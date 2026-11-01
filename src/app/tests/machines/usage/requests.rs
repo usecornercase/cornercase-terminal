@@ -43,11 +43,6 @@ impl Rig {
         replied(&answer.expect("an answer"))
     }
 
-    fn down(&mut self, down: Down) {
-        let link = self.links()[0];
-        self.app.machine_event(MachineEvent::Link(Report { link, event: Event::Down { down, failed: 1 } }));
-    }
-
     fn with_claude(&mut self, script: &str) {
         let path = self.dir.path().join("claude");
         write_executable(&path, &format!("#!/bin/sh\n{script}\n"));

@@ -9,10 +9,9 @@ use crate::agents::usage::Key;
 use crate::app::App;
 use crate::app::machine_usage::Asked;
 use crate::control::contract::Refusal;
-use crate::control::usage::{MachineRead, MachineStats};
+use crate::control::usage::MachineStats;
 use crate::control::{Done, Plans, Stats};
 use crate::machines::EVERY;
-use crate::time::Stamp;
 
 #[derive(Clone, Copy)]
 pub(super) enum Of {
@@ -85,14 +84,7 @@ impl App {
     }
 
     fn every_stats(&self, now: SystemTime) -> Value {
-        let reads = self.machine_reads::<View>();
-        let mut views = vec![self.stats_view(now)];
-        let current = |(machine, view): &(MachineRead, Option<View>)| {
-            let read_at = Stamp::parse(machine.read_at.as_deref()?)?;
-            Some(view.clone()?.moved_on(read_at, now))
-        };
-        views.extend(reads.iter().filter_map(current));
-        let machines = reads.into_iter().map(|(machine, _)| machine).collect();
-        json(&MachineStats { view: View::sum(&views, now), machine: None, machines })
+        let (view, machines) = self.summed_stats(now);
+        json(&MachineStats { view, machine: None, machines })
     }
 }

@@ -13,7 +13,18 @@ use crate::machines::link::fake::{request, respond};
 #[derive(Clone)]
 enum Reply {
     Answer(Response),
+    Once(Response),
     Refuse,
+}
+
+impl Reply {
+    fn to(&self, ask: usize) -> Option<Response> {
+        match self {
+            Self::Answer(response) => Some(response.clone()),
+            Self::Once(response) => (ask == 1).then(|| response.clone()),
+            Self::Refuse => None,
+        }
+    }
 }
 
 struct Asked {
@@ -25,7 +36,7 @@ struct Asked {
 impl Connect for Asked {
     fn connect(&self, _: &Killer) -> Result<Line> {
         self.seen.note("ask".into());
-        let Reply::Answer(response) = self.reply.clone() else {
+        let Some(response) = self.reply.to(self.seen.count("ask")) else {
             let reason = "ssh: connect to host vps.lan port 22: Connection refused".into();
             return Err(Error::Ssh { host: "vps.lan".into(), reason });
         };
@@ -66,6 +77,10 @@ fn answer(value: &impl serde::Serialize) -> Reply {
     Reply::Answer(Response::Ok(serde_json::to_value(value).expect("a JSON answer")))
 }
 
+fn once(value: &impl serde::Serialize) -> Reply {
+    Reply::Once(Response::Ok(serde_json::to_value(value).expect("a JSON answer")))
+}
+
 fn counted() -> View {
     let mut view = View::default();
     let total = view.windows.get_mut("total").expect("the total window");
@@ -83,6 +98,11 @@ impl Rig {
             let cache = &app.machines.held()[0].cache;
             !cache.stats.asking && !cache.usage.asking
         });
+    }
+
+    fn down(&mut self, down: Down) {
+        let link = self.links()[0];
+        self.app.machine_event(MachineEvent::Link(Report { link, event: Event::Down { down, failed: 1 } }));
     }
 
     fn stats_read(&mut self) -> Option<u64> {
@@ -200,4 +220,5 @@ mod the_cache {
     }
 }
 
+mod dialog;
 mod requests;

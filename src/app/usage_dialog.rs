@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
@@ -13,19 +13,29 @@ use crate::accounts::{self, Account};
 use crate::agents;
 use crate::agents::usage;
 use crate::config::Config;
+use crate::control::usage::PlanInfo;
 use crate::log::{Job, Level};
 use crate::time;
 use crate::ui;
 
+mod limits;
+mod machines;
+
 pub(super) struct Usages {
     pub(super) state: usage::State,
     page: usage::Page,
+    machine: machines::Pick,
     timeout: Duration,
 }
 
 impl Default for Usages {
     fn default() -> Self {
-        Self { state: usage::State::default(), page: usage::Page::default(), timeout: usage::TIMEOUT }
+        Self {
+            state: usage::State::default(),
+            page: usage::Page::default(),
+            machine: machines::Pick::default(),
+            timeout: usage::TIMEOUT,
+        }
     }
 }
 
@@ -43,11 +53,18 @@ impl Usages {
 impl App {
     pub(super) fn open_usage(&mut self) {
         self.overlay = Some(Overlay::Usage);
-        if self.usages.page == usage::Page::Limits {
-            self.probe_usage();
-        } else {
-            self.ask_merged_stale(Instant::now());
+        self.ask_usage();
+    }
+
+    fn ask_usage(&mut self) {
+        if !matches!(self.usage_pick(), machines::Pick::Machine(_)) {
+            if self.usages.page == usage::Page::Limits {
+                self.probe_usage();
+            } else {
+                self.ask_merged_stale(Instant::now());
+            }
         }
+        self.ask_machines();
     }
 
     pub(super) fn usage_agents(&self) -> Vec<agents::Known> {
@@ -100,11 +117,10 @@ impl App {
     }
 
     pub(super) fn usage_view(&self) -> ui::Usage {
-        ui::Usage {
-            page: self.usages.page,
-            stats: self.stats_view(SystemTime::now()),
-            sections: sections(&self.usages.state, &self.config, Instant::now(), time::now()),
-        }
+        let (stats, notes) = self.picked_stats(SystemTime::now());
+        let (machines, picked) = self.usage_picks();
+        let (sections, by_machine) = self.picked_limits(Instant::now(), time::now());
+        ui::Usage { page: self.usages.page, stats, sections, by_machine, machines, picked, notes }
     }
 
     pub(super) fn switch_usage(&mut self, page: usage::Page) {
@@ -112,11 +128,7 @@ impl App {
             return;
         }
         self.usages.page = page;
-        if page == usage::Page::Limits {
-            self.probe_usage();
-        } else {
-            self.ask_merged_stale(Instant::now());
-        }
+        self.ask_usage();
     }
 
     pub(super) fn usage_key(&mut self, key: KeyEvent) {
@@ -138,6 +150,8 @@ impl App {
             self.overlay = None;
         } else if let Some(i) = ui::usage_tabs(area, &view).iter().position(|r| r.contains(pos)) {
             self.switch_usage(if i == 0 { usage::Page::Limits } else { usage::Page::Stats });
+        } else if let Some(i) = ui::usage_picks(area, &view).iter().position(|r| r.contains(pos)) {
+            self.pick_usage(i);
         } else if view.page == usage::Page::Stats && !view.stats.empty && ui::usage_share(area, &view).contains(pos) {
             self.outbox.copy(&view.stats.share_link());
             self.messages.toast = Some(Toast::new("copied a link to your stats", ui::ToastIcon::Check));
@@ -153,34 +167,7 @@ impl App {
     }
 }
 
-fn section(agent: agents::Known, title: &str, probe: &usage::Probe, now: Instant, clock: i64) -> ui::UsageSection {
-    let report = probe.last().map(|(r, _)| r);
-    let plan = report.and_then(|r| r.plan.as_deref()).map_or_else(String::new, |p| format!(" · {p} plan"));
-    let windows = report.map(|r| r.windows.as_slice()).unwrap_or_default();
-    let status = if probe.loading() {
-        "loading…".into()
-    } else {
-        probe.last().map(|(_, at)| usage::updated(now.duration_since(*at).as_secs())).unwrap_or_default()
-    };
-    ui::UsageSection {
-        title: format!("{title}{plan}"),
-        status,
-        error: probe.error().map(|e| format!("usage unavailable: {e}")),
-        windows: windows
-            .iter()
-            .map(|w| ui::UsageWindow {
-                label: w.label.clone(),
-                percent: w.percent,
-                severity: w.severity,
-                resets: w.resets_at.map(|at| usage::until(at - clock)).unwrap_or_default(),
-            })
-            .collect(),
-        empty: report.and_then(|r| r.notice_for(agent)),
-        extra: report.and_then(|r| r.extra.clone()),
-    }
-}
-
-pub(super) fn active(
+fn active(
     keys: &[(agents::Known, Option<&str>)],
     chosen: &BTreeMap<String, String>,
     (agent, account): (agents::Known, Option<&str>),
@@ -190,7 +177,7 @@ pub(super) fn active(
     !names.is_empty() && picked.filter(|name| names.contains(name)) == account
 }
 
-pub(super) fn labelled(
+fn labelled(
     config: &Config,
     keys: &[(agents::Known, Option<&str>)],
     (agent, account): (agents::Known, Option<&str>),
@@ -202,18 +189,40 @@ fn names<'a>(keys: &[(agents::Known, Option<&'a str>)], agent: agents::Known) ->
     keys.iter().filter(|(kind, _)| *kind == agent).filter_map(|(_, name)| *name).collect()
 }
 
-fn sections(state: &usage::State, config: &Config, now: Instant, clock: i64) -> Vec<ui::UsageSection> {
-    let keys: Vec<(agents::Known, Option<&str>)> = state.shown().map(|(agent, account, _)| (agent, account)).collect();
+pub(super) fn infos(
+    state: &usage::State,
+    config: &Config,
+    listed: &[(agents::Known, Option<&str>)],
+    now: Instant,
+    clock: SystemTime,
+) -> Vec<PlanInfo> {
     let chosen = config.selected_accounts();
-    state
-        .shown()
-        .map(|(agent, account, probe)| {
+    listed
+        .iter()
+        .map(|&(agent, account)| {
             let key = (agent, account);
-            let title =
-                usage::heading(agent.title(), labelled(config, &keys, key).as_deref(), active(&keys, chosen, key));
-            section(agent, &title, probe, now, clock)
+            let label = labelled(config, listed, key);
+            PlanInfo::of(agent, state.probe_of(agent, account), now, clock).for_account(
+                account,
+                label,
+                active(listed, chosen, key),
+            )
         })
         .collect()
+}
+
+fn here(state: &usage::State, config: &Config, now: Instant, clock: i64) -> Vec<PlanInfo> {
+    let listed: Vec<(agents::Known, Option<&str>)> =
+        state.shown().map(|(agent, account, _)| (agent, account)).collect();
+    infos(state, config, &listed, now, at(clock))
+}
+
+fn at(clock: i64) -> SystemTime {
+    UNIX_EPOCH + Duration::from_secs(u64::try_from(clock).unwrap_or_default())
+}
+
+fn sections(state: &usage::State, config: &Config, now: Instant, clock: i64) -> Vec<ui::UsageSection> {
+    here(state, config, now, clock).iter().map(|info| limits::section(info, clock)).collect()
 }
 
 #[cfg(test)]

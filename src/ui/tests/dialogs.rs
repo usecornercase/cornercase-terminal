@@ -90,6 +90,7 @@ fn claude_usage() -> UsageSection {
     UsageSection {
         title: "Claude Code · max plan".into(),
         status: "updated 2m ago".into(),
+        on: None,
         error: None,
         windows: vec![
             usage_window("session (5h)", 7, Severity::Normal, "resets in 2h 13m"),
@@ -105,6 +106,7 @@ fn codex_usage() -> UsageSection {
     UsageSection {
         title: "Codex · plus plan".into(),
         status: "updated just now".into(),
+        on: None,
         error: None,
         windows: vec![
             usage_window("session (5h)", 53, Severity::Normal, "resets in 4h 59m"),
@@ -116,17 +118,13 @@ fn codex_usage() -> UsageSection {
 }
 
 fn usage() -> Usage {
-    Usage {
-        page: crate::agents::usage::Page::Limits,
-        stats: crate::agents::stats::View::default(),
-        sections: vec![claude_usage()],
-    }
+    Usage { page: crate::agents::usage::Page::Limits, sections: vec![claude_usage()], ..Usage::default() }
 }
 
 fn stats_usage(empty: bool) -> Usage {
     let now = std::time::UNIX_EPOCH + std::time::Duration::from_hours(10_000);
     let stats = if empty { crate::agents::stats::Stats::new(now) } else { crate::agents::stats::tests::example(now) };
-    Usage { page: crate::agents::usage::Page::Stats, stats: stats.view(now), sections: Vec::new() }
+    Usage { page: crate::agents::usage::Page::Stats, stats: stats.view(now), ..Usage::default() }
 }
 
 fn merged_usage(complete: bool) -> Usage {
@@ -182,9 +180,89 @@ fn the_heatmap_has_a_blue_ramp_for_each_theme(#[case] light: bool, #[case] palet
 fn usage_tabs_and_border_share_the_drawn_geometry() {
     let usage = stats_usage(false);
     let area = usage_area(AREA, &usage);
-    assert_eq!(usage_tabs(AREA, &usage), tabs_in(usage_rows(area)[0], &crate::agents::usage::Page::NAMES));
+    assert_eq!(usage_tabs(AREA, &usage), tabs_in(usage_rows(area, &usage)[1], &crate::agents::usage::Page::NAMES));
     let corners = corners_of_its_area(&with(Overlay::Usage(usage)));
     assert_eq!(corners, ("╭".into(), "╯".into()));
+}
+
+fn picked_usage(picked: usize, notes: &[&str]) -> Usage {
+    Usage {
+        machines: ["this computer", "vps", "all"].map(String::from).to_vec(),
+        picked,
+        notes: notes.iter().map(ToString::to_string).collect(),
+        ..stats_usage(false)
+    }
+}
+
+#[test]
+fn renders_the_machine_picker_on_every_machine() {
+    let usage = picked_usage(2, &[crate::agents::stats::PEAK, "vps: seen 5 min ago"]);
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), W, 38).backend());
+}
+
+#[test]
+fn renders_the_stats_of_one_machine() {
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(picked_usage(1, &[]))), W, 38).backend());
+}
+
+#[test]
+fn renders_the_machine_picker_at_phone_width() {
+    let usage = picked_usage(2, &[crate::agents::stats::PEAK, "pi: not summed · not read yet"]);
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), 46, 42).backend());
+}
+
+#[test]
+fn the_machine_picker_sits_above_the_tabs_and_only_with_machines() {
+    let usage = picked_usage(2, &[]);
+    let rows = usage_rows(usage_area(AREA, &usage), &usage);
+    assert_eq!(usage_picks(AREA, &usage), tabs_in(rows[0], &["this computer", "vps", "all"]));
+    assert_eq!((rows[1].y, usage_tabs(AREA, &usage)[0].y), (rows[0].y + 2, rows[1].y));
+    assert_eq!(usage_picks(AREA, &stats_usage(false)), Vec::<Rect>::new());
+}
+
+fn on(name: &str, status: &str, error: Option<&str>, sections: Vec<UsageSection>) -> UsageMachine {
+    UsageMachine { name: name.into(), status: status.into(), error: error.map(str::to_string), sections }
+}
+
+fn merged_limits(title: &str) -> Usage {
+    let merged = UsageSection { title: title.into(), on: Some("on this computer, vps".into()), ..claude_usage() };
+    Usage {
+        page: crate::agents::usage::Page::Limits,
+        by_machine: vec![
+            on("this computer", "", None, vec![merged]),
+            on("vps", "seen 5 min ago", None, vec![codex_usage()]),
+            on("pi", "", Some("not seen yet"), Vec::new()),
+        ],
+        machines: ["this computer", "vps", "pi", "all"].map(String::from).to_vec(),
+        picked: 3,
+        ..Usage::default()
+    }
+}
+
+#[test]
+fn renders_the_limits_of_every_machine_with_a_merged_row() {
+    let usage = merged_limits("Claude Code · max plan");
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), W, 44).backend());
+}
+
+#[test]
+fn renders_a_merged_row_with_a_label_at_phone_width_without_cutting_its_status() {
+    let usage = merged_limits("Claude Code · work ● · max plan");
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), 46, 48).backend());
+}
+
+#[test]
+fn every_machine_in_the_picker_stays_clickable_at_phone_width() {
+    let names = ["this computer", "vps", "mini", "pi", "laptop", "desk", "nas", "build", "studio", "all"];
+    let usage = Usage { machines: names.map(String::from).to_vec(), ..picked_usage(0, &[]) };
+    let phone = Rect::new(0, 0, 46, 42);
+    let row = usage_rows(usage_area(phone, &usage), &usage)[0];
+
+    let picks = usage_picks(phone, &usage);
+
+    assert!(picks.iter().all(|pick| pick.width > 0 && row.contains(pick.as_position())), "{picks:?} in {row:?}");
+    assert!(picks.windows(2).all(|two| two[0].right() < two[1].x), "{picks:?}");
+    assert_eq!((picks[0].width, picks[9].width), (13, 3));
 }
 
 #[test]
@@ -207,8 +285,8 @@ fn renders_the_usage_windows() {
 fn renders_one_section_per_agent() {
     let usage = Usage {
         page: crate::agents::usage::Page::Limits,
-        stats: crate::agents::stats::View::default(),
         sections: vec![claude_usage(), codex_usage()],
+        ..Usage::default()
     };
     insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), W, TALL).backend());
 }
@@ -225,11 +303,7 @@ fn renders_usage_while_loading_and_after_a_failure() {
         windows: Vec::new(),
         ..codex_usage()
     };
-    let usage = Usage {
-        page: crate::agents::usage::Page::Limits,
-        stats: crate::agents::stats::View::default(),
-        sections: vec![loading, failed],
-    };
+    let usage = Usage { page: crate::agents::usage::Page::Limits, sections: vec![loading, failed], ..Usage::default() };
     insta::assert_snapshot!(render(&with(Overlay::Usage(usage))).backend());
 }
 
@@ -239,7 +313,7 @@ fn renders_usage_while_loading_and_after_a_failure() {
 #[case::critical(2, Color::Red)]
 fn usage_bars_take_the_severity_colour(#[case] window: u16, #[case] expected: Color) {
     let t = render(&with(Overlay::Usage(usage())));
-    let body = usage_rows(usage_area(AREA, &usage()))[1];
+    let body = usage_rows(usage_area(AREA, &usage()), &usage())[2];
     let bar = Position::new(body.x, body.y + 3 + window * 3);
     assert_eq!(t.backend().buffer()[bar].fg, expected);
 }
@@ -247,7 +321,7 @@ fn usage_bars_take_the_severity_colour(#[case] window: u16, #[case] expected: Co
 #[test]
 fn the_rest_of_a_usage_bar_takes_the_line_colour() {
     let t = render(&with(Overlay::Usage(usage())));
-    let body = usage_rows(usage_area(AREA, &usage()))[1];
+    let body = usage_rows(usage_area(AREA, &usage()), &usage())[2];
     let bar = Position::new(body.right() - 1, body.y + 3);
     assert_eq!(t.backend().buffer()[bar].fg, DARK_LINE);
 }
@@ -272,8 +346,8 @@ fn the_usage_done_button_sits_on_the_last_row() {
 fn a_usage_too_tall_for_the_screen_keeps_its_done_button() {
     let usage = Usage {
         page: crate::agents::usage::Page::Limits,
-        stats: crate::agents::stats::View::default(),
         sections: vec![claude_usage(), codex_usage()],
+        ..Usage::default()
     };
     let r = usage_area(AREA, &usage);
     assert_eq!((r.height, usage_done(AREA, &usage).y), (AREA.height, r.bottom() - 2));

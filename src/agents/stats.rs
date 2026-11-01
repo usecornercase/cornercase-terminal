@@ -19,6 +19,7 @@ const RETAIN: u64 = (BLOCKS as u64 + 1) * 24;
 pub(crate) const SHARE_BASE: &str = "https://usecornercase.dev/stats/";
 pub(crate) const EMPTY: &str = "nothing counted yet: agents running in cornercase count from now on";
 pub(crate) const MERGED_LABEL: &str = "merged PRs";
+pub(crate) const PEAK: &str = "most at once: the largest peak of one machine, not a sum";
 const LABELS: [&str; 9] = [
     "agents started",
     "prompts",

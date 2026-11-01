@@ -60,7 +60,7 @@ impl Severity {
         }
     }
 
-    fn parse(text: Option<&str>, percent: u16) -> Self {
+    pub(crate) fn parse(text: Option<&str>, percent: u16) -> Self {
         match text {
             Some("normal") => Self::Normal,
             Some("warning") => Self::Warning,
