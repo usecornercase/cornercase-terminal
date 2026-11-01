@@ -750,6 +750,7 @@ mod files;
 mod flow;
 mod paste_file;
 mod processes;
+mod pull_request;
 mod requests;
 mod worktrees;
 
@@ -761,6 +762,7 @@ pub(in crate::cli) use flow::{
 };
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_HELP};
+pub(in crate::cli) use pull_request::PULL_REQUEST_HELP;
 pub(in crate::cli) use requests::REQUESTS_HELP;
 pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
 

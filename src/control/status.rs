@@ -316,6 +316,17 @@ pub(crate) struct PullRequestInfo {
     pub(crate) base: Option<String>,
     pub(crate) provider: String,
     pub(crate) stack: Option<StackInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) all_checks: Option<Vec<CheckInfo>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct CheckInfo {
+    pub(crate) name: String,
+    pub(crate) workflow: String,
+    pub(crate) outcome: String,
+    pub(crate) url: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

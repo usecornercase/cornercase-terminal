@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.237
+
+- **`cornercase pull-request` reads a workspace's pull request as its dialog shows it.** It asks gh (or glab) at once, as opening the dialog does, even while cornercase waits after a failed read, and prints the pull request with every check: failed, pending, passed and skipped, each with its workflow (a GitLab job's stage) and the link to its job. `--json` gives the `pull_request` object of `status --json` plus `all_checks`, so a program that draws cornercase can show the same dialog and hand an agent the failed jobs' links. A read that fails exits with 1 and says why (`gh is not logged in: run gh auth login`); a workspace that is not on a branch, is on the default branch or has pull requests turned off says so.
+
 ## 0.12.236
 
 - **Coming back to a window now repairs a garbled screen.** cornercase only sends the cells that changed, so when the terminal around it lost part of its screen, such as lines of a pane left as scattered letters or stale cells in the sidebar, they stayed that way until you resized the window. A window that regains focus is now drawn in full. The cause of the garbling is still being looked for, and terminals that don't report focus aren't helped.

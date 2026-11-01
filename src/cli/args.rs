@@ -9,6 +9,7 @@ pub(crate) mod issue;
 pub(crate) mod plugin;
 pub(crate) mod ports;
 pub(crate) mod processes;
+pub(crate) mod pull_request;
 pub(crate) mod queue;
 pub(crate) mod requests;
 pub(crate) mod terminal;
@@ -35,7 +36,10 @@ use super::help::{
     START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP,
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
-use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP, REQUESTS_HELP};
+use super::help::{
+    AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP, PULL_REQUEST_HELP,
+    REQUESTS_HELP,
+};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -256,6 +260,11 @@ pub(crate) enum Control {
         after_help = PORTS_HELP
     )]
     Ports(ports::PortsArgs),
+    #[command(
+        about = "Print a workspace's pull request and every check with its link, as its dialog shows it, asking gh at once",
+        after_help = PULL_REQUEST_HELP
+    )]
+    PullRequest(pull_request::PullRequestArgs),
     #[command(
         about = "List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program",
         after_help = PROCESSES_HELP
