@@ -106,6 +106,7 @@ group 9  personal  collapsed
 | `paste-file --pane ID [FILE]` | Keeps a file of the machine you run it on next to the server's session and pastes its path into a pane, so an agent there can open it: see [Paste a file from another machine](#paste-a-file-from-another-machine). |
 | `plugin actions`, `plugin run PLUGIN ACTION`, `plugin popup-close` | List the actions your [plugins](../plugins/) add to the menus and buttons, run one on a project, workspace, tab or pane as its menu entry does (or on what the window shows, as its button does), waiting for it to end, and close a plugin's popup. See [Plugins](#plugins). |
 | `skill` | Prints the instructions that teach coding agents these commands. |
+| `pull-request` | Prints a workspace's [pull request](../worktrees/#pull-requests-and-their-checks) and every check with the link to its job, as its dialog shows it, asking gh (or glab) at once: [pull requests](#pull-requests). |
 | `contract` | Says what the running server supports: its version, the [contract](#contract-and-compatibility) it speaks, its boot and its operations and streams. |
 
 `cornercase --help` and `cornercase COMMAND --help` describe every option, with examples.
@@ -921,6 +922,31 @@ It asks the installed agents (Claude Code and Codex; both when neither is instal
 With `--json` it prints `{"agents": [...]}`, one entry per agent with every key present (`null` when it has no value): `agent` and `title`, `loading` (a probe is running now), `read_at` (UTC) and `age` (seconds) of the last answer with numbers, `plan`, `limited` (`false` means the account has no plan limits, `null` that nothing was read yet), `limits`, `extra` (Claude Code's extra usage or Codex's credits, as text), `notice` (what the dialog shows instead of bars, such as `not signed in · run codex login`) and `error`. After a failed probe, `plan`, `limits` and the rest are from the answer before it, as old as `age` says. A limit has `label` (the dialog's text), `kind` (the agent's own name for it: Claude Code's `session`, `weekly_all` or `weekly_scoped`, or Codex's `primary` or `secondary`), `scope` (the model or bucket it applies to, `null` for the whole plan), `percent`, `severity` (`normal`, `warning` or `critical`; read it leniently) and `resets_at` (UTC, or `null`). `kind` and `scope` together name a limit from one answer to the next. With [accounts](../accounts/#plan-usage-per-account), an agent has one entry for its usual login and one per account, which adds `account` (its folder name) and `label` (the name you gave it, or `System` for the usual login); the default account's entry (the usual login's when that agent has no default account) has `active: true`. These keys are left out when there is nothing to say, so an answer without accounts is the same as before.
 
 It is the request `{"command": "usage", "args": {"cached": false}}`. An older server answers that it has no `usage` command.
+
+### Pull requests
+
+```sh
+cornercase pull-request
+cornercase pull-request --worktree feat/login --json
+cornercase pull-request --workspace 4
+```
+
+`pull-request` prints a workspace's [pull request](../worktrees/#pull-requests-and-their-checks) (the merge request on GitLab) as its dialog shows it: its state, the rollup and every check, failed first, then pending, passed and skipped, each with its workflow (a GitLab job's stage) and the link to its job. An agent can read why its checks fail and open the failed jobs' logs with `gh run view` or `glab ci trace`:
+
+```text
+pull request #482 open, checks failing
+Returns page crashes on an empty address
+https://github.com/acme/web-shop/pull/482
+failed   tests (ubuntu-24.04)  CI  https://github.com/acme/web-shop/actions/runs/1001/job/2001
+pending  tests (macos-15)  CI  https://github.com/acme/web-shop/actions/runs/1001/job/2002
+passed   lint  CI  https://github.com/acme/web-shop/actions/runs/1001/job/2003
+passed   review-bot
+skipped  deploy  Pages  https://github.com/acme/web-shop/actions/runs/1002/job/2004
+```
+
+From a pane it reads that pane's workspace, elsewhere the one shown; `--workspace ID` or `--worktree BRANCH` picks another. It asks gh (or glab) at once, as opening the dialog does, even while cornercase waits after a failed read, and answers when that workspace was read. A read that fails exits with 1 and says why (`gh is not logged in: run gh auth login`, `install gh, GitHub's CLI, to see them`, gh's own line). A workspace cornercase never asks about is answered at once, with exit 0 and `null`, saying why: pull requests are off in settings, it is not on a branch, its repository has no remote, or it is on the default branch. So is a branch without a pull request (`no pull request for feat/x`).
+
+With `--json` it prints `{"workspace", "branch", "pull_request", "reason"}`, every key present. `pull_request` is the object [`status --json`](#look) gives (`number`, `title`, `url`, `state`, `checks`, `failed`, `conflicts`, `base`, `provider`, `stack`) plus `all_checks`, a list of `{"name", "workflow", "outcome", "url"}` in the dialog's order: `outcome` is `failed`, `pending`, `passed` or `skipped`, `workflow` is empty for a commit status and `url` for a check without a link. `pull_request` is `null` and `reason` says why when there is none. It is the request `{"command": "pull-request", "args": {"workspace": 4}}`, answered once gh has answered; an older server answers that it has no `pull-request` command.
 
 ### Ports
 

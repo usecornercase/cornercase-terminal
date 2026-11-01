@@ -568,6 +568,7 @@ mod pasting;
 mod plugins;
 mod ports;
 mod processes;
+mod pull_request;
 mod queue;
 mod searching;
 mod setup;

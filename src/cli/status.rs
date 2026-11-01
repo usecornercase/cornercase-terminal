@@ -152,7 +152,7 @@ fn shared_part(shared: &[SharedInfo]) -> Option<String> {
     Some(said)
 }
 
-fn pull_request_part(pull: &PullRequestInfo) -> String {
+pub(super) fn pull_request_part(pull: &PullRequestInfo) -> String {
     let provider = Provider::of(&pull.provider);
     let mut said = vec![format!("{} {} {}", provider.noun(), provider.reference(pull.number), pull.state)];
     if pull.conflicts {

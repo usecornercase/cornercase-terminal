@@ -38,6 +38,7 @@ mod panes;
 mod plugins;
 mod ports;
 mod processes;
+mod pull_requests;
 mod queue;
 mod remote;
 mod requests;

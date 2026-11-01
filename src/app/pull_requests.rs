@@ -36,6 +36,10 @@ pub(super) const ASK_AGENT: &str = "ask agent";
 
 pub(super) const DONE: &str = "done";
 
+pub(in crate::app) const OFF: &str = "pull requests are off in settings";
+
+pub(in crate::app) const DETACHED: &str = "this workspace is not on a branch";
+
 const CONFLICT_NOTE: [&str; 2] =
     ["GitHub runs no pull_request workflows until the", "conflict is resolved, so checks may be missing."];
 
@@ -163,7 +167,7 @@ impl App {
     fn due_pull_requests(&mut self, p: usize, now: Instant) -> Vec<Due> {
         let mut due = Vec::new();
         for workspace in self.projects[p].workspaces.iter().filter(|w| w.open()) {
-            let Some(branch) = pull_branch(workspace) else {
+            let Ok(branch) = branch_to_ask(&workspace.path) else {
                 self.git.pulls.found.remove(&workspace.id);
                 continue;
             };
@@ -291,15 +295,40 @@ impl App {
     }
 
     pub(super) fn open_pull_request(&mut self, workspace: u64) {
-        let Some(found) = self.git.pulls.found.get_mut(&workspace) else { return };
-        found.at = None;
-        found.stack_at = None;
-        if let Some(at) = self.projects.workspace_index(workspace) {
-            self.git.pulls.answered.remove(&self.projects[at.project()].id);
+        if !self.git.pulls.found.contains_key(&workspace) {
+            return;
         }
         self.screen.nav = None;
         self.overlay = Some(Overlay::PullRequest { workspace, scroll: 0 });
-        self.ask_pull_requests(Instant::now());
+        self.ask_pull_request_now(workspace, Instant::now());
+    }
+
+    pub(in crate::app) fn ask_pull_request_now(&mut self, workspace: u64, now: Instant) {
+        if let Some(found) = self.git.pulls.found.get_mut(&workspace) {
+            found.at = None;
+            found.stack_at = None;
+        }
+        if let Some(at) = self.projects.workspace_index(workspace) {
+            self.git.pulls.answered.remove(&self.projects[at.project()].id);
+        }
+        self.ask_pull_requests(now);
+    }
+
+    pub(in crate::app) fn pull_request_read(&self, workspace: u64) -> PullRead<'_> {
+        let Some(at) = self.projects.workspace_index(workspace) else { return PullRead::Waiting };
+        let path = &self.projects.workspace(at).path;
+        let unasked = |reason: String| PullRead::Unasked { branch: git::checked_out(path), reason };
+        if !self.config.pull_requests {
+            return unasked(OFF.into());
+        }
+        if let Err(why) = branch_to_ask(path) {
+            return unasked(why.reason());
+        }
+        if let Some(Found { branch, at: Some(_), pull, .. }) = self.git.pulls.found.get(&workspace) {
+            return PullRead::Read { branch, pull: pull.as_ref() };
+        }
+        let error = self.git.pulls.answered.get(&self.projects[at.project()].id).and_then(|a| a.error.clone());
+        error.map_or(PullRead::Waiting, PullRead::Failed)
     }
 
     pub(super) fn pull_request_by_key(&mut self) {
@@ -311,10 +340,10 @@ impl App {
         }
         let project = self.project().map(|p| p.id).unwrap_or_default();
         let error = self.git.pulls.answered.get(&project).and_then(|a| a.error.clone());
-        let noun = self.pull_noun();
+        let noun = self.pull_noun_of(self.active);
         let (message, icon) = match (git::checked_out(&path), error) {
-            _ if !self.config.pull_requests => ("pull requests are off in settings".into(), ui::ToastIcon::Check),
-            (None, _) => ("this workspace is not on a branch".into(), ui::ToastIcon::Check),
+            _ if !self.config.pull_requests => (OFF.into(), ui::ToastIcon::Check),
+            (None, _) => (DETACHED.into(), ui::ToastIcon::Check),
             (Some(_), Some(error)) => (error, ui::ToastIcon::Bug),
             (Some(branch), None)
                 if self.git.pulls.found.contains_key(&id) || git::origin_head(&path) == Some(branch.clone()) =>
@@ -330,8 +359,8 @@ impl App {
         self.pull_request(workspace).map(|p| format!("{} {}", p.provider.noun(), p.reference())).unwrap_or_default()
     }
 
-    fn pull_noun(&self) -> &'static str {
-        let host = self.projects.get(self.active).and_then(|_| self.project_host(self.active));
+    pub(in crate::app) fn pull_noun_of(&self, p: usize) -> &'static str {
+        let host = self.projects.get(p).and_then(|_| self.project_host(p));
         match self.git.pulls.glab.route(host.as_deref()) {
             Route::Ask(provider) => provider.noun(),
             Route::Explain(_) => Provider::Gitlab.noun(),
@@ -429,12 +458,40 @@ impl App {
     }
 }
 
-fn pull_branch(workspace: &Workspace) -> Option<String> {
-    let branch = git::checked_out(&workspace.path)?;
-    if !git::has_remote(&workspace.path) || git::origin_head(&workspace.path).as_ref() == Some(&branch) {
-        return None;
+pub(in crate::app) enum PullRead<'a> {
+    Waiting,
+    Unasked { branch: Option<String>, reason: String },
+    Failed(String),
+    Read { branch: &'a str, pull: Option<&'a PullRequest> },
+}
+
+enum Unasked {
+    Detached,
+    NoRemote,
+    Default(String),
+}
+
+impl Unasked {
+    fn reason(&self) -> String {
+        match self {
+            Self::Detached => DETACHED.into(),
+            Self::NoRemote => "this workspace's repository has no remote".into(),
+            Self::Default(branch) => {
+                format!("{branch} is the default branch: cornercase looks for pull requests on other branches only")
+            }
+        }
     }
-    Some(branch)
+}
+
+fn branch_to_ask(path: &Path) -> Result<String, Unasked> {
+    let branch = git::checked_out(path).ok_or(Unasked::Detached)?;
+    if !git::has_remote(path) {
+        return Err(Unasked::NoRemote);
+    }
+    if git::origin_head(path).as_ref() == Some(&branch) {
+        return Err(Unasked::Default(branch));
+    }
+    Ok(branch)
 }
 
 struct Due {

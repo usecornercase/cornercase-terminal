@@ -34,6 +34,7 @@ mod lines;
 mod plugin;
 mod ports;
 mod processes;
+mod pull_request;
 mod queue;
 mod reach;
 mod read;
@@ -290,6 +291,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
         Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
         Control::Processes(args) => return ControlFlow::Break(processes::run(&args)),
+        Control::PullRequest(args) => return ControlFlow::Break(pull_request::run(&args)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),

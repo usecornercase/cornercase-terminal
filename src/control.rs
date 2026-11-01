@@ -21,6 +21,7 @@ pub(crate) mod issues;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
+pub(crate) mod pull_request;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -67,9 +68,12 @@ pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
+pub(crate) use pull_request::{PullRequestAnswer, PullRequestRead};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
-pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, SharedInfo, StackInfo};
+pub(crate) use status::{
+    CheckInfo, GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, SharedInfo, StackInfo,
+};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
@@ -236,6 +240,7 @@ pub(crate) enum Command {
     WorktreeSize(WorktreeSize),
     FreeBuilds(FreeBuilds),
     Worktrees(ListWorktrees),
+    PullRequest(PullRequestRead),
 }
 
 impl Command {
@@ -416,6 +421,7 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
+            Self::PullRequest(_) => 113,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -427,7 +433,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 113] = [
+    pub(crate) const NAMES: [&str; 114] = [
         "status",
         "open",
         "new-workspace",
@@ -541,6 +547,7 @@ impl Command {
         "processes",
         "stop-process",
         "worktrees",
+        "pull-request",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

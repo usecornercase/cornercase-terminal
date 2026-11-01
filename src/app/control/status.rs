@@ -7,15 +7,15 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
-    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, LayerInfo, PaneInfo, ProjectInfo, PullRequestInfo, Report,
-    RunStatus, StackInfo, TabInfo, WorkspaceInfo,
+    self, AppState, CheckInfo, ConfigInfo, Done, GroupInfo, KeepAwake, LayerInfo, PaneInfo, ProjectInfo,
+    PullRequestInfo, Report, RunStatus, StackInfo, TabInfo, WorkspaceInfo,
 };
 use crate::git;
 use crate::log::{self, Level};
 use crate::process;
 use crate::project::{Group, Hierarchy, Project, Tab, Workspace};
 use crate::pull_request::stack::Layer;
-use crate::pull_request::{Ci, PullRequest};
+use crate::pull_request::{Check, Ci, PullRequest};
 use crate::term::Term;
 use crate::version;
 
@@ -26,7 +26,7 @@ struct Seen {
     sweeping: bool,
 }
 
-fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
+pub(super) fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
     PullRequestInfo {
         number: pull.number,
         title: pull.title.clone(),
@@ -38,6 +38,16 @@ fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
         base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
         provider: pull.provider.id().into(),
         stack: stack_info(pull),
+        all_checks: None,
+    }
+}
+
+pub(super) fn check_info(check: &Check) -> CheckInfo {
+    CheckInfo {
+        name: check.name.clone(),
+        workflow: check.workflow.clone(),
+        outcome: check.outcome.name().into(),
+        url: check.url.clone(),
     }
 }
 
