@@ -271,6 +271,9 @@ fn a_machine_s_clone_is_paired_with_the_local_clone_of_the_same_repo_by_another_
     let local = here.says(&["open", &clone_of(&here, "web-shop", "https://github.com/acme/web-shop")]);
     machine.says(&["open", &clone_of(&machine, "web-shop", "git@github.com:acme/web-shop.git")]);
     machine.says(&["open", &clone_of(&machine, "blog", "git@github.com:ana/blog.git")]);
+    wait_until("the local clone has its repo", || {
+        project_named(&status(&here)["projects"], "web-shop")["repo"].is_string()
+    });
 
     let sent = sent_with_their_repos(&here, &["web-shop", "blog"]);
 

@@ -262,13 +262,14 @@ newest place the pane shows the text. The scroll and the selection are the pane'
 every view show them. When the pane no longer holds the text it is still shown, a warning goes to
 stderr and the exit status is 0.
 
---machine NAME shows one of a machine's workspaces or tabs in the window, as a click on its row
-does: --workspace and --tab take the ids `cornercase status` lists under that machine. The machine
-must have sent its workspaces since this server started.
+--machine NAME picks one of a machine's workspaces or tabs as the one shown: --workspace and --tab
+take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
+since this server started. For now it only records the pick, which `status` reports as shown; the
+window keeps showing what it showed.
 
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
-view shows changes. With --machine it is what is shown there, as `shown_remote` in `status --json`.
+view shows changes. With --machine it is what was picked, as `shown_remote` in `status --json`.
 
 Examples:
   cornercase focus --pane 12

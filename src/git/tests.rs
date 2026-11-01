@@ -346,6 +346,10 @@ mod remote_without_credentials {
     #[case::an_at_in_the_path("https://github.com/acme/web@shop", "https://github.com/acme/web@shop")]
     #[case::no_credentials("https://github.com/acme/web-shop", "https://github.com/acme/web-shop")]
     #[case::scp_like("git@github.com:acme/web-shop.git", "git@github.com:acme/web-shop.git")]
+    #[case::scp_like_with_a_query_and_a_fragment(
+        "git@github.com:acme/shop?v2#x.git",
+        "git@github.com:acme/shop?v2#x.git"
+    )]
     #[case::a_local_path("/srv/git/shop", "/srv/git/shop")]
     #[case::a_stray_quote("\"https://ghp_abc123@github.com/acme/shop\"", "\"https://github.com/acme/shop\"")]
     #[case::a_git_scheme_user("git://ghp_abc123@github.com/acme/shop", "git://github.com/acme/shop")]

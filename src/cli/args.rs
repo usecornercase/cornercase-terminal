@@ -694,7 +694,7 @@ pub(crate) struct FocusArgs {
         long,
         value_name = "NAME",
         conflicts_with_all = ["pane", "worktree", "project", "view", "reveal"],
-        help = "Show one of this machine's workspaces or tabs, as a click on its row does: --workspace and --tab are its ids"
+        help = "Pick one of this machine's workspaces or tabs as the one shown (only `status` reports it for now): --workspace and --tab are its ids"
     )]
     pub(crate) machine: Option<String>,
     #[arg(
