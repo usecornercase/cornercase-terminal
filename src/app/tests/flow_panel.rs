@@ -740,3 +740,27 @@ mod folder {
         assert!(toast(&app).is_some());
     }
 }
+
+mod loop_label {
+    use super::*;
+    use crate::ui::flow;
+
+    fn steps(app: &App) -> Vec<Option<flow::Step>> {
+        let view = app.flow_view(Instant::now(), None).expect("a view");
+        view.history.entries.into_iter().map(|entry| entry.step).collect()
+    }
+
+    #[test]
+    fn a_loop_without_a_back_edge_or_a_name_still_reads_loop() {
+        let (mut app, _rx, _dir) = team();
+        for to in ["coder", "reviewer", "coder"] {
+            send(&mut app, ORCHESTRATOR, to, "go");
+        }
+        app.show_flow();
+        assert_eq!(steps(&app)[0], Some(flow::Step::Loop("findings".into())));
+        app.runs.first_mut().flow.stages[1].back.as_mut().expect("a loop").when = "  ".into();
+        assert_eq!(steps(&app)[0], Some(flow::Step::Loop("loop".into())));
+        app.runs.first_mut().flow.stages[1].back = None;
+        assert_eq!(steps(&app)[0], Some(flow::Step::Loop("loop".into())));
+    }
+}

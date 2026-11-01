@@ -3,6 +3,8 @@ use std::time::{Instant, SystemTime};
 use ratatui::style::Color;
 
 use super::{HEAD, NOTHING_SENT};
+
+const LOOP: &str = "loop";
 use crate::app::App;
 use crate::flows::folder::{self, Listing};
 use crate::flows::progress::Edge;
@@ -33,8 +35,9 @@ fn step_of(run: &Run, edge: Edge) -> flow::Step {
     match edge {
         Edge::Forward(stage) => flow::Step::Forward(stage),
         Edge::Loop(stage) => {
-            let when = run.flow.stages.get(stage).and_then(|s| s.back.as_ref()).map(|b| b.when.trim().to_string());
-            flow::Step::Loop(when.unwrap_or_default())
+            let back = run.flow.stages.get(stage).and_then(|s| s.back.as_ref());
+            let when = back.map(|b| b.when.trim()).filter(|when| !when.is_empty());
+            flow::Step::Loop(when.unwrap_or(LOOP).to_string())
         }
         Edge::Outside { .. } => flow::Step::Outside,
     }
