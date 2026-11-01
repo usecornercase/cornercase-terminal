@@ -259,7 +259,12 @@ impl Settings {
     pub(crate) fn choose_hit(&mut self, i: usize) -> Action {
         let Some(hit) = self.hits().into_iter().nth(i) else { return Action::None };
         self.find.clear();
-        match hit.goal {
+        self.land_on(hit.goal);
+        Action::None
+    }
+
+    pub(crate) fn land_on(&mut self, goal: Goal) {
+        match goal {
             Goal::Row(row) => self.go_to(&row),
             Goal::Page(page) => self.open_page(page),
             Goal::Parent { landing, notice, .. } => {
@@ -267,7 +272,6 @@ impl Settings {
                 self.notice = Some(notice);
             }
         }
-        Action::None
     }
 }
 

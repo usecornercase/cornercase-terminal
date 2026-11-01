@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { App } from '../src/lib/demo/app';
+import { App, SETTING_RESULT } from '../src/lib/demo/app';
 import { inputKey } from '../src/lib/demo/client';
 import { projectLabel } from '../src/lib/demo/model';
 import { world } from '../src/lib/demo/world';
@@ -113,5 +113,35 @@ test('a narrow row crops around the match so it stays visible, and the hint coun
   pane.shell.screen = () => Array.from({ length: 21 }, () => 'needle').join('\n');
   app.render();
   assert.ok(app.textAt('the first 20 matches'));
+  app.destroy();
+});
+
+test('the name search lists settings after the names, by the start of each word', () => {
+  const app = started();
+  app.openSearch(); type(app, 'prefix key'); app.render();
+  const results = app.searchResults('prefix key');
+  const setting = results.findIndex((r) => r.name === 'UI › prefix key');
+  assert.ok(setting >= 0);
+  assert.ok(results[setting].context.endsWith('settings'));
+  assert.ok(results.slice(0, setting).every((r) => r.kind < SETTING_RESULT));
+  assert.ok(app.textAt('UI › prefix key'));
+  assert.equal(app.searchResults('refix key').length, 0);
+  assert.equal(app.searchResults('prefix zebra').length, 0);
+  assert.equal(app.searchResults('   ').length, 0);
+  assert.ok(app.searchResults('prefix key', 'sessions').every((r) => r.kind !== SETTING_RESULT));
+  app.destroy();
+});
+
+test('choosing a setting from the name search opens Settings on its row and saves nothing', () => {
+  const app = started();
+  const results = app.searchResults('prefix key');
+  const before = JSON.stringify(results.map((r) => r.context));
+  app.openSearch(); type(app, 'prefix key'); app.render();
+  app.searchGo(results.findIndex((r) => r.name === 'UI › prefix key')); app.render();
+  const o = app.overlay;
+  assert.equal(o?.kind, 'settings');
+  if (o?.kind !== 'settings') return;
+  assert.equal(app.settingsRows(o.page)[o.cursor].label, 'prefix key');
+  assert.equal(JSON.stringify(app.searchResults('prefix key').map((r) => r.context)), before);
   app.destroy();
 });

@@ -98,6 +98,10 @@ pub(crate) fn use_settings_search() -> Result<()> {
     require("settings-search", "cannot search the settings")
 }
 
+pub(crate) fn use_search_settings() -> Result<()> {
+    require("search-settings", "cannot search the settings with what was said")
+}
+
 pub(crate) fn use_agent_folds() -> Result<()> {
     require("agent-folds", "cannot collapse or expand an agent's children")
 }

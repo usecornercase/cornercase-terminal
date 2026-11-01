@@ -559,6 +559,7 @@ mod restore;
 mod scrollback;
 mod search;
 mod search_sessions;
+mod search_settings;
 mod select_text;
 mod settings;
 mod share_settings;

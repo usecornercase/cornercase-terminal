@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/search.rs
+expression: "render(&with(search(\"prefix\", rows()))).backend()"
+---
+"  ⌕ prefix                                            ❯  │                                          "
+"                                                         │                                          "
+"▌ prefix-lab                                             │                                          "
+"  UI › prefix key                         off · settings │                                          "
+"  Remote › Discord › foru…  … phone is paired · settings │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"  enter goes to feat/search                              │                                          "

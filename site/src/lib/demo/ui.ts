@@ -3,7 +3,7 @@ import { counting, factor, duration, ramp, rows as statRows } from '../stats/mod
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
 import { DEFAULT } from '../term/palette';
-import { type AgentRow, type App, PAGE_NAMES, crop } from './app';
+import { type AgentRow, type App, PAGE_NAMES, SETTING_RESULT, crop } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
 import { drawFlow } from './flow';
@@ -146,7 +146,7 @@ const SEVERITY: Record<UsageWindow['severity'], number> = { normal: 2, warning: 
 const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 ? 'critical' : percent >= 75 ? 'warning' : 'normal');
 const USAGE_BAR = '━';
 const SEARCH_PLACEHOLDER = 'search projects, workspaces, tabs';
-const NAMES_PLACEHOLDER = 'projects, workspaces, tabs';
+const NAMES_PLACEHOLDER = 'projects, workspaces, tabs, settings';
 const SESSIONS_PLACEHOLDER = 'what was said in agents and panes';
 const SESSIONS_PITCH = 2;
 const MODE_WIDTH = 3;
@@ -1659,7 +1659,7 @@ export class Painter {
     const selected = results[Math.min(o.selected, results.length - 1)];
     if (sessions && app.saidCapped(o.query)) this.span(hint.x, hint.y, `  the first ${results.length} matches`, DARK);
     else if (sessions && selected) this.span(hint.x, hint.y, `  enter goes to ${truncateLeft(selected.context, hint.w - 16)}`, DARK);
-    else if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
+    else if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter ${selected.kind === SETTING_RESULT ? 'opens' : 'goes to'} ${selected.name}`, hint.w - 2)}`, DARK);
   }
 
   private toast(message: string, status?: Status, button?: [string, () => void], bug?: boolean): void {

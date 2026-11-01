@@ -138,6 +138,15 @@ impl App {
         }
     }
 
+    pub(super) fn open_setting(&mut self, hit: Hit) {
+        self.settings_page = hit.page;
+        self.open_settings();
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.land_on(hit.goal);
+        }
+        self.watch_accounts_page(Instant::now());
+    }
+
     fn settings_pick_rows(area: Rect) -> usize {
         usize::from(ui::settings_pick_list(ui::settings_area(area)).height)
     }

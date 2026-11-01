@@ -21,7 +21,7 @@ pub(super) const SEARCH_ICON: &str = " ⌕ ";
 
 pub(super) const SEARCH_PLACEHOLDER: &str = "search projects, workspaces, tabs";
 
-const NAMES_PLACEHOLDER: &str = "projects, workspaces, tabs";
+const NAMES_PLACEHOLDER: &str = "projects, workspaces, tabs, settings";
 
 const SESSIONS_PLACEHOLDER: &str = "what was said in agents and panes";
 

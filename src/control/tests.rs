@@ -1,6 +1,7 @@
 use crate::issues::Secret;
-use serde_json::json;
+use serde_json::{Value, json};
 
+use super::contract::unknown_fields;
 use super::*;
 
 fn read(pane: u64) -> Command {
@@ -240,7 +241,7 @@ fn the_fields_to_log_leave_out_what_is_typed() {
         Command::Wait(Wait { until: Until::Text(secret.into()), ..Wait::default() }),
         Command::WaitSeveral(Wait { until: Until::Text(secret.into()), panes: vec![3, 4], ..Wait::default() }),
         Command::Notify(Notify { text: secret.into() }),
-        Command::Search(Search { query: secret.into() }),
+        Command::Search(Search { query: secret.into(), ..Search::default() }),
         Command::Focus(Focus { item: Item::Pane(1), reveal: Some(Reveal { query: secret.into(), line: Some(3) }) }),
         Command::Todo(Todo::Add(secret.into())),
         Command::Todo(Todo::Edit { id: 3, text: secret.into() }),
@@ -272,7 +273,7 @@ fn a_search_travels_as_its_query_and_logs_only_its_size() {
         contract: None,
         boot: None,
         view: None,
-        command: Command::Search(Search { query: "checkout".into() }),
+        command: Command::Search(Search { query: "checkout".into(), ..Search::default() }),
     };
     let sent = serde_json::to_string(&request).expect("json");
 
@@ -311,6 +312,16 @@ fn a_reveal_travels_as_its_query_and_line_and_logs_only_its_size() {
         request.command.fields(),
         [("item", "pane-4".to_string()), ("reveal_bytes", "8".to_string()), ("line", "12".to_string())]
     );
+}
+
+#[rstest::rstest]
+#[case::asked(r#"{"query":"a","settings":true}"#)]
+#[case::turned_off(r#"{"query":"a","settings":false}"#)]
+fn a_strict_client_may_name_the_settings_of_a_search(#[case] args: &str) {
+    let raw: Value = serde_json::from_str(args).expect("json");
+    let parsed: Search = serde_json::from_value(raw.clone()).expect("a search");
+
+    assert_eq!(unknown_fields(&raw, &parsed), None);
 }
 
 #[test]

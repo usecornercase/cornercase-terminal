@@ -774,6 +774,8 @@ pub(crate) struct ContractArgs {
 pub(crate) struct SearchArgs {
     #[arg(required = true, value_name = "TEXT", help = "The text to look for, ignoring case")]
     pub(crate) query: Vec<String>,
+    #[arg(long, help = "Also list the settings that match, as the global search does")]
+    pub(crate) settings: bool,
     #[command(flatten)]
     pub(crate) print: Print,
 }
