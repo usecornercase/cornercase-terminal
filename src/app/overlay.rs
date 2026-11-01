@@ -14,7 +14,7 @@ use super::pull_requests::{COPY_LINK, DONE};
 use super::settings_dialog::settings_view;
 use super::start_flow_dialog::start_flow_view;
 use super::update_dialog::UpdateStep;
-use super::worktrees::Check;
+use super::worktrees::{Check, removal_submit};
 use crate::agents::Known;
 use crate::changes::{self, BranchPicker};
 use crate::editor::Editor;
@@ -101,6 +101,7 @@ pub(super) enum Overlay {
     CloseAgents(Box<CloseAgents>),
     ForgetAgents { project: u64, workspace: u64 },
     Popup(Box<super::plugin_popup::Popup>),
+    MachineWorkspace(Box<super::machines::acting::dialog::Dialog>),
 }
 
 impl Overlay {
@@ -143,6 +144,7 @@ impl Overlay {
             Self::CloseAgents(_) => "close agents",
             Self::ForgetAgents { .. } => "forget agents",
             Self::Popup(_) => "plugin popup",
+            Self::MachineWorkspace(dialog) => dialog.name(),
         }
     }
 
@@ -194,15 +196,16 @@ impl Overlay {
                 | Overlay::CloseTab { .. }
                 | Overlay::ClosePane { .. }
                 | Overlay::ForgetAgents { .. }
+                | Overlay::MachineWorkspace(_)
         )
     }
 
     pub(super) fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
-            Self::RemoveWorkspace { lock: Some(_), .. } => UNLOCK_SUBMIT,
-            Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
-            Self::RemoveWorkspace { .. } | Self::RemoveAccount { .. } => REMOVE_SUBMIT,
+            Self::RemoveWorkspace { check, lock, .. } => removal_submit(*check, lock.is_some()),
+            Self::MachineWorkspace(dialog) => dialog.submit_label(),
+            Self::RemoveAccount { .. } => REMOVE_SUBMIT,
             Self::DiscardChanges(_) => DISCARD_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseAgents(_) => CLOSE_AGENTS_SUBMIT,
@@ -236,6 +239,7 @@ impl Overlay {
             Self::NewWorkspace { input, creating: false, .. }
             | Self::Rename { input, .. }
             | Self::NewGroup { input } => Some(input),
+            Self::MachineWorkspace(dialog) => dialog.input(),
             _ => None,
         }
     }
@@ -248,6 +252,7 @@ impl Overlay {
 
     pub(super) fn takes_input(&self) -> bool {
         matches!(self, Self::NewWorkspace { creating: false, .. } | Self::Rename { .. } | Self::NewGroup { .. })
+            || matches!(self, Self::MachineWorkspace(dialog) if dialog.takes_input())
     }
 
     pub(super) fn lists_running(&self) -> bool {
@@ -324,7 +329,7 @@ impl App {
             Overlay::StartFlow { start, .. } => start_flow_view(start, area),
             Overlay::ProjectSettings(form) => super::project_settings_dialog::project_settings_overlay(form),
             Overlay::Rename { target, input } => Self::rename_view(*target, input),
-            Overlay::RemoveWorkspace { .. } => self.remove_view(overlay)?,
+            Overlay::RemoveWorkspace { .. } | Overlay::MachineWorkspace(_) => self.workspace_view(overlay)?,
             Overlay::DeleteGroup { group } => self.delete_group_view(*group)?,
             Overlay::CloseProject { project } => self.close_project_view(*project)?,
             Overlay::CloseWorkspace { project, workspace } => self.close_workspace_view(*project, *workspace)?,
@@ -353,6 +358,13 @@ impl App {
 }
 
 impl App {
+    fn workspace_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::MachineWorkspace(dialog) => self.machine_workspace_view(dialog),
+            _ => self.remove_view(overlay),
+        }
+    }
+
     fn notes_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
         Some(match overlay {
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll, area)?,

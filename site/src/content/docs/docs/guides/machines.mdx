@@ -14,7 +14,7 @@ import Screen from '../../../../components/Screen.astro';
   crop={[2, 1, 106, 10]}
 />
 
-A linked machine's workspaces show [in your sidebar](#in-your-sidebar), under the project here that is a clone of the same repository, and its agents tell you when they need you as yours do. Your server can also [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). Opening tabs and typing on those machines from this window comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
+A linked machine's workspaces show [in your sidebar](#in-your-sidebar), under the project here that is a clone of the same repository, and its agents tell you when they need you as yours do. Your server can also [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). You can [rename, close and remove the worktree of a machine's workspace](#acting-on-a-machines-workspace) from its row. Opening tabs and typing on those machines from this window comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
 
 ## Add a machine
 
@@ -101,7 +101,20 @@ Once a machine is linked, your server reads what it has, and the sidebar shows i
 - **A project on the machine with no clone here** is a row of its own at the end of the list, outside your groups, with the machine's tag.
 - **Its tabs show what their agents are doing**, with the same icons and the model and context line as yours.
 - **A machine that is down keeps its rows**, dimmed, and an agent's tab says what it was doing and when the machine was last seen: `working · seen 2 min ago`.
-- **For now you can look, not act**: a machine's rows have no `×`, no ` ⋯ ` menu, no `+ Tab`, and can't be dragged. Folding a workspace works: it is kept by your server, not on the machine, until your server restarts.
+- **A machine's workspace has a `×` and a ` ⋯ ` menu**, as yours do: see [Acting on a machine's workspace](#acting-on-a-machines-workspace). Its tabs have no buttons, no row has `+ Tab`, and they can't be dragged. Folding a workspace works: it is kept by your server, not on the machine, until your server restarts.
+
+### Acting on a machine's workspace
+
+Hover over a machine's workspace (in compact mode its buttons always show) and use its buttons as you would on yours. Each one sends the machine the request a script would send, over a connection of its own, and the machine does it as if you had clicked in its own window:
+
+- **` ⋯ `**, or a right-click on the row, opens a menu with **rename workspace**. Leave the name empty to go back to the branch name. The new name shows when the machine sends its next update.
+- **`×` on a plain workspace** asks first, also when the window is wide: `Close the workspace notes on vps?`. Its shells stop on the machine.
+- **`×` on a workspace with a worktree** asks the machine what removing it would lose, as the [remove a worktree](../worktrees/#remove-a-worktree) dialog does here: changes that aren't committed (**remove anyway**), a lock (**unlock and remove**), its roles' worktrees and its teardown. Then the row says `removing…` until the machine answers with `removed feat/dark-mode on vps`, or, if its teardown or a role's worktree failed there, `removed feat/dark-mode on vps, cleanup failed in part, see server.log`, as a removal here says; the reason is in this computer's log (`cornercase logs`). If the machine can't check, the dialog closes and a toast says why; nothing is removed.
+- **If the machine is down**, the menu says `vps unreachable` (or why the link is waiting) and its items are greyed out, and the `×` says the same with `nothing was sent`. Nothing is kept to send later.
+- **While the machine works on one of them**, the workspace's **rename workspace** is greyed out and its `×` says `notes on vps is still waiting for its last action` with `nothing was sent`. A row that says `removing…` takes no clicks.
+- **If the machine restarted** after you opened a dialog, the dialog closes, or, if you confirm first, nothing is changed there and a toast says so, since its workspaces may have new ids by then.
+
+A rename or a close gives up after 15 seconds, the check after a minute and a removal after 10 minutes, with `it did not answer in time`; a removal that took longer goes on on the machine. Scripts can do the same with [`--remote`](../scripts-and-agents/#machines).
 
 ### Clicking a machine's workspace
 

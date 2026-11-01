@@ -37,7 +37,13 @@ pub(super) fn start_listing(here: &Session, listed: &[(&str, &str)], reached: &[
     config["machines"] = Value::Array(machines);
     std::fs::write(here.dir.join("config.json"), config.to_string()).expect("write the config");
     let path = fake_ssh_to(&here.dir, reached);
-    let started = here.cold_command().env("PATH", path).arg("start-server").output().expect("run cornercase");
+    let started = here
+        .cold_command()
+        .env("PATH", path)
+        .env("CORNERCASE_LOG", "info")
+        .arg("start-server")
+        .output()
+        .expect("run cornercase");
     assert!(started.status.success(), "{started:?}");
 }
 
@@ -196,7 +202,7 @@ fn two_machines_on_one_server_are_linked_once() {
         (with_state(&list, "linked").expect("linked"), with_state(&list, "unreachable").expect("refused"));
     assert_eq!(refused["error"], format!("the same server as {}", name_of(linked)));
     wait_until("the refused link's ssh ends", || gone(&ssh_pid_to(&here, name_of(refused))));
-    assert_eq!(machine.servers(), 1);
+    wait_until("the server that lost the lock there ends", || machine.servers() == 1);
 }
 
 #[test]

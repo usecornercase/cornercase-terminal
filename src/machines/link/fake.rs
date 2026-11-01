@@ -3,6 +3,7 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 
+use parking_lot::Mutex;
 use serde_json::Value;
 
 use super::{Connect, Ends, Line};
@@ -68,6 +69,14 @@ pub(crate) fn ended(theirs: &mut UnixStream) -> bool {
 
 pub(crate) fn refused() -> Error {
     Error::Ssh { host: "down".into(), reason: REFUSED.into() }
+}
+
+pub(crate) struct Once(pub(crate) Mutex<Option<Line>>);
+
+impl Connect for Once {
+    fn connect(&self, _: &Killer) -> Result<Line> {
+        self.0.lock().take().ok_or_else(refused)
+    }
 }
 
 pub(crate) struct Hanging;

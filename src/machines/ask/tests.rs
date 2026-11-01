@@ -7,29 +7,25 @@ use serde_json::json;
 
 use super::*;
 use crate::control::{Response, Stats};
-use crate::machines::link::Line;
-use crate::machines::link::fake::{Hanging, REFUSED, ended, line, refused, request, respond, window_messages};
+use crate::machines::link::fake::{Hanging, Once, REFUSED, ended, line, request, respond, window_messages};
 use crate::protocol::{self, ClientMessage, ServerMessage};
 
 const WAIT: Duration = Duration::from_secs(10);
 const SAID: &str = "Connection to vps closed by remote host.";
-
-struct Once(Mutex<Option<Line>>);
-
-impl Connect for Once {
-    fn connect(&self, _: &Killer) -> crate::error::Result<Line> {
-        self.0.lock().take().ok_or_else(refused)
-    }
-}
 
 fn stats() -> Command {
     Command::Stats(Stats::default())
 }
 
 fn asking(timeout: Duration) -> (JoinHandle<Result<String, String>>, UnixStream) {
+    asking_with(None, timeout)
+}
+
+fn asking_with(boot: Option<&str>, timeout: Duration) -> (JoinHandle<Result<String, String>>, UnixStream) {
     let (line, theirs) = line("0.12.232", Some(SAID));
     let connect = Once(Mutex::new(Some(line)));
-    (thread::spawn(move || ask(&connect, "vps", stats(), timeout)), theirs)
+    let boot = boot.map(str::to_string);
+    (thread::spawn(move || ask(&connect, "vps", stats(), boot, timeout)), theirs)
 }
 
 fn answered(asking: JoinHandle<Result<String, String>>) -> Result<String, String> {
@@ -72,6 +68,18 @@ mod a_question {
     }
 
     #[test]
+    fn carries_the_boot_it_is_given() {
+        let (asking, mut theirs) = asking_with(Some("boot-7"), WAIT);
+
+        let asked = request(&mut theirs);
+        respond(&mut theirs, &reply().0);
+
+        assert!(answered(asking).is_ok());
+        assert_eq!(asked["boot"], "boot-7", "{asked}");
+        assert_eq!(asked["command"], "stats");
+    }
+
+    #[test]
     fn ignores_what_a_window_gets_before_its_answer() {
         let (asking, mut theirs) = asking(WAIT);
 
@@ -90,7 +98,7 @@ mod a_question {
     fn a_machine_that_cannot_be_reached_says_why() {
         let connect = Once(Mutex::new(None));
 
-        assert_eq!(ask(&connect, "vps", stats(), WAIT), Err(REFUSED.into()));
+        assert_eq!(ask(&connect, "vps", stats(), None, WAIT), Err(REFUSED.into()));
     }
 
     #[rstest]
@@ -125,7 +133,7 @@ mod the_deadline {
     fn ends_an_ssh_that_has_not_answered() {
         let started = Instant::now();
 
-        let asked = ask(&Hanging, "vps", stats(), Duration::from_millis(50));
+        let asked = ask(&Hanging, "vps", stats(), None, Duration::from_millis(50));
 
         assert_eq!(asked, Err(LATE.into()));
         assert!(started.elapsed() < WAIT, "{:?}", started.elapsed());

@@ -553,7 +553,7 @@ pub(super) fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, line: 
     line.push(Span::styled(name, style));
     marks.push_onto(&mut line, used, room);
     draw_band(f, band.r, Line::from(line), band.bg);
-    if !entry.removing && machine.is_none() {
+    if !entry.removing {
         draw_row_buttons(f, view, band.r, band.pitch, band.bg);
     }
     dim_row(f, band.r, machine);

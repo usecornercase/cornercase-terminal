@@ -22,6 +22,7 @@ use crate::text;
 const PERSON: Duration = Duration::from_secs(60);
 const KEPT: usize = 200;
 const PATH_KEPT: usize = 4096;
+const WARNING_KEPT: usize = 4096;
 const PATHS: [&str; 3] = ["path", "home", "run_dir"];
 const STOPPED: &str = "the server there stopped";
 const RESTARTING: &str = "the server there is restarting";
@@ -79,19 +80,27 @@ impl Down {
     }
 }
 
-fn clean(text: &str) -> String {
+pub(super) fn clean(text: &str) -> String {
+    clean_within(text, KEPT)
+}
+
+pub(super) fn clean_warning(text: &str) -> String {
+    clean_within(text, WARNING_KEPT)
+}
+
+fn clean_within(text: &str, kept: usize) -> String {
     let shown: String = text
         .chars()
         .filter_map(|c| if c.is_whitespace() { Some(' ') } else { (!text::hidden(c)).then_some(c) })
         .collect();
-    text::one_line(&shown).chars().take(KEPT).collect()
+    text::one_line(&shown).chars().take(kept).collect()
 }
 
 fn clean_path(text: &str) -> String {
     text.chars().filter(|&c| !text::hidden(c)).take(PATH_KEPT).collect()
 }
 
-fn cleaned(value: Value) -> Value {
+pub(super) fn cleaned(value: Value) -> Value {
     cleaned_with(value, clean)
 }
 
@@ -458,7 +467,7 @@ impl<E: From<Report>> Running<E> {
     }
 
     fn watch(&self, line: &mut Line) -> Ended {
-        if let Err(ended) = ask(line, Command::Watch(Watch::default()), Ended::Dropped(None)) {
+        if let Err(ended) = ask(line, Command::Watch(Watch::default()), None, Ended::Dropped(None)) {
             return ended;
         }
         loop {
@@ -506,22 +515,22 @@ pub(super) fn why(line: &Line, said: Option<&str>) -> String {
 }
 
 fn handshake(line: &mut Line) -> std::result::Result<Started, Ended> {
-    ask(line, Command::StartServer(StartServer::default()), Ended::Lost(None))?;
+    ask(line, Command::StartServer(StartServer::default()), None, Ended::Lost(None))?;
     match listen(&mut line.reader) {
         Heard::Answer(text) => answered(&text).map_err(Ended::Refused),
         Heard::Ended(said) => Err(Ended::Lost(said)),
     }
 }
 
-pub(super) fn send_once(line: &mut Line, command: Command) -> Heard {
-    if ask(line, command, Ended::Lost(None)).is_err() {
+pub(super) fn send_once(line: &mut Line, command: Command, boot: Option<String>) -> Heard {
+    if ask(line, command, boot, Ended::Lost(None)).is_err() {
         return Heard::Ended(None);
     }
     listen(&mut line.reader)
 }
 
-fn ask(line: &mut Line, command: Command, lost: Ended) -> std::result::Result<(), Ended> {
-    let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+fn ask(line: &mut Line, command: Command, boot: Option<String>, lost: Ended) -> std::result::Result<(), Ended> {
+    let request = Request { caller: None, server: None, contract: None, boot, view: None, command };
     let text = serde_json::to_string(&request).map_err(|e| Ended::Refused(Down::Unreachable(e.to_string())))?;
     protocol::send(&mut line.writer, &ClientMessage::Request(text)).map_err(|_| lost)
 }

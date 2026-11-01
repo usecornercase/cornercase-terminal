@@ -20,6 +20,7 @@ use crate::machines::wake::{Network, Sleep};
 use crate::machines::{self, Info, Machine, State, Status};
 use crate::settings::Page;
 
+pub(super) mod acting;
 mod card;
 mod clicks;
 mod column;
@@ -45,6 +46,7 @@ pub(crate) enum MachineEvent {
     Repo { project: u64, repo: Option<Repo> },
     Stats { link: u64, result: std::result::Result<View, String> },
     Usage { link: u64, result: std::result::Result<Plans, String> },
+    Acted(acting::Acted),
 }
 
 impl From<Report> for AppEvent {
@@ -63,6 +65,7 @@ pub(super) struct Held {
     pub(super) watching: bool,
     pub(super) down_at: Option<(Instant, u32)>,
     pub(super) cache: Cache,
+    pub(super) era: u64,
 }
 
 pub(super) struct Machines {
@@ -76,6 +79,7 @@ pub(super) struct Machines {
     next: u64,
     sleep: Sleep,
     pub(super) repos: repo::Repos,
+    pub(super) acting: acting::Acting,
     selection: Option<selection::RemoteSelection>,
     folded: Vec<(String, PathBuf)>,
 }
@@ -93,6 +97,7 @@ impl Machines {
             next: 1,
             sleep: Sleep::default(),
             repos: repo::Repos::new(),
+            acting: acting::Acting::default(),
             selection: None,
             folded: Vec::new(),
         }
@@ -220,6 +225,7 @@ impl App {
             kept
         });
         self.follow_selection();
+        self.follow_remote_acts();
         for machine in wanted {
             let edited = before.iter().any(|old| old.destination == machine.destination && *old != machine);
             let Some(held) = self.machines.held.iter_mut().find(|held| held.destination == machine.destination) else {
@@ -249,6 +255,7 @@ impl App {
             watching: false,
             down_at: None,
             cache: Cache::default(),
+            era: 0,
         };
         self.machines.held.push(held);
     }
@@ -260,6 +267,7 @@ impl App {
             MachineEvent::Repo { project, repo } => self.repo_read(project, repo),
             MachineEvent::Stats { link, result } => self.machine_answered(link, result),
             MachineEvent::Usage { link, result } => self.machine_answered(link, result),
+            MachineEvent::Acted(acted) => self.acted(acted),
         }
     }
 
@@ -292,11 +300,15 @@ impl App {
 
     fn seen_arrived(&mut self, at: usize, seen: Box<control::Report>, now: i64) {
         let held = &mut self.machines.held[at];
+        if held.seen.as_ref().is_none_or(|old| old.boot != seen.boot) {
+            held.era += 1;
+        }
         let before = held.seen.replace(seen).filter(|_| held.watching);
         held.watching = true;
         held.seen_at = Some(now);
         self.log_seen(&self.machines.held[at]);
         self.follow_selection();
+        self.follow_remote_acts();
         self.tell_turns(at, before.as_deref());
     }
 

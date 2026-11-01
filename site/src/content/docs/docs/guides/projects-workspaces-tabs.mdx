@@ -109,7 +109,7 @@ A workspace is called after its custom name, otherwise its branch, otherwise `de
 
 Worktrees of the repository that you create outside cornercase, with `git worktree add`, appear as workspaces by themselves, at the end of the list. A worktree you remove outside cornercase goes away once its tabs are closed, also when git forgot it but its folder is still there (after `git worktree prune`, or a removal that failed half way); that folder stays on disk for you to delete.
 
-A workspace on one of your [machines](../machines/#in-your-sidebar) shows after the project's own when that machine has a clone of the same repository, tagged with the machine's icon and name, such as `☁ vps`; a project there with no clone here is a row of its own at the end of the projects. Clicking one shows a card that says where it runs instead of a pane.
+A workspace on one of your [machines](../machines/#in-your-sidebar) shows after the project's own when that machine has a clone of the same repository, tagged with the machine's icon and name, such as `☁ vps`; a project there with no clone here is a row of its own at the end of the projects. Clicking one shows a card that says where it runs instead of a pane. Its `×` and ` ⋯ ` [close, rename or remove it on the machine](../machines/#acting-on-a-machines-workspace).
 
 When a workspace's branch is behind its upstream, its row ends with the number of commits to pull, such as `↓3`. See [Commits to pull](../worktrees/#commits-to-pull). When the branch has a pull request on GitHub (or a merge request on GitLab), the row shows its number, coloured by its checks, such as `#485✗` when one failed, or `#486!` in orange when it has merge conflicts; click it to see its checks. See [Pull requests and their checks](../worktrees/#pull-requests-and-their-checks).
 
@@ -400,6 +400,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | --- | --- |
 | A tab | Its panes' programs are ended, then the tab goes away. In the compact layout it asks first. |
 | A workspace | All its tabs are closed, then the workspace goes away. In the compact layout it asks first. A workspace with its own worktree asks first, because it also deletes the worktree folder; see [Removing a worktree](../worktrees/#remove-a-worktree). |
+| A machine's workspace | It always asks first, naming the machine, then closes it there, or removes its worktree there; see [Acting on a machine's workspace](../machines/#acting-on-a-machines-workspace). |
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. With **keep projects** its projects stay open, ungrouped, and nothing in them is ended; with **close projects** they close with it, which stops every shell in them (folders and worktrees stay on disk). |
 

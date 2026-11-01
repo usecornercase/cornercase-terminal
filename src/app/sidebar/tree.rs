@@ -96,7 +96,7 @@ impl App {
         let shape = self.tree_shape();
         let scroll = self.scroll.of(List::Projects);
         let hit = self.tree_hit(list, &shape, pos);
-        if self.press_remote_tree(list, &shape, hit, area) {
+        if self.press_remote_tree(list, &shape, hit, (pos, area)) {
             return Ok(());
         }
         if let Some(ui::TreeHit::Select(ui::TreeRow::Workspace(p, w))) = hit

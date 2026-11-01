@@ -60,15 +60,7 @@ impl App {
     }
 
     pub(super) fn rename_view(target: Target, input: &Editor) -> ui::Overlay {
-        ui::Overlay::Form(ui::Form {
-            title: target.rename_title(),
-            label: "name",
-            value: input.clone(),
-            hint: target.rename_hint().into(),
-            toggle: None,
-            note: None,
-            submit: RENAME_SUBMIT,
-        })
+        rename_form(target.rename_title(), target.rename_hint(), input)
     }
 
     pub(super) fn group_style_view(&self, group: u64) -> Option<ui::Overlay> {
@@ -247,8 +239,8 @@ impl App {
             | Overlay::Worktrees(_)
             | Overlay::Ports(_)
             | Overlay::Processes(_) => None,
-            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
-                self.confirm_removal(project, workspace, check, lock.is_some())
+            overlay @ (Overlay::RemoveWorkspace { .. } | Overlay::MachineWorkspace(_)) => {
+                self.submit_workspace(overlay)
             }
             Overlay::DeleteGroup { group } => self.submit_delete_group(group),
             Overlay::RemoveAccount { kind, name } => Some(self.submit_remove_account(kind, &name)),
@@ -271,6 +263,16 @@ impl App {
             busy => Some(busy),
         };
         Ok(())
+    }
+
+    fn submit_workspace(&mut self, overlay: Overlay) -> Option<Overlay> {
+        match overlay {
+            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
+                self.confirm_removal(project, workspace, check, lock.is_some())
+            }
+            Overlay::MachineWorkspace(dialog) => self.submit_machine_workspace(*dialog),
+            other => Some(other),
+        }
     }
 
     fn submit_rename(&mut self, target: Target, input: &str) -> Option<Overlay> {
@@ -347,7 +349,7 @@ impl App {
     pub(super) fn close_workspace_message(&self, project: u64, workspace: u64) -> Option<String> {
         let workspace = self.projects.workspace(self.projects.workspace_in(project, workspace)?);
         let closed = self.forgotten_note(workspace.id);
-        Some(format!("Close the workspace {}?{}{closed}", workspace.label(), stopped_tabs(workspace.tabs.len())))
+        Some(close_question(&workspace.label(), workspace.tabs.len(), &closed, None))
     }
 
     pub(super) fn close_tab_message(&self, project: u64, workspace: u64, tab: u64) -> Option<String> {
@@ -369,6 +371,29 @@ pub(super) fn confirm_view(
     extra: Option<&'static str>,
 ) -> ui::Overlay {
     ui::Overlay::Confirm(ui::Confirm { title, message, note: None, submit, extra, dangerous: false })
+}
+
+pub(super) fn rename_form(title: &'static str, hint: &str, input: &Editor) -> ui::Overlay {
+    ui::Overlay::Form(ui::Form {
+        title,
+        label: "name",
+        value: input.clone(),
+        hint: hint.into(),
+        toggle: None,
+        note: None,
+        submit: RENAME_SUBMIT,
+    })
+}
+
+pub(super) fn close_question(label: &str, tabs: usize, closed: &str, on: Option<&str>) -> String {
+    format!("Close the workspace {}?{}{closed}", named(label, on), stopped_tabs(tabs))
+}
+
+pub(super) fn named(label: &str, on: Option<&str>) -> String {
+    match on {
+        Some(machine) => format!("{label} on {machine}"),
+        None => label.to_string(),
+    }
 }
 
 fn stopped_tabs(tabs: usize) -> String {
