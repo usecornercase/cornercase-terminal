@@ -273,9 +273,14 @@ pub(crate) fn workspace_drop(layout: &Rows, tabs: &TabLines, dragged: WorkspaceR
     let rows = workspace_rows(tabs);
     match dragged {
         WorkspaceRow::Workspace(_) => {
-            let header = |r| if let WorkspaceRow::Workspace(w) = r { Some(w) } else { None };
+            let ours = tabs.ours();
+            let header = |r| if let WorkspaceRow::Workspace(w) = r { (w < ours).then_some(w) } else { None };
             let (at, w) = block_drop(&rows, over, dragged, WorkspaceRow::Gap, header)?;
-            Some(Landing { at, spot: Spot::Workspace(w) })
+            let end = rows
+                .iter()
+                .position(|r| *r == WorkspaceRow::Workspace(ours))
+                .map_or(rows.len(), |t| t.saturating_sub(1));
+            Some(Landing { at: at.min(end), spot: Spot::Workspace(w) })
         }
         WorkspaceRow::Tab(w, t) => tab_drop(&rows, over, w, t),
         WorkspaceRow::Gap | WorkspaceRow::NewTab(_) | WorkspaceRow::Landing => None,

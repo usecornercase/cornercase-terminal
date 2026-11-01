@@ -21,6 +21,18 @@ fn arrow(app: &App, w: usize) -> Position {
     Position::new(r.x + 2, r.y)
 }
 
+fn add_workspaces(app: &mut App, names: &[&str]) {
+    let path = app.projects[0].path.clone();
+    for name in names {
+        let workspace = app.new_workspace(AREA, path.clone(), Some((*name).into()), false).expect("workspace");
+        app.projects[0].workspaces.push(workspace);
+    }
+}
+
+fn our_ids(app: &App) -> Vec<u64> {
+    app.projects[0].workspaces.iter().map(|w| w.id).collect()
+}
+
 mod a_machine_s_row {
     use super::*;
 
@@ -72,16 +84,33 @@ mod a_machine_s_row {
     #[test]
     fn takes_a_local_workspace_dropped_on_it_to_the_end_of_this_computer_s_own() {
         let Seeing { mut rig, _dir, .. } = seeing_two();
-        let path = rig.app.projects[0].path.clone();
-        let workspace = rig.app.new_workspace(AREA, path, Some("feature".into()), false).expect("workspace");
-        rig.app.projects[0].workspaces.push(workspace);
-        let ids = |app: &App| app.projects[0].workspaces.iter().map(|w| w.id).collect::<Vec<_>>();
-        let (before, w) = (ids(&rig.app), theirs_at(&rig.app));
+        add_workspaces(&mut rig.app, &["feature"]);
+        let (before, w) = (our_ids(&rig.app), theirs_at(&rig.app));
 
         let (from, to) = (row_pos(&rig.app, WorkspaceRow::Workspace(0)), row_pos(&rig.app, WorkspaceRow::Tab(w, 1)));
         drag(&mut rig.app, from, to);
 
-        assert_eq!(ids(&rig.app), [before[1], before[0]]);
+        assert_eq!(our_ids(&rig.app), [before[1], before[0]]);
+    }
+
+    #[test]
+    fn lets_a_local_workspace_dropped_on_ours_land_where_it_points_while_scrolling_the_column() {
+        let Seeing { mut rig, mut theirs, _dir, .. } = seeing_two();
+        add_workspaces(&mut rig.app, &["feature", "fix"]);
+        let mut many = worked(report(&[("web-shop", Some(SHOP)), ("blog", None)]));
+        let main = many.projects[0].workspaces[0].clone();
+        many.projects[0].workspaces = (0..6).map(|n| WorkspaceInfo { id: 100 + n, ..main.clone() }).collect();
+        serve(&mut theirs, 2, many);
+        rig.until("their six workspaces are listed", |app| listed(app).len() == 9);
+        let rows = ui::workspace_rows(&rig.app.tab_lines());
+        let second = rows.iter().position(|row| *row == WorkspaceRow::Workspace(1)).expect("our second workspace");
+        rig.app.scroll.set(List::Workspaces, second);
+        let before = our_ids(&rig.app);
+
+        let (from, to) = (row_pos(&rig.app, WorkspaceRow::Workspace(2)), row_pos(&rig.app, WorkspaceRow::Workspace(1)));
+        drag(&mut rig.app, from, to);
+
+        assert_eq!(our_ids(&rig.app), [before[0], before[2], before[1]]);
     }
 
     #[test]

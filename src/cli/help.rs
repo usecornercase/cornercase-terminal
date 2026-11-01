@@ -280,9 +280,8 @@ pub(super) const GO_HELP: &str =
     "Does what a click on an agent's desktop notification does, or the go button of its toast: shows
 the agent's pane (the one still needing you, when the notice covered several), or its workspace once
 they are all closed, and prints the pane's id. With --view ID it moves that view (see
-`cornercase view`) instead of the window; a notice about an agent on one of your machines shows that
-machine's workspace in the window only, so --view refuses it. TOKEN is a notice's, from
-`cornercase events --notices`.
+`cornercase view`) instead of the window; a notice about an agent on one of your machines refuses
+--view, since only the window shows that machine's workspace. TOKEN is from `cornercase events --notices`.
 It fails for a token this server never gave or no longer keeps (the last 64; a restart forgets them),
 and when the agent and its workspace are gone.
 

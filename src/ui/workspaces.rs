@@ -82,6 +82,10 @@ impl TabLines {
         self.listed && self.bare.get(w) != Some(&true)
     }
 
+    pub(crate) fn ours(&self) -> usize {
+        self.bare.iter().position(|bare| *bare).unwrap_or(self.lines.len())
+    }
+
     pub(crate) fn is_folded(&self, w: usize) -> bool {
         self.listed && self.folded.get(w) == Some(&true)
     }

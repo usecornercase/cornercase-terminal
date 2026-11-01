@@ -248,18 +248,10 @@ impl App {
     }
 
     pub(super) fn tab_lines(&self) -> ui::TabLines {
+        let lines = |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| self.tab_details(t).lines()).collect() };
         let remote = self.remote_projects();
         let column = self.column(&remote);
-        self.lines_of(column.ours, &self.remote_entries(&column))
-    }
-
-    pub(super) fn local_tab_lines(&self) -> ui::TabLines {
-        let remote = self.remote_projects();
-        self.lines_of(self.column(&remote).ours, &[])
-    }
-
-    fn lines_of(&self, ours: &[Workspace], theirs: &[ui::WorkspaceEntry]) -> ui::TabLines {
-        let lines = |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| self.tab_details(t).lines()).collect() };
+        let (ours, theirs) = (column.ours, self.remote_entries(&column));
         let lines = ours.iter().map(lines).chain(theirs.iter().map(ui::WorkspaceEntry::tab_lines)).collect();
         let folded = ours.iter().map(|w| w.collapsed).chain(theirs.iter().map(|w| w.collapsed)).collect();
         let bare = ours.iter().map(|_| false).chain(theirs.iter().map(|_| true)).collect();
