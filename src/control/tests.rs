@@ -181,6 +181,7 @@ fn newest_commands() -> Vec<Command> {
         Command::Worktrees(ListWorktrees::default()),
         Command::Machines(Machines::default()),
         Command::Clone(CloneRepository::default()),
+        Command::FocusMachine(FocusMachine { machine: "vps".into(), item: Item::Workspace(1) }),
     ]
 }
 

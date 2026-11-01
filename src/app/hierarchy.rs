@@ -254,6 +254,7 @@ impl App {
             Goto::Place { project, workspace, tab } => (project, workspace, tab),
         };
         let Some(p) = self.projects.project_index(project) else { return };
+        self.leave_remote();
         self.active = p;
         let project = &mut self.projects[p];
         if let Some(w) = workspace.and_then(|id| project.index_of(id)) {

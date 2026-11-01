@@ -291,6 +291,7 @@ impl App {
         let workspace = self.new_workspace(area, repo, Some(name), false)?;
         let at = self.projects.push_workspace(p, workspace);
         self.projects[p].active = at.index();
+        self.leave_remote();
         self.active = p;
         Ok(None)
     }
@@ -362,6 +363,7 @@ impl App {
             }
         }
         self.projects[at.project()].active = at.index();
+        self.leave_remote();
         self.active = at.project();
         Ok(())
     }

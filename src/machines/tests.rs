@@ -410,3 +410,30 @@ mod a_logged_error {
         assert_eq!(hide_destination(said, "vps", "me@c"), logged);
     }
 }
+
+mod how_long_ago_a_machine_was_seen {
+    use super::*;
+
+    const SEEN_NOW: u64 = 400;
+
+    fn stamped(secs: u64) -> String {
+        Stamp(UNIX_EPOCH + Duration::from_secs(secs)).to_string()
+    }
+
+    #[rstest]
+    #[case::seconds_before(SEEN_NOW - 30, "30 s")]
+    #[case::minutes_before(SEEN_NOW - 180, "3 min")]
+    #[case::the_same_second(SEEN_NOW, "0 s")]
+    #[case::a_stamp_from_the_future(SEEN_NOW + 100, "0 s")]
+    fn says_how_long_ago_a_stamp_was(#[case] seen: u64, #[case] said: &str) {
+        let now = UNIX_EPOCH + Duration::from_secs(SEEN_NOW);
+        assert_eq!(seen_ago(&stamped(seen), now).as_deref(), Some(said));
+    }
+
+    #[rstest]
+    #[case::empty("")]
+    #[case::not_a_stamp("xyzzy")]
+    fn says_nothing_of_a_stamp_it_cannot_read(#[case] seen: &str) {
+        assert_eq!(seen_ago(seen, UNIX_EPOCH + Duration::from_secs(SEEN_NOW)), None);
+    }
+}

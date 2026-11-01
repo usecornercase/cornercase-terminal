@@ -67,13 +67,15 @@ pub(crate) use flow::{
     RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
-pub(crate) use machines::{MachineList, MachineSet, Machines};
+pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Machines, ShownRemote};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
-pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, SharedInfo, StackInfo};
+pub(crate) use status::{
+    GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RemoteInfo, RunStatus, SharedInfo, StackInfo,
+};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
@@ -242,6 +244,7 @@ pub(crate) enum Command {
     Worktrees(ListWorktrees),
     Machines(Machines),
     Clone(CloneRepository),
+    FocusMachine(FocusMachine),
 }
 
 impl Command {
@@ -277,6 +280,7 @@ impl Command {
             Self::Mark(_) => 21,
             Self::Notify(_) => 13,
             Self::Focus(_) => 12,
+            Self::FocusMachine(_) => 115,
             _ => return None,
         })
     }
@@ -435,7 +439,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 115] = [
+    pub(crate) const NAMES: [&str; 116] = [
         "status",
         "open",
         "new-workspace",
@@ -551,6 +555,7 @@ impl Command {
         "worktrees",
         "machines",
         "clone",
+        "focus-machine",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

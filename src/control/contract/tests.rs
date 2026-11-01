@@ -45,6 +45,7 @@ mod describing {
             "files",
             "machines",
             "machine-usage",
+            "machine-workspaces",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();

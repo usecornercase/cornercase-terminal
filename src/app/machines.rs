@@ -11,12 +11,19 @@ use crate::control;
 use crate::control::contract::{Code, Refusal};
 use crate::control::usage::Plans;
 use crate::error::Result;
+use crate::git::remote::Repo;
 use crate::host::network;
 use crate::log::{self, Job, Level};
 use crate::machines::link::{self, Connect, Down, Event, Link, Report, Servers};
 use crate::machines::wake::{Network, Sleep};
 use crate::machines::{self, Info, Machine, State, Status};
 use crate::settings::Page;
+
+mod repo;
+mod report;
+mod selection;
+
+pub(super) use selection::RemoteItem;
 
 pub(super) const OLDER: &str = "its cornercase is older than this one";
 
@@ -27,6 +34,7 @@ pub(super) type Updater = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
 pub(crate) enum MachineEvent {
     Link(Report),
     Updated { link: u64, result: std::result::Result<(), String>, hidden: std::result::Result<(), String> },
+    Repo { project: u64, repo: Option<Repo> },
     Stats { link: u64, result: std::result::Result<View, String> },
     Usage { link: u64, result: std::result::Result<Plans, String> },
 }
@@ -42,6 +50,9 @@ pub(super) struct Held {
     pub(super) destination: String,
     pub(super) link: Link,
     pub(super) status: Status,
+    pub(super) seen: Option<Box<control::Report>>,
+    pub(super) seen_at: Option<i64>,
+    pub(super) down_at: Option<(Instant, u32)>,
     pub(super) cache: Cache,
 }
 
@@ -55,6 +66,8 @@ pub(super) struct Machines {
     servers: Servers,
     next: u64,
     sleep: Sleep,
+    pub(super) repos: repo::Repos,
+    selection: Option<selection::RemoteSelection>,
 }
 
 impl Machines {
@@ -69,6 +82,8 @@ impl Machines {
             servers: Servers::new(control::server_token()),
             next: 1,
             sleep: Sleep::default(),
+            repos: repo::Repos::new(),
+            selection: None,
         }
     }
 
@@ -121,6 +136,10 @@ impl Machines {
 
 #[cfg(test)]
 impl Machines {
+    pub(super) fn held_mut(&mut self) -> &mut [Held] {
+        &mut self.held
+    }
+
     pub(super) fn set_connector(&mut self, connect: Connector) {
         self.connect = connect;
     }
@@ -188,6 +207,7 @@ impl App {
             }
             kept
         });
+        self.follow_selection();
         for machine in wanted {
             let edited = before.iter().any(|old| old.destination == machine.destination && *old != machine);
             let Some(held) = self.machines.held.iter_mut().find(|held| held.destination == machine.destination) else {
@@ -207,8 +227,16 @@ impl App {
         let connector = (self.machines.connect)(&machine.destination);
         let link = Link::start(id, connector, &self.machines.servers, &self.tx);
         log::info!("machines", "linking", name = machine.name, link = id);
-        let (name, destination) = (machine.name, machine.destination);
-        let held = Held { name, destination, link, status: Status::default(), cache: Cache::default() };
+        let held = Held {
+            name: machine.name,
+            destination: machine.destination,
+            link,
+            status: Status::default(),
+            seen: None,
+            seen_at: None,
+            down_at: None,
+            cache: Cache::default(),
+        };
         self.machines.held.push(held);
     }
 
@@ -216,6 +244,7 @@ impl App {
         match event {
             MachineEvent::Link(report) => self.machine_reported(report),
             MachineEvent::Updated { link, result, hidden } => self.machine_updated(link, &result, &hidden),
+            MachineEvent::Repo { project, repo } => self.repo_read(project, repo),
             MachineEvent::Stats { link, result } => self.machine_answered(link, result),
             MachineEvent::Usage { link, result } => self.machine_answered(link, result),
         }
@@ -231,9 +260,17 @@ impl App {
                     log::info!("machines", "machine linked", name = held.name, version = release);
                 }
                 held.status.linked(release, server_version, now);
+                held.down_at = None;
+            }
+            Event::Seen(seen) => {
+                held.seen = Some(seen);
+                held.seen_at = Some(now);
+                self.log_seen(&self.machines.held[at]);
+                self.follow_selection();
             }
             Event::Down { down, failed } => {
                 held.status.down(down, now);
+                held.down_at = Some((Instant::now(), failed));
                 if !held.another_computer() {
                     held.cache = Cache::default();
                 }
@@ -242,6 +279,20 @@ impl App {
                 }
             }
         }
+    }
+
+    pub(super) fn paired(&self, seen: &control::Report) -> Vec<Option<u64>> {
+        let order = crate::project::sidebar_order(&self.projects, &self.groups);
+        let open = order.into_iter().map(|p| &self.projects[p]).filter(|p| !p.closing);
+        let ours: Vec<(u64, Option<&str>)> = open.map(|p| (p.id, p.repo.identity.as_deref())).collect();
+        let theirs: Vec<Option<&str>> = seen.projects.iter().map(|p| p.repo.as_deref()).collect();
+        machines::repo::pairs(&theirs, &ours)
+    }
+
+    fn log_seen(&self, held: &Held) {
+        let Some(seen) = &held.seen else { return };
+        let paired = self.paired(seen).into_iter().flatten().count();
+        log::debug!("machines", "machine seen", name = held.name, projects = seen.projects.len(), paired = paired);
     }
 
     pub(super) fn update_machine(&mut self, name: &str) -> Update {
@@ -321,5 +372,6 @@ impl App {
     pub(super) fn stop_machines(&mut self) {
         self.machines.held.clear();
         self.machines.synced.clear();
+        self.machines.selection = None;
     }
 }

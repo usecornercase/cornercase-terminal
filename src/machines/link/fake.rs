@@ -6,8 +6,8 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use super::{Connect, Ends, Line};
-use crate::control::Response;
 use crate::control::start_server::Started;
+use crate::control::{Report, Response, Snapshot};
 use crate::error::{Error, Result};
 use crate::host::open::{Browse, Open, Opener};
 use crate::host::sound::{Cue, Kind};
@@ -55,6 +55,11 @@ pub(crate) fn answer(theirs: &mut UnixStream, boot: &str, version: &str) {
     request(theirs);
     let started = Started { boot: boot.into(), version: version.into(), ..Started::default() };
     respond(theirs, &Response::Ok(serde_json::to_value(started).expect("a JSON answer")));
+}
+
+pub(crate) fn serve(theirs: &mut UnixStream, revision: u64, report: Report) {
+    let line = Snapshot { revision, report }.streamed().expect("a snapshot");
+    protocol::send(theirs, &ServerMessage::Response(line)).expect("send a snapshot to the link");
 }
 
 pub(crate) fn ended(theirs: &mut UnixStream) -> bool {

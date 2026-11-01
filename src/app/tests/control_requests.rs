@@ -570,6 +570,7 @@ mod plugins;
 mod ports;
 mod processes;
 mod queue;
+mod repos;
 mod searching;
 mod setup;
 mod start_server;

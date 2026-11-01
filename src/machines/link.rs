@@ -7,9 +7,11 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::{Condvar, Mutex};
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 
 use crate::control::start_server::Started;
-use crate::control::{Command, Request, Response, StartServer};
+use crate::control::{self, Command, Request, Response, Snapshot, StartServer, Watch};
 use crate::error::{Error, Result};
 use crate::panics;
 use crate::process;
@@ -19,21 +21,24 @@ use crate::text;
 
 const PERSON: Duration = Duration::from_secs(60);
 const KEPT: usize = 200;
+const PATH_KEPT: usize = 4096;
+const PATHS: [&str; 3] = ["path", "home", "run_dir"];
 const STOPPED: &str = "the server there stopped";
 const RESTARTING: &str = "the server there is restarting";
 const LET_GO: &str = "the server there ended the link";
 const LOST: &str = "the link ended";
 const THIS_COMPUTER: &str = "that is this computer";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Report {
     pub(crate) link: u64,
     pub(crate) event: Event,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Event {
     Linked { release: String, server_version: String },
+    Seen(Box<control::Report>),
     Down { down: Down, failed: u32 },
 }
 
@@ -80,6 +85,31 @@ fn clean(text: &str) -> String {
         .filter_map(|c| if c.is_whitespace() { Some(' ') } else { (!text::hidden(c)).then_some(c) })
         .collect();
     text::one_line(&shown).chars().take(KEPT).collect()
+}
+
+fn clean_path(text: &str) -> String {
+    text.chars().filter(|&c| !text::hidden(c)).take(PATH_KEPT).collect()
+}
+
+fn cleaned(value: Value) -> Value {
+    cleaned_with(value, clean)
+}
+
+fn cleaned_with(value: Value, how: fn(&str) -> String) -> Value {
+    match value {
+        Value::String(text) => Value::String(how(&text)),
+        Value::Array(items) => Value::Array(items.into_iter().map(|item| cleaned_with(item, how)).collect()),
+        Value::Object(fields) => Value::Object(
+            fields
+                .into_iter()
+                .map(|(key, value)| {
+                    let how = if PATHS.contains(&key.as_str()) { clean_path } else { clean };
+                    (clean(&key), cleaned_with(value, how))
+                })
+                .collect(),
+        ),
+        value => value,
+    }
 }
 
 pub(crate) struct Line {
@@ -420,11 +450,26 @@ impl<E: From<Report>> Running<E> {
             Ok(started) => {
                 let release = clean(&line.release);
                 self.tell(Event::Linked { release, server_version: clean(&started.version) });
-                Ended::Dropped(hold(&mut line.reader))
+                self.watch(&mut line)
             }
             Err(ended) => ended,
         };
         self.finish(&line, ended)
+    }
+
+    fn watch(&self, line: &mut Line) -> Ended {
+        if let Err(ended) = ask(line, Command::Watch(Watch::default()), Ended::Dropped(None)) {
+            return ended;
+        }
+        loop {
+            match listen(&mut line.reader) {
+                Heard::Answer(text) => match answered::<Snapshot>(&text) {
+                    Ok(snapshot) => self.tell(Event::Seen(Box::new(seen(snapshot.report)))),
+                    Err(down) => return Ended::Refused(down),
+                },
+                Heard::Ended(said) => return Ended::Dropped(said),
+            }
+        }
     }
 
     fn claim(&self, started: Started) -> std::result::Result<Started, Ended> {
@@ -461,37 +506,37 @@ pub(super) fn why(line: &Line, said: Option<&str>) -> String {
 }
 
 fn handshake(line: &mut Line) -> std::result::Result<Started, Ended> {
-    match send_once(line, Command::StartServer(StartServer::default())) {
-        Heard::Answer(text) => started(&text).map_err(Ended::Refused),
+    ask(line, Command::StartServer(StartServer::default()), Ended::Lost(None))?;
+    match listen(&mut line.reader) {
+        Heard::Answer(text) => answered(&text).map_err(Ended::Refused),
         Heard::Ended(said) => Err(Ended::Lost(said)),
     }
 }
 
 pub(super) fn send_once(line: &mut Line, command: Command) -> Heard {
-    let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
-    let sent = serde_json::to_string(&request)
-        .is_ok_and(|text| protocol::send(&mut line.writer, &ClientMessage::Request(text)).is_ok());
-    if !sent {
+    if ask(line, command, Ended::Lost(None)).is_err() {
         return Heard::Ended(None);
     }
     listen(&mut line.reader)
 }
 
-fn started(text: &str) -> std::result::Result<Started, Down> {
+fn ask(line: &mut Line, command: Command, lost: Ended) -> std::result::Result<(), Ended> {
+    let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+    let text = serde_json::to_string(&request).map_err(|e| Ended::Refused(Down::Unreachable(e.to_string())))?;
+    protocol::send(&mut line.writer, &ClientMessage::Request(text)).map_err(|_| lost)
+}
+
+fn answered<T: DeserializeOwned>(text: &str) -> std::result::Result<T, Down> {
     let unreadable =
         |e: serde_json::Error| Down::Unreachable(clean(&format!("cannot read the answer from there: {e}")));
     match serde_json::from_str(text).map_err(unreadable)? {
-        Response::Ok(value) => serde_json::from_value(value).map_err(unreadable),
+        Response::Ok(value) => serde_json::from_value(cleaned(value)).map_err(unreadable),
         Response::Error(message) => Err(Down::Unreachable(clean(&message))),
     }
 }
 
-fn hold(reader: &mut impl Read) -> Option<&'static str> {
-    loop {
-        if let Heard::Ended(said) = listen(reader) {
-            return said;
-        }
-    }
+fn seen(report: control::Report) -> control::Report {
+    control::Report { boot: report.boot, home: report.home, projects: report.projects, ..control::Report::default() }
 }
 
 fn listen(reader: &mut impl Read) -> Heard {

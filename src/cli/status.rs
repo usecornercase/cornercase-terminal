@@ -1,5 +1,6 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use serde_json::Value;
 
@@ -8,9 +9,11 @@ use super::{print_json, print_out};
 use crate::agents::activity;
 use crate::client::{answer, ask};
 use crate::control::{
-    self, PaneInfo, PaneRow, PaneRows, ProjectInfo, PullRequestInfo, Report, SharedInfo, WorkspaceInfo,
+    self, MachineSeen, PaneInfo, PaneRow, PaneRows, ProjectInfo, PullRequestInfo, Report, SharedInfo, ShownRemote,
+    WorkspaceInfo,
 };
 use crate::error::{Error, Result};
+use crate::machines::{self, State};
 use crate::pull_request::Provider;
 
 pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
@@ -27,7 +30,7 @@ pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
         (false, false) => {
             let report: Report = answer(value)?;
             let home = home(&report);
-            print_out(&render(&report, home.as_deref()))
+            print_out(&render(&report, home.as_deref(), SystemTime::now()))
         }
         (true, true) => print_json(&PaneRows { panes: answer::<Report>(value)?.panes() }),
         (true, false) => print_out(&pane_table(&answer::<Report>(value)?.panes())?),
@@ -45,20 +48,50 @@ fn home(report: &Report) -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
-pub(crate) fn render(report: &Report, home: Option<&Path>) -> String {
+pub(crate) fn render(report: &Report, home: Option<&Path>, now: SystemTime) -> String {
     let mut lines = Vec::new();
     lines.extend(report.view.as_ref().map(super::view::describe));
+    let window = if report.shown_remote.is_some() { control::Ids::default() } else { report.shown };
+    let shown = report.view.as_ref().map_or(window, |view| view.shown);
+    let marks = Marks { shown, word: if report.view.is_some() { "view" } else { "shown" } };
     for project in report.loose() {
-        project_lines(&mut lines, report, project, 0, home);
+        project_lines(&mut lines, project, 0, home, &marks);
     }
     for group in &report.groups {
         let state = if group.collapsed { "collapsed" } else { "" };
         lines.push(line(0, "group", group.id, &[group.name.clone(), state.into()], &[]));
         for project in report.grouped(group.id) {
-            project_lines(&mut lines, report, project, 1, home);
+            project_lines(&mut lines, project, 1, home, &marks);
         }
     }
+    for machine in &report.machines {
+        machine_lines(&mut lines, machine, report.shown_remote.as_ref(), now);
+    }
     lines.into_iter().map(|line| line + "\n").collect()
+}
+
+fn machine_lines(lines: &mut Vec<String>, machine: &MachineSeen, shown: Option<&ShownRemote>, now: SystemTime) {
+    lines.push(format!("machine {}  {}  {}", machine.name, machine.icon, machine_state(machine, now)));
+    let there = shown.filter(|shown| shown.machine == machine.name && shown.boot == machine.boot);
+    let shown = there.map_or_else(control::Ids::default, |shown| control::Ids {
+        project: Some(shown.project),
+        workspace: Some(shown.workspace),
+        tab: shown.tab,
+        pane: None,
+    });
+    for project in &machine.projects {
+        project_lines(lines, project, 1, None, &Marks { shown, word: "shown" });
+    }
+}
+
+fn machine_state(machine: &MachineSeen, now: SystemTime) -> String {
+    let seen = machine.seen.as_deref().and_then(|seen| machines::seen_ago(seen, now));
+    match machine.state {
+        State::Connecting => "connecting".into(),
+        State::Linked => "linked".into(),
+        State::Older => "older".into(),
+        State::Unreachable => seen.map_or_else(|| "unreachable".into(), |ago| format!("unreachable · seen {ago} ago")),
+    }
 }
 
 pub(crate) fn pane_table(rows: &[PaneRow]) -> Result<String> {
@@ -96,10 +129,10 @@ impl Marks {
     }
 }
 
-fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo, depth: usize, home: Option<&Path>) {
-    let shown = report.view.as_ref().map_or(report.shown, |view| view.shown);
-    let marks = Marks { shown, word: if report.view.is_some() { "view" } else { "shown" } };
-    let parts = [project.name.clone(), crate::text::display_path(&project.path, home)];
+fn project_lines(lines: &mut Vec<String>, project: &ProjectInfo, depth: usize, home: Option<&Path>, marks: &Marks) {
+    let shown = marks.shown;
+    let paired = project.paired.flatten().map(|id| format!("paired with project {id}"));
+    let parts = [project.name.clone(), crate::text::display_path(&project.path, home), paired.unwrap_or_default()];
     lines.push(line(depth, "project", project.id, &parts, &marks.of(shown.project == Some(project.id))));
     for workspace in &project.workspaces {
         let parts = workspace_parts(workspace, home);
@@ -114,7 +147,7 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
             let parts = [tab.name.clone(), tab.status.clone().unwrap_or_default()];
             lines.push(line(depth + 2, "tab", tab.id, &parts, &marks.of(shown.tab == Some(tab.id))));
             for pane in &tab.panes {
-                lines.push(pane_line(pane, depth + 3, &marks, home));
+                lines.push(pane_line(pane, depth + 3, marks, home));
             }
         }
     }
