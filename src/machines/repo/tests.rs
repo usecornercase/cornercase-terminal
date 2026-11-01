@@ -1,9 +1,10 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
 
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{TempDir, git_repo, write_executable};
+use crate::test_util::{self, TempDir, git_repo, write_executable};
 
 fn counted(hostname: Option<&'static str>) -> (Resolve, Arc<Mutex<Vec<String>>>) {
     let asked = Arc::new(Mutex::new(Vec::new()));
@@ -50,9 +51,11 @@ mod hostnames {
     fn resolve_a_host_once_when_asked_at_the_same_time() {
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&calls);
+        let (release, held) = mpsc::channel::<()>();
+        let held = Mutex::new(held);
         let hostnames = Hostnames::new(Arc::new(move |_: &str| {
             counter.fetch_add(1, Ordering::SeqCst);
-            std::thread::sleep(Duration::from_millis(50));
+            let _ = held.lock().recv();
             Some("github.com".into())
         }));
         let threads: Vec<_> = (0..4)
@@ -61,11 +64,29 @@ mod hostnames {
                 std::thread::spawn(move || hostnames.of("gh-work"))
             })
             .collect();
+        let waiting = || hostnames.known.lock().get("gh-work").map_or(0, Arc::strong_count);
+
+        test_util::wait_until("every thread waits for the one lookup", || {
+            calls.load(Ordering::SeqCst) == 1 && waiting() == 5
+        });
+        drop(release);
 
         for thread in threads {
             assert_eq!(thread.join().expect("join"), "github.com");
         }
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn leave_out_a_remote_s_query_and_fragment() {
+        let (resolve, _) = counted(None);
+        let hostnames = Hostnames::new(resolve);
+        let config = "[remote \"origin\"]\n\turl = https://github.com/acme/web-shop.git?access_token=ghp_abc123#main\n";
+
+        let repo = hostnames.repo(repo_with(config).path());
+
+        assert_eq!(repo.identity.as_deref(), Some("github.com/acme/web-shop"));
+        assert_eq!(repo.remotes, [("origin".to_string(), "https://github.com/acme/web-shop.git".to_string())]);
     }
 
     #[test]
@@ -139,6 +160,30 @@ mod ssh_hostname {
         assert_eq!(hostname(&ssh, "-oProxyCommand=touch"), None);
         assert_eq!(hostname(&ssh, "gh work"), None);
         assert!(!dir.path().join("args").exists());
+    }
+
+    #[rstest]
+    #[case::a_space("hostname evil host\n")]
+    #[case::a_shell_character("hostname github.com;rm\n")]
+    #[case::an_escape("hostname git\u{1b}[31mhub.com\n")]
+    #[case::a_slash("hostname github.com/acme\n")]
+    #[case::an_at("hostname git@github.com\n")]
+    fn is_none_when_the_hostname_is_not_a_plain_name(#[case] config: &str) {
+        assert_eq!(configured(config), None);
+    }
+
+    #[test]
+    fn keeps_dots_dashes_and_underscores() {
+        assert_eq!(configured("hostname Git_Hub-1.example.com\n").as_deref(), Some("git_hub-1.example.com"));
+    }
+
+    #[test]
+    fn keeps_the_host_as_it_is_when_ssh_prints_an_odd_hostname() {
+        let dir = TempDir::new();
+        let ssh = fake_ssh(&dir, "printf 'hostname evil;host\\n'\n");
+        let hostnames = Hostnames::new(Arc::new(move |host: &str| hostname(&ssh, host)));
+
+        assert_eq!(hostnames.of("gh-work"), "gh-work");
     }
 
     #[test]

@@ -350,6 +350,12 @@ mod remote_without_credentials {
     #[case::a_stray_quote("\"https://ghp_abc123@github.com/acme/shop\"", "\"https://github.com/acme/shop\"")]
     #[case::a_git_scheme_user("git://ghp_abc123@github.com/acme/shop", "git://github.com/acme/shop")]
     #[case::a_git_ssh_user("GIT+SSH://git:s3cret@github.com/acme/shop", "GIT+SSH://git@github.com/acme/shop")]
+    #[case::a_query("https://github.com/acme/shop.git?access_token=ghp_abc123", "https://github.com/acme/shop.git")]
+    #[case::a_fragment("https://github.com/acme/shop#ghp_abc123", "https://github.com/acme/shop")]
+    #[case::a_query_with_no_path("https://github.com?access_token=ghp_abc123", "https://github.com")]
+    #[case::a_user_and_a_query("https://ana:s3cret@github.com/acme/shop?x=1#y", "https://github.com/acme/shop")]
+    #[case::a_question_mark_in_the_password("https://ana:p?ss@github.com/acme/shop", "https://github.com/acme/shop")]
+    #[case::an_ssh_user_and_a_query("ssh://git@github.com/acme/shop?key=s3cret", "ssh://git@github.com/acme/shop")]
     fn keeps_everything_but_the_secrets(#[case] url: &str, #[case] expected: &str) {
         assert_eq!(without_credentials(url), expected);
     }

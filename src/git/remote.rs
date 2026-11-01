@@ -76,14 +76,17 @@ pub(crate) fn identity(remotes: &[(String, String)], resolve: impl Fn(&str) -> O
 
 pub(crate) fn without_credentials(url: &str) -> String {
     let Some((scheme, rest)) = url.split_once("://") else { return url.to_string() };
-    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let (authority, tail) = rest.split_at(end);
-    let Some((user_info, host)) = authority.rsplit_once('@') else { return url.to_string() };
+    let authority = rest.find('/').map_or(rest, |slash| &rest[..slash]);
+    let (user_info, after) = match authority.rfind('@') {
+        Some(at) => (&rest[..at], &rest[at + 1..]),
+        None => ("", rest),
+    };
+    let address = after.find(['?', '#']).map_or(after, |end| &after[..end]);
     let user = user_info.split(':').next().unwrap_or_default();
     if !is_ssh_scheme(scheme) || user.is_empty() {
-        return format!("{scheme}://{host}{tail}");
+        return format!("{scheme}://{address}");
     }
-    format!("{scheme}://{user}@{host}{tail}")
+    format!("{scheme}://{user}@{address}")
 }
 
 fn is_ssh_scheme(scheme: &str) -> bool {

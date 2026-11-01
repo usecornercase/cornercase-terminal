@@ -68,8 +68,12 @@ fn configured(config: &str) -> Option<String> {
         .lines()
         .find_map(|line| line.strip_prefix("hostname "))
         .map(str::trim)
-        .filter(|hostname| !hostname.is_empty())
+        .filter(|hostname| is_hostname(hostname))
         .map(str::to_ascii_lowercase)
+}
+
+fn is_hostname(text: &str) -> bool {
+    !text.is_empty() && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
 #[cfg(test)]
