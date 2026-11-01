@@ -10,6 +10,7 @@ use link::Down;
 pub(crate) mod ask;
 pub(crate) mod form;
 pub(crate) mod link;
+pub(crate) mod repo;
 pub(crate) mod wake;
 
 pub(crate) const ICONS: [(char, &str); 6] =
@@ -255,7 +256,6 @@ impl Info {
         error: Option<String>,
     ) -> Self {
         let unlinked = if problem.is_some() { State::Unreachable } else { State::Connecting };
-        let seen = status.and_then(|status| status.seen).and_then(|secs| u64::try_from(secs).ok());
         Self {
             name: machine.name.clone(),
             icon: known_icon(&machine.icon).to_string(),
@@ -264,7 +264,7 @@ impl Info {
             state: status.map_or(unlinked, |status| status.state),
             version: status.and_then(|status| status.version.clone()),
             server_version: status.and_then(|status| status.server_version.clone()),
-            seen: seen.map(|secs| Stamp(UNIX_EPOCH + Duration::from_secs(secs)).to_string()),
+            seen: status.and_then(|status| status.seen).and_then(stamp),
             error,
             updating: status.is_some_and(|status| status.updating),
             problem,
@@ -296,9 +296,18 @@ impl Info {
     }
 
     fn seen_ago(&self, now: SystemTime) -> Option<String> {
-        let seen = Stamp::parse(self.seen.as_deref()?)?;
-        Some(ago(now.duration_since(seen).unwrap_or_default().as_secs()))
+        seen_ago(self.seen.as_deref()?, now)
     }
+}
+
+pub(crate) fn stamp(secs: i64) -> Option<String> {
+    let secs = u64::try_from(secs).ok()?;
+    Some(Stamp(UNIX_EPOCH + Duration::from_secs(secs)).to_string())
+}
+
+pub(crate) fn seen_ago(seen: &str, now: SystemTime) -> Option<String> {
+    let seen = Stamp::parse(seen)?;
+    Some(ago(now.duration_since(seen).unwrap_or_default().as_secs()))
 }
 
 #[cfg(test)]

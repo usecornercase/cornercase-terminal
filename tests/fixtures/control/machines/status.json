@@ -1,0 +1,88 @@
+{
+  "machines": [
+    {
+      "name": "vps",
+      "icon": "☁",
+      "state": "linked",
+      "seen": "2026-10-29T10:00:00.000Z",
+      "boot": "4242-1760600000",
+      "projects": [
+        {
+          "id": 1,
+          "name": "web-shop",
+          "path": "/home/ana/web-shop",
+          "group": null,
+          "active": false,
+          "workspaces": [
+            {
+              "id": 2,
+              "name": "main",
+              "path": "/home/ana/web-shop",
+              "branch": null,
+              "worktree": false,
+              "behind": 0,
+              "pull_request": null,
+              "setup": null,
+              "run_dir": null,
+              "active": false,
+              "tabs": [],
+              "custom_name": null,
+              "collapsed": false,
+              "machine": "vps"
+            }
+          ],
+          "custom_name": null,
+          "collapsed": false,
+          "repo": "github.com/acme/web-shop",
+          "machine": "vps",
+          "paired": 7
+        },
+        {
+          "id": 3,
+          "name": "blog",
+          "path": "/home/ana/blog",
+          "group": null,
+          "active": false,
+          "workspaces": [
+            {
+              "id": 4,
+              "name": "main",
+              "path": "/home/ana/blog",
+              "branch": null,
+              "worktree": false,
+              "behind": 0,
+              "pull_request": null,
+              "setup": null,
+              "run_dir": null,
+              "active": false,
+              "tabs": [],
+              "custom_name": null,
+              "collapsed": false,
+              "machine": "vps"
+            }
+          ],
+          "custom_name": null,
+          "collapsed": false,
+          "machine": "vps",
+          "paired": null
+        }
+      ]
+    },
+    {
+      "name": "pi",
+      "icon": "◫",
+      "state": "unreachable",
+      "seen": "2026-10-29T09:58:00.000Z",
+      "boot": "77-1760500000",
+      "projects": []
+    }
+  ],
+  "shown_remote": {
+    "machine": "vps",
+    "boot": "4242-1760600000",
+    "project": 1,
+    "workspace": 2,
+    "tab": 5,
+    "path": "/home/ana/web-shop"
+  }
+}

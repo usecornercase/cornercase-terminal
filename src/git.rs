@@ -1,4 +1,5 @@
 pub(crate) mod clone;
+pub(crate) mod config;
 pub(crate) mod remote;
 pub(crate) mod upstream;
 pub(crate) mod worktree;
@@ -44,18 +45,11 @@ pub(crate) fn remote_urls(dir: &Path) -> Vec<(String, String)> {
     let Some(config) = common_dir(dir).and_then(|common| std::fs::read_to_string(common.join("config")).ok()) else {
         return Vec::new();
     };
-    let mut remote = None;
-    let mut urls = Vec::new();
-    for line in config.lines().map(str::trim) {
-        if line.starts_with('[') {
-            remote = line.strip_prefix("[remote \"").and_then(|rest| rest.strip_suffix("\"]")).map(str::to_string);
-        } else if let Some(name) = &remote
-            && let Some(url) = line.strip_prefix("url").map(str::trim_start).and_then(|rest| rest.strip_prefix('='))
-        {
-            urls.push((name.clone(), url.trim().to_string()));
-        }
-    }
-    urls
+    config::entries(&config)
+        .into_iter()
+        .filter(|entry| entry.section == "remote" && entry.key == "url")
+        .filter_map(|entry| Some((entry.subsection?, entry.value?)))
+        .collect()
 }
 
 pub(crate) fn user_name(dir: &Path) -> Option<String> {

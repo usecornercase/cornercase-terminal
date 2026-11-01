@@ -1,7 +1,9 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
-use super::Fields;
-use crate::machines::Info;
+use super::{Fields, Item, ProjectInfo};
+use crate::machines::{Info, State};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", content = "entry", rename_all = "kebab-case")]
@@ -41,6 +43,18 @@ impl Machines {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct FocusMachine {
+    pub(crate) machine: String,
+    pub(crate) item: Item,
+}
+
+impl FocusMachine {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("machine", &self.machine).add("item", self.item);
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct MachineList {
@@ -53,6 +67,28 @@ pub(crate) struct MachineList {
 pub(crate) struct ThisComputer {
     pub(crate) icon: String,
     pub(crate) version: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct MachineSeen {
+    pub(crate) name: String,
+    pub(crate) icon: String,
+    pub(crate) state: State,
+    pub(crate) seen: Option<String>,
+    pub(crate) boot: String,
+    pub(crate) projects: Vec<ProjectInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ShownRemote {
+    pub(crate) machine: String,
+    pub(crate) boot: String,
+    pub(crate) project: u64,
+    pub(crate) workspace: u64,
+    pub(crate) tab: Option<u64>,
+    pub(crate) path: PathBuf,
 }
 
 #[cfg(test)]

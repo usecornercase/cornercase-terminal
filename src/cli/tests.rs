@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::UNIX_EPOCH;
 
 use clap::{CommandFactory, Parser};
 use rstest::rstest;
@@ -558,6 +559,7 @@ mod output {
             post: None,
             shared: Vec::new(),
             tabs: vec![tab()],
+            machine: None,
         }
     }
 
@@ -581,12 +583,14 @@ mod output {
             theme: None,
             config: None,
             home: None,
+            machines: Vec::new(),
+            shown_remote: None,
         }
     }
 
     #[test]
     fn status_is_a_tree_of_ids_with_what_matters() {
-        let text = render(&report(), Some(Path::new("/home/ana")));
+        let text = render(&report(), Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert_eq!(
             text,
@@ -610,9 +614,9 @@ mod output {
             ..PullRequestInfo::default()
         };
         report.projects[0].workspaces[0].pull_request = Some(pull(Some("failing")));
-        let failing = render(&report, Some(Path::new("/home/ana")));
+        let failing = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
         report.projects[0].workspaces[0].pull_request = Some(pull(None));
-        let unchecked = render(&report, Some(Path::new("/home/ana")));
+        let unchecked = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(failing.contains("worktree  2 behind  pull request #482 open, checks failing  (shown)\n"), "{failing}");
         assert!(unchecked.contains("worktree  2 behind  pull request #482 open  (shown)\n"), "{unchecked}");
@@ -630,10 +634,10 @@ mod output {
             ..PullRequestInfo::default()
         };
         report.projects[0].workspaces[0].pull_request = Some(pull.clone());
-        let named = render(&report, Some(Path::new("/home/ana")));
+        let named = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
         pull.base = None;
         report.projects[0].workspaces[0].pull_request = Some(pull);
-        let bare = render(&report, Some(Path::new("/home/ana")));
+        let bare = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(named.contains("pull request #482 open, conflicts with main, checks passing  (shown)\n"), "{named}");
         assert!(bare.contains("pull request #482 open, conflicts, checks passing  (shown)\n"), "{bare}");
@@ -650,7 +654,7 @@ mod output {
             ..PullRequestInfo::default()
         });
 
-        let said = render(&report, Some(Path::new("/home/ana")));
+        let said = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(
             said.contains("pull request #483 open, checks passing, layer 2 of 3 of stack #484 on main  (shown)\n"),
@@ -671,7 +675,7 @@ mod output {
             ..PullRequestInfo::default()
         });
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(text.contains("merge request !486 open, conflicts with main, pipeline passing  (shown)\n"), "{text}");
     }
@@ -681,7 +685,7 @@ mod output {
         let mut report = report();
         report.projects[0].workspaces[0].tabs[0].panes[1].background_shell = true;
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(text.contains("pane 5  claude  working (background shell)  Opus 5.5 · 23%  ~/shop  (you)\n"), "{text}");
     }
@@ -693,11 +697,11 @@ mod output {
         pane.context = None;
         pane.compacted = true;
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
         assert!(text.contains("pane 5  claude  working  Opus 5.5 · compacted  ~/shop  (you)\n"), "{text}");
 
         report.projects[0].workspaces[0].tabs[0].panes[1].model = None;
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
         assert!(text.contains("pane 5  claude  working  compacted  ~/shop  (you)\n"), "{text}");
     }
 
@@ -706,7 +710,7 @@ mod output {
         let mut report = report();
         report.projects[0].workspaces[0].tabs[0].panes[1].subagents = 2;
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(text.contains("pane 5  claude  working (2 subagents)  Opus 5.5 · 23%  ~/shop  (you)\n"), "{text}");
     }
@@ -716,7 +720,7 @@ mod output {
         let mut report = report();
         report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(text.contains("pane 5  claude  working  Opus 5.5 · 23%  ~/shop  (parent 4, you)\n"), "{text}");
     }
@@ -727,7 +731,7 @@ mod output {
         report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
         report.projects[0].workspaces[0].tabs[0].panes[1].collapsed = true;
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(text.contains("~/shop  (parent 4, collapsed, you)\n"), "{text}");
     }
@@ -738,7 +742,7 @@ mod output {
         report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
         report.projects[0].workspaces[0].tabs[0].panes[1].role = Some("coder".into());
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(
             text.contains("pane 5  claude  working  Opus 5.5 · 23%  ~/shop  (parent 4, role coder, you)\n"),
@@ -887,7 +891,7 @@ mod output {
         pane.status = Some(if background_shell { "working" } else { "idle" }.into());
         (pane.background_shell, pane.dialog, pane.survey) = (background_shell, dialog, survey);
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(text.contains(&format!("pane 5  claude  {shown}  Opus 5.5 · 23%")), "{text}");
     }
@@ -900,7 +904,7 @@ mod output {
         let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[1];
         pane.account_restart = restart.map(str::to_string);
 
-        let text = render(&report, Some(Path::new("/home/ana")));
+        let text = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
 
         assert!(text.contains(&format!("pane 5  claude  {shown}  Opus 5.5 · 23%")), "{text}");
     }

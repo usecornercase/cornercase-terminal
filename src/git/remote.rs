@@ -53,3 +53,46 @@ pub(crate) fn primary(dir: &std::path::Path) -> Option<Remote> {
     let at = remotes.iter().position(|r| r.name == "origin").unwrap_or(0);
     (at < remotes.len()).then(|| remotes.swap_remove(at))
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Repo {
+    pub(crate) remotes: Vec<(String, String)>,
+    pub(crate) identity: Option<String>,
+}
+
+pub(crate) fn identity(remotes: &[(String, String)], resolve: impl Fn(&str) -> Option<String>) -> Option<String> {
+    let parsed: Vec<(&str, Remote)> = remotes
+        .iter()
+        .filter_map(|(name, url)| Some((url.as_str(), remote(name, url)?)))
+        .filter(|(_, r)| !r.path.is_empty())
+        .collect();
+    let named = |wanted: &str| parsed.iter().find(|(_, r)| r.name == wanted);
+    let (url, chosen) = named("upstream").or_else(|| named("origin")).or_else(|| parsed.first())?;
+    let host =
+        if is_ssh(url) { resolve(&chosen.host).unwrap_or_else(|| chosen.host.clone()) } else { chosen.host.clone() };
+    let path = chosen.path.to_lowercase();
+    Some(format!("{}/{}", host.to_lowercase(), path.strip_suffix(".git").unwrap_or(&path)))
+}
+
+pub(crate) fn without_credentials(url: &str) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else { return url.to_string() };
+    let authority = rest.find('/').map_or(rest, |slash| &rest[..slash]);
+    let (user_info, after) = match authority.rfind('@') {
+        Some(at) => (&rest[..at], &rest[at + 1..]),
+        None => ("", rest),
+    };
+    let address = after.find(['?', '#']).map_or(after, |end| &after[..end]);
+    let user = user_info.split(':').next().unwrap_or_default();
+    if !is_ssh_scheme(scheme) || user.is_empty() {
+        return format!("{scheme}://{address}");
+    }
+    format!("{scheme}://{user}@{address}")
+}
+
+fn is_ssh_scheme(scheme: &str) -> bool {
+    ["ssh", "git+ssh", "ssh+git"].iter().any(|ssh| scheme.eq_ignore_ascii_case(ssh))
+}
+
+fn is_ssh(url: &str) -> bool {
+    ["ssh://", "git+ssh://", "ssh+git://"].iter().any(|scheme| url.starts_with(scheme)) || !url.contains("://")
+}

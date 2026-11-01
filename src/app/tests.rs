@@ -184,6 +184,7 @@ fn new_app(config_path: impl AsRef<Path>) -> (App, Receiver<AppEvent>) {
     app.machines.set_connector(Box::new(|_| Box::new(NoSsh)));
     app.machines
         .set_updater(std::sync::Arc::new(|_| Err(Error::Ssh { host: "a machine".into(), reason: NO_SSH.into() })));
+    app.machines.repos.set_resolver(std::sync::Arc::new(|_| None));
     (app, rx)
 }
 

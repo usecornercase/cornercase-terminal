@@ -91,6 +91,7 @@ impl App {
             self.delete_group(group);
         }
         if let Some(i) = opened.first().and_then(|&id| self.projects.project_index(id)) {
+            self.leave_remote();
             self.active = i;
         }
         let name = self.group(group).map_or(workspace.name, |g| g.name.clone());

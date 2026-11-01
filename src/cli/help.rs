@@ -262,14 +262,20 @@ newest place the pane shows the text. The scroll and the selection are the pane'
 every view show them. When the pane no longer holds the text it is still shown, a warning goes to
 stderr and the exit status is 0.
 
+--machine NAME picks one of a machine's workspaces or tabs as the one shown: --workspace and --tab
+take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
+since this server started. For now it only records the pick, which `status` reports as shown; the
+window keeps showing what it showed.
+
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
-view shows changes.
+view shows changes. With --machine it is what was picked, as `shown_remote` in `status --json`.
 
 Examples:
   cornercase focus --pane 12
   cornercase focus --pane 12 --reveal 'migration failed' --line 340
-  cornercase focus --view 41 --tab 7";
+  cornercase focus --view 41 --tab 7
+  cornercase focus --machine vps --workspace 4";
 pub(super) const GO_HELP: &str =
     "Does what a click on an agent's desktop notification does, or the go button of its toast: shows
 the agent's pane (the one still needing you, when the notice covered several), or its workspace once
