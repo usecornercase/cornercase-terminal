@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::app::pull_requests::PullRead;
 use crate::app::tests::merge_requests::gitlab;
 use crate::app::tests::pull_requests::{Repo, printing, repo_on, repo_with};
 use crate::pull_request::glab::LOGGED_OUT;
@@ -161,6 +162,18 @@ mod asking_at_once {
 
         assert_eq!(answer["pull_request"]["number"], 482);
         assert_eq!(repo.calls().len(), 1);
+    }
+
+    #[test]
+    fn a_read_of_the_branch_left_behind_is_not_the_answer() {
+        let mut repo = repo_with(&printing(), |_| {});
+        repo.ask("gh answers");
+        let path = repo.app.projects[0].workspaces[1].path.clone();
+        git(&path, &["checkout", "--quiet", "-b", "feat/y"]);
+
+        let read = repo.app.pull_request_read(repo.worktree());
+
+        assert!(matches!(read, PullRead::Waiting));
     }
 }
 

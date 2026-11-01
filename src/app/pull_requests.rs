@@ -321,11 +321,12 @@ impl App {
         if !self.config.pull_requests {
             return unasked(OFF.into());
         }
-        if let Err(why) = branch_to_ask(path) {
-            return unasked(why.reason());
-        }
+        let current = match branch_to_ask(path) {
+            Ok(current) => current,
+            Err(why) => return unasked(why.reason()),
+        };
         if let Some(Found { branch, at: Some(_), pull, .. }) = self.git.pulls.found.get(&workspace) {
-            return PullRead::Read { branch, pull: pull.as_ref() };
+            return if *branch == current { PullRead::Read { branch, pull: pull.as_ref() } } else { PullRead::Waiting };
         }
         let error = self.git.pulls.answered.get(&self.projects[at.project()].id).and_then(|a| a.error.clone());
         error.map_or(PullRead::Waiting, PullRead::Failed)
