@@ -185,11 +185,13 @@ enum Stage {
 }
 
 impl Stage {
-    fn listing(&self) -> &'static str {
+    fn listing(&self) -> String {
         match self {
-            Self::Processes => "the processes are still being measured",
-            Self::PullRequest(_) => "gh or glab is still reading the pull request",
-            _ => "the ports are still being listed",
+            Self::Processes => "the processes are still being measured".into(),
+            Self::PullRequest(workspace) => {
+                format!("gh or glab is still reading the pull request of workspace {workspace}")
+            }
+            _ => "the ports are still being listed".into(),
         }
     }
 

@@ -59,8 +59,9 @@ impl App {
     }
 
     fn noun_of_workspace(&self, workspace: u64) -> &'static str {
-        let p = self.projects.workspace_index(workspace).map_or(self.active, WorkspaceAt::project);
-        self.pull_noun_of(p)
+        let at = self.projects.workspace_index(workspace);
+        let answered = at.and_then(|at| self.git.pulls.answered.get(&self.projects[at.project()].id));
+        answered.map_or_else(|| self.pull_noun_of(at.map_or(self.active, WorkspaceAt::project)), |a| a.provider.noun())
     }
 }
 

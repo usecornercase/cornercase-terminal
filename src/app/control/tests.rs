@@ -93,6 +93,27 @@ mod forgotten_checks {
     }
 }
 
+mod forgotten_pull_requests {
+    use super::*;
+    use crate::test_util::git_repo;
+
+    #[test]
+    fn a_pull_request_read_whose_client_left_is_dropped() {
+        let repo = git_repo(&[("README", "hi")]);
+        let (tx, _rx) = mpsc::channel();
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), repo.path().join("config.json"), tx);
+        app.open_here(Rect::new(0, 0, 120, 40)).expect("open the project");
+        let waiting =
+            Pending { client: Some(1), key: 1, timeout: None, done: Done::default(), stage: Stage::PullRequest(1) };
+        app.clients.requests.pending.push(waiting);
+        app.clients.requests.open.push(1);
+
+        app.forget(1);
+
+        assert_eq!(app.clients.requests.pending.len(), 0);
+    }
+}
+
 mod unavailable_operations {
     use super::*;
     use crate::control::contract::{self as wire_contract, Code, Refusal};

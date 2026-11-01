@@ -3,6 +3,7 @@ use rstest::rstest;
 use super::*;
 use crate::app::tests::merge_requests::gitlab;
 use crate::app::tests::pull_requests::{Repo, printing, repo_on, repo_with};
+use crate::pull_request::glab::LOGGED_OUT;
 use crate::test_util::{fake_gh, fixture, git, git_repo};
 
 const JOB: &str = "https://github.com/acme/web-shop/actions/runs/1001/job";
@@ -205,6 +206,29 @@ mod failures {
 
         let refused = reply_of(&reply.expect("a reply")).expect_err("refused");
         assert_eq!(refused.code, "failed");
+    }
+
+    #[test]
+    fn a_logged_out_glab_refuses_with_why() {
+        let mut repo = gitlab(MR, JOBS_FAILED);
+        let status = fixture!("glab/1.124.0/auth-status-logged-out.json");
+        std::fs::write(repo.tmp.path().join("glab.status"), status).expect("a status");
+
+        let refused = refused_read(&mut repo);
+
+        assert_eq!((refused.code.as_str(), refused.message.as_str()), ("failed", LOGGED_OUT));
+    }
+
+    #[test]
+    fn a_view_is_refused_as_malformed() {
+        let mut repo = repo_with(&printing(), |_| {});
+        let text = json!({"contract": 1, "view": 5, "command": "pull-request", "args": {}}).to_string();
+        repo.app.request(CLIENT, &text, Some(AREA), Instant::now());
+
+        let answers = repo.app.take_answers();
+
+        let refused = reply_of(&answers[0].1).expect_err("refused");
+        assert_eq!(refused.code, "malformed");
     }
 
     #[test]
