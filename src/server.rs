@@ -825,6 +825,7 @@ impl Server {
     }
 
     fn input(&mut self, id: u64, ev: Event) {
+        let shown = self.area;
         let Some(client) = self.client_mut(id).filter(|c| c.size.is_some()) else { return };
         if let Event::Resize(cols, rows) = ev {
             client.size = Some((cols, rows));
@@ -832,6 +833,9 @@ impl Server {
             return;
         }
         if let Event::FocusGained | Event::FocusLost = ev {
+            if let (Event::FocusGained, Some(area)) = (&ev, shown) {
+                client.reset_screen(area);
+            }
             self.app.window_focus(id, ev == Event::FocusGained);
             return;
         }

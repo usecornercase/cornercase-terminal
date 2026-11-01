@@ -7,6 +7,10 @@ Every pull request that changes the app adds a section here for its new version.
 - **The search finds settings.** Typing in the search now also lists matching settings, after your projects, workspaces and tabs, so those keep their places. Each shows where it lives and its value, such as `UI › prefix key`. Click one or press `Enter` and Settings opens on that row, with nothing changed. A row that doesn't show yet is listed muted with what it needs.
 - **`cornercase search TEXT --settings`** adds the matching settings to what was said, for scripts and other apps.
 
+## 0.12.236
+
+- **Coming back to a window now repairs a garbled screen.** cornercase only sends the cells that changed, so when the terminal around it lost part of its screen, such as lines of a pane left as scattered letters or stale cells in the sidebar, they stayed that way until you resized the window. A window that regains focus is now drawn in full. The cause of the garbling is still being looked for, and terminals that don't report focus aren't helped.
+
 ## 0.12.235
 
 - **Search the settings.** Settings now opens with a search field under the tabs: type and every tab is searched, by the start of each word (`def ag` finds **default agent**). Each tab shows how many results it holds, and `Enter` or a click goes to the row without changing it. A row that doesn't show yet, such as **closed workspaces**, is listed with what it needs.
