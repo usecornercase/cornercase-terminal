@@ -196,7 +196,7 @@ fn two_machines_on_one_server_are_linked_once() {
         (with_state(&list, "linked").expect("linked"), with_state(&list, "unreachable").expect("refused"));
     assert_eq!(refused["error"], format!("the same server as {}", name_of(linked)));
     wait_until("the refused link's ssh ends", || gone(&ssh_pid_to(&here, name_of(refused))));
-    assert_eq!(machine.servers(), 1);
+    wait_until("the server that lost the lock there ends", || machine.servers() == 1);
 }
 
 #[test]
