@@ -503,8 +503,7 @@ impl App {
         }
         let Some(name) = self.settle_removal(project, workspace, result.is_ok()) else { return };
         let toast = match result {
-            Ok(None) => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
-            Ok(Some(why)) => Toast::new(format!("removed {name}, but its teardown failed: {why}"), ui::ToastIcon::Bug),
+            Ok(warning) => removed(&name, warning.as_deref()),
             Err(e) => Toast::new(format!("could not remove {name}: {e}"), ui::ToastIcon::Bug),
         };
         self.messages.toast = Some(toast);
@@ -543,6 +542,13 @@ pub(super) struct Removing<'a> {
     pub(super) teardown: bool,
     pub(super) closed: &'a str,
     pub(super) on: Option<&'a str>,
+}
+
+pub(super) fn removed(name: &str, warning: Option<&str>) -> Toast {
+    match warning {
+        None => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
+        Some(why) => Toast::new(format!("removed {name}, but its teardown failed: {why}"), ui::ToastIcon::Bug),
+    }
 }
 
 pub(super) fn removal_question(removing: &Removing<'_>) -> String {

@@ -20,6 +20,7 @@ const REMOVE: Act = Act::Remove { force: false, unlock: false };
 #[derive(Clone, Copy)]
 enum Reply {
     Agree,
+    Warn,
     Refuse,
     Restarted,
     Down,
@@ -31,6 +32,7 @@ impl Reply {
         let refuse = |code, message: String| Structured::Error(Refusal::new(code, message));
         match (self, asked["boot"].as_str()) {
             (Self::Refuse, _) => refuse(Code::Failed, "the worktree on vps.lan is in use".into()),
+            (Self::Warn, _) => Structured::Ok(json!({ "warning": "exit status 1: no route to vps.lan" })),
             (Self::Found(removal), _) if asked["command"] == "removal-check" => Structured::Ok(removal()),
             (Self::Restarted, Some(boot)) if boot != RESTARTED => {
                 refuse(Code::StaleBoot, format!("this request is for the cornercase server started as {boot}"))
@@ -270,7 +272,6 @@ mod an_answer {
     #[case::renamed(Act::Rename("web".into()), Reply::Agree, None)]
     #[case::closed(Act::Close, Reply::Agree, None)]
     #[case::checked(Act::Check, Reply::Agree, None)]
-    #[case::removed(REMOVE, Reply::Agree, Some("removed api on vps"))]
     #[case::refused(REMOVE, Reply::Refuse, Some("could not remove api on vps: the worktree on vps is in use"))]
     #[case::unreachable(
         Act::Rename("web".into()),
@@ -284,6 +285,23 @@ mod an_answer {
         remote.heard();
 
         assert_eq!(toast(&remote.rig.app), told);
+    }
+
+    #[rstest]
+    #[case::removed(Reply::Agree, "removed api on vps", ui::ToastIcon::Check)]
+    #[case::warned(
+        Reply::Warn,
+        "removed api on vps, but its teardown failed: exit status 1: no route to vps",
+        ui::ToastIcon::Bug
+    )]
+    fn to_a_removal_is_told_as_a_removal_here(#[case] reply: Reply, #[case] told: &str, #[case] icon: ui::ToastIcon) {
+        let mut remote = seeing(reply);
+
+        remote.send(REMOVE);
+        remote.heard();
+
+        let toast = remote.rig.app.messages.toast.as_ref().expect("a toast");
+        assert_eq!((toast.message.as_str(), toast.icon), (told, icon));
     }
 
     #[test]

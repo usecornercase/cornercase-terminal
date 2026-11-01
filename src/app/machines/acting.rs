@@ -8,6 +8,7 @@ use crate::app::event::AppEvent;
 use crate::app::menus::{MenuAction, RENAME_WORKSPACE_LABEL};
 use crate::app::overlay::Overlay;
 use crate::app::toast::Toast;
+use crate::app::worktrees;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{self, WorkspaceInfo};
 use crate::error;
@@ -23,6 +24,7 @@ const NOTHING_SENT: &str = "nothing was sent";
 const UNLISTED: &str = "that machine is no longer listed";
 const NOTHING_REMOVED: &str = "nothing was removed";
 const WAITING: &str = "is still waiting for its last action";
+const WARNING: &str = "warning";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::app) struct Aim {
@@ -161,7 +163,9 @@ impl App {
         let work = move || Ok(ask::ask(connect.as_ref(), &there, command, Some(boot), timeout));
         self.spawn_job(job, work, move |result, job| {
             let hidden = |why: &str| machines::hide_destination(why, &machine, &destination);
-            let result = answered(result).map_err(|refusal| Refusal::new(refusal.code, hidden(&refusal.message)));
+            let result = answered(result)
+                .map(|value| warned(value, hidden))
+                .map_err(|refusal| Refusal::new(refusal.code, hidden(&refusal.message)));
             if let Err(refusal) = &result {
                 job.fail(&refusal.message);
             }
@@ -216,6 +220,13 @@ fn answered(result: error::Result<Result<String, String>>) -> Result<Value, Refu
     }
 }
 
+fn warned(mut value: Value, hidden: impl Fn(&str) -> String) -> Value {
+    if let Some(Value::String(warning)) = value.get_mut(WARNING) {
+        *warning = hidden(warning);
+    }
+    value
+}
+
 fn told(act: &Act, label: &str, machine: &str, result: &Result<Value, Refusal>) -> Option<Toast> {
     let named = named(label, Some(machine));
     let (message, icon) = match (act, result) {
@@ -226,7 +237,7 @@ fn told(act: &Act, label: &str, machine: &str, result: &Result<Value, Refusal>) 
             (format!("could not check {named}: {}; {NOTHING_REMOVED}", refusal.message), ui::ToastIcon::Bug)
         }
         (_, Err(refusal)) => (format!("could not {} {named}: {}", act.verb(), refusal.message), ui::ToastIcon::Bug),
-        (Act::Remove { .. }, Ok(_)) => (format!("removed {named}"), ui::ToastIcon::Check),
+        (Act::Remove { .. }, Ok(value)) => return Some(worktrees::removed(&named, value[WARNING].as_str())),
         _ => return None,
     };
     Some(Toast::new(message, icon))
