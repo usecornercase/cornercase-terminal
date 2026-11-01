@@ -142,6 +142,28 @@ mod hidden_rows {
     }
 
     #[test]
+    fn a_kept_result_lands_on_the_parent_once_its_row_no_longer_shows() {
+        let mut s = paired();
+
+        s.land_on_current(Goal::Row(Row::ForumClose(Via::Discord)));
+
+        assert_eq!((s.page, s.rows()[s.cursor].clone()), (Page::Remote, Row::Forum(Via::Discord)));
+        assert_eq!(s.notice.as_deref(), Some("closed workspaces shows once forum mode is on"));
+    }
+
+    #[test]
+    fn a_kept_result_lands_on_the_row_once_it_shows() {
+        let mut hidden = paired();
+        let goal = hidden.search("closed workspaces").remove(0).goal;
+        hidden.config.discord_forum = true;
+
+        hidden.land_on_current(goal);
+
+        assert_eq!(hidden.rows()[hidden.cursor], Row::ForumClose(Via::Discord));
+        assert_eq!(hidden.notice, None);
+    }
+
+    #[test]
     fn land_on_the_nearest_row_that_shows_and_change_nothing() {
         let mut s = paired();
         let config = s.config.clone();

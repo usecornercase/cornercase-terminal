@@ -597,7 +597,7 @@ impl App {
             Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),
             Command::View(open) => self.view_request(client, &open, area),
             Command::ViewSet(set) => self.view_set_asked(asker, &set, area),
-            Command::Search(search) => self.search_request(client, &search.query),
+            Command::Search(search) => self.search_request(client, &search),
             other => return ControlFlow::Continue(other),
         })
     }

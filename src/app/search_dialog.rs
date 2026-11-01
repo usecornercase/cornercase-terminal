@@ -6,8 +6,10 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::WHEEL_ROWS;
 use super::overlay::Overlay;
+use crate::control::config::FoundSetting;
 use crate::project::search::said::Found;
 use crate::project::search::{self, Candidate, Finder, Mode};
+use crate::settings::{Hit, Page};
 use crate::ui::{self};
 
 mod sessions;
@@ -15,7 +17,7 @@ mod sessions;
 #[derive(Debug)]
 pub(crate) enum SearchEvent {
     Found { generation: u64, query: String, found: Found },
-    Request { request: u64, found: crate::error::Result<Found> },
+    Request { request: u64, found: crate::error::Result<Found>, settings: Vec<FoundSetting> },
 }
 
 impl SearchEvent {
@@ -26,8 +28,39 @@ impl SearchEvent {
     }
 }
 
+#[derive(Clone)]
+enum Named {
+    Place(Candidate),
+    Setting(Hit),
+}
+
+impl Named {
+    fn hint(&self) -> String {
+        match self {
+            Self::Place(candidate) => format!("enter goes to {}", candidate.name),
+            Self::Setting(hit) => format!("enter opens {}", hit.title),
+        }
+    }
+
+    fn row(self) -> ui::ResultRow {
+        match self {
+            Self::Place(c) => {
+                ui::ResultRow { name: c.name, context: c.context, detail: String::new(), hit: None, muted: false }
+            }
+            Self::Setting(hit) => setting_row(hit),
+        }
+    }
+}
+
+fn setting_row(hit: Hit) -> ui::ResultRow {
+    let muted = hit.hidden();
+    let detail = if muted { hit.note } else { hit.value };
+    let context = if detail.is_empty() { SETTING_MARK.to_string() } else { format!("{detail} · {SETTING_MARK}") };
+    ui::ResultRow { name: hit.title, context, detail: String::new(), hit: None, muted }
+}
+
 enum Rows {
-    Names(Vec<Candidate>),
+    Names(Vec<Named>),
     Sessions(Option<std::sync::Arc<Found>>),
 }
 
@@ -39,6 +72,8 @@ impl Rows {
         }
     }
 }
+
+const SETTING_MARK: &str = "settings";
 
 fn pitch(mode: Mode) -> u16 {
     if mode == Mode::Sessions { ui::SESSIONS_PITCH } else { 1 }
@@ -53,13 +88,37 @@ impl App {
         search::rank(self.search_candidates(), query)
     }
 
+    pub(super) fn ask_settings(&mut self) {
+        let Some(Overlay::Search(dialog)) = &self.overlay else { return };
+        let query = dialog.query().trim().to_string();
+        let current = dialog.settings.as_ref().is_some_and(|(asked, _)| *asked == query);
+        if dialog.mode == Mode::Sessions || current {
+            return;
+        }
+        let hits = if query.is_empty() { Vec::new() } else { self.settings_model(Page::default()).search(&query) };
+        if let Some(Overlay::Search(dialog)) = &mut self.overlay {
+            dialog.settings = Some((query, hits));
+        }
+    }
+
+    fn open_named(&mut self, named: Named) {
+        match named {
+            Named::Place(candidate) => self.goto(candidate.goto),
+            Named::Setting(hit) => self.open_setting(hit),
+        }
+    }
+
     fn search_rows(&self, area: Rect, mode: Mode) -> usize {
         usize::from(ui::results_list(self.layout(area).results).height / pitch(mode))
     }
 
     fn search_listed(&self, dialog: &Finder) -> Rows {
         match dialog.mode {
-            Mode::Names => Rows::Names(self.search_results(dialog.query())),
+            Mode::Names => {
+                let places = self.search_results(dialog.query()).into_iter().map(Named::Place);
+                let hits = dialog.settings.iter().flat_map(|(_, hits)| hits.iter().cloned()).map(Named::Setting);
+                Rows::Names(places.chain(hits).collect())
+            }
             Mode::Sessions => Rows::Sessions(self.sessions.answer(dialog.query())),
         }
     }
@@ -77,9 +136,9 @@ impl App {
             KeyCode::Enter if empty => self.overlay = None,
             KeyCode::Enter => match &listed {
                 Rows::Names(names) => {
-                    if let Some(goto) = names.get(dialog.field.selected()).map(|c| c.goto) {
+                    if let Some(named) = names.get(dialog.field.selected()).cloned() {
                         self.overlay = None;
-                        self.goto(goto);
+                        self.open_named(named);
                     }
                 }
                 Rows::Sessions(Some(found)) => {
@@ -126,7 +185,7 @@ impl App {
                     .filter(|_| showing && button == MouseButton::Left);
                 self.overlay = None;
                 match (hit, &listed) {
-                    (Some(i), Rows::Names(names)) => self.goto(names[i].goto),
+                    (Some(i), Rows::Names(names)) => self.open_named(names[i].clone()),
                     (Some(i), Rows::Sessions(Some(found))) => self.open_match(&found.matches[i].clone(), &query),
                     _ => {}
                 }
@@ -140,14 +199,8 @@ impl App {
         let selected = dialog.field.selected();
         let (results, hint, searching) = match self.search_listed(dialog) {
             Rows::Names(names) => {
-                let hint = names.get(selected).map(|c| format!("enter goes to {}", c.name)).unwrap_or_default();
-                let rows = names.into_iter().map(|c| ui::ResultRow {
-                    name: c.name,
-                    context: c.context,
-                    detail: String::new(),
-                    hit: None,
-                });
-                (rows.collect(), hint, false)
+                let hint = names.get(selected).map(Named::hint).unwrap_or_default();
+                (names.into_iter().map(Named::row).collect(), hint, false)
             }
             Rows::Sessions(found) => self.sessions_rows(query, found.as_deref(), selected),
         };

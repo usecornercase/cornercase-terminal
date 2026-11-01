@@ -486,6 +486,8 @@ pane=$(cornercase search --json 'tax bug' | jq -r '.matches[0].pane')
 cornercase focus --pane "$pane" --reveal 'tax bug'
 ```
 
+`--settings` also looks in the settings, as the search in the window does: `--json` adds a `settings` list with the fields of [`config search`](#settings), left out when nothing matches, and text prints them as a second table after a blank line. Without it, `search` only looks in what was said. On a server without it the command says so.
+
 Text is one line per match under a header, separated by tabs, the way `status --panes` is. Matches come in the order of the sidebar, an agent's messages first, newest first, then the pane's history from the bottom up.
 
 ```text

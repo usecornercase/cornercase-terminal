@@ -17,7 +17,7 @@ fn search(query: &str, results: Vec<ResultRow>) -> Search {
 }
 
 fn row(name: &str, context: &str) -> ResultRow {
-    ResultRow { name: name.into(), context: context.into(), detail: String::new(), hit: None }
+    ResultRow { name: name.into(), context: context.into(), detail: String::new(), hit: None, muted: false }
 }
 
 fn found() -> Vec<ResultRow> {
@@ -107,7 +107,7 @@ mod sessions {
     use super::*;
 
     fn said(name: &str, hit: std::ops::Range<usize>, context: &str, detail: &str) -> ResultRow {
-        ResultRow { name: name.into(), context: context.into(), detail: detail.into(), hit: Some(hit) }
+        ResultRow { name: name.into(), context: context.into(), detail: detail.into(), hit: Some(hit), muted: false }
     }
 
     fn in_sessions(query: &str, results: Vec<ResultRow>) -> Search {
@@ -192,5 +192,46 @@ mod sessions {
         let t = render_sized(&with(in_sessions("", Vec::new())), SMALL.width, SMALL.height);
         let row = line(&t, 1);
         assert!(row.contains("what was said") && row.ends_with(" ❯"), "{row:?}");
+    }
+}
+
+mod settings {
+    use super::*;
+
+    fn rows() -> Vec<ResultRow> {
+        vec![
+            row("prefix-lab", ""),
+            row("UI › prefix key", "off · settings"),
+            ResultRow {
+                muted: true,
+                ..row("Remote › Discord › forum mode", "shows once a phone is paired · settings")
+            },
+        ]
+    }
+
+    #[test]
+    fn renders_after_the_names() {
+        insta::assert_snapshot!(render(&with(search("prefix", rows()))).backend());
+    }
+
+    #[test]
+    fn renders_in_a_narrow_window() {
+        insta::assert_snapshot!(render_sized(&with(search("prefix", rows())), 60, 20).backend());
+    }
+
+    #[test]
+    fn renders_in_a_compact_window() {
+        insta::assert_snapshot!(render_sized(&with(search("prefix", rows())), 44, 24).backend());
+    }
+
+    #[test]
+    fn a_hidden_row_is_drawn_muted() {
+        let view = with(search("zzz", rows()));
+        let area = result_item(results(), 3, 0, 2, 1);
+
+        let terminal = render(&view);
+        let cell = &terminal.backend().buffer()[(area.x + 2, area.y)];
+
+        assert_eq!(cell.style().fg, Some(view.muted));
     }
 }

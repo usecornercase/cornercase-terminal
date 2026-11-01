@@ -39,6 +39,7 @@ impl App {
     }
 
     pub(in crate::app) fn ask_sessions(&mut self, now: Instant) {
+        self.ask_settings();
         let Some(Overlay::Search(Finder { mode: Mode::Sessions, field, .. })) = &self.overlay else {
             if !self.sessions.idle() {
                 self.sessions.forget();
@@ -89,7 +90,7 @@ impl App {
                     self.open_match(&first, &query);
                 }
             }
-            SearchEvent::Request { request, found } => self.sessions_replied(request, found),
+            SearchEvent::Request { request, found, settings } => self.sessions_replied(request, found, settings),
         }
     }
 
@@ -108,6 +109,7 @@ impl App {
             context: m.place.label.clone(),
             detail: format!("{} · {}", m.place.who, m.origin.name()),
             hit: Some(m.hit.clone()),
+            muted: false,
         });
         let hint = if found.capped {
             format!("the first {MAX_MATCHES} matches")

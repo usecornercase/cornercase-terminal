@@ -49,6 +49,7 @@ pub(crate) struct ResultRow {
     pub(crate) context: String,
     pub(crate) detail: String,
     pub(crate) hit: Option<Range<usize>>,
+    pub(crate) muted: bool,
 }
 
 pub(crate) struct Search {
@@ -136,8 +137,9 @@ fn name_line(view: &View, search: &Search, result: &ResultRow, width: usize, pai
     let context_width = context.chars().count();
     let name = truncate_right(&result.name, width.saturating_sub(context_width + 5));
     let gap = width.saturating_sub(name.chars().count() + context_width + 3);
+    let text = if result.muted { base.fg(view.muted) } else { base };
     let mut spans = vec![rail(selected, bg), Span::styled(" ", bg)];
-    spans.extend(highlight(&name, None, &search.query, base, matched));
+    spans.extend(highlight(&name, None, &search.query, text, matched));
     spans.push(Span::styled(" ".repeat(gap), bg));
     spans.push(Span::styled(format!("{context} "), bg.fg(view.muted)));
     Line::from(spans)

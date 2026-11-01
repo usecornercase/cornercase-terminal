@@ -202,6 +202,8 @@ export interface IssuesView {
   error?: boolean;
 }
 
+export const SETTING_RESULT = 3;
+
 export interface SearchResult {
   kind: number;
   name: string;
@@ -2922,11 +2924,17 @@ export class App {
       }
       return best;
     };
-    return all
+    const names = all
       .map((r) => ({ r, s: score(r) }))
       .filter((x) => x.s < 3)
       .sort((a, b) => a.s - b.s || a.r.kind - b.r.kind || a.r.order - b.r.order)
       .map((x) => x.r);
+    return [...names, ...this.settingsHits(query).map((hit) => this.settingResult(hit))];
+  }
+
+  private settingResult(hit: SettingsHit): SearchResult {
+    const go = () => { this.openSettings(); this.landOn(hit); };
+    return { kind: SETTING_RESULT, name: hit.title, context: hit.value ? `${hit.value} · settings` : 'settings', keys: [], go };
   }
 
   private gotoGroup(id: number): void {
@@ -3166,9 +3174,13 @@ export class App {
     const o = this.overlay;
     if (o?.kind !== 'settings') return;
     const hit = this.settingsHits(o.query ?? '')[i];
-    if (!hit) return;
+    if (hit) this.landOn(hit);
+  }
+
+  private landOn(hit: SettingsHit): void {
     this.settingsPage(hit.page);
-    o.cursor = hit.i ?? 0;
+    const o = this.overlay;
+    if (o?.kind === 'settings') o.cursor = hit.i ?? 0;
   }
 
   settingsHitsWheel(dy: number): boolean {

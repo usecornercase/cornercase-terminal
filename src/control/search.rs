@@ -1,9 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+use super::config::FoundSetting;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Search {
     pub(crate) query: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) settings: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,9 +31,12 @@ impl Hit {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[expect(clippy::struct_field_names, reason = "`matches` is the field's name on the wire")]
 pub(crate) struct Matches {
     pub(crate) matches: Vec<Hit>,
     pub(crate) capped: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) settings: Vec<FoundSetting>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
