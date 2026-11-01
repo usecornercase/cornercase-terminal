@@ -803,4 +803,23 @@ mod branch {
         });
         assert!(place(&app).contains("my run"));
     }
+
+    #[test]
+    fn a_read_still_running_is_waited_for_before_another_starts() {
+        let (mut app, rx, dir) = team();
+        app.projects[0].workspaces[0].path = dir.path().to_path_buf();
+        app.show_flow();
+        let now = Instant::now();
+        app.refresh(now);
+        app.refresh(now + Duration::from_secs(3));
+        app.refresh(now + Duration::from_secs(6));
+        let reads = |wait: Duration| {
+            let mut seen = 0;
+            while let Ok(event) = rx.recv_timeout(wait) {
+                seen += usize::from(matches!(event, AppEvent::RunBranch(..)));
+            }
+            seen
+        };
+        assert_eq!(reads(Duration::from_secs(1)), 1);
+    }
 }

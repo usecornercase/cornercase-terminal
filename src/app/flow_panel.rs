@@ -49,6 +49,7 @@ pub(super) struct FlowPanel {
     listed: Option<Instant>,
     branch: Option<(u64, Option<String>)>,
     branching: Option<Instant>,
+    reading: bool,
 }
 
 pub(super) struct Noted {
