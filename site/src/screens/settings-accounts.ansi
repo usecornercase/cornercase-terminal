@@ -1,7 +1,7 @@
 [2m [38;5;8m[48;5;236m ⌕ search projects, workspa…[39m [49m [38;5;239m│[39m   1 use serde::Deserialize;                                                  
   [0m[38;5;8m╭─[1m[39m Settings [0m[38;5;8m─────────────────────────────────────────────────────────────────────────────────────────────╮[2m[39m  
 [1m[38;5;8m P[0m[38;5;8m│[39m [38;5;7m Worktrees [39m [38;5;7m Agents [39m [1m[38;5;6m[48;5;236m Accounts [0m [38;5;7m Flows [39m [38;5;7m Issues [39m [38;5;7m UI [39m [38;5;7m Remote [39m [38;5;7m Plugins [39m                               [38;5;8m│[2m[39m  
-  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m ⌕ [38;5;8msearch settings[39m                                                                                     [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m [1m[38;5;8mClaude Code[0m                                                                                            [38;5;8m│[2m[39m  
 [38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m [38;5;6m[48;5;236m▌ [1m[39m● work                    [0m[48;5;236msigned in as ana@acme.dev (max)  [38;5;8mclaude's own login · ~/.claude[39m           [49m [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39m    rename…               [38;5;8ma name for the window; its folder stays[39m                                    [38;5;8m│[2m[39m  

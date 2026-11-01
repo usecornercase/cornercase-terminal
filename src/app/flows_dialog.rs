@@ -164,6 +164,7 @@ impl App {
             }
             Action::Tab(i) => self.open_settings_page(Page::ALL[i]),
             Action::StepTab(delta) => self.open_settings_page(Page::Flows.step(delta)),
+            Action::Find(c) => self.search_from_flows(c),
             Action::Restart => self.open_restart(),
             Action::Share => self.open_share_settings(),
             Action::Export(flow) => self.flow_exported(&flow),
@@ -662,6 +663,7 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
     ui::Overlay::Flows(Box::new(ui::Flows {
         title: dialog.title(),
         heading: flows_heading(dialog, edit),
+        search: dialog.settings_tabs(),
         tabs,
         tab,
         rows: texts.iter().map(settings_row).collect(),

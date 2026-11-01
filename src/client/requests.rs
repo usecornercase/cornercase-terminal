@@ -94,6 +94,10 @@ pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }
 
+pub(crate) fn use_settings_search() -> Result<()> {
+    require("settings-search", "cannot search the settings")
+}
+
 pub(crate) fn use_agent_folds() -> Result<()> {
     require("agent-folds", "cannot collapse or expand an agent's children")
 }

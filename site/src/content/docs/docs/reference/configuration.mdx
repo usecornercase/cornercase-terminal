@@ -164,10 +164,19 @@ The [plugins](../../guides/plugins/) you installed with `cornercase plugin insta
 
 Plugins run as you, with your rights: what they ask for is shown, not enforced. Other apps read the same rows, and what each service is doing, with `cornercase plugin status` (or the `plugin-list` request; see [Scripts and agents](../../guides/scripts-and-agents/#plugins)).
 
+### Search the settings
+
+The field under the tabs has the keys as soon as the settings open, so you just type. It looks in every tab, in each row's label, section, tab, value and note: every word you type must be the start of a word there, so `def ag` finds **default agent** and `ose` finds nothing. Matches in a label come first, then in a section or tab, then in a value or note. Each tab shows how many results it holds, and a tab with none is dimmed.
+
+`↑` `↓` pick a result and `Enter` or a click goes to its tab and row; it selects the row and changes nothing. A row that only shows under another (**forum mode**, **closed workspaces**, **phone**, **paired browsers**) is listed in grey with what it needs, and going to it stops at the nearest row that shows. A tab's name is a result too. Plugins are searched as rows of their tab; the flows themselves are not, so `flows` leads to the Flows tab. `Esc` clears the field, then closes the settings. While the field is empty, the keys below work on the rows.
+
+Scripts search the same way with [`cornercase config search`](../../guides/scripts-and-agents/#settings).
+
 ### Keys in the settings modal
 
 | Key | Does |
 | --- | --- |
+| Any letter or number | Starts a [search](#search-the-settings). |
 | `Enter`, `Space` | Change the selected row. |
 | `↑` `↓` | Select a row. The mouse wheel does the same. |
 | `Tab`, `→` / `Shift+Tab`, `←` | Next / previous tab. |
@@ -177,7 +186,7 @@ Plugins run as you, with your rights: what they ask for is shown, not enforced. 
 
 In a list, type to filter it and press `Enter` to pick. In a text field, `Enter` saves and `Esc` cancels.
 
-Pasting while no text field is open opens [Share](#share-your-setup) with what you pasted, ready for ` preview `.
+Pasting several lines while no list or row is being edited opens [Share](#share-your-setup) with what you pasted, ready for ` preview `; a single line goes to the search.
 
 ## Share your setup
 
@@ -201,7 +210,7 @@ The text holds five sections, each of which the other person can leave out:
 
 It never holds a token, a chat bot, a paired chat or browser, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port) or [`keep_awake`](#keep_awake). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
 
-To import one, paste it on Share (or anywhere on a settings tab) and click **` preview `**. **Settings › Import** shows every setting that would change, as its value now → the shared one, grouped by section; a repository's setup and teardown are shown in full, a line at a time, in red:
+To import one, paste it on Share (or anywhere on a settings tab, when it has several lines) and click **` preview `**. **Settings › Import** shows every setting that would change, as its value now → the shared one, grouped by section; a repository's setup and teardown are shown in full, a line at a time, in red:
 
 <Screen
   name="settings-import"

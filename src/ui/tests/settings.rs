@@ -1,4 +1,5 @@
 use super::*;
+use crate::editor::Editor;
 
 fn row(section: &'static str, label: &str, value: &str, note: &str) -> SettingsRow {
     SettingsRow {
@@ -21,7 +22,8 @@ fn source(label: &str, note: &str) -> SettingsRow {
 
 fn settings(cursor: usize) -> Settings {
     Settings {
-        tabs: TABS.to_vec(),
+        tabs: TABS.map(String::from).to_vec(),
+        dimmed: Vec::new(),
         tab: 2,
         rows: vec![
             SettingsRow { removable: true, ..row("Accounts", "Shortcut API token", "@ana in acme", "saved") },
@@ -31,6 +33,7 @@ fn settings(cursor: usize) -> Settings {
             source("[ ] Linear", ""),
         ],
         cursor,
+        find: SettingsFind { field: Editor::default(), focused: true, searching: false },
         edit: None,
         pick: None,
         note: None,
@@ -71,7 +74,7 @@ fn renders_the_sections_and_rows() {
 #[test]
 fn renders_the_forum_mode_and_closed_workspaces_under_the_discord_phone() {
     let remote = Settings {
-        tabs: vec!["Worktrees", "Agents", "Remote"],
+        tabs: ["Worktrees", "Agents", "Remote"].map(String::from).to_vec(),
         tab: 2,
         rows: vec![
             row("Browser", "remote access", "[ ] off", ""),
@@ -185,4 +188,67 @@ fn a_click_in_a_pick_chooses_that_item() {
     let pos = Position::new(list.x + 2, list.y + 1);
     let pick = SettingsLayout { pick: Some((3, 0)), ..layout(&sections) };
     assert_eq!(settings_hit(AREA, &pick, pos), Some(SettingsHit::Pick(1)));
+}
+
+fn searching(query: &str, rows: Vec<SettingsRow>) -> Settings {
+    let mut field = Editor::default();
+    field.insert(query);
+    let counts = ["Worktrees 0", "Agents 2", "Issues 0", "TUI 1"];
+    Settings {
+        tabs: counts.map(String::from).to_vec(),
+        dimmed: vec![true, false, true, false],
+        tab: 1,
+        rows,
+        cursor: 1,
+        find: SettingsFind { field, focused: true, searching: true },
+        hint: "↑↓ picks a result · enter goes to it · esc clears the search".into(),
+        ..settings(0)
+    }
+}
+
+fn results() -> Vec<SettingsRow> {
+    let hidden = row("", "Remote › closed workspaces", "", "shows once forum mode is on");
+    vec![
+        row("", "Agents › default agent", "claude", ""),
+        row("", "Remote › Telegram › bot", "not set", "paste its token"),
+        SettingsRow { muted: true, ..hidden },
+    ]
+}
+
+#[test]
+fn renders_the_results_of_a_search() {
+    insta::assert_snapshot!(render(&with(searching("def", results()))).backend());
+}
+
+#[test]
+fn renders_a_search_that_finds_nothing() {
+    insta::assert_snapshot!(render(&with(searching("zebra", Vec::new()))).backend());
+}
+
+#[test]
+fn renders_a_search_in_a_narrow_window() {
+    insta::assert_snapshot!(render_sized(&with(searching("def", results())), 60, 20).backend());
+}
+
+#[test]
+fn renders_a_search_in_a_compact_window() {
+    insta::assert_snapshot!(render_sized(&with(searching("def", results())), 44, 24).backend());
+}
+
+#[test]
+fn dims_a_tab_with_no_results() {
+    let shown = with(searching("def", results()));
+    let area = settings_area(AREA);
+    let names = ["Worktrees 0", "Agents 2", "Issues 0", "TUI 1"];
+    let rects = settings_tabs(area, &names);
+    let backend = render(&shown);
+    let dim = |i: usize| backend.backend().buffer()[rects[i].as_position()].modifier.contains(Modifier::DIM);
+    assert_eq!((dim(0), dim(1)), (true, false));
+}
+
+#[test]
+fn a_click_on_the_field_is_a_hit_of_the_field() {
+    let area = Rect::new(0, 0, 100, 20);
+    let at = settings_find(settings_area(area)).as_position();
+    assert_eq!(settings_hit(area, &layout(&sections()), at), Some(SettingsHit::Find));
 }

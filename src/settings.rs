@@ -7,6 +7,7 @@ use crate::list::Search;
 use crate::messenger::Via;
 
 pub(crate) use self::accounts::{Listed, Order};
+pub(crate) use self::search::{Finder, Hit};
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
@@ -405,6 +406,7 @@ pub(crate) struct Settings {
     pub(crate) messengers: [Messenger; Via::ALL.len()],
     pub(crate) plugins: Vec<PluginRow>,
     pub(crate) accounts: Listed,
+    pub(crate) find: Finder,
 }
 
 impl Settings {
@@ -429,6 +431,7 @@ impl Settings {
             messengers: Default::default(),
             plugins: Vec::new(),
             accounts: Listed::default(),
+            find: Finder::default(),
         }
     }
 
@@ -549,6 +552,7 @@ impl Settings {
         self.pick = None;
         self.notice = None;
         self.capturing = false;
+        self.find.clear();
     }
 
     fn switch_page(&mut self, delta: isize) {
@@ -584,6 +588,7 @@ impl Settings {
     }
 
     pub(crate) fn select(&mut self, row: usize) {
+        self.find.settle();
         if row < self.rows().len() {
             self.cursor = row;
         }
@@ -595,6 +600,7 @@ mod activate;
 mod apply;
 mod describe;
 mod input;
+mod search;
 pub(crate) mod share;
 mod submit;
 mod trackers;

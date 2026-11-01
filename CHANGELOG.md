@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.235
+
+- **Search the settings.** Settings now opens with a search field under the tabs: type and every tab is searched, by the start of each word (`def ag` finds **default agent**). Each tab shows how many results it holds, and `Enter` or a click goes to the row without changing it. A row that doesn't show yet, such as **closed workspaces**, is listed with what it needs.
+- **`f ,` in the keys menu opens Settings**, next to the other searches, and a terminal can map one key to it: the docs show how for Ghostty.
+- **`cornercase config search WORDS`** finds settings the same way, for scripts and other apps.
+- Pasting into Settings now puts a single line in the search; several lines still open Share.
+
 ## 0.12.234
 
 - **Keep one `cornercase` running for a program's commands.** `cornercase requests --follow -` reads one command per line of standard input as JSON (`{"args": ["focus", "--tab", "6"], "stdin": "…"}`), runs each in order through one connection and prints one JSON answer per line: its exit status, what it printed (`json` with `--json`, else `text`) and its error. A window that draws cornercase on another machine through `--remote` then pays one round trip per action instead of an `ssh` connection. Streams and `update`, `restart`, `kill-server` and `logs` are refused on their line, since they need a process of their own.

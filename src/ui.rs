@@ -81,8 +81,8 @@ pub(crate) use dialog::project_settings::{
 pub(crate) use dialog::search::result_item;
 pub(crate) use dialog::search::{ResultRow, SESSIONS_PITCH, Search, mode_button, result_hit, results_list};
 pub(crate) use dialog::settings::{
-    Settings, SettingsEdit, SettingsHit, SettingsLayout, SettingsPick, SettingsRow, settings_area, settings_hit,
-    settings_pick_list,
+    Settings, SettingsEdit, SettingsFind, SettingsHit, SettingsLayout, SettingsPick, SettingsRow, settings_area,
+    settings_find, settings_hit, settings_pick_list,
 };
 #[cfg(test)]
 pub(crate) use dialog::settings::{

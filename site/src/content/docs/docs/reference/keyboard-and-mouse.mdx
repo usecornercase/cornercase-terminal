@@ -203,6 +203,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `f` `e` | Opens or closes the files panel. |
 | `f` `p` | Opens the search, like `/`. |
 | `f` `s` | Opens the search [in sessions](../../guides/search/#in-sessions), looking in what was said in agents and panes. |
+| `f` `,` | Opens the settings, ready to [search them](../configuration/#search-the-settings), like `,`. |
 | `g` `d` | Opens or closes the [changes panel](../../guides/changes/), with its filter ready to type. |
 | `g` `b` | Opens the changes panel and the list of branches to compare with. |
 | `g` `p` | Shows the [pull request](../../guides/worktrees/#pull-requests-and-their-checks) of the workspace and its checks, or says why there is none. |
@@ -217,6 +218,16 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `q` | Quits the window. Everything keeps running, as with **More ▴ › quit**. |
 
 `Esc`, or a key the menu doesn't list, closes it without doing anything, and that key doesn't reach your program. Press the prefix twice to send the prefix itself to the program in the pane. The prefix works while the pane, the files search or find field, the changes filter or a TODO field has the keys, but not inside a dialog, which has its own keys below.
+
+### A key of your own for a menu entry
+
+Your terminal can send the prefix and the next keys for you, so one combination reaches any entry of the menu. In Ghostty, with `Ctrl+Space` as the prefix (it sends the byte `\x00`), this line in its config opens the settings search:
+
+```
+keybind = cmd+shift+p=text:\x00,
+```
+
+It replaces Ghostty's own command palette key, so pick another combination if you use that. Other terminals have the same kind of setting for sending text. With another prefix, put the bytes it sends in place of `\x00`.
 
 ## Keys inside cornercase's dialogs
 

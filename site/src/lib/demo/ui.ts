@@ -1426,9 +1426,10 @@ export class Painter {
     this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), 'open', () => app.pickerOpen(), () => app.closeOverlay());
   }
 
-  private tabs(row: Rect, names: string[], active: number, onClick: (i: number) => void): void {
+  private tabs(row: Rect, names: string[], active: number, onClick: (i: number) => void, dimmed: boolean[] = []): void {
     tabsIn(row, names).forEach((r, i) => {
-      const style: Style = i === active ? { fg: 6, bg: this.surface, add: BOLD } : this.hovered(r) ? CYAN : { fg: 7 };
+      const lit: Style = i === active ? { fg: 6, bg: this.surface, add: BOLD } : this.hovered(r) ? CYAN : { fg: 7 };
+      const style: Style = dimmed[i] ? { ...lit, fg: 8, add: DIM } : lit;
       this.span(r.x, r.y, ` ${names[i]} `, style, r.w);
       this.region({ r, click: () => onClick(i), cursor: 'pointer' });
     });
@@ -1445,7 +1446,14 @@ export class Painter {
     const editRow = rect(c.x, bottom(body), c.w, 1);
     const noteRow = rect(c.x, bottom(body) + 1, c.w, 1);
     const buttonsRow = rect(c.x, bottom(body) + 2, c.w, 1);
-    this.tabs(tabsRow, PAGE_NAMES, o.page, (i) => app.settingsPage(i));
+    const query = o.query ?? '';
+    const hits = app.settingsHits(query);
+    const names = query ? PAGE_NAMES.map((name, page) => `${name} ${hits.filter((hit) => hit.page === page).length}`) : PAGE_NAMES;
+    const empty = PAGE_NAMES.map((_, page) => !!query && !hits.some((hit) => hit.page === page));
+    this.tabs(tabsRow, names, o.page, (i) => app.settingsPage(i), empty);
+    const findRow = rect(c.x, c.y + 1, c.w, 1);
+    const x = this.span(findRow.x, findRow.y, ' ⌕ ', { fg: 6 });
+    this.span(x, findRow.y, query || 'search settings', query ? { add: BOLD } : { fg: 8 }, right(findRow) - x);
     if (o.pick) {
       this.input(rect(body.x, body.y, body.w, 1), o.pick.title, o.pick.filter);
       const list = rect(body.x, body.y + 2, body.w, Math.max(0, body.h - 2));
@@ -1461,6 +1469,23 @@ export class Painter {
         const x = this.span(row.x + 1, row.y, `${item.value.padEnd(32)} `, value);
         this.span(x, row.y, item.note, { ...base, fg: 8 }, right(row) - x);
         this.region({ r: row, click: () => app.choosePick(i), cursor: 'pointer' });
+      });
+    } else if (query) {
+      if (!hits.length) this.span(body.x, body.y, ' nothing matches', DARK);
+      this.region({ r: body, wheel: (dy) => app.settingsHitsWheel(dy) });
+      const chosen = Math.min(o.found ?? 0, hits.length - 1);
+      const scroll = Math.max(0, chosen + 1 - body.h);
+      hits.slice(scroll, scroll + body.h).forEach((hit, n) => {
+        const i = scroll + n;
+        const rr = rect(body.x, body.y + n, body.w, 1);
+        const selected = chosen === i;
+        const bg: Style = selected ? { bg: this.surface } : {};
+        this.g.fill(rr, bg);
+        let at = this.span(rr.x, rr.y, selected ? '▌ ' : '  ', { ...bg, fg: 6 });
+        at = this.span(at, rr.y, truncateRight(hit.title, 42).padEnd(44), { ...bg, ...(selected ? { add: BOLD } : {}) });
+        if (hit.value) at = this.span(at, rr.y, `${truncateRight(hit.value, 20)}  `, bg);
+        this.span(at, rr.y, hit.note, { ...bg, fg: 8 }, right(rr) - at);
+        this.region({ r: rr, click: () => app.chooseHit(i), cursor: 'pointer' });
       });
     } else {
       const rows = app.settingsRows(o.page);
