@@ -94,6 +94,7 @@ impl Session {
         let dir = std::env::temp_dir().join(format!("cornercase-e2e-sock-{}-{n}", std::process::id()));
         std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).expect("create socket dir");
         std::fs::write(dir.join("tour.json"), r#"{"version":1,"offered":true,"announced":true}"#).expect("write tour");
+        std::fs::write(dir.join("star.json"), r#"{"version":2,"shown":1}"#).expect("write star");
         Arc::new(Self { dir })
     }
 
