@@ -510,7 +510,7 @@ mod branch_names {
         "Work on #7: Fix the login"
     )]
     #[case::a_prompt_of_its_own_replaces_it(
-        r##"{"name":"Quick","issue":"#7","prompt":"Fix #7, a test first"}"##,
+        r##"{"name":"Quick","issue":"#7","prompt":"Fix #7, a test first\n"}"##,
         "feat/7-fix-the-login",
         "#7 Fix the login",
         "Fix #7, a test first"

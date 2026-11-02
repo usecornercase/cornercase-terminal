@@ -526,7 +526,7 @@ impl App {
             name: run.workspace_name.clone(),
         };
         self.run_refusal(p, &starting)?;
-        starting.task = run.prompt;
+        starting.task = run.prompt.trim().to_string();
         let epoch = self.epoch(source);
         let requests = &mut self.clients.requests;
         let key = requests.key();
