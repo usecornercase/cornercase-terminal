@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.241
+
+- **cornercase now builds on Windows**, the first step towards running it there natively. For now it only says that it does not run on Windows yet, with a link to follow the port, and exits with 1; `--help` and `--version` work. Nothing changes on Linux and macOS.
+
 ## 0.12.240
 
 - **`‹` in a file you opened from the Flow panel goes back to the Flow panel**, scrolled where you left it. It used to show the files panel's tree, and the Flow panel had to be opened again. A file opened from the tree, a search or a path in a pane still goes back to the tree.
