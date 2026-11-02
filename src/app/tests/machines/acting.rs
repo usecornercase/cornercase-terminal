@@ -25,6 +25,9 @@ enum Reply {
     Restarted,
     Down,
     Found(fn() -> Value),
+    Made(fn() -> Value),
+    Each(fn(&str) -> Value),
+    Told(fn(&str) -> Structured),
 }
 
 impl Reply {
@@ -37,6 +40,9 @@ impl Reply {
             (Self::Restarted, Some(boot)) if boot != RESTARTED => {
                 refuse(Code::StaleBoot, format!("this request is for the cornercase server started as {boot}"))
             }
+            (Self::Made(made), _) => Structured::Ok(made()),
+            (Self::Each(answer), _) => Structured::Ok(answer(asked["command"].as_str().unwrap_or_default())),
+            (Self::Told(answer), _) => answer(asked["command"].as_str().unwrap_or_default()),
             _ => Structured::Ok(json!({})),
         }
     }
@@ -353,6 +359,9 @@ mod the_row {
     }
 }
 
+mod checks;
 mod dialogs;
 mod following;
 mod menus;
+mod relay;
+mod run_on;

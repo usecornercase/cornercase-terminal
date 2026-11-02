@@ -42,6 +42,7 @@ fn answer() -> AccountsInfo {
         profile: "Work".into(),
         login: Some(Ids { project: Some(1), workspace: Some(2), tab: Some(7), pane: Some(8) }),
         tokens: Vec::new(),
+        agents: Vec::new(),
     }
 }
 
@@ -65,6 +66,34 @@ fn an_answer_with_logins_is_written_as_its_fixture_and_reads_back() {
 
     assert_eq!(written, fixture!("control/accounts/v1/answer-login.json").trim_end());
     assert_eq!(read, checked());
+}
+
+fn with_agents() -> AccountsInfo {
+    let agent = |agent: &str, command: &str, installed| AgentInstalled {
+        agent: agent.into(),
+        command: command.into(),
+        installed,
+    };
+    AccountsInfo {
+        agents: vec![agent("claude", "claude", true), agent("codex", "/opt/codex/bin/codex", false)],
+        ..checked()
+    }
+}
+
+#[test]
+fn an_answer_with_the_installed_agents_is_written_as_its_fixture_and_reads_back() {
+    let written = serde_json::to_string_pretty(&with_agents()).expect("json");
+    let read: AccountsInfo = serde_json::from_str(fixture!("control/accounts/v1/answer-agents.json")).expect("answer");
+
+    assert_eq!(written, fixture!("control/accounts/v1/answer-agents.json").trim_end());
+    assert_eq!(read, with_agents());
+}
+
+#[test]
+fn an_answer_without_agents_has_no_agents_key() {
+    let value = serde_json::to_value(checked()).expect("json");
+
+    assert!(value.get("agents").is_none());
 }
 
 #[test]

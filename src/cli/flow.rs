@@ -20,7 +20,7 @@ use crate::flows::{Flow, Worktree};
 pub(super) fn run(action: FlowAction) -> Result<()> {
     match action {
         FlowAction::List(list) => flow_list(&list),
-        FlowAction::Run(run) => flow_run(run),
+        FlowAction::Run(run) => flow_run(*run),
         FlowAction::Export(export) => flow_export(export),
         FlowAction::Import(import) => import_flow(import),
         FlowAction::Save(save) => save_flow(save),
@@ -63,6 +63,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         focus: run.create.focus,
         profile,
         accounts,
+        machine: super::machine(run.on)?,
     };
     let value = ask("flow run", control::Command::FlowRun(request))?;
     if run.create.print.json {

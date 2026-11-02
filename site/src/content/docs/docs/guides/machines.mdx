@@ -14,7 +14,7 @@ import Screen from '../../../../components/Screen.astro';
   crop={[2, 1, 106, 10]}
 />
 
-A linked machine's workspaces show [in your sidebar](#in-your-sidebar), under the project here that is a clone of the same repository, and its agents tell you when they need you as yours do. Your server can also [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). Click one of those workspaces and its tab shows here, live, and you [work in it](#working-in-a-machines-tab) as in one of yours. You can [rename, close and remove the worktree of a machine's workspace](#acting-on-a-machines-workspace) from its row. Opening tabs or starting agents on those machines from this window comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
+A linked machine's workspaces show [in your sidebar](#in-your-sidebar), under the project here that is a clone of the same repository, and its agents tell you when they need you as yours do. Your server can also [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). Click one of those workspaces and its tab shows here, live, and you [work in it](#working-in-a-machines-tab) as in one of yours. You can [rename, close and remove the worktree of a machine's workspace](#acting-on-a-machines-workspace) from its row, and [start an issue, a flow or a workspace on a machine](#start-work-on-a-machine) from the dialogs you use for this computer. For everything else, [`cornercase remote`](../remote/) opens a window on one of them.
 
 ## Add a machine
 
@@ -172,10 +172,92 @@ Scripts get them from [`cornercase events --notices`](../scripts-and-agents/#fol
 - Changes and Files of a machine's workspace only read it: nothing stages, discards or opens a file there.
 - **Every project** in Changes lists only this computer's projects.
 - A project on a machine with no workspaces can't be picked.
-- Starting an agent, a script or an issue's work on a machine.
+- Starting work from a project that is only on the machine, [scheduling](../queue/) an agent there, and sending a TODO, a Telegram or a Discord message to an agent there.
 - Closing or renaming a machine's tabs, `+ Tab`, splitting or closing its panes, and the prefix key's menu acting there.
 - In a machine's tab: clicking a path, the pane's right-click menu, moving panes, the accounts row, opening links, and pictures.
 - Picking a machine's workspace with ` go ` or `focus --machine` doesn't scroll the tree, or the workspaces column, to its row.
+
+## Start work on a machine
+
+With at least one machine listed, the **Issues** dialog, **start a flow…** and **new workspace** have a `run on` row:
+
+```text
+ ╭─ Issues · web-shop ──────────────────────────────────────────────────────────╮
+ │ #482 Returns page crashes on empty address                                   │
+ │ open                                                                         │
+ │                                                                              │
+ │ run on  ○ this computer   ● ☁ vps                                            │
+ │ start   in its own worktree on vps, in ~/code/web-shop                       │
+ │ agent   claude  (default)  not logged in on vps                              │
+ │ account work  (in use)  (vps's accounts)                                     │
+ │                                                                              │
+ │   start   start a flow   agent…   run on…   open login tab   account…   back │
+ ╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+**this computer** is chosen each time a dialog opens. Pick a machine (**run on…** on an issue's page, a click on the row in the other two) and what you start is sent to the server on that machine, which starts it as if you had clicked there: it belongs to that machine, shows [in your sidebar](#in-your-sidebar) under it, and once the machine lists it, it is selected, so its tab shows here.
+
+- **A machine that is down** is dimmed with why (`unreachable`, `connecting…`, `not seen yet`, or an older cornercase), and can't be picked.
+- **A project with no git remote** can't run elsewhere: the row says `needs a git remote`, since its repository is how cornercase finds the same project on the machine. Right after a project opens, the row can say so for a moment, until its remotes are read.
+- **The project there** is the machine's clone of the same repository, the one its sidebar row pairs with. The `start` row says where the work goes: `in its own worktree on vps, in ~/code/web-shop`, or `in a tab on vps, in …`, from the same choice as here.
+- **While it starts**, the dialog says `starting on vps…`. If the machine refuses, its reason stays in red and nothing changed. If it restarted since you picked it, the dialog says `vps restarted; nothing was started there`.
+
+### What is checked there first
+
+Picking a machine asks it, before anything starts:
+
+- **Its accounts.** The account step of Issues, and the account boxes of **start a flow**, list that machine's [accounts](../accounts/), marked `(vps's accounts)`, with the ones in use there selected. Nothing is copied from here; the agent starts with the account you pick, as the machine knows it.
+- **The agent.** When the agent isn't found by the server there, the row says `not installed on vps`; when the account you picked (or the agent's own login) is logged out there, `not logged in on vps`. Both offer **open login tab**, which opens a tab in the project on that machine running the agent's login for that account (a plain shell when it isn't installed, so you can install it) and shows it here. Neither stops **start**: the server there may not see an agent your shell there finds, such as one installed with `nvm`.
+- **The tracker** (an issue, or a flow started from one). When the machine has no access to it, the row says what is missing, such as `vps has no GitHub token for web-shop`, and **start** sends nothing. Connect the tracker on the machine, with its own window or `cornercase --remote vps config secret github`.
+- **Its flows** (**start a flow**). The list is the flows of the machine, so the one you see is the one that runs; **edit** is hidden, since they are the machine's to change.
+
+An issue is started there with its key: the machine reads it with its own tracker, and the prompt is built with its own [prompt template](../../reference/prompt/), which the **prompt** row says instead of showing this computer's. The branch and the workspace names you see before starting are the ones used there. **schedule** is hidden while a machine is picked: the [queue](../queue/) starts agents on this computer only.
+
+The answers are kept until that machine restarts, and asked again each time you pick it.
+
+### Clone the project there
+
+When the project isn't on the machine, the row says `not on vps · clone…`, and **start** opens **Clone web-shop on vps** first:
+
+```text
+ ╭─ Clone web-shop on vps ─────────────────────────────────────────────╮
+ │ vps clones it from the URL, then copies the git-ignored files you    │
+ │ tick (such as .env) into the clone. Ignored folders, such as         │
+ │ node_modules, are never offered.                                     │
+ │                                                                      │
+ │ from    git@github.com:acme/web-shop.git                             │
+ │ into    ~/code/web-shop                                              │
+ │ files to copy into the clone                                         │
+ │ [x] .env  312 B                                                      │
+ │ [ ] .env.local  1 KB                                                 │
+ │ [ ] config/secrets.dev.json  4 KB                                    │
+ │     data/dump.sql  12 MB · too big to copy                           │
+ │                                                                      │
+ │                                           back   skip files   clone  │
+ ╰──────────────────────────────────────────────────────────────────────╯
+```
+
+- **from** is the address of this project's `upstream` remote, else `origin`, without a password or token, and you can change it. A clone from `upstream` pairs with this project, but its `origin` there is then the upstream repository; clone your fork's address if you want to push from there. An address that uses an alias of your `~/.ssh/config`, such as `gh-work:acme/web-shop`, only works if the machine has the same alias.
+- **into** is the machine's **folder**, with the repository's name.
+- **The list** is the files git ignores in this project's folder, such as `.env`, so the clone there can run as it does here. Every box starts unticked, and **only ticked files are copied**, with their permissions. Ignored folders, like `node_modules` or `target`, are never offered, and neither are links. At most 200 files are listed (a last line says how many more were left out), and a file over 1 MB shows its size and `too big to copy`. The ticked files can add up to 8 MB: a tick past that is refused, and says so.
+- **A click on a file ticks it.** **clone** (or `Enter`) clones it there with the ticked files, **skip files** clones without any, and **back** (or `Esc`) returns with nothing done.
+
+The machine writes the files once the clone is done, and never over a file the repository has. Then you are back in the dialog you came from, with the machine still picked and its checks made again; one it couldn't write is named there, as in `cloned on vps · not copied: .env (it is already in the clone)`. When the clone fails, git's reason stays in red.
+
+### From a terminal
+
+`start`, `new-workspace` and `flow run` take `--machine`:
+
+```sh
+cornercase status --json | jq '.machines[] | {name, projects: [.projects[] | {id, name, paired}]}'
+cornercase start claude --issue '#482' --project 2 --machine vps --focus
+cornercase new-workspace fix/login --worktree --project 2 --machine vps
+cornercase flow run Quick --prompt 'Fix the login form' --project 2 --machine vps
+```
+
+The ids, of `--project` and `--workspace` and the ones printed, are the machine's, as `status` lists them under the machine. `--focus` shows what started here once the machine lists it. `--wait`, `--until` and `--timeout` can't be used with `--machine`: follow the agent with [`cornercase --remote vps wait`](../remote/#commands-for-scripts-and-agents). See [Start work on a machine](../scripts-and-agents/#start-work-on-a-machine) for scripts and other apps.
+
+A start gives up after 10 minutes with `it did not answer in time` (git and the project's setup run there first), a plain workspace, the tracker and the flows checks after 15 seconds, the accounts check after a minute and a clone after 30 minutes; what was still running goes on on the machine, and your sidebar shows it when it's done.
 
 ## Stats and usage of each machine
 

@@ -45,6 +45,7 @@ fn a_busy_dialog_stays_open() {
         worktree: None,
         error: None,
         creating: true,
+        run_on: None,
     });
 
     click(&mut app, outside());

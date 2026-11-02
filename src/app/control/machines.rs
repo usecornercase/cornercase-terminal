@@ -7,7 +7,7 @@ use crate::log;
 use crate::machines::{self, DEFAULT_FOLDER, HERE_ICON, ICONS, Machine};
 use crate::version;
 
-pub(super) fn unknown(name: &str) -> Refusal {
+pub(in crate::app) fn unknown(name: &str) -> Refusal {
     Refusal::new(Code::NotFound, format!("no machine is called `{name}`; `cornercase machines` lists them"))
 }
 

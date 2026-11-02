@@ -6,6 +6,7 @@ use serde_json::Value;
 use super::App;
 use super::control::json;
 use super::event::AppEvent;
+use super::machines::relay::Asking;
 use super::machines::{Held, MachineEvent, OLDER};
 use crate::agents::stats::View;
 use crate::control::contract::{Code, Refusal};
@@ -13,7 +14,7 @@ use crate::control::usage::{MachineRead, MachineStats, Plans};
 use crate::control::{Command, Response, Stats, Usage};
 use crate::log::{Job, Level};
 use crate::machines::link::Down;
-use crate::machines::{self, State, ask};
+use crate::machines::{self, State};
 use crate::time::Stamp;
 
 const STATS: Duration = Duration::from_secs(15);
@@ -135,17 +136,14 @@ impl App {
             return None;
         }
         cached.asking = true;
-        let (name, destination) = (held.name.clone(), held.destination.clone());
-        let connect = self.machines.connector(&destination);
-        let job = Job::new(Level::Info, "machines", T::WHAT).with("name", &name).slow_after(timeout);
-        let there = name.clone();
-        let work = move || Ok(ask::ask(connect.as_ref(), &there, T::command(), None, timeout));
-        self.spawn_job(job, work, move |result, job| {
-            let result = heard::<T>(result).map_err(|why| machines::hide_destination(&why, &name, &destination));
+        let asking = Asking { machine: held.name.clone(), destination: held.destination.clone(), boot: None, timeout };
+        let job = Job::new(Level::Info, "machines", T::WHAT).with("name", &asking.machine);
+        self.spawn_ask(job, asking, T::command(), move |result, asking, job| {
+            let result = heard::<T>(result).map_err(|why| asking.hide(&why));
             if let Err(why) = &result {
                 job.fail(why);
             }
-            Some(AppEvent::Machine(T::event(link, result)))
+            AppEvent::Machine(T::event(link, result))
         });
         Some(link)
     }
@@ -248,8 +246,8 @@ fn unread_reason(state: State) -> &'static str {
     }
 }
 
-fn heard<T: Asked>(result: crate::error::Result<Result<String, String>>) -> Result<T, String> {
-    let text = result.map_err(|error| error.to_string())??;
+fn heard<T: Asked>(result: Result<String, String>) -> Result<T, String> {
+    let text = result?;
     match serde_json::from_str::<Response>(&text) {
         Ok(Response::Ok(value)) => T::read(value, SystemTime::now()).map_err(|_| UNREADABLE.into()),
         Ok(Response::Error(why)) => Err(why),

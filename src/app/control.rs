@@ -13,12 +13,13 @@ mod flow;
 mod held;
 mod idle_restart;
 mod issues;
-mod machines;
+pub(super) mod machines;
 mod merge_check;
 mod plugins;
 mod ports;
 mod processes;
 mod queue;
+mod relay;
 mod search;
 mod stats;
 mod status;
@@ -143,7 +144,7 @@ impl Requests {
         self.launched.push((key, started));
     }
 
-    fn key(&mut self) -> u64 {
+    pub(in crate::app) fn key(&mut self) -> u64 {
         self.next += 1;
         self.next
     }
@@ -186,6 +187,7 @@ enum Stage {
     Ports,
     Processes,
     Clone(clone::Cloning),
+    Relay(relay::Relaying),
 }
 
 impl Stage {
@@ -194,6 +196,7 @@ impl Stage {
             Self::Processes => "the processes are still being measured",
             Self::Machines(_) => "the machines have not answered yet",
             Self::Clone(_) => "git is still cloning the repository",
+            Self::Relay(_) => "the machine has not answered yet",
             _ => "the ports are still being listed",
         }
     }
@@ -553,11 +556,12 @@ impl App {
         let Asked { client, asker, area, now } = asked;
         ControlFlow::Break(match command {
             Command::Open(open) => self.open_request(asker, &open, area),
-            Command::Clone(clone) => self.clone_request(asked, &clone),
+            Command::Clone(clone) => self.clone_request(asked, clone),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),
             Command::NewTab(new) => self.new_tab_request(asked, new),
             Command::Split(split) => self.split_request(asked, split),
-            Command::Start(start) | Command::StartWith(start) => self.start_request(asked, start),
+            Command::Start(start) => self.start_request(asked, start),
+            Command::StartWith(start) => self.start_with_request(asked, start),
             Command::Send(send) => self.send_request(client, asker, send, now),
             Command::Keys(keys) => self.keys_request(asker, &keys, now),
             Command::Read(read) => self.read_request(asker, &read),

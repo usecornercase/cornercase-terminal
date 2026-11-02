@@ -38,6 +38,8 @@ pub(super) struct Upstream {
     pub(super) unlisted: HashSet<u64>,
 }
 
+pub(super) const NAME_REQUIRED: &str = "the name is required";
+
 pub(super) const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
 
 const UNCOMMITTED_TOO: &str = "It has uncommitted changes, which are deleted.";
@@ -283,12 +285,19 @@ impl App {
         let name = input.text().trim().to_string();
         let Some(p) = self.projects.project_index(project) else { return Ok(None) };
         if name.is_empty() {
-            let error = Some("the name is required".into());
-            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false }));
+            let error = Some(NAME_REQUIRED.into());
+            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false, run_on: None }));
         }
         if worktree == Some(true) {
             self.spawn_worktree(p, name, None, None);
-            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error: None, creating: true }));
+            return Ok(Some(Overlay::NewWorkspace {
+                project,
+                input,
+                worktree,
+                error: None,
+                creating: true,
+                run_on: None,
+            }));
         }
         let repo = self.projects[p].path.clone();
         let workspace = self.new_workspace(area, repo, Some(name), false)?;

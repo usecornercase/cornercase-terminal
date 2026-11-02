@@ -52,7 +52,7 @@ pub(crate) use changes::{
     Changes, ChangesBase, ChangesCount, ChangesDiscard, ChangesFile, ChangesGap, ChangesMergeCheck, ChangesMode,
     ChangesStage, ChangesViewed,
 };
-pub(crate) use clone::{CloneRepository, Cloned};
+pub(crate) use clone::{CloneFile, CloneRepository, Cloned, Unwritten};
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
 pub(crate) use contract::Contract;
@@ -606,6 +606,8 @@ pub(crate) struct NewWorkspace {
     pub(crate) project: Option<u64>,
     pub(crate) worktree: bool,
     pub(crate) focus: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -649,6 +651,8 @@ pub(crate) struct Start {
     pub(crate) focus: bool,
     pub(crate) profile: Option<String>,
     pub(crate) accounts: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

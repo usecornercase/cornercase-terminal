@@ -9,11 +9,14 @@ use link::Down;
 
 pub(crate) mod act;
 pub(crate) mod ask;
+pub(crate) mod clone_form;
 pub(crate) mod follow;
 pub(crate) mod form;
 pub(crate) mod heard;
 pub(crate) mod link;
 pub(crate) mod repo;
+pub(crate) mod run_on;
+pub(crate) mod send;
 pub(crate) mod stream;
 pub(crate) mod wake;
 
@@ -26,7 +29,7 @@ pub(crate) const DEFAULT_FOLDER: &str = "~/code";
 const NAME_MAX: usize = 20;
 pub(crate) const EVERY: &str = "all";
 const UPDATING: &str = "updating…";
-const CONNECTING: &str = "connecting…";
+pub(crate) const CONNECTING: &str = "connecting…";
 pub(crate) const NOT_SEEN: &str = "not seen yet";
 const DESTINATION_MAX: usize = 255;
 

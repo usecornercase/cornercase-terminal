@@ -1,6 +1,6 @@
 # Cloning a repository
 
-Code: `git/clone.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run_clone`, `clone_url`, `clone_parent`), `cli/help/clone.rs`, #541
+Code: `git/clone.rs`, `git/clone/files.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run_clone`, `clone_url`, `clone_parent`), `cli/help/clone.rs`, #541
 
 - **One operation, `clone`** (index 114 of `Command::NAMES`): `url`, `parent` and `focus`.
   - It runs `git clone` into a new folder inside `parent`. The folder is named after the repository as git names it: the URL's last part without `/`, `.git` or `.bundle` (`git/clone.rs` `folder_name`).
@@ -8,7 +8,7 @@ Code: `git/clone.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run
   - It then opens that folder as a project as `open` does, through `App::open_folder`, which both share: an open project of that path is reused, else `add_project`. So the project is saved with the session and shows in the sidebar.
   - It answers `path` (canonical), the project's `project`, `workspace`, `tab` and `pane` ids, and `projection` with `focus`.
   - `CONTRACT` stays 1: it is a new operation, which an older server refuses by name.
-  - There is no button: a person clones from a terminal, a script or another machine (#543 builds on it).
+  - The window has no button for a clone on its own machine: a person clones from a terminal or a script. Another machine's server is sent `clone` by the Clone on machine dialog (#543, Remote windows › Starting work on a machine).
 - **The folder is the parent, not the clone**: the request says where clones go (`~/src`), and the clone's own name comes from the URL, so a client that picks a machine and a folder needs no name of its own.
   - The CLI's optional `FOLDER` is that parent. It is the current folder by default, as for `git clone`. With `--remote` it is the other machine's home folder (`~`, expanded by the server), since this machine's current folder means nothing there.
   - A given `FOLDER` follows the `--remote` path rule (absolute or `~/…`), and the server refuses a relative `parent` as `malformed`.
@@ -47,3 +47,9 @@ Code: `git/clone.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run
   - With `focus` and a view, a view that closed while git ran skips the focus, as `focus_in_view` does for a new pane: the clone is on disk and its project open, so the answer still gives its path and ids, without `projection`.
 - **The log holds no URL**: the job logs the target folder and, on failure, only the kind (`not a repository`, `access denied`, `git failed`). The request's fields log `parent` and `focus`, and the refusal messages leave the URL out (above); where git's own line quotes it, only its scheme, host and path are left, without credentials, query or fragment. A token in the URL still reaches git's command line and the clone's `.git/config`, as with `git clone` by hand; the docs advise a credential helper instead.
 - **No timeout**: a clone of a big repository can take many minutes, and `ask` waits with no read timeout, as `start --worktree` waits for git. Ctrl+C ends the command, and the clone goes on.
+- **Files written after the clone** (#543, `files`, `git/clone/files.rs`): `clone` takes `files`, each with a `path` relative to the clone, its `data` in base64 and its `mode` (`0o644` when left out), so another machine's dialog can copy the git-ignored files a person ticked (`.env`) into the new clone. A field of `clone` because no request writes files, and a second channel (scp, sshfs) would go against the machines' one-way link.
+  - **Decoded before git runs**, in the job: bad base64, or more bytes than the dialog's cap (8 MiB in all, `git::ignored::MAX_TOTAL_BYTES`), is `malformed` and nothing is cloned. The server checks only that total: the dialog's other caps (200 entries, 1 MiB a file) are about what it offers, and a script's request is bounded anyway by the total and the protocol's message size.
+  - **Written only after `git clone` succeeded**, inside the clone: a path that is absolute, has a `..` or a `.git` component (any case), is empty, or names a file already there is refused, so a tracked file is never overwritten (`create_new`). Missing folders are made inside the clone, and one in the way that is not a folder (a link included) refuses the file. A file is written private, then given its `mode & 0o777`, so a `.env` kept at `0o600` stays so.
+  - **A file that fails does not undo the clone**: the answer lists it in `unwritten`, each with its `path` and `why`, and the project opens as usual. Both `files` and `unwritten` are left out when empty, so a clone without files is as before; a structured client's empty `files` is read as left out (Contract › Strict fields).
+  - **The log** holds how many files and how many bytes (`bytes`, what the base64 decodes to, as the relay logs it), never their names or content.
+  - **No feature**: the field is sent only by this server to a linked machine, whose release is equal or newer (Remote windows › Machines' links › Versions); an older server would ignore it and clone without the files, which a client reading `unwritten` could not tell.

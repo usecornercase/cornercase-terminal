@@ -9,6 +9,7 @@ use super::flows::{
     flows_wide, text_inside,
 };
 use super::issues::issue_buttons_in;
+use super::run_on::RunOnRow;
 use super::{INPUT_PROMPT, Note, draw_input, form_inner, pick_background};
 use crate::editor::Editor;
 use crate::flows::Flow;
@@ -25,6 +26,7 @@ const ACCOUNT_FIELD: u16 = 28;
 const PLACEHOLDER: &str = "what the team should do: a feature, a bug, an issue's text…";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(clippy::struct_excessive_bools, reason = "independent rows: preview, diagram, workspace, run on")]
 pub(crate) struct Shape {
     pub(crate) warnings: usize,
     pub(crate) preview: bool,
@@ -32,11 +34,16 @@ pub(crate) struct Shape {
     pub(crate) lines: usize,
     pub(crate) accounts: usize,
     pub(crate) workspace: bool,
+    pub(crate) run_on: bool,
 }
 
 impl Shape {
     pub(crate) fn new(items: usize, warnings: usize, preview: bool, diagram: bool) -> Self {
-        Self { warnings, preview, diagram, lines: 1 + 2 * items, accounts: 0, workspace: false }
+        Self { warnings, preview, diagram, lines: 1 + 2 * items, accounts: 0, workspace: false, run_on: false }
+    }
+
+    pub(crate) fn with_run_on(self, run_on: bool) -> Self {
+        Self { run_on, ..self }
     }
 
     pub(crate) fn with_accounts(self, accounts: usize) -> Self {
@@ -48,10 +55,11 @@ impl Shape {
     }
 }
 
-fn start_rows(area: Rect, shape: Shape) -> [Rect; 10] {
+fn start_rows(area: Rect, shape: Shape) -> [Rect; 11] {
     let shown = u16::try_from(shape.warnings.min(MAX_WARNINGS)).unwrap_or(0);
-    let [heading, _, body, _, branch, workspace, accounts, warnings, note, buttons] = Layout::vertical([
+    let [heading, run_on, _, body, _, branch, workspace, accounts, warnings, note, buttons] = Layout::vertical([
         Constraint::Length(1),
+        Constraint::Length(u16::from(shape.run_on)),
         Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(1),
@@ -70,7 +78,7 @@ fn start_rows(area: Rect, shape: Shape) -> [Rect; 10] {
     let on_top = shape.preview && shape.diagram && !flows_wide(area);
     let lines = u16::try_from(shape.lines).unwrap_or(u16::MAX).min(most.height);
     let [top, _, label, prompt] = if on_top { split(Constraint::Fill(2)) } else { split(Constraint::Length(lines)) };
-    [heading, top, label, prompt, branch, workspace, accounts, warnings, note, buttons]
+    [heading, top, label, prompt, branch, workspace, accounts, warnings, note, buttons, run_on]
 }
 
 fn columns(area: Rect, shape: Shape) -> (Rect, Option<Rect>) {
@@ -108,6 +116,10 @@ pub(crate) fn start_prompt(area: Rect, shape: Shape) -> Rect {
 
 pub(crate) fn start_branch(area: Rect, shape: Shape) -> Rect {
     start_rows(area, shape)[4]
+}
+
+pub(crate) fn start_run_on(area: Rect, shape: Shape) -> Rect {
+    start_rows(area, shape)[10]
 }
 
 pub(crate) fn start_workspace(area: Rect, shape: Shape) -> Rect {
@@ -159,6 +171,7 @@ pub(crate) struct StartFlow {
     pub(crate) diagram: bool,
     pub(crate) accounts: Vec<AccountField>,
     pub(crate) focused_account: Option<usize>,
+    pub(crate) run_on: Option<RunOnRow>,
 }
 
 impl StartFlow {
@@ -166,6 +179,7 @@ impl StartFlow {
         Shape::new(self.items.len(), self.warnings.len(), self.preview.is_some(), self.diagram)
             .with_accounts(self.accounts.len())
             .with_workspace(self.workspace.is_some())
+            .with_run_on(self.run_on.is_some())
     }
 
     fn list_hidden(&self, area: Rect) -> bool {
@@ -184,6 +198,7 @@ impl StartFlow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StartHit {
     Row(usize),
+    RunOn(usize),
     Prompt { line: usize, col: usize },
     Branch,
     Workspace,
@@ -205,6 +220,10 @@ pub(crate) fn start_hit(area: Rect, view: &StartFlow, pos: Position) -> Option<S
     }
     if let Some(i) = start_buttons(area, shape, &view.buttons).iter().position(|r| r.contains(pos)) {
         return Some(StartHit::Button(i));
+    }
+    let run_on = start_run_on(area, shape);
+    if let Some(row) = view.run_on.as_ref().filter(|_| run_on.contains(pos)) {
+        return row.at(pos.x.saturating_sub(run_on.x)).map(StartHit::RunOn);
     }
     let prompt = start_prompt(area, shape);
     if prompt.contains(pos) {
@@ -324,10 +343,13 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, &start.title), r);
     let shape = start.shape();
-    let [heading, _, _, _, branch, workspace, _, warning_rows, note, _] = start_rows(area, shape);
+    let [heading, _, _, _, branch, workspace, _, warning_rows, note, _, run_on] = start_rows(area, shape);
     let dim = Style::default().fg(view.muted);
     let heading_text = truncate_right(&start.heading, usize::from(heading.width));
     f.render_widget(Paragraph::new(Span::styled(heading_text, dim.add_modifier(Modifier::BOLD))), heading);
+    if let Some(row) = &start.run_on {
+        row.draw(f, view, run_on);
+    }
     if let Some(preview) = start.preview_area(area) {
         draw_preview(
             f,

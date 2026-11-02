@@ -10,6 +10,7 @@ use super::*;
 #[case::not_a_repository(Failure::NotRepository("Repository not found".into()), Code::NotFound)]
 #[case::access_denied(Failure::AccessDenied("Permission denied (publickey)".into()), Code::Failed)]
 #[case::other(Failure::Failed("Connection refused".into()), Code::Failed)]
+#[case::unfit_files(Failure::Files("the `data` of `.env` is not base64".into()), Code::Malformed)]
 fn each_failure_has_its_code(#[case] failure: Failure, #[case] code: Code) {
     let refused = refusal(&failure);
 

@@ -24,15 +24,18 @@ use crate::settings::Page;
 
 pub(super) mod acting;
 mod card;
+pub(super) mod checks;
 mod clicks;
 mod column;
 mod drag;
 mod mouse;
 mod notices;
 pub(super) mod panels;
+pub(super) mod relay;
 mod repo;
 mod report;
 mod rows;
+mod run_on;
 mod selection;
 mod stream;
 mod typing;
@@ -59,6 +62,9 @@ pub(crate) enum MachineEvent {
     Followed(Followed),
     Read(Box<panels::FileRead>),
     Stream(StreamReport),
+    Relayed(relay::Relayed),
+    Ignored { root: PathBuf, result: std::result::Result<crate::git::ignored::Listing, String> },
+    Packed { url: String, result: std::result::Result<Vec<control::CloneFile>, String> },
 }
 
 impl From<Report> for AppEvent {
@@ -77,6 +83,7 @@ pub(super) struct Held {
     pub(super) watching: bool,
     pub(super) down_at: Option<(Instant, u32)>,
     pub(super) cache: Cache,
+    pub(super) checks: checks::Checks,
     pub(super) era: u64,
 }
 
@@ -94,6 +101,7 @@ pub(super) struct Machines {
     pub(super) acting: acting::Acting,
     selection: Option<selection::RemoteSelection>,
     pub(super) panels: panels::RemotePanels,
+    awaited: Option<selection::Awaited>,
     folded: Vec<(String, PathBuf)>,
     watched: Option<stream::Watched>,
     streams: u64,
@@ -115,6 +123,7 @@ impl Machines {
             acting: acting::Acting::default(),
             selection: None,
             panels: panels::RemotePanels::default(),
+            awaited: None,
             folded: Vec::new(),
             watched: None,
             streams: 1,
@@ -225,6 +234,7 @@ impl App {
         self.refresh_machines_page();
         self.follow_stream();
         self.drop_late_typed(now);
+        self.drop_late_awaited(now);
     }
 
     pub(super) fn follow_machines(&mut self) {
@@ -276,12 +286,14 @@ impl App {
             watching: false,
             down_at: None,
             cache: Cache::default(),
+            checks: checks::Checks::default(),
             era: 0,
         };
         self.machines.held.push(held);
     }
 
     pub(super) fn machine_event(&mut self, event: MachineEvent) {
+        let streamed = matches!(event, MachineEvent::Stream(_));
         match event {
             MachineEvent::Link(report) => self.machine_reported(report),
             MachineEvent::Updated { link, result, hidden } => self.machine_updated(link, &result, &hidden),
@@ -292,7 +304,16 @@ impl App {
             MachineEvent::Followed(followed) => self.remote_followed(followed),
             MachineEvent::Read(read) => self.remote_file_read(*read),
             MachineEvent::Stream(report) => self.stream_reported(report),
+            MachineEvent::Relayed(relayed) => self.relayed(relayed),
+            MachineEvent::Ignored { root, result } => self.ignored_listed(&root, result),
+            MachineEvent::Packed { url, result } => self.clone_packed(url, result),
         }
+        if streamed {
+            return;
+        }
+        self.follow_issues_run_on();
+        self.follow_start_flow_run_on();
+        self.follow_new_workspace_run_on();
     }
 
     fn machine_reported(&mut self, report: Report) {
@@ -327,6 +348,7 @@ impl App {
         let held = &mut self.machines.held[at];
         if held.seen.as_ref().is_none_or(|old| old.boot != seen.boot) {
             held.era += 1;
+            held.checks = checks::Checks::default();
         }
         let before = held.seen.replace(seen).filter(|_| held.watching);
         held.watching = true;
@@ -431,5 +453,6 @@ impl App {
         self.machines.synced.clear();
         self.machines.selection = None;
         self.machines.panels.reset();
+        self.machines.awaited = None;
     }
 }

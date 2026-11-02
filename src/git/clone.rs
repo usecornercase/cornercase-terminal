@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 
 use super::worktree::git_env;
 
+pub(crate) mod files;
+
 const NOT_A_REPOSITORY: [&str; 4] =
     ["does not exist", "not found", "could not be found", "does not appear to be a git repository"];
 const DENIED: [&str; 7] = [
@@ -36,6 +38,7 @@ pub(crate) enum Failure {
     NotRepository(String),
     AccessDenied(String),
     Failed(String),
+    Files(String),
 }
 
 impl Failure {
@@ -48,6 +51,7 @@ impl Failure {
             Self::NotRepository(_) => "not a repository",
             Self::AccessDenied(_) => "access denied",
             Self::Failed(_) => "git failed",
+            Self::Files(_) => "unfit files",
         }
     }
 }
@@ -62,6 +66,7 @@ impl fmt::Display for Failure {
             Self::NotRepository(detail) => write!(f, "the URL is not a git repository: {detail}"),
             Self::AccessDenied(detail) => write!(f, "access to the repository was denied: {detail}"),
             Self::Failed(detail) => write!(f, "git clone failed: {detail}"),
+            Self::Files(detail) => write!(f, "{detail}"),
         }
     }
 }
@@ -93,7 +98,7 @@ fn bare(url: &str) -> String {
     rest.split(['?', '#']).next().unwrap_or(rest).to_string()
 }
 
-fn folder_name(url: &str) -> Result<String, Failure> {
+pub(crate) fn folder_name(url: &str) -> Result<String, Failure> {
     let url = naming_part(url.trim());
     let url = url.trim_end_matches('/');
     let url = url.strip_suffix("/.git").unwrap_or(url).trim_end_matches('/');
@@ -174,7 +179,7 @@ impl Target {
         Ok(created)
     }
 
-    fn undo(&self) {
+    pub(crate) fn undo(&self) {
         for dir in self.made.iter().rev() {
             let _ = if *dir == self.path { std::fs::remove_dir_all(dir) } else { std::fs::remove_dir(dir) };
         }

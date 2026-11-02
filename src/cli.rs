@@ -14,6 +14,7 @@ use self::status::run_status;
 use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, Until, What};
 use crate::error::{Error, Result};
+use crate::machines::send;
 use crate::remote::{self, Remote};
 use crate::{git, log, server};
 
@@ -328,7 +329,7 @@ fn clone_url(url: &str, remote: Option<&Remote>) -> Result<String> {
 fn run_clone(clone: &args::CloneArgs) -> Result<()> {
     let remote = client::used_remote();
     let (url, parent) = (clone_url(&clone.url, remote)?, clone_parent(clone.folder.as_deref(), remote)?);
-    let request = control::CloneRepository { url, parent, focus: clone.create.focus };
+    let request = control::CloneRepository { url, parent, focus: clone.create.focus, files: Vec::new() };
     let value = ask("clone", control::Command::Clone(request))?;
     if clone.create.print.json {
         return print_json(&value);
@@ -340,7 +341,7 @@ fn run_clone(clone: &args::CloneArgs) -> Result<()> {
 
 fn run_new_workspace(new: args::NewWorkspaceArgs) -> Result<()> {
     let (name, project, worktree, focus) = (new.name, new.project, new.worktree, new.create.focus);
-    let request = control::NewWorkspace { name, project, worktree, focus };
+    let request = control::NewWorkspace { name, project, worktree, focus, machine: machine(new.on)? };
     let value = ask("new-workspace", control::Command::NewWorkspace(request))?;
     say(value, new.create.print.json, |done| id(done.ids.workspace))
 }
@@ -563,7 +564,23 @@ fn issue_features(issue: &args::issue::IssueArg) -> Result<()> {
     Ok(())
 }
 
+fn machine(on: args::machine::MachineArg) -> Result<Option<String>> {
+    if on.machine.is_some() {
+        client::use_machine_start()?;
+    }
+    Ok(on.machine)
+}
+
+fn unwaited(start: &StartArgs) -> Result<()> {
+    let waits = start.wait || start.until.is_some() || start.timeout.is_some();
+    if waits && start.on.machine.is_some() {
+        return Err(Error::WrongUsage(send::UNWAITED.into()));
+    }
+    Ok(())
+}
+
 fn run_start(start: StartArgs) -> Result<()> {
+    unwaited(&start)?;
     let prompt = read_prompt(start.prompt, start.prompt_file)?;
     let chosen = start.model.is_some() || start.mode.is_some() || start.effort.is_some();
     let name = if chosen { "start-with" } else { "start" };
@@ -588,6 +605,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         focus: start.create.focus,
         profile,
         accounts,
+        machine: machine(start.on)?,
     };
     let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
     say(ask(name, command)?, start.create.print.json, |done| {

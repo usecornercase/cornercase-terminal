@@ -1,0 +1,80 @@
+use ratatui::style::{Color, Style};
+use ratatui::text::Span;
+
+use super::{Action, Start};
+use crate::machines::run_on::{RunOn, Target};
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct There {
+    pub(crate) place: String,
+    pub(crate) cloned: bool,
+    pub(crate) listed: bool,
+    pub(crate) accounted: bool,
+    pub(crate) lacking: Option<String>,
+}
+
+impl Start {
+    pub(crate) fn with_run_on(mut self, run_on: Option<RunOn>) -> Self {
+        self.run_on = run_on;
+        self
+    }
+
+    pub(crate) fn machine(&self) -> Option<&Target> {
+        self.run_on.as_ref()?.machine()
+    }
+
+    pub(crate) fn there(&self) -> Option<&There> {
+        self.there.as_ref().filter(|_| self.machine().is_some())
+    }
+
+    pub(crate) fn choose_machine(&mut self, at: Option<usize>) -> bool {
+        let Some(run_on) = &mut self.run_on else { return false };
+        if run_on.chosen == at || !run_on.choose(at) {
+            return false;
+        }
+        self.there = None;
+        self.notice = None;
+        self.close_accounts();
+        true
+    }
+
+    pub(crate) fn run_on_spans(&self, dim: Style) -> Option<Vec<Span<'static>>> {
+        let mut spans = self.run_on.as_ref()?.spans(dim);
+        if let Some(missing) = self.there().and_then(|there| there.lacking.clone()) {
+            spans.push(Span::styled(format!(" · {missing}"), Style::default().fg(Color::Red)));
+        }
+        Some(spans)
+    }
+
+    pub(crate) fn run_on_choices(&self) -> usize {
+        self.run_on.as_ref().map_or(0, |run_on| run_on.targets.len() + 1)
+    }
+
+    pub(super) fn heading_there(&self, name: &str) -> Option<String> {
+        let target = self.machine()?;
+        let place = self.there().map_or_else(|| format!("on {}", target.name), |there| there.place.clone());
+        Some(format!("{name} {place}"))
+    }
+
+    pub(super) fn not_ready_there(&mut self) -> Option<Action> {
+        let name = self.machine()?.name.clone();
+        let Some(there) = self.there() else {
+            self.notice = Some(format!("waiting for {name} to answer"));
+            return Some(Action::None);
+        };
+        if !there.cloned {
+            return Some(Action::CloneThere);
+        }
+        let why = there.lacking.clone().or_else(|| (!there.listed).then(|| format!("reading the flows on {name}…")));
+        self.notice = Some(why?);
+        Some(Action::None)
+    }
+
+    pub(crate) fn starting_there(&self) -> Option<String> {
+        let target = self.machine().filter(|_| self.waiting)?;
+        Some(format!("starting on {}…", target.name))
+    }
+}
+
+#[cfg(test)]
+mod tests;
