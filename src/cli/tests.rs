@@ -34,6 +34,7 @@ mod parsing {
             (Some("7"), Some("github"), Some(3))
         );
         assert!(parse(&["start", "--issue", "7", "--prompt", "x"]).is_err());
+        assert!(parse(&["start", "--issue", "7", "--prompt-file", "task.md"]).is_err());
         assert!(parse(&["start", "--source", "github"]).is_err());
         assert!(parse(&["start", "--issue", "7", "--source", "bugzilla"]).is_err());
         assert!(parse(&["start", "--issue", "7", "--project", "1", "--workspace", "2"]).is_err());
@@ -58,10 +59,12 @@ mod parsing {
     }
 
     #[test]
-    fn a_flow_needs_a_task_or_an_issue() {
+    fn a_flow_needs_a_task_or_an_issue_and_takes_both() {
         assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42"]).is_ok());
         assert!(parse(&["flow", "run", "Quick"]).is_err());
-        assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42", "--prompt", "x"]).is_err());
+        assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42", "--prompt", "x"]).is_ok());
+        assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42", "--prompt-file", "task.md"]).is_ok());
+        assert!(parse(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "f"]).is_err());
     }
 
     #[test]

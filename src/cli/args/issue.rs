@@ -92,7 +92,6 @@ pub(crate) struct IssueArg {
         id = "issue",
         long = "issue",
         value_name = "KEY",
-        conflicts_with_all = ["prompt", "prompt_file"],
         help = "Work on this issue instead: a key such as #482, sc-48 or ENG-42, or its URL, with the prompt the Issues dialog's start uses and its branch (settings → Worktrees → issue branches; --worktree names another)"
     )]
     pub(crate) key: Option<String>,
