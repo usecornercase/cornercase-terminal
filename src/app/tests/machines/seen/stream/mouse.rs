@@ -174,3 +174,145 @@ fn hovering_a_divider_of_the_tab_here_shows_no_resize_pointer() {
 
     assert_eq!(app.pointer(AREA), pointer::Shape::Default);
 }
+
+mod while_a_tab_changes {
+    use super::*;
+
+    const RESIZED: f32 = 6.0 / 18.0;
+
+    fn moving() -> (Streaming, Position, UnixStream) {
+        let mut streaming = streaming();
+        let line = split(&mut streaming, "none");
+        let orders = switched(&mut streaming, None);
+        (streaming, line, orders)
+    }
+
+    fn switched(streaming: &mut Streaming, orders: Option<UnixStream>) -> UnixStream {
+        assert!(streaming.seeing.rig.app.select_remote("vps", RemoteItem::Tab(11)));
+        let mut orders = orders.unwrap_or_else(|| reach(&streaming.seeing.ends));
+        assert_eq!(request(&mut orders)["args"]["item"], json!({"tab": 11}));
+        orders
+    }
+
+    fn held_then_moving() -> (Streaming, UnixStream) {
+        let mut streaming = streaming();
+        split(&mut streaming, "press_release");
+        let app = &mut streaming.seeing.rig.app;
+        mouse(app, MouseEventKind::Down(MouseButton::Left), in_pane(app, 3));
+        let mut orders = reach(&streaming.seeing.ends);
+        assert_eq!(request(&mut orders)["command"], json!("input"));
+        ok(&mut orders, &json!({}));
+        let orders = switched(&mut streaming, Some(orders));
+        (streaming, orders)
+    }
+
+    fn let_go(orders: &mut UnixStream) -> (Value, Value, Value) {
+        ok(orders, &json!({"tab": 11, "projection": 2}));
+        let asked = request(orders);
+        (asked["command"].clone(), asked["args"]["pane"].clone(), asked["args"]["events"][0]["mouse"]["kind"].clone())
+    }
+
+    fn refused(streaming: &mut Streaming, line: Position, orders: &mut UnixStream) {
+        say(orders, &json!({"error": {"code": "failed", "message": "no such tab"}}));
+        streaming
+            .seeing
+            .rig
+            .until("the refusal arrives", |app| app.remote_divider_at(line, app.layout(AREA).pane).is_some());
+    }
+
+    fn resized(streaming: &mut Streaming, line: Position, orders: &mut UnixStream) -> Value {
+        let app = &mut streaming.seeing.rig.app;
+        mouse(app, MouseEventKind::Down(MouseButton::Left), line);
+        mouse(app, MouseEventKind::Drag(MouseButton::Left), in_pane(app, 6));
+        request(orders)
+    }
+
+    #[test]
+    fn hovering_a_divider_of_the_old_screen_shows_no_resize_pointer() {
+        let (mut streaming, line, _orders) = moving();
+        let app = &mut streaming.seeing.rig.app;
+
+        app.screen.hover = Some(line);
+
+        assert_eq!(app.pointer(AREA), pointer::Shape::Default);
+    }
+
+    #[test]
+    fn a_press_on_the_old_divider_then_one_on_the_new_tab_s_drags_it_and_splits_nothing_in_half() {
+        let (mut streaming, line, mut orders) = moving();
+        mouse(&mut streaming.seeing.rig.app, MouseEventKind::Down(MouseButton::Left), line);
+        ok(&mut orders, &json!({"tab": 11, "projection": 2}));
+        say(&mut streaming.surface, &There { tab: 11, ..THERE }.split(2, 2, "none"));
+        streaming.seeing.rig.until("the other tab shows", |app| {
+            app.watched().and_then(|watched| watched.screen.as_ref()).is_some_and(|screen| screen.tab == 11)
+        });
+
+        let asked = resized(&mut streaming, line, &mut orders);
+
+        assert_eq!(
+            (&asked["command"], &asked["args"]["tab"], &asked["args"]["ratio"]),
+            (&json!("ratio"), &json!(11), &json!(f64::from(RESIZED)))
+        );
+    }
+
+    #[test]
+    fn a_press_on_the_old_divider_then_one_after_a_refused_tab_drags_it_and_splits_nothing_in_half() {
+        let (mut streaming, line, mut orders) = moving();
+        mouse(&mut streaming.seeing.rig.app, MouseEventKind::Down(MouseButton::Left), line);
+        refused(&mut streaming, line, &mut orders);
+
+        let asked = resized(&mut streaming, line, &mut orders);
+
+        assert_eq!(
+            (&asked["command"], &asked["args"]["tab"], &asked["args"]["ratio"]),
+            (&json!("ratio"), &json!(13), &json!(f64::from(RESIZED)))
+        );
+    }
+
+    #[test]
+    fn after_a_refused_tab_a_double_click_on_a_divider_splits_in_half_the_tab_shown() {
+        let (mut streaming, line, mut orders) = moving();
+        refused(&mut streaming, line, &mut orders);
+
+        click(&mut streaming.seeing.rig.app, line);
+        click(&mut streaming.seeing.rig.app, line);
+
+        let asked = request(&mut orders);
+        assert_eq!(
+            (&asked["command"], &asked["args"]["tab"], &asked["args"]["ratio"]),
+            (&json!("ratio"), &json!(13), &json!(0.5))
+        );
+    }
+
+    #[test]
+    fn a_divider_held_before_the_change_shows_no_resize_pointer() {
+        let mut streaming = streaming();
+        let line = split(&mut streaming, "none");
+        mouse(&mut streaming.seeing.rig.app, MouseEventKind::Down(MouseButton::Left), line);
+
+        let _orders = switched(&mut streaming, None);
+
+        assert_eq!(streaming.seeing.rig.app.pointer(AREA), pointer::Shape::Default);
+    }
+
+    #[test]
+    fn a_button_held_before_the_change_is_let_go_in_its_pane() {
+        let (mut streaming, mut orders) = held_then_moving();
+        let app = &mut streaming.seeing.rig.app;
+
+        mouse(app, MouseEventKind::Up(MouseButton::Left), in_pane(app, 4));
+
+        assert_eq!(let_go(&mut orders), (json!("input"), json!(1), json!("up")));
+    }
+
+    #[test]
+    fn a_button_held_before_the_change_and_dragged_sends_only_its_release() {
+        let (mut streaming, mut orders) = held_then_moving();
+        let app = &mut streaming.seeing.rig.app;
+        mouse(app, MouseEventKind::Drag(MouseButton::Left), in_pane(app, 5));
+
+        mouse(app, MouseEventKind::Up(MouseButton::Left), in_pane(app, 5));
+
+        assert_eq!(let_go(&mut orders), (json!("input"), json!(1), json!("up")));
+    }
+}

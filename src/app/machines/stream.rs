@@ -118,6 +118,12 @@ impl Watched {
         }
     }
 
+    pub(super) fn release(&self, order: Order) {
+        if let Some((stream, _)) = self.live() {
+            stream.send(order);
+        }
+    }
+
     pub(in crate::app) fn type_in(&mut self, event: InputEvent) -> bool {
         if self.typed.is_empty() {
             self.held_since = Some(Instant::now());

@@ -206,10 +206,6 @@ impl Stream {
         self.orders.push(order);
     }
 
-    pub(crate) fn tab(&self) -> u64 {
-        self.shared.wanted.lock().tab
-    }
-
     pub(crate) fn show(&self, tab: u64) -> bool {
         let mut wanted = self.shared.wanted.lock();
         let moved = wanted.tab != tab;

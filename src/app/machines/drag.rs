@@ -22,21 +22,36 @@ impl App {
         if matches!(drag, RemoteDrag::Divider { .. }) && matches!(ev.kind, MouseEventKind::Drag(_)) {
             self.screen.clicks.forget_divider();
         }
+        let released = matches!(drag, RemoteDrag::Mouse { .. }) && matches!(ev.kind, MouseEventKind::Up(_));
         let pointed = match self.watched().and_then(Watched::live) {
             Some((_, screen)) => dragged(screen, drag, ev, area),
             None => Pointed::default(),
         };
-        self.point(pointed);
+        if released {
+            self.release_remote(pointed);
+        } else {
+            self.point(pointed);
+        }
     }
 
     pub(in crate::app) fn remote_divider(&self, path: &[bool]) -> Option<Dir> {
-        let (_, screen) = self.watched()?.live()?;
+        let screen = self.settled()?;
         screen.dividers.iter().find(|divider| divider.path == path).map(|divider| divider.dir)
     }
 
     pub(in crate::app) fn remote_divider_at(&self, pos: Position, area: Rect) -> Option<Dir> {
-        let (_, screen) = self.watched()?.live()?;
-        divider_at(screen, pos, area).map(|divider| divider.dir)
+        divider_at(self.settled()?, pos, area).map(|divider| divider.dir)
+    }
+
+    fn settled(&self) -> Option<&RemoteScreen> {
+        Some(self.watched().filter(|watched| !watched.moving())?.live()?.1)
+    }
+
+    fn release_remote(&mut self, pointed: Pointed) {
+        self.screen.drag = None;
+        if let Some(watched) = self.machines.watched.as_ref() {
+            pointed.orders.into_iter().for_each(|order| watched.release(order));
+        }
     }
 
     pub(super) fn copy_remote(&mut self, text: Option<&str>) {

@@ -35,13 +35,16 @@ impl App {
             return false;
         }
         let acts = wheel(ev.kind).is_some() || matches!(ev.kind, MouseEventKind::Down(_));
-        let Some((stream, screen)) = self.watched().and_then(Watched::live) else {
+        let Some((_, screen)) = self.watched().and_then(Watched::live) else {
             if acts && area.contains(pos) {
                 self.nothing_sent();
             }
             return true;
         };
-        let mut pointed = pointed(screen, ev, pos, area, stream.tab());
+        if self.watched().is_some_and(Watched::moving) {
+            return true;
+        }
+        let mut pointed = pointed(screen, ev, pos, area, screen.tab);
         if let Some(RemoteDrag::Divider { tab, path }) = &pointed.drag
             && self.screen.clicks.divider_pressed(*tab, path, Instant::now())
         {
@@ -53,7 +56,8 @@ impl App {
 
     pub(super) fn point(&mut self, pointed: Pointed) {
         let moving = self.watched().is_some_and(Watched::moving);
-        self.screen.drag = pointed.drag.filter(|_| !moving).map(Drag::Remote);
+        let held = |drag: &RemoteDrag| !moving || matches!(drag, RemoteDrag::Mouse { .. });
+        self.screen.drag = pointed.drag.filter(held).map(Drag::Remote);
         if let Some(watched) = self.machines.watched.as_mut() {
             pointed.orders.into_iter().for_each(|order| watched.order(order));
         }
