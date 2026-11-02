@@ -114,6 +114,29 @@ mod forgotten_pull_requests {
     }
 }
 
+mod forgotten_contexts {
+    use super::*;
+
+    #[test]
+    fn a_context_read_whose_client_left_is_dropped() {
+        let (tx, _rx) = mpsc::channel();
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), "/nonexistent/config.json".into(), tx);
+        let stage = Stage::Context { pane: 1, answers: 0 };
+        app.clients.requests.pending.push(Pending {
+            client: Some(1),
+            key: 1,
+            timeout: None,
+            done: Done::default(),
+            stage,
+        });
+        app.clients.requests.open.push(1);
+
+        app.forget(1);
+
+        assert_eq!(app.clients.requests.pending.len(), 0);
+    }
+}
+
 mod unavailable_operations {
     use super::*;
     use crate::control::contract::{self as wire_contract, Code, Refusal};

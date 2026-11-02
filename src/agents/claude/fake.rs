@@ -78,6 +78,19 @@ done
 rm -f "$s"
 "#;
 
+    pub(crate) const PROBE: &str = r#"#!/bin/sh
+printf '%s|%s|%s\n' "$*" "$PWD" "${CLAUDE_CONFIG_DIR-unset}" >> "$0.args"
+[ -e "$0.fail" ] && exit 1
+while IFS= read -r line; do
+  case "$line" in
+    *initialize*) printf '{"type":"control_response","response":{"subtype":"success","request_id":"initialize","response":{}}}\n' ;;
+    *mcp_status*) printf '{"type":"control_response","response":{"subtype":"success","request_id":"mcp","response":{"mcpServers":[]}}}\n' ;;
+    *get_context_usage*) cat "$0.answer" ;;
+  esac
+done
+touch "$0.done"
+"#;
+
     pub(crate) fn new() -> Self {
         Self::running(Self::WORKING)
     }

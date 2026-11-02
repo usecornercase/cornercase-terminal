@@ -32,6 +32,7 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("allow all (dangerous)", &["--allow-all"]),
 ];
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
+pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const HOLDS_PROMPTS: bool = true;

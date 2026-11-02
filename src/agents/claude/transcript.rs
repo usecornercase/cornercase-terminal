@@ -238,6 +238,15 @@ impl Reply {
         Context { model: model_name(&self.model), percent: Some(percent(self.tokens, window)) }
     }
 
+    pub(in crate::agents) fn probe_model(&self, limits: &Limits) -> String {
+        let long = limits.window(&self.model, self.tokens) == LONG_WINDOW;
+        let known = Model::parse(&self.model);
+        match known {
+            Some(model) if long && !model.native_long() && !self.model.contains('[') => format!("{}[1m]", self.model),
+            _ => self.model.clone(),
+        }
+    }
+
     pub(in crate::agents) fn shown(&self, limits: &Limits, compaction: Compaction) -> Context {
         let context = self.context(limits);
         if compaction.hides { Context { percent: None, ..context } } else { context }
@@ -336,6 +345,10 @@ impl Transcript {
 impl Transcript {
     pub(in crate::agents) fn shown_key(&self) -> (Option<Reply>, bool) {
         (self.reply.clone(), self.compaction.hides)
+    }
+
+    pub(in crate::agents) fn probe_model(&self, limits: &Limits) -> Option<String> {
+        self.reply.as_ref().map(|reply| reply.probe_model(limits))
     }
 
     pub(in crate::agents) fn shown(&self, limits: &Limits) -> Option<Context> {
@@ -498,7 +511,7 @@ impl Limits {
     }
 }
 
-fn model_flag(args: &[String]) -> Option<String> {
+pub(in crate::agents) fn model_flag(args: &[String]) -> Option<String> {
     let mut found = None;
     let mut args = args.iter();
     while let Some(arg) = args.next() {

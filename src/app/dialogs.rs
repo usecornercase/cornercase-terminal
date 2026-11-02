@@ -213,6 +213,8 @@ impl App {
             self.scroll_pull_request(delta, area);
         } else if matches!(self.overlay, Some(Overlay::MergeCheck { .. })) {
             self.scroll_merge_check(delta, area);
+        } else if matches!(self.overlay, Some(Overlay::Context { .. })) {
+            self.scroll_context(delta, area);
         } else if matches!(self.overlay, Some(Overlay::FlowMessage { .. })) {
             self.scroll_flow_message(delta, area);
         } else {
@@ -262,14 +264,22 @@ impl App {
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => self.submit_restart(),
             Overlay::PullRequest { workspace, .. } => self.submit_pull_request(workspace),
-            Overlay::MergeCheck { workspace, scroll } => {
-                self.check_merges(workspace);
-                Some(Overlay::MergeCheck { workspace, scroll })
-            }
+            again @ (Overlay::MergeCheck { .. } | Overlay::Context { .. }) => Some(self.submit_again(again)),
             Overlay::FlowMessage { workspace, shown, .. } => self.submit_flow_message(workspace, &shown),
             busy => Some(busy),
         };
         Ok(())
+    }
+
+    fn submit_again(&mut self, overlay: Overlay) -> Overlay {
+        match overlay {
+            Overlay::MergeCheck { workspace, .. } => self.check_merges(workspace),
+            Overlay::Context { pane, .. } => {
+                self.read_context(pane);
+            }
+            _ => {}
+        }
+        overlay
     }
 
     fn submit_rename(&mut self, target: Target, input: &str) -> Option<Overlay> {

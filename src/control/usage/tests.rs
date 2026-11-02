@@ -53,7 +53,7 @@ fn example() -> Plans {
     };
     read(&mut state, Known::Claude, report, at);
     state.start(vec![(Known::Codex, None)]);
-    state.answered((Known::Codex, None), Err(Error::Usage("could not run /nonexistent/codex".into())), at);
+    state.answered((Known::Codex, None), Err(Error::Probe("could not run /nonexistent/codex".into())), at);
     let now = at + Duration::from_secs(120);
     Plans {
         agents: [Known::Claude, Known::Codex]
@@ -126,7 +126,7 @@ fn a_later_error_keeps_the_reading() {
     let at = Instant::now();
     read(&mut state, Known::Claude, Report { plan: Some("max".into()), limited: true, ..Report::default() }, at);
     state.start(vec![(Known::Claude, None)]);
-    state.answered((Known::Claude, None), Err(Error::Usage("late".into())), at);
+    state.answered((Known::Claude, None), Err(Error::Probe("late".into())), at);
     let info = PlanInfo::of(Known::Claude, state.probe(Known::Claude), at, clock());
     assert_eq!((info.plan.as_deref(), info.error.as_deref()), (Some("max"), Some("late")));
     assert!(info.read_at.is_some());
