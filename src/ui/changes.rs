@@ -13,7 +13,7 @@ pub(crate) use self::selection::{
 use self::selection::{code_rect, code_x, covers, line_hit, numbers_style, room};
 use super::code::{self, Fit};
 use super::icons::{self, Glyphs};
-use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
+use super::{RemoteNote, action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::Body;
 use crate::changes::diff::{Diff, File, Hunk, Kind, Line, Segments, Staged, Status};
 use crate::changes::every::Header;
@@ -83,6 +83,7 @@ pub(crate) struct View {
     pub(crate) filter: Option<FilterView>,
     pub(crate) selection: Option<Selected>,
     pub(crate) icons: bool,
+    pub(crate) remote: Option<RemoteNote>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -101,6 +102,14 @@ impl FilterView {
 impl View {
     fn glyphs(&self) -> &'static Glyphs {
         icons::glyphs(self.icons)
+    }
+
+    fn acts(&self) -> bool {
+        self.remote.is_none()
+    }
+
+    fn unreachable(&self) -> Option<String> {
+        self.remote.as_ref().and_then(RemoteNote::unreachable)
     }
 
     fn filtering(&self) -> Option<&FilterView> {
@@ -209,6 +218,7 @@ pub(crate) struct Parts {
     pub(crate) tabs: Rect,
     pub(crate) field: Rect,
     pub(crate) summary: Rect,
+    pub(crate) note: Rect,
     pub(crate) body: Rect,
     pub(crate) separator: Rect,
     pub(crate) footer: Rect,
@@ -218,13 +228,15 @@ pub(crate) fn parts(area: Rect, view: &View) -> Parts {
     let inner = Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area };
     let row = |y: u16| Rect::new(inner.x, y, inner.width, 1).intersection(area);
     let field = u16::from(view.filter.is_some());
-    let top = area.y.saturating_add(HEADER_ROWS + field);
+    let note = u16::from(view.remote.as_ref().is_some_and(|r| r.down.is_some()));
+    let top = area.y.saturating_add(HEADER_ROWS + field + note);
     let separator = area.bottom().saturating_sub(FOOTER_ROWS).max(top);
     Parts {
         scope: row(area.y),
         tabs: row(area.y.saturating_add(1)),
         field: if view.filter.is_some() { row(area.y.saturating_add(2)) } else { Rect::default() },
         summary: row(area.y.saturating_add(2 + field)),
+        note: if note == 1 { row(area.y.saturating_add(3 + field)) } else { Rect::default() },
         body: Rect::new(area.x, top, area.width, separator.saturating_sub(top)).intersection(area),
         separator: row(separator),
         footer: row(separator.saturating_add(1)),
@@ -281,7 +293,8 @@ pub(crate) fn clear_filter(area: Rect, view: &View) -> Rect {
 }
 
 fn base_label(view: &View) -> String {
-    format!("vs {} ▾", view.base.as_deref().unwrap_or("…"))
+    let base = format!("vs {}", view.base.as_deref().unwrap_or("…"));
+    if view.acts() { format!("{base} ▾") } else { base }
 }
 
 pub(crate) fn base(area: Rect, view: &View) -> Rect {
@@ -321,8 +334,9 @@ fn visible(area: Rect, view: &View) -> Vec<(Row, Rect)> {
         .collect()
 }
 
-pub(crate) fn actions(row: Rect) -> Vec<(Action, Rect)> {
-    buttons(row, &Action::ALL, Action::label)
+pub(crate) fn actions(view: &View, row: Rect) -> Vec<(Action, Rect)> {
+    let which: &[Action] = if view.acts() { &Action::ALL } else { &[Action::Copy] };
+    buttons(row, which, Action::label)
 }
 
 pub(super) fn buttons<A: Copy>(row: Rect, which: &[A], label: fn(A) -> &'static str) -> Vec<(A, Rect)> {
@@ -403,7 +417,7 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if parts(area, view).field.contains(pos) {
         return Some(Hit::Query);
     }
-    if base(area, view).contains(pos) {
+    if view.acts() && base(area, view).contains(pos) {
         return Some(Hit::Base);
     }
     if let Some(hit) = footer_hit(area, view, pos) {
@@ -412,14 +426,27 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     let (row, r) = visible(area, view).into_iter().find(|(_, r)| r.contains(pos))?;
     match row {
         Row::Header(i) => Some(Hit::Header(i)),
-        Row::File(i) if viewed_cell(r).contains(pos) => Some(Hit::Viewed(i)),
-        Row::File(i) if stage_cell(view, r).contains(pos) => Some(Hit::Stage(i)),
-        Row::File(i) if discard_cell(view, r).contains(pos) => Some(Hit::Discard(i)),
-        Row::File(i) => Some(Hit::File(i)),
+        Row::File(i) => Some(file_hit(view, i, r, pos)),
         Row::Gap(i, h) => Some(Hit::Gap(i, h)),
-        Row::Hunk(i, h) => actions(r).into_iter().find(|(_, a)| a.contains(pos)).map(|(a, _)| Hit::Action(i, h, a)),
+        Row::Hunk(i, h) => {
+            actions(view, r).into_iter().find(|(_, a)| a.contains(pos)).map(|(a, _)| Hit::Action(i, h, a))
+        }
         Row::Line(..) | Row::GapLine(..) => line_hit(view, row, r, pos),
         Row::Spacer => None,
+    }
+}
+
+fn file_hit(view: &View, i: usize, r: Rect, pos: Position) -> Hit {
+    if !view.acts() {
+        Hit::File(i)
+    } else if viewed_cell(r).contains(pos) {
+        Hit::Viewed(i)
+    } else if stage_cell(view, r).contains(pos) {
+        Hit::Stage(i)
+    } else if discard_cell(view, r).contains(pos) {
+        Hit::Discard(i)
+    } else {
+        Hit::File(i)
     }
 }
 
@@ -458,11 +485,16 @@ impl Painter<'_> {
         hovered(self.hover, r)
     }
 
+    fn acting(&self, r: Rect) -> bool {
+        self.view.acts() && self.lit(r)
+    }
+
     fn draw(&mut self) -> Option<Position> {
         let (area, view, hover) = (self.area, self.view, self.hover);
         self.tabs();
         let cursor = view.filter.as_ref().and_then(|filter| self.field(filter));
         self.summary();
+        self.note();
         let shown = visible(area, view);
         let hovered_hunk = shown.iter().find(|(_, r)| hovered(hover, *r)).and_then(|(row, _)| match *row {
             Row::Hunk(i, h) | Row::Line(i, h, ..) => Some((i, h)),
@@ -576,8 +608,15 @@ impl Painter<'_> {
         }
         if !selector.is_empty() {
             let style =
-                if self.lit(selector) { Style::default().fg(Color::Cyan) } else { Style::default().fg(view.soft) };
+                if self.acting(selector) { Style::default().fg(Color::Cyan) } else { Style::default().fg(view.soft) };
             put(self.buf, (selector.x, selector.y), &format!(" {} ", base_label(view)), style, selector.right());
+        }
+    }
+
+    fn note(&mut self) {
+        let (row, view) = (parts(self.area, self.view).note, self.view);
+        if let Some(text) = view.unreachable() {
+            put(self.buf, (row.x, row.y), &cut(&text, usize::from(row.width)), dim(view.muted), row.right());
         }
     }
 
@@ -680,7 +719,7 @@ impl Painter<'_> {
 
     fn hunk(&mut self, hunk: &Hunk, r: Rect, active: bool) {
         let view = self.view;
-        let end = if active { actions(r).first().map_or(r.right(), |(_, a)| a.x) } else { r.right() };
+        let end = if active { actions(view, r).first().map_or(r.right(), |(_, a)| a.x) } else { r.right() };
         let mut x = r.x + 1;
         if !hunk.context.is_empty() {
             x = put(self.buf, (x, r.y), "┄┄ ", dim(super::line_colour(view.light)), end);
@@ -692,7 +731,7 @@ impl Painter<'_> {
         let rest = usize::from(end.saturating_sub(x + 1));
         put(self.buf, (x, r.y), &"┄".repeat(rest), dim(super::line_colour(view.light)), end);
         if active {
-            for (action, a) in actions(r) {
+            for (action, a) in actions(view, r) {
                 let style = action_style(self.lit(a));
                 put(self.buf, (a.x, a.y), &format!(" {} ", action.label()), style, a.right());
             }
@@ -765,7 +804,7 @@ impl Painter<'_> {
             return check.x;
         }
         self.stage_mark(stage, r, staged);
-        if self.lit(r) {
+        if self.acting(r) {
             let style = if self.lit(cell) { Style::default().fg(Color::Red) } else { dim(self.view.muted) };
             put(self.buf, (cell.x + 1, r.y), DISCARD, style, r.right());
         }
@@ -774,13 +813,13 @@ impl Painter<'_> {
 
     fn stage_mark(&mut self, cell: Rect, r: Rect, staged: Option<Staged>) {
         let green = Style::default().fg(Color::Green);
-        let under = self.lit(cell);
+        let under = self.acting(cell);
         let (glyph, style) = match (staged, under) {
             (Some(Staged::Yes), true) => (UNSTAGE, Style::default().fg(Color::Yellow)),
             (Some(Staged::Yes), false) => (STAGED, green),
             (Some(Staged::Partly), false) => (PARTLY_STAGED, green),
             (_, true) => (STAGE, green),
-            (_, false) if self.lit(r) => (STAGE, dim(self.view.muted)),
+            (_, false) if self.acting(r) => (STAGE, dim(self.view.muted)),
             _ => return,
         };
         put(self.buf, (cell.x + 1, r.y), glyph, style, r.right());
@@ -790,7 +829,7 @@ impl Painter<'_> {
         let muted = dim(self.view.muted);
         if viewed {
             put(self.buf, (check.x + 1, r.y), "✓", Style::default().fg(Color::Green), r.right());
-        } else if self.lit(r) {
+        } else if self.acting(r) {
             let style = if self.lit(check) { Style::default().fg(Color::Green) } else { muted };
             put(self.buf, (check.x + 1, r.y), "✓", style, r.right());
         }

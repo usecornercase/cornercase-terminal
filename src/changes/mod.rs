@@ -128,6 +128,7 @@ pub(crate) enum Body {
 #[derive(Debug, Default)]
 pub(crate) struct Panel {
     watched: bool,
+    lazy: bool,
     mode: Mode,
     scope: Scope,
     scroll: usize,
@@ -162,6 +163,21 @@ fn key(workspace: u64, file: &File) -> FileKey {
 }
 
 impl Panel {
+    pub(crate) fn lazy() -> Self {
+        Self { lazy: true, ..Self::default() }
+    }
+
+    pub(crate) fn shown(
+        &mut self,
+        workspace: u64,
+        mode: Mode,
+        label: Option<String>,
+        result: std::result::Result<Arc<Diff>, String>,
+    ) {
+        let model = Model { mode, base: None, label, result, digest: None, at: Instant::now() };
+        self.models.insert((workspace, mode), model);
+    }
+
     pub(crate) fn mode(&self) -> Mode {
         self.mode
     }
@@ -567,7 +583,7 @@ impl Panel {
         let big = diff.files.iter().map(|f| f.lines()).sum::<usize>() > AUTO_FOLD_LINES;
         let reviewed_change =
             self.viewed.get(&key(workspace, file)).is_some_and(|digest| *digest != file.viewed_digest);
-        (self.scope == Scope::Every && !reviewed_change)
+        ((self.scope == Scope::Every || self.lazy) && !reviewed_change)
             || file.fold != diff::Fold::Open
             || self.viewed(workspace, file)
             || big

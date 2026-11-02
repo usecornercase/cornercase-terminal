@@ -72,11 +72,11 @@ impl App {
         }
     }
 
-    fn not_sent(&mut self, why: &str) {
+    pub(super) fn not_sent(&mut self, why: &str) {
         self.messages.toast = Some(Toast::new(format!("{why}; {NOTHING_SENT}"), ui::ToastIcon::Bug));
     }
 
-    fn unlinked(&self, held: &Held) -> String {
+    pub(super) fn unlinked(&self, held: &Held) -> String {
         let why = match held.status.down {
             Some(Down::Unreachable(_)) | None => format!("{} unreachable", held.name),
             Some(_) => self.machines.reason(held).unwrap_or_else(|| OLDER.into()),
@@ -84,11 +84,11 @@ impl App {
         machines::hide_destination(&why, &held.name, &held.destination)
     }
 
-    fn held_by(&self, link: u64) -> Option<&Held> {
+    pub(super) fn held_by(&self, link: u64) -> Option<&Held> {
         self.machines.held.iter().find(|held| held.link.id() == link)
     }
 
-    fn linked(&self, link: u64) -> bool {
+    pub(super) fn linked(&self, link: u64) -> bool {
         self.held_by(link).is_some_and(|held| held.status.state == State::Linked)
     }
 

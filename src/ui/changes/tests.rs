@@ -65,6 +65,7 @@ fn sample() -> View {
         filter: None,
         selection: None,
         icons: false,
+        remote: None,
     }
 }
 
@@ -423,7 +424,7 @@ mod stage {
 fn hunk_actions_are_clickable() {
     let view = sample();
     let r = row_of(&view, Row::Hunk(0, 0));
-    let (_, ask) = actions(r)[1];
+    let (_, ask) = actions(&view, r)[1];
     assert_eq!(hit(AREA, &view, Position::new(ask.x + 1, r.y)), Some(Hit::Action(0, 0, Action::Ask)));
 }
 
@@ -765,5 +766,84 @@ mod selecting {
 
     fn ready(view: &View) -> &Diff {
         view.diff().expect("ready")
+    }
+}
+
+mod a_remote_panel {
+    use super::*;
+
+    fn remote(view: View, down: Option<&str>) -> View {
+        let note = RemoteNote { machine: "vps".into(), down: down.map(String::from) };
+        View { remote: Some(note), live: false, ..view }
+    }
+
+    fn text_of(terminal: &Terminal<TestBackend>, y: u16) -> String {
+        (0..AREA.width).map(|x| terminal.backend().buffer()[(x, y)].symbol().to_string()).collect()
+    }
+
+    #[test]
+    fn of_an_unreachable_machine_keeps_its_list_and_says_so_without_actions() {
+        let view =
+            View { mode: Mode::All, base: Some("origin/main".into()), viewed: vec![true, false, false], ..sample() };
+        let view = remote(view, Some("reconnecting in 4 s"));
+        let line = row_of(&view, Row::Line(0, 0, 2, 0));
+        let terminal = render(&view, Some(Position::new(10, line.y)));
+        assert_eq!(text_of(&terminal, parts(AREA, &view).note.y).trim(), "vps unreachable · reconnecting in 4 s");
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn of_a_reachable_machine_has_no_note_row() {
+        let view = remote(sample(), None);
+        assert_eq!((parts(AREA, &view).note, parts(AREA, &view).body), (Rect::default(), parts(AREA, &sample()).body));
+    }
+
+    #[test]
+    fn offers_only_copy_on_a_hunk() {
+        let view = remote(sample(), None);
+        let r = row_of(&view, Row::Hunk(0, 0));
+        let open = actions(&sample(), r)[0].1;
+        assert_eq!(actions(&view, r).iter().map(|(a, _)| *a).collect::<Vec<_>>(), [Action::Copy]);
+        assert_ne!(hit(AREA, &view, Position::new(open.x + 1, r.y)), Some(Hit::Action(0, 0, Action::Open)));
+        let terminal = render(&view, Some(Position::new(r.x + 2, r.y)));
+        assert!(!text_of(&terminal, r.y).contains("open") && text_of(&terminal, r.y).contains(" copy "));
+    }
+
+    #[test]
+    fn offers_only_copy_for_selected_lines() {
+        let spot = Spot { hunk: 0, at: crate::changes::selection::At::Line(3) };
+        let view = remote(
+            View { selection: Some(Selected { file: 0, from: spot, to: spot, stretch: None }), ..sample() },
+            None,
+        );
+        assert_eq!(lines_actions(AREA, &view).iter().map(|(a, _)| *a).collect::<Vec<_>>(), [LinesAction::Copy]);
+    }
+
+    #[test]
+    fn shows_its_base_without_a_selector() {
+        let view = remote(View { mode: Mode::Commits, base: Some("origin/main".into()), ..sample() }, None);
+        let selector = base(AREA, &view);
+        let text = text_of(&render(&view, Some(selector.as_position())), selector.y);
+        assert!(text.contains("vs origin/main") && !text.contains('▾'), "{text}");
+        assert_ne!(hit(AREA, &view, selector.as_position()), Some(Hit::Base));
+    }
+
+    #[test]
+    fn draws_the_marks_of_the_machine_but_a_click_on_them_only_folds() {
+        let view =
+            remote(View { folded: vec![true; 3], viewed: vec![false, true, false], ..staged(Staged::Partly) }, None);
+        let r = row_of(&view, Row::File(1));
+        let (check, stage, discard) = (viewed_cell(r), stage_cell(&view, r), discard_cell(&view, r));
+        let terminal = render(&view, Some(Position::new(stage.x + 1, r.y)));
+        assert_eq!(
+            (glyph_at(&terminal, check).0, glyph_at(&terminal, stage), glyph_at(&terminal, discard).0),
+            ("✓".to_string(), (PARTLY_STAGED.to_string(), Color::Green), " ".to_string())
+        );
+        for cell in [check, stage, discard] {
+            assert_eq!(hit(AREA, &view, Position::new(cell.x + 1, r.y)), Some(Hit::File(1)));
+        }
+        let unmarked = row_of(&view, Row::File(2));
+        let hovered = render(&view, Some(Position::new(10, unmarked.y)));
+        assert_eq!(text_of(&hovered, unmarked.y).trim_end().chars().last(), Some('1'));
     }
 }

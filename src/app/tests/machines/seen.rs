@@ -68,8 +68,11 @@ struct Seeing {
 }
 
 fn seeing_two() -> Seeing {
+    seeing_two_in(TempDir::new())
+}
+
+fn seeing_two_in(dir: TempDir) -> Seeing {
     let (mut rig, ends) = watched();
-    let dir = TempDir::new();
     rig.app.open_project(dir.path().to_path_buf(), AREA).expect("open project");
     rig.app.projects[0].repo.identity = Some(SHOP.into());
     let ours = rig.app.projects[0].id;

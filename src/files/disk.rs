@@ -108,6 +108,10 @@ pub(crate) struct Stamp {
 const GONE: Stamp = Stamp { modified: None, len: 0, found: false };
 
 impl Stamp {
+    pub(crate) fn of(len: Option<u64>, modified: Option<SystemTime>) -> Self {
+        Self { modified, len: len.unwrap_or_default(), found: len.is_some() }
+    }
+
     pub(crate) fn len(self) -> Option<u64> {
         self.found.then_some(self.len)
     }
@@ -261,11 +265,15 @@ pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Content> {
 }
 
 fn text_body(path: &Path, source: String) -> (Option<&'static str>, Body) {
-    let (starts, lines): (Vec<usize>, Vec<String>) =
-        syntax::lines(&source).map(|(start, line)| (start, syntax::expand(line))).unzip();
     let first = syntax::lines(&source).next().map_or("", |(_, line)| line);
     let language = syntax::language(path, first);
-    (language, Body::Text { lines, styles: None, source: Arc::from(source), starts })
+    (language, text(source))
+}
+
+pub(crate) fn text(source: String) -> Body {
+    let (starts, lines): (Vec<usize>, Vec<String>) =
+        syntax::lines(&source).map(|(start, line)| (start, syntax::expand(line))).unzip();
+    Body::Text { lines, styles: None, source: Arc::from(source), starts }
 }
 
 fn head(path: &Path, limit: u64) -> io::Result<Vec<u8>> {
@@ -278,7 +286,7 @@ fn sniff(path: &Path) -> Option<&'static str> {
     decode::sniff(&head(path, SNIFF_BYTES).ok()?)
 }
 
-fn image(format: &'static str, bytes: &[u8]) -> Body {
+pub(crate) fn image(format: &'static str, bytes: &[u8]) -> Body {
     match decode::decode(bytes, PICTURES.fetch_add(1, atomic::Ordering::Relaxed)) {
         Ok(picture) => Body::Image(Arc::new(picture)),
         Err(reason) => Body::Unreadable { format, bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX), reason },

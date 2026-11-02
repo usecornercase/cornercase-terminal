@@ -337,22 +337,22 @@ impl App {
     }
 
     fn find_files(&mut self, mode: Mode) {
-        let Some(workspace) = self.project().and_then(Project::workspace).map(|w| w.id) else { return };
+        let Some(workspace) = self.files_workspace() else { return };
         if self.screen.side != Some(Side::Files) {
             self.toggle_files();
         }
-        self.panels.files.search(workspace, mode);
+        self.files_state_mut().search(workspace, mode);
     }
 
     fn changes_by_key(&mut self) {
-        if self.changes_target().is_none() {
+        if self.changes_label().is_none() {
             self.messages.toast = Some(Toast::new(NOT_GIT, ui::ToastIcon::Bug));
             return;
         }
         let opening = self.screen.side != Some(Side::Changes);
         self.toggle_changes();
         if opening {
-            self.panels.changes.focus_filter();
+            self.changes_state_mut().focus_filter();
         }
     }
 

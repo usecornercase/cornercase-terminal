@@ -9,7 +9,9 @@ use link::Down;
 
 pub(crate) mod act;
 pub(crate) mod ask;
+pub(crate) mod follow;
 pub(crate) mod form;
+pub(crate) mod heard;
 pub(crate) mod link;
 pub(crate) mod repo;
 pub(crate) mod wake;

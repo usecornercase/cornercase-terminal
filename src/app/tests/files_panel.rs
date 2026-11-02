@@ -36,7 +36,7 @@ fn settle(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&pan
     });
 }
 
-fn tree_rows(view: &panel::View) -> Vec<String> {
+pub(in crate::app::tests) fn tree_rows(view: &panel::View) -> Vec<String> {
     match &view.screen {
         Screen::Tree(tree) => tree.rows.iter().map(|r| r.path.clone()).collect(),
         Screen::Search(_) | Screen::File(_) => Vec::new(),
@@ -50,29 +50,29 @@ fn opened(repo: &TempDir) -> (App, Receiver<AppEvent>) {
     (app, rx)
 }
 
-fn row_pos(app: &App, path: &str) -> Position {
+pub(in crate::app::tests) fn row_pos(app: &App, path: &str) -> Position {
     let view = view(app);
     let Screen::Tree(tree) = &view.screen else { panic!("the tree shows") };
     let i = tree.rows.iter().position(|r| r.path == path).expect("the row is listed");
-    let body = panel::parts(panel_area(app)).body;
+    let body = panel::body(panel_area(app), &view);
     Position::new(body.x + 4, body.y + u16::try_from(i - tree.scroll).expect("the row is on screen"))
 }
 
-fn file(app: &App) -> panel::FileView {
+pub(in crate::app::tests) fn file(app: &App) -> panel::FileView {
     match view(app).screen {
         Screen::File(file) => *file,
         Screen::Tree(_) | Screen::Search(_) => panic!("a file shows"),
     }
 }
 
-fn lines(view: &panel::View) -> Vec<String> {
+pub(in crate::app::tests) fn lines(view: &panel::View) -> Vec<String> {
     match &view.screen {
         Screen::File(file) => file.content.as_ref().map(|c| c.lines().to_vec()).unwrap_or_default(),
         Screen::Tree(_) | Screen::Search(_) => Vec::new(),
     }
 }
 
-fn line_pos(app: &App, line: u32) -> Position {
+pub(in crate::app::tests) fn line_pos(app: &App, line: u32) -> Position {
     let view = view(app);
     let body = panel::body(panel_area(app), &view);
     let y = panel::line_y(panel_area(app), &view, line, 0).expect("the line is on screen");
@@ -83,7 +83,7 @@ fn scrolled(app: &App) -> usize {
     panel::top(panel_area(app), &view(app)).line
 }
 
-fn action_pos(app: &App, action: Action) -> Position {
+pub(in crate::app::tests) fn action_pos(app: &App, action: Action) -> Position {
     panel::action(panel_area(app), &file(app), action).as_position()
 }
 
@@ -342,7 +342,7 @@ fn the_viewer_follows_edits() {
     settle(&mut app, &rx, "the edit shows", |v| lines(v).len() == 2);
 }
 
-fn results(view: &panel::View) -> Vec<panel::Found> {
+pub(in crate::app::tests) fn results(view: &panel::View) -> Vec<panel::Found> {
     match &view.screen {
         Screen::Search(search) => search.rows.clone(),
         Screen::Tree(_) | Screen::File(_) => Vec::new(),

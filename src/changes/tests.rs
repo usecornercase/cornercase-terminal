@@ -658,3 +658,61 @@ mod rescan {
         assert!(panel.models.is_empty());
     }
 }
+
+mod fed_from_outside {
+    use super::*;
+
+    fn shown(panel: &mut Panel, files: Vec<File>) -> Arc<Diff> {
+        let d = Arc::new(diff(files));
+        panel.shown(1, Mode::Uncommitted, None, Ok(Arc::clone(&d)));
+        d
+    }
+
+    #[test]
+    fn a_lazy_panel_starts_every_file_folded_without_changing_its_scope() {
+        let mut panel = Panel::lazy();
+        let d = shown(&mut panel, vec![file("a", 1, 3)]);
+
+        assert_eq!((panel.folded(1, &d, &d.files[0]), panel.scope()), (true, Scope::Project));
+        panel.toggle_fold(1, &d, &d.files[0]);
+        assert!(!panel.folded(1, &d, &d.files[0]));
+    }
+
+    #[test]
+    fn a_new_list_replaces_the_model_and_keeps_the_folds_by_path() {
+        let mut panel = Panel::lazy();
+        let first = shown(&mut panel, vec![file("a", 1, 3), file("b", 2, 3)]);
+        panel.toggle_fold(1, &first, &first.files[0]);
+
+        let second = shown(&mut panel, vec![file("a", 3, 3), file("b", 4, 3)]);
+
+        let model = panel.model(1, None).expect("the list is shown");
+        assert_eq!((model.diff(), model.base.as_deref()), (Some(&second), None));
+        let folded = second.files.iter().map(|f| panel.folded(1, &second, f)).collect::<Vec<_>>();
+        assert_eq!(folded, [false, true]);
+    }
+
+    #[test]
+    fn each_mode_keeps_its_own_list_and_label() {
+        let mut panel = Panel::lazy();
+        panel.shown(1, Mode::Commits, Some("main".into()), Err("not a git repository".into()));
+        panel.set_mode(Mode::Commits);
+
+        let model = panel.model(1, None).expect("the error is shown");
+        assert_eq!(model.result.as_ref().err().map(String::as_str), Some("not a git repository"));
+        assert_eq!((panel.label(1), panel.model_in(1, Mode::Uncommitted, None).is_none()), (Some("main".into()), true));
+    }
+
+    #[test]
+    fn a_mark_from_the_machine_follows_its_digest() {
+        let mut panel = Panel::lazy();
+        let d = shown(&mut panel, vec![file("a", 7, 3)]);
+        panel.toggle_fold(1, &d, &d.files[0]);
+
+        panel.set_viewed(1, "a", Some(7));
+
+        assert_eq!((panel.viewed(1, &d.files[0]), panel.folded(1, &d, &d.files[0])), (true, true));
+        let changed = shown(&mut panel, vec![file("a", 8, 3)]);
+        assert_eq!((panel.viewed(1, &changed.files[0]), panel.folded(1, &changed, &changed.files[0])), (false, false));
+    }
+}

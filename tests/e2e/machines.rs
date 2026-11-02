@@ -260,11 +260,11 @@ fn status(session: &Session) -> Value {
     serde_json::from_str(&session.says(&["status", "--json"])).expect("a status report")
 }
 
-fn project_named<'a>(projects: &'a Value, name: &str) -> &'a Value {
+pub(super) fn project_named<'a>(projects: &'a Value, name: &str) -> &'a Value {
     projects.as_array().and_then(|list| list.iter().find(|p| p["name"] == name)).unwrap_or(&Value::Null)
 }
 
-fn sent_with_their_repos(here: &Session, names: &[&str]) -> Value {
+pub(super) fn sent_with_their_repos(here: &Session, names: &[&str]) -> Value {
     let mut sent = Value::Null;
     wait_until("the machine sends its projects with their repos", || {
         sent = status(here)["machines"][0]["projects"].clone();

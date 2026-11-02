@@ -62,7 +62,7 @@ impl App {
             None if self.todo_typing() => self.todo_key(key, area),
             None if self.files_typing() => self.files_key(key, area),
             None if self.filtering() => self.filter_key(key),
-            None if key.code == KeyCode::Esc && self.file_full_screen() => self.panels.files.set_full_screen(false),
+            None if key.code == KeyCode::Esc && self.file_full_screen() => self.set_file_full_screen(false),
             None if key.code == KeyCode::Esc && self.panel_shown() => self.close_panel(),
             Some(Overlay::Menu { .. }) | None => self.forward_key(key),
             Some(_) => return self.form_key(key, area),
@@ -141,9 +141,9 @@ impl App {
     fn side_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> ControlFlow<Result<()>> {
         let in_panel = self.panel_shown() && areas.changes.contains(pos);
         if matches!(ev.kind, MouseEventKind::Down(_)) && !in_panel {
-            self.panels.changes.unfocus();
+            self.changes_state_mut().unfocus();
             self.commit_todo();
-            self.panels.files.unfocus();
+            self.files_state_mut().unfocus();
         }
         if in_panel && self.screen.side.is_some() {
             return ControlFlow::Break(self.panel_mouse(ev, pos, areas.changes, area));
@@ -493,8 +493,8 @@ impl App {
             return true;
         }
         if self.filtering() {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| self.panels.changes.push_filter(c));
-            self.panels.changes.scroll_to_top();
+            text.chars().filter(|c| !c.is_control()).for_each(|c| self.changes_state_mut().push_filter(c));
+            self.changes_state_mut().scroll_to_top();
             return true;
         }
         false

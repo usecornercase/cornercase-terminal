@@ -13,7 +13,7 @@ use self::rows::Rows;
 use super::changes::{buttons, close};
 use super::code::{self, Fit, draw as draw_code};
 use super::icons::{self, Glyphs, Icon};
-use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
+use super::{RemoteNote, action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::diff::Status;
 use crate::files::disk::{Body, Content};
 use crate::files::find::{Find, Occurrence};
@@ -52,6 +52,7 @@ const CURRENT: Style = Style::new().fg(Color::Black).bg(Color::Cyan).add_modifie
 const PLACEHOLDER: &str = "text in this file";
 const FILE_ACTIONS: [Action; 4] = [Action::Open, Action::OpenIn, Action::Ask, Action::Copy];
 const IMAGE_ACTIONS: [Action; 3] = [Action::OpenIn, Action::Ask, Action::Copy];
+const REMOTE_ACTIONS: [Action; 1] = [Action::Copy];
 const MIN_INFO: u16 = 11;
 pub(crate) const MARKER: &str = "\u{10FFFD}";
 
@@ -84,11 +85,20 @@ pub(crate) struct View {
     pub(crate) tint: Option<Color>,
     pub(crate) icons: bool,
     pub(crate) soft: Color,
+    pub(crate) remote: Option<RemoteNote>,
 }
 
 impl View {
     fn glyphs(&self) -> &'static Glyphs {
         icons::glyphs(self.icons)
+    }
+
+    fn unreachable(&self) -> Option<String> {
+        self.remote.as_ref().and_then(RemoteNote::unreachable)
+    }
+
+    fn down(&self) -> u16 {
+        u16::from(self.remote.as_ref().is_some_and(|r| r.down.is_some()))
     }
 
     fn slot(&self) -> u16 {
@@ -189,8 +199,12 @@ impl FileView {
         self.content.as_ref().is_some_and(|c| c.is_image())
     }
 
-    fn actions(&self, row: Rect) -> Vec<(Action, Rect)> {
-        let all: &[Action] = if self.is_image() { &IMAGE_ACTIONS } else { &FILE_ACTIONS };
+    fn actions(&self, row: Rect, remote: bool) -> Vec<(Action, Rect)> {
+        let all: &[Action] = match (remote, self.is_image()) {
+            (true, _) => &REMOTE_ACTIONS,
+            (false, true) => &IMAGE_ACTIONS,
+            (false, false) => &FILE_ACTIONS,
+        };
         let full = buttons(row, all, Action::label);
         let room = full.first().map_or(0, |(_, r)| r.x.saturating_sub(row.x + 2));
         if room >= MIN_INFO {
@@ -267,17 +281,20 @@ pub(crate) fn parts(area: Rect) -> Parts {
 
 #[cfg(test)]
 pub(crate) fn action(area: Rect, file: &FileView, action: Action) -> Rect {
-    file.actions(parts(area).info).into_iter().find(|(a, _)| *a == action).map_or_else(Rect::default, |(_, r)| r)
+    let actions = file.actions(parts(area).info, false);
+    actions.into_iter().find(|(a, _)| *a == action).map_or_else(Rect::default, |(_, r)| r)
 }
 
 pub(crate) fn body(area: Rect, view: &View) -> Rect {
     let body = parts(area).body;
-    match &view.screen {
-        Screen::File(file) if file.find.is_some() => {
-            Rect { y: body.y + 1, height: body.height.saturating_sub(1), ..body }.intersection(area)
-        }
-        _ => body,
-    }
+    let find = u16::from(matches!(&view.screen, Screen::File(file) if file.find.is_some()));
+    let below = find + view.down();
+    Rect { y: body.y + below, height: body.height.saturating_sub(below), ..body }.intersection(area)
+}
+
+fn note_row(area: Rect, view: &View) -> Rect {
+    let row = Rect { y: body(area, view).y.saturating_sub(2), ..parts(area).info };
+    if view.down() == 0 { Rect::default() } else { row.intersection(area) }
 }
 
 pub(crate) fn image_room(area: Rect, visible: Rect) -> Rect {
@@ -387,7 +404,8 @@ fn hit_file(area: Rect, view: &View, file: &FileView, pos: Position) -> Option<H
     if back(area).contains(pos) {
         return Some(Hit::Back);
     }
-    if let Some((action, _)) = file.actions(parts(area).info).into_iter().find(|(_, r)| r.contains(pos)) {
+    let actions = file.actions(parts(area).info, view.remote.is_some());
+    if let Some((action, _)) = actions.into_iter().find(|(_, r)| r.contains(pos)) {
         return Some(Hit::Action(action));
     }
     if file.find.is_some()
@@ -439,7 +457,7 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
         Screen::Search(search) => {
             draw_title(buf, area, view);
             let cursor = draw_bar(buf, area, view, hover);
-            let note = Rect { y: p.info.y + 1, ..p.info }.intersection(area);
+            let note = Rect { y: body(area, view).y.saturating_sub(1), ..p.info }.intersection(area);
             put(buf, (note.x + 1, note.y), &search.note, dim(view.muted), note.right());
             draw_found(buf, area, view, search, hover);
             cursor
@@ -451,10 +469,18 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
             cursor
         }
     };
+    draw_note(buf, area, view);
     draw_close(buf, close(area), hover, view.muted);
     if let Some(cursor) = cursor {
         f.set_cursor_position(cursor);
     }
+}
+
+fn draw_note(buf: &mut Buffer, area: Rect, view: &View) {
+    let Some(text) = view.unreachable() else { return };
+    let row = note_row(area, view);
+    let text = truncate_right(&text, usize::from(row.width.saturating_sub(1)));
+    put(buf, (row.x + 1, row.y), &text, dim(view.muted), row.right());
 }
 
 fn draw_title(buf: &mut Buffer, area: Rect, view: &View) {
@@ -548,7 +574,7 @@ fn path_segments(path: &str, view: &View) -> Segments {
 }
 
 fn draw_found(buf: &mut Buffer, area: Rect, view: &View, search: &SearchView, hover: Option<Position>) {
-    let body = parts(area).body;
+    let body = body(area, view);
     let shown = search.rows.iter().enumerate().skip(first(area, view)).zip(body.y..body.bottom());
     for ((i, row), y) in shown {
         let r = Rect::new(body.x, y, body.width, 1);
@@ -617,7 +643,7 @@ fn mark(segments: &[(String, Style)], ranges: &[Range<usize>], lit: Style) -> Se
 }
 
 fn draw_tree(buf: &mut Buffer, area: Rect, view: &View, tree: &TreeView, hover: Option<Position>) {
-    let body = parts(area).body;
+    let body = body(area, view);
     if tree.rows.is_empty() {
         let text = if tree.loading { LOADING } else { EMPTY };
         put(buf, (body.x + 2, body.y), text, dim(view.muted), body.right());
@@ -676,7 +702,7 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     let x = put(buf, (start, b.y), folder, dim(view.muted), end);
     put(buf, (x, b.y), name, Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD), end);
     draw_title_buttons(buf, area, view, file, hover);
-    let buttons = file.actions(p.info);
+    let buttons = file.actions(p.info, view.remote.is_some());
     let end = buttons.first().map_or(p.info.right(), |(_, r)| r.x.saturating_sub(1));
     let (texts, style) = match file.covered() {
         Some((a, b)) if a == b => (vec![format!("line {a}"), a.to_string()], Style::default().fg(Color::Cyan)),

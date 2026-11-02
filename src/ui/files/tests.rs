@@ -30,6 +30,7 @@ fn tree() -> View {
         tint: None,
         icons: false,
         soft: Color::Gray,
+        remote: None,
     }
 }
 
@@ -75,6 +76,7 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
         tint: None,
         icons: false,
         soft: Color::Gray,
+        remote: None,
     }
 }
 
@@ -136,6 +138,7 @@ fn searched(mode: Mode, rows: Vec<Found>, selected: Option<usize>) -> View {
         tint: None,
         icons: false,
         soft: Color::Gray,
+        remote: None,
     }
 }
 
@@ -906,5 +909,30 @@ mod wrapped {
         assert_eq!(reveal(area, &view, (1, 80)), None);
         assert_eq!(reveal(area, &view, (1, 150)), Some(Top::default()));
         assert_eq!(reveal(area, &view, (1, 280)), Some(Top { line: 0, row: 4 }));
+    }
+}
+
+mod a_remote_panel {
+    use super::*;
+
+    fn remote(view: View, down: Option<&str>) -> View {
+        View { remote: Some(RemoteNote { machine: "vps".into(), down: down.map(String::from) }), ..view }
+    }
+
+    #[test]
+    fn offers_only_copy_on_a_file() {
+        let view = remote(opened(None, &[]), None);
+        let Screen::File(file) = &view.screen else { unreachable!() };
+        for wanted in [Action::Open, Action::OpenIn, Action::Ask] {
+            assert_ne!(hit(AREA, &view, action(AREA, file, wanted).as_position()), Some(Hit::Action(wanted)));
+        }
+        insta::assert_snapshot!(render(&view));
+    }
+
+    #[test]
+    fn of_an_unreachable_machine_says_so_under_the_header() {
+        let view = remote(tree(), Some("seen 2 min ago"));
+        assert_eq!(body(AREA, &view).y, body(AREA, &tree()).y + 1);
+        insta::assert_snapshot!(render(&view));
     }
 }

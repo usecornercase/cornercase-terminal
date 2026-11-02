@@ -123,7 +123,7 @@ pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, la
 pub(crate) use layout::{Nav, Screen, full_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, restart_notice, resume_notice, scrollback_badge, split_footer};
 pub(crate) use remote_access::{RemoteAccess, done as remote_done};
-pub(crate) use remote_card::{RemoteCard, Retry};
+pub(crate) use remote_card::{RemoteCard, RemoteNote, Retry, retrying};
 pub use rows::row_close_button;
 #[cfg(test)]
 pub(crate) use rows::row_menu_button;

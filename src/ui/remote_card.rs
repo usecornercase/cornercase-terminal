@@ -27,10 +27,28 @@ pub(crate) struct RemoteCard {
     pub(crate) down: Option<Retry>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RemoteNote {
+    pub(crate) machine: String,
+    pub(crate) down: Option<String>,
+}
+
+impl RemoteNote {
+    pub(super) fn unreachable(&self) -> Option<String> {
+        let down = self.down.as_deref()?;
+        let title = unreachable(&self.machine);
+        Some(if down.is_empty() { title } else { format!("{title} · {down}") })
+    }
+}
+
+fn unreachable(machine: &str) -> String {
+    format!("{machine} unreachable")
+}
+
 impl RemoteCard {
     fn title(&self) -> String {
         match self.down {
-            Some(_) => format!("{} unreachable", self.machine),
+            Some(_) => unreachable(&self.machine),
             None => format!("runs on {}", self.machine),
         }
     }
@@ -66,7 +84,7 @@ fn state(status: Option<Status>) -> String {
     }
 }
 
-fn retrying(retry: &Retry) -> String {
+pub(crate) fn retrying(retry: &Retry) -> String {
     match retry {
         Retry::In(seconds) => format!("reconnecting in {seconds} s"),
         Retry::Now => "reconnecting…".into(),
