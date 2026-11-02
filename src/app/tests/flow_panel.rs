@@ -448,6 +448,70 @@ mod files {
         });
     }
 
+    fn back(app: &mut App) {
+        let at = ui::files::back(app.layout(TALL).changes).as_position();
+        click_in(app, at, TALL);
+    }
+
+    fn opened_from_the_panel(count: usize) -> (App, Receiver<AppEvent>, TempDir, String, Position) {
+        let (mut app, rx, dir) = team();
+        let names: Vec<(String, u64)> = (0..count).map(|i| (format!("note-{i:02}.md"), 60 + i as u64)).collect();
+        let listed_files: Vec<(&str, u64)> = names.iter().map(|(n, age)| (n.as_str(), *age)).collect();
+        with_folder(&mut app, &dir, &listed_files);
+        app.show_flow();
+        listed(&mut app, &rx, "note-00.md");
+        for _ in 0..3 {
+            let inside = app.layout(TALL).changes.as_position();
+            mouse_in(&mut app, MouseEventKind::ScrollDown, inside, TALL);
+        }
+        let (name, at) = names
+            .iter()
+            .find_map(|(n, _)| spots(&mut app, n).first().copied().map(|at| (n.clone(), at)))
+            .expect("a file on screen");
+        click_in(&mut app, at, TALL);
+        (app, rx, dir, name, at)
+    }
+
+    #[test]
+    fn back_shows_the_panel_again_scrolled_where_it_was() {
+        let (mut app, _rx, _dir, name, at) = opened_from_the_panel(40);
+        let scroll = app.flow_view(Instant::now(), None).expect("the run").scroll;
+        assert!(scroll > 0);
+        assert_eq!(app.screen.side, Some(Side::Files));
+
+        back(&mut app);
+
+        assert_eq!(app.screen.side, Some(Side::Flow));
+        assert_eq!(app.flow_view(Instant::now(), None).expect("the run").scroll, scroll);
+        assert_eq!(spot(&mut app, &name), at);
+        assert!(app.panels.files.viewer(app.runs.all()[0].workspace).is_none());
+    }
+
+    #[test]
+    fn back_shows_the_tree_once_the_run_is_gone() {
+        let (mut app, _rx, _dir, _name, _at) = opened_from_the_panel(3);
+        let workspace = app.runs.all()[0].workspace;
+        app.runs.take_of(workspace);
+
+        back(&mut app);
+
+        assert_eq!(app.screen.side, Some(Side::Files));
+        assert!(matches!(app.files_view().expect("the panel").screen, ui::files::Screen::Tree(_)));
+    }
+
+    #[test]
+    fn leaving_the_files_panel_forgets_where_the_file_came_from() {
+        let (mut app, _rx, _dir, _name, _at) = opened_from_the_panel(3);
+        app.toggle_files();
+        app.toggle_files();
+        assert!(matches!(app.files_view().expect("the panel").screen, ui::files::Screen::File(_)));
+
+        back(&mut app);
+
+        assert_eq!(app.screen.side, Some(Side::Files));
+        assert!(matches!(app.files_view().expect("the panel").screen, ui::files::Screen::Tree(_)));
+    }
+
     #[test]
     fn an_empty_folder_says_so() {
         let (mut app, rx, dir) = team();

@@ -97,6 +97,19 @@ mod viewer {
     }
 
     #[test]
+    fn a_file_forgets_where_it_came_from_when_the_panel_closes_or_another_opens() {
+        let mut panel = Panel::default();
+        panel.open_file(1, "/runs/coder-1.md");
+        panel.viewer_mut(1).expect("a viewer").origin = Some(Origin::Flow);
+        panel.close();
+        assert_eq!(panel.viewer(1).map(|v| v.path.as_str()), Some("/runs/coder-1.md"));
+        assert_eq!(panel.viewer(1).and_then(|v| v.origin), None);
+        panel.viewer_mut(1).expect("a viewer").origin = Some(Origin::Flow);
+        panel.open_file(1, "src/a.rs");
+        assert_eq!(panel.viewer(1).and_then(|v| v.origin), None);
+    }
+
+    #[test]
     fn checks_the_file_again_every_second() {
         let mut panel = Panel::default();
         let now = Instant::now();

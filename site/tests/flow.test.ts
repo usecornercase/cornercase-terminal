@@ -272,6 +272,37 @@ test("the Flow panel lists the run's files as it plays, and a click opens one", 
   app.destroy();
 });
 
+test("back from a run's file shows the Flow panel again, scrolled where it was", () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  playUntil(app, 'coder-1.md');
+  app.resize(140, 26);
+  app.render();
+  for (let n = 0; n < 60 && !app.textAt('coder-1.md'); n++) {
+    app.scrollFlow(1);
+    app.render();
+  }
+  const scroll = app.flowScroll;
+  assert.ok(scroll > 0);
+  const at = app.textAt('coder-1.md');
+  assert.ok(at);
+  app.pointerDown(at.x + 1, at.y, 0);
+  app.pointerUp();
+  assert.equal(app.filesShown(), true);
+  app.render();
+  const back = app.textAt('‹');
+  assert.ok(back);
+  app.pointerDown(back.x, back.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.equal(app.flowShown(), true);
+  assert.equal(app.filesShown(), false);
+  assert.equal(app.flowScroll, scroll);
+  assert.deepEqual(app.textAt('coder-1.md'), at);
+  app.destroy();
+});
+
 test('the end stays lit once the orchestrator marked it, until the run starts over', () => {
   const app = demo();
   toRun(app);

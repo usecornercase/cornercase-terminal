@@ -1791,6 +1791,8 @@ export class App {
       this.openFiles();
       this.nav = null;
       this.showFile(`${RUN_DIR}/${name}`);
+      const viewer = this.filesPlace()?.viewer;
+      if (viewer) viewer.origin = 'flow';
     } else if (hit.edge) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: hit.edge, to: hit.to ?? null, scroll: 0 };
     this.dirty();
   }
@@ -2224,6 +2226,15 @@ export class App {
     else if (ch) this.editFind(find.query + ch);
     this.dirty();
     return true;
+  }
+
+  backFromFile(): void {
+    const origin = this.filesPlace()?.viewer?.origin ?? null;
+    this.closeFile();
+    if (origin !== 'flow' || !this.shownRun()) return;
+    this.files.close();
+    this.flowOpen = true;
+    this.dirty();
   }
 
   closeFile(): void {

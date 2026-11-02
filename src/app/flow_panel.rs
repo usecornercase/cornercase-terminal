@@ -16,6 +16,7 @@ use super::{App, Toast};
 use crate::control::{Command, FlowMessage};
 use crate::editor::wrap;
 use crate::error::Result;
+use crate::files::Origin;
 use crate::files::link::Target;
 use crate::flows::ORCHESTRATOR;
 use crate::flows::folder::{self, Listing};
@@ -198,11 +199,13 @@ impl App {
         }
     }
 
-    fn open_run_file(&mut self, index: usize) {
+    fn open_run_file(&mut self, workspace: u64, index: usize) {
         let path =
             self.panels.flow.files.as_ref().and_then(|(_, listing)| listing.files.get(index)).map(|f| f.path.clone());
-        if let Some(path) = path.as_deref().and_then(std::path::Path::to_str) {
-            self.open_link(&Target { path: path.to_string(), real: path.into(), lines: None });
+        let Some(path) = path.as_deref().and_then(std::path::Path::to_str) else { return };
+        self.open_link(&Target { path: path.to_string(), real: path.into(), lines: None });
+        if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
+            viewer.origin = Some(Origin::Flow);
         }
     }
 
@@ -231,7 +234,7 @@ impl App {
         match hit {
             flow::Hit::Close => self.show_side(None),
             flow::Hit::Role(role) => self.jump_to_role(&role),
-            flow::Hit::File(index) => self.open_run_file(index),
+            flow::Hit::File(index) => self.open_run_file(workspace, index),
             flow::Hit::Pull => self.open_pull_request(workspace),
             flow::Hit::Edge(edge, to) => {
                 self.overlay = Some(Overlay::FlowMessage { workspace, shown: Shown::Along(edge, to), scroll: 0 });
