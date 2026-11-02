@@ -17,6 +17,7 @@ use crate::process::{self, kill_group};
 const PAINT_BUDGET: Duration = Duration::from_secs(5);
 
 enum Fail {
+    #[cfg_attr(not(unix), expect(dead_code, reason = "only the Unix wait can time out"))]
     Timeout,
     Broken,
 }
