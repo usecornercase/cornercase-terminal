@@ -40,6 +40,7 @@ mod describing {
             "close-unlock",
             "agent-folds",
             "issues",
+            "flow-issue-prompt",
             "todo-panel",
             "changes",
             "files",

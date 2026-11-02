@@ -455,9 +455,14 @@ pub(crate) struct StartArgs {
     pub(crate) project: Option<u64>,
     #[arg(long, help = "The tab's name [default: the agent's]")]
     pub(crate) name: Option<String>,
-    #[arg(long, value_name = "TEXT", conflicts_with = "prompt_file", help = "What to ask it")]
+    #[arg(long, value_name = "TEXT", conflicts_with_all = ["prompt_file", "issue"], help = "What to ask it")]
     pub(crate) prompt: Option<String>,
-    #[arg(long, value_name = "FILE", help = "Read the prompt from a file, or from standard input with -")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        conflicts_with = "issue",
+        help = "Read the prompt from a file, or from standard input with -"
+    )]
     pub(crate) prompt_file: Option<PathBuf>,
     #[arg(long, help = "Then wait until the agent stops working, and print how it ended")]
     pub(crate) wait: bool,

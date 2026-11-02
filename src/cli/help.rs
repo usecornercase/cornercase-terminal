@@ -563,7 +563,7 @@ handle, or for Jira, Plane and Asana an id from `issue people`. A tracker that f
 stderr, its cached list is still printed, and the command exits 3 after listing the others. read prints an issue's details, its
 description in Markdown and its comments. people lists whom a tracker's filters can name.
 
-To work on one: `cornercase start --issue KEY`, or `cornercase flow run NAME --issue KEY`.
+To work on one: `cornercase start --issue KEY`, or `cornercase flow run NAME --issue KEY` (`--prompt` gives the team your own task).
 
 Examples:
   cornercase issue sources

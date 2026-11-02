@@ -82,6 +82,10 @@ pub(crate) fn use_issue_names() -> Result<()> {
     require("issue-names", "cannot name the workspace an issue starts in")
 }
 
+pub(crate) fn use_flow_issue_prompt() -> Result<()> {
+    require("flow-issue-prompt", "cannot start a flow on an issue with a prompt of your own")
+}
+
 pub(crate) fn use_todo_panel() -> Result<()> {
     require("todo-panel", "cannot edit, uncheck, reorder or restore TODO items")
 }

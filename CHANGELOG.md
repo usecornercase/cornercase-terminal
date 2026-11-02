@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.239
+
+- **`cornercase flow run --issue` takes a prompt of your own.** `--prompt` or `--prompt-file` give the team your text in place of the one your prompt template makes from the issue, as editing the prompt in **start a flow** does, while the issue still names the branch and the workspace (`--worktree` and `--workspace-name` name others). It used to refuse `--prompt` with `--issue`. Apps that drive cornercase send `prompt` with `issue` in `flow-run` once `cornercase contract` lists `flow-issue-prompt`.
+
 ## 0.12.238
 
 - **The Flow panel shows where a run stands, its team and what they sent each other.** Above the diagram: whether the run is running or reached its end, where it runs, its number and how many messages went through, a bar of its stages with `stage 2 of 3 · findings 1/3`, ` orchestrator ` to go to its pane and ` stop ` to close the whole team (it asks first). Then the team, one row per role with its status, agent, branch and pane: click one to go to it.
