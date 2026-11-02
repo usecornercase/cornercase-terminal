@@ -39,6 +39,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - Errors: `crate::error::Error` (`thiserror`) in the library; `anyhow` only in `src/main.rs`.
 - No `unwrap()` outside tests (`clippy::unwrap_used`); in tests prefer `expect("what")`.
 - Mutexes are `parking_lot::Mutex`.
+- **Unix-only APIs** (`std::os::unix`, `std::os::fd`, `rustix`, `signal-hook`) only inside `os/` or a file's own `mod imp` pair, beside a Windows `imp`, so the build keeps compiling on Windows (`design/windows.md`).
 - Lints live in `Cargo.toml` (clippy `all` deny, `pedantic` warn). Silence one only locally with `#[expect(clippy::x, reason = "...")]`.
 - **Small functions**: `clippy.toml` limits a function to 40 lines, 5 arguments (`self` counts), two levels of nesting inside a method (`excessive-nesting-threshold = 4`) and a cognitive complexity of 10 (`cognitive_complexity`, turned on in `Cargo.toml`). Split the function; never silence these four (`design/code-layout.md`).
 - Imports in three groups: `std`, external crates, then `super`/`crate`.

@@ -258,7 +258,7 @@ mod imp {
     use super::Fail;
 
     pub(super) fn wait_in(_stdout: &ChildStdout, _deadline: Instant) -> Result<(), Fail> {
-        Err(Fail::Timeout)
+        Err(Fail::Broken)
     }
 }
 
