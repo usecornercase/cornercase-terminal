@@ -218,3 +218,18 @@ fn a_folder_that_is_gone_is_said() {
     let error = probe(&gone, "claude", Duration::from_secs(1)).expect_err("a gone folder");
     assert!(error.to_string().starts_with("the folder Claude Code runs in is gone"), "{error}");
 }
+
+#[test]
+fn the_joined_forms_of_the_flags_are_repeated_too() {
+    let dir = TempDir::new();
+    let folder = dir.path().display().to_string();
+    let args: Vec<String> = [
+        format!("--add-dir={folder}"),
+        "--add-dir=/nonexistent".into(),
+        "--add-dir".into(),
+        folder.clone(),
+        "-p".into(),
+    ]
+    .to_vec();
+    assert_eq!(repeated(&args), ["--add-dir", &folder, "--add-dir", &folder]);
+}

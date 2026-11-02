@@ -5,7 +5,7 @@ memory files (AGENTS.md, CLAUDE.md), skills and the conversation, with each memo
 and skill.
 
 For Claude Code it starts a second `claude` that reloads the same conversation, in the same
-folder, account and model, sends no prompt and spends no tokens. It turns the hooks off and waits
+folder, account and model, sends no prompt and spends no tokens. It starts your MCP servers a second time. It turns the hooks off and waits
 up to 8 s for the MCP servers to connect, so a read takes 3 to 10 s. The numbers are a reload of
 the conversation with today's settings: while the agent works they lag by the reply in progress.
 A pane with no conversation yet answers with what a new one starts with. Without --pane or --tab

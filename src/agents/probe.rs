@@ -75,7 +75,9 @@ pub(crate) fn run<T: Send + 'static>(
         Err(mpsc::RecvTimeoutError::Timeout) => Err(Error::Probe(format!("{} did not answer in time", limits.name))),
         Err(mpsc::RecvTimeoutError::Disconnected) => Err(gone(limits.name)),
     };
-    let _ = process::wait_until(&mut child, Instant::now() + limits.grace);
+    if answer.is_ok() {
+        let _ = process::wait_until(&mut child, Instant::now() + limits.grace);
+    }
     let _ = child.kill();
     let _ = child.wait();
     answer

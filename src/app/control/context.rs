@@ -1,9 +1,11 @@
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use super::{Asker, Handled, Pending, Reply, Stage, conflict, json};
 use crate::app::App;
 use crate::control::{ContextInfo, ContextRead, Done};
 use crate::project::Hierarchy;
+
+const NOT_YET: &str = "the agent has not said yet which conversation it is in";
 
 impl App {
     pub(super) fn context_request(&mut self, client: u64, asker: Asker, request: &ContextRead) -> Handled {
@@ -15,12 +17,25 @@ impl App {
         if request.cached || kind.breakdown().is_none() {
             return Ok(Some(json(&self.context_info(pane))));
         }
-        let answers = self.agents.contexts.reads.get(&pane).map_or(0, |read| read.probe.answers());
+        if term.is_some_and(|term| term.context.agent().is_none()) {
+            return Ok(Some(json(&ContextInfo { error: Some(NOT_YET.into()), ..self.context_info(pane) })));
+        }
         self.read_context(pane);
+        let probe = self.agents.contexts.reads.get(&pane).map(|read| &read.probe);
+        let Some(answers) = probe.filter(|probe| probe.loading()).map(crate::agents::probe::Probe::answers) else {
+            return Ok(Some(json(&self.context_info(pane))));
+        };
         let key = self.clients.requests.key();
         let stage = Stage::Context { pane, answers };
-        let pending = Pending { client: Some(client), key, timeout: None, done: Done::default(), stage };
-        self.clients.requests.pending.push(pending);
+        let seconds = self.agents.contexts.timeout + Duration::from_secs(5);
+        let timeout = Some((Instant::now() + seconds, seconds.as_secs_f64()));
+        self.clients.requests.pending.push(Pending {
+            client: Some(client),
+            key,
+            timeout,
+            done: Done::default(),
+            stage,
+        });
         Ok(None)
     }
 

@@ -81,6 +81,7 @@ rm -f "$s"
     pub(crate) const PROBE: &str = r#"#!/bin/sh
 printf '%s|%s|%s\n' "$*" "$PWD" "${CLAUDE_CONFIG_DIR-unset}" >> "$0.args"
 [ -e "$0.fail" ] && exit 1
+[ -e "$0.hang" ] && exec sleep 30
 while IFS= read -r line; do
   case "$line" in
     *initialize*) printf '{"type":"control_response","response":{"subtype":"success","request_id":"initialize","response":{}}}\n' ;;

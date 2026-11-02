@@ -216,3 +216,25 @@ fn the_dialog_at_two_widths() {
     insta::assert_snapshot!("the_context_dialog_wide", dialog_only(&mut p.agent.app, Rect::new(0, 0, 100, 40)));
     insta::assert_snapshot!("the_context_dialog_narrow", dialog_only(&mut p.agent.app, Rect::new(0, 0, 60, 40)));
 }
+
+#[test]
+fn a_request_after_the_agent_restarted_is_still_answered() {
+    let mut p = Probed::new();
+    p.open();
+    p.agent.app.agents.contexts.reads.get_mut(&p.id).expect("a read").pid = 1;
+    ask(&mut p.agent.app, None, context(p.id, false));
+    let got = info(p.agent.answered("the request is answered"));
+    assert_eq!(got.breakdown.map(|b| b.total_tokens), Some(251_853));
+    assert_eq!(p.runs().len(), 2);
+}
+
+#[test]
+fn a_probe_that_hangs_answers_with_its_error_at_the_timeout() {
+    let mut p = Probed::new();
+    std::fs::write(format!("{}.hang", p.probe.display()), "").expect("make the probe hang");
+    p.agent.app.agents.contexts.timeout = Duration::from_millis(400);
+    ask(&mut p.agent.app, None, context(p.id, false));
+    let got = info(p.agent.answered("the timeout is answered"));
+    assert_eq!(got.error.as_deref(), Some("claude did not answer in time"));
+    assert!(got.breakdown.is_none());
+}

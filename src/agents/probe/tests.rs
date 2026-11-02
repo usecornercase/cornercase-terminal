@@ -64,3 +64,12 @@ fn each_answer_counts_once_and_a_running_probe_is_not_restarted() {
     probe.answered(Err(Error::Probe("no".into())), Instant::now());
     assert_eq!((probe.answers(), probe.error()), (2, Some("no")));
 }
+
+#[test]
+fn a_probe_that_times_out_is_killed_without_waiting_for_the_grace() {
+    let (_dir, command) = fake("exec sleep 30");
+    let limits = Limits { timeout: Duration::from_millis(200), grace: Duration::from_secs(8), ..LIMITS };
+    let started = Instant::now();
+    run(limits, command, "hi\n", echoes).expect_err("no answer");
+    assert!(started.elapsed() < Duration::from_secs(4), "{:?}", started.elapsed());
+}

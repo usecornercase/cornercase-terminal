@@ -210,7 +210,14 @@ The percentage says how full the window is, not what filled it. Right-click a ta
 
 For **Claude Code** the **Context** dialog shows how the window splits between the system prompt, the tools, MCP servers and their instructions, memory files such as a long `AGENTS.md`, skills and the conversation, as a bar and a row for each, with the model and `251.9k of 1M tokens · 25%` above it. Below, each memory file, each MCP server (how many of its tools are loaded), each skill count and the biggest tools of the conversation, with their tokens. Tools that Claude Code loads only when it needs them appear on one muted line, `Not loaded`. Scroll with the wheel; ` refresh ` reads again, and the line under the notes says when it was read (`read 2m ago`).
 
-cornercase asks a second `claude` that loads the same conversation, in the same folder, with the same account and model, so nothing is typed into your agent, no prompt is sent and no tokens are spent. It turns your hooks off while it looks, and waits up to 8 seconds for the MCP servers to connect, so a read takes a few seconds (`reading…`). The numbers are a reload of the conversation with today's settings: a skill added since the agent started shows, and while the agent works they lag by the reply in progress. A tab that has no conversation yet shows what a new one starts with, and says so. It runs the `claude` your [`agent_commands`](../../reference/agents/#your-own-agents) name, on the machine that runs the server; scripts get the same numbers with [`cornercase context`](../scripts-and-agents/#context).
+<Screen
+  name="context"
+  alt="The Context dialog over the window: Claude Code · Opus 5.5 with 251.9k of 1M tokens, a bar and a row for each part of the window, then the memory files, each with its tokens, and the buttons refresh and done"
+  caption="What fills a Claude Code conversation's window, read while the agent keeps working."
+  crop={[17, 7, 76, 21]}
+/>
+
+cornercase asks a second `claude` that loads the same conversation, in the same folder, with the same account and model, so nothing is typed into your agent, no prompt is sent and no tokens are spent. It does start your MCP servers a second time while it looks (the project's `.mcp.json` too), which matters for a server that takes a lock or a port. It turns your hooks off while it looks, and waits up to 8 seconds for the MCP servers to connect, so a read takes a few seconds (`reading…`). The numbers are a reload of the conversation with today's settings: a skill added since the agent started shows, and while the agent works they lag by the reply in progress. A tab that has no conversation yet shows what a new one starts with, and says so. It runs the `claude` your [`agent_commands`](../../reference/agents/#your-own-agents) name, on the machine that runs the server; scripts get the same numbers with [`cornercase context`](../scripts-and-agents/#context).
 
 The other agents show their model and how much of the window is used, and say that they do not report what fills it.
 

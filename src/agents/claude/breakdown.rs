@@ -249,27 +249,30 @@ fn directory(value: &str) -> bool {
     Path::new(value).is_dir()
 }
 
+fn flag_values<'a>(args: &'a [String], flag: &str, keep: fn(&str) -> bool) -> Vec<&'a str> {
+    let joined = format!("{flag}=");
+    let mut found = Vec::new();
+    let mut at = 0;
+    while at < args.len() {
+        if let Some(value) = args[at].strip_prefix(&joined) {
+            found.extend(Some(value).filter(|v| keep(v)));
+        } else if args[at] == flag {
+            let values = args[at + 1..].iter().take_while(|a| !a.starts_with('-')).map(String::as_str);
+            found.extend(values.filter(|v| keep(v)));
+        }
+        at += 1;
+    }
+    found
+}
+
 fn repeated(args: &[String]) -> Vec<String> {
     let mut kept = Vec::new();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--strict-mcp-config" => kept.push(arg.clone()),
-            "--add-dir" => {
-                let dirs = args.clone().take_while(|a| !a.starts_with("--")).filter(|a| directory(a));
-                for dir in dirs {
-                    kept.extend(["--add-dir".to_string(), dir.clone()]);
-                }
-            }
-            "--mcp-config" => {
-                let configs = args.clone().take_while(|a| !a.starts_with("--")).filter(|a| mcp_config(a));
-                for config in configs {
-                    kept.extend(["--mcp-config".to_string(), config.clone()]);
-                }
-            }
-            _ => {}
+    for (flag, keep) in [("--add-dir", directory as fn(&str) -> bool), ("--mcp-config", mcp_config)] {
+        for value in flag_values(args, flag, keep) {
+            kept.extend([flag.to_string(), value.to_string()]);
         }
     }
+    kept.extend(args.iter().filter(|a| *a == "--strict-mcp-config").cloned());
     kept
 }
 
