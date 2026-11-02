@@ -30,18 +30,14 @@ fn open(opener: Opener, path: &str, line: Option<u32>) -> Open {
 }
 
 fn argv(steps: &[Step]) -> Vec<Vec<String>> {
-    steps
-        .iter()
-        .map(|step| {
-            step.iter()
-                .enumerate()
-                .map(|(i, part)| {
-                    let part = part.to_string_lossy().into_owned();
-                    if i == 0 { part.rsplit('/').next().unwrap_or_default().to_string() } else { part }
-                })
-                .collect()
-        })
-        .collect()
+    steps.iter().map(arguments).collect()
+}
+
+fn arguments(step: &Step) -> Vec<String> {
+    let Step::Run(step) = step else { panic!("{step:?} runs no program") };
+    let name = |part: &OsString| Path::new(part).file_name().map(|name| name.to_string_lossy().into_owned());
+    let program = step.first().and_then(name).into_iter();
+    program.chain(step.iter().skip(1).map(|part| part.to_string_lossy().into_owned())).collect()
 }
 
 mod detection {
@@ -231,7 +227,7 @@ mod running {
         let tmp = TempDir::new();
         let program = tmp.path().join("xdg-open");
         write_executable(&program, script);
-        run(&[vec![program.into_os_string()]])
+        run(&[Step::Run(vec![program.into_os_string()])])
     }
 
     #[test]
@@ -246,7 +242,7 @@ mod running {
 
     #[test]
     fn a_missing_program_reports_the_spawn_error() {
-        let steps = [vec![OsString::from("/nonexistent/opener")]];
+        let steps = [Step::Run(vec![OsString::from("/nonexistent/opener")])];
         assert!(run(&steps).is_err());
     }
 
@@ -271,5 +267,204 @@ mod running {
             let _ = tx.send(failed);
         });
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).expect("failed").reason, "the path is not absolute");
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+
+    const ALL: [&str; 6] = ["explorer.exe", "code.cmd", "cursor.cmd", "zed.exe", "subl.exe", "code"];
+
+    fn bin_of(names: &[&str]) -> TempDir {
+        let bin = TempDir::new();
+        for name in names {
+            std::fs::write(bin.path().join(name), "").expect("a fake program");
+        }
+        bin
+    }
+
+    fn windows(names: &[&str], extra: Vec<(&'static str, String)>) -> (TempDir, Openers) {
+        let bin = bin_of(names);
+        let mut pairs = vec![("PATH", bin.path().display().to_string())];
+        pairs.extend(extra);
+        let openers = Openers::find(Os::Windows, &env_of(pairs), &[]);
+        (bin, openers)
+    }
+
+    fn shell(verb: Option<&'static str>, file: impl Into<OsString>, parameters: Option<&str>) -> Step {
+        Step::Shell(Shell { verb, file: file.into(), parameters: parameters.map(OsString::from) })
+    }
+
+    mod detection {
+        use super::*;
+
+        #[test]
+        fn finds_explorer_the_default_app_and_editors_through_pathext() {
+            let (_bin, openers) = windows(&ALL, vec![]);
+            let expected =
+                [Opener::Explorer, Opener::Vscode, Opener::Cursor, Opener::Zed, Opener::Sublime, Opener::Default];
+            assert_eq!(openers.ids(), expected);
+        }
+
+        #[test]
+        fn a_command_without_an_extension_is_not_one() {
+            let (_bin, openers) = windows(&["explorer.exe", "code"], vec![]);
+            assert_eq!(openers.ids(), [Opener::Explorer, Opener::Default]);
+        }
+
+        #[test]
+        fn pathext_decides_which_files_are_commands() {
+            let (_bin, openers) = windows(&["explorer.exe", "code.cmd"], vec![("PATHEXT", ".EXE".into())]);
+            assert_eq!(openers.ids(), [Opener::Explorer, Opener::Default]);
+        }
+
+        #[test]
+        fn without_explorer_only_editors_are_found() {
+            let (_bin, openers) = windows(&["code.cmd"], vec![]);
+            assert_eq!(openers.ids(), [Opener::Vscode]);
+        }
+
+        #[test]
+        fn needs_no_display_but_finds_nothing_over_ssh() {
+            let (_bin, openers) = windows(&ALL, vec![("SSH_CONNECTION", "10.0.0.2 51000 10.0.0.1 22".into())]);
+            assert_eq!(openers.ids(), NONE);
+        }
+
+        #[test]
+        fn a_mac_bundle_is_never_an_editor() {
+            let (apps, bin) = (TempDir::new(), bin_of(&["explorer.exe"]));
+            std::fs::create_dir(apps.path().join("Cursor.app")).expect("bundle");
+            let env = env_of(vec![("PATH", bin.path().display().to_string())]);
+            let openers = Openers::find(Os::Windows, &env, &[apps.path().to_path_buf()]);
+            assert_eq!(openers.ids(), [Opener::Explorer, Opener::Default]);
+        }
+    }
+
+    mod commands {
+        use super::*;
+
+        fn steps(opener: Opener, path: &str, line: Option<u32>, kind: Kind) -> (TempDir, Vec<Step>) {
+            let (bin, openers) = windows(&ALL, vec![]);
+            let steps = openers.steps(&open(opener, path, line), Some(kind)).expect("steps");
+            (bin, steps)
+        }
+
+        fn explorer_in(bin: &TempDir) -> PathBuf {
+            bin.path().join("explorer.exe")
+        }
+
+        #[rstest]
+        #[case::vscode_folder(Opener::Vscode, r"C:\work\web", None, Kind::Folder, &["code.cmd", r"C:\work\web"])]
+        #[case::vscode_line(Opener::Vscode, r"C:\work\web\a.rs", Some(11), Kind::File, &["code.cmd", "-g", r"C:\work\web\a.rs:11"])]
+        #[case::cursor_line(Opener::Cursor, r"C:\work\web\a.rs", Some(3), Kind::File, &["cursor.cmd", "-g", r"C:\work\web\a.rs:3"])]
+        #[case::zed_line(Opener::Zed, r"C:\work\web\a.rs", Some(7), Kind::File, &["zed.exe", r"C:\work\web\a.rs:7"])]
+        #[case::sublime_line(Opener::Sublime, r"C:\work\web\a.rs", Some(2), Kind::File, &["subl.exe", r"C:\work\web\a.rs:2"])]
+        #[case::a_verbatim_path(Opener::Vscode, r"\\?\C:\work\web\a.rs", Some(4), Kind::File, &["code.cmd", "-g", r"C:\work\web\a.rs:4"])]
+        fn editors(
+            #[case] opener: Opener,
+            #[case] path: &str,
+            #[case] line: Option<u32>,
+            #[case] kind: Kind,
+            #[case] expected: &[&str],
+        ) {
+            let (_bin, steps) = steps(opener, path, line, kind);
+            assert_eq!(argv(&steps), [expected.iter().map(ToString::to_string).collect::<Vec<_>>()]);
+        }
+
+        #[test]
+        fn explorer_selects_a_file_in_its_folder_with_the_path_quoted() {
+            let (bin, steps) = steps(Opener::Explorer, r"C:\work\my web\a,b.rs", None, Kind::File);
+            assert_eq!(steps, [shell(None, explorer_in(&bin), Some(r#"/select,"C:\work\my web\a,b.rs""#))]);
+        }
+
+        #[test]
+        fn explorer_selects_a_file_on_a_share_without_the_verbatim_prefix() {
+            let (bin, steps) = steps(Opener::Explorer, r"\\?\UNC\server\share\a.rs", None, Kind::Program);
+            assert_eq!(steps, [shell(None, explorer_in(&bin), Some(r#"/select,"\\server\share\a.rs""#))]);
+        }
+
+        #[test]
+        fn explorer_explores_a_folder() {
+            let (_bin, steps) = steps(Opener::Explorer, r"C:\", None, Kind::Folder);
+            assert_eq!(steps, [shell(Some("explore"), r"C:\", None)]);
+        }
+
+        #[test]
+        fn the_default_app_is_the_shells_own() {
+            let (_bin, steps) = steps(Opener::Default, r"C:\work\web\a.png", None, Kind::File);
+            assert_eq!(steps, [shell(None, r"C:\work\web\a.png", None)]);
+        }
+
+        #[test]
+        fn the_default_app_never_runs_a_program() {
+            let (_bin, openers) = windows(&ALL, vec![]);
+            let refused = openers.steps(&open(Opener::Default, r"C:\work\web\run.exe", None), Some(Kind::Program));
+            assert_eq!(refused.expect_err("refused"), "the default app opens only plain files");
+        }
+
+        #[test]
+        fn a_port_opens_in_the_browser_through_the_shell() {
+            let (_bin, openers) = windows(&ALL, vec![]);
+            let url = Browse { ip: None, port: 3000 }.url();
+            assert_eq!(openers.default_app(url.into()), Some(shell(None, "http://localhost:3000", None)));
+        }
+    }
+
+    mod kinds {
+        use super::*;
+
+        #[rstest]
+        #[case::a_program("run.exe", Some(Kind::Program))]
+        #[case::a_script("build.CMD", Some(Kind::Program))]
+        #[case::an_installer("Setup.msi", Some(Kind::Program))]
+        #[case::a_shortcut("Docs.lnk", Some(Kind::Program))]
+        #[case::text("notes.txt", Some(Kind::File))]
+        #[case::no_extension("LICENSE", Some(Kind::File))]
+        #[case::missing("gone.txt", None)]
+        fn come_from_the_extension(#[case] name: &str, #[case] expected: Option<Kind>) {
+            let tmp = TempDir::new();
+            if name != "gone.txt" {
+                std::fs::write(tmp.path().join(name), "").expect("write");
+            }
+            assert_eq!(Kind::of(&tmp.path().join(name)), expected);
+        }
+
+        #[test]
+        fn a_folder_is_a_folder() {
+            let tmp = TempDir::new();
+            assert_eq!(Kind::of(tmp.path()), Some(Kind::Folder));
+        }
+    }
+
+    mod running {
+        use super::*;
+
+        fn batch(script: &str) -> (TempDir, PathBuf) {
+            let tmp = TempDir::new();
+            let program = tmp.path().join("opener.cmd");
+            std::fs::write(&program, script).expect("write");
+            let program = PathBuf::from(plain(&program.to_string_lossy()).into_owned());
+            (tmp, program)
+        }
+
+        #[test]
+        fn a_failing_batch_file_reports_its_exit_status() {
+            let (_tmp, program) = batch("@exit /b 3\r\n");
+            assert_eq!(run(&[step(&program, &[r"C:\work\a b.rs".into()])]), Err("exit status 3".to_string()));
+        }
+
+        #[test]
+        fn a_batch_file_gets_its_arguments_whole() {
+            let (tmp, program) = batch("@echo %1> \"%~dp0said.txt\"\r\n");
+            assert_eq!(run(&[step(&program, &[r"C:\work\my web\a&b %PATH%.rs:3".into()])]), Ok(()));
+            let said = std::fs::read_to_string(tmp.path().join("said.txt")).expect("the batch file wrote");
+            assert_eq!(said.trim_end(), r#""C:\work\my web\a&b %PATH%.rs:3""#);
+        }
+
+        #[test]
+        fn a_missing_program_reports_the_spawn_error() {
+            assert!(run(&[step(Path::new(r"C:\nonexistent\opener.exe"), &[])]).is_err());
+        }
     }
 }
