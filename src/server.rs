@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io;
 use std::net::Shutdown;
 use std::ops::ControlFlow;
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -14,8 +13,6 @@ use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKin
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::{Terminal, TerminalOptions, Viewport};
-use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
-use signal_hook::iterator::Signals;
 
 use crate::app::{App, AppEvent, Streamed};
 use crate::control::start_server::SizeFrom;
@@ -28,6 +25,8 @@ use crate::host::pointer;
 use crate::host::sound;
 use crate::host::theme::HostTheme;
 use crate::log::{self, Level};
+use crate::os::process::{on_stop_signal, setsid};
+use crate::os::socket::{UnixListener, UnixStream};
 use crate::panics;
 use crate::paths;
 use crate::persist::{self, Saver};
@@ -66,6 +65,7 @@ enum ServerEvent {
     Shutdown,
 }
 
+#[cfg_attr(not(unix), expect(clippy::large_enum_variant, reason = "paths are larger on Windows"))]
 enum Step {
     Refresh,
     Answer,
@@ -285,7 +285,7 @@ fn prepare_app(app: &mut App, path: &Path, session: &Path) -> Saver<todo::Saved>
 
 pub(crate) fn run() -> Result<()> {
     panics::log_to_stderr();
-    let _ = rustix::process::setsid();
+    let _ = setsid();
     let path = paths::socket();
     let (listener, _lock) = bind(&path)?;
     let level = log::level_from_env();
@@ -346,13 +346,10 @@ fn spawn_acceptor(listener: UnixListener, tx: Sender<ServerEvent>) {
 }
 
 fn spawn_signal_thread(tx: Sender<ServerEvent>) -> Result<()> {
-    let mut signals = Signals::new([SIGTERM, SIGINT, SIGHUP]).map_err(Error::Signals)?;
-    thread::spawn(move || {
-        if signals.forever().any(|signal| signal != SIGHUP) {
-            let _ = tx.send(ServerEvent::Shutdown);
-        }
-    });
-    Ok(())
+    on_stop_signal(move || {
+        let _ = tx.send(ServerEvent::Shutdown);
+    })
+    .map_err(Error::Signals)
 }
 
 fn spawn_forwarder(app_rx: Receiver<AppEvent>, tx: Sender<ServerEvent>) {

@@ -230,6 +230,7 @@ fn a_run_without_an_item_leaves_the_key_out() {
     assert_eq!(serde_json::to_value(&run).expect("json"), json!({"plugin": "a", "action": "b", "revision": 3}));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_outcome_of_each_ending() {
     use std::os::unix::process::ExitStatusExt as _;

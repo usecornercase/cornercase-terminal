@@ -1,10 +1,10 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::SystemTime;
 
 use super::TAIL;
+use crate::os::fs::MetadataExt;
 
 pub(in crate::agents) fn head(path: &Path) -> Option<serde_json::Value> {
     let mut bytes = Vec::new();

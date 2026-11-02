@@ -192,6 +192,7 @@ mod serving {
     }
 }
 
+#[cfg(unix)]
 mod streams {
     use std::os::unix::net::UnixStream;
     use std::thread;

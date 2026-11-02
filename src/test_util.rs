@@ -6,10 +6,12 @@ macro_rules! fixture {
 
 pub(crate) use fixture;
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
+
+use crate::os::fs::set_mode;
+use crate::os::process::{Pid, Signal, kill_process};
 
 pub(crate) const SHORTCUT_MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
 
@@ -90,7 +92,7 @@ impl Locked {
         let dir = TempDir::new();
         let path = dir.path().join("locked");
         std::fs::create_dir(&path).expect("create the locked folder");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).expect("lock the folder");
+        set_mode(&path, 0o000).expect("lock the folder");
         let locked = Self { path, _dir: dir };
         let entered = std::process::Command::new("/bin/sh").arg("-c").arg("true").current_dir(&locked.path).status();
         assert!(entered.is_err(), "a locked folder can still be entered, so the test would prove nothing (root?)");
@@ -104,7 +106,7 @@ impl Locked {
 
 impl Drop for Locked {
     fn drop(&mut self) {
-        let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o755));
+        let _ = set_mode(&self.path, 0o755);
     }
 }
 
@@ -124,7 +126,7 @@ impl Sleeper {
     }
 
     fn spawn(name: &Path, dir: &Path, vars: &[(&str, &str)], stdin: std::process::Stdio) -> Self {
-        use std::os::unix::process::CommandExt;
+        use crate::os::process::CommandExt;
         let child = std::process::Command::new("/bin/sleep")
             .arg0(name)
             .arg("30")
@@ -189,8 +191,8 @@ impl Family {
 
 impl Drop for Family {
     fn drop(&mut self) {
-        if let Some(pid) = self.grandchild().and_then(rustix::process::Pid::from_raw) {
-            let _ = rustix::process::kill_process(pid, rustix::process::Signal::KILL);
+        if let Some(pid) = self.grandchild().and_then(Pid::from_raw) {
+            let _ = kill_process(pid, Signal::KILL);
         }
         let _ = self.0.kill();
         let _ = self.0.wait();

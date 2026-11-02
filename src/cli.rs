@@ -1,6 +1,5 @@
 use std::io::{self, Read as _, Write as _};
 use std::ops::ControlFlow;
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -15,6 +14,8 @@ use self::status::run_status;
 use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, Until, What};
 use crate::error::{Error, Result};
+use crate::os::console;
+use crate::os::socket::UnixStream;
 use crate::remote::{self, Remote};
 use crate::{log, server};
 
@@ -77,6 +78,9 @@ impl WhenArgs {
 }
 
 pub fn run(cli: Cli) -> Result<bool> {
+    if cfg!(not(unix)) {
+        return Err(Error::NotOnWindows);
+    }
     let remote = reach::chosen(&cli, &|name| std::env::var_os(name))?;
     match (cli.command, remote) {
         (None, None) => client::run()?,
@@ -141,7 +145,7 @@ fn print_log(path: &Path, args: &LogsArgs) -> Result<bool> {
     }
     let Some(follower) = follower else { return Ok(true) };
     let mut follower = follower?;
-    let mut reader = client::watched(rustix::stdio::stdout());
+    let mut reader = client::watched(console::stdout());
     loop {
         let new = follower.read()?;
         if !new.is_empty() && quietly(out.write_all(&new).and_then(|()| out.flush()))? {

@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::process::{Child, Command, Stdio};
 
 use rustix::process::Signal;

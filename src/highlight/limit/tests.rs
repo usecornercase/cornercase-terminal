@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::io;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};

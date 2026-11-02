@@ -122,6 +122,7 @@ mod file {
         assert_eq!(config.project(Path::new("/home/ana/code/other"), Some(home)), ProjectSettings::default());
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_key_through_a_symlink_names_the_same_folder() {
         let dir = TempDir::new();

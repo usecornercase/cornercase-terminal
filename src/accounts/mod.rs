@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::fs::{self, DirBuilder};
 use std::io;
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use crate::agents::Known;
 use crate::error::Error;
 use crate::log;
+use crate::os::fs::{DirBuilderExt, set_mode};
 
 pub(crate) mod links;
 pub(crate) mod login;
@@ -102,7 +102,7 @@ fn check(kind: Known, name: &str) -> Result<crate::agents::AccountHome, Error> {
 }
 
 fn private(path: &Path) -> io::Result<()> {
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+    set_mode(path, 0o700)
 }
 
 pub(crate) const LINKED: &str = "it is a symbolic link, and cornercase does not write through links";

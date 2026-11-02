@@ -1,12 +1,12 @@
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::Duration;
 
 use crate::error::{Error, Result};
 use crate::log;
+use crate::os::ffi::OsStrExt;
 use crate::process;
 
 pub(crate) mod setup;

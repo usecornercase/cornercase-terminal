@@ -1,11 +1,11 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::{failed, private_folder};
 use crate::error::Error;
+use crate::os::fs::{MetadataExt, OpenOptionsExt};
 
 pub(crate) trait Linker {
     fn link(&self, from: &Path, to: &Path) -> io::Result<()> {

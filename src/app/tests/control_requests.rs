@@ -531,6 +531,7 @@ fn reacted(message: i64) -> impl Fn(&Order) -> bool {
     move |order| matches!(order, Order::React { message: m, .. } if *m == message)
 }
 
+#[cfg(unix)]
 mod account_home;
 mod accounts;
 mod agents;
@@ -550,8 +551,10 @@ mod discord;
 mod discord_forum;
 mod driving;
 mod events;
+#[cfg(unix)]
 mod files;
 mod flow_sharing;
+#[cfg(unix)]
 mod flows;
 mod following_the_app;
 mod gemini;
@@ -564,6 +567,7 @@ mod one_folder;
 mod ordering;
 mod pane_moves;
 mod parents;
+#[cfg(unix)]
 mod pasting;
 mod plugins;
 mod ports;

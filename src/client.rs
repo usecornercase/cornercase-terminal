@@ -1,8 +1,5 @@
 use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write, stdin, stdout};
 use std::net::Shutdown;
-use std::os::fd::{AsFd, BorrowedFd};
-use std::os::unix::net::UnixStream;
-use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdout, Command};
 use std::sync::atomic::Ordering;
@@ -22,6 +19,9 @@ use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::Facts;
 use crate::host::theme::HostTheme;
+use crate::os::console::{AsFd, BorrowedFd};
+use crate::os::process::CommandExt;
+use crate::os::socket::UnixStream;
 use crate::remote::{Remote, Stderr, Use};
 use crate::{host::pointer, paths, process, protocol, update::restart};
 
@@ -32,6 +32,7 @@ mod server_process;
 mod window;
 
 #[cfg(test)]
+#[cfg(unix)]
 pub(crate) use requests::share_socket;
 pub(crate) use requests::{
     answer, ask, ask_starting, close_unused_link, connect, follow, follow_all, report_now, running_now,

@@ -1,5 +1,4 @@
 use std::fs;
-use std::process::Command;
 
 use rstest::rstest;
 
@@ -104,6 +103,7 @@ fn expands_home_paths(#[case] inside: bool) {
     assert!(resolve(&link, None, root.path(), None).is_none());
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::from_an_outside_cwd("x.txt", "other")]
 #[case::from_a_parent("../other/x.txt", "repo")]
@@ -146,8 +146,10 @@ fn under_finds_the_path_and_says_whether_it_is_inside() {
     assert!(under(&row("see a.rs"), 1, None, root.path(), None).is_none());
 }
 
+#[cfg(unix)]
 #[test]
 fn outside_folders_devices_and_fifos_are_not_links() {
+    use std::process::Command;
     let (root, other) = (TempDir::new(), TempDir::new());
     let fifo = other.path().join("pipe");
     assert!(Command::new("mkfifo").arg(&fifo).status().expect("create fifo").success());

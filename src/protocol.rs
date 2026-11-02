@@ -1,12 +1,8 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
 use crossterm::event::Event;
-use rustix::fs::{FlockOperation, flock};
-use rustix::io::Errno;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +12,8 @@ use crate::host::notify::Channel;
 use crate::host::open::{Browse, Failed, Open, Opener};
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
+use crate::os::fs::{DirBuilderExt, Lock, MetadataExt, locked, set_mode, uid};
+use crate::os::socket::UnixStream;
 use crate::paths;
 use crate::{host::pointer, process};
 
@@ -95,11 +93,7 @@ pub(crate) fn recv<T: DeserializeOwned>(r: &mut impl Read) -> io::Result<Option<
 
 pub(crate) fn try_lock(socket: &Path) -> io::Result<Option<File>> {
     let file = OpenOptions::new().create(true).write(true).truncate(false).open(paths::lock(socket))?;
-    match flock(&file, FlockOperation::NonBlockingLockExclusive) {
-        Ok(()) => Ok(Some(file)),
-        Err(Errno::WOULDBLOCK) => Ok(None),
-        Err(e) => Err(e.into()),
-    }
+    locked(file, Lock::Exclusive)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -139,7 +133,7 @@ pub(crate) fn check_socket_dir(socket: &Path, folder: Folder) -> Result<(), Erro
     let kind = meta.file_type();
     let reason = unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid());
     let refuse = |reason| Error::UnsafeSocketDir { path: dir.clone(), reason, custom: folder == Folder::Given };
-    let tighten = || std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    let tighten = || set_mode(&dir, 0o700);
     match reason {
         Some("can be written by other users") if folder == Folder::Own => {
             tighten().map_err(|_| refuse("can be written by other users"))
@@ -172,7 +166,7 @@ fn unsafe_dir_reason(is_symlink: bool, is_dir: bool, owner: u32, mode: u32, uid:
 }
 
 pub fn own_uid() -> u32 {
-    rustix::process::getuid().as_raw()
+    uid()
 }
 
 pub(crate) fn check_peer(stream: &UnixStream, uid: u32) -> Result<(), Error> {

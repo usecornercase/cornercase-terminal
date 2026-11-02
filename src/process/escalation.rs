@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use rustix::process::Signal;
+use crate::os::process::Signal;
 
 const GRACE: Duration = Duration::from_secs(3);
 

@@ -19,12 +19,12 @@ pub(crate) mod vibe;
 pub use known::Known;
 
 use std::ffi::{OsStr, OsString};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
+use crate::os::fs::PermissionsExt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AgentState {

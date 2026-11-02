@@ -286,7 +286,7 @@ impl Term {
     }
 
     pub(crate) fn foreground_pid(&self) -> Option<i32> {
-        self.master.process_group_leader().filter(|pid| process::alive(*pid)).or_else(|| self.shell_pid())
+        imp::group_leader(self.master.as_ref()).filter(|pid| process::alive(*pid)).or_else(|| self.shell_pid())
     }
 
     pub(crate) fn shell_pid(&self) -> Option<i32> {
@@ -455,6 +455,24 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
         }
     });
     Writer { tx, queued }
+}
+
+#[cfg(unix)]
+mod imp {
+    use portable_pty::MasterPty;
+
+    pub(super) fn group_leader(master: &(dyn MasterPty + Send)) -> Option<i32> {
+        master.process_group_leader()
+    }
+}
+
+#[cfg(not(unix))]
+mod imp {
+    use portable_pty::MasterPty;
+
+    pub(super) fn group_leader(_master: &(dyn MasterPty + Send)) -> Option<i32> {
+        None
+    }
 }
 
 #[cfg(test)]

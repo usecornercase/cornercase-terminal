@@ -1,7 +1,6 @@
 use std::fmt::{Display, Write as _};
-use std::fs::{File, OpenOptions, Permissions};
+use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -9,6 +8,8 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::os::console::redirect_stderr;
+use crate::os::fs::{MetadataExt, OpenOptionsExt, set_file_mode, set_mode};
 use crate::time::Stamp;
 
 pub(crate) const LEVEL_ENV: &str = "CORNERCASE_LOG";
@@ -211,14 +212,14 @@ impl Sink {
         if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir)?;
         }
-        match std::fs::set_permissions(rotated(&path), Permissions::from_mode(PRIVATE)) {
+        match set_mode(rotated(&path), PRIVATE) {
             Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
             _ => {}
         }
         let file = OpenOptions::new().create(true).append(true).mode(PRIVATE).open(&path)?;
-        file.set_permissions(Permissions::from_mode(PRIVATE))?;
+        set_file_mode(&file, PRIVATE)?;
         if stderr {
-            rustix::stdio::dup2_stderr(&file)?;
+            redirect_stderr(&file)?;
         }
         Ok(Self { path, file, max, stderr })
     }

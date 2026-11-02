@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use serde_json::Value;
 
 use super::super::tests::a_bug::Attached;

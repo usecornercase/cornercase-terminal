@@ -48,6 +48,11 @@ pub enum Error {
     },
     #[error("cornercase is already running in this terminal; nesting it is not supported")]
     Nested,
+    #[error(
+        "cornercase does not run on Windows yet; follow the port at \
+         https://github.com/usecornercase/cornercase-terminal/issues/586"
+    )]
+    NotOnWindows,
     #[error("{0}")]
     Rejected(String),
     #[error("this is a development build; `cornercase update` only updates released builds")]

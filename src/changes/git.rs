@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Read;
-use std::os::unix::ffi::OsStringExt;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::sync::Arc;
@@ -14,6 +12,8 @@ use super::diff::{self, Diff, File, MAX_UNTRACKED_BYTES, Status};
 use super::porcelain::{Porcelain, path_prefix};
 use crate::error::{Error, Result};
 use crate::git::worktree;
+use crate::os::ffi::OsStringExt;
+use crate::os::fs::MetadataExt;
 use crate::process;
 
 const GLOBAL: [&str; 5] = ["--no-optional-locks", "-c", "core.quotepath=false", "-c", "diff.autoRefreshIndex=false"];

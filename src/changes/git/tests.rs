@@ -205,6 +205,7 @@ fn does_not_rewrite_the_index() {
     assert_eq!(before, after);
 }
 
+#[cfg(unix)]
 #[test]
 fn an_untracked_symlink_shows_its_target_not_its_contents() {
     let repo = git_repo(&[]);

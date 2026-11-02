@@ -202,7 +202,7 @@ pub(crate) struct Invoked<'a> {
 
 impl ActionRan {
     pub(crate) fn of(invoked: Invoked, ran: &Ran, log: PathBuf) -> Self {
-        use std::os::unix::process::ExitStatusExt as _;
+        use crate::os::process::ExitStatusExt as _;
         let Invoked { plugin, action, context, ids } = invoked;
         let (ended, code, signal) = match &ran.ended {
             Ended::Status(status) => match status.signal() {

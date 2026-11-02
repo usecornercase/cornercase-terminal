@@ -11,9 +11,8 @@ use ratatui::DefaultTerminal;
 use ratatui::backend::Backend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
-use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGWINCH};
-use signal_hook::iterator::{Handle, Signals};
 
+use self::imp::{Handle, read, watch_signals};
 use super::probe::{env, finish_tmux_check, start_tmux_check, window_cell};
 use super::{Ending, Guard, Host, INPUT_POLL, Link, Source, Target, input};
 use crate::error::{Error, Result};
@@ -37,6 +36,7 @@ enum Incoming {
     InputEnded,
     Server(u64, Received),
     Linked(u64, Result<Link>),
+    #[cfg_attr(not(unix), expect(dead_code, reason = "only Unix signals end the window until the console is ported"))]
     Signal,
     Tmux(Option<Outer>),
 }
@@ -500,10 +500,7 @@ struct Threads {
 
 impl Threads {
     fn spawn(tx: Sender<Incoming>, probe_timed_out: bool) -> Result<Self> {
-        let mut signals = Signals::new([SIGTERM, SIGHUP, SIGINT, SIGWINCH]).map_err(Error::Signals)?;
-        let handle = signals.handle();
-        let signalled = tx.clone();
-        thread::spawn(move || forward_signals(&mut signals, &signalled));
+        let handle = watch_signals(tx.clone()).map_err(Error::Signals)?;
         let stop = Arc::new(AtomicBool::new(false));
         let (done, stopped) = mpsc::channel();
         let asked = Arc::clone(&stop);
@@ -515,33 +512,13 @@ impl Threads {
     }
 }
 
-fn signal_incoming(signal: i32) -> Option<Incoming> {
-    if signal != SIGWINCH {
-        return Some(Incoming::Signal);
-    }
-    let (cols, rows) = crossterm::terminal::size().ok()?;
-    Some(Incoming::Input(Event::Resize(cols, rows)))
-}
-
-fn forward_signals(signals: &mut Signals, tx: &Sender<Incoming>) {
-    for signal in signals.forever() {
-        let Some(incoming) = signal_incoming(signal) else { continue };
-        if tx.send(incoming).is_err() || signal != SIGWINCH {
-            break;
-        }
-    }
-}
-
 fn read_input(tx: &Sender<Incoming>, stop: &AtomicBool, probe_timed_out: bool) {
     let _ended = InputEnd(tx.clone());
     let input = stdin();
     input::run(
         stop,
         probe_timed_out,
-        input::Source {
-            poll: |wait| input::readable(&input, wait),
-            read: |bytes| rustix::io::read(&input, bytes).map_err(Into::into),
-        },
+        input::Source { poll: |wait| input::readable(&input, wait), read: |bytes| read(&input, bytes) },
         |input| {
             tx.send(match input {
                 input::Input::Event(event) => Incoming::Input(event),
@@ -564,6 +541,74 @@ const INCOMPATIBLE: &str = "the running cornercase server is incompatible with t
     Run `cornercase kill-server` (it closes all its terminals) and start cornercase again";
 const MAX_BACKOFF: Duration = Duration::from_secs(15);
 const SECOND: Duration = Duration::from_secs(1);
+
+#[cfg(unix)]
+mod imp {
+    use std::io::{self, Stdin};
+    use std::sync::mpsc::Sender;
+    use std::thread;
+
+    use crossterm::event::Event;
+    use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGWINCH};
+    use signal_hook::iterator::Signals;
+
+    use super::Incoming;
+
+    pub(super) use signal_hook::iterator::Handle;
+
+    pub(super) fn watch_signals(tx: Sender<Incoming>) -> io::Result<Handle> {
+        let mut signals = Signals::new([SIGTERM, SIGHUP, SIGINT, SIGWINCH])?;
+        let handle = signals.handle();
+        thread::spawn(move || forward_signals(&mut signals, &tx));
+        Ok(handle)
+    }
+
+    fn signal_incoming(signal: i32) -> Option<Incoming> {
+        if signal != SIGWINCH {
+            return Some(Incoming::Signal);
+        }
+        let (cols, rows) = crossterm::terminal::size().ok()?;
+        Some(Incoming::Input(Event::Resize(cols, rows)))
+    }
+
+    fn forward_signals(signals: &mut Signals, tx: &Sender<Incoming>) {
+        for signal in signals.forever() {
+            let Some(incoming) = signal_incoming(signal) else { continue };
+            if tx.send(incoming).is_err() || signal != SIGWINCH {
+                break;
+            }
+        }
+    }
+
+    pub(super) fn read(input: &Stdin, bytes: &mut [u8]) -> io::Result<usize> {
+        rustix::io::read(input, bytes).map_err(Into::into)
+    }
+}
+
+#[cfg(not(unix))]
+mod imp {
+    use std::convert::Infallible;
+    use std::io::{self, Stdin};
+    use std::sync::mpsc::Sender;
+
+    use super::Incoming;
+
+    pub(super) struct Handle(Infallible);
+
+    impl Handle {
+        pub(super) fn close(&self) {
+            match self.0 {}
+        }
+    }
+
+    pub(super) fn watch_signals(_tx: Sender<Incoming>) -> io::Result<Handle> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    pub(super) fn read(_input: &Stdin, _bytes: &mut [u8]) -> io::Result<usize> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+}
 
 #[cfg(test)]
 mod tests;

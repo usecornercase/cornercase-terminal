@@ -82,6 +82,7 @@ fn binary_and_missing_files_have_no_lines() {
     assert!(super::read(&path, Some(gone.stamp)).is_none());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_device_behind_a_link_is_not_read() {
     let dir = TempDir::new();
@@ -197,6 +198,7 @@ mod lines_of_the_source {
     }
 }
 
+#[cfg(unix)]
 mod a_folder_with_metadata {
     use std::os::unix::fs::symlink;
 

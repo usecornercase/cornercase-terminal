@@ -77,12 +77,13 @@ mod sink {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn only_its_owner_can_read_the_log() {
     let tmp = TempDir::new();
     let path = tmp.path().join("server.log");
     std::fs::write(&path, "old\n").expect("write");
-    std::fs::set_permissions(&path, Permissions::from_mode(0o644)).expect("chmod");
+    set_mode(&path, 0o644).expect("chmod");
     let mut sink = Sink::open(path.clone(), 10, false).expect("open");
     sink.write("a new line\n");
 
@@ -90,12 +91,13 @@ fn only_its_owner_can_read_the_log() {
     assert_eq!((mode(&rotated(&path)), mode(&path)), (PRIVATE, PRIVATE));
 }
 
+#[cfg(unix)]
 #[test]
 fn an_older_log_left_readable_is_made_private_too() {
     let tmp = TempDir::new();
     let path = tmp.path().join("server.log");
     std::fs::write(rotated(&path), "older\n").expect("write");
-    std::fs::set_permissions(rotated(&path), Permissions::from_mode(0o644)).expect("chmod");
+    set_mode(rotated(&path), 0o644).expect("chmod");
 
     Sink::open(path.clone(), 10, false).expect("open");
 

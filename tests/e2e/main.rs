@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::net::TcpListener;

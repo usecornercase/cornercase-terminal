@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::cell::Cell;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
