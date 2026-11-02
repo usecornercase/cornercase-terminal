@@ -12,6 +12,7 @@ pub(crate) mod ask;
 pub(crate) mod form;
 pub(crate) mod link;
 pub(crate) mod repo;
+pub(crate) mod stream;
 pub(crate) mod wake;
 
 pub(crate) const ICONS: [(char, &str); 6] =

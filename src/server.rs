@@ -97,15 +97,11 @@ impl Step {
     }
 
     fn traced(&self) -> bool {
-        !matches!(
-            self,
-            Self::Answer
-                | Self::Flush
-                | Self::Draw
-                | Self::Surfaces
-                | Self::Save
-                | Self::Event(ServerEvent::App(AppEvent::Output(..)))
-        )
+        match self {
+            Self::Answer | Self::Flush | Self::Draw | Self::Surfaces | Self::Save => false,
+            Self::Event(ServerEvent::App(ev)) => !matches!(ev, AppEvent::Output(..)) && !ev.remote_frame(),
+            _ => true,
+        }
     }
 }
 
@@ -704,11 +700,13 @@ impl Server {
         if log::enabled(Level::Debug) {
             describe(&ev);
         }
-        if let ServerEvent::App(AppEvent::Output(id, ..)) = &ev {
-            self.printed = self.printed || self.app.shows(*id);
-        } else {
-            self.changed = true;
-            self.app.touch_surfaces();
+        match &ev {
+            ServerEvent::App(AppEvent::Output(id, ..)) => self.printed = self.printed || self.app.shows(*id),
+            ServerEvent::App(ev) if ev.remote_frame() => self.printed = true,
+            _ => {
+                self.changed = true;
+                self.app.touch_surfaces();
+            }
         }
         self.dispatch(ev)?;
         if self.restart.is_some() {
@@ -942,6 +940,7 @@ fn logged_save(saved: io::Result<bool>, target: &str, (done, failed): (&str, &st
 fn describe(ev: &ServerEvent) {
     match ev {
         ServerEvent::App(AppEvent::Output(..)) => {}
+        ServerEvent::App(ev) if ev.remote_frame() => {}
         ServerEvent::App(ev) => log::debug!("server", "job answered", job = ev.name()),
         ServerEvent::Accepted(_) => log::debug!("server", "connection"),
         ServerEvent::Message(id, ClientMessage::Event(ev)) => {

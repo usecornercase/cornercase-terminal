@@ -65,6 +65,7 @@ impl App {
         self.machines.selection = Some(selected(link, seen, project, workspace, tab));
         self.panels.files.set_full_screen(false);
         self.follow_pairing();
+        self.follow_stream();
         true
     }
 
@@ -88,6 +89,7 @@ impl App {
 
     pub(in crate::app) fn leave_remote(&mut self) {
         self.machines.selection = None;
+        self.follow_stream();
     }
 
     pub(super) fn follow_selection(&mut self) {
@@ -99,6 +101,7 @@ impl App {
         }
         self.machines.selection = kept;
         self.follow_pairing();
+        self.follow_stream();
     }
 }
 

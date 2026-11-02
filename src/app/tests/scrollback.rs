@@ -80,7 +80,7 @@ fn a_drag_on_the_scrolled_view_copies_what_is_shown() {
 #[test]
 fn a_full_pane_that_refuses_the_wheels_arrows_says_so() {
     let (mut app, rx) = app();
-    type_line(&mut app, "printf '\\033[?1049h'; stty -echo; sleep 30");
+    type_line(&mut app, "printf '\\033[?1049h'; stty raw -echo; sleep 30");
     pump_until(&mut app, &rx, "sleep runs on the alternate screen", |a| {
         a.tab()
             .and_then(Tab::pane)

@@ -190,6 +190,7 @@ mod in_status {
             workspace: 2,
             tab: Some(5),
             path: "/home/ana/web-shop".into(),
+            stream: Some(StreamState::Live),
         }
     }
 

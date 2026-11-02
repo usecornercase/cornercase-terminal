@@ -351,6 +351,7 @@ impl App {
 
     pub(crate) fn window_attached(&mut self) {
         self.clients.views.windowed = true;
+        self.follow_stream();
     }
 
     pub(in crate::app) fn has_window(&self) -> bool {
@@ -364,6 +365,7 @@ impl App {
             let area = self.clients.views.area;
             self.size_tabs(area);
         }
+        self.follow_stream();
     }
 
     pub(crate) fn window_used(&mut self) {
@@ -384,6 +386,11 @@ impl App {
     pub(crate) fn resize(&mut self, area: Rect) {
         self.size_tabs(Some(area));
         self.size_popup(area);
+        self.size_stream();
+    }
+
+    pub(in crate::app) fn window_pane(&self) -> Option<Rect> {
+        self.clients.views.area.map(|area| self.layout(area).pane)
     }
 
     fn size_tabs(&mut self, window: Option<Rect>) {

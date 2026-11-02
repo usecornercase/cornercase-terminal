@@ -81,7 +81,7 @@ fn a_shell_busy_before_its_program_starts_is_not_back_yet() {
 fn an_enter_a_full_pane_refuses_is_not_reported_as_pressed(#[case] enter: fn(u64) -> Command, #[case] refused: &str) {
     let (mut app, rx) = app();
     let id = first(&app);
-    type_line(&mut app, "stty -echo; sleep 30");
+    type_line(&mut app, "stty raw -echo; sleep 30");
     pump_until(&mut app, &rx, "sleep runs", |a| pane(a, id).program(&a.config).as_deref() == Some("sleep"));
     let full = vec![b'x'; crate::term::MAX_QUEUED + 1024 * 1024];
     let filled = app.projects[0].workspaces[0].tabs[0].panes[0].write(&full);

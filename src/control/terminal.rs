@@ -1,4 +1,4 @@
-use crossterm::event::{KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use serde::{Deserialize, Serialize};
 
 use super::surface::{self, Size};
@@ -93,7 +93,33 @@ fn modifiers(mods: &[Modifier]) -> KeyModifiers {
     })
 }
 
+fn held(modifiers: KeyModifiers) -> Vec<Modifier> {
+    [
+        (KeyModifiers::CONTROL, Modifier::Ctrl),
+        (KeyModifiers::ALT, Modifier::Alt),
+        (KeyModifiers::SHIFT, Modifier::Shift),
+        (KeyModifiers::SUPER, Modifier::Super),
+    ]
+    .into_iter()
+    .filter_map(|(flag, modifier)| modifiers.contains(flag).then_some(modifier))
+    .collect()
+}
+
 impl Key {
+    pub(crate) fn of(event: &KeyEvent) -> Option<Self> {
+        let code = keys::name(event.code)?;
+        let mut mods = held(event.modifiers);
+        if event.code == KeyCode::BackTab && !mods.contains(&Modifier::Shift) {
+            mods.push(Modifier::Shift);
+        }
+        let kind = match event.kind {
+            KeyEventKind::Press => KeyKind::Press,
+            KeyEventKind::Repeat => KeyKind::Repeat,
+            KeyEventKind::Release => KeyKind::Release,
+        };
+        Some(Self { code, mods, kind })
+    }
+
     pub(crate) fn event(&self) -> Result<KeyEvent, String> {
         let kind = match self.kind {
             KeyKind::Press => KeyEventKind::Press,
@@ -105,6 +131,25 @@ impl Key {
 }
 
 impl Mouse {
+    pub(crate) fn of(event: MouseEvent, x: u16, y: u16) -> Self {
+        let (kind, button) = match event.kind {
+            MouseEventKind::Down(button) => (MouseKind::Down, button),
+            MouseEventKind::Up(button) => (MouseKind::Up, button),
+            MouseEventKind::Drag(button) => (MouseKind::Drag, button),
+            MouseEventKind::Moved => (MouseKind::Moved, MouseButton::Left),
+            MouseEventKind::ScrollUp => (MouseKind::ScrollUp, MouseButton::Left),
+            MouseEventKind::ScrollDown => (MouseKind::ScrollDown, MouseButton::Left),
+            MouseEventKind::ScrollLeft => (MouseKind::ScrollLeft, MouseButton::Left),
+            MouseEventKind::ScrollRight => (MouseKind::ScrollRight, MouseButton::Left),
+        };
+        let button = match button {
+            MouseButton::Left => Button::Left,
+            MouseButton::Middle => Button::Middle,
+            MouseButton::Right => Button::Right,
+        };
+        Self { kind, button, x, y, mods: held(event.modifiers) }
+    }
+
     pub(crate) fn event(&self) -> MouseEvent {
         let button = match self.button {
             Button::Left => MouseButton::Left,
