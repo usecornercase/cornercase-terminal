@@ -82,7 +82,7 @@ screen_first_run() {
 
 screen_tour() {
   cc_config '{}'
-  rm -f "$CC_RUN/tour.json"
+  rm -f "$CC_RUN/tour.json" "$CC_RUN/star.json"
   cc_start 110 38 "$CC_HOME/code/web-shop"
   cc_wait 'Get started'
   cc_wait 'feat/dark-mode'

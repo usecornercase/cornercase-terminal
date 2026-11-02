@@ -3366,7 +3366,7 @@ export class App {
       { id: 'soundDone', section: '', label: 'sound when it finishes', value: 'built-in', note: "an absolute or ~/ path on the window's computer; empty: built-in" },
       { id: 'soundSubagents', section: '', label: 'sound for subagents', value: '[ ] off', note: 'agents started by another agent or by a flow' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] every hour' : '[ ] never', note: 'asks GitHub for the latest release' },
-      { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] now and then' : '[ ] never', note: 'asks for a GitHub star after two weeks of use' },
+      { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] once' : '[ ] never', note: 'asks for a GitHub star once, after your 5th prompt' },
       this.prefixRow(),
     ];
   }

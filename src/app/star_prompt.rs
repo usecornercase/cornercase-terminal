@@ -5,10 +5,9 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::overlay::Overlay;
 use super::toast::Toast;
-use crate::agents::activity::Status;
 use crate::log;
-use crate::project::Hierarchy;
 use crate::star::{self, Answer, Saved};
 use crate::ui::{self, StarButton};
 
@@ -19,19 +18,13 @@ pub(super) struct StarPrompt {
     saved: Saved,
     path: Option<PathBuf>,
     window: Option<Instant>,
-    card: bool,
     opened: Option<i64>,
-    swallowed: bool,
 }
 
 impl StarPrompt {
     pub(super) fn load(&mut self, path: PathBuf) {
         self.saved = star::load(&path);
         self.path = Some(path);
-    }
-
-    pub(super) fn shows_card(&self) -> bool {
-        self.card
     }
 
     pub(super) fn window_open(&self, now: Instant) -> bool {
@@ -53,34 +46,26 @@ impl StarPrompt {
     pub(super) fn forget_window(&mut self) {
         self.window = None;
     }
-
-    #[cfg(test)]
-    pub(super) fn swallowing(&self) -> bool {
-        self.swallowed
-    }
 }
 
 impl App {
+    pub(super) fn count_star_prompts(&mut self, prompts: usize) {
+        if self.config.star_prompt && self.messages.star.saved.count(prompts) {
+            self.save_star();
+            log::info!("star", "prompts", count = self.messages.star.saved.prompts);
+        }
+    }
+
     pub(super) fn offer_star(&mut self, now: Instant, clock: i64) {
         if !self.config.star_prompt {
-            self.close_star("turned off");
+            self.close_star();
             return;
         }
-        if self.messages.star.saved.settled() {
-            return;
-        }
-        let window = self.messages.star.window_open(now);
-        if window && self.projects.terms().any(|t| t.agent.status().is_some()) && self.messages.star.saved.count(clock)
-        {
-            self.save_star();
-            log::info!("star", "active day", days = self.messages.star.saved.days);
-        }
-        let in_the_way = self.star_in_the_way();
-        if self.messages.star.card && in_the_way {
-            self.close_star("unanswered");
-        } else if window && !in_the_way && !self.messages.star.card && self.messages.star.saved.due(clock) {
-            self.messages.star.card = true;
+        let star = &self.messages.star;
+        if star.saved.due() && star.window_open(now) && !self.star_in_the_way() {
+            self.overlay = Some(Overlay::Star);
             self.messages.star.opened = Some(clock);
+            log::info!("star", "opened", prompts = self.messages.star.saved.prompts);
         }
     }
 
@@ -88,65 +73,60 @@ impl App {
         self.overlay.is_some()
             || self.screen.nav.is_some()
             || self.screen.drag.is_some()
-            || self.screen.drawn.compact()
-            || self.messages.toast.is_some()
+            || self.tour_typing()
             || self.todo_typing()
             || self.files_typing()
             || self.filtering()
-            || self.projects.terms().any(|t| {
-                t.agent.status().is_some_and(|s| matches!(s, Status::Working | Status::Waiting | Status::Failed))
-            })
     }
 
     pub(super) fn star_seen(&mut self, now: Instant) {
         self.messages.star.window = Some(now);
-        if let Some(clock) = self.messages.star.opened.take().filter(|_| self.messages.star.card) {
+        if matches!(self.overlay, Some(Overlay::Star))
+            && let Some(clock) = self.messages.star.opened.take()
+        {
             self.messages.star.saved.shown(clock);
             self.save_star();
-            log::info!("star", "shown", days = self.messages.star.saved.days);
+            log::info!("star", "shown");
         }
     }
 
-    fn close_star(&mut self, why: &str) {
+    fn close_star(&mut self) {
         self.messages.star.opened = None;
-        if std::mem::take(&mut self.messages.star.card) {
-            log::info!("star", "closed", why = why);
+        if matches!(self.overlay, Some(Overlay::Star)) {
+            self.overlay = None;
+            log::info!("star", "closed", why = "turned off");
         }
     }
 
-    pub(super) fn star_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
-        if self.messages.star.swallowed {
-            match ev.kind {
-                MouseEventKind::Drag(MouseButton::Left) => return true,
-                MouseEventKind::Up(MouseButton::Left) => {
-                    self.messages.star.swallowed = false;
-                    return true;
-                }
-                _ => self.messages.star.swallowed = false,
-            }
-        }
-        if !self.messages.star.card || !ui::star_area(area).contains(pos) {
-            return false;
-        }
+    pub(super) fn star_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
-            return true;
+            return;
         }
-        let Some(button) = ui::star_hit(area, pos) else { return true };
-        let answer = match button {
-            StarButton::Star => Answer::Starred,
-            StarButton::Later => Answer::Later,
-            StarButton::Never => Answer::Never,
-        };
-        self.messages.star.saved.answered(answer);
-        self.messages.star.card = false;
-        self.messages.star.swallowed = true;
+        match ui::star_hit(area, pos) {
+            Some(StarButton::Star) => self.answer_star(Some(Answer::Starred)),
+            Some(StarButton::NoThanks) => self.answer_star(Some(Answer::Never)),
+            None => {}
+        }
+    }
+
+    pub(super) fn answer_star(&mut self, answer: Option<Answer>) {
+        self.overlay = None;
+        if let Some(clock) = self.messages.star.opened.take() {
+            self.messages.star.saved.shown(clock);
+        }
+        if let Some(answer) = answer {
+            self.messages.star.saved.answered(answer);
+        }
         self.save_star();
-        log::info!("star", "answered", answer = format!("{answer:?}").to_lowercase());
-        if button == StarButton::Star {
+        log::info!(
+            "star",
+            "answered",
+            answer = answer.map_or("esc", |a| if a == Answer::Starred { "starred" } else { "never" })
+        );
+        if answer == Some(Answer::Starred) {
             self.copy(star::URL);
             self.messages.toast = Some(Toast::new(format!("copied {}", star::URL), ui::ToastIcon::Check));
         }
-        true
     }
 
     fn save_star(&self) {

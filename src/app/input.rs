@@ -126,8 +126,7 @@ impl App {
         if self.continue_drag(ev, areas, area)
             || self.field_menu_mouse(ev, pos, area)
             || (!modal
-                && (self.star_mouse(ev, pos, area)
-                    || self.field_right_press(ev, pos, area)
+                && (self.field_right_press(ev, pos, area)
                     || self.tour_mouse(ev, pos, area)
                     || self.toast_mouse(ev, pos, area)))
         {

@@ -1,0 +1,24 @@
+---
+source: src/app/tests/star_prompt.rs
+expression: dialog(AREA)
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"  + New                        │                         │                  █████████               "
+"                               │                         │               ▄▄▄▀▀▀▀▀▀▀▀▀               "
+"                               │                         │               ███                        "
+"                  ╭──────────────────────────────────────────────────────────────╮                  "
+"                  │ Enjoying cornercase? A star on GitHub helps others find it.  │                  "
+"                  │                                                              │                  "
+"                  │                                  star on GitHub   no thanks  │                  "
+"                  ╰──────────────────────────────────────────────────────────────╯se                "
+"                               │                         │       every agent in its own corner      "
+"                               │                         │                                          "
+"                               │                         │           + New opens a folder           "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Worktrees                    │                         │                                          "
+"  More ▴                 Help  │                         │                                          "

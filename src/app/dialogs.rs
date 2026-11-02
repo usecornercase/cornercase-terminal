@@ -98,7 +98,7 @@ impl App {
 
     pub(super) fn closed_from_outside(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
         let outside = ev.kind == MouseEventKind::Down(MouseButton::Left) && self.outside_dialog(pos, area);
-        if outside && self.popup().is_none() {
+        if outside && self.overlay.as_ref().is_some_and(Overlay::closes_from_outside) {
             self.cancel_form();
         }
         outside
@@ -225,6 +225,7 @@ impl App {
             Some(overlay) if overlay.busy() => {}
             Some(Overlay::Queue(_)) => self.close_queue_form(false),
             Some(Overlay::Flows { .. }) => self.close_flows(),
+            Some(Overlay::Star) => self.answer_star(None),
             Some(Overlay::RemoveAccount { .. }) => self.open_settings(),
             _ => self.overlay = None,
         }

@@ -99,6 +99,7 @@ pub(super) enum Overlay {
     CloseAgents(Box<CloseAgents>),
     ForgetAgents { project: u64, workspace: u64 },
     Popup(Box<super::plugin_popup::Popup>),
+    Star,
 }
 
 impl Overlay {
@@ -138,11 +139,22 @@ impl Overlay {
             Self::Worktrees(_) => "worktrees",
             Self::Ports(_) => "ports",
             Self::Processes(_) => "processes",
+            Self::CloseAgent(_) | Self::CloseAgents(_) | Self::ForgetAgents { .. } => self.agents_name(),
+            Self::Popup(_) => "plugin popup",
+            Self::Star => "star",
+        }
+    }
+
+    fn agents_name(&self) -> &'static str {
+        match self {
             Self::CloseAgent(_) => "close agent",
             Self::CloseAgents(_) => "close agents",
-            Self::ForgetAgents { .. } => "forget agents",
-            Self::Popup(_) => "plugin popup",
+            _ => "forget agents",
         }
+    }
+
+    pub(super) fn closes_from_outside(&self) -> bool {
+        !matches!(self, Self::Popup(_) | Self::Star)
     }
 
     fn notes_name(&self) -> &'static str {
@@ -271,6 +283,7 @@ impl App {
             Some(Overlay::Branches(_)) => self.branches_mouse(ev, pos, area),
             Some(Overlay::Issues(_)) => return self.issues_mouse(ev, pos, area),
             Some(Overlay::Queue(_)) => self.queue_form_mouse(ev, pos, area),
+            Some(Overlay::Star) => self.star_mouse(ev, pos, area),
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
             Some(Overlay::ShareSettings(_)) => self.share_settings_mouse(ev, pos, area),
             Some(Overlay::Flows { .. }) => self.flows_mouse(ev, pos, area),
@@ -337,6 +350,7 @@ impl App {
                 self.notes_view(overlay, area)?
             }
             Overlay::Popup(popup) => super::plugin_popup::popup_view(popup),
+            Overlay::Star => ui::Overlay::Star,
         })
     }
 }
