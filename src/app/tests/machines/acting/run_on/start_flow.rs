@@ -101,7 +101,7 @@ fn lists_the_machine_s_flows_and_hides_edit() {
     let app = &mut reading.remote.rig.app;
     let names: Vec<&str> = start(app).flows.iter().map(|saved| saved.flow.name.as_str()).collect();
     assert_eq!(names, [QUICK]);
-    insta::assert_snapshot!(render(app, WIDE).backend().to_string());
+    insta::assert_snapshot!(dialog(app, WIDE));
 }
 
 #[test]

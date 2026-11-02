@@ -116,6 +116,14 @@ fn reading_with(reply: Reply, projects: Vec<ProjectInfo>) -> Reading {
     Reading { remote, _dir: dir }
 }
 
+fn dialog(app: &mut App, area: Rect) -> String {
+    let shown = overlay_shown(app, area).area(area).expect("the dialog has an area");
+    let terminal = render(app, area);
+    let cell = |x, y| terminal.backend().buffer()[(x, y)].symbol().to_string();
+    let row = |y| (shown.x..shown.right()).map(|x| cell(x, y)).collect::<String>();
+    (shown.y..shown.bottom()).map(row).collect::<Vec<_>>().join("\n")
+}
+
 fn browser(app: &App) -> &Browser {
     let Some(Overlay::Issues(b)) = &app.overlay else { panic!("the issues are not open") };
     b
@@ -264,7 +272,7 @@ mod the_issues_dialog {
 
         reading.on_vps();
 
-        insta::assert_snapshot!(render(&mut reading.remote.rig.app, WIDE).backend().to_string());
+        insta::assert_snapshot!(dialog(&mut reading.remote.rig.app, WIDE));
     }
 }
 

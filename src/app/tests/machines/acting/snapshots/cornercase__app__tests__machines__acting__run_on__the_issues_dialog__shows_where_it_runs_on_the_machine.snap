@@ -1,34 +1,32 @@
 ---
 source: src/app/tests/machines/acting/run_on.rs
-expression: "render(&mut reading.remote.rig.app, WIDE).backend().to_string()"
+expression: "dialog(&mut reading.remote.rig.app, WIDE)"
 ---
-"  ⌕ search projects, workspa…  │ $                                                                                      "
-"     ╭─ Issues · web-shop ────────────────────────────────────────────────────────────────────────────────────────╮     "
-" Proj│ #7 Fix the login                                                                                           │     "
-"     │ open                                                                                                       │     "
-"▌ web│ https://github.com/acme/web-shop/issues/7                                                                  │     "
-"     │                                                                                                            │     "
-"  + N│ run on  ○ this computer   ● ☁ vps · vps has no GitHub token for web-shop                                   │     "
-"     │ start   in a tab on vps, in ~/code/web-shop                                                                │     "
-"     │ agent   claude  (default)  not logged in on vps                                                            │     "
-"     │ account work  (in use)  (vps's accounts)                                                                   │     "
-"     │ prompt  from vps's template (the issue's URL by default)                                                   │     "
-"     │                                                                                                            │     "
-" ────│                                                                                                            │     "
-" Work│                                                                                                            │     "
-"     │                                                                                                            │     "
-"  ▾ d│                                                                                                            │     "
-"▌ ├ ›│                                                                                                            │     "
-"  └ +│                                                                                                            │     "
-"     │                                                                                                            │     "
-"  ▾ a│                                                                                                            │     "
-"     │                                                                                                            │     "
-"  + N│                                                                                                            │     "
-"     │                                                                                                            │     "
-"     │                                                                                                            │     "
-" ────│                                                                                                            │     "
-"  Iss│                                                                                                            │     "
-"  Fil│ loading…                                                                                                   │     "
-"  Wor│               start   start a flow   agent…   run on…   open login tab   account…   raw   copy url   back  │     "
-" ────╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯     "
-"  More ▴                 Help  │                                                                                        "
+╭─ Issues · web-shop ────────────────────────────────────────────────────────────────────────────────────────╮
+│ #7 Fix the login                                                                                           │
+│ open                                                                                                       │
+│ https://github.com/acme/web-shop/issues/7                                                                  │
+│                                                                                                            │
+│ run on  ○ this computer   ● ☁ vps · vps has no GitHub token for web-shop                                   │
+│ start   in a tab on vps, in ~/code/web-shop                                                                │
+│ agent   claude  (default)  not logged in on vps                                                            │
+│ account work  (in use)  (vps's accounts)                                                                   │
+│ prompt  from vps's template (the issue's URL by default)                                                   │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│ loading…                                                                                                   │
+│               start   start a flow   agent…   run on…   open login tab   account…   raw   copy url   back  │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

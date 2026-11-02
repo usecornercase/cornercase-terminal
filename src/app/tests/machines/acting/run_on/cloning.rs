@@ -93,7 +93,7 @@ fn opens_from_start_with_the_url_and_every_ignored_file_unticked() {
 
     let app = &mut reading.remote.rig.app;
     assert_eq!((form(app).url.text().as_str(), form(app).destination().as_str()), (URL, "~/code/web-shop"));
-    insta::assert_snapshot!(render(app, WIDE).backend().to_string());
+    insta::assert_snapshot!(dialog(app, WIDE));
 }
 
 #[test]

@@ -1,34 +1,32 @@
 ---
 source: src/app/tests/machines/acting/run_on/cloning.rs
-expression: "render(app, WIDE).backend().to_string()"
+expression: "dialog(app, WIDE)"
 ---
-"  ⌕ search projects, workspa…  │ $                                                                                      "
-"  ╭─ Clone web-shop on vps ──────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ vps clones it from the URL, then copies the git-ignored files you tick (such as .env) into the clone. Ignored    │  "
-"  │ folders, such as node_modules, are never offered.                                                                │  "
-"▌ │                                                                                                                  │  "
-"  │ from    https://github.com/acme/web-shop.git                                                                     │  "
-"  │ into    ~/code/web-shop                                                                                          │  "
-"  │                                                                                                                  │  "
-"  │ files to copy into the clone                                                                                     │  "
-"  │ [ ] .env  5 B                                                                                                    │  "
-"  │ [ ] local.toml  8 B                                                                                              │  "
-"  │                                                                                                                  │  "
-" ─│                                                                                                                  │  "
-" W│                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"▌ │                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"  │                                                                                                                  │  "
-" ─│                                                                                                                  │  "
-"  │                                                                                                                  │  "
-"  │ a click on a file ticks it · only ticked files are copied · enter clones · esc goes back                         │  "
-"  │                                                                                       back   skip files   clone  │  "
-" ─╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"  More ▴                 Help  │                                                                                        "
+╭─ Clone web-shop on vps ──────────────────────────────────────────────────────────────────────────────────────────╮
+│ vps clones it from the URL, then copies the git-ignored files you tick (such as .env) into the clone. Ignored    │
+│ folders, such as node_modules, are never offered.                                                                │
+│                                                                                                                  │
+│ from    https://github.com/acme/web-shop.git                                                                     │
+│ into    ~/code/web-shop                                                                                          │
+│                                                                                                                  │
+│ files to copy into the clone                                                                                     │
+│ [ ] .env  5 B                                                                                                    │
+│ [ ] local.toml  8 B                                                                                              │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│                                                                                                                  │
+│ a click on a file ticks it · only ticked files are copied · enter clones · esc goes back                         │
+│                                                                                       back   skip files   clone  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

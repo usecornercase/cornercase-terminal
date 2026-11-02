@@ -32,14 +32,6 @@ fn form(app: &App) -> ui::Form {
     form
 }
 
-fn dialog(app: &mut App) -> String {
-    let terminal = render(app, AREA);
-    let form = ui::form_area(AREA);
-    let cell = |x, y| terminal.backend().buffer()[(x, y)].symbol().to_string();
-    let row = |y| (form.x..form.right()).map(|x| cell(x, y)).collect::<String>();
-    (form.y..form.bottom()).map(row).collect::<Vec<_>>().join("\n")
-}
-
 fn chosen(app: &App) -> Option<String> {
     let Some(Overlay::NewWorkspace { run_on, .. }) = &app.overlay else { panic!("New workspace is not open") };
     run_on.as_ref().and_then(RunOn::machine).map(|target| target.name.clone())
@@ -149,7 +141,7 @@ fn shows_where_it_creates_it_on_the_machine() {
     reading.new_on_vps();
 
     assert_eq!(chosen(&reading.remote.rig.app).as_deref(), Some("vps"));
-    insta::assert_snapshot!(dialog(&mut reading.remote.rig.app));
+    insta::assert_snapshot!(dialog(&mut reading.remote.rig.app, AREA));
 }
 
 #[test]
