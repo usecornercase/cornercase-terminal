@@ -184,8 +184,8 @@ impl Watched {
         }
     }
 
-    fn down(&mut self, why: String) -> bool {
-        (self.aim, self.flow) = (None, Flow::Down(why));
+    fn down(&mut self) -> bool {
+        self.aim = None;
         self.drop_typed()
     }
 }
@@ -206,11 +206,20 @@ impl App {
         self.watched().map(|watched| watched.flow.state())
     }
 
+    fn flow_to(&mut self, flow: Flow) {
+        let Some(watched) = self.machines.watched.as_mut() else { return };
+        if watched.flow != flow {
+            watched.flow = flow;
+            self.clients.events.snapshots.mark_changed();
+        }
+    }
+
     pub(in crate::app) fn follow_stream(&mut self) {
         let Some(target) = self.stream_target() else { return self.unwatch() };
         if !self.machines.watched.as_ref().is_some_and(|watched| watched.watches(&target)) {
             self.unwatch();
             self.machines.watched = Some(Watched::new(&target));
+            self.clients.events.snapshots.mark_changed();
         }
         let linked = self.machines.held.iter().find(|held| held.link.id() == target.link);
         if linked.is_some_and(|held| held.status.state == State::Linked && held.watching) {
@@ -233,7 +242,9 @@ impl App {
     }
 
     fn unwatch(&mut self) {
-        let dropped = self.machines.watched.take().is_some_and(|mut watched| watched.close());
+        let Some(mut watched) = self.machines.watched.take() else { return };
+        self.clients.events.snapshots.mark_changed();
+        let dropped = watched.close();
         self.typed_dropped(dropped);
     }
 
@@ -277,9 +288,10 @@ impl App {
         let stream = Stream::start(id, (self.machines.connect)(&held.destination), wanted, &self.tx);
         let dropped = self.machines.watched.as_mut().is_some_and(|watched| {
             let dropped = watched.close();
-            (watched.stream, watched.flow) = (Some(stream), Flow::Connecting);
+            watched.stream = Some(stream);
             dropped
         });
+        self.flow_to(Flow::Connecting);
         self.typed_dropped(dropped);
     }
 
@@ -288,11 +300,8 @@ impl App {
         let down = held.filter(|held| held.status.state != State::Linked);
         let flow = down
             .map_or(Flow::Connecting, |held| Flow::Down(self.machines.reason(held).unwrap_or_else(|| OLDER.into())));
-        let dropped = self.machines.watched.as_mut().is_some_and(|watched| {
-            let dropped = watched.close();
-            watched.flow = flow;
-            dropped
-        });
+        let dropped = self.machines.watched.as_mut().is_some_and(Watched::close);
+        self.flow_to(flow);
         self.typed_dropped(dropped);
     }
 
@@ -305,10 +314,10 @@ impl App {
             }
             StreamEvent::Frame(screen) => {
                 watched.framed(screen);
-                if mem::replace(&mut watched.flow, Flow::Live) != Flow::Live {
-                    self.clients.events.snapshots.mark_changed();
+                self.flow_to(Flow::Live);
+                if let Some(watched) = self.machines.watched.as_mut() {
+                    watched.send_typed();
                 }
-                watched.send_typed();
             }
             StreamEvent::Down(why) => {
                 let held = self.machines.held.iter().find(|held| held.link.id() == watched.link);
@@ -316,7 +325,8 @@ impl App {
                     let error = machines::hide_destination(&why, &held.name, &held.destination);
                     log::warning!("machines", "remote tab down", name = held.name, error = error);
                 }
-                let dropped = watched.down(why);
+                let dropped = watched.down();
+                self.flow_to(Flow::Down(why));
                 self.typed_dropped(dropped);
             }
             StreamEvent::Answer(answer) => {

@@ -334,22 +334,95 @@ mod in_status {
             .collect()
     }
 
-    #[test]
-    fn tells_a_watcher_once_the_first_frame_makes_it_live() {
-        let mut streaming = streaming();
-        let app = &mut streaming.seeing.rig.app;
+    fn watched_from_now(app: &mut App) -> Option<StreamState> {
         let before = watch(app);
         app.trace_refresh();
         published(app);
+        before
+    }
+
+    fn all_told(app: &mut App) -> Vec<Option<StreamState>> {
+        app.trace_refresh();
+        published(app)
+    }
+
+    fn told(app: &mut App) -> Option<StreamState> {
+        all_told(app).last().copied().flatten()
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    enum Fallen {
+        Stream,
+        Link,
+    }
+
+    #[test]
+    fn tells_a_watcher_once_the_first_frame_makes_it_live() {
+        let mut streaming = streaming();
+        let before = watched_from_now(&mut streaming.seeing.rig.app);
 
         live(&mut streaming, "hello");
-        let app = &mut streaming.seeing.rig.app;
-        app.trace_refresh();
 
-        assert_eq!(
-            (before, published(app).last().copied().flatten()),
-            (Some(StreamState::Connecting), Some(StreamState::Live))
-        );
+        let now = told(&mut streaming.seeing.rig.app);
+        assert_eq!((before, now), (Some(StreamState::Connecting), Some(StreamState::Live)));
+    }
+
+    #[rstest]
+    #[case::the_stream(Fallen::Stream)]
+    #[case::the_link(Fallen::Link)]
+    fn tells_a_watcher_once_it_falls(#[case] fallen: Fallen) {
+        let mut streaming = streaming();
+        live(&mut streaming, "hello");
+        let Streaming { mut seeing, view: _view, surface } = streaming;
+        let before = watched_from_now(&mut seeing.rig.app);
+
+        match fallen {
+            Fallen::Stream => drop(surface),
+            Fallen::Link => fall(&mut seeing),
+        }
+        seeing.rig.until("the stream is down", |app| matches!(flow(app), Some(Flow::Down(_))));
+
+        let now = told(&mut seeing.rig.app);
+        assert_eq!((before, now), (Some(StreamState::Live), Some(StreamState::Down)));
+    }
+
+    #[test]
+    fn tells_a_watcher_once_the_link_back_connects_it_again() {
+        let Streaming { mut seeing, view: _view, surface: _surface } = streaming();
+        fall(&mut seeing);
+        let before = watched_from_now(&mut seeing.rig.app);
+
+        seeing.theirs = linked(&seeing.ends);
+        serve(&mut seeing.theirs, 1, worked(report(&[("web-shop", Some(SHOP)), ("blog", None)])));
+        seeing.rig.until("the stream connects again", |app| flow(app) == Some(Flow::Connecting));
+
+        let now = told(&mut seeing.rig.app);
+        assert_eq!((before, now), (Some(StreamState::Down), Some(StreamState::Connecting)));
+    }
+
+    #[test]
+    fn tells_a_watcher_once_a_window_starts_the_stream() {
+        let mut seeing = seeing_two();
+        seeing.rig.app.resize(AREA);
+        assert!(seeing.rig.app.select_remote("vps", RemoteItem::Workspace(10)));
+        let before = watched_from_now(&mut seeing.rig.app);
+
+        seeing.rig.app.window_attached();
+
+        let now = all_told(&mut seeing.rig.app);
+        assert_eq!((before, now), (None, vec![Some(StreamState::Connecting)]));
+    }
+
+    #[test]
+    fn tells_a_watcher_once_the_last_window_ends_the_stream() {
+        let mut streaming = streaming();
+        live(&mut streaming, "hello");
+        let before = watched_from_now(&mut streaming.seeing.rig.app);
+
+        streaming.seeing.rig.app.window_gone();
+
+        let now = all_told(&mut streaming.seeing.rig.app);
+        assert_eq!((before, now), (Some(StreamState::Live), vec![None]));
     }
 
     #[test]
