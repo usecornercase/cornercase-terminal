@@ -51,6 +51,15 @@ mod work_stats {
     }
 
     #[test]
+    fn a_prompt_the_agent_records_counts_toward_the_star_prompt() {
+        let mut agent = Agent::new();
+        agent.app.config.star_prompt = true;
+        agent.start(Some("synthetic work"));
+        agent.refreshing("counted for the star", |a| a.messages.star.saved().prompts == 1);
+        agent.finish();
+    }
+
+    #[test]
     fn background_shells_stop_agent_time() {
         let mut agent = Agent::new();
         let id = agent.start(Some("background"));

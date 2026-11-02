@@ -76,6 +76,9 @@ test('the star prompt is a switch on the UI tab', () => {
   const index = app.settingsRows(5).findIndex((row) => row.id === 'starPrompt');
   assert.ok(index > 0);
   assert.equal(app.config.starPrompt, true);
+  const row = app.settingsRows(5)[index];
+  assert.equal(row.value, '[x] once');
+  assert.equal(row.note, 'asks for a GitHub star once, after your 5th prompt');
   app.settingsClick(index);
   app.render();
   assert.equal(app.config.starPrompt, false);

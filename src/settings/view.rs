@@ -185,8 +185,8 @@ impl Settings {
                 ("check for updates".into(), value.into(), "asks GitHub for the latest release".into(), false)
             }
             Row::StarPrompt => {
-                let value = if config.star_prompt { "[x] now and then" } else { "[ ] never" };
-                ("star prompt".into(), value.into(), "asks for a GitHub star after two weeks of use".into(), false)
+                let value = if config.star_prompt { "[x] once" } else { "[ ] never" };
+                ("star prompt".into(), value.into(), "asks for a GitHub star once, after your 5th prompt".into(), false)
             }
             Row::Tour | Row::TourStart | Row::TourReset => tour_row(config, row),
             _ => self.prefix_row(),
