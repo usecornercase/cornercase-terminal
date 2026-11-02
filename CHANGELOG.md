@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.241
+
+- **cornercase asks for a GitHub star once, right after your 5th prompt, in a dialog in the middle of the window.** It replaces the small card at the bottom right, which waited two weeks of use and went away by itself as soon as an agent worked or a toast showed, often before you could read it. The dialog stays until you answer: **star on GitHub** copies the repository's link, **no thanks** or `Esc` close it, and a click outside or `Enter` do nothing. Whatever you answer, it never asks again, and if you already answered the card with **star on GitHub** or **don't show again** it never asks at all. Turn it off in **Settings › UI › star prompt**, or with `"star_prompt": false` in `config.json`.
+
 ## 0.12.240
 
 - **`‹` in a file you opened from the Flow panel goes back to the Flow panel**, scrolled where you left it. It used to show the files panel's tree, and the Flow panel had to be opened again. A file opened from the tree, a search or a path in a pane still goes back to the tree.
