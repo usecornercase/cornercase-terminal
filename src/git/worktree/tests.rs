@@ -322,3 +322,24 @@ mod scoped_commands {
         assert_eq!(dropped, ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_12"].map(OsString::from));
     }
 }
+
+#[cfg(windows)]
+mod lock_holder_on_windows {
+    use super::*;
+    use crate::test_util::{exited_pid, this_pid};
+
+    fn holder_of_a_lock_naming(pid: i32) -> Option<Holder> {
+        let repo = git_repo(&[("README", "hi")]);
+        let reason = format!("claude session wt (pid {pid} start Wed Oct  7 09:10:42 2026)");
+        std::fs::write(repo.path().join(".git").join("locked"), reason).expect("write the lock");
+        lock(repo.path()).expect("read lock").and_then(|lock| lock.holder)
+    }
+
+    #[test]
+    fn a_pid_that_runs_holds_the_lock_and_one_that_exited_left_it_behind() {
+        let (running, gone) = (this_pid(), exited_pid());
+
+        assert_eq!(holder_of_a_lock_naming(running), Some(Holder::Running(running)));
+        assert_eq!(holder_of_a_lock_naming(gone), Some(Holder::Gone(gone)));
+    }
+}

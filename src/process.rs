@@ -27,8 +27,28 @@ const SHELLS: [&str; 17] = [
     "xonsh", "pwsh", "ion",
 ];
 
+const WINDOWS_SHELLS: [&str; 2] = ["cmd", "powershell"];
+
+const EXE: &str = ".exe";
+
 pub(crate) fn is_shell(name: &str) -> bool {
-    SHELLS.contains(&name)
+    if cfg!(windows) {
+        SHELLS.iter().chain(&WINDOWS_SHELLS).any(|shell| shell.eq_ignore_ascii_case(name))
+    } else {
+        SHELLS.contains(&name)
+    }
+}
+
+pub(crate) fn program_name(name: &str) -> &str {
+    if cfg!(windows) { trim_exe(name) } else { name }
+}
+
+fn trim_exe(name: &str) -> &str {
+    let cut = name.len().saturating_sub(EXE.len());
+    match (name.get(..cut), name.get(cut..)) {
+        (Some(stem), Some(extension)) if !stem.is_empty() && extension.eq_ignore_ascii_case(EXE) => stem,
+        _ => name,
+    }
 }
 
 pub(crate) fn reap(mut child: Child) {
@@ -128,7 +148,7 @@ pub(crate) fn command_line(program: Option<&str>, args: &[String], width: usize)
     text::truncate_right(&line, width)
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos", test))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows, test))]
 fn vars<'a>(entries: impl Iterator<Item = &'a [u8]>) -> Vec<(String, String)> {
     entries
         .filter_map(|entry| {
@@ -184,6 +204,55 @@ fn procargs(buf: &[u8]) -> Vec<String> {
 fn procenv(buf: &[u8]) -> Vec<(String, String)> {
     let Some((argc, strings)) = procargs_strings(buf) else { return Vec::new() };
     vars(strings.skip(argc).take_while(|s| !s.is_empty()))
+}
+
+#[cfg(any(windows, test))]
+fn split_command_line(line: &str) -> Vec<String> {
+    let (program, rest) = match line.strip_prefix('"') {
+        Some(quoted) => quoted.split_once('"').unwrap_or((quoted, "")),
+        None => line.split_once([' ', '\t']).unwrap_or((line, "")),
+    };
+    std::iter::once(program.to_string()).chain(arguments(rest)).filter(|arg| !arg.is_empty()).collect()
+}
+
+#[cfg(any(windows, test))]
+fn arguments(rest: &str) -> Vec<String> {
+    let (mut args, mut arg, mut quoted) = (Vec::new(), String::new(), false);
+    let mut chars = rest.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => backslashes(&mut chars, &mut arg),
+            '"' if quoted && chars.next_if_eq(&'"').is_some() => arg.push('"'),
+            '"' => quoted = !quoted,
+            ' ' | '\t' if !quoted => args.push(std::mem::take(&mut arg)),
+            c => arg.push(c),
+        }
+    }
+    args.push(arg);
+    args
+}
+
+#[cfg(any(windows, test))]
+fn backslashes(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, arg: &mut String) {
+    let mut count = 1;
+    while chars.next_if_eq(&'\\').is_some() {
+        count += 1;
+    }
+    if chars.peek() != Some(&'"') {
+        arg.extend(std::iter::repeat_n('\\', count));
+        return;
+    }
+    arg.extend(std::iter::repeat_n('\\', count / 2));
+    if count % 2 == 1 {
+        arg.extend(chars.next());
+    }
+}
+
+#[cfg(any(windows, test))]
+fn environment_block(units: &[u16]) -> Vec<(String, String)> {
+    let end = units.windows(2).position(|pair| pair == [0, 0]).unwrap_or(units.len());
+    let text = String::from_utf16_lossy(&units[..end]);
+    vars(text.split('\0').take_while(|entry| !entry.is_empty()).map(str::as_bytes))
 }
 
 #[cfg(target_os = "linux")]
@@ -423,16 +492,8 @@ mod imp {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-mod imp {
-    use super::{Duration, PathBuf, UnixStream, io};
-
-    pub(crate) fn all() -> Vec<i32> {
-        Vec::new()
-    }
-
-    pub(crate) fn children(_pid: i32) -> Vec<i32> {
-        Vec::new()
-    }
+mod unread {
+    use super::{PathBuf, UnixStream, io};
 
     pub(crate) fn open_files(_pid: i32) -> Vec<PathBuf> {
         Vec::new()
@@ -440,6 +501,309 @@ mod imp {
 
     pub(crate) fn peer_uid(_socket: &UnixStream) -> io::Result<u32> {
         Err(io::ErrorKind::Unsupported.into())
+    }
+}
+
+#[cfg(windows)]
+mod imp {
+    use std::ffi::OsString;
+    use std::mem::offset_of;
+    use std::os::windows::ffi::OsStringExt;
+    use std::ptr;
+    use std::sync::Arc;
+
+    use parking_lot::Mutex;
+    use windows_sys::Wdk::System::Threading::{NtQueryInformationProcess, ProcessBasicInformation};
+    use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, INVALID_HANDLE_VALUE, UNICODE_STRING};
+    use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
+    };
+    use windows_sys::Win32::System::Memory::{MEMORY_BASIC_INFORMATION, VirtualQueryEx};
+    use windows_sys::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX};
+    use windows_sys::Win32::System::Threading::{
+        GetProcessTimes, OpenProcess, PEB, PROCESS_ACCESS_RIGHTS, PROCESS_BASIC_INFORMATION, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ, QueryFullProcessImageNameW, RTL_USER_PROCESS_PARAMETERS,
+    };
+
+    use super::{Duration, Instant, PathBuf, alive, environment_block, program_name, split_command_line};
+
+    pub(crate) use super::unread::{open_files, peer_uid};
+
+    const ENVIRONMENT_LIMIT: usize = 1 << 20;
+    const NANOS_PER_TICK: u64 = 100;
+    const IMAGE_PATH_LIMIT: usize = 1024;
+    const SNAPSHOT_FOR: Duration = Duration::from_millis(50);
+
+    static SNAPSHOT: Mutex<Option<(Instant, Arc<[Entry]>)>> = Mutex::new(None);
+
+    struct Owned(HANDLE);
+
+    impl Owned {
+        fn new(handle: HANDLE) -> Option<Self> {
+            (!handle.is_null() && handle != INVALID_HANDLE_VALUE).then_some(Self(handle))
+        }
+
+        fn process(pid: i32, access: PROCESS_ACCESS_RIGHTS) -> Option<Self> {
+            let pid = u32::try_from(pid).ok().filter(|pid| *pid != 0)?;
+            Self::new(unsafe { OpenProcess(access, 0, pid) })
+        }
+
+        fn snapshot() -> Option<Self> {
+            Self::new(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) })
+        }
+    }
+
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+
+    trait AnyBits: Copy + Default {}
+
+    impl AnyBits for u16 {}
+    impl AnyBits for usize {}
+    impl AnyBits for Parameters {}
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct Parameters {
+        _lengths_and_flags: [u32; 4],
+        _console_and_standard_handles: [usize; 5],
+        current_directory: UNICODE_STRING,
+        _current_directory_handle: usize,
+        _dll_path: UNICODE_STRING,
+        _image_path: UNICODE_STRING,
+        command_line: UNICODE_STRING,
+        environment: usize,
+    }
+
+    const _: () = assert!(offset_of!(Parameters, command_line) == offset_of!(RTL_USER_PROCESS_PARAMETERS, CommandLine));
+
+    #[derive(Clone)]
+    struct Entry {
+        pid: i32,
+        parent: i32,
+        name: String,
+    }
+
+    impl Entry {
+        fn of(entry: &PROCESSENTRY32W) -> Self {
+            let file = &entry.szExeFile;
+            let name = String::from_utf16_lossy(&file[..file.iter().position(|unit| *unit == 0).unwrap_or(file.len())]);
+            let name = program_name(&name).to_string();
+            Self { pid: entry.th32ProcessID.cast_signed(), parent: entry.th32ParentProcessID.cast_signed(), name }
+        }
+    }
+
+    fn size_u32<T>() -> u32 {
+        u32::try_from(size_of::<T>()).unwrap_or(u32::MAX)
+    }
+
+    fn first(snapshot: &Owned, entry: &mut PROCESSENTRY32W) -> bool {
+        unsafe { Process32FirstW(snapshot.0, entry) != 0 }
+    }
+
+    fn next(snapshot: &Owned, entry: &mut PROCESSENTRY32W) -> bool {
+        unsafe { Process32NextW(snapshot.0, entry) != 0 }
+    }
+
+    fn entries() -> Arc<[Entry]> {
+        let mut last = SNAPSHOT.lock();
+        if let Some((at, entries)) = last.as_ref()
+            && at.elapsed() < SNAPSHOT_FOR
+        {
+            return Arc::clone(entries);
+        }
+        let entries: Arc<[Entry]> = snapshot().into();
+        *last = Some((Instant::now(), Arc::clone(&entries)));
+        entries
+    }
+
+    fn snapshot() -> Vec<Entry> {
+        let Some(snapshot) = Owned::snapshot() else { return Vec::new() };
+        let mut entry = PROCESSENTRY32W { dwSize: size_u32::<PROCESSENTRY32W>(), ..PROCESSENTRY32W::default() };
+        let mut found = Vec::new();
+        let mut more = first(&snapshot, &mut entry);
+        while more {
+            found.push(Entry::of(&entry));
+            more = next(&snapshot, &mut entry);
+        }
+        found
+    }
+
+    fn not_older(pid: i32, than: Option<u64>) -> bool {
+        match (start_stamp(pid), than) {
+            (Some(born), Some(other)) => born >= other,
+            _ => true,
+        }
+    }
+
+    pub(crate) fn all() -> Vec<i32> {
+        entries().iter().map(|entry| entry.pid).filter(|pid| *pid > 0).collect()
+    }
+
+    pub(crate) fn children(pid: i32) -> Vec<i32> {
+        if !alive(pid) {
+            return Vec::new();
+        }
+        let born = start_stamp(pid);
+        let mut pids: Vec<i32> = entries()
+            .iter()
+            .filter(|entry| entry.parent == pid && entry.pid != pid && entry.pid > 0)
+            .map(|entry| entry.pid)
+            .filter(|child| not_older(*child, born))
+            .collect();
+        pids.sort_unstable();
+        pids
+    }
+
+    fn listed(pid: i32) -> Option<Entry> {
+        if !alive(pid) {
+            return None;
+        }
+        entries().iter().find(|entry| entry.pid == pid).cloned()
+    }
+
+    pub(crate) fn parent(pid: i32) -> Option<i32> {
+        let up = listed(pid)?.parent;
+        (alive(up) && not_older(pid, start_stamp(up))).then_some(up)
+    }
+
+    pub(crate) fn name(pid: i32) -> Option<String> {
+        image_name(pid).or_else(|| listed(pid).map(|entry| entry.name))
+    }
+
+    fn image_name(pid: i32) -> Option<String> {
+        let process = Owned::process(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+        let mut path = [0_u16; IMAGE_PATH_LIMIT];
+        let mut size = u32::try_from(path.len()).ok()?;
+        let read =
+            unsafe { QueryFullProcessImageNameW(process.0, PROCESS_NAME_WIN32, path.as_mut_ptr(), &raw mut size) };
+        if read == 0 {
+            return None;
+        }
+        let path = PathBuf::from(OsString::from_wide(path.get(..usize::try_from(size).ok()?)?));
+        Some(program_name(&path.file_name()?.to_string_lossy()).to_string())
+    }
+
+    fn read_into<T: AnyBits>(process: &Owned, at: usize, into: &mut [T]) -> bool {
+        let size = size_of_val(into);
+        let mut done = 0;
+        let at = ptr::without_provenance(at);
+        let read = size == 0
+            || unsafe { ReadProcessMemory(process.0, at, into.as_mut_ptr().cast(), size, &raw mut done) } != 0;
+        read && done == size
+    }
+
+    fn read<T: AnyBits>(process: &Owned, at: usize) -> Option<T> {
+        let mut value = [T::default()];
+        read_into(process, at, &mut value).then_some(value[0])
+    }
+
+    fn units(process: &Owned, at: usize, count: usize) -> Option<Vec<u16>> {
+        let mut units = vec![0_u16; count];
+        read_into(process, at, &mut units).then_some(units)
+    }
+
+    fn text(process: &Owned, string: UNICODE_STRING) -> Option<Vec<u16>> {
+        units(process, string.Buffer.addr(), usize::from(string.Length / 2))
+    }
+
+    fn basic_information(process: &Owned) -> Option<PROCESS_BASIC_INFORMATION> {
+        let mut basic = PROCESS_BASIC_INFORMATION::default();
+        let (into, size) = ((&raw mut basic).cast(), size_u32::<PROCESS_BASIC_INFORMATION>());
+        let status =
+            unsafe { NtQueryInformationProcess(process.0, ProcessBasicInformation, into, size, ptr::null_mut()) };
+        (status >= 0).then_some(basic)
+    }
+
+    fn region(process: &Owned, at: usize) -> Option<MEMORY_BASIC_INFORMATION> {
+        let mut region = MEMORY_BASIC_INFORMATION::default();
+        let size = size_of::<MEMORY_BASIC_INFORMATION>();
+        let written = unsafe { VirtualQueryEx(process.0, ptr::without_provenance(at), &raw mut region, size) };
+        (written == size).then_some(region)
+    }
+
+    fn with_parameters<T>(pid: i32, read_with: impl FnOnce(&Owned, Parameters) -> Option<T>) -> Option<T> {
+        let process = Owned::process(pid, PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ)?;
+        let peb = basic_information(&process)?.PebBaseAddress.addr();
+        let at: usize = read(&process, peb.checked_add(offset_of!(PEB, ProcessParameters))?)?;
+        read_with(&process, read(&process, at)?)
+    }
+
+    fn environment(process: &Owned, at: usize) -> Option<Vec<u16>> {
+        let region = region(process, at)?;
+        let end = region.BaseAddress.addr().checked_add(region.RegionSize)?;
+        units(process, at, end.checked_sub(at)?.min(ENVIRONMENT_LIMIT) / 2)
+    }
+
+    pub(crate) fn args(pid: i32) -> Vec<String> {
+        let line = with_parameters(pid, |process, parameters| text(process, parameters.command_line));
+        line.map(|line| split_command_line(&String::from_utf16_lossy(&line))).unwrap_or_default()
+    }
+
+    pub(crate) fn env(pid: i32) -> Vec<(String, String)> {
+        let block = with_parameters(pid, |process, parameters| environment(process, parameters.environment));
+        block.map(|block| environment_block(&block)).unwrap_or_default()
+    }
+
+    pub(crate) fn cwd(pid: i32) -> Option<PathBuf> {
+        let units = with_parameters(pid, |process, parameters| text(process, parameters.current_directory))?;
+        let path = PathBuf::from(OsString::from_wide(&units));
+        (!units.is_empty()).then(|| path.components().collect())
+    }
+
+    pub(crate) fn footprint(pid: i32) -> Option<u64> {
+        let process = Owned::process(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+        let size = size_u32::<PROCESS_MEMORY_COUNTERS_EX>();
+        let mut counters = PROCESS_MEMORY_COUNTERS_EX { cb: size, ..PROCESS_MEMORY_COUNTERS_EX::default() };
+        let read = unsafe { GetProcessMemoryInfo(process.0, (&raw mut counters).cast(), size) };
+        (read != 0).then(|| u64::try_from(counters.PrivateUsage).unwrap_or(u64::MAX))
+    }
+
+    fn ticks(time: FILETIME) -> u64 {
+        (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime)
+    }
+
+    fn times(pid: i32) -> Option<(u64, u64)> {
+        let process = Owned::process(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+        let [mut created, mut exited, mut kernel, mut user] = [FILETIME::default(); 4];
+        let read =
+            unsafe { GetProcessTimes(process.0, &raw mut created, &raw mut exited, &raw mut kernel, &raw mut user) };
+        (read != 0).then(|| (ticks(created), ticks(kernel).saturating_add(ticks(user))))
+    }
+
+    pub(crate) fn cpu_time(pid: i32) -> Option<Duration> {
+        times(pid).map(|(_, busy)| Duration::from_nanos(busy.saturating_mul(NANOS_PER_TICK)))
+    }
+
+    pub(crate) fn start_stamp(pid: i32) -> Option<u64> {
+        times(pid).map(|(created, _)| created)
+    }
+
+    pub(crate) fn started(_pid: i32) -> Option<u64> {
+        None
+    }
+
+    pub(crate) fn zombie(_pid: i32) -> bool {
+        false
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+mod imp {
+    use super::{Duration, PathBuf};
+
+    pub(crate) use super::unread::{open_files, peer_uid};
+
+    pub(crate) fn all() -> Vec<i32> {
+        Vec::new()
+    }
+
+    pub(crate) fn children(_pid: i32) -> Vec<i32> {
+        Vec::new()
     }
 
     pub(crate) fn cwd(_pid: i32) -> Option<PathBuf> {

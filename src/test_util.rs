@@ -15,6 +15,8 @@ use crate::os::process::{Pid, Signal, kill_process};
 
 pub(crate) const SHORTCUT_MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
 
+const PID_WINDOWS_NEVER_GIVES: i32 = i32::MAX - 3;
+
 const TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
 
@@ -35,6 +37,9 @@ pub(crate) fn this_pid() -> i32 {
 }
 
 pub(crate) fn exited_pid() -> i32 {
+    if cfg!(windows) {
+        return PID_WINDOWS_NEVER_GIVES;
+    }
     let mut child = std::process::Command::new("/bin/sh").arg("-c").arg("exit 0").spawn().expect("spawn sh");
     child.wait().expect("wait for sh");
     i32::try_from(child.id()).expect("pid fits in i32")

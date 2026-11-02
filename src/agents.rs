@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::os::fs::PermissionsExt;
+use crate::process;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AgentState {
@@ -393,7 +394,7 @@ pub(crate) fn resolve(config: &Config, explicit: Option<&str>, running: Option<&
 }
 
 fn basename(arg: &str) -> &str {
-    Path::new(arg).file_name().and_then(|n| n.to_str()).unwrap_or(arg)
+    process::program_name(Path::new(arg).file_name().and_then(|n| n.to_str()).unwrap_or(arg))
 }
 
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {

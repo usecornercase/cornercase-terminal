@@ -387,3 +387,203 @@ mod command_line {
         assert_eq!(command_line(Some("node"), &args, 10), "node vite…");
     }
 }
+
+mod split_command_line {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::a_quoted_program_running_a_script(
+        r#""C:\Program Files\nodejs\node.exe" "C:\npm\node_modules\@anthropic-ai\claude-code\cli.js" --resume"#,
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\@anthropic-ai\claude-code\cli.js", "--resume"]
+    )]
+    #[case::an_argument_with_spaces(r#"cmd.exe /d /c "ping -n 30 127.0.0.1""#, &["cmd.exe", "/d", "/c", "ping -n 30 127.0.0.1"])]
+    #[case::backslashes_stay_unless_a_quote_follows(
+        r#"a.exe C:\dir\ "C:\with space\\" x"#,
+        &["a.exe", r"C:\dir\", r"C:\with space\", "x"]
+    )]
+    #[case::escaped_quotes(r#"a.exe say\"hi\" \\\"q"#, &["a.exe", r#"say"hi""#, r#"\"q"#])]
+    #[case::a_doubled_quote_inside_quotes(r#"a.exe "a""b""#, &["a.exe", r#"a"b"#])]
+    #[case::empty_arguments_and_extra_whitespace("a.exe  \t\"\" b ", &["a.exe", "b"])]
+    #[case::a_program_alone("pwsh.exe", &["pwsh.exe"])]
+    #[case::a_quoted_program_keeps_its_backslashes(r#""C:\a\" b"#, &[r"C:\a\", "b"])]
+    fn follows_the_rules_of_windows_programs(#[case] line: &str, #[case] expected: &[&str]) {
+        assert_eq!(split_command_line(line), expected);
+    }
+}
+
+mod environment_block {
+    use super::*;
+
+    #[test]
+    fn ends_at_the_empty_entry_and_skips_the_hidden_drive_folders() {
+        let block: Vec<u16> = "=C:=C:\\work\0PATH=C:\\bin;D:\\x\0A=b=c\0\0STALE=1\0".encode_utf16().collect();
+
+        assert_eq!(environment_block(&block), [("PATH".into(), "C:\\bin;D:\\x".into()), ("A".into(), "b=c".into())]);
+    }
+}
+
+mod program_name {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::lower_case("node.exe", "node")]
+    #[case::upper_case("PING.EXE", "PING")]
+    #[case::no_extension("node", "node")]
+    #[case::only_the_extension(".exe", ".exe")]
+    #[case::another_extension("claude.cmd", "claude.cmd")]
+    #[case::exe_inside_the_name("a.exe.bak", "a.exe.bak")]
+    #[case::a_cut_inside_a_character("ñabc", "ñabc")]
+    fn trim_exe_drops_a_last_exe_in_any_case(#[case] name: &str, #[case] expected: &str) {
+        assert_eq!(trim_exe(name), expected);
+    }
+
+    #[test]
+    fn drops_the_exe_only_on_windows() {
+        assert_eq!(program_name("node.exe"), if cfg!(windows) { "node" } else { "node.exe" });
+    }
+
+    #[test]
+    fn cmd_and_powershell_are_shells_only_on_windows() {
+        assert_eq!((is_shell("cmd"), is_shell("PowerShell"), is_shell("pwsh")), (cfg!(windows), cfg!(windows), true));
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use std::process::Stdio;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::*;
+    use crate::test_util::{Running, TempDir, wait_until};
+
+    const SIZE: usize = 64 << 20;
+    const HALF: u64 = 32 << 20;
+
+    fn ping(dir: &Path) -> Running {
+        Running::spawn(
+            Command::new("ping")
+                .args(["-n", "30", "127.0.0.1"])
+                .current_dir(dir)
+                .env("CORNERCASE_PROBE", "a=b")
+                .stdout(Stdio::null()),
+        )
+    }
+
+    #[test]
+    fn a_child_is_listed_under_this_process_with_its_name_and_arguments() {
+        let dir = TempDir::new();
+        let ping = ping(dir.path());
+        wait_until("a snapshot lists ping", || children(this_pid()).contains(&ping.pid()));
+
+        assert!(all().contains(&ping.pid()));
+        assert_eq!(parent(ping.pid()), Some(this_pid()));
+        assert!(name(ping.pid()).is_some_and(|name| name.eq_ignore_ascii_case("ping")), "{:?}", name(ping.pid()));
+        let args = args(ping.pid());
+        assert!(args.first().is_some_and(|program| program.eq_ignore_ascii_case("ping")), "{args:?}");
+        assert_eq!(args[1..], ["-n", "30", "127.0.0.1"]);
+    }
+
+    #[test]
+    fn a_child_has_the_folder_and_environment_it_started_with() {
+        let dir = TempDir::new();
+        let ping = ping(dir.path());
+
+        let folder = cwd(ping.pid()).expect("a folder");
+        assert_eq!(folder.canonicalize().expect("canonicalize"), dir.path());
+        assert!(!folder.to_string_lossy().ends_with('\\'), "{}", folder.display());
+        let probe = env(ping.pid()).into_iter().find(|(key, _)| key == "CORNERCASE_PROBE");
+        assert_eq!(probe, Some(("CORNERCASE_PROBE".into(), "a=b".into())));
+    }
+
+    #[test]
+    fn a_tree_reaches_the_child_of_a_child() {
+        let line = r"%SystemRoot%\System32\ping.exe -n 30 127.0.0.1";
+        let cmd = Running::spawn(Command::new("cmd.exe").args(["/d", "/c", line]).stdout(Stdio::null()));
+        wait_until("cmd starts ping", || !children(cmd.pid()).is_empty());
+        let ping = children(cmd.pid())[0];
+
+        let found = (name(ping), parent(ping), args(cmd.pid()), descendants(cmd.pid()), tree(this_pid()));
+        let _ = Command::new("taskkill").args(["/f", "/t", "/pid", &cmd.pid().to_string()]).output();
+
+        assert!(found.0.is_some_and(|name| name.eq_ignore_ascii_case("ping")));
+        assert_eq!(found.1, Some(cmd.pid()));
+        assert_eq!(found.2[1..], ["/d", "/c", line]);
+        assert_eq!(found.3, [ping]);
+        assert!(found.4.contains(&(ping, cmd.pid())));
+    }
+
+    #[test]
+    fn a_child_starts_after_this_process_and_keeps_its_start() {
+        let dir = TempDir::new();
+        let ping = ping(dir.path());
+        let stamp = start_stamp(ping.pid()).expect("a stamp");
+
+        assert!(start_stamp(this_pid()).is_some_and(|ours| ours < stamp));
+        assert_eq!(start_stamp(ping.pid()), Some(stamp));
+        assert!(running(ping.pid(), Some(stamp)));
+        assert!(!running(ping.pid(), Some(stamp + 1)));
+        assert_eq!(started(ping.pid()), None);
+        assert!(footprint(ping.pid()).is_some_and(|bytes| bytes > 0));
+    }
+
+    #[test]
+    fn a_child_is_alive_until_it_is_killed() {
+        let mut child =
+            Command::new("ping").args(["-n", "30", "127.0.0.1"]).stdout(Stdio::null()).spawn().expect("spawn ping");
+        let pid = i32::try_from(child.id()).expect("a pid");
+        assert!(alive(pid) && running(pid, None));
+
+        child.kill().expect("kill");
+        child.wait().expect("wait");
+        assert!(!alive(pid) && !running(pid, None));
+    }
+
+    #[test]
+    fn a_pid_without_a_process_has_nothing_to_read() {
+        let pid = exited_pid();
+
+        assert!(!alive(pid));
+        assert_eq!((name(pid), parent(pid), children(pid)), (None, None, Vec::new()));
+        assert_eq!((args(pid), env(pid), cwd(pid)), (Vec::<String>::new(), Vec::new(), None));
+        assert_eq!((footprint(pid), start_stamp(pid), cpu_time(pid)), (None, None, None));
+    }
+
+    #[test]
+    fn footprint_counts_memory_this_process_commits() {
+        let before = footprint(this_pid()).expect("before");
+        let memory = std::hint::black_box(vec![1_u8; SIZE]);
+        let after = footprint(this_pid()).expect("after");
+        drop(memory);
+
+        assert!(after.saturating_sub(before) > HALF, "{before} -> {after}");
+    }
+
+    #[test]
+    fn cpu_time_grows_by_the_time_a_busy_thread_takes() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let busy = Arc::clone(&stop);
+        let spinner = thread::spawn(move || {
+            while !busy.load(Ordering::Relaxed) {
+                std::hint::spin_loop();
+            }
+        });
+        let first = Instant::now();
+        let before = cpu_time(this_pid()).expect("cpu time");
+        wait_until("the busy thread uses cpu", || {
+            cpu_time(this_pid()).is_some_and(|now| now.saturating_sub(before) > Duration::from_millis(100))
+        });
+        let used = cpu_time(this_pid()).expect("cpu time").saturating_sub(before);
+        let wall = first.elapsed();
+        stop.store(true, Ordering::Relaxed);
+        spinner.join().expect("the busy thread ends");
+
+        let cores = thread::available_parallelism().map_or(1, usize::from);
+        let most = wall.as_secs_f64() * f64::from(u32::try_from(cores).unwrap_or(64)) * 2.0 + 0.1;
+        assert!(used.as_secs_f64() <= most, "{used:?} in {wall:?} on {cores} cores");
+    }
+}
