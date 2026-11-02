@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.240
+
+- **`‹` in a file you opened from the Flow panel goes back to the Flow panel**, scrolled where you left it. It used to show the files panel's tree, and the Flow panel had to be opened again. A file opened from the tree, a search or a path in a pane still goes back to the tree.
+
 ## 0.12.239
 
 - **`cornercase flow run --issue` takes a prompt of your own.** `--prompt` or `--prompt-file` give the team your text in place of the one your prompt template makes from the issue, as editing the prompt in **start a flow** does, while the issue still names the branch and the workspace (`--worktree` and `--workspace-name` name others). It used to refuse `--prompt` with `--issue`. Apps that drive cornercase send `prompt` with `issue` in `flow-run` once `cornercase contract` lists `flow-issue-prompt`.
