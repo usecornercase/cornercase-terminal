@@ -140,9 +140,7 @@ impl Overlay {
                 self.notes_name()
             }
             Self::Keys(_) => "keys",
-            Self::Worktrees(_) => "worktrees",
-            Self::Ports(_) => "ports",
-            Self::Processes(_) => "processes",
+            Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) => self.listing_name(),
             Self::CloseAgent(_) | Self::CloseAgents(_) | Self::ForgetAgents { .. } => self.agents_name(),
             Self::Popup(_) => "plugin popup",
             Self::Star => "star",
@@ -159,6 +157,14 @@ impl Overlay {
 
     pub(super) fn closes_from_outside(&self) -> bool {
         !matches!(self, Self::Popup(_) | Self::Star)
+    }
+
+    fn listing_name(&self) -> &'static str {
+        match self {
+            Self::Worktrees(_) => "worktrees",
+            Self::Ports(_) => "ports",
+            _ => "processes",
+        }
     }
 
     fn notes_name(&self) -> &'static str {
@@ -351,8 +357,7 @@ impl App {
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
             Overlay::Restart => self.restart_view(area),
-            Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
-            Overlay::Remote => ui::Overlay::Remote(self.remote_view()),
+            Overlay::Usage | Overlay::Remote => self.access_view(overlay),
             Overlay::Pairing(_) | Overlay::Forum(_) => self.messenger_view(overlay)?,
             Overlay::Branches(picker) => Self::branches_view(picker),
             Overlay::PullRequest { .. }
@@ -366,6 +371,13 @@ impl App {
 }
 
 impl App {
+    fn access_view(&self, overlay: &Overlay) -> ui::Overlay {
+        match overlay {
+            Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
+            _ => ui::Overlay::Remote(self.remote_view()),
+        }
+    }
+
     fn notes_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
         Some(match overlay {
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll, area)?,
