@@ -91,10 +91,11 @@ export class FilesPanel {
     this.open = false;
     this.full = false;
     this.selecting = null;
-    for (const place of this.places.values()) if (place.viewer) {
-        place.viewer.find = null;
-        place.viewer.origin = null;
-      }
+    for (const place of this.places.values()) {
+      if (!place.viewer) continue;
+      place.viewer.find = null;
+      place.viewer.origin = null;
+    }
     this.unfocus();
   }
 
