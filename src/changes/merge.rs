@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,6 +8,8 @@ use super::diff::MAX_UNTRACKED_BYTES;
 use super::git::{self, Deadline, UNTRACKED_READ_BYTES};
 use crate::error::{Error, Result};
 use crate::git::worktree;
+use crate::os::ffi::{OsStrExt, OsStringExt};
+use crate::os::fs::DirBuilderExt;
 
 const IDENTITY: &str = "cornercase";
 const IDENTITY_EMAIL: &str = "cornercase@localhost";

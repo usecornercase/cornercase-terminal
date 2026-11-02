@@ -1,5 +1,4 @@
-use rustix::process::{Pid, Signal, kill_process};
-
+use crate::os::process::{Pid, Signal, kill_process};
 use crate::process;
 use crate::process::escalation::{self, Outcome, Stoppable};
 use crate::text;
@@ -35,6 +34,7 @@ pub(crate) type Stopped = escalation::Stopped<Group>;
 
 impl Group {
     #[cfg(test)]
+    #[cfg(unix)]
     pub(crate) fn live(pid: i32) -> Self {
         Self::live_with(pid, None)
     }

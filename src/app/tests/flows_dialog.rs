@@ -812,6 +812,7 @@ mod ordering {
         assert_eq!(s.app.config.hidden_flows, ["Quick"]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_failed_delete_puts_the_hidden_names_back() {
         use std::os::unix::fs::PermissionsExt;

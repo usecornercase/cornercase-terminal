@@ -1,9 +1,10 @@
 use std::io::{self, Write};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use serde::Serialize;
+
+use crate::os::fs::{MetadataExt, OpenOptionsExt, set_file_mode};
 
 pub(crate) const SETTLE: Duration = Duration::from_secs(2);
 
@@ -35,7 +36,7 @@ pub(crate) fn write_marked(path: &Path, value: &impl Serialize, private: bool) -
         .mode(if private { 0o600 } else { 0o666 })
         .open(&tmp)?;
     if private {
-        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        set_file_mode(&file, 0o600)?;
     }
     file.write_all(&bytes)?;
     if private {

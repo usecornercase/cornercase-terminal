@@ -89,17 +89,20 @@ impl Streams {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(in crate::app) fn set_every(&mut self, every: Duration) {
         self.every = Some(every);
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(in crate::app) fn cancelled(&self, key: u64) -> Option<bool> {
         let found = self.searches.iter().find(|(_, searching, _)| *searching == key);
         found.map(|(_, _, cancel)| cancel.load(Ordering::Relaxed))
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(in crate::app) fn is_empty(&self) -> bool {
         self.open.is_empty() && self.searches.is_empty()
     }

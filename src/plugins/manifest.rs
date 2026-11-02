@@ -1,13 +1,11 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fs::Metadata;
 use std::io::Read as _;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 
-use rustix::fs::OFlags;
-use rustix::process::getgid;
 use serde::{Deserialize, Serialize};
 
+use crate::os::fs::{MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, gid};
 use crate::{text, version};
 
 pub(crate) const FILE: &str = "cornercase-plugin.toml";
@@ -207,7 +205,7 @@ impl Manifest {
         let cannot = |e: &dyn std::fmt::Display| format!("cannot read {}: {e}", path.display());
         let file = std::fs::OpenOptions::new()
             .read(true)
-            .custom_flags((OFlags::NONBLOCK | OFlags::NOFOLLOW).bits().cast_signed())
+            .custom_flags(NONBLOCK | NOFOLLOW)
             .open(&path)
             .map_err(|e| cannot(&e))?;
         let meta = file.metadata().map_err(|e| cannot(&e))?;
@@ -550,7 +548,7 @@ fn guarded(what: &str, meta: &Metadata) -> Result<(), String> {
     if meta.uid() != crate::protocol::own_uid() {
         return Err(format!("{what} belongs to another user; a plugin runs as you"));
     }
-    let shared_group = meta.mode() & 0o020 != 0 && meta.gid() != getgid().as_raw();
+    let shared_group = meta.mode() & 0o020 != 0 && meta.gid() != gid();
     if meta.mode() & 0o002 != 0 || shared_group {
         return Err(format!("other users can write to {what}; a plugin runs as you"));
     }

@@ -180,6 +180,7 @@ mod forwarding {
     }
 }
 
+#[cfg(unix)]
 mod outcomes {
     use std::os::unix::process::ExitStatusExt;
 

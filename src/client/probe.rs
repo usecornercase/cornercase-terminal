@@ -1,16 +1,15 @@
 use std::hash::{BuildHasher, RandomState};
 use std::io::{Read, Write, stdin, stdout};
-use std::os::fd::AsFd;
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use rustix::event::{PollFd, PollFlags, Timespec, poll};
-
+use self::imp::{own_tty, read, readable};
 use super::{Host, write_out};
 use crate::graphics::detect::{self, Facts, Outer};
 use crate::graphics::{self, Support};
 use crate::host::theme::{HostTheme, ThemeProbe};
+use crate::os::console::AsFd;
 use crate::{host::pointer, process};
 
 fn truecolor() -> bool {
@@ -71,7 +70,7 @@ fn listen(input: &impl AsFd, timeout: Duration) -> ThemeProbe {
         if !readable(input, deadline.saturating_duration_since(Instant::now())) {
             break;
         }
-        match rustix::io::read(input, &mut buf) {
+        match read(input, &mut buf) {
             Ok(n @ 1..) => probe.feed(&buf[..n]),
             _ => break,
         }
@@ -87,20 +86,10 @@ fn drain(input: &impl AsFd) {
     let mut buf = [0u8; 4096];
     loop {
         let wait = DRAIN_QUIET.min(limit.saturating_duration_since(Instant::now()));
-        if wait.is_zero() || !readable(input, wait) || !matches!(rustix::io::read(input, &mut buf), Ok(1..)) {
+        if wait.is_zero() || !readable(input, wait) || !matches!(read(input, &mut buf), Ok(1..)) {
             return;
         }
     }
-}
-
-fn readable(input: &impl AsFd, wait: Duration) -> bool {
-    let Ok(wait) = Timespec::try_from(wait) else { return false };
-    let mut fds = [PollFd::new(input, PollFlags::IN)];
-    matches!(poll(&mut fds, Some(&wait)), Ok(1..))
-}
-
-fn own_tty() -> Option<String> {
-    rustix::termios::ttyname(stdin(), Vec::new()).ok().map(|name| name.to_string_lossy().into_owned())
 }
 
 pub(super) fn window_cell() -> Option<graphics::CellSize> {
@@ -157,6 +146,48 @@ const TMUX_SETTLE: Duration = Duration::from_millis(150);
 const OUTER_WAIT: Duration = Duration::from_millis(300);
 const DRAIN_QUIET: Duration = Duration::from_millis(200);
 const DRAIN_LIMIT: Duration = Duration::from_secs(1);
+
+#[cfg(unix)]
+mod imp {
+    use std::io::stdin;
+    use std::time::Duration;
+
+    use rustix::event::{PollFd, PollFlags, Timespec, poll};
+
+    use crate::os::console::AsFd;
+
+    pub(super) use rustix::io::read;
+
+    pub(super) fn readable(input: &impl AsFd, wait: Duration) -> bool {
+        let Ok(wait) = Timespec::try_from(wait) else { return false };
+        let mut fds = [PollFd::new(input, PollFlags::IN)];
+        matches!(poll(&mut fds, Some(&wait)), Ok(1..))
+    }
+
+    pub(super) fn own_tty() -> Option<String> {
+        rustix::termios::ttyname(stdin(), Vec::new()).ok().map(|name| name.to_string_lossy().into_owned())
+    }
+}
+
+#[cfg(not(unix))]
+mod imp {
+    use std::io;
+    use std::time::Duration;
+
+    use crate::os::console::AsFd;
+
+    pub(super) fn read(_input: &impl AsFd, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    pub(super) fn readable(_input: &impl AsFd, _wait: Duration) -> bool {
+        false
+    }
+
+    pub(super) fn own_tty() -> Option<String> {
+        None
+    }
+}
 
 #[cfg(test)]
 mod tests;

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
+use crate::os::fs::uid;
 use crate::text::hex;
 
 pub const SOCKET_ENV: &str = "CORNERCASE_SOCKET";
@@ -75,12 +76,7 @@ pub(crate) fn earlier_sockets() -> Vec<PathBuf> {
     if custom_socket().is_some() || this_tree().is_some() {
         return Vec::new();
     }
-    earlier_sockets_from(
-        &process_var,
-        rustix::process::getuid().as_raw(),
-        &std::env::temp_dir(),
-        cfg!(target_os = "linux"),
-    )
+    earlier_sockets_from(&process_var, uid(), &std::env::temp_dir(), cfg!(target_os = "linux"))
 }
 
 fn earlier_sockets_from(var: Var, uid: u32, temp: &Path, linux: bool) -> Vec<PathBuf> {

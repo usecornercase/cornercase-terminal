@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::os::unix::fs::symlink;
 
 use super::*;
@@ -283,7 +285,7 @@ mod programs {
         let other = String::from_utf8_lossy(&groups.stdout)
             .split_whitespace()
             .filter_map(|group| group.parse::<u32>().ok())
-            .find(|&group| group != getgid().as_raw());
+            .find(|&group| group != gid());
         let Some(other) = other else { return };
         std::os::unix::fs::chown(&path, None, Some(other)).expect("chown to one of the user's groups");
         std::fs::set_permissions(&path, Permissions::from_mode(0o775)).expect("chmod");

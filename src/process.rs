@@ -1,18 +1,16 @@
 use std::cell::Cell;
 use std::io::{self, Read};
-use std::os::unix::net::UnixStream;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use rustix::io::Errno;
-use rustix::process::{Pid, Signal, kill_process_group, test_kill_process};
-
+use crate::os::process::{CommandExt, Pid, Signal, kill_process_group};
+use crate::os::socket::UnixStream;
 use crate::text;
 
+pub(crate) use crate::os::process::alive;
 pub(crate) use imp::{
     all, args, children, cpu_time, cwd, env, footprint, name, open_files, parent, peer_uid, start_stamp, started,
 };
@@ -101,10 +99,6 @@ pub(crate) fn wait_until(child: &mut Child, deadline: Instant) -> io::Result<Opt
         }
         thread::sleep(POLL);
     }
-}
-
-pub(crate) fn alive(pid: i32) -> bool {
-    Pid::from_raw(pid).is_some_and(|pid| !matches!(test_kill_process(pid), Err(Errno::SRCH)))
 }
 
 pub(crate) fn running(pid: i32, started: Option<u64>) -> bool {

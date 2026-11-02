@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::io::Write as _;
 
 use flate2::Compression;

@@ -1,9 +1,9 @@
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 use crate::git::worktree::{check, git};
 use crate::log;
+use crate::os::fs::MetadataExt;
 
 use super::Kind;
 use super::discover::gitdir_of;

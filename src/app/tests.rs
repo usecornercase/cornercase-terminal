@@ -523,6 +523,7 @@ fn branch_exists(repo: &Path, branch: &str) -> bool {
 }
 
 mod account_pills;
+#[cfg(unix)]
 mod account_restart;
 mod accounts;
 mod accounts_page;

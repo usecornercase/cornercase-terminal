@@ -3,6 +3,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::agents::Known;
+use crate::os::fs::symlink;
 
 fn listed(links: &[&str], name: &str) -> bool {
     links.iter().any(|link| match link.strip_suffix('*') {
@@ -37,7 +38,7 @@ pub(crate) fn ensure(kind: Known, default: &Path, account: &Path) -> io::Result<
         match fs::symlink_metadata(&link) {
             Ok(_) => {}
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
-                std::os::unix::fs::symlink(from.join(&name), &link)?;
+                symlink(from.join(&name), &link)?;
                 made += 1;
             }
             Err(e) => return Err(e),

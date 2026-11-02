@@ -23,6 +23,7 @@ mod kill_server {
     }
 }
 
+#[cfg(unix)]
 mod a_tied_wait {
     use std::io::{self, Write};
     use std::os::fd::{AsFd, OwnedFd};

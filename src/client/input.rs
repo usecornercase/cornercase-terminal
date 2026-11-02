@@ -1,16 +1,16 @@
 use std::fs::OpenOptions;
 use std::io::{self, Write};
-use std::os::fd::AsFd;
-use std::os::unix::fs::OpenOptionsExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use crossterm::event::Event;
-use rustix::event::{PollFd, PollFlags, Timespec};
 
 use crate::host::notify;
+use crate::os::fs::OpenOptionsExt;
 use crate::protocol::ClientMessage;
 use crate::{log, panics, paths};
+
+pub(super) use imp::readable;
 
 mod parse;
 
@@ -260,17 +260,6 @@ fn reply(bytes: &[u8]) -> Option<bool> {
     None
 }
 
-pub(super) fn readable(input: &impl AsFd, wait: Duration) -> io::Result<bool> {
-    let wait = Timespec::try_from(wait).map_err(io::Error::other)?;
-    let mut fds = [PollFd::new(input, PollFlags::IN)];
-    rustix::event::poll(&mut fds, Some(&wait))?;
-    let flags = fds[0].revents();
-    if flags.intersects(PollFlags::HUP | PollFlags::ERR | PollFlags::NVAL) {
-        return Err(io::ErrorKind::UnexpectedEof.into());
-    }
-    Ok(flags.contains(PollFlags::IN))
-}
-
 pub(super) fn run(
     stop: &AtomicBool,
     probe_timed_out: bool,
@@ -318,17 +307,56 @@ pub(super) fn run(
 
 fn ended(error: &io::Error) -> bool {
     matches!(error.kind(), io::ErrorKind::UnexpectedEof | io::ErrorKind::BrokenPipe | io::ErrorKind::NotConnected)
-        || error.raw_os_error().is_some_and(|code| {
-            code == rustix::io::Errno::IO.raw_os_error()
-                || code == rustix::io::Errno::BADF.raw_os_error()
-                || code == rustix::io::Errno::NODEV.raw_os_error()
-        })
+        || error.raw_os_error().is_some_and(imp::gone)
 }
 
 pub(super) fn report(message: &str) {
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).mode(log::PRIVATE).open(paths::log()) {
         let line = log::line(SystemTime::now(), log::Level::Warn, "client", message, &[]);
         let _ = file.write_all(line.as_bytes());
+    }
+}
+
+#[cfg(unix)]
+mod imp {
+    use std::io;
+    use std::time::Duration;
+
+    use rustix::event::{PollFd, PollFlags, Timespec};
+
+    use crate::os::console::AsFd;
+
+    pub(in crate::client) fn readable(input: &impl AsFd, wait: Duration) -> io::Result<bool> {
+        let wait = Timespec::try_from(wait).map_err(io::Error::other)?;
+        let mut fds = [PollFd::new(input, PollFlags::IN)];
+        rustix::event::poll(&mut fds, Some(&wait))?;
+        let flags = fds[0].revents();
+        if flags.intersects(PollFlags::HUP | PollFlags::ERR | PollFlags::NVAL) {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+        Ok(flags.contains(PollFlags::IN))
+    }
+
+    pub(super) fn gone(code: i32) -> bool {
+        code == rustix::io::Errno::IO.raw_os_error()
+            || code == rustix::io::Errno::BADF.raw_os_error()
+            || code == rustix::io::Errno::NODEV.raw_os_error()
+    }
+}
+
+#[cfg(not(unix))]
+mod imp {
+    use std::io;
+    use std::time::Duration;
+
+    use crate::os::console::AsFd;
+
+    pub(in crate::client) fn readable(_input: &impl AsFd, _wait: Duration) -> io::Result<bool> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    pub(super) fn gone(_code: i32) -> bool {
+        false
     }
 }
 

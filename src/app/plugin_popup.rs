@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
-use rustix::process::{Pid, Signal, kill_process_group};
 
 use super::App;
 use super::overlay::Overlay;
@@ -11,6 +10,7 @@ use super::toast::NOT_READING;
 use crate::control::plugins::ActionRan;
 use crate::control::{Ids, PopupInfo};
 use crate::log;
+use crate::os::process::{Pid, Signal, kill_process_group};
 use crate::plugins::manifest::Action;
 use crate::plugins::{Context, Places, Plugin, run};
 use crate::term::emulator::Snapshot;

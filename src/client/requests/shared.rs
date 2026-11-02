@@ -1,11 +1,11 @@
 use std::cell::{Cell, RefCell};
-use std::os::fd::{AsFd, OwnedFd};
 
 use serde_json::Value;
 
 use super::{ask_with, control, offered, used_remote};
 use crate::client::Link;
 use crate::error::{Error, Result};
+use crate::os::console::{AsFd, OwnedFd};
 
 thread_local! {
     static ACTIVE: Cell<bool> = const { Cell::new(false) };
@@ -31,6 +31,7 @@ pub(crate) fn unshare() {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 pub(crate) fn share_socket(stream: std::os::unix::net::UnixStream) {
     share(Link::socket(stream).expect("a link"), None);
 }

@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Write as _;
-use std::os::unix::fs::OpenOptionsExt;
 use std::process::Child;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -10,13 +9,12 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use rustix::fs::{FlockOperation, flock};
-use rustix::io::Errno;
-use rustix::process::Signal;
 
 use super::registry::{Entry, Plugin, Registry, Watch};
 use super::run::{Places, private_dir};
 use crate::log;
+use crate::os::fs::{Lock, OpenOptionsExt, locked, try_lock};
+use crate::os::process::Signal;
 use crate::panics;
 use crate::process;
 
@@ -95,7 +93,7 @@ pub(crate) struct Supervisor {
     stop: Option<Sender<()>>,
     thread: Option<JoinHandle<()>>,
     notes: Notes,
-    #[cfg_attr(not(test), expect(dead_code, reason = "tests wait until the supervisor has looked"))]
+    #[cfg_attr(not(all(test, unix)), expect(dead_code, reason = "tests wait until the supervisor has looked"))]
     steps: Arc<AtomicUsize>,
 }
 
@@ -114,6 +112,7 @@ impl Supervisor {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     fn steps(&self) -> usize {
         self.steps.load(Ordering::SeqCst)
     }
@@ -334,25 +333,17 @@ fn lock_file(places: &Places, plugin: &str) -> std::io::Result<File> {
     fs::OpenOptions::new().create(true).write(true).truncate(false).mode(0o600).open(dir.join(LOCK_FILE))
 }
 
-fn locked(file: File, operation: FlockOperation) -> std::io::Result<Option<File>> {
-    match flock(&file, operation) {
-        Ok(()) => Ok(Some(file)),
-        Err(Errno::WOULDBLOCK) => Ok(None),
-        Err(e) => Err(e.into()),
-    }
-}
-
 pub(crate) fn try_shared(places: &Places, plugin: &str) -> std::io::Result<Option<File>> {
-    locked(lock_file(places, plugin)?, FlockOperation::NonBlockingLockShared)
+    locked(lock_file(places, plugin)?, Lock::Shared)
 }
 
 pub(crate) fn exclude_spawns(places: &Places, plugin: &str, until: Instant) -> Result<(), String> {
     let file = lock_file(places, plugin).map_err(|e| format!("cannot open the lock of `{plugin}`: {e}"))?;
     loop {
-        match flock(&file, FlockOperation::NonBlockingLockExclusive) {
-            Ok(()) => return Ok(()),
-            Err(Errno::WOULDBLOCK) if Instant::now() < until => thread::sleep(Duration::from_millis(20)),
-            Err(Errno::WOULDBLOCK) => return Err(format!("a supervisor is still starting `{plugin}`")),
+        match try_lock(&file, Lock::Exclusive) {
+            Ok(true) => return Ok(()),
+            Ok(false) if Instant::now() < until => thread::sleep(Duration::from_millis(20)),
+            Ok(false) => return Err(format!("a supervisor is still starting `{plugin}`")),
             Err(e) => return Err(format!("cannot lock `{plugin}`: {e}")),
         }
     }

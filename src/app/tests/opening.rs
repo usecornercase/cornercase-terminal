@@ -164,6 +164,7 @@ mod files {
         assert_eq!(app.take_opens(), [order(Opener::Files, expected.to_str().expect("UTF-8"), None)]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_right_click_on_a_file_row_ends_with_the_default_app_and_has_none_for_a_program() {
         let repo = repo();

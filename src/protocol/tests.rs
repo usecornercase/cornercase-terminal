@@ -308,6 +308,7 @@ mod compatibility {
     }
 }
 
+#[cfg(unix)]
 mod socket_dir {
     use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::UnixStream;

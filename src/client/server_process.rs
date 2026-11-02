@@ -1,13 +1,13 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::error::{Error, Result};
+use crate::os::fs::{OpenOptionsExt, set_file_mode};
+use crate::os::socket::{UnixListener, UnixStream};
 use crate::process::reap;
 use crate::protocol::{self, ClientMessage, Folder, ServerMessage};
 use crate::{control, log, paths};
@@ -122,7 +122,7 @@ fn start_server(log: &Path) -> io::Result<Child> {
         fs::create_dir_all(dir)?;
     }
     let log = OpenOptions::new().create(true).append(true).mode(log::PRIVATE).open(log)?;
-    log.set_permissions(fs::Permissions::from_mode(log::PRIVATE))?;
+    set_file_mode(&log, log::PRIVATE)?;
     Command::new(std::env::current_exe()?)
         .arg("server")
         .env_remove(protocol::RESTARTED_ENV)

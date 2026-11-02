@@ -1,12 +1,11 @@
-use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
 use std::iter::once;
-use std::os::fd::AsFd as _;
 
 use clap::Parser as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use self::imp::isolate;
 use super::args::requests::RequestsArgs;
 use super::args::{Cli, Command};
 use super::line::{self, Printed};
@@ -15,6 +14,7 @@ use super::reach::{self, Kind};
 use super::{quietly, usage};
 use crate::client;
 use crate::error::{Error, Result};
+use crate::os::console::AsFd as _;
 
 const ONLY_STANDARD_INPUT: &str =
     "--follow reads its commands from standard input, one per line: give - as the only argument";
@@ -61,14 +61,6 @@ pub(super) fn run(args: &RequestsArgs) -> Result<()> {
     let served = serve(&lines::read(input), &mut answers, ran);
     client::unshare();
     served
-}
-
-fn isolate() -> Result<(File, File)> {
-    let answers = rustix::io::dup(rustix::stdio::stdout()).map_err(io::Error::from)?;
-    let input = rustix::io::dup(rustix::stdio::stdin()).map_err(io::Error::from)?;
-    rustix::stdio::dup2_stdin(File::open("/dev/null")?).map_err(io::Error::from)?;
-    rustix::stdio::dup2_stdout(rustix::stdio::stderr()).map_err(io::Error::from)?;
-    Ok((answers.into(), input.into()))
 }
 
 fn serve(lines: &Lines, out: &mut impl Write, mut run: impl FnMut(&[u8]) -> Option<Ran>) -> Result<()> {
@@ -177,6 +169,34 @@ fn outcome(result: Result<bool>, printed: Printed, name: &str) -> Answer {
 
 fn own_connection(name: &str) -> String {
     format!("`{name}` keeps a connection of its own (a stream): run `cornercase {name}` as a command of its own")
+}
+
+#[cfg(unix)]
+mod imp {
+    use std::fs::File;
+    use std::io;
+
+    use crate::error::Result;
+
+    pub(super) fn isolate() -> Result<(File, File)> {
+        let answers = rustix::io::dup(rustix::stdio::stdout()).map_err(io::Error::from)?;
+        let input = rustix::io::dup(rustix::stdio::stdin()).map_err(io::Error::from)?;
+        rustix::stdio::dup2_stdin(File::open("/dev/null")?).map_err(io::Error::from)?;
+        rustix::stdio::dup2_stdout(rustix::stdio::stderr()).map_err(io::Error::from)?;
+        Ok((answers.into(), input.into()))
+    }
+}
+
+#[cfg(not(unix))]
+mod imp {
+    use std::fs::File;
+    use std::io;
+
+    use crate::error::Result;
+
+    pub(super) fn isolate() -> Result<(File, File)> {
+        Err(io::Error::from(io::ErrorKind::Unsupported).into())
+    }
 }
 
 #[cfg(test)]

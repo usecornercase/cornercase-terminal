@@ -159,6 +159,7 @@ pub(crate) use event::AppEvent;
 pub(crate) use events::Streamed;
 pub(crate) use images::{Placed, Sight};
 #[cfg(test)]
+#[cfg(unix)]
 pub(crate) use surfaces::FRAME_EVERY;
 pub(crate) use surfaces::Surfaced;
 
@@ -666,6 +667,7 @@ impl App {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(crate) fn queue_sound(&mut self, cue: Cue) {
         self.outbox.play(cue);
     }

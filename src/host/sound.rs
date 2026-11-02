@@ -1,7 +1,6 @@
 use std::ffi::OsStr;
 use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{self, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -11,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::expand_home;
 use crate::log;
+use crate::os::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt, set_file_mode};
 
 const RATE: u16 = 22_050;
 const VOLUME: f32 = 0.3;
@@ -167,7 +167,7 @@ fn builtin(dir: &Path, kind: Kind) -> io::Result<PathBuf> {
     }
     let tmp = folder.join(format!("{}.wav.{}.tmp", kind.id(), std::process::id()));
     let mut file = OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
-    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    set_file_mode(&file, 0o600)?;
     file.write_all(&bytes)?;
     std::fs::rename(tmp, &path)?;
     Ok(path)

@@ -1,7 +1,6 @@
-use rustix::process::{Pid, Signal, kill_process};
-
 use super::Port;
 use super::listen::listeners;
+use crate::os::process::{Pid, Signal, kill_process};
 use crate::process::{self, escalation};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

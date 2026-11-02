@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
+use self::imp::Hidden;
 use super::args::config::{ConfigAction, ConfigArgs};
 use super::{line, print_json, print_out};
 use crate::client::{answer, ask, use_build_folders, use_settings_search};
@@ -152,28 +153,6 @@ fn read_secret(key: &str) -> Result<String> {
     Ok(token)
 }
 
-struct Hidden(Option<rustix::termios::Termios>);
-
-impl Hidden {
-    fn on() -> Self {
-        use rustix::termios::{LocalModes, OptionalActions, tcgetattr, tcsetattr};
-        let stdin = rustix::stdio::stdin();
-        let Ok(before) = tcgetattr(stdin) else { return Self(None) };
-        let mut quiet = before.clone();
-        quiet.local_modes.remove(LocalModes::ECHO);
-        let _ = tcsetattr(stdin, OptionalActions::Now, &quiet);
-        Self(Some(before))
-    }
-}
-
-impl Drop for Hidden {
-    fn drop(&mut self) {
-        if let Some(before) = &self.0 {
-            let _ = rustix::termios::tcsetattr(rustix::stdio::stdin(), rustix::termios::OptionalActions::Now, before);
-        }
-    }
-}
-
 fn shown(value: &Value) -> String {
     match value {
         Value::String(text) if text.is_empty() => "-".into(),
@@ -272,6 +251,47 @@ fn write_projects(out: &mut String, described: &Described) {
         let (setup, teardown) = (line(&p.setup), line(&p.teardown));
         let _ =
             writeln!(out, "  {}  setup: {setup}  teardown: {teardown}  builds: {}", p.folder.display(), line(&builds));
+    }
+}
+
+#[cfg(unix)]
+mod imp {
+    pub(super) struct Hidden(Option<rustix::termios::Termios>);
+
+    impl Hidden {
+        pub(super) fn on() -> Self {
+            use rustix::termios::{LocalModes, OptionalActions, tcgetattr, tcsetattr};
+            let stdin = rustix::stdio::stdin();
+            let Ok(before) = tcgetattr(stdin) else { return Self(None) };
+            let mut quiet = before.clone();
+            quiet.local_modes.remove(LocalModes::ECHO);
+            let _ = tcsetattr(stdin, OptionalActions::Now, &quiet);
+            Self(Some(before))
+        }
+    }
+
+    impl Drop for Hidden {
+        fn drop(&mut self) {
+            if let Some(before) = &self.0 {
+                let _ =
+                    rustix::termios::tcsetattr(rustix::stdio::stdin(), rustix::termios::OptionalActions::Now, before);
+            }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+mod imp {
+    pub(super) struct Hidden;
+
+    impl Hidden {
+        pub(super) fn on() -> Self {
+            Self
+        }
+    }
+
+    impl Drop for Hidden {
+        fn drop(&mut self) {}
     }
 }
 

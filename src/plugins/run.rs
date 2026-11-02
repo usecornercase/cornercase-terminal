@@ -1,18 +1,16 @@
 use std::ffi::OsString;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write as _};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant, SystemTime};
-
-use rustix::process::{Pid, Signal, kill_process_group};
 
 use super::registry::Plugin;
 use crate::control;
 use crate::issues::Source;
 use crate::log::{self, Level};
+use crate::os::fs::{DirBuilderExt, OpenOptionsExt, set_file_mode, set_mode};
+use crate::os::process::{CommandExt, Pid, Signal, kill_process_group};
 use crate::paths;
 
 pub(crate) const BIN_ENV: &str = "CORNERCASE_BIN";
@@ -69,7 +67,7 @@ impl Places {
             std::fs::rename(&path, log::rotated(&path))?;
         }
         let file = OpenOptions::new().create(true).append(true).mode(0o600).open(path)?;
-        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        set_file_mode(&file, 0o600)?;
         Ok(file)
     }
 
@@ -133,7 +131,7 @@ pub(crate) fn removed() -> impl Iterator<Item = &'static str> {
 
 pub(crate) fn private_dir(path: &Path) -> io::Result<()> {
     std::fs::DirBuilder::new().recursive(true).mode(0o700).create(path)?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+    set_mode(path, 0o700)
 }
 
 pub(crate) fn signal(child: &Child, signal: Signal) {

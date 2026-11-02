@@ -1,4 +1,6 @@
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 pub(crate) use imp::listeners;
 

@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::io::Write as _;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;

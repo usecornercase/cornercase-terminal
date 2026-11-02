@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};

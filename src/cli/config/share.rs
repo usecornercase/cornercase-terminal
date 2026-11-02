@@ -1,7 +1,6 @@
 use std::fmt::Write as _;
-use std::fs::{OpenOptions, Permissions};
+use std::fs::OpenOptions;
 use std::io::{IsTerminal as _, Write as _};
-use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::Path;
 
 use serde_json::Value;
@@ -14,6 +13,7 @@ use crate::control::config::{
     ConfigExport, ConfigImport, Described, NoteKind, SetupChange, SetupExported, SetupNote, SetupPreview,
 };
 use crate::error::{Error, Result};
+use crate::os::fs::{OpenOptionsExt as _, set_file_mode};
 use crate::settings::share::{self, MAX_BYTES};
 
 pub(super) struct Import {
@@ -52,7 +52,7 @@ fn written(file: &Path, text: &str) -> Result<()> {
         return Err(Error::WrongUsage(format!("`{}` is a folder: give the file to write", file.display())));
     }
     let only_mine = |mut out: std::fs::File| {
-        out.set_permissions(Permissions::from_mode(0o600))?;
+        set_file_mode(&out, 0o600)?;
         out.set_len(0)?;
         out.write_all(text.as_bytes())
     };

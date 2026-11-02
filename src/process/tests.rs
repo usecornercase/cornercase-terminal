@@ -88,6 +88,7 @@ mod start_stamp {
     }
 }
 
+#[cfg(unix)]
 mod footprint {
     use std::ptr::null_mut;
 

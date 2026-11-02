@@ -1,6 +1,5 @@
 use std::fs::{self, DirBuilder, OpenOptions};
 use std::io::{ErrorKind, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -11,6 +10,7 @@ use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use super::disk;
 use crate::graphics::decode;
 use crate::log;
+use crate::os::fs::{DirBuilderExt, OpenOptionsExt};
 use crate::time::Stamp;
 
 pub(crate) const MAX_BYTES: u64 = disk::MAX_IMAGE_BYTES;

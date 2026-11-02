@@ -1,8 +1,6 @@
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::net::IpAddr;
-use std::os::unix::fs::PermissionsExt;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -11,6 +9,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use super::sound::{Os, local_machine, on_path};
+use crate::os::fs::PermissionsExt;
+use crate::os::process::CommandExt;
 use crate::process;
 
 const REVEAL_WITHIN: Duration = Duration::from_secs(5);
