@@ -2,10 +2,11 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::thread;
 
-use super::link::{self, Asked, Connect, Control, Heard, Line};
+use super::link::{self, Asked, Connect, Control, Envelope, Heard, Line};
 use crate::control::Command;
 use crate::error::Error;
 use crate::panics;
+use crate::remote::Killer;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Followed {
@@ -29,6 +30,7 @@ pub(crate) struct Wanted {
 pub(crate) struct Follow {
     id: u64,
     control: Arc<Control>,
+    killer: Killer,
 }
 
 impl Follow {
@@ -36,11 +38,18 @@ impl Follow {
     where
         E: From<Followed> + Send + 'static,
     {
-        let control = Arc::new(Control::default());
-        let running =
-            Running { id, connector, name: name.into(), wanted, tx: tx.clone(), control: Arc::clone(&control) };
+        let (control, killer) = (Arc::new(Control::default()), Killer::default());
+        let running = Running {
+            id,
+            connector,
+            name: name.into(),
+            wanted,
+            tx: tx.clone(),
+            control: Arc::clone(&control),
+            killer: killer.clone(),
+        };
         thread::spawn(move || running.run());
-        Self { id, control }
+        Self { id, control, killer }
     }
 
     pub(crate) fn id(&self) -> u64 {
@@ -51,6 +60,7 @@ impl Follow {
 impl Drop for Follow {
     fn drop(&mut self) {
         self.control.stop();
+        self.killer.kill();
     }
 }
 
@@ -61,6 +71,7 @@ struct Running<E> {
     wanted: Wanted,
     tx: Sender<E>,
     control: Arc<Control>,
+    killer: Killer,
 }
 
 impl<E: From<Followed>> Running<E> {
@@ -75,7 +86,7 @@ impl<E: From<Followed>> Running<E> {
     }
 
     fn follow(&self) {
-        let mut line = match self.connector.connect(self.control.killer()) {
+        let mut line = match self.connector.connect(&self.killer) {
             Ok(line) => line,
             Err(error) => return self.tell(Event::Ended(link::failure(&error, &self.name))),
         };
@@ -87,8 +98,8 @@ impl<E: From<Followed>> Running<E> {
     }
 
     fn hear(&self, line: &mut Line) {
-        let command = self.wanted.command.clone();
-        let mut heard = link::send_once(line, command, Some(self.wanted.boot.clone()));
+        let envelope = Envelope { view: None, boot: Some(self.wanted.boot.clone()) };
+        let mut heard = link::send_once(line, &envelope, self.wanted.command.clone());
         loop {
             match heard {
                 Heard::Answer(text) => self.tell(Event::Line(text)),

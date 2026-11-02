@@ -96,7 +96,8 @@ impl App {
                         | Drag::Selection { .. }
                         | Drag::Divider { .. }
                         | Drag::Footer(_)
-                        | Drag::Text(_),
+                        | Drag::Text(_)
+                        | Drag::Remote(_),
                     ) => false,
                     Some(Drag::Border(_) | Drag::Link(_) | Drag::Lines { .. }) | None => true,
                 }

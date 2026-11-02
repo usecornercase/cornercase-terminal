@@ -38,6 +38,7 @@ impl App {
             workspace: shown.workspace,
             tab: shown.tab,
             path: shown.path,
+            stream: self.stream_state(),
         })
     }
 }

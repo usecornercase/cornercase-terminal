@@ -5,11 +5,11 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 
-use super::link::{self, Connect, Ends, Heard};
+use super::link::{self, Connect, Ends, Envelope, Heard};
 use crate::control::Command;
 use crate::remote::Killer;
 
-const LATE: &str = "it did not answer in time";
+pub(super) const LATE: &str = "it did not answer in time";
 
 #[derive(Default)]
 struct Watch {
@@ -79,7 +79,7 @@ fn asked(
 ) -> Result<String, String> {
     let mut line = connect.connect(&deadline.killer).map_err(|error| link::failure(&error, name))?;
     deadline.hold(&line.ends);
-    let heard = link::send_once(&mut line, command, boot);
+    let heard = link::send_once(&mut line, &Envelope { view: None, boot }, command);
     deadline.release();
     match heard {
         Heard::Answer(text) => Ok(text),

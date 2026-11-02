@@ -7,6 +7,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::interaction::Drag;
 use super::layout::{List, Side};
+use super::machines::RemoteDrag;
 use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
@@ -20,11 +21,25 @@ pub(super) const WHEEL_ROWS: isize = 3;
 impl App {
     fn stop_dragging(&mut self) -> bool {
         match &self.screen.drag {
-            Some(Drag::Border(_) | Drag::Divider { .. } | Drag::Row(_) | Drag::Pane(_) | Drag::Footer(_)) => {
+            Some(
+                Drag::Border(_)
+                | Drag::Divider { .. }
+                | Drag::Row(_)
+                | Drag::Pane(_)
+                | Drag::Footer(_)
+                | Drag::Remote(RemoteDrag::Divider { .. }),
+            ) => {
                 self.screen.drag = None;
                 true
             }
-            Some(Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. } | Drag::Text(_)) | None => false,
+            Some(
+                Drag::Selection { .. }
+                | Drag::Link(_)
+                | Drag::Lines { .. }
+                | Drag::Text(_)
+                | Drag::Remote(RemoteDrag::Selection { .. } | RemoteDrag::Mouse { .. }),
+            )
+            | None => false,
         }
     }
 
@@ -71,7 +86,7 @@ impl App {
     }
 
     pub(super) fn forward_key(&mut self, key: KeyEvent) {
-        if self.shown_remote().is_some() || self.holds_input() {
+        if self.machine_key(key) || self.holds_input() {
             return;
         }
         let Some(term) = self.term_mut() else { return };
@@ -275,7 +290,7 @@ impl App {
         if areas.tab_bar.contains(pos) {
             return self.tab_bar_mouse(areas, pos, ev.kind, area);
         }
-        if self.shown_remote().is_some() {
+        if self.machine_mouse(ev, pos, areas.pane) {
             return Ok(());
         }
         if self.tab().is_none() {
@@ -333,6 +348,7 @@ impl App {
             Some(Drag::Footer(pane)) => self.drag_footer(pane, ev, areas.pane),
             Some(Drag::Row(drag)) => self.drag_row(drag, ev, areas, area),
             Some(Drag::Text(field)) => self.drag_field(field, ev, area),
+            Some(Drag::Remote(drag)) => self.drag_remote(drag, ev, areas.pane),
             Some(Drag::Link(_)) | None => return false,
         }
         true
@@ -434,7 +450,7 @@ impl App {
             self.overlay_paste(text, area);
             return;
         }
-        if self.typing_paste(text, area) || self.shown_remote().is_some() || self.holds_input() {
+        if self.typing_paste(text, area) || self.machine_paste(text) || self.holds_input() {
             return;
         }
         if let Some(term) = self.term_mut() {

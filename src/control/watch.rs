@@ -28,6 +28,21 @@ pub(crate) enum Layout {
     Split { dir: Dir, ratio: f64, first: Box<Layout>, second: Box<Layout> },
 }
 
+impl From<&Layout> for Node<u64> {
+    fn from(layout: &Layout) -> Self {
+        match layout {
+            Layout::Leaf(id) => Node::Leaf(*id),
+            Layout::Split { dir, ratio, first, second } => Node::Split {
+                dir: *dir,
+                #[expect(clippy::cast_possible_truncation, reason = "a ratio between 0 and 1")]
+                ratio: *ratio as f32,
+                first: Box::new(Node::from(first.as_ref())),
+                second: Box::new(Node::from(second.as_ref())),
+            },
+        }
+    }
+}
+
 impl From<&Node<u64>> for Layout {
     fn from(node: &Node<u64>) -> Self {
         match node {

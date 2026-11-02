@@ -1,5 +1,6 @@
 use crossterm::event::Event;
 
+use super::machines::MachineEvent;
 use super::{
     ChangesEvent, FilesEvent, IssueEvent, MessengerEvent, PluginEvent, QueueEvent, SearchEvent, UpdateEvent,
     WorktreeEvent,
@@ -9,6 +10,7 @@ use crate::agents::launch::{self};
 use crate::agents::usage;
 use crate::error::Result;
 use crate::graphics::encode;
+use crate::machines::stream::StreamEvent;
 use crate::term;
 use crate::web::tailscale;
 use crate::web::{self};
@@ -41,11 +43,15 @@ pub(crate) enum AppEvent {
     Plugin(PluginEvent),
     Login(crate::agents::Known, String, crate::accounts::login::Login),
     Restarted(Box<super::account_restart::Restarted>),
-    Machine(super::machines::MachineEvent),
+    Machine(MachineEvent),
     Cloned { request: u64, result: std::result::Result<(), crate::git::clone::Failure> },
 }
 
 impl AppEvent {
+    pub(crate) fn remote_frame(&self) -> bool {
+        matches!(self, Self::Machine(MachineEvent::Stream(report)) if matches!(report.event, StreamEvent::Frame(_)))
+    }
+
     pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Input(_) => "input",

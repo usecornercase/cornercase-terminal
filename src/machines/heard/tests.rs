@@ -6,6 +6,7 @@ use serde_json::json;
 
 use super::*;
 use crate::control::changes::{Content, WorkspaceChanges};
+use crate::control::contract::Structured;
 use crate::control::files::{FoundLine, ImageInfo, Line};
 
 const HOSTILE: &str = "a\u{1b}[2Jb\u{1b}]52;c;cm0gLXJmIH4K\u{7}c\u{202e}d\u{200b}e\rf";

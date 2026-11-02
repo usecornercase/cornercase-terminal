@@ -10,6 +10,7 @@ use parking_lot::{Condvar, Mutex};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+use crate::control::contract::{Code, Refusal, Structured};
 use crate::control::start_server::Started;
 use crate::control::{self, Command, Request, Response, Snapshot, StartServer, Watch};
 use crate::error::{Error, Result};
@@ -134,7 +135,7 @@ pub(crate) trait Ends: Send + Sync {
     fn why(&self) -> Option<String>;
 }
 
-pub(crate) trait Connect: Send + 'static {
+pub(crate) trait Connect: Send + Sync + 'static {
     fn connect(&self, killer: &Killer) -> Result<Line>;
 }
 
@@ -222,6 +223,12 @@ impl Servers {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Envelope {
+    pub(crate) view: Option<u64>,
+    pub(crate) boot: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Asked {
     Stop,
@@ -249,7 +256,7 @@ impl Control {
         self.killer.kill();
     }
 
-    fn poke(&self) {
+    pub(super) fn poke(&self) {
         self.ask(|wants| wants.poke = true);
     }
 
@@ -260,10 +267,6 @@ impl Control {
             ends.cut();
         }
         self.wake.notify_all();
-    }
-
-    pub(super) fn killer(&self) -> &Killer {
-        &self.killer
     }
 
     pub(super) fn stopped(&self) -> bool {
@@ -279,7 +282,7 @@ impl Control {
         asked
     }
 
-    fn drop_line(&self) {
+    pub(super) fn drop_line(&self) {
         if let Some(ends) = self.wants.lock().ends.take() {
             ends.cut();
         }
@@ -291,7 +294,7 @@ impl Control {
         Self::asked(&mut wants)
     }
 
-    fn nap(&self, wait: Duration) -> Asked {
+    pub(super) fn nap(&self, wait: Duration) -> Asked {
         let until = Instant::now() + wait;
         let mut wants = self.wants.lock();
         loop {
@@ -314,11 +317,11 @@ impl Control {
     }
 }
 
-trait Clock: Send + 'static {
+pub(super) trait Clock: Send + 'static {
     fn nap(&self, control: &Control, wait: Duration) -> Asked;
 }
 
-struct Wall;
+pub(super) struct Wall;
 
 impl Clock for Wall {
     fn nap(&self, control: &Control, wait: Duration) -> Asked {
@@ -471,7 +474,7 @@ impl<E: From<Report>> Running<E> {
     }
 
     fn watch(&self, line: &mut Line) -> Ended {
-        if let Err(ended) = ask(line, Command::Watch(Watch::default()), None, Ended::Dropped(None)) {
+        if let Err(ended) = ask(line, &Envelope::default(), Command::Watch(Watch::default()), Ended::Dropped(None)) {
             return ended;
         }
         loop {
@@ -519,22 +522,27 @@ pub(super) fn why(line: &Line, said: Option<&str>) -> String {
 }
 
 fn handshake(line: &mut Line) -> std::result::Result<Started, Ended> {
-    ask(line, Command::StartServer(StartServer::default()), None, Ended::Lost(None))?;
+    ask(line, &Envelope::default(), Command::StartServer(StartServer::default()), Ended::Lost(None))?;
     match listen(&mut line.reader) {
         Heard::Answer(text) => answered(&text).map_err(Ended::Refused),
         Heard::Ended(said) => Err(Ended::Lost(said)),
     }
 }
 
-pub(super) fn send_once(line: &mut Line, command: Command, boot: Option<String>) -> Heard {
-    if ask(line, command, boot, Ended::Lost(None)).is_err() {
+pub(super) fn send_once(line: &mut Line, envelope: &Envelope, command: Command) -> Heard {
+    if !send(line, envelope, command) {
         return Heard::Ended(None);
     }
     listen(&mut line.reader)
 }
 
-fn ask(line: &mut Line, command: Command, boot: Option<String>, lost: Ended) -> std::result::Result<(), Ended> {
-    let request = Request { caller: None, server: None, contract: None, boot, view: None, command };
+pub(super) fn send(line: &mut Line, envelope: &Envelope, command: Command) -> bool {
+    ask(line, envelope, command, Ended::Lost(None)).is_ok()
+}
+
+fn ask(line: &mut Line, envelope: &Envelope, command: Command, lost: Ended) -> std::result::Result<(), Ended> {
+    let (boot, view) = (envelope.boot.clone(), envelope.view);
+    let request = Request { caller: None, server: None, contract: None, boot, view, command };
     let text = serde_json::to_string(&request).map_err(|e| Ended::Refused(Down::Unreachable(e.to_string())))?;
     protocol::send(&mut line.writer, &ClientMessage::Request(text)).map_err(|_| lost)
 }
@@ -545,6 +553,20 @@ fn answered<T: DeserializeOwned>(text: &str) -> std::result::Result<T, Down> {
     match serde_json::from_str(text).map_err(unreadable)? {
         Response::Ok(value) => serde_json::from_value(cleaned(value)).map_err(unreadable),
         Response::Error(message) => Err(Down::Unreachable(clean(&message))),
+    }
+}
+
+pub(super) fn replied(text: &str) -> Option<std::result::Result<Value, Refusal>> {
+    if let Ok(answer) = serde_json::from_str::<Structured>(text) {
+        return Some(match answer {
+            Structured::Ok(value) => Ok(value),
+            Structured::Error(refusal) => Err(Refusal::new(refusal.code, clean(&refusal.message))),
+        });
+    }
+    match serde_json::from_str::<Response>(text) {
+        Ok(Response::Ok(value)) => Some(Ok(value)),
+        Ok(Response::Error(message)) => Some(Err(Refusal::new(Code::Failed, clean(&message)))),
+        Err(_) => None,
     }
 }
 

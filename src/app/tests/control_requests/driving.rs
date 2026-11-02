@@ -200,7 +200,7 @@ fn stale_boot_input_is_refused_before_anything_is_typed() {
 fn a_full_pane_answers_busy_and_takes_nothing() {
     let (mut app, rx) = app();
     let id = first(&app);
-    type_line(&mut app, "stty -echo; sleep 30");
+    type_line(&mut app, "stty raw -echo; sleep 30");
     pump_until(&mut app, &rx, "sleep runs", |a| pane(a, id).program(&a.config).as_deref() == Some("sleep"));
     let full = vec![b'x'; crate::term::MAX_QUEUED + 1024 * 1024];
     assert!(app.projects[0].workspaces[0].tabs[0].panes[0].write(&full));

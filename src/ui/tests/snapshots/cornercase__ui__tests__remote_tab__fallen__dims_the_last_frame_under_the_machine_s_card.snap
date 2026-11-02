@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/remote_tab.rs
+expression: render(&fallen()).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │ $ left              │ $ top              "
+"                                                         │                     │                    "
+" Projects                      │ Workspaces              │                     │                    "
+"                               │                         │                     │                    "
+"▌ ~ (1)                        │                         │                     │                    "
+"                               │                         │ ╭─ vps unreachable ─────────────────────╮"
+"  + New                        │                         │ │                                       │"
+"                               │                         │ │ reconnecting in 4 s                   │"
+"                               │                         │ │ claude keeps working there            │"
+"                               │                         │ │ ~/code/web-shop                       │"
+"                               │                         │ │                                       │"
+"                               │                         │ ╰───────────────────────────────────────╯"
+"                               │                         │                     │                    "
+"                               │                         │                     │                    "
+"                               │                         │                     │                    "
+" ───────────────────────────── │                         │                     │                    "
+"  Worktrees                    │                         │                     │                    "
+"  More ▴                 Help  │  Files       TODO       │                     │                    "

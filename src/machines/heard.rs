@@ -6,9 +6,8 @@ use serde_json::Value;
 use super::act::UNREADABLE;
 use super::link;
 use crate::changes::diff::MAX_LINES;
-use crate::control::Response;
 use crate::control::changes::{FileInfo, Gap, GapLineInfo, HunkInfo, LineInfo, Patch, Segment, Summary};
-use crate::control::contract::{Code, Refusal, Structured};
+use crate::control::contract::{Code, Refusal};
 use crate::control::files::{EntryInfo, FolderInfo, Found, FoundFile, Listing, NameInfo, Read};
 use crate::files::disk::MAX_ENTRIES;
 use crate::files::search::{MAX_MATCHES, MAX_NAMES};
@@ -105,17 +104,7 @@ fn typed<T: DeserializeOwned>(text: &str) -> Result<T, Refusal> {
 }
 
 fn answer(text: &str) -> Result<Value, Refusal> {
-    if let Ok(structured) = serde_json::from_str::<Structured>(text) {
-        return match structured {
-            Structured::Ok(value) => Ok(value),
-            Structured::Error(refusal) => Err(Refusal::new(refusal.code, link::clean(&refusal.message))),
-        };
-    }
-    match serde_json::from_str::<Response>(text) {
-        Ok(Response::Ok(value)) => Ok(value),
-        Ok(Response::Error(message)) => Err(Refusal::new(Code::Failed, link::clean(&message))),
-        Err(_) => Err(unreadable()),
-    }
+    link::replied(text).unwrap_or_else(|| Err(unreadable()))
 }
 
 fn unreadable() -> Refusal {

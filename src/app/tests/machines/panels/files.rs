@@ -445,9 +445,13 @@ mod a_fallen_machine {
     fn takes_no_search() {
         let mut panels = fallen();
 
-        type_in_field(&mut panels, panel::field, "abc");
+        let pos = panel::field(panel_area(&panels.rig.app)).as_position();
+        click(&mut panels.rig.app, pos);
+        panels.sync();
+        let refused = toast(&panels.rig.app).map(str::to_owned);
+        type_text(&mut panels.rig.app, "abc");
         panels.sync();
 
-        assert_eq!((panels.streams(), toast(&panels.rig.app)), (1, Some("vps unreachable; nothing was sent")));
+        assert_eq!((panels.streams(), refused.as_deref()), (1, Some("vps unreachable; nothing was sent")));
     }
 }

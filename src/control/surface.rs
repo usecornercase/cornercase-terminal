@@ -279,6 +279,14 @@ pub(crate) enum Colour {
 }
 
 impl Colour {
+    fn color(colour: Option<Self>) -> Color {
+        match colour {
+            None => Color::Reset,
+            Some(Self::Index(index)) => Color::Indexed(index),
+            Some(Self::Rgb([r, g, b])) => Color::Rgb(r, g, b),
+        }
+    }
+
     fn of(color: Color) -> Option<Self> {
         match color {
             Color::Reset => None,
@@ -300,14 +308,6 @@ impl Colour {
             Color::LightMagenta => Some(Self::Index(13)),
             Color::LightCyan => Some(Self::Index(14)),
             Color::White => Some(Self::Index(15)),
-        }
-    }
-
-    fn color(colour: Option<Self>) -> Color {
-        match colour {
-            None => Color::Reset,
-            Some(Self::Index(index)) => Color::Indexed(index),
-            Some(Self::Rgb([r, g, b])) => Color::Rgb(r, g, b),
         }
     }
 }
@@ -358,16 +358,6 @@ pub(crate) enum Underline {
 }
 
 impl Underline {
-    fn of(style: UnderlineStyle) -> Option<Self> {
-        match style {
-            UnderlineStyle::None | UnderlineStyle::Single => None,
-            UnderlineStyle::Double => Some(Self::Double),
-            UnderlineStyle::Curly => Some(Self::Curly),
-            UnderlineStyle::Dotted => Some(Self::Dotted),
-            UnderlineStyle::Dashed => Some(Self::Dashed),
-        }
-    }
-
     fn style(underline: Option<Self>) -> UnderlineStyle {
         match underline {
             None => UnderlineStyle::Single,
@@ -375,6 +365,16 @@ impl Underline {
             Some(Self::Curly) => UnderlineStyle::Curly,
             Some(Self::Dotted) => UnderlineStyle::Dotted,
             Some(Self::Dashed) => UnderlineStyle::Dashed,
+        }
+    }
+
+    fn of(style: UnderlineStyle) -> Option<Self> {
+        match style {
+            UnderlineStyle::None | UnderlineStyle::Single => None,
+            UnderlineStyle::Double => Some(Self::Double),
+            UnderlineStyle::Curly => Some(Self::Curly),
+            UnderlineStyle::Dotted => Some(Self::Dotted),
+            UnderlineStyle::Dashed => Some(Self::Dashed),
         }
     }
 }
@@ -500,7 +500,6 @@ impl<B: Serialize> Frame<B> {
 
 pub(crate) mod patch;
 
-#[cfg(test)]
 pub(crate) mod mirror;
 #[cfg(test)]
 mod tests;

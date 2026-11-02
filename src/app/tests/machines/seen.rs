@@ -233,4 +233,5 @@ mod notices;
 mod report;
 mod rows;
 mod selection;
+mod stream;
 mod tree;
