@@ -50,6 +50,55 @@ jobs:
       - name: tests
         run: cargo test --locked
 
+  windows:
+    name: check (windows-2025)
+    runs-on: windows-2025
+    timeout-minutes: 30
+    continue-on-error: true
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - name: long paths
+        run: git config --system core.longpaths true
+
+      - uses: actions/checkout@v7
+
+      - name: toolchain
+        run: rustup toolchain install
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+          use-cache: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: check
+        id: check
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --all-targets --all-features --locked --message-format=short 2>&1 | tee check.log
+
+      - name: summary
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          {
+            echo '### Windows'
+            if [ "$OUTCOME" = success ]; then
+              echo '`cornercase` compiles'
+            else
+              grep -oE 'could not compile `cornercase` \([^)]*\) due to [0-9]+ previous errors?' check.log ||
+                echo '`cargo check` failed before reaching `cornercase`: see its log'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   guardrails:
     name: fmt + machete + jscpd
     runs-on: ubuntu-24.04
