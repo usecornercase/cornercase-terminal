@@ -10,6 +10,7 @@ use crate::control::contract::{Code, Refusal, Structured};
 use crate::protocol::{self, ServerMessage};
 use crate::test_util::git_repo;
 use crate::ui::changes as panel;
+use crate::ui::files as panel_files;
 
 const BASE: &str = "origin/main";
 
@@ -417,6 +418,52 @@ mod a_remote_patch {
 
 mod a_remote_gap {
     use super::*;
+
+    fn read(panels: &mut Panels, path: &str) -> Value {
+        let gap = at(&panels.rig.app, panel::Row::Gap(0, 1));
+        click(&mut panels.rig.app, gap);
+        let mut gap = taken(&panels.ends);
+        let asked = request(&mut gap);
+        let lines = [GapLine { old: 3, new: 3, text: "let x = 1;".into(), raw: None, syntax: None }];
+        tell(&mut gap, &Gap::of(SHOP, path, 1, &lines));
+        panels.rig.until("the unchanged lines show", |app| {
+            app.panel_view().is_some_and(|view| view.gaps.contains_key(&(0, 1)))
+        });
+        asked
+    }
+
+    #[test]
+    fn and_the_patch_are_asked_for_the_path_as_the_machine_wrote_it() {
+        let path = "a\u{200b}.rs";
+        let (mut panels, _stream) = Panels::listing(vec![info(path, 1)]);
+        panels.unfold(path);
+        let (mut asking, asked) = panels.asked_patch();
+        assert_eq!(asked, patch_of(path));
+        tell(&mut asking, &Patch::of(SHOP, Mode::Uncommitted, &patched(path, 1), false));
+        panels.rig.until("the hunks show", |app| hunks(app, path) == 2);
+
+        assert_eq!(read(&mut panels, path)["args"]["path"], path);
+    }
+
+    #[test]
+    fn cut_short_opens_files_there_at_the_first_line_left_out() {
+        let (mut panels, _stream) = Panels::with_hunks();
+        read(&mut panels, "a.rs");
+
+        let omitted = at(&panels.rig.app, panel::Row::Omitted(0, 1));
+        click(&mut panels.rig.app, omitted);
+        let mut first = panels.opened();
+        let mut second = taken(&panels.ends);
+
+        let asked = [request(&mut first), request(&mut second)];
+        let read = asked.iter().find(|asked| asked["command"] == "files-read").expect("the file is read");
+        assert_eq!(read["args"]["path"], "a.rs");
+        let Some(panel_files::View { screen: panel_files::Screen::File(file), .. }) = panels.rig.app.files_view()
+        else {
+            panic!("the file shows in Files")
+        };
+        assert_eq!(file.selection, Some((4, 4)));
+    }
 
     #[test]
     fn opens_with_the_lines_the_machine_reads() {

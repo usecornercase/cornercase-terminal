@@ -179,6 +179,10 @@ pub(crate) fn hidden(c: char) -> bool {
         )
 }
 
+pub(crate) fn visible(text: &str) -> String {
+    text.chars().filter(|&c| !hidden(c)).collect()
+}
+
 pub(crate) fn escape_hidden(text: &str) -> String {
     text.chars().fold(String::with_capacity(text.len()), |mut out, c| {
         if hidden(c) {

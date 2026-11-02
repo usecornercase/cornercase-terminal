@@ -936,3 +936,55 @@ mod a_remote_panel {
         insta::assert_snapshot!(render(&view));
     }
 }
+
+mod hidden_characters {
+    use rstest::rstest;
+
+    use super::*;
+
+    const HIDDEN: &str = "\u{202e}\u{200b}\u{1b}\n";
+    const COPIES: usize = 15;
+
+    fn hiding(text: &str) -> String {
+        format!("{}{text}", HIDDEN.repeat(COPIES))
+    }
+
+    fn hide(view: &mut View) {
+        view.root = hiding(&view.root);
+        match &mut view.screen {
+            Screen::Tree(tree) => tree.rows.iter_mut().for_each(|row| row.name = hiding(&row.name)),
+            Screen::Search(search) => search.rows.iter_mut().for_each(hide_found),
+            Screen::File(file) => file.path = hiding(&file.path),
+        }
+    }
+
+    fn hide_found(found: &mut Found) {
+        let shift = u32::try_from(HIDDEN.chars().count() * COPIES).expect("a short prefix");
+        match found {
+            Found::Name { path, indices } => {
+                *path = hiding(path);
+                *indices = indices.iter().map(|i| i + shift).collect();
+            }
+            Found::File { path, .. } => *path = hiding(path),
+            Found::Line { .. } => {}
+        }
+    }
+
+    fn drawn(view: &View) -> Buffer {
+        let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
+        terminal.draw(|f| draw(f, AREA, view, None)).expect("draw");
+        terminal.backend().buffer().clone()
+    }
+
+    #[rstest]
+    #[case::in_the_tree(tree())]
+    #[case::in_the_names_found(names())]
+    #[case::in_the_files_found(texts())]
+    #[case::in_the_path_of_a_file(opened(None, &[]))]
+    fn take_no_room_and_move_no_lit_letter(#[case] view: View) {
+        let mut hidden = view.clone();
+        hide(&mut hidden);
+
+        assert_eq!(drawn(&hidden), drawn(&view));
+    }
+}

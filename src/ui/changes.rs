@@ -18,7 +18,7 @@ use crate::changes::Body;
 use crate::changes::diff::{Diff, File, Hunk, Kind, Line, Segments, Staged, Status};
 use crate::changes::every::Header;
 use crate::changes::selection::Spot;
-use crate::changes::{GapLine, Mode, Scope, Tints};
+use crate::changes::{GapLine, Mode, Scope, Tints, gap_size, more_unchanged, omitted};
 
 mod selection;
 
@@ -30,6 +30,7 @@ const BAR_CELLS: usize = 8;
 const VIEWED_WIDTH: u16 = 3;
 const SHARED_TAG: &str = "⇄";
 const SLOT_WIDTH: u16 = 3;
+const OMITTED: &str = "open in Files";
 const DISCARD: &str = "↺";
 const STAGE: &str = "+";
 const UNSTAGE: &str = "−";
@@ -139,14 +140,10 @@ pub(crate) enum Row {
     File(usize),
     Gap(usize, usize),
     GapLine(usize, usize, usize, usize),
+    Omitted(usize, usize),
     Hunk(usize, usize),
     Line(usize, usize, usize, usize),
     Spacer,
-}
-
-fn gap_size(file: &File, hunk: usize) -> u32 {
-    let Some(before) = hunk.checked_sub(1).and_then(|h| file.hunks.get(h)) else { return 0 };
-    file.hunks.get(hunk).map_or(0, |after| after.new_start.saturating_sub(before.new_end()))
 }
 
 pub(crate) fn lines(view: &View) -> Vec<Row> {
@@ -176,17 +173,22 @@ pub(crate) fn lines(view: &View) -> Vec<Row> {
             continue;
         }
         for (h, hunk) in file.hunks.iter().enumerate() {
-            match view.gaps.get(&(i, h)) {
-                Some(lines) => rows.extend((0..lines.len()).map(|k| Row::GapLine(i, h, k, 0))),
-                None if gap_size(file, h) > 0 => rows.push(Row::Gap(i, h)),
-                None => {}
-            }
+            gap_rows(view, file, (i, h), &mut rows);
             rows.push(Row::Hunk(i, h));
             rows.extend((0..hunk.lines.len()).map(|l| Row::Line(i, h, l, 0)));
         }
         rows.push(Row::Spacer);
     }
     rows
+}
+
+fn gap_rows(view: &View, file: &File, (i, h): (usize, usize), rows: &mut Vec<Row>) {
+    let Some(lines) = view.gaps.get(&(i, h)) else {
+        rows.extend((gap_size(file, h) > 0).then_some(Row::Gap(i, h)));
+        return;
+    };
+    rows.extend((0..lines.len()).map(|k| Row::GapLine(i, h, k, 0)));
+    rows.extend((omitted(file, h, lines.len()) > 0).then_some(Row::Omitted(i, h)));
 }
 
 fn rows_of(view: &View, row: Row, width: u16, out: &mut Vec<Row>) {
@@ -392,6 +394,7 @@ pub(crate) enum Hit {
     Stage(usize),
     Discard(usize),
     Gap(usize, usize),
+    Omitted(usize, usize),
     Action(usize, usize, Action),
     Line(usize, Spot),
     Text(usize, Spot),
@@ -428,6 +431,7 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
         Row::Header(i) => Some(Hit::Header(i)),
         Row::File(i) => Some(file_hit(view, i, r, pos)),
         Row::Gap(i, h) => Some(Hit::Gap(i, h)),
+        Row::Omitted(i, h) => Some(Hit::Omitted(i, h)),
         Row::Hunk(i, h) => {
             actions(view, r).into_iter().find(|(_, a)| a.contains(pos)).map(|(a, _)| Hit::Action(i, h, a))
         }
@@ -668,6 +672,7 @@ impl Painter<'_> {
             Row::Header(i) => self.header(diff, &view.headers[i], r),
             Row::File(i) => self.file(&diff.files[i], i, r),
             Row::Gap(i, h) => self.gap(&diff.files[i], h, r),
+            Row::Omitted(i, h) => self.omitted(&diff.files[i], (i, h), r),
             Row::GapLine(file, hunk, gap, part) => {
                 let Some(line) = view.gaps.get(&(file, hunk)).and_then(|g| g.get(gap)) else { return };
                 let digits = number_width(&diff.files[file]);
@@ -710,11 +715,21 @@ impl Painter<'_> {
 
     fn gap(&mut self, file: &File, h: usize, r: Rect) {
         let n = gap_size(file, h);
+        let label = if n == 1 { "1 unchanged line".to_string() } else { format!("{n} unchanged lines") };
+        self.gap_row(file, &label, r);
+    }
+
+    fn omitted(&mut self, file: &File, (i, h): (usize, usize), r: Rect) {
+        let shown = self.view.gaps.get(&(i, h)).map_or(0, |lines| lines.len());
+        let more = more_unchanged(omitted(file, h, shown));
+        self.gap_row(file, &format!("{more} · {OMITTED}"), r);
+    }
+
+    fn gap_row(&mut self, file: &File, label: &str, r: Rect) {
         let digits = u16::try_from(number_width(file)).unwrap_or(3);
         let style = if self.lit(r) { Style::default().fg(Color::Cyan) } else { dim(self.view.muted) };
         put(self.buf, (r.x + 3 + digits * 2, r.y), "↕", Style::default().fg(Color::Cyan), r.right());
-        let label = if n == 1 { "1 unchanged line".to_string() } else { format!("{n} unchanged lines") };
-        put(self.buf, (r.x + 5 + digits * 2, r.y), &label, style, r.right());
+        put(self.buf, (r.x + 5 + digits * 2, r.y), label, style, r.right());
     }
 
     fn hunk(&mut self, hunk: &Hunk, r: Rect, active: bool) {
@@ -838,7 +853,7 @@ impl Painter<'_> {
     fn path(&mut self, file: &File, at: (u16, u16), end: u16, muted: bool) {
         let dimmed = dim(self.view.muted);
         let room = usize::from(end.saturating_sub(at.0));
-        let shown = crate::text::truncate_left(&file.label(), room);
+        let shown = crate::text::truncate_left(&crate::text::visible(&file.label()), room);
         let split = shown.rfind('/').map_or(0, |i| i + 1);
         let (folder, name) = shown.split_at(split);
         let x = put(self.buf, at, folder, dimmed, end);

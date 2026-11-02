@@ -22,7 +22,7 @@ use crate::graphics::kitty;
 use crate::highlight::markdown;
 use crate::highlight::syntax::Segments;
 use crate::text::stretch::Stretch;
-use crate::text::{truncate_left, truncate_right};
+use crate::text::{truncate_left, truncate_right, visible};
 
 mod find;
 mod rows;
@@ -488,7 +488,13 @@ fn draw_title(buf: &mut Buffer, area: Rect, view: &View) {
     let end = close(area).x.saturating_sub(1);
     let style = super::tab_style(true, false, super::surface_colour(view.light), view.muted);
     let x = put(buf, (row.x, row.y), &format!(" {LABEL} "), style, end) + 1;
-    put(buf, (x, row.y), &truncate_left(&view.root, usize::from(end.saturating_sub(x))), dim(view.muted), end);
+    put(
+        buf,
+        (x, row.y),
+        &truncate_left(&visible(&view.root), usize::from(end.saturating_sub(x))),
+        dim(view.muted),
+        end,
+    );
 }
 
 fn draw_bar(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) -> Option<Position> {
@@ -567,7 +573,14 @@ fn tail(path: &str, indices: &[u32], room: usize) -> (String, Vec<u32>) {
     (shown, indices.iter().filter(|&&i| i >= skip).map(|&i| i - skip + 1).collect())
 }
 
+fn visible_marked(path: &str, indices: &[u32]) -> (String, Vec<u32>) {
+    let kept: Vec<(u32, char)> = (0..).zip(path.chars()).filter(|&(_, c)| !crate::text::hidden(c)).collect();
+    let marked = (0..).zip(&kept).filter(|(_, (i, _))| indices.contains(i)).map(|(at, _)| at).collect();
+    (kept.iter().map(|&(_, c)| c).collect(), marked)
+}
+
 fn path_segments(path: &str, view: &View) -> Segments {
+    let path = visible(path);
     let split = path.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = path.split_at(split);
     vec![(folder.to_string(), dim(view.muted)), (name.to_string(), Style::default().fg(Color::Reset))]
@@ -594,7 +607,8 @@ fn draw_found_row(buf: &mut Buffer, view: &View, r: Rect, row: &Found) {
         Found::Name { path, indices } => {
             view.put_icon(buf, (r.x + 2, y), icons::file_at(path), r.right());
             let row = Rect::new(r.x + 2 + slot, y, r.width.saturating_sub(2 + slot), 1);
-            let (shown, indices) = tail(path, indices, usize::from(row.width.saturating_sub(1)));
+            let (path, indices) = visible_marked(path, indices);
+            let (shown, indices) = tail(&path, &indices, usize::from(row.width.saturating_sub(1)));
             let lit = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
             draw_code(buf, view.muted, row, &mark(&path_segments(&shown, view), &ranges_of(&indices), lit));
         }
@@ -681,7 +695,7 @@ fn tree_label(buf: &mut Buffer, view: &View, r: Rect, row: &TreeRow, last: bool)
     if last {
         style = style.add_modifier(Modifier::BOLD);
     }
-    let name = truncate_right(&row.name, usize::from(end.saturating_sub(name_x)));
+    let name = truncate_right(&visible(&row.name), usize::from(end.saturating_sub(name_x)));
     put(buf, (name_x, r.y), &name, style, end);
     if let Some(status) = row.status {
         let mark = if row.dir { "●" } else { status.letter() };
@@ -696,7 +710,7 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     put(buf, (b.x, b.y), " ‹ ", style, b.right());
     let start = b.right() + 1;
     let end = title_end(area, file);
-    let shown = truncate_left(&file.path, usize::from(end.saturating_sub(start)));
+    let shown = truncate_left(&visible(&file.path), usize::from(end.saturating_sub(start)));
     let split = shown.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = shown.split_at(split);
     let x = put(buf, (start, b.y), folder, dim(view.muted), end);

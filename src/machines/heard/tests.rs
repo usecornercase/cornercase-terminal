@@ -88,9 +88,9 @@ mod summaries {
     use super::*;
 
     #[test]
-    fn clean_names_and_paths_but_keep_paths_long() {
-        let long = "d/".repeat(3_000);
-        let mut renamed = file(&format!("{long}{HOSTILE}\nx"));
+    fn clean_names_but_keep_paths_as_the_machine_sent_them() {
+        let path = format!("{}{HOSTILE}\nx", "d/".repeat(3_000));
+        let mut renamed = file(&path);
         renamed.old_path = Some(format!("old{HOSTILE}"));
         renamed.digest = "z".repeat(10_000);
         let workspace = WorkspaceChanges {
@@ -108,9 +108,8 @@ mod summaries {
         assert_eq!(heard.boot, format!("boot{SAID}"));
         assert_eq!(heard.content.error.as_deref(), Some(SAID));
         assert_eq!(workspace.base.as_deref(), Some(format!("origin/main{SAID}").as_str()));
-        assert_eq!(file.path.chars().count(), 4096);
-        assert!(file.path.chars().all(|c| !text::hidden(c)));
-        assert_eq!(file.old_path.as_deref(), Some(format!("old{KEPT}").as_str()));
+        assert_eq!(file.path, path);
+        assert_eq!(file.old_path.as_deref(), Some(format!("old{HOSTILE}").as_str()));
         assert_eq!(file.digest.len(), 200);
     }
 }
@@ -159,13 +158,13 @@ mod patches {
     }
 
     #[test]
-    fn a_gap_cleans_its_path_and_code() {
+    fn a_gap_cleans_its_code_but_not_its_path() {
         let lines = vec![GapLineInfo { text: format!("\t{HOSTILE}\n"), ..GapLineInfo::default() }];
         let sent = Gap { path: format!("src/a.rs\n{HOSTILE}"), lines, ..Gap::default() };
 
         let heard = gap(&ok(&sent)).expect("a gap");
 
-        assert_eq!(heard.path, format!("src/a.rs{KEPT}"));
+        assert_eq!(heard.path, format!("src/a.rs\n{HOSTILE}"));
         assert_eq!(heard.lines[0].text, format!("\t{KEPT}"));
     }
 
@@ -183,7 +182,7 @@ mod files {
     use super::*;
 
     #[test]
-    fn a_listing_cleans_paths_names_and_errors() {
+    fn a_listing_cleans_its_errors_but_not_the_paths_and_names_asked_for_again() {
         let entry =
             EntryInfo { name: format!("a\nb{HOSTILE}"), modified: Some(HOSTILE.into()), ..EntryInfo::default() };
         let folder = FolderInfo {
@@ -197,10 +196,10 @@ mod files {
         let heard = listing(&ok(&Listing { workspace: Some(3), folders: vec![folder] })).expect("a listing");
 
         let folder = &heard.folders[0];
-        assert_eq!(folder.path, format!("src{KEPT}"));
+        assert_eq!(folder.path, format!("src\n{HOSTILE}"));
         assert_eq!(folder.dir, PathBuf::from(format!("/home/ana/src{KEPT}")));
         assert_eq!(folder.error.as_deref(), Some(SAID));
-        assert_eq!(folder.entries[0].name, format!("ab{KEPT}"));
+        assert_eq!(folder.entries[0].name, format!("a\nb{HOSTILE}"));
         assert_eq!(folder.entries[0].modified.as_deref(), Some(SAID));
     }
 
@@ -227,7 +226,7 @@ mod files {
 
         let heard = read(&ok(&sent)).expect("a read");
 
-        assert_eq!(heard.path, format!("src/a.rs{KEPT}"));
+        assert_eq!(heard.path, format!("src/a.rs\n{HOSTILE}"));
         assert_eq!(heard.file, PathBuf::from("/home/ana/src/a.rs"));
         assert_eq!(heard.language.as_deref(), Some(format!("Rust{SAID}").as_str()));
         assert_eq!(heard.text.as_deref(), Some(format!("fn main() {{\r\n\tlet x = 1;{KEPT}\n}}\n").as_str()));
@@ -236,7 +235,7 @@ mod files {
     }
 
     #[test]
-    fn found_names_and_lines_are_cleaned_and_kept_within_the_search_s_limits() {
+    fn found_lines_are_cleaned_and_kept_within_the_search_s_limits_but_not_their_paths() {
         let name = NameInfo { path: format!("a\n{HOSTILE}"), indices: (0..9_999).collect() };
         let hit = FoundLine { text: format!("\t{HOSTILE}\r\n"), ranges: vec![[0, 1]; 500], ..FoundLine::default() };
         let files = vec![
@@ -249,10 +248,10 @@ mod files {
 
         assert_eq!(heard.query, SAID);
         assert_eq!(heard.names.len(), MAX_NAMES);
-        assert_eq!(heard.names[0].path, format!("a{KEPT}"));
+        assert_eq!(heard.names[0].path, format!("a\n{HOSTILE}"));
         assert_eq!(heard.names[0].indices.len(), heard.names[0].path.chars().count());
         let first = &heard.files[0];
-        assert_eq!(first.path, format!("b{KEPT}"));
+        assert_eq!(first.path, format!("b\n{HOSTILE}"));
         assert_eq!(first.lines[0].text, format!("\t{KEPT}"));
         assert_eq!(first.lines[0].ranges.len(), first.lines[0].text.len());
         assert_eq!(heard.files[1].lines.len(), 1);

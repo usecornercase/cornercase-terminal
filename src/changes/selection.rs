@@ -1,5 +1,7 @@
-use super::GapLine;
+use std::borrow::Cow;
+
 use super::diff::{File, Kind};
+use super::{GapLine, more_unchanged, omitted};
 use crate::text::stretch::Stretch;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -33,12 +35,12 @@ impl Selection {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Picked<'a> {
     pub(crate) kind: Kind,
     pub(crate) old: Option<u32>,
     pub(crate) new: Option<u32>,
-    pub(crate) text: &'a str,
+    pub(crate) text: Cow<'a, str>,
 }
 
 pub(crate) fn picked<'a>(
@@ -49,16 +51,28 @@ pub(crate) fn picked<'a>(
     let inside = |spot: Spot| from <= spot && spot <= to;
     let mut out = Vec::new();
     for (h, hunk) in file.hunks.iter().enumerate().take(to.hunk + 1).skip(from.hunk) {
-        let unchanged = gaps(h).unwrap_or_default().iter().enumerate();
+        let loaded = gaps(h);
+        let unchanged = loaded.unwrap_or_default().iter().enumerate();
         for line in unchanged.filter(|(k, _)| inside(Spot { hunk: h, at: At::Gap(*k) })).map(|(_, line)| line) {
-            out.push(Picked { kind: Kind::Context, old: Some(line.old), new: Some(line.new), text: line.source() });
+            let text = Cow::Borrowed(line.source());
+            out.push(Picked { kind: Kind::Context, old: Some(line.old), new: Some(line.new), text });
+        }
+        let first = Spot { hunk: h, at: At::Line(0) };
+        if let Some(shown) = loaded.filter(|_| from < first && inside(first)) {
+            out.extend(omission(file, h, shown.len()));
         }
         let lines = hunk.lines.iter().enumerate();
         for line in lines.filter(|(l, _)| inside(Spot { hunk: h, at: At::Line(*l) })).map(|(_, line)| line) {
-            out.push(Picked { kind: line.kind, old: line.old, new: line.new, text: line.source() });
+            out.push(Picked { kind: line.kind, old: line.old, new: line.new, text: Cow::Borrowed(line.source()) });
         }
     }
     out
+}
+
+fn omission<'a>(file: &File, hunk: usize, shown: usize) -> Option<Picked<'a>> {
+    let n = omitted(file, hunk, shown);
+    let text = Cow::Owned(format!("↕ {}", more_unchanged(n)));
+    (n > 0).then_some(Picked { kind: Kind::Context, old: None, new: None, text })
 }
 
 pub(crate) fn covered<'a, 'b>(lines: &'b [Picked<'a>], stretch: Option<&Stretch<Spot>>) -> &'b [Picked<'a>] {
@@ -69,7 +83,7 @@ pub(crate) fn covered<'a, 'b>(lines: &'b [Picked<'a>], stretch: Option<&Stretch<
 }
 
 pub(crate) fn text(lines: &[Picked]) -> String {
-    lines.iter().map(|l| l.text).collect::<Vec<_>>().join("\n")
+    lines.iter().map(|l| l.text.as_ref()).collect::<Vec<_>>().join("\n")
 }
 
 pub(crate) fn place(path: &str, first: u32, last: u32) -> String {

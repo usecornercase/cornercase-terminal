@@ -277,6 +277,51 @@ fn a_gap_between_hunks_can_be_opened() {
     assert_eq!(hit(AREA, &view, Position::new(20, gap.y)), Some(Hit::Gap(0, 1)));
 }
 
+fn gap_read(shown: u32) -> View {
+    let mut view = sample();
+    let lines =
+        (14..14 + shown).map(|n| GapLine { old: n, new: n, text: format!("line {n}"), raw: None, syntax: None });
+    view.gaps.insert((0, 1), Arc::new(lines.collect()));
+    view
+}
+
+fn gap_of_the_first_file() -> u32 {
+    gap_size(&sample().diff().expect("a diff").files[0], 1)
+}
+
+#[test]
+fn a_gap_cut_short_ends_with_a_row_that_sends_to_files() {
+    let view = gap_read(5);
+    let rows = lines(&view);
+    let last = rows.iter().position(|row| *row == Row::GapLine(0, 1, 4, 0)).expect("the last line read");
+    assert_eq!(rows[last + 1], Row::Omitted(0, 1));
+
+    let r = row_of(&view, Row::Omitted(0, 1));
+    let terminal = render(&view, None);
+    let text: String = (0..AREA.width).map(|x| terminal.backend().buffer()[(x, r.y)].symbol()).collect();
+    let more = gap_of_the_first_file() - 5;
+    assert!(text.contains(&format!("↕ {more} more unchanged lines · open in Files")), "{text}");
+    assert_eq!(hit(AREA, &view, Position::new(20, r.y)), Some(Hit::Omitted(0, 1)));
+}
+
+#[test]
+fn a_gap_read_whole_has_no_row_after_its_lines() {
+    assert!(!lines(&gap_read(gap_of_the_first_file())).contains(&Row::Omitted(0, 1)));
+}
+
+#[test]
+fn hidden_characters_take_no_room_in_a_path() {
+    let view = sample();
+    let Body::Ready(diff) = &view.body else { unreachable!("a diff") };
+    let hiding = |file: &Arc<File>| {
+        Arc::new(File { path: format!("{}{}", "\u{202e}\u{200b}\u{1b}".repeat(20), file.path), ..(**file).clone() })
+    };
+    let files = diff.files.iter().map(hiding).collect();
+    let hidden = View { body: Body::Ready(Arc::new(Diff { files })), ..sample() };
+
+    assert_eq!(render(&hidden, None).backend().buffer(), render(&view, None).backend().buffer());
+}
+
 #[rstest::rstest]
 #[case::uncommitted(4, 1, Hit::Mode(Mode::Uncommitted))]
 #[case::commits(17, 1, Hit::Mode(Mode::Commits))]

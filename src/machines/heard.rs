@@ -43,7 +43,6 @@ pub(crate) fn patch(text: &str) -> Result<Patch, Refusal> {
 
 pub(crate) fn gap(text: &str) -> Result<Gap, Refusal> {
     let mut gap: Gap = typed(text)?;
-    gap.path = link::clean_path(&gap.path);
     gap.lines.truncate(MAX_LINES);
     gap.lines.iter_mut().for_each(clean_gap_line);
     Ok(gap)
@@ -58,7 +57,6 @@ pub(crate) fn listing(text: &str) -> Result<Listing, Refusal> {
 
 pub(crate) fn read(text: &str) -> Result<Read, Refusal> {
     let mut read: Read = typed(text)?;
-    read.path = link::clean_path(&read.path);
     read.file = clean_buf(&read.file);
     read.modified = read.modified.as_deref().map(link::clean);
     read.language = read.language.as_deref().map(link::clean);
@@ -117,8 +115,6 @@ fn clean_buf(path: &Path) -> PathBuf {
 }
 
 fn clean_file(file: &mut FileInfo) {
-    file.path = link::clean_path(&file.path);
-    file.old_path = file.old_path.as_deref().map(link::clean_path);
     file.digest = link::clean(&file.digest);
 }
 
@@ -148,7 +144,6 @@ fn clean_segments(segments: Option<&mut Vec<Segment>>, length: usize) {
 }
 
 fn clean_folder(folder: &mut FolderInfo) {
-    folder.path = link::clean_path(&folder.path);
     folder.dir = clean_buf(&folder.dir);
     folder.error = folder.error.as_deref().map(link::clean);
     folder.entries.truncate(MAX_ENTRIES);
@@ -156,17 +151,14 @@ fn clean_folder(folder: &mut FolderInfo) {
 }
 
 fn clean_entry(entry: &mut EntryInfo) {
-    entry.name = link::clean_path(&entry.name);
     entry.modified = entry.modified.as_deref().map(link::clean);
 }
 
 fn clean_name(name: &mut NameInfo) {
-    name.path = link::clean_path(&name.path);
     name.indices.truncate(name.path.chars().count());
 }
 
 fn clean_found_file(file: &mut FoundFile) {
-    file.path = link::clean_path(&file.path);
     for line in &mut file.lines {
         line.text = clean_code_line(&line.text);
         line.ranges.truncate(line.text.len());

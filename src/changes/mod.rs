@@ -688,6 +688,24 @@ pub(crate) fn gap(dir: &Path, mode: Mode, file: &File, hunk: usize) -> Option<Ve
     git::new_side(dir, mode, &file.path).map(|side| gap_lines(file, hunk, &side))
 }
 
+pub(crate) fn gap_size(file: &File, hunk: usize) -> u32 {
+    let Some(before) = hunk.checked_sub(1).and_then(|h| file.hunks.get(h)) else { return 0 };
+    file.hunks.get(hunk).map_or(0, |after| after.new_start.saturating_sub(before.new_end()))
+}
+
+pub(crate) fn omitted(file: &File, hunk: usize, shown: usize) -> u32 {
+    gap_size(file, hunk).saturating_sub(u32::try_from(shown).unwrap_or(u32::MAX))
+}
+
+pub(crate) fn first_omitted(file: &File, hunk: usize, shown: usize) -> Option<u32> {
+    let before = hunk.checked_sub(1).and_then(|h| file.hunks.get(h))?;
+    (omitted(file, hunk, shown) > 0).then(|| before.new_end().saturating_add(u32::try_from(shown).unwrap_or(0)))
+}
+
+pub(crate) fn more_unchanged(n: u32) -> String {
+    crate::text::plural(usize::try_from(n).unwrap_or(usize::MAX), "more unchanged line", "more unchanged lines")
+}
+
 pub(crate) fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<GapLine> {
     let (Some(before), Some(after)) = (hunk.checked_sub(1).and_then(|h| file.hunks.get(h)), file.hunks.get(hunk))
     else {

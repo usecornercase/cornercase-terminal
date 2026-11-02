@@ -187,6 +187,26 @@ mod the_remote_tree {
         assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("/home/ana/web-shop/README.md")));
         assert_eq!(toast(app), Some("copied the file's path: it is on vps"));
     }
+
+    #[test]
+    fn asks_for_and_copies_a_name_as_the_machine_wrote_it() {
+        let (mut panels, mut stream) = Panels::tree();
+        let name = "a\u{200b}b.txt";
+        let mut later = root();
+        later.entries.push(entry(name, EntryKind::File, None));
+        tell(&mut stream, &listing(vec![later]));
+        panels.rig.until("the file shows", |app| shows(app, name));
+
+        let pos = row_pos(&panels.rig.app, name);
+        right_click(&mut panels.rig.app, pos);
+        pick(&mut panels.rig.app, "copy path");
+        let copied = panels.rig.app.take_host_writes().pop();
+        click(&mut panels.rig.app, pos);
+        let mut read = panels.opened();
+
+        assert_eq!(copied, Some(clipboard::osc52(&format!("/home/ana/web-shop/{name}"))));
+        assert_eq!(request(&mut read)["args"]["path"], name);
+    }
 }
 
 mod the_remote_viewer {
@@ -406,6 +426,24 @@ mod the_remote_search {
 
         assert_eq!(request(&mut stream)["args"]["path"], "Cargo.toml");
         assert_eq!(file(&panels.rig.app).selection, Some((2, 2)));
+    }
+
+    #[test]
+    fn opens_a_name_found_as_the_machine_wrote_it() {
+        let (mut panels, _tree) = Panels::tree();
+        type_in_field(&mut panels, panel::mode_button, "main");
+        let mut search = panels.opened();
+        request(&mut search);
+        let path = "src/ma\u{200b}in.rs";
+        let names = vec![NameInfo { path: path.into(), indices: vec![4, 5, 7, 8] }];
+        tell(&mut search, &Found { names, matches: 1, ..found("main", SearchMode::Names) });
+        panels.rig.until("the name shows", |app| results(&view(app)).len() == 1);
+
+        let body = panel::parts(panel_area(&panels.rig.app)).body;
+        click(&mut panels.rig.app, Position::new(body.x + 4, body.y));
+        let mut read = panels.opened();
+
+        assert_eq!(request(&mut read)["args"]["path"], path);
     }
 }
 

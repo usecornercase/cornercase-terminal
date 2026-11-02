@@ -525,6 +525,7 @@ impl App {
             Some(PanelHit::Stage(_)) => self.stage_clicked(chosen),
             Some(PanelHit::Discard(_)) => self.ask_discard(chosen),
             Some(PanelHit::Gap(i, h)) => self.read_gap(view, i, h, chosen),
+            Some(PanelHit::Omitted(i, h)) => self.open_omitted(view, i, h),
             Some(PanelHit::Action(..) | PanelHit::Line(..) | PanelHit::Text(..) | PanelHit::Lines(_)) | None => {}
         }
     }
@@ -568,6 +569,21 @@ impl App {
             }
             self.changes_state_mut().toggle_fold(workspace, diff, file);
         }
+    }
+
+    fn open_omitted(&mut self, view: &panel::View, i: usize, h: usize) {
+        let (Some(file), Some(&workspace)) = (ready(view).and_then(|diff| diff.files.get(i)), view.owners.get(i))
+        else {
+            return;
+        };
+        let shown = view.gaps.get(&(i, h)).map_or(0, |lines| lines.len());
+        let Some(line) = changes::first_omitted(file, h, shown) else { return };
+        if self.shows_remote_diff() && self.cut_off(Feed::Reading) {
+            return;
+        }
+        self.show_side(Some(Side::Files));
+        self.screen.nav = None;
+        self.files_state_mut().open_at(workspace, &file.path, (line, line), None);
     }
 
     fn read_gap(&mut self, view: &panel::View, i: usize, h: usize, chosen: Option<Chosen>) {

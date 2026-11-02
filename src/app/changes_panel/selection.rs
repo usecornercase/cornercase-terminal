@@ -65,7 +65,7 @@ impl App {
         let lines = panel::picked(view, &selected);
         match action {
             LinesAction::Copy => self.copy(&match selected.stretch {
-                Some(stretch) => stretch.text(lines.iter().map(|line| line.text)),
+                Some(stretch) => stretch.text(lines.iter().map(|line| line.text.as_ref())),
                 None => selection::text(&lines),
             }),
             LinesAction::Ask if self.shows_remote_diff() => {}
