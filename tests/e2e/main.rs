@@ -33,6 +33,7 @@ mod flows;
 mod input;
 mod issues;
 mod machine_actions;
+mod machine_panels;
 mod machines;
 mod opening;
 mod panels;

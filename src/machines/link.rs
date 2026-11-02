@@ -10,6 +10,7 @@ use parking_lot::{Condvar, Mutex};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+use crate::control::contract::{Code, Refusal, Structured};
 use crate::control::start_server::Started;
 use crate::control::{self, Command, Request, Response, Snapshot, StartServer, Watch};
 use crate::error::{Error, Result};
@@ -96,7 +97,7 @@ fn clean_within(text: &str, kept: usize) -> String {
     text::one_line(&shown).chars().take(kept).collect()
 }
 
-fn clean_path(text: &str) -> String {
+pub(super) fn clean_path(text: &str) -> String {
     text.chars().filter(|&c| !text::hidden(c)).take(PATH_KEPT).collect()
 }
 
@@ -552,6 +553,20 @@ fn answered<T: DeserializeOwned>(text: &str) -> std::result::Result<T, Down> {
     match serde_json::from_str(text).map_err(unreadable)? {
         Response::Ok(value) => serde_json::from_value(cleaned(value)).map_err(unreadable),
         Response::Error(message) => Err(Down::Unreachable(clean(&message))),
+    }
+}
+
+pub(super) fn replied(text: &str) -> Option<std::result::Result<Value, Refusal>> {
+    if let Ok(answer) = serde_json::from_str::<Structured>(text) {
+        return Some(match answer {
+            Structured::Ok(value) => Ok(value),
+            Structured::Error(refusal) => Err(Refusal::new(refusal.code, clean(&refusal.message))),
+        });
+    }
+    match serde_json::from_str::<Response>(text) {
+        Ok(Response::Ok(value)) => Some(Ok(value)),
+        Ok(Response::Error(message)) => Some(Err(Refusal::new(Code::Failed, clean(&message)))),
+        Err(_) => None,
     }
 }
 

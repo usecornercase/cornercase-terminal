@@ -164,6 +164,10 @@ The bottom of the panel then says which lines the selection covers, such as `lin
 
 Click an empty spot of the diff (a hunk's top line outside its buttons, or the space between files) to clear the selection and get **collapse all** and the viewed count back. Collapsing the file or marking it viewed clears it too; the filter, another tab or workspace, or closing the panel only hide it until its lines show again, unless the file changed meanwhile.
 
+## On another machine
+
+With a [machine's workspace](../machines/#changes-and-files-of-a-machines-workspace) picked in the sidebar, the panel shows that workspace's changes on the machine: its files, the Uncommitted, Commits and All tabs against its base, the same filter and the same diff, refreshed at the machine's pace. Its first tab reads `web-shop › main · vps`. Files start folded, and each one you unfold asks the machine for its diff. The panel only reads: staging, discarding, marking a file as viewed, picking the base, ` open ` and **ask agent** aren't offered, while the machine's own `✓` and `●` marks show. **Every project** lists only this computer's projects. If the machine goes down, the list stays with `vps unreachable` under the header until it is back.
+
 ## Live, and light on your repository
 
 In the project scope, while the panel is open it asks git for changes every second, so edits show up shortly after they are saved; while it is closed it checks every three seconds, for the count on the button. It runs git in the background with options that never take git's index lock, so it doesn't get in the way of an agent running `git add` or `git commit` at the same time. Only **discard** and **stage** write git's index, once, when you confirm or click. When nothing changed, the diff is reused.

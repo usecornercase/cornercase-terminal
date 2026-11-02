@@ -155,7 +155,7 @@ impl App {
     pub(super) fn follow(&mut self, area: Rect) {
         self.set_queue_area(area);
         if self.focus() != self.scroll.followed {
-            self.panels.files.set_full_screen(false);
+            self.set_file_full_screen(false);
         }
         let areas = self.layout(area);
         let relayout =

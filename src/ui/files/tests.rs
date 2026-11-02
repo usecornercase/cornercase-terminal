@@ -30,6 +30,7 @@ fn tree() -> View {
         tint: None,
         icons: false,
         soft: Color::Gray,
+        remote: None,
     }
 }
 
@@ -75,6 +76,7 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
         tint: None,
         icons: false,
         soft: Color::Gray,
+        remote: None,
     }
 }
 
@@ -136,6 +138,7 @@ fn searched(mode: Mode, rows: Vec<Found>, selected: Option<usize>) -> View {
         tint: None,
         icons: false,
         soft: Color::Gray,
+        remote: None,
     }
 }
 
@@ -906,5 +909,82 @@ mod wrapped {
         assert_eq!(reveal(area, &view, (1, 80)), None);
         assert_eq!(reveal(area, &view, (1, 150)), Some(Top::default()));
         assert_eq!(reveal(area, &view, (1, 280)), Some(Top { line: 0, row: 4 }));
+    }
+}
+
+mod a_remote_panel {
+    use super::*;
+
+    fn remote(view: View, down: Option<&str>) -> View {
+        View { remote: Some(RemoteNote { machine: "vps".into(), down: down.map(String::from) }), ..view }
+    }
+
+    #[test]
+    fn offers_only_copy_on_a_file() {
+        let view = remote(opened(None, &[]), None);
+        let Screen::File(file) = &view.screen else { unreachable!() };
+        for wanted in [Action::Open, Action::OpenIn, Action::Ask] {
+            assert_ne!(hit(AREA, &view, action(AREA, file, wanted).as_position()), Some(Hit::Action(wanted)));
+        }
+        insta::assert_snapshot!(render(&view));
+    }
+
+    #[test]
+    fn of_an_unreachable_machine_says_so_under_the_header() {
+        let view = remote(tree(), Some("seen 2 min ago"));
+        assert_eq!(body(AREA, &view).y, body(AREA, &tree()).y + 1);
+        insta::assert_snapshot!(render(&view));
+    }
+}
+
+mod hidden_characters {
+    use rstest::rstest;
+
+    use super::*;
+
+    const HIDDEN: &str = "\u{202e}\u{200b}\u{1b}\n";
+    const COPIES: usize = 15;
+
+    fn hiding(text: &str) -> String {
+        format!("{}{text}", HIDDEN.repeat(COPIES))
+    }
+
+    fn hide(view: &mut View) {
+        view.root = hiding(&view.root);
+        match &mut view.screen {
+            Screen::Tree(tree) => tree.rows.iter_mut().for_each(|row| row.name = hiding(&row.name)),
+            Screen::Search(search) => search.rows.iter_mut().for_each(hide_found),
+            Screen::File(file) => file.path = hiding(&file.path),
+        }
+    }
+
+    fn hide_found(found: &mut Found) {
+        let shift = u32::try_from(HIDDEN.chars().count() * COPIES).expect("a short prefix");
+        match found {
+            Found::Name { path, indices } => {
+                *path = hiding(path);
+                *indices = indices.iter().map(|i| i + shift).collect();
+            }
+            Found::File { path, .. } => *path = hiding(path),
+            Found::Line { .. } => {}
+        }
+    }
+
+    fn drawn(view: &View) -> Buffer {
+        let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
+        terminal.draw(|f| draw(f, AREA, view, None)).expect("draw");
+        terminal.backend().buffer().clone()
+    }
+
+    #[rstest]
+    #[case::in_the_tree(tree())]
+    #[case::in_the_names_found(names())]
+    #[case::in_the_files_found(texts())]
+    #[case::in_the_path_of_a_file(opened(None, &[]))]
+    fn take_no_room_and_move_no_lit_letter(#[case] view: View) {
+        let mut hidden = view.clone();
+        hide(&mut hidden);
+
+        assert_eq!(drawn(&hidden), drawn(&view));
     }
 }

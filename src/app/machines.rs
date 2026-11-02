@@ -15,6 +15,7 @@ use crate::error::Result;
 use crate::git::remote::Repo;
 use crate::host::network;
 use crate::log::{self, Job, Level};
+use crate::machines::follow::Followed;
 use crate::machines::link::{self, Connect, Down, Event, Link, Report, Servers};
 use crate::machines::stream::StreamReport;
 use crate::machines::wake::{Network, Sleep};
@@ -28,6 +29,7 @@ mod column;
 mod drag;
 mod mouse;
 mod notices;
+pub(super) mod panels;
 mod repo;
 mod report;
 mod rows;
@@ -54,6 +56,8 @@ pub(crate) enum MachineEvent {
     Stats { link: u64, result: std::result::Result<View, String> },
     Usage { link: u64, result: std::result::Result<Plans, String> },
     Acted(acting::Acted),
+    Followed(Followed),
+    Read(Box<panels::FileRead>),
     Stream(StreamReport),
 }
 
@@ -89,6 +93,7 @@ pub(super) struct Machines {
     pub(super) repos: repo::Repos,
     pub(super) acting: acting::Acting,
     selection: Option<selection::RemoteSelection>,
+    pub(super) panels: panels::RemotePanels,
     folded: Vec<(String, PathBuf)>,
     watched: Option<stream::Watched>,
     streams: u64,
@@ -109,6 +114,7 @@ impl Machines {
             repos: repo::Repos::new(),
             acting: acting::Acting::default(),
             selection: None,
+            panels: panels::RemotePanels::default(),
             folded: Vec::new(),
             watched: None,
             streams: 1,
@@ -240,6 +246,7 @@ impl App {
         });
         self.follow_selection();
         self.follow_remote_acts();
+        self.drop_unheld_panels();
         for machine in wanted {
             let edited = before.iter().any(|old| old.destination == machine.destination && *old != machine);
             let Some(held) = self.machines.held.iter_mut().find(|held| held.destination == machine.destination) else {
@@ -282,6 +289,8 @@ impl App {
             MachineEvent::Stats { link, result } => self.machine_answered(link, result),
             MachineEvent::Usage { link, result } => self.machine_answered(link, result),
             MachineEvent::Acted(acted) => self.acted(acted),
+            MachineEvent::Followed(followed) => self.remote_followed(followed),
+            MachineEvent::Read(read) => self.remote_file_read(*read),
             MachineEvent::Stream(report) => self.stream_reported(report),
         }
     }
@@ -421,5 +430,6 @@ impl App {
         self.machines.held.clear();
         self.machines.synced.clear();
         self.machines.selection = None;
+        self.machines.panels.reset();
     }
 }

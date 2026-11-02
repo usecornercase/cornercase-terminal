@@ -64,7 +64,7 @@ An `older` machine has an **`update…`** row under it. It runs `cornercase upda
 ssh ana@vps.example.com true
 ```
 
-- **Your own `ControlMaster`, if you like.** The link holds one connection, but `cornercase machines update` and [`--remote` commands](../remote/#commands-for-scripts-and-agents) open their own; a shared one makes them faster:
+- **Your own `ControlMaster`, if you like.** The link holds one connection, but `cornercase machines update`, [the side panels on a machine](#changes-and-files-of-a-machines-workspace) and [`--remote` commands](../remote/#commands-for-scripts-and-agents) open their own; a shared one makes them faster:
 
 ```text
 Host vps
@@ -145,7 +145,17 @@ Once its screen shows, the tab works as one of yours, on the machine:
 
 Before its first screen arrives, and while the machine is down, nothing you type, click or scroll there is sent, or kept for later: a toast says `vps unreachable: nothing was sent`. When the program in a pane doesn't take what you send, the toast says so too.
 
-While a machine's workspace shows, the sidebar, the tools, the tabs above the pane and the prefix key's menu still work; what that menu does to a tab or a pane, such as a split, first goes back to this computer. The project here it pairs with becomes the active one, and the tabs above the pane, **Changes** and **Files** keep showing that project's workspace you were on here. Click anything of this computer to go back to it.
+While a machine's workspace shows, the sidebar, the tools, the tabs above the pane and the prefix key's menu still work; what that menu does to a tab or a pane, such as a split, first goes back to this computer. The project here it pairs with becomes the active one, and the tabs above the pane keep showing that project's workspace you were on here. **Changes** and **Files** show the machine's workspace, as the next section describes. Click anything of this computer to go back to it.
+
+### Changes and files of a machine's workspace
+
+With a machine's workspace picked, ` Changes ` and ` Files ` show that workspace as it is on the machine, not the copy you have here. Changes lists the files changed there, with the same Uncommitted, Commits and All tabs and the same filter. Files shows the machine's tree, its search and its files in the viewer. Both refresh at the machine's own pace, about every second or two, and the first tab of Changes reads `web-shop › main · vps`.
+
+- **They only read.** Staging, discarding, marking a file as viewed, picking the base, ` open `, **open in…** and **ask agent** aren't offered. The marks the machine has, its `✓`, `●` and its base, show as they are there. ` copy ` and **copy path** put the text, or the machine's path, on this computer's clipboard.
+- **Files start folded in Changes**, and each file you unfold asks the machine for its diff, one at a time.
+- **The button's number** shows once the machine has counted that workspace's changes, usually once you open the panel. Until then the button reads ` Changes ` alone.
+- **When the machine goes down**, both panels keep what they showed with `vps unreachable` and `seen 2 min ago` or `reconnecting in 4 s` under their header. Unfolding a file, opening a folder or a file and searching then send nothing and say so. When the link is back they pick up where they were.
+- While they show a machine's workspace they open `ssh` connections of their own, one for each thing they follow, such as the tree and the open file. [Your own `ControlMaster`](#what-you-need) makes them quicker.
 
 ### Notices from a machine
 
@@ -159,10 +169,11 @@ Scripts get them from [`cornercase events --notices`](../scripts-and-agents/#fol
 
 ### What isn't there yet
 
+- Changes and Files of a machine's workspace only read it: nothing stages, discards or opens a file there.
+- **Every project** in Changes lists only this computer's projects.
 - A project on a machine with no workspaces can't be picked.
 - Starting an agent, a script or an issue's work on a machine.
 - Closing or renaming a machine's tabs, `+ Tab`, splitting or closing its panes, and the prefix key's menu acting there.
-- **Changes** and **Files** for a machine's workspace.
 - In a machine's tab: clicking a path, the pane's right-click menu, moving panes, the accounts row, opening links, and pictures.
 - Picking a machine's workspace with ` go ` or `focus --machine` doesn't scroll the tree, or the workspaces column, to its row.
 

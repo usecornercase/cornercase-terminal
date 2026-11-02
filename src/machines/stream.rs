@@ -11,10 +11,10 @@ use serde_json::Value;
 
 use super::ask::LATE;
 use super::link::{self, Asked, Clock, Connect, Control, Ends, Envelope, Heard, Line, Wall};
-use crate::control::contract::{Code, Refusal, Structured};
+use crate::control::contract::{Code, Refusal};
 use crate::control::surface::mirror::{Mirror, Unapplied};
 use crate::control::surface::{COLS, ROWS};
-use crate::control::{Command, OpenView, Response, Snapshot, Surface, ViewInfo};
+use crate::control::{Command, OpenView, Snapshot, Surface, ViewInfo};
 use crate::error::Error;
 use crate::panics;
 use crate::remote::{self, Killer};
@@ -464,17 +464,7 @@ fn refusal(text: &str) -> String {
 }
 
 fn reply(text: &str) -> Result<Value, Refusal> {
-    if let Ok(answer) = serde_json::from_str::<Structured>(text) {
-        return match answer {
-            Structured::Ok(value) => Ok(value),
-            Structured::Error(refusal) => Err(Refusal::new(refusal.code, link::clean(&refusal.message))),
-        };
-    }
-    match serde_json::from_str::<Response>(text) {
-        Ok(Response::Ok(value)) => Ok(value),
-        Ok(Response::Error(message)) => Err(Refusal::new(Code::Failed, link::clean(&message))),
-        Err(_) => Err(Refusal::new(Code::Failed, UNREADABLE)),
-    }
+    link::replied(text).unwrap_or_else(|| Err(Refusal::new(Code::Failed, UNREADABLE)))
 }
 
 #[cfg(test)]

@@ -360,6 +360,7 @@ impl App {
 
     pub(crate) fn window_gone(&mut self) {
         self.clients.views.windowed = false;
+        self.machines.panels.hang_up();
         if self.clients.views.window.take().is_some() {
             self.clients.views.changed = true;
             let area = self.clients.views.area;

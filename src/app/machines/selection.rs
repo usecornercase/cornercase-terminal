@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use super::Held;
 use crate::app::App;
 use crate::control::{self, ProjectInfo, WorkspaceInfo};
 use crate::log;
@@ -33,10 +34,24 @@ pub(in crate::app) enum RemoteItem {
 }
 
 impl App {
-    pub(in crate::app) fn shown_remote(&self) -> Option<RemoteShown> {
+    fn chosen_remote(&self) -> Option<(&RemoteSelection, &Held, &control::Report)> {
         let selection = self.machines.selection.as_ref()?;
         let held = self.machines.held.iter().find(|held| held.link.id() == selection.link)?;
-        held.seen.as_deref().filter(|seen| seen.boot == selection.boot)?;
+        let seen = held.seen.as_deref().filter(|seen| seen.boot == selection.boot)?;
+        Some((selection, held, seen))
+    }
+
+    pub(in crate::app) fn showing_remote(&self) -> bool {
+        self.chosen_remote().is_some()
+    }
+
+    pub(in crate::app) fn shown_place(&self) -> Option<(&ProjectInfo, &WorkspaceInfo)> {
+        let (selection, _, seen) = self.chosen_remote()?;
+        place(seen, |w| w.id == selection.workspace)
+    }
+
+    pub(in crate::app) fn shown_remote(&self) -> Option<RemoteShown> {
+        let (selection, held, _) = self.chosen_remote()?;
         Some(RemoteShown {
             machine: held.name.clone(),
             link: selection.link,

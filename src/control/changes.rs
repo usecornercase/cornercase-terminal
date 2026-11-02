@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use ratatui::style::Style as Look;
 use serde::{Deserialize, Serialize};
 
@@ -221,6 +223,16 @@ impl From<Staged> for Staging {
     }
 }
 
+impl From<Staging> for Staged {
+    fn from(staging: Staging) -> Self {
+        match staging {
+            Staging::No => Self::No,
+            Staging::Partly => Self::Partly,
+            Staging::Yes => Self::Yes,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum FileStatus {
@@ -277,6 +289,17 @@ impl From<diff::Fold> for FoldClass {
     }
 }
 
+impl From<FoldClass> for diff::Fold {
+    fn from(fold: FoldClass) -> Self {
+        match fold {
+            FoldClass::Open => Self::Open,
+            FoldClass::Lockfile => Self::Lockfile,
+            FoldClass::Binary => Self::Binary,
+            FoldClass::Large => Self::Large,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum LineKind {
@@ -292,6 +315,16 @@ impl From<diff::Kind> for LineKind {
             diff::Kind::Context => Self::Context,
             diff::Kind::Removed => Self::Removed,
             diff::Kind::Added => Self::Added,
+        }
+    }
+}
+
+impl From<LineKind> for diff::Kind {
+    fn from(kind: LineKind) -> Self {
+        match kind {
+            LineKind::Context => Self::Context,
+            LineKind::Removed => Self::Removed,
+            LineKind::Added => Self::Added,
         }
     }
 }
@@ -323,6 +356,22 @@ impl FileInfo {
             viewed,
             staged: file.staged.map(Into::into),
             digest: digest(file.viewed_digest),
+        }
+    }
+
+    pub(crate) fn file(&self) -> File {
+        let digest = parse_digest(&self.digest).unwrap_or_default();
+        File {
+            path: self.path.clone(),
+            old_path: self.old_path.clone(),
+            status: self.status.into(),
+            added: self.added,
+            removed: self.removed,
+            fold: self.fold.into(),
+            hunks: Vec::new(),
+            digest,
+            viewed_digest: digest,
+            staged: self.staged.map(Into::into),
         }
     }
 }
@@ -468,6 +517,52 @@ impl Patch {
             .collect();
         Self { workspace, mode, file: FileInfo::of(file, viewed), styles: styles.into_entries(), hunks }
     }
+
+    pub(crate) fn file(&self) -> File {
+        let looks = looks(&self.styles);
+        File { hunks: self.hunks.iter().map(|hunk| hunk.hunk(&looks)).collect(), ..self.file.file() }
+    }
+}
+
+impl HunkInfo {
+    fn hunk(&self, looks: &[Look]) -> diff::Hunk {
+        diff::Hunk {
+            old_start: self.old_start,
+            new_start: self.new_start,
+            context: self.context.clone(),
+            lines: self.lines.iter().map(|line| line.line(looks)).collect(),
+        }
+    }
+}
+
+impl LineInfo {
+    fn line(&self, looks: &[Look]) -> diff::Line {
+        diff::Line {
+            kind: self.kind.into(),
+            old: self.old,
+            new: self.new,
+            text: self.text.clone(),
+            raw: None,
+            syntax: self.syntax.as_deref().map(|segments| looked(segments, looks)),
+            emphasis: within(&self.emphasis, &self.text),
+        }
+    }
+}
+
+fn looks(styles: &[Style]) -> Vec<Look> {
+    styles.iter().map(|style| style.look().0).collect()
+}
+
+fn looked(segments: &[Segment], looks: &[Look]) -> diff::Segments {
+    segments
+        .iter()
+        .map(|segment| (segment.text.clone(), looks.get(segment.style).copied().unwrap_or_default()))
+        .collect()
+}
+
+pub(super) fn within(ranges: &[[usize; 2]], text: &str) -> Vec<Range<usize>> {
+    let chars = text.chars().count();
+    ranges.iter().map(|&[start, end]| start..end.min(chars)).filter(|range| !range.is_empty()).collect()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -503,6 +598,20 @@ impl Gap {
             })
             .collect();
         Self { workspace, path: path.to_string(), hunk, styles: styles.into_entries(), lines }
+    }
+
+    pub(crate) fn lines(&self) -> Vec<GapLine> {
+        let looks = looks(&self.styles);
+        self.lines
+            .iter()
+            .map(|line| GapLine {
+                old: line.old,
+                new: line.new,
+                text: line.text.clone(),
+                raw: None,
+                syntax: line.syntax.as_deref().map(|segments| looked(segments, &looks)),
+            })
+            .collect()
     }
 }
 

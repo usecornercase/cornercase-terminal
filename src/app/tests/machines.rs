@@ -421,6 +421,7 @@ mod fakes {
 }
 
 mod acting;
+mod panels;
 mod requests;
 mod seen;
 mod settings;

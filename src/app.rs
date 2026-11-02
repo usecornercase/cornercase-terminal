@@ -464,6 +464,7 @@ impl App {
         self.flush_run_dirs();
         self.ask_sessions(now);
         self.refresh_changes(now);
+        self.sync_remote_panels(now);
         self.auto_scroll(now);
         self.auto_scroll_lines(now);
     }

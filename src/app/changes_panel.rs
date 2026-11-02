@@ -10,6 +10,7 @@ use super::control::{BaseChange, Replied};
 use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
+use super::machines::panels::Feed;
 use super::merge_check::MergeAnswer;
 use crate::changes::diff::File as ChangedFile;
 use crate::changes::{self, Checkout, Mode, Tints, every};
@@ -139,7 +140,22 @@ impl App {
         }
     }
 
+    fn shows_remote_diff(&self) -> bool {
+        self.showing_remote() && self.panels.changes.scope() == changes::Scope::Project
+    }
+
+    pub(super) fn changes_state(&self) -> &changes::Panel {
+        if self.shows_remote_diff() { &self.machines.panels.changes.panel } else { &self.panels.changes }
+    }
+
+    pub(super) fn changes_state_mut(&mut self) -> &mut changes::Panel {
+        if self.shows_remote_diff() { &mut self.machines.panels.changes.panel } else { &mut self.panels.changes }
+    }
+
     pub(super) fn changes_target(&self) -> Option<Checkout> {
+        if self.shown_remote().is_some() {
+            return None;
+        }
         let workspace = self.project().filter(|p| !p.closing)?.workspace().filter(|w| w.open())?;
         git::branch(&workspace.path)?;
         Some(Checkout { workspace: workspace.id, dir: workspace.path.clone(), base: workspace.base.clone() })
@@ -147,11 +163,13 @@ impl App {
 
     pub(super) fn changes_shown(&self) -> bool {
         self.screen.side == Some(Side::Changes)
-            && (self.panels.changes.scope() == changes::Scope::Every || self.changes_target().is_some())
+            && (self.changes_state().scope() == changes::Scope::Every
+                || self.changes_target().is_some()
+                || self.remote_changes_offered())
     }
 
     fn every_shown(&self) -> bool {
-        self.panels.changes.scope() == changes::Scope::Every && self.changes_shown()
+        self.changes_state().scope() == changes::Scope::Every && self.changes_shown()
     }
 
     pub(super) fn refresh_changes(&mut self, now: Instant) {
@@ -240,12 +258,17 @@ impl App {
     }
 
     pub(super) fn changes_label(&self) -> Option<String> {
-        self.changes_files().map(changes_label)
+        self.changes_button_view().map(|button| button.label)
     }
 
     pub(super) fn changes_button_view(&self) -> Option<ui::ChangesButton> {
         let open = self.screen.side == Some(Side::Changes);
-        self.changes_files().map(|files| ui::ChangesButton { label: changes_label(files), files, open })
+        let files = if self.shown_remote().is_some() {
+            self.remote_changes_offered().then(|| self.remote_changes_files())?
+        } else {
+            Some(self.changes_files()?)
+        };
+        Some(ui::ChangesButton { label: changes_label(files), files, open })
     }
 
     pub(super) fn changes_files(&self) -> Option<usize> {
@@ -268,26 +291,26 @@ impl App {
     }
 
     pub(super) fn filtering(&self) -> bool {
-        self.overlay.is_none() && self.changes_shown() && self.panels.changes.filter().is_some_and(|f| f.focused)
+        self.overlay.is_none() && self.changes_shown() && self.changes_state().filter().is_some_and(|f| f.focused)
     }
 
     pub(super) fn filter_key(&mut self, key: KeyEvent) {
-        let Some(filter) = self.panels.changes.filter() else { return };
+        let Some(filter) = self.changes_state().filter() else { return };
         let empty = filter.query().is_empty();
         match key.code {
             KeyCode::Esc if empty => {
-                self.panels.changes.clear_filter();
+                self.changes_state_mut().clear_filter();
                 self.close_panel();
             }
-            KeyCode::Esc => self.panels.changes.clear_filter(),
-            KeyCode::Enter => self.panels.changes.unfocus(),
-            KeyCode::Backspace => self.panels.changes.pop_filter(),
+            KeyCode::Esc => self.changes_state_mut().clear_filter(),
+            KeyCode::Enter => self.changes_state_mut().unfocus(),
+            KeyCode::Backspace => self.changes_state_mut().pop_filter(),
             KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
-                self.panels.changes.push_filter(c);
+                self.changes_state_mut().push_filter(c);
             }
             _ => return,
         }
-        self.panels.changes.scroll_to_top();
+        self.changes_state_mut().scroll_to_top();
     }
 
     pub(super) fn changed_diff(&self, target: &Checkout) -> Option<Arc<changes::diff::Diff>> {
@@ -309,33 +332,47 @@ impl App {
 
     pub(super) fn panel_view(&self) -> Option<panel::View> {
         let mut view = self.plain_view()?;
-        view.selection = self.panels.changes.selection().and_then(|s| panel::selected(&view, s));
+        view.selection = self.changes_state().selection().and_then(|s| panel::selected(&view, s));
         Some(view)
     }
 
     fn plain_view(&self) -> Option<panel::View> {
-        let every = self.panels.changes.scope() == changes::Scope::Every;
+        if self.shows_remote_diff() {
+            return self.remote_changes_view();
+        }
+        let every = self.changes_state().scope() == changes::Scope::Every;
         let target = if every { None } else { self.changes_target() };
-        let model = target.as_ref().and_then(|t| self.panels.changes.model(t.workspace, t.base.as_deref()));
+        let model = target.as_ref().and_then(|t| self.changes_state().model(t.workspace, t.base.as_deref()));
         let targets = if every { self.every_targets() } else { Vec::new() };
-        let (body, owners, headers) =
-            if every { self.every_body(&targets) } else { single_body(target.as_ref()?, model) };
-        let Marks { folded, viewed, shared, gaps } = self.panel_marks(&body, &owners);
-        let filter = self.panel_filter(&body);
-        Some(panel::View {
-            scope: self.panels.changes.scope(),
+        let listed = if every { self.every_body(&targets) } else { single_body(target.as_ref()?.workspace, model) };
+        Some(self.listed_view(ChangesList {
             project: self.panel_project(),
+            mode: if every { Mode::Uncommitted } else { self.changes_state().mode() },
+            base: target.and_then(|t| self.changes_state().label(t.workspace).or(t.base)).filter(|_| !every),
+            live: self.panel_live(every, &targets, model),
+            listed,
+            remote: None,
+        }))
+    }
+
+    pub(in crate::app) fn listed_view(&self, list: ChangesList) -> panel::View {
+        let (body, owners, headers) = list.listed;
+        let Marks { folded, viewed, shared, gaps } = self.panel_marks(&body, &owners, list.remote.is_none());
+        let filter = self.panel_filter(&body);
+        panel::View {
+            scope: self.changes_state().scope(),
+            project: list.project,
             owners,
             headers,
-            mode: if every { Mode::Uncommitted } else { self.panels.changes.mode() },
-            base: target.and_then(|t| self.panels.changes.label(t.workspace).or(t.base)).filter(|_| !every),
+            mode: list.mode,
+            base: list.base,
             body,
             folded,
             viewed,
             shared,
             gaps,
-            scroll: self.panels.changes.scroll(),
-            live: self.panel_live(every, &targets, model),
+            scroll: self.changes_state().scroll(),
+            live: list.live,
             light: self.themes.light(),
             muted: ui::muted(self.themes.host()),
             soft: ui::soft(self.themes.host()),
@@ -343,18 +380,19 @@ impl App {
             filter,
             selection: None,
             icons: false,
-        })
+            remote: list.remote,
+        }
     }
 
-    fn panel_marks(&self, body: &changes::Body, owners: &[u64]) -> Marks {
+    fn panel_marks(&self, body: &changes::Body, owners: &[u64], overlaps: bool) -> Marks {
         let mut marks = Marks::default();
         let mut sharing: HashMap<u64, HashSet<&str>> = HashMap::new();
         if let changes::Body::Ready(diff) = body {
             for (i, file) in diff.files.iter().enumerate() {
                 let ws = owners[i];
-                marks.folded.push(self.panels.changes.folded(ws, diff, file));
-                marks.viewed.push(self.panels.changes.viewed(ws, file));
-                let shared = sharing.entry(ws).or_insert_with(|| self.shared_files(ws));
+                marks.folded.push(self.changes_state().folded(ws, diff, file));
+                marks.viewed.push(self.changes_state().viewed(ws, file));
+                let shared = sharing.entry(ws).or_insert_with(|| self.marked_overlaps(ws, overlaps));
                 marks.shared.push(
                     shared.contains(file.path.as_str())
                         || file.old_path.as_deref().is_some_and(|old| shared.contains(old)),
@@ -365,13 +403,17 @@ impl App {
         marks
     }
 
+    fn marked_overlaps(&self, ws: u64, overlaps: bool) -> HashSet<&str> {
+        if overlaps { self.shared_files(ws) } else { HashSet::new() }
+    }
+
     fn file_gaps(&self, ws: u64, file: &ChangedFile) -> impl Iterator<Item = (usize, Arc<Vec<changes::GapLine>>)> {
         (1..file.hunks.len())
-            .filter_map(move |h| self.panels.changes.gap(ws, file, h).map(|lines| (h, Arc::clone(lines))))
+            .filter_map(move |h| self.changes_state().gap(ws, file, h).map(|lines| (h, Arc::clone(lines))))
     }
 
     fn panel_filter(&self, body: &changes::Body) -> Option<panel::FilterView> {
-        self.panels.changes.filter().map(|f| panel::FilterView {
+        self.changes_state().filter().map(|f| panel::FilterView {
             query: f.query().to_string(),
             focused: f.focused && self.overlay.is_none(),
             kept: match body {
@@ -405,7 +447,7 @@ impl App {
         let Some(view) = self.panel_view() else { return Ok(()) };
         if let Some(delta) = wheel(ev.kind) {
             let max = panel::max_scroll(panel_area, &view);
-            self.panels.changes.scroll_by(delta, max);
+            self.changes_state_mut().scroll_by(delta, max);
             return Ok(());
         }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
@@ -417,8 +459,7 @@ impl App {
         }
         let chosen = match hit {
             Some(
-                PanelHit::File(i)
-                | PanelHit::Viewed(i)
+                PanelHit::Viewed(i)
                 | PanelHit::Stage(i)
                 | PanelHit::Discard(i)
                 | PanelHit::Gap(i, _)
@@ -426,8 +467,8 @@ impl App {
             ) => self.chosen_file(&view, i),
             _ => None,
         };
-        if let (Some(PanelHit::Action(_, index, action)), Some(chosen)) = (hit, &chosen) {
-            return self.hunk_action(&chosen.target, &chosen.file, Hunk { index, action }, area);
+        if let Some(PanelHit::Action(i, index, action)) = hit {
+            return self.hunk_clicked(&view, (i, Hunk { index, action }), chosen.as_ref(), area);
         }
         self.changes_hit(hit, &view, chosen);
         if self.every_shown() {
@@ -447,13 +488,16 @@ impl App {
             Some(PanelHit::Line(i, spot)) => self.press_diff_line(view, (i, spot), at.1),
             Some(PanelHit::Text(i, spot)) => self.press_diff_text(view, (i, spot), (at.0, panel_area, at.1)),
             Some(PanelHit::Lines(action)) => self.selected_lines_action(view, action),
-            None if panel::parts(panel_area, view).body.contains(at.0) => self.panels.changes.clear_selection(),
+            None if panel::parts(panel_area, view).body.contains(at.0) => self.changes_state_mut().clear_selection(),
             _ => return false,
         }
         true
     }
 
     fn chosen_file(&self, view: &panel::View, i: usize) -> Option<Chosen> {
+        if self.shows_remote_diff() {
+            return None;
+        }
         let file = ready(view)?.files.get(i)?.clone();
         let workspace = *view.owners.get(i)?;
         let ws = self.projects.workspace_by(workspace)?;
@@ -464,29 +508,30 @@ impl App {
         match hit {
             Some(PanelHit::Scope(scope)) => self.panels.changes.set_scope(scope),
             Some(PanelHit::Header(i)) => self.toggle_changes_header(view, i),
-            Some(PanelHit::Mode(mode)) => self.panels.changes.set_mode(mode),
+            Some(PanelHit::Mode(mode)) => self.changes_state_mut().set_mode(mode),
             Some(PanelHit::Close) => self.show_side(None),
             Some(PanelHit::Filter | PanelHit::Query) => {
-                self.panels.changes.focus_filter();
+                self.changes_state_mut().focus_filter();
             }
-            Some(PanelHit::ClearFilter) => self.panels.changes.clear_filter(),
+            Some(PanelHit::ClearFilter) => self.changes_state_mut().clear_filter(),
             Some(PanelHit::Base) => self.pick_changes_base(),
             Some(PanelHit::FoldAll) => self.fold_all_files(view),
-            Some(PanelHit::File(_)) => self.toggle_file_fold(view, chosen),
+            Some(PanelHit::File(i)) => self.toggle_file_fold(view, i),
             Some(PanelHit::Viewed(_)) => {
                 if let Some(chosen) = chosen {
-                    self.panels.changes.toggle_viewed(chosen.target.workspace, &chosen.file);
+                    self.changes_state_mut().toggle_viewed(chosen.target.workspace, &chosen.file);
                 }
             }
             Some(PanelHit::Stage(_)) => self.stage_clicked(chosen),
             Some(PanelHit::Discard(_)) => self.ask_discard(chosen),
-            Some(PanelHit::Gap(_, h)) => self.read_gap(view.mode, chosen, h),
+            Some(PanelHit::Gap(i, h)) => self.read_gap(view, i, h, chosen),
+            Some(PanelHit::Omitted(i, h)) => self.open_omitted(view, i, h),
             Some(PanelHit::Action(..) | PanelHit::Line(..) | PanelHit::Text(..) | PanelHit::Lines(_)) | None => {}
         }
     }
 
     fn toggle_changes_header(&mut self, view: &panel::View, i: usize) {
-        self.panels.changes.toggle_header(view.headers[i].id);
+        self.changes_state_mut().toggle_header(view.headers[i].id);
         for workspace in &view.owners[view.headers[i].files.clone()] {
             self.panels.changes.invalidate_summary(*workspace);
         }
@@ -501,22 +546,55 @@ impl App {
     fn fold_all_files(&mut self, view: &panel::View) {
         let Some(diff) = ready(view) else { return };
         let fold = view.folded.iter().any(|f| !f);
+        if !fold && self.shows_remote_diff() && self.cut_off(Feed::Changes) {
+            return;
+        }
         if !fold {
-            self.panels.changes.unfold_headers();
+            self.changes_state_mut().unfold_headers();
         }
         for (file, workspace) in diff.files.iter().zip(&view.owners) {
-            self.panels.changes.set_fold(*workspace, file, fold);
+            self.changes_state_mut().set_fold(*workspace, file, fold);
         }
     }
 
-    fn toggle_file_fold(&mut self, view: &panel::View, chosen: Option<Chosen>) {
-        if let (Some(diff), Some(chosen)) = (ready(view), chosen) {
-            self.panels.changes.toggle_fold(chosen.target.workspace, diff, &chosen.file);
+    fn toggle_file_fold(&mut self, view: &panel::View, i: usize) {
+        let Some(diff) = ready(view) else { return };
+        let unfolds_remote = view.folded.get(i) == Some(&true) && self.shows_remote_diff();
+        if unfolds_remote && self.cut_off(Feed::Changes) {
+            return;
+        }
+        if let (Some(file), Some(&workspace)) = (diff.files.get(i), view.owners.get(i)) {
+            if unfolds_remote {
+                self.machines.panels.changes.try_again(&file.path);
+            }
+            self.changes_state_mut().toggle_fold(workspace, diff, file);
         }
     }
 
-    fn read_gap(&mut self, mode: Mode, chosen: Option<Chosen>, h: usize) {
+    fn open_omitted(&mut self, view: &panel::View, i: usize, h: usize) {
+        let (Some(file), Some(&workspace)) = (ready(view).and_then(|diff| diff.files.get(i)), view.owners.get(i))
+        else {
+            return;
+        };
+        let shown = view.gaps.get(&(i, h)).map_or(0, |lines| lines.len());
+        let Some(line) = changes::first_omitted(file, h, shown) else { return };
+        if self.shows_remote_diff() && self.cut_off(Feed::Reading) {
+            return;
+        }
+        self.show_side(Some(Side::Files));
+        self.screen.nav = None;
+        self.files_state_mut().open_at(workspace, &file.path, (line, line), None);
+    }
+
+    fn read_gap(&mut self, view: &panel::View, i: usize, h: usize, chosen: Option<Chosen>) {
+        if self.shows_remote_diff() {
+            if let Some(file) = ready(view).and_then(|diff| diff.files.get(i)) {
+                self.ask_remote_gap(file, h);
+            }
+            return;
+        }
         let Some(Chosen { target, file }) = chosen else { return };
+        let mode = view.mode;
         let (workspace, dir) = (target.workspace, target.dir);
         let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace);
         self.spawn_job(
@@ -527,6 +605,23 @@ impl App {
                 Some(AppEvent::Changes(ChangesEvent::Gap { workspace, file, hunk: h, lines }))
             },
         );
+    }
+
+    fn hunk_clicked(
+        &mut self,
+        view: &panel::View,
+        (i, hunk): (usize, Hunk),
+        chosen: Option<&Chosen>,
+        area: Rect,
+    ) -> Result<()> {
+        if let Some(chosen) = chosen {
+            return self.hunk_action(&chosen.target, &chosen.file, hunk, area);
+        }
+        let file = ready(view).and_then(|diff| diff.files.get(i)).filter(|_| self.shows_remote_diff());
+        if let (Some(found), HunkAction::Copy) = (file.and_then(|file| file.hunks.get(hunk.index)), hunk.action) {
+            self.copy(&found.patch());
+        }
+        Ok(())
     }
 
     pub(super) fn hunk_action(&mut self, target: &Checkout, file: &ChangedFile, hunk: Hunk, area: Rect) -> Result<()> {
@@ -562,6 +657,17 @@ impl App {
     }
 }
 
+pub(in crate::app) type Listed = (changes::Body, Vec<u64>, Vec<every::Header>);
+
+pub(in crate::app) struct ChangesList {
+    pub(in crate::app) project: String,
+    pub(in crate::app) mode: Mode,
+    pub(in crate::app) base: Option<String>,
+    pub(in crate::app) live: bool,
+    pub(in crate::app) listed: Listed,
+    pub(in crate::app) remote: Option<ui::RemoteNote>,
+}
+
 #[derive(Default)]
 struct Marks {
     folded: Vec<bool>,
@@ -588,19 +694,22 @@ fn ready(view: &panel::View) -> Option<&Arc<changes::diff::Diff>> {
     }
 }
 
-fn single_body(target: &Checkout, model: Option<&changes::Model>) -> (changes::Body, Vec<u64>, Vec<every::Header>) {
+pub(in crate::app) fn single_body(workspace: u64, model: Option<&changes::Model>) -> Listed {
     let body = match model.map(|m| &m.result) {
         None => changes::Body::Loading,
         Some(Ok(diff)) => changes::Body::Ready(Arc::clone(diff)),
         Some(Err(e)) => changes::Body::Failed(e.clone()),
     };
     let owners = match &body {
-        changes::Body::Ready(d) => vec![target.workspace; d.files.len()],
+        changes::Body::Ready(d) => vec![workspace; d.files.len()],
         _ => Vec::new(),
     };
     (body, owners, Vec::new())
 }
 
-pub(super) fn changes_label(files: usize) -> String {
-    if files > 0 { format!("{CHANGES_LABEL} {files}") } else { CHANGES_LABEL.to_string() }
+pub(super) fn changes_label(files: Option<usize>) -> String {
+    match files.filter(|files| *files > 0) {
+        Some(files) => format!("{CHANGES_LABEL} {files}"),
+        None => CHANGES_LABEL.to_string(),
+    }
 }

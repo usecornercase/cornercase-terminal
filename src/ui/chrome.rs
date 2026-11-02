@@ -47,7 +47,7 @@ pub(crate) const PLUGINS_MORE: &str = "⋯";
 
 pub(crate) struct ChangesButton {
     pub(crate) label: String,
-    pub(crate) files: usize,
+    pub(crate) files: Option<usize>,
     pub(crate) open: bool,
 }
 
