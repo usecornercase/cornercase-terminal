@@ -102,19 +102,20 @@ impl Watched {
         Some(self.held_since.filter(|_| !self.typed.is_empty())? + ANSWERS_WITHIN)
     }
 
-    pub(in crate::app) fn order(&mut self, order: Order) -> bool {
-        if self.live().is_none() {
-            return false;
+    pub(super) fn moving(&self) -> bool {
+        matches!(self.aim, Some(Aim::Tab(_)))
+    }
+
+    pub(super) fn order(&mut self, order: Order) {
+        if self.live().is_none() || self.moving() {
+            return;
         }
-        let mut dropped = false;
         if let Order::Focus(pane) = order {
-            dropped = matches!(self.aim, Some(Aim::Tab(_))) && self.drop_typed();
             self.aim = Some(Aim::Pane(pane));
         }
         if let Some((stream, _)) = self.live() {
             stream.send(order);
         }
-        dropped
     }
 
     pub(in crate::app) fn type_in(&mut self, event: InputEvent) -> bool {
@@ -138,7 +139,7 @@ impl Watched {
     }
 
     fn typed_pane(&self) -> Option<u64> {
-        let (_, screen) = self.live().filter(|_| !matches!(self.aim, Some(Aim::Tab(_))))?;
+        let (_, screen) = self.live().filter(|_| !self.moving())?;
         let aimed = |pane: &&RemotePane| match self.aim {
             Some(Aim::Pane(id)) => pane.pane == id,
             _ => pane.active,

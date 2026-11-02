@@ -52,11 +52,11 @@ impl App {
     }
 
     pub(super) fn point(&mut self, pointed: Pointed) {
-        self.screen.drag = pointed.drag.map(Drag::Remote);
-        let dropped = self.machines.watched.as_mut().is_some_and(|watched| {
-            pointed.orders.into_iter().map(|order| watched.order(order)).filter(|dropped| *dropped).count() > 0
-        });
-        self.typed_dropped(dropped);
+        let moving = self.watched().is_some_and(Watched::moving);
+        self.screen.drag = pointed.drag.filter(|_| !moving).map(Drag::Remote);
+        if let Some(watched) = self.machines.watched.as_mut() {
+            pointed.orders.into_iter().for_each(|order| watched.order(order));
+        }
     }
 }
 

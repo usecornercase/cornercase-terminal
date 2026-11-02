@@ -259,7 +259,35 @@ mod after_moving {
     }
 
     #[test]
-    fn keys_kept_for_a_tab_are_dropped_by_a_click_on_a_pane_still_shown() {
+    fn a_drag_over_the_old_screen_sends_no_selection_and_no_ratio_until_the_tab_shows() {
+        let mut streaming = streaming();
+        split(&mut streaming);
+        let mut streaming = kept(streaming, "a");
+        let pane = on(&mut streaming).layout(AREA).pane;
+        let at = |x: u16| Position::new(pane.x + x, pane.y + 1);
+
+        for (from, to) in [(1, 4), (9, 6)] {
+            mouse(on(&mut streaming), MouseEventKind::Down(MouseButton::Left), at(from));
+            mouse(on(&mut streaming), MouseEventKind::Drag(MouseButton::Left), at(to));
+            mouse(on(&mut streaming), MouseEventKind::Up(MouseButton::Left), at(to));
+        }
+
+        let mut orders = reach(&streaming.seeing.ends);
+        let focus = request(&mut orders);
+        assert_eq!((&focus["command"], &focus["args"]["item"]), (&json!("focus"), &json!({"tab": 11})));
+        say(&mut orders, &json!({"ok": {"tab": 11, "projection": 2}}));
+        say(&mut streaming.surface, &tab_with_pane(11, 5, 2));
+        streaming.seeing.rig.until("the other tab shows", |app| shown(app).as_deref() == Some("other"));
+        let kept = request(&mut orders);
+        say(&mut orders, &json!({"ok": {}}));
+        type_text(on(&mut streaming), "z");
+        let next = request(&mut orders);
+        assert_eq!((&kept["command"], events(&kept)), (&json!("input"), vec![key("a")]));
+        assert_eq!((&next["command"], events(&next)), (&json!("input"), vec![key("z")]));
+    }
+
+    #[test]
+    fn a_click_on_a_pane_still_shown_sends_nothing_and_the_keys_kept_reach_the_tab() {
         let mut streaming = streaming();
         split(&mut streaming);
         let mut streaming = kept(streaming, "a");
@@ -267,8 +295,15 @@ mod after_moving {
 
         click(on(&mut streaming), Position::new(pane.x + 13, pane.y + 1));
 
-        assert_eq!(held(&mut streaming), []);
-        assert_eq!(toast(on(&mut streaming)), Some(UNREACHABLE));
+        assert_eq!((held(&mut streaming), toast(on(&mut streaming))), (vec![key("a")], None));
+        let mut orders = reach(&streaming.seeing.ends);
+        assert_eq!(request(&mut orders)["args"]["item"], json!({"tab": 11}));
+        say(&mut orders, &json!({"ok": {"tab": 11, "projection": 2}}));
+        say(&mut streaming.surface, &tab_with_pane(11, 5, 2));
+        streaming.seeing.rig.until("the other tab shows", |app| shown(app).as_deref() == Some("other"));
+        let asked = request(&mut orders);
+        assert_eq!((&asked["command"], &asked["args"]["pane"]), (&json!("input"), &json!(5)));
+        assert_eq!(events(&asked), [key("a")]);
     }
 
     #[test]
