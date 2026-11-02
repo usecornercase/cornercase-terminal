@@ -77,6 +77,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: check
+        id: check
         shell: bash
         run: |
           set -o pipefail
@@ -85,10 +86,17 @@ jobs:
       - name: summary
         if: ${{ !cancelled() }}
         shell: bash
+        env:
+          OUTCOME: ${{ steps.check.outcome }}
         run: |
           {
             echo '### Windows'
-            grep -o 'could not compile `cornercase` ([^)]*) due to [0-9]* previous errors' check.log || echo 'No compile errors in `cornercase`'
+            if [ "$OUTCOME" = success ]; then
+              echo '`cornercase` compiles'
+            else
+              grep -oE 'could not compile `cornercase` \([^)]*\) due to [0-9]+ previous errors?' check.log ||
+                echo '`cargo check` failed before reaching `cornercase`: see its log'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   guardrails:
