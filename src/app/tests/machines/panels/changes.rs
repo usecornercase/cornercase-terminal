@@ -4,7 +4,7 @@ use super::*;
 use crate::changes::diff::{self, File, Fold, Hunk, Kind};
 use crate::changes::{Body, GapLine, Mode, Scope};
 use crate::control::changes::{
-    Content, FileInfo, FileStatus, FoldClass, Gap, Patch, State as Listing, Summary, WorkspaceChanges, digest,
+    Content, FileInfo, FileStatus, FoldClass, Gap, Patch, Staging, State as Listing, Summary, WorkspaceChanges, digest,
 };
 use crate::control::contract::{Code, Refusal, Structured};
 use crate::protocol::{self, ServerMessage};
@@ -365,6 +365,17 @@ mod a_remote_patch {
         panels.sync();
 
         assert_eq!((folded(&panels.rig.app), panels.streams()), (vec![false], 2));
+    }
+
+    #[test]
+    fn takes_the_marks_of_each_new_summary_with_the_same_digest() {
+        let (mut panels, mut stream) = Panels::with_hunks();
+
+        let staged = FileInfo { staged: Some(Staging::Yes), ..info("a.rs", 1) };
+        tell(&mut stream, &summary(Mode::Uncommitted, vec![staged]));
+
+        panels.rig.until("the new mark shows", |app| files(app)[0].staged == Some(diff::Staged::Yes));
+        assert_eq!(hunks(&panels.rig.app, "a.rs"), 2);
     }
 
     #[test]

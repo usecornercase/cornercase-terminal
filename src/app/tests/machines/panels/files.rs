@@ -209,6 +209,20 @@ mod the_remote_viewer {
     }
 
     #[test]
+    fn shows_each_new_text_before_its_colours() {
+        let (mut panels, mut stream) = Panels::with_file("[package]\n");
+        let long = (0..4000).map(|n| format!("key{n} = \"{n}\"")).collect::<Vec<_>>().join("\n");
+
+        let mut changes = 0;
+
+        panels.rig.until("a new text shows while the file keeps changing", |app| {
+            changes += 1;
+            tell(&mut stream, &read(&format!("[v{changes}]\n{long}")));
+            lines(&view(app)).first().is_some_and(|line| line.starts_with("[v"))
+        });
+    }
+
+    #[test]
     fn ends_its_stream_once_closed() {
         let (mut panels, mut stream) = Panels::with_file("[package]\n");
 
@@ -343,6 +357,21 @@ mod the_remote_search {
 
         assert_eq!(note(&panels.rig.app).as_deref(), Some("nothing found"));
         assert_eq!(panels.streams(), 2);
+    }
+
+    #[test]
+    fn shows_the_answer_to_a_query_longer_than_the_machine_s_text_is_kept() {
+        let (mut panels, _tree) = Panels::tree();
+        let query = "abc".repeat(90);
+        type_in_field(&mut panels, panel::field, &query);
+        let mut search = panels.opened();
+        request(&mut search);
+
+        let line = FoundLine { number: 2, text: "abc = 1".into(), ranges: vec![[0, 3]] };
+        let files = vec![FoundFile { path: "src/lib.toml".into(), lines: vec![line] }];
+        tell(&mut search, &Found { files, matches: 1, ..found(&query, SearchMode::Text) });
+
+        panels.rig.until("the answer shows", |app| results(&view(app)).len() == 2);
     }
 
     #[test]

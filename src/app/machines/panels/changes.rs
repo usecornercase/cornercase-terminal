@@ -174,6 +174,9 @@ impl RemoteChanges {
     fn show(&mut self, workspace: u64) {
         let Some(listed) = &self.listed else { return };
         let (mode, label) = (listed.mode, listed.label.clone());
+        for info in &listed.files {
+            headed(&mut self.patches, mode, info);
+        }
         let files = listed.files.iter().map(|info| self.file_of(mode, info)).collect();
         self.panel.shown(workspace, mode, label, Ok(Arc::new(Diff { files })));
     }
@@ -249,6 +252,19 @@ impl RemoteChanges {
         }
         late
     }
+}
+
+fn headed(patches: &mut HashMap<Key, Arc<File>>, mode: Mode, info: &FileInfo) {
+    let fresh = info.file();
+    let Some(kept) = patches.get_mut(&(mode, info.path.clone())) else { return };
+    if kept.digest == fresh.digest && !same_heading(kept, &fresh) {
+        *kept = Arc::new(File { hunks: kept.hunks.clone(), ..fresh });
+    }
+}
+
+fn same_heading(one: &File, other: &File) -> bool {
+    (&one.old_path, one.status, one.added, one.removed, one.fold, one.viewed_digest, one.staged)
+        == (&other.old_path, other.status, other.added, other.removed, other.fold, other.viewed_digest, other.staged)
 }
 
 impl App {

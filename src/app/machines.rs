@@ -50,7 +50,7 @@ pub(crate) enum MachineEvent {
     Usage { link: u64, result: std::result::Result<Plans, String> },
     Acted(acting::Acted),
     Followed(Followed),
-    Read(panels::FileRead),
+    Read(Box<panels::FileRead>),
 }
 
 impl From<Report> for AppEvent {
@@ -276,7 +276,7 @@ impl App {
             MachineEvent::Usage { link, result } => self.machine_answered(link, result),
             MachineEvent::Acted(acted) => self.acted(acted),
             MachineEvent::Followed(followed) => self.remote_followed(followed),
-            MachineEvent::Read(read) => self.remote_file_read(read),
+            MachineEvent::Read(read) => self.remote_file_read(*read),
         }
     }
 

@@ -34,6 +34,7 @@ const SILENT: &str = "did not answer the search";
 pub(crate) struct FileRead {
     stream: u64,
     turn: u64,
+    colored: bool,
     said: Result<Said, Refusal>,
 }
 
@@ -41,7 +42,6 @@ struct Queued {
     stream: u64,
     turn: u64,
     text: String,
-    first: bool,
 }
 
 #[derive(Default)]
@@ -152,7 +152,10 @@ impl RemoteFiles {
 
     fn found(&mut self, workspace: u64, text: &str) {
         match heard::found(text) {
-            Ok(found) if found.workspace == workspace => self.fed(workspace, &found),
+            Ok(found) if found.workspace == workspace => {
+                let query = self.asked(workspace).map_or(found.query, |asked| asked.query);
+                self.fed(workspace, &Found { query, ..found });
+            }
             Err(refusal) if refusal.code == Code::StaleBoot => self.refused(&refusal),
             Err(_) => {
                 if let Some(asked) = self.asked(workspace) {
@@ -204,18 +207,21 @@ fn next(reader: &Mutex<Reader>) -> Option<Queued> {
 
 fn read_and_send(tx: &Sender<AppEvent>, queued: &Queued) {
     let (stream, turn) = (queued.stream, queued.turn);
-    let send = |said| _ = tx.send(AppEvent::Machine(MachineEvent::Read(FileRead { stream, turn, said })));
+    let send = |said, colored| {
+        _ = tx.send(AppEvent::Machine(MachineEvent::Read(Box::new(FileRead { stream, turn, colored, said }))));
+    };
     let Some(read) = panics::contain(|| heard::read(&queued.text)) else { return };
     let read = match read {
         Ok(read) => read,
         Err(refusal) => {
-            send(Err(refusal));
+            send(Err(refusal), false);
             return;
         }
     };
     let Some(content) = panics::contain(|| read.content()) else { return };
+    let text = matches!(content.body, disk::Body::Text { .. });
     let said = |content| Said { workspace: read.workspace, path: read.path.clone(), content };
-    styled_after(content, queued.first, |content, _| send(Ok(said(content))));
+    styled_after(content, true, |content, done| send(Ok(said(content)), done && text));
 }
 
 impl App {
@@ -228,8 +234,7 @@ impl App {
         match feed {
             Feed::Reading => {
                 files.turn += 1;
-                let first = files.panel.viewer(workspace).is_none_or(|viewer| viewer.content.is_none());
-                post(&files.reader, &self.tx, Queued { stream, turn: files.turn, text, first });
+                post(&files.reader, &self.tx, Queued { stream, turn: files.turn, text });
             }
             Feed::Searching => {
                 files.found(workspace, &text);
@@ -252,7 +257,7 @@ impl App {
     pub(in crate::app) fn remote_file_read(&mut self, read: FileRead) {
         let Some(workspace) = self.machines.panels.aim.as_ref().map(|aim| aim.workspace) else { return };
         let files = &mut self.machines.panels.files;
-        if !Streamed::owns(files.read.as_ref(), read.stream) || read.turn != files.turn {
+        if !Streamed::owns(files.read.as_ref(), read.stream) || (read.colored && read.turn != files.turn) {
             return;
         }
         match read.said {
