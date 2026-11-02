@@ -56,6 +56,7 @@ fn removes_a_locked_worktree() {
     assert!(!at.exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn runs_the_teardown_first() {
     let repo = main_repo();
@@ -106,6 +107,7 @@ fn add_back(at: &Path, found: &Found) {
     std::fs::write(at.join(".git"), format!("gitdir: {}\n", admin.display())).expect("write");
 }
 
+#[cfg(unix)]
 #[test]
 fn deletes_an_orphan_folder_but_not_through_a_symlink() {
     let dir = TempDir::new();
@@ -216,6 +218,7 @@ fn refuses_an_orphan_that_is_a_repository() {
     assert!(dir.path().join("w/.git").exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn refuses_to_prune_through_a_symlinked_admin_folder() {
     let repo = main_repo();
@@ -244,6 +247,7 @@ fn removes_a_detached_worktree() {
     assert!(!at.exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn refuses_an_orphan_whose_gitdir_target_is_a_dangling_link() {
     let dir = TempDir::new();

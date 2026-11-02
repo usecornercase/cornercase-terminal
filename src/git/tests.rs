@@ -296,7 +296,7 @@ mod index_and_objects {
         assert_eq!(index.parent().and_then(Path::parent).and_then(Path::file_name), Some("worktrees".as_ref()));
         assert_eq!(index.file_name(), Some("index".as_ref()));
         let objects = objects_dir(&path).and_then(|dir| dir.canonicalize().ok());
-        assert_eq!(objects, Some(repo.path().join(".git/objects")));
+        assert_eq!(objects, repo.path().join(".git/objects").canonicalize().ok());
     }
 
     #[test]
@@ -304,5 +304,28 @@ mod index_and_objects {
         let repo = git_repo(&[]);
         assert_eq!(index_file(repo.path()), Some(repo.path().join(".git/index")));
         assert_eq!(objects_dir(repo.path()), Some(repo.path().join(".git/objects")));
+    }
+}
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::test_util::{git, git_repo, verbatim};
+
+    #[test]
+    fn a_worktree_git_wrote_with_forward_slashes_is_read_from_a_verbatim_folder() {
+        let repo = git_repo(&[]);
+        let tmp = TempDir::new();
+        let path = tmp.path().join("año");
+        git(repo.path(), &["worktree", "add", "--quiet", "-b", "feat", &path.display().to_string()]);
+        let gitdir = std::fs::read_to_string(repo.path().join(".git/worktrees/año/gitdir")).expect("gitdir");
+        assert!(gitdir.starts_with(&format!("{}:/", &path.display().to_string()[..1])), "{gitdir}");
+        let canonical = path.canonicalize().expect("canonical");
+
+        assert_eq!(linked_worktrees(&verbatim(repo.path())), std::slice::from_ref(&canonical));
+        assert_eq!(checkout_of(&verbatim(repo.path()), "feat"), Some(canonical));
+        assert_eq!(branch(&verbatim(&path)).as_deref(), Some("feat"));
+        let objects = objects_dir(&verbatim(&path)).and_then(|dir| dir.canonicalize().ok());
+        assert_eq!(objects, repo.path().join(".git").join("objects").canonicalize().ok());
     }
 }

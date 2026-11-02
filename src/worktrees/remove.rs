@@ -4,6 +4,7 @@ use crate::error::{Error, Result};
 use crate::git;
 use crate::git::worktree::{check, git as run};
 use crate::log;
+use crate::os::ffi;
 
 use super::discover::{Origin, plain, repo_of};
 use super::{Found, Kind};
@@ -48,8 +49,8 @@ fn prune(found: &Found) -> Result<()> {
         return Err(Error::Git(format!("{} is no longer prunable", found.path.display())));
     }
     let common = check(run(&found.repo, ["rev-parse", "--path-format=absolute", "--git-common-dir"])?)?;
-    let common = Path::new(std::str::from_utf8(common.trim_ascii_end()).map_err(|e| Error::Git(e.to_string()))?);
-    let dir = common.join("worktrees").join(admin);
+    let common = std::str::from_utf8(common.trim_ascii_end()).map_err(|e| Error::Git(e.to_string()))?;
+    let dir = ffi::to_path(common.as_bytes()).join("worktrees").join(admin);
     real_dir(&dir)?;
     std::fs::remove_dir_all(&dir)?;
     log::info!("worktrees", "pruned", path = found.path.display());
@@ -57,7 +58,7 @@ fn prune(found: &Found) -> Result<()> {
 }
 
 fn same(a: &Path, b: &Path) -> bool {
-    a == b || a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(a, b)| a == b)
+    ffi::same(a, b) || a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(a, b)| a == b)
 }
 
 fn real_dir(path: &Path) -> Result<()> {
@@ -76,8 +77,8 @@ fn orphan(path: &Path) -> Result<()> {
     let Some(target) = target else {
         return Err(Error::Git(format!("{} is not a worktree folder", path.display())));
     };
-    let gone =
-        matches!(std::fs::symlink_metadata(path.join(target)), Err(e) if e.kind() == std::io::ErrorKind::NotFound);
+    let looked = std::fs::symlink_metadata(ffi::join(path, target));
+    let gone = matches!(looked, Err(e) if e.kind() == std::io::ErrorKind::NotFound);
     if !gone {
         return Err(Error::Git(format!("the repository of {} is back", path.display())));
     }

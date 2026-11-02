@@ -65,6 +65,7 @@ mod refuses {
 mod touches_only_its_path {
     use super::*;
 
+    #[cfg(unix)]
     #[rstest]
     #[case::discard(FileAction::Discard)]
     #[case::stage(FileAction::Stage)]

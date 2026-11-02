@@ -12,7 +12,7 @@ use super::diff::{self, Diff, File, MAX_UNTRACKED_BYTES, Status};
 use super::porcelain::{Porcelain, path_prefix};
 use crate::error::{Error, Result};
 use crate::git::worktree;
-use crate::os::ffi::OsStringExt;
+use crate::os::ffi;
 use crate::os::fs::MetadataExt;
 use crate::process;
 
@@ -135,9 +135,10 @@ pub(super) fn read_untracked(dir: &Path, paths: impl IntoIterator<Item = String>
     let mut files = Vec::new();
     let mut budget = UNTRACKED_READ_BYTES;
     for path in paths {
-        let Ok(meta) = std::fs::symlink_metadata(dir.join(&path)) else { continue };
+        let at = ffi::join(dir, &path);
+        let Ok(meta) = std::fs::symlink_metadata(&at) else { continue };
         if meta.is_symlink() {
-            let target = std::fs::read_link(dir.join(&path)).map(|t| t.into_os_string().into_vec()).unwrap_or_default();
+            let target = std::fs::read_link(&at).map(|t| ffi::to_bytes(&t).into_owned()).unwrap_or_default();
             let size = target.len() as u64;
             files.push(Untracked { path, size, bytes: Some(target), modified: meta.modified().ok() });
             continue;
@@ -146,7 +147,7 @@ pub(super) fn read_untracked(dir: &Path, paths: impl IntoIterator<Item = String>
             continue;
         }
         let fits = meta.len() <= MAX_UNTRACKED_BYTES && meta.len() <= budget;
-        let bytes = fits.then(|| read(&dir.join(&path))).flatten();
+        let bytes = fits.then(|| read(&at)).flatten();
         budget = budget.saturating_sub(bytes.as_ref().map_or(0, |b| b.len() as u64));
         files.push(Untracked { path, size: meta.len(), bytes, modified: meta.modified().ok() });
     }
@@ -279,7 +280,7 @@ pub(super) fn stamp(path: &Path) -> Option<(u64, i64, i64, i64, i64)> {
 }
 
 pub(super) fn fingerprint(dir: &Path, from: &str, file: &File) -> u64 {
-    let stamp = stamp(&dir.join(&file.path));
+    let stamp = stamp(&ffi::join(dir, &file.path));
     let status = if file.status == Status::Untracked { Status::Added } else { file.status };
     let mut hasher = DefaultHasher::new();
     let counts = (status != Status::Added).then_some((file.added, file.removed));
@@ -320,7 +321,7 @@ impl Drop for Deadline {
 pub(crate) fn new_side(dir: &Path, mode: Mode, path: &str) -> Option<Vec<String>> {
     let bytes = match mode {
         Mode::Commits => run(dir, &["show", &format!("HEAD:./{path}")]).ok()?,
-        Mode::Uncommitted | Mode::All => read(&dir.join(path))?,
+        Mode::Uncommitted | Mode::All => read(&ffi::join(dir, path))?,
     };
     if bytes.len() as u64 > MAX_UNTRACKED_BYTES {
         return None;
