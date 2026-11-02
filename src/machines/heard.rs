@@ -44,6 +44,7 @@ pub(crate) fn patch(text: &str) -> Result<Patch, Refusal> {
 pub(crate) fn gap(text: &str) -> Result<Gap, Refusal> {
     let mut gap: Gap = typed(text)?;
     gap.path = link::clean_path(&gap.path);
+    gap.lines.truncate(MAX_LINES);
     gap.lines.iter_mut().for_each(clean_gap_line);
     Ok(gap)
 }

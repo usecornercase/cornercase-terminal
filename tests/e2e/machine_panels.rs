@@ -1,6 +1,8 @@
 use serde_json::json;
 
-use super::machines::{VPS, in_state, project_named, reach, sent_with_their_repos, start_listing, wait_for_machine};
+use super::machines::{
+    VPS, in_state, project_named, reach, sent_with_their_repos, start_listing, status, wait_for_machine,
+};
 use super::*;
 
 struct Shown {
@@ -35,13 +37,16 @@ fn showing() -> Shown {
     here.says(&["open", &clone_with_notes(&here, "https://github.com/acme/api", "one\ntwo\n")]);
     machine.says(&["open", &clone_with_notes(&machine, "git@github.com:acme/api.git", "one\nTWO\n")]);
     let sent = sent_with_their_repos(&here, &["api"]);
-    let workspace = project_named(&sent, "api")["workspaces"][0]["id"].to_string();
+    let workspace = project_named(&sent, "api")["workspaces"][0]["id"].clone();
     let mut app = Harness::open(Arc::clone(&here), ROWS, COLS);
     app.wait_for("the local clone", |s| s.contains(&entry("api")));
 
-    here.says(&["focus", "--machine", VPS, "--workspace", &workspace]);
+    here.says(&["focus", "--machine", VPS, "--workspace", &workspace.to_string()]);
 
-    app.wait_for("the machine's workspace shows", |s| s.contains("runs on vps"));
+    wait_until("the machine's workspace streams here", || {
+        let shown = status(&here)["shown_remote"].clone();
+        (&shown["machine"], &shown["workspace"], &shown["stream"]) == (&json!(VPS), &workspace, &json!("live"))
+    });
     Shown { machine, app }
 }
 

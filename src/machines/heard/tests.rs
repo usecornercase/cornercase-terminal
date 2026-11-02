@@ -168,6 +168,15 @@ mod patches {
         assert_eq!(heard.path, format!("src/a.rs{KEPT}"));
         assert_eq!(heard.lines[0].text, format!("\t{KEPT}"));
     }
+
+    #[test]
+    fn a_gap_keeps_no_more_lines_than_a_diff_can_hold() {
+        let sent = Gap { lines: vec![GapLineInfo::default(); MAX_LINES + 1], ..Gap::default() };
+
+        let heard = gap(&ok(&sent)).expect("a gap");
+
+        assert_eq!(heard.lines.len(), MAX_LINES);
+    }
 }
 
 mod files {

@@ -257,7 +257,7 @@ fn clone_of(session: &Session, name: &str, url: &str) -> String {
     dir.display().to_string()
 }
 
-fn status(session: &Session) -> Value {
+pub(super) fn status(session: &Session) -> Value {
     serde_json::from_str(&session.says(&["status", "--json"])).expect("a status report")
 }
 
