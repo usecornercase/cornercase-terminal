@@ -170,7 +170,7 @@ cornercase machines retry [vps]                        # try one link, or every 
 
 `--icon` takes the glyph or its name (`server`, `laptop`, `desktop`, `mini`, `home server`, `other`), `--folder` is `~/code` unless you give one, and `edit` changes only what you give. `add` refuses a name already listed and `edit` one that isn't. Every subcommand prints the list, or with `--json` the `machines` answer. A value the rules refuse, or an update that failed on the machine, exits with status 1 and says why. See [Machines](../../guides/machines/).
 
-[`cornercase status`](../../guides/scripts-and-agents/#machines-workspaces) lists, after the projects of this computer, what each linked machine has, with `paired with project N` on a project that is a clone of the same repository as one here, and `cornercase focus --machine vps --workspace ID` picks one of its workspaces as the one shown, as a click on its row does: the window shows a card that says where it runs.
+[`cornercase status`](../../guides/scripts-and-agents/#machines-workspaces) lists, after the projects of this computer, what each linked machine has, with `paired with project N` on a project that is a clone of the same repository as one here, and `cornercase focus --machine vps --workspace ID` picks one of its workspaces as the one shown, as a click on its row does: the window shows that workspace's tab, streamed from the machine.
 
 `stats` and `usage` read the machines too: `--machine NAME` prints that machine's stats or plan limits, and `--machine all` this computer's and every machine's, the stats summed. Your server asks each machine through `ssh`, so the command needs it running. See [Stats and usage of each machine](../../guides/machines/#stats-and-usage-of-each-machine).
 

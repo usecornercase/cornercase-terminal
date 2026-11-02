@@ -279,6 +279,14 @@ pub(crate) enum Colour {
 }
 
 impl Colour {
+    fn color(colour: Option<Self>) -> Color {
+        match colour {
+            None => Color::Reset,
+            Some(Self::Index(index)) => Color::Indexed(index),
+            Some(Self::Rgb([r, g, b])) => Color::Rgb(r, g, b),
+        }
+    }
+
     fn of(color: Color) -> Option<Self> {
         match color {
             Color::Reset => None,
@@ -350,6 +358,16 @@ pub(crate) enum Underline {
 }
 
 impl Underline {
+    fn style(underline: Option<Self>) -> UnderlineStyle {
+        match underline {
+            None => UnderlineStyle::Single,
+            Some(Self::Double) => UnderlineStyle::Double,
+            Some(Self::Curly) => UnderlineStyle::Curly,
+            Some(Self::Dotted) => UnderlineStyle::Dotted,
+            Some(Self::Dashed) => UnderlineStyle::Dashed,
+        }
+    }
+
     fn of(style: UnderlineStyle) -> Option<Self> {
         match style {
             UnderlineStyle::None | UnderlineStyle::Single => None,
@@ -380,6 +398,25 @@ impl Style {
             invisible: has(Modifier::HIDDEN),
             strikethrough: has(Modifier::CROSSED_OUT),
         }
+    }
+
+    pub(crate) fn look(&self) -> (Look, Decor) {
+        let mut modifier = Modifier::empty();
+        modifier.set(Modifier::BOLD, self.bold);
+        modifier.set(Modifier::DIM, self.dim);
+        modifier.set(Modifier::ITALIC, self.italic);
+        modifier.set(Modifier::UNDERLINED, self.underline);
+        modifier.set(Modifier::SLOW_BLINK, self.blink);
+        modifier.set(Modifier::REVERSED, self.inverse);
+        modifier.set(Modifier::HIDDEN, self.invisible);
+        modifier.set(Modifier::CROSSED_OUT, self.strikethrough);
+        let look = Look::default().fg(Colour::color(self.fg)).bg(Colour::color(self.bg)).add_modifier(modifier);
+        let decor = Decor {
+            underline: if self.underline { Underline::style(self.underline_style) } else { UnderlineStyle::None },
+            underline_colour: Colour::color(self.underline_colour.filter(|_| self.underline)),
+            overline: self.overline,
+        };
+        (look, decor)
     }
 }
 
@@ -463,7 +500,6 @@ impl<B: Serialize> Frame<B> {
 
 pub(crate) mod patch;
 
-#[cfg(test)]
 pub(crate) mod mirror;
 #[cfg(test)]
 mod tests;

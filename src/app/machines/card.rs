@@ -1,9 +1,11 @@
 use std::time::{Duration, Instant};
 
+use super::drag::RemoteDrag;
 use super::rows::{status, statuses};
-use super::{Held, OLDER};
+use super::{Flow, Held, OLDER};
 use crate::agents::activity::Status;
 use crate::app::App;
+use crate::app::interaction::Drag;
 use crate::control::TabInfo;
 use crate::machines::State;
 use crate::machines::link::Down;
@@ -12,16 +14,36 @@ use crate::ui;
 
 impl App {
     pub(in crate::app) fn remote_card(&self, now: Instant) -> Option<ui::RemoteCard> {
+        let stale = self.remote_screen().map(|tab| tab.down);
+        if stale == Some(false) {
+            return None;
+        }
         let shown = self.shown_remote()?;
         let held = self.machines.held.iter().find(|held| held.link.id() == shown.link)?;
         let seen = held.seen.as_deref()?;
         let workspace = seen.projects.iter().flat_map(|p| &p.workspaces).find(|w| w.id == shown.workspace)?;
         let tab = shown.tab.and_then(|id| workspace.tabs.iter().find(|tab| tab.id == id));
+        let fallen = stale.is_some() || self.watched().is_some_and(|watched| matches!(watched.flow, Flow::Down(_)));
         Some(ui::RemoteCard {
             machine: held.name.clone(),
             agent: tab.and_then(agent),
             folder: text::display_path(&shown.path, seen.home.as_deref()),
-            down: (held.status.state != State::Linked).then(|| self.retry(held, now)),
+            down: (held.status.state != State::Linked)
+                .then(|| self.retry(held, now))
+                .or_else(|| fallen.then_some(ui::Retry::Now)),
+        })
+    }
+
+    pub(in crate::app) fn remote_screen(&self) -> Option<ui::RemoteTab> {
+        let watched = self.watched()?;
+        Some(ui::RemoteTab {
+            screen: watched.screen.clone()?,
+            dim_inactive: self.config.dim_inactive_panes,
+            down: watched.flow != Flow::Live,
+            dragging: match &self.screen.drag {
+                Some(Drag::Remote(RemoteDrag::Divider { path, .. })) => Some(path.clone()),
+                _ => None,
+            },
         })
     }
 

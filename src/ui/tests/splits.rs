@@ -3,7 +3,7 @@ use ratatui::style::Modifier;
 use super::*;
 use crate::project::split::Dir;
 
-fn three(dim_inactive: bool) -> TabView {
+pub(super) fn three(dim_inactive: bool) -> TabView {
     let mut layout = Node::Leaf(0);
     layout.split(0, Dir::Right, 1);
     layout.split(1, Dir::Down, 2);

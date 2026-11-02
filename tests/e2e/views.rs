@@ -1,12 +1,12 @@
 use super::commands::{Followed, new_tab};
 use super::*;
 
-fn size_of(app: &Harness, pane: &str, when: &str) -> String {
+pub(super) fn size_of(session: &Session, pane: &str, when: &str) -> String {
     let marker = format!("size-{when}");
     let command = format!("echo {marker}-$(stty size | tr ' ' x)");
-    app.session.says(&["send", "--pane", pane, "--enter", &command]);
+    session.says(&["send", "--pane", pane, "--enter", &command]);
     let seen =
-        app.session.says(&["wait", "--pane", pane, "--text", &format!("^{marker}-[0-9]+x[0-9]+$"), "--timeout", "10"]);
+        session.says(&["wait", "--pane", pane, "--text", &format!("^{marker}-[0-9]+x[0-9]+$"), "--timeout", "10"]);
     seen.rsplit('-').next().unwrap_or_default().to_string()
 }
 
@@ -15,13 +15,13 @@ fn a_view_sizes_its_tab_and_moves_without_the_window_and_gives_both_back_when_it
     let app = Harness::start();
     let (pane, tab) = new_tab(&app);
     let window = app.session.report().shown;
-    let before = size_of(&app, &pane, "before");
+    let before = size_of(&app.session, &pane, "before");
 
     let mut opened = app.session.spawn(&["view", "--cols", "100", "--rows", "30", "--tab", &tab]);
     let mut followed = Followed::of(&mut opened);
     followed.until("the view's first line", |line| line["view"]["controls"] == true && line["revision"] == 1);
     let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
-    let sized = size_of(&app, &pane, "during");
+    let sized = size_of(&app.session, &pane, "during");
     let moved = app.session.says(&["new-tab", "--view", &id, "--focus"]);
     followed.until("the view moves", |line| line["view"]["projection"] == 2);
     let inside = app.session.says(&["status", "--view", &id]);
@@ -34,7 +34,7 @@ fn a_view_sizes_its_tab_and_moves_without_the_window_and_gives_both_back_when_it
     let _ = opened.wait();
     app.session
         .wait_for_report("the view closes", |_| app.session.cli(&["status", "--view", &id]).status.code() != Some(0));
-    let after = size_of(&app, &pane, "after");
+    let after = size_of(&app.session, &pane, "after");
 
     assert_eq!(sized, "30x100");
     assert!(unchanged, "the window kept showing what it showed");

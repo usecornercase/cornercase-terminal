@@ -145,6 +145,7 @@ mod machines {
             workspace: 10,
             tab: Some(11),
             path: "/home/ana/web-shop".into(),
+            stream: None,
         };
 
         let text = rendered(machines, Some(shown));

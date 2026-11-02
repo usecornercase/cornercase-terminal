@@ -65,6 +65,7 @@ use launches::LAUNCH_EVERY;
 #[cfg(test)]
 use layout::List;
 use layout::{Scrolls, Side};
+use machines::RemoteDrag;
 use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use plugins::{PluginEvent, Plugins};
@@ -310,27 +311,8 @@ impl App {
 
     pub(crate) fn pointer(&self, area: Rect) -> pointer::Shape {
         let areas = self.layout(area).shown(self.screen.nav);
-        let (border, divider) = (border_shape, divider_shape);
-        match &self.screen.drag {
-            Some(Drag::Border(b)) => return border(*b),
-            Some(Drag::Divider { tab, path }) => {
-                let dividers = self.tab().filter(|t| t.id == *tab).map(|t| t.layout.dividers(areas.pane));
-                return dividers
-                    .and_then(|d| d.into_iter().find(|d| d.path == *path))
-                    .map_or(pointer::Shape::Default, |d| divider(d.dir));
-            }
-            Some(
-                Drag::Row(_)
-                | Drag::Pane(_)
-                | Drag::Selection { .. }
-                | Drag::Link(_)
-                | Drag::Lines { .. }
-                | Drag::Text(_)
-                | Drag::Footer(_),
-            ) => {
-                return pointer::Shape::Default;
-            }
-            None => {}
+        if let Some(drag) = &self.screen.drag {
+            return self.drag_pointer(drag, areas.pane);
         }
         let Some(pos) = self.screen.hover.filter(|_| self.overlay.is_none()) else {
             return pointer::Shape::Default;
@@ -339,13 +321,38 @@ impl App {
             return pointer::Shape::Default;
         }
         if let Some(b) = areas.border_hit(pos) {
-            return border(b);
+            return border_shape(b);
         }
-        let in_pane = areas.pane.contains(pos) && !(self.screen.nav.is_some() && areas.compact());
-        self.tab()
-            .filter(|_| in_pane)
-            .and_then(|t| t.layout.divider_at(areas.pane, pos))
-            .map_or(pointer::Shape::Default, |d| divider(d.dir))
+        if !areas.pane.contains(pos) || (self.screen.nav.is_some() && areas.compact()) {
+            return pointer::Shape::Default;
+        }
+        let dir = if self.shown_remote().is_some() {
+            self.remote_divider_at(pos, areas.pane)
+        } else {
+            self.tab().and_then(|t| t.layout.divider_at(areas.pane, pos)).map(|d| d.dir)
+        };
+        dir.map_or(pointer::Shape::Default, divider_shape)
+    }
+
+    fn drag_pointer(&self, drag: &Drag, pane: Rect) -> pointer::Shape {
+        let dir = match drag {
+            Drag::Border(b) => return border_shape(*b),
+            Drag::Divider { tab, path } => self
+                .tab()
+                .filter(|t| t.id == *tab)
+                .and_then(|t| t.layout.dividers(pane).into_iter().find(|d| d.path == *path))
+                .map(|d| d.dir),
+            Drag::Remote(RemoteDrag::Divider { path, .. }) => self.remote_divider(path),
+            Drag::Row(_)
+            | Drag::Pane(_)
+            | Drag::Selection { .. }
+            | Drag::Link(_)
+            | Drag::Lines { .. }
+            | Drag::Text(_)
+            | Drag::Footer(_)
+            | Drag::Remote(RemoteDrag::Selection { .. } | RemoteDrag::Mouse { .. }) => None,
+        };
+        dir.map_or(pointer::Shape::Default, divider_shape)
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -391,6 +398,7 @@ impl App {
             self.panels.queued.wake(clock),
             self.popup_wake(now),
             self.card_wake(now),
+            self.typed_wake(now),
         ]
         .into_iter()
         .flatten()
@@ -710,9 +718,9 @@ impl App {
         let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
         let (files, placed) = self.files_seen(sight, area, modal);
         let tab = self.tab_view(area);
-        let remote_card = self.remote_card(now);
+        let (remote_card, remote_tab) = (self.remote_card(now), self.remote_screen());
         self.messages.toast = self.messages.toast.take().filter(|t| t.at.elapsed() < t.lasts());
-        let view = ui::View { remote_card, tab, overlay, files, ..self.lists_view(area, now) }
+        let view = ui::View { remote_card, remote_tab, tab, overlay, files, ..self.lists_view(area, now) }
             .with_icons(self.icons_in(sight));
         ui::draw(f, &view);
         placed.map(|placed| images::owned(f.buffer_mut(), placed))

@@ -219,20 +219,19 @@ impl App {
         let Some(tab) = self.tab_mut() else { return true };
         let Some(id) = tab.pane_at(area, pos) else { return true };
         let Some(term) = tab.pane_by_mut(id) else { return true };
-        if term.emulator.mouse_mode() != mouse::MouseMode::None {
-            return false;
-        }
-        let refused = if !term.emulator.alternate_screen() {
-            term.emulator.scroll(delta);
-            false
-        } else if held {
-            false
-        } else if term.emulator.alt_scroll() {
-            let code = if delta < 0 { KeyCode::Up } else { KeyCode::Down };
-            let key = term.emulator.encode_key(KeyEvent::new(code, KeyModifiers::NONE));
-            !term.write(&key.repeat(delta.unsigned_abs()))
-        } else {
-            false
+        let emulator = &term.emulator;
+        let reads = emulator.mouse_mode() != mouse::MouseMode::None;
+        let refused = match Wheel::of(reads, emulator.alternate_screen(), emulator.alt_scroll(), delta) {
+            Wheel::Program => return false,
+            Wheel::Scroll(rows) => {
+                term.emulator.scroll(rows);
+                false
+            }
+            Wheel::Keys(code, times) if !held => {
+                let key = term.emulator.encode_key(KeyEvent::new(code, KeyModifiers::NONE));
+                !term.write(&key.repeat(times))
+            }
+            Wheel::Keys(..) | Wheel::Nothing => false,
         };
         if refused {
             self.messages.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
@@ -337,7 +336,8 @@ impl App {
                 | Drag::Link(_)
                 | Drag::Lines { .. }
                 | Drag::Footer(_)
-                | Drag::Text(_),
+                | Drag::Text(_)
+                | Drag::Remote(_),
             )
             | None => return None,
         };
@@ -382,8 +382,32 @@ impl App {
     }
 }
 
+pub(super) enum Wheel {
+    Program,
+    Scroll(isize),
+    Keys(KeyCode, usize),
+    Nothing,
+}
+
+impl Wheel {
+    pub(super) fn of(reads_mouse: bool, alternate: bool, alternate_scroll: bool, delta: isize) -> Self {
+        match (reads_mouse, alternate, alternate_scroll) {
+            (true, _, _) => Self::Program,
+            (false, false, _) => Self::Scroll(delta),
+            (false, true, true) => {
+                Self::Keys(if delta < 0 { KeyCode::Up } else { KeyCode::Down }, delta.unsigned_abs())
+            }
+            (false, true, false) => Self::Nothing,
+        }
+    }
+}
+
 pub(super) fn within_terminal(term: &Term, rect: Rect) -> Rect {
     let Ok((rows, cols)) = term.emulator.size() else { return rect };
+    within_size(rect, cols, rows)
+}
+
+pub(super) fn within_size(rect: Rect, cols: u16, rows: u16) -> Rect {
     Rect::new(rect.x, rect.y, rect.width.min(cols.max(1)), rect.height.min(rows.max(1)))
 }
 

@@ -27,7 +27,10 @@ fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
         &bin.join("ssh"),
         &format!(
             "#!/bin/sh\necho $$ > '{dir}/{SSH_PID}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    \
-             --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\necho $$ > '{dir}/ssh-'\"$1\"'.pid'\n\
+             --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
+             if [ -e '{dir}/ssh-'\"$1\"'.held' ]; then\n  \
+             echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255\nfi\n\
+             echo $$ > '{dir}/ssh-'\"$1\"'.pid'\necho $$ >> '{dir}/ssh-'\"$1\"'.pids'\n\
              case \"$1\" in\n  {cases}\nesac\nshift\nexec /bin/sh -c \"exec $there $*\"\n"
         ),
     );
@@ -40,6 +43,18 @@ fn ssh_pid(session: &Session) -> String {
 
 pub(super) fn ssh_pid_to(session: &Session, destination: &str) -> String {
     pid_in(session, &format!("ssh-{destination}.pid"))
+}
+
+pub(super) fn ssh_pids_to(session: &Session, destination: &str) -> Vec<String> {
+    pid_in(session, &format!("ssh-{destination}.pids")).lines().map(str::to_string).collect()
+}
+
+pub(super) fn hold_ssh_to(session: &Session, destination: &str) {
+    std::fs::write(session.dir.join(format!("ssh-{destination}.held")), "").expect("hold the destination");
+}
+
+pub(super) fn let_ssh_to(session: &Session, destination: &str) {
+    std::fs::remove_file(session.dir.join(format!("ssh-{destination}.held"))).expect("let the destination go");
 }
 
 fn pid_in(session: &Session, file: &str) -> String {

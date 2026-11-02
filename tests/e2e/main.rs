@@ -271,7 +271,7 @@ struct Harness {
     raw: Arc<Mutex<Vec<u8>>>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
-    _master: Box<dyn MasterPty + Send>,
+    master: Box<dyn MasterPty + Send>,
 }
 
 impl Harness {
@@ -356,7 +356,7 @@ impl Harness {
         });
 
         let writer = pair.master.take_writer().expect("pty writer");
-        let mut harness = Self { session, cols, screen, raw, writer, child, _master: pair.master };
+        let mut harness = Self { session, cols, screen, raw, writer, child, master: pair.master };
         harness.wait_for_raw("app asks for the host colors", |raw| raw.contains("\x1b]4;15;?\x1b\\\x1b[>q\x1b[c"));
         harness.send(reply);
         harness
@@ -437,6 +437,12 @@ impl Harness {
     fn send(&mut self, bytes: &[u8]) {
         self.writer.write_all(bytes).expect("write to pty");
         self.writer.flush().expect("flush pty");
+    }
+
+    fn resize(&mut self, rows: u16, cols: u16) {
+        self.screen.lock().screen_mut().set_size(rows, cols);
+        self.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).expect("resize the pty");
+        self.cols = cols;
     }
 
     fn stop(&mut self) {

@@ -85,6 +85,7 @@ mod picking {
             workspace: 10,
             tab: Some(11),
             path: "/home/ana/web-shop".into(),
+            stream: None,
         };
         assert_eq!((status.shown_remote, status.shown), (Some(expected), control::Ids::default()));
     }
@@ -266,6 +267,7 @@ mod requested {
             workspace: 20,
             tab: Some(21),
             path: "/home/ana/blog".into(),
+            stream: None,
         };
         assert_eq!(serde_json::from_value::<ShownRemote>(answer).expect("a shown remote"), expected);
         assert_eq!((shown(&rig.app), rig.app.screen.nav), (Some(at(BOOT, 2, 21, "blog")), None));

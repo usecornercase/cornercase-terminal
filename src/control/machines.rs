@@ -89,6 +89,16 @@ pub(crate) struct ShownRemote {
     pub(crate) workspace: u64,
     pub(crate) tab: Option<u64>,
     pub(crate) path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) stream: Option<StreamState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum StreamState {
+    Connecting,
+    Live,
+    Down,
 }
 
 #[cfg(test)]

@@ -63,6 +63,18 @@ pub(crate) fn typed(c: char) -> KeyEvent {
         .unwrap_or_else(|| KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
 }
 
+pub(crate) fn name(code: KeyCode) -> Option<String> {
+    let code = if code == KeyCode::BackTab { KeyCode::Tab } else { code };
+    if let Some((name, _)) = NAMED.iter().find(|(_, named)| *named == code) {
+        return Some((*name).to_owned());
+    }
+    match code {
+        KeyCode::Char(c) => Some(c.to_string()),
+        KeyCode::F(n @ 1..=12) => Some(format!("f{n}")),
+        _ => None,
+    }
+}
+
 fn function(name: &str) -> Option<KeyCode> {
     let n: u8 = name.strip_prefix(['f', 'F'])?.parse().ok()?;
     (1..=12).contains(&n).then_some(KeyCode::F(n))

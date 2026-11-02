@@ -24,6 +24,7 @@ mod pane;
 pub(crate) mod remote;
 pub(crate) mod remote_access;
 mod remote_card;
+mod remote_tab;
 mod rows;
 mod sidebar;
 mod star;
@@ -124,6 +125,7 @@ pub(crate) use layout::{Nav, Screen, full_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, restart_notice, resume_notice, scrollback_badge, split_footer};
 pub(crate) use remote_access::{RemoteAccess, done as remote_done};
 pub(crate) use remote_card::{RemoteCard, Retry};
+pub(crate) use remote_tab::{RemoteTab, remote_rect};
 pub use rows::row_close_button;
 #[cfg(test)]
 pub(crate) use rows::row_menu_button;
@@ -209,6 +211,7 @@ pub(crate) struct View<'a> {
     pub(crate) has_project: bool,
     pub(crate) remote_project: bool,
     pub(crate) remote_card: Option<RemoteCard>,
+    pub(crate) remote_tab: Option<RemoteTab>,
     pub(crate) workspaces: Vec<WorkspaceEntry>,
     pub(crate) active_workspace: usize,
     pub(crate) active_tab: Option<usize>,
@@ -386,8 +389,7 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
 }
 
 fn draw_tab_or_empty(f: &mut Frame, view: &View, areas: &Areas) {
-    if let Some(card) = &view.remote_card {
-        remote_card::draw_remote_card(f, view, card, areas.pane);
+    if remote_tab::draw_remote(f, view, areas.pane) {
         return;
     }
     match &view.tab {
