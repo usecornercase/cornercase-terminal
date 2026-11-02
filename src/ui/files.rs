@@ -574,8 +574,9 @@ fn tail(path: &str, indices: &[u32], room: usize) -> (String, Vec<u32>) {
 }
 
 fn visible_marked(path: &str, indices: &[u32]) -> (String, Vec<u32>) {
+    let wanted: HashSet<u32> = indices.iter().copied().collect();
     let kept: Vec<(u32, char)> = (0..).zip(path.chars()).filter(|&(_, c)| !crate::text::hidden(c)).collect();
-    let marked = (0..).zip(&kept).filter(|(_, (i, _))| indices.contains(i)).map(|(at, _)| at).collect();
+    let marked = (0..).zip(&kept).filter(|(_, (i, _))| wanted.contains(i)).map(|(at, _)| at).collect();
     (kept.iter().map(|&(_, c)| c).collect(), marked)
 }
 
