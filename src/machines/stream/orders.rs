@@ -86,8 +86,10 @@ impl Orders {
     pub(super) fn push(&self, order: Order) {
         let mut queue = self.queue.lock();
         queue.orders.retain(|waiting| !order.replaces(waiting));
-        if let Some(order) = joined(queue.orders.back_mut(), order) {
-            queue.orders.push_back(order);
+        for order in split(order) {
+            if let Some(order) = joined(queue.orders.back_mut(), order) {
+                queue.orders.push_back(order);
+            }
         }
         self.wake.notify_all();
     }
@@ -109,6 +111,15 @@ impl Orders {
             }
             self.wake.wait(&mut queue);
         }
+    }
+}
+
+fn split(order: Order) -> Vec<Order> {
+    match order {
+        Order::Input(Input { pane, popup, size, events }) if !events.is_empty() => {
+            events.into_iter().map(|event| Order::Input(Input { pane, popup, size, events: vec![event] })).collect()
+        }
+        order => vec![order],
     }
 }
 

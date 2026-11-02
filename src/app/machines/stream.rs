@@ -11,7 +11,7 @@ use crate::control::contract::Code;
 use crate::control::terminal::InputEvent;
 use crate::log;
 use crate::machines::stream::orders::{Answer, Order};
-use crate::machines::stream::screen::RemoteScreen;
+use crate::machines::stream::screen::{RemotePane, RemoteScreen};
 use crate::machines::stream::{ANSWERS_WITHIN, Stream, StreamEvent, StreamReport, Wanted};
 use crate::machines::{self, State};
 
@@ -130,16 +130,20 @@ impl Watched {
     }
 
     fn send_typed(&mut self) {
-        let Some((_, screen)) = self.live() else { return };
-        let pane = match self.aim {
-            Some(Aim::Tab(_)) => return,
-            Some(Aim::Pane(pane)) => Some(pane),
-            None => screen.panes.iter().find(|pane| pane.active).map(|pane| pane.pane),
-        };
+        let Some(pane) = self.typed_pane().filter(|_| !self.typed.is_empty()) else { return };
         let events = mem::take(&mut self.typed);
-        if let (Some((stream, _)), Some(pane)) = (self.live(), pane.filter(|_| !events.is_empty())) {
+        if let Some((stream, _)) = self.live() {
             stream.send(typed(pane, events));
         }
+    }
+
+    fn typed_pane(&self) -> Option<u64> {
+        let (_, screen) = self.live().filter(|_| !matches!(self.aim, Some(Aim::Tab(_))))?;
+        let aimed = |pane: &&RemotePane| match self.aim {
+            Some(Aim::Pane(id)) => pane.pane == id,
+            _ => pane.active,
+        };
+        screen.panes.iter().find(aimed).map(|pane| pane.pane)
     }
 
     fn show(&mut self, tab: u64) -> bool {

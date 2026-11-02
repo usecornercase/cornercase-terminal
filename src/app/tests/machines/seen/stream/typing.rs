@@ -26,6 +26,10 @@ fn typed(streaming: &mut Streaming) -> Value {
     request(&mut reach(&streaming.seeing.ends))
 }
 
+fn held(streaming: &mut Streaming) -> Vec<InputEvent> {
+    on(streaming).watched().map(|watched| watched.typed.clone()).unwrap_or_default()
+}
+
 #[test]
 fn a_key_goes_to_the_active_pane_there_at_any_size() {
     let mut streaming = streaming();
@@ -108,6 +112,21 @@ fn before_the_first_frame_nothing_is_sent_or_kept_and_a_toast_says_so() {
 }
 
 #[test]
+fn keys_wait_while_no_pane_there_is_active_and_a_toast_says_when_they_are_dropped() {
+    let mut streaming = streaming();
+    let mut frame = THERE.complete(1, 1, "idle");
+    frame["ok"]["panes"][0]["active"] = json!(false);
+    say(&mut streaming.surface, &frame);
+    streaming.seeing.rig.until("the frame arrives", |app| shown(app).as_deref() == Some("idle"));
+
+    type_text(on(&mut streaming), "a");
+    assert_eq!(held(&mut streaming), [key("a")]);
+    on(&mut streaming).drop_late_typed(Instant::now() + ANSWERS_WITHIN);
+
+    assert_eq!((held(&mut streaming), toast(on(&mut streaming))), (vec![], Some(UNREACHABLE)));
+}
+
+#[test]
 fn with_the_link_down_nothing_is_sent_and_a_toast_says_so() {
     let mut streaming = streaming();
     live(&mut streaming, "hello");
@@ -150,10 +169,6 @@ mod after_moving {
         let mut streaming = streaming();
         live(&mut streaming, "hello");
         kept(streaming, text)
-    }
-
-    fn held(streaming: &mut Streaming) -> Vec<InputEvent> {
-        on(streaming).watched().map(|watched| watched.typed.clone()).unwrap_or_default()
     }
 
     fn split(streaming: &mut Streaming) {

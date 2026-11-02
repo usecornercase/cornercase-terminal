@@ -302,6 +302,20 @@ mod input {
     }
 
     #[test]
+    fn events_sent_together_go_in_requests_within_the_joined_limit() {
+        let rig = Rig::new();
+        let _streams = rig.opened();
+        let mut orders = sent(&rig, typed(vec![key("a")]));
+        let big = InputEvent::Paste("x".repeat(JOINED_BYTES / 2 + 1));
+
+        rig.stream.send(typed(vec![big.clone(), big.clone(), key("b")]));
+        let second = next(&mut orders);
+        let third = next(&mut orders);
+
+        assert_eq!((events(&second), events(&third)), (vec![big.clone()], vec![big, key("b")]));
+    }
+
+    #[test]
     fn busy_is_told_as_not_reading() {
         let rig = Rig::new();
         let _streams = rig.opened();
