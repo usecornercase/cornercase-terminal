@@ -27,6 +27,7 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::git::worktree::setup;
 use crate::host::theme::HostTheme;
+use crate::os::process::launch_folder;
 use crate::process;
 
 const SCROLLBACK_BYTES: usize = 10_000_000;
@@ -184,7 +185,7 @@ impl Term {
         let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
         let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
 
-        let dir = cwd.or_else(|| std::env::current_dir().ok());
+        let dir = cwd.or_else(launch_folder);
         let cmd = command(shell, args, env, remove, dir.as_deref());
 
         let child = pair.slave.spawn_command(cmd).map_err(|e| Error::SpawnShell {

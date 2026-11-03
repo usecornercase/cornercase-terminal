@@ -2,7 +2,9 @@
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::fs::File;
 use std::io;
+use std::os::windows::io::{AsRawHandle, OwnedHandle, RawHandle};
 use std::time::Duration;
 
 use parking_lot::Mutex;
@@ -20,9 +22,10 @@ use windows_sys::Win32::System::Threading::INFINITE;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{VK_CONTROL, VK_MENU, VK_SHIFT};
 
 use super::imp::{
-    Handles, Modes, Pending, Records, characters, ctrl_event, hide_echo, millis, off_ctrl, on_ctrl, raw, raw_from,
-    read_modes, read_with, wait_with, write_modes,
+    Handles, Modes, Pending, Records, Taken, characters, ctrl_event, hide_echo, millis, off_ctrl, on_ctrl, raw,
+    raw_from, read_modes, read_with, wait_with, write_modes,
 };
+use crate::test_util::TempDir;
 
 const CONHOST_INPUT: u32 = ENABLE_PROCESSED_INPUT
     | ENABLE_LINE_INPUT
@@ -139,6 +142,10 @@ fn focus() -> INPUT_RECORD {
 fn resized() -> INPUT_RECORD {
     let size = WINDOW_BUFFER_SIZE_RECORD { dwSize: COORD { X: 100, Y: 30 } };
     INPUT_RECORD { EventType: kind(WINDOW_BUFFER_SIZE_EVENT), Event: INPUT_RECORD_0 { WindowBufferSizeEvent: size } }
+}
+
+fn handles(tmp: &TempDir, count: usize) -> Vec<OwnedHandle> {
+    (0..count).map(|n| OwnedHandle::from(File::create(tmp.path().join(format!("log{n}"))).expect("file"))).collect()
 }
 
 fn read_all(console: &Typed, pending: &Mutex<Pending>) -> Vec<u8> {
@@ -361,5 +368,22 @@ mod ctrl_events {
         assert_eq!(ctrl_event(CTRL_C_EVENT), FALSE, "an event the window does not take goes on");
         off_ctrl();
         assert_eq!(ctrl_event(CTRL_BREAK_EVENT), FALSE);
+    }
+}
+
+mod the_log_taking_stderr {
+    use super::*;
+
+    #[test]
+    fn keeps_the_last_two_handles_and_closes_the_one_before() {
+        let tmp = TempDir::new();
+        let taken = handles(&tmp, 4);
+        let raw: Vec<RawHandle> = taken.iter().map(AsRawHandle::as_raw_handle).collect();
+        let mut kept = Taken::new();
+
+        let closed: Vec<Option<RawHandle>> =
+            taken.into_iter().map(|handle| kept.take(handle).map(|old| old.as_raw_handle())).collect();
+
+        assert_eq!(closed, [None, None, Some(raw[0]), Some(raw[1])]);
     }
 }

@@ -33,6 +33,7 @@ mod imp {
     use std::io;
     use std::iter;
     use std::marker::PhantomData;
+    use std::os::windows::io::{AsRawHandle, OwnedHandle};
     use std::time::{Duration, Instant};
 
     use parking_lot::Mutex;
@@ -41,8 +42,8 @@ mod imp {
         DISABLE_NEWLINE_AUTO_RETURN, ENABLE_ECHO_INPUT, ENABLE_EXTENDED_FLAGS, ENABLE_LINE_INPUT,
         ENABLE_PROCESSED_INPUT, ENABLE_QUICK_EDIT_MODE, ENABLE_VIRTUAL_TERMINAL_INPUT,
         ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetNumberOfConsoleInputEvents, GetStdHandle, INPUT_RECORD,
-        KEY_EVENT, LEFT_CTRL_PRESSED, RIGHT_CTRL_PRESSED, ReadConsoleInputW, STD_HANDLE, STD_INPUT_HANDLE,
-        STD_OUTPUT_HANDLE, SetConsoleCtrlHandler, SetConsoleMode,
+        KEY_EVENT, LEFT_CTRL_PRESSED, RIGHT_CTRL_PRESSED, ReadConsoleInputW, STD_ERROR_HANDLE, STD_HANDLE,
+        STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleCtrlHandler, SetConsoleMode, SetStdHandle,
     };
     use windows_sys::Win32::System::Threading::{INFINITE, WaitForSingleObject};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_MENU;
@@ -79,8 +80,34 @@ mod imp {
         BorrowedFd(PhantomData)
     }
 
-    pub(crate) fn redirect_stderr(_file: &File) -> io::Result<()> {
-        Err(io::ErrorKind::Unsupported.into())
+    #[derive(Debug)]
+    pub(super) struct Taken {
+        current: Option<OwnedHandle>,
+        previous: Option<OwnedHandle>,
+    }
+
+    impl Taken {
+        pub(super) const fn new() -> Self {
+            Self { current: None, previous: None }
+        }
+
+        pub(super) fn take(&mut self, handle: OwnedHandle) -> Option<OwnedHandle> {
+            let closing = self.previous.take();
+            self.previous = self.current.replace(handle);
+            closing
+        }
+    }
+
+    static TAKEN: Mutex<Taken> = Mutex::new(Taken::new());
+
+    pub(crate) fn redirect_stderr(file: &File) -> io::Result<()> {
+        let handle = OwnedHandle::from(file.try_clone()?);
+        if unsafe { SetStdHandle(STD_ERROR_HANDLE, handle.as_raw_handle()) } == FALSE {
+            return Err(io::Error::last_os_error());
+        }
+        let closing = TAKEN.lock().take(handle);
+        drop(closing);
+        Ok(())
     }
 
     const READ_AT_ONCE: usize = 128;

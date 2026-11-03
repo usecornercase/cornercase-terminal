@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::error::{Error, Result};
 use crate::os::fs::{OpenOptionsExt, set_file_mode};
+use crate::os::process::spawn_detached;
 use crate::os::socket::{UnixListener, UnixStream};
 use crate::process::reap;
 use crate::protocol::{self, ClientMessage, Folder, ServerMessage};
@@ -123,7 +124,8 @@ fn start_server(log: &Path) -> io::Result<Child> {
     }
     let log = OpenOptions::new().create(true).append(true).mode(log::PRIVATE).open(log)?;
     set_file_mode(&log, log::PRIVATE)?;
-    Command::new(std::env::current_exe()?)
+    let mut server = Command::new(std::env::current_exe()?);
+    server
         .arg("server")
         .env_remove(protocol::RESTARTED_ENV)
         .env_remove(control::PANE_ENV)
@@ -132,8 +134,8 @@ fn start_server(log: &Path) -> io::Result<Child> {
         .env_remove(protocol::TIED_ENV)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
-        .stderr(log)
-        .spawn()
+        .stderr(log);
+    spawn_detached(&mut server)
 }
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(5);
 const SERVER_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
