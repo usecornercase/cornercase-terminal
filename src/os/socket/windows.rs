@@ -3,15 +3,15 @@ use std::iter;
 use std::net::Shutdown;
 use std::path::Path;
 use std::ptr::{null, null_mut};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Networking::WinSock::{
-    self as winsock, AF_UNIX, INVALID_SOCKET, SD_BOTH, SD_RECEIVE, SD_SEND, SIO_AF_UNIX_GETPEERPID, SO_RCVTIMEO,
+    self as winsock, AF_UNIX, INVALID_SOCKET, POLLRDNORM, SD_BOTH, SD_RECEIVE, SD_SEND, SIO_AF_UNIX_GETPEERPID,
     SO_SNDTIMEO, SOCK_STREAM, SOCKADDR, SOCKADDR_UN, SOCKET, SOCKET_ERROR, SOL_SOCKET, WSA_FLAG_NO_HANDLE_INHERIT,
-    WSA_FLAG_OVERLAPPED, WSADATA,
+    WSA_FLAG_OVERLAPPED, WSADATA, WSAETIMEDOUT, WSAPOLLFD,
 };
 use windows_sys::Win32::System::IO::CancelIoEx;
 
@@ -19,11 +19,13 @@ use crate::os::fs::process_uid;
 
 const WINSOCK_2_2: u16 = 0x0202;
 const BACKLOG: i32 = 128;
+const POLL_SLICE: Duration = Duration::from_millis(200);
 
 #[derive(Debug)]
 struct Socket {
     raw: SOCKET,
     unread: AtomicBool,
+    read_timeout: AtomicU32,
 }
 
 impl Socket {
@@ -37,13 +39,43 @@ impl Socket {
         if raw == INVALID_SOCKET {
             return Err(last_error());
         }
-        Ok(Self { raw, unread: AtomicBool::new(false) })
+        Ok(Self { raw, unread: AtomicBool::new(false), read_timeout: AtomicU32::new(0) })
     }
 
     fn set_timeout(&self, option: i32, timeout: Option<Duration>) -> io::Result<()> {
         let millis = millis(timeout)?;
         let length = length_of::<u32>();
         checked(unsafe { winsock::setsockopt(self.raw, SOL_SOCKET, option, (&raw const millis).cast(), length) })
+    }
+
+    fn readable(&self) -> io::Result<bool> {
+        let millis = self.read_timeout.load(Ordering::SeqCst);
+        let deadline = (millis > 0).then(|| Instant::now() + Duration::from_millis(u64::from(millis)));
+        while !self.unread.load(Ordering::SeqCst) {
+            let polled = self.polled(slice_until(deadline)?);
+            if self.unread.load(Ordering::SeqCst) {
+                break;
+            }
+            if polled? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    fn polled(&self, wait: Duration) -> io::Result<bool> {
+        let mut socket = WSAPOLLFD { fd: self.raw, events: POLLRDNORM, revents: 0 };
+        let millis = i32::try_from(wait.as_millis()).unwrap_or(i32::MAX);
+        let ready = unsafe { winsock::WSAPoll(&raw mut socket, 1, millis) };
+        if ready == SOCKET_ERROR { Err(last_error()) } else { Ok(ready > 0) }
+    }
+}
+
+fn slice_until(deadline: Option<Instant>) -> io::Result<Duration> {
+    let Some(deadline) = deadline else { return Ok(POLL_SLICE) };
+    match deadline.checked_duration_since(Instant::now()) {
+        Some(left) if !left.is_zero() => Ok(left.min(POLL_SLICE)),
+        _ => Err(io::Error::from_raw_os_error(WSAETIMEDOUT)),
     }
 }
 
@@ -135,7 +167,8 @@ impl UnixStream {
     }
 
     pub(crate) fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
-        self.0.set_timeout(SO_RCVTIMEO, timeout)
+        self.0.read_timeout.store(millis(timeout)?, Ordering::SeqCst);
+        Ok(())
     }
 
     pub(crate) fn set_write_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
@@ -182,6 +215,9 @@ impl UnixStream {
 
 impl Read for UnixStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if !self.0.readable()? {
+            return Ok(0);
+        }
         let read = unsafe { winsock::recv(self.0.raw, buf.as_mut_ptr(), buffer_length(buf.len()), 0) };
         match usize::try_from(read) {
             Ok(read) => Ok(read),
