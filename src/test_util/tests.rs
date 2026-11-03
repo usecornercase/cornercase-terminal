@@ -32,6 +32,13 @@ mod fake_program {
 
         wait_until("it exits once released", || child.try_wait().expect("check the fake").is_some());
     }
+
+    #[test]
+    fn is_built_beside_the_test_binary_rather_than_in_the_shared_temp_folder() {
+        let test_binary = std::env::current_exe().expect("the test binary's path");
+
+        assert_eq!(built_program().parent(), test_binary.parent());
+    }
 }
 
 #[test]

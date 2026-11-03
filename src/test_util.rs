@@ -323,30 +323,47 @@ impl Drop for Running {
 pub(crate) fn fake_program(dir: &Path, name: &str) -> PathBuf {
     let path = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     let built = built_program();
-    std::fs::hard_link(built, &path)
-        .or_else(|_| std::fs::copy(built, &path).map(drop))
-        .expect("put the fake program in place");
+    if std::fs::hard_link(built, &path).is_err() {
+        copy_program(built, &path);
+    }
     path
+}
+
+fn copy_program(from: &Path, to: &Path) {
+    if cfg!(windows) {
+        std::fs::copy(from, to).expect("copy the fake program");
+        return;
+    }
+    let copied = std::process::Command::new("cp").arg(from).arg(to).status().expect("run cp");
+    assert!(copied.success(), "copy the fake program to {}", to.display());
 }
 
 fn built_program() -> &'static Path {
     static BUILT: OnceLock<PathBuf> = OnceLock::new();
-    BUILT.get_or_init(build_program)
+    BUILT.get_or_init(|| build_program(&program_cache()))
 }
 
-fn build_program() -> PathBuf {
+fn program_cache() -> PathBuf {
+    let test_binary = std::env::current_exe().expect("the test binary's path");
+    test_binary.parent().expect("the test binary's folder").to_path_buf()
+}
+
+fn build_program(cache: &Path) -> PathBuf {
     let source = format!("{PROGRAM}\n{PROGRAM_MAIN}\n");
     let mut hasher = std::hash::DefaultHasher::new();
     std::hash::Hash::hash(&source, &mut hasher);
-    let name =
-        format!("cornercase-test-program-{:016x}{}", std::hash::Hasher::finish(&hasher), std::env::consts::EXE_SUFFIX);
-    let built = std::env::temp_dir().join(name);
-    if built.exists() {
-        return built;
+    let stem = format!("cornercase-test-program-{:016x}", std::hash::Hasher::finish(&hasher));
+    let built = cache.join(format!("{stem}{}", std::env::consts::EXE_SUFFIX));
+    if !built.exists() {
+        compile_program(&source, &cache.join(format!("{stem}-{}", std::process::id())), &built);
     }
-    let work = TempDir::new();
-    let (main, output) =
-        (work.path().join("main.rs"), work.path().join(format!("program{}", std::env::consts::EXE_SUFFIX)));
+    built
+}
+
+fn compile_program(source: &str, work: &Path, built: &Path) {
+    let _ = std::fs::remove_dir_all(work);
+    std::fs::create_dir(work).expect("create the fake program's build folder");
+    let (main, output) = (work.join("main.rs"), work.join(format!("program{}", std::env::consts::EXE_SUFFIX)));
     std::fs::write(&main, source).expect("write the fake program's source");
     let status = std::process::Command::new("rustc")
         .args(["--edition", "2024", "-C", "debuginfo=0", "-o"])
@@ -355,9 +372,9 @@ fn build_program() -> PathBuf {
         .status()
         .expect("run rustc");
     assert!(status.success(), "rustc could not build the fake program");
-    let _ = std::fs::rename(&output, &built);
+    let _ = std::fs::rename(&output, built);
+    let _ = std::fs::remove_dir_all(work);
     assert!(built.exists(), "the fake program is not at {}", built.display());
-    built
 }
 
 #[cfg(unix)]
