@@ -32,21 +32,36 @@ public static class CcMouse
         Console.Write(text + "\r\n");
     }
 
-    public static void Vt()
+    static string Modes(string modes, char end)
+    {
+        StringBuilder all = new StringBuilder();
+        foreach (string number in modes.Split(';'))
+        {
+            all.Append("\u001b[?").Append(number).Append(end);
+        }
+        return all.ToString();
+    }
+
+    public static void Vt(string modes)
     {
         uint mode;
         GetConsoleMode(input, out mode);
         SetConsoleMode(input, 0x280);
-        Say("\u001b[?1000h\u001b[?1006hcc-ready");
+        Say(Modes(modes, 'h') + "cc-ready");
         StringBuilder read = new StringBuilder();
-        while (!read.ToString().EndsWith("m"))
+        while (read.ToString().IndexOf('q') < 0)
         {
             StringBuilder chunk = new StringBuilder(64);
             uint count;
             ReadConsoleW(input, chunk, 64, out count, IntPtr.Zero);
             read.Append(chunk.ToString(0, (int)count));
         }
-        Say("\u001b[?1006l\u001b[?1000lcc-read " + read.ToString().Replace("\u001b", "ESC"));
+        StringBuilder units = new StringBuilder();
+        foreach (char unit in read.ToString().Substring(0, read.ToString().IndexOf('q')))
+        {
+            units.Append(' ').Append(((int)unit).ToString("x"));
+        }
+        Say(Modes(modes, 'l') + "cc-read" + units);
         SetConsoleMode(input, mode);
     }
 
