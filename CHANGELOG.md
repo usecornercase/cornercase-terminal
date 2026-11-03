@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **On Windows, the cornercase server stops cleanly when you sign out, restart or shut down**, the next step of the native port (it still says it does not run on Windows yet). Windows asks it before the programs in its panes, and it stops the way `kill-server` stops it: plugins stop and the TODO list, the queue and the stats are saved, without holding up the end of the session for more than a few seconds. `taskkill /pid` without `/f` stops it the same way. Nothing changes on Linux and macOS.
 
+## 0.12.261
+
+- **On Windows, cornercase can now stop a program and everything it started**, the next step of the native port (it still says it does not run on Windows yet). A program with a window is asked to close it and ended if it still runs 3 s later; a console program, which has no window to close, is ended at once. On Windows the dialogs and `cornercase processes stop` and `ports stop` say so without naming Unix signals. Nothing changes on Linux and macOS.
+
 ## 0.12.259
 
 - **On Windows, cornercase now reads processes**: their trees, names, arguments, folders, memory and CPU, another step towards running there natively. It still says that it does not run on Windows yet. Nothing changes on Linux and macOS.

@@ -1,16 +1,52 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::os::windows::io::AsRawHandle;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use rstest::rstest;
-use windows_sys::Win32::Foundation::GetHandleInformation;
+use windows_sys::Win32::Foundation::{GetHandleInformation, WAIT_TIMEOUT};
 use windows_sys::Win32::System::Console::GetConsoleProcessList;
+use windows_sys::Win32::System::Threading::{PROCESS_SYNCHRONIZE, WaitForSingleObject};
 
 use super::*;
-use crate::test_util::TempDir;
+use crate::os::process::Grouped;
+use crate::process::{descendants, name};
+use crate::test_util::{TempDir, wait_until, wait_until_within};
+
+const PING: &str = r"%SystemRoot%\System32\ping.exe -n 30 127.0.0.1";
+
+const SHORT_PING: &str = r"%SystemRoot%\System32\ping.exe -n 2 127.0.0.1";
+
+const STARTS_WITHIN: Duration = Duration::from_secs(30);
+
+fn ping() -> Child {
+    Command::new("ping").args(["-n", "30", "127.0.0.1"]).stdout(Stdio::null()).spawn().expect("spawn ping")
+}
+
+fn pid_of(child: &Child) -> i32 {
+    i32::try_from(child.id()).expect("a pid")
+}
+
+fn pings(pid: i32) -> Vec<i32> {
+    let named = |pid: &i32| name(*pid).is_some_and(|name| name.eq_ignore_ascii_case("ping"));
+    descendants(pid).into_iter().filter(named).collect()
+}
+
+fn grouped(line: &str) -> (Grouped, Vec<i32>) {
+    let child =
+        Grouped::spawn(Command::new("cmd.exe").args(["/d", "/c", line]).stdin(Stdio::null()).stdout(Stdio::null()))
+            .expect("spawn cmd");
+    let pid = pid_of(&child);
+    wait_until_within("cmd starts its pings", STARTS_WITHIN, || pings(pid).len() == line.matches("ping").count());
+    let tree = std::iter::once(pid).chain(descendants(pid)).collect();
+    (child, tree)
+}
+
+fn all_gone(tree: &[i32]) -> bool {
+    tree.iter().all(|pid| !alive(*pid))
+}
 
 mod detached {
     use super::*;
@@ -188,5 +224,109 @@ mod in_place {
         let error = run_in_place(&mut Command::new(tmp.path().join("missing.exe"))).expect_err("not started");
 
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+}
+
+mod stopping_a_process {
+    use super::*;
+
+    #[test]
+    fn the_hard_step_ends_it() {
+        let mut child = ping();
+        let pid = Pid::from_raw(pid_of(&child)).expect("a pid");
+
+        kill_process(pid, Signal::KILL).expect("terminate");
+
+        assert!(!child.wait().expect("reap").success());
+        assert!(!alive(pid_of(&child)));
+    }
+
+    #[test]
+    fn a_program_without_a_window_cannot_be_asked_and_the_request_changes_nothing() {
+        let mut child = ping();
+        let pid = pid_of(&child);
+
+        assert!(!askable(pid));
+        kill_process(Pid::from_raw(pid).expect("a pid"), Signal::TERM).expect("nothing to close");
+        assert!(child.try_wait().expect("check").is_none());
+        let _ = (child.kill(), child.wait());
+    }
+
+    #[test]
+    fn a_pid_without_a_process_cannot_be_ended() {
+        let pid = Pid::from_raw(crate::test_util::exited_pid()).expect("a pid");
+        assert!(kill_process(pid, Signal::KILL).is_err());
+    }
+}
+
+mod a_job {
+    use super::*;
+
+    #[test]
+    fn holds_the_child_and_what_it_starts() {
+        let (child, tree) = grouped(&format!("start /b {PING} & {PING}"));
+        let job = child.job.handle.as_ref().expect("a job");
+
+        let mut members = listed(job);
+        members.sort_unstable();
+        let mut expected = tree.iter().map(|pid| u32::try_from(*pid).expect("a pid")).collect::<Vec<_>>();
+        expected.sort_unstable();
+
+        assert!(expected.iter().all(|pid| members.contains(pid)), "{members:?} {expected:?}");
+        child.signal(Signal::KILL);
+    }
+
+    #[test]
+    fn ends_the_whole_tree_on_the_hard_step() {
+        let (mut child, tree) = grouped(&format!("start /b {PING} & {PING}"));
+
+        assert!(child.signal(Signal::KILL));
+
+        wait_until("the tree is gone", || all_gone(&tree));
+        assert!(!child.wait().expect("reap").success());
+    }
+
+    #[test]
+    fn asks_nothing_of_programs_without_a_window() {
+        let (mut child, tree) = grouped(PING);
+
+        assert!(!child.signal(Signal::TERM));
+        assert!(child.try_wait().expect("check").is_none());
+        child.signal(Signal::KILL);
+        wait_until("the tree is gone", || all_gone(&tree));
+    }
+
+    #[test]
+    fn closed_by_the_system_ends_what_is_left() {
+        let (mut child, tree) = grouped(&format!("start /b {PING} & {PING}"));
+
+        drop(child.job.handle.take());
+
+        wait_until("the tree is gone", || all_gone(&tree));
+        child.wait().expect("reap");
+    }
+
+    #[test]
+    fn dropped_after_its_child_ends_leaves_what_the_child_started() {
+        let (mut child, tree) = grouped(&format!("start /b {PING} & {SHORT_PING}"));
+        assert!(child.wait().expect("cmd ends").success());
+        let access = PROCESS_SYNCHRONIZE | PROCESS_TERMINATE;
+        let left: Vec<OwnedHandle> =
+            tree.into_iter().filter(|pid| alive(*pid)).filter_map(|pid| open(pid_u32(pid), access).ok()).collect();
+
+        drop(child);
+
+        assert!(!left.is_empty() && left.iter().all(still_running_a_second_later));
+        for process in &left {
+            let _ = unsafe { TerminateProcess(process.as_raw_handle(), KILLED) };
+        }
+    }
+
+    fn pid_u32(pid: i32) -> u32 {
+        u32::try_from(pid).expect("a pid")
+    }
+
+    fn still_running_a_second_later(process: &OwnedHandle) -> bool {
+        unsafe { WaitForSingleObject(process.as_raw_handle(), 1000) == WAIT_TIMEOUT }
     }
 }
