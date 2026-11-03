@@ -205,6 +205,10 @@ impl Reading {
         asked.filter(|asked| asked["command"] == command).map(|asked| asked["args"].clone()).next_back()
     }
 
+    fn deliver(&mut self, event: AppEvent) {
+        self.remote.rig.app.handle_event(event, AREA).expect("handle event");
+    }
+
     fn answered(&mut self) {
         self.remote.rig.until("the machine answers", |app| !browser_open(app) || !browser(app).starting);
     }
@@ -441,6 +445,21 @@ mod starting_there {
 
         let app = &reading.remote.rig.app;
         assert_eq!((error(app), browser(app).starting), (Some(said), false));
+    }
+
+    #[test]
+    fn frees_the_dialog_when_the_machine_left_before_it_answered() {
+        let mut reading = reading_with(Reply::Told(refusing), vec![web_shop()]);
+        reading.checked();
+        reading.pick("account…", "home");
+        reading.press("start");
+        let answer = reading.remote.held_relay();
+        reading.remote.rig.edit(Vec::new(), Duration::from_secs(3));
+
+        reading.deliver(answer);
+
+        let app = &reading.remote.rig.app;
+        assert_eq!((error(app), browser(app).starting), (Some("vps is no longer listed"), false));
     }
 
     #[test]

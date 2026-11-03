@@ -106,6 +106,9 @@ impl App {
     pub(in crate::app) fn start_flow_there(&mut self, run: Run) {
         let Some(Overlay::StartFlow { start, .. }) = &self.overlay else { return };
         let Some(target) = start.machine().cloned() else { return };
+        if self.still_cloning(target.link, start.project) {
+            return;
+        }
         let Some(id) = self.project_there(target.link, start.project).map(|there| there.id) else {
             log::info!("flows", "project not on the machine", name = target.name);
             if let Some(Overlay::StartFlow { start, .. }) = &mut self.overlay {

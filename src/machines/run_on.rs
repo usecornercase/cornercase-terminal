@@ -112,8 +112,8 @@ pub(crate) fn not_there(name: &str) -> String {
 }
 
 pub(crate) fn clipped(text: &str) -> String {
-    let line = text.split(char::is_control).filter(|part| !part.trim().is_empty());
-    truncate_right(&line.map(str::trim).collect::<Vec<_>>().join(" "), TEXT)
+    let line = text.split(char::is_control).map(|part| part.trim_matches(blank)).filter(|part| !part.is_empty());
+    truncate_right(&line.collect::<Vec<_>>().join(" "), TEXT)
 }
 
 pub(crate) fn clipped_or(text: &str, or: &str) -> String {
@@ -137,8 +137,12 @@ pub(crate) fn capped<S: AsRef<str>>(items: impl Iterator<Item = S>) -> Option<St
     })
 }
 
-fn has_text(text: &str) -> bool {
-    text.chars().any(|c| !c.is_control() && !c.is_whitespace())
+pub(crate) fn has_text(text: &str) -> bool {
+    !text.chars().all(blank)
+}
+
+fn blank(c: char) -> bool {
+    c.is_control() || c.is_whitespace() || matches!(c, '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}')
 }
 
 #[cfg(test)]

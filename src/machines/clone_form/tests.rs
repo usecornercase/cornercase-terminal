@@ -178,3 +178,24 @@ mod cloning {
         assert_eq!(form.press(BACK), Step::Back);
     }
 }
+
+mod the_note {
+    use super::*;
+
+    fn unwritten(path: &str, why: &str) -> Unwritten {
+        Unwritten { path: PathBuf::from(path), why: why.into() }
+    }
+
+    #[rstest]
+    #[case::none(&[], "cloned web-shop on vps")]
+    #[case::one(&[("local.toml", "it is tracked there")], "cloned web-shop on vps · not copied: local.toml (it is tracked there)")]
+    #[case::a_blank_path(&[("", "it is tracked there"), (" ", "x")], "cloned web-shop on vps")]
+    #[case::an_invisible_path(&[("\u{FEFF}\u{200B}", "x")], "cloned web-shop on vps")]
+    #[case::a_blank_reason(&[(".env", " ")], "cloned web-shop on vps · not copied: .env (vps gave no reason)")]
+    #[case::a_control_reason(&[(".env", "\u{7}\u{200D}")], "cloned web-shop on vps · not copied: .env (vps gave no reason)")]
+    fn names_the_project_the_machine_and_only_the_files_it_can_name(#[case] left: &[(&str, &str)], #[case] said: &str) {
+        let left: Vec<Unwritten> = left.iter().map(|(path, why)| unwritten(path, why)).collect();
+
+        assert_eq!(cloned_note("web-shop", "vps", &left), said);
+    }
+}

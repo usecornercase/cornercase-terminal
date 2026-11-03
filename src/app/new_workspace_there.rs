@@ -69,6 +69,9 @@ impl App {
         let name = asked.input.text().trim().to_string();
         let Asked { project, input, worktree, run_on } = asked;
         self.overlay = Some(Overlay::NewWorkspace { project, input, worktree, error: None, creating: false, run_on });
+        if self.still_cloning(target.link, project) {
+            return self.overlay.take();
+        }
         let there = self.project_there(target.link, project).map(|there| there.id);
         let sent = match there {
             _ if name.is_empty() => Err(NAME_REQUIRED.to_string()),

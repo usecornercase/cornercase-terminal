@@ -145,7 +145,7 @@ impl App {
             Then::Client(key) => self.relay_answered(key, result),
             Then::Check(checking) => self.check_heard(checking, result),
             Then::Dialog(key) => self.dialog_answered(&sent, key, result),
-            Then::Clone(key) => self.clone_relayed(&sent, key, result),
+            Then::Clone(key) => self.clone_relayed(key, result),
         }
     }
 }

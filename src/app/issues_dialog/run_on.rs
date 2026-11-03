@@ -91,6 +91,9 @@ impl App {
         let Some(target) = b.machine().cloned() else { return false };
         let missing = b.there().and_then(|there| there.tracker.clone());
         let project = start.place.as_ref().map_or(b.project, |place| place.project);
+        if self.still_cloning(target.link, project) {
+            return true;
+        }
         let sent = match (missing, self.project_there(target.link, project).map(|there| there.id)) {
             (Some(missing), _) => Err(missing),
             (None, None) => Err(run_on::not_there(&target.name)),
@@ -153,10 +156,26 @@ impl App {
     }
 
     pub(in crate::app) fn dialog_run_on(&mut self) -> Option<&mut RunOn> {
+        self.run_on_dialog().and_then(|dialog| dialog.run_on)
+    }
+
+    pub(in crate::app) fn run_on_dialog(&mut self) -> Option<RunOnDialog<'_>> {
         match &mut self.overlay {
-            Some(Overlay::Issues(b)) => b.run_on.as_mut(),
-            Some(Overlay::StartFlow { start, .. }) => start.run_on.as_mut(),
-            Some(Overlay::NewWorkspace { run_on, .. }) => run_on.as_mut(),
+            Some(Overlay::Issues(b)) => Some(RunOnDialog {
+                project: issue_project(b),
+                run_on: b.run_on.as_mut(),
+                waiting: &mut b.starting,
+                note: &mut b.error,
+            }),
+            Some(Overlay::StartFlow { start, .. }) => Some(RunOnDialog {
+                project: start.project,
+                run_on: start.run_on.as_mut(),
+                waiting: &mut start.waiting,
+                note: &mut start.notice,
+            }),
+            Some(Overlay::NewWorkspace { project, run_on, creating, error, .. }) => {
+                Some(RunOnDialog { project: *project, run_on: run_on.as_mut(), waiting: creating, note: error })
+            }
             _ => None,
         }
     }
@@ -171,28 +190,33 @@ impl App {
         if let Ok(value) = &result {
             self.await_made(sent, value);
         }
-        self.dialog_relayed(sent.link, key, result);
+        self.dialog_relayed(sent.link, &sent.machine, key, result);
     }
 
-    pub(in crate::app) fn dialog_relayed(&mut self, link: u64, key: u64, result: Result<Value, Refusal>) {
-        let Some(held) = self.machines.held().iter().find(|held| held.link.id() == link) else { return };
-        let error = match result {
-            Ok(_) => None,
-            Err(refusal) if refusal.code == Code::StaleBoot => {
-                Some(format!("{} restarted; nothing was started there", held.name))
-            }
-            Err(refusal) => Some(run_on::reason(&held.name, &refusal.message)),
-        };
-        let Some(run_on) = self.dialog_run_on().filter(|run_on| run_on.awaiting == Some(key)) else { return };
+    pub(in crate::app) fn dialog_relayed(
+        &mut self,
+        link: u64,
+        machine: &str,
+        key: u64,
+        result: Result<Value, Refusal>,
+    ) {
+        let error = result.err().map(|refusal| self.not_started_there(link, machine, &refusal));
+        let Some(dialog) = self.run_on_dialog() else { return };
+        let Some(run_on) = dialog.run_on.filter(|run_on| run_on.awaiting == Some(key)) else { return };
         run_on.awaiting = None;
-        let close = match &mut self.overlay {
-            Some(Overlay::Issues(b)) => settled(&mut b.starting, &mut b.error, error),
-            Some(Overlay::StartFlow { start, .. }) => settled(&mut start.waiting, &mut start.notice, error),
-            Some(Overlay::NewWorkspace { creating, error: shown, .. }) => settled(creating, shown, error),
-            _ => false,
-        };
-        if close {
+        if settled(dialog.waiting, dialog.note, error) {
             self.overlay = None;
+        }
+    }
+
+    fn not_started_there(&self, link: u64, machine: &str, refusal: &Refusal) -> String {
+        let Some(held) = self.machines.held().iter().find(|held| held.link.id() == link) else {
+            return format!("{machine} is no longer listed");
+        };
+        if refusal.code == Code::StaleBoot {
+            format!("{} restarted; nothing was started there", held.name)
+        } else {
+            run_on::reason(&held.name, &refusal.message)
         }
     }
 
@@ -206,6 +230,20 @@ impl App {
         }
         start.leave_prompt();
         start
+    }
+}
+
+pub(in crate::app) struct RunOnDialog<'a> {
+    project: u64,
+    pub(in crate::app) run_on: Option<&'a mut RunOn>,
+    waiting: &'a mut bool,
+    note: &'a mut Option<String>,
+}
+
+impl RunOnDialog<'_> {
+    pub(in crate::app) fn shows(&self, link: u64, project: u64) -> bool {
+        let chosen = self.run_on.as_deref().and_then(RunOn::machine);
+        self.project == project && chosen.is_some_and(|target| target.link == link)
     }
 }
 
@@ -223,7 +261,7 @@ fn root_workspace(there: &ProjectInfo) -> Option<u64> {
     root.or_else(|| there.workspaces.first()).map(|workspace| workspace.id)
 }
 
-pub(in crate::app) fn issue_project(b: &Browser) -> u64 {
+fn issue_project(b: &Browser) -> u64 {
     let place = b.focused().and_then(|issue| b.place_for(issue).map(|place| place.project));
     place.unwrap_or(b.project)
 }

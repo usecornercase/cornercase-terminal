@@ -13,7 +13,7 @@ fn flows() -> Value {
     json!({ "flows": [info], "builtins": [QUICK] })
 }
 
-fn running(command: &str) -> Structured {
+pub(super) fn running(command: &str) -> Structured {
     match command {
         "flow-list" => Structured::Ok(flows()),
         "flow-run" => Structured::Ok(json!({ "workspace": WORKSPACE })),
@@ -30,7 +30,7 @@ fn refusing_the_run(command: &str) -> Structured {
     }
 }
 
-fn start(app: &App) -> &Start {
+pub(super) fn start(app: &App) -> &Start {
     let Some(Overlay::StartFlow { start, .. }) = &app.overlay else { panic!("Start flow is not open") };
     start
 }
@@ -62,6 +62,16 @@ impl Reading {
     fn run(&mut self, prompt: &str) {
         let app = &mut self.remote.rig.app;
         type_text(app, prompt);
+        send_key(app, KeyCode::Tab, KeyModifiers::NONE);
+        send_key(app, KeyCode::Enter, KeyModifiers::NONE);
+    }
+
+    pub(super) fn flow_from_the_issue(&mut self) {
+        self.press("start a flow");
+        self.remote
+            .rig
+            .until("the machine lists its flows", |app| start(app).there().is_some_and(|there| there.listed));
+        let app = &mut self.remote.rig.app;
         send_key(app, KeyCode::Tab, KeyModifiers::NONE);
         send_key(app, KeyCode::Enter, KeyModifiers::NONE);
     }
@@ -176,11 +186,7 @@ fn from_an_issue_keeps_the_machine_and_sends_the_issue() {
     let mut reading = reading_with(Reply::Told(running), vec![web_shop()]);
     reading.checked();
 
-    reading.press("start a flow");
-    reading.remote.rig.until("the machine lists its flows", |app| start(app).there().is_some_and(|there| there.listed));
-    let app = &mut reading.remote.rig.app;
-    send_key(app, KeyCode::Tab, KeyModifiers::NONE);
-    send_key(app, KeyCode::Enter, KeyModifiers::NONE);
+    reading.flow_from_the_issue();
     reading.run_answered();
 
     let sent = reading.sent("flow-run").expect("a flow run");

@@ -334,6 +334,19 @@ mod a_machine_that_is_gone {
         assert!(b.picker.is_some());
         assert!(b.run_on.as_ref().is_some_and(|run_on| run_on.lost.is_some()));
     }
+
+    #[test]
+    fn chooses_a_row_pasted_as_one_typed() {
+        let mut b = on_vps();
+        let moved = RunOn { targets: vec![Target { link: 2, ..target("vps", None) }], ..RunOn::default() };
+        b.run_on = RunOn::kept(Some(moved), b.run_on.as_ref());
+        let pos = button(&b, "run on…");
+        click(&mut b, pos);
+
+        b.paste("vps");
+
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::RunOn(Some(0)));
+    }
 }
 
 mod the_focused_issue {

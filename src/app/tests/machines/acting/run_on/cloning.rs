@@ -44,6 +44,13 @@ fn rambling(command: &str) -> Structured {
     }
 }
 
+fn cloned_with_flows(command: &str) -> Structured {
+    match command {
+        "clone" => cloned(command),
+        command => start_flow::running(command),
+    }
+}
+
 fn write(root: &Path, path: &str, contents: &str) {
     let path = root.join(path);
     std::fs::create_dir_all(path.parent().expect("a parent")).expect("create the folder");
@@ -102,8 +109,20 @@ impl Reading {
         self.remote.held(|event| matches!(event, AppEvent::Machine(MachineEvent::Packed { .. })))
     }
 
-    fn deliver(&mut self, event: AppEvent) {
-        self.remote.rig.app.handle_event(event, AREA).expect("handle event");
+    fn on_its_way(&mut self) -> AppEvent {
+        self.clone_dialog();
+        self.press_in_clone("skip files");
+        let answer = self.remote.held_relay();
+        self.press_in_clone("back");
+        answer
+    }
+
+    fn asked_again(&mut self) {
+        self.pick("run on…", "vps");
+        let remote = &self.remote;
+        wait_until("the machine is asked again", || {
+            remote.asked().iter().filter(|asked| asked["command"] == "account-list").count() == 2
+        });
     }
 
     fn lists_the_clone(&mut self) {
@@ -166,7 +185,7 @@ fn skips_the_files_when_asked() {
 }
 
 #[test]
-fn goes_back_to_the_issue_on_the_machine_and_checks_only_the_clone() {
+fn goes_back_to_the_issue_on_the_machine_checks_only_the_clone_and_says_it_in_a_toast() {
     let mut reading = not_there(half_copied);
     reading.clone_dialog();
 
@@ -175,7 +194,8 @@ fn goes_back_to_the_issue_on_the_machine_and_checks_only_the_clone() {
 
     let app = &reading.remote.rig.app;
     assert_eq!(browser(app).machine().map(|target| target.name.as_str()), Some("vps"));
-    assert_eq!(browser(app).notice.as_deref(), Some("cloned on vps · not copied: local.toml (it is tracked there)"));
+    assert_eq!(toast(app), Some("cloned web-shop on vps · not copied: local.toml (it is tracked there)"));
+    assert_eq!((browser(app).notice.as_deref(), error(app)), (None, None));
     reading.asked_for_the_clone();
     let asked = reading.remote.asked();
     assert_eq!(asked.iter().filter(|asked| asked["command"] == "account-list").count(), 1);
@@ -188,122 +208,119 @@ fn goes_back_without_sending_anything() {
     reading.tick(".env");
 
     reading.press_in_clone("back");
-    reading.pick("run on…", "vps");
+    reading.asked_again();
 
-    let remote = &reading.remote;
-    wait_until("the machine is asked again", || {
-        remote.asked().iter().filter(|asked| asked["command"] == "account-list").count() == 2
-    });
     assert!(browser_open(&reading.remote.rig.app));
     assert_eq!(reading.sent("clone"), None);
 }
 
 #[test]
-fn sends_the_files_read_after_it_went_back_and_says_so_there() {
+fn sends_the_files_ticked_before_back_whatever_the_dialog_chose_since() {
     let mut reading = not_there(cloned);
     reading.clone_dialog();
     let packed = reading.packing();
     reading.press_in_clone("back");
+    reading.pick("run on…", "this");
 
     reading.deliver(packed);
-    reading.remote.rig.until("the machine answers the clone", |app| browser(app).notice.is_some());
+    reading.remote.rig.until("the machine answers the clone", |app| toast(app).is_some());
 
     let sent = reading.sent("clone").expect("a clone");
     assert_eq!(sent["files"][0]["path"], json!(".env"));
-    assert_eq!(browser(&reading.remote.rig.app).notice.as_deref(), Some("cloned on vps"));
+    assert_eq!(toast(&reading.remote.rig.app), Some("cloned web-shop on vps"));
 }
 
 #[test]
-fn never_sends_files_read_for_a_dialog_that_chose_this_computer() {
+fn asks_nothing_and_leaves_alone_a_dialog_that_chose_this_computer_while_it_cloned() {
     let mut reading = not_there(cloned);
-    reading.clone_dialog();
-    let packed = reading.packing();
-    reading.press_in_clone("back");
+    let answer = reading.on_its_way();
     reading.pick("run on…", "this");
 
-    reading.deliver(packed);
-    reading.pick("run on…", "vps");
+    reading.deliver(answer);
+    reading.asked_again();
 
     let remote = &reading.remote;
-    wait_until("the machine is asked again", || {
-        remote.asked().iter().filter(|asked| asked["command"] == "account-list").count() == 2
-    });
-    assert_eq!(reading.sent("clone"), None);
-    assert_eq!(toast(&reading.remote.rig.app), Some("the clone on vps was not sent"));
+    assert!(remote.asked().iter().all(|asked| asked["args"]["project"] != CLONED));
+    assert_eq!(toast(&reading.remote.rig.app), Some("cloned web-shop on vps"));
 }
 
 #[test]
-fn leaves_alone_a_dialog_that_chose_this_computer_while_it_cloned() {
+fn says_it_is_cloning_where_start_was_and_starts_nothing_until_it_answers() {
     let mut reading = not_there(cloned);
-    reading.clone_dialog();
-    reading.press_in_clone("skip files");
-    let answer = reading.remote.held_relay();
-    reading.press_in_clone("back");
-    reading.pick("run on…", "this");
-
-    reading.deliver(answer);
-
-    let app = &reading.remote.rig.app;
-    assert_eq!((browser(app).machine(), browser(app).notice.as_deref()), (None, None));
-}
-
-#[test]
-fn checks_the_clone_even_once_the_dialog_sent_something_else() {
-    let mut reading = not_there(half_copied);
-    reading.clone_dialog();
-    reading.press_in_clone("clone");
-    let answer = reading.remote.held_relay();
-    reading.press_in_clone("back");
-    reading.remote.rig.app.dialog_run_on().expect("the run on row").awaiting = Some(u64::MAX);
-
-    reading.deliver(answer);
-
-    let app = &reading.remote.rig.app;
-    assert_eq!(browser(app).notice.as_deref(), Some("cloned on vps · not copied: local.toml (it is tracked there)"));
-    reading.asked_for_the_clone();
-}
-
-#[test]
-fn offers_no_second_clone_while_one_is_on_its_way() {
-    let mut reading = not_there(cloned);
-    reading.clone_dialog();
-    reading.press_in_clone("skip files");
-    let answer = reading.remote.held_relay();
-    reading.press_in_clone("back");
+    let answer = reading.on_its_way();
+    assert_eq!(row(&reading.remote.rig.app, "start").as_deref(), Some("start   cloning on vps…"));
 
     reading.press("start");
 
-    assert!(browser_open(&reading.remote.rig.app), "{:?}", reading.remote.rig.app.overlay);
-    assert_eq!(error(&reading.remote.rig.app), Some("still cloning on vps…"));
+    let app = &reading.remote.rig.app;
+    assert!(browser_open(app), "{:?}", app.overlay);
+    assert_eq!((error(app), browser(app).starting), (None, false));
     reading.deliver(answer);
-    assert_eq!(browser(&reading.remote.rig.app).notice.as_deref(), Some("cloned on vps"));
+    assert_eq!(row(&reading.remote.rig.app, "start").as_deref(), Some("start   not on vps · clone…"));
 }
 
 #[test]
-fn reaches_the_start_flow_opened_from_the_issue_while_it_cloned() {
-    let mut reading = not_there(half_copied);
-    reading.clone_dialog();
-    reading.press_in_clone("skip files");
-    let answer = reading.remote.held_relay();
-    reading.press_in_clone("back");
+fn starts_no_issue_on_a_clone_the_machine_lists_before_it_answers() {
+    let mut reading = not_there(cloned);
+    let _answer = reading.on_its_way();
     reading.lists_the_clone();
-    reading.press("start a flow");
+    reading.pick("account…", "home");
+    assert!(browser(&reading.remote.rig.app).there().is_some_and(|there| there.cloned));
+
+    reading.press("start");
+
+    let app = &reading.remote.rig.app;
+    assert_eq!((error(app), browser(app).starting), (None, false));
+}
+
+#[test]
+fn starts_no_flow_on_a_clone_the_machine_lists_before_it_answers() {
+    let mut reading = not_there(cloned_with_flows);
+    let _answer = reading.on_its_way();
+    reading.lists_the_clone();
+
+    reading.flow_from_the_issue();
+
+    let start = start_flow::start(&reading.remote.rig.app);
+    assert_eq!(start.there().map(|there| there.place.as_str()), Some("cloning on vps…"));
+    assert_eq!((start.notice.as_deref(), start.waiting), (None, false));
+}
+
+#[test]
+fn makes_no_workspace_on_a_clone_the_machine_lists_before_it_answers() {
+    let mut reading = not_there(cloned);
+    let _answer = reading.on_its_way();
+    reading.lists_the_clone();
+    let app = &mut reading.remote.rig.app;
+    app.overlay = None;
+    app.ask_new_workspace(0);
+    reading.new_on_vps();
+
+    reading.create("login");
+
+    let app = &reading.remote.rig.app;
+    assert!(
+        matches!(app.overlay, Some(Overlay::NewWorkspace { creating: false, error: None, .. })),
+        "{:?}",
+        app.overlay
+    );
+}
+
+#[test]
+fn names_the_machine_as_it_is_called_when_the_clone_answers() {
+    let mut reading = not_there(cloned);
+    let answer = reading.on_its_way();
+    reading.remote.rig.edit(vec![machine("box", "vps.lan")], Duration::from_secs(3));
 
     reading.deliver(answer);
 
-    let Some(Overlay::StartFlow { start, .. }) = &reading.remote.rig.app.overlay else {
-        panic!("Start flow is not open")
-    };
-    assert_eq!(start.notice.as_deref(), Some("cloned on vps · not copied: local.toml (it is tracked there)"));
+    assert_eq!(toast(&reading.remote.rig.app), Some("cloned web-shop on box"));
 }
 
 #[test]
 fn leaves_alone_a_dialog_whose_machine_left_while_it_cloned() {
     let mut reading = not_there(half_copied);
-    reading.clone_dialog();
-    reading.press_in_clone("skip files");
-    let answer = reading.remote.held_relay();
-    reading.press_in_clone("back");
+    let answer = reading.on_its_way();
     reading.remote.rig.edit(Vec::new(), Duration::from_secs(3));
     reading.remote.rig.app.follow_issues_run_on();
 
@@ -312,6 +329,7 @@ fn leaves_alone_a_dialog_whose_machine_left_while_it_cloned() {
     let app = &reading.remote.rig.app;
     assert!(browser(app).run_on.as_ref().is_some_and(|run_on| run_on.lost.is_some()));
     assert_eq!(browser(app).notice, None);
+    assert_eq!(toast(app), Some("cloned web-shop on vps · not copied: local.toml (it is tracked there)"));
 }
 
 #[test]
@@ -328,8 +346,10 @@ fn says_briefly_why_a_ticked_file_could_not_be_read() {
     reading.press_in_clone("clone");
     reading.cloned();
 
-    let said = form(&reading.remote.rig.app).error.clone().expect("an error");
+    let app = &reading.remote.rig.app;
+    let said = toast(app).and_then(|toast| toast.strip_prefix("the clone on vps failed: ")).expect("a failure");
     assert_eq!((said.chars().count(), said.ends_with('…')), (60, true), "{said}");
+    assert_eq!(form(app).error, None);
     assert_eq!(reading.sent("clone"), None);
 }
 
@@ -341,9 +361,9 @@ fn logs_a_failure_to_read_the_files_by_its_kind_alone(#[case] error: Error, #[ca
 }
 
 #[rstest]
-#[case::short(refused, "~/code/web-shop already exists on vps")]
-#[case::rambling(rambling, "fatal: could not create work tree dir because the disk on t…")]
-fn keeps_a_refusal_red_in_the_clone_dialog(#[case] told: fn(&str) -> Structured, #[case] said: &str) {
+#[case::short(refused, "the clone on vps failed: ~/code/web-shop already exists on vps")]
+#[case::rambling(rambling, "the clone on vps failed: fatal: could not create work tree dir because the disk on t…")]
+fn says_a_failed_clone_in_a_toast_and_lets_it_be_tried_again(#[case] told: fn(&str) -> Structured, #[case] said: &str) {
     let mut reading = not_there(told);
     reading.clone_dialog();
 
@@ -351,5 +371,6 @@ fn keeps_a_refusal_red_in_the_clone_dialog(#[case] told: fn(&str) -> Structured,
     reading.cloned();
 
     let app = &reading.remote.rig.app;
-    assert_eq!(form(app).error.as_deref(), Some(said));
+    assert_eq!((toast(app), form(app).error.as_deref()), (Some(said), None));
+    assert!(!form(app).cloning);
 }

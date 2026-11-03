@@ -39,6 +39,9 @@ impl App {
     pub(in crate::app) fn placed_there(&self, link: u64, project: u64, how: &str) -> String {
         let Some(held) = self.machines.held().iter().find(|held| held.link.id() == link) else { return String::new() };
         let name = &held.name;
+        if self.still_cloning(link, project) {
+            return format!("cloning on {name}…");
+        }
         let Some(there) = self.project_there(link, project) else { return format!("not on {name} · clone…") };
         let home = held.seen.as_ref().and_then(|seen| seen.home.as_deref());
         format!("{how} on {name}, in {}", text::display_path(&there.path, home))

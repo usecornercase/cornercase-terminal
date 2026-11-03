@@ -146,9 +146,11 @@ mod its_lists {
         assert_eq!(said.as_deref(), Some("file1, file2, file3 … and 1 more"));
     }
 
-    #[test]
-    fn say_nothing_when_every_one_is_blank() {
-        assert_eq!(capped(["", " ", "\u{1b}\t"].into_iter()), None);
+    #[rstest::rstest]
+    #[case::spaces(["", " ", "\u{1b}\t"])]
+    #[case::invisible(["\u{200B}", "\u{FEFF} \u{2060}", "\u{200C}\u{200D}"])]
+    fn say_nothing_when_every_one_is_blank(#[case] all: [&str; 3]) {
+        assert_eq!(capped(all.into_iter()), None);
     }
 
     struct Read<'a>(&'a std::cell::Cell<usize>, String);
@@ -173,6 +175,7 @@ mod its_lists {
     #[case::empty("")]
     #[case::spaces("  \n ")]
     #[case::control("\u{1b}\u{7}")]
+    #[case::invisible("\u{FEFF}\u{200B} \u{2060}")]
     fn say_the_machine_gave_no_reason_for_a_blank_one(#[case] text: &str) {
         assert_eq!(reason("vps", text), "vps gave no reason");
         assert_eq!(clipped_or(text, "the project"), "the project");
@@ -187,6 +190,7 @@ mod its_lists {
     #[case::lines("no such\nfolder\r\n", "no such folder")]
     #[case::escapes("red \u{1b}[31mtext\u{7}", "red [31mtext")]
     #[case::tabs("\tindented\t", "indented")]
+    #[case::invisible("\u{FEFF}disk full\u{200B}\n\u{2060}", "disk full")]
     fn keep_each_text_on_one_line_without_control_characters(#[case] text: &str, #[case] said: &str) {
         assert_eq!(clipped(text), said);
     }

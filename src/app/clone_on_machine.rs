@@ -8,22 +8,21 @@ use serde_json::Value;
 use super::App;
 use super::event::AppEvent;
 use super::input::wheel;
-use super::issues_dialog::run_on::issue_project;
 use super::machines::MachineEvent;
-use super::machines::relay::{Sent, Then};
+use super::machines::relay::Then;
 use super::overlay::Overlay;
 use super::text_fields::FieldArea;
 use super::toast::Toast;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{CloneFile, CloneRepository, Cloned, Unwritten};
+use crate::control::{CloneFile, CloneRepository, Cloned};
 use crate::editor::Editor;
 use crate::error::{Error, Result};
 use crate::git::ignored::{self, IgnoredFile, Listing};
 use crate::git::remote;
-use crate::log::{self, Job, Level};
+use crate::log::{Job, Level};
 use crate::machines::DEFAULT_FOLDER;
-use crate::machines::clone_form::{CloneForm, Opening, Step};
-use crate::machines::run_on::{self, RunOn, Target};
+use crate::machines::clone_form::{CloneForm, Opening, Step, cloned_note};
+use crate::machines::run_on::{self, Target};
 use crate::machines::send::Send;
 use crate::project::Hierarchy;
 use crate::ui::ToastIcon;
@@ -35,6 +34,7 @@ pub(in crate::app) struct Pending {
     link: u64,
     project: u64,
     machine: String,
+    label: String,
 }
 
 #[derive(Debug)]
@@ -59,8 +59,8 @@ pub(crate) struct Packed {
 
 impl App {
     pub(in crate::app) fn open_clone_on_machine(&mut self, target: &Target, project: u64) {
-        if self.machines.clones.iter().any(|pending| pending.link == target.link && pending.project == project) {
-            return self.say_in_dialog(format!("still cloning on {}…", target.name));
+        if self.still_cloning(target.link, project) {
+            return;
         }
         let Some(at) = self.projects.project_index(project) else { return };
         let shown = &self.projects[at];
@@ -72,13 +72,17 @@ impl App {
             root: shown.path.clone(),
             url,
         };
-        let root = opening.root.clone();
+        let (root, label) = (opening.root.clone(), opening.project.clone());
         let Some(back) = self.overlay.take() else { return };
-        let pending =
-            Pending { key: self.clients.requests.key(), link: target.link, project, machine: target.name.clone() };
+        let key = self.clients.requests.key();
+        let pending = Pending { key, link: target.link, project, machine: target.name.clone(), label };
         let cloning = Cloning { form: CloneForm::new(opening), back, pending };
         self.overlay = Some(Overlay::CloneOnMachine(Box::new(cloning)));
         self.list_ignored(root);
+    }
+
+    pub(in crate::app) fn still_cloning(&self, link: u64, project: u64) -> bool {
+        self.machines.clones.iter().any(|pending| pending.link == link && pending.project == project)
     }
 
     fn machine_folder(&self, name: &str) -> String {
@@ -169,18 +173,6 @@ impl App {
         matches!(&self.overlay, Some(Overlay::CloneOnMachine(cloning)) if cloning.pending.key == key)
     }
 
-    fn shows_clone(&self, pending: &Pending) -> bool {
-        let chosen = |run_on: Option<&RunOn>| run_on.and_then(RunOn::machine).map(|target| target.link);
-        let (link, project) = match &self.overlay {
-            Some(Overlay::Issues(b)) => (b.machine().map(|target| target.link), issue_project(b)),
-            Some(Overlay::StartFlow { start, .. }) => (chosen(start.run_on.as_ref()), start.project),
-            Some(Overlay::NewWorkspace { project, run_on, .. }) => (chosen(run_on.as_ref()), *project),
-            Some(Overlay::CloneOnMachine(cloning)) => (Some(cloning.pending.link), cloning.pending.project),
-            _ => return false,
-        };
-        link == Some(pending.link) && project == pending.project
-    }
-
     fn take_clone(&mut self, key: u64) -> Option<Pending> {
         let at = self.machines.clones.iter().position(|pending| pending.key == key)?;
         Some(self.machines.clones.swap_remove(at))
@@ -226,81 +218,71 @@ impl App {
     pub(in crate::app) fn clone_packed(&mut self, packed: Packed) {
         let Packed { key, mut clone, result } = packed;
         let Some(pending) = self.machines.clones.iter().find(|pending| pending.key == key).cloned() else { return };
-        if !self.shows_clone(&pending) {
-            self.take_clone(key);
-            log::info!("machines", "files read for a clone that was left", name = pending.machine);
-            let left = format!("the clone on {} was not sent", pending.machine);
-            self.messages.toast = Some(Toast::new(left, ToastIcon::Bug));
-            return;
-        }
         match result {
             Ok(files) => {
                 clone.files = files;
                 self.send_clone(clone, &pending);
             }
-            Err(why) => {
-                self.take_clone(key);
-                self.say_in_dialog(why);
-            }
+            Err(why) => self.clone_failed(&pending, &why),
         }
     }
 
     fn send_clone(&mut self, clone: CloneRepository, pending: &Pending) {
-        let held = self.machines.held().iter().find(|held| held.link.id() == pending.link);
-        let sent = match held.map(|held| held.name.clone()) {
+        let sent = match self.held_name(pending.link) {
             Some(name) => self.send_to_machine(&name, Send::Clone(clone), Then::Clone(pending.key)).map(|_| ()),
             None => Err(Refusal::new(Code::Unavailable, format!("{} is no longer listed", pending.machine))),
         };
         if let Err(refusal) = sent {
-            self.take_clone(pending.key);
-            self.say_in_dialog(refusal.message);
+            self.clone_failed(pending, &refusal.message);
         }
     }
 
-    fn say_in_dialog(&mut self, why: String) {
-        match &mut self.overlay {
-            Some(Overlay::CloneOnMachine(cloning)) => {
-                cloning.form.cloning = false;
-                cloning.form.error = Some(why);
+    pub(in crate::app) fn clone_relayed(&mut self, key: u64, result: std::result::Result<Value, Refusal>) {
+        let Some(pending) = self.machines.clones.iter().find(|pending| pending.key == key).cloned() else { return };
+        let cloned = match result {
+            Ok(value) => serde_json::from_value::<Cloned>(value).unwrap_or_default(),
+            Err(refusal) => {
+                let why = run_on::reason(&self.clone_machine(&pending), &refusal.message);
+                return self.clone_failed(&pending, &why);
             }
-            Some(Overlay::Issues(b)) => b.error = Some(why),
-            Some(Overlay::StartFlow { start, .. }) => start.notice = Some(why),
-            Some(Overlay::NewWorkspace { error, .. }) => *error = Some(why),
-            _ => {}
-        }
-    }
-
-    pub(in crate::app) fn clone_relayed(&mut self, sent: &Sent, key: u64, result: std::result::Result<Value, Refusal>) {
-        let Some(pending) = self.take_clone(key) else { return };
-        let cloned = result.map(|value| serde_json::from_value::<Cloned>(value).unwrap_or_default());
-        if cloned.is_ok() && self.cloning_with(key) {
+        };
+        self.take_clone(key);
+        if self.cloning_with(key) {
             self.clone_back();
         }
-        if let Ok(cloned) = &cloned
-            && let Some(held) = self.machines.held().iter().find(|held| held.link.id() == pending.link)
+        if let Some(name) = self.held_name(pending.link)
+            && self.run_on_dialog().is_some_and(|dialog| dialog.shows(pending.link, pending.project))
         {
-            let name = held.name.clone();
             self.check_cloned(&name, cloned.ids.project);
         }
-        if !self.shows_clone(&pending) {
-            log::info!("machines", "clone answered after its dialog closed", name = sent.machine);
-            return;
-        }
-        match cloned {
-            Ok(cloned) => self.cloned_in_dialog(&pending.machine, &cloned.unwritten),
-            Err(refusal) => self.say_in_dialog(run_on::reason(&pending.machine, &refusal.message)),
-        }
+        self.follow_run_on();
+        let note = cloned_note(&self.clone_project(&pending), &self.clone_machine(&pending), &cloned.unwritten);
+        self.messages.toast = Some(Toast::new(note, ToastIcon::Check));
     }
 
-    fn cloned_in_dialog(&mut self, machine: &str, unwritten: &[Unwritten]) {
-        let note = cloned_note(machine, unwritten);
-        match &mut self.overlay {
-            Some(Overlay::Issues(b)) => b.notice = Some(note),
-            Some(Overlay::StartFlow { start, .. }) if !unwritten.is_empty() => start.notice = Some(note),
-            Some(Overlay::NewWorkspace { error, .. }) if !unwritten.is_empty() => *error = Some(note),
-            _ => {}
+    fn clone_failed(&mut self, pending: &Pending, why: &str) {
+        self.take_clone(pending.key);
+        let said = format!("the clone on {} failed: {why}", self.clone_machine(pending));
+        self.messages.toast = Some(Toast::new(said, ToastIcon::Bug));
+        if let Some(Overlay::CloneOnMachine(cloning)) = &mut self.overlay
+            && cloning.pending.key == pending.key
+        {
+            cloning.form.cloning = false;
         }
         self.follow_run_on();
+    }
+
+    fn held_name(&self, link: u64) -> Option<String> {
+        self.machines.held().iter().find(|held| held.link.id() == link).map(|held| held.name.clone())
+    }
+
+    fn clone_machine(&self, pending: &Pending) -> String {
+        self.held_name(pending.link).unwrap_or_else(|| pending.machine.clone())
+    }
+
+    fn clone_project(&self, pending: &Pending) -> String {
+        let at = self.projects.project_index(pending.project);
+        at.map_or_else(|| pending.label.clone(), |at| self.projects[at].label(self.home.as_deref()))
     }
 }
 
@@ -315,14 +297,6 @@ fn packed(root: &Path, files: &[IgnoredFile]) -> Result<Vec<CloneFile>> {
         Ok(CloneFile { path: file.path.clone(), data, mode: file.mode })
     };
     files.iter().map(file).collect()
-}
-
-fn cloned_note(name: &str, unwritten: &[Unwritten]) -> String {
-    let left = unwritten.iter().map(|file| format!("{} ({})", file.path.display(), file.why));
-    match run_on::capped(left) {
-        Some(left) => format!("cloned on {name} · not copied: {left}"),
-        None => format!("cloned on {name}"),
-    }
 }
 
 fn quietly<T>(result: Result<T>, job: &mut Job) -> std::result::Result<T, String> {

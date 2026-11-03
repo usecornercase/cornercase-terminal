@@ -38,13 +38,13 @@ fn chosen(app: &App) -> Option<String> {
 }
 
 impl Reading {
-    fn new_on_vps(&mut self) {
+    pub(super) fn new_on_vps(&mut self) {
         let app = &mut self.remote.rig.app;
         let row = ui::form_run_on(ui::form_area(AREA));
         click(app, Position::new(row.x + 30, row.y));
     }
 
-    fn create(&mut self, name: &str) {
+    pub(super) fn create(&mut self, name: &str) {
         let app = &mut self.remote.rig.app;
         type_text(app, name);
         send_key(app, KeyCode::Enter, KeyModifiers::NONE);
@@ -169,14 +169,14 @@ fn leaves_the_dialog_waiting_when_an_earlier_dialog_s_answer_arrives() {
         *creating = true;
     }
 
-    app.dialog_relayed(link, 1, Err(Refusal::new(Code::Failed, "the earlier one failed")));
+    app.dialog_relayed(link, "vps", 1, Err(Refusal::new(Code::Failed, "the earlier one failed")));
     assert!(
         matches!(&app.overlay, Some(Overlay::NewWorkspace { creating: true, error: None, .. })),
         "{:?}",
         app.overlay
     );
 
-    app.dialog_relayed(link, 2, Err(Refusal::new(Code::Failed, "this one failed")));
+    app.dialog_relayed(link, "vps", 2, Err(Refusal::new(Code::Failed, "this one failed")));
     let Some(Overlay::NewWorkspace { creating, error, .. }) = &app.overlay else { panic!("New workspace is not open") };
     assert_eq!((*creating, error.as_deref()), (false, Some("this one failed")));
 }

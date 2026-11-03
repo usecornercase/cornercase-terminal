@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyEvent};
 
+use super::run_on;
+use crate::control::Unwritten;
 use crate::editor::Editor;
 use crate::git::clone::files::{MAX_FILES, MAX_TOTAL_BYTES};
 use crate::git::clone::folder_name;
@@ -215,6 +217,18 @@ impl CloneForm {
     pub(crate) fn place(&mut self, width: usize, col: usize) {
         let line = self.url.scroll();
         self.url.place(width, line, col);
+    }
+}
+
+pub(crate) fn cloned_note(project: &str, machine: &str, unwritten: &[Unwritten]) -> String {
+    let named = |file: &&Unwritten| run_on::has_text(&file.path.to_string_lossy());
+    let left = unwritten.iter().filter(named).map(|file| {
+        let path = run_on::clipped(&file.path.to_string_lossy());
+        format!("{path} ({})", run_on::reason(machine, &file.why))
+    });
+    match run_on::capped(left) {
+        Some(left) => format!("cloned {project} on {machine} · not copied: {left}"),
+        None => format!("cloned {project} on {machine}"),
     }
 }
 
