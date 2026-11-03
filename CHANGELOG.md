@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.260
+
+- **Another step towards running natively on Windows: panes there now run their shell in ConPTY**, Windows' own pseudo console. A new pane starts your `SHELL` when Windows can start it, else PowerShell 7 (`pwsh`), else Windows PowerShell, else `cmd`, with the folder, size and variables cornercase gives it; the tab's name follows the program you run, and a shell that exits closes its pane. cornercase still says it does not run on Windows yet, since the window and the server are not ported. Nothing changes on Linux and macOS.
+
 ## 0.12.259
 
 - **On Windows, cornercase now reads processes**: their trees, names, arguments, folders, memory and CPU, another step towards running there natively. It still says that it does not run on Windows yet. Nothing changes on Linux and macOS.
