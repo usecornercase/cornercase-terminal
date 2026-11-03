@@ -25,6 +25,7 @@ pub(crate) mod escalation;
 #[cfg(any(windows, test))]
 mod handles;
 pub(crate) mod owners;
+pub(crate) mod program;
 
 const MAX_DESCENDANTS: usize = 256;
 

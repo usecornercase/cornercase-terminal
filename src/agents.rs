@@ -26,8 +26,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::os::fs::PermissionsExt;
-use crate::process;
+use crate::{paths, process};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AgentState {
@@ -43,6 +42,11 @@ pub(crate) const AUTO: &str = "auto";
 pub(crate) const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
+const POWERSHELL_BARE: &str = r"-_./\+=";
+const POWERSHELL_START: &str = r"-_./\";
+const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
+const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
+const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
     ("droid", "droid"),
@@ -81,19 +85,8 @@ pub(crate) fn command(config: &Config, kind: &str) -> String {
         .unwrap_or_else(|| kind.to_string())
 }
 
-fn executable(path: &Path) -> bool {
-    path.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-}
-
-fn found(program: &str, path: Option<&OsStr>) -> bool {
-    if program.contains('/') {
-        return executable(Path::new(program));
-    }
-    path.is_some_and(|path| std::env::split_paths(path).any(|dir| dir.is_absolute() && executable(&dir.join(program))))
-}
-
 pub(crate) fn installed(program: &str) -> bool {
-    found(program, std::env::var_os("PATH").as_deref())
+    process::program::locate(program).is_some()
 }
 
 pub(crate) fn modes(config: &Config, kind: &str) -> Vec<Mode> {
@@ -187,7 +180,8 @@ pub(crate) struct AccountHome {
 impl AccountHome {
     pub(crate) fn default_home(self, var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
         let absolute = |name: &str| var(name).map(PathBuf::from).filter(|path| path.is_absolute());
-        absolute(self.env).or_else(|| absolute("HOME").map(|home| self.default.iter().fold(home, |p, s| p.join(s))))
+        absolute(self.env)
+            .or_else(|| absolute(paths::HOME_VAR).map(|home| self.default.iter().fold(home, |p, s| p.join(s))))
     }
 
     pub(crate) fn config(self, home: &Path) -> PathBuf {
@@ -313,6 +307,74 @@ pub(crate) fn quote(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', r"'\''"))
 }
 
+pub(crate) fn typed_line(words: impl IntoIterator<Item = String>) -> String {
+    if cfg!(windows) {
+        return powershell_line(words);
+    }
+    words.into_iter().map(|word| quote(&word)).collect::<Vec<_>>().join(" ")
+}
+
+fn powershell_line(words: impl IntoIterator<Item = String>) -> String {
+    let mut words = words.into_iter();
+    let program = words.next().map(|program| {
+        let named = !program.starts_with('-');
+        if named && powershell_bare(&program) { program } else { format!("& {}", powershell_quoted(&program)) }
+    });
+    let words = words.map(|word| if powershell_bare(&word) { word } else { powershell_quoted(&word) });
+    program.into_iter().chain(words).collect::<Vec<_>>().join(" ")
+}
+
+fn powershell_bare(word: &str) -> bool {
+    word.starts_with(|c: char| c.is_ascii_alphanumeric() || POWERSHELL_START.contains(c))
+        && word != "--"
+        && word.chars().all(|c| c.is_ascii_alphanumeric() || POWERSHELL_BARE.contains(c))
+}
+
+fn powershell_quoted(word: &str) -> String {
+    let mut quoted = String::with_capacity(word.len() + 2);
+    quoted.push('\'');
+    for c in word.chars() {
+        if POWERSHELL_QUOTES.contains(&c) {
+            quoted.push(c);
+        }
+        quoted.push(c);
+    }
+    quoted.push('\'');
+    quoted
+}
+
+pub(crate) fn batch_refusal(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Option<String> {
+    let (program, rest) = typed_program(line)?;
+    let target = runs(&program).unwrap_or_else(|| PathBuf::from(&program));
+    let batch = target
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| BATCH_EXTENSIONS.iter().any(|batch| extension.eq_ignore_ascii_case(batch)));
+    let special = program.chars().chain(rest.chars()).find(|c| BATCH_SPECIAL.contains(c)).filter(|_| batch)?;
+    Some(format!(
+        "not started: `{}` is a batch file, which runs through cmd.exe, and cmd.exe would read the `{special}` in \
+         the line as its own, so a .cmd launcher cannot take it safely; install the agent as an .exe or keep its .ps1",
+        target.display()
+    ))
+}
+
+fn typed_program(line: &str) -> Option<(String, &str)> {
+    let Some(quoted) = line.strip_prefix("& '") else {
+        let (program, rest) = line.split_once(' ').unwrap_or((line, ""));
+        return Some((program.to_string(), rest));
+    };
+    let mut program = String::new();
+    let mut chars = quoted.char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        let quote = POWERSHELL_QUOTES.contains(&c);
+        if quote && chars.next_if(|(_, next)| *next == c).is_none() {
+            return Some((program, &quoted[at + c.len_utf8()..]));
+        }
+        program.push(c);
+    }
+    None
+}
+
 pub(crate) fn join_args(args: &[String]) -> String {
     args.iter().map(|a| quote(a)).collect::<Vec<_>>().join(" ")
 }
@@ -322,7 +384,7 @@ pub(crate) fn command_line(config: &Config, kind: &str) -> String {
 }
 
 fn line(config: &Config, kind: &str, args: Vec<String>) -> String {
-    std::iter::once(command(config, kind)).chain(args).map(|a| quote(&a)).collect::<Vec<_>>().join(" ")
+    typed_line(std::iter::once(command(config, kind)).chain(args))
 }
 
 pub(crate) fn fresh_line(config: &Config, kind: &str, mode: Option<&str>) -> String {
@@ -385,7 +447,7 @@ pub(crate) fn resume_line(config: &Config, agent: &AgentState) -> Option<String>
     let args = with_mode(kind, &args(config, kind), &modes(config, kind), agent.mode.as_deref());
     let conversation = agent.conversation.clone();
     let line = Known::of(kind)?.resume(args, conversation)?;
-    Some(std::iter::once(command(config, kind)).chain(line).map(|a| quote(&a)).collect::<Vec<_>>().join(" "))
+    Some(typed_line(std::iter::once(command(config, kind)).chain(line)))
 }
 
 pub(crate) fn resolve(config: &Config, explicit: Option<&str>, running: Option<&str>) -> Option<String> {
@@ -401,6 +463,10 @@ fn basename(arg: &str) -> &str {
 
 fn named(part: Option<&str>, name: &str) -> bool {
     part.is_some_and(|part| process::same_file_name(part, name))
+}
+
+fn is_program(arg: &str, name: &str) -> bool {
+    process::same_file_name(basename(arg), name)
 }
 
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {

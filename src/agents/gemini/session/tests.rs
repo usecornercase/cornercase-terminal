@@ -240,7 +240,7 @@ fn a_process_the_agent_starts_during_the_scan_is_not_another_gemini() {
     let found = look_among(pid, UNIX_EPOCH, None, None, || {
         std::fs::write(&go, "").expect("signal the parent");
         crate::test_util::wait_until("the parent starts a gemini", || {
-            process::children(pid).into_iter().any(|child| named(&process::args(child), NAME))
+            process::children(pid).into_iter().any(|child| is_gemini(&process::args(child)))
         });
         process::all()
     });

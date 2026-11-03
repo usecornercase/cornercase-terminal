@@ -295,7 +295,7 @@ fn environment(command: &mut Command, own: Vec<(String, String)>, account: Optio
 }
 
 pub(super) fn build(program: &str, target: &Target, args: &[String], own: Vec<(String, String)>) -> Command {
-    let mut command = Command::new(program);
+    let mut command = process::program::command(program);
     command.args(ARGS).arg(SETTINGS);
     if let Some(conversation) = &target.conversation {
         command.args(["--resume", conversation]);

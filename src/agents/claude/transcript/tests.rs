@@ -370,6 +370,10 @@ mod folder {
     #[case::plain("/home/ubuntu/projects/shop", "-home-ubuntu-projects-shop")]
     #[case::dots_and_dashes("/home/a/.cornercase/worktrees/shop/feat-x", "-home-a--cornercase-worktrees-shop-feat-x")]
     #[case::accents_and_emoji("/home/ana/código/🦀 shop", "-home-ana-c-digo----shop")]
+    #[case::windows(
+        r"C:\Users\Usuario\Documents\projects\cornercase-terminal",
+        "C--Users-Usuario-Documents-projects-cornercase-terminal"
+    )]
     fn is_the_folder_with_every_other_character_as_a_dash(#[case] cwd: &str, #[case] expected: &str) {
         assert_eq!(project_dir(Path::new(cwd)), expected);
     }
