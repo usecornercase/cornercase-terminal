@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.277
+
+- **On Windows, worktree setup and teardown scripts and plugin scripts run without a Unix machine's `sh`**, the next step of the native port (it still says it does not run on Windows yet). They go through Git for Windows' own `sh`, found only inside Git's install, or through PowerShell when Git is missing, and a plugin's arguments reach its program as written. A plugin's manifest is checked by its owner and access list, as its mode is on Unix. Nothing changes on Linux and macOS.
+
 ## 0.12.274
 
 - **On Windows, cornercase finds the coding agents installed with npm, reads their folders from your profile and types their commands in PowerShell's syntax**, another step towards running there natively. It still says it does not run on Windows yet. Nothing changes on Linux and macOS.
