@@ -83,7 +83,7 @@ version = "1.0.0"
 description = "A notes file per workspace"
 min_cornercase = "0.12.87"         # optional: refused by an older cornercase
 api = 1                            # optional: the plugin API it was written for
-platforms = ["macos", "linux"]     # optional: where it runs; empty means everywhere
+platforms = ["macos", "linux", "windows"]  # optional: where it runs; empty means everywhere
 permissions = ["read", "send"]     # shown before turning it on, not enforced
 
 [button]                           # optional: the plugin's own button
@@ -125,7 +125,7 @@ url = "https://github.com/acme/notes/releases/download/v1.0.0/notes-aarch64-appl
 sha256 = "9f2c…"                   # 64 hexadecimal digits
 ```
 
-`[download]` may name `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu` and `x86_64-unknown-linux-gnu`. An archive is a `.tar.gz` served over `https://`; its files are unpacked into the plugin's folder. Links, devices and paths that lead out of the folder refuse the whole archive. When the archive's sha256 differs, nothing is unpacked. If a build step changes `cornercase-plugin.toml`, nothing is installed.
+`[download]` may name `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`. An archive is a `.tar.gz` served over `https://`; its files are unpacked into the plugin's folder. Links, devices and paths that lead out of the folder refuse the whole archive. When the archive's sha256 differs, nothing is unpacked. If a build step changes `cornercase-plugin.toml`, nothing is installed.
 
 Fields cornercase doesn't know are ignored, so a manifest written for a newer cornercase still loads. The plugin's folder and its manifest must be yours and not writable by other users. Its texts may not hold control characters or invisible ones (bidirectional overrides, zero-width spaces and the like), which could make a command read differently from what runs. A manifest that cannot be read shows in `plugin list` and in Settings with the reason, and never hides the other plugins.
 

@@ -27,15 +27,15 @@ cornercase is young. These are the gaps you may run into today.
 
 ## On Windows
 
-cornercase runs natively on Windows 11 and Windows 10 from version 1809, on x64, and has been checked on Windows 11 only. Most of what these pages describe works there too; these are the gaps known today:
+cornercase runs natively on Windows 11 and Windows 10 from version 1809, on x64. It has been checked on Windows 11 only, and its automated tests don't run on Windows yet ([#601](https://github.com/usecornercase/cornercase-terminal/issues/601)), so expect rough edges. Most of what these pages describe works there too; these are the gaps known today:
 
 | Limitation | What it means for you |
 | --- | --- |
-| **No mouse for programs in a pane** | Windows' pseudo-console keeps a program's mouse mode to itself, so vim with `mouse=a`, htop, lazygit or an agent's own interface get no clicks, drags or wheel; the wheel scrolls the pane's history instead. Pasting works. ([#616](https://github.com/usecornercase/cornercase-terminal/issues/616)) |
-| **No context line for some agents** | Codex, GitHub Copilot CLI, Cursor CLI and opencode tabs show no model and context line, since Windows can't tell cornercase which of their records a process has open (a Copilot session it resumed shows one). Their status icons and notifications work. ([#618](https://github.com/usecornercase/cornercase-terminal/issues/618)) |
-| **Logging off stops the server abruptly** | Logging off or shutting down Windows ends the server without its usual clean stop, so changes since it last saved can be lost. Run `cornercase kill-server` first. ([#617](https://github.com/usecornercase/cornercase-terminal/issues/617)) |
-| **Folders show a `\\?\` prefix** | Project folders appear as `\\?\C:\…` in the window and in `cornercase status`. They work as usual. ([#613](https://github.com/usecornercase/cornercase-terminal/issues/613)) |
 | **Remote and chat apps not checked yet** | [`cornercase remote`](../../guides/remote/) and `--remote`, [opening cornercase from your phone](../../guides/phone/), and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots have not been tried on Windows. ([#603](https://github.com/usecornercase/cornercase-terminal/issues/603)) |
+| **PowerShell doesn't say where it is** | `cd` in PowerShell doesn't change its process's folder, and its default prompt doesn't report the folder either, so a PowerShell pane counts as being in the folder it started in: a new tab, a relative path you click and `cornercase status` start from there. A prompt that reports its folder (OSC 7, or OSC 9;9 as in Windows Terminal's docs, which oh-my-posh and Starship can send) fixes it. cmd and Git Bash are followed as on Linux. |
+| **A background job counts as running** | A program started in the background (`start /b` in cmd, `&` in PowerShell 7 or Git Bash) can't be told from one the shell waits for, so while it runs the tab is named after it and cornercase treats the pane as busy: `cornercase wait` keeps waiting and closing a worktree warns that a program runs. |
+| **Local plugin folders as `C:\…`** | `cornercase plugin install` takes a local folder only as a path starting with `/`, so `C:\…` is refused; install from GitHub, or use `cornercase plugin link`. In a `.code-workspace` file, folders written as `file://` URIs are skipped. |
+| **Some texts still look Unix** | The help of `cornercase logs` and of `cornercase flow` names Unix folders in its examples, and `cornercase status` writes a path under your user folder as `~/` followed by the rest with backslashes. |
 | **x64 only** | There is no native Arm build; Windows on Arm runs the x64 one under emulation. |
 
 ## On purpose
