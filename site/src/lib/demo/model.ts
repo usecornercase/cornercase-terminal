@@ -173,6 +173,7 @@ export type MenuAction =
   | { kind: 'newGroup' }
   | { kind: 'mark'; panes: number[]; pending: boolean }
   | { kind: 'agentFold'; pane: number; collapsed: boolean }
+  | { kind: 'viewContext'; pane: number; named: boolean }
   | { kind: 'closeAgent'; pane: number }
   | { kind: 'closeAgents'; workspace: number }
   | { kind: 'reopenAgents'; workspace: number }

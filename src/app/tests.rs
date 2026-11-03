@@ -534,6 +534,7 @@ mod close_agent;
 mod closed_agents;
 mod compact;
 mod context_menu;
+mod context_menus;
 mod dispatch;
 mod groups;
 mod icon_bar;

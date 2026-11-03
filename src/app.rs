@@ -86,6 +86,7 @@ mod clock;
 mod close_agent;
 mod closed_agents;
 mod config_file;
+mod context_dialog;
 mod control;
 mod dialogs;
 mod event;
@@ -593,6 +594,7 @@ impl App {
             AppEvent::Search(event) => self.search_answered(event),
             AppEvent::Queue(event) => self.queue_prepared(*event),
             AppEvent::Usage(key, result) => self.usages.state.answered(key, result, Instant::now()),
+            AppEvent::Breakdown { pane, pid, result } => self.breakdown_answered(pane, pid, *result),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),

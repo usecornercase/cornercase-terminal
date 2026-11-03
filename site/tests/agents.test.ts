@@ -155,7 +155,7 @@ test('A tab marked as pending review keeps its ● until it is marked as reviewe
   const pick = (label: string) => app.chooseMenu(labels().indexOf(label));
 
   app.openMenu({ x: 1, y: 1 }, target);
-  assert.deepEqual(labels(), ['rename tab', 'mark as pending review']);
+  assert.deepEqual(labels(), ['rename tab', 'mark as pending review', 'view context']);
   pick('mark as pending review');
   assert.equal(tabStatus(place.t), 'pending');
   watchPane(place.t.panes[0], 'idle', true, 1);
@@ -177,7 +177,7 @@ test('An agent row in the agents section offers marking its pane', () => {
   watchPane(pane, 'idle', true, 0);
   app.openAgentMenu({ x: 1, y: 1 }, pane.id);
   const labels = app.overlay?.kind === 'menu' ? app.overlay.actions.map((a) => app.menuLabel(a)) : [];
-  assert.deepEqual(labels, ['mark as pending review', 'close agent']);
+  assert.deepEqual(labels, ['mark as pending review', 'view context', 'close agent']);
   app.chooseMenu(0);
   assert.equal(tabStatus(app.projects[0].workspaces[0].tabs[0]), 'pending');
   app.destroy();
@@ -449,6 +449,38 @@ test('The agent menu offers close agent, which says it needs a real cornercase',
   app.chooseMenu(last);
   app.render();
   assert.ok(app.textAt('the demo closes no agents'));
+  app.destroy();
+});
+
+test('The agent menu offers view context before close agent, which says it needs a real cornercase', () => {
+  const app = agentsDemo();
+  const pane = app.agentRows()[0].pane;
+  app.openAgentMenu({ x: 1, y: 1 }, pane);
+  if (app.overlay?.kind !== 'menu') return assert.fail('no menu');
+  const labels = app.overlay.actions.map((a) => app.menuLabel(a));
+  assert.equal(labels[labels.length - 2], 'view context');
+  app.chooseMenu(labels.length - 2);
+  app.render();
+  assert.ok(app.textAt('the demo\'s agents are not real Claude Code sessions'));
+  app.destroy();
+});
+
+test('A split tab lists one view context for each agent, named and numbered', () => {
+  const app = agentsDemo();
+  const place = app.findPane(app.agentRows()[0].pane);
+  assert.ok(place);
+  const second = { ...place.t.panes[0], id: 9001 };
+  const third = { ...place.t.panes[0], id: 9002 };
+  const other = { ...place.t.panes[0], id: 9003 };
+  followAgent(other, 'codex');
+  place.t.panes.push(second, third, other);
+  const target = { kind: 'tab', project: place.p.id, workspace: place.w.id, tab: place.t.id } as const;
+  app.openMenu({ x: 1, y: 1 }, target);
+  const labels = app.overlay?.kind === 'menu' ? app.overlay.actions.map((a) => app.menuLabel(a)) : [];
+  assert.deepEqual(
+    labels.filter((l) => l.startsWith('view context')),
+    ['view context · Claude Code', 'view context · Claude Code 2', 'view context · Claude Code 3', 'view context · Codex'],
+  );
   app.destroy();
 });
 

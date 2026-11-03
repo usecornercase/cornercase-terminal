@@ -77,7 +77,7 @@ fn a_right_click_on_a_child_offers_marking_its_pane() {
 
     mouse_in(&mut f.app, MouseEventKind::Down(MouseButton::Right), at, TALL);
     mouse_in(&mut f.app, MouseEventKind::Up(MouseButton::Right), at, TALL);
-    assert_eq!(menu_labels(&f.app), ["mark as pending review", "close agent"]);
+    assert_eq!(menu_labels(&f.app), ["mark as pending review", "view context", "close agent"]);
     pick(&mut f.app, "mark as pending review");
 
     assert_eq!(
@@ -289,14 +289,14 @@ mod folds {
 
         mouse_in(&mut f.app, MouseEventKind::Down(MouseButton::Right), at, TALL);
         mouse_in(&mut f.app, MouseEventKind::Up(MouseButton::Right), at, TALL);
-        assert_eq!(menu_labels(&f.app), ["mark as pending review", "collapse", "close agent"]);
+        assert_eq!(menu_labels(&f.app), ["mark as pending review", "collapse", "view context", "close agent"]);
         pick(&mut f.app, "collapse");
         render(&mut f.app, TALL);
         let at = row_at(&f.app, 0, false);
         mouse_in(&mut f.app, MouseEventKind::Down(MouseButton::Right), at, TALL);
         mouse_in(&mut f.app, MouseEventKind::Up(MouseButton::Right), at, TALL);
 
-        assert_eq!(menu_labels(&f.app), ["mark as pending review", "expand", "close agent"]);
+        assert_eq!(menu_labels(&f.app), ["mark as pending review", "expand", "view context", "close agent"]);
         assert!(collapsed(&f.app, f.parent));
     }
 
@@ -308,7 +308,7 @@ mod folds {
         mouse_in(&mut f.app, MouseEventKind::Down(MouseButton::Right), at, TALL);
         mouse_in(&mut f.app, MouseEventKind::Up(MouseButton::Right), at, TALL);
 
-        assert_eq!(menu_labels(&f.app), ["mark as pending review", "close agent"]);
+        assert_eq!(menu_labels(&f.app), ["mark as pending review", "view context", "close agent"]);
     }
 
     #[rstest]

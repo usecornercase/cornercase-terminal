@@ -12,14 +12,20 @@ mkdir -p "$dir/sessions"
 slug=$(printf '%s' "$PWD" | tr -c 'a-zA-Z0-9' '-')
 mkdir -p "$dir/projects/$slug"
 if [ "${1:-}" = -p ]; then
-  read -r _init
-  read -r _usage
   printf '{"type":"system"}\n'
-  usage="$CC_DATA/usage/claude-$(basename "$dir").json"
-  [ -f "$usage" ] || usage="$CC_DATA/usage/claude.json"
-  cat "$usage"
-  printf '\n'
-  exec sleep 30
+  while IFS= read -r line; do
+    case "$line" in
+      *get_usage*)
+        usage="$CC_DATA/usage/claude-$(basename "$dir").json"
+        [ -f "$usage" ] || usage="$CC_DATA/usage/claude.json"
+        cat "$usage"
+        printf '\n'
+        ;;
+      *mcp_status*) printf '{"type":"control_response","response":{"subtype":"success","request_id":"mcp","response":{"mcpServers":[]}}}\n' ;;
+      *get_context_usage*) cat "$CC_DATA/claude-context.jsonl" ;;
+    esac
+  done
+  exit 0
 fi
 pct=${CC_AGENT_PERCENT:-7}
 model=${CC_AGENT_MODEL:-claude-opus-5-5}

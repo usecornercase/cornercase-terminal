@@ -102,6 +102,7 @@ pub(super) enum MenuAction {
     ForgetAgents(u64),
     PullRequest(u64),
     MergeCheck(u64),
+    ViewContext { pane: u64, named: bool },
     ShowFlow(u64),
     Browser,
     Away(Via),
@@ -160,6 +161,7 @@ impl App {
             .or_else(|| self.help_menu_label(action))
             .or_else(|| self.more_menu_label(action))
             .or_else(|| self.closed_agents_label(action))
+            .or_else(|| self.context_menu_label(action))
     }
 
     fn menu_label(&self, action: MenuAction, blocker: Option<&str>) -> String {
@@ -246,7 +248,9 @@ impl App {
 
     fn more_entries(&self, target: Target) -> Vec<MenuAction> {
         match target {
-            Target::Tab(_, _, tab) => self.mark_action(Marked::Tab(tab)).into_iter().collect(),
+            Target::Tab(_, _, tab) => {
+                self.mark_action(Marked::Tab(tab)).into_iter().chain(self.context_entries(tab)).collect()
+            }
             Target::Workspace(_, workspace) => {
                 let pull = self.pull_request(workspace).map(|_| MenuAction::PullRequest(workspace));
                 let git =
@@ -365,6 +369,7 @@ impl App {
                 self.set_agent_fold(pane, collapsed);
             }
             MenuAction::CloseAgent(pane) => self.ask_close_agent(pane),
+            MenuAction::ViewContext { pane, .. } => self.open_context(pane),
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
             MenuAction::Away(via) => self.toggle_away(via),

@@ -79,12 +79,12 @@ mod marking {
     fn a_tab_running_an_agent_offers_marking_it_and_then_reviewing_it() {
         let (mut app, _rx, _dirs) = with_claude();
         right_click_row(&mut app, WorkspaceRow::Tab(0, 0));
-        assert_eq!(menu_labels(&app), ["rename tab", "mark as pending review"]);
+        assert_eq!(menu_labels(&app), ["rename tab", "mark as pending review", "view context"]);
         pick(&mut app, "mark as pending review");
         let marked = status(&app);
 
         right_click_row(&mut app, WorkspaceRow::Tab(0, 0));
-        assert_eq!(menu_labels(&app), ["rename tab", "mark as reviewed"]);
+        assert_eq!(menu_labels(&app), ["rename tab", "mark as reviewed", "view context"]);
         pick(&mut app, "mark as reviewed");
 
         assert_eq!((marked, status(&app)), (Some(Status::Pending), Some(Status::Idle)));
@@ -104,7 +104,7 @@ mod marking {
     fn an_agents_row_in_the_agents_section_offers_marking_its_pane() {
         let (mut app, _rx, _dirs) = with_claude();
         right_click_first_agent(&mut app);
-        assert_eq!(menu_labels(&app), ["mark as pending review", "close agent"]);
+        assert_eq!(menu_labels(&app), ["mark as pending review", "view context", "close agent"]);
         pick(&mut app, "mark as pending review");
 
         assert_eq!(status(&app), Some(Status::Pending));
