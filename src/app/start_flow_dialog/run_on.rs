@@ -2,14 +2,14 @@ use std::collections::BTreeMap;
 
 use super::flow_accounts;
 use crate::app::App;
-use crate::app::issues_dialog::run_on::{kept, lacking};
+use crate::app::issues_dialog::run_on::lacking;
 use crate::app::machines::checks::Checked;
 use crate::app::overlay::Overlay;
 use crate::control::FlowRun;
 use crate::flows::start::{Start, There};
 use crate::flows::store::Listing;
 use crate::log;
-use crate::machines::run_on::{RunOn, Target};
+use crate::machines::run_on::{self, RunOn, Target};
 use crate::machines::send::Send;
 use crate::project::Hierarchy;
 
@@ -53,7 +53,7 @@ impl App {
 
     pub(in crate::app) fn follow_start_flow_run_on(&mut self) {
         let Some(Overlay::StartFlow { start, .. }) = &self.overlay else { return };
-        let run_on = self.run_on_for(start.project).map(|fresh| kept(fresh, start.run_on.as_ref()));
+        let run_on = RunOn::kept(self.run_on_for(start.project), start.run_on.as_ref());
         let target = run_on.as_ref().and_then(RunOn::machine).cloned();
         let read = target.map(|target| self.read_there(start, &target));
         let Some(Overlay::StartFlow { start, .. }) = &mut self.overlay else { return };
@@ -106,7 +106,13 @@ impl App {
     pub(in crate::app) fn start_flow_there(&mut self, run: Run) {
         let Some(Overlay::StartFlow { start, .. }) = &self.overlay else { return };
         let Some(target) = start.machine().cloned() else { return };
-        let Some(id) = self.project_there(target.link, start.project).map(|there| there.id) else { return };
+        let Some(id) = self.project_there(target.link, start.project).map(|there| there.id) else {
+            log::info!("flows", "project not on the machine", name = target.name);
+            if let Some(Overlay::StartFlow { start, .. }) = &mut self.overlay {
+                start.notice = Some(run_on::not_there(&target.name));
+            }
+            return;
+        };
         let (issue, source) = start.asked.clone().unzip();
         let prompt = if issue.is_some() { String::new() } else { run.task };
         log::info!("flows", "start on a machine", flow = run.name, name = target.name, project = id);

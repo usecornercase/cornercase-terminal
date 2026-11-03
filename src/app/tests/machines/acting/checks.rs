@@ -117,6 +117,20 @@ mod the_checks {
     }
 
     #[test]
+    fn drop_an_answer_to_the_question_before_they_were_asked_again() {
+        let mut remote = seeing(Reply::Each(there));
+        remote.rig.app.check_machine("vps", None, Wanted::default());
+        let earlier = remote.held_relay();
+
+        remote.rig.app.recheck_machine("vps", None);
+        remote.rig.app.handle_event(earlier, AREA).expect("handle event");
+
+        assert_eq!(remote.rig.app.accounts_there("vps"), Checked::Waiting);
+        remote.rig.until("the machine answers again", |app| app.accounts_there("vps") != Checked::Waiting);
+        assert_eq!(remote.rig.seen("ask"), 2);
+    }
+
+    #[test]
     fn are_forgotten_when_the_machine_restarts() {
         let mut remote = seeing(Reply::Each(there));
         remote.checks();

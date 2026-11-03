@@ -78,7 +78,7 @@ impl Browser {
 
     fn prompt_spans(&self, issue: &Issue, dim: Style) -> Vec<Span<'static>> {
         if let Some(target) = self.machine() {
-            return vec![Span::styled(format!("from {}'s template (the issue's URL by default)", target.name), dim)];
+            return vec![Span::styled(crate::machines::run_on::from_template(&target.name), dim)];
         }
         let prompt = crate::issues::prompt(&self.agents.prompt, issue, &self.branch(issue));
         let send = if self.agents.submit { "sent for you" } else { "typed, you press enter" };

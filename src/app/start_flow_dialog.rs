@@ -49,7 +49,7 @@ impl App {
     }
 
     pub(super) fn start_text(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
-        let start = self.start_flow()?;
+        let start = self.start_flow().filter(|start| start.templated().is_none())?;
         let text = ui::start_prompt(area, shape(start));
         let top = start.prompt.scroll();
         Some((FieldArea { text, width: usize::from(text.width), top, scrolls: true }, &mut start.prompt))
@@ -193,6 +193,7 @@ pub(super) fn start_flow_view(start: &Start, area: Rect) -> ui::Overlay {
         cursor: start.cursor,
         preview_scroll: start.preview,
         prompt: start.prompt.clone(),
+        template: start.templated(),
         branch: start.branch.clone(),
         workspace: start.issue.is_some().then(|| start.workspace.clone()),
         focus: start.focus,

@@ -15,11 +15,20 @@ impl Browser {
         self.there.as_ref().filter(|_| self.machine().is_some())
     }
 
-    pub(crate) fn focused(&self) -> Option<Issue> {
+    pub(crate) fn focused(&self) -> Option<&Issue> {
         match &self.screen {
-            Screen::Detail { issue, .. } => Some((**issue).clone()),
-            Screen::List => self.selected(),
+            Screen::Detail { issue, .. } => Some(issue),
+            Screen::List => self.selected_issue(),
         }
+    }
+
+    pub(super) fn elsewhere(&self) -> bool {
+        self.run_on.as_ref().is_some_and(|run_on| run_on.chosen.is_some() || run_on.lost.is_some())
+    }
+
+    pub(super) fn lost_there(&mut self) -> Option<Action> {
+        self.error = Some(self.run_on.as_ref()?.lost.clone()?);
+        Some(Action::None)
     }
 
     pub(crate) fn starting_there(&self) -> Option<String> {

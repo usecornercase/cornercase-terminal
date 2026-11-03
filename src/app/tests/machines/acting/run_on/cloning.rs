@@ -1,6 +1,7 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 use super::*;
+use crate::control::CloneFile;
 use crate::machines::clone_form::{BUTTONS, CloneForm, Files};
 use crate::test_util::{git, wait_until};
 
@@ -49,7 +50,7 @@ fn not_there(told: fn(&str) -> Structured) -> Reading {
     write(&root, "node_modules/left-pad/index.js", "x");
     app.projects[0].repo.remotes = vec![("origin".into(), URL.into())];
     reading.pick("run on…", "vps");
-    reading.remote.rig.until("the machine answers its accounts", |app| browser(app).accounts.is_some());
+    reading.remote.rig.until("the machine answers its accounts", |app| app.accounts_there("vps") != Checked::Waiting);
     reading
 }
 
@@ -75,6 +76,13 @@ impl Reading {
         let app = &mut self.remote.rig.app;
         let at = BUTTONS.iter().position(|shown| *shown == label).expect("the button");
         click(app, ui::clone_on_machine::buttons(AREA, &BUTTONS)[at].as_position());
+    }
+
+    fn asked_for_the_clone(&self) -> Vec<Value> {
+        let remote = &self.remote;
+        wait_until("the clone is checked", || remote.asked().iter().any(|asked| asked["args"]["project"] == CLONED));
+        let asked = remote.asked().into_iter().filter(|asked| asked["command"] == "clone");
+        asked.map(|asked| asked["args"].clone()).collect()
     }
 
     fn cloned(&mut self) {
@@ -127,7 +135,7 @@ fn skips_the_files_when_asked() {
 }
 
 #[test]
-fn goes_back_to_the_issue_on_the_machine_and_checks_it_again() {
+fn goes_back_to_the_issue_on_the_machine_and_checks_only_the_clone() {
     let mut reading = not_there(half_copied);
     reading.clone_dialog();
 
@@ -137,23 +145,56 @@ fn goes_back_to_the_issue_on_the_machine_and_checks_it_again() {
     let app = &reading.remote.rig.app;
     assert_eq!(browser(app).machine().map(|target| target.name.as_str()), Some("vps"));
     assert_eq!(browser(app).notice.as_deref(), Some("cloned on vps · not copied: local.toml (it is tracked there)"));
-    let remote = &reading.remote;
-    wait_until("the machine is checked again", || {
-        let asked = remote.asked();
-        let accounts = asked.iter().filter(|asked| asked["command"] == "account-list").count();
-        accounts == 2 && asked.iter().any(|asked| asked["args"]["project"] == json!(CLONED))
-    });
+    reading.asked_for_the_clone();
+    let asked = reading.remote.asked();
+    assert_eq!(asked.iter().filter(|asked| asked["command"] == "account-list").count(), 1);
 }
 
 #[test]
 fn goes_back_without_sending_anything() {
     let mut reading = not_there(cloned);
     reading.clone_dialog();
+    reading.tick(".env");
 
     reading.press_in_clone("back");
+    reading.pick("run on…", "vps");
 
+    let remote = &reading.remote;
+    wait_until("the machine is asked again", || {
+        remote.asked().iter().filter(|asked| asked["command"] == "account-list").count() == 2
+    });
     assert!(browser_open(&reading.remote.rig.app));
     assert_eq!(reading.sent("clone"), None);
+}
+
+#[test]
+fn never_sends_files_read_for_a_dialog_that_closed() {
+    let mut reading = not_there(cloned);
+    reading.clone_dialog();
+    let read = CloneFile { path: PathBuf::from(".env"), data: STANDARD.encode("KEY=1"), mode: 0o600 };
+
+    reading.remote.rig.app.clone_packed(u64::MAX, URL.into(), Ok(vec![read]));
+    reading.press_in_clone("skip files");
+    reading.cloned();
+
+    let clones = reading.asked_for_the_clone();
+    assert_eq!(clones.iter().map(|clone| clone.get("files")).collect::<Vec<_>>(), [None]);
+}
+
+#[test]
+fn leaves_alone_a_clone_dialog_opened_after_it_was_sent() {
+    let mut reading = not_there(cloned);
+    reading.clone_dialog();
+    reading.press_in_clone("skip files");
+    let answer = reading.remote.held_relay();
+    reading.press_in_clone("back");
+    reading.clone_dialog();
+
+    reading.remote.rig.app.handle_event(answer, AREA).expect("handle event");
+
+    let app = &reading.remote.rig.app;
+    assert!(matches!(&app.overlay, Some(Overlay::CloneOnMachine(_))), "{:?}", app.overlay);
+    assert_eq!((form(app).cloning, &form(app).error), (false, &None));
 }
 
 #[test]

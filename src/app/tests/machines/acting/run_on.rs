@@ -238,6 +238,21 @@ mod the_issues_dialog {
     }
 
     #[test]
+    fn keeps_the_account_picked_there_while_the_machine_is_asked_again() {
+        let mut reading = reading(vec![web_shop()]);
+        reading.on_vps();
+        reading.pick("account…", "home");
+
+        reading.pick("run on…", "vps");
+
+        let chosen = |app: &App| browser(app).accounts.as_ref().and_then(|accounts| accounts.chosen.clone());
+        let home = Some(("claude".to_string(), "home".to_string()));
+        assert_eq!(chosen(&reading.remote.rig.app), home);
+        reading.remote.rig.until("the machine answers again", |app| app.accounts_there("vps") != Checked::Waiting);
+        assert_eq!(chosen(&reading.remote.rig.app), home);
+    }
+
+    #[test]
     fn says_an_account_with_a_login_there_is_ready() {
         let mut reading = reading(vec![web_shop()]);
         reading.on_vps();
@@ -266,7 +281,10 @@ mod the_issues_dialog {
         let mut reading = reading(Vec::new());
 
         reading.pick("run on…", "vps");
-        reading.remote.rig.until("the machine answers its accounts", |app| browser(app).accounts.is_some());
+        reading
+            .remote
+            .rig
+            .until("the machine answers its accounts", |app| app.accounts_there("vps") != Checked::Waiting);
 
         let app = &reading.remote.rig.app;
         assert_eq!(row(app, "start").as_deref(), Some("start   not on vps · clone…"));

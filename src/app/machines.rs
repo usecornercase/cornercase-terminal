@@ -64,7 +64,7 @@ pub(crate) enum MachineEvent {
     Stream(StreamReport),
     Relayed(relay::Relayed),
     Ignored { root: PathBuf, result: std::result::Result<crate::git::ignored::Listing, String> },
-    Packed { url: String, result: std::result::Result<Vec<control::CloneFile>, String> },
+    Packed { key: u64, url: String, result: std::result::Result<Vec<control::CloneFile>, String> },
 }
 
 impl From<Report> for AppEvent {
@@ -308,7 +308,7 @@ impl App {
             MachineEvent::Stream(report) => self.stream_reported(report),
             MachineEvent::Relayed(relayed) => self.relayed(relayed),
             MachineEvent::Ignored { root, result } => self.ignored_listed(&root, result),
-            MachineEvent::Packed { url, result } => self.clone_packed(url, result),
+            MachineEvent::Packed { key, url, result } => self.clone_packed(key, url, result),
         }
         if streamed {
             return;

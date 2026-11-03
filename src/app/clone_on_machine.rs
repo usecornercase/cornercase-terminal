@@ -9,7 +9,7 @@ use super::App;
 use super::event::AppEvent;
 use super::input::wheel;
 use super::machines::MachineEvent;
-use super::machines::relay::Then;
+use super::machines::relay::{Sent, Then};
 use super::overlay::Overlay;
 use super::text_fields::FieldArea;
 use crate::control::contract::Refusal;
@@ -18,10 +18,10 @@ use crate::editor::Editor;
 use crate::error::Result;
 use crate::git::ignored::{self, IgnoredFile, Listing};
 use crate::git::remote;
-use crate::log::{Job, Level};
+use crate::log::{self, Job, Level};
 use crate::machines::DEFAULT_FOLDER;
 use crate::machines::clone_form::{CloneForm, Opening, Step};
-use crate::machines::run_on::Target;
+use crate::machines::run_on::{self, Target};
 use crate::machines::send::Send;
 use crate::project::Hierarchy;
 use crate::ui::clone_on_machine::{self as view, Hit};
@@ -30,7 +30,7 @@ use crate::ui::clone_on_machine::{self as view, Hit};
 pub(super) struct Cloning {
     form: CloneForm,
     back: Overlay,
-    link: u64,
+    key: u64,
 }
 
 impl Cloning {
@@ -53,7 +53,8 @@ impl App {
         };
         let root = opening.root.clone();
         let Some(back) = self.overlay.take() else { return };
-        let cloning = Cloning { form: CloneForm::new(opening), back, link: target.link };
+        let key = self.clients.requests.key();
+        let cloning = Cloning { form: CloneForm::new(opening), back, key };
         self.overlay = Some(Overlay::CloneOnMachine(Box::new(cloning)));
         self.list_ignored(root);
     }
@@ -138,8 +139,22 @@ impl App {
 
     pub(super) fn clone_back(&mut self) {
         let Some(Overlay::CloneOnMachine(cloning)) = self.overlay.take() else { return };
-        self.overlay = Some(cloning.back);
+        let Cloning { form, back, key } = *cloning;
+        self.overlay = Some(back);
+        if let Some(run_on) = self.dialog_run_on().filter(|_| form.cloning) {
+            run_on.awaiting = Some(key);
+        }
         self.follow_run_on();
+    }
+
+    fn cloning_with(&self, key: u64) -> bool {
+        matches!(&self.overlay, Some(Overlay::CloneOnMachine(cloning)) if cloning.key == key)
+    }
+
+    fn awaits_clone(&mut self, key: u64) -> bool {
+        let Some(run_on) = self.dialog_run_on().filter(|run_on| run_on.awaiting == Some(key)) else { return false };
+        run_on.awaiting = None;
+        true
     }
 
     fn follow_run_on(&mut self) {
@@ -157,25 +172,34 @@ impl App {
     }
 
     fn start_cloning(&mut self, url: String, files: Vec<IgnoredFile>) {
-        let Some(form) = self.clone_form() else { return };
-        form.cloning = true;
+        let Some(Overlay::CloneOnMachine(cloning)) = &mut self.overlay else { return };
+        cloning.form.cloning = true;
         if files.is_empty() {
             self.send_clone(url, Vec::new());
             return;
         }
-        let root = form.root.clone();
+        let (root, key) = (cloning.form.root.clone(), cloning.key);
         let job = Job::new(Level::Debug, "machines", "read ignored files").with("files", files.len());
         self.spawn_job(
             job,
             move || packed(&root, &files),
             move |result, _| {
                 let result = result.map_err(|error| error.to_string());
-                Some(AppEvent::Machine(MachineEvent::Packed { url, result }))
+                Some(AppEvent::Machine(MachineEvent::Packed { key, url, result }))
             },
         );
     }
 
-    pub(in crate::app) fn clone_packed(&mut self, url: String, result: std::result::Result<Vec<CloneFile>, String>) {
+    pub(in crate::app) fn clone_packed(
+        &mut self,
+        key: u64,
+        url: String,
+        result: std::result::Result<Vec<CloneFile>, String>,
+    ) {
+        if !self.cloning_with(key) {
+            log::info!("machines", "files read for a clone dialog that closed");
+            return;
+        }
         match result {
             Ok(files) => self.send_clone(url, files),
             Err(why) => self.clone_refused(why),
@@ -184,10 +208,10 @@ impl App {
 
     fn send_clone(&mut self, url: String, files: Vec<CloneFile>) {
         let Some(Overlay::CloneOnMachine(cloning)) = &self.overlay else { return };
-        let (form, link) = (&cloning.form, cloning.link);
+        let (form, key) = (&cloning.form, cloning.key);
         let machine = form.machine.clone();
         let clone = CloneRepository { url, parent: PathBuf::from(&form.folder), focus: false, files };
-        if let Err(refusal) = self.send_to_machine(&machine, Send::Clone(clone), Then::Clone(link)) {
+        if let Err(refusal) = self.send_to_machine(&machine, Send::Clone(clone), Then::Clone(key)) {
             self.clone_refused(refusal.message);
         }
     }
@@ -205,17 +229,21 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn clone_relayed(&mut self, link: u64, result: std::result::Result<Value, Refusal>) {
-        let Some(name) = self.machines.by_link(link).map(|held| held.name.clone()) else { return };
-        let cloned = match result {
-            Ok(value) => serde_json::from_value::<Cloned>(value).unwrap_or_default(),
-            Err(refusal) => return self.clone_refused(refusal.message),
-        };
-        if matches!(self.overlay, Some(Overlay::CloneOnMachine(_))) {
+    pub(in crate::app) fn clone_relayed(&mut self, sent: &Sent, key: u64, result: std::result::Result<Value, Refusal>) {
+        let cloned = result.map(|value| serde_json::from_value::<Cloned>(value).unwrap_or_default());
+        if cloned.is_ok() && self.cloning_with(key) {
             self.clone_back();
         }
-        self.recheck_machine(&name, cloned.ids.project);
-        let note = cloned_note(&name, &cloned.unwritten);
+        if !self.cloning_with(key) && !self.awaits_clone(key) {
+            log::info!("machines", "clone answered after its dialog closed", name = sent.machine);
+            return;
+        }
+        let cloned = match cloned {
+            Ok(cloned) => cloned,
+            Err(refusal) => return self.clone_refused(refusal.message),
+        };
+        self.check_cloned(&sent.machine, cloned.ids.project);
+        let note = cloned_note(&sent.machine, &cloned.unwritten);
         match &mut self.overlay {
             Some(Overlay::Issues(b)) => b.notice = Some(note),
             Some(Overlay::StartFlow { start, .. }) if !cloned.unwritten.is_empty() => start.notice = Some(note),
@@ -243,6 +271,6 @@ fn cloned_note(name: &str, unwritten: &[Unwritten]) -> String {
     if unwritten.is_empty() {
         return format!("cloned on {name}");
     }
-    let left: Vec<String> = unwritten.iter().map(|file| format!("{} ({})", file.path.display(), file.why)).collect();
-    format!("cloned on {name} · not copied: {}", left.join(", "))
+    let left = unwritten.iter().map(|file| format!("{} ({})", file.path.display(), file.why));
+    format!("cloned on {name} · not copied: {}", run_on::capped(left))
 }

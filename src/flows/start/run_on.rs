@@ -1,8 +1,8 @@
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
 
-use super::{Action, Start};
-use crate::machines::run_on::{RunOn, Target};
+use super::{Action, Focus, Start};
+use crate::machines::run_on::{self, RunOn, Target};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct There {
@@ -29,13 +29,25 @@ impl Start {
 
     pub(crate) fn choose_machine(&mut self, at: Option<usize>) -> bool {
         let Some(run_on) = &mut self.run_on else { return false };
-        if run_on.chosen == at || !run_on.choose(at) {
+        if run_on.is_chosen(at) || !run_on.choose(at) {
             return false;
         }
         self.there = None;
         self.notice = None;
         self.close_accounts();
+        self.leave_prompt();
         true
+    }
+
+    pub(crate) fn templated(&self) -> Option<String> {
+        let target = self.machine().filter(|_| self.asked.is_some())?;
+        Some(run_on::from_template(&target.name))
+    }
+
+    pub(crate) fn leave_prompt(&mut self) {
+        if self.focus == Focus::Prompt && self.templated().is_some() {
+            self.focus = Focus::Branch;
+        }
     }
 
     pub(crate) fn run_on_spans(&self, dim: Style) -> Option<Vec<Span<'static>>> {
@@ -57,6 +69,10 @@ impl Start {
     }
 
     pub(super) fn not_ready_there(&mut self) -> Option<Action> {
+        if let Some(lost) = self.run_on.as_ref().and_then(|run_on| run_on.lost.clone()) {
+            self.notice = Some(lost);
+            return Some(Action::None);
+        }
         let name = self.machine()?.name.clone();
         let Some(there) = self.there() else {
             self.notice = Some(format!("waiting for {name} to answer"));

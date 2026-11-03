@@ -22,7 +22,7 @@ impl App {
             why: self.run_on_why(held),
         };
         let blocked = self.identity(project).is_none().then_some(NEEDS_REMOTE);
-        Some(RunOn { targets: held.into_iter().map(target).collect(), chosen: None, blocked, awaiting: None })
+        Some(RunOn { targets: held.into_iter().map(target).collect(), blocked, ..RunOn::default() })
     }
 
     pub(in crate::app) fn project_there(&self, link: u64, project: u64) -> Option<&ProjectInfo> {

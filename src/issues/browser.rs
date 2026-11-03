@@ -453,9 +453,13 @@ impl Browser {
     }
 
     pub(super) fn selected(&self) -> Option<Issue> {
+        self.selected_issue().cloned()
+    }
+
+    fn selected_issue(&self) -> Option<&Issue> {
         let shown = self.shown();
         let last = shown.len().checked_sub(1)?;
-        shown.get(self.search.selected().min(last)).map(|issue| (*issue).clone())
+        shown.get(self.search.selected().min(last)).copied()
     }
 }
 

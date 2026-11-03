@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_json::Value;
 
 use super::IssueStart;
@@ -11,7 +13,7 @@ use crate::flows::start::Start;
 use crate::issues::Issue;
 use crate::issues::browser::{Accounts, AgentNote, Browser, There};
 use crate::log;
-use crate::machines::run_on::{RunOn, Target};
+use crate::machines::run_on::{self, RunOn, Target};
 use crate::machines::send::Send;
 
 impl App {
@@ -31,16 +33,11 @@ impl App {
 
     pub(in crate::app) fn follow_issues_run_on(&mut self) {
         let Some(Overlay::Issues(b)) = &self.overlay else { return };
-        let had = b.machine().is_some();
-        let run_on = self.run_on_for(b.project).map(|fresh| kept(fresh, b.run_on.as_ref()));
+        let run_on = RunOn::kept(self.run_on_for(b.project), b.run_on.as_ref());
         let target = run_on.as_ref().and_then(RunOn::machine);
         let accounts = target.map(|target| self.machine_accounts(&target.name, b.accounts.as_ref()));
         let there = target.and_then(|target| self.there_for(b, target, accounts.as_ref().and_then(Option::as_ref)));
-        let accounts = match accounts {
-            Some(accounts) => Some(accounts.filter(|_| self.config.account_picker)),
-            None if had => Some(self.account_choices()),
-            None => None,
-        };
+        let accounts = accounts.map(|accounts| accounts.filter(|_| self.config.account_picker));
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return };
         b.run_on = run_on;
         b.there = there;
@@ -50,8 +47,12 @@ impl App {
     }
 
     fn machine_accounts(&self, name: &str, shown: Option<&Accounts>) -> Option<Accounts> {
-        let Checked::Read(Some(mut accounts)) = self.accounts_there(name) else { return None };
         let chosen = shown.and_then(|shown| shown.chosen.clone());
+        let mut accounts = match self.accounts_there(name) {
+            Checked::Read(accounts) => accounts?,
+            Checked::Waiting => return Some(Accounts { agents: HashMap::new(), chosen }),
+            Checked::Failed(_) => return None,
+        };
         accounts.chosen = chosen.filter(|(kind, name)| {
             accounts.of(kind).is_some_and(|agent| name.is_empty() || agent.names.contains(name))
         });
@@ -60,7 +61,7 @@ impl App {
 
     fn there_for(&self, b: &Browser, target: &Target, accounts: Option<&Accounts>) -> Option<There> {
         let issue = b.focused()?;
-        let place = b.place_for(&issue);
+        let place = b.place_for(issue);
         let project = place.map_or(b.project, |place| place.project);
         let worktree = place.map_or(b.worktrees, |place| place.worktree);
         let id = self.project_there(target.link, project).map(|there| there.id);
@@ -83,12 +84,16 @@ impl App {
 
     pub(super) fn start_issue_there(&mut self, issue: &Issue, start: &IssueStart) -> bool {
         let Some(Overlay::Issues(b)) = &self.overlay else { return false };
+        if let Some(lost) = b.run_on.as_ref().and_then(|run_on| run_on.lost.clone()) {
+            self.dialog_sent(Err(lost));
+            return true;
+        }
         let Some(target) = b.machine().cloned() else { return false };
         let missing = b.there().and_then(|there| there.tracker.clone());
         let project = start.place.as_ref().map_or(b.project, |place| place.project);
         let sent = match (missing, self.project_there(target.link, project).map(|there| there.id)) {
             (Some(missing), _) => Err(missing),
-            (None, None) => Err(format!("the project is not on {}", target.name)),
+            (None, None) => Err(run_on::not_there(&target.name)),
             (None, Some(id)) => {
                 let start = self.start_there(issue, start, id);
                 log::info!(
@@ -147,7 +152,7 @@ impl App {
         Ok(())
     }
 
-    fn dialog_run_on(&mut self) -> Option<&mut RunOn> {
+    pub(in crate::app) fn dialog_run_on(&mut self) -> Option<&mut RunOn> {
         match &mut self.overlay {
             Some(Overlay::Issues(b)) => b.run_on.as_mut(),
             Some(Overlay::StartFlow { start, .. }) => start.run_on.as_mut(),
@@ -199,6 +204,7 @@ impl App {
             run_on.chosen = run_on.targets.iter().position(|target| target.link == link);
             start.notice = None;
         }
+        start.leave_prompt();
         start
     }
 }
@@ -218,15 +224,8 @@ fn root_workspace(there: &ProjectInfo) -> Option<u64> {
 }
 
 fn issue_project(b: &Browser) -> u64 {
-    let place = b.focused().and_then(|issue| b.place_for(&issue).map(|place| place.project));
+    let place = b.focused().and_then(|issue| b.place_for(issue).map(|place| place.project));
     place.unwrap_or(b.project)
-}
-
-pub(in crate::app) fn kept(mut fresh: RunOn, shown: Option<&RunOn>) -> RunOn {
-    let chosen = shown.and_then(RunOn::machine).map(|target| target.link);
-    fresh.chosen = chosen.and_then(|link| fresh.targets.iter().position(|target| target.link == link));
-    fresh.awaiting = shown.and_then(|shown| shown.awaiting);
-    fresh
 }
 
 fn note(agent: AgentThere) -> AgentNote {

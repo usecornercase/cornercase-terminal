@@ -11,7 +11,7 @@ fn target(name: &str, why: Option<&str>) -> Target {
 }
 
 fn run_on(why: Option<&str>) -> RunOn {
-    RunOn { targets: vec![target("vps", None), target("box", why)], chosen: None, blocked: None, awaiting: None }
+    RunOn { targets: vec![target("vps", None), target("box", why)], ..RunOn::default() }
 }
 
 fn drawn(spans: &[Span]) -> Vec<(String, bool)> {
@@ -113,5 +113,73 @@ mod spans {
                 (" — needs a git remote".to_string(), true),
             ]
         );
+    }
+}
+
+mod its_lists {
+    use super::*;
+
+    fn items(count: usize) -> Vec<String> {
+        (1..=count).map(|n| format!("file{n}")).collect()
+    }
+
+    #[rstest::rstest]
+    #[case::few(3, "file1, file2, file3")]
+    #[case::many(5, "file1, file2, file3 … and 2 more")]
+    fn show_a_few_and_count_the_rest(#[case] count: usize, #[case] said: &str) {
+        assert_eq!(capped(items(count).into_iter()), said);
+    }
+
+    #[test]
+    fn cut_each_long_text() {
+        let said = capped(vec!["a".repeat(500), String::new()].into_iter());
+
+        assert_eq!(said, format!("{}…, ", "a".repeat(59)));
+    }
+}
+
+mod a_chosen_machine {
+    use super::*;
+
+    fn on_vps() -> RunOn {
+        RunOn { chosen: Some(0), ..run_on(None) }
+    }
+
+    fn linked(name: &str, link: u64) -> Target {
+        Target { link, ..target(name, None) }
+    }
+
+    #[test]
+    fn stays_chosen_while_it_is_listed() {
+        let kept = RunOn::kept(Some(run_on(Some("unreachable"))), Some(&on_vps()));
+
+        assert_eq!(kept.as_ref().and_then(RunOn::machine).map(|target| target.name.as_str()), Some("vps"));
+        assert_eq!(kept.and_then(|kept| kept.lost), None);
+    }
+
+    #[rstest::rstest]
+    #[case::removed(Some(RunOn { targets: vec![linked("box", 2)], ..RunOn::default() }), "vps is no longer listed")]
+    #[case::the_last_one(None, "vps is no longer listed")]
+    #[case::edited(
+        Some(RunOn { targets: vec![linked("vps", 3)], ..RunOn::default() }),
+        "vps changed in Settings; choose it again"
+    )]
+    fn that_is_gone_is_not_swapped_for_this_computer(#[case] fresh: Option<RunOn>, #[case] why: &str) {
+        let kept = RunOn::kept(fresh, Some(&on_vps())).expect("the row");
+
+        assert_eq!((kept.chosen, kept.lost.as_deref()), (None, Some(why)));
+        assert!(text(&kept.spans(dim())).starts_with("○ this computer"), "{}", text(&kept.spans(dim())));
+        assert!(text(&kept.spans(dim())).ends_with(&format!(" · {why}")));
+    }
+
+    #[test]
+    fn that_is_gone_stays_gone_until_one_is_chosen() {
+        let lost = RunOn::kept(None, Some(&on_vps()));
+        let mut kept = RunOn::kept(None, lost.as_ref()).expect("the row");
+
+        assert!(!kept.is_chosen(None));
+        assert!(kept.choose(None));
+
+        assert_eq!((kept.lost, RunOn::kept(None, Some(&RunOn::default()))), (None, None));
     }
 }

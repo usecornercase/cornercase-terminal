@@ -148,6 +148,27 @@ mod the_tracker {
     }
 
     #[test]
+    fn says_a_few_of_many_missing_settings_and_how_many_more() {
+        let missing = ["site", "email", "workspace", "project", "team"].map(String::from).to_vec();
+        let found = SourceInfo { missing, ..source("plane", "Plane", SourceState::Missing) };
+
+        assert_eq!(
+            lacks(found, "plane").as_deref(),
+            Some("vps lacks site, email, workspace … and 2 more for Plane in web-shop")
+        );
+    }
+
+    #[test]
+    fn cuts_a_long_reason_and_name() {
+        let found =
+            SourceInfo { reason: Some("x".repeat(500)), ..source("github", &"G".repeat(500), SourceState::Failing) };
+
+        let said = lacks(found, "github").expect("a reason");
+
+        assert_eq!(said, format!("{}… on vps: {}…", "G".repeat(59), "x".repeat(59)));
+    }
+
+    #[test]
     fn says_a_machine_that_does_not_list_it_cannot_read_it() {
         assert_eq!(
             lacks(source("github", "GitHub", SourceState::Connected), "asana").as_deref(),

@@ -112,7 +112,7 @@ impl Browser {
     }
 
     fn unscheduled(&self, mut buttons: Vec<Button>) -> Vec<Button> {
-        if self.machine().is_some() {
+        if self.elsewhere() {
             buttons.retain(|button| *button != Button::Schedule);
         }
         buttons
@@ -325,6 +325,9 @@ impl Browser {
     }
 
     pub(super) fn start(&mut self, issue: Issue) -> Action {
+        if let Some(action) = self.lost_there() {
+            return action;
+        }
         if self.not_cloned() {
             return Action::CloneThere(issue);
         }
@@ -352,6 +355,9 @@ impl Browser {
     }
 
     pub(super) fn start_flow(&mut self, issue: Issue) -> Action {
+        if let Some(action) = self.lost_there() {
+            return action;
+        }
         if self.not_cloned() {
             return Action::CloneThere(issue);
         }

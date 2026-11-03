@@ -93,6 +93,20 @@ fn keeps_the_machine_s_refusal_in_red() {
 }
 
 #[test]
+fn creates_nothing_here_once_the_chosen_machine_is_gone() {
+    let mut reading = asking(created, vec![web_shop()]);
+    reading.new_on_vps();
+    reading.remote.rig.edit(Vec::new(), Duration::from_secs(3));
+    reading.remote.rig.app.follow_new_workspace_run_on();
+
+    reading.create("login");
+
+    let app = &reading.remote.rig.app;
+    assert_eq!(form(app).note, Some(ui::Note::Error("vps is no longer listed".into())));
+    assert_eq!(chosen(app), None);
+}
+
+#[test]
 fn asks_for_a_name_before_sending() {
     let mut reading = asking(created, vec![web_shop()]);
     reading.new_on_vps();

@@ -2,7 +2,7 @@ use super::*;
 use crate::agents::Known;
 use crate::control::FlowSpec;
 use crate::flows::builtin;
-use crate::flows::start::Start;
+use crate::flows::start::{Start, There};
 
 const QUICK: &str = "Quick";
 
@@ -45,11 +45,15 @@ fn starting_flow(told: fn(&str) -> Structured, projects: Vec<ProjectInfo>) -> Re
 }
 
 impl Reading {
-    fn flow_on_vps(&mut self) {
+    fn choose_vps(&mut self) {
         let app = &mut self.remote.rig.app;
         let ui::Overlay::StartFlow(view) = overlay_shown(app, AREA) else { panic!("Start flow is not shown") };
         let row = ui::start_run_on(AREA, view.shape());
         click(app, Position::new(row.x + 30, row.y));
+    }
+
+    fn flow_on_vps(&mut self) {
+        self.choose_vps();
         self.remote.rig.until("the machine lists its flows and accounts", |app| {
             start(app).there().is_some_and(|there| there.listed) && app.accounts_there("vps") != Checked::Waiting
         });
@@ -139,14 +143,32 @@ fn opens_the_clone_dialog_when_the_project_is_not_there() {
     let mut reading = starting_flow(running, Vec::new());
     let app = &mut reading.remote.rig.app;
     app.projects[0].repo.remotes = vec![("origin".into(), "https://github.com/acme/web-shop.git".into())];
-    let ui::Overlay::StartFlow(view) = overlay_shown(app, AREA) else { panic!("Start flow is not shown") };
-    let row = ui::start_run_on(AREA, view.shape());
-    click(app, Position::new(row.x + 30, row.y));
+    reading.choose_vps();
     reading.remote.rig.until("the machine answers", |app| start(app).there().is_some());
 
     reading.run("Add dark mode");
 
     assert!(matches!(reading.remote.rig.app.overlay, Some(Overlay::CloneOnMachine(_))));
+}
+
+#[test]
+fn says_the_project_left_the_machine_instead_of_starting_nothing_in_silence() {
+    let mut reading = starting_flow(running, vec![web_shop()]);
+    reading.flow_on_vps();
+    serve(&mut reading.remote.theirs, 2, shop(Vec::new()));
+    reading
+        .remote
+        .rig
+        .until("the project leaves the machine", |app| start(app).there().is_some_and(|there| !there.cloned));
+    if let Some(Overlay::StartFlow { start, .. }) = &mut reading.remote.rig.app.overlay {
+        start.there = start.there.take().map(|there| There { cloned: true, ..there });
+    }
+
+    reading.run("Add dark mode");
+
+    let app = &reading.remote.rig.app;
+    assert_eq!((start(app).notice.as_deref(), start(app).waiting), (Some("the project is not on vps"), false));
+    assert_eq!(reading.sent("flow-run"), None);
 }
 
 #[test]

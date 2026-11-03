@@ -18,6 +18,7 @@ use crate::control::issues::{SourceState, Sources};
 use crate::control::{FlowInfo, Flows};
 use crate::flows::store::{Listing, Origin, Saved};
 use crate::issues::browser::{Accounts, AgentAccounts};
+use crate::machines::run_on::{capped, clipped};
 use crate::machines::send::Send;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,11 +38,13 @@ pub(in crate::app) struct Wanted {
 pub(in crate::app) struct Checking {
     link: u64,
     era: u64,
+    generation: u64,
     check: Check,
 }
 
 #[derive(Default)]
 pub(in crate::app) struct Checks {
+    generation: u64,
     accounts: Cached<AccountsInfo>,
     sources: HashMap<u64, Cached<Sources>>,
     flows: HashMap<u64, Cached<Flows>>,
@@ -124,8 +127,12 @@ impl App {
 
     pub(in crate::app) fn recheck_machine(&mut self, name: &str, project: Option<u64>) {
         if let Some(held) = self.machines.named(name) {
-            held.checks = Checks::default();
+            held.checks = Checks { generation: held.checks.generation + 1, ..Checks::default() };
         }
+        self.check_cloned(name, project);
+    }
+
+    pub(in crate::app) fn check_cloned(&mut self, name: &str, project: Option<u64>) {
         let wanted = self.wanted_checks();
         self.check_machine(name, project, wanted);
     }
@@ -143,7 +150,8 @@ impl App {
         if !held.checks.slot(check).wanted() {
             return;
         }
-        let then = Then::Check(Checking { link: held.link.id(), era: held.era, check });
+        let then =
+            Then::Check(Checking { link: held.link.id(), era: held.era, generation: held.checks.generation, check });
         let sent = self.send_to_machine(name, check.send(), then);
         let Some(held) = self.machines.named(name) else { return };
         let slot = held.checks.slot(check);
@@ -155,7 +163,7 @@ impl App {
 
     pub(super) fn check_heard(&mut self, checking: Checking, result: Result<Value, Refusal>) {
         let Some(held) = self.machines.by_link(checking.link) else { return };
-        if held.era == checking.era {
+        if held.era == checking.era && held.checks.generation == checking.generation {
             held.checks.slot(checking.check).heard(result);
         }
     }
@@ -276,17 +284,17 @@ impl Tracked<'_> {
         let Some(found) = sources.sources.iter().find(|found| found.source == *source) else {
             return Some(format!("{machine} cannot read {source} issues"));
         };
-        let name = &found.name;
+        let name = &clipped(&found.name);
         match found.state {
             SourceState::Connected => None,
             SourceState::Missing if found.missing.iter().any(|missing| missing == "token") => {
                 Some(format!("{machine} has no {name} token for {project}"))
             }
             SourceState::Missing => {
-                Some(format!("{machine} lacks {} for {name} in {project}", found.missing.join(", ")))
+                Some(format!("{machine} lacks {} for {name} in {project}", capped(found.missing.iter().cloned())))
             }
             SourceState::Failing => {
-                Some(format!("{name} on {machine}: {}", found.reason.as_deref().unwrap_or("failing")))
+                Some(format!("{name} on {machine}: {}", clipped(found.reason.as_deref().unwrap_or("failing"))))
             }
             SourceState::Other => Some(format!("{machine} cannot tell whether {name} works for {project}")),
         }

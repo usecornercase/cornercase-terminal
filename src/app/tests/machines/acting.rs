@@ -171,6 +171,23 @@ impl Remote {
         self.asked.lock().clone()
     }
 
+    fn held_relay(&mut self) -> AppEvent {
+        let (app, rx) = (&mut self.rig.app, &self.rig.rx);
+        let mut held = None;
+        wait_until("the machine answers", || {
+            while held.is_none()
+                && let Ok(event) = rx.try_recv()
+            {
+                match event {
+                    AppEvent::Machine(MachineEvent::Relayed(_)) => held = Some(event),
+                    event => app.handle_event(event, AREA).expect("handle event"),
+                }
+            }
+            held.is_some()
+        });
+        held.expect("an answer")
+    }
+
     fn sent_nothing_while_down(&self) {
         assert!(self.rig.app.overlay.is_none());
         assert_eq!(toast(&self.rig.app), Some("vps unreachable; nothing was sent"));

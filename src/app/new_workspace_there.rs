@@ -2,7 +2,6 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Style};
 
 use super::App;
-use super::issues_dialog::run_on::kept;
 use super::overlay::Overlay;
 use super::worktrees::NAME_REQUIRED;
 use crate::control::NewWorkspace;
@@ -35,7 +34,7 @@ impl App {
         let Some(at) = ui::form_run_on_hit(area, &run_on_row(run_on), pos) else { return false };
         let Some(Overlay::NewWorkspace { run_on: Some(run_on), error, .. }) = &mut self.overlay else { return false };
         let at = at.checked_sub(1);
-        if run_on.chosen != at && run_on.choose(at) {
+        if !run_on.is_chosen(at) && run_on.choose(at) {
             *error = None;
         }
         true
@@ -43,13 +42,18 @@ impl App {
 
     pub(super) fn follow_new_workspace_run_on(&mut self) {
         let Some(Overlay::NewWorkspace { project, run_on, .. }) = &self.overlay else { return };
-        let fresh = self.run_on_for(*project).map(|fresh| kept(fresh, run_on.as_ref()));
+        let fresh = RunOn::kept(self.run_on_for(*project), run_on.as_ref());
         if let Some(Overlay::NewWorkspace { run_on, .. }) = &mut self.overlay {
             *run_on = fresh;
         }
     }
 
     pub(super) fn submit_new_workspace(&mut self, asked: Asked, area: Rect) -> Result<Option<Overlay>> {
+        if let Some(lost) = asked.run_on.as_ref().and_then(|run_on| run_on.lost.clone()) {
+            let Asked { project, input, worktree, run_on } = asked;
+            let error = Some(lost);
+            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false, run_on }));
+        }
         if let Some(target) = asked.run_on.as_ref().and_then(RunOn::machine).cloned() {
             return Ok(self.new_workspace_there(&target, asked));
         }

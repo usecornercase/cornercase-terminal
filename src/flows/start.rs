@@ -312,7 +312,9 @@ impl Start {
             }
             None => Some("there is no flow to start: make one, or bring a built-in back, in Settings › Flows"),
             Some(saved) if !self.problems(saved).is_empty() => Some("fix this flow's problems first: edit it"),
-            Some(_) if self.prompt.text().trim().is_empty() => Some("say what the team should do in the prompt"),
+            Some(_) if self.prompt.text().trim().is_empty() && self.templated().is_none() => {
+                Some("say what the team should do in the prompt")
+            }
             Some(_) if self.branch.trim().is_empty() => Some("the run needs a branch for its worktree"),
             Some(_) => None,
         };
@@ -351,7 +353,7 @@ impl Start {
     }
 
     pub(crate) fn typing_prompt(&self) -> bool {
-        self.focus == Focus::Prompt && !self.waiting && !self.accounts_open()
+        self.focus == Focus::Prompt && !self.waiting && !self.accounts_open() && self.templated().is_none()
     }
 
     pub(crate) fn typed(&mut self) {
@@ -377,8 +379,10 @@ impl Start {
 
     fn step_focus(&mut self, back: bool) {
         self.close_accounts();
-        let order: Vec<Focus> = [Focus::List, Focus::Prompt, Focus::Branch]
+        let prompt = self.templated().is_none().then_some(Focus::Prompt);
+        let order: Vec<Focus> = [Some(Focus::List), prompt, Some(Focus::Branch)]
             .into_iter()
+            .flatten()
             .chain(self.issue.is_some().then_some(Focus::Workspace))
             .chain(self.shown_accounts().into_iter().map(Focus::Account))
             .collect();
@@ -429,9 +433,13 @@ impl Start {
             Focus::List => match key.code {
                 KeyCode::Up => self.select(self.cursor.saturating_sub(1)),
                 KeyCode::Down => self.select(self.cursor + 1),
-                KeyCode::Enter => self.focus = Focus::Prompt,
+                KeyCode::Enter => {
+                    self.focus = Focus::Prompt;
+                    self.leave_prompt();
+                }
                 _ => {}
             },
+            Focus::Prompt if self.templated().is_some() => {}
             Focus::Prompt => {
                 if self.prompt.key(key, room.width, room.height) {
                     self.typed();
@@ -456,6 +464,7 @@ impl Start {
         }
         match self.focus {
             Focus::Account(_) => {}
+            Focus::Prompt | Focus::List if self.templated().is_some() => {}
             Focus::Prompt | Focus::List => {
                 self.focus = Focus::Prompt;
                 self.prompt.insert_lines(text);
@@ -493,6 +502,7 @@ impl Start {
                 self.select(i);
                 self.focus = Focus::List;
             }
+            Hit::Prompt { .. } if self.templated().is_some() => {}
             Hit::Prompt { line, col } => {
                 self.focus = Focus::Prompt;
                 let scroll = self.prompt.scroll();

@@ -275,3 +275,52 @@ mod with_a_machine {
         assert!(matches!(click(&mut b, pos), Action::Name(issue, _, _) if issue.key == "sc-2"));
     }
 }
+
+mod a_machine_that_is_gone {
+    use super::*;
+
+    fn gone() -> Browser {
+        let mut b = on_vps();
+        b.run_on = RunOn::kept(None, b.run_on.as_ref());
+        b
+    }
+
+    #[test]
+    fn starts_nothing_and_says_why() {
+        let mut b = gone();
+
+        for label in ["start", "start a flow"] {
+            let pos = button(&b, label);
+            assert_eq!(click(&mut b, pos), Action::None);
+            assert_eq!(b.error.as_deref(), Some("vps is no longer listed"));
+        }
+        assert!(!b.labels(ROOM.buttons).contains(&"schedule"));
+        assert!(row(&b, "run on").is_some_and(|row| row.ends_with("○ this computer · vps is no longer listed")));
+    }
+
+    #[test]
+    fn is_left_once_this_computer_is_chosen() {
+        let mut b = gone();
+
+        assert_eq!(pick(&mut b, "this"), Action::RunOn(None));
+
+        assert_eq!(b.run_on.as_ref().and_then(|run_on| run_on.lost.as_deref()), None);
+        assert!(b.labels(ROOM.buttons).contains(&"schedule"));
+    }
+}
+
+mod the_focused_issue {
+    use super::*;
+
+    #[test]
+    fn is_lent_not_copied() {
+        let mut b = reading(None);
+        let Screen::Detail { issue, .. } = &b.screen else { panic!("not reading an issue") };
+        assert!(b.focused().is_some_and(|focused| std::ptr::eq(focused, &raw const **issue)));
+
+        press(&mut b, KeyCode::Esc);
+
+        let listed = b.shown()[0];
+        assert!(b.focused().is_some_and(|focused| std::ptr::eq(focused, listed)));
+    }
+}
