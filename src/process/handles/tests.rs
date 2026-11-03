@@ -165,12 +165,21 @@ mod naming {
         assert!(!waiting.full.load(Ordering::Relaxed));
 
         let full = names(3, vec![2, 4], &asking(&gated.ask, PATIENT, waiting));
+        let again = names(4, vec![2], &asking(&gated.ask, PATIENT, waiting));
 
-        assert_eq!((full, gated.blocked(), waiting.full.load(Ordering::Relaxed)), (vec![], 2, true));
+        assert_eq!((full, again, gated.blocked()), (vec![], vec![], 2));
+        assert!(!waiting.filled(), "the first full call warned, and only it");
         gated.open();
         assert_eq!(earlier.join().expect("the first call ends"), Vec::<PathBuf>::new());
         wait_until("every name is answered", || waiting.asked.lock().is_empty());
         assert_eq!(names(3, vec![2, 4], &asking(&gated.ask, PATIENT, waiting)), [file(2), file(4)]);
+    }
+
+    #[test]
+    fn warns_only_the_first_time_the_list_is_full() {
+        let waiting = waiting(1);
+
+        assert_eq!((waiting.filled(), waiting.filled()), (true, false));
     }
 
     #[test]
@@ -224,17 +233,18 @@ mod on_windows {
     }
 
     fn locking(path: &Path) -> Running {
-        let script = "$f = [IO.File]::Open($env:HELD, 'Open', 'ReadWrite', 'ReadWrite'); \
-                      while ($true) { try { $f.Lock(0, 1); break } catch { Start-Sleep -Milliseconds 10 } }; \
-                      [void][Console]::In.ReadLine()";
-        Running::spawn(
+        let script = "$f = [IO.File]::Open($env:HELD, 'Open', 'ReadWrite', 'ReadWrite'); $f.Lock(0, 1); \
+                      [Console]::Out.WriteLine('locked'); [Console]::Out.Flush(); [void][Console]::In.ReadLine()";
+        let mut holder = Running::spawn(
             Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", script])
                 .env("HELD", path)
                 .stdin(Stdio::piped())
-                .stdout(Stdio::null())
+                .stdout(Stdio::piped())
                 .stderr(Stdio::null()),
-        )
+        );
+        assert_eq!(holder.first_line(), "locked", "the other process says it holds the lock");
+        holder
     }
 
     fn locked(path: &Path) -> bool {
@@ -248,7 +258,7 @@ mod on_windows {
         let path = dir.path().join("locked.db");
         File::create(&path).expect("create the file");
         let holder = locking(&path);
-        wait_until_within("the other process locks the file", PATIENT, || locked(&path));
+        assert!(locked(&path));
 
         named(holder.pid(), &path);
         named(holder.pid(), &path);

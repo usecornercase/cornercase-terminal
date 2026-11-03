@@ -266,6 +266,15 @@ impl Running {
     pub(crate) fn pid(&self) -> i32 {
         i32::try_from(self.0.id()).expect("pid fits in i32")
     }
+
+    #[cfg(windows)]
+    pub(crate) fn first_line(&mut self) -> String {
+        use std::io::BufRead;
+        let output = self.0.stdout.take().expect("the output is piped");
+        let mut line = String::new();
+        std::io::BufReader::new(output).read_line(&mut line).expect("read the first line");
+        line.trim().to_string()
+    }
 }
 
 impl Drop for Running {

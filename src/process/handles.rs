@@ -96,10 +96,8 @@ impl Waiting {
         true
     }
 
-    fn filled(&self) {
-        if !self.full.swap(true, Ordering::Relaxed) {
-            log::warning!("process", "open files are not named, too many names wait", most = self.most);
-        }
+    fn filled(&self) -> bool {
+        !self.full.swap(true, Ordering::Relaxed)
     }
 }
 
@@ -145,14 +143,18 @@ fn batch(pid: i32, handles: &[usize], asking: &Asking, found: &mut Vec<PathBuf>)
                 found.extend(path);
                 answered += 1;
             }
-            Ok(Answer::Full) => {
-                asking.waiting.filled();
-                return None;
-            }
+            Ok(Answer::Full) => return full(asking.waiting),
             Err(RecvTimeoutError::Timeout) if !asking.waiting.give_up(answered, &progress) => {}
             Err(_) => return Some(answered),
         }
     }
+}
+
+fn full(waiting: &Waiting) -> Option<usize> {
+    if waiting.filled() {
+        log::warning!("process", "open files are not named, too many names wait", most = waiting.most);
+    }
+    None
 }
 
 fn start(pid: i32, handles: Vec<usize>, asking: Asking, progress: Arc<Progress>) -> Option<Receiver<Answer>> {
