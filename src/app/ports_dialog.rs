@@ -27,6 +27,13 @@ const REFRESH_EVERY: Duration = Duration::from_secs(2);
 
 const COMMAND_WIDTH: usize = 40;
 
+const STOPS: &str = if cfg!(windows) {
+    "Each window is asked to close, then what still holds its port after 3 s is ended (at once without a window). \
+     Only that process is stopped."
+} else {
+    "Each gets SIGTERM, then SIGKILL if it still holds its port after 3 s. Only that process is signalled."
+};
+
 #[derive(Debug, Default)]
 pub(super) struct PortsState {
     refresh: Refresh,
@@ -258,9 +265,7 @@ impl App {
             }
         }
         lines.push(Line::raw(""));
-        lines.push(Line::raw(
-            "Each gets SIGTERM, then SIGKILL if it still holds its port after 3 s. Only that process is signalled.",
-        ));
+        lines.push(Line::raw(STOPS));
         lines
     }
 }

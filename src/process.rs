@@ -6,7 +6,11 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::os::process::{CommandExt, Pid, Signal, kill_process_group};
+#[cfg(not(unix))]
+use crate::os::process::kill_process;
+#[cfg(unix)]
+use crate::os::process::kill_process_group;
+use crate::os::process::{Grouped, Pid, Signal};
 use crate::os::socket::UnixStream;
 use crate::text;
 
@@ -79,8 +83,7 @@ pub(crate) fn stop(mut child: Child) {
 
 pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Result<Option<Output>> {
     let deadline = Instant::now() + timeout;
-    let mut child =
-        command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0).spawn()?;
+    let mut child = Grouped::spawn(command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()))?;
     let (stdout, stderr) = (drain(child.stdout.take()), drain(child.stderr.take()));
     let left = || deadline.saturating_duration_since(Instant::now());
     let output = wait_until(&mut child, deadline)?.and_then(|status| {
@@ -94,12 +97,25 @@ pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Res
     Ok(output)
 }
 
-pub(crate) fn kill_group(child: &mut Child) {
-    if let Some(group) = i32::try_from(child.id()).ok().and_then(Pid::from_raw) {
-        let _ = kill_process_group(group, Signal::KILL);
-    }
+pub(crate) fn kill_group(child: &mut Grouped) {
+    child.signal(Signal::KILL);
     let _ = child.kill();
     let _ = child.wait();
+}
+
+#[cfg(unix)]
+pub(crate) fn signal_group(leader: i32, signal: Signal) {
+    if let Some(group) = Pid::from_raw(leader) {
+        let _ = kill_process_group(group, signal);
+    }
+}
+
+#[cfg(not(unix))]
+pub(crate) fn signal_group(leader: i32, signal: Signal) {
+    let members: Vec<i32> = std::iter::once(leader).chain(descendants(leader)).collect();
+    for pid in members.into_iter().filter_map(Pid::from_raw) {
+        let _ = kill_process(pid, signal);
+    }
 }
 
 thread_local! {

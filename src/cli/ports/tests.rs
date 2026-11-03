@@ -71,11 +71,19 @@ fn stopping_says_what_happened() {
     let stopped =
         |outcome: &str| PortStopped { port: 5173, pid: 41, program: Some("node".into()), outcome: outcome.into() };
     assert_eq!(stopped_text(&stopped("stopped")), "stopped node (pid 41) on port 5173\n");
-    assert_eq!(
-        stopped_text(&stopped("killed")),
-        "killed node (pid 41) on port 5173: it did not stop within 3 s of SIGTERM\n"
-    );
-    assert_eq!(stopped_text(&stopped("still-running")), "node (pid 41) on port 5173 is still running after SIGKILL\n");
+    let (killed, still) = if cfg!(windows) {
+        (
+            "killed node (pid 41) on port 5173: it had no window to close, or did not close within 3 s\n",
+            "node (pid 41) on port 5173 is still running after being terminated\n",
+        )
+    } else {
+        (
+            "killed node (pid 41) on port 5173: it did not stop within 3 s of SIGTERM\n",
+            "node (pid 41) on port 5173 is still running after SIGKILL\n",
+        )
+    };
+    assert_eq!(stopped_text(&stopped("killed")), killed);
+    assert_eq!(stopped_text(&stopped("still-running")), still);
 }
 
 #[test]

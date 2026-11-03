@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 
 use super::{Print, branch};
-use crate::cli::help::{BY_BRANCH, PROCESSES_STOP_HELP};
+use crate::cli::help::{BY_BRANCH, PROCESSES_STOP_ABOUT, PROCESSES_STOP_HELP};
 
 #[derive(Debug, Args)]
 #[command(args_conflicts_with_subcommands = true)]
@@ -28,7 +28,7 @@ pub(crate) struct ProcessesArgs {
 #[derive(Debug, Subcommand)]
 pub(crate) enum ProcessesAction {
     #[command(
-        about = "Stop a program of a pane and what it started: SIGTERM, then SIGKILL after 3 s",
+        about = PROCESSES_STOP_ABOUT,
         after_help = PROCESSES_STOP_HELP
     )]
     Stop(StopArgs),

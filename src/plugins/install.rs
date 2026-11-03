@@ -434,10 +434,8 @@ fn build(fetched: &Fetched, places: &Places) -> Result<(), String> {
     for step in &manifest.build {
         let shown = shown(&step.command);
         places.note(&manifest.id, "build step started", &[("command", &shown)]);
-        let child = places
-            .command(&plugin, &step.command, &[], None)
-            .and_then(|mut c| c.spawn())
-            .map_err(|e| format!("cannot run `{shown}`: {e}"))?;
+        let child =
+            places.spawn(&plugin, &step.command, &[], None).map_err(|e| format!("cannot run `{shown}`: {e}"))?;
         let logs = format!("`cornercase plugin logs {}` says more", manifest.id);
         match run::finish(child, BUILD_WITHIN).map_err(|e| e.to_string())? {
             Some(status) if status.success() => {}
