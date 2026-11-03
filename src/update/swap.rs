@@ -75,4 +75,4 @@ pub(crate) fn remove_old(exe: &Path) {
 }
 
 #[cfg(test)]
-pub(crate) mod tests;
+mod tests;

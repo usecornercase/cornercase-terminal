@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
 use crate::http::{self, Service};
+use crate::os::desktop;
 use crate::os::fs::{canonicalize, set_mode, writable};
 use crate::text::hex;
 
@@ -244,10 +245,21 @@ fn verify(archive: &[u8], sums: &str) -> Result<()> {
     }
 }
 
+fn tar() -> PathBuf {
+    tar_in(cfg!(windows), desktop::windows_folder())
+}
+
+fn tar_in(windows: bool, folder: Option<PathBuf>) -> PathBuf {
+    match folder {
+        Some(folder) if windows => folder.join("System32").join("tar.exe"),
+        _ => PathBuf::from("tar"),
+    }
+}
+
 fn unpack(archive: &[u8], staging: &Path) -> Result<PathBuf> {
     let file = staging.join(ARCHIVE);
     fs::write(&file, archive)?;
-    let output = Command::new("tar").arg("-xzf").arg(&file).arg("-C").arg(staging).output()?;
+    let output = Command::new(tar()).arg("-xzf").arg(&file).arg("-C").arg(staging).output()?;
     if !output.status.success() {
         return Err(Error::Api(format!(
             "could not unpack the download: {}",

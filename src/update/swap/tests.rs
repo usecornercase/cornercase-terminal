@@ -106,7 +106,7 @@ mod aside {
 }
 
 #[cfg(windows)]
-pub(crate) mod on_windows {
+mod on_windows {
     use std::process::{Command, Stdio};
 
     use super::*;
@@ -116,7 +116,7 @@ pub(crate) mod on_windows {
         Running::spawn(Command::new(exe).args(["-n", "30", "127.0.0.1"]).stdout(Stdio::null()))
     }
 
-    pub(crate) fn ping_as(path: &Path) {
+    fn ping_as(path: &Path) {
         let system = std::env::var_os("SystemRoot").expect("SystemRoot");
         fs::copy(Path::new(&system).join("System32").join("PING.EXE"), path).expect("copy ping");
     }

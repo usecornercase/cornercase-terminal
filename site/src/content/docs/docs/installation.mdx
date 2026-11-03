@@ -44,7 +44,7 @@ Optional, for some features:
    powershell -ExecutionPolicy Bypass -c "irm https://usecornercase.dev/install.ps1 | iex"
    ```
 
-   It downloads `cornercase.exe` from the latest release, puts it in `%USERPROFILE%\.local\bin` and adds that folder to your user `PATH`. Open a new terminal, such as Windows Terminal, so it picks it up.
+   It downloads `cornercase.exe` from the latest release, puts it in `%USERPROFILE%\.local\bin` and adds that folder to your user `PATH`. Open a new terminal, such as Windows Terminal, so it picks it up. Running the line again while cornercase runs works too: it sets the running `cornercase.exe` aside as `cornercase.old.exe`, which cornercase deletes once nothing runs from it, and the server keeps the old version until it restarts.
 
 2. Check that it runs:
 
@@ -199,7 +199,7 @@ On Windows, in PowerShell:
 
 ```powershell
 cornercase kill-server
-Remove-Item "$HOME\.local\bin\cornercase.exe"
+Remove-Item "$HOME\.local\bin\cornercase.exe", "$HOME\.local\bin\cornercase.old*.exe"
 Remove-Item -Recurse "$env:APPDATA\cornercase", "$env:LOCALAPPDATA\cornercase"
 ```
 

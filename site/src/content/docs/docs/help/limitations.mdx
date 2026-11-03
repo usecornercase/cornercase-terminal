@@ -27,14 +27,15 @@ cornercase is young. These are the gaps you may run into today.
 
 ## On Windows
 
-cornercase runs natively on Windows 11 and Windows 10 from version 1809, on x64. It has been checked on Windows 11 only, and its automated tests don't run on Windows yet ([#601](https://github.com/usecornercase/cornercase-terminal/issues/601)), so expect rough edges. Most of what these pages describe works there too; these are the gaps known today:
+cornercase runs natively on Windows 11 and Windows 10 from version 1809, on x64. Its tests run on Windows on every change, but it has been tried by hand on Windows 11 only, so expect rough edges. Most of what these pages describe works there too; these are the gaps known today:
 
 | Limitation | What it means for you |
 | --- | --- |
-| **Remote and chat apps not checked yet** | [`cornercase remote`](../../guides/remote/) and `--remote`, [opening cornercase from your phone](../../guides/phone/), and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots have not been tried on Windows. ([#603](https://github.com/usecornercase/cornercase-terminal/issues/603)) |
+| **No remote window to a Windows computer** | [`cornercase remote`](../../guides/remote/) and `--remote` work from Windows with the OpenSSH client that comes with it, but a Windows computer can't be the other end: Windows' OpenSSH Server runs commands in cmd, which has no `sh`. [Opening cornercase from your phone](../../guides/phone/) and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots haven't been tried end to end on Windows yet (a real phone over `tailscale serve`, a real bot). ([#603](https://github.com/usecornercase/cornercase-terminal/issues/603)) |
 | **PowerShell doesn't say where it is** | `cd` in PowerShell doesn't change its process's folder, and its default prompt doesn't report the folder either, so a PowerShell pane counts as being in the folder it started in: a new tab, a relative path you click and `cornercase status` start from there. A prompt that reports its folder (OSC 7, or OSC 9;9 as in Windows Terminal's docs, which oh-my-posh and Starship can send) fixes it. cmd and Git Bash are followed as on Linux. |
 | **A background job counts as running** | A program started in the background (`start /b` in cmd, `&` in PowerShell 7 or Git Bash) can't be told from one the shell waits for, so while it runs the tab is named after it and cornercase treats the pane as busy: `cornercase wait` keeps waiting and closing a worktree warns that a program runs. |
-| **Local plugin folders as `C:\…`** | `cornercase plugin install` takes a local folder only as a path starting with `/`, so `C:\…` is refused; install from GitHub, or use `cornercase plugin link`. In a `.code-workspace` file, folders written as `file://` URIs are skipped. |
+| **Some npm agents and special characters** | An agent installed with npm starts through a `.cmd` file, and cmd reads `& \| < > ^ % ! "` as its own, so cornercase refuses to start one when its launch line, the prompt included, holds any of them, rather than let cmd run part of it. ([#632](https://github.com/usecornercase/cornercase-terminal/issues/632)) |
+| **`file://` folders in a `.code-workspace`** | In a `.code-workspace` file, folders written as `file://` URIs are skipped; plain paths work. |
 | **Some texts still look Unix** | The help of `cornercase logs` and of `cornercase flow` names Unix folders in its examples, and `cornercase status` writes a path under your user folder as `~/` followed by the rest with backslashes. |
 | **x64 only** | There is no native Arm build; Windows on Arm runs the x64 one under emulation. |
 
