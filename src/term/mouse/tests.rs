@@ -84,11 +84,33 @@ mod legacy {
         assert_eq!(out[3], 32 + 3);
     }
 
+    #[cfg(unix)]
     #[test]
     fn default_encoding_clamps_coordinates_that_do_not_fit_a_byte() {
         let out = encode(event(K::Down(LEFT)), 400, 0, M::Press, E::Default).expect("press is wanted");
 
         assert_eq!(out[4], u8::MAX);
+    }
+
+    #[cfg(windows)]
+    #[rstest]
+    #[case::the_last_ascii_column(94, 0, Some(vec![0x1b, b'[', b'M', 32, 0x7f, 32 + 1]))]
+    #[case::a_column_past_it(95, 0, None)]
+    #[case::a_row_past_it(0, 95, None)]
+    fn default_encoding_sends_nothing_past_the_last_ascii_coordinate_on_windows(
+        #[case] col: u16,
+        #[case] row: u16,
+        #[case] expected: Option<Vec<u8>>,
+    ) {
+        assert_eq!(encode(event(K::Down(LEFT)), col, row, M::Press, E::Default), expected);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sgr_reaches_past_the_last_ascii_coordinate_on_windows() {
+        let out = encode(event(K::Down(LEFT)), 199, 0, M::Press, E::Sgr);
+
+        assert_eq!(out.as_deref(), Some(&b"\x1b[<0;200;1M"[..]));
     }
 
     #[test]

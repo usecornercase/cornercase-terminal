@@ -20,9 +20,13 @@ const LEGACY_RELEASE: u32 = 3;
 const MOTION: u32 = 32;
 const WHEEL: u32 = 64;
 const LEGACY_OFFSET: u32 = 32;
+#[cfg(unix)]
+const LEGACY_LAST: Option<u16> = None;
+#[cfg(windows)]
+const LEGACY_LAST: Option<u16> = Some(94);
 
 pub(crate) fn encode(ev: MouseEvent, col: u16, row: u16, mode: MouseMode, encoding: MouseEncoding) -> Option<Vec<u8>> {
-    if !is_wanted(ev.kind, mode) {
+    if !is_wanted(ev.kind, mode) || !fits(col, row, encoding) {
         return None;
     }
 
@@ -48,6 +52,10 @@ pub(crate) fn encode(ev: MouseEvent, col: u16, row: u16, mode: MouseMode, encodi
             out
         }
     })
+}
+
+fn fits(col: u16, row: u16, encoding: MouseEncoding) -> bool {
+    encoding != MouseEncoding::Default || LEGACY_LAST.is_none_or(|last| col.max(row) <= last)
 }
 
 fn is_wanted(kind: MouseEventKind, mode: MouseMode) -> bool {
