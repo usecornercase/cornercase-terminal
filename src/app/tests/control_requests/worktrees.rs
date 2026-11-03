@@ -90,15 +90,24 @@ fn no_tab_opens_in_a_worktree_being_removed() {
     assert!(message.contains("is being removed"), "{message}");
 }
 
+fn removals_wait_in_teardown(app: &mut App, repo: &Path, hold: &Path) {
+    let teardown = format!("while [ -d '{0}' ] && [ ! -e '{0}/go' ]; do sleep 0.02; done", hold.display());
+    app.config.projects.insert(repo.display().to_string(), ProjectSettings { teardown, ..Default::default() });
+}
+
 #[test]
 fn a_removal_that_starts_while_git_status_runs_is_not_started_twice() {
-    let (mut app, rx, _repo, _worktrees, _config) = repo();
+    let (mut app, rx, repo, _worktrees, _config) = repo();
     let (id, _) = made(&mut app, &rx);
+    let hold = TempDir::new();
+    removals_wait_in_teardown(&mut app, repo.path(), hold.path());
     ask(&mut app, None, remove(id));
 
     app.start_removal(app.projects[0].id, id, RemoveOptions::default(), None);
 
     let message = error(answered(&mut app, &rx, "git status answers"));
+    std::fs::write(hold.path().join("go"), "").expect("let the teardown end");
+    pump_until(&mut app, &rx, "the one removal ends", |a| a.projects.workspace_index(id).is_none());
     assert!(message.contains("is being removed"), "{message}");
 }
 

@@ -11,8 +11,12 @@ fn first_pane(app: &App) -> (u64, i32) {
 fn sleeping(app: &mut App) -> (u64, i32, i32) {
     let (pane, shell) = first_pane(app);
     type_line(app, "sleep 30");
-    wait_until("the sleep starts", || !process::children(shell).is_empty());
-    (pane, shell, process::children(shell)[0])
+    let mut sleeper = None;
+    wait_until("the shell's child runs sleep", || {
+        sleeper = process::children(shell).into_iter().find(|pid| process::name(*pid).as_deref() == Some("sleep"));
+        sleeper.is_some()
+    });
+    (pane, shell, sleeper.expect("the sleeper"))
 }
 
 fn pids(list: &Value) -> Vec<i64> {
