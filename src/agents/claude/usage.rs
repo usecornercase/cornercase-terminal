@@ -153,7 +153,7 @@ fn extra(spend: &Spend) -> Option<String> {
 }
 
 pub(super) fn parse(body: Value) -> Result<Report> {
-    let unexpected = |e: &dyn std::fmt::Display| Error::Usage(format!("unexpected answer: {e}"));
+    let unexpected = |e: &dyn std::fmt::Display| Error::Probe(format!("unexpected answer: {e}"));
     let body: Body = serde_json::from_value(body).map_err(|e| unexpected(&e))?;
     let limits = match (body.rate_limits_available, body.rate_limits) {
         (false, _) => None,
@@ -179,7 +179,7 @@ pub(in crate::agents) fn answer(line: &str) -> Option<Result<Report>> {
         return Some(parse(response["response"].clone()));
     }
     let error = response["error"].as_str().unwrap_or("claude refused the request");
-    Some(Err(Error::Usage(error.to_string())))
+    Some(Err(Error::Probe(error.to_string())))
 }
 
 pub(in crate::agents) fn command(program: &str) -> Command {

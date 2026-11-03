@@ -173,3 +173,37 @@ mod conversation_files {
         assert_eq!(Record::Gemini(PathBuf::from("/home/.gemini/tmp/chats/session.json")).conversation_files(), None);
     }
 }
+
+mod probe_model {
+    use super::*;
+    use crate::agents::Known;
+    use crate::agents::claude::transcript::transcript_path;
+    use crate::agents::context::tests::pane_look;
+    use crate::agents::context::{Look, Pane};
+
+    const REPLY: &str = r#"{"type":"assistant","message":{"model":"claude-opus-5-5","usage":{"input_tokens":2,"cache_creation_input_tokens":10,"cache_read_input_tokens":100}}}"#;
+
+    fn conversation(home: &Path, work: &Path, id: &str, text: &str) {
+        let path = transcript_path(home, work, id).expect("path");
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("project folder");
+        std::fs::write(path, text).expect("transcript");
+        std::fs::create_dir_all(home.join("sessions")).expect("sessions");
+        let session = serde_json::json!({"pid": 7, "sessionId": id, "cwd": work}).to_string();
+        std::fs::write(home.join("sessions/7.json"), session).expect("session");
+    }
+
+    #[test]
+    fn a_new_conversation_without_a_reply_forgets_the_model_of_the_old_one() {
+        let (home, work) = (TempDir::new(), TempDir::new());
+        let mut pane = Pane::default();
+        let look = || Look { claude_dir: Some(home.path()), ..pane_look(7) };
+        conversation(home.path(), work.path(), "one", &format!("{REPLY}\n"));
+        pane.update(Some(Known::Claude), &look());
+        assert_eq!(pane.breakdown_target(None).and_then(|t| t.model).as_deref(), Some("claude-opus-5-5"));
+
+        conversation(home.path(), work.path(), "two", "{}\n");
+        pane.update(Some(Known::Claude), &look());
+
+        assert_eq!(pane.breakdown_target(None).map(|t| t.model), Some(None));
+    }
+}

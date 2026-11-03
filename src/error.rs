@@ -80,7 +80,7 @@ pub enum Error {
     #[error("{0}")]
     TokenRejected(String),
     #[error("{0}")]
-    Usage(String),
+    Probe(String),
     #[error("{0}")]
     Plugin(String),
     #[error("{0}")]
