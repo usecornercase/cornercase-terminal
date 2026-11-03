@@ -288,7 +288,7 @@ const FILETIME_TICKS_PER_MICRO: u64 = 10;
 const NANOS_PER_FILETIME_TICK: u64 = 100;
 
 #[cfg(any(windows, test))]
-fn filetime_micros(ticks: u64) -> Option<u64> {
+pub(crate) fn filetime_micros(ticks: u64) -> Option<u64> {
     Some(ticks.checked_sub(FILETIME_AT_UNIX_EPOCH)? / FILETIME_TICKS_PER_MICRO)
 }
 
@@ -306,7 +306,7 @@ fn still_listed(listed: Option<u64>, now: Option<u64>) -> bool {
 }
 
 #[cfg(any(windows, test))]
-fn born_before(parent: Option<u64>, child: Option<u64>) -> bool {
+pub(crate) fn born_before(parent: Option<u64>, child: Option<u64>) -> bool {
     match (parent, child) {
         (Some(parent), Some(child)) => parent <= child,
         _ => true,

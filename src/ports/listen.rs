@@ -1,6 +1,11 @@
+#[cfg(any(windows, test))]
+use std::collections::HashSet;
 use std::net::IpAddr;
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
 use std::net::{Ipv4Addr, Ipv6Addr};
+
+#[cfg(any(windows, test))]
+use crate::process;
 
 pub(crate) use imp::listeners;
 
@@ -75,8 +80,8 @@ fn tcp_listener(info: &[u8]) -> Option<(IpAddr, u16)> {
 }
 
 #[cfg(any(windows, test))]
-mod owner_pid_table {
-    pub(super) const ROWS: usize = 4;
+mod owner_module_table {
+    pub(super) const ROWS: usize = 8;
     pub(super) const LISTEN: u32 = 2;
 
     pub(super) struct Row {
@@ -85,12 +90,16 @@ mod owner_pid_table {
         pub(super) address: usize,
         pub(super) port: usize,
         pub(super) pid: usize,
+        pub(super) created: usize,
         pub(super) ipv6: bool,
     }
 
-    pub(super) const IPV4: Row = Row { size: 24, state: 0, address: 4, port: 8, pid: 20, ipv6: false };
-    pub(super) const IPV6: Row = Row { size: 56, state: 48, address: 0, port: 20, pid: 52, ipv6: true };
+    pub(super) const IPV4: Row = Row { size: 160, state: 0, address: 4, port: 8, pid: 20, created: 24, ipv6: false };
+    pub(super) const IPV6: Row = Row { size: 192, state: 48, address: 0, port: 20, pid: 52, created: 56, ipv6: true };
 }
+
+#[cfg(any(windows, test))]
+type Stamped = (Listener, Option<u64>);
 
 #[cfg(any(windows, test))]
 fn bytes_at<const N: usize>(bytes: &[u8], at: usize) -> Option<[u8; N]> {
@@ -98,9 +107,9 @@ fn bytes_at<const N: usize>(bytes: &[u8], at: usize) -> Option<[u8; N]> {
 }
 
 #[cfg(any(windows, test))]
-fn owned_listeners(table: &[u8], row: &owner_pid_table::Row) -> Vec<Listener> {
+fn owned_listeners(table: &[u8], row: &owner_module_table::Row) -> Vec<Stamped> {
     let count = bytes_at(table, 0).map_or(0, u32::from_ne_bytes);
-    let rows = table.get(owner_pid_table::ROWS..).unwrap_or_default();
+    let rows = table.get(owner_module_table::ROWS..).unwrap_or_default();
     rows.chunks_exact(row.size)
         .take(usize::try_from(count).unwrap_or(usize::MAX))
         .filter_map(|bytes| owned_listener(bytes, row))
@@ -108,8 +117,8 @@ fn owned_listeners(table: &[u8], row: &owner_pid_table::Row) -> Vec<Listener> {
 }
 
 #[cfg(any(windows, test))]
-fn owned_listener(bytes: &[u8], row: &owner_pid_table::Row) -> Option<Listener> {
-    if u32::from_ne_bytes(bytes_at(bytes, row.state)?) != owner_pid_table::LISTEN {
+fn owned_listener(bytes: &[u8], row: &owner_module_table::Row) -> Option<Stamped> {
+    if u32::from_ne_bytes(bytes_at(bytes, row.state)?) != owner_module_table::LISTEN {
         return None;
     }
     let address = if row.ipv6 {
@@ -118,7 +127,21 @@ fn owned_listener(bytes: &[u8], row: &owner_pid_table::Row) -> Option<Listener> 
         IpAddr::from(bytes_at::<4>(bytes, row.address)?)
     };
     let port = u16::from_be_bytes(bytes_at(bytes, row.port)?);
-    Some(Listener { pid: u32::from_ne_bytes(bytes_at(bytes, row.pid)?).cast_signed(), port, address })
+    let pid = u32::from_ne_bytes(bytes_at(bytes, row.pid)?).cast_signed();
+    let created = u64::try_from(i64::from_ne_bytes(bytes_at(bytes, row.created)?)).ok();
+    Some((Listener { pid, port, address }, created.and_then(process::filetime_micros)))
+}
+
+#[cfg(any(windows, test))]
+fn still_owned(stamped: Vec<Stamped>, pids: &[i32], started: impl Fn(i32) -> Option<u64>) -> Vec<Listener> {
+    let pids: HashSet<i32> = pids.iter().copied().collect();
+    stamped
+        .into_iter()
+        .filter(|(listener, created)| {
+            pids.contains(&listener.pid) && process::born_before(started(listener.pid), *created)
+        })
+        .map(|(listener, _)| listener)
+        .collect()
 }
 
 #[cfg(target_os = "linux")]
@@ -196,58 +219,62 @@ mod imp {
 
 #[cfg(windows)]
 mod imp {
-    use std::collections::HashSet;
     use std::mem::offset_of;
     use std::ptr::null_mut;
 
     use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, NO_ERROR};
     use windows_sys::Win32::NetworkManagement::IpHelper::{
-        GetExtendedTcpTable, MIB_TCP_STATE_LISTEN, MIB_TCP6ROW_OWNER_PID, MIB_TCP6TABLE_OWNER_PID,
-        MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_LISTENER,
+        GetExtendedTcpTable, MIB_TCP_STATE_LISTEN, MIB_TCP6ROW_OWNER_MODULE, MIB_TCP6TABLE_OWNER_MODULE,
+        MIB_TCPROW_OWNER_MODULE, MIB_TCPTABLE_OWNER_MODULE, TCP_TABLE_OWNER_MODULE_LISTENER,
     };
     use windows_sys::Win32::Networking::WinSock::{ADDRESS_FAMILY, AF_INET, AF_INET6};
 
-    use super::owner_pid_table::{IPV4, IPV6, LISTEN, ROWS};
-    use super::{Listener, owned_listeners};
+    use super::owner_module_table::{IPV4, IPV6, LISTEN, ROWS};
+    use super::{Listener, Stamped, owned_listeners, still_owned};
+    use crate::process;
 
     const ATTEMPTS: usize = 4;
 
     const _: () = assert!(
-        offset_of!(MIB_TCPTABLE_OWNER_PID, table) == ROWS
-            && offset_of!(MIB_TCP6TABLE_OWNER_PID, table) == ROWS
+        offset_of!(MIB_TCPTABLE_OWNER_MODULE, table) == ROWS
+            && offset_of!(MIB_TCP6TABLE_OWNER_MODULE, table) == ROWS
             && MIB_TCP_STATE_LISTEN.cast_unsigned() == LISTEN
     );
 
     const _: () = assert!(
-        size_of::<MIB_TCPROW_OWNER_PID>() == IPV4.size
-            && offset_of!(MIB_TCPROW_OWNER_PID, dwState) == IPV4.state
-            && offset_of!(MIB_TCPROW_OWNER_PID, dwLocalAddr) == IPV4.address
-            && offset_of!(MIB_TCPROW_OWNER_PID, dwLocalPort) == IPV4.port
-            && offset_of!(MIB_TCPROW_OWNER_PID, dwOwningPid) == IPV4.pid
+        size_of::<MIB_TCPROW_OWNER_MODULE>() == IPV4.size
+            && offset_of!(MIB_TCPROW_OWNER_MODULE, dwState) == IPV4.state
+            && offset_of!(MIB_TCPROW_OWNER_MODULE, dwLocalAddr) == IPV4.address
+            && offset_of!(MIB_TCPROW_OWNER_MODULE, dwLocalPort) == IPV4.port
+            && offset_of!(MIB_TCPROW_OWNER_MODULE, dwOwningPid) == IPV4.pid
+            && offset_of!(MIB_TCPROW_OWNER_MODULE, liCreateTimestamp) == IPV4.created
     );
 
     const _: () = assert!(
-        size_of::<MIB_TCP6ROW_OWNER_PID>() == IPV6.size
-            && offset_of!(MIB_TCP6ROW_OWNER_PID, dwState) == IPV6.state
-            && offset_of!(MIB_TCP6ROW_OWNER_PID, ucLocalAddr) == IPV6.address
-            && offset_of!(MIB_TCP6ROW_OWNER_PID, dwLocalPort) == IPV6.port
-            && offset_of!(MIB_TCP6ROW_OWNER_PID, dwOwningPid) == IPV6.pid
+        size_of::<MIB_TCP6ROW_OWNER_MODULE>() == IPV6.size
+            && offset_of!(MIB_TCP6ROW_OWNER_MODULE, dwState) == IPV6.state
+            && offset_of!(MIB_TCP6ROW_OWNER_MODULE, ucLocalAddr) == IPV6.address
+            && offset_of!(MIB_TCP6ROW_OWNER_MODULE, dwLocalPort) == IPV6.port
+            && offset_of!(MIB_TCP6ROW_OWNER_MODULE, dwOwningPid) == IPV6.pid
+            && offset_of!(MIB_TCP6ROW_OWNER_MODULE, liCreateTimestamp) == IPV6.created
     );
 
     pub(crate) fn listeners(pids: &[i32]) -> Vec<Listener> {
-        let pids: HashSet<i32> = pids.iter().copied().collect();
+        still_owned(stamped(), pids, process::start_stamp)
+    }
+
+    pub(super) fn stamped() -> Vec<Stamped> {
         [(AF_INET, &IPV4), (AF_INET6, &IPV6)]
             .into_iter()
             .filter_map(|(family, row)| Some(owned_listeners(&table(family)?, row)))
             .flatten()
-            .filter(|listener| pids.contains(&listener.pid))
             .collect()
     }
 
     fn table(family: ADDRESS_FAMILY) -> Option<Vec<u8>> {
         let mut size = 0;
         for _ in 0..ATTEMPTS {
-            let mut words = vec![0_u32; usize::try_from(size).ok()?.div_ceil(4)];
+            let mut words = vec![0_u64; usize::try_from(size).ok()?.div_ceil(8)];
             let status = listening_table(&mut words, &mut size, family);
             if status != ERROR_INSUFFICIENT_BUFFER {
                 return (status == NO_ERROR).then(|| words.iter().flat_map(|word| word.to_ne_bytes()).collect());
@@ -256,9 +283,9 @@ mod imp {
         None
     }
 
-    fn listening_table(into: &mut [u32], size: &mut u32, family: ADDRESS_FAMILY) -> u32 {
+    fn listening_table(into: &mut [u64], size: &mut u32, family: ADDRESS_FAMILY) -> u32 {
         let table = if into.is_empty() { null_mut() } else { into.as_mut_ptr().cast() };
-        unsafe { GetExtendedTcpTable(table, size, 0, u32::from(family), TCP_TABLE_OWNER_PID_LISTENER, 0) }
+        unsafe { GetExtendedTcpTable(table, size, 0, u32::from(family), TCP_TABLE_OWNER_MODULE_LISTENER, 0) }
     }
 }
 
