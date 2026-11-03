@@ -1,7 +1,7 @@
 use std::fs::{DirBuilder, File, Metadata, OpenOptions, Permissions, TryLockError};
 use std::io;
 use std::os::windows::ffi::OsStrExt;
-use std::os::windows::fs::OpenOptionsExt as WindowsOptions;
+use std::os::windows::fs::{MetadataExt as WindowsMetadata, OpenOptionsExt as WindowsOptions};
 use std::os::windows::io::AsRawHandle;
 use std::path::{Component, Path, PathBuf, Prefix};
 use std::ptr::null_mut;
@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, UNIX_EPOCH};
 
 use windows_sys::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, GetFileInformationByHandle,
-    MoveFileExW,
+    BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    GetFileInformationByHandle, MoveFileExW,
 };
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::FSCTL_SET_REPARSE_POINT;
@@ -19,7 +19,7 @@ use super::{Lock, Stat};
 
 #[cfg(test)]
 pub(crate) use self::acl::share_with_everyone;
-pub(crate) use self::acl::{create_private_dir_all, make_private, owner_and_mode, process_uid};
+pub(crate) use self::acl::{create_private_dir_all, file_owner_and_mode, make_private, owner_and_mode, process_uid};
 pub(crate) use self::verbatim::simplified;
 
 mod acl;
@@ -72,9 +72,7 @@ impl PermissionsExt for Permissions {
 pub(crate) trait MetadataExt {
     fn dev(&self) -> u64;
     fn ino(&self) -> u64;
-    fn mode(&self) -> u32;
     fn nlink(&self) -> u64;
-    fn uid(&self) -> u32;
     fn gid(&self) -> u32;
     fn blocks(&self) -> u64;
     fn mtime(&self) -> i64;
@@ -93,16 +91,8 @@ impl MetadataExt for Metadata {
         UNKNOWN.fetch_add(1, Ordering::Relaxed)
     }
 
-    fn mode(&self) -> u32 {
-        ANYONE_MAY_WRITE
-    }
-
     fn nlink(&self) -> u64 {
         1
-    }
-
-    fn uid(&self) -> u32 {
-        NOBODY
     }
 
     fn gid(&self) -> u32 {
@@ -142,6 +132,10 @@ pub(crate) fn set_mode(_path: impl AsRef<Path>, _mode: u32) -> io::Result<()> {
 #[expect(clippy::unnecessary_wraps, reason = "setting a mode can fail on Unix, so every caller handles an error")]
 pub(crate) fn set_file_mode(_file: &File, _mode: u32) -> io::Result<()> {
     Ok(())
+}
+
+pub(crate) fn reparse_point(meta: &Metadata) -> bool {
+    WindowsMetadata::file_attributes(meta) & FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
 pub(crate) fn truncate(_file: &File, path: &Path) -> io::Result<()> {

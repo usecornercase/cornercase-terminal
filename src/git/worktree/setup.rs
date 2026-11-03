@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use crate::agents::activity::Status;
 use crate::process;
+use crate::script::{self, Line, Shell};
 
 pub(crate) const NAME: &str = "cornercase-setup";
 
@@ -11,9 +11,12 @@ pub(crate) const TEARDOWN_WITHIN: Duration = Duration::from_mins(5);
 
 const MAX_FAILURE: usize = 160;
 
-const WRAPPER: &str = r#"trap : INT
-CORNERCASE_ROOT="$4" CORNERCASE_WORKTREE="$PWD" CORNERCASE_BRANCH="$5" /bin/sh -ec "$1"
-s=$?
+const RUN: &str = r#"CORNERCASE_ROOT="$4" CORNERCASE_WORKTREE="$PWD" CORNERCASE_BRANCH="$5" /bin/sh -ec "$1""#;
+
+const GIT_RUN: &str =
+    r#"CORNERCASE_ROOT="$4" CORNERCASE_WORKTREE="$6" CORNERCASE_BRANCH="$5" PATH="/usr/bin:$PATH" /bin/sh -ec "$1""#;
+
+const AFTER: &str = r#"s=$?
 trap - INT
 if [ "$s" = 0 ]; then
   printf '\n\033[32m✓ setup finished\033[0m\n'
@@ -23,6 +26,36 @@ fi
 printf '%s\n' "$s" > "$2"
 exec "$3"
 "#;
+
+const POWERSHELL_WRAPPER: &str = r#"try {
+    Set-Location -LiteralPath $cornercase.Worktree
+    $env:CORNERCASE_ROOT = $cornercase.Root
+    $env:CORNERCASE_WORKTREE = $cornercase.Worktree
+    $env:CORNERCASE_BRANCH = $cornercase.Branch
+    & $cornercase.Shell -NoProfile -EncodedCommand $cornercase.Script
+    $cornercase.Code = $LASTEXITCODE
+} finally {
+    Remove-Item Env:CORNERCASE_ROOT, Env:CORNERCASE_WORKTREE, Env:CORNERCASE_BRANCH -ErrorAction Ignore
+    $cornercase.Escape = [char]27
+    if ($cornercase.Code -eq 0) {
+        Write-Host ("`n" + $cornercase.Escape + '[32m' + [char]0x2713 + ' setup finished' + $cornercase.Escape + '[0m')
+    } else {
+        $cornercase.Said = ' setup failed with exit status ' + $cornercase.Code
+        Write-Host ("`n" + $cornercase.Escape + '[1;31m' + [char]0x2717 + $cornercase.Said + $cornercase.Escape + '[0m')
+    }
+    Set-Content -LiteralPath $cornercase.Status -Value $cornercase.Code
+    Remove-Variable cornercase
+}
+"#;
+
+pub(crate) struct Wrapper<'a> {
+    pub(crate) script: &'a str,
+    pub(crate) status: &'a Path,
+    pub(crate) shell: &'a str,
+    pub(crate) root: &'a Path,
+    pub(crate) branch: &'a str,
+    pub(crate) worktree: &'a Path,
+}
 
 #[derive(Debug)]
 pub(crate) enum Pane {
@@ -40,17 +73,37 @@ impl Pane {
     }
 }
 
-pub(crate) fn args(script: &str, status: &Path, shell: &str, root: &Path, branch: &str) -> Vec<String> {
-    vec![
-        "-c".into(),
-        WRAPPER.into(),
-        NAME.into(),
-        script.into(),
-        status.display().to_string(),
-        shell.into(),
-        root.display().to_string(),
-        branch.into(),
-    ]
+pub(crate) fn line(interpreter: &Shell, wrapper: &Wrapper) -> Line {
+    match interpreter {
+        Shell::Sh(sh) => {
+            let run = if sh.git { GIT_RUN } else { RUN };
+            let mut args = vec![
+                NAME.into(),
+                wrapper.script.into(),
+                wrapper.status.display().to_string(),
+                wrapper.shell.into(),
+                wrapper.root.display().to_string(),
+                wrapper.branch.into(),
+            ];
+            args.extend(sh.git.then(|| wrapper.worktree.display().to_string()));
+            sh.line("-c", &format!("trap : INT\n{run}\n{AFTER}"), &args)
+        }
+        Shell::PowerShell(program) => powershell(program, wrapper),
+    }
+}
+
+fn powershell(program: &str, wrapper: &Wrapper) -> Line {
+    let values = [
+        ("Shell", program.to_string()),
+        ("Script", script::encoded(&script::strict(wrapper.script))),
+        ("Status", wrapper.status.display().to_string()),
+        ("Root", wrapper.root.display().to_string()),
+        ("Worktree", wrapper.worktree.display().to_string()),
+        ("Branch", wrapper.branch.to_string()),
+    ];
+    let fields: Vec<String> = values.iter().map(|(key, value)| format!("{key} = {}", script::literal(value))).collect();
+    let text = format!("$cornercase = @{{ Code = 1; {} }}\n{POWERSHELL_WRAPPER}", fields.join("; "));
+    Line { program: program.to_string(), args: vec!["-NoExit".into(), "-Command".into(), text], env: Vec::new() }
 }
 
 pub(crate) fn status_file(dir: &Path, pane: u64) -> PathBuf {
@@ -76,9 +129,8 @@ pub(crate) fn teardown(script: &str, worktree: &Path, root: &Path, branch: &str,
     if !worktree.is_dir() {
         return None;
     }
-    let mut command = Command::new("/bin/sh");
+    let mut command = Shell::here().run(script).command();
     command
-        .args(["-ec", script])
         .current_dir(worktree)
         .env("CORNERCASE_ROOT", root)
         .env("CORNERCASE_WORKTREE", worktree)
