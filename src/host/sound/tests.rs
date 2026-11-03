@@ -1,16 +1,18 @@
-#![cfg(unix)]
-
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{TempDir, wait_until, write_executable};
+use crate::test_util::TempDir;
+#[cfg(unix)]
+use crate::test_util::{wait_until, write_executable};
 
 fn cue(kind: Kind, path: &str) -> Cue {
     Cue { kind, path: path.into() }
 }
 
+#[cfg(unix)]
 mod builtin_sounds {
     use super::*;
 
@@ -59,6 +61,7 @@ mod builtin_sounds {
     }
 }
 
+#[cfg(unix)]
 mod choosing_a_player {
     use super::*;
 
@@ -80,8 +83,8 @@ mod choosing_a_player {
     fn takes_the_first_one_on_the_path(#[case] os: Os, #[case] names: &[&str], #[case] expected: Option<&str>) {
         let tmp = fake_path(names);
         let path = tmp.path().as_os_str().to_owned();
-        let found = player(os, on_path(Some(&path)));
-        assert_eq!(found, expected.map(|name| tmp.path().join(name)));
+        let found = player(os, on_path(os, Some(&path), &[]));
+        assert_eq!(found, expected.map(|name| Device::Program(tmp.path().join(name))));
     }
 
     #[test]
@@ -89,12 +92,12 @@ mod choosing_a_player {
         let tmp = TempDir::new();
         std::fs::write(tmp.path().join("afplay"), "").expect("write");
         let path = tmp.path().as_os_str().to_owned();
-        assert_eq!(player(Os::Macos, on_path(Some(&path))), None);
+        assert_eq!(player(Os::Macos, on_path(Os::Macos, Some(&path), &[])), None);
     }
 
     #[test]
     fn finds_none_without_a_path() {
-        assert_eq!(player(Os::Linux, on_path(None)), None);
+        assert_eq!(player(Os::Linux, on_path(Os::Linux, None, &[])), None);
     }
 }
 
@@ -156,14 +159,15 @@ mod on_this_machine {
     }
 }
 
+#[cfg(unix)]
 mod playing {
     use super::*;
 
-    fn recording_player(tmp: &TempDir) -> PathBuf {
+    fn recording_player(tmp: &TempDir) -> Device {
         let program = tmp.path().join("afplay");
         let log = tmp.path().join("played");
         write_executable(&program, &format!("#!/bin/sh\necho \"$@\" >> '{}'\n", log.display()));
-        program
+        Device::Program(program)
     }
 
     fn played(tmp: &TempDir) -> String {
@@ -211,10 +215,10 @@ mod playing {
     #[test]
     fn a_player_that_cannot_start_only_waits_for_the_next_sound() {
         let tmp = TempDir::new();
-        let mut player = Player::new(Some(tmp.path().join("missing")), tmp.path().into(), None);
+        let mut player = Player::new(Some(Device::Program(tmp.path().join("missing"))), tmp.path().into(), None);
         let now = Instant::now();
         assert!(player.play(&cue(Kind::NeedsYou, ""), now));
-        player.program = Some(recording_player(&tmp));
+        player.device = Some(recording_player(&tmp));
         assert!(player.play(&cue(Kind::NeedsYou, ""), now + GAP));
         wait_until("the second player ran", || played(&tmp).lines().count() == 1);
     }
@@ -225,8 +229,69 @@ mod playing {
         let program = tmp.path().join("aplay");
         let log = tmp.path().join("played");
         write_executable(&program, &format!("#!/bin/sh\necho \"$@\" >> '{}'\n", log.display()));
-        let mut player = Player::new(Some(program), tmp.path().into(), None);
+        let mut player = Player::new(Some(Device::Program(program)), tmp.path().into(), None);
         assert!(player.play(&cue(Kind::NeedsYou, ""), Instant::now()));
         wait_until("aplay ran", || played(&tmp).starts_with("-q "));
+    }
+}
+
+mod for_windows {
+    use super::*;
+
+    fn fake_path(names: &[&str]) -> TempDir {
+        let tmp = TempDir::new();
+        for name in names {
+            std::fs::write(tmp.path().join(name), "").expect("write");
+        }
+        tmp
+    }
+
+    #[test]
+    fn plays_through_play_sound_whatever_the_path_holds() {
+        let tmp = fake_path(&["afplay"]);
+        let path = tmp.path().as_os_str().to_owned();
+        let lookup = on_path(Os::Windows, Some(&path), &[]);
+        assert_eq!(lookup("afplay"), Some(tmp.path().join("afplay")));
+        assert_eq!(player(Os::Windows, lookup), Some(Device::PlaySound));
+    }
+
+    #[rstest]
+    #[case::unset(None, &[".com", ".exe", ".bat", ".cmd"])]
+    #[case::empty(Some(" "), &[".com", ".exe", ".bat", ".cmd"])]
+    #[case::lower_case_and_trimmed(Some(".EXE; .Cmd ;;"), &[".exe", ".cmd"])]
+    #[case::not_an_extension(Some("EXE;.;.BAT"), &[".bat"])]
+    #[case::only_what_command_runs(Some(".VBS;.CMD;.JS;.PY;.EXE"), &[".cmd", ".exe"])]
+    #[case::nothing_runnable(Some(".VBS;.PY"), &[".com", ".exe", ".bat", ".cmd"])]
+    fn reads_pathext(#[case] pathext: Option<&str>, #[case] expected: &[&str]) {
+        assert_eq!(Os::Windows.extensions(pathext), expected);
+    }
+
+    #[test]
+    fn other_systems_take_names_as_they_are() {
+        assert_eq!((Os::Linux.extensions(Some(".EXE")), Os::Macos.extensions(None)), (vec![], vec![]));
+    }
+
+    #[test]
+    fn finds_a_command_through_its_extensions_in_order() {
+        let tmp = fake_path(&["code", "code.cmd", "code.exe", "subl.exe", "run.vbs"]);
+        let path = tmp.path().as_os_str().to_owned();
+        let extensions = Os::Windows.extensions(Some(".COM;.EXE;.BAT;.CMD;.VBS"));
+        let lookup = on_path(Os::Windows, Some(&path), &extensions);
+        assert_eq!(lookup("code"), Some(tmp.path().join("code.exe")));
+        assert_eq!(lookup("subl"), Some(tmp.path().join("subl.exe")));
+        assert_eq!((lookup("zed"), lookup("run")), (None, None));
+        let batch_only = Os::Windows.extensions(Some(".CMD"));
+        assert_eq!(on_path(Os::Windows, Some(&path), &batch_only)("code"), Some(tmp.path().join("code.cmd")));
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+
+    #[test]
+    fn this_build_plays_through_play_sound() {
+        let tmp = TempDir::new();
+        assert_eq!((Os::current(), Player::detect(tmp.path().into()).device), (Os::Windows, Some(Device::PlaySound)));
     }
 }

@@ -150,11 +150,54 @@ fn the_holder_ends_with_the_end_of_its_input_as_when_the_server_dies() {
     awake.update(true, 1, Instant::now());
     let pid = fakes.pid("holds");
 
-    drop(awake.holder.as_mut().and_then(|h| h.stdin.take()));
+    if let Some(Holder { lock: Lock::Child { stdin, .. }, .. }) = awake.holder.as_mut() {
+        drop(stdin.take());
+    }
 
     wait_until("the holder ends", || {
         awake.update(true, 1, Instant::now());
         !matches!(awake.state(), State::Held(_))
     });
     assert!(gone(pid));
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+
+    fn working(awake: &mut Awake, at: Instant) -> (State, bool) {
+        awake.update(true, 1, at);
+        (awake.state(), desktop::system_required())
+    }
+
+    #[test]
+    fn the_execution_state_is_the_one_tool() {
+        assert_eq!(tools(), [Tool::execution_state()]);
+    }
+
+    #[test]
+    fn a_thread_holds_the_system_awake_while_an_agent_works_and_lets_go() {
+        let mut awake = Awake::new(tools());
+        let start = Instant::now();
+
+        let held = working(&mut awake, start);
+        awake.update(true, 0, start + Duration::from_secs(1));
+        awake.update(true, 0, start + Duration::from_secs(1) + KEEP_FOR);
+
+        assert_eq!(held, (State::Held("SetThreadExecutionState".into()), true));
+        assert_eq!((awake.state(), awake.holder.is_none()), (State::Released, true));
+    }
+
+    #[test]
+    fn turning_it_off_ends_the_thread_and_taking_it_again_works() {
+        let mut awake = Awake::new(tools());
+        let start = Instant::now();
+        working(&mut awake, start);
+
+        awake.update(false, 1, start);
+        let off = awake.state();
+        let again = working(&mut awake, start);
+
+        assert_eq!((off, again), (State::Off, (State::Held("SetThreadExecutionState".into()), true)));
+    }
 }
