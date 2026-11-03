@@ -378,6 +378,17 @@ mod saving {
         assert_eq!(listed_path(Path::new("a/../mine.toml")).expect("a path"), here.join("mine.toml"));
     }
 
+    #[rstest::rstest]
+    #[case::from_unix(false, "/srv/flows/../flows/./mine.toml")]
+    #[case::from_windows(true, r"/srv/flows\..\flows\.\mine.toml")]
+    fn a_path_on_another_machine_is_cleaned_by_its_rules_with_slashes(#[case] windows: bool, #[case] given: &str) {
+        let remote = Remote { destination: "devbox".into(), command: None, option: "--command" };
+
+        let listed = listed_on(Path::new(given), Some(&remote), windows).expect("a path");
+
+        assert_eq!(listed.to_str(), Some("/srv/flows/mine.toml"));
+    }
+
     #[test]
     fn an_edit_stays_in_the_place_its_file_is_listed_in() {
         let entry = |origin: &str, path: &str| FlowInfo {

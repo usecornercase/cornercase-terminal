@@ -128,27 +128,44 @@ fn outcome(remote: &Remote, status: ExitStatus) -> Result<bool> {
 }
 
 pub(super) fn server_path(path: &Path) -> Result<PathBuf> {
-    path_on(path, client::used_remote())
+    path_on(path, client::used_remote(), cfg!(windows))
 }
 
 pub(super) fn open_path(path: &Path) -> Result<PathBuf> {
     if path.starts_with("~") { Ok(path.to_path_buf()) } else { server_path(path) }
 }
 
-fn path_on(path: &Path, remote: Option<&Remote>) -> Result<PathBuf> {
+pub(super) fn path_on(path: &Path, remote: Option<&Remote>, windows: bool) -> Result<PathBuf> {
     match remote {
         None => Ok(std::path::absolute(path)?),
-        Some(_) if absolute_there(path) => Ok(path.to_path_buf()),
-        Some(remote) => Err(Error::WrongUsage(format!(
-            "`{}` is relative: with --remote, give its absolute path on {}",
-            path.display(),
-            remote.host()
-        ))),
+        Some(remote) => path_there(path, remote, windows),
     }
 }
 
-fn absolute_there(path: &Path) -> bool {
-    path.is_absolute() || path.as_os_str().as_encoded_bytes().first() == Some(&b'/')
+fn path_there(path: &Path, remote: &Remote, windows: bool) -> Result<PathBuf> {
+    let text = path.to_string_lossy();
+    if windows && windows_path(&text) {
+        return Err(Error::WrongUsage(format!(
+            "`{}` is a Windows path, and {} takes Unix ones, such as /srv/x; \
+             Git Bash turns /srv/x into a Windows path: write //srv/x there, or set MSYS_NO_PATHCONV=1",
+            path.display(),
+            remote.host()
+        )));
+    }
+    if !text.starts_with('/') {
+        return Err(Error::WrongUsage(format!(
+            "`{}` is relative: with --remote, give its absolute path on {}",
+            path.display(),
+            remote.host()
+        )));
+    }
+    Ok(if windows { PathBuf::from(text.replace('\\', "/")) } else { path.to_path_buf() })
+}
+
+fn windows_path(text: &str) -> bool {
+    let mut chars = text.chars();
+    let drive = chars.next().is_some_and(|c| c.is_ascii_alphabetic()) && chars.next() == Some(':');
+    drive || text.starts_with('\\')
 }
 
 #[cfg(test)]

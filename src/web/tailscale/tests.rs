@@ -52,15 +52,24 @@ mod finding {
         path
     }
 
-    #[rstest]
-    #[case::unix(false, "tailscale")]
-    #[case::windows(true, "tailscale.exe")]
-    fn the_program_on_the_path_is_named_as_the_system_names_it(#[case] windows: bool, #[case] name: &str) {
+    #[test]
+    fn windows_finds_tailscale_exe_in_the_absolute_folders_of_the_path() {
         let dir = TempDir::new();
-        let program = placed(&dir.path().join("bin"), name);
-        let path = std::env::join_paths([dir.path().join("empty"), dir.path().join("bin")]).expect("path");
+        let program = placed(&dir.path().join("bin"), "tailscale.exe");
+        let folders = [PathBuf::from("bin"), PathBuf::new(), dir.path().join("empty"), dir.path().join("bin")];
+        let path = std::env::join_paths(folders).expect("path");
 
-        assert_eq!(found(windows, Some(&path), None), Some(program));
+        assert_eq!(found(true, Some(&path), None), Some(program));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_finds_tailscale_on_the_path() {
+        let dir = TempDir::new();
+        let program = dir.path().join("tailscale");
+        write_executable(&program, "#!/bin/sh\n");
+
+        assert_eq!(found(false, Some(dir.path().as_os_str()), None), Some(program));
     }
 
     #[test]
@@ -69,6 +78,12 @@ mod finding {
         let program = placed(&dir.path().join("Tailscale"), "tailscale.exe");
 
         assert_eq!(found(true, None, Some(dir.path().as_os_str())), Some(program));
+    }
+
+    #[test]
+    fn windows_takes_program_files_only_as_an_absolute_folder() {
+        assert_eq!(installed(true, Some(OsStr::new("Program Files"))), None);
+        assert_eq!(installed(true, None), None);
     }
 
     #[test]

@@ -223,21 +223,46 @@ mod outcomes {
 mod paths {
     use super::*;
 
+    fn there(path: &str, windows: bool) -> Result<PathBuf> {
+        path_on(Path::new(path), Some(&devbox()), windows)
+    }
+
     #[rstest]
-    #[case::a_name("src")]
-    #[case::a_backslash_without_a_drive(r"\srv\x")]
-    fn a_relative_path_is_refused_there(#[case] path: &str) {
-        let error = path_on(Path::new(path), Some(&devbox())).expect_err("refused");
+    #[case::a_name("src", false)]
+    #[case::a_name_from_windows("src", true)]
+    #[case::a_drive_from_unix(r"C:\srv", false)]
+    fn a_relative_path_is_refused_there(#[case] path: &str, #[case] windows: bool) {
+        let error = there(path, windows).expect_err("refused");
 
         assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
         assert!(error.to_string().contains("absolute path on devbox"), "{error}");
     }
 
     #[rstest]
-    #[case::with_dots("/a/../b")]
-    #[case::a_unix_folder("/srv/x")]
-    fn a_path_from_the_root_goes_as_it_is_whatever_this_system(#[case] path: &str) {
-        assert_eq!(path_on(Path::new(path), Some(&devbox())).expect("kept"), PathBuf::from(path));
+    #[case::with_dots("/a/../b", false, "/a/../b")]
+    #[case::from_windows("/srv/x", true, "/srv/x")]
+    #[case::with_backslashes_from_windows(r"/srv\shop\x", true, "/srv/shop/x")]
+    #[case::a_backslash_from_unix(r"/srv\x", false, r"/srv\x")]
+    fn a_path_from_the_root_goes_with_the_remote_s_slashes(
+        #[case] path: &str,
+        #[case] windows: bool,
+        #[case] sent: &str,
+    ) {
+        assert_eq!(there(path, windows).expect("kept").to_str(), Some(sent));
+    }
+
+    #[rstest]
+    #[case::a_drive(r"C:\srv\x")]
+    #[case::turned_by_git_bash("C:/Program Files/Git/srv/x")]
+    #[case::the_root_of_a_drive(r"\srv\x")]
+    #[case::a_share(r"\\host\share\x")]
+    #[case::relative_to_a_drive("c:x")]
+    fn a_windows_path_is_refused_with_how_to_give_a_unix_one(#[case] path: &str) {
+        let error = there(path, true).expect_err("refused");
+
+        assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
+        assert!(error.to_string().contains("is a Windows path"), "{error}");
+        assert!(error.to_string().contains("MSYS_NO_PATHCONV=1"), "{error}");
     }
 
     #[rstest]
@@ -255,6 +280,6 @@ mod paths {
 
     #[test]
     fn here_it_becomes_absolute() {
-        assert!(path_on(Path::new("src"), None).expect("absolute").is_absolute());
+        assert!(path_on(Path::new("src"), None, cfg!(windows)).expect("absolute").is_absolute());
     }
 }
