@@ -521,6 +521,12 @@ mod program_name {
         assert_eq!(same_file_name("ÉDITEUR.JS", "éditeur.js"), cfg!(windows));
         assert!(!same_file_name("claude", "codex"));
     }
+
+    #[test]
+    fn a_shell_named_with_its_exe_is_one_only_on_windows() {
+        let names = ["pwsh.exe", "PowerShell.EXE", "cmd.exe", "nu.exe", "bash.exe", "sh.exe"];
+        assert!(names.iter().all(|name| is_shell(name) == cfg!(windows)), "{names:?}");
+    }
 }
 
 #[cfg(windows)]

@@ -34,11 +34,9 @@ const WINDOWS_SHELLS: [&str; 2] = ["cmd", "powershell"];
 const EXE: &str = ".exe";
 
 pub(crate) fn is_shell(name: &str) -> bool {
-    if cfg!(windows) {
-        SHELLS.iter().chain(&WINDOWS_SHELLS).any(|shell| same_file_name(shell, name))
-    } else {
-        SHELLS.contains(&name)
-    }
+    let name = program_name(name);
+    let windows: &[&str] = if cfg!(windows) { &WINDOWS_SHELLS } else { &[] };
+    SHELLS.iter().chain(windows).any(|shell| same_file_name(shell, name))
 }
 
 pub(crate) fn program_name(name: &str) -> &str {

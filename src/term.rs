@@ -3,6 +3,7 @@ pub(crate) mod keys;
 pub(crate) mod memory;
 pub(crate) mod mouse;
 pub(crate) mod reader;
+pub(crate) mod shell;
 mod status;
 pub(crate) mod typing;
 
@@ -15,7 +16,7 @@ use std::thread;
 use std::time::Instant;
 
 use crossterm::event::KeyEvent;
-use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{Child, CommandBuilder, PtySize, native_pty_system};
 
 use self::emulator::Emulator;
 use self::typing::Typing;
@@ -40,6 +41,8 @@ const PASTE_START: &str = "\x1b[200~";
 const PASTE_END: &str = "\x1b[201~";
 
 pub(crate) const MAX_QUEUED: usize = 16 * 1024 * 1024;
+
+type Started = (imp::Master, Box<dyn Child + Send + Sync>);
 
 #[derive(Clone)]
 struct Writer {
@@ -68,7 +71,7 @@ pub(crate) struct Term {
     generation: u32,
     accounts: Accounts,
     account: accounts::Seen,
-    master: Box<dyn MasterPty + Send>,
+    master: imp::Master,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
     size: (u16, u16),
@@ -103,7 +106,7 @@ struct Wired {
     id: u64,
     generation: u32,
     emulator: Emulator,
-    master: Box<dyn MasterPty + Send>,
+    master: imp::Master,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
     size: (u16, u16),
@@ -151,6 +154,7 @@ fn command(
     dir: Option<&Path>,
 ) -> CommandBuilder {
     let mut cmd = CommandBuilder::new(shell);
+    imp::inherit(&mut cmd);
     cmd.args(args);
     cmd.env("TERM", "xterm-256color");
     for key in agents::claude::CLAUDE_SESSION_ENV.iter().chain(&agents::copilot::SESSION_ENV) {
@@ -184,26 +188,23 @@ impl Term {
     ) -> Result<Self> {
         let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
         let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
+        let reader = pair.master.try_clone_reader().map_err(|e| Error::AttachPty(e.into()))?;
+        let writer = spawn_writer(pair.master.take_writer().map_err(|e| Error::AttachPty(e.into()))?);
 
         let dir = cwd.or_else(launch_folder);
         let cmd = command(shell, args, env, remove, dir.as_deref());
-
-        let child = pair.slave.spawn_command(cmd).map_err(|e| Error::SpawnShell {
+        let (master, child) = imp::Master::start(pair, cmd, &writer).map_err(|cause| Error::SpawnShell {
             shell: shell.to_string(),
             dir: dir.unwrap_or_default(),
-            cause: e.into(),
+            cause,
         })?;
-        drop(pair.slave);
 
-        let reader = pair.master.try_clone_reader().map_err(|e| Error::AttachPty(e.into()))?;
-        let writer = spawn_writer(pair.master.take_writer().map_err(|e| Error::AttachPty(e.into()))?);
         let replies = writer.clone();
         let emulator =
             Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
                 .map_err(|e| Error::Emulator(e.into()))?;
         reader::spawn(id, generation, reader, tx);
 
-        let master = pair.master;
         Ok(Wired { id, generation, emulator, master, writer, child, size: (rows, cols), interactive: args.is_empty() }
             .into())
     }
@@ -282,12 +283,14 @@ impl Term {
             return;
         }
         self.size = (rows, cols);
-        let _ = self.master.resize(pty_size(rows, cols));
+        self.master.resize(pty_size(rows, cols));
         let _ = self.emulator.resize(rows, cols);
     }
 
     pub(crate) fn foreground_pid(&self) -> Option<i32> {
-        imp::group_leader(self.master.as_ref()).filter(|pid| process::alive(*pid)).or_else(|| self.shell_pid())
+        imp::group_leader(&self.master, self.shell_pid())
+            .filter(|pid| process::alive(*pid))
+            .or_else(|| self.shell_pid())
     }
 
     pub(crate) fn shell_pid(&self) -> Option<i32> {
@@ -460,19 +463,128 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
 
 #[cfg(unix)]
 mod imp {
-    use portable_pty::MasterPty;
+    use portable_pty::{CommandBuilder, MasterPty, PtyPair, PtySize};
 
-    pub(super) fn group_leader(master: &(dyn MasterPty + Send)) -> Option<i32> {
-        master.process_group_leader()
+    use super::{Started, Writer};
+    use crate::error::BoxError;
+
+    pub(super) struct Master(Box<dyn MasterPty + Send>);
+
+    impl Master {
+        pub(super) fn start(pair: PtyPair, cmd: CommandBuilder, _replies: &Writer) -> Result<Started, BoxError> {
+            let child = pair.slave.spawn_command(cmd)?;
+            drop(pair.slave);
+            Ok((Self(pair.master), child))
+        }
+
+        pub(super) fn resize(&self, size: PtySize) {
+            let _ = self.0.resize(size);
+        }
     }
+
+    pub(super) fn group_leader(master: &Master, _shell: Option<i32>) -> Option<i32> {
+        master.0.process_group_leader()
+    }
+
+    pub(super) fn inherit(_cmd: &mut CommandBuilder) {}
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod imp {
-    use portable_pty::MasterPty;
+    use std::os::windows::io::{AsRawHandle, BorrowedHandle, OwnedHandle};
+    use std::sync::Arc;
+    use std::thread;
 
-    pub(super) fn group_leader(_master: &(dyn MasterPty + Send)) -> Option<i32> {
-        None
+    use parking_lot::Mutex;
+    use portable_pty::{Child, CommandBuilder, MasterPty, PtyPair, PtySize};
+    use windows_sys::Win32::System::Threading::{INFINITE, WaitForSingleObject};
+
+    use super::{Started, Writer, write_to};
+    use crate::error::BoxError;
+    use crate::process;
+
+    const CURSOR_REPORT: &[u8] = b"\x1b[1;1R";
+    const MAX_SHELLS: usize = 16;
+
+    type Shared = Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>;
+
+    pub(super) struct Master {
+        shared: Shared,
+        replies: Writer,
+    }
+
+    impl Master {
+        pub(super) fn start(pair: PtyPair, cmd: CommandBuilder, replies: &Writer) -> Result<Started, BoxError> {
+            let PtyPair { slave, master } = pair;
+            let master = Self { shared: Arc::new(Mutex::new(Some(master))), replies: replies.clone() };
+            let spawned = slave.spawn_command(cmd);
+            drop(slave);
+            let child = spawned?;
+            if let Some(exit) = exit_handle(child.as_ref()) {
+                let (shared, replies) = (Arc::clone(&master.shared), master.replies.clone());
+                thread::spawn(move || close_after(&exit, &shared, &replies));
+            }
+            Ok((master, child))
+        }
+
+        pub(super) fn resize(&self, size: PtySize) {
+            if let Some(master) = self.shared.lock().as_ref() {
+                let _ = master.resize(size);
+            }
+        }
+    }
+
+    impl Drop for Master {
+        fn drop(&mut self) {
+            let (shared, replies) = (Arc::clone(&self.shared), self.replies.clone());
+            thread::spawn(move || close(&shared, &replies));
+        }
+    }
+
+    fn exit_handle(child: &(dyn Child + Send + Sync)) -> Option<OwnedHandle> {
+        let raw = child.as_raw_handle()?;
+        unsafe { BorrowedHandle::borrow_raw(raw) }.try_clone_to_owned().ok()
+    }
+
+    fn close_after(exit: &OwnedHandle, shared: &Shared, replies: &Writer) {
+        unsafe { WaitForSingleObject(exit.as_raw_handle(), INFINITE) };
+        close(shared, replies);
+    }
+
+    fn close(shared: &Shared, replies: &Writer) {
+        let Some(master) = shared.lock().take() else { return };
+        let _ = write_to(replies, CURSOR_REPORT);
+        drop(master);
+    }
+
+    pub(super) fn group_leader(_master: &Master, shell: Option<i32>) -> Option<i32> {
+        shell.map(foreground)
+    }
+
+    fn foreground(shell: i32) -> i32 {
+        let mut at = shell;
+        for _ in 0..MAX_SHELLS {
+            let Some(child) = newest_child(at) else { break };
+            if !is_shell(child) {
+                return child;
+            }
+            at = child;
+        }
+        shell
+    }
+
+    fn newest_child(pid: i32) -> Option<i32> {
+        process::children(pid).into_iter().max_by_key(|child| process::start_stamp(*child))
+    }
+
+    fn is_shell(pid: i32) -> bool {
+        process::name(pid).is_some_and(|name| process::is_shell(&name))
+    }
+
+    pub(super) fn inherit(cmd: &mut CommandBuilder) {
+        for (key, value) in std::env::vars_os() {
+            cmd.env(key, value);
+        }
     }
 }
 
