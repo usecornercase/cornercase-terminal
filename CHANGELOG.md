@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.244
+
+- **On Windows, cornercase reads git's paths**, the next step towards running there: the changes panel, the merge check and the worktrees understand Git for Windows' forward slashes and names out of ASCII. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
 ## 0.12.242
 
 - **cornercase now builds on Windows**, the first step towards running it there natively. For now it only says that it does not run on Windows yet, with a link to follow the port, and exits with 1; `--help` and `--version` work. Nothing changes on Linux and macOS.
