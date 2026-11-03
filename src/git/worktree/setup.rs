@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use crate::agents::activity::Status;
 use crate::process;
-use crate::script::{self, Line, Shell};
+use crate::script::{self, Line, Sh, Shell};
 
 pub(crate) const NAME: &str = "cornercase-setup";
 
@@ -16,15 +16,17 @@ const RUN: &str = r#"CORNERCASE_ROOT="$4" CORNERCASE_WORKTREE="$PWD" CORNERCASE_
 const GIT_RUN: &str =
     r#"CORNERCASE_ROOT="$4" CORNERCASE_WORKTREE="$6" CORNERCASE_BRANCH="$5" PATH="/usr/bin:$PATH" /bin/sh -ec "$1""#;
 
-const AFTER: &str = r#"s=$?
-trap - INT
-if [ "$s" = 0 ]; then
+const GIT_SHELL: &str = r#"unset PWD SHLVL
+[ -n "$7" ] || unset HOME
+"$3"
+"#;
+
+const REPORT: &str = r#"if [ "$s" = 0 ]; then
   printf '\n\033[32m✓ setup finished\033[0m\n'
 else
   printf '\n\033[1;31m✗ setup failed with exit status %s\033[0m\n' "$s"
 fi
 printf '%s\n' "$s" > "$2"
-exec "$3"
 "#;
 
 const POWERSHELL_WRAPPER: &str = r#"try {
@@ -55,6 +57,7 @@ pub(crate) struct Wrapper<'a> {
     pub(crate) root: &'a Path,
     pub(crate) branch: &'a str,
     pub(crate) worktree: &'a Path,
+    pub(crate) home: bool,
 }
 
 #[derive(Debug)]
@@ -75,21 +78,25 @@ impl Pane {
 
 pub(crate) fn line(interpreter: &Shell, wrapper: &Wrapper) -> Line {
     match interpreter {
-        Shell::Sh(sh) => {
-            let run = if sh.git { GIT_RUN } else { RUN };
-            let mut args = vec![
-                NAME.into(),
-                wrapper.script.into(),
-                wrapper.status.display().to_string(),
-                wrapper.shell.into(),
-                wrapper.root.display().to_string(),
-                wrapper.branch.into(),
-            ];
-            args.extend(sh.git.then(|| wrapper.worktree.display().to_string()));
-            sh.line("-c", &format!("trap : INT\n{run}\n{AFTER}"), &args)
-        }
+        Shell::Sh(sh) => through_sh(sh, wrapper),
         Shell::PowerShell(program) => powershell(program, wrapper),
     }
+}
+
+fn through_sh(sh: &Sh, wrapper: &Wrapper) -> Line {
+    let mut args = vec![
+        NAME.into(),
+        wrapper.script.into(),
+        wrapper.status.display().to_string(),
+        wrapper.shell.into(),
+        wrapper.root.display().to_string(),
+        wrapper.branch.into(),
+    ];
+    if !sh.git {
+        return sh.line("-c", &format!("trap : INT\n{RUN}\ns=$?\ntrap - INT\n{REPORT}exec \"$3\"\n"), &args);
+    }
+    args.extend([wrapper.worktree.display().to_string(), if wrapper.home { "1" } else { "" }.into()]);
+    sh.line("-c", &format!("trap : INT\n{GIT_RUN}\ns=$?\n{REPORT}{GIT_SHELL}"), &args)
 }
 
 fn powershell(program: &str, wrapper: &Wrapper) -> Line {

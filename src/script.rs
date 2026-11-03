@@ -9,12 +9,14 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 
 use crate::os::ffi;
+use crate::os::fs::{owner_and_mode, uid};
 use crate::process::{self, program};
 
 const SH: &str = "/bin/sh";
 const GIT_SHELLS: [&str; 2] = [r"usr\bin\sh.exe", r"bin\sh.exe"];
-const GIT_LEVELS: usize = 4;
+const GIT_MARK: &str = r"cmd\git.exe";
 const EXEC_PATH_WITHIN: Duration = Duration::from_secs(5);
+const NO_PATH_CONVERSION: &str = "MSYS2_ARG_CONV_EXCL";
 const SCRIPT_ENV: &str = "CORNERCASE_SCRIPT";
 const ARGS_ENV: &str = "CORNERCASE_ARGS";
 const ADAPTER: &str = r#"eval "set -- $CORNERCASE_ARGS"; cornercase_script=$CORNERCASE_SCRIPT; unset CORNERCASE_ARGS CORNERCASE_SCRIPT; eval "$cornercase_script""#;
@@ -111,7 +113,9 @@ impl Shell {
             || EXEC.to_string(),
             |log| format!("{EXEC} >>{} 2>&1", sh_quote(&ffi::plain(log).to_string_lossy())),
         );
-        Some(sh.line("-c", &text, &positional).on_git_path(sh))
+        let mut line = sh.line("-c", &text, &positional).on_git_path(sh);
+        line.env.push((NO_PATH_CONVERSION.into(), "*".into()));
+        Some(line)
     }
 
     pub(crate) fn refuses(&self, program: &Path) -> Option<&'static str> {
@@ -164,13 +168,45 @@ fn sh_quote(text: &str) -> String {
 }
 
 pub(crate) fn git_sh() -> Option<PathBuf> {
-    let git = program::locate("git");
-    git.as_deref().and_then(Path::parent).and_then(beside_git).or_else(|| exec_path().as_deref().and_then(beside_git))
+    let root = exec_path().as_deref().and_then(exec_path_root);
+    let root = root.or_else(|| program::locate("git").as_deref().and_then(git_root));
+    root.as_deref().and_then(sh_in)
 }
 
-fn beside_git(folder: &Path) -> Option<PathBuf> {
-    let mut candidates = folder.ancestors().take(GIT_LEVELS).flat_map(|dir| GIT_SHELLS.map(|sh| dir.join(sh)));
-    candidates.find(|candidate| candidate.is_file())
+fn exec_path_root(dir: &Path) -> Option<PathBuf> {
+    let libexec = dir.parent().filter(|_| named(dir, "git-core"))?;
+    let platform = libexec.parent().filter(|_| named(libexec, "libexec"))?;
+    let root = platform.parent()?;
+    platform.join("bin").join("git.exe").is_file().then(|| root.to_path_buf())
+}
+
+fn git_root(git: &Path) -> Option<PathBuf> {
+    let folder = git.parent()?;
+    let above = folder.parent()?;
+    let in_platform = above.join("libexec").join("git-core").is_dir();
+    let root = if named(folder, "cmd") || (named(folder, "bin") && !in_platform) {
+        above
+    } else if named(folder, "bin") {
+        above.parent()?
+    } else {
+        return None;
+    };
+    root.join(GIT_MARK).is_file().then(|| root.to_path_buf())
+}
+
+fn sh_in(root: &Path) -> Option<PathBuf> {
+    GIT_SHELLS.iter().map(|sh| root.join(sh)).find(|sh| only_ours(sh))
+}
+
+fn only_ours(path: &Path) -> bool {
+    std::fs::metadata(path).is_ok_and(|meta| {
+        let (owner, mode) = owner_and_mode(path, &meta);
+        meta.is_file() && owner == uid() && mode & 0o022 == 0
+    })
+}
+
+fn named(path: &Path, name: &str) -> bool {
+    path.file_name().is_some_and(|own| own.eq_ignore_ascii_case(name))
 }
 
 fn exec_path() -> Option<PathBuf> {

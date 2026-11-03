@@ -23,6 +23,7 @@ fn run(script: &str) -> (String, Option<i32>) {
         root: Path::new("/repo"),
         branch: "feat/x",
         worktree: dir.path(),
+        home: true,
     };
     let out = line(&Shell::sh(), &wrapper)
         .command()
@@ -166,11 +167,13 @@ mod on_windows {
             root: root.path(),
             branch: "feat/it's",
             worktree: dir.path(),
+            home: false,
         };
         let mut child = line(interpreter, &wrapper)
             .command()
             .current_dir(dir.path())
             .env("CORNERCASE_BRANCH", "inherited")
+            .env_remove("HOME")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -198,12 +201,13 @@ mod on_windows {
 
     #[test]
     fn a_setup_runs_through_git_s_sh_then_starts_the_shell() {
-        let script = "echo \"script:$CORNERCASE_BRANCH:$CORNERCASE_ROOT:$CORNERCASE_WORKTREE\"\nls -d . > /dev/null";
+        let script = "echo \"script:$CORNERCASE_BRANCH:$CORNERCASE_ROOT:$CORNERCASE_WORKTREE\"\nls -d . >/dev/null\ntest -n \"$HOME\"";
 
-        let ran = setup(&git_sh(), script, "echo shell:%CORNERCASE_BRANCH%\r\nexit\r\n");
+        let ran = setup(&git_sh(), script, "echo shell:%CORNERCASE_BRANCH%:%PWD%:%SHLVL%:%HOME%\r\nexit\r\n");
 
         ran.succeeded();
-        assert!(ran.out.contains("✓ setup finished") && ran.out.contains("shell:inherited"), "{}", ran.out);
+        assert!(ran.out.contains("✓ setup finished"), "{}", ran.out);
+        assert!(ran.out.contains("shell:inherited:%PWD%:%SHLVL%:%HOME%"), "{}", ran.out);
     }
 
     #[test]

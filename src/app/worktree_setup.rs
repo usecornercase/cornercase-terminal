@@ -84,6 +84,7 @@ impl App {
             root,
             branch: &branch,
             worktree: &path,
+            home: std::env::var_os("HOME").is_some(),
         };
         let line = setup::line(Shell::here(), &wrapper);
         let spawning = Spawning { id, size, shell: &line.program, args: &line.args, env: &line.env, cwd: path, run };

@@ -207,20 +207,74 @@ mod on_windows {
         Shell::pick(Some(&sh), None)
     }
 
-    #[rstest]
-    #[case::beside_cmd(&["cmd"], "cmd", r"usr\bin\sh.exe")]
-    #[case::above_its_exec_path(&[r"mingw64\libexec\git-core"], r"mingw64\libexec\git-core", r"usr\bin\sh.exe")]
-    #[case::only_its_launcher(&["cmd"], "cmd", r"bin\sh.exe")]
-    fn git_s_sh_is_found_from_git_s_folder(#[case] folders: &[&str], #[case] from: &str, #[case] sh: &str) {
-        let dir = TempDir::new();
-        let found = dir.path().join(sh);
-        for folder in folders {
-            std::fs::create_dir_all(dir.path().join(folder)).expect("a folder");
-        }
-        std::fs::create_dir_all(found.parent().expect("its folder")).expect("its folder");
-        std::fs::write(&found, "").expect("an sh");
+    mod finding_git_s_sh {
+        use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_READ, FILE_GENERIC_WRITE};
 
-        assert_eq!(beside_git(&dir.path().join(from)), Some(found));
+        use super::*;
+        use crate::os::fs::share_with_everyone;
+
+        const INSTALL: [&str; 5] =
+            [r"cmd\git.exe", r"bin\git.exe", r"mingw64\bin\git.exe", r"mingw64\libexec\git-core\git.exe", SH_EXE];
+        const SH_EXE: &str = r"usr\bin\sh.exe";
+
+        fn files(dir: &TempDir, names: &[&str]) {
+            for name in names {
+                let path = dir.path().join(name);
+                std::fs::create_dir_all(path.parent().expect("its folder")).expect("its folder");
+                std::fs::write(&path, "").expect("a file");
+            }
+        }
+
+        #[test]
+        fn git_s_exec_path_leads_to_its_install() {
+            let dir = TempDir::new();
+            files(&dir, &INSTALL);
+
+            let root = exec_path_root(&dir.path().join(r"mingw64\libexec\git-core"));
+
+            assert_eq!(root.as_deref().and_then(sh_in), Some(dir.path().join(SH_EXE)));
+            assert_eq!(exec_path_root(dir.path()), None);
+        }
+
+        #[rstest]
+        #[case::cmd(r"cmd\git.exe")]
+        #[case::its_launcher(r"bin\git.exe")]
+        #[case::mingw(r"mingw64\bin\git.exe")]
+        fn git_s_own_folder_leads_to_its_install(#[case] git: &str) {
+            let dir = TempDir::new();
+            files(&dir, &INSTALL);
+
+            let root = git_root(&dir.path().join(git));
+
+            assert_eq!(root.as_deref().and_then(sh_in), Some(dir.path().join(SH_EXE)));
+        }
+
+        #[rstest]
+        #[case::a_scoop_shim(r"scoop\shims\git.exe")]
+        #[case::a_shim_folder_named_bin(r"chocolatey\bin\git.exe")]
+        fn a_shim_never_leads_to_an_sh_above_it(#[case] shim: &str) {
+            let dir = TempDir::new();
+            files(&dir, &[shim, r"bin\sh.exe", SH_EXE]);
+
+            assert_eq!(git_root(&dir.path().join(shim)), None);
+        }
+
+        #[test]
+        fn the_launcher_is_taken_when_there_is_no_other() {
+            let dir = TempDir::new();
+            files(&dir, &[r"cmd\git.exe", r"bin\sh.exe"]);
+
+            assert_eq!(sh_in(dir.path()), Some(dir.path().join(r"bin\sh.exe")));
+        }
+
+        #[test]
+        fn an_sh_others_can_write_to_is_refused() {
+            let dir = TempDir::new();
+            files(&dir, &[r"cmd\git.exe", SH_EXE]);
+            share_with_everyone(&dir.path().join(SH_EXE), FILE_GENERIC_READ | FILE_GENERIC_WRITE).expect("shared");
+
+            assert_eq!(sh_in(dir.path()), None);
+        }
     }
 
     fn ran(line: &Line, dir: &Path) -> Output {
@@ -292,5 +346,16 @@ mod on_windows {
         let output = ran(&line, dir.path());
 
         assert_eq!(stdout(&output), "open|it's here|");
+    }
+
+    #[test]
+    fn a_windows_program_a_plugin_script_starts_gets_unix_looking_arguments_as_they_are() {
+        let dir = TempDir::new();
+        let script = file(&dir, "run", "#!/bin/sh\nexec cmd.exe /d /c echo \"$@\"\n");
+        let args = strings(&["open", "/api/v1", "--dir=/tmp/x"]);
+
+        let output = ran(&through_git().interpreted(&script, &args, None).expect("interpreted"), dir.path());
+
+        assert_eq!(stdout(&output), "open /api/v1 --dir=/tmp/x\n");
     }
 }
