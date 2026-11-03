@@ -6,7 +6,8 @@ use windows_sys::Win32::Foundation::TRUE;
 use windows_sys::Win32::System::Console::CTRL_C_EVENT;
 use windows_sys::Win32::System::Threading::GetProcessShutdownParameters;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, IsWindow, IsWindowVisible, PostMessageW, SendMessageW, WM_QUIT, WM_USER,
+    EnumWindows, GetWindowThreadProcessId, IsWindow, IsWindowVisible, PostThreadMessageW, SendMessageW, WM_QUIT,
+    WM_USER,
 };
 use windows_sys::core::BOOL;
 
@@ -45,7 +46,7 @@ mod replies {
     }
 
     #[test]
-    fn the_server_stops_once() {
+    fn the_stop_runs_once() {
         let (stop, stopped) = slot();
 
         assert_eq!(reply(WM_CLOSE, 0, stop), Reply::Handled);
@@ -68,6 +69,7 @@ mod window {
 
     struct Opened {
         window: HWND,
+        pump: u32,
         thread: Option<JoinHandle<()>>,
         stopped: Receiver<()>,
     }
@@ -80,7 +82,10 @@ mod window {
         fn holding(wait: Duration) -> Self {
             let (stop, stopped) = slot();
             let (window, thread) = open(Ending { stop, wait }).expect("opened");
-            Self { window: ptr::with_exposed_provenance_mut(window), thread: Some(thread), stopped }
+            let window = ptr::with_exposed_provenance_mut(window);
+            let pump = unsafe { GetWindowThreadProcessId(window, ptr::null_mut()) };
+            assert_ne!(pump, 0, "no thread for the window");
+            Self { window, pump, thread: Some(thread), stopped }
         }
 
         fn send(&self, message: u32, wparam: WPARAM) -> LRESULT {
@@ -94,8 +99,8 @@ mod window {
 
     impl Drop for Opened {
         fn drop(&mut self) {
-            unsafe { PostMessageW(self.window, WM_QUIT, 0, 0) };
-            if let Some(thread) = self.thread.take() {
+            let quit = unsafe { PostThreadMessageW(self.pump, WM_QUIT, 0, 0) } != 0;
+            if let Some(thread) = self.thread.take().filter(|_| quit) {
                 let _ = thread.join();
             }
         }
@@ -114,7 +119,7 @@ mod window {
     }
 
     #[test]
-    fn the_question_is_allowed_without_stopping() {
+    fn the_question_is_allowed_without_calling_the_stop() {
         let opened = Opened::new();
 
         assert_eq!(opened.send(WM_QUERYENDSESSION, 0), 1);
@@ -122,7 +127,7 @@ mod window {
     }
 
     #[test]
-    fn the_end_stops_the_server_and_answers_only_after_waiting_for_it() {
+    fn the_end_calls_the_stop_and_answers_only_after_waiting() {
         let opened = Opened::new();
         let sent = Instant::now();
 
@@ -132,7 +137,7 @@ mod window {
     }
 
     #[test]
-    fn an_end_called_off_neither_stops_nor_waits() {
+    fn an_end_called_off_neither_calls_the_stop_nor_waits() {
         let opened = Opened::holding(Duration::from_secs(30));
         let sent = Instant::now();
 
@@ -142,7 +147,7 @@ mod window {
     }
 
     #[test]
-    fn a_close_stops_the_server_and_keeps_the_window() {
+    fn a_close_calls_the_stop_and_keeps_the_window() {
         let opened = Opened::new();
 
         assert_eq!(opened.send(WM_CLOSE, 0), 0);
