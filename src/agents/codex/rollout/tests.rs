@@ -451,3 +451,22 @@ fn a_rollout_outside_a_sessions_folder_has_no_conversation_to_move() {
 
     assert_eq!(record.conversation_files(), None);
 }
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+    use crate::test_util::holding;
+
+    #[test]
+    fn follows_the_rollout_a_process_holds_under_its_canonical_home() {
+        let home = TempDir::new();
+        let sessions = home.path().join("sessions/2026/10/05");
+        std::fs::create_dir_all(&sessions).expect("create sessions");
+        let rollout = sessions.join(format!("rollout-2026-10-05T12-00-00-{ID}.jsonl"));
+        std::fs::write(&rollout, CONTEXT).expect("write rollout");
+        let codex = holding(&rollout, &[("CODEX_HOME", &home.path().display().to_string())]);
+        let expected = Some(rollout.canonicalize().expect("canonical rollout"));
+
+        wait_until("the rollout is found", || rollout_path(codex.pid(), SystemTime::UNIX_EPOCH) == expected);
+    }
+}

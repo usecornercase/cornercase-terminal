@@ -22,6 +22,8 @@ pub(crate) use imp::{
 };
 
 pub(crate) mod escalation;
+#[cfg(any(windows, test))]
+mod handles;
 pub(crate) mod owners;
 pub(crate) mod program;
 
@@ -566,8 +568,11 @@ mod imp {
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod unread {
-    use super::{PathBuf, UnixStream, io};
+    #[cfg(not(windows))]
+    use super::PathBuf;
+    use super::{UnixStream, io};
 
+    #[cfg(not(windows))]
     pub(crate) fn open_files(_pid: i32) -> Vec<PathBuf> {
         Vec::new()
     }
@@ -612,7 +617,8 @@ mod imp {
         program_name, split_command_line, still_listed,
     };
 
-    pub(crate) use super::unread::{open_files, peer_uid};
+    pub(crate) use super::handles::open_files;
+    pub(crate) use super::unread::peer_uid;
 
     const ENVIRONMENT_LIMIT: usize = 1 << 20;
     const IMAGE_PATH_LIMIT: usize = 1024;
@@ -633,14 +639,14 @@ mod imp {
         static PINNED: RefCell<Option<Arc<[Entry]>>> = const { RefCell::new(None) };
     }
 
-    struct Owned(HANDLE);
+    pub(super) struct Owned(pub(super) HANDLE);
 
     impl Owned {
-        fn new(handle: HANDLE) -> Option<Self> {
+        pub(super) fn new(handle: HANDLE) -> Option<Self> {
             (!handle.is_null() && handle != INVALID_HANDLE_VALUE).then_some(Self(handle))
         }
 
-        fn process(pid: i32, access: PROCESS_ACCESS_RIGHTS) -> Option<Self> {
+        pub(super) fn process(pid: i32, access: PROCESS_ACCESS_RIGHTS) -> Option<Self> {
             let pid = u32::try_from(pid).ok().filter(|pid| *pid != 0)?;
             Self::new(unsafe { OpenProcess(access, 0, pid) })
         }
@@ -710,7 +716,7 @@ mod imp {
         Some(String::from_utf16_lossy(&units))
     }
 
-    fn as_bytes(words: &[u64]) -> &[u8] {
+    pub(super) fn as_bytes(words: &[u64]) -> &[u8] {
         unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), size_of_val(words)) }
     }
 
