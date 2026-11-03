@@ -3,7 +3,7 @@ use serde_json::Value;
 use super::{Asked, Handled, Pending, Stage, malformed};
 use crate::app::App;
 use crate::app::machines::RemoteItem;
-use crate::app::machines::relay::Sent;
+use crate::app::machines::relay::{Sent, Then};
 use crate::control::contract::Refusal;
 use crate::control::{Command, Done, Start, Until};
 use crate::machines::send::{Send, UNWAITED};
@@ -18,7 +18,7 @@ impl App {
         unwaited(&send)?;
         let focus = send.focus();
         let key = self.clients.requests.key();
-        let target = self.send_to_machine(machine, send, key)?;
+        let target = self.send_to_machine(machine, send, Then::Client(key))?;
         let (client, done, stage) = (Some(client), Done::default(), Stage::Relay(Relaying { sent: target, focus }));
         self.clients.requests.pending.push(Pending { client, key, timeout: None, done, stage });
         Ok(None)
@@ -51,7 +51,7 @@ impl App {
         value
     }
 
-    fn await_made(&mut self, sent: &Sent, value: &Value) {
+    pub(in crate::app) fn await_made(&mut self, sent: &Sent, value: &Value) {
         let id = |key: &str| value.pointer(key).and_then(Value::as_u64);
         let tab = id("/tab").or_else(|| id("/members/0/tab"));
         let made = tab.map(RemoteItem::Tab).or_else(|| id("/workspace").map(RemoteItem::Workspace));

@@ -98,7 +98,7 @@ fn bare(url: &str) -> String {
     rest.split(['?', '#']).next().unwrap_or(rest).to_string()
 }
 
-fn folder_name(url: &str) -> Result<String, Failure> {
+pub(crate) fn folder_name(url: &str) -> Result<String, Failure> {
     let url = naming_part(url.trim());
     let url = url.trim_end_matches('/');
     let url = url.strip_suffix("/.git").unwrap_or(url).trim_end_matches('/');

@@ -89,7 +89,7 @@ pub(super) fn clean_warning(text: &str) -> String {
     clean_within(text, WARNING_KEPT)
 }
 
-fn clean_within(text: &str, kept: usize) -> String {
+pub(super) fn clean_within(text: &str, kept: usize) -> String {
     let shown: String = text
         .chars()
         .filter_map(|c| if c.is_whitespace() { Some(' ') } else { (!text::hidden(c)).then_some(c) })

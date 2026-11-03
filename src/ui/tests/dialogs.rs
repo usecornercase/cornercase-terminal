@@ -9,6 +9,7 @@ fn new_workspace_form(on: bool) -> Form {
         value: Editor::new("feat/login"),
         hint: "in ~/.cornercase/worktrees/cornercase/feat-login".into(),
         toggle: Some(Toggle { label: "with its own worktree", on }),
+        run_on: None,
         note: None,
         submit: "create",
     }

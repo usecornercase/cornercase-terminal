@@ -60,14 +60,23 @@ pub(crate) struct Repo {
     pub(crate) identity: Option<String>,
 }
 
-pub(crate) fn identity(remotes: &[(String, String)], resolve: impl Fn(&str) -> Option<String>) -> Option<String> {
-    let parsed: Vec<(&str, Remote)> = remotes
+fn chosen(remotes: &[(String, String)]) -> Option<(&str, Remote)> {
+    let mut parsed: Vec<(&str, Remote)> = remotes
         .iter()
         .filter_map(|(name, url)| Some((url.as_str(), remote(name, url)?)))
         .filter(|(_, r)| !r.path.is_empty())
         .collect();
-    let named = |wanted: &str| parsed.iter().find(|(_, r)| r.name == wanted);
-    let (url, chosen) = named("upstream").or_else(|| named("origin")).or_else(|| parsed.first())?;
+    let named = |wanted: &str| parsed.iter().position(|(_, r)| r.name == wanted);
+    let at = named("upstream").or_else(|| named("origin")).unwrap_or_default();
+    (at < parsed.len()).then(|| parsed.swap_remove(at))
+}
+
+pub(crate) fn identity_url(remotes: &[(String, String)]) -> Option<&str> {
+    chosen(remotes).map(|(url, _)| url)
+}
+
+pub(crate) fn identity(remotes: &[(String, String)], resolve: impl Fn(&str) -> Option<String>) -> Option<String> {
+    let (url, chosen) = chosen(remotes)?;
     let host =
         if is_ssh(url) { resolve(&chosen.host).unwrap_or_else(|| chosen.host.clone()) } else { chosen.host.clone() };
     let path = chosen.path.to_lowercase();

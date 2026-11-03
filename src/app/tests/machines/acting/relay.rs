@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::machines::RemoteItem;
-use crate::app::machines::relay::Asking;
+use crate::app::machines::relay::{Asking, Then};
 use crate::control::NewWorkspace;
 use crate::log::{Job, Level};
 use crate::machines::send::Send;
@@ -28,7 +28,7 @@ fn relayed(event: &AppEvent) -> Option<std::result::Result<Value, Refusal>> {
 impl Remote {
     fn relay(&mut self, send: Send) -> std::result::Result<Value, (Code, String)> {
         self.rig.app.pend_reading(CLIENT, KEY);
-        self.rig.app.send_to_machine("vps", send, KEY).expect("relayed");
+        self.rig.app.send_to_machine("vps", send, Then::Client(KEY)).expect("relayed");
         let mut result = None;
         let (app, rx) = (&mut self.rig.app, &self.rig.rx);
         wait_until("the machine answers", || {
@@ -47,7 +47,7 @@ impl Remote {
     }
 
     fn refused(&mut self, name: &str) -> (Code, String) {
-        let refusal = self.rig.app.send_to_machine(name, new_workspace(), KEY).expect_err("refused");
+        let refusal = self.rig.app.send_to_machine(name, new_workspace(), Then::Client(KEY)).expect_err("refused");
         (refusal.code, refusal.message)
     }
 
@@ -164,21 +164,30 @@ mod a_relay {
 mod an_answer {
     use super::*;
 
+    fn asking() -> Asking {
+        Asking { machine: "vps".into(), destination: "ana@vps.lan".into(), boot: None, timeout: Duration::from_secs(1) }
+    }
+
     #[rstest]
     #[case::late("it did not answer in time")]
     #[case::unreachable("ssh: connect to host vps.lan port 22: Connection refused")]
     fn that_never_came_fails_without_the_destination(#[case] why: &str) {
-        let asking = Asking {
-            machine: "vps".into(),
-            destination: "ana@vps.lan".into(),
-            boot: None,
-            timeout: Duration::from_secs(1),
-        };
         let mut job = Job::new(Level::Info, "machines", "relay");
 
-        let heard = asking.heard(Err(why.into()), &mut job).expect_err("a failure");
+        let heard = asking().heard(Err(why.into()), &mut job).expect_err("a failure");
 
         assert_eq!((heard.code, heard.message), (Code::Failed, why.replace("vps.lan", "vps")));
+    }
+
+    #[test]
+    fn refused_there_is_logged_by_its_code_and_size_never_by_what_it_says() {
+        let said = "cannot clone https://github.com/acme/shop.git into /home/ana/code/shop";
+        let text = serde_json::to_string(&Structured::Error(Refusal::new(Code::Conflict, said))).expect("json");
+
+        let (heard, logged) = asking().read(Ok(text), crate::machines::act::heard);
+
+        assert_eq!(heard.expect_err("a refusal").message, said);
+        assert_eq!(logged, Some(format!("refused: Conflict, {} bytes", said.len())));
     }
 }
 

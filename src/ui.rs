@@ -11,6 +11,7 @@ mod chrome;
 mod code;
 pub(crate) mod combo;
 mod dialog;
+pub(crate) use dialog::clone_on_machine;
 pub(crate) use dialog::machine as machine_form;
 pub(crate) use dialog::queue as queue_form;
 mod drop;
@@ -54,10 +55,10 @@ pub(crate) use dialog::flows::{
 };
 #[cfg(test)]
 pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};
-pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit, form_text};
+pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit, form_run_on_hit, form_text};
 pub use dialog::form::{form_area, form_buttons};
 #[cfg(test)]
-pub(crate) use dialog::form::{form_extra_button, form_toggle};
+pub(crate) use dialog::form::{form_extra_button, form_run_on, form_toggle};
 pub(crate) use dialog::group_style::{StyleHit, style_hit};
 #[cfg(test)]
 pub(crate) use dialog::group_style::{style_colour, style_done, style_icon};
@@ -80,6 +81,7 @@ pub(crate) use dialog::project_settings::project_settings_buttons;
 pub(crate) use dialog::project_settings::{
     ProjectSettings, ProjectSettingsHit, project_settings_field, project_settings_hit,
 };
+pub(crate) use dialog::run_on::RunOnRow;
 #[cfg(test)]
 pub(crate) use dialog::search::result_item;
 pub(crate) use dialog::search::{ResultRow, SESSIONS_PITCH, Search, mode_button, result_hit, results_list};
@@ -102,7 +104,7 @@ pub(crate) use dialog::start_flow::{
 };
 #[cfg(test)]
 pub(crate) use dialog::start_flow::{
-    start_account, start_account_list, start_branch, start_buttons, start_list, start_workspace,
+    start_account, start_account_list, start_branch, start_buttons, start_list, start_run_on, start_workspace,
 };
 pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
 #[cfg(test)]
@@ -489,6 +491,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
         Some(Overlay::ShareSettings(share)) => draw_share_settings(f, view, share),
         Some(Overlay::Machine(form)) => dialog::machine::draw(f, view, form),
+        Some(Overlay::CloneOnMachine(form)) => clone_on_machine::draw(f, view, form),
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),

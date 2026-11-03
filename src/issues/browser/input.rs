@@ -98,7 +98,9 @@ impl Browser {
 
     pub(crate) fn paste(&mut self, text: &str) {
         if let Some(picker) = &mut self.picker {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| picker.search.push(c));
+            let mut chars = text.chars().filter(|c| !c.is_control()).peekable();
+            picker.blank &= chars.peek().is_none();
+            chars.for_each(|c| picker.search.push(c));
             return;
         }
         if self.starting {

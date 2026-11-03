@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
 use super::App;
+use super::clone_on_machine::{Packed, Pending};
 use super::control::json;
 use super::event::AppEvent;
 use super::machine_usage::Cache;
@@ -24,6 +25,7 @@ use crate::settings::Page;
 
 pub(super) mod acting;
 mod card;
+pub(super) mod checks;
 mod clicks;
 mod column;
 mod drag;
@@ -34,6 +36,7 @@ pub(super) mod relay;
 mod repo;
 mod report;
 mod rows;
+mod run_on;
 mod selection;
 mod stream;
 mod typing;
@@ -61,6 +64,8 @@ pub(crate) enum MachineEvent {
     Read(Box<panels::FileRead>),
     Stream(StreamReport),
     Relayed(relay::Relayed),
+    Ignored { key: u64, result: std::result::Result<crate::git::ignored::Listing, String> },
+    Packed(Box<Packed>),
 }
 
 impl From<Report> for AppEvent {
@@ -79,6 +84,7 @@ pub(super) struct Held {
     pub(super) watching: bool,
     pub(super) down_at: Option<(Instant, u32)>,
     pub(super) cache: Cache,
+    pub(super) checks: checks::Checks,
     pub(super) era: u64,
 }
 
@@ -101,6 +107,7 @@ pub(super) struct Machines {
     folded: Vec<(String, PathBuf)>,
     watched: Option<stream::Watched>,
     streams: u64,
+    pub(super) clones: Vec<Pending>,
 }
 
 impl Machines {
@@ -124,6 +131,7 @@ impl Machines {
             folded: Vec::new(),
             watched: None,
             streams: 1,
+            clones: Vec::new(),
         }
     }
 
@@ -283,12 +291,14 @@ impl App {
             watching: false,
             down_at: None,
             cache: Cache::default(),
+            checks: checks::Checks::default(),
             era: 0,
         };
         self.machines.held.push(held);
     }
 
     pub(super) fn machine_event(&mut self, event: MachineEvent) {
+        let streamed = matches!(event, MachineEvent::Stream(_));
         match event {
             MachineEvent::Link(report) => self.machine_reported(report),
             MachineEvent::Updated { link, result, hidden } => self.machine_updated(link, &result, &hidden),
@@ -300,7 +310,16 @@ impl App {
             MachineEvent::Read(read) => self.remote_file_read(*read),
             MachineEvent::Stream(report) => self.stream_reported(report),
             MachineEvent::Relayed(relayed) => self.relayed(relayed),
+            MachineEvent::Ignored { key, result } => self.ignored_listed(key, result),
+            MachineEvent::Packed(packed) => self.clone_packed(*packed),
         }
+        if streamed {
+            return;
+        }
+        self.check_shown(false);
+        self.follow_issues_run_on();
+        self.follow_start_flow_run_on();
+        self.follow_new_workspace_run_on();
     }
 
     fn machine_reported(&mut self, report: Report) {
@@ -313,6 +332,7 @@ impl App {
                     log::info!("machines", "machine linked", name = held.name, version = release);
                 }
                 held.status.linked(release, server_version, now);
+                held.checks.relinked();
                 held.down_at = None;
                 held.watching = false;
             }
@@ -335,6 +355,7 @@ impl App {
         let held = &mut self.machines.held[at];
         if held.seen.as_ref().is_none_or(|old| old.boot != seen.boot) {
             held.era += 1;
+            held.checks = checks::Checks::default();
         }
         let before = held.seen.replace(seen).filter(|_| held.watching);
         held.watching = true;

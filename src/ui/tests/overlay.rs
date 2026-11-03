@@ -8,6 +8,7 @@ fn form(note: Option<Note>) -> Form {
         value: Editor::new("feat/login"),
         hint: "in ~/.cornercase/worktrees/cornercase/feat-login".into(),
         toggle: None,
+        run_on: None,
         note,
         submit: "create",
     }

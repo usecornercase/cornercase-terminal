@@ -26,6 +26,8 @@ enum Reply {
     Down,
     Found(fn() -> Value),
     Made(fn() -> Value),
+    Each(fn(&str) -> Value),
+    Told(fn(&str) -> Structured),
 }
 
 impl Reply {
@@ -39,6 +41,8 @@ impl Reply {
                 refuse(Code::StaleBoot, format!("this request is for the cornercase server started as {boot}"))
             }
             (Self::Made(made), _) => Structured::Ok(made()),
+            (Self::Each(answer), _) => Structured::Ok(answer(asked["command"].as_str().unwrap_or_default())),
+            (Self::Told(answer), _) => answer(asked["command"].as_str().unwrap_or_default()),
             _ => Structured::Ok(json!({})),
         }
     }
@@ -165,6 +169,27 @@ impl Remote {
 
     fn asked(&self) -> Vec<Value> {
         self.asked.lock().clone()
+    }
+
+    fn held_relay(&mut self) -> AppEvent {
+        self.held(|event| matches!(event, AppEvent::Machine(MachineEvent::Relayed(_))))
+    }
+
+    fn held(&mut self, wanted: fn(&AppEvent) -> bool) -> AppEvent {
+        let (app, rx) = (&mut self.rig.app, &self.rig.rx);
+        let mut held = None;
+        wait_until("the event comes", || {
+            while held.is_none()
+                && let Ok(event) = rx.try_recv()
+            {
+                match event {
+                    event if wanted(&event) => held = Some(event),
+                    event => app.handle_event(event, AREA).expect("handle event"),
+                }
+            }
+            held.is_some()
+        });
+        held.expect("the event")
     }
 
     fn sent_nothing_while_down(&self) {
@@ -361,7 +386,9 @@ mod the_row {
     }
 }
 
+mod checks;
 mod dialogs;
 mod following;
 mod menus;
 mod relay;
+mod run_on;

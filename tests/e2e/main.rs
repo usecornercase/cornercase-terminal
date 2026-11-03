@@ -649,6 +649,15 @@ fn refused(out: &std::process::Output, code: i32, message: &str) -> bool {
 
 const ISSUES_LIST: &str = r#"[{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"author":{"login":"ana"},"updatedAt":"2026-09-19T12:00:00Z","url":"https://github.com/acme/shop/issues/7"}]"#;
 
+fn fake_issue_gh(dir: &std::path::Path, view: &str) -> PathBuf {
+    let gh = dir.join("gh");
+    let script = format!(
+        "#!/bin/sh\nif [ \"$2\" = view ]; then cat <<'EOF'\n{view}\nEOF\nelse cat <<'EOF'\n{ISSUES_LIST}\nEOF\nfi\n"
+    );
+    write_executable(&gh, &script);
+    gh
+}
+
 fn fake_trusting_agent(dir: &std::path::Path) -> PathBuf {
     fake_agent_writing(dir, ">")
 }
@@ -665,11 +674,7 @@ fn fake_agent_writing(dir: &std::path::Path, redirect: &str) -> PathBuf {
 
 fn fake_issue_tracker(session: &Session, view: &str, trust: &str, repo: &std::path::Path) -> (PathBuf, String) {
     let worktrees = session.dir.join("worktrees");
-    let gh = session.dir.join("gh");
-    let script = format!(
-        "#!/bin/sh\nif [ \"$2\" = view ]; then cat <<'EOF'\n{view}\nEOF\nelse cat <<'EOF'\n{ISSUES_LIST}\nEOF\nfi\n"
-    );
-    write_executable(&gh, &script);
+    let gh = fake_issue_gh(&session.dir, view);
     let agent = fake_trusting_agent(&session.dir);
     let config = format!(
         r#"{{"worktrees_dir": "{}", "gh": "{}", "agent": "fake", {trust}"agent_commands": {{"fake": "{}"}}}}"#,

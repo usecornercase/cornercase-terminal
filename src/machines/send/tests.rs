@@ -29,6 +29,10 @@ fn flow_run() -> Send {
     Send::FlowRun(FlowRun { name: "review".into(), project: Some(4), focus: true, machine, ..FlowRun::default() })
 }
 
+fn clone_with(files: Vec<CloneFile>) -> CloneRepository {
+    CloneRepository { url: "git@github.com:acme/api.git".into(), parent: PathBuf::from("~/code"), focus: true, files }
+}
+
 fn env_file(data: &str) -> CloneFile {
     CloneFile { path: PathBuf::from(".env"), data: data.into(), mode: 0o600 }
 }
@@ -44,6 +48,8 @@ mod a_send {
     #[case::start(Send::Start(start()), "start")]
     #[case::new_workspace(new_workspace(), "new-workspace")]
     #[case::flow_run(flow_run(), "flow-run")]
+    #[case::new_tab(Send::NewTab(NewTab { workspace: Some(9), focus: true, ..NewTab::default() }), "new-tab")]
+    #[case::clone(Send::Clone(clone_with(Vec::new())), "clone")]
     fn never_asks_the_machine_to_focus_what_it_makes(#[case] send: Send, #[case] command: &str) {
         let sent = sent(send);
 
@@ -82,6 +88,21 @@ mod a_send {
         );
     }
 
+    #[test]
+    fn keeps_the_files_of_a_clone() {
+        let sent = sent(Send::Clone(clone_with(vec![env_file("S0VZPTEK")])));
+
+        assert_eq!(sent["args"]["files"], json!([{"path": ".env", "data": "S0VZPTEK", "mode": 0o600}]));
+    }
+
+    #[rstest]
+    #[case::accounts(Send::AccountList, json!({"command": "account-list", "args": {"check": true}}))]
+    #[case::issue_sources(Send::IssueSources(4), json!({"command": "issue-sources", "args": {"project": 4}}))]
+    #[case::flows(Send::FlowList(4), json!({"command": "flow-list", "args": {"project": 4}}))]
+    fn asks_for_what_the_machine_has_there(#[case] send: Send, #[case] asked: Value) {
+        assert_eq!(sent(send), asked);
+    }
+
     #[rstest]
     #[case::start(Send::Start(start()), "start", WORKTREE)]
     #[case::start_with(Send::StartWith(start()), "start-with", WORKTREE)]
@@ -92,6 +113,11 @@ mod a_send {
         WORKTREE,
     )]
     #[case::plain_workspace(Send::NewWorkspace(NewWorkspace::default()), "new-workspace", QUICK)]
+    #[case::new_tab(Send::NewTab(NewTab::default()), "new-tab", QUICK)]
+    #[case::issue_sources(Send::IssueSources(4), "issue-sources", QUICK)]
+    #[case::flows(Send::FlowList(4), "flow-list", QUICK)]
+    #[case::accounts(Send::AccountList, "account-list", CHECK)]
+    #[case::clone(Send::Clone(clone_with(Vec::new())), "clone", CLONE)]
     fn waits_as_long_as_its_work_takes(#[case] send: Send, #[case] verb: &str, #[case] timeout: Duration) {
         assert_eq!((send.verb(), send.timeout()), (verb, timeout));
     }
@@ -102,6 +128,11 @@ mod a_send {
     #[case::new_workspace(new_workspace(), true)]
     #[case::flow_run(flow_run(), true)]
     #[case::unfocused(Send::FlowRun(FlowRun::default()), false)]
+    #[case::new_tab(Send::NewTab(NewTab { focus: true, ..NewTab::default() }), true)]
+    #[case::clone(Send::Clone(clone_with(Vec::new())), true)]
+    #[case::accounts(Send::AccountList, false)]
+    #[case::issue_sources(Send::IssueSources(4), false)]
+    #[case::flows(Send::FlowList(4), false)]
     fn says_whether_the_window_follows_it(#[case] send: Send, #[case] focus: bool) {
         assert_eq!(send.focus(), focus);
     }
@@ -110,6 +141,10 @@ mod a_send {
     #[case::start(Send::Start(start()), Some(4))]
     #[case::flow_run(flow_run(), Some(4))]
     #[case::no_project(Send::NewWorkspace(NewWorkspace::default()), None)]
+    #[case::issue_sources(Send::IssueSources(5), Some(5))]
+    #[case::flows(Send::FlowList(6), Some(6))]
+    #[case::accounts(Send::AccountList, None)]
+    #[case::clone(Send::Clone(clone_with(Vec::new())), None)]
     fn names_the_project_of_the_machine_it_works_on(#[case] send: Send, #[case] project: Option<u64>) {
         assert_eq!(send.project(), project);
     }
@@ -128,5 +163,21 @@ mod the_bytes {
         let files: Vec<CloneFile> = data.iter().map(|data| env_file(data)).collect();
 
         assert_eq!(bytes(&files), decoded);
+    }
+}
+
+mod an_answer {
+    use super::*;
+    use crate::control::contract::Structured;
+
+    #[rstest]
+    #[case::flows(Send::FlowList(4), "Read it.\nThen fix it.")]
+    #[case::accounts(Send::AccountList, "Read it. Then fix it.")]
+    fn keeps_lines_only_in_a_flow_listing(#[case] send: Send, #[case] kept: &str) {
+        let text = serde_json::to_string(&Structured::Ok(json!({ "prompt": "Read it.\nThen fix it." }))).expect("json");
+
+        let heard = (send.hearing())(&text).expect("an answer");
+
+        assert_eq!(heard["prompt"], json!(kept));
     }
 }

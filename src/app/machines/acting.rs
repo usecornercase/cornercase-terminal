@@ -84,7 +84,7 @@ impl App {
         machines::hide_destination(&why, &held.name, &held.destination)
     }
 
-    pub(super) fn held_by(&self, link: u64) -> Option<&Held> {
+    pub(in crate::app) fn held_by(&self, link: u64) -> Option<&Held> {
         self.machines.held.iter().find(|held| held.link.id() == link)
     }
 

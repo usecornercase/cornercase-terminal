@@ -9,6 +9,11 @@ use crate::accounts::AgentAccounts;
 use crate::editor::Editor;
 use crate::issues::naming::check_branch;
 use crate::list::COMBO_ROWS;
+use crate::machines::run_on::RunOn;
+
+mod run_on;
+
+pub(crate) use run_on::There;
 
 pub(crate) const START: &str = "start";
 const ACCOUNT_HINT: &str = "only this run: the default stays · enter opens the list";
@@ -27,6 +32,9 @@ pub(crate) enum Action {
     None,
     Close,
     Edit(Origin, String),
+    CloneThere,
+    AskAgain,
+    RunOn,
     Start {
         flow: Box<Flow>,
         task: String,
@@ -39,6 +47,7 @@ pub(crate) enum Action {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Hit {
     Row(usize),
+    RunOn(Option<usize>),
     Prompt { line: usize, col: usize },
     Branch,
     Workspace,
@@ -88,6 +97,10 @@ pub(crate) struct Start {
     pub(crate) diagram: bool,
     pub(crate) notice: Option<String>,
     pub(crate) waiting: bool,
+    pub(crate) run_on: Option<RunOn>,
+    pub(crate) there: Option<There>,
+    pub(crate) asked: Option<(String, String)>,
+    picked_there: BTreeMap<String, String>,
 }
 
 impl Start {
@@ -111,6 +124,10 @@ impl Start {
             diagram: false,
             notice: None,
             waiting: false,
+            run_on: None,
+            there: None,
+            asked: None,
+            picked_there: BTreeMap::new(),
         };
         start.cursor = start.first_choice();
         start
@@ -220,12 +237,15 @@ impl Start {
 
     pub(crate) fn heading(&self) -> String {
         let name = self.selected().map_or("a flow", |saved| saved.flow.name.trim());
+        if let Some(heading) = self.heading_there(name) {
+            return heading;
+        }
         format!("{name} in {}, in a worktree of its own", self.project_name)
     }
 
     pub(crate) fn warnings(&self) -> Vec<String> {
         let mut out = Vec::new();
-        if !self.repo {
+        if !self.repo && !self.elsewhere() {
             out.push(format!(
                 "{} is not the root of a git repository, and a flow works in a worktree of its own",
                 self.project_name
@@ -259,7 +279,7 @@ impl Start {
 
     pub(crate) fn buttons(&self, room: Room) -> Vec<&'static str> {
         let mut buttons = Vec::new();
-        if self.selected().is_some() {
+        if self.selected().is_some() && !self.elsewhere() {
             buttons.push(EDIT);
         }
         if !room.wide {
@@ -286,11 +306,18 @@ impl Start {
     }
 
     pub(crate) fn start(&mut self) -> Action {
+        if let Some(action) = self.not_ready_there() {
+            return action;
+        }
         let refused = match self.selected() {
-            _ if !self.repo => Some("a flow needs a project that is the root of a git repository"),
+            _ if !self.repo && self.machine().is_none() => {
+                Some("a flow needs a project that is the root of a git repository")
+            }
             None => Some("there is no flow to start: make one, or bring a built-in back, in Settings › Flows"),
             Some(saved) if !self.problems(saved).is_empty() => Some("fix this flow's problems first: edit it"),
-            Some(_) if self.prompt.text().trim().is_empty() => Some("say what the team should do in the prompt"),
+            Some(_) if self.prompt.text().trim().is_empty() && self.templated().is_none() => {
+                Some("say what the team should do in the prompt")
+            }
             Some(_) if self.branch.trim().is_empty() => Some("the run needs a branch for its worktree"),
             Some(_) => None,
         };
@@ -329,7 +356,7 @@ impl Start {
     }
 
     pub(crate) fn typing_prompt(&self) -> bool {
-        self.focus == Focus::Prompt && !self.waiting && !self.accounts_open()
+        self.focus == Focus::Prompt && !self.waiting && !self.accounts_open() && self.templated().is_none()
     }
 
     pub(crate) fn typed(&mut self) {
@@ -355,8 +382,10 @@ impl Start {
 
     fn step_focus(&mut self, back: bool) {
         self.close_accounts();
-        let order: Vec<Focus> = [Focus::List, Focus::Prompt, Focus::Branch]
+        let prompt = self.templated().is_none().then_some(Focus::Prompt);
+        let order: Vec<Focus> = [Some(Focus::List), prompt, Some(Focus::Branch)]
             .into_iter()
+            .flatten()
             .chain(self.issue.is_some().then_some(Focus::Workspace))
             .chain(self.shown_accounts().into_iter().map(Focus::Account))
             .collect();
@@ -407,9 +436,13 @@ impl Start {
             Focus::List => match key.code {
                 KeyCode::Up => self.select(self.cursor.saturating_sub(1)),
                 KeyCode::Down => self.select(self.cursor + 1),
-                KeyCode::Enter => self.focus = Focus::Prompt,
+                KeyCode::Enter => {
+                    self.focus = Focus::Prompt;
+                    self.leave_prompt();
+                }
                 _ => {}
             },
+            Focus::Prompt if self.templated().is_some() => {}
             Focus::Prompt => {
                 if self.prompt.key(key, room.width, room.height) {
                     self.typed();
@@ -434,6 +467,7 @@ impl Start {
         }
         match self.focus {
             Focus::Account(_) => {}
+            Focus::Prompt | Focus::List if self.templated().is_some() => {}
             Focus::Prompt | Focus::List => {
                 self.focus = Focus::Prompt;
                 self.prompt.insert_lines(text);
@@ -455,6 +489,11 @@ impl Start {
         }
         match hit {
             Hit::Account(i) => self.toggle_account(i),
+            Hit::RunOn(at) => {
+                if self.choose_machine(at) {
+                    return Action::RunOn;
+                }
+            }
             Hit::Choose(i) => {
                 if let Some(at) = open {
                     self.accounts[at].combo.choose(i);
@@ -466,6 +505,7 @@ impl Start {
                 self.select(i);
                 self.focus = Focus::List;
             }
+            Hit::Prompt { .. } if self.templated().is_some() => {}
             Hit::Prompt { line, col } => {
                 self.focus = Focus::Prompt;
                 let scroll = self.prompt.scroll();
