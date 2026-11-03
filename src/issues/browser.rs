@@ -337,6 +337,7 @@ pub(crate) struct Browser {
     pub(crate) gitlab_url: String,
     pub(crate) screen: Screen,
     pub(crate) starting: bool,
+    pub(crate) making: Option<(u64, String)>,
     pub(crate) scheduling: bool,
     pub(crate) error: Option<String>,
     pub(crate) notice: Option<String>,

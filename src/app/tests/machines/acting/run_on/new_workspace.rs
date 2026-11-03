@@ -180,3 +180,20 @@ fn leaves_the_dialog_waiting_when_an_earlier_dialog_s_answer_arrives() {
     let Some(Overlay::NewWorkspace { creating, error, .. }) = &app.overlay else { panic!("New workspace is not open") };
     assert_eq!((*creating, error.as_deref()), (false, Some("this one failed")));
 }
+
+#[test]
+fn takes_no_key_while_it_waits_for_the_machine() {
+    let mut reading = asking(created, vec![web_shop()]);
+    reading.new_on_vps();
+    reading.create("login");
+    let answer = reading.remote.held_relay();
+
+    let app = &mut reading.remote.rig.app;
+    type_text(app, "x");
+    send_key(app, KeyCode::Esc, KeyModifiers::NONE);
+
+    let Some(Overlay::NewWorkspace { input, creating, .. }) = &app.overlay else { panic!("New workspace is not open") };
+    assert_eq!((input.text().as_str(), *creating), ("login", true));
+    reading.deliver(answer);
+    assert!(reading.remote.rig.app.overlay.is_none());
+}

@@ -30,14 +30,13 @@ pub(crate) fn list(root: &Path) -> Result<Listing> {
     let top = toplevel(root)?;
     let args = ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "--full-name", "-z"];
     let listed = check(git(root, args)?)?;
-    let mut files: Vec<IgnoredFile> = listed
-        .split(|b| *b == 0)
-        .filter(|entry| !entry.is_empty() && !entry.ends_with(b"/"))
+    let mut entries = listed.split(|b| *b == 0).filter(|entry| !entry.is_empty() && !entry.ends_with(b"/"));
+    let files: Vec<IgnoredFile> = entries
+        .by_ref()
         .filter_map(|entry| regular(&top, Path::new(OsStr::from_bytes(entry))))
+        .take(MAX_FILES)
         .collect();
-    let left_out = files.len().saturating_sub(MAX_FILES);
-    files.truncate(MAX_FILES);
-    Ok(Listing { files, left_out })
+    Ok(Listing { files, left_out: entries.count() })
 }
 
 pub(crate) fn toplevel(root: &Path) -> Result<PathBuf> {

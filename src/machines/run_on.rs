@@ -149,7 +149,7 @@ pub(crate) fn has_text(text: &str) -> bool {
 }
 
 fn blank(c: char) -> bool {
-    c.is_control() || c.is_whitespace() || matches!(c, '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}')
+    c.is_whitespace() || text::hidden(c)
 }
 
 pub(crate) fn heard_flows(text: &str) -> Result<Value, Refusal> {

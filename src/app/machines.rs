@@ -316,6 +316,7 @@ impl App {
         if streamed {
             return;
         }
+        self.check_shown();
         self.follow_issues_run_on();
         self.follow_start_flow_run_on();
         self.follow_new_workspace_run_on();

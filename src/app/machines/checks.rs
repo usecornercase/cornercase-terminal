@@ -8,6 +8,7 @@ use super::relay::Then;
 use crate::accounts::login::State;
 use crate::agents::{self, Known};
 use crate::app::App;
+use crate::app::issues_dialog::run_on::issue_project;
 use crate::app::machine_usage::{Cached, UNREADABLE};
 use crate::app::overlay::Overlay;
 use crate::app::start_flow_dialog::flow_accounts;
@@ -71,14 +72,14 @@ pub(in crate::app) enum AgentThere {
 }
 
 trait Slot {
-    fn wanted(&self) -> bool;
+    fn wanted(&self, again: bool) -> bool;
     fn ask(&mut self);
     fn heard(&mut self, result: Result<Value, Refusal>, machine: &str);
 }
 
 impl<T: DeserializeOwned> Slot for Cached<T> {
-    fn wanted(&self) -> bool {
-        !self.asking && self.read.is_none()
+    fn wanted(&self, again: bool) -> bool {
+        !self.asking && self.read.is_none() && (again || self.error.is_none())
     }
 
     fn ask(&mut self) {
@@ -130,11 +131,27 @@ impl Checks {
 
 impl App {
     pub(in crate::app) fn check_machine(&mut self, name: &str, project: Option<u64>, wanted: Wanted) {
+        self.ask_checks(name, project, wanted, true);
+    }
+
+    pub(in crate::app) fn check_shown(&mut self) {
+        let (target, project) = match &self.overlay {
+            Some(Overlay::Issues(b)) => (b.machine().cloned(), issue_project(b)),
+            Some(Overlay::StartFlow { start, .. }) => (start.machine().cloned(), start.project),
+            _ => return,
+        };
+        let Some(target) = target else { return };
+        let there = self.project_there(target.link, project).map(|there| there.id);
+        let wanted = self.wanted_checks();
+        self.ask_checks(&target.name, there, wanted, false);
+    }
+
+    fn ask_checks(&mut self, name: &str, project: Option<u64>, wanted: Wanted, again: bool) {
         let sources = project.filter(|_| wanted.sources).map(Check::Sources);
         let flows = project.filter(|_| wanted.flows).map(Check::Flows);
         let accounts = wanted.accounts.then_some(Check::Accounts);
         for check in [accounts, sources, flows].into_iter().flatten() {
-            self.ask_check(name, check);
+            self.ask_check(name, check, again);
         }
     }
 
@@ -160,9 +177,9 @@ impl App {
         }
     }
 
-    fn ask_check(&mut self, name: &str, check: Check) {
+    fn ask_check(&mut self, name: &str, check: Check, again: bool) {
         let Some(held) = self.machines.named(name) else { return };
-        if !held.checks.slot(check).wanted() {
+        if !held.checks.slot(check).wanted(again) {
             return;
         }
         let then =

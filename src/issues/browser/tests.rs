@@ -28,6 +28,7 @@ fn browser() -> Browser {
         gitlab_url: String::new(),
         screen: Screen::List,
         starting: false,
+        making: None,
         scheduling: false,
         error: None,
         notice: None,

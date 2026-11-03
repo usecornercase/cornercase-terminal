@@ -99,6 +99,7 @@ pub(crate) struct Start {
     pub(crate) run_on: Option<RunOn>,
     pub(crate) there: Option<There>,
     pub(crate) asked: Option<(String, String)>,
+    picked_there: BTreeMap<String, String>,
 }
 
 impl Start {
@@ -125,6 +126,7 @@ impl Start {
             run_on: None,
             there: None,
             asked: None,
+            picked_there: BTreeMap::new(),
         };
         start.cursor = start.first_choice();
         start

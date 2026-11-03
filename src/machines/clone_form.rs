@@ -152,7 +152,7 @@ impl CloneForm {
         let total: u64 = files.iter().filter(|(_, ticked)| *ticked).map(|(file, _)| file.size).sum();
         let Some((file, ticked)) = files.get_mut(at).filter(|(file, _)| !file.too_big) else { return };
         if !*ticked && total + file.size > MAX_TOTAL_BYTES {
-            self.error = Some(format!("over the {} MiB a clone takes", MAX_TOTAL_BYTES >> 20));
+            self.error = Some(over_the_total());
             return;
         }
         *ticked = !*ticked;
@@ -218,6 +218,10 @@ impl CloneForm {
         let line = self.url.scroll();
         self.url.place(width, line, col);
     }
+}
+
+pub(crate) fn over_the_total() -> String {
+    format!("over the {} MiB a clone takes", MAX_TOTAL_BYTES >> 20)
 }
 
 pub(crate) fn cloned_note(project: &str, machine: &str, unwritten: &[Unwritten]) -> String {

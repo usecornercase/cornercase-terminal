@@ -17,7 +17,7 @@ use crate::agents::launch::Launch;
 use crate::control::BuildsFreed;
 use crate::control::contract::Refusal;
 use crate::editor::Editor;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::flows::run::RoleWorktree;
 use crate::git;
 use crate::git::upstream;
@@ -74,7 +74,7 @@ pub(crate) enum ListFor {
 
 #[derive(Debug)]
 pub(crate) enum WorktreeEvent {
-    Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
+    Created { project: u64, branch: String, result: Result<PathBuf>, start: Option<Box<Start>>, request: Option<u64> },
     Run { project: u64, result: Result<Made>, request: u64 },
     Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
     Removed { project: u64, workspace: u64, result: Result<Option<String>>, request: Option<u64> },
@@ -119,8 +119,9 @@ impl App {
             WorktreeEvent::Created { project, result, request: Some(key), .. } => {
                 self.worktree_ready(key, project, result, area);
             }
-            WorktreeEvent::Created { project, result, start, request: None } => {
-                self.worktree_created(project, result, start, area)?;
+            WorktreeEvent::Created { project, branch, result, start, request: None } => {
+                self.worktree_awaited(project, &branch, result.as_ref().err());
+                self.worktree_created(project, result, start.map(|start| *start), area)?;
             }
             WorktreeEvent::Run { project, result, request } => self.run_worktrees_ready(request, project, result, area),
             WorktreeEvent::Checked { project, workspace, status, request: Some(key) } => {
@@ -268,10 +269,15 @@ impl App {
         let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
         let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
         let job = job.with("path", path.display()).with("issue", start.is_some());
+        let made = branch.clone();
         self.spawn_job(
             job,
             move || worktree::create(&repo, &branch, &path).map(|()| path),
-            move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Created { project: id, result, start, request })),
+            move |result, _| {
+                let start = start.map(Box::new);
+                let created = WorktreeEvent::Created { project: id, branch: made, result, start, request };
+                Some(AppEvent::Worktree(created))
+            },
         );
     }
 
@@ -315,29 +321,45 @@ impl App {
         start: Option<Start>,
         area: Rect,
     ) -> Result<()> {
-        let path = match result {
-            Ok(path) => path.canonicalize().unwrap_or(path),
-            Err(e) => {
-                match &mut self.overlay {
-                    Some(Overlay::NewWorkspace { error, creating, .. }) => {
-                        *error = Some(e.to_string());
-                        *creating = false;
-                    }
-                    Some(Overlay::Issues(b)) => {
-                        b.error = Some(e.to_string());
-                        b.starting = false;
-                    }
-                    _ => {}
-                }
-                return Ok(());
-            }
-        };
-        if matches!(self.overlay, Some(Overlay::NewWorkspace { .. } | Overlay::Issues(_))) {
-            self.overlay = None;
-        }
+        let Ok(path) = result.map(|path| path.canonicalize().unwrap_or(path)) else { return Ok(()) };
         let Some(p) = self.projects.project_index(project) else { return Ok(()) };
         let at = self.worktree_workspace(p, path);
         self.open_workspace(at, start, area, true)
+    }
+
+    fn worktree_awaited(&mut self, project: u64, branch: &str, failed: Option<&Error>) {
+        if !self.awaits_worktree(project, branch) {
+            return;
+        }
+        let Some(failed) = failed else {
+            self.overlay = None;
+            return;
+        };
+        match &mut self.overlay {
+            Some(Overlay::NewWorkspace { error, creating, .. }) => {
+                *error = Some(failed.to_string());
+                *creating = false;
+            }
+            Some(Overlay::Issues(b)) => {
+                b.error = Some(failed.to_string());
+                b.starting = false;
+                b.making = None;
+            }
+            _ => {}
+        }
+    }
+
+    fn awaits_worktree(&self, project: u64, branch: &str) -> bool {
+        match &self.overlay {
+            Some(Overlay::NewWorkspace { project: shown, input, creating: true, run_on, .. }) => {
+                let local = run_on.as_ref().is_none_or(|run_on| run_on.awaiting.is_none());
+                local && *shown == project && input.text().trim() == branch
+            }
+            Some(Overlay::Issues(b)) => {
+                b.making.as_ref().is_some_and(|(shown, made)| *shown == project && made == branch)
+            }
+            _ => false,
+        }
     }
 
     pub(super) fn worktree_workspace(&mut self, p: usize, path: PathBuf) -> WorkspaceAt {

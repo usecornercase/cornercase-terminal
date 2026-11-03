@@ -150,6 +150,7 @@ impl App {
             gitlab_url: self.config.gitlab_url.clone(),
             screen: Screen::List,
             starting: false,
+            making: None,
             scheduling: false,
             error: None,
             notice: None,
@@ -224,6 +225,12 @@ impl App {
     fn act(&mut self, action: Action, area: Rect) -> Result<()> {
         self.remember_browser();
         self.follow_issues_run_on();
+        let acted = self.act_on(action, area);
+        self.check_shown();
+        acted
+    }
+
+    fn act_on(&mut self, action: Action, area: Rect) -> Result<()> {
         match action {
             Action::None => {}
             Action::CloneThere(_) => self.clone_there(),
@@ -634,9 +641,11 @@ impl App {
             self.overlay = None;
             return self.open_workspace(at, Some(start), area, false);
         }
+        let making = (self.projects[p].id, branch.clone());
         self.spawn_worktree(p, branch, Some(start), None);
         if let Some(Overlay::Issues(b)) = &mut self.overlay {
             b.starting = true;
+            b.making = Some(making);
             b.error = None;
         }
         Ok(())

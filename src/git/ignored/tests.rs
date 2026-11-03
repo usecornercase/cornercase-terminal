@@ -109,6 +109,21 @@ mod list {
     }
 
     #[test]
+    fn looks_at_no_entry_past_the_cap_and_only_counts_it() {
+        let repo = repo("*.log\n");
+        for n in 0..MAX_FILES {
+            write(&repo, &format!("logs/{n:03}.log"), b"x");
+        }
+        let outside = TempDir::new();
+        write(&outside, "real.log", b"x");
+        std::os::unix::fs::symlink(outside.path().join("real.log"), repo.path().join("logs/zz.log")).expect("symlink");
+
+        let listing = list(repo.path()).expect("list");
+
+        assert_eq!((listing.files.len(), listing.left_out), (MAX_FILES, 1));
+    }
+
+    #[test]
     fn leaves_the_total_to_the_ticks() {
         let repo = repo("*.bin\n");
         let cap = usize::try_from(MAX_FILE_BYTES).expect("a small cap");

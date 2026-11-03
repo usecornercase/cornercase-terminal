@@ -1,3 +1,4 @@
+use std::io;
 use std::path::{Path, PathBuf};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -17,12 +18,13 @@ use crate::control::contract::{Code, Refusal};
 use crate::control::{CloneFile, CloneRepository, Cloned};
 use crate::editor::Editor;
 use crate::error::{Error, Result};
+use crate::git::clone::files::MAX_TOTAL_BYTES;
 use crate::git::ignored::{self, IgnoredFile, Listing};
 use crate::git::remote;
 use crate::log::{Job, Level};
 use crate::machines::DEFAULT_FOLDER;
 use crate::machines::act::UNREADABLE;
-use crate::machines::clone_form::{CloneForm, Opening, Step, cloned_note};
+use crate::machines::clone_form::{CloneForm, Opening, Step, cloned_note, over_the_total};
 use crate::machines::run_on::{self, Target};
 use crate::machines::send::Send;
 use crate::project::Hierarchy;
@@ -296,13 +298,18 @@ fn url_width(area: Rect) -> usize {
     usize::from(view::url_text(area).width.max(1))
 }
 
-fn packed(root: &Path, files: &[IgnoredFile]) -> Result<Vec<CloneFile>> {
+pub(in crate::app) fn packed(root: &Path, files: &[IgnoredFile]) -> Result<Vec<CloneFile>> {
     let top = ignored::toplevel(root)?;
-    let file = |file: &IgnoredFile| {
-        let data = STANDARD.encode(ignored::read(&top, file)?);
-        Ok(CloneFile { path: file.path.clone(), data, mode: file.mode })
+    let mut total = 0;
+    let mut file = |file: &IgnoredFile| {
+        let bytes = ignored::read(&top, file)?;
+        total += bytes.len() as u64;
+        if total > MAX_TOTAL_BYTES {
+            return Err(io::Error::other(over_the_total()).into());
+        }
+        Ok(CloneFile { path: file.path.clone(), data: STANDARD.encode(bytes), mode: file.mode })
     };
-    files.iter().map(file).collect()
+    files.iter().map(&mut file).collect()
 }
 
 fn quietly<T>(result: Result<T>, job: &mut Job) -> std::result::Result<T, String> {

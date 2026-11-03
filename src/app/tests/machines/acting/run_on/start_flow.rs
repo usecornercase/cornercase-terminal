@@ -87,9 +87,9 @@ impl Reading {
 
     pub(super) fn flow_from_the_issue(&mut self) {
         self.press("start a flow");
-        self.remote
-            .rig
-            .until("the machine lists its flows", |app| start(app).there().is_some_and(|there| there.listed));
+        self.remote.rig.until("the machine lists its flows and accounts", |app| {
+            start(app).there().is_some_and(|there| there.listed && there.accounted)
+        });
         let app = &mut self.remote.rig.app;
         send_key(app, KeyCode::Tab, KeyModifiers::NONE);
         send_key(app, KeyCode::Enter, KeyModifiers::NONE);
@@ -194,6 +194,18 @@ fn opens_the_clone_dialog_when_the_project_is_not_there() {
 }
 
 #[test]
+fn lists_the_flows_of_a_project_the_machine_lists_later() {
+    let mut reading = starting_flow(running, Vec::new());
+    reading.choose_vps();
+    reading.remote.rig.until("the machine answers its accounts", |app| app.accounts_there("vps") != Checked::Waiting);
+
+    serve(&mut reading.remote.theirs, 2, shop(vec![web_shop()]));
+
+    reading.remote.rig.until("the machine lists its flows", |app| start(app).there().is_some_and(|there| there.listed));
+    assert_eq!(reading.sent("flow-list"), Some(json!({ "project": 1 })));
+}
+
+#[test]
 fn says_the_project_left_the_machine_instead_of_starting_nothing_in_silence() {
     let mut reading = starting_flow(running, vec![web_shop()]);
     reading.flow_on_vps();
@@ -224,4 +236,16 @@ fn from_an_issue_keeps_the_machine_and_sends_the_issue() {
     let sent = reading.sent("flow-run").expect("a flow run");
     assert_eq!((&sent["issue"], &sent["source"], &sent["project"]), (&json!("#7"), &json!("github"), &json!(1)));
     assert_eq!(sent["prompt"], json!(""));
+}
+
+#[test]
+fn from_an_issue_runs_with_the_account_picked_on_the_machine() {
+    let mut reading = reading_with(Reply::Told(running), vec![web_shop()]);
+    reading.checked();
+    reading.pick("account…", "home");
+
+    reading.flow_from_the_issue();
+    reading.run_answered();
+
+    assert_eq!(reading.sent("flow-run").expect("a flow run")["accounts"], json!({ "claude": "home" }));
 }

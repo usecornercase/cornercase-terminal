@@ -150,6 +150,7 @@ mod its_lists {
     #[rstest::rstest]
     #[case::spaces(["", " ", "\u{1b}\t"])]
     #[case::invisible(["\u{200B}", "\u{FEFF} \u{2060}", "\u{200C}\u{200D}"])]
+    #[case::marks(["\u{200E}", "\u{3164} \u{AD}", "\u{FE0F}\u{2061}"])]
     fn say_nothing_when_every_one_is_blank(#[case] all: [&str; 3]) {
         assert_eq!(capped(all.into_iter()), None);
     }
@@ -177,6 +178,7 @@ mod its_lists {
     #[case::spaces("  \n ")]
     #[case::control("\u{1b}\u{7}")]
     #[case::invisible("\u{FEFF}\u{200B} \u{2060}")]
+    #[case::marks("\u{200F}\u{3164} \u{AD}\u{FE00}\u{206F}")]
     fn say_the_machine_gave_no_reason_for_a_blank_one(#[case] text: &str) {
         assert_eq!(reason("vps", text), "vps gave no reason");
         assert_eq!(clipped_or(text, "the project"), "the project");

@@ -64,7 +64,7 @@ impl App {
             start.set_listing(listing, None);
         }
         if let Some(accounts) = accounts {
-            start.accounts = accounts;
+            start.read_accounts_there(accounts);
         }
     }
 
@@ -118,7 +118,7 @@ impl App {
         };
         let (issue, source) = start.asked.clone().unzip();
         let prompt = if issue.is_some() { String::new() } else { run.task };
-        log::info!("flows", "start on a machine", flow = run.name, name = target.name, project = id);
+        log::info!("flows", "start on a machine", name = target.name, project = id);
         let flow = FlowRun {
             name: run.name,
             prompt,

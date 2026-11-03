@@ -228,6 +228,7 @@ impl App {
         start.asked = Some((issue.key.clone(), issue.source.id().to_string()));
         let Some(Overlay::Issues(b)) = &self.overlay else { return start };
         let Some(link) = b.machine().map(|target| target.link) else { return start };
+        start.pick_there(self.chosen_accounts());
         if let Some(run_on) = &mut start.run_on {
             run_on.chosen = run_on.targets.iter().position(|target| target.link == link);
             start.notice = None;
@@ -265,7 +266,7 @@ fn root_workspace(there: &ProjectInfo) -> Option<u64> {
     root.or_else(|| there.workspaces.first()).map(|workspace| workspace.id)
 }
 
-fn issue_project(b: &Browser) -> u64 {
+pub(in crate::app) fn issue_project(b: &Browser) -> u64 {
     let place = b.focused().and_then(|issue| b.place_for(issue).map(|place| place.project));
     place.unwrap_or(b.project)
 }

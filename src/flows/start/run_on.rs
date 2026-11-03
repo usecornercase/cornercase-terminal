@@ -1,7 +1,10 @@
+use std::collections::BTreeMap;
+
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
 
 use super::{Action, Focus, Start};
+use crate::accounts::AgentAccounts;
 use crate::machines::run_on::{self, RunOn, Target};
 
 const LOST: &str = "the machine";
@@ -40,9 +43,20 @@ impl Start {
         }
         self.there = None;
         self.notice = None;
+        self.picked_there.clear();
         self.close_accounts();
         self.leave_prompt();
         true
+    }
+
+    pub(crate) fn pick_there(&mut self, picked: BTreeMap<String, String>) {
+        self.picked_there = picked;
+    }
+
+    pub(crate) fn read_accounts_there(&mut self, accounts: Vec<AgentAccounts>) {
+        self.accounts = accounts;
+        let picked = std::mem::take(&mut self.picked_there);
+        self.seed_accounts(&picked);
     }
 
     pub(crate) fn templated(&self) -> Option<String> {

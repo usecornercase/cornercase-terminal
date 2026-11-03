@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use super::*;
 use crate::app::issues_dialog;
 use crate::app::machines::checks::Checked;
+use crate::app::worktrees::WorktreeEvent;
 use crate::control::TabInfo;
 use crate::issues::browser::{Accounts, AgentNote, Browser, Screen};
 use crate::issues::{Issue, Source};
@@ -328,6 +329,23 @@ mod the_issues_dialog {
     }
 
     #[test]
+    fn asks_the_machine_again_once_it_restarted() {
+        let mut reading = reading(vec![web_shop()]);
+        reading.checked();
+
+        serve(&mut reading.remote.theirs, 2, control::Report { boot: "a later boot".into(), ..shop(vec![web_shop()]) });
+        reading.remote.rig.until("the machine restarted", |app| {
+            app.machines.held()[0].seen.as_ref().is_some_and(|seen| seen.boot == "a later boot")
+        });
+
+        reading.remote.rig.until("the machine answers the checks again", |app| {
+            app.accounts_there("vps") != Checked::Waiting && app.tracker_there("vps", 1, "github") != Checked::Waiting
+        });
+        let asked = reading.remote.asked();
+        assert_eq!(asked.iter().filter(|asked| asked["command"] == "issue-sources").count(), 2);
+    }
+
+    #[test]
     fn says_briefly_why_the_machine_cannot_read_the_tracker() {
         let mut reading = reading_with(Reply::Told(rambling_tracker), vec![web_shop()]);
 
@@ -468,6 +486,44 @@ mod starting_there {
 
         let app = &reading.remote.rig.app;
         assert_eq!((error(app), browser(app).starting), (Some("vps is no longer listed"), false));
+    }
+
+    fn failed(_: &Path) -> Result<PathBuf> {
+        Err(std::io::Error::other("fatal: a branch named 'login' already exists").into())
+    }
+
+    fn made(dir: &Path) -> Result<PathBuf> {
+        let path = dir.join("login");
+        std::fs::create_dir(&path)?;
+        Ok(path)
+    }
+
+    #[rstest]
+    #[case::failed(failed)]
+    #[case::made(made)]
+    fn waits_for_the_machine_whatever_a_worktree_made_here_meanwhile_does(#[case] ended: fn(&Path) -> Result<PathBuf>) {
+        let mut reading = reading_with(Reply::Told(ready), vec![web_shop()]);
+        reading.checked();
+        reading.pick("account…", "home");
+        reading.press("start");
+        let answer = reading.remote.held_relay();
+        let project = reading.remote.rig.app.projects[0].id;
+        let dir = TempDir::new();
+        let result = ended(dir.path());
+
+        reading.deliver(AppEvent::Worktree(WorktreeEvent::Created {
+            project,
+            branch: "login".into(),
+            result,
+            start: None,
+            request: None,
+        }));
+
+        let app = &reading.remote.rig.app;
+        assert!(browser_open(app), "{:?}", app.overlay);
+        assert_eq!((error(app), browser(app).starting), (None, true));
+        reading.deliver(answer);
+        assert!(!browser_open(&reading.remote.rig.app));
     }
 
     #[test]

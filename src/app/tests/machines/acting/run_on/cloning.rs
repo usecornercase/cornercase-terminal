@@ -1,10 +1,10 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 use super::*;
-use crate::app::clone_on_machine::told;
+use crate::app::clone_on_machine::{packed, told};
 use crate::git::ignored::{self, IgnoredFile};
 use crate::machines::clone_form::{BUTTONS, CloneForm, Files};
-use crate::test_util::{git, wait_until};
+use crate::test_util::{git, git_repo, wait_until};
 
 const URL: &str = "https://github.com/acme/web-shop.git";
 const CLONED: u64 = 2;
@@ -429,6 +429,23 @@ fn logs_a_failure_to_read_the_files_by_its_kind_alone(
     let shown = result.expect_err("a failure");
     assert!(shown.contains(said), "{shown}");
     assert_eq!(failed.as_deref(), Some(logged));
+}
+
+#[test]
+fn refuses_files_that_grew_past_what_a_clone_takes_since_they_were_listed() {
+    let repo = git_repo(&[(".gitignore", "*.bin\n")]);
+    let size = usize::try_from(ignored::MAX_FILE_BYTES).expect("a small cap");
+    let listed: Vec<IgnoredFile> = (0..9)
+        .map(|n| {
+            let path = format!("{n}.bin");
+            std::fs::write(repo.path().join(&path), vec![0; size]).expect("write the file");
+            IgnoredFile { path: PathBuf::from(path), size: 1, mode: 0o644, too_big: false }
+        })
+        .collect();
+
+    let (result, failed) = told(packed(repo.path(), &listed));
+
+    assert_eq!((result.err().as_deref(), failed.as_deref()), (Some("over the 8 MiB a clone takes"), Some("Other")));
 }
 
 #[rstest]
