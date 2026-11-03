@@ -246,10 +246,13 @@ fn junction(original: &Path, link: &Path) -> io::Result<()> {
 }
 
 fn on_a_local_disk(original: &Path) -> io::Result<PathBuf> {
+    on_a_local_disk_through(original, |path| std::fs::canonicalize(path))
+}
+
+fn on_a_local_disk_through(original: &Path, resolve: impl Fn(&Path) -> io::Result<PathBuf>) -> io::Result<PathBuf> {
     let refused = || io::Error::new(io::ErrorKind::Unsupported, "a junction only leads to a folder on a local disk");
     let plain = on_a_drive(&std::path::absolute(original)?).ok_or_else(refused)?;
-    on_a_drive(&std::fs::canonicalize(&plain)?).ok_or_else(refused)?;
-    Ok(plain)
+    on_a_drive(&resolve(&plain)?).ok_or_else(refused)
 }
 
 fn on_a_drive(path: &Path) -> Option<PathBuf> {

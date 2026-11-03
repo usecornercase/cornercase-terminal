@@ -55,6 +55,20 @@ mod junctions {
     }
 
     #[test]
+    fn a_folder_on_a_drive_that_resolves_to_a_share_is_refused() {
+        let share = |_: &Path| Ok(PathBuf::from(r"\\?\UNC\server\share\skills"));
+        let refused = on_a_local_disk_through(Path::new(r"C:\skills"), share).expect_err("a share");
+        assert_eq!(refused.kind(), ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn the_junction_leads_to_the_resolved_folder() {
+        let resolved = |_: &Path| Ok(PathBuf::from(r"\\?\D:\real\skills"));
+        let local = on_a_local_disk_through(Path::new(r"C:\skills"), resolved).expect("a local disk");
+        assert_eq!(local, PathBuf::from(r"D:\real\skills"));
+    }
+
+    #[test]
     fn a_folder_that_resolves_to_a_share_is_not_on_a_drive() {
         assert_eq!(on_a_drive(Path::new(r"\\?\UNC\server\share\skills")), None);
         assert_eq!(on_a_drive(Path::new(r"\\?\C:\Users\me")), Some(PathBuf::from(r"C:\Users\me")));
