@@ -79,7 +79,7 @@ pub(in crate::agents) fn local_command(text: &str) -> bool {
 pub(in crate::agents) fn runs_as(arg: &str) -> bool {
     let mut parts = Path::new(arg).iter().rev().filter_map(OsStr::to_str);
     let (file, package, scope) = (parts.next(), parts.next(), parts.next());
-    file == Some("npm-loader.js") && package == Some("copilot") && scope == Some("@github")
+    super::named(file, "npm-loader.js") && super::named(package, "copilot") && super::named(scope, "@github")
 }
 
 #[derive(Debug)]

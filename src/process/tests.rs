@@ -515,10 +515,11 @@ mod program_name {
     }
 
     #[test]
-    fn names_in_another_case_are_the_same_program_only_on_windows() {
-        assert!(same_program("claude", "claude"));
-        assert_eq!(same_program("CLAUDE", "claude"), cfg!(windows));
-        assert!(!same_program("claude", "codex"));
+    fn names_in_another_case_are_the_same_file_only_on_windows() {
+        assert!(same_file_name("claude", "claude"));
+        assert_eq!(same_file_name("CLAUDE", "claude"), cfg!(windows));
+        assert_eq!(same_file_name("ÉDITEUR.JS", "éditeur.js"), cfg!(windows));
+        assert!(!same_file_name("claude", "codex"));
     }
 }
 
@@ -565,6 +566,21 @@ mod on_windows {
     }
 
     #[test]
+    fn a_listing_holds_its_thread_to_one_snapshot_until_it_is_dropped() {
+        let dir = TempDir::new();
+        let pinned = listing().expect("a listing");
+        let ping = ping(dir.path());
+        let pid = ping.pid();
+        wait_until("another thread sees ping", || {
+            thread::spawn(move || children(this_pid()).contains(&pid)).join().expect("the other thread")
+        });
+
+        assert!(!children(this_pid()).contains(&pid));
+        drop(pinned);
+        assert!(children(this_pid()).contains(&pid));
+    }
+
+    #[test]
     fn a_child_has_the_folder_and_environment_it_started_with() {
         let dir = TempDir::new();
         let ping = ping(dir.path());
@@ -589,7 +605,10 @@ mod on_windows {
         let ping = find_ping().expect("ping");
 
         let found = (parent(ping), args(cmd.pid()), descendants(cmd.pid()), tree(this_pid()));
-        let _ = Command::new("taskkill").args(["/f", "/t", "/pid", &cmd.pid().to_string()]).output();
+        let born = start_stamp(ping);
+        let stopped = Command::new("taskkill").args(["/f", "/pid", &ping.to_string()]).stdout(Stdio::null()).status();
+        assert!(stopped.as_ref().is_ok_and(ExitStatus::success), "taskkill: {stopped:?}");
+        wait_until("ping is gone", || !running(ping, born));
 
         assert_eq!(found.0, Some(cmd.pid()));
         assert_eq!(found.1[1..], ["/d", "/c", line]);

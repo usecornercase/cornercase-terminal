@@ -399,13 +399,17 @@ fn basename(arg: &str) -> &str {
     process::program_name(Path::new(arg).file_name().and_then(|n| n.to_str()).unwrap_or(arg))
 }
 
+fn named(part: Option<&str>, name: &str) -> bool {
+    part.is_some_and(|part| process::same_file_name(part, name))
+}
+
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     let names: Vec<&str> = argv.iter().take(2).map(|a| basename(a)).collect();
     let script = argv.iter().skip(1).find(|arg| !arg.starts_with('-'));
     let scripts: Vec<&str> = argv.first().into_iter().chain(script).map(String::as_str).collect();
     kinds(config).into_iter().find(|kind| {
         let bin = command(config, kind);
-        names.iter().any(|name| process::same_program(name, basename(&bin)))
+        names.iter().any(|name| process::same_file_name(name, basename(&bin)))
             || Known::of(kind).is_some_and(|kind| scripts.iter().any(|arg| kind.runs_as(arg)))
     })
 }

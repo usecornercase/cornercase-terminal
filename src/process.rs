@@ -12,7 +12,7 @@ use crate::text;
 
 pub(crate) use crate::os::process::alive;
 #[cfg(windows)]
-pub(crate) use imp::can_list;
+pub(crate) use imp::listing;
 pub(crate) use imp::{
     all, args, children, cpu_time, cwd, env, footprint, name, open_files, parent, peer_uid, start_stamp, started,
 };
@@ -35,7 +35,7 @@ const EXE: &str = ".exe";
 
 pub(crate) fn is_shell(name: &str) -> bool {
     if cfg!(windows) {
-        SHELLS.iter().chain(&WINDOWS_SHELLS).any(|shell| shell.eq_ignore_ascii_case(name))
+        SHELLS.iter().chain(&WINDOWS_SHELLS).any(|shell| same_file_name(shell, name))
     } else {
         SHELLS.contains(&name)
     }
@@ -45,14 +45,21 @@ pub(crate) fn program_name(name: &str) -> &str {
     if cfg!(windows) { trim_exe(name) } else { name }
 }
 
-pub(crate) fn same_program(name: &str, other: &str) -> bool {
-    if cfg!(windows) { name.eq_ignore_ascii_case(other) } else { name == other }
+pub(crate) fn same_file_name(name: &str, other: &str) -> bool {
+    if cfg!(windows) {
+        name.chars().flat_map(char::to_lowercase).eq(other.chars().flat_map(char::to_lowercase))
+    } else {
+        name == other
+    }
 }
 
 #[cfg(not(windows))]
+pub(crate) struct Listing;
+
+#[cfg(not(windows))]
 #[expect(clippy::unnecessary_wraps, reason = "Windows reads the process list whole, and that read can fail")]
-pub(crate) fn can_list() -> io::Result<()> {
-    Ok(())
+pub(crate) fn listing() -> io::Result<Listing> {
+    Ok(Listing)
 }
 
 fn trim_exe(name: &str) -> &str {
@@ -563,6 +570,7 @@ mod unread {
 
 #[cfg(windows)]
 mod imp {
+    use std::cell::RefCell;
     use std::ffi::OsString;
     use std::mem::offset_of;
     use std::os::windows::ffi::OsStringExt;
@@ -605,6 +613,10 @@ mod imp {
     const PARENT: usize = offset_of!(SYSTEM_PROCESS_INFORMATION, Reserved2);
 
     static SNAPSHOT: Mutex<Option<(Instant, Arc<[Entry]>)>> = Mutex::new(None);
+
+    thread_local! {
+        static PINNED: RefCell<Option<Arc<[Entry]>>> = const { RefCell::new(None) };
+    }
 
     struct Owned(HANDLE);
 
@@ -736,13 +748,26 @@ mod imp {
     }
 
     fn latest() -> Arc<[Entry]> {
+        if let Some(pinned) = PINNED.with(|pinned| pinned.borrow().clone()) {
+            return pinned;
+        }
         snapshot().unwrap_or_else(|_| {
             SNAPSHOT.lock().as_ref().map_or_else(|| Arc::from(Vec::new()), |(_, entries)| Arc::clone(entries))
         })
     }
 
-    pub(crate) fn can_list() -> io::Result<()> {
-        snapshot().map(drop)
+    pub(crate) struct Listing(Option<Arc<[Entry]>>);
+
+    impl Drop for Listing {
+        fn drop(&mut self) {
+            let earlier = self.0.take();
+            PINNED.with(|pinned| *pinned.borrow_mut() = earlier);
+        }
+    }
+
+    pub(crate) fn listing() -> io::Result<Listing> {
+        let entries = snapshot()?;
+        Ok(Listing(PINNED.with(|pinned| pinned.borrow_mut().replace(entries))))
     }
 
     fn current(entries: &[Entry], pid: i32) -> Option<&Entry> {

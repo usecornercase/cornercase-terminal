@@ -37,7 +37,7 @@ fn walk(places: &Places) -> Walk {
 }
 
 fn read(places: &Places, before: &Times) -> Result<Sample> {
-    process::can_list()?;
+    let _listing = process::listing()?;
     let walk = walk(places);
     let now = Instant::now();
     let mut times = Times { at: Some(now), cpu: HashMap::new() };
