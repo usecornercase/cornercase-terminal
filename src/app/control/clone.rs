@@ -11,7 +11,7 @@ use crate::app::event::AppEvent;
 use crate::config;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{CloneFile, CloneRepository, Cloned, Done, Item, Unwritten};
-use crate::git::clone::files::{self, File, MAX_TOTAL_BYTES};
+use crate::git::clone::files::{self, File, MAX_FILES, MAX_TOTAL_BYTES};
 use crate::git::clone::{self, Failure, Target};
 use crate::log::{self, Job, Level};
 use crate::machines::send;
@@ -57,6 +57,9 @@ fn checked_parent(parent: PathBuf, given: &Path) -> Result<PathBuf, Refusal> {
 }
 
 fn decoded(files: &[CloneFile]) -> Result<Vec<File>, Failure> {
+    if files.len() > MAX_FILES {
+        return Err(Failure::Files(format!("the files are over the {MAX_FILES} a clone takes")));
+    }
     let mut total = 0;
     let mut decoded = Vec::with_capacity(files.len());
     for (at, file) in files.iter().enumerate() {

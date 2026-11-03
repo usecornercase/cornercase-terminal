@@ -64,6 +64,16 @@ mod the_files {
     }
 
     #[test]
+    fn over_the_count_are_refused_even_when_empty() {
+        let files = vec![sized(0); MAX_FILES + 1];
+
+        let Err(Failure::Files(why)) = decoded(&files) else { panic!("refused for their count") };
+
+        assert!(why.contains("over the 200 a clone takes"), "{why}");
+        assert_eq!(decoded(&files[1..]).map(|taken| taken.len()).ok(), Some(MAX_FILES));
+    }
+
+    #[test]
     fn that_are_not_base64_are_named_by_their_place_and_never_their_path() {
         let file = CloneFile { path: PathBuf::from("secrets/.env"), data: "not base64!".into(), mode: 0o600 };
 
