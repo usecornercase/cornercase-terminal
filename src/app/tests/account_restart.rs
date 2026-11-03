@@ -90,7 +90,9 @@ impl Setup {
     fn runs_sleep(&mut self, pane: u64) {
         type_line(&mut self.app, "sleep 30");
         pump_until(&mut self.app, &self.rx, "sleep runs", |app| {
-            app.projects.pane_by(pane).is_some_and(|term| !term.shell_in_foreground())
+            app.projects.pane_by(pane).is_some_and(|term| {
+                !term.shell_in_foreground() && term.program(&Config::default()).as_deref() == Some("sleep")
+            })
         });
     }
 

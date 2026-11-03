@@ -400,3 +400,24 @@ fn a_sub_agents_newer_record_does_not_hide_the_main_percentage_after_a_seed() {
 
     assert_eq!(session.context, Some(Context { model: "gpt-4.1".into(), percent: Some(19) }));
 }
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+    use crate::test_util::holding;
+
+    #[test]
+    fn a_session_whose_lock_the_process_holds_is_the_panes() {
+        let home = TempDir::new();
+        let session = home.path().join("session-state").join(ID);
+        std::fs::create_dir_all(&session).expect("create the session");
+        let lock = session.join("inuse.hold");
+        let copilot = holding(&lock, &[("COPILOT_HOME", &home.path().display().to_string())]);
+        std::fs::rename(&lock, session.join(format!("inuse.{}.hold", copilot.pid()))).expect("name the lock");
+        let expected = session.canonicalize().expect("session folder");
+
+        wait_until("the session is found", || {
+            look(copilot.pid(), &[]).is_some_and(|found| found.id == ID && found.path == expected)
+        });
+    }
+}
