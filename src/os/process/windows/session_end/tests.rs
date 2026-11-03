@@ -74,8 +74,12 @@ mod window {
 
     impl Opened {
         fn new() -> Self {
+            Self::holding(SHORT)
+        }
+
+        fn holding(wait: Duration) -> Self {
             let (stop, stopped) = slot();
-            let (window, thread) = open(Ending { stop, wait: SHORT }).expect("opened");
+            let (window, thread) = open(Ending { stop, wait }).expect("opened");
             Self { window: ptr::with_exposed_provenance_mut(window), thread: Some(thread), stopped }
         }
 
@@ -129,11 +133,11 @@ mod window {
 
     #[test]
     fn an_end_called_off_neither_stops_nor_waits() {
-        let opened = Opened::new();
+        let opened = Opened::holding(Duration::from_secs(30));
         let sent = Instant::now();
 
         assert_eq!(opened.send(WM_ENDSESSION, 0), 0);
-        assert!(sent.elapsed() < SHORT, "it answered after {:?}", sent.elapsed());
+        assert!(sent.elapsed() < Duration::from_secs(10), "it answered after {:?}", sent.elapsed());
         assert_eq!(opened.stops(), 0);
     }
 

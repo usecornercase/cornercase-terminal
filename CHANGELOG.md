@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.264
 
-- **On Windows, the cornercase server stops cleanly when you sign out, restart or shut down**, the next step of the native port (it still says it does not run on Windows yet). Windows asks it before the programs in its panes, and it stops the way `kill-server` stops it: plugins stop and the TODO list, the queue and the stats are saved, without ever holding up the end of the session. `taskkill /pid` without `/f` stops it the same way. Nothing changes on Linux and macOS.
+- **On Windows, the cornercase server stops cleanly when you sign out, restart or shut down**, the next step of the native port (it still says it does not run on Windows yet). Windows asks it before the programs in its panes, and it stops the way `kill-server` stops it: plugins stop and the TODO list, the queue and the stats are saved, without holding up the end of the session for more than a few seconds. `taskkill /pid` without `/f` stops it the same way. Nothing changes on Linux and macOS.
 
 ## 0.12.259
 
