@@ -355,6 +355,43 @@ mod the_issues_dialog {
         assert!(run_on.ends_with(" · gh failed: exit status 1 because the token expired on Monda…"), "{run_on:?}");
     }
 
+    fn sources_asked(reading: &Reading) -> usize {
+        reading.remote.asked().iter().filter(|asked| asked["command"] == "issue-sources").count()
+    }
+
+    #[test]
+    fn asks_again_what_failed_once_the_link_is_up_again() {
+        let mut reading = reading_with(Reply::Told(rambling_tracker), vec![web_shop()]);
+        reading.checked();
+        let linked = Event::Linked { release: version::CURRENT.into(), server_version: version::CURRENT.into() };
+
+        reading.deliver(AppEvent::Machine(MachineEvent::Link(Report { link: reading.remote.link, event: linked })));
+
+        reading
+            .remote
+            .rig
+            .until("the machine answers again", |app| app.tracker_there("vps", 1, "github") != Checked::Waiting);
+        assert_eq!(sources_asked(&reading), 2);
+    }
+
+    #[test]
+    fn asks_again_what_failed_when_start_is_pressed_and_still_refuses() {
+        let mut reading = reading_with(Reply::Told(rambling_tracker), vec![web_shop()]);
+        reading.checked();
+        reading.pick("account…", "home");
+
+        reading.press("start");
+
+        let app = &reading.remote.rig.app;
+        let said = error(app).expect("the reason");
+        assert!(said.starts_with("gh failed: exit status 1"), "{said}");
+        reading
+            .remote
+            .rig
+            .until("the machine answers again", |app| app.tracker_there("vps", 1, "github") != Checked::Waiting);
+        assert_eq!((sources_asked(&reading), reading.sent("start")), (2, None));
+    }
+
     #[test]
     fn says_an_account_with_a_login_there_is_ready() {
         let mut reading = reading(vec![web_shop()]);

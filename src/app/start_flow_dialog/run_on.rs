@@ -69,7 +69,8 @@ impl App {
     }
 
     fn read_there(&self, start: &Start, target: &Target) -> Read {
-        let was = start.there().cloned().unwrap_or_default();
+        let era = self.held_by(target.link).map_or(0, |held| held.era);
+        let was = start.there().filter(|was| was.era == era).cloned().unwrap_or_default();
         let id = self.project_there(target.link, start.project).map(|there| there.id);
         let flows = id.filter(|_| !was.listed).map(|id| self.flows_there(&target.name, id));
         let failed = match &flows {
@@ -92,6 +93,7 @@ impl App {
             listed: was.listed || listing.is_some(),
             accounted: was.accounted || accounts.is_some(),
             lacking: tracker.or(failed),
+            era,
         };
         Read { there, listing, accounts }
     }

@@ -5,6 +5,7 @@ use serde_json::Value;
 use super::link::{clean_path, clean_within};
 use super::{HERE, act};
 use crate::control::contract::Refusal;
+use crate::flows::folder::MAX_FILES;
 use crate::text::{self, truncate_right};
 
 pub(crate) const NEEDS_REMOTE: &str = "needs a git remote";
@@ -15,6 +16,7 @@ const FLOW_KEPT: usize = 65_536;
 const FLOW_LINES: [&str; 3] = ["prompt", "description", "notes"];
 const FLOW_PATHS: [&str; 1] = ["path"];
 const FLOW_LISTS: [&str; 2] = ["flows", "hidden"];
+const FLOW_CAPPED: [&str; 4] = ["flows", "hidden", "broken", "builtins"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Target {
@@ -157,9 +159,10 @@ pub(crate) fn heard_flows(text: &str) -> Result<Value, Refusal> {
 }
 
 fn flows_cleaned(mut value: Value) -> Value {
-    for list in FLOW_LISTS {
+    for list in FLOW_CAPPED {
         if let Some(Value::Array(items)) = value.get_mut(list) {
-            items.retain(named_whole);
+            items.retain(|item| !FLOW_LISTS.contains(&list) || named_whole(item));
+            items.truncate(MAX_FILES);
         }
     }
     flow_text(value, flow_line)

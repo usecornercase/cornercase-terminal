@@ -316,7 +316,7 @@ impl App {
         if streamed {
             return;
         }
-        self.check_shown();
+        self.check_shown(false);
         self.follow_issues_run_on();
         self.follow_start_flow_run_on();
         self.follow_new_workspace_run_on();
@@ -332,6 +332,7 @@ impl App {
                     log::info!("machines", "machine linked", name = held.name, version = release);
                 }
                 held.status.linked(release, server_version, now);
+                held.checks.forget_failures();
                 held.down_at = None;
                 held.watching = false;
             }

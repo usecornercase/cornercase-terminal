@@ -226,7 +226,7 @@ impl App {
         self.remember_browser();
         self.follow_issues_run_on();
         let acted = self.act_on(action, area);
-        self.check_shown();
+        self.check_shown(false);
         acted
     }
 

@@ -287,6 +287,18 @@ mod a_flow_listing {
         assert_eq!(flows["flows"][0]["flow"]["notes"].as_str().map(str::len), Some(65_536));
     }
 
+    #[test]
+    fn keeps_as_many_entries_in_each_list_as_a_folder_here_offers() {
+        let many = |item: Value| Value::Array(vec![item; MAX_FILES + 5]);
+        let broken = json!({ "path": "/x.json", "error": "bad" });
+        let listed = json!({ "flows": many(flow("Pair")), "hidden": many(flow("Quick")), "broken": many(broken), "builtins": many(json!("solo")) });
+
+        let flows = heard(&listed);
+
+        let lengths = ["flows", "hidden", "broken", "builtins"].map(|list| flows[list].as_array().map(Vec::len));
+        assert_eq!(lengths, [Some(MAX_FILES); 4]);
+    }
+
     #[rstest::rstest]
     #[case::past_one_line("x".repeat(250), true)]
     #[case::past_the_limit("x".repeat(FLOW_KEPT + 1), false)]

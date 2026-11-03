@@ -137,6 +137,7 @@ impl App {
             Action::None => {}
             Action::RunOn => self.start_flow_run_on_chosen(),
             Action::CloneThere => self.start_flow_clone(),
+            Action::AskAgain => self.check_shown(true),
             Action::Close => {
                 if let Some(Overlay::StartFlow { back, .. }) = self.overlay.take() {
                     self.overlay = back.map(|back| *back);

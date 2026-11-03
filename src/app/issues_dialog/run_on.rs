@@ -95,7 +95,10 @@ impl App {
             return true;
         }
         let sent = match (missing, self.project_there(target.link, project).map(|there| there.id)) {
-            (Some(missing), _) => Err(missing),
+            (Some(missing), _) => {
+                self.check_shown(true);
+                Err(missing)
+            }
             (None, None) => Err(run_on::not_there(&target.name)),
             (None, Some(id)) => {
                 let start = self.start_there(issue, start, id);

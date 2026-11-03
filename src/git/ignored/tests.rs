@@ -183,10 +183,16 @@ mod read {
         target.to_path_buf()
     }
 
+    fn in_a_linked_folder(repo: &Path, target: &Path) -> PathBuf {
+        std::os::unix::fs::symlink(target.parent().expect("a folder"), repo.join("secrets")).expect("symlink");
+        Path::new("secrets").join(target.file_name().expect("a name"))
+    }
+
     #[rstest::rstest]
     #[case::outside(linked)]
     #[case::a_parent(up_from)]
     #[case::absolute(absolute)]
+    #[case::through_a_folder(in_a_linked_folder)]
     fn refuses_a_symlink_or_a_path_out_of_the_project(#[case] aim: fn(&Path, &Path) -> PathBuf) {
         let repo = repo(".env\n");
         let outside = TempDir::new();
@@ -215,7 +221,12 @@ mod read {
         let made = std::process::Command::new("mkfifo").arg(&fifo).status().expect("mkfifo");
         assert!(made.success());
 
-        let why = read(repo.path(), &file(".env", 0)).expect_err("a fifo").to_string();
+        let root = repo.path().to_path_buf();
+        let (told, heard) = std::sync::mpsc::channel();
+        std::thread::spawn(move || told.send(read(&root, &file(".env", 0)).map_err(|error| error.to_string())));
+
+        let read = heard.recv_timeout(std::time::Duration::from_secs(10)).expect("read waits for a writer on the fifo");
+        let why = read.expect_err("a fifo");
 
         assert!(why.contains("not a regular file"), "{why}");
     }

@@ -113,6 +113,12 @@ impl Check {
 }
 
 impl Checks {
+    pub(super) fn forget_failures(&mut self) {
+        self.accounts.error = None;
+        self.sources.values_mut().for_each(|sources| sources.error = None);
+        self.flows.values_mut().for_each(|flows| flows.error = None);
+    }
+
     fn slot(&mut self, check: Check) -> &mut dyn Slot {
         match check {
             Check::Accounts => &mut self.accounts,
@@ -134,7 +140,7 @@ impl App {
         self.ask_checks(name, project, wanted, true);
     }
 
-    pub(in crate::app) fn check_shown(&mut self) {
+    pub(in crate::app) fn check_shown(&mut self, again: bool) {
         let (target, project) = match &self.overlay {
             Some(Overlay::Issues(b)) => (b.machine().cloned(), issue_project(b)),
             Some(Overlay::StartFlow { start, .. }) => (start.machine().cloned(), start.project),
@@ -143,7 +149,7 @@ impl App {
         let Some(target) = target else { return };
         let there = self.project_there(target.link, project).map(|there| there.id);
         let wanted = self.wanted_checks();
-        self.ask_checks(&target.name, there, wanted, false);
+        self.ask_checks(&target.name, there, wanted, again);
     }
 
     fn ask_checks(&mut self, name: &str, project: Option<u64>, wanted: Wanted, again: bool) {

@@ -40,7 +40,7 @@ fn on_vps() -> Start {
 
 fn there(cloned: bool, listed: bool, lacking: Option<&str>) -> There {
     let place = "in its own worktree on vps, in ~/code/web-shop".into();
-    There { place, cloned, listed, accounted: true, lacking: lacking.map(str::to_string) }
+    There { place, cloned, listed, accounted: true, lacking: lacking.map(str::to_string), era: 0 }
 }
 
 fn texts(spans: Option<Vec<Span<'static>>>) -> Option<String> {
@@ -92,7 +92,7 @@ fn sends_nothing_while_the_machine_lacks_something_or_has_not_listed_its_flows()
     let mut s = on_vps();
 
     s.there = Some(there(true, true, Some("vps has no GitHub token for web-shop")));
-    assert_eq!(s.press(START), Action::None);
+    assert_eq!(s.press(START), Action::AskAgain);
     assert_eq!(s.notice.as_deref(), Some("vps has no GitHub token for web-shop"));
 
     s.there = Some(there(true, false, None));

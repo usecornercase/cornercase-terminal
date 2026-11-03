@@ -16,6 +16,7 @@ pub(crate) struct There {
     pub(crate) listed: bool,
     pub(crate) accounted: bool,
     pub(crate) lacking: Option<String>,
+    pub(crate) era: u64,
 }
 
 impl Start {
@@ -54,9 +55,11 @@ impl Start {
     }
 
     pub(crate) fn read_accounts_there(&mut self, accounts: Vec<AgentAccounts>) {
+        let mut kept: BTreeMap<String, String> =
+            self.accounts.iter().map(|agent| (agent.kind.clone(), agent.chosen().to_string())).collect();
+        kept.extend(std::mem::take(&mut self.picked_there));
         self.accounts = accounts;
-        let picked = std::mem::take(&mut self.picked_there);
-        self.seed_accounts(&picked);
+        self.seed_accounts(&kept);
     }
 
     pub(crate) fn templated(&self) -> Option<String> {
@@ -106,8 +109,15 @@ impl Start {
         if !there.cloned {
             return Some(Action::CloneThere);
         }
-        let why = there.lacking.clone().or_else(|| (!there.listed).then(|| format!("reading the flows on {name}…")));
-        self.notice = Some(why?);
+        let (lacking, listed) = (there.lacking.clone(), there.listed);
+        if let Some(lacking) = lacking {
+            self.notice = Some(lacking);
+            return Some(Action::AskAgain);
+        }
+        if listed {
+            return None;
+        }
+        self.notice = Some(format!("reading the flows on {name}…"));
         Some(Action::None)
     }
 

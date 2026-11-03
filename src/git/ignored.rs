@@ -1,9 +1,11 @@
 use std::ffi::OsStr;
-use std::fs::OpenOptions;
+use std::fs::File;
 use std::io::{self, Read};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
+
+use rustix::fs::{Mode, OFlags};
 
 use super::clone::files::MAX_FILES;
 use super::worktree::{check, git};
@@ -48,10 +50,7 @@ pub(crate) fn read(root: &Path, file: &IgnoredFile) -> Result<Vec<u8>> {
     if !file.path.components().all(|part| matches!(part, Component::Normal(_))) {
         return Err(io::Error::other(format!("{} is not inside the project", file.path.display())).into());
     }
-    let opened = OpenOptions::new()
-        .read(true)
-        .custom_flags((rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK).bits().cast_signed())
-        .open(root.join(&file.path))?;
+    let opened = open_within(root, &file.path)?;
     if !opened.metadata()?.file_type().is_file() {
         return Err(io::Error::other(format!("{} is not a regular file", file.path.display())).into());
     }
@@ -66,6 +65,20 @@ pub(crate) fn read(root: &Path, file: &IgnoredFile) -> Result<Vec<u8>> {
         .into());
     }
     Ok(bytes)
+}
+
+fn open_within(root: &Path, path: &Path) -> Result<File> {
+    let Some(name) = path.file_name() else {
+        return Err(io::Error::other(format!("{} is not a file", path.display())).into());
+    };
+    let mut dir = rustix::fs::open(root, OFlags::DIRECTORY | OFlags::RDONLY | OFlags::CLOEXEC, Mode::empty())
+        .map_err(io::Error::from)?;
+    let folder = OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::RDONLY | OFlags::CLOEXEC;
+    for part in path.parent().into_iter().flat_map(Path::components) {
+        dir = rustix::fs::openat(&dir, part.as_os_str(), folder, Mode::empty()).map_err(io::Error::from)?;
+    }
+    let leaf = OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::RDONLY | OFlags::CLOEXEC;
+    Ok(File::from(rustix::fs::openat(&dir, name, leaf, Mode::empty()).map_err(io::Error::from)?))
 }
 
 fn regular(top: &Path, path: &Path) -> Option<IgnoredFile> {

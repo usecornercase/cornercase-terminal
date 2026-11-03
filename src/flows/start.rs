@@ -33,6 +33,7 @@ pub(crate) enum Action {
     Close,
     Edit(Origin, String),
     CloneThere,
+    AskAgain,
     RunOn,
     Start {
         flow: Box<Flow>,
