@@ -494,7 +494,7 @@ mod on_windows {
         let ping = ping(dir.path());
 
         let folder = cwd(ping.pid()).expect("a folder");
-        assert_eq!(folder.canonicalize().expect("canonicalize"), dir.path());
+        assert_eq!(folder.canonicalize().expect("canonicalize"), dir.path().canonicalize().expect("canonicalize"));
         assert!(!folder.to_string_lossy().ends_with('\\'), "{}", folder.display());
         let probe = env(ping.pid()).into_iter().find(|(key, _)| key == "CORNERCASE_PROBE");
         assert_eq!(probe, Some(("CORNERCASE_PROBE".into(), "a=b".into())));
