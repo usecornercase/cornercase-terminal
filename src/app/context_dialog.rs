@@ -43,6 +43,9 @@ impl Default for Contexts {
 
 impl App {
     pub(super) fn open_context(&mut self, pane: u64) {
+        if self.projects.pane_by(pane).is_none_or(|term| term.context.kind().is_none()) {
+            return;
+        }
         self.screen.nav = None;
         self.overlay = Some(Overlay::Context { pane, scroll: 0 });
         self.read_context(pane);

@@ -90,6 +90,14 @@ pub(crate) struct Messages {
     pub(crate) attachment_kinds: Vec<Named>,
 }
 
+impl Messages {
+    pub(crate) fn top_tools(&self, listed: usize) -> Vec<String> {
+        let mut tools: Vec<_> = self.tools.iter().map(|t| (&t.name, t.calls + t.results)).collect();
+        tools.sort_by_key(|(_, tokens)| std::cmp::Reverse(*tokens));
+        tools.into_iter().take(listed).map(|(name, used)| format!("{name} {}", tokens(used))).collect()
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Breakdown {

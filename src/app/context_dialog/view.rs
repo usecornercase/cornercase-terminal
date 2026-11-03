@@ -97,13 +97,7 @@ fn messages(breakdown: &Breakdown) -> Option<Section> {
         breakdown::tokens(found.user),
         breakdown::tokens(found.attachments)
     )));
-    let mut tools: Vec<_> = found.tools.iter().map(|t| (&t.name, t.calls + t.results)).collect();
-    tools.sort_by_key(|(_, tokens)| std::cmp::Reverse(*tokens));
-    let top: Vec<String> = tools
-        .iter()
-        .take(TOOLS_LISTED)
-        .map(|(name, tokens)| format!("{name} {}", breakdown::tokens(*tokens)))
-        .collect();
+    let top = found.top_tools(TOOLS_LISTED);
     if !top.is_empty() {
         rows.push(muted(top.join(" · ")));
     }

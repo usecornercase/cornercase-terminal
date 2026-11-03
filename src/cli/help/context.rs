@@ -1,8 +1,8 @@
 pub(in crate::cli) const CONTEXT_HELP: &str =
     "Prints what fills an agent's context, as the Context dialog shows it (`view context` in a tab's
 menu or an agent row's): how its window splits between the system prompt, the tools, MCP servers,
-memory files (AGENTS.md, CLAUDE.md), skills and the conversation, with each memory file, MCP server
-and skill.
+memory files (AGENTS.md, CLAUDE.md), skills and the conversation, with each memory file and MCP
+server, the skill count and the tools that took the most of the conversation.
 
 For Claude Code it starts a second `claude` that reloads the same conversation, in the same
 folder, account and model, sends no prompt and spends no tokens. It starts your MCP servers a second time. It turns the hooks off and waits

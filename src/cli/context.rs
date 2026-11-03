@@ -7,6 +7,8 @@ use crate::client::{answer, ask};
 use crate::control::{Command, ContextInfo, ContextRead};
 use crate::error::Result;
 
+const TOOLS_LISTED: usize = 5;
+
 pub(super) fn run(args: &ContextArgs) -> Result<bool> {
     let read = ContextRead { pane: args.target.pane, tab: args.target.tab, cached: args.cached };
     let value = ask("context", Command::Context(read))?;
@@ -123,6 +125,10 @@ fn sections(text: &mut String, b: &Breakdown) {
             breakdown::tokens(m.user),
             breakdown::tokens(m.attachments)
         );
+        let top = m.top_tools(TOOLS_LISTED);
+        if !top.is_empty() {
+            let _ = writeln!(text, "  {}", top.join(" · "));
+        }
     }
 }
 

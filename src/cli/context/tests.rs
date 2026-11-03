@@ -1,5 +1,5 @@
 use super::*;
-use crate::agents::breakdown::{Category, McpServer, MemoryFile};
+use crate::agents::breakdown::{Category, McpServer, MemoryFile, Messages, ToolUse};
 
 fn category(id: &str, name: &str, tokens: u64, kind: &str) -> Category {
     Category { id: id.into(), name: name.into(), tokens, kind: kind.into() }
@@ -72,4 +72,21 @@ fn a_new_conversation_is_said() {
         b.conversation = None;
     }
     assert!(text(&fresh).ends_with("no conversation yet: this is what a new conversation starts with\n"));
+}
+
+#[test]
+fn the_tools_behind_the_message_tokens_are_listed_largest_first() {
+    let mut with = info();
+    let tool = |name: &str, calls, results| ToolUse { name: name.into(), calls, results };
+    if let Some(b) = with.breakdown.as_mut() {
+        b.messages = Some(Messages {
+            tool_calls: 1_000,
+            tool_results: 90_000,
+            tools: vec![tool("Read", 80, 8_900), tool("Bash", 4_800, 81_900)],
+            ..Messages::default()
+        });
+    }
+    let said = text(&with);
+    assert!(said.contains("  tool calls and results  91k\n"), "{said}");
+    assert!(said.contains("  Bash 86.7k · Read 9k\n"), "{said}");
 }

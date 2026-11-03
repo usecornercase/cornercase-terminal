@@ -41,3 +41,11 @@ fn the_agent_row_menu_puts_it_before_close_agent() {
     let at = actions.iter().position(|a| matches!(a, MenuAction::ViewContext { .. })).expect("view context");
     assert!(matches!(actions[at + 1], MenuAction::CloseAgent(_)), "{actions:?}");
 }
+
+#[test]
+fn a_pane_without_a_known_agent_opens_no_dialog() {
+    let (mut app, _rx) = app();
+    let pane = agent(&mut app, 0, 0);
+    app.open_context(pane);
+    assert!(app.overlay.is_none());
+}

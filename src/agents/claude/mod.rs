@@ -185,6 +185,7 @@ impl Reader {
         if self.transcript.as_ref().is_none_or(|t| t.path != path) {
             self.transcript = None;
             *shown = None;
+            self.probe_model = None;
         }
         let transcript = self.transcript.get_or_insert_with(|| Transcript::new(path));
         let before = transcript.shown_key();
