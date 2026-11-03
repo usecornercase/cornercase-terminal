@@ -30,6 +30,7 @@ mod agents;
 mod arranging;
 mod browser;
 mod commands;
+mod context;
 mod contract;
 mod flows;
 mod input;

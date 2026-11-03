@@ -25,6 +25,7 @@ mod args;
 mod arrange;
 mod changes;
 mod config;
+mod context;
 mod contract;
 mod files;
 mod flow;
@@ -296,6 +297,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
         Control::Processes(args) => return ControlFlow::Break(processes::run(&args)),
         Control::PullRequest(args) => return ControlFlow::Break(pull_request::run(&args)),
+        Control::Context(args) => return ControlFlow::Break(context::run(&args)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),

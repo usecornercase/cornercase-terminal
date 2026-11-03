@@ -543,6 +543,7 @@ mod closed_agents;
 mod compacting;
 mod config;
 mod config_share;
+mod context_read;
 mod contract;
 mod copilot;
 mod creating;

@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.245
+## 0.12.246
 
 - **On Windows, cornercase now reads processes**: their trees, names, arguments, folders, memory and CPU, another step towards running there natively. It still says that it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.243
+
+- **See what fills an agent's context.** Right-click a tab running an agent (or click its ` ⋯ `), or an agent's row in the agents section, and pick **view context**. For Claude Code a dialog shows how its window splits between the system prompt, the tools, MCP servers, memory files such as a long `AGENTS.md`, skills and the conversation, with each memory file and MCP server, the skill count and the biggest tools under it. cornercase asks a second `claude` that loads the same conversation in the same folder, account and model, so nothing is typed into your agent and no tokens are spent (your MCP servers are started a second time while it looks); ` refresh ` reads again. The other agents show their model and how full their context is.
+- **`cornercase context`** prints the same numbers for scripts and other apps (`--json`, `--cached`), and `context` is a new request over the socket.
 
 ## 0.12.242
 
