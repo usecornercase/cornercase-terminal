@@ -650,10 +650,16 @@ fn refused(out: &std::process::Output, code: i32, message: &str) -> bool {
 const ISSUES_LIST: &str = r#"[{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"author":{"login":"ana"},"updatedAt":"2026-09-19T12:00:00Z","url":"https://github.com/acme/shop/issues/7"}]"#;
 
 fn fake_trusting_agent(dir: &std::path::Path) -> PathBuf {
+    fake_agent_writing(dir, ">")
+}
+
+fn fake_agent_writing(dir: &std::path::Path, redirect: &str) -> PathBuf {
     let agent = dir.join("agent");
-    let agent_script = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
-        printf '\\033[2J\\033[Hagent ready> '\nread line\nprintf '%s' \"$line\" > got\n";
-    write_executable(&agent, agent_script);
+    let agent_script = format!(
+        "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
+         printf '\\033[2J\\033[Hagent ready> '\nread line\nprintf '%s' \"$line\" {redirect} got\n"
+    );
+    write_executable(&agent, &agent_script);
     agent
 }
 

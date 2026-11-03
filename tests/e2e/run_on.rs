@@ -15,7 +15,7 @@ fn on_vps() -> OnVps {
     let home = machine.dir.join("home");
     std::fs::create_dir_all(&home).expect("create the machine's home");
     let home = home.canonicalize().expect("canonicalize the machine's home");
-    let agent = fake_trusting_agent(&machine.dir);
+    let agent = fake_agent_writing(&machine.dir, ">>");
     let config = json!({
         "worktrees_dir": machine.dir.join("worktrees"),
         "agent": "fake",
