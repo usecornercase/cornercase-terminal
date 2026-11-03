@@ -17,7 +17,7 @@ fn on_vps() -> OnVps {
     let home = machine.dir.join("home");
     std::fs::create_dir_all(&home).expect("create the machine's home");
     let home = home.canonicalize().expect("canonicalize the machine's home");
-    let agent = fake_trusting_agent(&machine.dir);
+    let agent = fake_agent_writing(&machine.dir, ">>");
     let config = json!({
         "worktrees_dir": machine.dir.join("worktrees"),
         "gh": fake_issue_gh(&machine.dir, VIEW),
@@ -95,6 +95,21 @@ impl OnVps {
         let shown = answer(&self.here.says(&["status", "--json"]))["shown_remote"].clone();
         (shown["machine"] == VPS).then(|| shown["tab"].clone())
     }
+
+    fn why(&self, pane: &str) -> String {
+        let folder = self.machine.dir.join("worktrees").display().to_string();
+        let listing = std::process::Command::new("ls").args(["-laR", &folder]).output().expect("run ls");
+        let screen = self.machine.cli(&["read", "--pane", pane, "--lines", "40"]);
+        let log = std::fs::read_to_string(self.machine.dir.join("server.log")).unwrap_or_default();
+        let tail = log.lines().skip(log.lines().count().saturating_sub(40)).collect::<Vec<_>>().join("\n");
+        let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+        format!(
+            "--- worktrees there ---\n{}\n--- the orchestrator's screen ---\n{}{}\n--- server.log there ---\n{tail}",
+            text(&listing.stdout),
+            text(&screen.stdout),
+            text(&screen.stderr),
+        )
+    }
 }
 
 #[test]
@@ -132,8 +147,18 @@ fn a_flow_run_on_a_machine_starts_its_team_in_a_worktree_there() {
     let run = answer(&vps.here.says(&[&args[..], &["--worktree", "dark-mode", "--json"]].concat()));
 
     assert_eq!(run["machine"], VPS, "{run}");
-    let checkout = vps.machine.dir.join("worktrees").join("shop").join("dark-mode");
-    wait_until("the worktree is made there", || checkout.is_dir());
+    let members = run["members"].as_array().cloned().unwrap_or_default();
+    let mut roles: Vec<&str> = members.iter().filter_map(|member| member["role"].as_str()).collect();
+    roles.sort_unstable();
+    assert_eq!(roles, ["coder", "orchestrator", "reviewer"], "{run}");
+    let orchestrator = members.iter().find(|member| member["role"] == "orchestrator").expect("the orchestrator");
+    let pane = orchestrator["pane"].to_string();
+    let got = vps.machine.dir.join("worktrees").join("shop").join("dark-mode").join("got");
+    let deadline = Instant::now() + TIMEOUT;
+    while !std::fs::read_to_string(&got).unwrap_or_default().contains("add dark mode") {
+        assert!(Instant::now() < deadline, "the orchestrator there never got the task\n{}", vps.why(&pane));
+        thread::sleep(POLL);
+    }
     let branched = |project: &Value| workspaces(project).iter().any(|w| w["branch"] == "dark-mode");
     vps.wait_there("here lists the run's workspace under vps", branched);
 }

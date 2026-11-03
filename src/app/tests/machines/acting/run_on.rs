@@ -173,9 +173,17 @@ impl Reading {
         self.remote.rig.until("the machine answers", |app| !browser_open(app) || !browser(app).starting);
     }
 
-    fn shows_the_tab(&mut self) {
+    fn lists_the_tab(&mut self) {
         let workspace = WorkspaceInfo { tabs: vec![TabInfo { id: TAB, ..TabInfo::default() }], ..workspace() };
         serve(&mut self.remote.theirs, 2, shop(vec![ProjectInfo { workspaces: vec![workspace], ..web_shop() }]));
+        self.remote.rig.until("the machine lists the tab", |app| {
+            let seen = app.machines.held()[0].seen.as_deref();
+            seen.is_some_and(|seen| seen.projects[0].workspaces[0].tabs.iter().any(|tab| tab.id == TAB))
+        });
+    }
+
+    fn shows_the_tab(&mut self) {
+        self.lists_the_tab();
         self.remote
             .rig
             .until("the new tab is selected", |app| app.shown_remote().and_then(|shown| shown.tab) == Some(TAB));
@@ -311,6 +319,20 @@ mod starting_there {
 
         assert!(!browser_open(&reading.remote.rig.app));
         reading.shows_the_tab();
+    }
+
+    #[test]
+    fn leaves_alone_what_was_picked_before_the_machine_answered() {
+        let mut reading = reading_with(Reply::Told(ready), vec![web_shop()]);
+        reading.checked();
+        reading.pick("account…", "home");
+
+        reading.press("start");
+        reading.remote.rig.app.leave_remote();
+        reading.answered();
+        reading.lists_the_tab();
+
+        assert!(reading.remote.rig.app.shown_remote().is_none());
     }
 
     #[rstest]

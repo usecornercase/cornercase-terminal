@@ -7,9 +7,10 @@ use super::checks::Checking;
 use crate::app::App;
 use crate::app::control::machines::unknown;
 use crate::app::event::AppEvent;
+use crate::app::machines::RemoteItem;
 use crate::control::Command;
 use crate::control::contract::{Code, Refusal};
-use crate::log::{Job, Level};
+use crate::log::{self, Job, Level};
 use crate::machines::{self, State, act, ask, send};
 
 pub(in crate::app) struct Asking {
@@ -38,7 +39,7 @@ impl Asking {
 pub(in crate::app) enum Then {
     Client(u64),
     Check(Checking),
-    Dialog { link: u64, key: u64 },
+    Dialog(u64),
     Clone(u64),
 }
 
@@ -47,11 +48,13 @@ pub(in crate::app) struct Sent {
     pub(in crate::app) machine: String,
     pub(in crate::app) link: u64,
     pub(in crate::app) boot: Option<String>,
+    picks: u64,
 }
 
 #[derive(Debug)]
 pub(crate) struct Relayed {
     then: Then,
+    sent: Sent,
     result: Result<Value, Refusal>,
 }
 
@@ -92,23 +95,40 @@ impl App {
             return Err(Refusal::new(Code::Unavailable, self.unlinked(held)));
         }
         let boot = held.seen.as_ref().map(|seen| seen.boot.clone());
-        let target = Sent { machine: held.name.clone(), link: held.link.id(), boot: boot.clone() };
+        if boot.is_none() && send.focus() {
+            let why = format!("{} has not reported yet; try again", held.name);
+            return Err(Refusal::new(Code::Unavailable, why));
+        }
+        let picks = self.machines.picks;
+        let target = Sent { machine: held.name.clone(), link: held.link.id(), boot: boot.clone(), picks };
+        let awaited = target.clone();
         let asking =
             Asking { machine: held.name.clone(), destination: held.destination.clone(), boot, timeout: send.timeout() };
         let job = Job::new(Level::Info, "machines", "relay").with("name", &asking.machine).with("verb", send.verb());
         self.spawn_ask(send.logged(job), asking, send.command(), move |result, asking, job| {
             let result = asking.heard(result, job);
-            AppEvent::Machine(MachineEvent::Relayed(Relayed { then, result }))
+            AppEvent::Machine(MachineEvent::Relayed(Relayed { then, sent: awaited, result }))
         });
         Ok(target)
     }
 
+    pub(in crate::app) fn await_sent(&mut self, sent: &Sent, made: Option<RemoteItem>) {
+        if self.machines.picks != sent.picks {
+            log::info!("machines", "picked before the answer", name = sent.machine);
+            return;
+        }
+        match (made, sent.boot.clone()) {
+            (Some(made), Some(boot)) => self.await_remote(sent.link, boot, made),
+            _ => log::info!("machines", "nothing to select", name = sent.machine),
+        }
+    }
+
     pub(super) fn relayed(&mut self, relayed: Relayed) {
-        let Relayed { then, result } = relayed;
+        let Relayed { then, sent, result } = relayed;
         match then {
             Then::Client(key) => self.relay_answered(key, result),
             Then::Check(checking) => self.check_heard(checking, result),
-            Then::Dialog { link, key } => self.dialog_relayed(link, key, result),
+            Then::Dialog(key) => self.dialog_answered(&sent, key, result),
             Then::Clone(link) => self.clone_relayed(link, result),
         }
     }

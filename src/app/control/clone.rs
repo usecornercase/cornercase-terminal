@@ -11,9 +11,8 @@ use crate::app::event::AppEvent;
 use crate::config;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{CloneFile, CloneRepository, Cloned, Done, Item, Unwritten};
-use crate::git::clone::files::{self, File};
+use crate::git::clone::files::{self, File, MAX_FILES, MAX_TOTAL_BYTES};
 use crate::git::clone::{self, Failure, Target};
-use crate::git::ignored::MAX_TOTAL_BYTES;
 use crate::log::{self, Job, Level};
 use crate::machines::send;
 
@@ -58,17 +57,20 @@ fn checked_parent(parent: PathBuf, given: &Path) -> Result<PathBuf, Refusal> {
 }
 
 fn decoded(files: &[CloneFile]) -> Result<Vec<File>, Failure> {
+    if files.len() > MAX_FILES {
+        return Err(Failure::Files(format!("the files are over the {MAX_FILES} a clone takes")));
+    }
     let mut total = 0;
     let mut decoded = Vec::with_capacity(files.len());
-    for file in files {
-        let bytes = STANDARD
-            .decode(&file.data)
-            .map_err(|e| Failure::Files(format!("the `data` of `{}` is not base64: {e}", file.path.display())))?;
-        total += bytes.len() as u64;
+    for (at, file) in files.iter().enumerate() {
+        total += file.size();
         if total > MAX_TOTAL_BYTES {
             let limit = MAX_TOTAL_BYTES >> 20;
             return Err(Failure::Files(format!("the files are over the {limit} MiB a clone takes")));
         }
+        let bytes = STANDARD
+            .decode(&file.data)
+            .map_err(|e| Failure::Files(format!("the `data` of files[{at}] is not base64: {e}")))?;
         decoded.push(File { path: file.path.clone(), bytes, mode: file.mode });
     }
     Ok(decoded)

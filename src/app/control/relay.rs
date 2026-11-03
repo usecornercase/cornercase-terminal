@@ -5,8 +5,7 @@ use crate::app::App;
 use crate::app::machines::RemoteItem;
 use crate::app::machines::relay::{Sent, Then};
 use crate::control::contract::Refusal;
-use crate::control::{Done, Start, Until};
-use crate::log;
+use crate::control::{Command, Done, Start, Until};
 use crate::machines::send::{Send, UNWAITED};
 
 pub(super) struct Relaying {
@@ -17,7 +16,7 @@ pub(super) struct Relaying {
 impl App {
     pub(super) fn relay_request(&mut self, client: u64, machine: &str, send: Send) -> Handled {
         unwaited(&send)?;
-        let focus = focused(&send);
+        let focus = send.focus();
         let key = self.clients.requests.key();
         let target = self.send_to_machine(machine, send, Then::Client(key))?;
         let (client, done, stage) = (Some(client), Done::default(), Stage::Relay(Relaying { sent: target, focus }));
@@ -53,12 +52,10 @@ impl App {
     }
 
     pub(in crate::app) fn await_made(&mut self, sent: &Sent, value: &Value) {
-        let id = |key: &str| value.get(key).and_then(Value::as_u64);
-        let made = id("tab").map(RemoteItem::Tab).or_else(|| id("workspace").map(RemoteItem::Workspace));
-        match (made, sent.boot.clone()) {
-            (Some(made), Some(boot)) => self.await_remote(sent.link, boot, made),
-            _ => log::info!("machines", "nothing to select", name = sent.machine),
-        }
+        let id = |key: &str| value.pointer(key).and_then(Value::as_u64);
+        let tab = id("/tab").or_else(|| id("/members/0/tab"));
+        let made = tab.map(RemoteItem::Tab).or_else(|| id("/workspace").map(RemoteItem::Workspace));
+        self.await_sent(sent, made);
     }
 }
 
@@ -73,13 +70,16 @@ fn unwaited(send: &Send) -> Result<(), Refusal> {
     }
 }
 
-fn focused(send: &Send) -> bool {
-    match send {
-        Send::Start(start) | Send::StartWith(start) => start.focus,
-        Send::NewWorkspace(new) => new.focus,
-        Send::FlowRun(run) => run.focus,
-        Send::NewTab(tab) => tab.focus,
-        Send::Clone(clone) => clone.focus,
-        Send::AccountList | Send::IssueSources(_) | Send::FlowList(_) => false,
+pub(super) fn viewless(command: &Command) -> Result<(), Refusal> {
+    let (machine, focus) = match command {
+        Command::Start(start) | Command::StartWith(start) => (&start.machine, start.focus),
+        Command::NewWorkspace(new) => (&new.machine, new.focus),
+        _ => return Ok(()),
+    };
+    match machine {
+        Some(_) if focus => Err(malformed(
+            "`focus` with `machine` takes no view: what a machine shows is the window's, shared by every client",
+        )),
+        _ => Ok(()),
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::machines::RemoteItem;
 use crate::app::machines::relay::{Asking, Then};
-use crate::control::NewTab;
+use crate::control::NewWorkspace;
 use crate::log::{Job, Level};
 use crate::machines::send::Send;
 
@@ -9,8 +9,8 @@ const CLIENT: u64 = 3;
 const KEY: u64 = 900;
 const NEW: u64 = 8;
 
-fn new_tab() -> Send {
-    Send::NewTab(NewTab { workspace: Some(WORKSPACE), focus: true, ..NewTab::default() })
+fn new_workspace() -> Send {
+    Send::NewWorkspace(NewWorkspace { name: "notes".into(), project: Some(1), focus: true, ..NewWorkspace::default() })
 }
 
 fn with_new(boot: &str) -> control::Report {
@@ -47,7 +47,7 @@ impl Remote {
     }
 
     fn refused(&mut self, name: &str) -> (Code, String) {
-        let refusal = self.rig.app.send_to_machine(name, new_tab(), Then::Client(KEY)).expect_err("refused");
+        let refusal = self.rig.app.send_to_machine(name, new_workspace(), Then::Client(KEY)).expect_err("refused");
         (refusal.code, refusal.message)
     }
 
@@ -78,7 +78,7 @@ mod a_relay {
     fn answers_the_client_with_what_the_machine_said() {
         let mut remote = seeing(Reply::Agree);
 
-        assert_eq!(remote.relay(new_tab()), Ok(json!({})));
+        assert_eq!(remote.relay(new_workspace()), Ok(json!({})));
         assert_eq!(remote.answers(), [(CLIENT, json!({ "ok": {} }))]);
     }
 
@@ -86,7 +86,7 @@ mod a_relay {
     fn tells_the_client_why_the_machine_refused() {
         let mut remote = seeing(Reply::Refuse);
 
-        remote.relay(new_tab()).expect_err("a refusal");
+        remote.relay(new_workspace()).expect_err("a refusal");
 
         assert_eq!(remote.answers(), [(CLIENT, json!({ "error": "the worktree on vps is in use" }))]);
     }
@@ -95,15 +95,12 @@ mod a_relay {
     fn reaches_the_machine_with_the_boot_of_its_snapshot_and_without_the_focus() {
         let mut remote = seeing(Reply::Agree);
 
-        remote.relay(new_tab()).expect("an answer");
+        remote.relay(new_workspace()).expect("an answer");
 
         let asked = remote.asked();
         let [asked] = &asked[..] else { panic!("one question, not {asked:?}") };
-        assert_eq!((asked["command"].as_str(), asked["boot"].as_str()), (Some("new-tab"), Some(BOOT)));
-        assert_eq!(
-            (asked["args"]["workspace"].as_u64(), asked["args"]["focus"].as_bool()),
-            (Some(WORKSPACE), Some(false))
-        );
+        assert_eq!((asked["command"].as_str(), asked["boot"].as_str()), (Some("new-workspace"), Some(BOOT)));
+        assert_eq!((asked["args"]["name"].as_str(), asked["args"]["focus"].as_bool()), (Some("notes"), Some(false)));
     }
 
     #[rstest]
@@ -112,17 +109,36 @@ mod a_relay {
     fn keeps_the_machines_code_without_the_destination(#[case] reply: Reply, #[case] code: Code, #[case] why: &str) {
         let mut remote = seeing(reply);
 
-        assert_eq!(remote.relay(new_tab()), Err((code, why.into())));
+        assert_eq!(remote.relay(new_workspace()), Err((code, why.into())));
     }
 
     #[test]
     fn says_a_machine_that_cannot_be_reached_failed_without_its_destination() {
         let mut remote = seeing(Reply::Down);
 
-        let (code, why) = remote.relay(new_tab()).expect_err("a failure");
+        let (code, why) = remote.relay(new_workspace()).expect_err("a failure");
 
         assert_eq!(code, Code::Failed);
         assert!(why.contains("vps") && !why.contains("vps.lan"), "{why}");
+    }
+
+    #[test]
+    fn refuses_to_focus_on_a_machine_that_has_not_reported_yet() {
+        let mut remote = unseen(Reply::Agree);
+
+        assert_eq!(remote.refused("vps"), (Code::Unavailable, "vps has not reported yet; try again".into()));
+        assert_eq!(remote.rig.seen("ask"), 0);
+    }
+
+    #[test]
+    fn reaches_a_machine_that_has_not_reported_yet_when_nothing_is_focused() {
+        let mut remote = unseen(Reply::Agree);
+        let Send::NewWorkspace(new) = new_workspace() else { panic!("a new workspace") };
+
+        let answer = remote.relay(Send::NewWorkspace(NewWorkspace { focus: false, ..new }));
+
+        assert_eq!(answer, Ok(json!({})));
+        assert_eq!(remote.asked()[0].get("boot"), None);
     }
 
     #[test]

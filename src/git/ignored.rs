@@ -5,12 +5,11 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 
+use super::clone::files::MAX_FILES;
 use super::worktree::{check, git};
 use crate::error::Result;
 
-pub(crate) const MAX_FILES: usize = 200;
 pub(crate) const MAX_FILE_BYTES: u64 = 1024 * 1024;
-pub(crate) const MAX_TOTAL_BYTES: u64 = 8 * 1024 * 1024;
 const PERMISSIONS: u32 = 0o777;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

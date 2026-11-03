@@ -64,6 +64,17 @@ impl Send {
         }
     }
 
+    pub(crate) fn focus(&self) -> bool {
+        match self {
+            Self::Start(start) | Self::StartWith(start) => start.focus,
+            Self::NewWorkspace(new) => new.focus,
+            Self::FlowRun(run) => run.focus,
+            Self::NewTab(tab) => tab.focus,
+            Self::Clone(clone) => clone.focus,
+            Self::AccountList | Self::IssueSources(_) | Self::FlowList(_) => false,
+        }
+    }
+
     pub(crate) fn logged(&self, job: Job) -> Job {
         let job = match self.project() {
             Some(project) => job.with("project", project),
@@ -93,8 +104,8 @@ fn unwaited(start: Start) -> Start {
     Start { wait: false, until: Until::default(), timeout: None, focus: false, machine: None, ..start }
 }
 
-pub(crate) fn bytes(files: &[CloneFile]) -> usize {
-    files.iter().map(|file| base64::decoded_len_estimate(file.data.len())).sum()
+pub(crate) fn bytes(files: &[CloneFile]) -> u64 {
+    files.iter().map(CloneFile::size).sum()
 }
 
 #[cfg(test)]

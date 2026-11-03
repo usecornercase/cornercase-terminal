@@ -1,6 +1,7 @@
 use std::os::unix::fs::PermissionsExt;
 
 use super::*;
+use crate::git::clone::files::MAX_TOTAL_BYTES;
 use crate::test_util::{TempDir, git_repo};
 
 fn repo(ignore: &str) -> TempDir {

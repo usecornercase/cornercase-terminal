@@ -139,7 +139,7 @@ impl App {
 
     pub(in crate::app) fn send_from_dialog(&mut self, target: &Target, send: Send) -> Result<(), String> {
         let key = self.clients.requests.key();
-        let then = Then::Dialog { link: target.link, key };
+        let then = Then::Dialog(key);
         self.send_to_machine(&target.name, send, then).map_err(|refusal| refusal.message)?;
         if let Some(run_on) = self.dialog_run_on() {
             run_on.awaiting = Some(key);
@@ -162,17 +162,19 @@ impl App {
         b.error = sent.err();
     }
 
+    pub(in crate::app) fn dialog_answered(&mut self, sent: &Sent, key: u64, result: Result<Value, Refusal>) {
+        if let Ok(value) = &result {
+            self.await_made(sent, value);
+        }
+        self.dialog_relayed(sent.link, key, result);
+    }
+
     pub(in crate::app) fn dialog_relayed(&mut self, link: u64, key: u64, result: Result<Value, Refusal>) {
         let Some(held) = self.machines.held().iter().find(|held| held.link.id() == link) else { return };
-        let boot = held.seen.as_ref().map(|seen| seen.boot.clone());
-        let sent = Sent { machine: held.name.clone(), link, boot };
         let error = match result {
-            Ok(value) => {
-                self.await_made(&sent, &value);
-                None
-            }
+            Ok(_) => None,
             Err(refusal) if refusal.code == Code::StaleBoot => {
-                Some(format!("{} restarted; nothing was started there", sent.machine))
+                Some(format!("{} restarted; nothing was started there", held.name))
             }
             Err(refusal) => Some(refusal.message),
         };

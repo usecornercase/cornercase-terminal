@@ -50,9 +50,9 @@ impl Reading {
         let ui::Overlay::StartFlow(view) = overlay_shown(app, AREA) else { panic!("Start flow is not shown") };
         let row = ui::start_run_on(AREA, view.shape());
         click(app, Position::new(row.x + 30, row.y));
-        self.remote
-            .rig
-            .until("the machine lists its flows", |app| start(app).there().is_some_and(|there| there.listed));
+        self.remote.rig.until("the machine lists its flows and accounts", |app| {
+            start(app).there().is_some_and(|there| there.listed) && app.accounts_there("vps") != Checked::Waiting
+        });
     }
 
     fn run(&mut self, prompt: &str) {

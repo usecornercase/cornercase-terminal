@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::editor::Editor;
+use crate::git::clone::files::{MAX_FILES, MAX_TOTAL_BYTES};
 use crate::git::clone::folder_name;
-use crate::git::ignored::{IgnoredFile, Listing, MAX_FILES, MAX_TOTAL_BYTES};
+use crate::git::ignored::{IgnoredFile, Listing};
 use crate::text;
 
 pub(crate) const BACK: &str = "back";
