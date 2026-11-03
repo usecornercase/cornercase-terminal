@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::os::fs::{drive_path, reaches_network};
+
 const MAX_REF: usize = 200;
 const MAX_URL: usize = 2000;
 const GITHUB: &str = "https://github.com/";
@@ -26,7 +28,13 @@ impl Origin {
             valid_ref(reference)?;
         }
         let reference = reference.map(str::to_string);
-        if place.starts_with('/') {
+        if reaches_network(place) {
+            return Err(format!(
+                "`{place}` is a folder on the network; install from a folder on this computer, owner/repo or an \
+                 https:// address"
+            ));
+        }
+        if folder(place) {
             let (path, subdir) = split_subdir(place, place.find("//"))?;
             return Ok(Self { repo: path.to_string(), url: path.to_string(), reference, subdir });
         }
@@ -86,6 +94,10 @@ impl Origin {
             None => self.repo.clone(),
         }
     }
+}
+
+fn folder(place: &str) -> bool {
+    place.starts_with('/') || (cfg!(windows) && drive_path(place))
 }
 
 fn github(path: &str, reference: Option<String>) -> Result<Origin, String> {

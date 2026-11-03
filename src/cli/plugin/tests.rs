@@ -207,3 +207,47 @@ mod previewing {
         );
     }
 }
+
+mod folders {
+    use super::*;
+    use crate::test_util::TempDir;
+
+    fn home_with_tools() -> (TempDir, String) {
+        let home = TempDir::new();
+        std::fs::create_dir(home.path().join("tools.git")).expect("create the folder");
+        let expected = format!("{}//notes@v1", home.path().join("tools.git").display());
+        (home, expected)
+    }
+
+    #[test]
+    fn one_in_the_home_folder_becomes_absolute_and_keeps_its_subfolder_and_ref() {
+        let (home, expected) = home_with_tools();
+
+        assert_eq!(folder_spec_from("~/tools.git//notes@v1", Some(home.path())), expected);
+    }
+
+    #[test]
+    fn owner_and_repo_is_left_as_it_is() {
+        assert_eq!(folder_spec_from("acme/notes@v1", None), "acme/notes@v1");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_drive_path_and_one_in_the_home_folder_with_backslashes_become_canonical() {
+        let (home, expected) = home_with_tools();
+        let typed = format!(r"{}\tools.git\..\tools.git//notes@v1", home.path().display());
+
+        assert_eq!(folder_spec_from(r"~\tools.git//notes@v1", Some(home.path())), expected);
+        assert_eq!(folder_spec_from(&typed, None), expected);
+        assert!(Origin::parse(&expected).expect("a folder").local());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_network_folder_is_left_for_the_source_to_refuse() {
+        let share = r"\\host\share\tools.git";
+
+        assert_eq!(folder_spec_from(share, None), share);
+        assert!(Origin::parse(share).is_err());
+    }
+}

@@ -226,7 +226,6 @@ mod navigation {
         assert_eq!(picker.dir(), tmp.path());
     }
 
-    #[cfg(unix)]
     #[test]
     fn typing_a_path_walks_it() {
         let tmp = tree(&["projects/cornercase", "projects/cornercase-web"]);
@@ -235,6 +234,39 @@ mod navigation {
         type_text(&mut picker, &format!("{}/projects/cornercase/", tmp.path().display()));
 
         assert_eq!(picker.dir(), tmp.path().join("projects/cornercase"));
+    }
+
+    #[test]
+    fn a_separator_first_goes_to_the_root_of_the_folders_drive() {
+        let tmp = tree(&["src"]);
+        let mut picker = open(tmp.path());
+
+        picker.push('/');
+
+        assert_eq!(picker.dir(), tmp.path().ancestors().last().expect("a root"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_backslash_first_goes_to_the_root_of_the_folders_drive() {
+        let tmp = tree(&["src"]);
+        let mut picker = open(&tmp.path().join("src"));
+
+        picker.push('\\');
+
+        assert_eq!(picker.dir(), tmp.path().ancestors().last().expect("a root"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_drive_and_a_separator_go_to_that_drive() {
+        let tmp = tree(&["src"]);
+        let drive = tmp.path().to_string_lossy().chars().next().expect("a drive letter");
+        let mut picker = open(Path::new("/"));
+
+        type_text(&mut picker, &format!(r"{}:\", drive.to_ascii_lowercase()));
+
+        assert_eq!(picker.dir(), tmp.path().ancestors().last().expect("a root"));
     }
 
     #[test]

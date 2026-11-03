@@ -27,10 +27,26 @@ impl Target {
 
 const TRAILING: [char; 5] = ['.', ',', ':', ';', '#'];
 
-fn path_char(symbol: &str) -> bool {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Separators {
+    Slash,
+    Both,
+}
+
+impl Separators {
+    fn here() -> Self {
+        if cfg!(windows) { Self::Both } else { Self::Slash }
+    }
+
+    fn matches(self, c: char) -> bool {
+        c == '/' || (self == Self::Both && c == '\\')
+    }
+}
+
+fn path_char(symbol: &str, separators: Separators) -> bool {
     let mut chars = symbol.chars();
     match (chars.next(), chars.next()) {
-        (Some(c), None) => c.is_alphanumeric() || "_-./~@+,%:#".contains(c),
+        (Some(c), None) => c.is_alphanumeric() || "_-./~@+,%:#".contains(c) || separators.matches(c),
         _ => false,
     }
 }
@@ -49,11 +65,11 @@ fn location(rest: &str) -> Option<(u32, u32)> {
     }
 }
 
-fn split(token: &str) -> (&str, Option<(u32, u32)>) {
+fn split(token: &str, separators: Separators) -> (&str, Option<(u32, u32)>) {
     if let Some((path, rest)) = token.rsplit_once("#L") {
         return (path, location(rest));
     }
-    let name = token.rfind('/').map_or(0, |i| i + 1);
+    let name = token.rfind(|c| separators.matches(c)).map_or(0, |i| i + 1);
     let colon = token[name..].find(':').map(|i| name + i);
     match colon.and_then(|i| Some((i, location(&token[i + 1..])?))) {
         Some((i, lines)) => (&token[..i], Some(lines)),
@@ -62,12 +78,17 @@ fn split(token: &str) -> (&str, Option<(u32, u32)>) {
 }
 
 pub(crate) fn at(row: &[Cell], col: u16) -> Option<Link> {
+    at_with(row, col, Separators::here())
+}
+
+fn at_with(row: &[Cell], col: u16, separators: Separators) -> Option<Link> {
     let col = usize::from(col);
-    if !row.get(col).is_some_and(|c| path_char(&c.symbol)) {
+    let in_path = |i: usize| path_char(&row[i].symbol, separators);
+    if col >= row.len() || !in_path(col) {
         return None;
     }
-    let start = (0..col).rev().take_while(|&i| path_char(&row[i].symbol)).last().unwrap_or(col);
-    let mut end = (col..row.len()).take_while(|&i| path_char(&row[i].symbol)).last().map_or(col, |i| i + 1);
+    let start = (0..col).rev().take_while(|&i| in_path(i)).last().unwrap_or(col);
+    let mut end = (col..row.len()).take_while(|&i| in_path(i)).last().map_or(col, |i| i + 1);
     let mut token: String = row[start..end].iter().map(|c| c.symbol.as_str()).collect();
     while token.ends_with(TRAILING) {
         token.pop();
@@ -76,8 +97,8 @@ pub(crate) fn at(row: &[Cell], col: u16) -> Option<Link> {
     if col >= end || token.contains("://") {
         return None;
     }
-    let (path, lines) = split(&token);
-    if path.is_empty() || path.chars().all(|c| c == '.' || c == '/') {
+    let (path, lines) = split(&token, separators);
+    if path.is_empty() || path.chars().all(|c| c == '.' || separators.matches(c)) {
         return None;
     }
     let column = |i: usize| u16::try_from(i).unwrap_or(u16::MAX);

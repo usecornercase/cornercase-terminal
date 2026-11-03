@@ -89,8 +89,7 @@ impl Picker {
     pub(crate) fn push(&mut self, c: char) {
         self.error = None;
         match c {
-            '/' if self.filter.is_empty() && self.selected.is_none() => self.go(Path::new("/")),
-            '/' => self.enter_selected(),
+            c if std::path::is_separator(c) => self.separator(),
             '~' if self.filter.is_empty() => {
                 if let Some(home) = self.home.clone() {
                     self.go(&home);
@@ -168,12 +167,36 @@ impl Picker {
         self.scroll = cursor.scroll;
     }
 
+    fn separator(&mut self) {
+        if let Some(drive) = drive(&self.filter) {
+            self.go(&drive);
+        } else if self.filter.is_empty() && self.selected.is_none() {
+            self.go(&root(&self.dir));
+        } else {
+            self.enter_selected();
+        }
+    }
+
     fn go(&mut self, dir: &Path) {
         match Self::open(dir, self.home.as_deref()) {
             Ok(picker) => *self = picker,
             Err(e) => self.error = Some(format!("cannot open {}: {e}", dir.display())),
         }
     }
+}
+
+fn drive(filter: &str) -> Option<PathBuf> {
+    let mut chars = filter.chars();
+    match (chars.next(), chars.next(), chars.next()) {
+        (Some(letter), Some(':'), None) if cfg!(windows) && letter.is_ascii_alphabetic() => {
+            Some(PathBuf::from(format!(r"{}:\", letter.to_ascii_uppercase())))
+        }
+        _ => None,
+    }
+}
+
+fn root(dir: &Path) -> PathBuf {
+    if cfg!(windows) { dir.ancestors().last().unwrap_or(dir).to_path_buf() } else { PathBuf::from("/") }
 }
 
 fn entries(dir: &Path) -> io::Result<Vec<Item>> {

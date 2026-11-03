@@ -13,7 +13,7 @@ use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::control::{Command, Item, PluginActions, PluginList, PluginPopupClose, PluginRun};
 use crate::error::{Error, Result};
-use crate::os::fs::canonical;
+use crate::os::fs::{canonical, drive_path, reaches_network};
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
 use crate::plugins::registry::{missing, short};
@@ -306,7 +306,12 @@ fn same_commit(found: &str, wanted: Option<&str>, what: &str, kept: &str) -> Res
 }
 
 fn folder_spec(spec: &str) -> String {
-    if !spec.starts_with(['.', '~', '/']) {
+    let home = std::env::var_os(paths::HOME_VAR).map(std::path::PathBuf::from);
+    folder_spec_from(spec, home.as_deref())
+}
+
+fn folder_spec_from(spec: &str, home: Option<&Path>) -> String {
+    if !names_a_folder(spec) || reaches_network(spec) {
         return spec.to_string();
     }
     let (place, at) = match spec.split_once('@') {
@@ -317,9 +322,19 @@ fn folder_spec(spec: &str) -> String {
         Some((folder, subdir)) => (folder, format!("//{subdir}")),
         None => (place, String::new()),
     };
-    let home = std::env::var_os(paths::HOME_VAR).map(std::path::PathBuf::from);
-    let path = canonical(config::expand_home(folder, home.as_deref()));
+    let path = canonical(config::expand_home(&home_with_a_slash(folder), home));
     format!("{}{subdir}{at}", Path::new(&path).display())
+}
+
+fn names_a_folder(spec: &str) -> bool {
+    spec.starts_with(['.', '~', '/']) || (cfg!(windows) && (spec.starts_with('\\') || drive_path(spec)))
+}
+
+fn home_with_a_slash(folder: &str) -> String {
+    match folder.strip_prefix(r"~\") {
+        Some(rest) if cfg!(windows) => format!("~/{rest}"),
+        _ => folder.to_string(),
+    }
 }
 
 fn update(places: &Places, registry: &Registry, args: &UpdatePluginArgs) -> Result<()> {
