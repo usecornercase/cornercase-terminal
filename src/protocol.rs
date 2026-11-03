@@ -17,7 +17,7 @@ use crate::os::socket::UnixStream;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 9;
+pub(crate) const VERSION: u32 = 10;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const REMOTE_ENV: &str = "CORNERCASE_REMOTE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
