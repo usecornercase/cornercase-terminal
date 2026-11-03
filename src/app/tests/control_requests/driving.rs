@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use ratatui::style::Modifier;
 use rstest::rstest;
 use serde_json::{Value, json};

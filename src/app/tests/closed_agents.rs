@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::close_agent::{agent, tabs};
 use super::*;
 use crate::agents::AgentState;

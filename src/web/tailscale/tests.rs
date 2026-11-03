@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+#[cfg(unix)]
 use crate::test_util::{TempDir, write_executable};
 
 fn status_json(state: &str, certs: &str) -> String {
@@ -43,12 +44,14 @@ mod parse_status {
 mod commands {
     use super::*;
 
+    #[cfg(unix)]
     fn fake(dir: &TempDir, script: &str) -> PathBuf {
         let path = dir.path().join("tailscale");
         write_executable(&path, &format!("#!/bin/sh\n{script}\n"));
         path
     }
 
+    #[cfg(unix)]
     #[test]
     fn start_serves_the_local_port_on_the_https_port() {
         let dir = TempDir::new();
@@ -66,6 +69,7 @@ mod commands {
         assert_eq!(calls, "status --json\nserve --bg --yes --https=8443 http://127.0.0.1:4321\n");
     }
 
+    #[cfg(unix)]
     #[test]
     fn stop_turns_the_https_port_off() {
         let dir = TempDir::new();
@@ -77,6 +81,7 @@ mod commands {
         assert_eq!(std::fs::read_to_string(&log).expect("calls"), "serve --https=8443 off\n");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_failing_command_reports_its_last_line() {
         let dir = TempDir::new();

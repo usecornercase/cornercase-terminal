@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn in_pane() -> Position {

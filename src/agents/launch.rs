@@ -124,6 +124,7 @@ impl Launch {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(crate) fn trusted(&self) -> bool {
         self.spec.trusted
     }

@@ -5,6 +5,8 @@ use crate::test_util::{TempDir, wait_until, wait_until_within};
 
 const SLOW: Duration = Duration::from_secs(30);
 const PING: &str = "ping -n 30 127.0.0.1";
+const STOPS_BEFORE_PING_ENDS: Duration = Duration::from_secs(10);
+const CTRL_C_EVERY: u32 = 25;
 const CURSOR_REQUEST: &[u8] = b"\x1b[6n";
 
 fn system_path() -> String {
@@ -18,7 +20,12 @@ fn spawn_cmd(cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
     spawn_cmd_with(&env, cwd)
 }
 
+fn ctrl_c_reaches_the_panes() {
+    unsafe { windows_sys::Win32::System::Console::SetConsoleCtrlHandler(None, windows_sys::Win32::Foundation::FALSE) };
+}
+
 fn spawn_cmd_with(env: &[(String, String)], cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
+    ctrl_c_reaches_the_panes();
     let (tx, rx) = mpsc::channel();
     let args = ["/d".to_string()];
     let theme = HostTheme::default();
@@ -319,9 +326,14 @@ mod foreground {
         let job = term.current_job(&Config::default()).expect("a job");
         assert_eq!((Some(job.pid), term.shell_in_foreground()), (term.foreground_pid(), false));
 
-        term.write(b"\x03");
-
-        wait_until_within("back to cmd", SLOW, || program_is(&mut term, &rx, "cmd"));
+        let mut polls = 0;
+        wait_until_within("back to cmd", STOPS_BEFORE_PING_ENDS, || {
+            if polls % CTRL_C_EVERY == 0 {
+                term.write(b"\x03");
+            }
+            polls += 1;
+            program_is(&mut term, &rx, "cmd")
+        });
     }
 
     #[test]

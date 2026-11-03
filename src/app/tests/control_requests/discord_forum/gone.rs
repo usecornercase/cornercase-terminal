@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::cleanup::post_of;
 use super::posts::{Posting, THREAD, needs_you, posts, sends};
 use super::{tags, *};

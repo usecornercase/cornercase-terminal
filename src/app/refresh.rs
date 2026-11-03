@@ -37,6 +37,7 @@ impl Refresh {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn busy(&self) -> bool {
         self.busy
     }

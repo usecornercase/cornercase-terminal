@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use serde_json::json;
 
 use super::super::usage_modal::{ANSWER, CODEX_ANSWER, with_agents, with_claude_accounts};

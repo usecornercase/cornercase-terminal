@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::issue_list::{
     Setup, accounts_with_linear, assert_only_linear, browser, enter, loaded, open_list, secrets_file, setup, shown,
     to_tab,

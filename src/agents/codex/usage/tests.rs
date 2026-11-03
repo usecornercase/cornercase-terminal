@@ -5,6 +5,7 @@ use crate::agents::usage::Severity;
 
 pub(crate) const RECORDED: &str = r#"{"id":2,"result":{"ordinaryUsageAllowed":true,"rateLimits":{"limitId":"codex","limitName":null,"normalModelSlug":null,"primary":{"usedPercent":53,"windowDurationMins":300,"resetsAt":1791218970},"secondary":{"usedPercent":8,"windowDurationMins":10080,"resetsAt":1791805770},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"individualLimit":null,"spendControlReached":false,"planType":"plus","rateLimitReachedType":null},"rateLimitsByLimitId":{"codex":{"limitId":"codex","limitName":null,"normalModelSlug":null,"primary":{"usedPercent":53,"windowDurationMins":300,"resetsAt":1791218970},"secondary":{"usedPercent":8,"windowDurationMins":10080,"resetsAt":1791805770},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"individualLimit":null,"spendControlReached":false,"planType":"plus","rateLimitReachedType":null}},"rateLimitResetCredits":{"availableCount":2,"credits":null},"accountId":"00000000-0000-0000-0000-000000000000","rateLimitUpsell":null}}"#;
 
+#[cfg(unix)]
 pub(crate) const PARAMS_REFUSED: &str =
     r#"{"error":{"code":-32600,"message":"Invalid request: invalid type: map, expected unit"},"id":2}"#;
 

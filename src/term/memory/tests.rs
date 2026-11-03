@@ -1,5 +1,7 @@
 use super::*;
-use crate::test_util::{Family, exited_pid, this_pid, wait_until};
+#[cfg(unix)]
+use crate::test_util::Family;
+use crate::test_util::{exited_pid, this_pid, wait_until};
 
 fn measured(pid: i32, now: Instant) -> Pane {
     let mut pane = Pane::default();
@@ -10,6 +12,7 @@ fn measured(pid: i32, now: Instant) -> Pane {
     pane
 }
 
+#[cfg(unix)]
 #[test]
 fn counts_the_process_and_everything_it_started() {
     let family = Family::new();

@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::worktrees::{made, repo};
 use super::*;
 use crate::config::ProjectSettings;

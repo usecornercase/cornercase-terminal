@@ -1,12 +1,15 @@
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{TempDir, fake_gh, fixture};
+#[cfg(unix)]
+use crate::test_util::fake_gh;
+use crate::test_util::{TempDir, fixture};
 
 const VIEW: &str = fixture!("gh/2.101.0/pr-view.json");
 
 const CONFLICTING: &str = fixture!("gh/2.101.0/pr-view-conflicting.json");
 
+#[cfg(unix)]
 fn gh_printing(tmp: &TempDir, json: &str) -> std::path::PathBuf {
     fake_gh(tmp.path(), &format!("echo \"$@\" > args; cat <<'EOF'\n{json}\nEOF"))
 }
@@ -33,6 +36,7 @@ fn pull(state: State, checks: Vec<Check>) -> PullRequest {
     }
 }
 
+#[cfg(unix)]
 mod find {
     use super::*;
 

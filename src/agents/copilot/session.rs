@@ -65,6 +65,7 @@ pub(in crate::agents) fn follow(pid: i32, args: &[String], previous: Option<Sess
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 pub(in crate::agents) fn look(pid: i32, args: &[String]) -> Option<Session> {
     follow(pid, args, None)
 }
@@ -151,6 +152,7 @@ fn back_limit() -> u64 {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 pub(in crate::agents) fn limit_back(limit: Option<u64>) {
     BACK_LIMIT.with(|cell| cell.set(limit));
 }

@@ -3,11 +3,17 @@ use std::io::Write;
 use rstest::rstest;
 
 use super::*;
+#[cfg(unix)]
 use crate::agents::Known;
+#[cfg(unix)]
 use crate::agents::codex::fake::FakeCodex;
+#[cfg(unix)]
 use crate::agents::context::Pane;
+#[cfg(unix)]
 use crate::agents::context::tests::pane_look;
-use crate::test_util::{Running, Sleeper, TempDir, wait_until, write_executable};
+use crate::test_util::TempDir;
+#[cfg(unix)]
+use crate::test_util::{Running, Sleeper, wait_until, write_executable};
 
 const ID: &str = "019a1234-5678-7000-8000-000000000001";
 const CONTEXT: &str = crate::test_util::fixture!("codex/0.160.0/context.jsonl");
@@ -258,6 +264,7 @@ fn an_initial_tail_without_a_model_does_not_reuse_a_percentage() {
     assert_eq!(file.rollout.context(), None);
 }
 
+#[cfg(unix)]
 #[test]
 fn the_home_is_read_from_the_agent_process() {
     let dir = TempDir::new();
@@ -281,6 +288,7 @@ fn oversized_records_cannot_leave_an_obsolete_percentage_forever() {
     assert_eq!(file.append(CONTEXT), Some(shown("gpt-5.4", Some(20))));
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::native(false, "cli")]
 #[case::wrapper(true, "cli")]
@@ -307,6 +315,7 @@ fn a_fake_agent_is_associated_by_its_open_rollout_and_cleared_on_exit(#[case] wr
     });
 }
 
+#[cfg(unix)]
 #[test]
 fn ambiguous_open_rollouts_are_hidden_and_subagent_rollouts_are_excluded() {
     let fake = FakeCodex::new(ID, "gpt-5.4", false);
@@ -330,6 +339,7 @@ fn ambiguous_open_rollouts_are_hidden_and_subagent_rollouts_are_excluded() {
     assert_eq!(rollout_path(pid, SystemTime::UNIX_EPOCH), Some(fake.rollout.clone()));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_codex_child_whose_home_cannot_be_read_does_not_hide_the_session() {
     let fake = FakeCodex::new(ID, "gpt-5.4", false);
@@ -355,6 +365,7 @@ fn a_codex_child_whose_home_cannot_be_read_does_not_hide_the_session() {
     assert_eq!(rollout_path(pid, SystemTime::UNIX_EPOCH), Some(fake.rollout.clone()));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_session_served_by_the_daemon_is_found_by_folder_once_written_after_the_agent_started() {
     let fake = FakeCodex::new(ID, "gpt-5.4", false);
@@ -379,6 +390,7 @@ fn a_session_served_by_the_daemon_is_found_by_folder_once_written_after_the_agen
     });
 }
 
+#[cfg(unix)]
 #[test]
 fn a_served_session_is_hidden_from_other_folders_and_while_another_agent_shares_its_folder() {
     let fake = FakeCodex::new(ID, "gpt-5.4", false);
@@ -427,6 +439,7 @@ mod counting_records {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn the_conversation_is_the_open_rollout_at_its_path_under_sessions() {
     let fake = FakeCodex::new(ID, "gpt-5.4", false);

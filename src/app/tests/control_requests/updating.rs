@@ -1,15 +1,20 @@
+#[cfg(unix)]
 use std::path::PathBuf;
 
 use rstest::rstest;
 use serde_json::{Value, json};
 
 use super::*;
-use crate::test_util::{FakeHttp, TempDir};
+use crate::test_util::FakeHttp;
+#[cfg(unix)]
+use crate::test_util::TempDir;
+#[cfg(unix)]
 use crate::update::tests::replace::{NEW, installed, publish_for, sums_for};
 use crate::update::{self, Install};
 
 const LATEST: &str = r#"{"tag_name": "v9.0.0", "assets": []}"#;
 
+#[cfg(unix)]
 fn target() -> &'static str {
     update::target().expect("a known target")
 }
@@ -175,6 +180,7 @@ mod checking {
 mod installing {
     use super::*;
 
+    #[cfg(unix)]
     struct Replacing {
         app: App,
         rx: Receiver<AppEvent>,
@@ -183,6 +189,7 @@ mod installing {
         _releases: FakeHttp,
     }
 
+    #[cfg(unix)]
     fn replacing(tmp: &TempDir, sums: impl FnOnce(&[u8]) -> String) -> Replacing {
         let (releases, files) = publish_for(tmp, target(), sums);
         let exe = installed(tmp);
@@ -211,6 +218,7 @@ mod installing {
         assert!(refusal.message.contains("brew"), "{}", refusal.message);
     }
 
+    #[cfg(unix)]
     #[test]
     fn install_replaces_the_binary_and_a_restart_names_it() {
         let tmp = TempDir::new();
@@ -227,6 +235,7 @@ mod installing {
         assert_eq!(app.take_restart(), Some(exe));
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_install_running_is_joined() {
         let tmp = TempDir::new();
@@ -241,6 +250,7 @@ mod installing {
         assert!(got.iter().all(|(_, answer)| info(answer)["installed"] == true));
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_dialog_shows_an_install_a_request_started() {
         let tmp = TempDir::new();
@@ -256,6 +266,7 @@ mod installing {
         assert_eq!(files.requests().len(), 2);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_failed_install_says_why_and_can_be_tried_again() {
         let tmp = TempDir::new();

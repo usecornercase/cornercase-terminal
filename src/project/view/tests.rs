@@ -4,7 +4,9 @@ use std::sync::mpsc::Receiver;
 use rstest::rstest;
 
 use super::*;
-use crate::project::{Phase, Tab, Workspace};
+#[cfg(unix)]
+use crate::project::Phase;
+use crate::project::{Tab, Workspace};
 use crate::term::Event;
 use crate::test_util::spawn_term;
 
@@ -33,6 +35,7 @@ fn world(shape: &[&[usize]]) -> World {
     World { projects, _terms: terms }
 }
 
+#[cfg(unix)]
 fn none() -> Shown {
     Shown::default()
 }
@@ -41,6 +44,7 @@ fn ids(shown: &Shown) -> (Option<u64>, Option<u64>, Option<u64>) {
     (shown.project, shown.workspace, shown.tab)
 }
 
+#[cfg(unix)]
 #[test]
 fn placing_descends_into_the_active_children() {
     let mut w = world(&[&[2, 3]]);
@@ -59,6 +63,7 @@ fn placing_on_a_workspace_without_tabs_shows_no_tab() {
     assert_eq!(ids(&Shown::place(&w.projects, 0, Some(0), None)), (Some(100), Some(200), None));
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::the_middle(1, 0)]
 #[case::the_first(0, 0)]
@@ -75,6 +80,7 @@ fn a_closed_tab_falls_to_the_one_before_it(#[case] closed: usize, #[case] expect
     assert_eq!(shown.tab, Some(tabs[expected].id));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_moved_tab_keeps_the_selection_by_its_id() {
     let mut w = world(&[&[3]]);
@@ -86,6 +92,7 @@ fn a_moved_tab_keeps_the_selection_by_its_id() {
     assert_eq!(shown.tab, Some(w.projects[0].workspaces[0].tabs[0].id));
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::closing_goes_to_the_one_before(2, 1)]
 #[case::the_first_goes_to_the_next(0, 1)]
@@ -100,6 +107,7 @@ fn a_workspace_that_is_going_falls_to_the_nearest_open_one(#[case] going: usize,
     assert_eq!(shown.tab, Some(w.projects[0].workspaces[expected].tabs[0].id));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_workspace_being_removed_is_left_even_when_it_is_gone() {
     let mut w = world(&[&[1, 1]]);
@@ -111,6 +119,7 @@ fn a_workspace_being_removed_is_left_even_when_it_is_gone() {
     assert_eq!(shown.workspace, Some(200));
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::the_previous_project(1, 0)]
 #[case::the_next_when_the_first_closes(0, 1)]
@@ -125,6 +134,7 @@ fn a_closing_project_falls_to_a_neighbour(#[case] closing: usize, #[case] expect
     assert_eq!(shown.tab, Some(w.projects[expected].workspaces[0].tabs[0].id));
 }
 
+#[cfg(unix)]
 #[test]
 fn nothing_left_gives_an_empty_selection_that_adopts_the_window_later() {
     let mut w = world(&[&[1]]);
@@ -138,6 +148,7 @@ fn nothing_left_gives_an_empty_selection_that_adopts_the_window_later() {
     assert_eq!(shown, window);
 }
 
+#[cfg(unix)]
 #[test]
 fn an_unchanged_selection_is_not_a_change() {
     let w = world(&[&[2, 2], &[1]]);
@@ -146,6 +157,7 @@ fn an_unchanged_selection_is_not_a_change() {
     assert!(!shown.settle(&w.projects, none));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_tab_that_appears_in_an_empty_workspace_is_adopted() {
     let mut w = world(&[&[0]]);
@@ -157,6 +169,7 @@ fn a_tab_that_appears_in_an_empty_workspace_is_adopted() {
     assert!(shown.tab.is_some());
 }
 
+#[cfg(unix)]
 fn unreachable_tab() -> Tab {
     let (term, rx) = spawn_term(9999, &[], None);
     std::mem::forget(rx);

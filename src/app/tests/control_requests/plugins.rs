@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use serde_json::json;
 
 use super::super::plugins::{MANIFEST, Plugged, plugged};

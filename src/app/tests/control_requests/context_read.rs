@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::agents::claude::fake::FakeClaude;
 use crate::app::context_dialog::REFRESH;

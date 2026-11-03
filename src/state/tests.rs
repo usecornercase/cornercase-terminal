@@ -534,9 +534,12 @@ mod saver {
 
 mod mapping {
     use super::*;
+    #[cfg(unix)]
     use crate::project::split::Dir;
+    #[cfg(unix)]
     use crate::test_util::spawn_term;
 
+    #[cfg(unix)]
     fn split_tab() -> Tab {
         let mut tab = Tab::new(5, Some("dev".into()), spawn_term(6, &[], None).0);
         tab.split(6, Dir::Right, spawn_term(7, &[], None).0, true);
@@ -545,6 +548,7 @@ mod mapping {
         tab
     }
 
+    #[cfg(unix)]
     fn saved_tab(panes: usize, active: usize) -> TabState {
         let pane = PaneState {
             cwd: None,
@@ -561,6 +565,7 @@ mod mapping {
         TabState { name: None, panes: vec![pane; panes], active, layout: None }
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_tab_comes_back_with_its_layout_active_pane_and_right_clicks() {
         let tab = split_tab();
@@ -581,6 +586,7 @@ mod mapping {
         assert_eq!(back.right_clicks, [17]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_single_pane_tab_saves_no_layout() {
         let tab = Tab::new(5, None, spawn_term(6, &[], None).0);
@@ -623,6 +629,7 @@ mod mapping {
         assert_eq!(back.run_dirs, [PathBuf::from("/t/runs/ok")]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn restoring_clamps_an_active_child_that_is_out_of_range() {
         let workspace =
@@ -650,6 +657,7 @@ mod mapping {
         assert_eq!((back.name.as_deref(), back.path.as_path()), (Some("name"), Path::new("/q")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_run_is_saved_with_the_place_of_each_role_and_comes_back_from_json() {
         use crate::flows::run::{Member, Run};

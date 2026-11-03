@@ -4,73 +4,89 @@ use std::sync::mpsc::{self, Receiver};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+#[cfg(unix)]
 use ratatui::buffer::Buffer;
 
+#[cfg(unix)]
 use super::actions::NO_AGENT;
-use super::dialogs::CLOSE_PROJECTS_SUBMIT;
-use super::dialogs::KEEP_PROJECTS_SUBMIT;
+#[cfg(unix)]
+use super::dialogs::{CLOSE_PROJECTS_SUBMIT, KEEP_PROJECTS_SUBMIT};
+#[cfg(unix)]
 use super::input::WHEEL_ROWS;
+#[cfg(unix)]
 use super::interaction::DOUBLE_CLICK;
-use super::menus::MenuAction;
-use super::menus::PaneAction;
-use super::menus::Target;
-use super::overlay::CLOSE_SUBMIT;
-use super::overlay::CREATE_SUBMIT;
-use super::overlay::DELETE_SUBMIT;
-use super::overlay::FORCE_REMOVE_SUBMIT;
+#[cfg(unix)]
+use super::menus::{MenuAction, PaneAction, Target};
 use super::overlay::LATER;
-use super::overlay::REMOVE_SUBMIT;
-use super::overlay::RENAME_SUBMIT;
 use super::overlay::RESTART_SUBMIT;
 use super::overlay::RETRY_UPDATE_SUBMIT;
-use super::overlay::UNLOCK_SUBMIT;
-use super::overlay::UPDATE_SUBMIT;
+#[cfg(unix)]
+use super::overlay::{
+    CLOSE_SUBMIT, CREATE_SUBMIT, DELETE_SUBMIT, FORCE_REMOVE_SUBMIT, REMOVE_SUBMIT, RENAME_SUBMIT, UNLOCK_SUBMIT,
+    UPDATE_SUBMIT,
+};
+#[cfg(unix)]
 use super::panes::pane_cell;
+#[cfg(unix)]
 use super::picker_dialog::PICKER_SUBMIT;
+#[cfg(unix)]
 use super::session::RESUME_GRACE;
 use super::toast::BUG_FOR;
-use super::toast::COPIED;
-use super::toast::NOT_READING;
-use super::toast::TOAST_FOR;
-use super::toast::UNDO_FOR;
+#[cfg(unix)]
+use super::toast::{COPIED, NOT_READING, TOAST_FOR, UNDO_FOR};
 use super::update_dialog::RESTART_LABEL;
 use super::update_dialog::UPDATE_AVAILABLE;
 use super::update_dialog::UpdateStep;
-use super::worktrees::COUNT_BEHIND_EVERY;
-use super::worktrees::Check;
-use super::worktrees::UNCOMMITTED;
 use super::worktrees::lock_message;
 use super::worktrees::lock_note;
+#[cfg(unix)]
+use super::worktrees::{COUNT_BEHIND_EVERY, Check, UNCOMMITTED};
 use super::*;
+#[cfg(unix)]
 use crate::agents::AgentState;
+#[cfg(unix)]
 use crate::agents::context::{self};
+#[cfg(unix)]
 use crate::changes::Checkout;
 use crate::config;
+#[cfg(unix)]
 use crate::editor::Editor;
-use crate::git;
 use crate::host::clipboard;
+#[cfg(unix)]
 use crate::host::notify::{self};
+use crate::issues::Secret;
+#[cfg(unix)]
 use crate::issues::browser::{Browser, Screen};
-use crate::issues::{self, Secret};
+#[cfg(unix)]
+use crate::issues::{self};
 use crate::paths;
-use crate::process;
+#[cfg(unix)]
 use crate::project::picker::Picker;
-use crate::project::search::Finder;
-use crate::project::search::{Goto, Kind};
+#[cfg(unix)]
+use crate::project::search::{Finder, Goto, Kind};
+#[cfg(unix)]
 use crate::project::split::{self};
-use crate::project::{Phase, Workspace};
-use crate::project::{Tab, TabAt, WorkspaceAt};
+#[cfg(unix)]
+use crate::project::{Phase, Tab, TabAt, Workspace, WorkspaceAt};
+#[cfg(unix)]
 use crate::settings::{Settings, Status};
 use crate::state;
-use crate::state::{PaneState, TabState, WorkspaceState};
-use crate::term::Term;
-use crate::term::mouse;
-use crate::test_util::{Locked, TempDir, git_repo, is_sh, wait_until, wait_until_within};
-use crate::ui::SidebarRow;
-use crate::ui::WorkspaceRow;
+#[cfg(unix)]
+use crate::state::TabState;
+use crate::state::{PaneState, WorkspaceState};
+#[cfg(unix)]
+use crate::term::{Term, mouse};
+#[cfg(unix)]
+use crate::test_util::{Locked, git_repo, is_sh, wait_until_within};
+use crate::test_util::{TempDir, wait_until};
+#[cfg(unix)]
 use crate::ui::changes::{self as panel, Action as HunkAction};
+#[cfg(unix)]
+use crate::ui::{SidebarRow, WorkspaceRow};
 use crate::update::{self, Release};
 use crate::version;
+#[cfg(unix)]
+use crate::{git, process};
 
 fn drain(app: &mut App, rx: &Receiver<AppEvent>) {
     drain_in(app, rx, AREA);
@@ -88,6 +104,7 @@ fn render(app: &mut App, area: Rect) -> Terminal<TestBackend> {
     terminal
 }
 
+#[cfg(unix)]
 fn render_frame(app: &mut App, area: Rect, sight: &Sight) -> (Buffer, Option<Placed>) {
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("terminal");
     let mut placed = None;
@@ -95,18 +112,21 @@ fn render_frame(app: &mut App, area: Rect, sight: &Sight) -> (Buffer, Option<Pla
     (buffer, placed)
 }
 
+#[cfg(unix)]
 fn write_config(dir: &Path, config: &Config) -> PathBuf {
     let path = dir.join("config.json");
     config::save(&path, config).expect("write config");
     path
 }
 
+#[cfg(unix)]
 fn drag(app: &mut App, from: Position, to: Position) {
     press(app, from);
     mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
     mouse(app, MouseEventKind::Up(MouseButton::Left), to);
 }
 
+#[cfg(unix)]
 fn hold(app: &mut App, from: Instant, steps: u32) -> Instant {
     for step in 1..=steps {
         app.refresh(from + LINES_SCROLL_EVERY * step);
@@ -114,16 +134,19 @@ fn hold(app: &mut App, from: Instant, steps: u32) -> Instant {
     from + LINES_SCROLL_EVERY * steps
 }
 
+#[cfg(unix)]
 fn panel_area(app: &App) -> Rect {
     app.layout(AREA).changes
 }
 
+#[cfg(unix)]
 fn fake_shortcut<B: Into<Vec<u8>>>(app: &mut App, routes: Vec<(&'static str, u16, B)>) -> crate::test_util::FakeHttp {
     let server = crate::test_util::FakeHttp::start(routes);
     app.issues.api_at(Source::Shortcut, &format!("{}/api/v3", server.url()));
     server
 }
 
+#[cfg(unix)]
 fn closing_last_tab() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(1);
     click_close(&mut app, WorkspaceRow::Tab(0, 0));
@@ -131,6 +154,7 @@ fn closing_last_tab() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     (app, rx, dirs)
 }
 
+#[cfg(unix)]
 fn pointer_after_drag(app: &mut App, away: Position) -> pointer::Shape {
     mouse(app, MouseEventKind::Drag(MouseButton::Left), away);
     let dragging = app.pointer(AREA);
@@ -138,6 +162,7 @@ fn pointer_after_drag(app: &mut App, away: Position) -> pointer::Shape {
     dragging
 }
 
+#[cfg(unix)]
 fn running_sleep(app: &mut App) {
     type_line(app, "sleep 30");
     wait_until("sleep runs", || app.term().and_then(|t| t.program(&app.config)).as_deref() == Some("sleep"));
@@ -182,12 +207,14 @@ fn empty_app() -> (App, Receiver<AppEvent>) {
     new_app(no_config())
 }
 
+#[cfg(unix)]
 fn app() -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = empty_app();
     app.open_here(AREA).expect("open the first project");
     (app, rx)
 }
 
+#[cfg(unix)]
 fn app_with(n: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let dirs: Vec<TempDir> = (0..n).map(|_| TempDir::new()).collect();
     let (mut app, rx) = empty_app();
@@ -197,18 +224,21 @@ fn app_with(n: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     (app, rx, dirs)
 }
 
+#[cfg(unix)]
 fn app_in(dir: &Path, config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = new_app(config_path);
     app.open_project(dir.to_path_buf(), AREA).expect("open project");
     (app, rx)
 }
 
+#[cfg(unix)]
 fn repo_with_edit() -> TempDir {
     let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
     std::fs::write(repo.path().join("a.txt"), "one\nTWO\n").expect("edit");
     repo
 }
 
+#[cfg(unix)]
 fn shop_with_topic_worktree() -> (TempDir, TempDir) {
     let shop = repo_with_edit();
     let worktree = TempDir::new();
@@ -221,18 +251,22 @@ fn shop_with_topic_worktree() -> (TempDir, TempDir) {
     (shop, worktree)
 }
 
+#[cfg(unix)]
 fn workspace_at(app: &App, p: usize, w: usize) -> WorkspaceAt {
     app.projects.workspace_at(p, w).expect("the workspace")
 }
 
+#[cfg(unix)]
 fn tab_at(app: &App, p: usize, w: usize, t: usize) -> TabAt {
     app.projects.tab_at(p, w, t).expect("the tab")
 }
 
+#[cfg(unix)]
 fn term(app: &App, p: usize) -> &Term {
     app.projects[p].workspace().and_then(Workspace::tab).and_then(Tab::pane).expect("the project has a pane")
 }
 
+#[cfg(unix)]
 fn tab_term(app: &App, w: usize, t: usize) -> &Term {
     app.projects[app.active].workspaces[w].tabs[t].pane().expect("the tab has a pane")
 }
@@ -254,15 +288,18 @@ fn toast(app: &App) -> Option<&str> {
     app.messages.toast.as_ref().map(|t| t.message.as_str())
 }
 
+#[cfg(unix)]
 fn screen(app: &mut App) -> String {
     app.term_mut().and_then(|t| t.emulator.snapshot().ok()).map(|s| s.contents()).unwrap_or_default()
 }
 
+#[cfg(unix)]
 fn numbered(term: &mut Term, lines: usize) {
     let text: Vec<String> = (1..=lines).map(|i| format!("line-{i}")).collect();
     term.feed(format!("\x1b[2J\x1b[H{}", text.join("\r\n")).as_bytes());
 }
 
+#[cfg(unix)]
 fn shows(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
     wait_until(text, || {
         drain(app, rx);
@@ -270,6 +307,7 @@ fn shows(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
     });
 }
 
+#[cfg(unix)]
 fn type_in_pane(app: &mut App, rx: &Receiver<AppEvent>, word: &str) {
     type_text(app, &format!("echo {word}-\"\"typed"));
     send_key(app, KeyCode::Enter, KeyModifiers::NONE);
@@ -307,6 +345,7 @@ fn mouse_in(app: &mut App, kind: MouseEventKind, pos: Position, area: Rect) {
     app.handle_event(AppEvent::Input(Event::Mouse(ev)), area).expect("handle mouse");
 }
 
+#[cfg(unix)]
 fn mouse_down(app: &mut App, button: MouseButton, pos: Position) {
     mouse(app, MouseEventKind::Down(button), pos);
 }
@@ -320,16 +359,19 @@ fn click(app: &mut App, pos: Position) {
     click_in(app, pos, AREA);
 }
 
+#[cfg(unix)]
 fn press(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Left, pos);
 }
 
+#[cfg(unix)]
 fn drag_between(app: &mut App, from: Position, to: Position) {
     press(app, from);
     mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
     mouse(app, MouseEventKind::Up(MouseButton::Left), to);
 }
 
+#[cfg(unix)]
 fn right_click_first_agent(app: &mut App) {
     app.config.agents_section = true;
     let a = app.layout(AREA);
@@ -337,82 +379,99 @@ fn right_click_first_agent(app: &mut App) {
     right_click(app, Position::new(row.x + 4, row.y));
 }
 
+#[cfg(unix)]
 fn right_click(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Right, pos);
     mouse(app, MouseEventKind::Up(MouseButton::Right), pos);
 }
 
+#[cfg(unix)]
 fn type_line(app: &mut App, line: &str) {
     app.handle_event(AppEvent::Input(Event::Paste(format!("{line}\r"))), AREA).expect("handle paste");
 }
 
+#[cfg(unix)]
 fn type_text(app: &mut App, text: &str) {
     for c in text.chars() {
         send_key(app, KeyCode::Char(c), KeyModifiers::NONE);
     }
 }
 
+#[cfg(unix)]
 fn submit_text(app: &mut App, text: &str) {
     type_text(app, text);
     send_key(app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
+#[cfg(unix)]
 fn list() -> Rect {
     areas().list
 }
 
+#[cfg(unix)]
 fn entry_pos() -> Position {
     Position::new(list().x + 3, list().y)
 }
 
+#[cfg(unix)]
 fn sidebar_pos(app: &App, row: SidebarRow) -> Position {
     let r = ui::entry_row(list(), 1, &app.sidebar_rows(), app.scroll.of(List::Projects), row);
     Position::new(r.x + 3, r.y)
 }
 
+#[cfg(unix)]
 fn sidebar_close(app: &App, row: SidebarRow) -> Position {
     ui::close_button(list(), 1, &app.sidebar_rows(), app.scroll.of(List::Projects), row).as_position()
 }
 
+#[cfg(unix)]
 fn row_rect(app: &App, row: WorkspaceRow) -> Rect {
     ui::workspace_row(areas().workspaces_list, areas().pitch, &app.tab_lines(), app.scroll.of(List::Workspaces), row)
 }
 
+#[cfg(unix)]
 fn row_pos(app: &App, row: WorkspaceRow) -> Position {
     let r = row_rect(app, row);
     Position::new(r.x + 6, r.y)
 }
 
+#[cfg(unix)]
 fn row_close(app: &App, row: WorkspaceRow) -> Position {
     ui::row_close_button(row_rect(app, row), areas().pitch).as_position()
 }
 
+#[cfg(unix)]
 fn click_row(app: &mut App, row: WorkspaceRow) {
     let pos = row_pos(app, row);
     click(app, pos);
 }
 
+#[cfg(unix)]
 fn click_close(app: &mut App, row: WorkspaceRow) {
     let pos = row_close(app, row);
     click(app, pos);
 }
 
+#[cfg(unix)]
 fn right_click_row(app: &mut App, row: WorkspaceRow) {
     let pos = row_pos(app, row);
     right_click(app, pos);
 }
 
+#[cfg(unix)]
 fn new_workspace_pos(app: &App) -> Position {
     let areas = app_areas(app);
     ui::new_workspace_button(areas.workspaces_list, areas.pitch, &app.tab_lines()).as_position()
 }
 
+#[cfg(unix)]
 fn click_new_workspace(app: &mut App) {
     let new = new_workspace_pos(app);
     click(app, new);
     pick(app, "new workspace");
 }
 
+#[cfg(unix)]
 fn form_value(app: &App) -> Option<String> {
     match &app.overlay {
         Some(Overlay::NewWorkspace { input, .. } | Overlay::Rename { input, .. }) => Some(input.text()),
@@ -420,6 +479,7 @@ fn form_value(app: &App) -> Option<String> {
     }
 }
 
+#[cfg(unix)]
 fn confirmation(app: &App) -> Option<String> {
     match app.overlay_view(app.overlay.as_ref()?, AREA)? {
         ui::Overlay::Confirm(confirm) => Some(confirm.message),
@@ -427,6 +487,7 @@ fn confirmation(app: &App) -> Option<String> {
     }
 }
 
+#[cfg(unix)]
 fn form_error(app: &App) -> Option<&str> {
     match &app.overlay {
         Some(Overlay::NewWorkspace { error, .. }) => error.as_deref(),
@@ -435,12 +496,14 @@ fn form_error(app: &App) -> Option<&str> {
     }
 }
 
+#[cfg(unix)]
 fn clear_input(app: &mut App) {
     while form_value(app).is_some_and(|v| !v.is_empty()) {
         send_key(app, KeyCode::Backspace, KeyModifiers::NONE);
     }
 }
 
+#[cfg(unix)]
 fn form_button(submit: &str, which: usize) -> Position {
     ui::form_buttons(ui::form_area(AREA), submit)[which].as_position()
 }
@@ -450,6 +513,7 @@ fn menu_labels(app: &App) -> Vec<String> {
     app.menu_labels(actions)
 }
 
+#[cfg(unix)]
 fn menu_disabled(app: &App) -> Vec<bool> {
     match overlay_shown(app, AREA) {
         ui::Overlay::Menu { disabled, .. } => disabled,
@@ -457,6 +521,7 @@ fn menu_disabled(app: &App) -> Vec<bool> {
     }
 }
 
+#[cfg(unix)]
 fn menu_item_at(app: &App, i: usize) -> Position {
     menu_item_in(app, i, AREA)
 }
@@ -482,6 +547,7 @@ fn from_more(app: &mut App, entry: &str) {
     pick(app, entry);
 }
 
+#[cfg(unix)]
 fn click_pill(app: &mut App, pane: u64, pill: usize) {
     let shown = app.tab().expect("a tab").shown(app.layout(AREA).pane);
     let leaf = shown.into_iter().find_map(|(id, leaf)| (id == pane).then_some(leaf)).expect("the pane is shown");
@@ -491,24 +557,29 @@ fn click_pill(app: &mut App, pane: u64, pill: usize) {
     click(app, rect.as_position());
 }
 
+#[cfg(unix)]
 fn plain(projects: usize) -> Vec<SidebarRow> {
     ui::sidebar_rows(&vec![None; projects], &[])
 }
 
+#[cfg(unix)]
 fn new_project_pos(app: &App) -> Position {
     ui::new_project_button(list(), 1, &app.sidebar_rows()).as_position()
 }
 
+#[cfg(unix)]
 fn click_new_project(app: &mut App) {
     let new = new_project_pos(app);
     click(app, new);
     pick(app, "open project");
 }
 
+#[cfg(unix)]
 fn workspace_labels(app: &App) -> Vec<String> {
     app.projects[app.active].workspaces.iter().map(Workspace::label).collect()
 }
 
+#[cfg(unix)]
 fn with_worktrees_config() -> (TempDir, TempDir, PathBuf) {
     let (worktrees, config) = (TempDir::new(), TempDir::new());
     let worktrees_dir = worktrees.path().display().to_string();
@@ -516,6 +587,7 @@ fn with_worktrees_config() -> (TempDir, TempDir, PathBuf) {
     (worktrees, config, config_path)
 }
 
+#[cfg(unix)]
 fn branch_exists(repo: &Path, branch: &str) -> bool {
     std::process::Command::new("git")
         .arg("-C")
@@ -585,6 +657,7 @@ mod workspaces;
 mod worktree_builds;
 mod worktrees_dialog;
 
+#[cfg(unix)]
 #[test]
 fn resize_fits_terminals_to_the_pane() {
     let (mut app, _rx) = app();

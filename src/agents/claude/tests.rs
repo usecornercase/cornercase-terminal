@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::TempDir;
+use crate::test_util::{TempDir, os_path};
 
 pub(in crate::agents) fn session(text: &str, pid: i32) -> Option<Activity> {
     Session::parse(text, pid).and_then(|s| s.activity())
@@ -94,8 +94,8 @@ mod config_dir {
     #[case::relative(&[("CLAUDE_CONFIG_DIR", "work")], None)]
     fn of_an_agent_comes_from_its_own_environment(#[case] env: &[(&str, &str)], #[case] expected: Option<&str>) {
         let env: Vec<(String, String)> =
-            env.iter().map(|(name, value)| ((*name).to_string(), (*value).to_string())).collect();
-        assert_eq!(own_dir(&env), expected.map(PathBuf::from));
+            env.iter().map(|(name, value)| ((*name).to_string(), os_path(value))).collect();
+        assert_eq!(own_dir(&env), expected.map(|dir| PathBuf::from(os_path(dir))));
     }
 
     #[cfg(windows)]

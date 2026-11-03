@@ -66,11 +66,13 @@ impl Launches {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn list(&self) -> &[Launch] {
         &self.list
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn clear(&mut self) {
         self.list.clear();
     }

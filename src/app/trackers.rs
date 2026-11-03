@@ -130,16 +130,19 @@ impl IssueConnections {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn clear_env_tokens(&mut self) {
         self.env_tokens.clear();
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn set_env_token(&mut self, source: Source, token: &str) {
         self.env_tokens.insert(source, token.into());
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn api_at(&mut self, source: Source, url: &str) {
         match source {
             Source::Shortcut => self.apis.shortcut = url.into(),

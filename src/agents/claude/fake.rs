@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::path::{Path, PathBuf};
 
 use crate::test_util::{TempDir, write_executable};

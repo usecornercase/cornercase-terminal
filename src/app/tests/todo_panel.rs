@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::state;
 use crate::ui::todo as panel;

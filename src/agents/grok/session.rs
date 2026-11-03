@@ -99,6 +99,7 @@ struct Child {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 pub(in crate::agents) fn look(pid: i32) -> Option<Session> {
     follow(pid, None)
 }
@@ -586,6 +587,7 @@ impl Session {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn retained_prompts(&self) -> usize {
         self.prompt_ids.len()
     }
@@ -732,6 +734,7 @@ fn back_limit() -> u64 {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 pub(in crate::agents) fn set_back_limit(limit: u64) {
     BACK_LIMIT.with(|cell| cell.set(limit));
 }

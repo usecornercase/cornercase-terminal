@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::error::Error;
 use crate::test_util::{TempDir, fake_gh};

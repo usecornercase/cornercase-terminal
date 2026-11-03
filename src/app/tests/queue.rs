@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::app::text_fields::TextField;
 use crate::issues::browser::Tab as IssueTab;

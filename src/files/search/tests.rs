@@ -12,7 +12,8 @@ fn indexes_the_files_git_does_not_ignore() {
     let repo = git_repo(&[(".gitignore", "target/\n"), ("src/main.rs", ""), ("README.md", "")]);
     fs::create_dir_all(repo.path().join("target/debug")).expect("mkdir");
     fs::write(repo.path().join("target/debug/app"), "").expect("write");
-    assert_eq!(index(repo.path(), &AtomicBool::new(false)), [".gitignore", "README.md", "src/main.rs"]);
+    let main = Path::new("src").join("main.rs").display().to_string();
+    assert_eq!(index(repo.path(), &AtomicBool::new(false)), [".gitignore", "README.md", main.as_str()]);
 }
 
 #[test]

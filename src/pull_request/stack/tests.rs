@@ -1,15 +1,22 @@
 use rstest::rstest;
 
 use super::*;
+#[cfg(unix)]
 use crate::test_util::{TempDir, fake_gh, fixture};
 
+#[cfg(unix)]
 const STACK: &str = fixture!("gh/2.101.0/stack.json");
+#[cfg(unix)]
 const NONE: &str = fixture!("gh/2.101.0/stack-none.json");
+#[cfg(unix)]
 const UNSUPPORTED: &str = fixture!("gh/2.101.0/stack-unsupported.json");
+#[cfg(unix)]
 const UNSUPPORTED_ERROR: &str = fixture!("gh/2.101.0/stack-unsupported.stderr");
 
+#[cfg(unix)]
 const URL: &str = "https://github.com/acme/web-shop/pull/483";
 
+#[cfg(unix)]
 fn printing(tmp: &TempDir, json: &str) -> std::path::PathBuf {
     fake_gh(tmp.path(), &format!("echo \"$@\" > args; cat <<'EOF'\n{json}\nEOF"))
 }
@@ -31,6 +38,7 @@ fn stack_of(layers: Vec<Layer>) -> Stack {
     Stack { number: 480, base: "main".into(), size: layers.len(), layers }
 }
 
+#[cfg(unix)]
 mod read {
     use super::*;
 

@@ -231,6 +231,7 @@ mod paths {
         assert!(error.to_string().contains("absolute path on devbox"), "{error}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_absolute_one_goes_as_it_is() {
         assert_eq!(path_on(Path::new("/a/../b"), Some(&devbox())).expect("kept"), PathBuf::from("/a/../b"));

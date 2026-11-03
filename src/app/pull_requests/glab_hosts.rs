@@ -37,6 +37,7 @@ pub(super) enum Route {
 
 impl GlabHosts {
     #[cfg(test)]
+    #[cfg(unix)]
     pub(in crate::app) fn asking(&self) -> bool {
         self.asking
     }

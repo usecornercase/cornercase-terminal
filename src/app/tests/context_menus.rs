@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::close_agent::agent;
 use super::*;
 use crate::app::menus::MenuAction;
