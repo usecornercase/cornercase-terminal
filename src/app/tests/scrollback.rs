@@ -76,7 +76,6 @@ fn a_drag_on_the_scrolled_view_copies_what_is_shown() {
     assert_eq!(app.take_host_writes(), [clipboard::osc52(&first)]);
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 fn a_full_pane_that_refuses_the_wheels_arrows_says_so() {
     let (mut app, rx) = app();

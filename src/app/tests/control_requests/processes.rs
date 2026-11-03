@@ -1,7 +1,7 @@
 use super::*;
 use crate::process;
 use crate::project::Hierarchy;
-use crate::test_util::{Running, this_pid, wait_until};
+use crate::test_util::{Running, child_running, this_pid, wait_until};
 
 fn first_pane(app: &App) -> (u64, i32) {
     let term = app.projects.terms().next().expect("a pane");
@@ -11,12 +11,7 @@ fn first_pane(app: &App) -> (u64, i32) {
 fn sleeping(app: &mut App) -> (u64, i32, i32) {
     let (pane, shell) = first_pane(app);
     type_line(app, "sleep 30");
-    let mut sleeper = None;
-    wait_until("the shell's child runs sleep", || {
-        sleeper = process::children(shell).into_iter().find(|pid| process::name(*pid).as_deref() == Some("sleep"));
-        sleeper.is_some()
-    });
-    (pane, shell, sleeper.expect("the sleeper"))
+    (pane, shell, child_running(shell, "sleep"))
 }
 
 fn pids(list: &Value) -> Vec<i64> {

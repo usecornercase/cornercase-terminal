@@ -195,7 +195,6 @@ fn stale_boot_input_is_refused_before_anything_is_typed() {
     assert!(pane(&app, id).input_at.is_none());
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 fn a_full_pane_answers_busy_and_takes_nothing() {
     let (mut app, rx) = app();

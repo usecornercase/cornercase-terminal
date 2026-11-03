@@ -106,6 +106,7 @@ fn a_removal_that_starts_while_git_status_runs_is_not_started_twice() {
     app.start_removal(app.projects[0].id, id, RemoveOptions::default(), None);
 
     let message = error(answered(&mut app, &rx, "git status answers"));
+    assert!(app.projects.workspace_by(id).is_some_and(Workspace::removing), "the removal waits in its teardown");
     std::fs::write(hold.path().join("go"), "").expect("let the teardown end");
     pump_until(&mut app, &rx, "the one removal ends", |a| a.projects.workspace_index(id).is_none());
     assert!(message.contains("is being removed"), "{message}");

@@ -74,7 +74,6 @@ fn a_shell_busy_before_its_program_starts_is_not_back_yet() {
     assert!(typed.elapsed() >= Duration::from_millis(1500), "it ended after {:?}", typed.elapsed());
 }
 
-#[cfg(target_os = "linux")]
 #[rstest::rstest]
 #[case::send(|pane| send_text(pane, "", true, false), "did not take what was typed")]
 #[case::keys(|pane| press_keys(pane, &["enter"]), "is not reading its input")]
