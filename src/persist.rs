@@ -8,14 +8,14 @@ use crate::os::fs::{OpenOptionsExt, Stat, set_file_mode, stat, stat_file};
 
 pub(crate) const SETTLE: Duration = Duration::from_secs(2);
 
-pub(crate) type Mark = Option<(u64, SystemTime, u64)>;
+pub(crate) type Mark = Option<((u64, u64), SystemTime, u64)>;
 
 pub(crate) fn mark(path: &Path) -> Mark {
     stat(path).ok().as_ref().and_then(mark_of)
 }
 
 fn mark_of(stat: &Stat) -> Mark {
-    Some((stat.inode, stat.meta.modified().ok()?, stat.meta.len()))
+    Some((stat.id(), stat.meta.modified().ok()?, stat.meta.len()))
 }
 
 pub(crate) fn save(path: &Path, value: &impl Serialize) -> io::Result<()> {

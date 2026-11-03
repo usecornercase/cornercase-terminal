@@ -10,6 +10,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, GetFileInformationByHandle,
+    MoveFileExW,
 };
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::FSCTL_SET_REPARSE_POINT;
@@ -152,14 +153,18 @@ pub(crate) fn try_lock(file: &File, lock: Lock) -> io::Result<bool> {
 }
 
 pub(crate) fn writable(dir: &Path) -> bool {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let probe = dir.join(format!(".cornercase-writable-{}-{n}", std::process::id()));
+    let probe = scratch(dir, "writable");
     let made = OpenOptions::new().write(true).create_new(true).open(&probe).is_ok();
     if made {
         let _ = std::fs::remove_file(&probe);
     }
     made
+}
+
+fn scratch(dir: &Path, what: &str) -> PathBuf {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    dir.join(format!(".cornercase-{what}-{}-{n}", std::process::id()))
 }
 
 pub(crate) fn uid() -> u32 {
@@ -207,13 +212,27 @@ pub(crate) fn links_to(meta: &Metadata, link: &Path, original: &Path) -> bool {
 
 fn copy_new(original: &Path, link: &Path) -> io::Result<()> {
     let mut source = File::open(original)?;
-    let mut out = OpenOptions::new().write(true).create_new(true).open(link)?;
+    let temp = scratch(link.parent().unwrap_or(Path::new("")), "copy");
+    let mut out = OpenOptions::new().write(true).create_new(true).open(&temp)?;
     let copied = io::copy(&mut source, &mut out).and_then(|_| out.sync_all());
-    if copied.is_err() {
-        drop(out);
-        let _ = std::fs::remove_file(link);
+    drop(out);
+    let published = copied.and_then(|()| publish(&temp, link));
+    if published.is_err() {
+        let _ = std::fs::remove_file(&temp);
     }
-    copied
+    published
+}
+
+fn publish(temp: &Path, link: &Path) -> io::Result<()> {
+    let (from, to) = (wide(temp), wide(link));
+    if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+fn wide(path: &Path) -> Vec<u16> {
+    path.as_os_str().encode_wide().chain([0]).collect()
 }
 
 fn junction(original: &Path, link: &Path) -> io::Result<()> {
@@ -227,17 +246,22 @@ fn junction(original: &Path, link: &Path) -> io::Result<()> {
 }
 
 fn on_a_local_disk(original: &Path) -> io::Result<PathBuf> {
-    let absolute = std::path::absolute(original)?;
     let refused = || io::Error::new(io::ErrorKind::Unsupported, "a junction only leads to a folder on a local disk");
-    let Some(Component::Prefix(prefix)) = absolute.components().next() else { return Err(refused()) };
+    let plain = on_a_drive(&std::path::absolute(original)?).ok_or_else(refused)?;
+    on_a_drive(&std::fs::canonicalize(&plain)?).ok_or_else(refused)?;
+    Ok(plain)
+}
+
+fn on_a_drive(path: &Path) -> Option<PathBuf> {
+    let Some(Component::Prefix(prefix)) = path.components().next() else { return None };
     match prefix.kind() {
-        Prefix::Disk(_) => Ok(absolute),
+        Prefix::Disk(_) => Some(path.to_path_buf()),
         Prefix::VerbatimDisk(drive) => {
-            let mut path = PathBuf::from(format!("{}:", char::from(drive)));
-            path.extend(absolute.components().skip(1));
-            Ok(path)
+            let mut plain = PathBuf::from(format!("{}:", char::from(drive)));
+            plain.extend(path.components().skip(1));
+            Some(plain)
         }
-        _ => Err(refused()),
+        _ => None,
     }
 }
 

@@ -280,15 +280,15 @@ pub(crate) fn tail(path: &Path, lines: usize) -> io::Result<String> {
 pub(crate) struct Follower {
     path: PathBuf,
     file: File,
-    inode: u64,
+    id: (u64, u64),
 }
 
 impl Follower {
     pub(crate) fn at_end(path: &Path) -> io::Result<Self> {
         let mut file = File::open(path)?;
-        let inode = stat_file(&file)?.inode;
+        let id = stat_file(&file)?.id();
         file.seek(SeekFrom::End(0))?;
-        Ok(Self { path: path.to_path_buf(), file, inode })
+        Ok(Self { path: path.to_path_buf(), file, id })
     }
 
     pub(crate) fn read(&mut self) -> io::Result<Vec<u8>> {
@@ -296,9 +296,9 @@ impl Follower {
         self.file.read_to_end(&mut new)?;
         let Ok(now) = stat(&self.path) else { return Ok(new) };
         let read_to = self.file.stream_position()?;
-        if now.inode != self.inode || now.meta.len() < read_to {
+        if now.id() != self.id || now.meta.len() < read_to {
             self.file = File::open(&self.path)?;
-            self.inode = now.inode;
+            self.id = now.id();
             self.file.read_to_end(&mut new)?;
         }
         Ok(new)

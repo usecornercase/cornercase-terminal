@@ -20,8 +20,12 @@ pub(crate) struct Stat {
 }
 
 impl Stat {
+    pub(crate) fn id(&self) -> (u64, u64) {
+        (self.device, self.inode)
+    }
+
     pub(crate) fn same_file(&self, other: &Self) -> bool {
-        (self.device, self.inode) == (other.device, other.inode)
+        self.id() == other.id()
     }
 }
 

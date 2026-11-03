@@ -4,25 +4,58 @@ use std::io::ErrorKind;
 use super::*;
 use crate::test_util::TempDir;
 
+fn names(dir: &TempDir) -> Vec<String> {
+    let entries = fs::read_dir(dir.path()).expect("list the folder");
+    let mut names: Vec<String> =
+        entries.map(|entry| entry.expect("an entry").file_name().to_string_lossy().into()).collect();
+    names.sort();
+    names
+}
+
 mod junctions {
     use super::*;
 
     #[test]
     fn a_verbatim_path_becomes_a_plain_one() {
-        let local = on_a_local_disk(Path::new(r"\\?\C:\Users\me\.claude\skills")).expect("a local disk");
-        assert_eq!(local, PathBuf::from(r"C:\Users\me\.claude\skills"));
+        let dir = TempDir::new();
+        let skills = dir.path().join("skills");
+        fs::create_dir(&skills).expect("a folder");
+        let plain = skills.to_str().and_then(|path| path.strip_prefix(r"\\?\")).expect("a verbatim path");
+        assert_eq!(on_a_local_disk(&skills).expect("a local disk"), PathBuf::from(plain));
     }
 
     #[test]
-    fn a_relative_path_is_made_absolute() {
-        let local = on_a_local_disk(Path::new("skills")).expect("a local disk");
-        assert_eq!(local, std::env::current_dir().expect("the current folder").join("skills"));
+    fn a_relative_path_is_made_absolute_unless_the_current_folder_is_not_on_a_drive() {
+        let here = fs::canonicalize(".").expect("the current folder");
+        match on_a_local_disk(Path::new("src")) {
+            Ok(local) => {
+                assert!(local.is_absolute() && on_a_drive(&local).is_some());
+                assert_eq!(fs::canonicalize(local).expect("canonical"), here.join("src"));
+            }
+            Err(refused) => {
+                assert_eq!(refused.kind(), ErrorKind::Unsupported);
+                assert!(on_a_drive(&here).is_none(), "refused although the current folder is on a drive");
+            }
+        }
+    }
+
+    #[test]
+    fn a_missing_folder_is_not_linked() {
+        let dir = TempDir::new();
+        let missing = on_a_local_disk(&dir.path().join("missing")).expect_err("missing");
+        assert_eq!(missing.kind(), ErrorKind::NotFound);
     }
 
     #[test]
     fn a_network_folder_is_refused() {
         let refused = on_a_local_disk(Path::new(r"\\server\share\skills")).expect_err("a network folder");
         assert_eq!(refused.kind(), ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn a_folder_that_resolves_to_a_share_is_not_on_a_drive() {
+        assert_eq!(on_a_drive(Path::new(r"\\?\UNC\server\share\skills")), None);
+        assert_eq!(on_a_drive(Path::new(r"\\?\C:\Users\me")), Some(PathBuf::from(r"C:\Users\me")));
     }
 
     #[test]
@@ -71,10 +104,11 @@ mod copies {
         copy_new(&original, &copy).expect("a copy");
         assert_eq!(fs::read(&copy).expect("the copy"), fs::read(&original).expect("the original"));
         assert!(!is_shared(&copy, &original));
+        assert_eq!(names(&dir), ["config.toml", "copy.toml"]);
     }
 
     #[test]
-    fn never_replace_a_file() {
+    fn never_replace_a_file_and_leave_no_temporary_one() {
         let dir = TempDir::new();
         let original = dir.path().join("config.toml");
         fs::write(&original, "shared").expect("the original");
@@ -82,6 +116,23 @@ mod copies {
         fs::write(&mine, "mine").expect("mine");
         assert_eq!(copy_new(&original, &mine).expect_err("a file is there").kind(), ErrorKind::AlreadyExists);
         assert_eq!(fs::read_to_string(&mine).expect("mine"), "mine");
+        assert_eq!(names(&dir), ["config.toml", "mine.toml"]);
+    }
+
+    #[test]
+    fn are_written_aside_and_only_then_take_the_name() {
+        let dir = TempDir::new();
+        let temp = dir.path().join(".partial");
+        fs::write(&temp, "half").expect("a partial copy");
+        let copy = dir.path().join("copy.toml");
+        publish(&temp, &copy).expect("published");
+        assert_eq!(
+            (fs::read_to_string(&copy).expect("the copy"), names(&dir)),
+            ("half".to_owned(), vec!["copy.toml".to_owned()])
+        );
+        fs::write(&temp, "again").expect("another partial copy");
+        assert_eq!(publish(&temp, &copy).expect_err("the name is taken").kind(), ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&copy).expect("the copy"), "half");
     }
 
     #[test]
@@ -89,7 +140,7 @@ mod copies {
         let dir = TempDir::new();
         let copy = dir.path().join("copy.toml");
         assert_eq!(copy_new(&dir.path().join("missing"), &copy).expect_err("missing").kind(), ErrorKind::NotFound);
-        assert!(!copy.exists());
+        assert_eq!(names(&dir), Vec::<String>::new());
     }
 
     fn is_shared(link: &Path, original: &Path) -> bool {
