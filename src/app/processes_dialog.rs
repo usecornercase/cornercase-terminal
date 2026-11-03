@@ -31,6 +31,13 @@ const BASELINE: Duration = Duration::from_millis(500);
 
 const COMMAND_WIDTH: usize = 40;
 
+const STOPS: &str = if cfg!(windows) {
+    "Their windows are asked to close, then what still runs after 3 s is ended (at once if none has a window). \
+     The pane's shell keeps running."
+} else {
+    "Each gets SIGTERM, then SIGKILL if it is still running after 3 s. The pane's shell keeps running."
+};
+
 #[derive(Debug, Default)]
 pub(super) struct ProcessesState {
     refresh: Refresh,
@@ -365,9 +372,7 @@ fn stop_lines(target: &Target) -> Vec<Line<'static>> {
         None => {}
     }
     lines.push(Line::raw(""));
-    lines.push(Line::raw(
-        "Each gets SIGTERM, then SIGKILL if it is still running after 3 s. The pane's shell keeps running.",
-    ));
+    lines.push(Line::raw(STOPS));
     lines
 }
 

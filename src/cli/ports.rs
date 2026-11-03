@@ -7,8 +7,15 @@ use crate::control::ports::PortInfo;
 use crate::control::{Command, Listing, PortStopped, Ports, StopPort};
 use crate::error::Result;
 use crate::process::command_line;
+use crate::process::escalation::HARD_STEP;
 
 const COMMAND_WIDTH: usize = 40;
+
+const KILLED: &str = if cfg!(windows) {
+    "it had no window to close, or did not close within 3 s"
+} else {
+    "it did not stop within 3 s of SIGTERM"
+};
 
 pub(super) fn run(args: &PortsArgs) -> Result<bool> {
     if let Some(PortsAction::Stop(stop)) = &args.action {
@@ -41,8 +48,8 @@ pub(crate) fn stopped_text(stopped: &PortStopped) -> String {
     let what = format!("{program} (pid {}) on port {}", stopped.pid, stopped.port);
     match stopped.outcome.as_str() {
         "stopped" => format!("stopped {what}\n"),
-        "killed" => format!("killed {what}: it did not stop within 3 s of SIGTERM\n"),
-        _ => format!("{what} is still running after SIGKILL\n"),
+        "killed" => format!("killed {what}: {KILLED}\n"),
+        _ => format!("{what} is still running after {HARD_STEP}\n"),
     }
 }
 

@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.261
+
+- **On Windows, cornercase can now stop a program and everything it started**, the next step of the native port (it still says it does not run on Windows yet). A program with a window is asked to close it and ended if it still runs 3 s later; a console program, which has no window to close, is ended at once. On Windows the dialogs and `cornercase processes stop` and `ports stop` say so without naming Unix signals. Nothing changes on Linux and macOS.
+
 ## 0.12.259
 
 - **On Windows, cornercase now reads processes**: their trees, names, arguments, folders, memory and CPU, another step towards running there natively. It still says that it does not run on Windows yet. Nothing changes on Linux and macOS.

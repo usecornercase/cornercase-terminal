@@ -1,7 +1,6 @@
 #![cfg(unix)]
 
 use std::io;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -10,16 +9,16 @@ use super::*;
 use crate::process;
 use crate::test_util::{self, TempDir};
 
-fn hung(pid_file: &Path) -> io::Result<Child> {
+fn hung(pid_file: &Path) -> io::Result<Grouped> {
     let script = format!("sleep 30 & echo $! > '{}'; wait", pid_file.display());
-    Command::new("/bin/sh")
-        .arg("-c")
-        .arg(script)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .process_group(0)
-        .spawn()
+    Grouped::spawn(
+        Command::new("/bin/sh")
+            .arg("-c")
+            .arg(script)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
 }
 
 #[test]
@@ -45,13 +44,9 @@ fn a_full_budget_timeout_is_not_painted_again() {
     let mut spawns = 0;
     let mut spawn = || {
         spawns += 1;
-        Command::new("sleep")
-            .arg("30")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .process_group(0)
-            .spawn()
+        Grouped::spawn(
+            Command::new("sleep").arg("30").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()),
+        )
     };
     for _ in 0..2 {
         assert!(session.ask("fn stuck() {}", "rust", PAINT_BUDGET, &mut spawn).is_none());
