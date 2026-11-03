@@ -907,8 +907,6 @@ impl Server {
     }
 
     fn shutdown(&mut self) {
-        self.app.stop_plugins();
-        self.answer();
         if let Err(e) = self.stats_saver.flush(self.app.stats(), SystemTime::now()) {
             log::error!("stats", "failed to save", error = e);
         }
@@ -928,6 +926,8 @@ impl Server {
         {
             log::error!("server", "failed to save the queue", error = e);
         }
+        self.app.stop_plugins();
+        self.answer();
         for client in self.clients.drain(..) {
             client.leave(self.restart.clone().map_or(ServerMessage::Shutdown, ServerMessage::Restart));
             let Client { out, screen, writer, .. } = client;
