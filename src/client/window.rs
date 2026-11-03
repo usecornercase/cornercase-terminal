@@ -36,7 +36,6 @@ enum Incoming {
     InputEnded,
     Server(u64, Received),
     Linked(u64, Result<Link>),
-    #[cfg_attr(not(unix), expect(dead_code, reason = "only Unix signals end the window until the console is ported"))]
     Signal,
     Tmux(Option<Outer>),
 }
@@ -585,28 +584,65 @@ mod imp {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod imp {
-    use std::convert::Infallible;
     use std::io::{self, Stdin};
-    use std::sync::mpsc::Sender;
+    use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+    use std::thread;
 
-    use super::Incoming;
+    use crossterm::event::Event;
+    use windows_sys::Win32::System::Console::{
+        CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT,
+    };
 
-    pub(super) struct Handle(Infallible);
+    use super::{INPUT_POLL, Incoming};
+    use crate::os::console;
+
+    pub(super) struct Handle(Sender<()>);
 
     impl Handle {
         pub(super) fn close(&self) {
-            match self.0 {}
+            console::off_ctrl();
+            let _ = self.0.send(());
         }
     }
 
-    pub(super) fn watch_signals(_tx: Sender<Incoming>) -> io::Result<Handle> {
-        Err(io::ErrorKind::Unsupported.into())
+    pub(super) fn watch_signals(tx: Sender<Incoming>) -> io::Result<Handle> {
+        let (stop, stopped) = mpsc::channel();
+        let ending = tx.clone();
+        thread::Builder::new().name("console size".into()).spawn(move || watch_size(&tx, &stopped))?;
+        console::on_ctrl(move |event| ctrl_incoming(event).is_some_and(|incoming| ending.send(incoming).is_ok()))?;
+        Ok(Handle(stop))
     }
 
-    pub(super) fn read(_input: &Stdin, _bytes: &mut [u8]) -> io::Result<usize> {
-        Err(io::ErrorKind::Unsupported.into())
+    pub(super) fn ctrl_incoming(event: u32) -> Option<Incoming> {
+        matches!(event, CTRL_C_EVENT | CTRL_BREAK_EVENT | CTRL_CLOSE_EVENT | CTRL_LOGOFF_EVENT | CTRL_SHUTDOWN_EVENT)
+            .then_some(Incoming::Signal)
+    }
+
+    #[derive(Debug, Default)]
+    pub(super) struct Size(pub(super) Option<(u16, u16)>);
+
+    impl Size {
+        pub(super) fn changed(&mut self, now: Option<(u16, u16)>) -> Option<Event> {
+            let (cols, rows) = now?;
+            (self.0.replace((cols, rows)) != Some((cols, rows))).then_some(Event::Resize(cols, rows))
+        }
+    }
+
+    fn watch_size(tx: &Sender<Incoming>, stopped: &Receiver<()>) {
+        let mut size = Size(crossterm::terminal::size().ok());
+        while let Err(RecvTimeoutError::Timeout) = stopped.recv_timeout(INPUT_POLL) {
+            if let Some(resized) = size.changed(crossterm::terminal::size().ok())
+                && tx.send(Incoming::Input(resized)).is_err()
+            {
+                return;
+            }
+        }
+    }
+
+    pub(super) fn read(_input: &Stdin, bytes: &mut [u8]) -> io::Result<usize> {
+        console::read_input(bytes)
     }
 }
 
