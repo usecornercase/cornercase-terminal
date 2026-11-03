@@ -91,7 +91,7 @@ mod linked_worktrees {
 
         let registered = registered_worktrees(repo.path()).expect("the registry");
 
-        assert_eq!(registered, [path.canonicalize().expect("canonical")]);
+        assert_eq!(registered, [crate::os::fs::canonicalize(&path).expect("canonical")]);
     }
 
     #[test]
