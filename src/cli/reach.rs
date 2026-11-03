@@ -138,13 +138,17 @@ pub(super) fn open_path(path: &Path) -> Result<PathBuf> {
 fn path_on(path: &Path, remote: Option<&Remote>) -> Result<PathBuf> {
     match remote {
         None => Ok(std::path::absolute(path)?),
-        Some(_) if path.is_absolute() => Ok(path.to_path_buf()),
+        Some(_) if absolute_there(path) => Ok(path.to_path_buf()),
         Some(remote) => Err(Error::WrongUsage(format!(
             "`{}` is relative: with --remote, give its absolute path on {}",
             path.display(),
             remote.host()
         ))),
     }
+}
+
+fn absolute_there(path: &Path) -> bool {
+    path.is_absolute() || path.as_os_str().as_encoded_bytes().first() == Some(&b'/')
 }
 
 #[cfg(test)]

@@ -1,8 +1,9 @@
 use rstest::rstest;
 
 use super::*;
+use crate::test_util::TempDir;
 #[cfg(unix)]
-use crate::test_util::{TempDir, write_executable};
+use crate::test_util::write_executable;
 
 fn status_json(state: &str, certs: &str) -> String {
     format!(
@@ -38,6 +39,44 @@ mod parse_status {
     #[test]
     fn output_that_is_not_json_is_a_failure() {
         assert!(matches!(parse_status("Tailscale is stopped."), Err(Problem::Failed(_))));
+    }
+}
+
+mod finding {
+    use super::*;
+
+    fn placed(dir: &Path, name: &str) -> PathBuf {
+        std::fs::create_dir_all(dir).expect("folder");
+        let path = dir.join(name);
+        std::fs::write(&path, "").expect("program");
+        path
+    }
+
+    #[rstest]
+    #[case::unix(false, "tailscale")]
+    #[case::windows(true, "tailscale.exe")]
+    fn the_program_on_the_path_is_named_as_the_system_names_it(#[case] windows: bool, #[case] name: &str) {
+        let dir = TempDir::new();
+        let program = placed(&dir.path().join("bin"), name);
+        let path = std::env::join_paths([dir.path().join("empty"), dir.path().join("bin")]).expect("path");
+
+        assert_eq!(found(windows, Some(&path), None), Some(program));
+    }
+
+    #[test]
+    fn windows_finds_it_in_program_files_when_the_path_misses_it() {
+        let dir = TempDir::new();
+        let program = placed(&dir.path().join("Tailscale"), "tailscale.exe");
+
+        assert_eq!(found(true, None, Some(dir.path().as_os_str())), Some(program));
+    }
+
+    #[test]
+    fn windows_without_it_finds_nothing() {
+        let dir = TempDir::new();
+        placed(&dir.path().join("bin"), "tailscale");
+
+        assert_eq!(found(true, Some(dir.path().join("bin").as_os_str()), Some(dir.path().as_os_str())), None);
     }
 }
 

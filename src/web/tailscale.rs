@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -11,6 +12,9 @@ use crate::process;
 pub(crate) const HTTPS_PORT: u16 = 8443;
 pub(crate) const ADMIN_DNS: &str = "https://login.tailscale.com/admin/dns";
 const APP_BINARY: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
+const NAME: &str = "tailscale";
+const WINDOWS_NAME: &str = "tailscale.exe";
+const PROGRAM_FILES: &str = "ProgramFiles";
 const TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,12 +49,26 @@ impl fmt::Display for Problem {
 }
 
 pub(crate) fn binary() -> Option<PathBuf> {
-    let on_path = std::env::var_os("PATH")
+    let var = std::env::var_os;
+    found(cfg!(windows), var("PATH").as_deref(), var(PROGRAM_FILES).as_deref())
+}
+
+fn found(windows: bool, path: Option<&OsStr>, program_files: Option<&OsStr>) -> Option<PathBuf> {
+    let name = if windows { WINDOWS_NAME } else { NAME };
+    let on_path = path
         .into_iter()
-        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
-        .map(|dir| dir.join("tailscale"))
+        .flat_map(|path| std::env::split_paths(path).collect::<Vec<_>>())
+        .map(|dir| dir.join(name))
         .find(|candidate| candidate.is_file());
-    on_path.or_else(|| Some(PathBuf::from(APP_BINARY)).filter(|app| app.is_file()))
+    on_path.or_else(|| installed(windows, program_files).filter(|app| app.is_file()))
+}
+
+fn installed(windows: bool, program_files: Option<&OsStr>) -> Option<PathBuf> {
+    if windows {
+        program_files.map(|dir| Path::new(dir).join("Tailscale").join(WINDOWS_NAME))
+    } else {
+        Some(PathBuf::from(APP_BINARY))
+    }
 }
 
 pub(crate) fn start(program: &Path, local_port: u16) -> Result<Node, Problem> {

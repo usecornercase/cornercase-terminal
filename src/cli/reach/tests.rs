@@ -223,18 +223,21 @@ mod outcomes {
 mod paths {
     use super::*;
 
-    #[test]
-    fn a_relative_path_is_refused_there() {
-        let error = path_on(Path::new("src"), Some(&devbox())).expect_err("refused");
+    #[rstest]
+    #[case::a_name("src")]
+    #[case::a_backslash_without_a_drive(r"\srv\x")]
+    fn a_relative_path_is_refused_there(#[case] path: &str) {
+        let error = path_on(Path::new(path), Some(&devbox())).expect_err("refused");
 
         assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
         assert!(error.to_string().contains("absolute path on devbox"), "{error}");
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn an_absolute_one_goes_as_it_is() {
-        assert_eq!(path_on(Path::new("/a/../b"), Some(&devbox())).expect("kept"), PathBuf::from("/a/../b"));
+    #[rstest]
+    #[case::with_dots("/a/../b")]
+    #[case::a_unix_folder("/srv/x")]
+    fn a_path_from_the_root_goes_as_it_is_whatever_this_system(#[case] path: &str) {
+        assert_eq!(path_on(Path::new(path), Some(&devbox())).expect("kept"), PathBuf::from(path));
     }
 
     #[rstest]
