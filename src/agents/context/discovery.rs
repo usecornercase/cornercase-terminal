@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 
-use crate::process;
+use crate::agents::is_program;
+use crate::{paths, process};
 
 #[derive(Debug)]
 pub(in crate::agents) struct Job<T>(Option<Receiver<T>>);
@@ -73,20 +74,44 @@ pub(in crate::agents) fn folder(pid: i32) -> Option<PathBuf> {
     process::cwd(pid)?.canonicalize().ok()
 }
 
-pub(in crate::agents) fn home(pid: i32, variable: &str, suffix: &str, default: &str) -> Option<PathBuf> {
+pub(in crate::agents) fn home(pid: i32, own: &str, suffix: &str, default: &str) -> Option<PathBuf> {
     let env = process::env(pid);
-    let var = |name| env.iter().find(|(key, value)| key == name && !value.is_empty()).map(|(_, v)| PathBuf::from(v));
-    let path = var(variable).map(|home| home.join(suffix)).or_else(|| var("HOME").map(|p| p.join(default)))?;
+    let var = |name| variable(&env, name).map(PathBuf::from);
+    let path = var(own).map(|home| home.join(suffix)).or_else(|| var(paths::HOME_VAR).map(|p| p.join(default)))?;
     let path = if path.is_absolute() { path } else { process::cwd(pid)?.join(path) };
     path.canonicalize().ok()
+}
+
+pub(in crate::agents) fn variable<'a>(env: &'a [(String, String)], name: &str) -> Option<&'a str> {
+    env.iter().find(|(key, value)| same_variable(key, name) && !value.is_empty()).map(|(_, value)| value.as_str())
+}
+
+pub(in crate::agents) fn variable_key(name: String) -> String {
+    if cfg!(windows) { name.to_uppercase() } else { name }
+}
+
+fn same_variable(key: &str, name: &str) -> bool {
+    if cfg!(windows) {
+        key.chars().flat_map(char::to_uppercase).eq(name.chars().flat_map(char::to_uppercase))
+    } else {
+        key == name
+    }
 }
 
 pub(in crate::agents) fn named(args: &[String], name: &str) -> bool {
     let script = args
         .first()
-        .filter(|arg| Path::new(arg).file_name().is_some_and(|n| n == "node"))
+        .filter(|arg| is_program(arg, "node"))
         .and_then(|_| args.iter().skip(1).find(|arg| !arg.starts_with('-')));
-    args.iter().take(2).chain(script).any(|arg| Path::new(arg).file_name().is_some_and(|n| n == name))
+    args.iter().take(2).chain(script).any(|arg| is_program(arg, name))
+}
+
+pub(in crate::agents) fn npm_script(arg: &str, parts: &[&str]) -> bool {
+    let mut found = Path::new(arg).components().rev();
+    parts
+        .iter()
+        .rev()
+        .all(|part| crate::agents::named(found.next().and_then(|component| component.as_os_str().to_str()), part))
 }
 
 #[cfg(test)]

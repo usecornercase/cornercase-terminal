@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.274
+
+- **On Windows, cornercase finds the coding agents installed with npm, reads their folders from your profile and types their commands in PowerShell's syntax**, another step towards running there natively. It still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
 ## 0.12.272
 
 - **On Windows, project, workspace and worktree folders are stored and shown without the `\\?\` prefix**, and sessions saved with it open with plain folders. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.

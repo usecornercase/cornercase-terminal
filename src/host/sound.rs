@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::config::expand_home;
 use crate::log;
 use crate::os::desktop;
-use crate::os::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt, set_file_mode};
+use crate::os::fs::{DirBuilderExt, OpenOptionsExt, set_file_mode};
+use crate::process::program;
 
 const RATE: u16 = 22_050;
 const VOLUME: f32 = 0.3;
@@ -20,7 +21,6 @@ const GAP: Duration = Duration::from_secs(1);
 const KILL_AFTER: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(50);
 const FOLDER: &str = "sounds";
-const RUNNABLE: [&str; 4] = [".com", ".exe", ".bat", ".cmd"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -85,12 +85,7 @@ impl Os {
     }
 
     pub(super) fn extensions(self, pathext: Option<&str>) -> Vec<String> {
-        if self != Self::Windows {
-            return Vec::new();
-        }
-        let listed = pathext.unwrap_or_default().split(';').map(|extension| extension.trim().to_lowercase());
-        let runnable: Vec<String> = listed.filter(|extension| RUNNABLE.contains(&extension.as_str())).collect();
-        if runnable.is_empty() { RUNNABLE.map(String::from).to_vec() } else { runnable }
+        if self == Self::Windows { program::extensions(pathext) } else { Vec::new() }
     }
 }
 
@@ -127,22 +122,7 @@ pub(super) fn on_path<'a>(
     path: Option<&'a OsStr>,
     extensions: &'a [String],
 ) -> impl Fn(&str) -> Option<PathBuf> + 'a {
-    move |name| {
-        std::env::split_paths(path?)
-            .filter(|dir| dir.is_absolute())
-            .find_map(|dir| named(&dir, name, extensions).into_iter().find(|candidate| executable(os, candidate)))
-    }
-}
-
-fn named(dir: &Path, name: &str, extensions: &[String]) -> Vec<PathBuf> {
-    if extensions.is_empty() {
-        return vec![dir.join(name)];
-    }
-    extensions.iter().map(|extension| dir.join(format!("{name}{extension}"))).collect()
-}
-
-fn executable(os: Os, path: &Path) -> bool {
-    path.metadata().is_ok_and(|m| m.is_file() && (os == Os::Windows || m.permissions().mode() & 0o111 != 0))
+    program::on_path(os == Os::Windows, path, extensions)
 }
 
 fn resolve(path: &str, home: Option<&Path>) -> Option<PathBuf> {

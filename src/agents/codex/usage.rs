@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 
 use crate::agents::usage::{Reading, Report, Window, window};
 use crate::error::{Error, Result};
+use crate::process;
 
 const ARGS: [&str; 1] = ["app-server"];
 const INITIALIZE: u64 = 1;
@@ -129,7 +130,7 @@ pub(in crate::agents) fn answer(line: &str) -> Option<Result<Report>> {
 }
 
 pub(in crate::agents) fn command(program: &str) -> Command {
-    let mut cmd = Command::new(program);
+    let mut cmd = process::program::command(program);
     cmd.args(ARGS);
     cmd
 }
