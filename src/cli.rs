@@ -80,6 +80,7 @@ impl WhenArgs {
 
 pub fn run(cli: Cli) -> Result<bool> {
     let remote = reach::chosen(&cli, &|name| std::env::var_os(name))?;
+    crate::update::remove_old_binaries();
     match (cli.command, remote) {
         (None, None) => client::run()?,
         (None, Some(remote)) => client::remote(&remote)?,

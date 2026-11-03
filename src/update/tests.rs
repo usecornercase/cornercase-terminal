@@ -140,6 +140,20 @@ mod install {
     use super::*;
 
     #[rstest]
+    #[case::linux("x86_64-unknown-linux-gnu", "cornercase-x86_64-unknown-linux-gnu.tar.gz")]
+    #[case::macos("aarch64-apple-darwin", "cornercase-aarch64-apple-darwin.tar.gz")]
+    #[case::windows("x86_64-pc-windows-msvc", "cornercase-x86_64-pc-windows-msvc.zip")]
+    fn each_target_downloads_its_own_archive(#[case] target: &str, #[case] expected: &str) {
+        assert_eq!(archive_name(target), expected);
+    }
+
+    #[test]
+    fn the_installer_command_fits_the_system() {
+        let expected = if cfg!(windows) { "install.ps1 | iex" } else { "install.sh | sh" };
+        assert!(INSTALLER.contains(expected), "{INSTALLER}");
+    }
+
+    #[rstest]
     #[case::cellar("/opt/homebrew/Cellar/cornercase/0.1.0/bin/cornercase")]
     #[case::linuxbrew("/home/linuxbrew/.linuxbrew/bin/cornercase")]
     fn homebrew_installs_ask_for_brew(#[case] exe: &str) {
@@ -247,7 +261,7 @@ pub(crate) mod replace {
         let bytes = archive_for(tmp, target, NEW);
         let checksums = sums(&bytes);
         let files = FakeHttp::start(vec![("GET /a.tar.gz", 200, bytes), ("GET /a.sha256", 200, checksums.into())]);
-        let name = format!("cornercase-{target}.tar.gz");
+        let name = archive_name(target);
         let json = serde_json::json!({"tag_name": "v9.0.0", "assets": [
             {"name": name, "browser_download_url": format!("{}/a.tar.gz", files.url())},
             {"name": format!("{name}.sha256"), "browser_download_url": format!("{}/a.sha256", files.url())},
@@ -321,6 +335,65 @@ pub(crate) mod replace {
         let err = replace(&bytes, &sums(&bytes), "9.0.0", &exe).err().map(|e| e.to_string());
 
         assert_eq!(err.as_deref(), Some("the new cornercase does not run here: missing library"));
+        assert_eq!(fs::read_to_string(&exe).expect("old binary"), "old");
+        assert_eq!(fs::read_dir(exe.parent().expect("bin")).expect("bin").count(), 1);
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+    use crate::test_util::verbatim;
+    use crate::update::swap::tests::on_windows::ping_as;
+
+    fn zipped(tmp: &TempDir) -> Vec<u8> {
+        let build = tmp.path().join("build");
+        fs::create_dir_all(&build).expect("build folder");
+        ping_as(&build.join("cornercase.exe"));
+        fs::write(build.join("README.md"), "readme").expect("readme");
+        let zip = tmp.path().join("build.zip");
+        let status = Command::new("tar")
+            .arg("-a")
+            .arg("-cf")
+            .arg(&zip)
+            .arg("-C")
+            .arg(&build)
+            .args(["cornercase.exe", "README.md"])
+            .status()
+            .expect("run tar");
+        assert!(status.success());
+        fs::read(zip).expect("read zip")
+    }
+
+    fn installed(tmp: &TempDir) -> PathBuf {
+        let bin = verbatim(tmp.path()).join("bin");
+        fs::create_dir(&bin).expect("bin folder");
+        let exe = bin.join("cornercase.exe");
+        fs::write(&exe, "old").expect("old binary");
+        exe
+    }
+
+    #[test]
+    fn a_flat_zip_is_unpacked_by_the_system_tar() {
+        let tmp = TempDir::new();
+        let staging = verbatim(tmp.path()).join("staging");
+        fs::create_dir(&staging).expect("staging folder");
+
+        let binary = unpack(&zipped(&tmp), &staging).expect("unpack");
+
+        assert_eq!(binary, staging.join("cornercase.exe"));
+    }
+
+    #[test]
+    fn a_new_binary_that_does_not_print_the_version_leaves_the_old_one() {
+        let tmp = TempDir::new();
+        let exe = installed(&tmp);
+        let bytes = zipped(&tmp);
+
+        let err = replace(&bytes, &replace::sums_for("x86_64-pc-windows-msvc", &bytes), "9.0.0", &exe).err();
+
+        let err = err.map(|e| e.to_string()).unwrap_or_default();
+        assert!(err.starts_with("the new cornercase does not run here"), "{err}");
         assert_eq!(fs::read_to_string(&exe).expect("old binary"), "old");
         assert_eq!(fs::read_dir(exe.parent().expect("bin")).expect("bin").count(), 1);
     }
