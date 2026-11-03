@@ -57,6 +57,13 @@ fn unlisted(command: &str) -> Structured {
     }
 }
 
+fn unaccounted(command: &str) -> Structured {
+    match command {
+        "account-list" => Structured::Error(Refusal::new(Code::Failed, "cannot read the accounts")),
+        command => running(command),
+    }
+}
+
 pub(super) fn start(app: &App) -> &Start {
     let Some(Overlay::StartFlow { start, .. }) = &app.overlay else { panic!("Start flow is not open") };
     start
@@ -223,7 +230,7 @@ fn says_the_project_left_the_machine_instead_of_starting_nothing_in_silence() {
         .rig
         .until("the project leaves the machine", |app| start(app).there().is_some_and(|there| !there.cloned));
     if let Some(Overlay::StartFlow { start, .. }) = &mut reading.remote.rig.app.overlay {
-        start.there = start.there.take().map(|there| There { cloned: true, ..there });
+        start.there = start.there.take().map(|there| There { cloned: true, listed: true, project: Some(1), ..there });
     }
 
     reading.run("Add dark mode");
@@ -246,21 +253,36 @@ fn from_an_issue_keeps_the_machine_and_sends_the_issue() {
     assert_eq!(sent["prompt"], json!(""));
 }
 
-#[test]
-fn asks_again_for_the_flows_it_could_not_list_when_run_is_pressed() {
-    let mut reading = starting_flow(unlisted, vec![web_shop()]);
+fn flows_answered(app: &App) -> bool {
+    app.flows_there("vps", 1) != Checked::Waiting
+}
+
+fn accounts_answered(app: &App) -> bool {
+    app.accounts_there("vps") != Checked::Waiting
+}
+
+#[rstest::rstest]
+#[case::flows(unlisted, "flow-list", "cannot read the flows", flows_answered)]
+#[case::accounts(unaccounted, "account-list", "cannot read the accounts", accounts_answered)]
+fn asks_again_for_what_it_could_not_read_when_run_is_pressed(
+    #[case] told: fn(&str) -> Structured,
+    #[case] command: &str,
+    #[case] said: &str,
+    #[case] answered: fn(&App) -> bool,
+) {
+    let mut reading = starting_flow(told, vec![web_shop()]);
     reading.choose_vps();
     reading
         .remote
         .rig
-        .until("the machine refuses its flows", |app| start(app).there().is_some_and(|there| there.lacking.is_some()));
+        .until("the machine refuses", |app| start(app).there().is_some_and(|there| there.lacking.is_some()));
 
     reading.run("Add dark mode");
 
-    assert_eq!(start(&reading.remote.rig.app).notice.as_deref(), Some("cannot read the flows"));
-    reading.remote.rig.until("the machine refuses again", |app| app.flows_there("vps", 1) != Checked::Waiting);
-    let lists = reading.remote.asked().iter().filter(|asked| asked["command"] == "flow-list").count();
-    assert_eq!((lists, reading.sent("flow-run")), (2, None));
+    assert_eq!(start(&reading.remote.rig.app).notice.as_deref(), Some(said));
+    reading.remote.rig.until("the machine refuses again", answered);
+    let asked = reading.remote.asked().iter().filter(|asked| asked["command"] == command).count();
+    assert_eq!((asked, reading.sent("flow-run")), (2, None));
 }
 
 #[test]
@@ -297,5 +319,53 @@ fn from_an_issue_runs_with_the_account_picked_on_the_machine() {
     reading.flow_from_the_issue();
     reading.run_answered();
 
+    assert_eq!(reading.sent("flow-run").expect("a flow run")["accounts"], json!({ "claude": "home" }));
+}
+
+fn a_snapshot(event: &AppEvent) -> bool {
+    matches!(event, AppEvent::Machine(MachineEvent::Link(Report { event: Event::Seen(_), .. })))
+}
+
+fn the_accounts(event: &AppEvent) -> bool {
+    let AppEvent::Machine(MachineEvent::Relayed(relayed)) = event else { return false };
+    relayed.result().as_ref().is_ok_and(|answer| answer.get("providers").is_some())
+}
+
+#[test]
+fn reads_the_flows_again_when_the_machine_lists_the_project_under_another_id() {
+    let mut reading = starting_flow(running, vec![web_shop()]);
+    reading.flow_on_vps();
+    serve(&mut reading.remote.theirs, 2, shop(vec![ProjectInfo { id: 3, ..web_shop() }]));
+    let reopened = reading.remote.held(a_snapshot);
+
+    reading.deliver(reopened);
+    reading.run("Add dark mode");
+
+    let app = &reading.remote.rig.app;
+    assert_eq!((start(app).notice.as_deref(), reading.sent("flow-run")), (Some("reading the flows on vps…"), None));
+    reading.remote.rig.until("the machine lists the flows of the project again", |app| {
+        start(app).there().is_some_and(|there| there.listed && there.project == Some(3))
+    });
+    assert_eq!(reading.sent("flow-list"), Some(json!({ "project": 3 })));
+}
+
+#[test]
+fn waits_for_the_machine_s_accounts_and_then_runs_with_the_account_picked_there() {
+    let mut reading = reading_with(Reply::Told(running), vec![web_shop()]);
+    reading.checked();
+    reading.pick("account…", "home");
+    reading.press("start a flow");
+    let accounts = reading.remote.held(the_accounts);
+    reading.remote.rig.until("the machine lists its flows", |app| start(app).there().is_some_and(|there| there.listed));
+
+    let app = &mut reading.remote.rig.app;
+    send_key(app, KeyCode::Tab, KeyModifiers::NONE);
+    send_key(app, KeyCode::Enter, KeyModifiers::NONE);
+
+    let app = &reading.remote.rig.app;
+    assert_eq!((start(app).notice.as_deref(), reading.sent("flow-run")), (Some("reading the accounts on vps…"), None));
+    reading.deliver(accounts);
+    send_key(&mut reading.remote.rig.app, KeyCode::Enter, KeyModifiers::NONE);
+    reading.run_answered();
     assert_eq!(reading.sent("flow-run").expect("a flow run")["accounts"], json!({ "claude": "home" }));
 }

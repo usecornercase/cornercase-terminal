@@ -24,7 +24,7 @@ fn listed() -> CloneForm {
     let mut form = opened();
     form.listed(Ok(Listing {
         files: vec![file(".env", 120, false), file("data/big.sqlite", 9 << 20, true), file("local.toml", 2048, false)],
-        left_out: 0,
+        ..Listing::default()
     }));
     form
 }
@@ -90,7 +90,7 @@ mod the_files {
     fn refuse_a_tick_past_the_total_a_clone_takes() {
         let mut form = opened();
         let big = |n: usize| file(&format!("{n}.bin"), MAX_TOTAL_BYTES / 2, false);
-        form.listed(Ok(Listing { files: vec![big(0), big(1), file(".env", 1, false)], left_out: 0 }));
+        form.listed(Ok(Listing { files: vec![big(0), big(1), file(".env", 1, false)], ..Listing::default() }));
 
         form.toggle(0);
         form.toggle(1);
@@ -106,7 +106,7 @@ mod the_files {
     #[test]
     fn say_how_many_were_left_out() {
         let mut form = opened();
-        form.listed(Ok(Listing { files: vec![file(".env", 120, false)], left_out: 3 }));
+        form.listed(Ok(Listing { files: vec![file(".env", 120, false)], left_out: 3, ..Listing::default() }));
 
         assert_eq!(texts(&form), ["[ ] .env  120 B", "… and 3 more not offered (200 at most)"]);
         assert_eq!(form.lines()[1].tone, Tone::Muted);

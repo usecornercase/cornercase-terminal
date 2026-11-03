@@ -359,18 +359,44 @@ mod the_issues_dialog {
         reading.remote.asked().iter().filter(|asked| asked["command"] == "issue-sources").count()
     }
 
-    #[test]
-    fn asks_again_what_failed_once_the_link_is_up_again() {
-        let mut reading = reading_with(Reply::Told(rambling_tracker), vec![web_shop()]);
-        reading.checked();
+    fn relinked(reading: &mut Reading) {
         let linked = Event::Linked { release: version::CURRENT.into(), server_version: version::CURRENT.into() };
-
         reading.deliver(AppEvent::Machine(MachineEvent::Link(Report { link: reading.remote.link, event: linked })));
+    }
 
+    fn refused(event: &AppEvent) -> bool {
+        matches!(event, AppEvent::Machine(MachineEvent::Relayed(relayed)) if relayed.result().is_err())
+    }
+
+    fn answered_again(reading: &mut Reading) {
         reading
             .remote
             .rig
             .until("the machine answers again", |app| app.tracker_there("vps", 1, "github") != Checked::Waiting);
+    }
+
+    #[test]
+    fn asks_again_what_failed_once_the_link_is_up_again() {
+        let mut reading = reading_with(Reply::Told(rambling_tracker), vec![web_shop()]);
+        reading.checked();
+
+        relinked(&mut reading);
+
+        answered_again(&mut reading);
+        assert_eq!(sources_asked(&reading), 2);
+    }
+
+    #[test]
+    fn drops_a_failure_asked_before_the_link_fell_and_asks_again() {
+        let mut reading = reading_with(Reply::Told(rambling_tracker), vec![web_shop()]);
+        reading.pick("run on…", "vps");
+        let failed = reading.remote.held(refused);
+
+        relinked(&mut reading);
+        reading.deliver(failed);
+
+        assert_eq!(reading.remote.rig.app.tracker_there("vps", 1, "github"), Checked::Waiting);
+        answered_again(&mut reading);
         assert_eq!(sources_asked(&reading), 2);
     }
 
@@ -385,10 +411,7 @@ mod the_issues_dialog {
         let app = &reading.remote.rig.app;
         let said = error(app).expect("the reason");
         assert!(said.starts_with("gh failed: exit status 1"), "{said}");
-        reading
-            .remote
-            .rig
-            .until("the machine answers again", |app| app.tracker_there("vps", 1, "github") != Checked::Waiting);
+        answered_again(&mut reading);
         assert_eq!((sources_asked(&reading), reading.sent("start")), (2, None));
     }
 

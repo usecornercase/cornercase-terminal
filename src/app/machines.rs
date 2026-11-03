@@ -332,7 +332,7 @@ impl App {
                     log::info!("machines", "machine linked", name = held.name, version = release);
                 }
                 held.status.linked(release, server_version, now);
-                held.checks.forget_failures();
+                held.checks.relinked();
                 held.down_at = None;
                 held.watching = false;
             }

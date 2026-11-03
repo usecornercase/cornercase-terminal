@@ -1,7 +1,10 @@
+use std::os::unix::fs::PermissionsExt;
+
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 use super::*;
 use crate::app::clone_on_machine::{packed, told};
+use crate::control::CloneFile;
 use crate::git::ignored::{self, IgnoredFile};
 use crate::machines::clone_form::{BUTTONS, CloneForm, Files};
 use crate::test_util::{git, git_repo, wait_until};
@@ -47,6 +50,27 @@ fn rambling(command: &str) -> Structured {
 fn garbled(command: &str) -> Structured {
     match command {
         "clone" => Structured::Ok(json!({ "path": "/home/ana/code/web-shop", "unwritten": "local.toml" })),
+        command => ready(command),
+    }
+}
+
+fn empty(command: &str) -> Structured {
+    match command {
+        "clone" => Structured::Ok(json!({})),
+        command => ready(command),
+    }
+}
+
+fn nameless(command: &str) -> Structured {
+    match command {
+        "clone" => Structured::Ok(json!({ "path": "/home/ana/code/web-shop" })),
+        command => ready(command),
+    }
+}
+
+fn pathless(command: &str) -> Structured {
+    match command {
+        "clone" => Structured::Ok(json!({ "path": "", "project": CLONED })),
         command => ready(command),
     }
 }
@@ -404,21 +428,35 @@ fn says_briefly_why_a_ticked_file_could_not_be_read() {
     assert_eq!(reading.sent("clone"), None);
 }
 
-fn a_folder_read(root: &Path) -> Result<Vec<u8>> {
+fn a_folder_read(root: &Path) -> Result<Vec<CloneFile>> {
+    git(root, &["init", "--quiet"]);
     std::fs::create_dir_all(root.join("secret/.env")).expect("a folder");
     let file = IgnoredFile { path: PathBuf::from("secret/.env"), size: 5, mode: 0o644, too_big: false };
-    ignored::read(root, &file)
+    packed(&ignored::list(root).expect("list").root, &[file])
 }
 
-fn outside_git(root: &Path) -> Result<Vec<u8>> {
+fn a_moved_folder(root: &Path) -> Result<Vec<CloneFile>> {
+    let top = root.join("shop");
+    std::fs::create_dir(&top).expect("the project folder");
+    git(&top, &["init", "--quiet"]);
+    write(&top, ".gitignore", ".env\n");
+    write(&top, ".env", "KEY=1");
+    let listing = ignored::list(&top).expect("list");
+    std::fs::rename(&top, root.join("moved")).expect("move the folder");
+    std::fs::create_dir(&top).expect("another folder");
+    packed(&listing.root, &listing.files)
+}
+
+fn outside_git(root: &Path) -> Result<Vec<CloneFile>> {
     ignored::toplevel(root).map(|_| Vec::new())
 }
 
 #[rstest]
 #[case::io(a_folder_read, "Other", "secret/.env")]
+#[case::moved(a_moved_folder, "Other", "the project folder changed since its files were listed")]
 #[case::git(outside_git, "git", "git")]
 fn logs_a_failure_to_read_the_files_by_its_kind_alone(
-    #[case] reading: fn(&Path) -> Result<Vec<u8>>,
+    #[case] reading: fn(&Path) -> Result<Vec<CloneFile>>,
     #[case] logged: &str,
     #[case] said: &str,
 ) {
@@ -443,15 +481,32 @@ fn refuses_files_that_grew_past_what_a_clone_takes_since_they_were_listed() {
         })
         .collect();
 
-    let (result, failed) = told(packed(repo.path(), &listed));
+    let (result, failed) = told(packed(&ignored::list(repo.path()).expect("list").root, &listed));
 
     assert_eq!((result.err().as_deref(), failed.as_deref()), (Some("over the 8 MiB a clone takes"), Some("Other")));
+}
+
+#[test]
+fn sends_the_permissions_a_file_has_when_it_is_packed() {
+    let repo = git_repo(&[(".gitignore", ".env\n")]);
+    let path = repo.path().join(".env");
+    std::fs::write(&path, "KEY=1").expect("write the file");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).expect("chmod");
+    let listing = ignored::list(repo.path()).expect("list");
+
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).expect("chmod");
+
+    let files = packed(&listing.root, &listing.files).expect("packed");
+    assert_eq!(files.iter().map(|file| file.mode).collect::<Vec<_>>(), [0o600]);
 }
 
 #[rstest]
 #[case::short(refused, "the clone on vps failed: ~/code/web-shop already exists on vps")]
 #[case::rambling(rambling, "the clone on vps failed: fatal: could not create work tree dir because the disk on t…")]
 #[case::unreadable(garbled, "the clone on vps failed: its answer could not be read")]
+#[case::empty(empty, "the clone on vps failed: its answer could not be read")]
+#[case::without_a_project(nameless, "the clone on vps failed: its answer could not be read")]
+#[case::without_a_path(pathless, "the clone on vps failed: its answer could not be read")]
 fn says_a_failed_clone_in_a_toast_and_lets_it_be_tried_again(#[case] told: fn(&str) -> Structured, #[case] said: &str) {
     let mut reading = not_there(told);
     reading.clone_dialog();

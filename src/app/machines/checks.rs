@@ -113,10 +113,11 @@ impl Check {
 }
 
 impl Checks {
-    pub(super) fn forget_failures(&mut self) {
-        self.accounts.error = None;
-        self.sources.values_mut().for_each(|sources| sources.error = None);
-        self.flows.values_mut().for_each(|flows| flows.error = None);
+    pub(super) fn relinked(&mut self) {
+        self.generation += 1;
+        unasked(&mut self.accounts);
+        self.sources.values_mut().for_each(unasked);
+        self.flows.values_mut().for_each(unasked);
     }
 
     fn slot(&mut self, check: Check) -> &mut dyn Slot {
@@ -126,6 +127,11 @@ impl Checks {
             Check::Flows(project) => self.flows.entry(project).or_default(),
         }
     }
+}
+
+fn unasked<T>(cached: &mut Cached<T>) {
+    cached.asking = false;
+    cached.error = None;
 }
 
 #[cfg(test)]

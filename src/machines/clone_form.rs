@@ -7,7 +7,7 @@ use crate::control::Unwritten;
 use crate::editor::Editor;
 use crate::git::clone::files::{MAX_FILES, MAX_TOTAL_BYTES};
 use crate::git::clone::folder_name;
-use crate::git::ignored::{IgnoredFile, Listing};
+use crate::git::ignored::{IgnoredFile, Listing, Root};
 use crate::text;
 
 pub(crate) const BACK: &str = "back";
@@ -63,7 +63,7 @@ pub(crate) struct CloneForm {
     pub(crate) project: String,
     pub(crate) machine: String,
     pub(crate) folder: String,
-    pub(crate) root: PathBuf,
+    pub(crate) root: Root,
     pub(crate) url: Editor,
     pub(crate) files: Files,
     pub(crate) left_out: usize,
@@ -74,14 +74,14 @@ pub(crate) struct CloneForm {
 
 impl CloneForm {
     pub(crate) fn new(opening: Opening) -> Self {
-        let Opening { project, machine, folder, root, url } = opening;
+        let Opening { project, machine, folder, url, .. } = opening;
         let mut url = Editor::new(&url);
         url.home();
         Self {
             project,
             machine,
             folder,
-            root,
+            root: Root::default(),
             url,
             files: Files::Reading,
             left_out: 0,
@@ -95,6 +95,7 @@ impl CloneForm {
         self.files = match listed {
             Ok(listing) => {
                 self.left_out = listing.left_out;
+                self.root = listing.root;
                 Files::Read(listing.files.into_iter().map(|file| (file, false)).collect())
             }
             Err(why) => Files::Failed(why),

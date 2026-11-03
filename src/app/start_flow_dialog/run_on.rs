@@ -72,16 +72,9 @@ impl App {
         let era = self.held_by(target.link).map_or(0, |held| held.era);
         let was = start.there().filter(|was| was.era == era).cloned().unwrap_or_default();
         let id = self.project_there(target.link, start.project).map(|there| there.id);
-        let flows = id.filter(|_| !was.listed).map(|id| self.flows_there(&target.name, id));
-        let failed = match &flows {
-            Some(Checked::Failed(why)) => Some(why.clone()),
-            _ => None,
-        };
-        let listing = flows.and_then(|flows| if let Checked::Read(listing) = flows { Some(listing) } else { None });
-        let accounts = match self.flow_accounts_there(&target.name) {
-            Checked::Read(accounts) if !was.accounted => Some(accounts),
-            _ => None,
-        };
+        let listed = was.listed && was.project == id;
+        let (listing, unlisted) = taken(id.filter(|_| !listed).map(|id| self.flows_there(&target.name, id)));
+        let (accounts, unaccounted) = taken((!was.accounted).then(|| self.flow_accounts_there(&target.name)));
         let tracker = start
             .asked
             .as_ref()
@@ -90,9 +83,10 @@ impl App {
         let there = There {
             place: self.where_there(target.link, start.project, true),
             cloned: id.is_some(),
-            listed: was.listed || listing.is_some(),
+            listed: listed || listing.is_some(),
             accounted: was.accounted || accounts.is_some(),
-            lacking: tracker.or(failed),
+            lacking: tracker.or(unlisted).or(unaccounted),
+            project: id,
             era,
         };
         Read { there, listing, accounts }
@@ -145,4 +139,12 @@ struct Read {
     there: There,
     listing: Option<Listing>,
     accounts: Option<Vec<crate::accounts::AgentAccounts>>,
+}
+
+fn taken<T>(checked: Option<Checked<T>>) -> (Option<T>, Option<String>) {
+    match checked {
+        Some(Checked::Read(read)) => (Some(read), None),
+        Some(Checked::Failed(why)) => (None, Some(why)),
+        Some(Checked::Waiting) | None => (None, None),
+    }
 }

@@ -16,6 +16,7 @@ pub(crate) struct There {
     pub(crate) listed: bool,
     pub(crate) accounted: bool,
     pub(crate) lacking: Option<String>,
+    pub(crate) project: Option<u64>,
     pub(crate) era: u64,
 }
 
@@ -109,15 +110,17 @@ impl Start {
         if !there.cloned {
             return Some(Action::CloneThere);
         }
-        let (lacking, listed) = (there.lacking.clone(), there.listed);
+        let (lacking, listed, accounted) = (there.lacking.clone(), there.listed, there.accounted);
         if let Some(lacking) = lacking {
             self.notice = Some(lacking);
             return Some(Action::AskAgain);
         }
-        if listed {
-            return None;
-        }
-        self.notice = Some(format!("reading the flows on {name}…"));
+        let reading = match (listed, accounted) {
+            (false, _) => "flows",
+            (true, false) => "accounts",
+            (true, true) => return None,
+        };
+        self.notice = Some(format!("reading the {reading} on {name}…"));
         Some(Action::None)
     }
 

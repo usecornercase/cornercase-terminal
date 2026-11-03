@@ -2,7 +2,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use super::*;
 use crate::git::clone::files::MAX_TOTAL_BYTES;
-use crate::test_util::{TempDir, git_repo};
+use crate::test_util::{TempDir, git, git_repo};
 
 fn repo(ignore: &str) -> TempDir {
     git_repo(&[(".gitignore", ignore), ("config/app.json", "{}")])
@@ -16,6 +16,10 @@ fn write(repo: &TempDir, path: &str, contents: &[u8]) {
 
 fn paths(repo: &TempDir) -> Vec<String> {
     list(repo.path()).expect("list").files.into_iter().map(|file| file.path.display().to_string()).collect()
+}
+
+fn root(repo: &Path) -> Root {
+    list(repo).expect("list").root
 }
 
 fn file(path: &str, size: u64) -> IgnoredFile {
@@ -67,7 +71,9 @@ mod list {
         let repo = repo(".env\n");
         write(&repo, "untracked.txt", b"x");
 
-        assert_eq!(list(repo.path()).expect("list"), Listing::default());
+        let listing = list(repo.path()).expect("list");
+
+        assert_eq!((listing.files, listing.left_out), (Vec::new(), 0));
     }
 
     #[test]
@@ -166,7 +172,7 @@ mod read {
         let repo = repo(".env\n");
         write(&repo, ".env", b"KEY=1");
 
-        assert_eq!(read(repo.path(), &file(".env", 5)).expect("read"), b"KEY=1");
+        assert_eq!(read(&root(repo.path()), &file(".env", 5)).expect("read").0, b"KEY=1");
     }
 
     fn linked(repo: &Path, target: &Path) -> PathBuf {
@@ -201,7 +207,7 @@ mod read {
         assert_eq!(std::fs::read(repo.path().join(&path)).expect("the file is there"), b"KEY=1");
 
         let ignored = IgnoredFile { path, size: 5, mode: 0o644, too_big: false };
-        assert!(read(repo.path(), &ignored).is_err());
+        assert!(read(&root(repo.path()), &ignored).is_err());
     }
 
     #[test]
@@ -209,7 +215,7 @@ mod read {
         let repo = repo(".env\n");
         write(&repo, ".env", &vec![b'x'; usize::try_from(MAX_FILE_BYTES).expect("a size") + 1]);
 
-        let why = read(repo.path(), &file(".env", 5)).expect_err("too big").to_string();
+        let why = read(&root(repo.path()), &file(".env", 5)).expect_err("too big").to_string();
 
         assert!(why.contains(".env grew past"), "{why}");
     }
@@ -221,7 +227,7 @@ mod read {
         let made = std::process::Command::new("mkfifo").arg(&fifo).status().expect("mkfifo");
         assert!(made.success());
 
-        let root = repo.path().to_path_buf();
+        let root = root(repo.path());
         let (told, heard) = std::sync::mpsc::channel();
         std::thread::spawn(move || told.send(read(&root, &file(".env", 0)).map_err(|error| error.to_string())));
 
@@ -229,5 +235,48 @@ mod read {
         let why = read.expect_err("a fifo");
 
         assert!(why.contains("not a regular file"), "{why}");
+    }
+
+    #[test]
+    fn gives_the_permissions_the_file_has_when_it_is_read() {
+        let repo = repo(".env\n");
+        write(&repo, ".env", b"KEY=1");
+        let path = repo.path().join(".env");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).expect("chmod");
+        let listing = list(repo.path()).expect("list");
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).expect("chmod");
+
+        assert_eq!(read(&listing.root, &listing.files[0]).expect("read").1, 0o600);
+    }
+
+    fn another_folder(top: &Path, _: &Path) {
+        std::fs::create_dir(top).expect("a new folder");
+        std::fs::write(top.join(".env"), "KEY=2").expect("write file");
+    }
+
+    fn a_symlink(top: &Path, outside: &Path) {
+        another_folder(outside, top);
+        std::os::unix::fs::symlink(outside, top).expect("symlink");
+    }
+
+    #[rstest::rstest]
+    #[case::another_folder(another_folder)]
+    #[case::a_symlink(a_symlink)]
+    fn refuses_a_project_folder_that_changed_since_its_files_were_listed(#[case] swap: fn(&Path, &Path)) {
+        let outer = TempDir::new();
+        let top = outer.path().join("shop");
+        std::fs::create_dir(&top).expect("the project folder");
+        git(&top, &["init", "--quiet"]);
+        std::fs::write(top.join(".gitignore"), ".env\n").expect("write file");
+        std::fs::write(top.join(".env"), "KEY=1").expect("write file");
+        let listing = list(&top).expect("list");
+        let moved = outer.path().join("moved");
+        std::fs::rename(&top, &moved).expect("move the folder");
+
+        swap(&top, &outer.path().join("outside"));
+
+        let why = read(&listing.root, &listing.files[0]).expect_err("a changed folder").to_string();
+        assert!(why.contains(MOVED), "{why}");
     }
 }

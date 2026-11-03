@@ -1,5 +1,5 @@
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
@@ -19,7 +19,7 @@ use crate::control::{CloneFile, CloneRepository, Cloned};
 use crate::editor::Editor;
 use crate::error::{Error, Result};
 use crate::git::clone::files::MAX_TOTAL_BYTES;
-use crate::git::ignored::{self, IgnoredFile, Listing};
+use crate::git::ignored::{self, IgnoredFile, Listing, Root};
 use crate::git::remote;
 use crate::log::{Job, Level};
 use crate::machines::DEFAULT_FOLDER;
@@ -249,8 +249,8 @@ impl App {
     pub(in crate::app) fn clone_relayed(&mut self, key: u64, result: std::result::Result<Value, Refusal>) {
         let Some(pending) = self.machines.clones.iter().find(|pending| pending.key == key).cloned() else { return };
         let cloned = match result.map(serde_json::from_value::<Cloned>) {
-            Ok(Ok(cloned)) => cloned,
-            Ok(Err(_)) => return self.clone_failed(&pending, UNREADABLE),
+            Ok(Ok(cloned)) if !cloned.path.as_os_str().is_empty() && cloned.ids.project.is_some() => cloned,
+            Ok(_) => return self.clone_failed(&pending, UNREADABLE),
             Err(refusal) => {
                 let why = run_on::reason(&self.clone_machine(&pending), &refusal.message);
                 return self.clone_failed(&pending, &why);
@@ -298,16 +298,15 @@ fn url_width(area: Rect) -> usize {
     usize::from(view::url_text(area).width.max(1))
 }
 
-pub(in crate::app) fn packed(root: &Path, files: &[IgnoredFile]) -> Result<Vec<CloneFile>> {
-    let top = ignored::toplevel(root)?;
+pub(in crate::app) fn packed(root: &Root, files: &[IgnoredFile]) -> Result<Vec<CloneFile>> {
     let mut total = 0;
     let mut file = |file: &IgnoredFile| {
-        let bytes = ignored::read(&top, file)?;
+        let (bytes, mode) = ignored::read(root, file)?;
         total += bytes.len() as u64;
         if total > MAX_TOTAL_BYTES {
             return Err(io::Error::other(over_the_total()).into());
         }
-        Ok(CloneFile { path: file.path.clone(), data: STANDARD.encode(bytes), mode: file.mode })
+        Ok(CloneFile { path: file.path.clone(), data: STANDARD.encode(bytes), mode })
     };
     files.iter().map(&mut file).collect()
 }
