@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **On Windows, cornercase can now see which files a program holds open**, the next step of the native port (it still says it does not run on Windows yet). That is how it finds the records of Codex, Copilot, Cursor and opencode for a tab's model and context line, so those agents can show it there as they do on Linux and macOS. A file whose name Windows cannot give at once (a pipe or console another thread is reading) is skipped rather than holding the rest up. Nothing changes on Linux and macOS.
 
+## 0.12.270
+
+- **On Windows, programs in a pane get the mouse**, the next step of the native port (it still says it does not run on Windows yet). vim with `set mouse=a` and other programs that ask for the mouse, with escape codes or through the Windows console, get clicks, drags and the wheel through ConPTY. A program using the oldest mouse encoding gets no click past column or row 95, where Windows would turn it into stray keys, as in Windows Terminal. Nothing changes on Linux and macOS.
+
 ## 0.12.268
 
 - **On Windows, the cornercase server stops cleanly when you sign out, restart or shut down**, the next step of the native port (it still says it does not run on Windows yet). Windows asks it before the programs in its panes, and it stops the way `kill-server` stops it: plugins stop and the TODO list, the queue and the stats are saved, without holding up the end of the session for more than a few seconds. `taskkill /pid` without `/f` stops it the same way. Nothing changes on Linux and macOS.
