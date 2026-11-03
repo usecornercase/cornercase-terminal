@@ -252,11 +252,16 @@ fn the_outcome_of_each_ending() {
 
 #[cfg(windows)]
 #[test]
-fn a_program_ended_by_force_on_windows_reads_as_its_exit_code() {
-    use std::os::windows::process::ExitStatusExt as _;
-    use std::process::ExitStatus;
+fn an_action_ended_by_the_hard_step_on_windows_reads_as_its_exit_code() {
+    use std::process::Stdio;
+
+    use crate::os::process::{Grouped, Signal};
+    let mut ping = std::process::Command::new("ping");
+    let mut action = Grouped::spawn(ping.args(["-n", "30", "127.0.0.1"]).stdout(Stdio::null())).expect("spawn ping");
+    assert!(action.signal(Signal::KILL));
+    let status = action.wait().expect("ended");
     let invoked = Invoked { plugin: "p", action: "a", context: Context::Tab, ids: Ids::default() };
-    let ran = Ran { ended: Ended::Status(ExitStatus::from_raw(1)), took: Duration::from_millis(7) };
+    let ran = Ran { ended: Ended::Status(status), took: Duration::from_millis(7) };
     let ended = ActionRan::of(invoked, &ran, "/log".into());
     assert_eq!((ended.ended.as_str(), ended.code, ended.signal), ("exited", Some(1), None));
     assert_eq!(ended.error.as_deref(), Some("exit code: 1"));

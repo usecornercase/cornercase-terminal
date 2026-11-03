@@ -9,9 +9,12 @@ const KILL_WAIT: Duration = Duration::from_secs(1);
 
 const POLL: Duration = Duration::from_millis(50);
 
-pub(crate) const KILLED_BECAUSE: &str = if cfg!(windows) { "it did not close" } else { "it ignored SIGTERM" };
+pub(crate) const KILLED_BECAUSE: &str =
+    if cfg!(windows) { "it had no window to close, or did not close within 3 s" } else { "it ignored SIGTERM" };
 
 pub(crate) const HARD_STEP: &str = if cfg!(windows) { "being terminated" } else { "SIGKILL" };
+
+const HARD_STEP_AFTER_A_FAILED_ASK: bool = cfg!(windows);
 
 pub(crate) trait Stoppable {
     fn check(&self) -> Result<(), String>;
@@ -42,9 +45,9 @@ pub(crate) type Stopped<T> = (T, Result<Outcome, String>);
 pub(crate) fn escalate<T: Stoppable>(targets: Vec<T>) -> Vec<Stopped<T>> {
     let mut done = Vec::new();
     let (asked, unasked) = ask(targets, &mut done);
-    let mut left = wait(asked, GRACE, Outcome::Stopped, &mut done);
-    left.extend(unasked);
-    let killed = kill(left, &mut done);
+    let mut killed = kill(unasked, &mut done);
+    let left = wait(asked, GRACE, Outcome::Stopped, &mut done);
+    killed.extend(kill(left, &mut done));
     let left = wait(killed, KILL_WAIT, Outcome::Killed, &mut done);
     done.extend(left.into_iter().map(|target| (target, Ok(Outcome::StillRunning))));
     done
@@ -58,6 +61,7 @@ fn ask<T: Stoppable>(targets: Vec<T>, done: &mut Vec<Stopped<T>>) -> (Vec<T>, Ve
             Ok(()) if !target.askable() => unasked.push(target),
             Ok(()) => match target.signal(Signal::TERM) {
                 Ok(()) => asked.push(target),
+                Err(_) if HARD_STEP_AFTER_A_FAILED_ASK => unasked.push(target),
                 Err(reason) => done.push((target, Err(reason))),
             },
         }

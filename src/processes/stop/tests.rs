@@ -156,7 +156,10 @@ mod saying {
     #[test]
     fn the_hard_step_names_no_signal() {
         let said = |outcome: Result<Outcome, String>| summary(&[(group(0), outcome)]);
-        assert_eq!(said(Ok(Outcome::Killed)), "killed node (pid 48211): it did not close");
+        assert_eq!(
+            said(Ok(Outcome::Killed)),
+            "killed node (pid 48211): it had no window to close, or did not close within 3 s"
+        );
         assert_eq!(said(Ok(Outcome::StillRunning)), "node (pid 48211) is still running after being terminated");
     }
 }
