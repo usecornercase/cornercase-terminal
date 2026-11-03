@@ -270,9 +270,14 @@ impl Running {
     pub(crate) fn first_line(&mut self) -> String {
         use std::io::BufRead;
         let output = self.0.stdout.take().expect("the output is piped");
-        let mut line = String::new();
-        std::io::BufReader::new(output).read_line(&mut line).expect("read the first line");
-        line.trim().to_string()
+        let (line, read) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut first = String::new();
+            let _ = std::io::BufReader::new(output).read_line(&mut first);
+            let _ = line.send(first);
+        });
+        let first = read.recv_timeout(Duration::from_secs(30));
+        first.expect("the child writes its first line within 30 s").trim().to_string()
     }
 }
 

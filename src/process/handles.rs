@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 
 use crate::{log, panics};
 
@@ -24,19 +24,45 @@ const ENTRY: usize = 3 * WORD + 16;
 #[cfg(windows)]
 static WAITING: Waiting = Waiting::new(MOST_ASKED);
 
-type Ask = Arc<dyn Fn(usize) -> Option<PathBuf> + Send + Sync>;
+trait Object: Send + Sync {
+    fn name(&self) -> Option<PathBuf>;
+    fn same(&self, other: &dyn Object) -> bool;
+    fn raw(&self) -> usize;
+}
+
+type Open = Arc<dyn Fn(usize) -> Option<Arc<dyn Object>> + Send + Sync>;
 
 #[derive(Clone)]
 struct Asking {
-    ask: Ask,
+    open: Open,
     within: Duration,
     waiting: &'static Waiting,
 }
 
 struct Waiting {
-    asked: Mutex<Vec<(i32, usize)>>,
+    asked: Mutex<Vec<Question>>,
     most: usize,
     full: AtomicBool,
+}
+
+struct Question {
+    key: (i32, usize),
+    object: Arc<dyn Object>,
+    since: Instant,
+    answer: Arc<Slot>,
+}
+
+#[derive(Default)]
+struct Slot {
+    told: Mutex<Told>,
+    given: Condvar,
+}
+
+#[derive(Default)]
+enum Told {
+    #[default]
+    Waiting,
+    Named(Option<PathBuf>),
 }
 
 #[derive(Default)]
@@ -46,7 +72,8 @@ struct Progress {
 }
 
 enum Turn {
-    Ask,
+    Ask(Arc<Slot>),
+    Wait(Arc<Slot>, Instant),
     Skip,
     Full,
     Stop,
@@ -57,34 +84,62 @@ enum Answer {
     Full,
 }
 
+impl Progress {
+    fn pass(&self) -> bool {
+        self.done.fetch_add(1, Ordering::Relaxed);
+        !self.abandoned.load(Ordering::Relaxed)
+    }
+}
+
+impl Slot {
+    fn give(&self, path: Option<PathBuf>) {
+        *self.told.lock() = Told::Named(path);
+        self.given.notify_all();
+    }
+
+    fn wait(&self, until: Instant) -> Option<PathBuf> {
+        let mut told = self.told.lock();
+        while matches!(*told, Told::Waiting) && !self.given.wait_until(&mut told, until).timed_out() {}
+        match &*told {
+            Told::Named(path) => path.clone(),
+            Told::Waiting => None,
+        }
+    }
+}
+
 impl Waiting {
     const fn new(most: usize) -> Self {
         Self { asked: Mutex::new(Vec::new()), most, full: AtomicBool::new(false) }
     }
 
-    fn take(&self, pid: i32, handle: usize, progress: &Progress) -> Turn {
+    fn take(&self, key: (i32, usize), object: &Arc<dyn Object>, within: Duration, progress: &Progress) -> Turn {
         let mut asked = self.asked.lock();
         if progress.abandoned.load(Ordering::Relaxed) {
             return Turn::Stop;
         }
-        if asked.contains(&(pid, handle)) {
-            progress.done.fetch_add(1, Ordering::Relaxed);
-            return Turn::Skip;
+        if let Some(question) = asked.iter().find(|question| question.key == key && object.same(&*question.object)) {
+            let until = question.since + within;
+            return if until > Instant::now() { Turn::Wait(Arc::clone(&question.answer), until) } else { Turn::Skip };
         }
         if asked.len() >= self.most {
             return Turn::Full;
         }
-        asked.push((pid, handle));
-        Turn::Ask
+        let answer = Arc::new(Slot::default());
+        let since = Instant::now();
+        asked.push(Question { key, object: Arc::clone(object), since, answer: Arc::clone(&answer) });
+        Turn::Ask(answer)
     }
 
-    fn answered(&self, pid: i32, handle: usize, progress: &Progress) -> bool {
+    fn answered(&self, answer: &Arc<Slot>, path: Option<PathBuf>, progress: &Progress) -> bool {
         let mut asked = self.asked.lock();
-        if let Some(at) = asked.iter().position(|entry| *entry == (pid, handle)) {
-            asked.swap_remove(at);
-        }
-        progress.done.fetch_add(1, Ordering::Relaxed);
-        !progress.abandoned.load(Ordering::Relaxed)
+        asked.retain(|question| !Arc::ptr_eq(&question.answer, answer));
+        answer.give(path);
+        progress.pass()
+    }
+
+    fn passed(&self, progress: &Progress) -> bool {
+        let _asked = self.asked.lock();
+        progress.pass()
     }
 
     fn give_up(&self, answered: usize, progress: &Progress) -> bool {
@@ -173,15 +228,22 @@ fn start(pid: i32, handles: Vec<usize>, asking: Asking, progress: Arc<Progress>)
 }
 
 fn answer(pid: i32, handle: usize, asking: &Asking, progress: &Progress) -> Option<Answer> {
-    match asking.waiting.take(pid, handle, progress) {
-        Turn::Stop => None,
-        Turn::Full => Some(Answer::Full),
-        Turn::Skip => Some(Answer::Named(None)),
-        Turn::Ask => {
-            let path = panics::contain(|| (asking.ask)(handle)).flatten();
-            asking.waiting.answered(pid, handle, progress).then_some(Answer::Named(path))
-        }
-    }
+    let Some(object) = (asking.open)(handle) else {
+        return asking.waiting.passed(progress).then_some(Answer::Named(None));
+    };
+    let path = match asking.waiting.take((pid, handle), &object, asking.within, progress) {
+        Turn::Stop => return None,
+        Turn::Full => return Some(Answer::Full),
+        Turn::Ask(answer) => return ask(&object, &answer, asking.waiting, progress),
+        Turn::Wait(answer, until) => answer.wait(until),
+        Turn::Skip => None,
+    };
+    asking.waiting.passed(progress).then_some(Answer::Named(path))
+}
+
+fn ask(object: &Arc<dyn Object>, answer: &Arc<Slot>, waiting: &Waiting, progress: &Progress) -> Option<Answer> {
+    let path = panics::contain(|| object.name()).flatten();
+    waiting.answered(answer, path.clone(), progress).then_some(Answer::Named(path))
 }
 
 #[cfg(windows)]
@@ -195,11 +257,13 @@ mod imp {
     use std::sync::{Arc, OnceLock};
 
     use windows_sys::Wdk::System::Threading::{NtQueryInformationProcess, ProcessHandleInformation};
-    use windows_sys::Win32::Foundation::{DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE, STATUS_INFO_LENGTH_MISMATCH};
+    use windows_sys::Win32::Foundation::{
+        CompareObjectHandles, DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE, STATUS_INFO_LENGTH_MISMATCH,
+    };
     use windows_sys::Win32::Storage::FileSystem::{GetFinalPathNameByHandleW, VOLUME_NAME_DOS};
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, PROCESS_DUP_HANDLE, PROCESS_QUERY_INFORMATION};
 
-    use super::{Asking, NAME_WITHIN, WAITING, names, of_type, type_of};
+    use super::{Asking, NAME_WITHIN, Object, WAITING, names, of_type, type_of};
     use crate::process::imp::{Owned, as_bytes};
 
     const SNAPSHOT_FIRST_WORDS: usize = 1 << 11;
@@ -212,6 +276,31 @@ mod imp {
     unsafe impl Send for Process {}
     unsafe impl Sync for Process {}
 
+    impl Process {
+        fn object(&self, handle: usize) -> Option<Arc<dyn Object>> {
+            Some(Arc::new(duplicate(self.0.0, handle)?))
+        }
+    }
+
+    pub(super) struct Duplicate(Owned);
+
+    unsafe impl Send for Duplicate {}
+    unsafe impl Sync for Duplicate {}
+
+    impl Object for Duplicate {
+        fn name(&self) -> Option<PathBuf> {
+            final_path(self.0.0)
+        }
+
+        fn same(&self, other: &dyn Object) -> bool {
+            unsafe { CompareObjectHandles(self.0.0, ptr::without_provenance_mut(other.raw())) != 0 }
+        }
+
+        fn raw(&self) -> usize {
+            self.0.0.addr()
+        }
+    }
+
     pub(crate) fn open_files(pid: i32) -> Vec<PathBuf> {
         let Some(file) = file_type() else { return Vec::new() };
         let Some(process) = Owned::process(pid, PROCESS_QUERY_INFORMATION | PROCESS_DUP_HANDLE) else {
@@ -220,7 +309,7 @@ mod imp {
         let Some(snapshot) = snapshot(process.0) else { return Vec::new() };
         let process = Process(process);
         let asking =
-            Asking { ask: Arc::new(move |handle| name(&process, handle)), within: NAME_WITHIN, waiting: &WAITING };
+            Asking { open: Arc::new(move |handle| process.object(handle)), within: NAME_WITHIN, waiting: &WAITING };
         names(pid, of_type(as_bytes(&snapshot), file), &asking)
     }
 
@@ -254,15 +343,14 @@ mod imp {
         None
     }
 
-    fn name(process: &Process, handle: usize) -> Option<PathBuf> {
+    pub(super) fn duplicate(from: HANDLE, handle: usize) -> Option<Duplicate> {
         let mut copy = ptr::null_mut();
         let (source, here) = (ptr::without_provenance_mut(handle), unsafe { GetCurrentProcess() });
-        let copied =
-            unsafe { DuplicateHandle(process.0.0, source, here, &raw mut copy, 0, 0, DUPLICATE_SAME_ACCESS) } != 0;
+        let copied = unsafe { DuplicateHandle(from, source, here, &raw mut copy, 0, 0, DUPLICATE_SAME_ACCESS) } != 0;
         if !copied {
             return None;
         }
-        final_path(Owned::new(copy)?.0)
+        Owned::new(copy).map(Duplicate)
     }
 
     fn final_path(handle: HANDLE) -> Option<PathBuf> {
