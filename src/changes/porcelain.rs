@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use super::diff::{File, Staged, Status};
+use crate::os::ffi;
 
 #[derive(Clone, Copy, Default)]
 struct Sides {
@@ -101,7 +102,7 @@ pub(super) fn path_prefix(dir: &Path) -> String {
         .find(|root| root.join(".git").exists())
         .and_then(|root| dir.strip_prefix(root).ok())
         .filter(|prefix| !prefix.as_os_str().is_empty())
-        .map_or_else(String::new, |prefix| format!("{}/", prefix.display()))
+        .map_or_else(String::new, |prefix| format!("{}/", ffi::text(prefix)))
 }
 
 #[cfg(test)]

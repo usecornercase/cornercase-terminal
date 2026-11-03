@@ -144,7 +144,6 @@ mod pid_in {
 
 mod remove {
     use super::*;
-    use crate::test_util::{exited_pid, this_pid};
 
     fn with_worktree() -> (TempDir, TempDir, PathBuf) {
         let repo = git_repo(&[("README", "hi")]);
@@ -188,19 +187,21 @@ mod remove {
         assert_eq!(lock(&path).expect("read lock"), Some(Lock { reason: String::new(), holder: None, role: None }));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_pid_in_the_reason_that_is_gone_is_a_lock_left_behind() {
         let (repo, _tmp, path) = with_worktree();
-        let pid = exited_pid();
+        let pid = crate::test_util::exited_pid();
         locked(repo.path(), &path, Some(&format!("claude session wt (pid {pid} start Wed Oct  7 09:10:42 2026)")));
 
         assert_eq!(lock(&path).expect("read lock").and_then(|l| l.holder), Some(Holder::Gone(pid)));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_pid_in_the_reason_that_runs_holds_the_lock() {
         let (repo, _tmp, path) = with_worktree();
-        let pid = this_pid();
+        let pid = crate::test_util::this_pid();
         locked(repo.path(), &path, Some(&format!("claude session wt (pid {pid} start …)")));
 
         assert_eq!(lock(&path).expect("read lock").and_then(|l| l.holder), Some(Holder::Running(pid)));
@@ -320,5 +321,30 @@ mod scoped_commands {
         let dropped = injected_config(names.into_iter().map(OsString::from));
 
         assert_eq!(dropped, ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_12"].map(OsString::from));
+    }
+}
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::test_util::verbatim;
+
+    #[test]
+    fn a_checkout_is_made_locked_and_removed_through_verbatim_paths() {
+        let repo = git_repo(&[("README", "hi"), (".worktreeinclude", ".env\n"), (".gitignore", ".env\n")]);
+        std::fs::write(repo.path().join(".env"), "secret").expect("write .env");
+        let tmp = TempDir::new();
+        let path = tmp.path().join("año");
+
+        create(&verbatim(repo.path()), "feat", &verbatim(&path)).expect("create");
+
+        assert_eq!(read(&path.join("README")).as_deref(), Some("hi"));
+        assert_eq!(read(&path.join(".env")).as_deref(), Some("secret"));
+        let dot_git = read(&path.join(".git")).expect("the .git file");
+        assert!(!dot_git.contains('?'), "{dot_git}");
+        git(repo.path(), &["worktree", "lock", "--reason", "busy", &path.display().to_string()]);
+        assert_eq!(lock(&verbatim(&path)).expect("lock").map(|lock| lock.reason), Some("busy".into()));
+        remove(&verbatim(repo.path()), &verbatim(&path), false, true).expect("remove");
+        assert!(!path.exists());
     }
 }

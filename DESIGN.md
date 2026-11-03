@@ -69,7 +69,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Plugins](design/plugins.md) (`plugins/`, `app/plugins.rs`, `app/plugin_popup.rs`, `ui/dialog/popup.rs`, `cli/plugin.rs`, `client/window.rs`): manifests, trust, actions, buttons, popups, hooks, services, installing, the catalogue.
 - [Updates](design/updates.md) (`update.rs`, `cli/update.rs`, `version.rs`, `http.rs`, `app/update_dialog.rs`): checking, installing and restarting, also once agents are idle.
 - [Releases](design/releases.md) (`.github/`, `dist-workspace.toml`): how a push to `main` becomes a release.
-- [Windows](design/windows.md) (`os.rs`, `os/`, `paths.rs`, `.github/workflows/ci.yml`, #586, #588, #589, #600): the native Windows port, step by step, the per-OS layer and its stubs, its CI job, the folders, file modes, identity and links.
+- [Windows](design/windows.md) (`os.rs`, `os/`, `paths.rs`, `.github/workflows/ci.yml`, #586, #588, #589, #590, #600): the native Windows port, step by step, the per-OS layer and its stubs, git's paths, its CI job, the folders, file modes, identity and links.
 - [Saved session](design/saved-session.md) (`state.rs`, `persist.rs`, `app.rs`, `app/session.rs`, `app/closed_agents.rs`, `app/closed_agents/`, `control/closed_agents.rs`, `cli/agents.rs`, #430): `session.json`, restoring, resuming agents, closing a workspace's agents and reopening them.
 - [Website](design/website.md) (`site/`): the brand, the landing demo, captures, translations.
 - [Test helpers](design/test-helpers.md) (`test_util.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot,vibe}/fake.rs`, `app/tests.rs`): fakes, fixtures, keeping tests away from the user's files.

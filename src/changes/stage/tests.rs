@@ -135,6 +135,7 @@ mod refuses {
     }
 }
 
+#[cfg(unix)]
 mod does_not_confuse {
     use super::*;
 
