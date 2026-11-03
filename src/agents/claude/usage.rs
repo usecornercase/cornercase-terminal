@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::agents::usage::{Reading, Report, Window, window};
 use crate::error::{Error, Result};
-use crate::time;
+use crate::{process, time};
 
 const ARGS: [&str; 9] = [
     "-p",
@@ -183,7 +183,7 @@ pub(in crate::agents) fn answer(line: &str) -> Option<Result<Report>> {
 }
 
 pub(in crate::agents) fn command(program: &str) -> Command {
-    let mut cmd = Command::new(program);
+    let mut cmd = process::program::command(program);
     cmd.args(ARGS);
     for key in crate::agents::claude::CLAUDE_SESSION_ENV {
         cmd.env_remove(key);

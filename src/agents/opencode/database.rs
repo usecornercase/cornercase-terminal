@@ -13,8 +13,8 @@ use crate::agents::context::discovery::{folder, named};
 use crate::agents::context::message::{self, Each, Role, Said, Spoken};
 use crate::agents::context::{Compaction, Context, percent};
 use crate::error::{self, Error};
-use crate::process;
 use crate::time::Stamp;
+use crate::{paths, process};
 
 const NAME: &str = "opencode";
 const BUSY_FOR: Duration = Duration::from_millis(100);
@@ -96,7 +96,7 @@ fn read_model(path: &Path, provider: &str, model: &str) -> Option<Model> {
 pub(in crate::agents) fn model_ids() -> Vec<String> {
     let var = |name| std::env::var_os(name).filter(|value| !value.is_empty()).map(PathBuf::from);
     let path = var("OPENCODE_MODELS_PATH").or_else(|| {
-        let cache = var("XDG_CACHE_HOME").or_else(|| var("HOME").map(|home| home.join(".cache")))?;
+        let cache = var("XDG_CACHE_HOME").or_else(|| var(paths::HOME_VAR).map(|home| home.join(".cache")))?;
         Some(cache.join(NAME).join("models.json"))
     });
     path.map(|path| ids_in(&path)).unwrap_or_default()
@@ -180,7 +180,7 @@ fn models_file(pid: i32) -> Option<PathBuf> {
     let env = process::env(pid);
     let var = |name| env.iter().find(|(key, value)| key == name && !value.is_empty()).map(|(_, v)| PathBuf::from(v));
     let path = var("OPENCODE_MODELS_PATH").or_else(|| {
-        let cache = var("XDG_CACHE_HOME").or_else(|| var("HOME").map(|home| home.join(".cache")))?;
+        let cache = var("XDG_CACHE_HOME").or_else(|| var(paths::HOME_VAR).map(|home| home.join(".cache")))?;
         Some(cache.join(NAME).join("models.json"))
     })?;
     if path.is_absolute() { Some(path) } else { Some(process::cwd(pid)?.join(path)) }

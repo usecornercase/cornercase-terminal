@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use crate::accounts::login::{Login, State};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::context::counting::Ledger;
-use crate::agents::context::discovery::Job;
+use crate::agents::context::discovery::{self, Job};
 use crate::agents::context::{Compaction, Context, Look, Record};
 
 const ACTION_REQUIRED: [&str; 2] = ["[ ! ] Action Required", "[ . ] Action Required"];
@@ -85,10 +85,10 @@ pub(in crate::agents) fn resume(args: Vec<String>, conversation: String) -> Opti
     Some([vec!["resume".into()], args, vec![conversation]].concat())
 }
 
-const NPM_SCRIPT: &str = "/codex/bin/codex.js";
+const NPM_SCRIPT: [&str; 3] = ["codex", "bin", "codex.js"];
 
 pub(in crate::agents) fn runs_as(arg: &str) -> bool {
-    arg.ends_with(NPM_SCRIPT)
+    discovery::npm_script(arg, &NPM_SCRIPT)
 }
 
 fn activity(title: &str, turn: bool) -> Activity {

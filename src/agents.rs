@@ -20,14 +20,13 @@ pub(crate) mod vibe;
 
 pub use known::Known;
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::os::fs::PermissionsExt;
-use crate::process;
+use crate::{paths, process};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AgentState {
@@ -81,19 +80,8 @@ pub(crate) fn command(config: &Config, kind: &str) -> String {
         .unwrap_or_else(|| kind.to_string())
 }
 
-fn executable(path: &Path) -> bool {
-    path.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-}
-
-fn found(program: &str, path: Option<&OsStr>) -> bool {
-    if program.contains('/') {
-        return executable(Path::new(program));
-    }
-    path.is_some_and(|path| std::env::split_paths(path).any(|dir| dir.is_absolute() && executable(&dir.join(program))))
-}
-
 pub(crate) fn installed(program: &str) -> bool {
-    found(program, std::env::var_os("PATH").as_deref())
+    process::program::locate(program).is_some()
 }
 
 pub(crate) fn modes(config: &Config, kind: &str) -> Vec<Mode> {
@@ -187,7 +175,8 @@ pub(crate) struct AccountHome {
 impl AccountHome {
     pub(crate) fn default_home(self, var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
         let absolute = |name: &str| var(name).map(PathBuf::from).filter(|path| path.is_absolute());
-        absolute(self.env).or_else(|| absolute("HOME").map(|home| self.default.iter().fold(home, |p, s| p.join(s))))
+        absolute(self.env)
+            .or_else(|| absolute(paths::HOME_VAR).map(|home| self.default.iter().fold(home, |p, s| p.join(s))))
     }
 
     pub(crate) fn config(self, home: &Path) -> PathBuf {
@@ -306,11 +295,23 @@ pub(crate) fn split_args(text: &str) -> Vec<String> {
 }
 
 pub(crate) fn quote(arg: &str) -> String {
-    let safe = |c: char| c.is_ascii_alphanumeric() || "-_./:@%+=,".contains(c);
-    if !arg.is_empty() && arg.chars().all(safe) {
+    quoted(arg, "-_./:@%+=,", r"'\''")
+}
+
+fn typed(arg: &str) -> String {
+    if cfg!(windows) { quoted(arg, r"-_./:\%+=", "''") } else { quote(arg) }
+}
+
+pub(crate) fn typed_line(words: impl IntoIterator<Item = String>) -> String {
+    let line = words.into_iter().map(|word| typed(&word)).collect::<Vec<_>>().join(" ");
+    if cfg!(windows) && line.starts_with('\'') { format!("& {line}") } else { line }
+}
+
+fn quoted(arg: &str, safe: &str, inner_quote: &str) -> String {
+    if !arg.is_empty() && arg.chars().all(|c| c.is_ascii_alphanumeric() || safe.contains(c)) {
         return arg.to_string();
     }
-    format!("'{}'", arg.replace('\'', r"'\''"))
+    format!("'{}'", arg.replace('\'', inner_quote))
 }
 
 pub(crate) fn join_args(args: &[String]) -> String {
@@ -322,7 +323,7 @@ pub(crate) fn command_line(config: &Config, kind: &str) -> String {
 }
 
 fn line(config: &Config, kind: &str, args: Vec<String>) -> String {
-    std::iter::once(command(config, kind)).chain(args).map(|a| quote(&a)).collect::<Vec<_>>().join(" ")
+    typed_line(std::iter::once(command(config, kind)).chain(args))
 }
 
 pub(crate) fn fresh_line(config: &Config, kind: &str, mode: Option<&str>) -> String {
@@ -385,7 +386,7 @@ pub(crate) fn resume_line(config: &Config, agent: &AgentState) -> Option<String>
     let args = with_mode(kind, &args(config, kind), &modes(config, kind), agent.mode.as_deref());
     let conversation = agent.conversation.clone();
     let line = Known::of(kind)?.resume(args, conversation)?;
-    Some(std::iter::once(command(config, kind)).chain(line).map(|a| quote(&a)).collect::<Vec<_>>().join(" "))
+    Some(typed_line(std::iter::once(command(config, kind)).chain(line)))
 }
 
 pub(crate) fn resolve(config: &Config, explicit: Option<&str>, running: Option<&str>) -> Option<String> {
@@ -401,6 +402,10 @@ fn basename(arg: &str) -> &str {
 
 fn named(part: Option<&str>, name: &str) -> bool {
     part.is_some_and(|part| process::same_file_name(part, name))
+}
+
+fn is_program(arg: &str, name: &str) -> bool {
+    process::same_file_name(basename(arg), name)
 }
 
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {

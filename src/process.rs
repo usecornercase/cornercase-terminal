@@ -23,6 +23,7 @@ pub(crate) use imp::{
 
 pub(crate) mod escalation;
 pub(crate) mod owners;
+pub(crate) mod program;
 
 const MAX_DESCENDANTS: usize = 256;
 

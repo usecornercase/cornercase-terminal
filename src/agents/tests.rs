@@ -4,40 +4,6 @@ use rstest::rstest;
 
 use super::*;
 
-mod installed {
-    use super::*;
-    use crate::test_util::{TempDir, write_executable};
-
-    fn bin() -> TempDir {
-        let dir = TempDir::new();
-        write_executable(&dir.path().join("codex"), "#!/bin/sh\n");
-        std::fs::write(dir.path().join("notes"), "").expect("write a plain file");
-        dir
-    }
-
-    #[test]
-    fn a_program_is_looked_up_in_the_path() {
-        let dir = bin();
-        let path = std::env::join_paths(["/nonexistent", dir.path().to_str().expect("utf-8")]).expect("a path");
-        assert_eq!(
-            [found("codex", Some(&path)), found("claude", Some(&path)), found("notes", Some(&path))],
-            [true, false, false]
-        );
-    }
-
-    #[test]
-    fn a_program_with_a_slash_is_checked_as_is() {
-        let dir = bin();
-        let codex = dir.path().join("codex").display().to_string();
-        assert_eq!([found(&codex, None), found("/nonexistent/codex", None)], [true, false]);
-    }
-
-    #[test]
-    fn without_a_path_nothing_is_found() {
-        assert!(!found("sh", None));
-    }
-}
-
 fn strings(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| (*s).to_string()).collect()
 }
@@ -223,6 +189,32 @@ mod arguments {
     #[test]
     fn join_quotes_what_a_shell_would_split() {
         assert_eq!(join_args(&strings(&["--add-dir", "../my dir", "it's"])), r"--add-dir '../my dir' 'it'\''s'");
+    }
+
+    #[test]
+    fn a_typed_line_quotes_for_the_shell_of_this_system() {
+        let line = typed_line(strings(&["claude", "--model", "opus[1m]", "it's"]));
+        let expected =
+            if cfg!(windows) { "claude --model 'opus[1m]' 'it''s'" } else { r"claude --model 'opus[1m]' 'it'\''s'" };
+        assert_eq!(line, expected);
+    }
+
+    #[cfg(windows)]
+    #[rstest]
+    #[case::a_folder(r"C:\Users\me\repo", r"C:\Users\me\repo")]
+    #[case::a_folder_with_a_space(r"C:\Users\me\my repo", r"'C:\Users\me\my repo'")]
+    #[case::a_list("Read,Write", "'Read,Write'")]
+    #[case::a_splat("@notes", "'@notes'")]
+    #[case::a_flag("--permission-mode=plan", "--permission-mode=plan")]
+    fn powershell_reads_each_typed_word_as_one_argument(#[case] word: &str, #[case] expected: &str) {
+        assert_eq!(typed_line(["claude".to_string(), word.to_string()]), format!("claude {expected}"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn powershell_calls_a_quoted_program_with_its_call_operator() {
+        let line = typed_line(strings(&[r"C:\Program Files\Claude\claude.exe", "--resume", "a1"]));
+        assert_eq!(line, r"& 'C:\Program Files\Claude\claude.exe' --resume a1");
     }
 
     #[test]
@@ -459,6 +451,35 @@ mod choosing {
         &[r"C:\Users\a\.local\bin\agent.exe", r"C:\Users\a\AppData\Local\Cursor-Agent\Versions\2026.10.14-941492e\INDEX.JS"],
         Some("cursor")
     )]
+    #[case::claude_npm_script(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\Users\a\AppData\Roaming\npm\\node_modules\@anthropic-ai\claude-code\cli.js"],
+        Some("claude")
+    )]
+    #[case::claude_npm_binary(
+        &[r"C:\Users\a\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe"],
+        Some("claude")
+    )]
+    #[case::codex_npm_script(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\Users\a\AppData\Roaming\npm\node_modules\@openai\codex\bin\codex.js"],
+        Some("codex")
+    )]
+    #[case::codex_npm_script_in_capitals(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\@openai\Codex\BIN\Codex.JS"],
+        Some("codex")
+    )]
+    #[case::codex_native(&[r"C:\Users\a\AppData\Roaming\npm\node_modules\@openai\codex\vendor\codex.exe"], Some("codex"))]
+    #[case::gemini_bundle(
+        &[r"C:\Program Files\nodejs\node.exe", "--no-warnings=DEP0040", r"C:\npm\node_modules\@google\gemini-cli\bundle\gemini.js"],
+        Some("gemini")
+    )]
+    #[case::gemini_dist(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\@google\gemini-cli\dist\index.js"],
+        Some("gemini")
+    )]
+    #[case::opencode_binary(&[r"C:\npm\node_modules\opencode-ai\bin\opencode.exe"], Some("opencode"))]
+    #[case::opencode_launcher(&[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\opencode-ai\bin\opencode"], Some("opencode"))]
+    #[case::vibe_binary(&[r"C:\Users\a\AppData\Roaming\uv\tools\mistral-vibe\Lib\site-packages\vibe\_bin\Vibe-RS.EXE"], Some("vibe"))]
+    #[case::another_cli_js(&[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\other\cli.js"], None)]
     #[case::a_shell(&[r"C:\WINDOWS\system32\cmd.exe", "/d"], None)]
     fn detects_the_agent_in_a_windows_tab(#[case] argv: &[&str], #[case] expected: Option<&str>) {
         assert_eq!(detect(&config(), &strings(argv)).as_deref(), expected);
@@ -504,5 +525,30 @@ mod trust {
         let mut trust = TrustPrompt::default();
         trust.regex(DEFAULT_TRUST_PROMPT);
         assert!(trust.regex("how can i help").is_some_and(|re| asks_trust(re, "> How can I help?")));
+    }
+}
+
+#[cfg(windows)]
+mod account_homes_on_windows {
+    use super::*;
+
+    const PROFILE: (&str, &str) = ("USERPROFILE", r"C:\Users\me");
+
+    #[rstest]
+    #[case::claude(Known::Claude, &[PROFILE], Some(r"C:\Users\me\.claude"))]
+    #[case::codex(Known::Codex, &[PROFILE], Some(r"C:\Users\me\.codex"))]
+    #[case::gemini(Known::Gemini, &[PROFILE], Some(r"C:\Users\me"))]
+    #[case::home_is_not_read(Known::Claude, &[("HOME", r"C:\home"), PROFILE], Some(r"C:\Users\me\.claude"))]
+    #[case::only_home(Known::Codex, &[("HOME", r"C:\home")], None)]
+    #[case::the_variable_first(Known::Claude, &[PROFILE, ("CLAUDE_CONFIG_DIR", r"D:\claude")], Some(r"D:\claude"))]
+    #[case::a_relative_profile(Known::Codex, &[("USERPROFILE", "me")], None)]
+    fn are_in_the_profile_when_home_is_unset(
+        #[case] kind: Known,
+        #[case] env: &[(&str, &str)],
+        #[case] expected: Option<&str>,
+    ) {
+        let var = |name: &str| env.iter().find(|(key, _)| *key == name).map(|(_, value)| OsString::from(*value));
+        let found = kind.account().and_then(|account| account.default_home(var));
+        assert_eq!(found, expected.map(PathBuf::from));
     }
 }

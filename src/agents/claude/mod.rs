@@ -9,7 +9,7 @@ use crate::accounts::login::{Login, State};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::breakdown::Target;
 use crate::agents::context::counting::Ledger;
-use crate::agents::context::discovery::Job;
+use crate::agents::context::discovery::{self, Job};
 use crate::agents::context::{Compaction, Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "claude";
@@ -60,7 +60,7 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("skip permissions (dangerous)", &["--dangerously-skip-permissions"]),
 ];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = false;
-pub(in crate::agents) const RUNS_AS: bool = false;
+const NPM_SCRIPT: [&str; 3] = ["@anthropic-ai", "claude-code", "cli.js"];
 pub(in crate::agents) const LOCAL_COMMAND: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(crate::agents::usage::Spec {
     command: usage::command,
@@ -102,6 +102,10 @@ fn clean(text: Option<String>) -> Option<String> {
 
 pub(in crate::agents) fn normalized(args: &[String]) -> Vec<String> {
     args.to_vec()
+}
+
+pub(in crate::agents) fn runs_as(arg: &str) -> bool {
+    cfg!(windows) && discovery::npm_script(arg, &NPM_SCRIPT)
 }
 
 #[expect(clippy::unnecessary_wraps, reason = "Known dispatch shares an optional resume signature across agents")]

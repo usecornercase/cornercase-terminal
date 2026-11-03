@@ -257,9 +257,9 @@ impl Known {
 
     pub(crate) fn runs_as(self, arg: &str) -> bool {
         match self {
-            Self::Claude => claude::RUNS_AS,
+            Self::Claude => claude::runs_as(arg),
             Self::Codex => codex::runs_as(arg),
-            Self::Gemini => gemini::RUNS_AS,
+            Self::Gemini => gemini::runs_as(arg),
             Self::Opencode => opencode::RUNS_AS,
             Self::Grok => grok::RUNS_AS,
             Self::Cursor => cursor::runs_as(arg),
