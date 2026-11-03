@@ -343,19 +343,44 @@ fn powershell_quoted(word: &str) -> String {
     quoted
 }
 
-pub(crate) fn batch_refusal(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Option<String> {
-    let (program, rest) = typed_program(line)?;
+pub(crate) fn without_cmd(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Result<String, String> {
+    let Some((program, rest)) = typed_program(line) else { return Ok(line.to_string()) };
     let target = runs(&program).unwrap_or_else(|| PathBuf::from(&program));
-    let batch = target
-        .extension()
-        .and_then(OsStr::to_str)
-        .is_some_and(|extension| BATCH_EXTENSIONS.iter().any(|batch| extension.eq_ignore_ascii_case(batch)));
-    let special = program.chars().chain(rest.chars()).find(|c| BATCH_SPECIAL.contains(c)).filter(|_| batch)?;
-    Some(format!(
-        "not started: `{}` is a batch file, which runs through cmd.exe, and cmd.exe would read the `{special}` in \
-         the line as its own, so a .cmd launcher cannot take it safely; install the agent as an .exe or keep its .ps1",
+    if !is_batch(&target) {
+        return Ok(line.to_string());
+    }
+    if let Some(words) = shim_words(&target, &runs) {
+        return Ok(retyped(words, rest));
+    }
+    let Some(special) = program.chars().chain(rest.chars()).find(|c| BATCH_SPECIAL.contains(c)) else {
+        return Ok(line.to_string());
+    };
+    Err(format!(
+        "not started: `{}` is a batch file that is not an npm shim cornercase can read, so it runs through cmd.exe, \
+         and cmd.exe would read the `{special}` in the line as its own; install the agent as an .exe or with npm, \
+         or keep its .ps1",
         target.display()
     ))
+}
+
+fn is_batch(program: &Path) -> bool {
+    program
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| BATCH_EXTENSIONS.iter().any(|batch| extension.eq_ignore_ascii_case(batch)))
+}
+
+fn shim_words(shim: &Path, runs: impl Fn(&str) -> Option<PathBuf>) -> Option<Vec<String>> {
+    let words = process::program::shim::target(shim, runs)?;
+    words.into_iter().map(|word| word.into_os_string().into_string().ok()).collect()
+}
+
+fn retyped(words: Vec<String>, rest: &str) -> String {
+    let program = powershell_line(words);
+    match rest.trim_start() {
+        "" => program,
+        rest => format!("{program} {rest}"),
+    }
 }
 
 fn typed_program(line: &str) -> Option<(String, &str)> {

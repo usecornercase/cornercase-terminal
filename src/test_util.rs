@@ -294,6 +294,29 @@ pub(crate) fn fake_tool(dir: &Path, name: &str, script: &str) -> PathBuf {
     path
 }
 
+pub(crate) const NPM_SHIM: &str = "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\n\
+                                   SETLOCAL\r\nCALL :find_dp0\r\n\r\nIF EXIST \"%dp0%\\node.exe\" (\r\n  SET \
+                                   \"_prog=%dp0%\\node.exe\"\r\n) ELSE (\r\n  SET \"_prog=node\"\r\n  SET \
+                                   PATHEXT=%PATHEXT:;.JS;=;%\r\n)\r\n\r\nendLocal & goto #_undefined_# 2>NUL || \
+                                   title %COMSPEC% & \"%_prog%\"  \
+                                   \"%dp0%\\node_modules\\@anthropic-ai\\claude-code\\cli.js\" %*\r\n";
+pub(crate) const NPM_SCRIPT: [&str; 4] = ["node_modules", "@anthropic-ai", "claude-code", "cli.js"];
+
+pub(crate) fn under(dir: &Path, parts: &[&str]) -> PathBuf {
+    parts.iter().fold(dir.to_path_buf(), |path, part| path.join(part))
+}
+
+pub(crate) fn npm_install(dir: &Path, shim: &str, files: &[&[&str]]) -> PathBuf {
+    for parts in files {
+        let file = under(dir, parts);
+        std::fs::create_dir_all(file.parent().expect("a folder")).expect("make the folder");
+        std::fs::write(file, "").expect("write the file");
+    }
+    let path = dir.join("claude.cmd");
+    std::fs::write(&path, shim).expect("write the shim");
+    path
+}
+
 pub(crate) fn fake_gh(dir: &Path, script: &str) -> PathBuf {
     fake_tool(dir, "gh", script)
 }

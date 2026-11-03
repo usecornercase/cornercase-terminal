@@ -64,7 +64,7 @@ pub(crate) struct Seen<'a> {
     pub(crate) screen: &'a mut dyn FnMut() -> String,
     pub(crate) trust_prompt: &'a dyn Fn(&str) -> bool,
     pub(crate) trust: Trust,
-    pub(crate) refusal: &'a dyn Fn(&str) -> Option<String>,
+    pub(crate) typed: &'a dyn Fn(&str) -> Result<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -216,16 +216,16 @@ impl Launch {
         if !ready {
             return Step::Wait;
         }
-        let typed = format!("{}\r", self.spec.command).into_bytes();
         if !self.agent {
-            return Step::Done(typed);
+            return Step::Done(format!("{}\r", self.spec.command).into_bytes());
         }
-        if let Some(refusal) = (seen.refusal)(&self.spec.command) {
-            return Step::Refuse(refusal);
-        }
-        self.echo = compact(&(seen.screen)()) + &compact(&self.spec.command);
+        let line = match (seen.typed)(&self.spec.command) {
+            Ok(line) => line,
+            Err(refusal) => return Step::Refuse(refusal),
+        };
+        self.echo = compact(&(seen.screen)()) + &compact(&line);
         self.next(Stage::Agent, now);
-        Step::Write(typed)
+        Step::Write(format!("{line}\r").into_bytes())
     }
 
     fn step_agent(&mut self, now: Instant, seen: &mut Seen) -> Step {

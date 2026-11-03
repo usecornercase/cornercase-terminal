@@ -440,10 +440,66 @@ mod arguments {
 
 mod batch_files {
     use super::*;
+    use crate::test_util::{NPM_SCRIPT, NPM_SHIM, TempDir, npm_install, under};
+
+    fn typed(words: &[&str], runs: &str) -> Result<String, String> {
+        let runs = PathBuf::from(runs);
+        without_cmd(&powershell_line(strings(words)), move |_| Some(runs.clone()))
+    }
 
     fn refusal(words: &[&str], runs: &str) -> Option<String> {
-        let runs = PathBuf::from(runs);
-        batch_refusal(&powershell_line(strings(words)), move |_| Some(runs.clone()))
+        typed(words, runs).err()
+    }
+
+    fn shown(path: PathBuf) -> String {
+        path.into_os_string().into_string().expect("utf-8")
+    }
+
+    fn through(shim: &Path, line: &str) -> Result<String, String> {
+        without_cmd(line, |program| (program == "claude").then(|| shim.to_path_buf()))
+    }
+
+    const WORDS: [&str; 7] = ["--add-dir", r"C:\Users\me\R&D", "50%", "!x!", "a^b|c", "<in", r#"{"a":1}"#];
+
+    #[test]
+    fn an_npm_shim_is_passed_over_for_node_and_its_script_with_every_word() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let node = [dir.path().join("node.exe"), under(dir.path(), &NPM_SCRIPT)].map(shown);
+        let line = powershell_line(strings(&["claude"]).into_iter().chain(strings(&WORDS)));
+        let expected = powershell_line(node.into_iter().chain(strings(&WORDS)));
+        assert_eq!(through(&shim, &line), Ok(expected.clone()));
+        let quoted = powershell_line(std::iter::once(shown(shim.clone())).chain(strings(&WORDS)));
+        assert_eq!(without_cmd(&quoted, |program| Some(PathBuf::from(program))), Ok(expected));
+    }
+
+    #[test]
+    fn an_npm_shim_alone_is_typed_with_no_word_after_it() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let node = [dir.path().join("node.exe"), under(dir.path(), &NPM_SCRIPT)].map(shown);
+        assert_eq!(through(&shim, "claude"), Ok(powershell_line(node)));
+    }
+
+    #[test]
+    fn an_npm_shim_without_a_node_to_run_keeps_the_refusal() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT]);
+        let refused = through(&shim, r"claude --add-dir 'C:\Users\me\R&D'").expect_err("refused");
+        assert!(refused.contains("`&`") && refused.contains("claude.cmd"), "{refused}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn powershell_reads_the_line_past_an_npm_shim_as_node_its_script_and_every_word_and_it_is_claude() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let line = through(&shim, &powershell_line(strings(&["claude"]).into_iter().chain(strings(&WORDS))));
+        let parsed = powershell::parse(&[line.expect("typed")]);
+        let node = [dir.path().join("node.exe"), under(dir.path(), &NPM_SCRIPT)].map(shown);
+        let argv: Vec<String> = node.into_iter().chain(strings(&WORDS)).collect();
+        assert_eq!(parsed, [Some((true, argv.clone()))]);
+        assert_eq!(detect(&config(), &argv).as_deref(), Some("claude"));
     }
 
     #[rstest]
@@ -466,25 +522,26 @@ mod batch_files {
     fn the_same_word_is_quoted_and_typed_for_anything_else(#[case] runs: &str) {
         let words = ["claude", "--add-dir", r"C:\Users\me\R&D"];
         assert_eq!(powershell_line(strings(&words)), r"claude --add-dir 'C:\Users\me\R&D'");
-        assert_eq!(refusal(&words, runs), None);
+        assert_eq!(typed(&words, runs), Ok(r"claude --add-dir 'C:\Users\me\R&D'".to_string()));
     }
 
     #[test]
-    fn plain_words_go_to_a_cmd_shim() {
-        assert_eq!(refusal(&["claude", "--permission-mode", "plan", r"..\docs"], r"C:\npm\claude.CMD"), None);
+    fn plain_words_go_to_a_cmd_shim_it_cannot_read() {
+        let words = ["claude", "--permission-mode", "plan", r"..\docs"];
+        assert_eq!(typed(&words, r"C:\npm\claude.CMD"), Ok(powershell_line(strings(&words))));
     }
 
     #[test]
     fn a_batch_file_named_as_the_program_counts_when_it_is_not_found() {
         let line = powershell_line(strings(&[r"C:\Program Files\x\claude.bat", "50%"]));
-        let refused = batch_refusal(&line, |_| None).expect("refused");
+        let refused = without_cmd(&line, |_| None).expect_err("refused");
         assert!(refused.contains(r"`C:\Program Files\x\claude.bat`") && refused.contains("`%`"), "{refused}");
     }
 
     #[test]
     fn the_program_is_read_back_from_the_typed_line() {
         let line = powershell_line(strings(&[r"C:\R&D\Sergio’s\claude.cmd", "--resume", "a1"]));
-        let refused = batch_refusal(&line, |program| Some(PathBuf::from(program))).expect("refused");
+        let refused = without_cmd(&line, |program| Some(PathBuf::from(program))).expect_err("refused");
         assert!(refused.contains(r"`C:\R&D\Sergio’s\claude.cmd`") && refused.contains("`&`"), "{refused}");
     }
 }

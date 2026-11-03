@@ -85,9 +85,10 @@ impl App {
         let regex = self.agents.launches.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
-        let refusal =
-            |line: &str| cfg!(windows).then(|| agents::batch_refusal(line, program::powershell_runs)).flatten();
-        let round = Round { now, trust, asks: &asks, refusal: &refusal };
+        let typed = |line: &str| {
+            if cfg!(windows) { agents::without_cmd(line, program::powershell_runs) } else { Ok(line.to_string()) }
+        };
+        let round = Round { now, trust, asks: &asks, typed: &typed };
         let mut out = Outcomes::default();
         let mut finished = Vec::new();
         let starting: Vec<u64> = self.agents.launches.list.iter().map(|launch| launch.term).collect();
@@ -141,7 +142,7 @@ struct Round<'a> {
     now: Instant,
     trust: Trust,
     asks: &'a dyn Fn(&str) -> bool,
-    refusal: &'a dyn Fn(&str) -> Option<String>,
+    typed: &'a dyn Fn(&str) -> std::result::Result<String, String>,
 }
 
 #[derive(Default)]
@@ -178,7 +179,7 @@ fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
         screen: &mut screen,
         trust_prompt: round.asks,
         trust: launch.trust.unwrap_or(round.trust),
-        refusal: round.refusal,
+        typed: round.typed,
     };
     launch.step(round.now, &mut seen)
 }
