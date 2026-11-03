@@ -74,14 +74,13 @@ fn a_shell_busy_before_its_program_starts_is_not_back_yet() {
     assert!(typed.elapsed() >= Duration::from_millis(1500), "it ended after {:?}", typed.elapsed());
 }
 
-#[cfg(target_os = "linux")]
 #[rstest::rstest]
 #[case::send(|pane| send_text(pane, "", true, false), "did not take what was typed")]
 #[case::keys(|pane| press_keys(pane, &["enter"]), "is not reading its input")]
 fn an_enter_a_full_pane_refuses_is_not_reported_as_pressed(#[case] enter: fn(u64) -> Command, #[case] refused: &str) {
     let (mut app, rx) = app();
     let id = first(&app);
-    type_line(&mut app, "stty -echo; sleep 30");
+    type_line(&mut app, "stty -icanon -echo; sleep 30");
     pump_until(&mut app, &rx, "sleep runs", |a| pane(a, id).program(&a.config).as_deref() == Some("sleep"));
     let full = vec![b'x'; crate::term::MAX_QUEUED + 1024 * 1024];
     let filled = app.projects[0].workspaces[0].tabs[0].panes[0].write(&full);
@@ -183,10 +182,13 @@ fn a_client_that_leaves_takes_its_wait_with_it(#[case] wait: fn(u64) -> Command)
     assert_eq!(answers(&mut app), []);
 }
 
+fn prompted(app: &mut App, rx: &Receiver<AppEvent>, pane: u64) {
+    pump_until(app, rx, "the shell shows its prompt", |a| pane_screen(a, pane).contains('$'));
+}
+
 fn new_shell(app: &mut App, rx: &Receiver<AppEvent>) -> Done {
     let made = done(now(app, None, new_tab(None)));
-    let pane = made.ids.pane.expect("the new pane");
-    pump_until(app, rx, "the new shell is ready", |a| pane_screen(a, pane).contains('$'));
+    prompted(app, rx, made.ids.pane.expect("the new pane"));
     made
 }
 
@@ -225,6 +227,7 @@ fn waiting_for_any_of_several_answers_the_first_with_the_id_it_was_given() {
 fn waiting_for_all_answers_once_every_pane_has_matched_in_the_order_given() {
     let (mut app, rx) = app();
     let id = first(&app);
+    prompted(&mut app, &rx, id);
     let other = new_shell(&mut app, &rx).ids.pane.expect("the new pane");
     ask(&mut app, None, wait_on(&[id, other], &[], true, Until::Text(r"mark-\d".into()), None));
 

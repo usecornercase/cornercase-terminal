@@ -1,5 +1,7 @@
 #![cfg(unix)]
 
+use std::sync::atomic::Ordering;
+
 use serde_json::Value;
 
 use super::super::tests::a_bug::Attached;
@@ -67,6 +69,14 @@ fn until_frame(attached: &mut Attached, revision: u64) -> Vec<ServerMessage> {
     got
 }
 
+fn hold_back(attached: &Attached) {
+    attached.server.clients[0].out.queued.fetch_add(SURFACES_QUEUED, Ordering::Relaxed);
+}
+
+fn make_room(attached: &Attached) {
+    attached.server.clients[0].out.queued.fetch_sub(SURFACES_QUEUED, Ordering::Relaxed);
+}
+
 fn split(attached: &mut Attached, pane: u64) {
     let request = format!(r#"{{"command":"split","args":{{"pane":{pane}}}}}"#);
     ask(attached, &request);
@@ -90,7 +100,7 @@ fn a_reader_with_frames_queued_gets_none_until_it_has_room() {
     let mut attached = Attached::new();
     let (tab, pane) = tab_and_pane(&mut attached);
     surface(&mut attached, tab);
-    attached.server.clients[0].out.queued.store(SURFACES_QUEUED, std::sync::atomic::Ordering::Relaxed);
+    hold_back(&attached);
 
     split(&mut attached, pane);
     attached.server.app.touch_surfaces();
@@ -98,7 +108,7 @@ fn a_reader_with_frames_queued_gets_none_until_it_has_room() {
     attached.server.app.render_surfaces(&ready, Instant::now() + FRAME_EVERY);
     let blocked_ids = attached.server.with_room();
     let blocked = attached.messages();
-    attached.server.clients[0].out.queued.store(0, std::sync::atomic::Ordering::Relaxed);
+    make_room(&attached);
     let open_ids = attached.server.with_room();
     let got = until_frame(&mut attached, 2);
 
@@ -113,7 +123,7 @@ fn a_reader_with_frames_queued_gets_a_complete_frame_once_it_has_room() {
     let (tab, pane) = tab_and_pane(&mut attached);
     let request = format!(r#"{{"command":"surface","args":{{"tab":{tab},"cols":80,"rows":24,"patches":true}}}}"#);
     json(&ask(&mut attached, &request)[0]);
-    attached.server.clients[0].out.queued.store(SURFACES_QUEUED, std::sync::atomic::Ordering::Relaxed);
+    hold_back(&attached);
 
     attached
         .server
@@ -125,7 +135,7 @@ fn a_reader_with_frames_queued_gets_a_complete_frame_once_it_has_room() {
         .expect("output");
     let ready = attached.server.with_room();
     attached.server.app.render_surfaces(&ready, Instant::now() + FRAME_EVERY);
-    attached.server.clients[0].out.queued.store(0, std::sync::atomic::Ordering::Relaxed);
+    make_room(&attached);
     let got = until_frame(&mut attached, 2);
 
     let frame = got
