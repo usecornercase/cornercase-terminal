@@ -12,7 +12,7 @@ use crate::host::notify::Channel;
 use crate::host::open::{Browse, Failed, Open, Opener};
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
-use crate::os::fs::{DirBuilderExt, Lock, MetadataExt, locked, set_mode, uid};
+use crate::os::fs::{Lock, create_private_dir_all, locked, make_private, owner_and_mode, uid};
 use crate::os::socket::UnixStream;
 use crate::paths;
 use crate::{host::pointer, process};
@@ -128,18 +128,19 @@ pub(crate) fn check_socket_dir(socket: &Path, folder: Folder) -> Result<(), Erro
         });
     }
     let dir = socket_folder(socket)?;
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir)?;
+    create_private_dir_all(&dir)?;
     let meta = std::fs::symlink_metadata(&dir)?;
     let kind = meta.file_type();
-    let reason = unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid());
+    let (owner, mode) = owner_and_mode(&dir, &meta);
+    let reason = unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), owner, mode, own_uid());
     let refuse = |reason| Error::UnsafeSocketDir { path: dir.clone(), reason, custom: folder == Folder::Given };
-    let tighten = || set_mode(&dir, 0o700);
+    let tighten = || make_private(&dir);
     match reason {
         Some("can be written by other users") if folder == Folder::Own => {
             tighten().map_err(|_| refuse("can be written by other users"))
         }
         Some(reason) => Err(refuse(reason)),
-        None if folder == Folder::Own && meta.mode() & 0o077 != 0 => Ok(tighten()?),
+        None if folder == Folder::Own && mode & 0o077 != 0 => Ok(tighten()?),
         None => Ok(()),
     }
 }
@@ -148,7 +149,8 @@ pub(crate) fn socket_dir_is_safe(socket: &Path) -> bool {
     let Ok(dir) = socket_folder(socket) else { return false };
     let Ok(meta) = std::fs::symlink_metadata(&dir) else { return false };
     let kind = meta.file_type();
-    unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid()).is_none()
+    let (owner, mode) = owner_and_mode(&dir, &meta);
+    unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), owner, mode, own_uid()).is_none()
 }
 
 fn unsafe_dir_reason(is_symlink: bool, is_dir: bool, owner: u32, mode: u32, uid: u32) -> Option<&'static str> {
