@@ -253,6 +253,10 @@ impl Emulator {
         self.vt.title().map(str::to_string).unwrap_or_default()
     }
 
+    pub(crate) fn pwd(&self) -> String {
+        self.vt.pwd().map(str::to_string).unwrap_or_default()
+    }
+
     pub(crate) fn bracketed_paste(&self) -> bool {
         self.mode(Mode::BRACKETED_PASTE)
     }
