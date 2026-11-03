@@ -380,3 +380,20 @@ mod counting_records {
         assert_eq!(sum(ledger.take()).1.out, 0);
     }
 }
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+    use crate::test_util::holding;
+
+    #[test]
+    fn finds_the_database_a_process_holds() {
+        let dir = TempDir::new();
+        let path = dir.path().join("opencode.db");
+        let opencode = holding(&path, &[]);
+
+        let found = database(opencode.pid());
+
+        assert_eq!(found, Some((opencode.pid(), path.canonicalize().expect("canonical database"))));
+    }
+}

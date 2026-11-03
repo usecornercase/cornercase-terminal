@@ -346,6 +346,19 @@ pub(crate) fn verbatim(path: &Path) -> PathBuf {
     PathBuf::from(format!(r"\\?\{}", path.display()))
 }
 
+#[cfg(windows)]
+pub(crate) fn holding(file: &Path, vars: &[(&str, &str)]) -> Running {
+    let held = std::fs::OpenOptions::new().create(true).append(true).open(file).expect("open the file to hold");
+    Running::spawn(
+        std::process::Command::new("findstr")
+            .arg("held")
+            .envs(vars.iter().copied())
+            .stdin(std::process::Stdio::piped())
+            .stdout(held)
+            .stderr(std::process::Stdio::null()),
+    )
+}
+
 type Route = (&'static str, u16, Vec<u8>);
 
 fn answer(stream: &mut std::net::TcpStream, routes: &[Route], used: &mut [bool]) -> String {
