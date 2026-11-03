@@ -10,7 +10,7 @@ src/gh.rs         running gh, GitHub's CLI
 src/http.rs       HTTP requests and downloads for issue trackers and updates
 src/list.rs       list cursors and search queries with a selection and scroll
 src/log.rs        server.log: levels, the line format, the writer thread and its rotation, `Job` timings, `cornercase logs`
-src/os.rs         the per-OS layer (design/windows.md), one file per area with a `mod imp` for Unix and one for other systems: os/console.rs descriptors, standard input and output, stderr into the log; os/ffi.rs paths as bytes; os/fs.rs file modes, metadata and file identity, links, locks, the user and group ids, with its Windows `imp` in os/fs/windows.rs; os/process.rs signals, process groups, sessions, exec, the server's stop signals; os/socket.rs the local socket
+src/os.rs         the per-OS layer (design/windows.md), one file per area with a `mod imp` for Unix and one for other systems: os/console.rs descriptors, standard input and output, stderr into the log; os/ffi.rs paths as bytes; os/fs.rs file modes, metadata and file identity, links, locks, the user and group ids, a folder's owner and access, with its Windows `imp` in os/fs/windows.rs and the owners, DACLs and process users in os/fs/windows/acl.rs; os/process.rs signals, process groups, sessions, exec, the server's stop signals; os/socket.rs the local socket, with its Windows `imp` (AF_UNIX over Winsock) in os/socket/windows.rs
 src/panics.rs     containing panics: `catch_unwind` wrappers for the server loop and background jobs, the hook that logs them
 src/paths.rs      socket and lock paths, and every file cornercase keeps
 src/persist.rs    safe JSON writes, backups and the Saver that writes once the state settles

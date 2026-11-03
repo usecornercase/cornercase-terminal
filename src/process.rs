@@ -499,6 +499,12 @@ mod unread {
         Vec::new()
     }
 
+    #[cfg(windows)]
+    pub(crate) fn peer_uid(socket: &UnixStream) -> io::Result<u32> {
+        crate::os::socket::peer_uid(socket)
+    }
+
+    #[cfg(not(windows))]
     pub(crate) fn peer_uid(_socket: &UnixStream) -> io::Result<u32> {
         Err(io::ErrorKind::Unsupported.into())
     }

@@ -19,7 +19,6 @@ mod shared;
 mod watch;
 
 #[cfg(test)]
-#[cfg(unix)]
 pub(crate) use shared::share_socket;
 pub(crate) use shared::{line_done, share, unshare};
 pub(crate) use watch::{input_ended, reader_gone_within, watched};
