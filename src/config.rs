@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 
 use crate::agents;
 use crate::host::notify;
-use crate::os::fs::{NONBLOCK, OpenOptionsExt, canonicalize};
+use crate::os::fs::{NONBLOCK, OpenOptionsExt, canonicalize, drive_path};
 use crate::persist;
 use crate::shortcuts::Prefix;
 
@@ -190,6 +190,8 @@ pub(crate) const DEFAULT_PORT: u16 = 47681;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
 pub(crate) const DEFAULT_GH: &str = "gh";
 pub(crate) const DEFAULT_GLAB: &str = "glab";
+const SOUND_FILE_ABSOLUTE: &str = "use an absolute path or one starting with ~/";
+const SOUND_FILE_ON_A_DRIVE: &str = r"use a file on a drive, such as C:\sounds\done.wav, or one starting with ~/";
 pub(crate) const DEFAULT_ISSUE_TABS: [&str; 8] =
     ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
@@ -665,15 +667,19 @@ pub(crate) fn check_fetch_minutes(input: &str) -> Result<u64, &'static str> {
 }
 
 pub(crate) fn check_sound_file(input: &str) -> Result<String, &'static str> {
+    check_sound_file_on(input, cfg!(windows))
+}
+
+fn check_sound_file_on(input: &str, windows: bool) -> Result<String, &'static str> {
     if input.chars().any(crate::text::hidden) {
         return Err("a file's path cannot hold control or invisible characters");
     }
     let path = input.trim();
-    let absolute = path.starts_with('/') || Path::new(path).is_absolute();
-    if !(path.is_empty() || absolute || path == "~" || path.starts_with("~/")) {
-        return Err("use an absolute path or one starting with ~/");
+    let absolute = if windows { drive_path(path) } else { path.starts_with('/') };
+    if path.is_empty() || absolute || path == "~" || path.starts_with("~/") {
+        return Ok(input.to_string());
     }
-    Ok(input.to_string())
+    Err(if windows { SOUND_FILE_ON_A_DRIVE } else { SOUND_FILE_ABSOLUTE })
 }
 
 #[cfg(test)]

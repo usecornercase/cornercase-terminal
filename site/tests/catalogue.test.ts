@@ -39,13 +39,21 @@ test('a manifest becomes a plugin at its folder', () => {
   });
 });
 
+test('a plugin for windows is kept with its platforms', () => {
+  const everywhere = MANIFEST.replace('platforms = ["macos", "linux"]', 'platforms = ["linux", "macos", "windows"]');
+  assert.deepEqual(pluginFrom('', everywhere).platforms, ['linux', 'macos', 'windows']);
+  const index = assemble([found('acme/notes', [{ path: '', text: everywhere }])], empty, when);
+  assert.deepEqual(index.repos[0].plugins[0].platforms, ['linux', 'macos', 'windows']);
+  assert.ok(validate(JSON.stringify(index)));
+});
+
 test('bad manifests are counted as invalid', () => {
   const bad = [
     'id = ',
     withId('Acme Notes'),
     MANIFEST.replace('"Notes"', '"No\\u001btes"'),
     MANIFEST.replace('per workspace', 'per \\u202eworkspace'),
-    MANIFEST.replace('"linux"]', '"windows"]'),
+    MANIFEST.replace('"linux"]', '"plan9"]'),
     `api = 2\n${MANIFEST}`,
     MANIFEST.replace('version = "1.0.0"\n', ''),
   ];

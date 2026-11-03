@@ -21,6 +21,31 @@ pub(crate) fn canonical(path: impl AsRef<Path> + Into<PathBuf>) -> PathBuf {
     canonicalize(path.as_ref()).unwrap_or_else(|_| simplified(path.into()))
 }
 
+pub(crate) fn reaches_network(path: &str) -> bool {
+    cfg!(windows) && unc_or_device(path)
+}
+
+pub(crate) fn unc_or_device(path: &str) -> bool {
+    let mut chars = path.chars();
+    let doubled = matches!((chars.next(), chars.next()), (Some('\\' | '/'), Some('\\' | '/')));
+    doubled && !drive_path(path)
+}
+
+pub(crate) fn drive_path(path: &str) -> bool {
+    match path.strip_prefix(r"\\?\") {
+        Some(verbatim) => drive_root(verbatim, &['\\']),
+        None => drive_root(path, &['\\', '/']),
+    }
+}
+
+fn drive_root(path: &str, separators: &[char]) -> bool {
+    let mut chars = path.chars();
+    match (chars.next(), chars.next(), chars.next()) {
+        (Some(letter), Some(':'), Some(separator)) => letter.is_ascii_alphabetic() && separators.contains(&separator),
+        _ => false,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Lock {
     Shared,

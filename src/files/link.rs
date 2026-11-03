@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::expand_home;
-use crate::os::fs::simplified;
+use crate::os::fs::{reaches_network, simplified};
 use crate::term::emulator::Cell;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +85,9 @@ pub(crate) fn at(row: &[Cell], col: u16) -> Option<Link> {
 }
 
 pub(crate) fn resolve(link: &Link, cwd: Option<&Path>, root: &Path, home: Option<&Path>) -> Option<Target> {
+    if reaches_network(&link.path) {
+        return None;
+    }
     let root = std::fs::canonicalize(root).ok()?;
     let given = expand_home(&link.path, home);
     let candidates: Vec<PathBuf> = if given.is_absolute() {
