@@ -20,8 +20,10 @@ use super::{Lock, Stat};
 #[cfg(test)]
 pub(crate) use self::acl::share_with_everyone;
 pub(crate) use self::acl::{create_private_dir_all, make_private, owner_and_mode, process_uid};
+pub(crate) use self::verbatim::simplified;
 
 mod acl;
+mod verbatim;
 
 pub(crate) const NONBLOCK: i32 = 0;
 pub(crate) const NOFOLLOW: i32 = FILE_FLAG_OPEN_REPARSE_POINT.cast_signed();

@@ -3,6 +3,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 
 use crate::host::open::Browse;
+use crate::os::fs::canonical;
 use crate::process;
 use crate::process::owners::{Owner, Trees, folder, owner, trees};
 
@@ -130,11 +131,7 @@ impl<'a> Attribution<'a> {
             places,
             panes: trees(&shells),
             agents: trees(&agents),
-            worktrees: places
-                .worktrees
-                .iter()
-                .map(|(path, _)| path.canonicalize().unwrap_or_else(|_| path.clone()))
-                .collect(),
+            worktrees: places.worktrees.iter().map(|(path, _)| canonical(path)).collect(),
         }
     }
 

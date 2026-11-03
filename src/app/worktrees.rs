@@ -23,6 +23,7 @@ use crate::git::upstream;
 use crate::git::worktree;
 pub(super) use crate::git::worktree::RemoveOptions;
 use crate::log::{self, Job, Level};
+use crate::os::fs::canonical;
 use crate::project::{Hierarchy, Phase, Workspace, WorkspaceAt};
 use crate::pull_request::glab::Host;
 use crate::ui::{self};
@@ -303,7 +304,7 @@ impl App {
         area: Rect,
     ) -> Result<()> {
         let path = match result {
-            Ok(path) => path.canonicalize().unwrap_or(path),
+            Ok(path) => canonical(path),
             Err(e) => {
                 match &mut self.overlay {
                     Some(Overlay::NewWorkspace { error, creating, .. }) => {

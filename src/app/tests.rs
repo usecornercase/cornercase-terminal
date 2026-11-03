@@ -158,8 +158,12 @@ fn no_config() -> PathBuf {
 }
 
 fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
+    new_app_with_shell("/bin/sh", config_path)
+}
+
+fn new_app_with_shell(shell: &str, config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     let (tx, rx) = mpsc::channel();
-    let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path, tx);
+    let mut app = App::new(shell.into(), HostTheme::default(), config_path, tx);
     app.config.sidebar = config::Sidebar::SideBySide.id().into();
     app.config.sound = false;
     app.config.star_prompt = false;
@@ -234,7 +238,7 @@ fn tab_term(app: &App, w: usize, t: usize) -> &Term {
 }
 
 fn canonical(dir: &TempDir) -> PathBuf {
-    dir.path().canonicalize().expect("canonicalize")
+    crate::os::fs::canonicalize(dir.path()).expect("canonicalize")
 }
 
 fn click_button(app: &mut App, area: Rect, labels: &[&str], rects: &[Rect], label: &str) {

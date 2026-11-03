@@ -11,6 +11,7 @@ use crate::control::contract::{Code, Refusal};
 use crate::error::Error;
 use crate::git;
 use crate::issues::{Account, Secret, Source};
+use crate::os::fs::canonical;
 use crate::project::Hierarchy;
 use crate::settings::share::{self, Section};
 use crate::settings::{Action, Page, Refused};
@@ -106,8 +107,7 @@ impl App {
             .projects
             .iter()
             .map(|(key, settings)| {
-                let folder = config::expand_home(key, home);
-                let folder = folder.canonicalize().unwrap_or(folder);
+                let folder = canonical(config::expand_home(key, home));
                 ProjectEntry {
                     project: open(&folder),
                     repository: git::is_repo_root(&folder),
@@ -173,7 +173,7 @@ impl App {
                 if !folder.is_absolute() {
                     return Err(Refusal::new(Code::Malformed, "use an absolute path or one starting with ~/"));
                 }
-                Ok(folder.canonicalize().unwrap_or(folder))
+                Ok(canonical(folder))
             }
             _ => Err(Refusal::new(Code::Malformed, "give the project's `project` id or its `path`, not both")),
         }

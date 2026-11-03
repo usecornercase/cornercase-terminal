@@ -1,5 +1,6 @@
 use std::fs::{File, Metadata};
 use std::io;
+use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
 pub(crate) use imp::process_uid;
@@ -8,9 +9,17 @@ pub(crate) use imp::process_uid;
 pub(crate) use imp::share_with_everyone;
 pub(crate) use imp::{
     DirBuilderExt, MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, PermissionsExt, create_private_dir_all, gid,
-    link_to, links_to, make_private, owner_and_mode, set_file_mode, set_mode, stat, stat_file, truncate, try_lock, uid,
-    writable,
+    link_to, links_to, make_private, owner_and_mode, set_file_mode, set_mode, simplified, stat, stat_file, truncate,
+    try_lock, uid, writable,
 };
+
+pub(crate) fn canonicalize(path: impl AsRef<Path>) -> io::Result<PathBuf> {
+    std::fs::canonicalize(path).map(simplified)
+}
+
+pub(crate) fn canonical(path: impl AsRef<Path> + Into<PathBuf>) -> PathBuf {
+    canonicalize(path.as_ref()).unwrap_or_else(|_| simplified(path.into()))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Lock {
@@ -43,7 +52,7 @@ pub(crate) fn locked(file: File, lock: Lock) -> io::Result<Option<File>> {
 mod imp {
     use std::fs::{File, Metadata, Permissions};
     use std::io;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use rustix::fs::{Access, FlockOperation, OFlags, access, flock};
     use rustix::io::Errno;
@@ -79,6 +88,10 @@ mod imp {
 
     pub(crate) fn truncate(file: &File, _path: &Path) -> io::Result<()> {
         file.set_len(0)
+    }
+
+    pub(crate) fn simplified(path: PathBuf) -> PathBuf {
+        path
     }
 
     pub(crate) fn links_to(meta: &Metadata, _link: &Path, _original: &Path) -> bool {

@@ -13,6 +13,7 @@ use crate::agents::{AgentState, Known};
 use crate::error::Result;
 use crate::flows::{Role, folder};
 use crate::log::{self};
+use crate::os::fs::canonical;
 use crate::project::{Hierarchy, Tab, Workspace};
 use crate::state::{PaneState, TabState, WorkspaceState};
 use crate::term::Term;
@@ -50,7 +51,7 @@ impl App {
         area: Rect,
         parents: &mut Parents,
     ) -> Option<(Workspace, usize)> {
-        let path = saved.path.canonicalize().unwrap_or_else(|_| saved.path.clone());
+        let path = canonical(&saved.path);
         if !path.is_dir() {
             return None;
         }

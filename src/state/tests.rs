@@ -694,3 +694,31 @@ mod mapping {
         assert_eq!(serde_json::from_str::<WorkspaceState>(&text).expect("read back"), saved);
     }
 }
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+
+    fn session(prefix: &str) -> State {
+        let at = |path: &str| PathBuf::from(format!(r"{prefix}C:\{path}"));
+        let mut workspace = WorkspaceState::plain(at("repo"), vec![Some(at(r"repo\src")), None], 0);
+        let tree = RoleWorktree { role: "coder".into(), path: at("repo-coder"), branch: "coder".into() };
+        workspace.role_worktrees = vec![tree];
+        let closed =
+            TabState { name: None, panes: vec![PaneState::at(Some(at("repo-coder")))], active: 0, layout: None };
+        workspace.closed = Some(ClosedState { tabs: vec![closed], run: None });
+        let mut saved = state(&[r"\\?\UNC\server\share\repo"]);
+        saved.projects.insert(0, ProjectState { path: at("repo"), workspaces: vec![workspace], ..project("") });
+        saved
+    }
+
+    #[test]
+    fn a_session_saved_with_verbatim_folders_loads_them_plain() {
+        let tmp = TempDir::new();
+        let path = tmp.path().join("session.json");
+        persist::save(&path, &session(r"\\?\")).expect("save");
+        assert!(std::fs::read_to_string(&path).expect("saved").contains(r#""\\\\?\\C:\\repo""#));
+
+        assert_eq!(load(&path), Some(session("")));
+    }
+}

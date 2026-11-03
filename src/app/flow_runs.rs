@@ -20,6 +20,7 @@ use crate::git;
 use crate::git::worktree;
 use crate::host::notify::{self, Notification};
 use crate::log::{self, Job, Level};
+use crate::os::fs::canonical;
 use crate::paths;
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Project, Tab, Workspace, WorkspaceAt};
@@ -184,7 +185,6 @@ fn make_trees(
     branch: &str,
     roles: Vec<(String, String)>,
 ) -> crate::error::Result<Made> {
-    let canonical = |path: PathBuf| path.canonicalize().unwrap_or(path);
     let mut made_paths: Vec<PathBuf> = Vec::new();
     let built = || -> crate::error::Result<Vec<(RoleWorktree, bool)>> {
         if let Some(path) = &run {

@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn the_first_one_opens_in_the_server_folder() {
     let (app, _rx) = app();
-    let here = std::env::current_dir().and_then(|d| d.canonicalize()).expect("current dir");
+    let here = std::env::current_dir().and_then(crate::os::fs::canonicalize).expect("current dir");
     assert_eq!(app.projects[0].path, here);
 }
 
@@ -32,4 +32,23 @@ fn the_name_does_not_follow_cd() {
 
     let folder = dirs[0].path().file_name().and_then(|n| n.to_str()).expect("folder name");
     assert_eq!(app.project_label(&app.projects[0]), folder);
+}
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::test_util::verbatim;
+
+    #[test]
+    fn a_folder_opened_by_its_verbatim_path_is_stored_plain() {
+        let dir = TempDir::new();
+        let (mut app, _rx) = new_app_with_shell("cmd.exe", no_config());
+
+        app.open_project(verbatim(dir.path()), AREA).expect("open project");
+
+        let saved = app.state();
+        let stored = (saved.projects[0].path.as_path(), saved.projects[0].workspaces[0].path.as_path());
+        assert_eq!(stored, (dir.path(), dir.path()));
+        assert!(!dir.path().to_string_lossy().starts_with(r"\\?\"));
+    }
 }
