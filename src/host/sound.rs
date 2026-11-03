@@ -20,7 +20,7 @@ const GAP: Duration = Duration::from_secs(1);
 const KILL_AFTER: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(50);
 const FOLDER: &str = "sounds";
-const PATHEXT: &str = ".COM;.EXE;.BAT;.CMD";
+const RUNNABLE: [&str; 4] = [".com", ".exe", ".bat", ".cmd"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -88,13 +88,15 @@ impl Os {
         if self != Self::Windows {
             return Vec::new();
         }
-        let listed = pathext.filter(|list| !list.trim().is_empty()).unwrap_or(PATHEXT);
-        listed
-            .split(';')
-            .map(str::trim)
-            .filter(|ext| ext.len() > 1 && ext.starts_with('.'))
-            .map(str::to_lowercase)
-            .collect()
+        let listed = pathext.unwrap_or_default().split(';').map(|extension| extension.trim().to_lowercase());
+        let runnable: Vec<String> = listed.filter(|extension| RUNNABLE.contains(&extension.as_str())).collect();
+        if runnable.is_empty() { RUNNABLE.map(String::from).to_vec() } else { runnable }
+    }
+}
+
+impl Default for Os {
+    fn default() -> Self {
+        Self::current()
     }
 }
 
@@ -120,11 +122,15 @@ fn player(os: Os, lookup: impl Fn(&str) -> Option<PathBuf>) -> Option<Device> {
     os.players().iter().find_map(|name| lookup(name)).map(Device::Program)
 }
 
-pub(super) fn on_path<'a>(path: Option<&'a OsStr>, extensions: &'a [String]) -> impl Fn(&str) -> Option<PathBuf> + 'a {
+pub(super) fn on_path<'a>(
+    os: Os,
+    path: Option<&'a OsStr>,
+    extensions: &'a [String],
+) -> impl Fn(&str) -> Option<PathBuf> + 'a {
     move |name| {
         std::env::split_paths(path?)
             .filter(|dir| dir.is_absolute())
-            .find_map(|dir| named(&dir, name, extensions).into_iter().find(|candidate| executable(candidate)))
+            .find_map(|dir| named(&dir, name, extensions).into_iter().find(|candidate| executable(os, candidate)))
     }
 }
 
@@ -135,8 +141,8 @@ fn named(dir: &Path, name: &str, extensions: &[String]) -> Vec<PathBuf> {
     extensions.iter().map(|extension| dir.join(format!("{name}{extension}"))).collect()
 }
 
-fn executable(path: &Path) -> bool {
-    path.metadata().is_ok_and(|m| m.is_file() && (cfg!(windows) || m.permissions().mode() & 0o111 != 0))
+fn executable(os: Os, path: &Path) -> bool {
+    path.metadata().is_ok_and(|m| m.is_file() && (os == Os::Windows || m.permissions().mode() & 0o111 != 0))
 }
 
 fn resolve(path: &str, home: Option<&Path>) -> Option<PathBuf> {
@@ -234,8 +240,8 @@ impl Player {
     }
 
     pub(crate) fn detect(dir: PathBuf) -> Self {
-        let path = std::env::var_os("PATH");
-        let device = player(Os::current(), on_path(path.as_deref(), &[]));
+        let (os, path) = (Os::current(), std::env::var_os("PATH"));
+        let device = player(os, on_path(os, path.as_deref(), &[]));
         Self::new(device, dir, std::env::var_os("HOME").map(PathBuf::from))
     }
 

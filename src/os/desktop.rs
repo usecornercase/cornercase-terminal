@@ -1,4 +1,4 @@
-pub(crate) use imp::{Awake, detach, play, shell_open};
+pub(crate) use imp::{Awake, dangerous, detach, play, shell_open, windows_folder};
 
 #[cfg(test)]
 #[cfg(windows)]
@@ -6,11 +6,11 @@ pub(crate) use imp::system_required;
 
 #[cfg(windows)]
 mod imp {
-    use std::ffi::OsStr;
+    use std::ffi::{OsStr, OsString};
     use std::io;
-    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use std::os::windows::process::CommandExt;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
     use std::ptr::{null, null_mut};
     use std::sync::mpsc::{self, Receiver, Sender};
@@ -23,8 +23,11 @@ mod imp {
         COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
     };
     use windows_sys::Win32::System::Power::{ES_CONTINUOUS, ES_SYSTEM_REQUIRED, SetThreadExecutionState};
+    use windows_sys::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
     use windows_sys::Win32::System::Threading::{CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW};
-    use windows_sys::Win32::UI::Shell::{SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW};
+    use windows_sys::Win32::UI::Shell::{
+        AssocIsDangerous, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
     static PLAYED: Mutex<u64> = Mutex::new(0);
@@ -67,6 +70,20 @@ mod imp {
             unsafe { CoUninitialize() };
         }
         result
+    }
+
+    pub(crate) fn windows_folder() -> Option<PathBuf> {
+        let mut buffer = [0u16; 1024];
+        let size = u32::try_from(buffer.len()).ok()?;
+        let length = usize::try_from(unsafe { GetSystemWindowsDirectoryW(buffer.as_mut_ptr(), size) }).ok()?;
+        let name = buffer.get(..length).filter(|name| !name.is_empty())?;
+        Some(PathBuf::from(OsString::from_wide(name)))
+    }
+
+    pub(crate) fn dangerous(extension: &OsStr) -> bool {
+        let mut dotted = OsString::from(".");
+        dotted.push(extension);
+        !wide(&dotted).is_ok_and(|name| unsafe { AssocIsDangerous(name.as_ptr()) } == 0)
     }
 
     pub(crate) fn play(file: &Path, limit: Duration) -> io::Result<()> {
@@ -135,7 +152,7 @@ mod imp {
     use std::convert::Infallible;
     use std::ffi::OsStr;
     use std::io;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
     use std::time::Duration;
 
@@ -163,6 +180,14 @@ mod imp {
 
     pub(crate) fn play(_file: &Path, _limit: Duration) -> io::Result<()> {
         Err(unsupported())
+    }
+
+    pub(crate) fn windows_folder() -> Option<PathBuf> {
+        None
+    }
+
+    pub(crate) fn dangerous(_extension: &OsStr) -> bool {
+        false
     }
 
     fn unsupported() -> io::Error {

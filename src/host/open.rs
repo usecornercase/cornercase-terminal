@@ -118,19 +118,35 @@ pub(crate) enum Kind {
 
 impl Kind {
     pub(crate) fn of(path: &Path) -> Option<Self> {
+        Self::on(Os::current(), path)
+    }
+
+    fn on(os: Os, path: &Path) -> Option<Self> {
         let meta = path.metadata().ok()?;
         if meta.is_dir() {
             Some(Self::Folder)
         } else if meta.is_file() {
-            Some(if program(path, &meta) { Self::Program } else { Self::File })
+            Some(if program(os, path, &meta) { Self::Program } else { Self::File })
         } else {
             None
         }
     }
 }
 
-fn program(path: &Path, meta: &Metadata) -> bool {
-    if cfg!(windows) { has_extension(path, &RUN_WHEN_OPENED) } else { meta.permissions().mode() & 0o111 != 0 }
+fn program(os: Os, path: &Path, meta: &Metadata) -> bool {
+    match os {
+        Os::Windows => real(path).is_none_or(|real| runs_when_opened(Path::new(&real))),
+        Os::Macos | Os::Linux => meta.permissions().mode() & 0o111 != 0,
+    }
+}
+
+fn real(path: &Path) -> Option<String> {
+    let real = path.canonicalize().ok()?;
+    Some(plain(&real.to_string_lossy()).into_owned())
+}
+
+fn runs_when_opened(path: &Path) -> bool {
+    has_extension(path, RUN_WHEN_OPENED.split(' ')) || path.extension().is_some_and(desktop::dangerous)
 }
 
 impl Os {
@@ -138,12 +154,22 @@ impl Os {
         self != Self::Linux || set("WAYLAND_DISPLAY") || set("DISPLAY")
     }
 
-    fn launcher(self) -> &'static str {
+    fn launcher(self, lookup: impl Fn(&str) -> Option<PathBuf>, apps: &[PathBuf]) -> Option<PathBuf> {
         match self {
-            Self::Macos => "open",
-            Self::Linux => "xdg-open",
-            Self::Windows => "explorer",
+            Self::Macos => lookup("open"),
+            Self::Linux => lookup("xdg-open"),
+            Self::Windows => apps.iter().map(|dir| dir.join("explorer.exe")).find(|explorer| explorer.is_file()),
         }
+    }
+
+    fn apps(self, env: impl Fn(&str) -> Option<String>) -> Vec<PathBuf> {
+        if self == Self::Windows {
+            return desktop::windows_folder().into_iter().collect();
+        }
+        let home = env("HOME").filter(|home| !home.is_empty()).map(PathBuf::from);
+        let mut apps = vec![PathBuf::from("/Applications")];
+        apps.extend(home.map(|home| home.join("Applications")));
+        apps
     }
 
     fn file_manager(self) -> Opener {
@@ -188,6 +214,7 @@ impl Shell {
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Openers {
+    os: Os,
     found: Vec<(Opener, Reach)>,
     launcher: Option<PathBuf>,
     dbus: Option<PathBuf>,
@@ -195,21 +222,19 @@ pub(crate) struct Openers {
 
 impl Openers {
     pub(crate) fn detect(env: impl Fn(&str) -> Option<String>) -> Self {
-        let home = env("HOME").filter(|home| !home.is_empty()).map(PathBuf::from);
-        let mut apps = vec![PathBuf::from("/Applications")];
-        apps.extend(home.map(|home| home.join("Applications")));
-        Self::find(Os::current(), &env, &apps)
+        let os = Os::current();
+        Self::find(os, &env, &os.apps(&env))
     }
 
     fn find(os: Os, env: &impl Fn(&str) -> Option<String>, apps: &[PathBuf]) -> Self {
         let set = |name: &str| env(name).is_some_and(|value| !value.is_empty());
         if !local_machine(env) || !os.has_desktop(set) {
-            return Self::default();
+            return Self { os, ..Self::default() };
         }
         let path = env("PATH").map(OsString::from);
         let extensions = os.extensions(env("PATHEXT").as_deref());
-        let lookup = on_path(path.as_deref(), &extensions);
-        let launcher = lookup(os.launcher());
+        let lookup = on_path(os, path.as_deref(), &extensions);
+        let launcher = os.launcher(&lookup, apps);
         let mut found = Vec::new();
         if launcher.is_some() {
             found.push((os.file_manager(), Reach::Launcher));
@@ -218,7 +243,7 @@ impl Openers {
         let apps = if launcher.is_some() && os != Os::Windows { apps } else { &[] };
         found.extend(EDITORS.into_iter().filter_map(|opener| Some((opener, editor(os, opener, &lookup, apps)?))));
         found.sort_by_key(|(opener, _)| *opener);
-        Self { found, launcher, dbus: lookup("dbus-send") }
+        Self { os, found, launcher, dbus: lookup("dbus-send") }
     }
 
     pub(crate) fn ids(&self) -> Vec<Opener> {
@@ -287,13 +312,24 @@ impl Openers {
         }
         let (this, open) = (self.clone(), open.clone());
         thread::spawn(move || {
+            let open = this.located(open);
             let path = Path::new(&open.path);
-            let kind = path.is_absolute().then(|| Kind::of(path)).flatten();
+            let kind = path.is_absolute().then(|| Kind::on(this.os, path)).flatten();
             let done = this.steps(&open, kind).and_then(|steps| run(&steps));
             if let Err(reason) = done {
                 failed(Failed { opener: open.opener, reason });
             }
         });
+    }
+
+    fn located(&self, open: Open) -> Open {
+        if self.os != Os::Windows || !Path::new(&open.path).is_absolute() {
+            return open;
+        }
+        match real(Path::new(&open.path)) {
+            Some(path) => Open { path, ..open },
+            None => open,
+        }
     }
 }
 
@@ -325,7 +361,7 @@ fn command_step(command: &Path, opener: Opener, open: &Open, kind: Kind, target:
 }
 
 fn finder(launcher: &Path, path: &Path, kind: Kind, target: OsString) -> Step {
-    let reveal = kind != Kind::Folder || has_extension(path, &BUNDLES);
+    let reveal = kind != Kind::Folder || has_extension(path, BUNDLES);
     step(launcher, &if reveal { vec!["-R".into(), target] } else { vec![target] })
 }
 
@@ -352,13 +388,13 @@ fn plain(path: &str) -> Cow<'_, str> {
 const BUNDLES: [&str; 10] =
     ["app", "appex", "bundle", "framework", "pkg", "playground", "plugin", "prefpane", "xcodeproj", "xcworkspace"];
 
-const RUN_WHEN_OPENED: [&str; 25] = [
-    "bat", "cmd", "com", "cpl", "exe", "hta", "jar", "js", "jse", "lnk", "msc", "msi", "msp", "pif", "ps1", "py",
-    "pyw", "reg", "scr", "url", "vbe", "vbs", "ws", "wsf", "wsh",
-];
+const RUN_WHEN_OPENED: &str = "appinstaller application appref-ms appx bat chm cmd com cpl diagcab exe hta jar js \
+    jse lnk msc msi msix msp pif pl ps1 psc1 py pyc pyw pyz pyzw rb reg scf scr settingcontent-ms sh url vbe vbs ws \
+    wsf wsh";
 
-fn has_extension(path: &Path, extensions: &[&str]) -> bool {
-    path.extension().and_then(OsStr::to_str).is_some_and(|ext| extensions.iter().any(|e| ext.eq_ignore_ascii_case(e)))
+fn has_extension<'a>(path: &Path, extensions: impl IntoIterator<Item = &'a str>) -> bool {
+    let Some(extension) = path.extension().and_then(OsStr::to_str) else { return false };
+    extensions.into_iter().any(|known| extension.eq_ignore_ascii_case(known))
 }
 
 fn in_zed_app(path: &Path) -> bool {

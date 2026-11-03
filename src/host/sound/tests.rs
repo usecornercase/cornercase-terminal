@@ -83,7 +83,7 @@ mod choosing_a_player {
     fn takes_the_first_one_on_the_path(#[case] os: Os, #[case] names: &[&str], #[case] expected: Option<&str>) {
         let tmp = fake_path(names);
         let path = tmp.path().as_os_str().to_owned();
-        let found = player(os, on_path(Some(&path), &[]));
+        let found = player(os, on_path(os, Some(&path), &[]));
         assert_eq!(found, expected.map(|name| Device::Program(tmp.path().join(name))));
     }
 
@@ -92,12 +92,12 @@ mod choosing_a_player {
         let tmp = TempDir::new();
         std::fs::write(tmp.path().join("afplay"), "").expect("write");
         let path = tmp.path().as_os_str().to_owned();
-        assert_eq!(player(Os::Macos, on_path(Some(&path), &[])), None);
+        assert_eq!(player(Os::Macos, on_path(Os::Macos, Some(&path), &[])), None);
     }
 
     #[test]
     fn finds_none_without_a_path() {
-        assert_eq!(player(Os::Linux, on_path(None, &[])), None);
+        assert_eq!(player(Os::Linux, on_path(Os::Linux, None, &[])), None);
     }
 }
 
@@ -235,30 +235,33 @@ mod playing {
     }
 }
 
-#[cfg(windows)]
-mod on_windows {
+mod for_windows {
     use super::*;
 
-    #[test]
-    fn plays_through_play_sound_whatever_the_path_holds() {
+    fn fake_path(names: &[&str]) -> TempDir {
         let tmp = TempDir::new();
-        std::fs::write(tmp.path().join("afplay.exe"), "").expect("write");
-        let path = tmp.path().as_os_str().to_owned();
-        assert_eq!(player(Os::Windows, on_path(Some(&path), &[])), Some(Device::PlaySound));
-        assert_eq!(player(Os::Windows, on_path(None, &[])), Some(Device::PlaySound));
+        for name in names {
+            std::fs::write(tmp.path().join(name), "").expect("write");
+        }
+        tmp
     }
 
     #[test]
-    fn this_build_plays_through_play_sound() {
-        let tmp = TempDir::new();
-        assert_eq!((Os::current(), Player::detect(tmp.path().into()).device), (Os::Windows, Some(Device::PlaySound)));
+    fn plays_through_play_sound_whatever_the_path_holds() {
+        let tmp = fake_path(&["afplay"]);
+        let path = tmp.path().as_os_str().to_owned();
+        let lookup = on_path(Os::Windows, Some(&path), &[]);
+        assert_eq!(lookup("afplay"), Some(tmp.path().join("afplay")));
+        assert_eq!(player(Os::Windows, lookup), Some(Device::PlaySound));
     }
 
     #[rstest]
     #[case::unset(None, &[".com", ".exe", ".bat", ".cmd"])]
     #[case::empty(Some(" "), &[".com", ".exe", ".bat", ".cmd"])]
-    #[case::lower_case_and_trimmed(Some(".EXE; .Cmd ;;.PY"), &[".exe", ".cmd", ".py"])]
+    #[case::lower_case_and_trimmed(Some(".EXE; .Cmd ;;"), &[".exe", ".cmd"])]
     #[case::not_an_extension(Some("EXE;.;.BAT"), &[".bat"])]
+    #[case::only_what_command_runs(Some(".VBS;.CMD;.JS;.PY;.EXE"), &[".cmd", ".exe"])]
+    #[case::nothing_runnable(Some(".VBS;.PY"), &[".com", ".exe", ".bat", ".cmd"])]
     fn reads_pathext(#[case] pathext: Option<&str>, #[case] expected: &[&str]) {
         assert_eq!(Os::Windows.extensions(pathext), expected);
     }
@@ -270,17 +273,25 @@ mod on_windows {
 
     #[test]
     fn finds_a_command_through_its_extensions_in_order() {
-        let tmp = TempDir::new();
-        for name in ["code", "code.cmd", "code.exe", "subl.exe"] {
-            std::fs::write(tmp.path().join(name), "").expect("write");
-        }
+        let tmp = fake_path(&["code", "code.cmd", "code.exe", "subl.exe", "run.vbs"]);
         let path = tmp.path().as_os_str().to_owned();
-        let extensions = Os::Windows.extensions(Some(".COM;.EXE;.BAT;.CMD"));
-        let lookup = on_path(Some(&path), &extensions);
+        let extensions = Os::Windows.extensions(Some(".COM;.EXE;.BAT;.CMD;.VBS"));
+        let lookup = on_path(Os::Windows, Some(&path), &extensions);
         assert_eq!(lookup("code"), Some(tmp.path().join("code.exe")));
         assert_eq!(lookup("subl"), Some(tmp.path().join("subl.exe")));
-        assert_eq!(lookup("zed"), None);
+        assert_eq!((lookup("zed"), lookup("run")), (None, None));
         let batch_only = Os::Windows.extensions(Some(".CMD"));
-        assert_eq!(on_path(Some(&path), &batch_only)("code"), Some(tmp.path().join("code.cmd")));
+        assert_eq!(on_path(Os::Windows, Some(&path), &batch_only)("code"), Some(tmp.path().join("code.cmd")));
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+
+    #[test]
+    fn this_build_plays_through_play_sound() {
+        let tmp = TempDir::new();
+        assert_eq!((Os::current(), Player::detect(tmp.path().into()).device), (Os::Windows, Some(Device::PlaySound)));
     }
 }
