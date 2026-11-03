@@ -12,6 +12,7 @@ pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod closed_agents;
 pub(crate) mod config;
+pub(crate) mod context;
 pub(crate) mod contract;
 mod events;
 mod fields;
@@ -53,6 +54,7 @@ pub(crate) use changes::{
 };
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
+pub(crate) use context::{ContextInfo, ContextRead};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
 pub(crate) use files::{FilesList, FilesRead, FilesSearch};
@@ -241,6 +243,7 @@ pub(crate) enum Command {
     FreeBuilds(FreeBuilds),
     Worktrees(ListWorktrees),
     PullRequest(PullRequestRead),
+    Context(ContextRead),
 }
 
 impl Command {
@@ -422,6 +425,7 @@ impl Command {
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
             Self::PullRequest(_) => 113,
+            Self::Context(_) => 114,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -433,7 +437,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 114] = [
+    pub(crate) const NAMES: [&str; 115] = [
         "status",
         "open",
         "new-workspace",
@@ -548,6 +552,7 @@ impl Command {
         "stop-process",
         "worktrees",
         "pull-request",
+        "context",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

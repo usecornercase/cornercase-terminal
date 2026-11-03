@@ -4,9 +4,10 @@ use std::time::SystemTime;
 
 use serde::Deserialize;
 
-use self::transcript::{Limits, Running, Subagents, Transcript, live, transcript_path};
+use self::transcript::{Limits, Running, Subagents, Transcript, live, model_flag, transcript_path};
 use crate::accounts::login::{Login, State};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
+use crate::agents::breakdown::Target;
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
 use crate::agents::context::{Compaction, Context, Look, Record};
@@ -67,6 +68,8 @@ pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(cra
     answer: usage::answer,
     no_limits: "no plan limits for this account (API key, Bedrock or Vertex)",
 });
+pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> =
+    Some(crate::agents::breakdown::Spec { probe: breakdown::probe });
 pub(in crate::agents) const UNFOUND: &str = "Claude Code has not said yet which conversation it is in";
 
 #[derive(Deserialize)]
@@ -161,6 +164,7 @@ pub(in crate::agents) struct Reader {
     children: Vec<Running>,
     live: usize,
     home: Option<(i32, Vec<String>, Option<PathBuf>)>,
+    probe_model: Option<String>,
 }
 
 impl Reader {
@@ -177,15 +181,11 @@ impl Reader {
             let cwd = session.cwd.as_deref()?;
             Some((dir, cwd, transcript_path(dir, cwd, session.id.as_deref()?)?))
         });
-        let Some((dir, cwd, path)) = found else {
-            self.transcript = None;
-            self.live = 0;
-            *shown = None;
-            return None;
-        };
+        let Some((dir, cwd, path)) = found else { return self.lost(shown) };
         if self.transcript.as_ref().is_none_or(|t| t.path != path) {
             self.transcript = None;
             *shown = None;
+            self.probe_model = None;
         }
         let transcript = self.transcript.get_or_insert_with(|| Transcript::new(path));
         let before = transcript.shown_key();
@@ -193,7 +193,8 @@ impl Reader {
         let prompted = transcript.prompted;
         ledger.apply(&transcript.path.to_string_lossy(), since, std::mem::take(&mut transcript.counted));
         if transcript.shown_key() != before {
-            *shown = transcript.shown(&Limits::read(dir, cwd, look));
+            let limits = Limits::read(dir, cwd, look);
+            (*shown, self.probe_model) = (transcript.shown(&limits), transcript.probe_model(&limits));
         }
         let parent = transcript.path.with_extension("").join("subagents");
         if let Some(mut found) = self.following.take() {
@@ -211,6 +212,14 @@ impl Reader {
         let interrupted = self.transcript.as_ref().and_then(|t| t.interrupted);
         self.live = live(&self.children, since, busy, interrupted, SystemTime::now());
         prompted
+    }
+
+    fn lost(&mut self, shown: &mut Option<Context>) -> Option<SystemTime> {
+        self.transcript = None;
+        self.live = 0;
+        *shown = None;
+        self.probe_model = None;
+        None
     }
 
     fn home(&mut self, look: &Look<'_>) -> Option<PathBuf> {
@@ -244,6 +253,12 @@ impl Reader {
         self.transcript.as_ref().filter(|t| t.len > 0).and_then(|t| t.path.file_stem()?.to_str())
     }
 
+    pub(in crate::agents) fn target(&self, pid: i32, account: Option<PathBuf>) -> Option<Target> {
+        let folder = self.session.as_ref()?.cwd.clone()?;
+        let model = self.probe_model.clone().or_else(|| model_flag(&self.home.as_ref()?.1));
+        Some(Target { pid, conversation: self.conversation().map(str::to_string), folder, model, account })
+    }
+
     pub(in crate::agents) fn folder(&self) -> Option<&Path> {
         self.session.as_ref()?.cwd.as_deref()
     }
@@ -275,6 +290,7 @@ fn from_title(title: &str) -> Option<Activity> {
     }
 }
 
+pub(in crate::agents) mod breakdown;
 pub(in crate::agents) mod message;
 pub(crate) mod screen;
 pub(in crate::agents) mod transcript;

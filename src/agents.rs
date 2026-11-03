@@ -1,5 +1,6 @@
 pub(crate) mod activity;
 pub(crate) mod awake;
+pub(crate) mod breakdown;
 pub mod claude;
 pub(crate) mod closing;
 pub(crate) mod codex;
@@ -11,6 +12,7 @@ pub(crate) mod grok;
 mod known;
 pub(crate) mod launch;
 pub(crate) mod opencode;
+pub(crate) mod probe;
 pub mod stats;
 pub(crate) mod tree;
 pub(crate) mod usage;
