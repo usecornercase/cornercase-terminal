@@ -4,7 +4,6 @@ use super::{Asker, Handled, conflict, json, malformed, none};
 use crate::app::App;
 use crate::app::event::AppEvent;
 use crate::app::worktrees::{ListFor, Measure, WorktreeEvent};
-use crate::app::worktrees_dialog::canonical;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{
     BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
@@ -12,6 +11,7 @@ use crate::control::{
 use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
+use crate::os::fs::{canonical, canonicalize};
 use crate::process;
 use crate::process::owners::trees;
 use crate::project::{Hierarchy, WorkspaceAt};
@@ -201,7 +201,7 @@ impl App {
 }
 
 fn linked_target(path: &Path) -> std::result::Result<Target, Refusal> {
-    let path = path.canonicalize().map_err(|e| conflict(format!("{}: {e}", path.display())))?;
+    let path = canonicalize(path).map_err(|e| conflict(format!("{}: {e}", path.display())))?;
     let repo = discover::linked(&path)
         .ok_or_else(|| conflict(format!("{} is not a linked worktree of a repository", path.display())))?;
     Ok(Target { path, repo })

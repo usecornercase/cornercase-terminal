@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::agents::Known;
 use crate::error::Error;
 use crate::log;
-use crate::os::fs::{DirBuilderExt, set_mode};
+use crate::os::fs::{DirBuilderExt, canonicalize, set_mode};
 
 pub(crate) mod links;
 pub(crate) mod login;
@@ -66,7 +66,7 @@ pub(crate) fn add(root: &Path, kind: Known, name: &str, default: Option<&Path>) 
         Err(e) => return Err(failed("create", &dir, &e)),
     }
     let made = private(&dir)
-        .and_then(|()| dir.canonicalize())
+        .and_then(|()| canonicalize(&dir))
         .and_then(|dir| private_folder(&home.config(&dir)).map(|()| dir));
     let dir = match made {
         Ok(dir) => dir,
@@ -209,8 +209,7 @@ fn resolve(root: &Path, provider: &str, name: &str) -> Result<Account, &'static 
     if !valid(name) {
         return Err("not a valid name");
     }
-    let home = path(root, kind, name)
-        .canonicalize()
+    let home = canonicalize(path(root, kind, name))
         .ok()
         .filter(|home| home.is_dir() && home.to_str().is_some())
         .ok_or("its folder is missing")?;

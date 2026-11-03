@@ -20,6 +20,7 @@ use crate::flows::{self, Flow, builtin};
 use crate::git;
 use crate::git::worktree;
 use crate::log;
+use crate::os::fs::canonical;
 use crate::paths;
 use crate::project::Hierarchy;
 
@@ -255,7 +256,7 @@ impl App {
 
     fn open_in_new_worktree(&mut self, landing: Landing, path: PathBuf, starting: Starting) -> Result<RunInfo, String> {
         let Landing { p, area, fresh } = landing;
-        let path = path.canonicalize().unwrap_or(path);
+        let path = canonical(path);
         let created = self.projects.find_workspace(p, |w| w.path == path).is_none();
         let at = self.worktree_workspace(p, path.clone());
         let opened = self.open_run(at, starting, area, true);

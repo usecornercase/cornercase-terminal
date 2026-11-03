@@ -8,6 +8,7 @@ use crate::changes::{Mode, Scope};
 use crate::flows::run::{RoleWorktree, Run};
 use crate::flows::{Flow, folder};
 use crate::issues::People;
+use crate::os::fs::simplified;
 use crate::project::group::GroupEntry;
 use crate::project::split::Node;
 use crate::project::{Hierarchy, Project, Tab, Workspace};
@@ -373,6 +374,32 @@ impl State {
         let projects = self.projects.into_iter().enumerate().map(|(i, p)| ProjectState { collapsed: i != active, ..p });
         Self { version: VERSION, projects: projects.collect(), ..self }
     }
+
+    fn plain_paths(self) -> Self {
+        let projects = self.projects.into_iter().map(ProjectState::plain_paths).collect();
+        Self { projects, ..self }
+    }
+}
+
+impl ProjectState {
+    fn plain_paths(self) -> Self {
+        let workspaces = self.workspaces.into_iter().map(WorkspaceState::plain_paths).collect();
+        Self { path: simplified(self.path), workspaces, ..self }
+    }
+}
+
+impl WorkspaceState {
+    fn plain_paths(self) -> Self {
+        let trees = self.role_worktrees.into_iter().map(|tree| RoleWorktree { path: simplified(tree.path), ..tree });
+        let closed = self.closed.map(|closed| ClosedState { tabs: plain_cwds(closed.tabs), ..closed });
+        let tabs = plain_cwds(self.tabs);
+        Self { path: simplified(self.path), tabs, role_worktrees: trees.collect(), closed, ..self }
+    }
+}
+
+fn plain_cwds(tabs: Vec<TabState>) -> Vec<TabState> {
+    let plain = |pane: PaneState| PaneState { cwd: pane.cwd.map(simplified), ..pane };
+    tabs.into_iter().map(|tab| TabState { panes: tab.panes.into_iter().map(plain).collect(), ..tab }).collect()
 }
 
 #[derive(Deserialize)]
@@ -460,11 +487,15 @@ impl From<V1State> for V2State {
 
 pub(crate) fn load(path: &Path) -> Option<State> {
     let text = std::fs::read_to_string(path).ok()?;
-    match serde_json::from_str::<Versioned>(&text).ok()?.version {
-        VERSION => serde_json::from_str(&text).ok(),
-        3 | 4 => serde_json::from_str::<State>(&text).ok().map(State::folded),
-        2 => serde_json::from_str::<V2State>(&text).ok().map(|v2| State::from(v2).folded()),
-        1 => serde_json::from_str::<V1State>(&text).ok().map(|v1| State::from(V2State::from(v1)).folded()),
+    parsed(&text).map(State::plain_paths)
+}
+
+fn parsed(text: &str) -> Option<State> {
+    match serde_json::from_str::<Versioned>(text).ok()?.version {
+        VERSION => serde_json::from_str(text).ok(),
+        3 | 4 => serde_json::from_str::<State>(text).ok().map(State::folded),
+        2 => serde_json::from_str::<V2State>(text).ok().map(|v2| State::from(v2).folded()),
+        1 => serde_json::from_str::<V1State>(text).ok().map(|v1| State::from(V2State::from(v1)).folded()),
         _ => None,
     }
 }

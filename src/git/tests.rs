@@ -47,7 +47,8 @@ mod linked_worktrees {
         git(repo.path(), &["worktree", "add", "--quiet", "-b", "b", &b_path.display().to_string()]);
         git(repo.path(), &["worktree", "add", "--quiet", "-b", "a", &a_path.display().to_string()]);
 
-        let mut expected = vec![a_path.canonicalize().expect("a"), b_path.canonicalize().expect("b")];
+        let canonical = |path: &Path| crate::os::fs::canonicalize(path).expect("canonical");
+        let mut expected = vec![canonical(&a_path), canonical(&b_path)];
         expected.sort();
         assert_eq!(linked_worktrees(repo.path()), expected);
     }
@@ -335,10 +336,9 @@ mod on_windows {
         git(repo.path(), &["worktree", "add", "--quiet", "-b", "feat", &path.display().to_string()]);
         let gitdir = std::fs::read_to_string(repo.path().join(".git/worktrees/año/gitdir")).expect("gitdir");
         assert!(gitdir.starts_with(&format!("{}:/", &path.display().to_string()[..1])), "{gitdir}");
-        let canonical = path.canonicalize().expect("canonical");
 
-        assert_eq!(linked_worktrees(&verbatim(repo.path())), std::slice::from_ref(&canonical));
-        assert_eq!(checkout_of(&verbatim(repo.path()), "feat"), Some(canonical));
+        assert_eq!(linked_worktrees(&verbatim(repo.path())), std::slice::from_ref(&path));
+        assert_eq!(checkout_of(&verbatim(repo.path()), "feat"), Some(path.clone()));
         assert_eq!(branch(&verbatim(&path)).as_deref(), Some("feat"));
         let objects = objects_dir(&verbatim(&path)).and_then(|dir| dir.canonicalize().ok());
         assert_eq!(objects, repo.path().join(".git").join("objects").canonicalize().ok());

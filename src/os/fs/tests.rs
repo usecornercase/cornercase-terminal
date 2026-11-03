@@ -198,3 +198,58 @@ mod writing {
         fs::write(&path, "{\"a\":1}").expect("still ours to write");
     }
 }
+
+mod canonical_paths {
+    use super::*;
+
+    fn inner(dir: &TempDir) -> PathBuf {
+        let inner = dir.path().join("inner");
+        fs::create_dir(&inner).expect("a folder");
+        inner
+    }
+
+    #[test]
+    fn a_folder_reached_the_long_way_is_canonical() {
+        let dir = TempDir::new();
+        let inner = inner(&dir);
+        let roundabout = inner.join("..").join("inner");
+        assert_eq!(canonicalize(&roundabout).expect("canonical"), inner);
+        assert_eq!(canonical(&roundabout), inner);
+    }
+
+    #[test]
+    fn a_missing_folder_is_kept_as_given() {
+        let dir = TempDir::new();
+        let missing = dir.path().join("missing");
+        assert_eq!(canonicalize(&missing).expect_err("missing").kind(), io::ErrorKind::NotFound);
+        assert_eq!(canonical(&missing), missing);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_is_what_std_makes_of_it() {
+        let dir = TempDir::new();
+        let link = dir.path().join("link");
+        link_to(inner(&dir), &link).expect("a link");
+        assert_eq!(canonicalize(&link).expect("canonical"), fs::canonicalize(&link).expect("std"));
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn a_folder_comes_back_without_the_verbatim_prefix() {
+        let dir = TempDir::new();
+        let inner = inner(&dir);
+        assert!(fs::canonicalize(&inner).expect("std").to_string_lossy().starts_with(r"\\?\"));
+        assert!(!inner.to_string_lossy().starts_with(r"\\?\"));
+        assert_eq!(canonicalize(&inner).expect("canonical"), inner);
+        assert_eq!(canonicalize(crate::test_util::verbatim(&inner)).expect("canonical"), inner);
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn a_missing_verbatim_folder_is_kept_without_the_prefix() {
+        let dir = TempDir::new();
+        let missing = dir.path().join("missing");
+        assert_eq!(canonical(crate::test_util::verbatim(&missing)), missing);
+    }
+}

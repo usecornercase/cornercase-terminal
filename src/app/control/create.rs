@@ -14,6 +14,7 @@ use crate::control::contract::Refusal;
 use crate::control::{self, Done, Ids, Item};
 use crate::error;
 use crate::git;
+use crate::os::fs::{canonical, canonicalize};
 use crate::project::split::Dir;
 use crate::project::{Hierarchy, WorkspaceAt};
 
@@ -50,7 +51,7 @@ const NO_AGENT: &str = "say which agent to start, such as `cornercase start clau
 impl App {
     pub(super) fn open_request(&mut self, asker: Asker, open: &control::Open, area: Option<Rect>) -> Handled {
         let wanted = config::expand_home(&open.path.to_string_lossy(), self.home.as_deref());
-        let path = wanted.canonicalize().map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
+        let path = canonicalize(&wanted).map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
         if !path.is_dir() {
             return Err(format!("`{}` is not a folder", path.display()).into());
         }
@@ -298,8 +299,7 @@ impl App {
     }
 
     fn worktree_place(&mut self, project: u64, result: error::Result<PathBuf>) -> Result<WorkspaceAt, String> {
-        let path = result.map_err(|e| e.to_string())?;
-        let path = path.canonicalize().unwrap_or(path);
+        let path = canonical(result.map_err(|e| e.to_string())?);
         let p = self.projects.project_index(project).ok_or_else(|| format!("project {project} closed"))?;
         Ok(self.worktree_workspace(p, path))
     }

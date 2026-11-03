@@ -10,8 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::os::ffi;
-use crate::os::fs::set_mode;
+use crate::os::fs::{canonicalize, set_mode};
 use crate::os::process::{Pid, Signal, kill_process};
 
 pub(crate) const SHORTCUT_MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
@@ -74,7 +73,7 @@ impl TempDir {
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("cornercase-test-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("create temp dir");
-        Self(ffi::plain(&dir.canonicalize().expect("canonicalize temp dir")).into_owned())
+        Self(canonicalize(&dir).expect("canonicalize temp dir"))
     }
 
     pub(crate) fn path(&self) -> &Path {

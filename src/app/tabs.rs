@@ -10,6 +10,7 @@ use crate::control;
 use crate::error::Result;
 use crate::flows::folder;
 use crate::log;
+use crate::os::fs::canonical;
 use crate::paths;
 use crate::project::split::Dir;
 use crate::project::{Hierarchy, Project, Tab, TabAt, Workspace, WorkspaceAt};
@@ -160,7 +161,7 @@ impl App {
     }
 
     pub(super) fn open_project(&mut self, dir: PathBuf, area: Rect) -> Result<()> {
-        let path = dir.canonicalize().unwrap_or(dir);
+        let path = canonical(dir);
         self.active = match self.projects.iter().position(|p| p.path == path) {
             Some(i) => i,
             None => self.add_project(path, area)?,

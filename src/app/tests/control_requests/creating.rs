@@ -184,3 +184,16 @@ fn start_with_a_mode_the_agent_lacks_opens_nothing() {
     assert!(refused.starts_with("claude has no mode `yolo`; its modes are `accept edits`"), "{refused}");
     assert_eq!(app.projects[0].workspaces[0].tabs.len(), tabs);
 }
+
+#[cfg(not(unix))]
+#[test]
+fn open_stores_a_verbatim_folder_without_the_prefix() {
+    let dir = TempDir::new();
+    let (mut app, _rx) = new_app_with_shell("cmd.exe", no_config());
+    let open = Command::Open(wire::Open { path: crate::test_util::verbatim(dir.path()), focus: false });
+
+    let opened = done(now(&mut app, None, open));
+
+    assert_eq!(opened.ids.project, Some(app.projects[0].id));
+    assert_eq!(app.projects[0].path, dir.path());
+}

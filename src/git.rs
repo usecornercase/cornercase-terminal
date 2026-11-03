@@ -5,6 +5,7 @@ pub(crate) mod worktree;
 use std::path::{Path, PathBuf};
 
 use crate::os::ffi;
+use crate::os::fs::canonical;
 
 const SHORT_SHA_LEN: usize = 7;
 
@@ -141,7 +142,7 @@ pub(crate) fn registered_worktrees(repo: &Path) -> std::io::Result<Vec<PathBuf>>
             ffi::join(&entry.path(), gitdir.trim()).parent().map(Path::to_path_buf)
         })
         .filter(|path| path.is_dir())
-        .map(|path| path.canonicalize().unwrap_or(path))
+        .map(canonical)
         .collect();
     worktrees.sort();
     Ok(worktrees)

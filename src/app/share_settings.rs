@@ -5,6 +5,7 @@ use crate::config::{self, ProjectSettings};
 use crate::control::config::SetupExported;
 use crate::git;
 use crate::log;
+use crate::os::fs::canonical;
 use crate::settings::Status;
 use crate::settings::share::preview::{Here, OpenRepository};
 use crate::settings::share::{self, Repository, Shared};
@@ -29,8 +30,7 @@ impl App {
         let home = self.home.as_deref();
         let mut found = Vec::new();
         for (key, settings) in &self.config.projects {
-            let folder = config::expand_home(key, home);
-            let folder = folder.canonicalize().unwrap_or(folder);
+            let folder = canonical(config::expand_home(key, home));
             left_out.extend(share_or_name(&mut found, folder, settings, home));
         }
         found.into_iter().map(|(_, repository)| repository).collect()

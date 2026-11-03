@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
 use crate::http::{self, Service};
-use crate::os::fs::{set_mode, writable};
+use crate::os::fs::{canonicalize, set_mode, writable};
 use crate::text::hex;
 
 use crate::version::newer;
@@ -84,7 +84,7 @@ pub(crate) struct Updates {
 
 impl Updates {
     pub(crate) fn from_env() -> Self {
-        let exe = std::env::current_exe().and_then(fs::canonicalize).ok();
+        let exe = std::env::current_exe().and_then(canonicalize).ok();
         Self {
             enabled: !cfg!(debug_assertions),
             url: std::env::var(LATEST_ENV).unwrap_or_else(|_| DEFAULT_LATEST.into()),
