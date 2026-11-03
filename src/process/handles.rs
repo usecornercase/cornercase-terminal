@@ -7,10 +7,13 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 
+use crate::log;
+
 #[cfg(windows)]
 pub(crate) use imp::open_files;
 
-const NAME_WITHIN: Duration = Duration::from_millis(100);
+#[cfg(windows)]
+const NAME_WITHIN: Duration = Duration::from_secs(1);
 const MOST_STUCK: usize = 16;
 const WORD: usize = size_of::<usize>();
 const HEADER: usize = 2 * WORD;
@@ -18,6 +21,7 @@ const TYPE_INDEX: usize = 3 * WORD + 4;
 const ENTRY: usize = 3 * WORD + 16;
 
 static STUCK: Mutex<Vec<(i32, usize)>> = Mutex::new(Vec::new());
+static FULL: AtomicBool = AtomicBool::new(false);
 
 type Ask = Arc<dyn Fn(usize) -> Option<PathBuf> + Send + Sync>;
 
@@ -49,25 +53,36 @@ fn type_of(snapshot: &[u8], handle: usize) -> Option<u32> {
     entries(snapshot).find(|(value, _)| *value == handle).map(|(_, index)| index)
 }
 
-fn names(pid: i32, handles: Vec<usize>, ask: &Ask) -> Vec<PathBuf> {
+fn names(pid: i32, handles: Vec<usize>, ask: &Ask, within: Duration) -> Vec<PathBuf> {
     let mut left: Vec<usize> = {
         let stuck = STUCK.lock();
         handles.into_iter().filter(|handle| !stuck.contains(&(pid, *handle))).collect()
     };
     let mut found = Vec::new();
-    while !left.is_empty() && STUCK.lock().len() < MOST_STUCK {
-        let Some(answered) = batch(pid, &left, ask, &mut found) else { break };
+    while !left.is_empty() && room() {
+        let Some(answered) = batch(pid, &left, ask, within, &mut found) else { break };
         left = left.split_off(answered.saturating_add(1).min(left.len()));
     }
     found
 }
 
-fn batch(pid: i32, handles: &[usize], ask: &Ask, found: &mut Vec<PathBuf>) -> Option<usize> {
+fn room() -> bool {
+    let stuck = STUCK.lock().len();
+    if stuck < MOST_STUCK {
+        return true;
+    }
+    if !FULL.swap(true, Ordering::Relaxed) {
+        log::warning!("process", "open files are not named, too many names wait", stuck = stuck);
+    }
+    false
+}
+
+fn batch(pid: i32, handles: &[usize], ask: &Ask, within: Duration, found: &mut Vec<PathBuf>) -> Option<usize> {
     let progress = Arc::new(Progress::default());
     let answers = start(pid, handles.to_vec(), Arc::clone(ask), Arc::clone(&progress))?;
     let mut answered = 0;
     loop {
-        match answers.recv_timeout(NAME_WITHIN) {
+        match answers.recv_timeout(within) {
             Ok(path) => {
                 found.extend(path);
                 answered += 1;
@@ -130,7 +145,7 @@ mod imp {
     use windows_sys::Win32::Storage::FileSystem::{GetFinalPathNameByHandleW, VOLUME_NAME_DOS};
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, PROCESS_DUP_HANDLE, PROCESS_QUERY_INFORMATION};
 
-    use super::{Ask, names, of_type, type_of};
+    use super::{Ask, NAME_WITHIN, names, of_type, type_of};
     use crate::process::imp::{Owned, as_bytes};
 
     const SNAPSHOT_FIRST_WORDS: usize = 1 << 11;
@@ -151,7 +166,7 @@ mod imp {
         let Some(snapshot) = snapshot(process.0) else { return Vec::new() };
         let process = Process(process);
         let ask: Ask = Arc::new(move |handle| name(&process, handle));
-        names(pid, of_type(as_bytes(&snapshot), file), &ask)
+        names(pid, of_type(as_bytes(&snapshot), file), &ask, NAME_WITHIN)
     }
 
     fn file_type() -> Option<u32> {

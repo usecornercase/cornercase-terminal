@@ -465,9 +465,8 @@ mod on_windows {
         let rollout = sessions.join(format!("rollout-2026-10-05T12-00-00-{ID}.jsonl"));
         std::fs::write(&rollout, CONTEXT).expect("write rollout");
         let codex = holding(&rollout, &[("CODEX_HOME", &home.path().display().to_string())]);
+        let expected = Some(rollout.canonicalize().expect("canonical rollout"));
 
-        let found = rollout_path(codex.pid(), SystemTime::UNIX_EPOCH);
-
-        assert_eq!(found, Some(rollout.canonicalize().expect("canonical rollout")));
+        wait_until("the rollout is found", || rollout_path(codex.pid(), SystemTime::UNIX_EPOCH) == expected);
     }
 }

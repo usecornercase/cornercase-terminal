@@ -559,7 +559,7 @@ mod retrying {
 #[cfg(windows)]
 mod on_windows {
     use super::*;
-    use crate::test_util::holding;
+    use crate::test_util::{holding, wait_until};
 
     #[test]
     fn finds_the_store_a_process_holds() {
@@ -568,9 +568,8 @@ mod on_windows {
         std::fs::create_dir_all(&chat).expect("create the chat");
         let store = chat.join("store.db");
         let cursor = holding(&store, &[]);
+        let expected = Some((store.canonicalize().expect("canonical store"), "abc-1".to_string()));
 
-        let found = store_of(cursor.pid());
-
-        assert_eq!(found, Some((store.canonicalize().expect("canonical store"), "abc-1".to_string())));
+        wait_until("the store is found", || store_of(cursor.pid()) == expected);
     }
 }

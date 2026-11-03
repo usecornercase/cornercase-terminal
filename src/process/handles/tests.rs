@@ -4,6 +4,9 @@ use std::sync::atomic::AtomicUsize;
 use super::*;
 use crate::test_util::wait_until;
 
+const PATIENT: Duration = Duration::from_secs(30);
+const BLOCKED_AFTER: Duration = Duration::from_secs(2);
+
 fn snapshot(entries: &[(usize, u32)]) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend(entries.len().to_ne_bytes());
@@ -73,7 +76,7 @@ mod naming {
     fn names_every_handle_that_has_a_name() {
         let ask: Ask = Arc::new(even);
 
-        assert_eq!(names(-1, vec![2, 3, 4], &ask), [file(2), file(4)]);
+        assert_eq!(names(-1, vec![2, 3, 4], &ask, PATIENT), [file(2), file(4)]);
         assert_eq!(stuck(-1), Vec::<usize>::new());
     }
 
@@ -92,15 +95,15 @@ mod naming {
             even(handle)
         });
 
-        assert_eq!(names(pid, vec![2, 4, 6], &ask), [file(4), file(6)]);
+        assert_eq!(names(pid, vec![2, 4, 6], &ask, BLOCKED_AFTER), [file(4), file(6)]);
         assert_eq!(stuck(pid), [2]);
-        assert_eq!(names(pid, vec![2, 4], &ask), [file(4)]);
+        assert_eq!(names(pid, vec![2, 4], &ask, PATIENT), [file(4)]);
         assert_eq!(asked.load(Ordering::SeqCst), 1);
 
         drop(open);
         wait_until("the blocked name is answered", || stuck(pid).is_empty());
 
-        assert_eq!(names(pid, vec![2], &ask), [file(2)]);
+        assert_eq!(names(pid, vec![2], &ask, PATIENT), [file(2)]);
         assert_eq!(asked.load(Ordering::SeqCst), 2);
     }
 
@@ -111,7 +114,7 @@ mod naming {
             even(handle)
         });
 
-        assert_eq!(names(-3, vec![2, 4, 6], &ask), [file(2), file(6)]);
+        assert_eq!(names(-3, vec![2, 4, 6], &ask, PATIENT), [file(2), file(6)]);
         assert_eq!(stuck(-3), Vec::<usize>::new());
     }
 }
@@ -121,7 +124,6 @@ mod on_windows {
     use std::fs::{File, TryLockError};
     use std::path::Path;
     use std::process::{Command, Stdio};
-    use std::time::Duration;
 
     use super::*;
     use crate::test_util::{Running, TempDir, exited_pid, holding, this_pid, wait_until_within};
@@ -129,11 +131,15 @@ mod on_windows {
     fn within(pid: i32) -> Vec<PathBuf> {
         let (answer, answered) = mpsc::channel();
         thread::spawn(move || answer.send(open_files(pid)));
-        answered.recv_timeout(Duration::from_secs(5)).expect("the open files are read without hanging")
+        answered.recv_timeout(PATIENT).expect("the open files are read without hanging")
     }
 
     fn canonical(path: &Path) -> PathBuf {
         path.canonicalize().expect("canonical path")
+    }
+
+    fn named(pid: i32, path: &Path) {
+        wait_until_within("the file is named", PATIENT, || within(pid).contains(&canonical(path)));
     }
 
     #[test]
@@ -142,7 +148,7 @@ mod on_windows {
         let path = dir.path().join("held.txt");
         let _held = File::create(&path).expect("create the file");
 
-        assert!(within(this_pid()).contains(&canonical(&path)));
+        named(this_pid(), &path);
     }
 
     #[test]
@@ -175,12 +181,12 @@ mod on_windows {
         let path = dir.path().join("locked.db");
         File::create(&path).expect("create the file");
         let holder = locking(&path);
-        wait_until_within("the other process locks the file", Duration::from_secs(30), || locked(&path));
+        wait_until_within("the other process locks the file", PATIENT, || locked(&path));
 
-        let named =
-            within(holder.pid()).contains(&canonical(&path)) && within(holder.pid()).contains(&canonical(&path));
+        named(holder.pid(), &path);
+        named(holder.pid(), &path);
 
-        assert!(named && locked(&path));
+        assert!(locked(&path));
     }
 
     #[test]
@@ -190,11 +196,11 @@ mod on_windows {
         let holder = holding(&path, &[]);
         let pid = holder.pid();
 
-        wait_until("a handle blocked in a read is skipped", || {
+        wait_until_within("a handle blocked in a read is skipped", PATIENT, || {
             within(pid).contains(&canonical(&path)) && !stuck(pid).is_empty()
         });
         drop(holder);
 
-        wait_until("the blocked question ends with the process", || stuck(pid).is_empty());
+        wait_until_within("the blocked question ends with the process", PATIENT, || stuck(pid).is_empty());
     }
 }

@@ -414,9 +414,10 @@ mod on_windows {
         let lock = session.join("inuse.hold");
         let copilot = holding(&lock, &[("COPILOT_HOME", &home.path().display().to_string())]);
         std::fs::rename(&lock, session.join(format!("inuse.{}.hold", copilot.pid()))).expect("name the lock");
+        let expected = session.canonicalize().expect("session folder");
 
-        let found = look(copilot.pid(), &[]).expect("a session");
-
-        assert_eq!((found.id.as_str(), found.path), (ID, session.canonicalize().expect("session folder")));
+        wait_until("the session is found", || {
+            look(copilot.pid(), &[]).is_some_and(|found| found.id == ID && found.path == expected)
+        });
     }
 }

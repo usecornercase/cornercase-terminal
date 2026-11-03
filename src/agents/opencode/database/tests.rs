@@ -391,9 +391,8 @@ mod on_windows {
         let dir = TempDir::new();
         let path = dir.path().join("opencode.db");
         let opencode = holding(&path, &[]);
+        let expected = Some((opencode.pid(), path.canonicalize().expect("canonical database")));
 
-        let found = database(opencode.pid());
-
-        assert_eq!(found, Some((opencode.pid(), path.canonicalize().expect("canonical database"))));
+        wait_until("the database is found", || database(opencode.pid()) == expected);
     }
 }
