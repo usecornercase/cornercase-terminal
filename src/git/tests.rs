@@ -79,6 +79,21 @@ mod linked_worktrees {
     }
 
     #[test]
+    fn reads_a_relative_gitdir_from_its_own_entry() {
+        let repo = git_repo(&[]);
+        let tmp = TempDir::new();
+        let path = tmp.path().join("relative");
+        git(repo.path(), &["worktree", "add", "--quiet", "-b", "relative", &path.display().to_string()]);
+        let name = tmp.path().file_name().and_then(|name| name.to_str()).expect("a folder name");
+        let entry = repo.path().join(".git").join("worktrees").join("relative");
+        std::fs::write(entry.join("gitdir"), format!("../../../../{name}/relative/.git\n")).expect("a relative gitdir");
+
+        let registered = registered_worktrees(repo.path()).expect("the registry");
+
+        assert_eq!(registered, [path.canonicalize().expect("canonical")]);
+    }
+
+    #[test]
     fn is_empty_and_readable_without_worktrees() {
         let repo = git_repo(&[]);
         assert_eq!(registered_worktrees(repo.path()).expect("no registry is an empty one"), Vec::<PathBuf>::new());

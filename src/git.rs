@@ -136,8 +136,10 @@ pub(crate) fn registered_worktrees(repo: &Path) -> std::io::Result<Vec<PathBuf>>
     };
     let mut worktrees: Vec<PathBuf> = entries
         .flatten()
-        .filter_map(|entry| std::fs::read_to_string(entry.path().join("gitdir")).ok())
-        .filter_map(|gitdir| ffi::to_path(gitdir.trim().as_bytes()).parent().map(Path::to_path_buf))
+        .filter_map(|entry| {
+            let gitdir = std::fs::read_to_string(entry.path().join("gitdir")).ok()?;
+            ffi::join(&entry.path(), gitdir.trim()).parent().map(Path::to_path_buf)
+        })
         .filter(|path| path.is_dir())
         .map(|path| path.canonicalize().unwrap_or(path))
         .collect();
