@@ -9,7 +9,7 @@ Contributions are welcome: bug reports, ideas and pull requests. For anything bi
 
 ## Set up
 
-You need the same tools as for [building from source](../../installation/#from-source): Linux or macOS, [rustup](https://rustup.rs), [Zig 0.15.2](https://ziglang.org/download/) on your `PATH`, and `git`.
+You need the same tools as for [building from source](../../installation/#from-source): Linux, macOS or Windows ([with long paths and a short folder](../../installation/#on-windows)), [rustup](https://rustup.rs), [Zig 0.15.2](https://ziglang.org/download/) on your `PATH`, and `git`.
 
 - The Rust toolchain is pinned in `rust-toolchain.toml`, version and components (`clippy`, `rustfmt`). rustup installs it on the first build, and CI uses exactly the same one.
 - The first build of each profile clones Ghostty and builds its terminal core with Zig: about 100 seconds and 530 MB in `target/`. `GHOSTTY_SOURCE_DIR` can point at a local Ghostty checkout instead.
@@ -111,7 +111,7 @@ Every pull request that changes the app (`src/`, `Cargo.toml`, `Cargo.lock`, the
 - bump `version` in `Cargo.toml` above the last release;
 - add a `## <version>` section to `CHANGELOG.md` saying what changed, written for users: it becomes the release notes on GitHub and in the app's update dialog.
 
-Merging it to `main` publishes the release automatically: CI tags the version, builds the binaries for Linux and macOS, and publishes the GitHub Release, the install script's installer and the Homebrew formula. Running cornercase then offers the update within a day.
+Merging it to `main` publishes the release automatically: CI tags the version, builds the binaries for Linux, macOS and Windows, and publishes the GitHub Release, the installers behind the install script and the PowerShell line, and the Homebrew formula. Running cornercase then offers the update within a day.
 
 ## This website
 

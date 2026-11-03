@@ -25,10 +25,22 @@ cornercase is young. These are the gaps you may run into today.
 | **Restarting an agent on another account** | [`account restart`](../../guides/accounts/#restart-open-agents-on-another-account) moves Claude Code's and Codex's conversation into the other account's folder as hard links (one file in both folders), but not Claude Code's rewind of past file edits; Gemini CLI starts a new conversation. When the two folders are on different disks the files are copied instead, so going back to the first account later fails (its copy lacks what was added since); and cornercase never writes through a symbolic link, so a `projects` or `sessions` folder that links elsewhere stops the restart with a message saying so. Codex resuming a conversation moved this way has only been tested with a stand-in for Codex, not the real one. A shell can only be restarted on another account at its prompt: stop the program in it first. Restarts waiting for an agent's turn are forgotten by `cornercase kill-server`. |
 | **Agent readiness is a guess** | cornercase decides when a shell or an agent is ready by watching its output settle. A very slow agent may get its prompt late, or not at all; see [The launch](../../guides/issues-and-agents/#the-launch). |
 
+## On Windows
+
+cornercase runs natively on Windows 11 and Windows 10 from version 1809, on x64, and has been checked on Windows 11 only. Most of what these pages describe works there too; these are the gaps known today:
+
+| Limitation | What it means for you |
+| --- | --- |
+| **No mouse for programs in a pane** | Windows' pseudo-console keeps a program's mouse mode to itself, so vim with `mouse=a`, htop, lazygit or an agent's own interface get no clicks, drags or wheel; the wheel scrolls the pane's history instead. Pasting works. ([#616](https://github.com/usecornercase/cornercase-terminal/issues/616)) |
+| **No context line for some agents** | Codex, GitHub Copilot CLI, Cursor CLI and opencode tabs show no model and context line, since Windows can't tell cornercase which of their records a process has open (a Copilot session it resumed shows one). Their status icons and notifications work. ([#618](https://github.com/usecornercase/cornercase-terminal/issues/618)) |
+| **Logging off stops the server abruptly** | Logging off or shutting down Windows ends the server without its usual clean stop, so changes since it last saved can be lost. Run `cornercase kill-server` first. ([#617](https://github.com/usecornercase/cornercase-terminal/issues/617)) |
+| **Folders show a `\\?\` prefix** | Project folders appear as `\\?\C:\…` in the window and in `cornercase status`. They work as usual. ([#613](https://github.com/usecornercase/cornercase-terminal/issues/613)) |
+| **Remote and chat apps not checked yet** | [`cornercase remote`](../../guides/remote/) and `--remote`, [opening cornercase from your phone](../../guides/phone/), and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots have not been tried on Windows. ([#603](https://github.com/usecornercase/cornercase-terminal/issues/603)) |
+| **x64 only** | There is no native Arm build; Windows on Arm runs the x64 one under emulation. |
+
 ## On purpose
 
 | Choice | Why |
 | --- | --- |
-| **Linux and macOS only** | cornercase relies on Unix pseudo-terminals, Unix sockets and each system's process information. |
 | **No keyboard shortcuts unless you ask** | Every key belongs to the program in the active pane until you choose a [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), and then only that key is taken. See the [FAQ](../faq/#why-is-everything-a-mouse-click). |
 | **No nesting** | Running `cornercase` inside one of its own panes is refused, because the inner one would fight the outer one for the mouse and the screen. The [commands for scripts and agents](../../guides/scripts-and-agents/) work there, and so does [`cornercase remote`](../../guides/remote/), which shows another machine's server. |

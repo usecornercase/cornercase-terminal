@@ -13,7 +13,7 @@ The rules for every change are in [AGENTS.md](AGENTS.md), and the design and the
 
 ## Setup
 
-You need Linux or macOS (with the Xcode Command Line Tools), [rustup](https://rustup.rs) (it installs the pinned Rust version by itself), `git` and [Zig 0.15.2](https://ziglang.org/download/) on your `PATH` (exactly this version). The first build fetches Ghostty's sources and takes a couple of minutes.
+You need Linux, macOS (with the Xcode Command Line Tools) or Windows (with the Visual Studio Build Tools' C++ workload and [long paths in git](https://usecornercase.dev/docs/installation/#on-windows)), [rustup](https://rustup.rs) (it installs the pinned Rust version by itself), `git` and [Zig 0.15.2](https://ziglang.org/download/) on your `PATH` (exactly this version). The first build fetches Ghostty's sources and takes a couple of minutes.
 
 ```sh
 cargo run                  # build and attach

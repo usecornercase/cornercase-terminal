@@ -3,7 +3,7 @@ import type { Demo, Page } from './en';
 export const page: Page = {
   title: 'cornercase · un multiplexor de terminal con todo incluido',
   description:
-    'Un multiplexor de terminal con todo incluido: proyectos y worktrees de git, agentes de programación, issues, diffs en vivo, archivos, flows y acceso remoto, sin nada que configurar. Gratis y de código abierto, para Linux y macOS.',
+    'Un multiplexor de terminal con todo incluido: proyectos y worktrees de git, agentes de programación, issues, diffs en vivo, archivos, flows y acceso remoto, sin nada que configurar. Gratis y de código abierto, para Linux, macOS y Windows.',
   skip: 'Saltar al contenido',
   home: 'cornercase, inicio',
   nav: {
@@ -25,7 +25,7 @@ export const page: Page = {
   hero: {
     title: ['Un multiplexor de terminal', 'con todo incluido.'],
     pitch: 'Proyectos, worktrees, agentes de programación, issues, diffs en vivo y acceso remoto, listos en cuanto lo instalas. Nada que configurar.',
-    strip: 'Gratis y de código abierto, para Linux y macOS.',
+    strip: 'Gratis y de código abierto, para Linux, macOS y Windows.',
   },
   demo: {
     label:

@@ -1,7 +1,7 @@
 export const page = {
   title: 'cornercase · a terminal multiplexer, batteries included',
   description:
-    'A terminal multiplexer, batteries included: projects and git worktrees, coding agents, issues, live diffs, files, flows and remote access, with nothing to configure. Free and open source, for Linux and macOS.',
+    'A terminal multiplexer, batteries included: projects and git worktrees, coding agents, issues, live diffs, files, flows and remote access, with nothing to configure. Free and open source, for Linux, macOS and Windows.',
   skip: 'Skip to content',
   home: 'cornercase, home',
   nav: {
@@ -23,7 +23,7 @@ export const page = {
   hero: {
     title: ['A terminal multiplexer,', 'batteries included.'],
     pitch: 'Projects, worktrees, coding agents, issues, live diffs and remote access, ready the moment you install it. Nothing to configure.',
-    strip: 'Free and open source, for Linux and macOS.',
+    strip: 'Free and open source, for Linux, macOS and Windows.',
   },
   demo: {
     label:

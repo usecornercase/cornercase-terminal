@@ -107,7 +107,7 @@ Astro + Starlight, deployed to GitHub Pages by `.github/workflows/pages.yml` (Pa
 - Shells do not survive the server: after `kill-server` or a reboot, panes come back as new shells (every known agent but opencode resumes its conversation in them).
 - Host colours are read once; a theme switch is not seen.
 - Inner programs never get key releases.
-- Runs on Linux and macOS only.
+- On Windows (x64 only), some features do not work yet: `design/windows.md` and the website's Known limitations list them.
 
 ## Instruction files
 
