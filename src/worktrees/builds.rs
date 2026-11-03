@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{Error, Result};
 use crate::git::worktree::{check, git};
 use crate::log;
+use crate::os::ffi;
 use crate::os::fs::MetadataExt;
 
 use super::Kind;
@@ -63,7 +64,7 @@ pub(crate) fn listed(path: &Path, names: &[String]) -> Result<Vec<PathBuf>> {
     let mut found = Vec::new();
     for record in status.split(|byte| *byte == 0).map(String::from_utf8_lossy) {
         let Some(entry) = record.strip_prefix("! ").and_then(|entry| entry.strip_suffix('/')) else { continue };
-        let relative = PathBuf::from(entry);
+        let relative = ffi::to_path(entry.as_bytes());
         let on_list = relative.file_name().is_some_and(|name| names.iter().any(|n| name == n.as_str()));
         let real = std::fs::symlink_metadata(path.join(&relative))
             .is_ok_and(|meta| meta.is_dir() && device.is_none_or(|device| meta.dev() == device));
