@@ -113,6 +113,7 @@ fn counts(row: &Row) -> (usize, usize) {
     (scan.changed, scan.unpushed)
 }
 
+#[cfg(unix)]
 fn builds_of(row: &Row) -> u64 {
     let Some(Ok(size)) = &row.size else { panic!("{:?} was not measured", row.found.path) };
     size.builds_bytes()
@@ -126,6 +127,7 @@ fn fill_scans_counts_measures_and_sorts_like_the_dialog() {
 
     assert_eq!((filled[0].found.kind, counts(&filled[0]), filled[0].size.is_none()), (Kind::Prunable, (0, 1), true));
     assert_eq!(counts(of(&filled, "dirty")).0, 1);
+    #[cfg(unix)]
     assert!(builds_of(of(&filled, "clean")) >= 100_000);
     assert_eq!(List::new(filled).pending(), 0);
 }

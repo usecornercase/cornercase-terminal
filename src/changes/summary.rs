@@ -8,6 +8,7 @@ use super::diff::{self, Diff, File, Fold, Status};
 use super::git::{self, Loaded, Request};
 use super::porcelain::{Porcelain, path_prefix};
 use crate::error::Result;
+use crate::os::ffi;
 
 fn counted(raw: &[u8], statuses: &Statuses) -> Vec<File> {
     let mut records = raw.split(|b| *b == 0);
@@ -110,7 +111,7 @@ fn digest_of(dir: &Path, statuses: &Statuses, parts: impl Hash) -> u64 {
     let mut tracked: Vec<_> = statuses.keys().collect();
     tracked.sort();
     for path in tracked {
-        (path, git::stamp(&dir.join(path))).hash(&mut hasher);
+        (path, git::stamp(&ffi::join(dir, path))).hash(&mut hasher);
     }
     hasher.finish()
 }
