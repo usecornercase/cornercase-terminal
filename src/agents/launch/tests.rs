@@ -21,6 +21,10 @@ struct World {
 }
 
 fn step(launch: &mut Launch, now: Instant, world: &World) -> Step {
+    step_refusing(launch, now, world, &|_| None)
+}
+
+fn step_refusing(launch: &mut Launch, now: Instant, world: &World, refusal: &dyn Fn(&str) -> Option<String>) -> Step {
     let screen = world.screen.clone();
     let mut read = move || screen.clone();
     let trust = |s: &str| s.contains("trust");
@@ -31,6 +35,7 @@ fn step(launch: &mut Launch, now: Instant, world: &World) -> Step {
         screen: &mut read,
         trust_prompt: &trust,
         trust: world.trust,
+        refusal,
     };
     launch.step(now, &mut seen)
 }
@@ -61,6 +66,23 @@ fn waits_for_the_shell_prompt_before_typing_the_agent() {
     let mut launch = Launch::new(1, spec(false), t0);
     launch.output(t0);
     assert_eq!(step(&mut launch, t0 + 100 * MS, &shell()), Step::Wait);
+}
+
+#[test]
+fn a_refused_line_is_never_typed() {
+    let t0 = Instant::now();
+    let mut launch = Launch::new(1, spec(false), t0);
+    let refusal = |line: &str| line.contains("plan").then(|| format!("refused {line}"));
+    let refused = step_refusing(&mut launch, t0 + SHELL_LATEST, &shell(), &refusal);
+    assert_eq!(refused, Step::Refuse("refused claude --permission-mode plan".into()));
+}
+
+#[test]
+fn a_plain_command_is_not_checked() {
+    let t0 = Instant::now();
+    let mut launch = Launch::command(1, "npm run dev".into(), t0);
+    let refused = step_refusing(&mut launch, t0 + SHELL_LATEST, &shell(), &|_| Some("refused".into()));
+    assert_eq!(refused, Step::Done(b"npm run dev\r".to_vec()));
 }
 
 #[test]

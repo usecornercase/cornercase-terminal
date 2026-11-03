@@ -92,6 +92,35 @@ mod for_windows {
     }
 
     #[test]
+    fn powershell_runs_the_ps1_shim_before_the_cmd_in_a_folder() {
+        let dir = npm_folder();
+        let found = powershell_finds("claude", Some(&path_with(&dir)), None);
+        assert_eq!(found, Some(dir.path().join("claude.ps1")));
+    }
+
+    #[test]
+    fn powershell_runs_the_first_folder_that_has_the_program() {
+        let (batch, script) = (TempDir::new(), TempDir::new());
+        std::fs::write(batch.path().join("claude.cmd"), SHIM).expect("write the cmd shim");
+        std::fs::write(script.path().join("claude.ps1"), "").expect("write the ps1 shim");
+        let path = std::env::join_paths([batch.path(), script.path()]).expect("a path");
+        assert_eq!(powershell_finds("claude", Some(&path), None), Some(batch.path().join("claude.cmd")));
+        assert_eq!(powershell_finds("codex", Some(&path), None), None);
+    }
+
+    #[test]
+    fn a_cmd_shim_alone_refuses_a_word_cmd_reads_and_a_ps1_beside_it_lets_it_through() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("claude.cmd"), SHIM).expect("write the cmd shim");
+        let path = dir.path().as_os_str().to_owned();
+        let runs = |program: &str| powershell_finds(program, Some(&path), None);
+        let line = r"claude --add-dir 'C:\Users\me\R&D'";
+        assert!(crate::agents::batch_refusal(line, runs).is_some_and(|refused| refused.contains("claude.cmd")));
+        std::fs::write(dir.path().join("claude.ps1"), "").expect("write the ps1 shim");
+        assert_eq!(crate::agents::batch_refusal(line, runs), None);
+    }
+
+    #[test]
     fn a_program_that_is_nowhere_keeps_its_name() {
         let dir = npm_folder();
         assert_eq!(startable("codex", Some(&path_with(&dir)), &extensions(None)), OsString::from("codex"));

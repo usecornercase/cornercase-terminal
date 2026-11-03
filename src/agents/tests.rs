@@ -438,6 +438,57 @@ mod arguments {
     }
 }
 
+mod batch_files {
+    use super::*;
+
+    fn refusal(words: &[&str], runs: &str) -> Option<String> {
+        let runs = PathBuf::from(runs);
+        batch_refusal(&powershell_line(strings(words)), move |_| Some(runs.clone()))
+    }
+
+    #[rstest]
+    #[case::an_ampersand(r"C:\Users\me\R&D", '&')]
+    #[case::a_pipe("a|b", '|')]
+    #[case::a_redirection("a<b", '<')]
+    #[case::another_redirection("a>b", '>')]
+    #[case::cmds_escape("a^b", '^')]
+    #[case::a_variable("%PATH%", '%')]
+    #[case::a_delayed_variable("!x!", '!')]
+    #[case::a_double_quote(r#"{"a":1}"#, '"')]
+    fn a_word_cmd_reads_is_refused_for_a_cmd_shim(#[case] word: &str, #[case] special: char) {
+        let refused = refusal(&["claude", "--add-dir", word], r"C:\npm\claude.cmd").expect("refused");
+        assert!(refused.contains(&format!("`{special}`")) && refused.contains(r"C:\npm\claude.cmd"), "{refused}");
+    }
+
+    #[rstest]
+    #[case::the_ps1_shim(r"C:\npm\claude.ps1")]
+    #[case::a_program(r"C:\Users\me\.local\bin\claude.exe")]
+    fn the_same_word_is_quoted_and_typed_for_anything_else(#[case] runs: &str) {
+        let words = ["claude", "--add-dir", r"C:\Users\me\R&D"];
+        assert_eq!(powershell_line(strings(&words)), r"claude --add-dir 'C:\Users\me\R&D'");
+        assert_eq!(refusal(&words, runs), None);
+    }
+
+    #[test]
+    fn plain_words_go_to_a_cmd_shim() {
+        assert_eq!(refusal(&["claude", "--permission-mode", "plan", r"..\docs"], r"C:\npm\claude.CMD"), None);
+    }
+
+    #[test]
+    fn a_batch_file_named_as_the_program_counts_when_it_is_not_found() {
+        let line = powershell_line(strings(&[r"C:\Program Files\x\claude.bat", "50%"]));
+        let refused = batch_refusal(&line, |_| None).expect("refused");
+        assert!(refused.contains(r"`C:\Program Files\x\claude.bat`") && refused.contains("`%`"), "{refused}");
+    }
+
+    #[test]
+    fn the_program_is_read_back_from_the_typed_line() {
+        let line = powershell_line(strings(&[r"C:\R&D\Sergio’s\claude.cmd", "--resume", "a1"]));
+        let refused = batch_refusal(&line, |program| Some(PathBuf::from(program))).expect("refused");
+        assert!(refused.contains(r"`C:\R&D\Sergio’s\claude.cmd`") && refused.contains("`&`"), "{refused}");
+    }
+}
+
 mod resuming {
     use super::*;
 

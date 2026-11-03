@@ -20,7 +20,7 @@ pub(crate) mod vibe;
 
 pub use known::Known;
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -45,6 +45,8 @@ const TRUST_LINES: usize = 15;
 const POWERSHELL_BARE: &str = r"-_./\+=";
 const POWERSHELL_START: &str = r"-_./\";
 const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
+const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
+const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
     ("droid", "droid"),
@@ -339,6 +341,38 @@ fn powershell_quoted(word: &str) -> String {
     }
     quoted.push('\'');
     quoted
+}
+
+pub(crate) fn batch_refusal(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Option<String> {
+    let (program, rest) = typed_program(line)?;
+    let target = runs(&program).unwrap_or_else(|| PathBuf::from(&program));
+    let batch = target
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| BATCH_EXTENSIONS.iter().any(|batch| extension.eq_ignore_ascii_case(batch)));
+    let special = program.chars().chain(rest.chars()).find(|c| BATCH_SPECIAL.contains(c)).filter(|_| batch)?;
+    Some(format!(
+        "not started: `{}` is a batch file, which runs through cmd.exe, and cmd.exe would read the `{special}` in \
+         the line as its own, so a .cmd launcher cannot take it safely; install the agent as an .exe or keep its .ps1",
+        target.display()
+    ))
+}
+
+fn typed_program(line: &str) -> Option<(String, &str)> {
+    let Some(quoted) = line.strip_prefix("& '") else {
+        let (program, rest) = line.split_once(' ').unwrap_or((line, ""));
+        return Some((program.to_string(), rest));
+    };
+    let mut program = String::new();
+    let mut chars = quoted.char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        let quote = POWERSHELL_QUOTES.contains(&c);
+        if quote && chars.next_if(|(_, next)| *next == c).is_none() {
+            return Some((program, &quoted[at + c.len_utf8()..]));
+        }
+        program.push(c);
+    }
+    None
 }
 
 pub(crate) fn join_args(args: &[String]) -> String {

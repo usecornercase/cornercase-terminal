@@ -5,6 +5,7 @@ use std::process::Command;
 use crate::os::fs::PermissionsExt;
 
 const RUNNABLE: [&str; 4] = [".com", ".exe", ".bat", ".cmd"];
+const SCRIPT: &str = ".ps1";
 
 pub(crate) fn extensions(pathext: Option<&str>) -> Vec<String> {
     let listed = pathext.unwrap_or_default().split(';').map(|extension| extension.trim().to_lowercase());
@@ -30,6 +31,15 @@ pub(crate) fn locate(program: &str) -> Option<PathBuf> {
 
 pub(crate) fn command(program: &str) -> Command {
     Command::new(startable(program, std::env::var_os("PATH").as_deref(), &own_extensions()))
+}
+
+pub(crate) fn powershell_runs(program: &str) -> Option<PathBuf> {
+    powershell_finds(program, std::env::var_os("PATH").as_deref(), std::env::var("PATHEXT").ok().as_deref())
+}
+
+fn powershell_finds(program: &str, path: Option<&OsStr>, pathext: Option<&str>) -> Option<PathBuf> {
+    let extensions: Vec<String> = std::iter::once(SCRIPT.to_string()).chain(extensions(pathext)).collect();
+    find(true, program, path, &extensions)
 }
 
 fn find(windows: bool, program: &str, path: Option<&OsStr>, extensions: &[String]) -> Option<PathBuf> {

@@ -4,12 +4,15 @@ use ratatui::layout::Rect;
 
 use super::App;
 use super::event::Start;
+use super::toast::Toast;
 use crate::agents;
 use crate::agents::launch::{self, Launch, Step, Trust};
 use crate::error::Result;
 use crate::log::{self};
+use crate::process::program;
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::term::Term;
+use crate::ui;
 
 pub(super) const LAUNCH_EVERY: Duration = Duration::from_millis(100);
 
@@ -82,8 +85,10 @@ impl App {
         let regex = self.agents.launches.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
-        let round = Round { now, trust, asks: &asks };
-        let mut parked = Vec::new();
+        let refusal =
+            |line: &str| cfg!(windows).then(|| agents::batch_refusal(line, program::powershell_runs)).flatten();
+        let round = Round { now, trust, asks: &asks, refusal: &refusal };
+        let mut out = Outcomes::default();
         let mut finished = Vec::new();
         let starting: Vec<u64> = self.agents.launches.list.iter().map(|launch| launch.term).collect();
         for (i, launch) in self.agents.launches.list.iter_mut().enumerate() {
@@ -94,16 +99,20 @@ impl App {
                 finished.push((i, false));
                 continue;
             };
-            if let Some(started) = drive(launch, term, &round, &mut parked) {
+            if let Some(started) = drive(launch, term, &round, &mut out) {
                 finished.push((i, started));
             }
+        }
+        for (pane, refusal) in out.refused {
+            self.fail_pane_requests(pane, &refusal);
+            self.messages.toast = Some(Toast::new(refusal, ui::ToastIcon::Bug));
         }
         for (i, started) in finished.into_iter().rev() {
             if let Some(key) = self.agents.launches.list.remove(i).key {
                 self.clients.requests.launched(key, started);
             }
         }
-        for pane in parked {
+        for pane in out.parked {
             self.member_waits(pane);
         }
     }
@@ -132,17 +141,27 @@ struct Round<'a> {
     now: Instant,
     trust: Trust,
     asks: &'a dyn Fn(&str) -> bool,
+    refusal: &'a dyn Fn(&str) -> Option<String>,
 }
 
-fn drive(launch: &mut Launch, term: &mut Term, round: &Round, parked: &mut Vec<u64>) -> Option<bool> {
+#[derive(Default)]
+struct Outcomes {
+    parked: Vec<u64>,
+    refused: Vec<(u64, String)>,
+}
+
+fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes) -> Option<bool> {
     let before = launch.stage();
     let step = step_launch(launch, term, round);
     let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
     if stage == "consent" && before != stage && !launch.told {
         launch.told = true;
-        parked.push(pane);
+        out.parked.push(pane);
     }
     log_step(&step, (pane, kind), (before, stage));
+    if let Step::Refuse(refusal) = &step {
+        out.refused.push((pane, refusal.clone()));
+    }
     apply_step(step, launch, term, round.now)
 }
 
@@ -159,6 +178,7 @@ fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
         screen: &mut screen,
         trust_prompt: round.asks,
         trust: launch.trust.unwrap_or(round.trust),
+        refusal: round.refusal,
     };
     launch.step(round.now, &mut seen)
 }
@@ -173,6 +193,7 @@ fn log_step(step: &Step, (pane, kind): (u64, &str), (before, stage): (&str, &str
             log::info!("launch", message, pane = pane, kind = kind, from = before, to = stage, bytes = bytes);
         }
         Step::Abandon => log::warning!("launch", "the agent did not start", pane = pane, kind = kind),
+        Step::Refuse(_) => log::warning!("launch", "refused for a batch file", pane = pane, kind = kind),
     }
 }
 
@@ -187,7 +208,7 @@ fn apply_step(step: Step, launch: &Launch, term: &mut Term, now: Instant) -> Opt
             }
             Some(true)
         }
-        Step::Abandon => Some(false),
+        Step::Abandon | Step::Refuse(_) => Some(false),
     }
 }
 
