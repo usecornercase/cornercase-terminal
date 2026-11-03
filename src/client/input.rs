@@ -344,19 +344,21 @@ mod imp {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod imp {
     use std::io;
     use std::time::Duration;
 
-    use crate::os::console::AsFd;
+    use windows_sys::Win32::Foundation::{ERROR_BROKEN_PIPE, ERROR_HANDLE_EOF, ERROR_INVALID_HANDLE};
 
-    pub(in crate::client) fn readable(_input: &impl AsFd, _wait: Duration) -> io::Result<bool> {
-        Err(io::ErrorKind::Unsupported.into())
+    use crate::os::console::{self, AsFd};
+
+    pub(in crate::client) fn readable(_input: &impl AsFd, wait: Duration) -> io::Result<bool> {
+        console::wait_input(wait)
     }
 
-    pub(super) fn gone(_code: i32) -> bool {
-        false
+    pub(super) fn gone(code: i32) -> bool {
+        matches!(code.cast_unsigned(), ERROR_INVALID_HANDLE | ERROR_BROKEN_PIPE | ERROR_HANDLE_EOF)
     }
 }
 

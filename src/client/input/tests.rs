@@ -356,6 +356,9 @@ fn an_input_failure_is_retried_with_a_pause(#[case] in_read: bool, #[case] panic
 #[case::eof(None)]
 #[case::hangup(Some(io::Error::from(io::ErrorKind::UnexpectedEof)))]
 #[cfg_attr(unix, case::gone(Some(io::Error::from_raw_os_error(rustix::io::Errno::IO.raw_os_error()))))]
+#[cfg_attr(windows, case::gone(Some(io::Error::from_raw_os_error(
+    windows_sys::Win32::Foundation::ERROR_INVALID_HANDLE.cast_signed()
+))))]
 fn the_end_of_input_stops_the_reader(#[case] error: Option<io::Error>) {
     let mut error = error;
     run(
