@@ -192,13 +192,12 @@ mod serving {
     }
 }
 
-#[cfg(unix)]
 mod streams {
-    use std::os::unix::net::UnixStream;
     use std::thread;
 
     use super::*;
     use crate::control;
+    use crate::os::socket::UnixStream;
     use crate::protocol::{self, ClientMessage, ServerMessage};
 
     fn fake_server(mut stream: UnixStream) -> thread::JoinHandle<Vec<String>> {

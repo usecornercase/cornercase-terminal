@@ -1,9 +1,7 @@
-#![cfg(unix)]
-
-use std::os::unix::net::UnixStream;
 use std::thread;
 
 use super::*;
+use crate::os::socket::UnixStream;
 
 fn old_server(answer: ServerMessage) -> Result<Value> {
     let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
@@ -186,6 +184,7 @@ mod the_view {
     }
 }
 
+#[cfg(unix)]
 mod a_follow {
     use std::fs::OpenOptions;
     use std::os::fd::{AsFd, OwnedFd};
@@ -360,6 +359,7 @@ mod a_follow {
     }
 }
 
+#[cfg(unix)]
 mod an_input {
     use std::io::{self, Write};
     use std::net::Shutdown;
@@ -490,11 +490,12 @@ mod one_link {
 }
 
 mod a_shared_link {
-    use std::os::fd::OwnedFd;
+    #[cfg(unix)]
     use std::time::Duration;
 
     use super::*;
 
+    #[cfg(unix)]
     const WAIT: Duration = Duration::from_secs(10);
 
     type Seen = thread::JoinHandle<Vec<String>>;
@@ -503,7 +504,7 @@ mod a_shared_link {
         control::Command::Status(control::Status {})
     }
 
-    fn sharing(features: &[&str], watch: Option<OwnedFd>) -> Seen {
+    fn sharing(features: &[&str], watch: Option<console::OwnedFd>) -> Seen {
         let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
         let mut descriptor = control::contract::describe("boot", &[]);
         descriptor.features.retain(|feature| features.contains(&feature.as_str()));
@@ -626,6 +627,7 @@ mod a_shared_link {
         unshare();
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_ask_ends_when_its_reader_leaves_and_the_server_reads_the_end() {
         let (reader, out) = io::pipe().expect("a pipe");
