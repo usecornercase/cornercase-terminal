@@ -20,8 +20,10 @@ mod junctions {
         let dir = TempDir::new();
         let skills = dir.path().join("skills");
         fs::create_dir(&skills).expect("a folder");
-        let plain = skills.to_str().and_then(|path| path.strip_prefix(r"\\?\")).expect("a verbatim path");
-        assert_eq!(on_a_local_disk(&skills).expect("a local disk"), PathBuf::from(plain));
+        let text = skills.to_str().expect("a UTF-8 path");
+        let plain = text.strip_prefix(r"\\?\").unwrap_or(text);
+        let verbatim = PathBuf::from(format!(r"\\?\{plain}"));
+        assert_eq!(on_a_local_disk(&verbatim).expect("a local disk"), PathBuf::from(plain));
     }
 
     #[test]
