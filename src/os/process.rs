@@ -30,14 +30,12 @@ mod imp {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod imp {
     use std::io;
     use std::process::{Command, ExitStatus};
 
-    #[cfg(windows)]
     use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, STILL_ACTIVE};
-    #[cfg(windows)]
     use windows_sys::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,7 +108,6 @@ mod imp {
         Err(unsupported())
     }
 
-    #[cfg(windows)]
     pub(crate) fn alive(pid: i32) -> bool {
         let Some(pid) = u32::try_from(pid).ok().filter(|pid| *pid != 0) else { return false };
         let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
@@ -121,11 +118,6 @@ mod imp {
         let read = unsafe { GetExitCodeProcess(handle, &raw mut code) } != 0;
         unsafe { CloseHandle(handle) };
         read && code == STILL_ACTIVE.cast_unsigned()
-    }
-
-    #[cfg(not(windows))]
-    pub(crate) fn alive(_pid: i32) -> bool {
-        false
     }
 
     pub(crate) fn on_stop_signal(_stop: impl FnOnce() + Send + 'static) -> io::Result<()> {

@@ -422,6 +422,83 @@ mod environment_block {
 
         assert_eq!(environment_block(&block), [("PATH".into(), "C:\\bin;D:\\x".into()), ("A".into(), "b=c".into())]);
     }
+
+    #[test]
+    fn a_block_cut_inside_a_variable_drops_that_variable() {
+        let block: Vec<u16> = "A=1\0B=2\0PATH=C:\\b".encode_utf16().collect();
+
+        assert_eq!(environment_block(&block), [("A".into(), "1".into()), ("B".into(), "2".into())]);
+    }
+
+    #[test]
+    fn a_block_cut_right_after_a_variable_keeps_it() {
+        let block: Vec<u16> = "A=1\0B=2\0".encode_utf16().collect();
+
+        assert_eq!(environment_block(&block), [("A".into(), "1".into()), ("B".into(), "2".into())]);
+    }
+}
+
+mod filetime {
+    use super::*;
+
+    #[test]
+    fn a_start_is_microseconds_since_the_unix_epoch() {
+        assert_eq!(filetime_micros(FILETIME_AT_UNIX_EPOCH + 25), Some(2));
+        assert_eq!(filetime_micros(134_381_276_700_310_730), Some(1_793_654_070_031_073));
+        assert_eq!(filetime_micros(FILETIME_AT_UNIX_EPOCH - 1), None);
+    }
+
+    #[test]
+    fn ten_million_ticks_are_one_second() {
+        assert_eq!(filetime_duration(10_000_000), Duration::from_secs(1));
+        assert_eq!(filetime_duration(1), Duration::from_nanos(100));
+    }
+}
+
+mod snapshot_checks {
+    use rstest::rstest;
+
+    use super::*;
+
+    const TAKEN: u64 = 1_000;
+
+    #[rstest]
+    #[case::born_after_its_parent_and_before_the_snapshot(Some(500), Some(400), true)]
+    #[case::born_with_the_snapshot(Some(TAKEN), Some(400), true)]
+    #[case::a_parent_whose_start_is_unknown(Some(500), None, true)]
+    #[case::older_than_its_parent_so_a_reused_parent_pid(Some(300), Some(400), false)]
+    #[case::born_after_the_snapshot_so_a_reused_pid(Some(TAKEN + 1), Some(400), false)]
+    #[case::gone_since_the_snapshot(None, Some(400), false)]
+    fn a_child_entry_counts_only_for_a_process_born_between_its_parent_and_the_snapshot(
+        #[case] born: Option<u64>,
+        #[case] parent_born: Option<u64>,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(born_in_snapshot(born, parent_born, TAKEN), expected);
+    }
+
+    #[rstest]
+    #[case::born_before_the_snapshot(Some(500), true)]
+    #[case::born_after_the_snapshot_so_a_reused_pid(Some(TAKEN + 1), false)]
+    #[case::alive_but_its_start_unreadable(None, true)]
+    fn an_entry_answers_for_a_pid_only_if_it_was_born_before_the_snapshot(
+        #[case] born: Option<u64>,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(may_be_listed(born, TAKEN), expected);
+    }
+
+    #[rstest]
+    #[case::born_first(Some(400), Some(500), true)]
+    #[case::born_later_so_a_reused_pid(Some(600), Some(500), false)]
+    #[case::unknown(None, Some(500), true)]
+    fn a_parent_counts_only_if_it_was_born_first(
+        #[case] parent: Option<u64>,
+        #[case] child: Option<u64>,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(born_before(parent, child), expected);
+    }
 }
 
 mod program_name {
@@ -455,8 +532,14 @@ mod program_name {
 #[cfg(windows)]
 mod on_windows {
     use std::process::Stdio;
+    use std::ptr;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use windows_sys::Win32::System::Memory::{
+        MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE, VirtualAlloc, VirtualFree,
+    };
 
     use super::*;
     use crate::test_util::{Running, TempDir, wait_until};
@@ -504,17 +587,21 @@ mod on_windows {
     fn a_tree_reaches_the_child_of_a_child() {
         let line = r"%SystemRoot%\System32\ping.exe -n 30 127.0.0.1";
         let cmd = Running::spawn(Command::new("cmd.exe").args(["/d", "/c", line]).stdout(Stdio::null()));
-        wait_until("cmd starts ping", || !children(cmd.pid()).is_empty());
-        let ping = children(cmd.pid())[0];
+        let find_ping = || {
+            children(cmd.pid())
+                .into_iter()
+                .find(|child| name(*child).is_some_and(|name| name.eq_ignore_ascii_case("ping")))
+        };
+        wait_until("cmd starts ping", || find_ping().is_some());
+        let ping = find_ping().expect("ping");
 
-        let found = (name(ping), parent(ping), args(cmd.pid()), descendants(cmd.pid()), tree(this_pid()));
+        let found = (parent(ping), args(cmd.pid()), descendants(cmd.pid()), tree(this_pid()));
         let _ = Command::new("taskkill").args(["/f", "/t", "/pid", &cmd.pid().to_string()]).output();
 
-        assert!(found.0.is_some_and(|name| name.eq_ignore_ascii_case("ping")));
-        assert_eq!(found.1, Some(cmd.pid()));
-        assert_eq!(found.2[1..], ["/d", "/c", line]);
-        assert_eq!(found.3, [ping]);
-        assert!(found.4.contains(&(ping, cmd.pid())));
+        assert_eq!(found.0, Some(cmd.pid()));
+        assert_eq!(found.1[1..], ["/d", "/c", line]);
+        assert!(found.2.contains(&ping), "{:?}", found.2);
+        assert!(found.3.contains(&(ping, cmd.pid())));
     }
 
     #[test]
@@ -554,13 +641,23 @@ mod on_windows {
     }
 
     #[test]
-    fn footprint_counts_memory_this_process_commits() {
+    fn footprint_counts_memory_committed_but_never_touched() {
         let before = footprint(this_pid()).expect("before");
-        let memory = std::hint::black_box(vec![1_u8; SIZE]);
+        let memory = unsafe { VirtualAlloc(ptr::null(), SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) };
+        assert!(!memory.is_null(), "commit {SIZE} bytes");
         let after = footprint(this_pid()).expect("after");
-        drop(memory);
+        unsafe { VirtualFree(memory, 0, MEM_RELEASE) };
 
         assert!(after.saturating_sub(before) > HALF, "{before} -> {after}");
+    }
+
+    #[test]
+    fn a_start_stamp_is_microseconds_since_the_unix_epoch() {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("after 1970");
+        let ours = start_stamp(this_pid()).map(Duration::from_micros).expect("a stamp");
+
+        let age = now.checked_sub(ours).expect("started before now");
+        assert!(age < Duration::from_hours(24), "{ours:?} against {now:?}");
     }
 
     #[test]
@@ -585,5 +682,6 @@ mod on_windows {
         let cores = thread::available_parallelism().map_or(1, usize::from);
         let most = wall.as_secs_f64() * f64::from(u32::try_from(cores).unwrap_or(64)) * 2.0 + 0.1;
         assert!(used.as_secs_f64() <= most, "{used:?} in {wall:?} on {cores} cores");
+        assert!(used.as_secs_f64() >= wall.as_secs_f64() * 0.25, "{used:?} in {wall:?}");
     }
 }

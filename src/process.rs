@@ -250,9 +250,50 @@ fn backslashes(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, arg: &mut S
 
 #[cfg(any(windows, test))]
 fn environment_block(units: &[u16]) -> Vec<(String, String)> {
-    let end = units.windows(2).position(|pair| pair == [0, 0]).unwrap_or(units.len());
-    let text = String::from_utf16_lossy(&units[..end]);
-    vars(text.split('\0').take_while(|entry| !entry.is_empty()).map(str::as_bytes))
+    let end = units.windows(2).position(|pair| pair == [0, 0]);
+    let text = String::from_utf16_lossy(&units[..end.unwrap_or(units.len())]);
+    let mut entries: Vec<&str> = text.split('\0').take_while(|entry| !entry.is_empty()).collect();
+    if end.is_none() && !text.ends_with('\0') {
+        entries.pop();
+    }
+    vars(entries.into_iter().map(str::as_bytes))
+}
+
+#[cfg(any(windows, test))]
+const FILETIME_AT_UNIX_EPOCH: u64 = 116_444_736_000_000_000;
+
+#[cfg(any(windows, test))]
+const FILETIME_TICKS_PER_MICRO: u64 = 10;
+
+#[cfg(any(windows, test))]
+const NANOS_PER_FILETIME_TICK: u64 = 100;
+
+#[cfg(any(windows, test))]
+fn filetime_micros(ticks: u64) -> Option<u64> {
+    Some(ticks.checked_sub(FILETIME_AT_UNIX_EPOCH)? / FILETIME_TICKS_PER_MICRO)
+}
+
+#[cfg(any(windows, test))]
+fn filetime_duration(ticks: u64) -> Duration {
+    Duration::from_nanos(ticks.saturating_mul(NANOS_PER_FILETIME_TICK))
+}
+
+#[cfg(any(windows, test))]
+fn born_in_snapshot(born: Option<u64>, parent_born: Option<u64>, taken: u64) -> bool {
+    born.is_some_and(|born| born <= taken && parent_born.is_none_or(|parent| parent <= born))
+}
+
+#[cfg(any(windows, test))]
+fn may_be_listed(born: Option<u64>, taken: u64) -> bool {
+    born.is_none_or(|born| born <= taken)
+}
+
+#[cfg(any(windows, test))]
+fn born_before(parent: Option<u64>, child: Option<u64>) -> bool {
+    match (parent, child) {
+        (Some(parent), Some(child)) => parent <= child,
+        _ => true,
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -517,6 +558,7 @@ mod imp {
     use std::os::windows::ffi::OsStringExt;
     use std::ptr;
     use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     use parking_lot::Mutex;
     use windows_sys::Wdk::System::Threading::{NtQueryInformationProcess, ProcessBasicInformation};
@@ -532,16 +574,18 @@ mod imp {
         PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ, QueryFullProcessImageNameW, RTL_USER_PROCESS_PARAMETERS,
     };
 
-    use super::{Duration, Instant, PathBuf, alive, environment_block, program_name, split_command_line};
+    use super::{
+        Duration, Instant, PathBuf, alive, born_before, born_in_snapshot, environment_block, filetime_duration,
+        filetime_micros, may_be_listed, program_name, split_command_line,
+    };
 
     pub(crate) use super::unread::{open_files, peer_uid};
 
     const ENVIRONMENT_LIMIT: usize = 1 << 20;
-    const NANOS_PER_TICK: u64 = 100;
     const IMAGE_PATH_LIMIT: usize = 1024;
     const SNAPSHOT_FOR: Duration = Duration::from_millis(50);
 
-    static SNAPSHOT: Mutex<Option<(Instant, Arc<[Entry]>)>> = Mutex::new(None);
+    static SNAPSHOT: Mutex<Option<(Instant, Arc<Snapshot>)>> = Mutex::new(None);
 
     struct Owned(HANDLE);
 
@@ -594,6 +638,12 @@ mod imp {
         name: String,
     }
 
+    #[derive(Default)]
+    struct Snapshot {
+        taken: u64,
+        entries: Vec<Entry>,
+    }
+
     impl Entry {
         fn of(entry: &PROCESSENTRY32W) -> Self {
             let file = &entry.szExeFile;
@@ -615,51 +665,47 @@ mod imp {
         unsafe { Process32NextW(snapshot.0, entry) != 0 }
     }
 
-    fn entries() -> Arc<[Entry]> {
+    fn snapshot() -> Arc<Snapshot> {
         let mut last = SNAPSHOT.lock();
-        if let Some((at, entries)) = last.as_ref()
+        if let Some((at, snapshot)) = last.as_ref()
             && at.elapsed() < SNAPSHOT_FOR
         {
-            return Arc::clone(entries);
+            return Arc::clone(snapshot);
         }
-        let entries: Arc<[Entry]> = snapshot().into();
-        *last = Some((Instant::now(), Arc::clone(&entries)));
-        entries
+        let Some(taken) = take() else { return Arc::default() };
+        let taken = Arc::new(taken);
+        *last = Some((Instant::now(), Arc::clone(&taken)));
+        taken
     }
 
-    fn snapshot() -> Vec<Entry> {
-        let Some(snapshot) = Owned::snapshot() else { return Vec::new() };
+    fn take() -> Option<Snapshot> {
+        let handle = Owned::snapshot()?;
+        let taken = u64::try_from(SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_micros()).ok()?;
         let mut entry = PROCESSENTRY32W { dwSize: size_u32::<PROCESSENTRY32W>(), ..PROCESSENTRY32W::default() };
-        let mut found = Vec::new();
-        let mut more = first(&snapshot, &mut entry);
+        let mut entries = Vec::new();
+        let mut more = first(&handle, &mut entry);
         while more {
-            found.push(Entry::of(&entry));
-            more = next(&snapshot, &mut entry);
+            entries.push(Entry::of(&entry));
+            more = next(&handle, &mut entry);
         }
-        found
-    }
-
-    fn not_older(pid: i32, than: Option<u64>) -> bool {
-        match (start_stamp(pid), than) {
-            (Some(born), Some(other)) => born >= other,
-            _ => true,
-        }
+        (!entries.is_empty()).then_some(Snapshot { taken, entries })
     }
 
     pub(crate) fn all() -> Vec<i32> {
-        entries().iter().map(|entry| entry.pid).filter(|pid| *pid > 0).collect()
+        snapshot().entries.iter().map(|entry| entry.pid).filter(|pid| *pid > 0).collect()
     }
 
     pub(crate) fn children(pid: i32) -> Vec<i32> {
         if !alive(pid) {
             return Vec::new();
         }
-        let born = start_stamp(pid);
-        let mut pids: Vec<i32> = entries()
+        let (born, snapshot) = (start_stamp(pid), snapshot());
+        let mut pids: Vec<i32> = snapshot
+            .entries
             .iter()
             .filter(|entry| entry.parent == pid && entry.pid != pid && entry.pid > 0)
             .map(|entry| entry.pid)
-            .filter(|child| not_older(*child, born))
+            .filter(|child| born_in_snapshot(start_stamp(*child), born, snapshot.taken))
             .collect();
         pids.sort_unstable();
         pids
@@ -669,12 +715,14 @@ mod imp {
         if !alive(pid) {
             return None;
         }
-        entries().iter().find(|entry| entry.pid == pid).cloned()
+        let snapshot = snapshot();
+        let entry = snapshot.entries.iter().find(|entry| entry.pid == pid)?;
+        may_be_listed(start_stamp(pid), snapshot.taken).then(|| entry.clone())
     }
 
     pub(crate) fn parent(pid: i32) -> Option<i32> {
         let up = listed(pid)?.parent;
-        (alive(up) && not_older(pid, start_stamp(up))).then_some(up)
+        (alive(up) && born_before(start_stamp(up), start_stamp(pid))).then_some(up)
     }
 
     pub(crate) fn name(pid: i32) -> Option<String> {
@@ -782,11 +830,11 @@ mod imp {
     }
 
     pub(crate) fn cpu_time(pid: i32) -> Option<Duration> {
-        times(pid).map(|(_, busy)| Duration::from_nanos(busy.saturating_mul(NANOS_PER_TICK)))
+        times(pid).map(|(_, busy)| filetime_duration(busy))
     }
 
     pub(crate) fn start_stamp(pid: i32) -> Option<u64> {
-        times(pid).map(|(created, _)| created)
+        times(pid).and_then(|(created, _)| filetime_micros(created))
     }
 
     pub(crate) fn started(_pid: i32) -> Option<u64> {
