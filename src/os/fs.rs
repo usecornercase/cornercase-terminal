@@ -1,9 +1,15 @@
 use std::fs::{File, Metadata};
 use std::io;
 
+#[cfg(windows)]
+pub(crate) use imp::process_uid;
+#[cfg(test)]
+#[cfg(windows)]
+pub(crate) use imp::share_with_everyone;
 pub(crate) use imp::{
-    DirBuilderExt, MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, PermissionsExt, gid, link_to, links_to,
-    set_file_mode, set_mode, stat, stat_file, truncate, try_lock, uid, writable,
+    DirBuilderExt, MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, PermissionsExt, create_private_dir_all, gid,
+    link_to, links_to, make_private, owner_and_mode, set_file_mode, set_mode, stat, stat_file, truncate, try_lock, uid,
+    writable,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +63,18 @@ mod imp {
 
     pub(crate) fn set_file_mode(file: &File, mode: u32) -> io::Result<()> {
         file.set_permissions(Permissions::from_mode(mode))
+    }
+
+    pub(crate) fn create_private_dir_all(dir: &Path) -> io::Result<()> {
+        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)
+    }
+
+    pub(crate) fn owner_and_mode(_dir: &Path, meta: &Metadata) -> (u32, u32) {
+        (meta.uid(), meta.mode())
+    }
+
+    pub(crate) fn make_private(dir: &Path) -> io::Result<()> {
+        set_mode(dir, 0o700)
     }
 
     pub(crate) fn truncate(file: &File, _path: &Path) -> io::Result<()> {
