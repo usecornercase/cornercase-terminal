@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.255
+## 0.12.259
 
 - **On Windows, cornercase now reads processes**: their trees, names, arguments, folders, memory and CPU, another step towards running there natively. It still says that it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.256
+
+- **The Windows port can now open File Explorer, an editor or the default app, play the notification sounds and keep the machine awake while agents work**, ready for when cornercase runs there. On Windows it still only says that it does not run there yet. Nothing changes on Linux and macOS.
 
 ## 0.12.254
 
