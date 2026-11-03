@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **On Windows, cornercase can now see which files a program holds open**, the next step of the native port (it still says it does not run on Windows yet). That is how it finds the records of Codex, Copilot, Cursor and opencode for a tab's model and context line, so those agents can show it there as they do on Linux and macOS. A file whose name Windows cannot give at once (a pipe or console another thread is reading) is skipped rather than holding the rest up. Nothing changes on Linux and macOS.
 
+## 0.12.266
+
+- **On Windows, the Ports dialog and `cornercase ports` list the TCP ports a workspace's programs listen on**, another step towards running cornercase natively there. It still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
 ## 0.12.265
 
 - **Another step towards running natively on Windows: panes there now run their shell in ConPTY**, Windows' own pseudo console. A new pane starts your `SHELL` when Windows can start it, else PowerShell 7 (`pwsh`), else Windows PowerShell, else `cmd`, with the folder, size and variables cornercase gives it; the tab's name follows the program you run, and a shell that exits closes its pane. cornercase still says it does not run on Windows yet, since the window and the server are not ported. Nothing changes on Linux and macOS.
