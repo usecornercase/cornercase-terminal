@@ -311,6 +311,7 @@ pub(crate) struct There {
     pub(crate) agent: AgentNote,
     pub(crate) command: Option<String>,
     pub(crate) tracker: Option<String>,
+    pub(crate) checking: bool,
 }
 
 #[derive(Debug)]

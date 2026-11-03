@@ -161,6 +161,11 @@ fn reading_with(reply: Reply, projects: Vec<ProjectInfo>) -> Reading {
     Reading { remote, _dir: dir }
 }
 
+fn the_sources(event: &AppEvent) -> bool {
+    let AppEvent::Machine(MachineEvent::Relayed(relayed)) = event else { return false };
+    relayed.result().as_ref().is_ok_and(|answer| answer.get("sources").is_some())
+}
+
 fn dialog(app: &mut App, area: Rect) -> String {
     let shown = overlay_shown(app, area).area(area).expect("the dialog has an area");
     let terminal = render(app, area);
@@ -207,6 +212,14 @@ impl Reading {
         self.remote.rig.until("the machine answers the checks", |app| {
             app.accounts_there("vps") != Checked::Waiting && app.tracker_there("vps", 1, "github") != Checked::Waiting
         });
+    }
+
+    fn tracker_held(&mut self) -> AppEvent {
+        self.pick("run on…", "vps");
+        let sources = self.remote.held(the_sources);
+        self.remote.rig.until("the machine lists its accounts", |app| app.accounts_there("vps") != Checked::Waiting);
+        self.pick("account…", "home");
+        sources
     }
 
     fn sent(&self, command: &str) -> Option<Value> {
@@ -597,6 +610,22 @@ mod starting_there {
         let app = &reading.remote.rig.app;
         assert_eq!((error(app), browser(app).starting), (Some("vps has no GitHub token for web-shop"), false));
         assert_eq!(reading.sent("start"), None);
+    }
+
+    #[test]
+    fn waits_for_the_tracker_check_and_says_so_where_start_was() {
+        let mut reading = reading_with(Reply::Told(ready), vec![web_shop()]);
+        let sources = reading.tracker_held();
+
+        reading.press("start");
+
+        let app = &reading.remote.rig.app;
+        let hint = browser(app).there().map(|there| there.start_hint.clone());
+        assert_eq!((hint.as_deref(), reading.sent("start")), (Some("checking the tracker on vps…"), None));
+        reading.deliver(sources);
+        reading.press("start");
+        reading.answered();
+        assert!(reading.sent("start").is_some());
     }
 }
 

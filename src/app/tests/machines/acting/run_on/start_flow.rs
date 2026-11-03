@@ -103,7 +103,7 @@ impl Reading {
     pub(super) fn flow_from_the_issue(&mut self) {
         self.press("start a flow");
         self.remote.rig.until("the machine lists its flows and accounts", |app| {
-            start(app).there().is_some_and(|there| there.listed && there.accounted)
+            start(app).there().is_some_and(|there| there.listed && there.accounted && there.tracked)
         });
         let app = &mut self.remote.rig.app;
         send_key(app, KeyCode::Tab, KeyModifiers::NONE);
@@ -301,7 +301,8 @@ fn reads_the_flows_and_accounts_again_once_the_machine_restarted_and_keeps_the_a
     serve(&mut reading.remote.theirs, 2, control::Report { boot: "a later boot".into(), ..shop(vec![web_shop()]) });
 
     reading.remote.rig.until("the machine lists its flows and accounts again", |app| {
-        !start(app).flows.is_empty() && start(app).there().is_some_and(|there| there.listed && there.accounted)
+        !start(app).flows.is_empty()
+            && start(app).there().is_some_and(|there| there.listed && there.accounted && there.tracked)
     });
     let app = &mut reading.remote.rig.app;
     send_key(app, KeyCode::Tab, KeyModifiers::NONE);
@@ -347,6 +348,29 @@ fn reads_the_flows_again_when_the_machine_lists_the_project_under_another_id() {
         start(app).there().is_some_and(|there| there.listed && there.project == Some(3))
     });
     assert_eq!(reading.sent("flow-list"), Some(json!({ "project": 3 })));
+}
+
+#[test]
+fn waits_for_the_tracker_check_of_the_issue_before_it_runs() {
+    let mut reading = reading_with(Reply::Told(running), vec![web_shop()]);
+    reading.checked();
+    reading.pick("account…", "home");
+    reading.press("start a flow");
+    let sources = reading.remote.held(the_sources);
+    reading.remote.rig.until("the machine lists its flows and accounts", |app| {
+        start(app).there().is_some_and(|there| there.listed && there.accounted)
+    });
+
+    let app = &mut reading.remote.rig.app;
+    send_key(app, KeyCode::Tab, KeyModifiers::NONE);
+    send_key(app, KeyCode::Enter, KeyModifiers::NONE);
+
+    let app = &reading.remote.rig.app;
+    assert_eq!((start(app).notice.as_deref(), reading.sent("flow-run")), (Some("checking the tracker on vps…"), None));
+    reading.deliver(sources);
+    send_key(&mut reading.remote.rig.app, KeyCode::Enter, KeyModifiers::NONE);
+    reading.run_answered();
+    assert!(reading.sent("flow-run").is_some());
 }
 
 #[test]

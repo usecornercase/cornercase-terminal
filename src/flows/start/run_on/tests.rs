@@ -40,7 +40,16 @@ fn on_vps() -> Start {
 
 fn there(cloned: bool, listed: bool, lacking: Option<&str>) -> There {
     let place = "in its own worktree on vps, in ~/code/web-shop".into();
-    There { place, cloned, listed, accounted: true, lacking: lacking.map(str::to_string), project: Some(1), era: 0 }
+    There {
+        place,
+        cloned,
+        listed,
+        accounted: true,
+        tracked: true,
+        lacking: lacking.map(str::to_string),
+        project: Some(1),
+        era: 0,
+    }
 }
 
 fn texts(spans: Option<Vec<Span<'static>>>) -> Option<String> {

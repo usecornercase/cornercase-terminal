@@ -42,7 +42,7 @@ fn on_vps() -> Browser {
 
 fn there(cloned: bool, agent: AgentNote, tracker: Option<&str>) -> There {
     let start_hint = "in its own worktree on vps, in ~/code/shop".into();
-    There { start_hint, cloned, agent, command: None, tracker: tracker.map(str::to_string) }
+    There { start_hint, cloned, agent, command: None, tracker: tracker.map(str::to_string), checking: false }
 }
 
 mod without_machines {

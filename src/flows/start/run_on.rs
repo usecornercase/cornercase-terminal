@@ -10,11 +10,16 @@ use crate::machines::run_on::{self, RunOn, Target};
 const LOST: &str = "the machine";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts read from the machine: cloned, listed, accounted, tracked"
+)]
 pub(crate) struct There {
     pub(crate) place: String,
     pub(crate) cloned: bool,
     pub(crate) listed: bool,
     pub(crate) accounted: bool,
+    pub(crate) tracked: bool,
     pub(crate) lacking: Option<String>,
     pub(crate) project: Option<u64>,
     pub(crate) era: u64,
@@ -110,17 +115,19 @@ impl Start {
         if !there.cloned {
             return Some(Action::CloneThere);
         }
-        let (lacking, listed, accounted) = (there.lacking.clone(), there.listed, there.accounted);
+        let (lacking, listed, accounted, tracked) =
+            (there.lacking.clone(), there.listed, there.accounted, there.tracked);
         if let Some(lacking) = lacking {
             self.notice = Some(lacking);
             return Some(Action::AskAgain);
         }
-        let reading = match (listed, accounted) {
-            (false, _) => "flows",
-            (true, false) => "accounts",
-            (true, true) => return None,
+        let reading = match (listed, accounted, tracked) {
+            (false, _, _) => "reading the flows",
+            (true, false, _) => "reading the accounts",
+            (true, true, false) => "checking the tracker",
+            (true, true, true) => return None,
         };
-        self.notice = Some(format!("reading the {reading} on {name}…"));
+        self.notice = Some(format!("{reading} on {name}…"));
         Some(Action::None)
     }
 

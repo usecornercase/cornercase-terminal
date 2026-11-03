@@ -75,16 +75,15 @@ impl App {
         let listed = was.listed && was.project == id;
         let (listing, unlisted) = taken(id.filter(|_| !listed).map(|id| self.flows_there(&target.name, id)));
         let (accounts, unaccounted) = taken((!was.accounted).then(|| self.flow_accounts_there(&target.name)));
-        let tracker = start
-            .asked
-            .as_ref()
-            .zip(id)
-            .and_then(|((_, source), id)| lacking(self.tracker_there(&target.name, id, source)));
+        let asked = start.asked.as_ref().zip(id).map(|((_, source), id)| self.tracker_there(&target.name, id, source));
+        let pending = matches!(asked, Some(Checked::Waiting));
+        let tracker = asked.and_then(lacking);
         let there = There {
             place: self.where_there(target.link, start.project, true),
             cloned: id.is_some(),
             listed: listed || listing.is_some(),
             accounted: was.accounted || accounts.is_some(),
+            tracked: !pending,
             lacking: tracker.or(unlisted).or(unaccounted),
             project: id,
             era,

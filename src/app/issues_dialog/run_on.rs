@@ -70,9 +70,15 @@ impl App {
             let account = accounts.and_then(|accounts| accounts.pick(&kind)).unwrap_or_default();
             note(self.agent_there(&target.name, &kind, account))
         });
-        let tracker = id.and_then(|id| lacking(self.tracker_there(&target.name, id, issue.source.id())));
-        let start_hint = self.where_there(target.link, project, worktree);
-        Some(There { start_hint, cloned: id.is_some(), agent, command, tracker })
+        let tracker = id.map(|id| self.tracker_there(&target.name, id, issue.source.id()));
+        let checking = matches!(tracker, Some(Checked::Waiting)) && !self.still_cloning(target.link, project);
+        let start_hint = if checking {
+            checking_the_tracker(&target.name)
+        } else {
+            self.where_there(target.link, project, worktree)
+        };
+        let tracker = tracker.and_then(lacking);
+        Some(There { start_hint, cloned: id.is_some(), agent, command, tracker, checking })
     }
 
     pub(super) fn clone_there(&mut self) {
@@ -91,7 +97,7 @@ impl App {
         let Some(target) = b.machine().cloned() else { return false };
         let missing = b.there().and_then(|there| there.tracker.clone());
         let project = start.place.as_ref().map_or(b.project, |place| place.project);
-        if self.still_cloning(target.link, project) {
+        if self.still_cloning(target.link, project) || b.there().is_some_and(|there| there.checking) {
             return true;
         }
         let sent = match (missing, self.project_there(target.link, project).map(|there| there.id)) {
@@ -280,6 +286,10 @@ fn note(agent: AgentThere) -> AgentNote {
         AgentThere::SignedOut => AgentNote::SignedOut,
         AgentThere::Ready | AgentThere::Unknown => AgentNote::Ready,
     }
+}
+
+fn checking_the_tracker(name: &str) -> String {
+    format!("checking the tracker on {name}…")
 }
 
 pub(in crate::app) fn lacking(tracker: Checked<Option<String>>) -> Option<String> {
