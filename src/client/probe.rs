@@ -169,19 +169,19 @@ mod imp {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod imp {
     use std::io;
     use std::time::Duration;
 
-    use crate::os::console::AsFd;
+    use crate::os::console::{self, AsFd};
 
-    pub(super) fn read(_input: &impl AsFd, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(io::ErrorKind::Unsupported.into())
+    pub(super) fn read(_input: &impl AsFd, buf: &mut [u8]) -> io::Result<usize> {
+        console::read_input(buf)
     }
 
-    pub(super) fn readable(_input: &impl AsFd, _wait: Duration) -> bool {
-        false
+    pub(super) fn readable(_input: &impl AsFd, wait: Duration) -> bool {
+        console::wait_input(wait).unwrap_or(false)
     }
 
     pub(super) fn own_tty() -> Option<String> {
