@@ -319,6 +319,21 @@ mod a_machine_that_is_gone {
         assert_eq!(press(&mut b, KeyCode::Down), Action::None);
         assert_eq!(press(&mut b, KeyCode::Enter), Action::RunOn(None));
     }
+
+    #[test]
+    fn chooses_nothing_on_enter_or_choose_until_a_row_is_marked() {
+        let mut b = gone();
+        let pos = button(&b, "run on…");
+        click(&mut b, pos);
+
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::None);
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::None);
+        let choose = button(&b, "choose");
+        assert_eq!(click(&mut b, choose), Action::None);
+
+        assert!(b.picker.is_some());
+        assert!(b.run_on.as_ref().is_some_and(|run_on| run_on.lost.is_some()));
+    }
 }
 
 mod the_focused_issue {

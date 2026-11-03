@@ -18,8 +18,12 @@ use crate::control::issues::{SourceState, Sources};
 use crate::control::{FlowInfo, Flows};
 use crate::flows::store::{Listing, Origin, Saved};
 use crate::issues::browser::{Accounts, AgentAccounts};
-use crate::machines::run_on::{capped, clipped};
+use crate::machines::run_on::{capped, clipped_or, reason};
 use crate::machines::send::Send;
+
+const UNNAMED: &str = "the project";
+const SETTINGS: &str = "settings";
+const FAILING: &str = "failing";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Check {
@@ -68,7 +72,7 @@ pub(in crate::app) enum AgentThere {
 trait Slot {
     fn wanted(&self) -> bool;
     fn ask(&mut self);
-    fn heard(&mut self, result: Result<Value, Refusal>);
+    fn heard(&mut self, result: Result<Value, Refusal>, machine: &str);
 }
 
 impl<T: DeserializeOwned> Slot for Cached<T> {
@@ -81,10 +85,10 @@ impl<T: DeserializeOwned> Slot for Cached<T> {
         self.error = None;
     }
 
-    fn heard(&mut self, result: Result<Value, Refusal>) {
+    fn heard(&mut self, result: Result<Value, Refusal>, machine: &str) {
         self.asking = false;
         let read = result
-            .map_err(|refusal| clipped(&refusal.message))
+            .map_err(|refusal| reason(machine, &refusal.message))
             .and_then(|value| serde_json::from_value(value).map_err(|_| UNREADABLE.to_string()));
         match read {
             Ok(read) => {
@@ -157,14 +161,14 @@ impl App {
         let slot = held.checks.slot(check);
         match sent {
             Ok(_) => slot.ask(),
-            Err(refusal) => slot.heard(Err(refusal)),
+            Err(refusal) => slot.heard(Err(refusal), name),
         }
     }
 
     pub(super) fn check_heard(&mut self, checking: Checking, result: Result<Value, Refusal>) {
         let Some(held) = self.machines.by_link(checking.link) else { return };
         if held.era == checking.era && held.checks.generation == checking.generation {
-            held.checks.slot(checking.check).heard(result);
+            held.checks.slot(checking.check).heard(result, &held.name);
         }
     }
 
@@ -191,7 +195,7 @@ impl App {
         };
         let projects = held.seen.iter().flat_map(|seen| &seen.projects);
         let named = projects.filter(|there| there.id == project).map(|there| there.name.as_str()).next();
-        let there = Tracked { machine: &held.name, project: named.unwrap_or("the project"), source };
+        let there = Tracked { machine: &held.name, project: named.unwrap_or(UNNAMED), source };
         checked(held.checks.sources.get(&project), |sources| there.lacks(sources))
     }
 
@@ -281,22 +285,24 @@ struct Tracked<'a> {
 impl Tracked<'_> {
     fn lacks(&self, sources: &Sources) -> Option<String> {
         let Self { machine, project, source } = self;
-        let project = &clipped(project);
+        let project = &clipped_or(project, UNNAMED);
         let Some(found) = sources.sources.iter().find(|found| found.source == *source) else {
             return Some(format!("{machine} cannot read {source} issues"));
         };
-        let name = &clipped(&found.name);
+        let name = &clipped_or(&found.name, source);
         match found.state {
             SourceState::Connected => None,
             SourceState::Missing if found.missing.iter().any(|missing| missing == "token") => {
                 Some(format!("{machine} has no {name} token for {project}"))
             }
             SourceState::Missing => {
-                Some(format!("{machine} lacks {} for {name} in {project}", capped(found.missing.iter().cloned())))
+                let missing = capped(found.missing.iter()).unwrap_or_else(|| SETTINGS.into());
+                Some(format!("{machine} lacks {missing} for {name} in {project}"))
             }
-            SourceState::Failing => {
-                Some(format!("{name} on {machine}: {}", clipped(found.reason.as_deref().unwrap_or("failing"))))
-            }
+            SourceState::Failing => Some(format!(
+                "{name} on {machine}: {}",
+                clipped_or(found.reason.as_deref().unwrap_or_default(), FAILING)
+            )),
             SourceState::Other => Some(format!("{machine} cannot tell whether {name} works for {project}")),
         }
     }

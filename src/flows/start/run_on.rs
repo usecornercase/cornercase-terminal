@@ -4,6 +4,8 @@ use ratatui::text::Span;
 use super::{Action, Focus, Start};
 use crate::machines::run_on::{self, RunOn, Target};
 
+const LOST: &str = "the machine";
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct There {
     pub(crate) place: String,
@@ -44,8 +46,10 @@ impl Start {
     }
 
     pub(crate) fn templated(&self) -> Option<String> {
-        let target = self.machine().filter(|_| self.asked.is_some())?;
-        Some(run_on::from_template(&target.name))
+        if self.asked.is_none() || !self.elsewhere() {
+            return None;
+        }
+        Some(run_on::from_template(self.machine().map_or(LOST, |target| target.name.as_str())))
     }
 
     pub(crate) fn leave_prompt(&mut self) {

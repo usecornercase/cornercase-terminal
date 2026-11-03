@@ -29,7 +29,6 @@ pub(crate) struct RunOn {
     pub(crate) chosen: Option<usize>,
     pub(crate) blocked: Option<&'static str>,
     pub(crate) awaiting: Option<u64>,
-    pub(crate) cloning: Option<u64>,
     pub(crate) lost: Option<String>,
 }
 
@@ -41,9 +40,6 @@ impl RunOn {
     pub(crate) fn choose(&mut self, at: Option<usize>) -> bool {
         if at.is_some_and(|at| !self.can_choose(at)) {
             return false;
-        }
-        if !self.is_chosen(at) {
-            self.cloning = None;
         }
         self.chosen = at;
         self.lost = None;
@@ -63,7 +59,6 @@ impl RunOn {
         let listed = fresh.is_some();
         let mut fresh = fresh.unwrap_or_default();
         fresh.awaiting = shown.awaiting;
-        fresh.cloning = shown.cloning;
         fresh.lost.clone_from(&shown.lost);
         if let Some(target) = shown.machine() {
             fresh.chosen = fresh.targets.iter().position(|there| there.link == target.link);
@@ -121,14 +116,29 @@ pub(crate) fn clipped(text: &str) -> String {
     truncate_right(&line.map(str::trim).collect::<Vec<_>>().join(" "), TEXT)
 }
 
-pub(crate) fn capped(items: impl Iterator<Item = String>) -> String {
-    let items: Vec<String> = items.map(|item| clipped(&item)).filter(|item| !item.is_empty()).collect();
-    let more = items.len().saturating_sub(SHOWN);
-    let shown = &items[..items.len().min(SHOWN)];
-    match more {
+pub(crate) fn clipped_or(text: &str, or: &str) -> String {
+    let said = clipped(text);
+    if said.is_empty() { or.to_string() } else { said }
+}
+
+pub(crate) fn reason(machine: &str, text: &str) -> String {
+    clipped_or(text, &format!("{machine} gave no reason"))
+}
+
+pub(crate) fn capped<S: AsRef<str>>(items: impl Iterator<Item = S>) -> Option<String> {
+    let mut items = items.filter(|item| has_text(item.as_ref()));
+    let shown: Vec<String> = items.by_ref().take(SHOWN).map(|item| clipped(item.as_ref())).collect();
+    if shown.is_empty() {
+        return None;
+    }
+    Some(match items.count() {
         0 => shown.join(", "),
         more => format!("{} … and {more} more", shown.join(", ")),
-    }
+    })
+}
+
+fn has_text(text: &str) -> bool {
+    text.chars().any(|c| !c.is_control() && !c.is_whitespace())
 }
 
 #[cfg(test)]

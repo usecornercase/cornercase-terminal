@@ -127,14 +127,14 @@ mod its_lists {
     #[case::few(3, "file1, file2, file3")]
     #[case::many(5, "file1, file2, file3 … and 2 more")]
     fn show_a_few_and_count_the_rest(#[case] count: usize, #[case] said: &str) {
-        assert_eq!(capped(items(count).into_iter()), said);
+        assert_eq!(capped(items(count).into_iter()).as_deref(), Some(said));
     }
 
     #[test]
     fn cut_each_long_text() {
         let said = capped(vec!["a".repeat(500), "b".into()].into_iter());
 
-        assert_eq!(said, format!("{}…, b", "a".repeat(59)));
+        assert_eq!(said, Some(format!("{}…, b", "a".repeat(59))));
     }
 
     #[test]
@@ -143,7 +143,44 @@ mod its_lists {
         all.extend(items(4));
         let said = capped(all.into_iter());
 
-        assert_eq!(said, "file1, file2, file3 … and 1 more");
+        assert_eq!(said.as_deref(), Some("file1, file2, file3 … and 1 more"));
+    }
+
+    #[test]
+    fn say_nothing_when_every_one_is_blank() {
+        assert_eq!(capped(["", " ", "\u{1b}\t"].into_iter()), None);
+    }
+
+    struct Read<'a>(&'a std::cell::Cell<usize>, String);
+
+    impl AsRef<str> for Read<'_> {
+        fn as_ref(&self) -> &str {
+            self.0.set(self.0.get() + 1);
+            &self.1
+        }
+    }
+
+    #[test]
+    fn read_each_once_and_cut_only_the_ones_shown() {
+        let reads = std::cell::Cell::new(0);
+        let all = items(1_000).into_iter().map(|item| Read(&reads, item));
+
+        assert_eq!(capped(all).as_deref(), Some("file1, file2, file3 … and 997 more"));
+        assert_eq!(reads.get(), 1_000 + 3);
+    }
+
+    #[rstest::rstest]
+    #[case::empty("")]
+    #[case::spaces("  \n ")]
+    #[case::control("\u{1b}\u{7}")]
+    fn say_the_machine_gave_no_reason_for_a_blank_one(#[case] text: &str) {
+        assert_eq!(reason("vps", text), "vps gave no reason");
+        assert_eq!(clipped_or(text, "the project"), "the project");
+    }
+
+    #[test]
+    fn keep_a_reason_that_has_text() {
+        assert_eq!(reason("vps", " disk full\n"), "disk full");
     }
 
     #[rstest::rstest]

@@ -1,6 +1,8 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 use super::*;
+use crate::app::clone_on_machine::failure;
+use crate::error::Error;
 use crate::machines::clone_form::{BUTTONS, CloneForm, Files};
 use crate::test_util::{git, wait_until};
 
@@ -102,6 +104,16 @@ impl Reading {
 
     fn deliver(&mut self, event: AppEvent) {
         self.remote.rig.app.handle_event(event, AREA).expect("handle event");
+    }
+
+    fn lists_the_clone(&mut self) {
+        serve(&mut self.remote.theirs, 2, shop(vec![ProjectInfo { id: CLONED, ..web_shop() }]));
+        self.remote.rig.until("the machine lists the clone", |app| {
+            app.machines.held()[0]
+                .seen
+                .as_ref()
+                .is_some_and(|seen| seen.projects.iter().any(|there| there.id == CLONED))
+        });
     }
 
     fn cloned(&mut self) {
@@ -252,19 +264,80 @@ fn checks_the_clone_even_once_the_dialog_sent_something_else() {
 }
 
 #[test]
-fn leaves_alone_a_clone_dialog_opened_after_it_was_sent() {
+fn offers_no_second_clone_while_one_is_on_its_way() {
     let mut reading = not_there(cloned);
     reading.clone_dialog();
     reading.press_in_clone("skip files");
     let answer = reading.remote.held_relay();
     reading.press_in_clone("back");
+
+    reading.press("start");
+
+    assert!(browser_open(&reading.remote.rig.app), "{:?}", reading.remote.rig.app.overlay);
+    assert_eq!(error(&reading.remote.rig.app), Some("still cloning on vps…"));
+    reading.deliver(answer);
+    assert_eq!(browser(&reading.remote.rig.app).notice.as_deref(), Some("cloned on vps"));
+}
+
+#[test]
+fn reaches_the_start_flow_opened_from_the_issue_while_it_cloned() {
+    let mut reading = not_there(half_copied);
     reading.clone_dialog();
+    reading.press_in_clone("skip files");
+    let answer = reading.remote.held_relay();
+    reading.press_in_clone("back");
+    reading.lists_the_clone();
+    reading.press("start a flow");
+
+    reading.deliver(answer);
+
+    let Some(Overlay::StartFlow { start, .. }) = &reading.remote.rig.app.overlay else {
+        panic!("Start flow is not open")
+    };
+    assert_eq!(start.notice.as_deref(), Some("cloned on vps · not copied: local.toml (it is tracked there)"));
+}
+
+#[test]
+fn leaves_alone_a_dialog_whose_machine_left_while_it_cloned() {
+    let mut reading = not_there(half_copied);
+    reading.clone_dialog();
+    reading.press_in_clone("skip files");
+    let answer = reading.remote.held_relay();
+    reading.press_in_clone("back");
+    reading.remote.rig.edit(Vec::new(), Duration::from_secs(3));
+    reading.remote.rig.app.follow_issues_run_on();
 
     reading.deliver(answer);
 
     let app = &reading.remote.rig.app;
-    assert!(matches!(&app.overlay, Some(Overlay::CloneOnMachine(_))), "{:?}", app.overlay);
-    assert_eq!((form(app).cloning, &form(app).error), (false, &None));
+    assert!(browser(app).run_on.as_ref().is_some_and(|run_on| run_on.lost.is_some()));
+    assert_eq!(browser(app).notice, None);
+}
+
+#[test]
+fn says_briefly_why_a_ticked_file_could_not_be_read() {
+    let mut reading = not_there(cloned);
+    let root = reading.remote.rig.app.projects[0].path.clone();
+    let long = "settings/for/the/staging/servers/of/the/web/shop/local.toml";
+    write(&root, long, "port = 2");
+    reading.clone_dialog();
+    reading.tick("staging");
+    std::fs::remove_file(root.join(long)).expect("remove the file");
+    std::fs::create_dir(root.join(long)).expect("put a folder in its place");
+
+    reading.press_in_clone("clone");
+    reading.cloned();
+
+    let said = form(&reading.remote.rig.app).error.clone().expect("an error");
+    assert_eq!((said.chars().count(), said.ends_with('…')), (60, true), "{said}");
+    assert_eq!(reading.sent("clone"), None);
+}
+
+#[rstest]
+#[case::io(Error::Io(std::io::Error::other("secret/.env is not a regular file")), "Other")]
+#[case::git(Error::Git("fatal: not a git repository: /home/ana/web-shop".into()), "git")]
+fn logs_a_failure_to_read_the_files_by_its_kind_alone(#[case] error: Error, #[case] logged: &str) {
+    assert_eq!(failure(&error), logged);
 }
 
 #[rstest]

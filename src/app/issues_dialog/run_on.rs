@@ -181,7 +181,7 @@ impl App {
             Err(refusal) if refusal.code == Code::StaleBoot => {
                 Some(format!("{} restarted; nothing was started there", held.name))
             }
-            Err(refusal) => Some(run_on::clipped(&refusal.message)),
+            Err(refusal) => Some(run_on::reason(&held.name, &refusal.message)),
         };
         let Some(run_on) = self.dialog_run_on().filter(|run_on| run_on.awaiting == Some(key)) else { return };
         run_on.awaiting = None;
@@ -223,7 +223,7 @@ fn root_workspace(there: &ProjectInfo) -> Option<u64> {
     root.or_else(|| there.workspaces.first()).map(|workspace| workspace.id)
 }
 
-fn issue_project(b: &Browser) -> u64 {
+pub(in crate::app) fn issue_project(b: &Browser) -> u64 {
     let place = b.focused().and_then(|issue| b.place_for(issue).map(|place| place.project));
     place.unwrap_or(b.project)
 }

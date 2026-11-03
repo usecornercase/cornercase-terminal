@@ -180,6 +180,35 @@ mod the_tracker {
         assert_eq!(said, Some(format!("vps has no GitHub token for {}…", "w".repeat(59))));
     }
 
+    #[rstest]
+    #[case::nothing_missing(SourceInfo { missing: vec![" ".into(), "\u{7}".into()], ..source("plane", "Plane", SourceState::Missing) }, "vps lacks settings for Plane in web-shop")]
+    #[case::no_reason(SourceInfo { reason: Some("\n ".into()), ..source("github", "GitHub", SourceState::Failing) }, "GitHub on vps: failing")]
+    #[case::no_name(SourceInfo { missing: vec!["token".into()], ..source("plane", " \t", SourceState::Missing) }, "vps has no plane token for web-shop")]
+    fn never_leaves_a_blank_where_the_machine_said_nothing(#[case] found: SourceInfo, #[case] said: &str) {
+        let source = found.source.clone();
+
+        assert_eq!(lacks(found, &source).as_deref(), Some(said));
+    }
+
+    #[test]
+    fn names_a_project_with_a_blank_name_there_the_project() {
+        let found = SourceInfo { missing: vec!["token".into()], ..source("github", "GitHub", SourceState::Missing) };
+        let sources = Sources { sources: vec![found], ..Sources::default() };
+
+        let said = Tracked { machine: "vps", project: "\u{1b} ", source: "github" }.lacks(&sources);
+
+        assert_eq!(said.as_deref(), Some("vps has no GitHub token for the project"));
+    }
+
+    #[test]
+    fn keeps_a_blank_refusal_a_visible_error() {
+        let mut cached = Cached::<Sources>::default();
+
+        cached.heard(Err(Refusal::new(crate::control::contract::Code::Failed, " \r\n")), "vps");
+
+        assert_eq!(cached.error.as_deref(), Some("vps gave no reason"));
+    }
+
     #[test]
     fn says_a_machine_that_does_not_list_it_cannot_read_it() {
         assert_eq!(

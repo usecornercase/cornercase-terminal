@@ -89,7 +89,9 @@ impl Browser {
     }
 
     pub(super) fn choose(&mut self, index: Option<usize>) -> Action {
-        let Some(picker) = &self.picker else { return Action::None };
+        let Some(picker) = self.picker.as_ref().filter(|picker| index.is_some() || !picker.blank) else {
+            return Action::None;
+        };
         let (pick, after) = (picker.pick, picker.after);
         let choices = self.choices();
         let i = index.unwrap_or_else(|| picker.search.selected()).min(choices.len().saturating_sub(1));
@@ -140,15 +142,15 @@ impl Browser {
         let rows = room.list_rows;
         let count = self.choices().len();
         let Some(picker) = &mut self.picker else { return Action::None };
-        let blank = std::mem::take(&mut picker.blank);
         match key.code {
             KeyCode::Esc => self.picker = None,
-            KeyCode::Enter | KeyCode::Up | KeyCode::Down if blank => {}
             KeyCode::Enter => return self.choose(None),
+            KeyCode::Up | KeyCode::Down if picker.blank => picker.blank = false,
             KeyCode::Up => picker.search.move_selection(-1, count, rows),
             KeyCode::Down => picker.search.move_selection(1, count, rows),
             KeyCode::Backspace => picker.search.pop(),
             KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+                picker.blank = false;
                 picker.search.push(c);
             }
             _ => {}

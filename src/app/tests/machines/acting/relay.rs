@@ -164,21 +164,30 @@ mod a_relay {
 mod an_answer {
     use super::*;
 
+    fn asking() -> Asking {
+        Asking { machine: "vps".into(), destination: "ana@vps.lan".into(), boot: None, timeout: Duration::from_secs(1) }
+    }
+
     #[rstest]
     #[case::late("it did not answer in time")]
     #[case::unreachable("ssh: connect to host vps.lan port 22: Connection refused")]
     fn that_never_came_fails_without_the_destination(#[case] why: &str) {
-        let asking = Asking {
-            machine: "vps".into(),
-            destination: "ana@vps.lan".into(),
-            boot: None,
-            timeout: Duration::from_secs(1),
-        };
         let mut job = Job::new(Level::Info, "machines", "relay");
 
-        let heard = asking.heard(Err(why.into()), &mut job).expect_err("a failure");
+        let heard = asking().heard(Err(why.into()), &mut job).expect_err("a failure");
 
         assert_eq!((heard.code, heard.message), (Code::Failed, why.replace("vps.lan", "vps")));
+    }
+
+    #[test]
+    fn refused_there_is_logged_by_its_code_and_size_never_by_what_it_says() {
+        let said = "cannot clone https://github.com/acme/shop.git into /home/ana/code/shop";
+        let text = serde_json::to_string(&Structured::Error(Refusal::new(Code::Conflict, said))).expect("json");
+
+        let (heard, logged) = asking().read(Ok(text));
+
+        assert_eq!(heard.expect_err("a refusal").message, said);
+        assert_eq!(logged, Some(format!("refused: Conflict, {} bytes", said.len())));
     }
 }
 

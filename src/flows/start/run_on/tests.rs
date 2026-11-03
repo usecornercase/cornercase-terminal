@@ -152,6 +152,15 @@ mod from_an_issue_on_a_machine {
         s
     }
 
+    fn takes_no_typing(s: &mut Start) {
+        assert_eq!(s.hit(Hit::Prompt { line: 0, col: 0 }, ROOM), Action::None);
+        s.focus = Focus::List;
+        s.paste("more", ROOM);
+        s.key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), ROOM);
+
+        assert_eq!((s.focus, s.prompt.text().as_str()), (Focus::Branch, "Add dark mode"));
+    }
+
     #[test]
     fn says_the_machine_writes_the_prompt() {
         let s = from_an_issue();
@@ -164,12 +173,7 @@ mod from_an_issue_on_a_machine {
     fn takes_no_typing_in_the_prompt() {
         let mut s = from_an_issue();
 
-        assert_eq!(s.hit(Hit::Prompt { line: 0, col: 0 }, ROOM), Action::None);
-        s.focus = Focus::List;
-        s.paste("more", ROOM);
-        s.key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), ROOM);
-
-        assert_eq!((s.focus, s.prompt.text().as_str()), (Focus::Branch, "Add dark mode"));
+        takes_no_typing(&mut s);
     }
 
     #[test]
@@ -178,6 +182,15 @@ mod from_an_issue_on_a_machine {
         s.prompt = crate::editor::Editor::default();
 
         assert!(matches!(s.press(START), Action::Start { .. }));
+    }
+
+    #[test]
+    fn keeps_the_prompt_to_the_machine_once_the_machine_is_gone() {
+        let mut s = from_an_issue();
+        s.run_on = RunOn::kept(None, s.run_on.as_ref());
+
+        assert_eq!(s.templated().as_deref(), Some("from the machine's template (the issue's URL by default)"));
+        takes_no_typing(&mut s);
     }
 
     #[test]

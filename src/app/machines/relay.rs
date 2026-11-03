@@ -26,12 +26,28 @@ impl Asking {
     }
 
     pub(in crate::app) fn heard(&self, result: Result<String, String>, job: &mut Job) -> Result<Value, Refusal> {
-        let heard = result.map_err(|why| Refusal::new(Code::Failed, why)).and_then(|text| act::heard(&text));
-        let heard = heard.map_err(|refusal| Refusal::new(refusal.code, self.hide(&refusal.message)));
-        if let Err(refusal) = &heard {
-            job.fail(&refusal.message);
+        let (heard, failed) = self.read(result);
+        if let Some(failed) = failed {
+            job.fail(failed);
         }
         heard
+    }
+
+    pub(in crate::app) fn read(&self, result: Result<String, String>) -> (Result<Value, Refusal>, Option<String>) {
+        let text = match result {
+            Ok(text) => text,
+            Err(why) => {
+                let why = self.hide(&why);
+                return (Err(Refusal::new(Code::Failed, why.clone())), Some(why));
+            }
+        };
+        match act::heard(&text) {
+            Ok(value) => (Ok(value), None),
+            Err(refusal) => {
+                let logged = format!("refused: {:?}, {} bytes", refusal.code, refusal.message.len());
+                (Err(Refusal::new(refusal.code, self.hide(&refusal.message))), Some(logged))
+            }
+        }
     }
 }
 

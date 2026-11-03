@@ -58,6 +58,13 @@ fn rambling_start(command: &str) -> Structured {
     }
 }
 
+fn silent_start(command: &str) -> Structured {
+    match command {
+        "start" => Structured::Error(Refusal::new(Code::Failed, " \n\u{7}")),
+        command => ready(command),
+    }
+}
+
 fn rambling_tracker(command: &str) -> Structured {
     match command {
         "issue-sources" => Structured::Error(Refusal::new(
@@ -423,6 +430,7 @@ mod starting_there {
     #[case::refused(refusing, "the worktree on vps is in use")]
     #[case::restarted(restarted, "vps restarted; nothing was started there")]
     #[case::rambling(rambling_start, "the worktree is in use by the run that started on Monday mo…")]
+    #[case::silent(silent_start, "vps gave no reason")]
     fn says_why_the_machine_did_not_start_it(#[case] told: fn(&str) -> Structured, #[case] said: &str) {
         let mut reading = reading_with(Reply::Told(told), vec![web_shop()]);
         reading.checked();

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
 use super::App;
-use super::clone_on_machine::Packed;
+use super::clone_on_machine::{Packed, Pending};
 use super::control::json;
 use super::event::AppEvent;
 use super::machine_usage::Cache;
@@ -107,6 +107,7 @@ pub(super) struct Machines {
     folded: Vec<(String, PathBuf)>,
     watched: Option<stream::Watched>,
     streams: u64,
+    pub(super) clones: Vec<Pending>,
 }
 
 impl Machines {
@@ -130,6 +131,7 @@ impl Machines {
             folded: Vec::new(),
             watched: None,
             streams: 1,
+            clones: Vec::new(),
         }
     }
 
