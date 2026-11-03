@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.254
+
+- **On Windows, the cornercase server runs in the background**: it keeps running when the terminal that started it closes, stops with `kill-server`, and restarts in place. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
 ## 0.12.250
 
 - **On Windows, cornercase reads git's paths**, the next step towards running there: the changes panel, the merge check and the worktrees understand Git for Windows' forward slashes and names out of ASCII. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
