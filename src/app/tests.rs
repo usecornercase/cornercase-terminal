@@ -30,7 +30,6 @@ use super::picker_dialog::PICKER_SUBMIT;
 use super::session::RESUME_GRACE;
 use super::toast::BUG_FOR;
 use super::toast::COPIED;
-#[cfg(target_os = "linux")]
 use super::toast::NOT_READING;
 use super::toast::TOAST_FOR;
 use super::toast::UNDO_FOR;

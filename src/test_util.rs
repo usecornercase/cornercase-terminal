@@ -209,6 +209,17 @@ pub(crate) fn is_sh(name: &str) -> bool {
     matches!(name, "sh" | "bash" | "dash")
 }
 
+pub(crate) fn child_running(parent: i32, program: &str) -> i32 {
+    let mut found = None;
+    wait_until(&format!("a child of {parent} runs {program}"), || {
+        found = crate::process::children(parent)
+            .into_iter()
+            .find(|pid| crate::process::name(*pid).as_deref() == Some(program));
+        found.is_some()
+    });
+    found.expect("the child")
+}
+
 pub(crate) fn sleep_named(path: &Path) -> Running {
     let copied = std::process::Command::new("cp").arg("/bin/sleep").arg(path).status().expect("run cp");
     assert!(copied.success(), "copy sleep to {}", path.display());
