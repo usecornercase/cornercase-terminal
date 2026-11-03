@@ -16,6 +16,7 @@ use super::worktrees::{ListFor, WorktreeEvent};
 use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
+use crate::os::fs::canonical;
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::pull_request::State;
@@ -125,7 +126,7 @@ impl App {
         self.spawn_job(
             job,
             move || {
-                let open: HashSet<PathBuf> = open.iter().map(|p| canonical(p)).collect();
+                let open: HashSet<PathBuf> = open.iter().map(canonical).collect();
                 let keep = keep.map(|path| discover::main_checkout(&canonical(&path)));
                 let found = discover::discover(&repos, &dir);
                 Ok(found
@@ -710,8 +711,4 @@ impl App {
         let running = &self.git.scans.running;
         (running.len(), running.values().filter(|r| r.confirm && !r.stale).count())
     }
-}
-
-pub(super) fn canonical(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }

@@ -3,10 +3,11 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthChar;
 
-use super::{Outside, canonical};
+use super::Outside;
 use crate::app::App;
 use crate::app::worktrees::lock_note;
 use crate::flows::run::RoleWorktree;
+use crate::os::fs::canonical;
 use crate::process;
 use crate::project::Hierarchy;
 use crate::text::plural;

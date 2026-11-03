@@ -160,3 +160,23 @@ fn outside_folders_devices_and_fifos_are_not_links() {
         assert!(resolve(&link, None, root.path(), None).is_none(), "{} is not a regular file", path.display());
     }
 }
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::test_util::verbatim;
+
+    #[test]
+    fn a_file_named_like_a_device_inside_the_workspace_stays_inside() {
+        let root = TempDir::new();
+        fs::create_dir(root.path().join("src")).expect("mkdir");
+        let file = verbatim(&root.path().join("src").join("aux.rs"));
+        fs::write(&file, "").expect("write");
+        let link = Link { start: 0, end: 1, path: "src/aux.rs".into(), lines: Some((10, 10)) };
+
+        let target = resolve(&link, None, root.path(), None).expect("the file");
+
+        assert_eq!((target.path.as_str(), target.inside()), (r"src\aux.rs", true));
+        assert_eq!(target.real, file);
+    }
+}

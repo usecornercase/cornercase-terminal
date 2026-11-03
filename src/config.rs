@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 
 use crate::agents;
 use crate::host::notify;
-use crate::os::fs::{NONBLOCK, OpenOptionsExt};
+use crate::os::fs::{NONBLOCK, OpenOptionsExt, canonicalize};
 use crate::persist;
 use crate::shortcuts::Prefix;
 
@@ -638,7 +638,7 @@ pub(crate) fn save(path: &Path, config: &Config) -> io::Result<persist::Mark> {
 
 pub(crate) fn names_folder(key: &str, folder: &Path, home: Option<&Path>) -> bool {
     let key = expand_home(key, home);
-    key == folder || key.canonicalize().is_ok_and(|key| key == folder)
+    key == folder || canonicalize(&key).is_ok_and(|key| key == folder)
 }
 
 pub(crate) fn expand_home(path: &str, home: Option<&Path>) -> PathBuf {
