@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::{failed, private_folder};
 use crate::error::Error;
-use crate::os::fs::{MetadataExt, OpenOptionsExt};
+use crate::os::fs::{OpenOptionsExt, stat};
 
 pub(crate) trait Linker {
     fn link(&self, from: &Path, to: &Path) -> io::Result<()> {
@@ -191,11 +191,11 @@ fn copy_into(source: &Path, dest: &Path, temp: &Path, linker: &dyn Linker) -> Re
 }
 
 fn same(a: &Path, b: &Path) -> io::Result<bool> {
-    let (meta_a, meta_b) = (fs::metadata(a)?, fs::metadata(b)?);
-    if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
+    let (stat_a, stat_b) = (stat(a)?, stat(b)?);
+    if stat_a.same_file(&stat_b) {
         return Ok(true);
     }
-    if meta_a.len() != meta_b.len() {
+    if stat_a.meta.len() != stat_b.meta.len() {
         return Ok(false);
     }
     let (mut a, mut b) = (File::open(a)?, File::open(b)?);
