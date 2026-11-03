@@ -67,7 +67,7 @@ impl App {
         let job = Job::new(Level::Debug, "processes", "sample");
         self.spawn_job(
             job,
-            move || Ok(processes::sample(&places, previous, BASELINE)),
+            move || processes::sample(&places, previous, BASELINE),
             move |result, job| {
                 job.note("panes", result.as_ref().map_or(0, |sample| sample.panes.len()));
                 Some(AppEvent::Processes(ProcessesEvent::Sampled { generation, result }))

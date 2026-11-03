@@ -6,13 +6,15 @@ use std::thread;
 
 use parking_lot::Mutex;
 use windows_sys::Win32::Foundation::{
-    ERROR_ACCESS_DENIED, FALSE, HANDLE, HANDLE_FLAG_INHERIT, SetHandleInformation, TRUE,
+    CloseHandle, ERROR_ACCESS_DENIED, FALSE, HANDLE, HANDLE_FLAG_INHERIT, STILL_ACTIVE, SetHandleInformation, TRUE,
 };
 use windows_sys::Win32::System::Console::{
     CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT, GetConsoleWindow,
     GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleCtrlHandler,
 };
-use windows_sys::Win32::System::Threading::{CREATE_BREAKAWAY_FROM_JOB, CREATE_NO_WINDOW};
+use windows_sys::Win32::System::Threading::{
+    CREATE_BREAKAWAY_FROM_JOB, CREATE_NO_WINDOW, GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use windows_sys::core::BOOL;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,8 +94,16 @@ pub(crate) fn setsid() -> io::Result<Pid> {
     Err(unsupported())
 }
 
-pub(crate) fn alive(_pid: i32) -> bool {
-    false
+pub(crate) fn alive(pid: i32) -> bool {
+    let Some(pid) = u32::try_from(pid).ok().filter(|pid| *pid != 0) else { return false };
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle.is_null() {
+        return io::Error::last_os_error().raw_os_error() == i32::try_from(ERROR_ACCESS_DENIED).ok();
+    }
+    let mut code = 0;
+    let read = unsafe { GetExitCodeProcess(handle, &raw mut code) } != 0;
+    unsafe { CloseHandle(handle) };
+    read && code == STILL_ACTIVE.cast_unsigned()
 }
 
 pub(crate) fn spawn_detached(command: &mut Command) -> io::Result<Child> {

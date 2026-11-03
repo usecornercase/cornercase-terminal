@@ -62,7 +62,7 @@ pub(in crate::agents) fn local_command(text: &str) -> bool {
 pub(in crate::agents) fn runs_as(arg: &str) -> bool {
     let mut parts = Path::new(arg).components().rev().filter_map(|c| c.as_os_str().to_str());
     let (file, _version, versions, install) = (parts.next(), parts.next(), parts.next(), parts.next());
-    file == Some("index.js") && versions == Some("versions") && install == Some("cursor-agent")
+    super::named(file, "index.js") && super::named(versions, "versions") && super::named(install, "cursor-agent")
 }
 
 const WAITING: [char; 2] = ['❓', '🔐'];

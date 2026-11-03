@@ -43,7 +43,7 @@ impl App {
         let job = Job::new(Level::Debug, "control", "processes");
         self.spawn_job(
             job,
-            move || Ok(processes::sample(&places, None, Duration::from_millis(interval))),
+            move || processes::sample(&places, None, Duration::from_millis(interval)),
             move |result, job| {
                 job.note("panes", result.as_ref().map_or(0, |sample| sample.panes.len()));
                 Some(AppEvent::Processes(ProcessesEvent::Answered { request: key, interval, result }))

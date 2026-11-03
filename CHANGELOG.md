@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.259
+
+- **On Windows, cornercase now reads processes**: their trees, names, arguments, folders, memory and CPU, another step towards running there natively. It still says that it does not run on Windows yet. Nothing changes on Linux and macOS.
+
 ## 0.12.258
 
 - Nothing changes for users: five tests that failed now and then on a busy machine now wait for what they check.

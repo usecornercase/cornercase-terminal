@@ -3,6 +3,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::{Pane, PaneTree, Places, Proc, Sample, Times, cpu_percent};
+use crate::error::Result;
 use crate::process;
 
 type Edges = Vec<(i32, i32)>;
@@ -12,12 +13,14 @@ struct Walk {
     cornercase: Edges,
 }
 
-pub(crate) fn sample(places: &Places, previous: Option<Times>, baseline: Duration) -> Sample {
-    let before = previous.unwrap_or_else(|| {
-        let first = read(places, &Times::default());
+pub(crate) fn sample(places: &Places, previous: Option<Times>, baseline: Duration) -> Result<Sample> {
+    let before = if let Some(before) = previous {
+        before
+    } else {
+        let first = read(places, &Times::default())?;
         thread::sleep(baseline);
         first.times
-    });
+    };
     read(places, &before)
 }
 
@@ -33,7 +36,8 @@ fn walk(places: &Places) -> Walk {
     Walk { panes, cornercase: own }
 }
 
-fn read(places: &Places, before: &Times) -> Sample {
+fn read(places: &Places, before: &Times) -> Result<Sample> {
+    let _listing = process::listing()?;
     let walk = walk(places);
     let now = Instant::now();
     let mut times = Times { at: Some(now), cpu: HashMap::new() };
@@ -46,7 +50,7 @@ fn read(places: &Places, before: &Times) -> Sample {
         })
         .collect();
     let cornercase = if places.own { tree_of(places.server, &walk.cornercase, before, &mut times) } else { Vec::new() };
-    Sample { panes, cornercase, times }
+    Ok(Sample { panes, cornercase, times })
 }
 
 fn tree_of(root: i32, edges: &Edges, before: &Times, times: &mut Times) -> Vec<Proc> {

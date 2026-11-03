@@ -144,6 +144,7 @@ mod pid_in {
 
 mod remove {
     use super::*;
+    use crate::test_util::{exited_pid, this_pid};
 
     fn with_worktree() -> (TempDir, TempDir, PathBuf) {
         let repo = git_repo(&[("README", "hi")]);
@@ -187,21 +188,19 @@ mod remove {
         assert_eq!(lock(&path).expect("read lock"), Some(Lock { reason: String::new(), holder: None, role: None }));
     }
 
-    #[cfg(unix)]
     #[test]
     fn a_pid_in_the_reason_that_is_gone_is_a_lock_left_behind() {
         let (repo, _tmp, path) = with_worktree();
-        let pid = crate::test_util::exited_pid();
+        let pid = exited_pid();
         locked(repo.path(), &path, Some(&format!("claude session wt (pid {pid} start Wed Oct  7 09:10:42 2026)")));
 
         assert_eq!(lock(&path).expect("read lock").and_then(|l| l.holder), Some(Holder::Gone(pid)));
     }
 
-    #[cfg(unix)]
     #[test]
     fn a_pid_in_the_reason_that_runs_holds_the_lock() {
         let (repo, _tmp, path) = with_worktree();
-        let pid = crate::test_util::this_pid();
+        let pid = this_pid();
         locked(repo.path(), &path, Some(&format!("claude session wt (pid {pid} start …)")));
 
         assert_eq!(lock(&path).expect("read lock").and_then(|l| l.holder), Some(Holder::Running(pid)));
@@ -321,6 +320,27 @@ mod scoped_commands {
         let dropped = injected_config(names.into_iter().map(OsString::from));
 
         assert_eq!(dropped, ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_12"].map(OsString::from));
+    }
+}
+
+#[cfg(windows)]
+mod lock_holder_on_windows {
+    use super::*;
+    use crate::test_util::{exited_pid, this_pid};
+
+    fn holder_of_a_lock_naming(pid: i32) -> Option<Holder> {
+        let repo = git_repo(&[("README", "hi")]);
+        let reason = format!("claude session wt (pid {pid} start Wed Oct  7 09:10:42 2026)");
+        std::fs::write(repo.path().join(".git").join("locked"), reason).expect("write the lock");
+        lock(repo.path()).expect("read lock").and_then(|lock| lock.holder)
+    }
+
+    #[test]
+    fn a_pid_that_runs_holds_the_lock_and_one_that_exited_left_it_behind() {
+        let (running, gone) = (this_pid(), exited_pid());
+
+        assert_eq!(holder_of_a_lock_naming(running), Some(Holder::Running(running)));
+        assert_eq!(holder_of_a_lock_naming(gone), Some(Holder::Gone(gone)));
     }
 }
 

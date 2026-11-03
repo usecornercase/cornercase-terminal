@@ -77,7 +77,7 @@ mod sampling {
         let busy = Running::spawn(std::process::Command::new("/bin/sh").args(["-c", "while :; do :; done"]));
         let pane = Pane { id: 1, shell: busy.pid(), foreground: None, agent: None };
         let places = Places { panes: vec![pane], server: me(), own: false };
-        let sample = sample(&places, None, Duration::from_millis(300));
+        let sample = sample(&places, None, Duration::from_millis(300)).expect("a sample");
         let [tree] = &sample.panes[..] else { panic!("one pane: {:?}", sample.panes) };
         let shell = &tree.procs[0];
         assert_eq!((shell.pid, shell.parent, shell.depth), (busy.pid(), None, 0));
@@ -92,7 +92,7 @@ mod sampling {
         let (child, grandchild) = (family.child().expect("child"), family.grandchild().expect("grandchild"));
         let pane = Pane { id: 1, shell: family.pid(), foreground: None, agent: None };
         let places = Places { panes: vec![pane], server: me(), own: false };
-        let sample = sample(&places, None, Duration::from_millis(50));
+        let sample = sample(&places, None, Duration::from_millis(50)).expect("a sample");
         let shape: Vec<_> = sample.panes[0].procs.iter().map(|p| (p.pid, p.parent, p.depth)).collect();
         assert_eq!(shape, [(family.pid(), None, 0), (child, Some(family.pid()), 1), (grandchild, Some(child), 2)]);
     }
@@ -103,7 +103,7 @@ mod sampling {
         let own = Running::spawn(std::process::Command::new("/bin/sleep").arg("30"));
         let pane = Pane { id: 1, shell: pane_shell.pid(), foreground: None, agent: None };
         let places = Places { panes: vec![pane], server: me(), own: true };
-        let sample = sample(&places, None, Duration::from_millis(50));
+        let sample = sample(&places, None, Duration::from_millis(50)).expect("a sample");
         let pids: Vec<i32> = sample.cornercase.iter().map(|proc| proc.pid).collect();
         assert_eq!(pids.first(), Some(&me()));
         assert!(pids.contains(&own.pid()), "{pids:?}");
@@ -116,7 +116,8 @@ mod sampling {
         let pid = i32::try_from(child.id()).expect("pid");
         wait_until("the child is a zombie", || process::alive(pid) && !process::running(pid, None));
         let pane = Pane { id: 1, shell: pid, foreground: None, agent: None };
-        let sample = sample(&Places { panes: vec![pane], server: me(), own: false }, None, Duration::from_millis(10));
+        let sample = sample(&Places { panes: vec![pane], server: me(), own: false }, None, Duration::from_millis(10))
+            .expect("a sample");
         assert_eq!(sample.panes[0].procs, Vec::<Proc>::new());
         child.wait().expect("reap");
     }
