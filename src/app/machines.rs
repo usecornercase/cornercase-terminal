@@ -64,7 +64,7 @@ pub(crate) enum MachineEvent {
     Read(Box<panels::FileRead>),
     Stream(StreamReport),
     Relayed(relay::Relayed),
-    Ignored { root: PathBuf, result: std::result::Result<crate::git::ignored::Listing, String> },
+    Ignored { key: u64, result: std::result::Result<crate::git::ignored::Listing, String> },
     Packed(Box<Packed>),
 }
 
@@ -310,7 +310,7 @@ impl App {
             MachineEvent::Read(read) => self.remote_file_read(*read),
             MachineEvent::Stream(report) => self.stream_reported(report),
             MachineEvent::Relayed(relayed) => self.relayed(relayed),
-            MachineEvent::Ignored { root, result } => self.ignored_listed(&root, result),
+            MachineEvent::Ignored { key, result } => self.ignored_listed(key, result),
             MachineEvent::Packed(packed) => self.clone_packed(*packed),
         }
         if streamed {

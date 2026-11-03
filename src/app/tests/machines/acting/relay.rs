@@ -184,7 +184,7 @@ mod an_answer {
         let said = "cannot clone https://github.com/acme/shop.git into /home/ana/code/shop";
         let text = serde_json::to_string(&Structured::Error(Refusal::new(Code::Conflict, said))).expect("json");
 
-        let (heard, logged) = asking().read(Ok(text));
+        let (heard, logged) = asking().read(Ok(text), crate::machines::act::heard);
 
         assert_eq!(heard.expect_err("a refusal").message, said);
         assert_eq!(logged, Some(format!("refused: Conflict, {} bytes", said.len())));

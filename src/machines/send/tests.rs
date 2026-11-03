@@ -165,3 +165,19 @@ mod the_bytes {
         assert_eq!(bytes(&files), decoded);
     }
 }
+
+mod an_answer {
+    use super::*;
+    use crate::control::contract::Structured;
+
+    #[rstest]
+    #[case::flows(Send::FlowList(4), "Read it.\nThen fix it.")]
+    #[case::accounts(Send::AccountList, "Read it. Then fix it.")]
+    fn keeps_lines_only_in_a_flow_listing(#[case] send: Send, #[case] kept: &str) {
+        let text = serde_json::to_string(&Structured::Ok(json!({ "prompt": "Read it.\nThen fix it." }))).expect("json");
+
+        let heard = (send.hearing())(&text).expect("an answer");
+
+        assert_eq!(heard["prompt"], json!(kept));
+    }
+}

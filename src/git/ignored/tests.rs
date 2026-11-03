@@ -154,19 +154,33 @@ mod read {
         assert_eq!(read(repo.path(), &file(".env", 5)).expect("read"), b"KEY=1");
     }
 
+    fn linked(repo: &Path, target: &Path) -> PathBuf {
+        std::os::unix::fs::symlink(target, repo.join(".env")).expect("symlink");
+        PathBuf::from(".env")
+    }
+
+    fn up_from(repo: &Path, target: &Path) -> PathBuf {
+        let up = repo.components().skip(1).map(|_| Component::ParentDir);
+        up.map(Component::as_os_str).chain(target.components().skip(1).map(Component::as_os_str)).collect()
+    }
+
+    fn absolute(_: &Path, target: &Path) -> PathBuf {
+        target.to_path_buf()
+    }
+
     #[rstest::rstest]
-    #[case::outside(".env", true)]
-    #[case::a_parent("../.env", false)]
-    #[case::absolute("/etc/hostname", false)]
-    fn refuses_a_symlink_or_a_path_out_of_the_project(#[case] path: &str, #[case] linked: bool) {
+    #[case::outside(linked)]
+    #[case::a_parent(up_from)]
+    #[case::absolute(absolute)]
+    fn refuses_a_symlink_or_a_path_out_of_the_project(#[case] aim: fn(&Path, &Path) -> PathBuf) {
         let repo = repo(".env\n");
         let outside = TempDir::new();
         write(&outside, "real.env", b"KEY=1");
-        if linked {
-            std::os::unix::fs::symlink(outside.path().join("real.env"), repo.path().join(path)).expect("symlink");
-        }
+        let path = aim(repo.path(), &outside.path().join("real.env"));
+        assert_eq!(std::fs::read(repo.path().join(&path)).expect("the file is there"), b"KEY=1");
 
-        assert!(read(repo.path(), &file(path, 5)).is_err());
+        let ignored = IgnoredFile { path, size: 5, mode: 0o644, too_big: false };
+        assert!(read(repo.path(), &ignored).is_err());
     }
 
     #[test]

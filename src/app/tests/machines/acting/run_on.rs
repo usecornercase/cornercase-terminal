@@ -96,6 +96,14 @@ fn opened(command: &str) -> Value {
     }
 }
 
+fn blank_command(command: &str) -> Value {
+    let mut answer = opened(command);
+    if command == "account-list" {
+        answer["agents"][0]["command"] = json!(" \u{200B}");
+    }
+    answer
+}
+
 fn shop(projects: Vec<ProjectInfo>) -> control::Report {
     control::Report { boot: BOOT.into(), home: Some("/home/ana".into()), projects, ..control::Report::default() }
 }
@@ -494,6 +502,31 @@ mod the_login_tab {
         );
         assert!(!browser_open(&reading.remote.rig.app));
         reading.shows_the_tab();
+    }
+
+    #[test]
+    fn opens_the_login_by_the_agent_s_name_when_its_command_there_is_blank() {
+        let mut reading = reading_with(Reply::Each(blank_command), vec![web_shop()]);
+        reading.on_vps();
+        assert_eq!(browser(&reading.remote.rig.app).there().and_then(|there| there.command.clone()), None);
+
+        reading.press("open login tab");
+        reading.answered();
+
+        assert_eq!(reading.sent("new-tab").expect("a new tab")["command"], json!("claude auth login"));
+    }
+
+    #[test]
+    fn sends_nothing_and_says_so_when_the_project_there_has_no_workspace() {
+        let mut reading = reading_with(Reply::Each(opened), vec![ProjectInfo { workspaces: Vec::new(), ..web_shop() }]);
+        reading.on_vps();
+
+        reading.press("open login tab");
+
+        let app = &reading.remote.rig.app;
+        let said = "vps has no workspace of this project for the login tab";
+        assert_eq!((error(app), browser(app).starting), (Some(said), false));
+        assert_eq!(reading.sent("new-tab"), None);
     }
 }
 

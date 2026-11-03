@@ -13,6 +13,8 @@ use crate::control::contract::{Code, Refusal};
 use crate::log::{self, Job, Level};
 use crate::machines::{self, State, act, ask, send};
 
+type Hear = fn(&str) -> Result<Value, Refusal>;
+
 pub(in crate::app) struct Asking {
     pub(in crate::app) machine: String,
     pub(in crate::app) destination: String,
@@ -26,14 +28,22 @@ impl Asking {
     }
 
     pub(in crate::app) fn heard(&self, result: Result<String, String>, job: &mut Job) -> Result<Value, Refusal> {
-        let (heard, failed) = self.read(result);
+        self.heard_as(result, job, act::heard)
+    }
+
+    fn heard_as(&self, result: Result<String, String>, job: &mut Job, hear: Hear) -> Result<Value, Refusal> {
+        let (heard, failed) = self.read(result, hear);
         if let Some(failed) = failed {
             job.fail(failed);
         }
         heard
     }
 
-    pub(in crate::app) fn read(&self, result: Result<String, String>) -> (Result<Value, Refusal>, Option<String>) {
+    pub(in crate::app) fn read(
+        &self,
+        result: Result<String, String>,
+        hear: Hear,
+    ) -> (Result<Value, Refusal>, Option<String>) {
         let text = match result {
             Ok(text) => text,
             Err(why) => {
@@ -41,7 +51,7 @@ impl Asking {
                 return (Err(Refusal::new(Code::Failed, why.clone())), Some(why));
             }
         };
-        match act::heard(&text) {
+        match hear(&text) {
             Ok(value) => (Ok(value), None),
             Err(refusal) => {
                 let logged = format!("refused: {:?}, {} bytes", refusal.code, refusal.message.len());
@@ -121,8 +131,9 @@ impl App {
         let asking =
             Asking { machine: held.name.clone(), destination: held.destination.clone(), boot, timeout: send.timeout() };
         let job = Job::new(Level::Info, "machines", "relay").with("name", &asking.machine).with("verb", send.verb());
+        let hear = send.hearing();
         self.spawn_ask(send.logged(job), asking, send.command(), move |result, asking, job| {
-            let result = asking.heard(result, job);
+            let result = asking.heard_as(result, job, hear);
             AppEvent::Machine(MachineEvent::Relayed(Relayed { then, sent: awaited, result }))
         });
         Ok(target)

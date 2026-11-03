@@ -1,4 +1,5 @@
 use ratatui::style::Color;
+use serde_json::json;
 
 use super::*;
 
@@ -239,5 +240,67 @@ mod a_chosen_machine {
         assert!(kept.choose(None));
 
         assert_eq!((kept.lost, RunOn::kept(None, Some(&RunOn::default()))), (None, None));
+    }
+}
+
+mod a_flow_listing {
+    use super::*;
+    use crate::control::contract::Structured;
+
+    fn heard(flows: &Value) -> Value {
+        let text = serde_json::to_string(&Structured::Ok(flows.clone())).expect("json");
+        heard_flows(&text).expect("an answer")
+    }
+
+    fn flow(name: &str) -> Value {
+        json!({ "name": name, "flow": { "name": name, "orchestrator": { "agent": "claude", "prompt": "" } } })
+    }
+
+    #[test]
+    fn keeps_the_lines_of_a_prompt_and_a_description_and_drops_other_controls() {
+        let long = "x".repeat(300);
+        let mut listed = flow("Pair");
+        listed["flow"]["orchestrator"]["prompt"] =
+            json!(format!("Read it.\r\n\n  - then\tfix it\u{7}\u{200B}\n{long}"));
+        listed["description"] = json!("Two\nlines");
+        listed["flow"]["orchestrator"]["agent"] = json!("claude\ncode");
+
+        let flows = heard(&json!({ "flows": [listed] }));
+
+        let first = &flows["flows"][0];
+        assert_eq!(first["flow"]["orchestrator"]["prompt"], json!(format!("Read it.\n\n  - then fix it\n{long}")));
+        assert_eq!(
+            (&first["description"], &first["flow"]["orchestrator"]["agent"]),
+            (&json!("Two\nlines"), &json!("claude code"))
+        );
+    }
+
+    #[test]
+    fn cuts_a_field_only_past_its_own_limit() {
+        let mut listed = flow("Pair");
+        listed["flow"]["notes"] = json!("y".repeat(FLOW_KEPT + 1));
+
+        let flows = heard(&json!({ "flows": [listed] }));
+
+        assert_eq!(flows["flows"][0]["flow"]["notes"].as_str().map(str::len), Some(65_536));
+    }
+
+    #[rstest::rstest]
+    #[case::past_one_line("x".repeat(250), true)]
+    #[case::past_the_limit("x".repeat(FLOW_KEPT + 1), false)]
+    #[case::on_two_lines("Pair\nlater".into(), false)]
+    #[case::with_an_invisible("Pa\u{200B}ir".into(), false)]
+    fn offers_a_flow_only_by_its_whole_name(#[case] name: String, #[case] offered: bool) {
+        let mut renamed = flow("Pair");
+        renamed["flow"]["name"] = json!(name);
+
+        let flows = heard(&json!({ "flows": [flow(&name), renamed, flow("Quick")], "hidden": [flow(&name)] }));
+
+        let names = |list: &str| {
+            flows[list].as_array().expect("a list").iter().map(|item| item["name"].clone()).collect::<Vec<_>>()
+        };
+        let kept = if offered { vec![json!(name), json!("Pair"), json!("Quick")] } else { vec![json!("Quick")] };
+        assert_eq!(names("flows"), kept);
+        assert_eq!(names("hidden").len(), usize::from(offered));
     }
 }

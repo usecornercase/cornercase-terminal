@@ -52,8 +52,12 @@ impl Act {
 }
 
 pub(crate) fn heard(text: &str) -> Result<Value, Refusal> {
+    heard_with(text, cleaned)
+}
+
+pub(crate) fn heard_with(text: &str, clean: fn(Value) -> Value) -> Result<Value, Refusal> {
     match serde_json::from_str::<Structured>(text) {
-        Ok(Structured::Ok(value)) => Ok(cleaned(value)),
+        Ok(Structured::Ok(value)) => Ok(clean(value)),
         Ok(Structured::Error(refusal)) => Err(Refusal::new(refusal.code, link::clean(&refusal.message))),
         Err(_) => Err(Refusal::new(Code::Malformed, UNREADABLE)),
     }

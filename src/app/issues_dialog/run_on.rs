@@ -134,8 +134,12 @@ impl App {
         let Some(Overlay::Issues(b)) = &self.overlay else { return };
         let (Some(target), Some(kind)) = (b.machine().cloned(), b.agents.pick()) else { return };
         let Some(there) = self.project_there(target.link, issue_project(b)) else { return };
+        let Some(workspace) = root_workspace(there) else {
+            return self
+                .dialog_sent(Err(format!("{} has no workspace of this project for the login tab", target.name)));
+        };
         let tab = NewTab {
-            workspace: root_workspace(there),
+            workspace: Some(workspace),
             name: Some(format!("{kind} login")),
             command: self.login_there(&target.name, &kind),
             accounts: self.chosen_accounts(),
@@ -210,7 +214,7 @@ impl App {
     }
 
     fn not_started_there(&self, link: u64, machine: &str, refusal: &Refusal) -> String {
-        let Some(held) = self.machines.held().iter().find(|held| held.link.id() == link) else {
+        let Some(held) = self.held_by(link) else {
             return format!("{machine} is no longer listed");
         };
         if refusal.code == Code::StaleBoot {

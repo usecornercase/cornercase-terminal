@@ -1,6 +1,10 @@
 use std::time::Duration;
 
-use super::act::{CHECK, QUICK, REMOVE as WORKTREE};
+use serde_json::Value;
+
+use super::act::{self, CHECK, QUICK, REMOVE as WORKTREE};
+use super::run_on;
+use crate::control::contract::Refusal;
 use crate::control::{
     AccountList, CloneFile, CloneRepository, Command, FlowList, FlowRun, IssueSources, NewTab, NewWorkspace, Start,
     Until,
@@ -37,6 +41,13 @@ impl Send {
             Self::AccountList => Command::AccountList(AccountList { check: true }),
             Self::IssueSources(project) => Command::IssueSources(IssueSources { project: Some(project) }),
             Self::FlowList(project) => Command::FlowList(FlowList { project: Some(project) }),
+        }
+    }
+
+    pub(crate) fn hearing(&self) -> fn(&str) -> Result<Value, Refusal> {
+        match self {
+            Self::FlowList(_) => run_on::heard_flows,
+            _ => act::heard,
         }
     }
 

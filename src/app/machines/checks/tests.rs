@@ -64,6 +64,33 @@ mod its_accounts {
     }
 
     #[test]
+    fn leave_out_one_with_a_blank_name_and_fall_back_from_a_blank_label() {
+        let mut info = info(State::SignedIn, State::SignedIn);
+        let claude = &mut info.providers[0];
+        claude.system_label = "\u{200B}".into();
+        claude.active = " ".into();
+        claude.accounts =
+            vec![account(" \u{FEFF}", "Ghost", State::SignedIn), account("work", " \u{2060}", State::SignedIn)];
+
+        let read = accounts(&info).expect("accounts");
+
+        let claude = read.of("claude").expect("claude");
+        assert_eq!(
+            (&claude.names[..], &claude.labels[..]),
+            (&["work".to_string()][..], &["System", "work"].map(String::from)[..])
+        );
+        assert_eq!(claude.active, "");
+    }
+
+    #[test]
+    fn are_none_when_every_name_is_blank() {
+        let mut info = info(State::SignedIn, State::SignedIn);
+        info.providers[0].accounts = vec![account("\u{200B}", "Ghost", State::SignedIn)];
+
+        assert_eq!(accounts(&info), None);
+    }
+
+    #[test]
     fn are_none_when_no_agent_has_one() {
         let info = AccountsInfo { providers: vec![ProviderInfo::default()], ..AccountsInfo::default() };
 

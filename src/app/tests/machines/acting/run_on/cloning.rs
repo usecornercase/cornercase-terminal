@@ -1,8 +1,8 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 use super::*;
-use crate::app::clone_on_machine::failure;
-use crate::error::Error;
+use crate::app::clone_on_machine::told;
+use crate::git::ignored::{self, IgnoredFile};
 use crate::machines::clone_form::{BUTTONS, CloneForm, Files};
 use crate::test_util::{git, wait_until};
 
@@ -44,6 +44,13 @@ fn rambling(command: &str) -> Structured {
     }
 }
 
+fn garbled(command: &str) -> Structured {
+    match command {
+        "clone" => Structured::Ok(json!({ "path": "/home/ana/code/web-shop", "unwritten": "local.toml" })),
+        command => ready(command),
+    }
+}
+
 fn cloned_with_flows(command: &str) -> Structured {
     match command {
         "clone" => cloned(command),
@@ -57,7 +64,7 @@ fn write(root: &Path, path: &str, contents: &str) {
     std::fs::write(path, contents).expect("write the file");
 }
 
-fn not_there(told: fn(&str) -> Structured) -> Reading {
+fn ignoring(told: fn(&str) -> Structured) -> Reading {
     let mut reading = reading_with(Reply::Told(told), Vec::new());
     let app = &mut reading.remote.rig.app;
     let root = app.projects[0].path.clone();
@@ -67,6 +74,11 @@ fn not_there(told: fn(&str) -> Structured) -> Reading {
     write(&root, "local.toml", "port = 1");
     write(&root, "node_modules/left-pad/index.js", "x");
     app.projects[0].repo.remotes = vec![("origin".into(), URL.into())];
+    reading
+}
+
+fn not_there(told: fn(&str) -> Structured) -> Reading {
+    let mut reading = ignoring(told);
     reading.pick("run on…", "vps");
     reading.remote.rig.until("the machine answers its accounts", |app| app.accounts_there("vps") != Checked::Waiting);
     reading
@@ -80,6 +92,10 @@ fn form(app: &App) -> &CloneForm {
 impl Reading {
     fn clone_dialog(&mut self) {
         self.press("start");
+        self.listed();
+    }
+
+    fn listed(&mut self) {
         self.remote.rig.until("the ignored files are listed", |app| !matches!(form(app).files, Files::Reading));
     }
 
@@ -202,6 +218,21 @@ fn goes_back_to_the_issue_on_the_machine_checks_only_the_clone_and_says_it_in_a_
 }
 
 #[test]
+fn keeps_what_was_ticked_when_the_files_listed_for_an_earlier_opening_come_late() {
+    let mut reading = not_there(cloned);
+    reading.press("start");
+    let earlier = reading.remote.held(|event| matches!(event, AppEvent::Machine(MachineEvent::Ignored { .. })));
+    reading.press_in_clone("back");
+    reading.clone_dialog();
+    reading.tick(".env");
+
+    reading.deliver(earlier);
+
+    let ticked = form(&reading.remote.rig.app).ticked();
+    assert_eq!(ticked.iter().map(|file| file.path.as_path()).collect::<Vec<_>>(), [Path::new(".env")]);
+}
+
+#[test]
 fn goes_back_without_sending_anything() {
     let mut reading = not_there(cloned);
     reading.clone_dialog();
@@ -307,6 +338,26 @@ fn makes_no_workspace_on_a_clone_the_machine_lists_before_it_answers() {
 }
 
 #[test]
+fn asks_new_workspace_for_no_accounts_once_it_cloned() {
+    let mut reading = ignoring(cloned);
+    let app = &mut reading.remote.rig.app;
+    app.overlay = None;
+    app.ask_new_workspace(0);
+    reading.new_on_vps();
+    reading.create("login");
+    reading.listed();
+    reading.press_in_clone("skip files");
+    let answer = reading.remote.held_relay();
+
+    reading.deliver(answer);
+
+    let app = &reading.remote.rig.app;
+    assert!(matches!(app.overlay, Some(Overlay::NewWorkspace { .. })), "{:?}", app.overlay);
+    assert!(!app.machines.held()[0].checks.asking_accounts());
+    assert_eq!(reading.sent("account-list"), None);
+}
+
+#[test]
 fn names_the_machine_as_it_is_called_when_the_clone_answers() {
     let mut reading = not_there(cloned);
     let answer = reading.on_its_way();
@@ -353,16 +404,37 @@ fn says_briefly_why_a_ticked_file_could_not_be_read() {
     assert_eq!(reading.sent("clone"), None);
 }
 
+fn a_folder_read(root: &Path) -> Result<Vec<u8>> {
+    std::fs::create_dir_all(root.join("secret/.env")).expect("a folder");
+    let file = IgnoredFile { path: PathBuf::from("secret/.env"), size: 5, mode: 0o644, too_big: false };
+    ignored::read(root, &file)
+}
+
+fn outside_git(root: &Path) -> Result<Vec<u8>> {
+    ignored::toplevel(root).map(|_| Vec::new())
+}
+
 #[rstest]
-#[case::io(Error::Io(std::io::Error::other("secret/.env is not a regular file")), "Other")]
-#[case::git(Error::Git("fatal: not a git repository: /home/ana/web-shop".into()), "git")]
-fn logs_a_failure_to_read_the_files_by_its_kind_alone(#[case] error: Error, #[case] logged: &str) {
-    assert_eq!(failure(&error), logged);
+#[case::io(a_folder_read, "Other", "secret/.env")]
+#[case::git(outside_git, "git", "git")]
+fn logs_a_failure_to_read_the_files_by_its_kind_alone(
+    #[case] reading: fn(&Path) -> Result<Vec<u8>>,
+    #[case] logged: &str,
+    #[case] said: &str,
+) {
+    let root = TempDir::new();
+
+    let (result, failed) = told(reading(root.path()));
+
+    let shown = result.expect_err("a failure");
+    assert!(shown.contains(said), "{shown}");
+    assert_eq!(failed.as_deref(), Some(logged));
 }
 
 #[rstest]
 #[case::short(refused, "the clone on vps failed: ~/code/web-shop already exists on vps")]
 #[case::rambling(rambling, "the clone on vps failed: fatal: could not create work tree dir because the disk on t…")]
+#[case::unreadable(garbled, "the clone on vps failed: its answer could not be read")]
 fn says_a_failed_clone_in_a_toast_and_lets_it_be_tried_again(#[case] told: fn(&str) -> Structured, #[case] said: &str) {
     let mut reading = not_there(told);
     reading.clone_dialog();

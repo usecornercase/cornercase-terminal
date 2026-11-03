@@ -21,6 +21,7 @@ use crate::git::ignored::{self, IgnoredFile, Listing};
 use crate::git::remote;
 use crate::log::{Job, Level};
 use crate::machines::DEFAULT_FOLDER;
+use crate::machines::act::UNREADABLE;
 use crate::machines::clone_form::{CloneForm, Opening, Step, cloned_note};
 use crate::machines::run_on::{self, Target};
 use crate::machines::send::Send;
@@ -78,7 +79,7 @@ impl App {
         let pending = Pending { key, link: target.link, project, machine: target.name.clone(), label };
         let cloning = Cloning { form: CloneForm::new(opening), back, pending };
         self.overlay = Some(Overlay::CloneOnMachine(Box::new(cloning)));
-        self.list_ignored(root);
+        self.list_ignored(key, root);
     }
 
     pub(in crate::app) fn still_cloning(&self, link: u64, project: u64) -> bool {
@@ -90,22 +91,23 @@ impl App {
         machine.map_or(DEFAULT_FOLDER, |machine| machine.folder.as_str()).to_string()
     }
 
-    fn list_ignored(&self, root: PathBuf) {
+    fn list_ignored(&self, key: u64, root: PathBuf) {
         let job = Job::new(Level::Debug, "machines", "list ignored files");
-        let listed = root.clone();
         self.spawn_job(
             job,
-            move || Ok(ignored::list(&listed)),
+            move || Ok(ignored::list(&root)),
             move |result, job| {
                 let result = quietly(result.and_then(std::convert::identity), job);
-                Some(AppEvent::Machine(MachineEvent::Ignored { root, result }))
+                Some(AppEvent::Machine(MachineEvent::Ignored { key, result }))
             },
         );
     }
 
-    pub(in crate::app) fn ignored_listed(&mut self, root: &Path, result: std::result::Result<Listing, String>) {
-        if let Some(form) = self.clone_form().filter(|form| form.root == root) {
-            form.listed(result);
+    pub(in crate::app) fn ignored_listed(&mut self, key: u64, result: std::result::Result<Listing, String>) {
+        if let Some(Overlay::CloneOnMachine(cloning)) = &mut self.overlay
+            && cloning.pending.key == key
+        {
+            cloning.form.listed(result);
         }
     }
 
@@ -164,9 +166,14 @@ impl App {
     }
 
     pub(super) fn clone_back(&mut self) {
-        let Some(Overlay::CloneOnMachine(cloning)) = self.overlay.take() else { return };
-        self.overlay = Some(cloning.back);
+        self.leave_clone();
         self.follow_run_on();
+    }
+
+    fn leave_clone(&mut self) {
+        if let Some(Overlay::CloneOnMachine(cloning)) = self.overlay.take() {
+            self.overlay = Some(cloning.back);
+        }
     }
 
     fn cloning_with(&self, key: u64) -> bool {
@@ -239,8 +246,9 @@ impl App {
 
     pub(in crate::app) fn clone_relayed(&mut self, key: u64, result: std::result::Result<Value, Refusal>) {
         let Some(pending) = self.machines.clones.iter().find(|pending| pending.key == key).cloned() else { return };
-        let cloned = match result {
-            Ok(value) => serde_json::from_value::<Cloned>(value).unwrap_or_default(),
+        let cloned = match result.map(serde_json::from_value::<Cloned>) {
+            Ok(Ok(cloned)) => cloned,
+            Ok(Err(_)) => return self.clone_failed(&pending, UNREADABLE),
             Err(refusal) => {
                 let why = run_on::reason(&self.clone_machine(&pending), &refusal.message);
                 return self.clone_failed(&pending, &why);
@@ -248,14 +256,13 @@ impl App {
         };
         self.take_clone(key);
         if self.cloning_with(key) {
-            self.clone_back();
+            self.leave_clone();
         }
         if let Some(name) = self.held_name(pending.link)
             && self.run_on_dialog().is_some_and(|dialog| dialog.shows(pending.link, pending.project))
         {
             self.check_cloned(&name, cloned.ids.project);
         }
-        self.follow_run_on();
         let note = cloned_note(&self.clone_project(&pending), &self.clone_machine(&pending), &cloned.unwritten);
         self.messages.toast = Some(Toast::new(note, ToastIcon::Check));
     }
@@ -269,11 +276,10 @@ impl App {
         {
             cloning.form.cloning = false;
         }
-        self.follow_run_on();
     }
 
     fn held_name(&self, link: u64) -> Option<String> {
-        self.machines.held().iter().find(|held| held.link.id() == link).map(|held| held.name.clone())
+        self.held_by(link).map(|held| held.name.clone())
     }
 
     fn clone_machine(&self, pending: &Pending) -> String {
@@ -300,13 +306,21 @@ fn packed(root: &Path, files: &[IgnoredFile]) -> Result<Vec<CloneFile>> {
 }
 
 fn quietly<T>(result: Result<T>, job: &mut Job) -> std::result::Result<T, String> {
-    result.map_err(|error| {
-        job.fail(failure(&error));
-        run_on::clipped_or(&error.to_string(), "failed")
-    })
+    let (result, logged) = told(result);
+    if let Some(logged) = logged {
+        job.fail(logged);
+    }
+    result
 }
 
-pub(in crate::app) fn failure(error: &Error) -> String {
+pub(in crate::app) fn told<T>(result: Result<T>) -> (std::result::Result<T, String>, Option<String>) {
+    match result {
+        Ok(value) => (Ok(value), None),
+        Err(error) => (Err(run_on::clipped_or(&error.to_string(), "failed")), Some(failure(&error))),
+    }
+}
+
+fn failure(error: &Error) -> String {
     match error {
         Error::Io(error) => format!("{:?}", error.kind()),
         Error::RunGit(_) | Error::Git(_) => "git".into(),

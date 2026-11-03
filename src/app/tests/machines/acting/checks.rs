@@ -1,7 +1,9 @@
 use super::*;
 use crate::app::machines::checks::{AgentThere, Checked, Wanted};
 
-const EVERY: Wanted = Wanted { sources: true, flows: true };
+const EVERY: Wanted = Wanted { accounts: true, sources: true, flows: true };
+
+const ACCOUNTS: Wanted = Wanted { accounts: true, sources: false, flows: false };
 
 const PROJECT: u64 = 1;
 
@@ -107,6 +109,7 @@ mod the_checks {
         remote.checks();
 
         remote.rig.app.recheck_machine("vps", Some(PROJECT));
+        remote.rig.app.check_machine("vps", Some(PROJECT), ACCOUNTS);
         let (app, rx) = (&mut remote.rig.app, &remote.rig.rx);
         wait_until("the machine answers again", || {
             drain(app, rx);
@@ -119,10 +122,11 @@ mod the_checks {
     #[test]
     fn drop_an_answer_to_the_question_before_they_were_asked_again() {
         let mut remote = seeing(Reply::Each(there));
-        remote.rig.app.check_machine("vps", None, Wanted::default());
+        remote.rig.app.check_machine("vps", None, ACCOUNTS);
         let earlier = remote.held_relay();
 
         remote.rig.app.recheck_machine("vps", None);
+        remote.rig.app.check_machine("vps", None, ACCOUNTS);
         remote.rig.app.handle_event(earlier, AREA).expect("handle event");
 
         assert_eq!(remote.rig.app.accounts_there("vps"), Checked::Waiting);

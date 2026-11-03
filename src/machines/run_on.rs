@@ -1,13 +1,20 @@
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
+use serde_json::Value;
 
-use super::HERE;
-use crate::text::truncate_right;
+use super::link::{clean_path, clean_within};
+use super::{HERE, act};
+use crate::control::contract::Refusal;
+use crate::text::{self, truncate_right};
 
 pub(crate) const NEEDS_REMOTE: &str = "needs a git remote";
 const GAP: &str = "   ";
 const SHOWN: usize = 3;
 const TEXT: usize = 60;
+const FLOW_KEPT: usize = 65_536;
+const FLOW_LINES: [&str; 3] = ["prompt", "description", "notes"];
+const FLOW_PATHS: [&str; 1] = ["path"];
+const FLOW_LISTS: [&str; 2] = ["flows", "hidden"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Target {
@@ -143,6 +150,59 @@ pub(crate) fn has_text(text: &str) -> bool {
 
 fn blank(c: char) -> bool {
     c.is_control() || c.is_whitespace() || matches!(c, '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}')
+}
+
+pub(crate) fn heard_flows(text: &str) -> Result<Value, Refusal> {
+    act::heard_with(text, flows_cleaned)
+}
+
+fn flows_cleaned(mut value: Value) -> Value {
+    for list in FLOW_LISTS {
+        if let Some(Value::Array(items)) = value.get_mut(list) {
+            items.retain(named_whole);
+        }
+    }
+    flow_text(value, flow_line)
+}
+
+fn named_whole(item: &Value) -> bool {
+    let names = [&item["name"], &item["flow"]["name"]];
+    names.into_iter().all(|name| name.as_str().is_none_or(|name| flow_line(name) == name))
+}
+
+fn flow_text(value: Value, how: fn(&str) -> String) -> Value {
+    match value {
+        Value::String(text) => Value::String(how(&text)),
+        Value::Array(items) => Value::Array(items.into_iter().map(|item| flow_text(item, how)).collect()),
+        Value::Object(fields) => Value::Object(
+            fields.into_iter().map(|(key, value)| (flow_line(&key), flow_text(value, flow_field(&key)))).collect(),
+        ),
+        value => value,
+    }
+}
+
+fn flow_field(key: &str) -> fn(&str) -> String {
+    if FLOW_LINES.contains(&key) {
+        flow_lines
+    } else if FLOW_PATHS.contains(&key) {
+        clean_path
+    } else {
+        flow_line
+    }
+}
+
+fn flow_line(text: &str) -> String {
+    clean_within(text, FLOW_KEPT)
+}
+
+fn flow_lines(text: &str) -> String {
+    let kept = |c: char| match c {
+        '\n' => Some(c),
+        '\r' => None,
+        c if c.is_whitespace() => Some(' '),
+        c => (!text::hidden(c)).then_some(c),
+    };
+    text.chars().filter_map(kept).take(FLOW_KEPT).collect()
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@ use crate::control::issues::{SourceState, Sources};
 use crate::control::{FlowInfo, Flows};
 use crate::flows::store::{Listing, Origin, Saved};
 use crate::issues::browser::{Accounts, AgentAccounts};
-use crate::machines::run_on::{capped, clipped_or, reason};
+use crate::machines::run_on::{capped, clipped_or, has_text, reason};
 use crate::machines::send::Send;
 
 const UNNAMED: &str = "the project";
@@ -34,6 +34,7 @@ enum Check {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(in crate::app) struct Wanted {
+    pub(in crate::app) accounts: bool,
     pub(in crate::app) sources: bool,
     pub(in crate::app) flows: bool,
 }
@@ -120,11 +121,19 @@ impl Checks {
     }
 }
 
+#[cfg(test)]
+impl Checks {
+    pub(in crate::app) fn asking_accounts(&self) -> bool {
+        self.accounts.asking
+    }
+}
+
 impl App {
     pub(in crate::app) fn check_machine(&mut self, name: &str, project: Option<u64>, wanted: Wanted) {
         let sources = project.filter(|_| wanted.sources).map(Check::Sources);
         let flows = project.filter(|_| wanted.flows).map(Check::Flows);
-        for check in [Some(Check::Accounts), sources, flows].into_iter().flatten() {
+        let accounts = wanted.accounts.then_some(Check::Accounts);
+        for check in [accounts, sources, flows].into_iter().flatten() {
             self.ask_check(name, check);
         }
     }
@@ -143,8 +152,10 @@ impl App {
 
     fn wanted_checks(&self) -> Wanted {
         match &self.overlay {
-            Some(Overlay::Issues(_)) => Wanted { sources: true, flows: false },
-            Some(Overlay::StartFlow { start, .. }) => Wanted { sources: start.asked.is_some(), flows: true },
+            Some(Overlay::Issues(_)) => Wanted { accounts: true, sources: true, flows: false },
+            Some(Overlay::StartFlow { start, .. }) => {
+                Wanted { accounts: true, sources: start.asked.is_some(), flows: true }
+            }
             _ => Wanted::default(),
         }
     }
@@ -206,15 +217,16 @@ impl App {
     pub(in crate::app) fn login_there(&self, name: &str, agent: &str) -> Option<String> {
         let (info, _) = self.checks_of(name)?.accounts.read.as_ref()?;
         let found = info.agents.iter().find(|found| found.agent == agent && found.installed)?;
+        let command = Some(found.command.as_str()).filter(|command| has_text(command)).unwrap_or(agent);
         let login = Known::of(agent).and_then(Known::account).map_or(&[][..], |home| home.login);
-        let line = std::iter::once(found.command.as_str()).chain(login.iter().copied()).map(agents::quote);
+        let line = std::iter::once(command).chain(login.iter().copied()).map(agents::quote);
         Some(line.collect::<Vec<_>>().join(" "))
     }
 
     pub(in crate::app) fn command_there(&self, name: &str, agent: &str) -> Option<String> {
         let (info, _) = self.checks_of(name)?.accounts.read.as_ref()?;
         let found = info.agents.iter().find(|found| found.agent == agent && found.installed)?;
-        Some(found.command.clone())
+        Some(found.command.clone()).filter(|command| has_text(command))
     }
 
     fn checks_of(&self, name: &str) -> Option<&Checks> {
@@ -232,28 +244,25 @@ fn checked<T, U>(cached: Option<&Cached<T>>, read: impl FnOnce(&T) -> U) -> Chec
 }
 
 fn accounts(info: &AccountsInfo) -> Option<Accounts> {
-    let listed = info.providers.iter().filter(|provider| !provider.accounts.is_empty());
+    let listed =
+        info.providers.iter().filter(|provider| provider.accounts.iter().any(|account| has_text(&account.name)));
     let agents: HashMap<String, AgentAccounts> =
         listed.map(|provider| (provider.provider.clone(), agent_accounts(provider))).collect();
     (!agents.is_empty()).then_some(Accounts { agents, chosen: None })
 }
 
 fn agent_accounts(provider: &ProviderInfo) -> AgentAccounts {
-    let names: Vec<String> = provider.accounts.iter().map(|account| account.name.clone()).collect();
+    let kept: Vec<_> = provider.accounts.iter().filter(|account| has_text(&account.name)).collect();
+    let names: Vec<String> = kept.iter().map(|account| account.name.clone()).collect();
     let labels = std::iter::once(label(&provider.system_label, ""))
-        .chain(provider.accounts.iter().map(|account| label(&account.label, &account.name)))
+        .chain(kept.iter().map(|account| label(&account.label, &account.name)))
         .collect();
     let active = Some(&provider.active).filter(|active| names.contains(active)).cloned().unwrap_or_default();
     AgentAccounts { names, labels, active }
 }
 
 fn label(saved: &str, name: &str) -> String {
-    match (saved, name) {
-        ("", "") => SYSTEM_ACCOUNT,
-        ("", name) => name,
-        (saved, _) => saved,
-    }
-    .to_string()
+    [saved, name].into_iter().find(|text| has_text(text)).unwrap_or(SYSTEM_ACCOUNT).to_string()
 }
 
 fn agent_state(info: &AccountsInfo, agent: &str, account: &str) -> AgentThere {

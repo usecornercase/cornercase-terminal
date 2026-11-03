@@ -5,6 +5,7 @@ use crate::flows::builtin;
 use crate::flows::start::{Start, There};
 
 const QUICK: &str = "Quick";
+const PROMPT: &str = "Read the task.\n\n  Then do it.";
 
 fn flows() -> Value {
     let flows = builtin::flows(&[Known::Claude], Some(Known::Claude));
@@ -18,6 +19,24 @@ pub(super) fn running(command: &str) -> Structured {
         "flow-list" => Structured::Ok(flows()),
         "flow-run" => Structured::Ok(json!({ "workspace": WORKSPACE })),
         command => ready(command),
+    }
+}
+
+fn long_name() -> String {
+    format!("{QUICK} {}", "x".repeat(250))
+}
+
+fn long_named(command: &str) -> Structured {
+    match command {
+        "flow-list" => {
+            let mut listed = flows();
+            let flow = &mut listed["flows"][0];
+            flow["name"] = json!(long_name());
+            flow["flow"]["name"] = json!(long_name());
+            flow["flow"]["orchestrator"]["prompt"] = json!(PROMPT);
+            Structured::Ok(listed)
+        }
+        command => running(command),
     }
 }
 
@@ -134,6 +153,19 @@ fn sends_the_run_with_the_machine_s_project_and_closes_once_it_started() {
     );
     assert_eq!((&sent["focus"], sent.get("machine"), sent.get("issue")), (&json!(false), None, Some(&Value::Null)));
     assert!(reading.remote.rig.app.overlay.is_none());
+}
+
+#[test]
+fn runs_a_long_named_flow_by_its_whole_name_and_keeps_the_lines_of_its_prompt() {
+    let mut reading = starting_flow(long_named, vec![web_shop()]);
+    reading.flow_on_vps();
+
+    reading.run("Add dark mode");
+    reading.run_answered();
+
+    assert_eq!(reading.sent("flow-run").expect("a flow run")["name"], json!(long_name()));
+    let Checked::Read(listing) = reading.remote.rig.app.flows_there("vps", 1) else { panic!("no flows") };
+    assert_eq!(listing.flows[0].flow.orchestrator.prompt, PROMPT);
 }
 
 #[test]

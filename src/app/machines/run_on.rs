@@ -27,7 +27,7 @@ impl App {
 
     pub(in crate::app) fn project_there(&self, link: u64, project: u64) -> Option<&ProjectInfo> {
         let identity = self.identity(project)?;
-        let seen = self.machines.held().iter().find(|held| held.link.id() == link)?.seen.as_ref()?;
+        let seen = self.held_by(link)?.seen.as_ref()?;
         let same = |there: &&ProjectInfo| there.repo.as_deref().is_some_and(|repo| repo.eq_ignore_ascii_case(identity));
         seen.projects.iter().find(same)
     }
@@ -37,7 +37,7 @@ impl App {
     }
 
     pub(in crate::app) fn placed_there(&self, link: u64, project: u64, how: &str) -> String {
-        let Some(held) = self.machines.held().iter().find(|held| held.link.id() == link) else { return String::new() };
+        let Some(held) = self.held_by(link) else { return String::new() };
         let name = &held.name;
         if self.still_cloning(link, project) {
             return format!("cloning on {name}…");
