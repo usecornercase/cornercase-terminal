@@ -10,9 +10,10 @@ use super::toast::NOT_READING;
 use crate::control::plugins::ActionRan;
 use crate::control::{Ids, PopupInfo};
 use crate::log;
-use crate::os::process::{Pid, Signal, kill_process_group};
+use crate::os::process::Signal;
 use crate::plugins::manifest::Action;
 use crate::plugins::{Context, Places, Plugin, run};
+use crate::process;
 use crate::term::emulator::Snapshot;
 use crate::term::mouse;
 use crate::term::{SpawnOptions, Term};
@@ -132,8 +133,8 @@ fn popup_ran(popup: &Popup, ended: &Ended) -> ActionRan {
 }
 
 fn hang_up(term: &Term, signal: Signal) {
-    if let Some(group) = term.shell_pid().and_then(Pid::from_raw) {
-        let _ = kill_process_group(group, signal);
+    if let Some(leader) = term.shell_pid() {
+        process::signal_group(leader, signal);
     }
 }
 
