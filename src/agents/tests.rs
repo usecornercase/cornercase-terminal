@@ -445,6 +445,7 @@ mod choosing {
     #[rstest]
     #[case::native_binary(&[r"C:\Users\a\.local\bin\claude.exe", "--resume"], Some("claude"))]
     #[case::extension_in_capitals(&[r"C:\Users\a\.local\bin\claude.EXE"], Some("claude"))]
+    #[case::name_in_capitals(&[r"C:\Users\a\.local\bin\CLAUDE.EXE"], Some("claude"))]
     #[case::binary_named_without_its_extension(&["claude"], Some("claude"))]
     #[case::copilot_npm_through_its_cmd_shim_which_doubles_a_separator(
         &[r"C:\Program Files\nodejs\node.exe", r"C:\Users\a\AppData\Roaming\npm\\node_modules\@github\copilot\npm-loader.js"],

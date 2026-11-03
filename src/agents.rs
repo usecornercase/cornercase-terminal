@@ -405,7 +405,7 @@ pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     let scripts: Vec<&str> = argv.first().into_iter().chain(script).map(String::as_str).collect();
     kinds(config).into_iter().find(|kind| {
         let bin = command(config, kind);
-        names.contains(&basename(&bin))
+        names.iter().any(|name| process::same_program(name, basename(&bin)))
             || Known::of(kind).is_some_and(|kind| scripts.iter().any(|arg| kind.runs_as(arg)))
     })
 }

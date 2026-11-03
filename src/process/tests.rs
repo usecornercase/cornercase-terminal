@@ -460,39 +460,25 @@ mod snapshot_checks {
 
     use super::*;
 
-    const TAKEN: u64 = 1_000;
-
     #[rstest]
-    #[case::born_after_its_parent_and_before_the_snapshot(Some(500), Some(400), true)]
-    #[case::born_with_the_snapshot(Some(TAKEN), Some(400), true)]
-    #[case::a_parent_whose_start_is_unknown(Some(500), None, true)]
-    #[case::older_than_its_parent_so_a_reused_parent_pid(Some(300), Some(400), false)]
-    #[case::born_after_the_snapshot_so_a_reused_pid(Some(TAKEN + 1), Some(400), false)]
-    #[case::gone_since_the_snapshot(None, Some(400), false)]
-    fn a_child_entry_counts_only_for_a_process_born_between_its_parent_and_the_snapshot(
-        #[case] born: Option<u64>,
-        #[case] parent_born: Option<u64>,
+    #[case::the_same_start(Some(500), Some(500), true)]
+    #[case::another_start_so_a_reused_pid(Some(500), Some(900), false)]
+    #[case::a_start_this_user_may_not_read(Some(500), None, true)]
+    #[case::a_kernel_process_with_no_listed_start(None, Some(500), true)]
+    fn a_listed_entry_answers_for_a_pid_only_while_it_holds_the_same_process(
+        #[case] listed: Option<u64>,
+        #[case] now: Option<u64>,
         #[case] expected: bool,
     ) {
-        assert_eq!(born_in_snapshot(born, parent_born, TAKEN), expected);
-    }
-
-    #[rstest]
-    #[case::born_before_the_snapshot(Some(500), true)]
-    #[case::born_after_the_snapshot_so_a_reused_pid(Some(TAKEN + 1), false)]
-    #[case::alive_but_its_start_unreadable(None, true)]
-    fn an_entry_answers_for_a_pid_only_if_it_was_born_before_the_snapshot(
-        #[case] born: Option<u64>,
-        #[case] expected: bool,
-    ) {
-        assert_eq!(may_be_listed(born, TAKEN), expected);
+        assert_eq!(still_listed(listed, now), expected);
     }
 
     #[rstest]
     #[case::born_first(Some(400), Some(500), true)]
-    #[case::born_later_so_a_reused_pid(Some(600), Some(500), false)]
-    #[case::unknown(None, Some(500), true)]
-    fn a_parent_counts_only_if_it_was_born_first(
+    #[case::born_together(Some(500), Some(500), true)]
+    #[case::born_later_so_a_reused_parent_pid(Some(600), Some(500), false)]
+    #[case::a_kernel_parent_with_no_listed_start(None, Some(500), true)]
+    fn a_listed_parent_counts_only_if_it_was_born_first(
         #[case] parent: Option<u64>,
         #[case] child: Option<u64>,
         #[case] expected: bool,
@@ -526,6 +512,13 @@ mod program_name {
     #[test]
     fn cmd_and_powershell_are_shells_only_on_windows() {
         assert_eq!((is_shell("cmd"), is_shell("PowerShell"), is_shell("pwsh")), (cfg!(windows), cfg!(windows), true));
+    }
+
+    #[test]
+    fn names_in_another_case_are_the_same_program_only_on_windows() {
+        assert!(same_program("claude", "claude"));
+        assert_eq!(same_program("CLAUDE", "claude"), cfg!(windows));
+        assert!(!same_program("claude", "codex"));
     }
 }
 
@@ -628,6 +621,18 @@ mod on_windows {
         child.kill().expect("kill");
         child.wait().expect("wait");
         assert!(!alive(pid) && !running(pid, None));
+    }
+
+    #[test]
+    fn a_process_whose_start_this_user_may_not_read_keeps_its_place_in_the_tree() {
+        let unreadable: Vec<i32> = all().into_iter().filter(|pid| alive(*pid) && start_stamp(*pid).is_none()).collect();
+        let placed: Vec<(i32, i32)> = unreadable.iter().filter_map(|pid| Some((*pid, parent(*pid)?))).collect();
+
+        assert!(unreadable.is_empty() || !placed.is_empty(), "none of {unreadable:?} has a parent");
+        for (pid, up) in &placed {
+            assert!(children(*up).contains(pid) || !alive(*pid), "{pid} under {up}");
+        }
+        assert!(placed.iter().all(|(pid, _)| name(*pid).is_some() || !alive(*pid)));
     }
 
     #[test]

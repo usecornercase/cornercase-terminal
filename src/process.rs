@@ -11,6 +11,8 @@ use crate::os::socket::UnixStream;
 use crate::text;
 
 pub(crate) use crate::os::process::alive;
+#[cfg(windows)]
+pub(crate) use imp::can_list;
 pub(crate) use imp::{
     all, args, children, cpu_time, cwd, env, footprint, name, open_files, parent, peer_uid, start_stamp, started,
 };
@@ -41,6 +43,16 @@ pub(crate) fn is_shell(name: &str) -> bool {
 
 pub(crate) fn program_name(name: &str) -> &str {
     if cfg!(windows) { trim_exe(name) } else { name }
+}
+
+pub(crate) fn same_program(name: &str, other: &str) -> bool {
+    if cfg!(windows) { name.eq_ignore_ascii_case(other) } else { name == other }
+}
+
+#[cfg(not(windows))]
+#[expect(clippy::unnecessary_wraps, reason = "Windows reads the process list whole, and that read can fail")]
+pub(crate) fn can_list() -> io::Result<()> {
+    Ok(())
 }
 
 fn trim_exe(name: &str) -> &str {
@@ -279,13 +291,11 @@ fn filetime_duration(ticks: u64) -> Duration {
 }
 
 #[cfg(any(windows, test))]
-fn born_in_snapshot(born: Option<u64>, parent_born: Option<u64>, taken: u64) -> bool {
-    born.is_some_and(|born| born <= taken && parent_born.is_none_or(|parent| parent <= born))
-}
-
-#[cfg(any(windows, test))]
-fn may_be_listed(born: Option<u64>, taken: u64) -> bool {
-    born.is_none_or(|born| born <= taken)
+fn still_listed(listed: Option<u64>, now: Option<u64>) -> bool {
+    match (listed, now) {
+        (Some(listed), Some(now)) => listed == now,
+        _ => true,
+    }
 }
 
 #[cfg(any(windows, test))]
@@ -558,25 +568,25 @@ mod imp {
     use std::os::windows::ffi::OsStringExt;
     use std::ptr;
     use std::sync::Arc;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use parking_lot::Mutex;
+    use windows_sys::Wdk::System::SystemInformation::{NtQuerySystemInformation, SystemProcessInformation};
     use windows_sys::Wdk::System::Threading::{NtQueryInformationProcess, ProcessBasicInformation};
-    use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, INVALID_HANDLE_VALUE, UNICODE_STRING};
-    use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
-    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, FILETIME, HANDLE, INVALID_HANDLE_VALUE, NTSTATUS, STATUS_INFO_LENGTH_MISMATCH, UNICODE_STRING,
     };
+    use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
     use windows_sys::Win32::System::Memory::{MEMORY_BASIC_INFORMATION, VirtualQueryEx};
     use windows_sys::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX};
     use windows_sys::Win32::System::Threading::{
         GetProcessTimes, OpenProcess, PEB, PROCESS_ACCESS_RIGHTS, PROCESS_BASIC_INFORMATION, PROCESS_NAME_WIN32,
         PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ, QueryFullProcessImageNameW, RTL_USER_PROCESS_PARAMETERS,
     };
+    use windows_sys::Win32::System::WindowsProgramming::SYSTEM_PROCESS_INFORMATION;
 
     use super::{
-        Duration, Instant, PathBuf, alive, born_before, born_in_snapshot, environment_block, filetime_duration,
-        filetime_micros, may_be_listed, program_name, split_command_line,
+        Duration, Instant, PathBuf, alive, born_before, environment_block, filetime_duration, filetime_micros, io,
+        program_name, split_command_line, still_listed,
     };
 
     pub(crate) use super::unread::{open_files, peer_uid};
@@ -584,8 +594,17 @@ mod imp {
     const ENVIRONMENT_LIMIT: usize = 1 << 20;
     const IMAGE_PATH_LIMIT: usize = 1024;
     const SNAPSHOT_FOR: Duration = Duration::from_millis(50);
+    const LIST_FIRST_SIZE: usize = 1 << 19;
+    const LIST_TRIES: usize = 4;
+    const CREATE_TIME_IN_RESERVED: usize = 24;
+    const NEXT: usize = offset_of!(SYSTEM_PROCESS_INFORMATION, NextEntryOffset);
+    const CREATED: usize = offset_of!(SYSTEM_PROCESS_INFORMATION, Reserved1) + CREATE_TIME_IN_RESERVED;
+    const NAME_LENGTH: usize = offset_of!(SYSTEM_PROCESS_INFORMATION, ImageName) + offset_of!(UNICODE_STRING, Length);
+    const NAME_UNITS: usize = offset_of!(SYSTEM_PROCESS_INFORMATION, ImageName) + offset_of!(UNICODE_STRING, Buffer);
+    const PID: usize = offset_of!(SYSTEM_PROCESS_INFORMATION, UniqueProcessId);
+    const PARENT: usize = offset_of!(SYSTEM_PROCESS_INFORMATION, Reserved2);
 
-    static SNAPSHOT: Mutex<Option<(Instant, Arc<Snapshot>)>> = Mutex::new(None);
+    static SNAPSHOT: Mutex<Option<(Instant, Arc<[Entry]>)>> = Mutex::new(None);
 
     struct Owned(HANDLE);
 
@@ -597,10 +616,6 @@ mod imp {
         fn process(pid: i32, access: PROCESS_ACCESS_RIGHTS) -> Option<Self> {
             let pid = u32::try_from(pid).ok().filter(|pid| *pid != 0)?;
             Self::new(unsafe { OpenProcess(access, 0, pid) })
-        }
-
-        fn snapshot() -> Option<Self> {
-            Self::new(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) })
         }
     }
 
@@ -631,25 +646,24 @@ mod imp {
 
     const _: () = assert!(offset_of!(Parameters, command_line) == offset_of!(RTL_USER_PROCESS_PARAMETERS, CommandLine));
 
-    #[derive(Clone)]
     struct Entry {
         pid: i32,
         parent: i32,
+        born: Option<u64>,
         name: String,
     }
 
-    #[derive(Default)]
-    struct Snapshot {
-        taken: u64,
-        entries: Vec<Entry>,
-    }
-
     impl Entry {
-        fn of(entry: &PROCESSENTRY32W) -> Self {
-            let file = &entry.szExeFile;
-            let name = String::from_utf16_lossy(&file[..file.iter().position(|unit| *unit == 0).unwrap_or(file.len())]);
-            let name = program_name(&name).to_string();
-            Self { pid: entry.th32ProcessID.cast_signed(), parent: entry.th32ParentProcessID.cast_signed(), name }
+        fn read(bytes: &[u8], base: usize, at: usize) -> Option<Self> {
+            let pid = i32::try_from(usize::from_ne_bytes(field(bytes, at + PID)?)).ok()?;
+            let parent = i32::try_from(usize::from_ne_bytes(field(bytes, at + PARENT)?)).unwrap_or(0);
+            let born = filetime_micros(u64::from_ne_bytes(field(bytes, at + CREATED)?));
+            let name = image_name_in(bytes, base, at).unwrap_or_default();
+            Some(Self { pid, parent, born, name: program_name(&name).to_string() })
+        }
+
+        fn current(&self) -> bool {
+            self.pid > 0 && alive(self.pid) && still_listed(self.born, start_stamp(self.pid))
         }
     }
 
@@ -657,76 +671,110 @@ mod imp {
         u32::try_from(size_of::<T>()).unwrap_or(u32::MAX)
     }
 
-    fn first(snapshot: &Owned, entry: &mut PROCESSENTRY32W) -> bool {
-        unsafe { Process32FirstW(snapshot.0, entry) != 0 }
+    fn field<const N: usize>(bytes: &[u8], at: usize) -> Option<[u8; N]> {
+        bytes.get(at..at.checked_add(N)?)?.try_into().ok()
     }
 
-    fn next(snapshot: &Owned, entry: &mut PROCESSENTRY32W) -> bool {
-        unsafe { Process32NextW(snapshot.0, entry) != 0 }
+    fn image_name_in(bytes: &[u8], base: usize, at: usize) -> Option<String> {
+        let length = usize::from(u16::from_ne_bytes(field(bytes, at + NAME_LENGTH)?));
+        let start = usize::from_ne_bytes(field(bytes, at + NAME_UNITS)?).checked_sub(base)?;
+        let (pairs, _) = bytes.get(start..start.checked_add(length)?)?.as_chunks::<2>();
+        let units: Vec<u16> = pairs.iter().map(|pair| u16::from_ne_bytes(*pair)).collect();
+        Some(String::from_utf16_lossy(&units))
     }
 
-    fn snapshot() -> Arc<Snapshot> {
+    fn as_bytes(words: &[u64]) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), size_of_val(words)) }
+    }
+
+    fn query(words: &mut [u64]) -> (NTSTATUS, usize) {
+        let (length, mut needed) = (u32::try_from(size_of_val(words)).unwrap_or(u32::MAX), 0_u32);
+        let into = words.as_mut_ptr().cast();
+        let status = unsafe { NtQuerySystemInformation(SystemProcessInformation, into, length, &raw mut needed) };
+        (status, usize::try_from(needed).unwrap_or(usize::MAX))
+    }
+
+    fn process_list() -> io::Result<Vec<u64>> {
+        let mut size = LIST_FIRST_SIZE;
+        for _ in 0..LIST_TRIES {
+            let mut words = vec![0_u64; size.div_ceil(size_of::<u64>())];
+            match query(&mut words) {
+                (status, _) if status >= 0 => return Ok(words),
+                (STATUS_INFO_LENGTH_MISMATCH, needed) => size = needed.max(size).saturating_mul(2),
+                (status, _) => return Err(io::Error::other(format!("could not list the processes: {status:#x}"))),
+            }
+        }
+        Err(io::Error::other("could not list the processes: the list kept growing"))
+    }
+
+    fn entries_in(words: &[u64]) -> Vec<Entry> {
+        let (bytes, base) = (as_bytes(words), words.as_ptr().addr());
+        let mut entries = Vec::new();
+        let mut at = Some(0);
+        while let Some(start) = at {
+            entries.extend(Entry::read(bytes, base, start));
+            let next = u32::from_ne_bytes(field(bytes, start + NEXT).unwrap_or_default());
+            at = usize::try_from(next).ok().filter(|next| *next > 0).and_then(|next| start.checked_add(next));
+        }
+        entries
+    }
+
+    fn snapshot() -> io::Result<Arc<[Entry]>> {
         let mut last = SNAPSHOT.lock();
-        if let Some((at, snapshot)) = last.as_ref()
+        if let Some((at, entries)) = last.as_ref()
             && at.elapsed() < SNAPSHOT_FOR
         {
-            return Arc::clone(snapshot);
+            return Ok(Arc::clone(entries));
         }
-        let Some(taken) = take() else { return Arc::default() };
-        let taken = Arc::new(taken);
-        *last = Some((Instant::now(), Arc::clone(&taken)));
-        taken
+        let entries = entries_in(&process_list()?);
+        if entries.is_empty() {
+            return Err(io::Error::other("could not list the processes: the list was empty"));
+        }
+        let entries: Arc<[Entry]> = entries.into();
+        *last = Some((Instant::now(), Arc::clone(&entries)));
+        Ok(entries)
     }
 
-    fn take() -> Option<Snapshot> {
-        let handle = Owned::snapshot()?;
-        let taken = u64::try_from(SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_micros()).ok()?;
-        let mut entry = PROCESSENTRY32W { dwSize: size_u32::<PROCESSENTRY32W>(), ..PROCESSENTRY32W::default() };
-        let mut entries = Vec::new();
-        let mut more = first(&handle, &mut entry);
-        while more {
-            entries.push(Entry::of(&entry));
-            more = next(&handle, &mut entry);
-        }
-        (!entries.is_empty()).then_some(Snapshot { taken, entries })
+    fn latest() -> Arc<[Entry]> {
+        snapshot().unwrap_or_else(|_| {
+            SNAPSHOT.lock().as_ref().map_or_else(|| Arc::from(Vec::new()), |(_, entries)| Arc::clone(entries))
+        })
+    }
+
+    pub(crate) fn can_list() -> io::Result<()> {
+        snapshot().map(drop)
+    }
+
+    fn current(entries: &[Entry], pid: i32) -> Option<&Entry> {
+        entries.iter().find(|entry| entry.pid == pid).filter(|entry| entry.current())
     }
 
     pub(crate) fn all() -> Vec<i32> {
-        snapshot().entries.iter().map(|entry| entry.pid).filter(|pid| *pid > 0).collect()
+        latest().iter().map(|entry| entry.pid).filter(|pid| *pid > 0).collect()
     }
 
     pub(crate) fn children(pid: i32) -> Vec<i32> {
-        if !alive(pid) {
-            return Vec::new();
-        }
-        let (born, snapshot) = (start_stamp(pid), snapshot());
-        let mut pids: Vec<i32> = snapshot
-            .entries
+        let entries = latest();
+        let Some(parent) = current(&entries, pid) else { return Vec::new() };
+        let mut pids: Vec<i32> = entries
             .iter()
-            .filter(|entry| entry.parent == pid && entry.pid != pid && entry.pid > 0)
+            .filter(|entry| entry.parent == pid && entry.pid != pid)
+            .filter(|entry| born_before(parent.born, entry.born) && entry.current())
             .map(|entry| entry.pid)
-            .filter(|child| born_in_snapshot(start_stamp(*child), born, snapshot.taken))
             .collect();
         pids.sort_unstable();
         pids
     }
 
-    fn listed(pid: i32) -> Option<Entry> {
-        if !alive(pid) {
-            return None;
-        }
-        let snapshot = snapshot();
-        let entry = snapshot.entries.iter().find(|entry| entry.pid == pid)?;
-        may_be_listed(start_stamp(pid), snapshot.taken).then(|| entry.clone())
-    }
-
     pub(crate) fn parent(pid: i32) -> Option<i32> {
-        let up = listed(pid)?.parent;
-        (alive(up) && born_before(start_stamp(up), start_stamp(pid))).then_some(up)
+        let entries = latest();
+        let child = current(&entries, pid)?;
+        let up = current(&entries, child.parent)?;
+        born_before(up.born, child.born).then_some(up.pid)
     }
 
     pub(crate) fn name(pid: i32) -> Option<String> {
-        image_name(pid).or_else(|| listed(pid).map(|entry| entry.name))
+        image_name(pid).or_else(|| current(&latest(), pid).map(|entry| entry.name.clone()))
     }
 
     fn image_name(pid: i32) -> Option<String> {
