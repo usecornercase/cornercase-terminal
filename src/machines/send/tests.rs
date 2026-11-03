@@ -97,6 +97,16 @@ mod a_send {
     }
 
     #[rstest]
+    #[case::start(Send::Start(start()), true)]
+    #[case::start_with(Send::StartWith(Start { focus: false, ..start() }), false)]
+    #[case::new_workspace(new_workspace(), true)]
+    #[case::flow_run(flow_run(), true)]
+    #[case::unfocused(Send::FlowRun(FlowRun::default()), false)]
+    fn says_whether_the_window_follows_it(#[case] send: Send, #[case] focus: bool) {
+        assert_eq!(send.focus(), focus);
+    }
+
+    #[rstest]
     #[case::start(Send::Start(start()), Some(4))]
     #[case::flow_run(flow_run(), Some(4))]
     #[case::no_project(Send::NewWorkspace(NewWorkspace::default()), None)]
@@ -108,8 +118,15 @@ mod a_send {
 mod the_bytes {
     use super::*;
 
-    #[test]
-    fn of_the_files_count_what_they_decode_to_not_their_base64() {
-        assert_eq!(bytes(&[env_file("S0VZPTEK"), env_file("")]), 6);
+    #[rstest]
+    #[case::unpadded(&["S0VZPTEK"], 6)]
+    #[case::one_padding(&["S0VZPTE="], 5)]
+    #[case::two_paddings(&["S0VZPQ=="], 4)]
+    #[case::empty(&[""], 0)]
+    #[case::summed(&["S0VZPTEK", "S0VZPQ==", ""], 10)]
+    fn of_the_files_count_what_they_decode_to_not_their_base64(#[case] data: &[&str], #[case] decoded: u64) {
+        let files: Vec<CloneFile> = data.iter().map(|data| env_file(data)).collect();
+
+        assert_eq!(bytes(&files), decoded);
     }
 }

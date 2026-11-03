@@ -291,7 +291,8 @@ mod a_clone_with_files {
         let refused = asked(&mut app, &rx, "clone", &with_files(&repo, &parent, &files)).expect_err("refused");
 
         assert_eq!(refused.code, "malformed", "{}", refused.message);
-        assert!(refused.message.contains("`.env` is not base64"), "{}", refused.message);
+        assert!(refused.message.contains("files[0] is not base64"), "{}", refused.message);
+        assert!(!refused.message.contains(".env"), "{}", refused.message);
         assert!(!the_clone(&repo, &parent).exists(), "no folder is left");
         assert!(app.projects.is_empty());
     }

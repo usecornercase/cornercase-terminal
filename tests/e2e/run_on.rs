@@ -108,8 +108,9 @@ fn a_flow_run_on_a_machine_starts_its_team_in_a_worktree_there() {
     let run = answer(&vps.here.says(&[&args[..], &["--worktree", "dark-mode", "--json"]].concat()));
 
     assert_eq!(run["machine"], VPS, "{run}");
-    let checkout = vps.machine.dir.join("worktrees").join("shop").join("dark-mode");
-    wait_until("the worktree is made there", || checkout.is_dir());
+    let got = vps.machine.dir.join("worktrees").join("shop").join("dark-mode").join("got");
+    let got = got.display().to_string();
+    vps.machine.wait_for_file(&got, "the team's orchestrator there gets its prompt", |text| !text.is_empty());
     let branched = |project: &Value| workspaces(project).iter().any(|w| w["branch"] == "dark-mode");
     vps.wait_there("here lists the run's workspace under vps", branched);
 }

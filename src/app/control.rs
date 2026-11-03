@@ -901,6 +901,7 @@ impl App {
             let message = format!("`{}` takes no view", request.command.name());
             return Err(Refusal::new(Code::Malformed, message));
         }
+        relay::viewless(&request.command)?;
         if self.clients.views.get(view).is_none() {
             let message = format!(
                 "there is no view {view}: it closed with the connection that opened it, or the server restarted"

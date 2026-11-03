@@ -123,6 +123,25 @@ mod a_relay {
     }
 
     #[test]
+    fn refuses_to_focus_on_a_machine_that_has_not_reported_yet() {
+        let mut remote = unseen(Reply::Agree);
+
+        assert_eq!(remote.refused("vps"), (Code::Unavailable, "vps has not reported yet; try again".into()));
+        assert_eq!(remote.rig.seen("ask"), 0);
+    }
+
+    #[test]
+    fn reaches_a_machine_that_has_not_reported_yet_when_nothing_is_focused() {
+        let mut remote = unseen(Reply::Agree);
+        let Send::NewWorkspace(new) = new_workspace() else { panic!("a new workspace") };
+
+        let answer = remote.relay(Send::NewWorkspace(NewWorkspace { focus: false, ..new }));
+
+        assert_eq!(answer, Ok(json!({})));
+        assert_eq!(remote.asked()[0].get("boot"), None);
+    }
+
+    #[test]
     fn refuses_a_machine_that_is_not_listed() {
         let mut remote = seeing(Reply::Agree);
 

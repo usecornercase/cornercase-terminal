@@ -59,15 +59,15 @@ fn checked_parent(parent: PathBuf, given: &Path) -> Result<PathBuf, Refusal> {
 fn decoded(files: &[CloneFile]) -> Result<Vec<File>, Failure> {
     let mut total = 0;
     let mut decoded = Vec::with_capacity(files.len());
-    for file in files {
-        let bytes = STANDARD
-            .decode(&file.data)
-            .map_err(|e| Failure::Files(format!("the `data` of `{}` is not base64: {e}", file.path.display())))?;
-        total += bytes.len() as u64;
+    for (at, file) in files.iter().enumerate() {
+        total += file.size();
         if total > MAX_TOTAL_BYTES {
             let limit = MAX_TOTAL_BYTES >> 20;
             return Err(Failure::Files(format!("the files are over the {limit} MiB a clone takes")));
         }
+        let bytes = STANDARD
+            .decode(&file.data)
+            .map_err(|e| Failure::Files(format!("the `data` of files[{at}] is not base64: {e}")))?;
         decoded.push(File { path: file.path.clone(), bytes, mode: file.mode });
     }
     Ok(decoded)

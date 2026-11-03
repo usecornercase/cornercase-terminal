@@ -32,6 +32,14 @@ pub(crate) struct CloneFile {
     pub(crate) mode: u32,
 }
 
+impl CloneFile {
+    pub(crate) fn size(&self) -> u64 {
+        let data = self.data.as_bytes();
+        let padding = data.iter().rev().take(2).take_while(|&&byte| byte == b'=').count();
+        (data.len() / 4 * 3).saturating_sub(padding) as u64
+    }
+}
+
 const fn plain_mode() -> u32 {
     PLAIN_MODE
 }
