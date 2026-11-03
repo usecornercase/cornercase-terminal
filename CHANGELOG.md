@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.269
+## 0.12.272
 
 - **On Windows, project, workspace and worktree folders are stored and shown without the `\\?\` prefix**, and sessions saved with it open with plain folders. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.270
+
+- **On Windows, programs in a pane get the mouse**, the next step of the native port (it still says it does not run on Windows yet). vim with `set mouse=a` and other programs that ask for the mouse, with escape codes or through the Windows console, get clicks, drags and the wheel through ConPTY. A program using the oldest mouse encoding gets no click past column or row 95, where Windows would turn it into stray keys, as in Windows Terminal. Nothing changes on Linux and macOS.
 
 ## 0.12.268
 
