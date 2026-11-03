@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use super::TAIL;
-use crate::os::fs::MetadataExt;
+use crate::os::fs::stat;
 
 pub(in crate::agents) fn head(path: &Path) -> Option<serde_json::Value> {
     let mut bytes = Vec::new();
@@ -25,7 +25,7 @@ pub(in crate::agents) fn values(bytes: &[u8]) -> Vec<serde_json::Value> {
 pub(in crate::agents) struct Tail {
     read: u64,
     skipping: bool,
-    stamp: Option<(u64, u64, SystemTime)>,
+    stamp: Option<((u64, u64), u64, SystemTime)>,
 }
 
 pub(in crate::agents) struct Batch {
@@ -52,8 +52,9 @@ impl Tail {
     }
 
     pub(in crate::agents) fn read_since(&mut self, path: &Path, since: Option<SystemTime>) -> std::io::Result<Batch> {
-        let info = std::fs::metadata(path)?;
-        let stamp = (info.ino(), info.len(), info.modified()?);
+        let found = stat(path)?;
+        let (id, info) = (found.id(), found.meta);
+        let stamp = (id, info.len(), info.modified()?);
         let reset = self.stamp.is_some_and(|s| s.0 != stamp.0 || stamp.1 < s.1 || (stamp.1 == s.1 && stamp.2 != s.2));
         if reset {
             *self = Self::default();

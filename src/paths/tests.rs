@@ -66,6 +66,7 @@ mod the_key_of_a_source_tree {
     }
 }
 
+#[cfg(unix)]
 #[rstest::rstest]
 #[case::release(None, &[HOME], "/home/me/.local/state/cornercase/server.sock")]
 #[case::release_xdg(None, &[HOME, ("XDG_STATE_HOME", "/st")], "/st/cornercase/server.sock")]
@@ -77,6 +78,7 @@ fn sockets(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str)
     assert_eq!(socket_in(&vars(env), dev), PathBuf::from(expected));
 }
 
+#[cfg(unix)]
 #[rstest::rstest]
 #[case::empty(&[("XDG_STATE_HOME", ""), HOME])]
 #[case::relative(&[("XDG_STATE_HOME", "rel"), HOME])]
@@ -84,6 +86,7 @@ fn relative_or_empty_xdg_folders_are_ignored(#[case] env: Vars) {
     assert_eq!(socket_in(&vars(env), None), PathBuf::from("/home/me/.local/state/cornercase/server.sock"));
 }
 
+#[cfg(unix)]
 #[rstest::rstest]
 #[case::runtime_set(&[RUNTIME], true, &["/run/user/501/cornercase/server.sock", "/t/cornercase-501/server.sock"])]
 #[case::linux_guesses_the_runtime_folder(&[], true, &["/run/user/501/cornercase/server.sock", "/t/cornercase-501/server.sock"])]
@@ -93,6 +96,7 @@ fn earlier_sockets(#[case] env: Vars, #[case] linux: bool, #[case] expected: &[&
     assert_eq!(found, expected.iter().map(PathBuf::from).collect::<Vec<_>>());
 }
 
+#[cfg(unix)]
 #[rstest::rstest]
 #[case::release(None, &[HOME], "/home/me/.config/cornercase/config.json")]
 #[case::release_xdg(None, &[HOME, ("XDG_CONFIG_HOME", "/c")], "/c/cornercase/config.json")]
@@ -103,6 +107,7 @@ fn configs(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str)
     assert_eq!(config_in(&vars(env), dev), PathBuf::from(expected));
 }
 
+#[cfg(unix)]
 #[rstest::rstest]
 #[case::release(None, &[HOME], "/home/me/.local/state/cornercase/session.json")]
 #[case::release_xdg(None, &[HOME, ("XDG_STATE_HOME", "/st")], "/st/cornercase/session.json")]
@@ -113,6 +118,7 @@ fn sessions(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str
     assert_eq!(session_in(&vars(env), dev), PathBuf::from(expected));
 }
 
+#[cfg(unix)]
 #[rstest::rstest]
 #[case::release(None, &[HOME], "/home/me/.local/state/cornercase/server.log")]
 #[case::debug(KEY, &[HOME], "/home/me/.local/state/cornercase-dev/ecddcea2/server.log")]
@@ -137,6 +143,7 @@ fn the_source_file_sits_in_the_state_folder() {
     );
 }
 
+#[cfg(unix)]
 #[rstest::rstest]
 #[case::release(None, &[HOME], "/home/me/.local/state/cornercase/accounts")]
 #[case::release_xdg(None, &[HOME, ("XDG_STATE_HOME", "/st")], "/st/cornercase/accounts")]
@@ -153,4 +160,60 @@ fn accounts_sit_beside_the_session(#[case] dev: Option<&str>, #[case] env: Vars,
 #[case::custom("/c/server.json", "/c/server.pasted")]
 fn pasted_files_live_beside_the_session(#[case] session: &str, #[case] expected: &str) {
     assert_eq!(pasted(Path::new(session)), PathBuf::from(expected));
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+
+    const ROAMING: (&str, &str) = ("APPDATA", r"C:\Users\me\AppData\Roaming");
+    const LOCAL: (&str, &str) = ("LOCALAPPDATA", r"C:\Users\me\AppData\Local");
+    const PROFILE: (&str, &str) = ("USERPROFILE", r"C:\Users\me");
+    const KNOWN: Vars = &[ROAMING, LOCAL, PROFILE];
+    const XDG: Vars = &[
+        ROAMING,
+        LOCAL,
+        PROFILE,
+        ("XDG_CONFIG_HOME", r"C:\xdg\config"),
+        ("XDG_STATE_HOME", r"C:\xdg\state"),
+        ("HOME", r"C:\home"),
+    ];
+
+    #[rstest::rstest]
+    #[case::release(None, KNOWN, r"C:\Users\me\AppData\Roaming\cornercase\config.json")]
+    #[case::debug(KEY, KNOWN, r"C:\Users\me\AppData\Roaming\cornercase-dev\config.json")]
+    #[case::xdg_is_not_read(None, XDG, r"C:\Users\me\AppData\Roaming\cornercase\config.json")]
+    #[case::only_the_profile(None, &[PROFILE], r"C:\Users\me\AppData\Roaming\cornercase\config.json")]
+    #[case::relative_is_ignored(None, &[("APPDATA", "Roaming"), PROFILE], r"C:\Users\me\AppData\Roaming\cornercase\config.json")]
+    #[case::custom_in_debug(KEY, &[ROAMING, CUSTOM], "/s/config.json")]
+    fn the_config_roams(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
+        assert_eq!(config_in(&vars(env), dev), PathBuf::from(expected));
+    }
+
+    #[rstest::rstest]
+    #[case::release(None, KNOWN, r"C:\Users\me\AppData\Local\cornercase\session.json")]
+    #[case::debug(KEY, KNOWN, r"C:\Users\me\AppData\Local\cornercase-dev\ecddcea2\session.json")]
+    #[case::xdg_is_not_read(None, XDG, r"C:\Users\me\AppData\Local\cornercase\session.json")]
+    #[case::only_the_profile(None, &[PROFILE], r"C:\Users\me\AppData\Local\cornercase\session.json")]
+    #[case::custom_in_debug(KEY, &[LOCAL, CUSTOM], "/s/dev.json")]
+    fn the_state_stays_on_this_machine(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
+        assert_eq!(session_in(&vars(env), dev), PathBuf::from(expected));
+    }
+
+    #[rstest::rstest]
+    #[case::release(None, r"C:\Users\me\AppData\Local\cornercase")]
+    #[case::debug(KEY, r"C:\Users\me\AppData\Local\cornercase-dev\ecddcea2")]
+    fn the_socket_the_log_and_the_accounts_sit_beside_the_session(#[case] dev: Option<&str>, #[case] folder: &str) {
+        let (env, folder) = (vars(KNOWN), Path::new(folder));
+        assert_eq!(socket_in(&env, dev), folder.join("server.sock"));
+        assert_eq!(log_in(&env, dev), folder.join("server.log"));
+        assert_eq!(accounts_in(&env, dev), folder.join("accounts"));
+    }
+
+    #[test]
+    fn a_custom_socket_still_decides_everything() {
+        let env = vars(&[ROAMING, LOCAL, CUSTOM]);
+        assert_eq!(socket_in(&env, None), PathBuf::from("/s/dev.sock"));
+        assert_eq!(log_in(&env, None), PathBuf::from("/s/dev.log"));
+    }
 }

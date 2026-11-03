@@ -1,6 +1,6 @@
 [package]
 name = "cornercase"
-version = "0.12.243"
+version = "0.12.244"
 edition = "2024"
 description = "A terminal multiplexer for projects, git worktrees and coding agents, driven by the mouse"
 license = "MIT OR Apache-2.0"
@@ -61,6 +61,11 @@ ureq = "3.4.2"
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1.5", features = ["event", "fs", "net", "param", "process", "stdio", "termios"] }
 signal-hook = "0.4.4"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+  "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl"
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.189"
