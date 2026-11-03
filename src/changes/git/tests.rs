@@ -331,3 +331,72 @@ mod marks {
         assert!(marks(TempDir::new().path()).is_err());
     }
 }
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::test_util::verbatim;
+
+    fn texts(dir: &Path, expanded: Option<Vec<String>>) -> Vec<(String, Vec<String>)> {
+        let loaded = load(&Request { expanded, ..request(dir, Mode::Uncommitted) }).expect("load");
+        let files = loaded.diff.expect("a diff").files;
+        let lines = |file: &File| file.hunks.iter().flat_map(|h| &h.lines).map(|l| l.text.clone()).collect();
+        files.iter().map(|file| (file.path.clone(), lines(file))).collect()
+    }
+
+    #[test]
+    fn a_verbatim_folder_and_names_out_of_ascii_are_read() {
+        let repo = git_repo(&[("año/ñandú.txt", "one\n")]);
+        write(repo.path(), "año/ñandú.txt", "one\ntwo\n");
+        std::fs::create_dir(repo.path().join("año").join("más")).expect("mkdir");
+        write(repo.path(), "año/más/é.txt", "x\ny\n");
+        let dir = verbatim(repo.path());
+
+        assert_eq!(
+            files(&dir, Mode::Uncommitted),
+            [("año/más/é.txt".into(), Status::Untracked, 2, 0), ("año/ñandú.txt".into(), Status::Modified, 1, 0)]
+        );
+        assert_eq!(new_side(&dir, Mode::Uncommitted, "año/ñandú.txt"), Some(vec!["one".into(), "two".into()]));
+    }
+
+    #[test]
+    fn a_verbatim_subfolder_keeps_its_paths_relative() {
+        let repo = git_repo(&[("app/src/a.txt", "one\n"), ("other.txt", "one\n")]);
+        write(repo.path(), "app/src/a.txt", "two\n");
+        write(repo.path(), "other.txt", "two\n");
+
+        let marks = marks(&verbatim(&repo.path().join("app"))).expect("marks");
+
+        assert_eq!(marks, [("src/a.txt".to_string(), Status::Modified)]);
+    }
+
+    #[test]
+    fn a_checkout_with_crlf_shows_only_what_changed_and_no_carriage_return() {
+        let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
+        git(repo.path(), &["config", "core.autocrlf", "true"]);
+        write(repo.path(), "a.txt", "one\r\nTWO\r\n");
+        write(repo.path(), "c.txt", "new\r\nfile\r\n");
+        let want = [
+            ("a.txt".to_string(), vec!["one".to_string(), "two".into(), "TWO".into()]),
+            ("c.txt".to_string(), vec!["new".to_string(), "file".into()]),
+        ];
+
+        assert_eq!(texts(repo.path(), None), want);
+        assert_eq!(texts(repo.path(), Some(vec!["a.txt".into(), "c.txt".into()])), want);
+    }
+
+    #[test]
+    fn a_file_checked_out_with_crlf_and_unchanged_is_not_listed() {
+        let repo = git_repo(&[("a.txt", "one\ntwo\n"), ("b.txt", "same\n")]);
+        git(repo.path(), &["config", "core.autocrlf", "true"]);
+        std::fs::remove_file(repo.path().join("b.txt")).expect("remove");
+        git(repo.path(), &["checkout", "--", "b.txt"]);
+        assert_eq!(std::fs::read(repo.path().join("b.txt")).expect("read"), b"same\r\n");
+        write(repo.path(), "a.txt", "one\ntwo\nthree\n");
+
+        assert_eq!(files(repo.path(), Mode::Uncommitted), [("a.txt".into(), Status::Modified, 1, 0)]);
+        let first = load(&request(repo.path(), Mode::Uncommitted)).expect("load");
+        let again = load(&Request { last: Some(first.digest), ..request(repo.path(), Mode::Uncommitted) });
+        assert!(again.expect("load").diff.is_none());
+    }
+}

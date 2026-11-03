@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::os::ffi;
 use crate::os::fs::set_mode;
 use crate::os::process::{Pid, Signal, kill_process};
 
@@ -68,7 +69,7 @@ impl TempDir {
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("cornercase-test-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("create temp dir");
-        Self(dir.canonicalize().expect("canonicalize temp dir"))
+        Self(ffi::plain(&dir.canonicalize().expect("canonicalize temp dir")).into_owned())
     }
 
     pub(crate) fn path(&self) -> &Path {
@@ -322,6 +323,11 @@ pub(crate) fn clone_of(remote: &Path) -> (TempDir, PathBuf) {
     git(dir.path(), &["clone", "--quiet", &remote.display().to_string(), "clone"]);
     let path = dir.path().join("clone");
     (dir, path)
+}
+
+#[cfg(not(unix))]
+pub(crate) fn verbatim(path: &Path) -> PathBuf {
+    PathBuf::from(format!(r"\\?\{}", path.display()))
 }
 
 type Route = (&'static str, u16, Vec<u8>);

@@ -8,7 +8,7 @@ use super::diff::MAX_UNTRACKED_BYTES;
 use super::git::{self, Deadline, UNTRACKED_READ_BYTES};
 use crate::error::{Error, Result};
 use crate::git::worktree;
-use crate::os::ffi::{OsStrExt, OsStringExt};
+use crate::os::ffi;
 use crate::os::fs::DirBuilderExt;
 
 const IDENTITY: &str = "cornercase";
@@ -111,19 +111,19 @@ impl Drop for Scratch {
 }
 
 fn quoted(path: &Path) -> OsString {
-    let bytes = path.as_os_str().as_bytes();
-    if !bytes.iter().any(|b| matches!(b, b':' | b'"')) {
-        return path.as_os_str().to_owned();
+    let bytes = ffi::to_bytes(path);
+    if !bytes.iter().any(|b| *b == ffi::LIST_SEPARATOR || *b == b'"') {
+        return ffi::to_os(bytes.into_owned());
     }
     let mut out = vec![b'"'];
-    for b in bytes {
+    for b in bytes.iter() {
         if matches!(b, b'\\' | b'"') {
             out.push(b'\\');
         }
         out.push(*b);
     }
     out.push(b'"');
-    OsString::from_vec(out)
+    ffi::to_os(out)
 }
 
 struct Env(Vec<(&'static str, OsString)>);
@@ -132,13 +132,13 @@ impl Env {
     fn of(scratch: &Scratch, dir: &Path) -> Result<Self> {
         let objects = crate::git::objects_dir(dir).ok_or_else(|| Error::Git("not a git repository".into()))?;
         Ok(Self(vec![
-            ("GIT_OBJECT_DIRECTORY", scratch.dir.join("objects").into_os_string()),
+            ("GIT_OBJECT_DIRECTORY", ffi::plain(&scratch.dir.join("objects")).into_owned().into_os_string()),
             ("GIT_ALTERNATE_OBJECT_DIRECTORIES", quoted(&objects)),
         ]))
     }
 
     fn snapshotting(mut self, index: &Path) -> Self {
-        self.0.push(("GIT_INDEX_FILE", index.as_os_str().to_os_string()));
+        self.0.push(("GIT_INDEX_FILE", ffi::plain(index).into_owned().into_os_string()));
         for key in ["GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"] {
             self.0.push((key, IDENTITY.into()));
         }
@@ -233,7 +233,7 @@ fn failure(out: Output) -> Error {
 
 fn snapshot(scratch: &Scratch, dir: &Path, index: &Path) -> Result<Snapshot> {
     let plain = Env::of(scratch, dir)?;
-    let top = PathBuf::from(plain.text(dir, &["rev-parse", "--show-toplevel"])?);
+    let top = ffi::to_path(plain.text(dir, &["rev-parse", "--show-toplevel"])?.as_bytes());
     let head = plain.text(&top, &["rev-parse", "--verify", "--quiet", "HEAD"]).unwrap_or_default();
     if head.is_empty() {
         return Err(Error::Git("the branch has no commit yet".into()));
@@ -258,7 +258,7 @@ fn add_untracked(env: &Env, scratch: &Scratch, top: &Path, index: &Path) -> Resu
     }
     let file = scratch.dir.join(format!("untracked-{}", index.file_name().unwrap_or_default().to_string_lossy()));
     std::fs::write(&file, kept)?;
-    let from = format!("--pathspec-from-file={}", file.display());
+    let from = format!("--pathspec-from-file={}", ffi::text(&file));
     let args = ["--literal-pathspecs", "-c", "core.splitIndex=false", "add", &from, "--pathspec-file-nul"];
     env.run(top, &args)?;
     Ok(left_out)
@@ -269,7 +269,7 @@ fn within_caps(top: &Path, listed: &[u8]) -> (Vec<u8>, usize) {
     let mut left_out = 0;
     let mut budget = UNTRACKED_READ_BYTES;
     for path in listed.split(|b| *b == 0).filter(|p| !p.is_empty()) {
-        let Ok(meta) = std::fs::symlink_metadata(top.join(OsStr::from_bytes(path))) else { continue };
+        let Ok(meta) = std::fs::symlink_metadata(top.join(ffi::to_path(path))) else { continue };
         if !meta.is_symlink() && !meta.is_file() {
             continue;
         }
