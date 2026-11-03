@@ -343,8 +343,12 @@ extern "system" fn stop_event(event: u32) -> BOOL {
 pub(crate) fn on_stop_signal(stop: impl FnOnce() + Send + 'static) -> io::Result<()> {
     *STOP.lock() = Some(Box::new(stop));
     unsafe { SetConsoleCtrlHandler(None, FALSE) };
-    checked(unsafe { SetConsoleCtrlHandler(Some(stop_event), TRUE) })
+    checked(unsafe { SetConsoleCtrlHandler(Some(stop_event), TRUE) })?;
+    session_end::watch(&STOP);
+    Ok(())
 }
+
+mod session_end;
 
 #[cfg(test)]
 mod tests;
