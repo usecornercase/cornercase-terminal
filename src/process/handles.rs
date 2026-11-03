@@ -7,28 +7,100 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 
-use crate::log;
+use crate::{log, panics};
 
 #[cfg(windows)]
 pub(crate) use imp::open_files;
 
 #[cfg(windows)]
 const NAME_WITHIN: Duration = Duration::from_secs(1);
-const MOST_STUCK: usize = 16;
+#[cfg(windows)]
+const MOST_ASKED: usize = 16;
 const WORD: usize = size_of::<usize>();
 const HEADER: usize = 2 * WORD;
 const TYPE_INDEX: usize = 3 * WORD + 4;
 const ENTRY: usize = 3 * WORD + 16;
 
-static STUCK: Mutex<Vec<(i32, usize)>> = Mutex::new(Vec::new());
-static FULL: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
+static WAITING: Waiting = Waiting::new(MOST_ASKED);
 
 type Ask = Arc<dyn Fn(usize) -> Option<PathBuf> + Send + Sync>;
+
+#[derive(Clone)]
+struct Asking {
+    ask: Ask,
+    within: Duration,
+    waiting: &'static Waiting,
+}
+
+struct Waiting {
+    asked: Mutex<Vec<(i32, usize)>>,
+    most: usize,
+    full: AtomicBool,
+}
 
 #[derive(Default)]
 struct Progress {
     done: AtomicUsize,
     abandoned: AtomicBool,
+}
+
+enum Turn {
+    Ask,
+    Skip,
+    Full,
+    Stop,
+}
+
+enum Answer {
+    Named(Option<PathBuf>),
+    Full,
+}
+
+impl Waiting {
+    const fn new(most: usize) -> Self {
+        Self { asked: Mutex::new(Vec::new()), most, full: AtomicBool::new(false) }
+    }
+
+    fn take(&self, pid: i32, handle: usize, progress: &Progress) -> Turn {
+        let mut asked = self.asked.lock();
+        if progress.abandoned.load(Ordering::Relaxed) {
+            return Turn::Stop;
+        }
+        if asked.contains(&(pid, handle)) {
+            progress.done.fetch_add(1, Ordering::Relaxed);
+            return Turn::Skip;
+        }
+        if asked.len() >= self.most {
+            return Turn::Full;
+        }
+        asked.push((pid, handle));
+        Turn::Ask
+    }
+
+    fn answered(&self, pid: i32, handle: usize, progress: &Progress) -> bool {
+        let mut asked = self.asked.lock();
+        if let Some(at) = asked.iter().position(|entry| *entry == (pid, handle)) {
+            asked.swap_remove(at);
+        }
+        progress.done.fetch_add(1, Ordering::Relaxed);
+        !progress.abandoned.load(Ordering::Relaxed)
+    }
+
+    fn give_up(&self, answered: usize, progress: &Progress) -> bool {
+        let _asked = self.asked.lock();
+        if progress.done.load(Ordering::Relaxed) != answered {
+            return false;
+        }
+        progress.abandoned.store(true, Ordering::Relaxed);
+        true
+    }
+
+    fn filled(&self) {
+        if !self.full.swap(true, Ordering::Relaxed) {
+            log::warning!("process", "open files are not named, too many names wait", most = self.most);
+        }
+    }
 }
 
 fn word(bytes: &[u8], at: usize) -> Option<usize> {
@@ -53,63 +125,43 @@ fn type_of(snapshot: &[u8], handle: usize) -> Option<u32> {
     entries(snapshot).find(|(value, _)| *value == handle).map(|(_, index)| index)
 }
 
-fn names(pid: i32, handles: Vec<usize>, ask: &Ask, within: Duration) -> Vec<PathBuf> {
-    let mut left: Vec<usize> = {
-        let stuck = STUCK.lock();
-        handles.into_iter().filter(|handle| !stuck.contains(&(pid, *handle))).collect()
-    };
+fn names(pid: i32, handles: Vec<usize>, asking: &Asking) -> Vec<PathBuf> {
+    let mut left = handles;
     let mut found = Vec::new();
-    while !left.is_empty() && room() {
-        let Some(answered) = batch(pid, &left, ask, within, &mut found) else { break };
+    while !left.is_empty() {
+        let Some(answered) = batch(pid, &left, asking, &mut found) else { break };
         left = left.split_off(answered.saturating_add(1).min(left.len()));
     }
     found
 }
 
-fn room() -> bool {
-    let stuck = STUCK.lock().len();
-    if stuck < MOST_STUCK {
-        return true;
-    }
-    if !FULL.swap(true, Ordering::Relaxed) {
-        log::warning!("process", "open files are not named, too many names wait", stuck = stuck);
-    }
-    false
-}
-
-fn batch(pid: i32, handles: &[usize], ask: &Ask, within: Duration, found: &mut Vec<PathBuf>) -> Option<usize> {
+fn batch(pid: i32, handles: &[usize], asking: &Asking, found: &mut Vec<PathBuf>) -> Option<usize> {
     let progress = Arc::new(Progress::default());
-    let answers = start(pid, handles.to_vec(), Arc::clone(ask), Arc::clone(&progress))?;
+    let answers = start(pid, handles.to_vec(), asking.clone(), Arc::clone(&progress))?;
     let mut answered = 0;
     loop {
-        match answers.recv_timeout(within) {
-            Ok(path) => {
+        match answers.recv_timeout(asking.within) {
+            Ok(Answer::Named(path)) => {
                 found.extend(path);
                 answered += 1;
             }
-            Err(RecvTimeoutError::Timeout) if !give_up(pid, handles, answered, &progress) => {}
+            Ok(Answer::Full) => {
+                asking.waiting.filled();
+                return None;
+            }
+            Err(RecvTimeoutError::Timeout) if !asking.waiting.give_up(answered, &progress) => {}
             Err(_) => return Some(answered),
         }
     }
 }
 
-fn give_up(pid: i32, handles: &[usize], answered: usize, progress: &Progress) -> bool {
-    let Some(&handle) = handles.get(answered) else { return true };
-    let mut stuck = STUCK.lock();
-    if progress.done.load(Ordering::Relaxed) != answered {
-        return false;
-    }
-    stuck.push((pid, handle));
-    progress.abandoned.store(true, Ordering::Relaxed);
-    true
-}
-
-fn start(pid: i32, handles: Vec<usize>, ask: Ask, progress: Arc<Progress>) -> Option<Receiver<Option<PathBuf>>> {
+fn start(pid: i32, handles: Vec<usize>, asking: Asking, progress: Arc<Progress>) -> Option<Receiver<Answer>> {
     let (answers, answered) = mpsc::channel();
     let work = move || {
         for handle in handles {
-            let path = ask(handle);
-            if !go_on(pid, handle, &progress) || answers.send(path).is_err() {
+            let Some(answer) = answer(pid, handle, &asking, &progress) else { return };
+            let full = matches!(answer, Answer::Full);
+            if answers.send(answer).is_err() || full {
                 return;
             }
         }
@@ -118,16 +170,16 @@ fn start(pid: i32, handles: Vec<usize>, ask: Ask, progress: Arc<Progress>) -> Op
     Some(answered)
 }
 
-fn go_on(pid: i32, handle: usize, progress: &Progress) -> bool {
-    let mut stuck = STUCK.lock();
-    progress.done.fetch_add(1, Ordering::Relaxed);
-    if !progress.abandoned.load(Ordering::Relaxed) {
-        return true;
+fn answer(pid: i32, handle: usize, asking: &Asking, progress: &Progress) -> Option<Answer> {
+    match asking.waiting.take(pid, handle, progress) {
+        Turn::Stop => None,
+        Turn::Full => Some(Answer::Full),
+        Turn::Skip => Some(Answer::Named(None)),
+        Turn::Ask => {
+            let path = panics::contain(|| (asking.ask)(handle)).flatten();
+            asking.waiting.answered(pid, handle, progress).then_some(Answer::Named(path))
+        }
     }
-    if let Some(at) = stuck.iter().position(|entry| *entry == (pid, handle)) {
-        stuck.swap_remove(at);
-    }
-    false
 }
 
 #[cfg(windows)]
@@ -145,7 +197,7 @@ mod imp {
     use windows_sys::Win32::Storage::FileSystem::{GetFinalPathNameByHandleW, VOLUME_NAME_DOS};
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, PROCESS_DUP_HANDLE, PROCESS_QUERY_INFORMATION};
 
-    use super::{Ask, NAME_WITHIN, names, of_type, type_of};
+    use super::{Asking, NAME_WITHIN, WAITING, names, of_type, type_of};
     use crate::process::imp::{Owned, as_bytes};
 
     const SNAPSHOT_FIRST_WORDS: usize = 1 << 11;
@@ -165,8 +217,9 @@ mod imp {
         };
         let Some(snapshot) = snapshot(process.0) else { return Vec::new() };
         let process = Process(process);
-        let ask: Ask = Arc::new(move |handle| name(&process, handle));
-        names(pid, of_type(as_bytes(&snapshot), file), &ask, NAME_WITHIN)
+        let asking =
+            Asking { ask: Arc::new(move |handle| name(&process, handle)), within: NAME_WITHIN, waiting: &WAITING };
+        names(pid, of_type(as_bytes(&snapshot), file), &asking)
     }
 
     fn file_type() -> Option<u32> {

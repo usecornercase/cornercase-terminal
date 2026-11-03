@@ -6,6 +6,7 @@ use crate::test_util::wait_until;
 
 const PATIENT: Duration = Duration::from_secs(30);
 const BLOCKED_AFTER: Duration = Duration::from_secs(2);
+const ONLY_BLOCKED_AFTER: Duration = Duration::from_millis(100);
 
 fn snapshot(entries: &[(usize, u32)]) -> Vec<u8> {
     let mut bytes = Vec::new();
@@ -20,8 +21,16 @@ fn snapshot(entries: &[(usize, u32)]) -> Vec<u8> {
     bytes
 }
 
-fn stuck(pid: i32) -> Vec<usize> {
-    STUCK.lock().iter().filter(|(of, _)| *of == pid).map(|(_, handle)| *handle).collect()
+fn waiting(most: usize) -> &'static Waiting {
+    Box::leak(Box::new(Waiting::new(most)))
+}
+
+fn waiting_on(waiting: &Waiting, pid: i32) -> Vec<usize> {
+    waiting.asked.lock().iter().filter(|(of, _)| *of == pid).map(|(_, handle)| *handle).collect()
+}
+
+fn asking(ask: &Ask, within: Duration, waiting: &'static Waiting) -> Asking {
+    Asking { ask: Arc::clone(ask), within, waiting }
 }
 
 fn file(handle: usize) -> PathBuf {
@@ -30,6 +39,37 @@ fn file(handle: usize) -> PathBuf {
 
 fn even(handle: usize) -> Option<PathBuf> {
     handle.is_multiple_of(2).then(|| file(handle))
+}
+
+struct Gated {
+    ask: Ask,
+    blocked: Arc<AtomicUsize>,
+    open: Option<mpsc::Sender<()>>,
+}
+
+impl Gated {
+    fn new(blocks: impl Fn(usize) -> bool + Send + Sync + 'static) -> Self {
+        let (open, gate) = mpsc::channel::<()>();
+        let gate = Mutex::new(gate);
+        let blocked = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&blocked);
+        let ask: Ask = Arc::new(move |handle| {
+            if blocks(handle) {
+                counted.fetch_add(1, Ordering::SeqCst);
+                let _ = gate.lock().recv();
+            }
+            even(handle)
+        });
+        Self { ask, blocked, open: Some(open) }
+    }
+
+    fn blocked(&self) -> usize {
+        self.blocked.load(Ordering::SeqCst)
+    }
+
+    fn open(&mut self) {
+        self.open = None;
+    }
 }
 
 mod the_snapshot {
@@ -74,48 +114,75 @@ mod naming {
 
     #[test]
     fn names_every_handle_that_has_a_name() {
+        let waiting = waiting(16);
         let ask: Ask = Arc::new(even);
 
-        assert_eq!(names(-1, vec![2, 3, 4], &ask, PATIENT), [file(2), file(4)]);
-        assert_eq!(stuck(-1), Vec::<usize>::new());
+        assert_eq!(names(1, vec![2, 3, 4], &asking(&ask, PATIENT, waiting)), [file(2), file(4)]);
+        assert_eq!(waiting_on(waiting, 1), Vec::<usize>::new());
     }
 
     #[test]
     fn skips_a_handle_whose_name_blocks_and_asks_again_once_it_answered() {
-        let pid = -2;
-        let (open, gate) = mpsc::channel::<()>();
-        let gate = Mutex::new(gate);
-        let asked = Arc::new(AtomicUsize::new(0));
-        let counted = Arc::clone(&asked);
-        let ask: Ask = Arc::new(move |handle| {
-            if handle == 2 {
-                counted.fetch_add(1, Ordering::SeqCst);
-                let _ = gate.lock().recv();
-            }
-            even(handle)
-        });
+        let waiting = waiting(16);
+        let mut gated = Gated::new(|handle| handle == 2);
 
-        assert_eq!(names(pid, vec![2, 4, 6], &ask, BLOCKED_AFTER), [file(4), file(6)]);
-        assert_eq!(stuck(pid), [2]);
-        assert_eq!(names(pid, vec![2, 4], &ask, PATIENT), [file(4)]);
-        assert_eq!(asked.load(Ordering::SeqCst), 1);
+        assert_eq!(names(1, vec![2, 4, 6], &asking(&gated.ask, BLOCKED_AFTER, waiting)), [file(4), file(6)]);
+        assert_eq!(waiting_on(waiting, 1), [2]);
+        assert_eq!(names(1, vec![2, 4], &asking(&gated.ask, PATIENT, waiting)), [file(4)]);
+        assert_eq!(gated.blocked(), 1);
 
-        drop(open);
-        wait_until("the blocked name is answered", || stuck(pid).is_empty());
+        gated.open();
+        wait_until("the blocked name is answered", || waiting_on(waiting, 1).is_empty());
 
-        assert_eq!(names(pid, vec![2], &ask, PATIENT), [file(2)]);
-        assert_eq!(asked.load(Ordering::SeqCst), 2);
+        assert_eq!(names(1, vec![2], &asking(&gated.ask, PATIENT, waiting)), [file(2)]);
+        assert_eq!(gated.blocked(), 2);
+    }
+
+    #[test]
+    fn asks_a_handle_once_while_two_calls_want_its_name() {
+        let waiting = waiting(16);
+        let mut gated = Gated::new(|handle| handle == 2);
+        let first = asking(&gated.ask, PATIENT, waiting);
+        let earlier = thread::spawn(move || names(1, vec![2], &first));
+        wait_until("the first call asks", || gated.blocked() == 1);
+
+        let later = names(1, vec![2, 4], &asking(&gated.ask, BLOCKED_AFTER, waiting));
+
+        assert_eq!((later, gated.blocked(), waiting_on(waiting, 1)), (vec![file(4)], 1, vec![2]));
+        gated.open();
+        assert_eq!(earlier.join().expect("the first call ends"), [file(2)]);
+        assert_eq!(waiting_on(waiting, 1), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn asks_no_more_names_at_once_than_the_most_and_says_so_once() {
+        let waiting = waiting(2);
+        let mut gated = Gated::new(|_| true);
+        let first = asking(&gated.ask, PATIENT, waiting);
+        let earlier = thread::spawn(move || names(1, vec![1], &first));
+        wait_until("the first call asks", || gated.blocked() == 1);
+        assert_eq!(names(2, vec![1], &asking(&gated.ask, ONLY_BLOCKED_AFTER, waiting)), Vec::<PathBuf>::new());
+        assert!(!waiting.full.load(Ordering::Relaxed));
+
+        let full = names(3, vec![2, 4], &asking(&gated.ask, PATIENT, waiting));
+
+        assert_eq!((full, gated.blocked(), waiting.full.load(Ordering::Relaxed)), (vec![], 2, true));
+        gated.open();
+        assert_eq!(earlier.join().expect("the first call ends"), Vec::<PathBuf>::new());
+        wait_until("every name is answered", || waiting.asked.lock().is_empty());
+        assert_eq!(names(3, vec![2, 4], &asking(&gated.ask, PATIENT, waiting)), [file(2), file(4)]);
     }
 
     #[test]
     fn goes_on_after_a_handle_whose_question_failed() {
+        let waiting = waiting(16);
         let ask: Ask = Arc::new(|handle| {
             assert_ne!(handle, 4, "the question about this handle fails");
             even(handle)
         });
 
-        assert_eq!(names(-3, vec![2, 4, 6], &ask, PATIENT), [file(2), file(6)]);
-        assert_eq!(stuck(-3), Vec::<usize>::new());
+        assert_eq!(names(1, vec![2, 4, 6], &asking(&ask, PATIENT, waiting)), [file(2), file(6)]);
+        assert_eq!(waiting_on(waiting, 1), Vec::<usize>::new());
     }
 }
 
@@ -197,10 +264,12 @@ mod on_windows {
         let pid = holder.pid();
 
         wait_until_within("a handle blocked in a read is skipped", PATIENT, || {
-            within(pid).contains(&canonical(&path)) && !stuck(pid).is_empty()
+            within(pid).contains(&canonical(&path)) && !waiting_on(&WAITING, pid).is_empty()
         });
         drop(holder);
 
-        wait_until_within("the blocked question ends with the process", PATIENT, || stuck(pid).is_empty());
+        wait_until_within("the blocked question ends with the process", PATIENT, || {
+            waiting_on(&WAITING, pid).is_empty()
+        });
     }
 }
