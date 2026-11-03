@@ -3,6 +3,7 @@ use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write, stdin, stdout};
 use std::net::Shutdown;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdout, Command};
+use std::sync::Once;
 use std::sync::atomic::Ordering;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -256,12 +257,7 @@ fn open(target: &Target, restarted: bool) -> Result<()> {
     let host = probe_host();
     let mut forget = host.graphics.forget();
     forget.extend(host.pointer.map(pointer::Terminal::reset).unwrap_or_default());
-    write_ansi(|out| {
-        EnableBracketedPaste.write_ansi(out)?;
-        EnableMouseCapture.write_ansi(out)?;
-        EnableFocusChange.write_ansi(out)?;
-        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES).write_ansi(out)
-    });
+    write_ansi(input_modes_on);
     install_panic_hook(forget.clone());
     let result = attach(link, target, &mut terminal, host);
     write_out(&forget);
@@ -282,26 +278,27 @@ fn open(target: &Target, restarted: bool) -> Result<()> {
 
 fn screen(restarted: bool) -> Result<DefaultTerminal> {
     console::keep_modes();
-    restore_console_on_panic();
-    let terminal = if restarted {
-        ratatui::init_with_options(TerminalOptions { viewport: Viewport::Fullscreen })
-    } else {
-        ratatui::init()
-    };
     if let Err(error) = console::enter_raw() {
-        ratatui::restore();
         console::restore_modes();
         return Err(Error::Console(error));
     }
-    Ok(terminal)
+    restore_console_on_panic();
+    Ok(if restarted {
+        ratatui::init_with_options(TerminalOptions { viewport: Viewport::Fullscreen })
+    } else {
+        ratatui::init()
+    })
 }
 
 fn restore_console_on_panic() {
-    let prev_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        console::restore_modes();
-        prev_hook(info);
-    }));
+    static HOOKED: Once = Once::new();
+    HOOKED.call_once(|| {
+        let prev_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            console::restore_modes();
+            prev_hook(info);
+        }));
+    });
 }
 
 fn come_back(exe: io::Result<PathBuf>) -> Result<()> {
@@ -346,20 +343,30 @@ fn write_ansi(commands: impl FnOnce(&mut String) -> fmt::Result) {
     }
 }
 
+fn input_modes_on(out: &mut String) -> fmt::Result {
+    EnableBracketedPaste.write_ansi(out)?;
+    EnableMouseCapture.write_ansi(out)?;
+    EnableFocusChange.write_ansi(out)?;
+    PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES).write_ansi(out)
+}
+
 fn input_modes_off(out: &mut String) -> fmt::Result {
     DisableBracketedPaste.write_ansi(out)?;
     DisableMouseCapture.write_ansi(out)?;
     DisableFocusChange.write_ansi(out)
 }
 
+fn all_input_modes_off(out: &mut String) -> fmt::Result {
+    PopKeyboardEnhancementFlags.write_ansi(out)?;
+    input_modes_off(out)
+}
+
 fn restore_input_modes() {
-    write_ansi(|out| {
-        PopKeyboardEnhancementFlags.write_ansi(out)?;
-        input_modes_off(out)
-    });
+    write_ansi(all_input_modes_off);
 }
 
 fn release_screen() {
+    let _ = console::enter_raw();
     write_ansi(input_modes_off);
     ratatui::restore();
     console::restore_modes();
@@ -374,3 +381,6 @@ struct Host {
     probe_timed_out: bool,
     pointer: Option<pointer::Terminal>,
 }
+
+#[cfg(test)]
+mod tests;

@@ -72,7 +72,6 @@ windows-sys = { version = "=0.61.2", features = [
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.189"
 
-
 [dev-dependencies]
 insta = "1.48.0"
 rstest = "0.27.0"

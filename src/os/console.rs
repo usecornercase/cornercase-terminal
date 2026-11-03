@@ -40,8 +40,9 @@ mod imp {
     use windows_sys::Win32::System::Console::{
         DISABLE_NEWLINE_AUTO_RETURN, ENABLE_ECHO_INPUT, ENABLE_EXTENDED_FLAGS, ENABLE_LINE_INPUT,
         ENABLE_PROCESSED_INPUT, ENABLE_QUICK_EDIT_MODE, ENABLE_VIRTUAL_TERMINAL_INPUT,
-        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetStdHandle, INPUT_RECORD, KEY_EVENT, ReadConsoleInputW,
-        STD_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleCtrlHandler, SetConsoleMode,
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetNumberOfConsoleInputEvents, GetStdHandle, INPUT_RECORD,
+        KEY_EVENT, LEFT_CTRL_PRESSED, RIGHT_CTRL_PRESSED, ReadConsoleInputW, STD_HANDLE, STD_INPUT_HANDLE,
+        STD_OUTPUT_HANDLE, SetConsoleCtrlHandler, SetConsoleMode,
     };
     use windows_sys::Win32::System::Threading::{INFINITE, WaitForSingleObject};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_MENU;
@@ -83,6 +84,7 @@ mod imp {
     }
 
     const READ_AT_ONCE: usize = 128;
+    const NUL_KEY: u16 = 0x40;
     const HIGH_SURROGATES: std::ops::Range<u16> = 0xD800..0xDC00;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,12 +143,18 @@ mod imp {
         }
 
         fn read(&self) -> io::Result<Vec<INPUT_RECORD>> {
+            let mut queued = 0;
+            checked(unsafe { GetNumberOfConsoleInputEvents(handle(STD_INPUT_HANDLE), &raw mut queued) })?;
+            let length = queued.min(u32::try_from(READ_AT_ONCE).unwrap_or(1));
+            if length == 0 {
+                return Ok(Vec::new());
+            }
             let mut records = [INPUT_RECORD::default(); READ_AT_ONCE];
-            let (mut read, length) = (0, u32::try_from(READ_AT_ONCE).unwrap_or(1));
+            let mut read = 0;
             checked(unsafe {
                 ReadConsoleInputW(handle(STD_INPUT_HANDLE), records.as_mut_ptr(), length, &raw mut read)
             })?;
-            Ok(records.into_iter().take(usize::try_from(read).unwrap_or(READ_AT_ONCE)).collect())
+            Ok(records.into_iter().take(usize::try_from(read).unwrap_or(0)).collect())
         }
     }
 
@@ -166,10 +174,15 @@ mod imp {
         *KEPT.lock() = read_modes(&Real).ok();
     }
 
-    pub(crate) fn enter_raw() -> io::Result<()> {
-        let kept = (*KEPT.lock())
+    pub(super) fn raw_from(console: &impl Handles, kept: Option<Modes>) -> io::Result<()> {
+        let kept = kept
             .ok_or_else(|| io::Error::new(io::ErrorKind::Unsupported, "standard input or output is not a console"))?;
-        write_modes(&Real, raw(kept))
+        write_modes(console, raw(kept))
+    }
+
+    pub(crate) fn enter_raw() -> io::Result<()> {
+        let kept = *KEPT.lock();
+        raw_from(&Real, kept)
     }
 
     pub(crate) fn restore_modes() {
@@ -228,8 +241,11 @@ mod imp {
         }
         let key = unsafe { record.Event.KeyEvent };
         let unit = unsafe { key.uChar.UnicodeChar };
-        let typed = key.bKeyDown != FALSE || key.wVirtualKeyCode == VK_MENU;
-        (typed && unit != 0).then_some((unit, key.wRepeatCount.max(1)))
+        let down = key.bKeyDown != FALSE;
+        let character = (down || key.wVirtualKeyCode == VK_MENU) && unit != 0;
+        let ctrl = key.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED) != 0;
+        let nul = down && ctrl && key.wVirtualKeyCode == NUL_KEY && unit == 0;
+        (character || nul).then_some((unit, key.wRepeatCount.max(1)))
     }
 
     pub(super) fn characters(records: &[INPUT_RECORD]) -> Vec<u16> {
@@ -254,8 +270,13 @@ mod imp {
     }
 
     pub(super) fn read_with(console: &impl Records, pending: &Mutex<Pending>, buf: &mut [u8]) -> io::Result<usize> {
-        wait_with(console, pending, Duration::MAX)?;
-        Ok(pending.lock().take(buf))
+        loop {
+            wait_with(console, pending, Duration::MAX)?;
+            let taken = pending.lock().take(buf);
+            if taken > 0 || buf.is_empty() {
+                return Ok(taken);
+            }
+        }
     }
 
     pub(crate) fn wait_input(wait: Duration) -> io::Result<bool> {
@@ -270,7 +291,7 @@ mod imp {
 
     static CTRL: Mutex<Option<OnCtrl>> = Mutex::new(None);
 
-    extern "system" fn ctrl_event(event: u32) -> BOOL {
+    pub(super) extern "system" fn ctrl_event(event: u32) -> BOOL {
         if CTRL.lock().as_ref().is_some_and(|handled| handled(event)) { TRUE } else { FALSE }
     }
 

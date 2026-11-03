@@ -9,17 +9,19 @@ use parking_lot::Mutex;
 use rstest::rstest;
 use windows_sys::Win32::Foundation::{ERROR_INVALID_HANDLE, FALSE, TRUE};
 use windows_sys::Win32::System::Console::{
-    COORD, DISABLE_NEWLINE_AUTO_RETURN, ENABLE_ECHO_INPUT, ENABLE_EXTENDED_FLAGS, ENABLE_INSERT_MODE,
-    ENABLE_LINE_INPUT, ENABLE_MOUSE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_PROCESSED_OUTPUT, ENABLE_QUICK_EDIT_MODE,
-    ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING, ENABLE_WINDOW_INPUT, ENABLE_WRAP_AT_EOL_OUTPUT,
-    FOCUS_EVENT, FOCUS_EVENT_RECORD, INPUT_RECORD, INPUT_RECORD_0, KEY_EVENT, KEY_EVENT_RECORD, KEY_EVENT_RECORD_0,
-    STD_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, WINDOW_BUFFER_SIZE_EVENT, WINDOW_BUFFER_SIZE_RECORD,
+    COORD, CTRL_BREAK_EVENT, CTRL_C_EVENT, DISABLE_NEWLINE_AUTO_RETURN, ENABLE_ECHO_INPUT, ENABLE_EXTENDED_FLAGS,
+    ENABLE_INSERT_MODE, ENABLE_LINE_INPUT, ENABLE_MOUSE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_PROCESSED_OUTPUT,
+    ENABLE_QUICK_EDIT_MODE, ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING, ENABLE_WINDOW_INPUT,
+    ENABLE_WRAP_AT_EOL_OUTPUT, FOCUS_EVENT, FOCUS_EVENT_RECORD, INPUT_RECORD, INPUT_RECORD_0, KEY_EVENT,
+    KEY_EVENT_RECORD, KEY_EVENT_RECORD_0, LEFT_CTRL_PRESSED, STD_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+    WINDOW_BUFFER_SIZE_EVENT, WINDOW_BUFFER_SIZE_RECORD,
 };
 use windows_sys::Win32::System::Threading::INFINITE;
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{VK_MENU, VK_SHIFT};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{VK_CONTROL, VK_MENU, VK_SHIFT};
 
 use super::imp::{
-    Handles, Modes, Pending, Records, characters, hide_echo, millis, raw, read_modes, read_with, wait_with, write_modes,
+    Handles, Modes, Pending, Records, characters, ctrl_event, hide_echo, millis, off_ctrl, on_ctrl, raw, raw_from,
+    read_modes, read_with, wait_with, write_modes,
 };
 
 const CONHOST_INPUT: u32 = ENABLE_PROCESSED_INPUT
@@ -31,6 +33,7 @@ const CONHOST_INPUT: u32 = ENABLE_PROCESSED_INPUT
     | ENABLE_QUICK_EDIT_MODE
     | ENABLE_EXTENDED_FLAGS;
 const CONHOST_OUTPUT: u32 = ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT;
+const CONSOLE_NUL: u16 = 0x40;
 
 #[derive(Default)]
 struct Console {
@@ -123,6 +126,11 @@ fn typed(text: &str) -> Vec<INPUT_RECORD> {
     text.encode_utf16().flat_map(|unit| [key(true, 0, unit, 1), key(false, 0, unit, 1)]).collect()
 }
 
+fn with_ctrl(mut record: INPUT_RECORD) -> INPUT_RECORD {
+    record.Event.KeyEvent.dwControlKeyState = LEFT_CTRL_PRESSED;
+    record
+}
+
 fn focus() -> INPUT_RECORD {
     let focus = FOCUS_EVENT_RECORD { bSetFocus: TRUE };
     INPUT_RECORD { EventType: kind(FOCUS_EVENT), Event: INPUT_RECORD_0 { FocusEvent: focus } }
@@ -195,6 +203,17 @@ mod modes {
         console.modes.borrow_mut().insert(STD_INPUT_HANDLE, CONHOST_INPUT);
         assert!(read_modes(&console).is_err());
     }
+
+    #[test]
+    fn raw_mode_needs_modes_to_come_back_to() {
+        let console = Console::with(CONHOST_INPUT, CONHOST_OUTPUT);
+        let error = raw_from(&console, None).expect_err("nothing was kept");
+        assert_eq!(error.kind(), io::ErrorKind::Unsupported);
+        assert_eq!(console.now(), Modes { input: CONHOST_INPUT, output: CONHOST_OUTPUT }, "the console is untouched");
+        let kept = console.now();
+        raw_from(&console, Some(kept)).expect("raw mode");
+        assert_eq!(console.now(), raw(kept));
+    }
 }
 
 mod hidden_input {
@@ -223,6 +242,10 @@ mod records {
     #[case::a_held_key(vec![key(true, 0, u16::from(b'x'), 3)], "xxx")]
     #[case::a_character_composed_with_alt(vec![key(false, VK_MENU, 0xE9, 1)], "\u{e9}")]
     #[case::focus_and_size(vec![focus(), resized()], "")]
+    #[case::ctrl_space_as_the_console_writes_it(vec![with_ctrl(key(true, CONSOLE_NUL, 0, 1))], "\0")]
+    #[case::the_release_of_a_nul(vec![with_ctrl(key(false, CONSOLE_NUL, 0, 1))], "")]
+    #[case::a_nul_without_ctrl(vec![key(true, CONSOLE_NUL, 0, 1)], "")]
+    #[case::ctrl_alone(vec![with_ctrl(key(true, VK_CONTROL, 0, 1))], "")]
     fn only_typed_characters_count(#[case] records: Vec<INPUT_RECORD>, #[case] text: &str) {
         assert_eq!(String::from_utf16_lossy(&characters(&records)), text);
     }
@@ -235,6 +258,13 @@ mod records {
     fn typed_text_comes_back_as_utf8(#[case] text: &str) {
         let console = Typed::of([typed(text)]);
         assert_eq!(read_all(&console, &Mutex::new(Pending::new())), text.as_bytes());
+    }
+
+    #[test]
+    fn ctrl_space_reaches_the_pane_as_nul() {
+        let nul = with_ctrl(key(true, CONSOLE_NUL, 0, 1));
+        let console = Typed::of([vec![nul, with_ctrl(key(false, CONSOLE_NUL, 0, 1)), key(true, 0, 1, 1)]]);
+        assert_eq!(read_all(&console, &Mutex::new(Pending::new())), b"\0\x01");
     }
 
     #[test]
@@ -275,6 +305,7 @@ mod waiting {
         let typed = wait_with(&console, &Mutex::new(Pending::new()), Duration::from_millis(50)).expect("a fake wait");
         assert!(!typed);
         assert_eq!(console.waits.borrow().len(), 3);
+        assert!(console.waits.borrow().iter().all(|&wait| wait <= 50), "no wait goes past the deadline");
         assert!(console.batches.borrow().is_empty(), "the records that are no characters are read and dropped");
     }
 
@@ -304,9 +335,31 @@ mod waiting {
     }
 
     #[test]
+    fn records_another_reader_took_first_send_the_read_back_to_waiting() {
+        let console = Typed::of([Vec::new(), typed("z")]);
+        let mut buf = [0; 8];
+        assert_eq!(read_with(&console, &Mutex::new(Pending::new()), &mut buf).expect("a fake read"), 1);
+        assert_eq!(buf[0], b'z');
+        assert_eq!(console.waits.borrow().len(), 2);
+    }
+
+    #[test]
     fn a_console_that_went_away_is_an_error() {
         let error = wait_with(&Gone, &Mutex::new(Pending::new()), Duration::ZERO).expect_err("no console");
         assert_eq!(error.raw_os_error(), Some(ERROR_INVALID_HANDLE.cast_signed()));
         assert!(read_with(&Gone, &Mutex::new(Pending::new()), &mut [0; 8]).is_err());
+    }
+}
+
+mod ctrl_events {
+    use super::*;
+
+    #[test]
+    fn the_handler_answers_for_the_window_until_it_goes() {
+        on_ctrl(|event| event == CTRL_BREAK_EVENT).expect("a handler");
+        assert_eq!(ctrl_event(CTRL_BREAK_EVENT), TRUE);
+        assert_eq!(ctrl_event(CTRL_C_EVENT), FALSE, "an event the window does not take goes on");
+        off_ctrl();
+        assert_eq!(ctrl_event(CTRL_BREAK_EVENT), FALSE);
     }
 }

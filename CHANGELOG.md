@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.253
 
-- **On Windows, the window reads the console the way it reads a Unix terminal**, another step towards running cornercase natively there. It puts the console in raw VT mode, so keys, clicks, the wheel and pastes arrive as the same sequences; it follows resizes, leaves Ctrl+C to the program in the pane, detaches when the console window closes, and gives the console back as it found it, also after a crash. A token typed for `cornercase config secret` is not shown. cornercase still says it does not run on Windows yet, until its socket and server are ported. Nothing changes on Linux and macOS.
+- **On Windows, the window reads the console the way it reads a Unix terminal**, another step towards running cornercase natively there. It puts the console in raw VT mode, so keys, clicks, the wheel and pastes arrive as the same sequences; it follows resizes, leaves Ctrl+C to the program in the pane, detaches when the console window closes, and gives the console back as it found it, also after a crash. A token typed for `cornercase config secret` is not shown; in a terminal that cannot hide it, such as mintty, it asks you to pipe the token in instead. cornercase still says it does not run on Windows yet, until its socket and server are ported. Nothing changes on Linux and macOS.
 
 ## 0.12.249
 
