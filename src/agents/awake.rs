@@ -1,4 +1,4 @@
-use std::io::{ErrorKind, Read};
+use std::io::{self, ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
@@ -6,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::log;
+use crate::os::desktop;
 
 pub(crate) const KEEP_FOR: Duration = Duration::from_secs(30);
 const REASON: &str = "an agent is working in cornercase";
@@ -14,17 +15,30 @@ const STDERR_WAIT: Duration = Duration::from_millis(200);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Tool {
     pub(crate) label: String,
-    pub(crate) program: PathBuf,
-    pub(crate) args: Vec<String>,
+    how: How,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum How {
+    Program(PathBuf, Vec<String>),
+    ExecutionState,
 }
 
 impl Tool {
     pub(crate) fn new(label: &str, program: impl Into<PathBuf>, args: &[&str]) -> Self {
-        Self { label: label.into(), program: program.into(), args: args.iter().map(|a| (*a).to_string()).collect() }
+        let args = args.iter().map(|a| (*a).to_string()).collect();
+        Self { label: label.into(), how: How::Program(program.into(), args) }
+    }
+
+    fn execution_state() -> Self {
+        Self { label: "SetThreadExecutionState".into(), how: How::ExecutionState }
     }
 }
 
 pub(crate) fn tools() -> Vec<Tool> {
+    if cfg!(windows) {
+        return vec![Tool::execution_state()];
+    }
     if cfg!(target_os = "macos") {
         let pid = std::process::id().to_string();
         return vec![Tool::new("caffeinate", "/usr/bin/caffeinate", &["-i", "-w", &pid])];
@@ -68,9 +82,37 @@ impl State {
 
 struct Holder {
     tool: usize,
-    child: Child,
-    stdin: Option<ChildStdin>,
-    stderr: Receiver<String>,
+    lock: Lock,
+}
+
+enum Lock {
+    Child { child: Child, stdin: Option<ChildStdin>, stderr: Receiver<String> },
+    Thread(desktop::Awake),
+}
+
+impl Lock {
+    fn lost(&mut self) -> Option<String> {
+        let Self::Child { child, stdin, stderr } = self else { return None };
+        let status = match child.try_wait() {
+            Ok(None) => return None,
+            Ok(Some(status)) => status.to_string(),
+            Err(e) => e.to_string(),
+        };
+        drop(stdin.take());
+        let said = stderr.recv_timeout(STDERR_WAIT).unwrap_or_default();
+        Some(said.lines().map(str::trim).rfind(|line| !line.is_empty()).unwrap_or(&status).to_string())
+    }
+
+    fn release(self) {
+        match self {
+            Self::Child { mut child, stdin, .. } => {
+                drop(stdin);
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            Self::Thread(awake) => awake.release(),
+        }
+    }
 }
 
 pub(crate) struct Awake {
@@ -120,10 +162,10 @@ impl Awake {
 
     fn take(&mut self, working: usize) {
         while let Some(tool) = self.tools.get(self.next) {
-            match spawn(tool) {
-                Ok((child, stdin, stderr)) => {
+            match lock(tool) {
+                Ok(lock) => {
                     log::info!("awake", "keep awake held", tool = tool.label, agents = working);
-                    self.holder = Some(Holder { tool: self.next, child, stdin, stderr });
+                    self.holder = Some(Holder { tool: self.next, lock });
                     return;
                 }
                 Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -140,27 +182,19 @@ impl Awake {
 
     fn check(&mut self) {
         let Some(holder) = &mut self.holder else { return };
-        let status = match holder.child.try_wait() {
-            Ok(None) => return,
-            Ok(Some(status)) => status.to_string(),
-            Err(e) => e.to_string(),
-        };
-        let Some(mut holder) = self.holder.take() else { return };
-        drop(holder.stdin.take());
-        let said = holder.stderr.recv_timeout(STDERR_WAIT).unwrap_or_default();
-        let last = said.lines().map(str::trim).rfind(|line| !line.is_empty()).unwrap_or(&status);
-        let reason = format!("{}: {last}", self.tools[holder.tool].label);
+        let Some(last) = holder.lock.lost() else { return };
+        let tool = holder.tool;
+        self.holder = None;
+        let reason = format!("{}: {last}", self.tools[tool].label);
         log::warning!("awake", "keep awake lost", reason = reason);
         self.failed = Some(reason);
-        self.next = holder.tool + 1;
+        self.next = tool + 1;
         self.idle_since = None;
     }
 
     fn release(&mut self) {
-        let Some(mut holder) = self.holder.take() else { return };
-        drop(holder.stdin.take());
-        let _ = holder.child.kill();
-        let _ = holder.child.wait();
+        let Some(holder) = self.holder.take() else { return };
+        holder.lock.release();
         log::info!("awake", "keep awake released", tool = self.tools[holder.tool].label);
         self.next = holder.tool;
         self.failed = None;
@@ -174,15 +208,18 @@ impl Drop for Awake {
     }
 }
 
-fn spawn(tool: &Tool) -> std::io::Result<(Child, Option<ChildStdin>, Receiver<String>)> {
-    let mut child = Command::new(&tool.program)
-        .args(&tool.args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()?;
+fn lock(tool: &Tool) -> io::Result<Lock> {
+    match &tool.how {
+        How::Program(program, args) => spawn(program, args),
+        How::ExecutionState => desktop::Awake::hold().map(Lock::Thread),
+    }
+}
+
+fn spawn(program: &Path, args: &[String]) -> io::Result<Lock> {
+    let mut child =
+        Command::new(program).args(args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
     let stdin = child.stdin.take();
-    let (tx, rx) = mpsc::channel();
+    let (tx, stderr) = mpsc::channel();
     if let Some(mut pipe) = child.stderr.take() {
         thread::spawn(move || {
             let mut said = String::new();
@@ -190,7 +227,7 @@ fn spawn(tool: &Tool) -> std::io::Result<(Child, Option<ChildStdin>, Receiver<St
             let _ = tx.send(said);
         });
     }
-    Ok((child, stdin, rx))
+    Ok(Lock::Child { child, stdin, stderr })
 }
 
 #[cfg(test)]
