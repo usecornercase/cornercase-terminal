@@ -249,6 +249,7 @@ mod naming {
 #[cfg(windows)]
 mod on_windows {
     use std::fs::{File, TryLockError};
+    use std::os::windows::ffi::OsStrExt;
     use std::os::windows::io::AsRawHandle;
     use std::path::Path;
     use std::process::{Command, Stdio};
@@ -277,6 +278,19 @@ mod on_windows {
         let dir = TempDir::new();
         let path = dir.path().join("held.txt");
         let _held = File::create(&path).expect("create the file");
+
+        named(this_pid(), &path);
+    }
+
+    #[test]
+    fn names_a_file_whose_path_is_longer_than_the_first_buffer() {
+        let dir = TempDir::new();
+        let folder =
+            (0..6).fold(dir.path().to_path_buf(), |path, depth| path.join(format!("{depth}{}", "d".repeat(110))));
+        std::fs::create_dir_all(&folder).expect("create the nested folders");
+        let path = folder.join("held.txt");
+        let _held = File::create(&path).expect("create the file");
+        assert!(canonical(&path).as_os_str().encode_wide().count() > 512, "the path outgrows the first buffer");
 
         named(this_pid(), &path);
     }
