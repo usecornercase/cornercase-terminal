@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write, stdin, stdout};
 use std::net::Shutdown;
 use std::path::PathBuf;
@@ -6,12 +7,12 @@ use std::sync::atomic::Ordering;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use crossterm::Command as _;
 use crossterm::event::{
     DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste, EnableFocusChange,
     EnableMouseCapture, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
-use crossterm::execute;
-use ratatui::{TerminalOptions, Viewport};
+use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 
 use self::probe::probe_host;
 use self::window::attach;
@@ -19,7 +20,7 @@ use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::Facts;
 use crate::host::theme::HostTheme;
-use crate::os::console::{AsFd, BorrowedFd};
+use crate::os::console::{self, AsFd, BorrowedFd};
 use crate::os::process::CommandExt;
 use crate::os::socket::UnixStream;
 use crate::remote::{Remote, Stderr, Use};
@@ -252,27 +253,23 @@ fn open(target: &Target, restarted: bool) -> Result<()> {
     })?;
     let exe = std::env::current_exe();
 
-    let mut terminal = if restarted {
-        ratatui::init_with_options(TerminalOptions { viewport: Viewport::Fullscreen })
-    } else {
-        ratatui::init()
-    };
+    let mut terminal = screen(restarted)?;
     let host = probe_host();
     let mut forget = host.graphics.forget();
     forget.extend(host.pointer.map(pointer::Terminal::reset).unwrap_or_default());
-    let _ = execute!(
-        stdout(),
-        EnableBracketedPaste,
-        EnableMouseCapture,
-        EnableFocusChange,
-        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
-    );
+    write_ansi(|out| {
+        EnableBracketedPaste.write_ansi(out)?;
+        EnableMouseCapture.write_ansi(out)?;
+        EnableFocusChange.write_ansi(out)?;
+        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES).write_ansi(out)
+    });
     install_panic_hook(forget.clone());
     let result = attach(link, target, &mut terminal, host);
     write_out(&forget);
     if !matches!(result, Ok(Ending::Restart)) {
         restore_input_modes();
         ratatui::restore();
+        console::restore_modes();
     }
     match result? {
         Ending::Restart => come_back(exe),
@@ -284,9 +281,34 @@ fn open(target: &Target, restarted: bool) -> Result<()> {
     }
 }
 
+fn screen(restarted: bool) -> Result<DefaultTerminal> {
+    console::keep_modes();
+    restore_console_on_panic();
+    let terminal = if restarted {
+        ratatui::init_with_options(TerminalOptions { viewport: Viewport::Fullscreen })
+    } else {
+        ratatui::init()
+    };
+    if let Err(error) = console::enter_raw() {
+        ratatui::restore();
+        console::restore_modes();
+        return Err(Error::Console(error));
+    }
+    Ok(terminal)
+}
+
+fn restore_console_on_panic() {
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        console::restore_modes();
+        prev_hook(info);
+    }));
+}
+
 fn come_back(exe: io::Result<PathBuf>) -> Result<()> {
     restore_input_modes();
     let _ = crossterm::terminal::disable_raw_mode();
+    console::restore_modes();
     wait_for_exit(&paths::socket());
     let error = match exe {
         Ok(exe) => Command::new(exe).env(protocol::RESTARTED_ENV, "1").exec(),
@@ -318,14 +340,30 @@ fn write_out(bytes: &[u8]) {
     }
 }
 
+fn write_ansi(commands: impl FnOnce(&mut String) -> fmt::Result) {
+    let mut ansi = String::new();
+    if commands(&mut ansi).is_ok() {
+        write_out(ansi.as_bytes());
+    }
+}
+
+fn input_modes_off(out: &mut String) -> fmt::Result {
+    DisableBracketedPaste.write_ansi(out)?;
+    DisableMouseCapture.write_ansi(out)?;
+    DisableFocusChange.write_ansi(out)
+}
+
 fn restore_input_modes() {
-    let _ =
-        execute!(stdout(), PopKeyboardEnhancementFlags, DisableBracketedPaste, DisableMouseCapture, DisableFocusChange);
+    write_ansi(|out| {
+        PopKeyboardEnhancementFlags.write_ansi(out)?;
+        input_modes_off(out)
+    });
 }
 
 fn release_screen() {
-    let _ = execute!(stdout(), DisableBracketedPaste, DisableMouseCapture, DisableFocusChange);
+    write_ansi(input_modes_off);
     ratatui::restore();
+    console::restore_modes();
 }
 
 struct Host {

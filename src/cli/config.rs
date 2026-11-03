@@ -280,18 +280,24 @@ mod imp {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod imp {
-    pub(super) struct Hidden;
+    use crate::os::console;
+
+    pub(super) struct Hidden(Option<u32>);
 
     impl Hidden {
         pub(super) fn on() -> Self {
-            Self
+            Self(console::echo_off())
         }
     }
 
     impl Drop for Hidden {
-        fn drop(&mut self) {}
+        fn drop(&mut self) {
+            if let Some(before) = self.0 {
+                console::set_input_mode(before);
+            }
+        }
     }
 }
 

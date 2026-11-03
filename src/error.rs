@@ -59,6 +59,8 @@ pub enum Error {
     DevelopmentBuild,
     #[error("failed to register signal handlers")]
     Signals(#[source] std::io::Error),
+    #[error("failed to put the console in raw VT mode")]
+    Console(#[source] std::io::Error),
     #[error("failed to run git: {0}")]
     RunGit(std::io::Error),
     #[error("{0}")]
