@@ -42,8 +42,6 @@ fn browser() -> Browser {
         filtering: None,
         members: HashMap::new(),
         queued: Vec::new(),
-        run_on: None,
-        there: None,
     }
 }
 
@@ -497,7 +495,6 @@ mod account;
 mod list_flow;
 mod naming;
 mod place;
-mod run_on;
 
 pub(crate) mod people {
     use super::*;

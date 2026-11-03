@@ -232,7 +232,6 @@ mod input;
 mod notices;
 mod report;
 mod rows;
-mod run_on;
 mod selection;
 mod stream;
 mod tree;

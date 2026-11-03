@@ -261,7 +261,7 @@ mod repo_identity {
     use std::cell::RefCell;
 
     use super::*;
-    use crate::git::remote::{identity, identity_url};
+    use crate::git::remote::identity;
 
     const SHOP: &str = "github.com/acme/web-shop";
 
@@ -324,15 +324,6 @@ mod repo_identity {
             assert_eq!(ssh.as_deref(), Some("elsewhere.example/acme/web-shop"));
         }
         assert_eq!(*asked.borrow(), ["github.com", "github.com", "github.com"]);
-    }
-
-    #[rstest]
-    #[case::a_fork(&[("origin", "git@github.com:me/web-shop.git"), ("upstream", "https://github.com/acme/web-shop")], Some("https://github.com/acme/web-shop"))]
-    #[case::origin_before_others(&[("mirror", "https://gitlab.com/x/y"), ("origin", "git@github.com:acme/web-shop")], Some("git@github.com:acme/web-shop"))]
-    #[case::the_first_that_parses(&[("upstream", "/srv/git/shop"), ("mine", "https://github.com/acme/web-shop")], Some("https://github.com/acme/web-shop"))]
-    #[case::only_a_local_path(&[("origin", "/srv/git/shop")], None)]
-    fn is_the_url_the_identity_comes_from(#[case] remotes: &[(&str, &str)], #[case] expected: Option<&str>) {
-        assert_eq!(identity_url(&listed(remotes)), expected);
     }
 }
 

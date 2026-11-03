@@ -26,31 +26,21 @@ impl Browser {
         let Some(kind) = self.agents.pick() else {
             return vec![Span::styled("none chosen yet: start asks which one", dim)];
         };
+        let start = self.agents.starts.get(&kind);
         let mut spans = vec![Span::styled(kind.clone(), Style::default().add_modifier(Modifier::BOLD))];
-        if self.machine().is_some() {
-            let command = self.command_there().filter(|command| *command != kind);
-            spans.extend(command.map(|command| Span::styled(format!("  {command}"), dim)));
-        } else {
-            spans.extend(self.local_start(&kind, dim));
-        }
-        let notes = self.agents.notes(&kind);
-        if !notes.is_empty() {
-            spans.push(Span::styled(format!("  ({notes})"), dim));
-        }
-        spans.extend(self.agent_note());
-        spans
-    }
-
-    fn local_start(&self, kind: &str, dim: Style) -> Vec<Span<'static>> {
-        let Some(start) = self.agents.starts.get(kind) else { return Vec::new() };
-        let mut spans = Vec::new();
-        if let Some(mode) = start.mode.clone() {
+        if let Some(mode) = start.and_then(|s| s.mode.clone()) {
             let style =
                 if crate::agents::is_dangerous(&mode) { Style::default().fg(Color::Red) } else { Style::default() };
             spans.push(Span::raw(" · "));
             spans.push(Span::styled(mode, style));
         }
-        spans.push(Span::styled(format!("  {}", start.command), dim));
+        if let Some(start) = start {
+            spans.push(Span::styled(format!("  {}", start.command), dim));
+        }
+        let notes = self.agents.notes(&kind);
+        if !notes.is_empty() {
+            spans.push(Span::styled(format!("  ({notes})"), dim));
+        }
         spans
     }
 
@@ -60,29 +50,22 @@ impl Browser {
             Line::from([vec![Span::styled(format!("{label:<8}"), dim)], spans].concat())
         };
         let agent = self.agent_spans(dim);
-        let mut lines: Vec<Line<'static>> =
-            self.run_on_spans(dim).map(|spans| row("run on", spans)).into_iter().collect();
-        lines.extend([row("start", vec![Span::raw(self.start_hint_there(issue))]), row("agent", agent)]);
+        let prompt = crate::issues::prompt(&self.agents.prompt, issue, &self.branch(issue));
+        let send = if self.agents.submit { "sent for you" } else { "typed, you press enter" };
+        let mut lines = vec![row("start", vec![Span::raw(self.start_hint(issue))]), row("agent", agent)];
         if let Some((kind, agent)) = self.agent_accounts() {
             let pick = self.accounts.as_ref().and_then(|a| a.pick(&kind)).unwrap_or_default();
             let mut spans = vec![Span::raw(agent.label(pick).to_string())];
             if pick == agent.active {
                 spans.push(Span::styled("  (in use)", dim));
             }
-            spans.extend(self.accounts_note(dim));
             lines.push(row("account", spans));
         }
-        lines.push(row("prompt", self.prompt_spans(issue, dim)));
+        lines.push(row(
+            "prompt",
+            vec![Span::raw(crate::text::one_line(&prompt)), Span::styled(format!("  ({send})"), dim)],
+        ));
         lines
-    }
-
-    fn prompt_spans(&self, issue: &Issue, dim: Style) -> Vec<Span<'static>> {
-        if let Some(target) = self.machine() {
-            return vec![Span::styled(format!("from {}'s template (the issue's URL by default)", target.name), dim)];
-        }
-        let prompt = crate::issues::prompt(&self.agents.prompt, issue, &self.branch(issue));
-        let send = if self.agents.submit { "sent for you" } else { "typed, you press enter" };
-        vec![Span::raw(crate::text::one_line(&prompt)), Span::styled(format!("  ({send})"), dim)]
     }
 
     pub(crate) fn detail_lines(&self, room: Room) -> Vec<Line<'static>> {

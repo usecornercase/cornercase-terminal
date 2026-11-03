@@ -4,7 +4,6 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
-use super::run_on::RunOnRow;
 use super::{
     CANCEL_LABEL, FORM_WIDTH, INPUT_PROMPT, Note, buttons_in, draw_danger, draw_dialog_buttons, draw_note,
     draw_secondary, draw_submit, form_inner, left_of,
@@ -23,34 +22,17 @@ pub fn form_area(area: Rect) -> Rect {
 }
 
 pub(in crate::ui) fn form_rows(form: Rect) -> [Rect; 6] {
-    let [label, input, hint, toggle, _, note, _, buttons] = rows(form, 0);
-    [label, input, hint, toggle, note, buttons]
-}
-
-fn rows(form: Rect, run_on: u16) -> [Rect; 8] {
-    Layout::vertical([
+    let [label, input, hint, toggle, note, _, buttons] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(run_on),
         Constraint::Length(2),
         Constraint::Min(0),
         Constraint::Length(1),
     ])
-    .areas(form_inner(form))
-}
-
-pub(crate) fn form_run_on(form: Rect) -> Rect {
-    rows(form, 1)[4]
-}
-
-pub(crate) fn form_run_on_hit(area: Rect, row: &RunOnRow, pos: Position) -> Option<usize> {
-    let r = form_run_on(form_area(area));
-    if !r.contains(pos) {
-        return None;
-    }
-    row.at(pos.x - r.x)
+    .areas(form_inner(form));
+    [label, input, hint, toggle, note, buttons]
 }
 
 pub(crate) fn form_text(area: Rect) -> Rect {
@@ -107,7 +89,6 @@ pub(crate) struct Form {
     pub(crate) value: Editor,
     pub(crate) hint: String,
     pub(crate) toggle: Option<Toggle>,
-    pub(crate) run_on: Option<RunOnRow>,
     pub(crate) note: Option<Note>,
     pub(crate) submit: &'static str,
 }
@@ -125,7 +106,7 @@ pub(in crate::ui) fn draw_form(f: &mut Frame, view: &View, form: &Form) {
     let r = form_area(f.area());
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, form.title), r);
-    let [label, input, hint, toggle, run_on, note, _, _] = rows(r, u16::from(form.run_on.is_some()));
+    let [label, input, hint, toggle, note, _] = form_rows(r);
     let dim = Style::default().fg(view.muted);
 
     f.render_widget(Paragraph::new(Span::styled(form.label, dim)), label);
@@ -133,9 +114,6 @@ pub(in crate::ui) fn draw_form(f: &mut Frame, view: &View, form: &Form) {
         let mark = if t.on { "[x] " } else { "[ ] " };
         let style = if hovered(view, toggle) { Style::default().fg(Color::Cyan) } else { Style::default() };
         f.render_widget(Paragraph::new(Span::styled(format!("{mark}{}", t.label), style)), toggle);
-    }
-    if let Some(row) = &form.run_on {
-        row.draw(f, view, run_on);
     }
     f.render_widget(Paragraph::new(Span::styled(INPUT_PROMPT, Style::default().fg(Color::Cyan))), input);
     draw_value(f, &form.value, form_text(f.area()), !matches!(form.note, Some(Note::Busy(_))));

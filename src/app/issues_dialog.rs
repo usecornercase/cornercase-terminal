@@ -26,8 +26,6 @@ use crate::project::{Hierarchy, Project};
 use crate::time;
 use crate::ui;
 
-pub(in crate::app) mod run_on;
-
 struct IssueStart<'a> {
     agent: &'a str,
     place: Option<Place>,
@@ -164,8 +162,6 @@ impl App {
             filtering: None,
             queued: self.queued_rows(),
             members: self.known_members(project.id),
-            run_on: self.run_on_for(project.id),
-            there: None,
         }
     }
 
@@ -223,12 +219,8 @@ impl App {
 
     fn act(&mut self, action: Action, area: Rect) -> Result<()> {
         self.remember_browser();
-        self.follow_issues_run_on();
         match action {
             Action::None => {}
-            Action::CloneThere(_) => self.clone_there(),
-            Action::OpenLoginTab => self.open_login_there(),
-            Action::RunOn(_) => self.run_on_chosen(),
             Action::Close => self.overlay = None,
             Action::Load(sources) => sources.into_iter().for_each(|source| self.load_issues(source)),
             Action::Read(issue) => self.read_issue(issue),
@@ -534,10 +526,9 @@ impl App {
                 Some(why) => s.notice = Some(why.into()),
                 None => s.seed_accounts(&chosen),
             }
-            self.on_the_chosen_machine(s, issue)
+            s
         });
         self.open_start_flow(start);
-        self.start_flow_on_machine();
     }
 
     fn name_issue_start(&mut self, issue: Issue, kind: String, place: Option<Place>) {
@@ -553,9 +544,6 @@ impl App {
     }
 
     fn start_issue(&mut self, issue: &Issue, start: IssueStart, area: Rect) -> Result<()> {
-        if self.start_issue_there(issue, &start) {
-            return Ok(());
-        }
         let IssueStart { agent, place, names } = start;
         let Some(browsing) = self.browser_project() else { return Ok(()) };
         let project = place.as_ref().map_or(browsing, |place| place.project);
@@ -684,9 +672,6 @@ fn picker_hint(browser: &Browser) -> (String, Option<ui::Note>) {
             ),
             None,
         ),
-        Some(Pick::Machine) => {
-            ("where should it run? a machine starts it with its own agents, accounts and copy".to_string(), None)
-        }
         Some(Pick::Person(source, field)) => {
             let note = match browser.members.get(&source) {
                 None => Some(ui::Note::Busy("loading people…")),
@@ -768,9 +753,7 @@ pub(super) fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
     let (body, note, hint) = screen_view(browser, room, now);
     let hint = browser.notice.clone().unwrap_or(hint);
     let (toggles, on) = browser.toggles();
-    let note = if let Some(starting) = browser.starting_there() {
-        Some(ui::Note::Info(starting))
-    } else if browser.starting {
+    let note = if browser.starting {
         Some(ui::Note::Busy("starting…"))
     } else if let Some(e) = &browser.error {
         Some(ui::Note::Error(e.clone()))

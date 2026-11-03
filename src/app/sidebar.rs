@@ -105,7 +105,6 @@ impl App {
             worktree,
             error: None,
             creating: false,
-            run_on: self.run_on_for(project.id),
         });
     }
 

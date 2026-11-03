@@ -11,9 +11,8 @@ use crate::app::event::AppEvent;
 use crate::config;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{CloneFile, CloneRepository, Cloned, Done, Item, Unwritten};
-use crate::git::clone::files::{self, File};
+use crate::git::clone::files::{self, File, MAX_TOTAL_BYTES};
 use crate::git::clone::{self, Failure, Target};
-use crate::git::ignored::MAX_TOTAL_BYTES;
 use crate::log::{self, Job, Level};
 use crate::machines::send;
 

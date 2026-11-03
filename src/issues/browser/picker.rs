@@ -14,7 +14,6 @@ impl Browser {
                 let pick = self.accounts.as_ref().and_then(|a| a.pick(&kind)).unwrap_or_default();
                 agent.keys().position(|key| key == pick)
             }),
-            Pick::Machine => self.chosen_machine(),
             Pick::Person(source, field) => {
                 let who = &self.people.of(source)[field];
                 self.person_choices(source).iter().position(|(w, _)| w == who)
@@ -51,7 +50,6 @@ impl Browser {
                 })
                 .collect(),
             Pick::Account => self.agent_accounts().map(|(_, agent)| Self::account_choices(agent)).unwrap_or_default(),
-            Pick::Machine => self.machine_choices(),
             Pick::Person(source, _) => self
                 .person_choices(source)
                 .into_iter()
@@ -93,21 +91,7 @@ impl Browser {
         let choices = self.choices();
         let i = index.unwrap_or_else(|| picker.search.selected()).min(choices.len().saturating_sub(1));
         let Some((key, who)) = choices.get(i).map(|c| (c.key.clone(), c.who.clone())) else { return Action::None };
-        if pick == Pick::Machine {
-            return self.choose_machine(&key);
-        }
         self.picker = None;
-        self.take_choice(pick, key, who);
-        let Screen::Detail { issue, .. } = &self.screen else { return Action::None };
-        let issue = (**issue).clone();
-        match after {
-            After::Start => self.start(issue),
-            After::Flow => self.start_flow(issue),
-            After::Nothing => Action::None,
-        }
-    }
-
-    fn take_choice(&mut self, pick: Pick, key: String, who: Option<Who>) {
         match pick {
             Pick::Agent => {
                 if let Some(accounts) = &mut self.accounts
@@ -131,7 +115,13 @@ impl Browser {
                     self.set_person(source, field, who);
                 }
             }
-            Pick::Machine => {}
+        }
+        let Screen::Detail { issue, .. } = &self.screen else { return Action::None };
+        let issue = (**issue).clone();
+        match after {
+            After::Start => self.start(issue),
+            After::Flow => self.start_flow(issue),
+            After::Nothing => Action::None,
         }
     }
 

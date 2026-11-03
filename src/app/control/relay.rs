@@ -3,7 +3,7 @@ use serde_json::Value;
 use super::{Asked, Handled, Pending, Stage, malformed};
 use crate::app::App;
 use crate::app::machines::RemoteItem;
-use crate::app::machines::relay::{Sent, Then};
+use crate::app::machines::relay::Sent;
 use crate::control::contract::Refusal;
 use crate::control::{Done, Start, Until};
 use crate::log;
@@ -19,7 +19,7 @@ impl App {
         unwaited(&send)?;
         let focus = focused(&send);
         let key = self.clients.requests.key();
-        let target = self.send_to_machine(machine, send, Then::Client(key))?;
+        let target = self.send_to_machine(machine, send, key)?;
         let (client, done, stage) = (Some(client), Done::default(), Stage::Relay(Relaying { sent: target, focus }));
         self.clients.requests.pending.push(Pending { client, key, timeout: None, done, stage });
         Ok(None)
@@ -52,7 +52,7 @@ impl App {
         value
     }
 
-    pub(in crate::app) fn await_made(&mut self, sent: &Sent, value: &Value) {
+    fn await_made(&mut self, sent: &Sent, value: &Value) {
         let id = |key: &str| value.get(key).and_then(Value::as_u64);
         let made = id("tab").map(RemoteItem::Tab).or_else(|| id("workspace").map(RemoteItem::Workspace));
         match (made, sent.boot.clone()) {
@@ -78,8 +78,5 @@ fn focused(send: &Send) -> bool {
         Send::Start(start) | Send::StartWith(start) => start.focus,
         Send::NewWorkspace(new) => new.focus,
         Send::FlowRun(run) => run.focus,
-        Send::NewTab(tab) => tab.focus,
-        Send::Clone(clone) => clone.focus,
-        Send::AccountList | Send::IssueSources(_) | Send::FlowList(_) => false,
     }
 }

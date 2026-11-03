@@ -97,8 +97,6 @@ Click **`+ New`** under the workspaces, then **new workspace**, to start another
 - **With its own worktree** (the default in a repository): the name is a branch, and the workspace is a separate checkout of the repository in `~/.cornercase/worktrees/<repo>/<branch>`. Its files, builds and agents don't touch your other work. See [Git worktrees](../worktrees/).
 - **Without**: the workspace uses the project folder itself, under the name you chose. This is handy to keep a group of tabs together, for example a `servers` workspace next to `main`.
 
-With [machines](../machines/) listed, the dialog has a `run on` row: pick a machine and the workspace is made in that machine's clone of the project, and shows under it in your sidebar. When the machine has no clone yet, **create** offers to [clone the project there](../machines/#clone-the-project-there) first.
-
 Workspaces are listed in the order they were created, or the order you [dragged them](#reorder) into, never sorted by name or branch: a new one goes at the end.
 
 <Screen

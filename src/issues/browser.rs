@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, sort_by_updated};
 use crate::list::Search;
-use crate::machines::run_on::RunOn;
 use crate::queue::State;
 
 mod buttons;
@@ -10,7 +9,6 @@ mod input;
 mod naming;
 mod people;
 mod picker;
-mod run_on;
 mod token_form;
 mod view;
 
@@ -234,7 +232,6 @@ pub(crate) enum Pick {
     Agent,
     Place,
     Account,
-    Machine,
     Person(Source, usize),
 }
 
@@ -290,26 +287,6 @@ pub(crate) enum Action {
     Copy(String),
     SetDefaultAgent(String),
     LoadPeople(Vec<Source>),
-    RunOn(Option<usize>),
-    OpenLoginTab,
-    CloneThere(Issue),
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum AgentNote {
-    #[default]
-    Ready,
-    NotInstalled,
-    SignedOut,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct There {
-    pub(crate) start_hint: String,
-    pub(crate) cloned: bool,
-    pub(crate) agent: AgentNote,
-    pub(crate) command: Option<String>,
-    pub(crate) tracker: Option<String>,
 }
 
 #[derive(Debug)]
@@ -350,8 +327,6 @@ pub(crate) struct Browser {
     pub(crate) filtering: Option<usize>,
     pub(crate) members: HashMap<Source, Result<Vec<Person>, String>>,
     pub(crate) queued: Vec<Queued>,
-    pub(crate) run_on: Option<RunOn>,
-    pub(crate) there: Option<There>,
 }
 
 impl Browser {

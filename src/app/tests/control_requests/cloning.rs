@@ -5,7 +5,7 @@ use base64::engine::general_purpose::STANDARD;
 use rstest::rstest;
 
 use super::*;
-use crate::git::ignored::MAX_TOTAL_BYTES;
+use crate::git::clone::files::MAX_TOTAL_BYTES;
 use crate::test_util::FakeHttp;
 
 fn clone_args(url: &str, parent: &Path) -> Value {

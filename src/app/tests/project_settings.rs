@@ -126,7 +126,6 @@ fn the_new_workspace_dialog_names_the_setup_when_a_worktree_is_chosen() {
         worktree: Some(true),
         error: None,
         creating: false,
-        run_on: None,
     });
     let shown = format!("{}", render(&mut s.app, SIZE).backend());
     assert!(shown.contains("then runs the project's setup: npm ci …"), "{shown}");

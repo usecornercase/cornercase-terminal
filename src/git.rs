@@ -1,6 +1,5 @@
 pub(crate) mod clone;
 pub(crate) mod config;
-pub(crate) mod ignored;
 pub(crate) mod remote;
 pub(crate) mod upstream;
 pub(crate) mod worktree;

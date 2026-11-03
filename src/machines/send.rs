@@ -1,13 +1,8 @@
 use std::time::Duration;
 
-use super::act::{CHECK, QUICK, REMOVE as WORKTREE};
-use crate::control::{
-    AccountList, CloneFile, CloneRepository, Command, FlowList, FlowRun, IssueSources, NewTab, NewWorkspace, Start,
-    Until,
-};
+use super::act::{QUICK, REMOVE as WORKTREE};
+use crate::control::{CloneFile, Command, FlowRun, NewWorkspace, Start, Until};
 use crate::log::Job;
-
-const CLONE: Duration = Duration::from_mins(30);
 
 pub(crate) const UNWAITED: &str =
     "`wait`, `until` and `timeout` do not work with `machine`: start it there, then follow it there";
@@ -18,11 +13,6 @@ pub(crate) enum Send {
     StartWith(Start),
     NewWorkspace(NewWorkspace),
     FlowRun(FlowRun),
-    NewTab(NewTab),
-    Clone(CloneRepository),
-    AccountList,
-    IssueSources(u64),
-    FlowList(u64),
 }
 
 impl Send {
@@ -32,11 +22,6 @@ impl Send {
             Self::StartWith(start) => Command::StartWith(unwaited(start)),
             Self::NewWorkspace(new) => Command::NewWorkspace(NewWorkspace { focus: false, machine: None, ..new }),
             Self::FlowRun(run) => Command::FlowRun(FlowRun { focus: false, machine: None, ..run }),
-            Self::NewTab(tab) => Command::NewTab(NewTab { focus: false, ..tab }),
-            Self::Clone(clone) => Command::Clone(CloneRepository { focus: false, ..clone }),
-            Self::AccountList => Command::AccountList(AccountList { check: true }),
-            Self::IssueSources(project) => Command::IssueSources(IssueSources { project: Some(project) }),
-            Self::FlowList(project) => Command::FlowList(FlowList { project: Some(project) }),
         }
     }
 
@@ -46,11 +31,6 @@ impl Send {
             Self::StartWith(_) => "start-with",
             Self::NewWorkspace(_) => "new-workspace",
             Self::FlowRun(_) => "flow-run",
-            Self::NewTab(_) => "new-tab",
-            Self::Clone(_) => "clone",
-            Self::AccountList => "account-list",
-            Self::IssueSources(_) => "issue-sources",
-            Self::FlowList(_) => "flow-list",
         }
     }
 
@@ -58,23 +38,14 @@ impl Send {
         match self {
             Self::Start(_) | Self::StartWith(_) | Self::FlowRun(_) => WORKTREE,
             Self::NewWorkspace(new) if new.worktree => WORKTREE,
-            Self::NewWorkspace(_) | Self::NewTab(_) | Self::IssueSources(_) | Self::FlowList(_) => QUICK,
-            Self::AccountList => CHECK,
-            Self::Clone(_) => CLONE,
+            Self::NewWorkspace(_) => QUICK,
         }
     }
 
     pub(crate) fn logged(&self, job: Job) -> Job {
-        let job = match self.project() {
+        match self.project() {
             Some(project) => job.with("project", project),
             None => job,
-        };
-        match self {
-            Self::NewTab(NewTab { workspace: Some(workspace), .. }) => job.with("workspace", workspace),
-            Self::Clone(clone) if !clone.files.is_empty() => {
-                job.with("files", clone.files.len()).with("bytes", bytes(&clone.files))
-            }
-            _ => job,
         }
     }
 
@@ -83,8 +54,6 @@ impl Send {
             Self::Start(start) | Self::StartWith(start) => start.project,
             Self::NewWorkspace(new) => new.project,
             Self::FlowRun(run) => run.project,
-            Self::IssueSources(project) | Self::FlowList(project) => Some(*project),
-            Self::NewTab(_) | Self::Clone(_) | Self::AccountList => None,
         }
     }
 }

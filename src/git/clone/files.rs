@@ -6,6 +6,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 
 pub(crate) const PLAIN_MODE: u32 = 0o644;
+pub(crate) const MAX_TOTAL_BYTES: u64 = 8 * 1024 * 1024;
 const PERMISSIONS: u32 = 0o777;
 const PRIVATE: u32 = 0o600;
 

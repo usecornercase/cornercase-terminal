@@ -8,8 +8,6 @@ pub(super) enum Button {
     Schedule,
     Flow,
     Agent,
-    RunOn,
-    LoginTab,
     Where,
     Account,
     Done,
@@ -38,8 +36,6 @@ impl Button {
             Self::Schedule => "schedule",
             Self::Flow => "start a flow",
             Self::Agent => "agent…",
-            Self::RunOn => "run on…",
-            Self::LoginTab => "open login tab",
             Self::Where => "where…",
             Self::Account => "account…",
             Self::Done => "done",
@@ -96,8 +92,6 @@ impl Browser {
 
     fn detail_buttons(&self, raw: bool, issue: &Issue) -> Vec<Button> {
         let mut buttons = vec![Button::Start, Button::Schedule, Button::Flow, Button::Agent];
-        buttons.extend(self.run_on.as_ref().map(|_| Button::RunOn));
-        buttons.extend(self.needs_login_tab().then_some(Button::LoginTab));
         if !issue.source.in_repository() && self.places.len() > 1 {
             buttons.push(Button::Where);
         }
@@ -108,13 +102,6 @@ impl Browser {
             buttons.push(Button::MakeDefault);
         }
         buttons.extend([if raw { Button::Rendered } else { Button::Raw }, Button::Copy, Button::Back]);
-        self.unscheduled(buttons)
-    }
-
-    fn unscheduled(&self, mut buttons: Vec<Button>) -> Vec<Button> {
-        if self.machine().is_some() {
-            buttons.retain(|button| *button != Button::Schedule);
-        }
         buttons
     }
 
@@ -143,7 +130,7 @@ impl Browser {
             buttons.push(Button::Disconnect);
         }
         buttons.push(Button::Cancel);
-        self.unscheduled(buttons)
+        buttons
     }
 
     fn queue_buttons(&self) -> Vec<Button> {
@@ -185,10 +172,9 @@ impl Browser {
             Button::Start if self.naming.is_some() => self.start_named(),
             Button::Start | Button::Schedule => self.press_start(button == Button::Schedule),
             Button::Flow => self.press_flow(),
-            Button::Agent | Button::RunOn | Button::Where | Button::Account => {
+            Button::Agent | Button::Where | Button::Account => {
                 let pick = match button {
                     Button::Agent => Pick::Agent,
-                    Button::RunOn => Pick::Machine,
                     Button::Where => Pick::Place,
                     _ => Pick::Account,
                 };
@@ -198,7 +184,6 @@ impl Browser {
             Button::New | Button::RunNow | Button::Remove | Button::ClearStarted => self.press_queue(button),
             Button::Done => self.close_people(),
             Button::Clear => self.clear_people(),
-            Button::LoginTab => Action::OpenLoginTab,
             Button::MakeDefault => self.agents.chosen.clone().map_or(Action::None, Action::SetDefaultAgent),
             Button::Choose => self.choose(None),
             Button::Refresh => {
@@ -325,9 +310,6 @@ impl Browser {
     }
 
     pub(super) fn start(&mut self, issue: Issue) -> Action {
-        if self.not_cloned() {
-            return Action::CloneThere(issue);
-        }
         if self.needs_place(&issue) {
             self.open_picker(Pick::Place, After::Start);
             return Action::None;
@@ -352,9 +334,6 @@ impl Browser {
     }
 
     pub(super) fn start_flow(&mut self, issue: Issue) -> Action {
-        if self.not_cloned() {
-            return Action::CloneThere(issue);
-        }
         if self.needs_place(&issue) {
             self.open_picker(Pick::Place, After::Flow);
             return Action::None;

@@ -1,4 +1,3 @@
-pub(crate) mod clone_on_machine;
 pub(super) mod flows;
 pub(super) mod form;
 pub(super) mod group_style;
@@ -11,7 +10,6 @@ pub(super) mod ports;
 pub(super) mod processes;
 pub(super) mod project_settings;
 pub(crate) mod queue;
-pub(super) mod run_on;
 pub(super) mod search;
 pub(super) mod settings;
 pub(super) mod share_settings;
@@ -166,7 +164,6 @@ pub(crate) enum Overlay {
     Form(Form),
     Queue(Box<crate::queue::form::Form>),
     Machine(Box<crate::machines::form::Form>),
-    CloneOnMachine(Box<crate::machines::clone_form::CloneForm>),
     GroupStyle(GroupEntry),
     Confirm(Confirm),
     Update(Update),
@@ -203,7 +200,7 @@ impl Overlay {
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Forum(setup) => Some(super::forum::area(area, setup)),
             Self::Issues(_) => Some(issues_area(area)),
-            Self::Settings(_) | Self::ShareSettings(_) | Self::CloneOnMachine(_) => Some(settings_area(area)),
+            Self::Settings(_) | Self::ShareSettings(_) => Some(settings_area(area)),
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
