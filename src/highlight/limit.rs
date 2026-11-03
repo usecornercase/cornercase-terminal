@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 use self::imp::wait_in;
 use super::syntax::{self, Segments};
 use super::worker;
-use crate::os::process::CommandExt;
+use crate::os::process::Grouped;
 use crate::process::{self, kill_group};
 
 const PAINT_BUDGET: Duration = Duration::from_secs(5);
@@ -24,7 +24,7 @@ enum Fail {
 
 #[derive(Default)]
 struct Session {
-    child: Option<Child>,
+    child: Option<Grouped>,
     stdin: Option<ChildStdin>,
     stdout: Option<ChildStdout>,
     failed: HashSet<u64>,
@@ -44,14 +44,14 @@ fn session() -> &'static Mutex<Session> {
     SESSION.get_or_init(|| Mutex::new(Session::default()))
 }
 
-fn spawn_worker() -> io::Result<Child> {
-    Command::new(worker_exe()?)
-        .env("CORNERCASE_HIGHLIGHT_WORKER", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .process_group(0)
-        .spawn()
+fn spawn_worker() -> io::Result<Grouped> {
+    Grouped::spawn(
+        Command::new(worker_exe()?)
+            .env("CORNERCASE_HIGHLIGHT_WORKER", "1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
 }
 
 fn worker_exe() -> io::Result<PathBuf> {
@@ -79,7 +79,7 @@ impl Session {
         source: &str,
         language: &str,
         budget: Duration,
-        spawn: &mut dyn FnMut() -> io::Result<Child>,
+        spawn: &mut dyn FnMut() -> io::Result<Grouped>,
     ) -> Option<Vec<Segments>> {
         let key = hash_of(language, source);
         if self.failed.contains(&key) || budget.is_zero() {
@@ -106,7 +106,7 @@ impl Session {
         language: &str,
         source: &str,
         budget: Duration,
-        spawn: &mut dyn FnMut() -> io::Result<Child>,
+        spawn: &mut dyn FnMut() -> io::Result<Grouped>,
     ) -> Result<Option<Vec<Segments>>, Fail> {
         self.ensure(spawn)?;
         let deadline = Instant::now() + budget;
@@ -115,7 +115,7 @@ impl Session {
         read_response(stdout, deadline)
     }
 
-    fn ensure(&mut self, spawn: &mut dyn FnMut() -> io::Result<Child>) -> Result<(), Fail> {
+    fn ensure(&mut self, spawn: &mut dyn FnMut() -> io::Result<Grouped>) -> Result<(), Fail> {
         if self.child.is_some() {
             return Ok(());
         }

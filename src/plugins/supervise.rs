@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Write as _;
-use std::process::Child;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -14,7 +13,7 @@ use super::registry::{Entry, Plugin, Registry, Watch};
 use super::run::{Places, private_dir};
 use crate::log;
 use crate::os::fs::{Lock, OpenOptionsExt, locked, try_lock};
-use crate::os::process::Signal;
+use crate::os::process::{Grouped, Signal};
 use crate::panics;
 use crate::process;
 
@@ -54,7 +53,7 @@ struct Spec {
 
 struct Running {
     spec: Spec,
-    child: Child,
+    child: Grouped,
     since: Instant,
 }
 
@@ -210,21 +209,19 @@ impl State {
         }
     }
 
-    fn start_child(&self, lock: &std::io::Result<Option<File>>, spec: &Spec) -> Option<std::io::Result<Child>> {
+    fn start_child(&self, lock: &std::io::Result<Option<File>>, spec: &Spec) -> Option<std::io::Result<Grouped>> {
         Some(match lock {
             Ok(Some(_)) if !on_disk(&self.places, &spec.plugin.entry) => return None,
             Ok(Some(_)) if !spec.plugin.root().is_dir() => {
                 Err(std::io::Error::new(std::io::ErrorKind::NotFound, "the plugin's folder is gone"))
             }
-            Ok(Some(_)) => {
-                self.places.command(&spec.plugin, &spec.command, &self.env, None).and_then(|mut c| c.spawn())
-            }
+            Ok(Some(_)) => self.places.spawn(&spec.plugin, &spec.command, &self.env, None),
             Ok(None) => return None,
             Err(e) => Err(std::io::Error::new(e.kind(), e.to_string())),
         })
     }
 
-    fn started(&mut self, key: &Key, spec: &Spec, child: Child, now: Instant) {
+    fn started(&mut self, key: &Key, spec: &Spec, child: Grouped, now: Instant) {
         let kind = self.kind.name();
         log::info!("plugins", "started", kind = kind, plugin = key.plugin, entry = key.entry, pid = child.id());
         self.places.note(&key.plugin, &format!("{kind} started"), &[("entry", &key.entry), ("pid", &child.id())]);
@@ -400,10 +397,11 @@ fn stop_children(places: &Places, mut running: Vec<Running>) {
 }
 
 fn stop_all_of(running: &mut Vec<Running>) {
+    let mut asked = false;
     for run in running.iter() {
-        super::run::signal(&run.child, Signal::TERM);
+        asked |= run.child.signal(Signal::TERM);
     }
-    let until = Instant::now() + STOP_WITHIN;
+    let until = Instant::now() + if asked { STOP_WITHIN } else { Duration::ZERO };
     while Instant::now() < until {
         running.retain_mut(|run| !matches!(run.child.try_wait(), Ok(Some(_)) | Err(_)));
         if running.is_empty() {
@@ -412,7 +410,7 @@ fn stop_all_of(running: &mut Vec<Running>) {
         thread::sleep(Duration::from_millis(20));
     }
     for mut run in std::mem::take(running) {
-        super::run::signal(&run.child, Signal::KILL);
+        run.child.signal(Signal::KILL);
         let _ = run.child.wait();
     }
 }

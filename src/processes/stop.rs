@@ -1,6 +1,6 @@
-use crate::os::process::{Pid, Signal, kill_process};
+use crate::os::process::{Pid, Signal, askable, kill_process};
 use crate::process;
-use crate::process::escalation::{self, Outcome, Stoppable};
+use crate::process::escalation::{self, HARD_STEP, KILLED_BECAUSE, Outcome, Stoppable};
 use crate::text;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,7 +34,6 @@ pub(crate) type Stopped = escalation::Stopped<Group>;
 
 impl Group {
     #[cfg(test)]
-    #[cfg(unix)]
     pub(crate) fn live(pid: i32) -> Self {
         Self::live_with(pid, None)
     }
@@ -72,6 +71,10 @@ impl Stoppable for Group {
             return Err(format!("pid {} is no longer the program that was listed", root.pid));
         }
         Ok(())
+    }
+
+    fn askable(&self) -> bool {
+        std::iter::once(&self.root).chain(&self.members).any(|member| member.running() && askable(member.pid))
     }
 
     fn signal(&self, signal: Signal) -> Result<(), String> {
@@ -117,8 +120,8 @@ pub(crate) fn summary(stopped: &[Stopped]) -> String {
     };
     match outcome {
         Ok(Outcome::Stopped) => format!("stopped {label}{also}"),
-        Ok(Outcome::Killed) => format!("killed {label}{also}: it ignored SIGTERM"),
-        Ok(Outcome::StillRunning) => format!("{label} is still running after SIGKILL"),
+        Ok(Outcome::Killed) => format!("killed {label}{also}: {KILLED_BECAUSE}"),
+        Ok(Outcome::StillRunning) => format!("{label} is still running after {HARD_STEP}"),
         Err(reason) => format!("did not stop {label}: {reason}"),
     }
 }
