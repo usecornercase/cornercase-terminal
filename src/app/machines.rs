@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
 use super::App;
+use super::clone_on_machine::Packed;
 use super::control::json;
 use super::event::AppEvent;
 use super::machine_usage::Cache;
@@ -64,7 +65,7 @@ pub(crate) enum MachineEvent {
     Stream(StreamReport),
     Relayed(relay::Relayed),
     Ignored { root: PathBuf, result: std::result::Result<crate::git::ignored::Listing, String> },
-    Packed { key: u64, url: String, result: std::result::Result<Vec<control::CloneFile>, String> },
+    Packed(Box<Packed>),
 }
 
 impl From<Report> for AppEvent {
@@ -308,7 +309,7 @@ impl App {
             MachineEvent::Stream(report) => self.stream_reported(report),
             MachineEvent::Relayed(relayed) => self.relayed(relayed),
             MachineEvent::Ignored { root, result } => self.ignored_listed(&root, result),
-            MachineEvent::Packed { key, url, result } => self.clone_packed(key, url, result),
+            MachineEvent::Packed(packed) => self.clone_packed(*packed),
         }
         if streamed {
             return;

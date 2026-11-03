@@ -169,6 +169,18 @@ mod the_tracker {
     }
 
     #[test]
+    fn cuts_a_long_project_name_there() {
+        let project = "w".repeat(500);
+        let found = source("github", "GitHub", SourceState::Missing);
+        let sources =
+            Sources { sources: vec![SourceInfo { missing: vec!["token".into()], ..found }], ..Sources::default() };
+
+        let said = Tracked { machine: "vps", project: &project, source: "github" }.lacks(&sources);
+
+        assert_eq!(said, Some(format!("vps has no GitHub token for {}…", "w".repeat(59))));
+    }
+
+    #[test]
     fn says_a_machine_that_does_not_list_it_cannot_read_it() {
         assert_eq!(
             lacks(source("github", "GitHub", SourceState::Connected), "asana").as_deref(),

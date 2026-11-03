@@ -250,6 +250,7 @@ pub(crate) struct Picker {
     pub(crate) pick: Pick,
     pub(crate) search: Search,
     pub(super) after: After,
+    pub(crate) blank: bool,
 }
 
 pub(crate) struct Choice {

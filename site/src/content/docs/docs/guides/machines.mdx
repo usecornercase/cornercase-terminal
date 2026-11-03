@@ -198,7 +198,7 @@ With at least one machine listed, the **Issues** dialog, **start a flow…** and
 **this computer** is chosen each time a dialog opens. Pick a machine (**run on…** on an issue's page, a click on the row in the other two) and what you start is sent to the server on that machine, which starts it as if you had clicked there: it belongs to that machine, shows [in your sidebar](#in-your-sidebar) under it, and once the machine lists it, it is selected, so its tab shows here.
 
 - **A machine that is down** is dimmed with why (`unreachable`, `connecting…`, `not seen yet`, or an older cornercase), and can't be picked. One you already picked stays picked when it goes down, and **start** then says it's unreachable.
-- **A machine that leaves the list** while you have it picked, removed or given another address in Settings, isn't swapped for this computer: the row says `vps is no longer listed` (or `vps changed in Settings; choose it again`) in red, and nothing starts until you pick again.
+- **A machine that leaves the list** while you have it picked, removed or given another address in Settings, isn't swapped for this computer: the row says `vps is no longer listed` (or `vps changed in Settings; choose it again`) in red, and nothing starts until you pick again; **run on…** then opens with no row highlighted.
 - **A project with no git remote** can't run elsewhere: the row says `needs a git remote`, since its repository is how cornercase finds the same project on the machine. Right after a project opens, the row can say so for a moment, until its remotes are read.
 - **The project there** is the machine's clone of the same repository, the one its sidebar row pairs with. The `start` row says where the work goes: `in its own worktree on vps, in ~/code/web-shop`, or `in a tab on vps, in …`, from the same choice as here.
 - **While it starts**, the dialog says `starting on vps…`. If the machine refuses, its reason stays in red and nothing changed. If it restarted since you picked it, the dialog says `vps restarted; nothing was started there`.
@@ -214,7 +214,7 @@ Picking a machine asks it, before anything starts:
 
 An issue is started there with its key: the machine reads it with its own tracker, and the prompt is built with its own [prompt template](../../reference/prompt/), which the **prompt** row says instead of showing this computer's; **start a flow** from the issue says the same in its prompt box, which then takes no typing, since the machine writes the prompt. The branch and the workspace names you see before starting are the ones used there. **schedule** is hidden while a machine is picked: the [queue](../queue/) starts agents on this computer only.
 
-The answers are kept until that machine restarts, and asked again each time you pick it; the account you picked stays picked meanwhile.
+The answers are kept until that machine restarts, and asked again each time you pick it; the account you picked on that machine stays picked meanwhile. One picked on this computer is let go when you pick a machine, since the machine has its own accounts.
 
 ### Clone the project there
 
@@ -243,7 +243,7 @@ When the project isn't on the machine, the row says `not on vps · clone…`, an
 - **The list** is the files git ignores in this project's folder, such as `.env`, so the clone there can run as it does here. Every box starts unticked, and **only ticked files are copied**, with their permissions. Ignored folders, like `node_modules` or `target`, are never offered, and neither are links. At most 200 files are listed (a last line says how many more were left out), and a file over 1 MB shows its size and `too big to copy`. The ticked files can add up to 8 MB: a tick past that is refused, and says so.
 - **A click on a file ticks it.** **clone** (or `Enter`) clones it there with the ticked files, **skip files** clones without any, and **back** (or `Esc`) returns with nothing done.
 
-The machine writes the files once the clone is done, and never over a file the repository has. Then you are back in the dialog you came from, with the machine still picked and the new clone checked; one it couldn't write is named there, as in `cloned on vps · not copied: .env (it is already in the clone)`. When the clone fails, git's reason stays in red. **back** still works while it clones; the answer then shows only in the dialog you went back to.
+The machine writes the files once the clone is done, and never over a file the repository has. Then you are back in the dialog you came from, with the machine still picked and the new clone checked; one it couldn't write is named there, as in `cloned on vps · not copied: .env (it is already in the clone)`. When the clone fails, git's reason stays in red. **back** still works while it clones and doesn't stop it: the answer shows in the dialog you went back to. If you pick something else there, or close it, before the ticked files are read, nothing is sent and a toast says `the clone on vps was not sent`.
 
 ### From a terminal
 

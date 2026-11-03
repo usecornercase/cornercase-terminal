@@ -181,7 +181,7 @@ impl App {
             Err(refusal) if refusal.code == Code::StaleBoot => {
                 Some(format!("{} restarted; nothing was started there", held.name))
             }
-            Err(refusal) => Some(refusal.message),
+            Err(refusal) => Some(run_on::clipped(&refusal.message)),
         };
         let Some(run_on) = self.dialog_run_on().filter(|run_on| run_on.awaiting == Some(key)) else { return };
         run_on.awaiting = None;

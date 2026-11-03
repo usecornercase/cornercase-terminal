@@ -29,6 +29,7 @@ pub(crate) struct RunOn {
     pub(crate) chosen: Option<usize>,
     pub(crate) blocked: Option<&'static str>,
     pub(crate) awaiting: Option<u64>,
+    pub(crate) cloning: Option<u64>,
     pub(crate) lost: Option<String>,
 }
 
@@ -41,9 +42,16 @@ impl RunOn {
         if at.is_some_and(|at| !self.can_choose(at)) {
             return false;
         }
+        if !self.is_chosen(at) {
+            self.cloning = None;
+        }
         self.chosen = at;
         self.lost = None;
         true
+    }
+
+    pub(crate) fn elsewhere(&self) -> bool {
+        self.chosen.is_some() || self.lost.is_some()
     }
 
     pub(crate) fn is_chosen(&self, at: Option<usize>) -> bool {
@@ -55,6 +63,7 @@ impl RunOn {
         let listed = fresh.is_some();
         let mut fresh = fresh.unwrap_or_default();
         fresh.awaiting = shown.awaiting;
+        fresh.cloning = shown.cloning;
         fresh.lost.clone_from(&shown.lost);
         if let Some(target) = shown.machine() {
             fresh.chosen = fresh.targets.iter().position(|there| there.link == target.link);
@@ -108,12 +117,14 @@ pub(crate) fn not_there(name: &str) -> String {
 }
 
 pub(crate) fn clipped(text: &str) -> String {
-    truncate_right(text, TEXT)
+    let line = text.split(char::is_control).filter(|part| !part.trim().is_empty());
+    truncate_right(&line.map(str::trim).collect::<Vec<_>>().join(" "), TEXT)
 }
 
-pub(crate) fn capped(items: impl ExactSizeIterator<Item = String>) -> String {
+pub(crate) fn capped(items: impl Iterator<Item = String>) -> String {
+    let items: Vec<String> = items.map(|item| clipped(&item)).filter(|item| !item.is_empty()).collect();
     let more = items.len().saturating_sub(SHOWN);
-    let shown: Vec<String> = items.take(SHOWN).map(|item| clipped(&item)).collect();
+    let shown = &items[..items.len().min(SHOWN)];
     match more {
         0 => shown.join(", "),
         more => format!("{} … and {more} more", shown.join(", ")),

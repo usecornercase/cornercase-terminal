@@ -84,7 +84,7 @@ impl<T: DeserializeOwned> Slot for Cached<T> {
     fn heard(&mut self, result: Result<Value, Refusal>) {
         self.asking = false;
         let read = result
-            .map_err(|refusal| refusal.message)
+            .map_err(|refusal| clipped(&refusal.message))
             .and_then(|value| serde_json::from_value(value).map_err(|_| UNREADABLE.to_string()));
         match read {
             Ok(read) => {
@@ -281,6 +281,7 @@ struct Tracked<'a> {
 impl Tracked<'_> {
     fn lacks(&self, sources: &Sources) -> Option<String> {
         let Self { machine, project, source } = self;
+        let project = &clipped(project);
         let Some(found) = sources.sources.iter().find(|found| found.source == *source) else {
             return Some(format!("{machine} cannot read {source} issues"));
         };

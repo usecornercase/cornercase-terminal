@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use super::*;
 use crate::app::issues_dialog;
 use crate::app::machines::checks::Checked;
 use crate::control::TabInfo;
-use crate::issues::browser::{AgentNote, Browser, Screen};
+use crate::issues::browser::{Accounts, AgentNote, Browser, Screen};
 use crate::issues::{Issue, Source};
 
 const SHOP: &str = "github.com/acme/web-shop";
@@ -42,6 +44,33 @@ fn ready(command: &str) -> Structured {
 fn refusing(command: &str) -> Structured {
     match command {
         "start" => Structured::Error(Refusal::new(Code::Failed, "the worktree on vps.lan is in use")),
+        command => ready(command),
+    }
+}
+
+fn rambling_start(command: &str) -> Structured {
+    match command {
+        "start" => Structured::Error(Refusal::new(
+            Code::Failed,
+            "the worktree is in use\nby the run that started on Monday morning and is still at it",
+        )),
+        command => ready(command),
+    }
+}
+
+fn rambling_tracker(command: &str) -> Structured {
+    match command {
+        "issue-sources" => Structured::Error(Refusal::new(
+            Code::Failed,
+            "gh failed:\r\nexit status 1 because the token expired on Monday and nobody renewed it",
+        )),
+        command => ready(command),
+    }
+}
+
+fn no_accounts(command: &str) -> Structured {
+    match command {
+        "account-list" => Structured::Error(Refusal::new(Code::Failed, "cannot read the accounts")),
         command => ready(command),
     }
 }
@@ -253,6 +282,43 @@ mod the_issues_dialog {
     }
 
     #[test]
+    fn drops_an_account_picked_here_once_the_machine_is_chosen() {
+        let mut reading = reading(vec![web_shop()]);
+        let Some(Overlay::Issues(b)) = &mut reading.remote.rig.app.overlay else { panic!("the issues are not open") };
+        let here = Some(("claude".to_string(), "home".to_string()));
+        b.accounts = Some(Accounts { agents: HashMap::new(), chosen: here });
+
+        reading.pick("run on…", "vps");
+
+        let chosen = |app: &App| browser(app).accounts.as_ref().and_then(|accounts| accounts.chosen.clone());
+        assert_eq!(chosen(&reading.remote.rig.app), None);
+        reading.remote.rig.until("the machine answers again", |app| app.accounts_there("vps") != Checked::Waiting);
+        assert_eq!(chosen(&reading.remote.rig.app), None);
+    }
+
+    #[test]
+    fn shows_no_accounts_of_this_computer_when_the_machine_cannot_list_its_own() {
+        let mut reading = reading_with(Reply::Told(no_accounts), vec![web_shop()]);
+        let Some(Overlay::Issues(b)) = &mut reading.remote.rig.app.overlay else { panic!("the issues are not open") };
+        b.accounts = Some(Accounts { agents: HashMap::new(), chosen: Some(("claude".into(), "home".into())) });
+
+        reading.pick("run on…", "vps");
+        reading.remote.rig.until("the machine refuses", |app| app.accounts_there("vps") != Checked::Waiting);
+
+        assert!(browser(&reading.remote.rig.app).accounts.is_none());
+    }
+
+    #[test]
+    fn says_briefly_why_the_machine_cannot_read_the_tracker() {
+        let mut reading = reading_with(Reply::Told(rambling_tracker), vec![web_shop()]);
+
+        reading.checked();
+
+        let run_on = row(&reading.remote.rig.app, "run on").expect("the run on row");
+        assert!(run_on.ends_with(" · gh failed: exit status 1 because the token expired on Monda…"), "{run_on:?}");
+    }
+
+    #[test]
     fn says_an_account_with_a_login_there_is_ready() {
         let mut reading = reading(vec![web_shop()]);
         reading.on_vps();
@@ -356,6 +422,7 @@ mod starting_there {
     #[rstest]
     #[case::refused(refusing, "the worktree on vps is in use")]
     #[case::restarted(restarted, "vps restarted; nothing was started there")]
+    #[case::rambling(rambling_start, "the worktree is in use by the run that started on Monday mo…")]
     fn says_why_the_machine_did_not_start_it(#[case] told: fn(&str) -> Structured, #[case] said: &str) {
         let mut reading = reading_with(Reply::Told(told), vec![web_shop()]);
         reading.checked();

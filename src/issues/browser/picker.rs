@@ -21,7 +21,8 @@ impl Browser {
             }
         };
         search.select(current.unwrap_or(0));
-        self.picker = Some(Picker { pick, search, after });
+        let blank = pick == Pick::Machine && current.is_none();
+        self.picker = Some(Picker { pick, search, after, blank });
     }
 
     pub(crate) fn choices(&self) -> Vec<Choice> {
@@ -139,8 +140,10 @@ impl Browser {
         let rows = room.list_rows;
         let count = self.choices().len();
         let Some(picker) = &mut self.picker else { return Action::None };
+        let blank = std::mem::take(&mut picker.blank);
         match key.code {
             KeyCode::Esc => self.picker = None,
+            KeyCode::Enter | KeyCode::Up | KeyCode::Down if blank => {}
             KeyCode::Enter => return self.choose(None),
             KeyCode::Up => picker.search.move_selection(-1, count, rows),
             KeyCode::Down => picker.search.move_selection(1, count, rows),

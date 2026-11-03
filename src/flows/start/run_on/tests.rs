@@ -131,6 +131,16 @@ fn starts_nothing_once_the_machine_is_gone_until_one_is_chosen() {
     assert!(matches!(s.press(START), Action::None) && s.machine().is_none());
 }
 
+#[test]
+fn keeps_to_the_machine_s_flows_once_the_machine_is_gone() {
+    let mut s = on_vps();
+    s.run_on = RunOn::kept(None, s.run_on.as_ref());
+
+    assert_eq!(s.buttons(ROOM), [CANCEL, START]);
+    assert!(s.warnings().is_empty(), "{:?}", s.warnings());
+    assert!(s.heading().ends_with(" · choose where it runs"), "{}", s.heading());
+}
+
 mod from_an_issue_on_a_machine {
     use super::*;
 

@@ -658,7 +658,8 @@ pub(super) fn room(area: Rect) -> Room {
 fn picker_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {
     let picker = browser.picker.as_ref();
     let choices = browser.choices();
-    let selected = choices.len().checked_sub(1).map(|last| picker.map_or(0, |p| p.search.selected()).min(last));
+    let shown = choices.len().checked_sub(1).filter(|_| !picker.is_some_and(|p| p.blank));
+    let selected = shown.map(|last| picker.map_or(0, |p| p.search.selected()).min(last));
     let items =
         choices.into_iter().map(|c| ui::IssueRow { key: c.key, title: c.title, meta: c.meta, colour: None }).collect();
     let body = ui::IssuesBody::List {

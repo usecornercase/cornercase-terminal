@@ -132,9 +132,26 @@ mod its_lists {
 
     #[test]
     fn cut_each_long_text() {
-        let said = capped(vec!["a".repeat(500), String::new()].into_iter());
+        let said = capped(vec!["a".repeat(500), "b".into()].into_iter());
 
-        assert_eq!(said, format!("{}…, ", "a".repeat(59)));
+        assert_eq!(said, format!("{}…, b", "a".repeat(59)));
+    }
+
+    #[test]
+    fn leave_out_and_never_count_the_empty_ones() {
+        let mut all = ["", " ", "\t"].map(String::from).to_vec();
+        all.extend(items(4));
+        let said = capped(all.into_iter());
+
+        assert_eq!(said, "file1, file2, file3 … and 1 more");
+    }
+
+    #[rstest::rstest]
+    #[case::lines("no such\nfolder\r\n", "no such folder")]
+    #[case::escapes("red \u{1b}[31mtext\u{7}", "red [31mtext")]
+    #[case::tabs("\tindented\t", "indented")]
+    fn keep_each_text_on_one_line_without_control_characters(#[case] text: &str, #[case] said: &str) {
+        assert_eq!(clipped(text), said);
     }
 }
 

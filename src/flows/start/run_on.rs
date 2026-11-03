@@ -23,6 +23,10 @@ impl Start {
         self.run_on.as_ref()?.machine()
     }
 
+    pub(super) fn elsewhere(&self) -> bool {
+        self.run_on.as_ref().is_some_and(RunOn::elsewhere)
+    }
+
     pub(crate) fn there(&self) -> Option<&There> {
         self.there.as_ref().filter(|_| self.machine().is_some())
     }
@@ -63,6 +67,9 @@ impl Start {
     }
 
     pub(super) fn heading_there(&self, name: &str) -> Option<String> {
+        if self.run_on.as_ref().is_some_and(|run_on| run_on.lost.is_some()) {
+            return Some(format!("{name} · choose where it runs"));
+        }
         let target = self.machine()?;
         let place = self.there().map_or_else(|| format!("on {}", target.name), |there| there.place.clone());
         Some(format!("{name} {place}"))

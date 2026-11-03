@@ -307,6 +307,18 @@ mod a_machine_that_is_gone {
         assert_eq!(b.run_on.as_ref().and_then(|run_on| run_on.lost.as_deref()), None);
         assert!(b.labels(ROOM.buttons).contains(&"schedule"));
     }
+
+    #[test]
+    fn opens_the_picker_with_no_choice_marked() {
+        let mut b = gone();
+        let pos = button(&b, "run on…");
+        click(&mut b, pos);
+
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::None);
+        assert!(b.run_on.as_ref().is_some_and(|run_on| run_on.lost.is_some()));
+        assert_eq!(press(&mut b, KeyCode::Down), Action::None);
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::RunOn(None));
+    }
 }
 
 mod the_focused_issue {

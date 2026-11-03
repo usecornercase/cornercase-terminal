@@ -242,7 +242,7 @@ impl Start {
 
     pub(crate) fn warnings(&self) -> Vec<String> {
         let mut out = Vec::new();
-        if !self.repo && self.machine().is_none() {
+        if !self.repo && !self.elsewhere() {
             out.push(format!(
                 "{} is not the root of a git repository, and a flow works in a worktree of its own",
                 self.project_name
@@ -276,7 +276,7 @@ impl Start {
 
     pub(crate) fn buttons(&self, room: Room) -> Vec<&'static str> {
         let mut buttons = Vec::new();
-        if self.selected().is_some() && self.machine().is_none() {
+        if self.selected().is_some() && !self.elsewhere() {
             buttons.push(EDIT);
         }
         if !room.wide {

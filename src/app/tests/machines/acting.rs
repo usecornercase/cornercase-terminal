@@ -172,20 +172,24 @@ impl Remote {
     }
 
     fn held_relay(&mut self) -> AppEvent {
+        self.held(|event| matches!(event, AppEvent::Machine(MachineEvent::Relayed(_))))
+    }
+
+    fn held(&mut self, wanted: fn(&AppEvent) -> bool) -> AppEvent {
         let (app, rx) = (&mut self.rig.app, &self.rig.rx);
         let mut held = None;
-        wait_until("the machine answers", || {
+        wait_until("the event comes", || {
             while held.is_none()
                 && let Ok(event) = rx.try_recv()
             {
                 match event {
-                    AppEvent::Machine(MachineEvent::Relayed(_)) => held = Some(event),
+                    event if wanted(&event) => held = Some(event),
                     event => app.handle_event(event, AREA).expect("handle event"),
                 }
             }
             held.is_some()
         });
-        held.expect("an answer")
+        held.expect("the event")
     }
 
     fn sent_nothing_while_down(&self) {

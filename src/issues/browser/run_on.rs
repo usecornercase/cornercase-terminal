@@ -3,7 +3,7 @@ use ratatui::text::Span;
 
 use super::{Action, AgentNote, Browser, Choice, Screen, There};
 use crate::issues::Issue;
-use crate::machines::run_on::Target;
+use crate::machines::run_on::{RunOn, Target};
 use crate::machines::{HERE, HERE_ICON};
 
 impl Browser {
@@ -23,7 +23,7 @@ impl Browser {
     }
 
     pub(super) fn elsewhere(&self) -> bool {
-        self.run_on.as_ref().is_some_and(|run_on| run_on.chosen.is_some() || run_on.lost.is_some())
+        self.run_on.as_ref().is_some_and(RunOn::elsewhere)
     }
 
     pub(super) fn lost_there(&mut self) -> Option<Action> {
@@ -45,7 +45,8 @@ impl Browser {
     }
 
     pub(super) fn chosen_machine(&self) -> Option<usize> {
-        self.run_on.as_ref().map(|run_on| run_on.chosen.map_or(0, |at| at + 1))
+        let run_on = self.run_on.as_ref().filter(|run_on| run_on.lost.is_none())?;
+        Some(run_on.chosen.map_or(0, |at| at + 1))
     }
 
     pub(super) fn machine_choices(&self) -> Vec<Choice> {
@@ -63,8 +64,12 @@ impl Browser {
     pub(super) fn choose_machine(&mut self, key: &str) -> Action {
         let Some(run_on) = &mut self.run_on else { return Action::None };
         let at = run_on.targets.iter().position(|target| target.name == key);
+        let moved = !run_on.is_chosen(at);
         if (at.is_none() && key != HERE) || !run_on.choose(at) {
             return Action::None;
+        }
+        if let Some(accounts) = self.accounts.as_mut().filter(|_| moved) {
+            accounts.chosen = None;
         }
         self.picker = None;
         self.there = None;
