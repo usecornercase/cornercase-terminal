@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
+pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug)]
 pub struct Workspaces {

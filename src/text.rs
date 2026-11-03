@@ -175,5 +175,18 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
     })
 }
 
+pub(crate) fn percent_decoded(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = (bytes[i] == b'%').then(|| text.get(i + 1..i + 3)).flatten();
+        let (byte, width) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()).map_or((bytes[i], 1), |b| (b, 3));
+        out.push(byte);
+        i += width;
+    }
+    String::from_utf8(out).ok()
+}
+
 #[cfg(test)]
 mod tests;
