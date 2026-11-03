@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
 use super::registry::Plugin;
@@ -10,7 +10,7 @@ use crate::control;
 use crate::issues::Source;
 use crate::log::{self, Level};
 use crate::os::fs::{DirBuilderExt, OpenOptionsExt, set_file_mode, set_mode};
-use crate::os::process::{CommandExt, Pid, Signal, kill_process_group};
+use crate::os::process::{Grouped, Signal};
 use crate::paths;
 
 pub(crate) const BIN_ENV: &str = "CORNERCASE_BIN";
@@ -110,8 +110,18 @@ impl Places {
         for key in removed() {
             built.env_remove(key);
         }
-        built.envs(launch.env).process_group(0);
+        built.envs(launch.env);
         Ok(built)
+    }
+
+    pub(crate) fn spawn(
+        &self,
+        plugin: &Plugin,
+        command: &[String],
+        env: &[(String, String)],
+        cwd: Option<&Path>,
+    ) -> io::Result<Grouped> {
+        Grouped::spawn(&mut self.command(plugin, command, env, cwd)?)
     }
 }
 
@@ -134,20 +144,14 @@ pub(crate) fn private_dir(path: &Path) -> io::Result<()> {
     set_mode(path, 0o700)
 }
 
-pub(crate) fn signal(child: &Child, signal: Signal) {
-    if let Some(pid) = i32::try_from(child.id()).ok().and_then(Pid::from_raw) {
-        let _ = kill_process_group(pid, signal);
-    }
-}
-
-pub(crate) fn finish(mut child: Child, within: Duration) -> io::Result<Option<ExitStatus>> {
+pub(crate) fn finish(mut child: Grouped, within: Duration) -> io::Result<Option<ExitStatus>> {
     let until = Instant::now() + within;
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
         }
         if Instant::now() >= until {
-            signal(&child, Signal::KILL);
+            child.signal(Signal::KILL);
             let _ = child.wait();
             return Ok(None);
         }
@@ -189,7 +193,7 @@ pub(crate) struct Invocation<'a> {
 pub(crate) fn run_to_end(places: &Places, plugin: &Plugin, invocation: Invocation<'_>, within: Duration) -> Ran {
     let Invocation { argv, env, cwd } = invocation;
     let started = Instant::now();
-    let child = places.command(plugin, argv, env, cwd).and_then(|mut c| c.spawn());
+    let child = places.spawn(plugin, argv, env, cwd);
     let ended = match child {
         Err(e) => Ended::Failed(format!("cannot start {}: {e}", argv.first().map_or("", String::as_str))),
         Ok(child) => match finish(child, within) {

@@ -78,11 +78,19 @@ fn stopping_says_what_happened_and_what_else_it_stopped() {
     };
     assert_eq!(stopped_text(&stopped("stopped", 3)), "stopped node (pid 41) and 2 programs it started\n");
     assert_eq!(stopped_text(&stopped("stopped", 1)), "stopped node (pid 41)\n");
-    assert_eq!(
-        stopped_text(&stopped("killed", 2)),
-        "killed node (pid 41) and 1 program it started: they did not stop within 3 s of SIGTERM\n"
-    );
-    assert_eq!(stopped_text(&stopped("still-running", 1)), "node (pid 41) still running after SIGKILL\n");
+    let (killed, still) = if cfg!(windows) {
+        (
+            "killed node (pid 41) and 1 program it started: they had no window to close, or did not close within 3 s\n",
+            "node (pid 41) still running after being terminated\n",
+        )
+    } else {
+        (
+            "killed node (pid 41) and 1 program it started: they did not stop within 3 s of SIGTERM\n",
+            "node (pid 41) still running after SIGKILL\n",
+        )
+    };
+    assert_eq!(stopped_text(&stopped("killed", 2)), killed);
+    assert_eq!(stopped_text(&stopped("still-running", 1)), still);
 }
 
 #[test]

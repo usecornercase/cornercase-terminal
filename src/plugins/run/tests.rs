@@ -45,8 +45,7 @@ fn a_command_that_outlives_its_time_is_stopped_with_its_children() {
     let (home, root) = (TempDir::new(), TempDir::new());
     let places = Places::new(&home.path().join("config.json"), &home.path().join("session.json"));
     write_executable(&root.path().join("hang"), "#!/bin/sh\nsleep 30 &\necho $! > child\nwait\n");
-    let child =
-        places.command(&plugin(root.path()), &["./hang".into()], &[], None).expect("command").spawn().expect("spawn");
+    let child = places.spawn(&plugin(root.path()), &["./hang".into()], &[], None).expect("spawn");
     let pid_file = root.path().join("child");
     wait_until("the child starts", || std::fs::read_to_string(&pid_file).is_ok_and(|s| s.ends_with('\n')));
     let grandchild: i32 = std::fs::read_to_string(&pid_file).expect("pid").trim().parse().expect("a pid");

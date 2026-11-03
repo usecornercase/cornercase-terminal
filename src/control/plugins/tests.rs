@@ -249,3 +249,15 @@ fn the_outcome_of_each_ending() {
     let fine = at(Ended::Status(ExitStatus::from_raw(0)));
     assert_eq!((fine.ended.as_str(), fine.code, fine.error), ("exited", Some(0), None));
 }
+
+#[cfg(windows)]
+#[test]
+fn a_program_ended_by_force_on_windows_reads_as_its_exit_code() {
+    use std::os::windows::process::ExitStatusExt as _;
+    use std::process::ExitStatus;
+    let invoked = Invoked { plugin: "p", action: "a", context: Context::Tab, ids: Ids::default() };
+    let ran = Ran { ended: Ended::Status(ExitStatus::from_raw(1)), took: Duration::from_millis(7) };
+    let ended = ActionRan::of(invoked, &ran, "/log".into());
+    assert_eq!((ended.ended.as_str(), ended.code, ended.signal), ("exited", Some(1), None));
+    assert_eq!(ended.error.as_deref(), Some("exit code: 1"));
+}

@@ -7,9 +7,16 @@ use crate::control::processes::{PaneProcesses, ProcessInfo, ProcessList};
 use crate::control::{Command, ProcessStopped, Processes, StopProcess};
 use crate::error::Result;
 use crate::process::command_line;
+use crate::process::escalation::HARD_STEP;
 use crate::text::size;
 
 const COMMAND_WIDTH: usize = 40;
+
+const KILLED: &str = if cfg!(windows) {
+    "they had no window to close, or did not close within 3 s"
+} else {
+    "they did not stop within 3 s of SIGTERM"
+};
 
 pub(super) fn run(args: &ProcessesArgs) -> Result<bool> {
     if let Some(ProcessesAction::Stop(stop)) = &args.action {
@@ -47,8 +54,8 @@ pub(crate) fn stopped_text(stopped: &ProcessStopped) -> String {
     let what = format!("{program} (pid {}){also}", stopped.pid);
     match stopped.outcome.as_str() {
         "stopped" => format!("stopped {what}\n"),
-        "killed" => format!("killed {what}: they did not stop within 3 s of SIGTERM\n"),
-        _ => format!("{what} still running after SIGKILL\n"),
+        "killed" => format!("killed {what}: {KILLED}\n"),
+        _ => format!("{what} still running after {HARD_STEP}\n"),
     }
 }
 
