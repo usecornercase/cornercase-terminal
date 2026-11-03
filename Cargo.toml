@@ -62,6 +62,11 @@ ureq = "3.4.2"
 rustix = { version = "1.1.5", features = ["event", "fs", "net", "param", "process", "stdio", "termios"] }
 signal-hook = "0.4.4"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+  "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl"
+] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.189"
 
