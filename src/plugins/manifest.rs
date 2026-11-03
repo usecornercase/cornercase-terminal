@@ -189,7 +189,13 @@ pub(crate) struct Build {
 }
 
 pub(crate) fn platform() -> &'static str {
-    if cfg!(target_os = "macos") { "macos" } else { "linux" }
+    if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(windows) {
+        "windows"
+    } else {
+        "linux"
+    }
 }
 
 impl Manifest {

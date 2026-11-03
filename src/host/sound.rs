@@ -222,7 +222,7 @@ impl Player {
     pub(crate) fn detect(dir: PathBuf) -> Self {
         let (os, path) = (Os::current(), std::env::var_os("PATH"));
         let device = player(os, on_path(os, path.as_deref(), &[]));
-        Self::new(device, dir, std::env::var_os("HOME").map(PathBuf::from))
+        Self::new(device, dir, std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from))
     }
 
     pub(crate) fn play(&mut self, cue: &Cue, now: Instant) -> bool {

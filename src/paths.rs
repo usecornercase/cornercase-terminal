@@ -38,6 +38,8 @@ const CONFIG_BASE: Base = Base { var: "APPDATA", home: HOME_VAR, in_home: &["App
 #[cfg(not(unix))]
 const STATE_BASE: Base = Base { var: "LOCALAPPDATA", home: HOME_VAR, in_home: &["AppData", "Local"] };
 
+pub(crate) const STATE_VAR: &str = STATE_BASE.var;
+
 fn process_var(name: &str) -> Option<OsString> {
     std::env::var_os(name)
 }

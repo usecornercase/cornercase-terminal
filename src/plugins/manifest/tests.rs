@@ -385,6 +385,17 @@ mod on_windows {
     }
 
     #[test]
+    fn a_plugin_for_linux_and_macos_only_is_refused() {
+        let error = Manifest::parse(&with("platforms = [\"linux\", \"macos\"]")).expect_err("refused");
+        assert!(error.contains("runs on linux, macos only"), "{error}");
+    }
+
+    #[test]
+    fn a_plugin_for_windows_is_accepted() {
+        assert!(Manifest::parse(&with("platforms = [\"Windows\"]")).is_ok());
+    }
+
+    #[test]
     fn a_private_manifest_is_read() {
         let dir = TempDir::new();
         plugin(&dir);

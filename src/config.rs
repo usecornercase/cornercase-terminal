@@ -669,7 +669,8 @@ pub(crate) fn check_sound_file(input: &str) -> Result<String, &'static str> {
         return Err("a file's path cannot hold control or invisible characters");
     }
     let path = input.trim();
-    if !(path.is_empty() || path.starts_with('/') || path == "~" || path.starts_with("~/")) {
+    let absolute = path.starts_with('/') || Path::new(path).is_absolute();
+    if !(path.is_empty() || absolute || path == "~" || path.starts_with("~/")) {
         return Err("use an absolute path or one starting with ~/");
     }
     Ok(input.to_string())

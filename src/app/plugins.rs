@@ -281,7 +281,7 @@ impl App {
 
     fn shown_env(&self) -> (control::Ids, PathBuf) {
         let Some(project) = self.project() else {
-            let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from);
+            let home = std::env::var_os(crate::paths::HOME_VAR).map_or_else(|| PathBuf::from("/"), PathBuf::from);
             return (control::Ids::default(), home);
         };
         let cwd = project.workspace().map_or(&project.path, |workspace| &workspace.path);

@@ -368,6 +368,12 @@ mod check_sound_file {
     fn accepts_only_absolute_files(#[case] input: &str, #[case] expected: Result<String, &'static str>) {
         assert_eq!(check_sound_file(input), expected);
     }
+
+    #[test]
+    #[cfg(windows)]
+    fn accepts_a_windows_path() {
+        assert_eq!(check_sound_file(r"C:\Users\ana\ding.wav"), Ok(r"C:\Users\ana\ding.wav".to_string()));
+    }
 }
 
 mod check_fetch_minutes {

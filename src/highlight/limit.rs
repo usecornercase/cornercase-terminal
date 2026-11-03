@@ -17,7 +17,6 @@ use crate::process::{self, kill_group};
 const PAINT_BUDGET: Duration = Duration::from_secs(5);
 
 enum Fail {
-    #[cfg_attr(not(unix), expect(dead_code, reason = "only the Unix wait can time out"))]
     Timeout,
     Broken,
 }
@@ -251,15 +250,38 @@ mod imp {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod imp {
+    use std::os::windows::io::AsRawHandle;
     use std::process::ChildStdout;
-    use std::time::Instant;
+    use std::ptr;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use windows_sys::Win32::System::Pipes::PeekNamedPipe;
 
     use super::Fail;
 
-    pub(super) fn wait_in(_stdout: &ChildStdout, _deadline: Instant) -> Result<(), Fail> {
-        Err(Fail::Broken)
+    const PEEK_EVERY: Duration = Duration::from_millis(1);
+
+    pub(super) fn wait_in(stdout: &ChildStdout, deadline: Instant) -> Result<(), Fail> {
+        loop {
+            if waiting(stdout)? > 0 {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err(Fail::Timeout);
+            }
+            thread::sleep(PEEK_EVERY);
+        }
+    }
+
+    fn waiting(stdout: &ChildStdout) -> Result<u32, Fail> {
+        let mut available = 0;
+        let pipe = stdout.as_raw_handle();
+        let peeked =
+            unsafe { PeekNamedPipe(pipe, ptr::null_mut(), 0, ptr::null_mut(), &raw mut available, ptr::null_mut()) };
+        if peeked == 0 { Err(Fail::Broken) } else { Ok(available) }
     }
 }
 

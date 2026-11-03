@@ -61,7 +61,7 @@ pub(crate) fn remote_urls(dir: &Path) -> Vec<(String, String)> {
 }
 
 pub(crate) fn user_name(dir: &Path) -> Option<String> {
-    let home = std::env::var_os("HOME").filter(|home| !home.is_empty()).map(PathBuf::from);
+    let home = std::env::var_os(crate::paths::HOME_VAR).filter(|home| !home.is_empty()).map(PathBuf::from);
     let xdg = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .filter(|xdg| xdg.is_absolute())
