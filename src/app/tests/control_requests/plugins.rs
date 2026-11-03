@@ -102,6 +102,7 @@ mod listing {
         assert!(info.problem.is_some_and(|text| text.contains("cannot read")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn services_are_starting_then_running_then_stopped() {
         let mut p = plugged(true);

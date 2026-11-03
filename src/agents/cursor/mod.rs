@@ -32,6 +32,7 @@ pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
+pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const UNFOUND: &str = "Cursor CLI has no conversation for this pane yet";
 
 #[expect(clippy::unnecessary_wraps, reason = "Known dispatch shares an optional resume signature across agents")]
@@ -61,7 +62,7 @@ pub(in crate::agents) fn local_command(text: &str) -> bool {
 pub(in crate::agents) fn runs_as(arg: &str) -> bool {
     let mut parts = Path::new(arg).components().rev().filter_map(|c| c.as_os_str().to_str());
     let (file, _version, versions, install) = (parts.next(), parts.next(), parts.next(), parts.next());
-    file == Some("index.js") && versions == Some("versions") && install == Some("cursor-agent")
+    super::named(file, "index.js") && super::named(versions, "versions") && super::named(install, "cursor-agent")
 }
 
 const WAITING: [char; 2] = ['❓', '🔐'];

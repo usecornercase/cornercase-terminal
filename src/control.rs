@@ -12,6 +12,7 @@ pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod closed_agents;
 pub(crate) mod config;
+pub(crate) mod context;
 pub(crate) mod contract;
 mod events;
 mod fields;
@@ -21,6 +22,7 @@ pub(crate) mod issues;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
+pub(crate) mod pull_request;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -52,6 +54,7 @@ pub(crate) use changes::{
 };
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
+pub(crate) use context::{ContextInfo, ContextRead};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
 pub(crate) use files::{FilesList, FilesRead, FilesSearch};
@@ -67,9 +70,12 @@ pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
+pub(crate) use pull_request::{PullRequestAnswer, PullRequestRead};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
-pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, SharedInfo, StackInfo};
+pub(crate) use status::{
+    CheckInfo, GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, SharedInfo, StackInfo,
+};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
@@ -236,6 +242,8 @@ pub(crate) enum Command {
     WorktreeSize(WorktreeSize),
     FreeBuilds(FreeBuilds),
     Worktrees(ListWorktrees),
+    PullRequest(PullRequestRead),
+    Context(ContextRead),
 }
 
 impl Command {
@@ -416,6 +424,8 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
+            Self::PullRequest(_) => 113,
+            Self::Context(_) => 114,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -427,7 +437,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 113] = [
+    pub(crate) const NAMES: [&str; 115] = [
         "status",
         "open",
         "new-workspace",
@@ -541,6 +551,8 @@ impl Command {
         "processes",
         "stop-process",
         "worktrees",
+        "pull-request",
+        "context",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

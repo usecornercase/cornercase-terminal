@@ -9,6 +9,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
 use super::layout::Side;
+use super::opening::Subject;
 use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
 use crate::control::contract::Refusal;
@@ -371,7 +372,7 @@ impl App {
             Some(hit @ (Hit::Find | Hit::FindField | Hit::FindPrevious | Hit::FindNext | Hit::FindClose)) => {
                 self.find_mouse(workspace, hit, panel_area);
             }
-            Some(Hit::Back) => self.panels.files.close_file(workspace),
+            Some(Hit::Back) => self.back_from_file(workspace),
             Some(Hit::FullScreen) => self.panels.files.set_full_screen(!self.panels.files.full_screen()),
             Some(Hit::Row(i)) => self.click_file_row(workspace, &view, i),
             Some(Hit::Line(n)) => self.press_file_line(workspace, n, area),
@@ -407,6 +408,14 @@ impl App {
             && let Some(row) = tree.rows.get(i)
         {
             self.open_row_menu(workspace, &row.path, pos);
+        }
+    }
+
+    fn back_from_file(&mut self, workspace: u64) {
+        let origin = self.panels.files.viewer(workspace).and_then(|viewer| viewer.origin);
+        self.panels.files.close_file(workspace);
+        if origin == Some(files::Origin::Flow) && self.has_run() {
+            self.show_side(Some(Side::Flow));
         }
     }
 
@@ -545,7 +554,7 @@ impl App {
                 let line = selected.map_or(1, |(first, _)| first);
                 return self.open_in_editor(target, &path, line, area);
             }
-            Action::OpenIn => self.open_file_menu(workspace, pos),
+            Action::OpenIn => self.open_menu_or_copy(Subject::File(workspace), pos),
             Action::Ask => {
                 let reference = match selected {
                     Some((a, b)) if a == b => format!("{path}:{a} "),

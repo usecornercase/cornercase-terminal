@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::style::Modifier;
 use rstest::rstest;
 
 use super::*;
@@ -282,7 +283,16 @@ mod hits {
     use super::*;
 
     fn panel(diagram: Diagram) -> View {
-        View { name: "Full issue".into(), task: "fix the login\nmore".into(), diagram, files: None, scroll: 0 }
+        View {
+            name: "Full issue".into(),
+            task: "fix the login\nmore".into(),
+            heading: Heading::default(),
+            team: Vec::new(),
+            diagram,
+            history: History::default(),
+            files: None,
+            scroll: 0,
+        }
     }
 
     const AREA: Rect = Rect::new(10, 2, 48, 60);
@@ -322,7 +332,7 @@ mod hits {
         let exit = position(&view, "┃─╯");
         assert_eq!(hit(AREA, &view, Position { x: exit.x + 1, ..exit }), Some(Hit::Edge(Edge::Loop(1), None)));
         assert_eq!(hit(AREA, &view, position(&view, "◀")), None);
-        assert_eq!(hit(AREA, &view, position(&view, "findings")), Some(Hit::Edge(Edge::Loop(1), None)));
+        assert_eq!(hit(AREA, &view, position(&view, "findings ·")), Some(Hit::Edge(Edge::Loop(1), None)));
         assert_eq!(hit(AREA, &view, position(&view, "┴")), Some(Hit::Edge(Edge::Forward(0), None)));
     }
 
@@ -386,12 +396,13 @@ mod hits {
     fn scrolling_stops_at_the_bottom() {
         let view = panel(Diagram::plan(&full_issue(), MUTED, false));
         let short = Rect { height: 12, ..AREA };
-        let most = diagram_height(&view.diagram, body(short).width) - body(short).height;
+        let most = content_height(&view, body(short).width) - body(short).height;
         assert_eq!((scrolled(short, &view, 100), scrolled(short, &view, -3)), (most, 0));
     }
 
     fn with_files(names: &[&str]) -> View {
-        let rows = names.iter().map(|name| FileRow { name: (*name).into(), age: "2h".into() }).collect();
+        let rows =
+            names.iter().map(|name| FileRow { name: (*name).into(), size: "2 KB".into(), age: "2h".into() }).collect();
         View { files: Some(Files { rows, more: false }), ..panel(Diagram::plan(&full_issue(), MUTED, false)) }
     }
 
@@ -415,8 +426,7 @@ mod hits {
     fn scrolling_reaches_the_last_file() {
         let view = with_files(&["a.md", "b.md", "last.md"]);
         let short = Rect { height: 12, ..AREA };
-        let total = diagram_height(&view.diagram, body(short).width) + 5;
-        let most = total - body(short).height;
+        let most = content_height(&view, body(short).width) - body(short).height;
         let at = scrolled(short, &view, 100);
         assert_eq!(at, most);
         let bottom = View { scroll: at, ..view };
@@ -612,5 +622,262 @@ mod end {
     fn a_plan_has_no_tag() {
         let t = render(&Diagram::plan(&full_issue(), MUTED, false), 46);
         assert!(find(&t, "#").is_none());
+    }
+}
+
+mod panel {
+    use super::*;
+
+    const WIDE: Rect = Rect::new(0, 0, 48, 70);
+    const NARROW: Rect = Rect::new(0, 0, 36, 70);
+    const WIDER: Rect = Rect::new(0, 0, 90, 70);
+
+    fn team(flow: &Flow) -> Vec<Member> {
+        let roles = std::iter::once(&flow.orchestrator).chain(&flow.roles);
+        roles
+            .enumerate()
+            .map(|(i, role)| Member {
+                role: role.name.clone(),
+                agent: role.summary(),
+                colour: role_colour(i),
+                state: working(&role.name),
+                branch: (role.name == "coder").then(|| "fix/coder".to_string()),
+                pane: Some(i as u64 + 4),
+            })
+            .collect()
+    }
+
+    fn entry(seq: u64, to: &str, step: Option<Step>, head: Option<&str>) -> Entry {
+        Entry {
+            seq,
+            from: ORCHESTRATOR.into(),
+            to: to.into(),
+            kind: "sent",
+            step,
+            colour: role_colour(1),
+            age: "3m".into(),
+            head: head.map(Into::into),
+        }
+    }
+
+    fn history() -> History {
+        let entries = vec![
+            entry(
+                3,
+                "coder",
+                Some(Step::Loop("findings".into())),
+                Some("fix what the review found\nin the login form, then test it again before you hand it back to me"),
+            ),
+            entry(2, "reviewer", Some(Step::Forward(0)), Some("review the fix")),
+            entry(1, "coder", Some(Step::Outside), None),
+        ];
+        History { entries, recorded: 3 }
+    }
+
+    fn full(reached: bool) -> View {
+        let flow = full_issue();
+        let start = Instant::now();
+        let progress = progress(&flow, &["coder", "reviewer", "coder"], start);
+        let end = Ending { reached, pull: None };
+        let diagram = Diagram::plan(&flow, MUTED, false).live(&progress, working, end, start + Duration::from_secs(9));
+        let heading = Heading {
+            place: "web-shop › issue-482 · fix/login".into(),
+            run: 2,
+            messages: 3,
+            active: Some(1),
+            lead: true,
+        };
+        let rows = vec![
+            FileRow { name: "coder-1.md".into(), size: "2 KB".into(), age: "2h".into() },
+            FileRow { name: "reviewer-2.md".into(), size: "300 bytes".into(), age: "5m".into() },
+        ];
+        View {
+            name: "Full issue".into(),
+            task: "fix the login".into(),
+            heading,
+            team: team(&flow),
+            diagram,
+            history: history(),
+            files: Some(Files { rows, more: false }),
+            scroll: 0,
+        }
+    }
+
+    fn drawn(view: &View, area: Rect) -> Terminal<TestBackend> {
+        let mut t = Terminal::new(TestBackend::new(area.right(), area.bottom())).expect("terminal");
+        t.draw(|f| draw(f, area, view, None)).expect("draw");
+        t
+    }
+
+    fn at(view: &View, area: Rect, text: &str) -> Position {
+        let (x, y) = find(&drawn(view, area), text).expect("on screen");
+        Position::new(x, y)
+    }
+
+    #[test]
+    fn the_whole_panel_at_its_usual_width() {
+        insta::assert_snapshot!("panel_wide", drawn(&full(false), WIDE).backend());
+    }
+
+    #[test]
+    fn the_whole_panel_at_its_narrowest() {
+        insta::assert_snapshot!("panel_narrow", drawn(&full(false), NARROW).backend());
+    }
+
+    #[test]
+    fn a_run_that_reached_its_end_says_so_in_the_brand_colour() {
+        let t = drawn(&full(true), WIDE);
+        let (x, y) = find(&t, "reached its end").expect("the state");
+        assert_eq!(cell(&t, x, y).fg, BRAND);
+        insta::assert_snapshot!("panel_reached", t.backend());
+    }
+
+    #[test]
+    fn the_name_is_cut_before_the_state() {
+        let view = View { name: "A flow with a very long name indeed".into(), ..full(false) };
+        let t = drawn(&view, NARROW);
+        assert!(find(&t, "running").is_some());
+        assert!(find(&t, "A flow with a very long name indeed").is_none());
+        let tiny = drawn(&view, Rect::new(0, 0, 18, 30));
+        assert!(find(&tiny, "running").is_some() && find(&tiny, "A flo").is_none());
+    }
+
+    #[test]
+    fn a_loop_past_its_limit_shows_in_the_waiting_colour() {
+        let mut view = full(false);
+        view.diagram.loops.iter_mut().flatten().for_each(|back| back.rounds = back.at_most + 1);
+        let t = drawn(&view, WIDE);
+        let (x, y) = find(&t, "findings 4/3").expect("the summary");
+        assert_eq!(cell(&t, x, y).fg, WAITING_COLOR);
+    }
+
+    #[test]
+    fn a_run_that_did_not_start_says_so() {
+        let mut view = full(false);
+        view.heading.active = None;
+        assert!(find(&drawn(&view, WIDE), "not started").is_some());
+    }
+
+    #[test]
+    fn a_message_takes_the_colour_of_the_role_it_went_to() {
+        let t = drawn(&full(false), WIDE);
+        let (x, y) = find(&t, "#2").expect("an entry");
+        assert_eq!(cell(&t, 1, y).symbol(), "▎");
+        assert_eq!(cell(&t, 1, y).fg, role_colour(1));
+        assert!(x > 20);
+    }
+
+    #[test]
+    fn a_message_outside_the_plan_is_orange() {
+        let t = drawn(&full(false), WIDER);
+        let (x, y) = find(&t, "outside the plan").expect("the step");
+        assert_eq!(cell(&t, x, y).fg, WAITING_COLOR);
+    }
+
+    #[test]
+    fn a_long_text_shows_two_rows_and_ends_with_an_ellipsis() {
+        let t = drawn(&full(false), WIDE);
+        assert!(find(&t, "fix what the review found").is_some());
+        assert!(find(&t, "…").is_some());
+        assert!(find(&t, "hand it back").is_none());
+    }
+
+    #[test]
+    fn hovering_a_message_fills_all_its_rows() {
+        let view = full(false);
+        let top = at(&view, WIDE, "#3");
+        let mut t = Terminal::new(TestBackend::new(WIDE.right(), WIDE.bottom())).expect("terminal");
+        t.draw(|f| draw(f, WIDE, &view, Some(top))).expect("draw");
+        let fill = Color::Indexed(235);
+        assert_eq!(cell(&t, 5, top.y).bg, fill);
+        assert_eq!(cell(&t, 5, top.y + 3).bg, fill);
+        assert_ne!(cell(&t, 5, top.y + 4).bg, fill);
+    }
+
+    #[rstest]
+    #[case::a_team_row("security", Some(Hit::Role("security".into())))]
+    #[case::the_orchestrator_button("orchestrator ", Some(Hit::Role(ORCHESTRATOR.into())))]
+    #[case::the_stop_button(" stop ", Some(Hit::Stop))]
+    #[case::a_message("#2", Some(Hit::Message(2)))]
+    #[case::the_folder_button("open folder", Some(Hit::Folder))]
+    #[case::a_file("coder-1.md", Some(Hit::File(0)))]
+    #[case::a_title("Messages", None)]
+    fn clicks_on_the_panel(#[case] text: &str, #[case] expected: Option<Hit>) {
+        let view = full(false);
+        let pos = at(&view, WIDE, text);
+        let pos = if text.starts_with(' ') { Position::new(pos.x + 1, pos.y) } else { pos };
+        assert_eq!(hit(WIDE, &view, pos), expected);
+    }
+
+    #[test]
+    fn every_row_of_a_message_is_a_hit() {
+        let view = full(false);
+        let top = at(&view, WIDE, "#3");
+        for row in 0..4 {
+            assert_eq!(hit(WIDE, &view, Position::new(8, top.y + row)), Some(Hit::Message(3)));
+        }
+        assert_eq!(hit(WIDE, &view, Position::new(8, top.y + 4)), Some(Hit::Message(2)));
+    }
+
+    #[test]
+    fn a_closed_member_is_dimmed_and_is_no_hit() {
+        let view = full(false);
+        let pos = at(&view, WIDE, "tester");
+        assert_eq!(hit(WIDE, &view, pos), None);
+        let t = drawn(&view, WIDE);
+        assert_eq!(cell(&t, pos.x, pos.y).fg, MUTED);
+        assert!(find(&t, "closed").is_some());
+    }
+
+    #[test]
+    fn a_member_with_its_own_worktree_shows_the_branch() {
+        assert!(find(&drawn(&full(false), WIDE), "fix/coder").is_some());
+        assert!(find(&drawn(&full(false), NARROW), "fix/coder").is_none());
+    }
+
+    #[test]
+    fn the_buttons_get_their_own_row_when_the_summary_is_long() {
+        let view = full(false);
+        let (wide, narrow) = (at(&view, WIDER, " stop "), at(&view, NARROW, " stop "));
+        assert_eq!(narrow.y, at(&view, NARROW, "stage 2 of 3").y + 1);
+        assert_eq!(wide.y, at(&view, WIDER, "stage 2 of 3").y);
+    }
+
+    #[test]
+    fn the_bar_lights_the_stages_up_to_the_active_one() {
+        let t = drawn(&full(false), WIDE);
+        let y = find(&t, "stage 2 of 3").expect("the summary").1 - 1;
+        assert_eq!(cell(&t, 1, y).symbol(), "━");
+        assert_eq!(cell(&t, 1, y).fg, BRAND);
+        assert_eq!(cell(&t, 46, y).symbol(), "─");
+    }
+
+    #[test]
+    fn scrolling_covers_the_whole_panel() {
+        let view = full(false);
+        let short = Rect { height: 14, ..WIDE };
+        let most = content_height(&view, body(short).width) - body(short).height;
+        assert_eq!(scrolled(short, &view, 1000), most);
+        let bottom = View { scroll: most, ..view };
+        assert!(find(&drawn(&bottom, short), "reviewer-2.md").is_some());
+    }
+
+    #[test]
+    fn huge_labels_overflow_nothing() {
+        let mut view = full(false);
+        let huge = "x".repeat(40_000);
+        view.diagram.loops.iter_mut().flatten().for_each(|back| {
+            back.when.clone_from(&huge);
+            back.rounds = 1;
+        });
+        view.history.entries[0].from = huge.clone();
+        view.history.entries[0].to = huge.clone();
+        view.history.entries[0].head = Some(huge.clone());
+        view.team[1].role = huge.clone();
+        view.team[1].agent = huge;
+        let t = drawn(&view, WIDE);
+        assert!(find(&t, "Messages").is_some());
+        let _ = hit(WIDE, &view, Position::new(5, 8));
+        let _ = scrolled(WIDE, &view, 5);
     }
 }

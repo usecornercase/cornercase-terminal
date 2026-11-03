@@ -88,6 +88,7 @@ mod start_stamp {
     }
 }
 
+#[cfg(unix)]
 mod footprint {
     use std::ptr::null_mut;
 
@@ -384,5 +385,333 @@ mod command_line {
         assert_eq!(command_line(Some("node"), &args, 40), "node vite --port 5173");
         assert_eq!(command_line(None, &args, 40), "node vite --port 5173");
         assert_eq!(command_line(Some("node"), &args, 10), "node vite…");
+    }
+}
+
+mod split_command_line {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::a_quoted_program_running_a_script(
+        r#""C:\Program Files\nodejs\node.exe" "C:\npm\node_modules\@anthropic-ai\claude-code\cli.js" --resume"#,
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\@anthropic-ai\claude-code\cli.js", "--resume"]
+    )]
+    #[case::an_argument_with_spaces(r#"cmd.exe /d /c "ping -n 30 127.0.0.1""#, &["cmd.exe", "/d", "/c", "ping -n 30 127.0.0.1"])]
+    #[case::backslashes_stay_unless_a_quote_follows(
+        r#"a.exe C:\dir\ "C:\with space\\" x"#,
+        &["a.exe", r"C:\dir\", r"C:\with space\", "x"]
+    )]
+    #[case::escaped_quotes(r#"a.exe say\"hi\" \\\"q"#, &["a.exe", r#"say"hi""#, r#"\"q"#])]
+    #[case::a_doubled_quote_inside_quotes(r#"a.exe "a""b""#, &["a.exe", r#"a"b"#])]
+    #[case::empty_arguments_and_extra_whitespace("a.exe  \t\"\" b ", &["a.exe", "b"])]
+    #[case::a_program_alone("pwsh.exe", &["pwsh.exe"])]
+    #[case::a_quoted_program_keeps_its_backslashes(r#""C:\a\" b"#, &[r"C:\a\", "b"])]
+    fn follows_the_rules_of_windows_programs(#[case] line: &str, #[case] expected: &[&str]) {
+        assert_eq!(split_command_line(line), expected);
+    }
+}
+
+mod environment_block {
+    use super::*;
+
+    #[test]
+    fn ends_at_the_empty_entry_and_skips_the_hidden_drive_folders() {
+        let block: Vec<u16> = "=C:=C:\\work\0PATH=C:\\bin;D:\\x\0A=b=c\0\0STALE=1\0".encode_utf16().collect();
+
+        assert_eq!(environment_block(&block), [("PATH".into(), "C:\\bin;D:\\x".into()), ("A".into(), "b=c".into())]);
+    }
+
+    #[test]
+    fn a_block_cut_inside_a_variable_drops_that_variable() {
+        let block: Vec<u16> = "A=1\0B=2\0PATH=C:\\b".encode_utf16().collect();
+
+        assert_eq!(environment_block(&block), [("A".into(), "1".into()), ("B".into(), "2".into())]);
+    }
+
+    #[test]
+    fn a_block_cut_right_after_a_variable_keeps_it() {
+        let block: Vec<u16> = "A=1\0B=2\0".encode_utf16().collect();
+
+        assert_eq!(environment_block(&block), [("A".into(), "1".into()), ("B".into(), "2".into())]);
+    }
+}
+
+mod filetime {
+    use super::*;
+
+    #[test]
+    fn a_start_is_microseconds_since_the_unix_epoch() {
+        assert_eq!(filetime_micros(FILETIME_AT_UNIX_EPOCH + 25), Some(2));
+        assert_eq!(filetime_micros(134_381_276_700_310_730), Some(1_793_654_070_031_073));
+        assert_eq!(filetime_micros(FILETIME_AT_UNIX_EPOCH - 1), None);
+    }
+
+    #[test]
+    fn ten_million_ticks_are_one_second() {
+        assert_eq!(filetime_duration(10_000_000), Duration::from_secs(1));
+        assert_eq!(filetime_duration(1), Duration::from_nanos(100));
+    }
+}
+
+mod snapshot_checks {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::the_same_start(Some(500), Some(500), true)]
+    #[case::another_start_so_a_reused_pid(Some(500), Some(900), false)]
+    #[case::a_start_this_user_may_not_read(Some(500), None, true)]
+    #[case::a_kernel_process_with_no_listed_start(None, Some(500), true)]
+    fn a_listed_entry_answers_for_a_pid_only_while_it_holds_the_same_process(
+        #[case] listed: Option<u64>,
+        #[case] now: Option<u64>,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(still_listed(listed, now), expected);
+    }
+
+    #[rstest]
+    #[case::born_first(Some(400), Some(500), true)]
+    #[case::born_together(Some(500), Some(500), true)]
+    #[case::born_later_so_a_reused_parent_pid(Some(600), Some(500), false)]
+    #[case::a_kernel_parent_with_no_listed_start(None, Some(500), true)]
+    fn a_listed_parent_counts_only_if_it_was_born_first(
+        #[case] parent: Option<u64>,
+        #[case] child: Option<u64>,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(born_before(parent, child), expected);
+    }
+}
+
+mod program_name {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::lower_case("node.exe", "node")]
+    #[case::upper_case("PING.EXE", "PING")]
+    #[case::no_extension("node", "node")]
+    #[case::only_the_extension(".exe", ".exe")]
+    #[case::another_extension("claude.cmd", "claude.cmd")]
+    #[case::exe_inside_the_name("a.exe.bak", "a.exe.bak")]
+    #[case::a_cut_inside_a_character("ñabc", "ñabc")]
+    fn trim_exe_drops_a_last_exe_in_any_case(#[case] name: &str, #[case] expected: &str) {
+        assert_eq!(trim_exe(name), expected);
+    }
+
+    #[test]
+    fn drops_the_exe_only_on_windows() {
+        assert_eq!(program_name("node.exe"), if cfg!(windows) { "node" } else { "node.exe" });
+    }
+
+    #[test]
+    fn cmd_and_powershell_are_shells_only_on_windows() {
+        assert_eq!((is_shell("cmd"), is_shell("PowerShell"), is_shell("pwsh")), (cfg!(windows), cfg!(windows), true));
+    }
+
+    #[test]
+    fn names_in_another_case_are_the_same_file_only_on_windows() {
+        assert!(same_file_name("claude", "claude"));
+        assert_eq!(same_file_name("CLAUDE", "claude"), cfg!(windows));
+        assert_eq!(same_file_name("ÉDITEUR.JS", "éditeur.js"), cfg!(windows));
+        assert!(!same_file_name("claude", "codex"));
+    }
+
+    #[test]
+    fn a_shell_named_with_its_exe_is_one_only_on_windows() {
+        let names = ["pwsh.exe", "PowerShell.EXE", "cmd.exe", "nu.exe", "bash.exe", "sh.exe"];
+        assert!(names.iter().all(|name| is_shell(name) == cfg!(windows)), "{names:?}");
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use std::process::Stdio;
+    use std::ptr;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use windows_sys::Win32::System::Memory::{
+        MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE, VirtualAlloc, VirtualFree,
+    };
+
+    use super::*;
+    use crate::test_util::{Running, TempDir, wait_until};
+
+    const SIZE: usize = 64 << 20;
+    const HALF: u64 = 32 << 20;
+
+    fn ping(dir: &Path) -> Running {
+        Running::spawn(
+            Command::new("ping")
+                .args(["-n", "30", "127.0.0.1"])
+                .current_dir(dir)
+                .env("CORNERCASE_PROBE", "a=b")
+                .stdout(Stdio::null()),
+        )
+    }
+
+    #[test]
+    fn a_child_is_listed_under_this_process_with_its_name_and_arguments() {
+        let dir = TempDir::new();
+        let ping = ping(dir.path());
+        wait_until("a snapshot lists ping", || children(this_pid()).contains(&ping.pid()));
+
+        assert!(all().contains(&ping.pid()));
+        assert_eq!(parent(ping.pid()), Some(this_pid()));
+        assert!(name(ping.pid()).is_some_and(|name| name.eq_ignore_ascii_case("ping")), "{:?}", name(ping.pid()));
+        let args = args(ping.pid());
+        assert!(args.first().is_some_and(|program| program.eq_ignore_ascii_case("ping")), "{args:?}");
+        assert_eq!(args[1..], ["-n", "30", "127.0.0.1"]);
+    }
+
+    #[test]
+    fn a_listing_holds_its_thread_to_one_snapshot_until_it_is_dropped() {
+        let dir = TempDir::new();
+        let pinned = listing().expect("a listing");
+        let ping = ping(dir.path());
+        let pid = ping.pid();
+        wait_until("another thread sees ping", || {
+            thread::spawn(move || children(this_pid()).contains(&pid)).join().expect("the other thread")
+        });
+
+        assert!(!children(this_pid()).contains(&pid));
+        drop(pinned);
+        assert!(children(this_pid()).contains(&pid));
+    }
+
+    #[test]
+    fn a_child_has_the_folder_and_environment_it_started_with() {
+        let dir = TempDir::new();
+        let ping = ping(dir.path());
+
+        let folder = cwd(ping.pid()).expect("a folder");
+        assert_eq!(folder.canonicalize().expect("canonicalize"), dir.path().canonicalize().expect("canonicalize"));
+        assert!(!folder.to_string_lossy().ends_with('\\'), "{}", folder.display());
+        let probe = env(ping.pid()).into_iter().find(|(key, _)| key == "CORNERCASE_PROBE");
+        assert_eq!(probe, Some(("CORNERCASE_PROBE".into(), "a=b".into())));
+    }
+
+    #[test]
+    fn a_tree_reaches_the_child_of_a_child() {
+        let line = r"%SystemRoot%\System32\ping.exe -n 30 127.0.0.1";
+        let cmd = Running::spawn(Command::new("cmd.exe").args(["/d", "/c", line]).stdout(Stdio::null()));
+        let find_ping = || {
+            children(cmd.pid())
+                .into_iter()
+                .find(|child| name(*child).is_some_and(|name| name.eq_ignore_ascii_case("ping")))
+        };
+        wait_until("cmd starts ping", || find_ping().is_some());
+        let ping = find_ping().expect("ping");
+
+        let found = (parent(ping), args(cmd.pid()), descendants(cmd.pid()), tree(this_pid()));
+        let born = start_stamp(ping);
+        let stopped = Command::new("taskkill").args(["/f", "/pid", &ping.to_string()]).stdout(Stdio::null()).status();
+        assert!(stopped.as_ref().is_ok_and(ExitStatus::success), "taskkill: {stopped:?}");
+        wait_until("ping is gone", || !running(ping, born));
+
+        assert_eq!(found.0, Some(cmd.pid()));
+        assert_eq!(found.1[1..], ["/d", "/c", line]);
+        assert!(found.2.contains(&ping), "{:?}", found.2);
+        assert!(found.3.contains(&(ping, cmd.pid())));
+    }
+
+    #[test]
+    fn a_child_starts_after_this_process_and_keeps_its_start() {
+        let dir = TempDir::new();
+        let ping = ping(dir.path());
+        let stamp = start_stamp(ping.pid()).expect("a stamp");
+
+        assert!(start_stamp(this_pid()).is_some_and(|ours| ours < stamp));
+        assert_eq!(start_stamp(ping.pid()), Some(stamp));
+        assert!(running(ping.pid(), Some(stamp)));
+        assert!(!running(ping.pid(), Some(stamp + 1)));
+        assert_eq!(started(ping.pid()), None);
+        assert!(footprint(ping.pid()).is_some_and(|bytes| bytes > 0));
+    }
+
+    #[test]
+    fn a_child_is_alive_until_it_is_killed() {
+        let mut child =
+            Command::new("ping").args(["-n", "30", "127.0.0.1"]).stdout(Stdio::null()).spawn().expect("spawn ping");
+        let pid = i32::try_from(child.id()).expect("a pid");
+        assert!(alive(pid) && running(pid, None));
+
+        child.kill().expect("kill");
+        child.wait().expect("wait");
+        assert!(!alive(pid) && !running(pid, None));
+    }
+
+    #[test]
+    fn a_process_whose_start_this_user_may_not_read_keeps_its_place_in_the_tree() {
+        let unreadable: Vec<i32> = all().into_iter().filter(|pid| alive(*pid) && start_stamp(*pid).is_none()).collect();
+        let placed: Vec<(i32, i32)> = unreadable.iter().filter_map(|pid| Some((*pid, parent(*pid)?))).collect();
+
+        assert!(unreadable.is_empty() || !placed.is_empty(), "none of {unreadable:?} has a parent");
+        for (pid, up) in &placed {
+            assert!(children(*up).contains(pid) || !alive(*pid), "{pid} under {up}");
+        }
+        assert!(placed.iter().all(|(pid, _)| name(*pid).is_some() || !alive(*pid)));
+    }
+
+    #[test]
+    fn a_pid_without_a_process_has_nothing_to_read() {
+        let pid = exited_pid();
+
+        assert!(!alive(pid));
+        assert_eq!((name(pid), parent(pid), children(pid)), (None, None, Vec::new()));
+        assert_eq!((args(pid), env(pid), cwd(pid)), (Vec::<String>::new(), Vec::new(), None));
+        assert_eq!((footprint(pid), start_stamp(pid), cpu_time(pid)), (None, None, None));
+    }
+
+    #[test]
+    fn footprint_counts_memory_committed_but_never_touched() {
+        let before = footprint(this_pid()).expect("before");
+        let memory = unsafe { VirtualAlloc(ptr::null(), SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) };
+        assert!(!memory.is_null(), "commit {SIZE} bytes");
+        let after = footprint(this_pid()).expect("after");
+        unsafe { VirtualFree(memory, 0, MEM_RELEASE) };
+
+        assert!(after.saturating_sub(before) > HALF, "{before} -> {after}");
+    }
+
+    #[test]
+    fn a_start_stamp_is_microseconds_since_the_unix_epoch() {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("after 1970");
+        let ours = start_stamp(this_pid()).map(Duration::from_micros).expect("a stamp");
+
+        let age = now.checked_sub(ours).expect("started before now");
+        assert!(age < Duration::from_hours(24), "{ours:?} against {now:?}");
+    }
+
+    #[test]
+    fn cpu_time_grows_by_the_time_a_busy_thread_takes() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let busy = Arc::clone(&stop);
+        let spinner = thread::spawn(move || {
+            while !busy.load(Ordering::Relaxed) {
+                std::hint::spin_loop();
+            }
+        });
+        let first = Instant::now();
+        let before = cpu_time(this_pid()).expect("cpu time");
+        wait_until("the busy thread uses cpu", || {
+            cpu_time(this_pid()).is_some_and(|now| now.saturating_sub(before) > Duration::from_millis(100))
+        });
+        let used = cpu_time(this_pid()).expect("cpu time").saturating_sub(before);
+        let wall = first.elapsed();
+        stop.store(true, Ordering::Relaxed);
+        spinner.join().expect("the busy thread ends");
+
+        let cores = thread::available_parallelism().map_or(1, usize::from);
+        let most = wall.as_secs_f64() * f64::from(u32::try_from(cores).unwrap_or(64)) * 2.0 + 0.1;
+        assert!(used.as_secs_f64() <= most, "{used:?} in {wall:?} on {cores} cores");
+        assert!(used.as_secs_f64() >= wall.as_secs_f64() * 0.25, "{used:?} in {wall:?}");
     }
 }

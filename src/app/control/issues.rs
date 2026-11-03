@@ -501,9 +501,6 @@ impl App {
     }
 
     pub(super) fn flow_issue_request(&mut self, client: u64, caller: Option<u64>, run: control::FlowRun) -> Handled {
-        if !run.prompt.trim().is_empty() {
-            return Err(malformed("give the prompt or the issue, not both"));
-        }
         let asker = Asker::from(caller);
         let (_, scope) = self.issue_project(asker, run.project)?;
         let text = run.issue.clone().unwrap_or_default();
@@ -529,7 +526,7 @@ impl App {
             name: run.workspace_name.clone(),
         };
         self.run_refusal(p, &starting)?;
-        starting.task.clear();
+        starting.task = run.prompt.trim().to_string();
         let epoch = self.epoch(source);
         let requests = &mut self.clients.requests;
         let key = requests.key();
@@ -579,17 +576,20 @@ impl App {
     fn issue_found(&mut self, found: Found, then: AfterIssue, issue: &Issue) -> Handled {
         match then {
             AfterIssue::Start(start, accounts) => self.found_start(found, *start, accounts, issue),
-            AfterIssue::Flow { project, starting } => {
-                let mut starting = *starting;
-                if starting.branch.trim().is_empty() {
-                    starting.branch = self.issue_branch(issue, project);
-                }
-                let name = starting.name.take().map(|name| name.trim().to_string()).filter(|name| !name.is_empty());
-                starting.name = Some(name.unwrap_or_else(|| issues::workspace_name(issue)));
-                starting.task = issues::prompt(&self.config.prompt, issue, &starting.branch);
-                self.run_flow(Some(found.client), project, starting, found.area)
-            }
+            AfterIssue::Flow { project, starting } => self.found_flow(found, project, *starting, issue),
         }
+    }
+
+    fn found_flow(&mut self, found: Found, project: u64, mut starting: Starting, issue: &Issue) -> Handled {
+        if starting.branch.trim().is_empty() {
+            starting.branch = self.issue_branch(issue, project);
+        }
+        let name = starting.name.take().map(|name| name.trim().to_string()).filter(|name| !name.is_empty());
+        starting.name = Some(name.unwrap_or_else(|| issues::workspace_name(issue)));
+        if starting.task.trim().is_empty() {
+            starting.task = issues::prompt(&self.config.prompt, issue, &starting.branch);
+        }
+        self.run_flow(Some(found.client), project, starting, found.area)
     }
 
     fn start_branch(&self, start: &Start, issue: &Issue) -> String {

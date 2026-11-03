@@ -27,6 +27,7 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("auto-approve (dangerous)", &["--agent", "auto-approve"]),
 ];
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
+pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
@@ -61,7 +62,7 @@ pub(in crate::agents) fn local_command(text: &str) -> bool {
 }
 
 pub(in crate::agents) fn runs_as(arg: &str) -> bool {
-    Path::new(arg).file_name() == Some(OsStr::new("vibe-rs"))
+    super::named(Path::new(arg).file_name().and_then(OsStr::to_str), "vibe-rs")
 }
 
 #[derive(Debug)]

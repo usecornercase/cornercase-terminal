@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
+use crate::os::fs::uid;
 use crate::text::hex;
 
 pub const SOCKET_ENV: &str = "CORNERCASE_SOCKET";
@@ -16,6 +17,21 @@ const RELEASE: &str = "cornercase";
 const DEV: &str = "cornercase-dev";
 
 type Var<'a> = &'a dyn Fn(&str) -> Option<OsString>;
+
+struct Base {
+    var: &'static str,
+    home: &'static str,
+    in_home: &'static [&'static str],
+}
+
+#[cfg(unix)]
+const CONFIG_BASE: Base = Base { var: "XDG_CONFIG_HOME", home: "HOME", in_home: &[".config"] };
+#[cfg(unix)]
+const STATE_BASE: Base = Base { var: "XDG_STATE_HOME", home: "HOME", in_home: &[".local", "state"] };
+#[cfg(not(unix))]
+const CONFIG_BASE: Base = Base { var: "APPDATA", home: "USERPROFILE", in_home: &["AppData", "Roaming"] };
+#[cfg(not(unix))]
+const STATE_BASE: Base = Base { var: "LOCALAPPDATA", home: "USERPROFILE", in_home: &["AppData", "Local"] };
 
 fn process_var(name: &str) -> Option<OsString> {
     std::env::var_os(name)
@@ -49,11 +65,11 @@ fn absolute(value: Option<OsString>) -> Option<PathBuf> {
     value.map(PathBuf::from).filter(|path| path.is_absolute())
 }
 
-fn user_file(var: Var, home_var: &str, fallback: &[&str], folder: &Path, name: &str) -> PathBuf {
-    let base = absolute(var(home_var))
-        .or_else(|| absolute(var("HOME")).map(|home| fallback.iter().fold(home, |p, s| p.join(s))))
+fn user_file(var: Var, base: &Base, folder: &Path, name: &str) -> PathBuf {
+    let root = absolute(var(base.var))
+        .or_else(|| absolute(var(base.home)).map(|home| base.in_home.iter().fold(home, |p, s| p.join(s))))
         .unwrap_or_else(std::env::temp_dir);
-    base.join(folder).join(name)
+    root.join(folder).join(name)
 }
 
 fn state_folder(dev: Option<&str>) -> PathBuf {
@@ -72,15 +88,10 @@ fn socket_in(var: Var, dev: Option<&str>) -> PathBuf {
 }
 
 pub(crate) fn earlier_sockets() -> Vec<PathBuf> {
-    if custom_socket().is_some() || this_tree().is_some() {
+    if !cfg!(unix) || custom_socket().is_some() || this_tree().is_some() {
         return Vec::new();
     }
-    earlier_sockets_from(
-        &process_var,
-        rustix::process::getuid().as_raw(),
-        &std::env::temp_dir(),
-        cfg!(target_os = "linux"),
-    )
+    earlier_sockets_from(&process_var, uid(), &std::env::temp_dir(), cfg!(target_os = "linux"))
 }
 
 fn earlier_sockets_from(var: Var, uid: u32, temp: &Path, linux: bool) -> Vec<PathBuf> {
@@ -105,7 +116,7 @@ fn config_in(var: Var, dev: Option<&str>) -> PathBuf {
         return socket.with_file_name("config.json");
     }
     let folder = if dev.is_some() { DEV } else { RELEASE };
-    user_file(var, "XDG_CONFIG_HOME", &[".config"], Path::new(folder), "config.json")
+    user_file(var, &CONFIG_BASE, Path::new(folder), "config.json")
 }
 
 pub(crate) fn secrets(config_path: &Path) -> PathBuf {
@@ -151,7 +162,7 @@ pub(crate) fn session() -> PathBuf {
 fn session_in(var: Var, dev: Option<&str>) -> PathBuf {
     match custom(var) {
         Some(socket) => socket.with_extension("json"),
-        None => user_file(var, "XDG_STATE_HOME", &[".local", "state"], &state_folder(dev), "session.json"),
+        None => user_file(var, &STATE_BASE, &state_folder(dev), "session.json"),
     }
 }
 

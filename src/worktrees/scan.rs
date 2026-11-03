@@ -3,6 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::error::{Error, Result};
 use crate::git::worktree::{check, git, lock};
+use crate::os::ffi;
 use crate::process;
 use crate::process::owners::{Owner, Trees, folder, owner};
 
@@ -30,7 +31,7 @@ pub(crate) fn scan(path: &Path, base: Option<&str>) -> Result<Scan> {
     )?)?;
     let paths = changed_paths(&status);
     for entry in &paths {
-        let modified = std::fs::symlink_metadata(path.join(entry)).and_then(|meta| meta.modified()).ok();
+        let modified = std::fs::symlink_metadata(ffi::join(path, entry)).and_then(|meta| meta.modified()).ok();
         last_changed = last_changed.max(modified);
     }
     let base = base.filter(|base| resolves(path, base));

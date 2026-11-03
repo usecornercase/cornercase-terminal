@@ -1,17 +1,14 @@
 use std::io::{self, Write};
-use std::os::fd::BorrowedFd;
 use std::sync::OnceLock;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use rustix::event::{PollFd, PollFlags, Timespec};
-use rustix::fs::FileType;
-use rustix::io::Errno;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
+use crate::os::console::{self, BorrowedFd};
 use crate::protocol::{self, ClientMessage, ServerMessage};
 use crate::remote::{Remote, Use};
 use crate::update::restart;
@@ -19,10 +16,12 @@ use crate::update::restart;
 use super::{Link, Source};
 
 mod shared;
+mod watch;
 
 #[cfg(test)]
 pub(crate) use shared::share_socket;
 pub(crate) use shared::{line_done, share, unshare};
+pub(crate) use watch::{input_ended, reader_gone_within, watched};
 
 static VIEW: OnceLock<u64> = OnceLock::new();
 static REMOTE: OnceLock<Remote> = OnceLock::new();
@@ -80,6 +79,10 @@ pub(crate) fn use_issues() -> Result<()> {
 
 pub(crate) fn use_issue_names() -> Result<()> {
     require("issue-names", "cannot name the workspace an issue starts in")
+}
+
+pub(crate) fn use_flow_issue_prompt() -> Result<()> {
+    require("flow-issue-prompt", "cannot start a flow on an issue with a prompt of your own")
 }
 
 pub(crate) fn use_todo_panel() -> Result<()> {
@@ -322,7 +325,7 @@ fn follow_from(
     if first && each(answer)? {
         return Ok(());
     }
-    match follow_on(&mut link.reader, watched(rustix::stdio::stdout()), each) {
+    match follow_on(&mut link.reader, watched(console::stdout()), each) {
         Err(Error::ServerLost) => Err(lost(&mut link, Error::ServerLost)),
         followed => followed,
     }
@@ -357,100 +360,8 @@ fn follow_on(
     }
 }
 
-pub(crate) fn watched(out: BorrowedFd<'_>) -> Option<BorrowedFd<'_>> {
-    let kind = rustix::fs::fstat(out).map(|stat| FileType::from_raw_mode(stat.st_mode));
-    matches!(kind, Ok(FileType::Fifo | FileType::Socket)).then_some(out)
-}
-
 fn reader_left(stream: &impl Source, out: &mut Option<BorrowedFd<'_>>) -> bool {
-    if stream.buffered() {
-        return false;
-    }
-    while let Some(reader) = *out {
-        let Some((heard, left)) = polled(Some(stream.fd()), reader, None) else { return false };
-        if left.intersects(PollFlags::HUP | PollFlags::ERR) {
-            return true;
-        }
-        if !left.is_empty() {
-            *out = None;
-        }
-        if heard {
-            return false;
-        }
-    }
-    false
-}
-
-pub(crate) fn reader_gone_within(out: &mut Option<BorrowedFd<'_>>, wait: Duration) -> bool {
-    let Some(reader) = *out else {
-        std::thread::sleep(wait);
-        return false;
-    };
-    let Some((_, left)) = polled(None, reader, Some(wait)) else {
-        *out = None;
-        return false;
-    };
-    if !left.is_empty() && !left.intersects(PollFlags::HUP | PollFlags::ERR) {
-        *out = None;
-    }
-    left.intersects(PollFlags::HUP | PollFlags::ERR)
-}
-
-pub(crate) fn input_ended(
-    server: Option<BorrowedFd<'_>>,
-    input: &mut Option<BorrowedFd<'_>>,
-    wait: Option<Duration>,
-) -> bool {
-    while let Some(fd) = *input {
-        let Some((heard, events)) = polled(server, fd, wait) else {
-            *input = None;
-            return false;
-        };
-        match input_state(fd, events) {
-            Some(true) => return true,
-            Some(false) => {}
-            None => *input = None,
-        }
-        if heard || events.is_empty() {
-            return false;
-        }
-    }
-    false
-}
-
-fn input_state(fd: BorrowedFd<'_>, events: PollFlags) -> Option<bool> {
-    if events.intersects(PollFlags::HUP | PollFlags::ERR) {
-        return Some(true);
-    }
-    if events.is_empty() {
-        return Some(false);
-    }
-    if events != PollFlags::IN {
-        return None;
-    }
-    let mut buffer = [0u8; 64];
-    match rustix::io::read(fd, &mut buffer) {
-        Ok(0) => Some(true),
-        Ok(_) | Err(Errno::INTR | Errno::AGAIN) => Some(false),
-        Err(_) => None,
-    }
-}
-
-fn polled(server: Option<BorrowedFd<'_>>, reader: BorrowedFd<'_>, wait: Option<Duration>) -> Option<(bool, PollFlags)> {
-    let wait = match wait {
-        Some(wait) => Some(Timespec::try_from(wait).ok()?),
-        None => None,
-    };
-    let mut fds = vec![PollFd::new(&reader, PollFlags::IN | PollFlags::HUP)];
-    fds.extend(server.as_ref().map(|server| PollFd::new(server, PollFlags::IN)));
-    loop {
-        match rustix::event::poll(&mut fds, wait.as_ref()) {
-            Ok(_) => break,
-            Err(Errno::INTR) => {}
-            Err(_) => return None,
-        }
-    }
-    Some((fds.get(1).is_some_and(|fd| !fd.revents().is_empty()), fds[0].revents()))
+    !stream.buffered() && watch::reader_left(stream.fd(), out)
 }
 
 pub(crate) fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {

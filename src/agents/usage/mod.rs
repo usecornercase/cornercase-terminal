@@ -1,11 +1,10 @@
-use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use crate::accounts::Account;
 use crate::agents::Known;
+use crate::agents::probe::{self, Limits, Step};
 use crate::error::{Error, Result};
 use crate::time;
 
@@ -117,56 +116,13 @@ pub(in crate::agents) fn window(label: String, kind: String, scope: Option<Strin
 
 type Answer = fn(&str) -> Option<Result<Report>>;
 
-fn read_answer(reader: impl BufRead, answer: Answer, name: &str) -> Result<Report> {
-    for line in reader.lines() {
-        if let Some(result) = answer(&line?) {
-            return result;
-        }
-    }
-    Err(Error::Usage(format!("{name} exited without answering")))
-}
-
-fn await_answer(
-    written: Option<std::io::Result<()>>,
-    stdout: Option<impl Read + Send + 'static>,
-    answer: Answer,
-    name: &'static str,
-    timeout: Duration,
-) -> Result<Report> {
-    let (tx, rx) = mpsc::channel();
-    if let (Some(Ok(())), Some(stdout)) = (written, stdout) {
-        std::thread::spawn(move || {
-            let _ = tx.send(read_answer(BufReader::new(stdout), answer, name));
-        });
-    } else {
-        drop(tx);
-    }
-    match rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(mpsc::RecvTimeoutError::Timeout) => Err(Error::Usage(format!("{name} did not answer in time"))),
-        Err(mpsc::RecvTimeoutError::Disconnected) => Err(Error::Usage(format!("{name} exited without answering"))),
-    }
-}
-
-fn run(agent: Known, mut command: Command, requests: &str, answer: Answer, timeout: Duration) -> Result<Report> {
-    let program = command.get_program().to_string_lossy().into_owned();
-    let mut child = command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| Error::Usage(format!("could not run {program}: {e}")))?;
-    let mut stdin = child.stdin.take();
-    let written = stdin.as_mut().map(|s| s.write_all(requests.as_bytes()).and_then(|()| s.flush()));
-    let answer = await_answer(written, child.stdout.take(), answer, agent.name(), timeout);
-    let _ = child.kill();
-    let _ = child.wait();
-    drop(stdin);
-    answer
+fn run(agent: Known, command: Command, requests: &str, answer: Answer, timeout: Duration) -> Result<Report> {
+    let limits = Limits { name: agent.name(), timeout, grace: Duration::ZERO };
+    probe::run(limits, command, requests, move |line| answer(line).map_or(Step::Read, Step::Answer))
 }
 
 pub(crate) fn probe(agent: Known, program: &str, home: Option<&Path>, timeout: Duration) -> Result<Report> {
-    let spec = agent.usage().ok_or_else(|| Error::Usage(format!("{} has no plan probe", agent.name())))?;
+    let spec = agent.usage().ok_or_else(|| Error::Probe(format!("{} has no plan probe", agent.name())))?;
     run(agent, command(agent, &spec, program, home), &(spec.requests)(), spec.answer, timeout)
 }
 
@@ -201,52 +157,11 @@ pub(crate) fn updated(secs: u64) -> String {
     }
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct Probe {
-    last: Option<(Report, Instant)>,
-    loading: bool,
-    error: Option<String>,
-    answers: u64,
-}
-
-impl Probe {
-    fn start(&mut self) -> bool {
-        if self.loading {
-            return false;
-        }
-        self.loading = true;
-        self.error = None;
-        true
-    }
-
-    fn answered(&mut self, result: Result<Report>, now: Instant) {
-        self.loading = false;
-        self.answers += 1;
-        match result {
-            Ok(report) => self.last = Some((report, now)),
-            Err(e) => self.error = Some(e.to_string()),
-        }
-    }
-    pub(crate) fn last(&self) -> Option<&(Report, Instant)> {
-        self.last.as_ref()
-    }
-
-    pub(crate) fn answers(&self) -> u64 {
-        self.answers
-    }
-
-    pub(crate) fn loading(&self) -> bool {
-        self.loading
-    }
-
-    pub(crate) fn error(&self) -> Option<&str> {
-        self.error.as_deref()
-    }
-}
+pub(crate) type Probe = probe::Probe<Report>;
 
 pub(crate) type Key = (Known, Option<String>);
 
-static UNASKED: Probe = Probe { last: None, loading: false, error: None, answers: 0 };
+static UNASKED: Probe = Probe::UNASKED;
 
 #[derive(Debug, Default)]
 pub(crate) struct State {

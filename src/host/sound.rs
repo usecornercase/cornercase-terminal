@@ -1,7 +1,6 @@
 use std::ffi::OsStr;
 use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{self, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -11,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::expand_home;
 use crate::log;
+use crate::os::desktop;
+use crate::os::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt, set_file_mode};
 
 const RATE: u16 = 22_050;
 const VOLUME: f32 = 0.3;
@@ -19,6 +20,7 @@ const GAP: Duration = Duration::from_secs(1);
 const KILL_AFTER: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(50);
 const FOLDER: &str = "sounds";
+const RUNNABLE: [&str; 4] = [".com", ".exe", ".bat", ".cmd"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -60,36 +62,87 @@ pub(crate) struct Cue {
 pub(super) enum Os {
     Macos,
     Linux,
+    Windows,
 }
 
 impl Os {
     pub(super) fn current() -> Self {
-        if cfg!(target_os = "macos") { Self::Macos } else { Self::Linux }
+        if cfg!(target_os = "macos") {
+            Self::Macos
+        } else if cfg!(windows) {
+            Self::Windows
+        } else {
+            Self::Linux
+        }
     }
 
     fn players(self) -> &'static [&'static str] {
         match self {
             Self::Macos => &["afplay"],
             Self::Linux => &["pw-play", "paplay", "aplay"],
+            Self::Windows => &[],
+        }
+    }
+
+    pub(super) fn extensions(self, pathext: Option<&str>) -> Vec<String> {
+        if self != Self::Windows {
+            return Vec::new();
+        }
+        let listed = pathext.unwrap_or_default().split(';').map(|extension| extension.trim().to_lowercase());
+        let runnable: Vec<String> = listed.filter(|extension| RUNNABLE.contains(&extension.as_str())).collect();
+        if runnable.is_empty() { RUNNABLE.map(String::from).to_vec() } else { runnable }
+    }
+}
+
+impl Default for Os {
+    fn default() -> Self {
+        Self::current()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Device {
+    Program(PathBuf),
+    PlaySound,
+}
+
+impl Device {
+    fn name(&self) -> String {
+        match self {
+            Self::Program(program) => program.display().to_string(),
+            Self::PlaySound => "PlaySound".into(),
         }
     }
 }
 
-fn player(os: Os, lookup: impl Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
-    os.players().iter().find_map(|name| lookup(name))
+fn player(os: Os, lookup: impl Fn(&str) -> Option<PathBuf>) -> Option<Device> {
+    if os == Os::Windows {
+        return Some(Device::PlaySound);
+    }
+    os.players().iter().find_map(|name| lookup(name)).map(Device::Program)
 }
 
-pub(super) fn on_path(path: Option<&OsStr>) -> impl Fn(&str) -> Option<PathBuf> + '_ {
+pub(super) fn on_path<'a>(
+    os: Os,
+    path: Option<&'a OsStr>,
+    extensions: &'a [String],
+) -> impl Fn(&str) -> Option<PathBuf> + 'a {
     move |name| {
         std::env::split_paths(path?)
             .filter(|dir| dir.is_absolute())
-            .map(|dir| dir.join(name))
-            .find(|candidate| executable(candidate))
+            .find_map(|dir| named(&dir, name, extensions).into_iter().find(|candidate| executable(os, candidate)))
     }
 }
 
-pub(super) fn executable(path: &Path) -> bool {
-    path.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+fn named(dir: &Path, name: &str, extensions: &[String]) -> Vec<PathBuf> {
+    if extensions.is_empty() {
+        return vec![dir.join(name)];
+    }
+    extensions.iter().map(|extension| dir.join(format!("{name}{extension}"))).collect()
+}
+
+fn executable(os: Os, path: &Path) -> bool {
+    path.metadata().is_ok_and(|m| m.is_file() && (os == Os::Windows || m.permissions().mode() & 0o111 != 0))
 }
 
 fn resolve(path: &str, home: Option<&Path>) -> Option<PathBuf> {
@@ -167,7 +220,7 @@ fn builtin(dir: &Path, kind: Kind) -> io::Result<PathBuf> {
     }
     let tmp = folder.join(format!("{}.wav.{}.tmp", kind.id(), std::process::id()));
     let mut file = OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
-    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    set_file_mode(&file, 0o600)?;
     file.write_all(&bytes)?;
     std::fs::rename(tmp, &path)?;
     Ok(path)
@@ -175,25 +228,25 @@ fn builtin(dir: &Path, kind: Kind) -> io::Result<PathBuf> {
 
 #[derive(Debug)]
 pub(crate) struct Player {
-    program: Option<PathBuf>,
+    device: Option<Device>,
     dir: PathBuf,
     home: Option<PathBuf>,
     started: Option<Instant>,
 }
 
 impl Player {
-    pub(crate) fn new(program: Option<PathBuf>, dir: PathBuf, home: Option<PathBuf>) -> Self {
-        Self { program, dir, home, started: None }
+    pub(crate) fn new(device: Option<Device>, dir: PathBuf, home: Option<PathBuf>) -> Self {
+        Self { device, dir, home, started: None }
     }
 
     pub(crate) fn detect(dir: PathBuf) -> Self {
-        let path = std::env::var_os("PATH");
-        let program = player(Os::current(), on_path(path.as_deref()));
-        Self::new(program, dir, std::env::var_os("HOME").map(PathBuf::from))
+        let (os, path) = (Os::current(), std::env::var_os("PATH"));
+        let device = player(os, on_path(os, path.as_deref(), &[]));
+        Self::new(device, dir, std::env::var_os("HOME").map(PathBuf::from))
     }
 
     pub(crate) fn play(&mut self, cue: &Cue, now: Instant) -> bool {
-        let Some(program) = self.program.clone() else {
+        let Some(device) = self.device.clone() else {
             return false;
         };
         if self.started.is_some_and(|started| now.saturating_duration_since(started) < GAP) {
@@ -201,12 +254,12 @@ impl Player {
         }
         self.started = Some(now);
         let (cue, dir, home) = (cue.clone(), self.dir.clone(), self.home.clone());
-        thread::spawn(move || sound(&program, &cue, &dir, home.as_deref()));
+        thread::spawn(move || sound(&device, &cue, &dir, home.as_deref()));
         true
     }
 }
 
-fn sound(program: &Path, cue: &Cue, dir: &Path, home: Option<&Path>) {
+fn sound(device: &Device, cue: &Cue, dir: &Path, home: Option<&Path>) {
     let file = match resolve(&cue.path, home) {
         Some(file) => file,
         None => match builtin(dir, cue.kind) {
@@ -217,9 +270,12 @@ fn sound(program: &Path, cue: &Cue, dir: &Path, home: Option<&Path>) {
             }
         },
     };
-    match spawn(program, &file) {
-        Ok(child) => reap(child),
-        Err(err) => log::warning!("sound", "cannot play a sound", program = program.display(), reason = err),
+    let played = match device {
+        Device::Program(program) => spawn(program, &file).map(reap),
+        Device::PlaySound => desktop::play(&file, KILL_AFTER),
+    };
+    if let Err(err) = played {
+        log::warning!("sound", "cannot play a sound", program = device.name(), reason = err);
     }
 }
 

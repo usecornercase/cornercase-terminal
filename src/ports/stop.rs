@@ -1,7 +1,7 @@
-use rustix::process::{Pid, Signal, kill_process};
-
 use super::Port;
 use super::listen::listeners;
+use crate::os::process::{Pid, Signal, askable, kill_process};
+use crate::process::escalation::{HARD_STEP, KILLED_BECAUSE};
 use crate::process::{self, escalation};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +36,10 @@ impl escalation::Stoppable for Target {
         Ok(())
     }
 
+    fn askable(&self) -> bool {
+        askable(self.pid)
+    }
+
     fn signal(&self, signal: Signal) -> Result<(), String> {
         let pid = Pid::from_raw(self.pid).ok_or_else(String::new)?;
         kill_process(pid, signal).map_err(|errno| format!("could not signal pid {}: {errno}", self.pid))
@@ -63,8 +67,8 @@ pub(crate) fn summary(stopped: &[Stopped]) -> String {
     if let [(target, outcome)] = stopped {
         return match outcome {
             Ok(Outcome::Stopped) => format!("stopped {}", target.label()),
-            Ok(Outcome::Killed) => format!("killed {}: it ignored SIGTERM", target.label()),
-            Ok(Outcome::StillRunning) => format!("{} is still running after SIGKILL", target.label()),
+            Ok(Outcome::Killed) => format!("killed {}: {KILLED_BECAUSE}", target.label()),
+            Ok(Outcome::StillRunning) => format!("{} is still running after {HARD_STEP}", target.label()),
             Err(reason) => format!("did not stop {}: {reason}", target.label()),
         };
     }

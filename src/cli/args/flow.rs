@@ -277,10 +277,14 @@ pub(crate) struct FlowRunArgs {
         value_name = "TEXT",
         conflicts_with = "prompt_file",
         required_unless_present_any = ["prompt_file", "issue"],
-        help = "The task: what the team should do"
+        help = "The task: what the team should do; with --issue, it replaces the prompt made from the issue"
     )]
     pub(crate) prompt: Option<String>,
-    #[arg(long, value_name = "FILE", help = "Read the task from a file, or from standard input with -")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Read the task from a file, or from standard input with -; with --issue, it replaces the prompt made from the issue"
+    )]
     pub(crate) prompt_file: Option<PathBuf>,
     #[arg(
         long,

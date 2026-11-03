@@ -5,6 +5,7 @@ mod changes;
 mod close;
 mod closed_agents;
 mod config;
+mod context;
 mod contract;
 mod create;
 mod files;
@@ -16,6 +17,7 @@ mod merge_check;
 mod plugins;
 mod ports;
 mod processes;
+mod pull_request;
 mod queue;
 mod search;
 mod status;
@@ -180,13 +182,19 @@ enum Stage {
     Usage(Vec<(agents::usage::Key, u64)>),
     Ports,
     Processes,
+    PullRequest(u64),
+    Context { pane: u64, answers: u64 },
 }
 
 impl Stage {
-    fn listing(&self) -> &'static str {
+    fn listing(&self) -> String {
         match self {
-            Self::Processes => "the processes are still being measured",
-            _ => "the ports are still being listed",
+            Self::Processes => "the processes are still being measured".into(),
+            Self::PullRequest(workspace) => {
+                format!("gh or glab is still reading the pull request of workspace {workspace}")
+            }
+            Self::Context { pane, .. } => format!("the agent is still saying what fills the context of pane {pane}"),
+            _ => "the ports are still being listed".into(),
         }
     }
 
@@ -208,6 +216,8 @@ impl Stage {
                 | Self::Usage(_)
                 | Self::Ports
                 | Self::Processes
+                | Self::PullRequest(_)
+                | Self::Context { .. }
         )
     }
 }
@@ -629,6 +639,8 @@ impl App {
             Command::ChangesDiscard(discard) => self.changes_discard_request(client, asker, &discard),
             Command::ChangesStage(stage) => self.changes_stage_request(client, asker, &stage),
             Command::ChangesMergeCheck(check) => self.changes_merge_check_request(client, asker, &check),
+            Command::PullRequest(read) => self.pull_request_request(client, asker, &read, now),
+            Command::Context(read) => self.context_request(client, asker, &read),
             other => return ControlFlow::Continue(other),
         })
     }

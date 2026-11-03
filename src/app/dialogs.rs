@@ -98,7 +98,7 @@ impl App {
 
     pub(super) fn closed_from_outside(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
         let outside = ev.kind == MouseEventKind::Down(MouseButton::Left) && self.outside_dialog(pos, area);
-        if outside && self.popup().is_none() {
+        if outside && self.overlay.as_ref().is_some_and(Overlay::closes_from_outside) {
             self.cancel_form();
         }
         outside
@@ -213,6 +213,8 @@ impl App {
             self.scroll_pull_request(delta, area);
         } else if matches!(self.overlay, Some(Overlay::MergeCheck { .. })) {
             self.scroll_merge_check(delta, area);
+        } else if matches!(self.overlay, Some(Overlay::Context { .. })) {
+            self.scroll_context(delta, area);
         } else if matches!(self.overlay, Some(Overlay::FlowMessage { .. })) {
             self.scroll_flow_message(delta, area);
         } else {
@@ -225,6 +227,7 @@ impl App {
             Some(overlay) if overlay.busy() => {}
             Some(Overlay::Queue(_)) => self.close_queue_form(false),
             Some(Overlay::Flows { .. }) => self.close_flows(),
+            Some(Overlay::Star) => self.answer_star(None),
             Some(Overlay::RemoveAccount { .. }) => self.open_settings(),
             _ => self.overlay = None,
         }
@@ -261,16 +264,22 @@ impl App {
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => self.submit_restart(),
             Overlay::PullRequest { workspace, .. } => self.submit_pull_request(workspace),
-            Overlay::MergeCheck { workspace, scroll } => {
-                self.check_merges(workspace);
-                Some(Overlay::MergeCheck { workspace, scroll })
-            }
-            Overlay::FlowMessage { workspace, edge, to, .. } => {
-                self.submit_flow_message(workspace, edge, to.as_deref())
-            }
+            again @ (Overlay::MergeCheck { .. } | Overlay::Context { .. }) => Some(self.submit_again(again)),
+            Overlay::FlowMessage { workspace, shown, .. } => self.submit_flow_message(workspace, &shown),
             busy => Some(busy),
         };
         Ok(())
+    }
+
+    fn submit_again(&mut self, overlay: Overlay) -> Overlay {
+        match overlay {
+            Overlay::MergeCheck { workspace, .. } => self.check_merges(workspace),
+            Overlay::Context { pane, .. } => {
+                self.read_context(pane);
+            }
+            _ => {}
+        }
+        overlay
     }
 
     fn submit_rename(&mut self, target: Target, input: &str) -> Option<Overlay> {

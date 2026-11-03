@@ -1,3 +1,4 @@
+pub(crate) mod context;
 pub(super) mod flows;
 pub(super) mod form;
 pub(super) mod group_style;
@@ -169,6 +170,7 @@ pub(crate) enum Overlay {
     Ports(Box<Ports>),
     Processes(Box<Processes>),
     Popup(Box<popup::Popup>),
+    Star,
 }
 
 impl Overlay {
@@ -192,6 +194,7 @@ impl Overlay {
             Self::Ports(p) => Some(ports_area(area, p.compact)),
             Self::Processes(p) => Some(processes_area(area, p.compact)),
             Self::Popup(p) => Some(popup::popup_area(area, p.wanted)),
+            Self::Star => Some(super::star_area(area)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }
     }

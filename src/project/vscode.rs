@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
+use crate::text;
 
 pub(crate) const EXTENSION: &str = "code-workspace";
 
@@ -63,16 +64,7 @@ fn file_uri(uri: &str) -> Option<String> {
     if !path.starts_with('/') {
         return None;
     }
-    let bytes = path.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let hex = (bytes[i] == b'%').then(|| path.get(i + 1..i + 3)).flatten();
-        let (byte, width) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()).map_or((bytes[i], 1), |b| (b, 3));
-        out.push(byte);
-        i += width;
-    }
-    String::from_utf8(out).ok()
+    text::percent_decoded(path)
 }
 
 fn strip_jsonc(text: &str) -> String {

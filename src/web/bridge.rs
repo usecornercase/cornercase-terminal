@@ -1,6 +1,5 @@
 use std::io::{self, Write};
 use std::net::TcpStream;
-use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -18,6 +17,7 @@ use crate::graphics::{Missing, Support};
 use crate::host::notify::Channel;
 use crate::host::theme::{HostTheme, PALETTE_LEN};
 use crate::log;
+use crate::os::socket::UnixStream;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::version;
 

@@ -3,6 +3,7 @@ pub(crate) mod keys;
 pub(crate) mod memory;
 pub(crate) mod mouse;
 pub(crate) mod reader;
+pub(crate) mod shell;
 mod status;
 pub(crate) mod typing;
 
@@ -15,7 +16,7 @@ use std::thread;
 use std::time::Instant;
 
 use crossterm::event::KeyEvent;
-use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{Child, CommandBuilder, PtySize, native_pty_system};
 
 use self::emulator::Emulator;
 use self::typing::Typing;
@@ -27,6 +28,7 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::git::worktree::setup;
 use crate::host::theme::HostTheme;
+use crate::os::process::launch_folder;
 use crate::process;
 
 const SCROLLBACK_BYTES: usize = 10_000_000;
@@ -39,6 +41,8 @@ const PASTE_START: &str = "\x1b[200~";
 const PASTE_END: &str = "\x1b[201~";
 
 pub(crate) const MAX_QUEUED: usize = 16 * 1024 * 1024;
+
+type Started = (imp::Master, Box<dyn Child + Send + Sync>);
 
 #[derive(Clone)]
 struct Writer {
@@ -67,7 +71,7 @@ pub(crate) struct Term {
     generation: u32,
     accounts: Accounts,
     account: accounts::Seen,
-    master: Box<dyn MasterPty + Send>,
+    master: imp::Master,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
     size: (u16, u16),
@@ -102,7 +106,7 @@ struct Wired {
     id: u64,
     generation: u32,
     emulator: Emulator,
-    master: Box<dyn MasterPty + Send>,
+    master: imp::Master,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
     size: (u16, u16),
@@ -150,6 +154,7 @@ fn command(
     dir: Option<&Path>,
 ) -> CommandBuilder {
     let mut cmd = CommandBuilder::new(shell);
+    imp::inherit(&mut cmd);
     cmd.args(args);
     cmd.env("TERM", "xterm-256color");
     for key in agents::claude::CLAUDE_SESSION_ENV.iter().chain(&agents::copilot::SESSION_ENV) {
@@ -183,26 +188,23 @@ impl Term {
     ) -> Result<Self> {
         let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
         let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
-
-        let dir = cwd.or_else(|| std::env::current_dir().ok());
-        let cmd = command(shell, args, env, remove, dir.as_deref());
-
-        let child = pair.slave.spawn_command(cmd).map_err(|e| Error::SpawnShell {
-            shell: shell.to_string(),
-            dir: dir.unwrap_or_default(),
-            cause: e.into(),
-        })?;
-        drop(pair.slave);
-
         let reader = pair.master.try_clone_reader().map_err(|e| Error::AttachPty(e.into()))?;
         let writer = spawn_writer(pair.master.take_writer().map_err(|e| Error::AttachPty(e.into()))?);
+
+        let dir = cwd.or_else(launch_folder);
+        let cmd = command(shell, args, env, remove, dir.as_deref());
+        let (master, child) = imp::Master::start(pair, cmd, &writer).map_err(|cause| Error::SpawnShell {
+            shell: shell.to_string(),
+            dir: dir.unwrap_or_default(),
+            cause,
+        })?;
+
         let replies = writer.clone();
         let emulator =
             Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
                 .map_err(|e| Error::Emulator(e.into()))?;
         reader::spawn(id, generation, reader, tx);
 
-        let master = pair.master;
         Ok(Wired { id, generation, emulator, master, writer, child, size: (rows, cols), interactive: args.is_empty() }
             .into())
     }
@@ -243,7 +245,7 @@ impl Term {
     pub(crate) fn feed(&mut self, bytes: &[u8]) {
         self.output_at = Instant::now();
         let pid = self.foreground_pid();
-        let reporting = if self.interactive && pid == self.shell_pid() {
+        let reporting = if self.interactive && imp::at_prompt(pid, self.shell_pid()) {
             self.status_agent.as_ref().filter(|(pid, _)| process::alive(*pid)).map(|(pid, _)| *pid).or(pid)
         } else {
             pid
@@ -281,12 +283,14 @@ impl Term {
             return;
         }
         self.size = (rows, cols);
-        let _ = self.master.resize(pty_size(rows, cols));
+        self.master.resize(pty_size(rows, cols));
         let _ = self.emulator.resize(rows, cols);
     }
 
     pub(crate) fn foreground_pid(&self) -> Option<i32> {
-        self.master.process_group_leader().filter(|pid| process::alive(*pid)).or_else(|| self.shell_pid())
+        imp::group_leader(&self.master, self.shell_pid())
+            .filter(|pid| process::alive(*pid))
+            .or_else(|| self.shell_pid())
     }
 
     pub(crate) fn shell_pid(&self) -> Option<i32> {
@@ -294,7 +298,8 @@ impl Term {
     }
 
     pub(crate) fn cwd(&self) -> Option<PathBuf> {
-        process::cwd(self.foreground_pid()?)
+        let pid = self.foreground_pid()?;
+        imp::reported_folder(pid, || self.emulator.pwd()).or_else(|| process::cwd(pid))
     }
 
     pub(crate) fn program(&self, config: &Config) -> Option<String> {
@@ -314,7 +319,7 @@ impl Term {
 
     pub(crate) fn shell_in_foreground(&self) -> bool {
         let shell = self.shell_pid();
-        self.interactive && shell.is_some() && self.foreground_pid() == shell
+        self.interactive && shell.is_some() && imp::at_prompt(self.foreground_pid(), shell)
     }
 
     pub(crate) fn became_shell(&mut self) {
@@ -455,6 +460,173 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
         }
     });
     Writer { tx, queued }
+}
+
+#[cfg(unix)]
+mod imp {
+    use std::path::PathBuf;
+
+    use portable_pty::{CommandBuilder, MasterPty, PtyPair, PtySize};
+
+    use super::{Started, Writer};
+    use crate::error::BoxError;
+
+    pub(super) struct Master(Box<dyn MasterPty + Send>);
+
+    impl Master {
+        pub(super) fn start(pair: PtyPair, cmd: CommandBuilder, _replies: &Writer) -> Result<Started, BoxError> {
+            let child = pair.slave.spawn_command(cmd)?;
+            drop(pair.slave);
+            Ok((Self(pair.master), child))
+        }
+
+        pub(super) fn resize(&self, size: PtySize) {
+            let _ = self.0.resize(size);
+        }
+    }
+
+    pub(super) fn group_leader(master: &Master, _shell: Option<i32>) -> Option<i32> {
+        master.0.process_group_leader()
+    }
+
+    pub(super) fn at_prompt(foreground: Option<i32>, shell: Option<i32>) -> bool {
+        foreground == shell
+    }
+
+    pub(super) fn reported_folder(_foreground: i32, _reported: impl FnOnce() -> String) -> Option<PathBuf> {
+        None
+    }
+
+    pub(super) fn inherit(_cmd: &mut CommandBuilder) {}
+}
+
+#[cfg(windows)]
+mod imp {
+    use std::os::windows::io::{AsRawHandle, BorrowedHandle, OwnedHandle};
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::thread;
+
+    use parking_lot::Mutex;
+    use portable_pty::{Child, CommandBuilder, MasterPty, PtyPair, PtySize};
+    use windows_sys::Win32::System::Threading::{INFINITE, WaitForSingleObject};
+
+    use super::{Started, Writer, write_to};
+    use crate::error::BoxError;
+    use crate::{process, text};
+
+    const CURSOR_REPORT: &[u8] = b"\x1b[1;1R";
+    const MAX_SHELLS: usize = 16;
+    const POWERSHELLS: [&str; 2] = ["pwsh", "powershell"];
+    const FILE_URL: &str = "file://";
+
+    type Shared = Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>;
+
+    pub(super) struct Master {
+        shared: Shared,
+        replies: Writer,
+    }
+
+    impl Master {
+        pub(super) fn start(pair: PtyPair, cmd: CommandBuilder, replies: &Writer) -> Result<Started, BoxError> {
+            let PtyPair { slave, master } = pair;
+            let master = Self { shared: Arc::new(Mutex::new(Some(master))), replies: replies.clone() };
+            let spawned = slave.spawn_command(cmd);
+            drop(slave);
+            let child = spawned?;
+            if let Some(exit) = exit_handle(child.as_ref()) {
+                let (shared, replies) = (Arc::clone(&master.shared), master.replies.clone());
+                thread::spawn(move || close_after(&exit, &shared, &replies));
+            }
+            Ok((master, child))
+        }
+
+        pub(super) fn resize(&self, size: PtySize) {
+            if let Some(master) = self.shared.lock().as_ref() {
+                let _ = master.resize(size);
+            }
+        }
+    }
+
+    impl Drop for Master {
+        fn drop(&mut self) {
+            let (shared, replies) = (Arc::clone(&self.shared), self.replies.clone());
+            thread::spawn(move || close(&shared, &replies));
+        }
+    }
+
+    fn exit_handle(child: &(dyn Child + Send + Sync)) -> Option<OwnedHandle> {
+        let raw = child.as_raw_handle()?;
+        unsafe { BorrowedHandle::borrow_raw(raw) }.try_clone_to_owned().ok()
+    }
+
+    fn close_after(exit: &OwnedHandle, shared: &Shared, replies: &Writer) {
+        unsafe { WaitForSingleObject(exit.as_raw_handle(), INFINITE) };
+        close(shared, replies);
+    }
+
+    fn close(shared: &Shared, replies: &Writer) {
+        let Some(master) = shared.lock().take() else { return };
+        let _ = write_to(replies, CURSOR_REPORT);
+        drop(master);
+    }
+
+    pub(super) fn group_leader(_master: &Master, shell: Option<i32>) -> Option<i32> {
+        shell.map(foreground)
+    }
+
+    fn foreground(shell: i32) -> i32 {
+        let mut at = shell;
+        for _ in 0..MAX_SHELLS {
+            let Some(child) = newest_child(at) else { break };
+            if !is_shell(child) {
+                return child;
+            }
+            at = child;
+        }
+        at
+    }
+
+    fn newest_child(pid: i32) -> Option<i32> {
+        process::children(pid).into_iter().max_by_key(|child| process::start_stamp(*child))
+    }
+
+    fn is_shell(pid: i32) -> bool {
+        process::name(pid).is_some_and(|name| process::is_shell(&name))
+    }
+
+    pub(super) fn at_prompt(foreground: Option<i32>, shell: Option<i32>) -> bool {
+        foreground == shell || (shell.is_some() && foreground.is_some_and(is_shell))
+    }
+
+    pub(super) fn reported_folder(foreground: i32, reported: impl FnOnce() -> String) -> Option<PathBuf> {
+        let named = |name: &str| POWERSHELLS.iter().any(|shell| process::same_file_name(shell, name));
+        let powershell = process::name(foreground).is_some_and(|name| named(&name));
+        powershell.then(|| folder_from(&reported())).flatten().filter(|folder| folder.is_dir())
+    }
+
+    pub(super) fn folder_from(reported: &str) -> Option<PathBuf> {
+        let reported = reported.trim().trim_matches('"');
+        let path = match reported.strip_prefix(FILE_URL) {
+            Some(url) => text::percent_decoded(url.get(url.find('/')?..)?)?,
+            None => reported.to_string(),
+        };
+        let path = PathBuf::from(without_slash_before_drive(&path));
+        path.is_absolute().then_some(path)
+    }
+
+    fn without_slash_before_drive(path: &str) -> &str {
+        match path.as_bytes() {
+            [b'/', drive, b':', ..] if drive.is_ascii_alphabetic() => &path[1..],
+            _ => path,
+        }
+    }
+
+    pub(super) fn inherit(cmd: &mut CommandBuilder) {
+        for (key, value) in std::env::vars_os() {
+            cmd.env(key, value);
+        }
+    }
 }
 
 #[cfg(test)]

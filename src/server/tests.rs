@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use ratatui::layout::Position;
 
 use super::*;

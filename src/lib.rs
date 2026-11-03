@@ -4,6 +4,7 @@ pub(crate) mod gh;
 pub(crate) mod http;
 pub(crate) mod list;
 pub(crate) mod log;
+pub(crate) mod os;
 pub(crate) mod panics;
 pub mod paths;
 pub(crate) mod persist;

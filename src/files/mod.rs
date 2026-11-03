@@ -88,6 +88,11 @@ pub(crate) struct Top {
     pub(crate) row: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Origin {
+    Flow,
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Viewer {
     pub(crate) path: String,
@@ -98,6 +103,7 @@ pub(crate) struct Viewer {
     pub(crate) stretch: Option<Stretch<u32>>,
     pub(crate) unfolded: HashSet<u32>,
     pub(crate) find: Option<Find>,
+    pub(crate) origin: Option<Origin>,
 }
 
 impl Viewer {
@@ -304,6 +310,7 @@ impl Panel {
         self.unfocus();
         for viewer in self.places.values_mut().filter_map(|p| p.viewer.as_mut()) {
             viewer.find = None;
+            viewer.origin = None;
         }
     }
 

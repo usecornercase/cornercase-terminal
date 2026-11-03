@@ -9,10 +9,11 @@ import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, type Spot, changesLineEdge, changesLineNear, changesStretchNear, compareSpots, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
 import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, insertText, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
-import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
+import { type Edge, describe as describeRole, live, plan, roleColour } from './flow';
+import { type PanelHit, type PanelHistory, type PanelMember, type PanelStep, type PanelView, fileAge, scrolled as flowScrolled } from './flowpanel';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, size as fileSize, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -146,6 +147,8 @@ const HELP_LABELS: Record<HelpItem, string> = {
 };
 const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
+const CONTEXT_NEEDS = "this needs cornercase on your computer: the demo's agents are not real Claude Code sessions";
+const AGENT_TITLES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', opencode: 'opencode', grok: 'Grok Build', cursor: 'Cursor CLI', copilot: 'GitHub Copilot CLI', vibe: 'Vibe CLI' };
 const MERGE_NEED = 'this needs cornercase on your computer: the demo has no git repositories to merge';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const PORTS_NEED = 'this needs cornercase on your computer: the demo runs no servers';
@@ -1733,8 +1736,36 @@ export class App {
     const own = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
     if (own !== undefined && this.findPane(own)?.pane.pending) run.ended = true;
     const diagram = live(plan(run.flow), run.progress, state, run.ended, this.now());
-    const files = run.files.map((f) => ({ name: f.name, age: fileAge(this.now() - f.at) })).reverse();
-    return { name: run.flow.name, task: run.task, diagram, files, scroll: this.flowScroll };
+    const files = run.files.map((f) => ({ name: f.name, size: fileSize(f.bytes), age: fileAge(this.now() - f.at) })).reverse();
+    const heading = { place: this.runPlace(run), run: 1, messages: run.recorded, active: run.progress.active, lead: state(ORCHESTRATOR) !== 'closed' };
+    return { name: run.flow.name, task: run.task, heading, team: this.runTeam(run, state), diagram, history: this.runHistory(run), files, scroll: this.flowScroll };
+  }
+
+  private runPlace(run: Run): string {
+    const project = this.projects.find((p) => p.workspaces.some((w) => w.id === run.workspace));
+    const workspace = project?.workspaces.find((w) => w.id === run.workspace);
+    return project && workspace ? `${project.folder} › ${workspaceLabel(workspace)}` : '';
+  }
+
+  private runTeam(run: Run, state: (role: string) => PanelMember['state']): PanelMember[] {
+    return [run.flow.orchestrator, ...run.flow.roles].map((role, i) => {
+      const pane = run.members.find((m) => m.role === role.name)?.pane ?? null;
+      return { role: role.name, agent: describeRole(role), colour: roleColour(i), state: state(role.name), branch: null, pane };
+    });
+  }
+
+  private runHistory(run: Run): PanelHistory {
+    const colour = (role: string) => roleColour(run.flow.roles.findIndex((r) => r.name === role) + 1);
+    const step = (edge: Edge | null): PanelStep | null => {
+      if (!edge) return null;
+      if (edge.kind === 'forward') return { kind: 'forward', stage: edge.stage };
+      if (edge.kind === 'loop') return { kind: 'loop', when: (run.flow.stages[edge.stage]?.back?.when ?? '').trim() };
+      return { kind: 'outside' };
+    };
+    const entries = run.messages
+      .map((m) => ({ seq: m.seq, from: m.from, to: m.to, kind: 'sent', step: step(m.edge), colour: colour(m.to), age: fileAge(this.now() - m.at), head: m.text.slice(0, 1024) }))
+      .reverse();
+    return { entries, recorded: run.recorded };
   }
 
   scrollFlow(delta: number): boolean {
@@ -1745,10 +1776,15 @@ export class App {
     return true;
   }
 
-  flowClick(hit: DiagramHit): void {
+  flowClick(hit: PanelHit): void {
     const run = this.shownRun();
     if (!run) return;
-    if (hit.role) {
+    if (hit.stop) {
+      const lead = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
+      if (lead !== undefined) this.askCloseAgent(lead);
+    } else if (hit.folder) this.bug(OPEN_IN_NEEDS);
+    else if (hit.message !== undefined) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: '', to: null, seq: hit.message, scroll: 0 };
+    else if (hit.role) {
       const pane = run.members.find((m) => m.role === hit.role)?.pane;
       if (pane === undefined || !this.findPane(pane)) return;
       if (this.areas().compact) this.flowOpen = false;
@@ -1759,13 +1795,16 @@ export class App {
       this.openFiles();
       this.nav = null;
       this.showFile(`${RUN_DIR}/${name}`);
+      const viewer = this.filesPlace()?.viewer;
+      if (viewer) viewer.origin = 'flow';
     } else if (hit.edge) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: hit.edge, to: hit.to ?? null, scroll: 0 };
     this.dirty();
   }
 
-  flowMessage(o: { workspace: number; edge: string; to: string | null }): { from: string; to: string; text: string } | null {
+  flowMessage(o: { workspace: number; edge: string; to: string | null; seq?: number }): { from: string; to: string; text: string } | null {
     const run = this.runOf(o.workspace);
     if (!run) return null;
+    if (o.seq !== undefined) return run.messages.find((m) => m.seq === o.seq) ?? null;
     const progress = run.progress;
     const [kind, a, b] = o.edge.split(':');
     const edge =
@@ -2193,6 +2232,15 @@ export class App {
     return true;
   }
 
+  backFromFile(): void {
+    const origin = this.filesPlace()?.viewer?.origin ?? null;
+    this.closeFile();
+    if (origin !== 'flow' || !this.shownRun()) return;
+    this.files.close();
+    this.flowOpen = true;
+    this.dirty();
+  }
+
   closeFile(): void {
     const place = this.filesPlace();
     if (place) place.viewer = null;
@@ -2466,6 +2514,20 @@ export class App {
     return { kind: 'mark', panes: agents.map((pane) => pane.id), pending: !agents.some((pane) => pane.pending) };
   }
 
+  private contextActions(panes: Pane[]): MenuAction[] {
+    const agents = panes.filter((pane) => pane.agent);
+    return agents.map((pane) => ({ kind: 'viewContext', pane: pane.id, named: agents.length > 1 }));
+  }
+
+  private contextLabel(pane: number, named: boolean): string {
+    const found = this.findPane(pane);
+    const title = AGENT_TITLES[found?.pane.agent ?? ''];
+    if (!named || !found || !title) return 'view context';
+    const same = found.t.panes.filter((x) => x.agent && AGENT_TITLES[x.agent] === title);
+    const at = same.findIndex((x) => x.id === pane);
+    return at > 0 ? `view context · ${title} ${at + 1}` : `view context · ${title}`;
+  }
+
   private mark(a: Extract<MenuAction, { kind: 'mark' }>): void {
     for (const id of a.panes) {
       const found = this.findPane(id);
@@ -2480,7 +2542,7 @@ export class App {
     const pane = this.findPane(id)?.pane;
     const mark = pane && this.markAction([pane]);
     const row = this.agentShown().find((r) => r.pane === id);
-    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : []), ...(row ? [{ kind: 'closeAgent' as const, pane: id }] : [])];
+    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : []), ...(row ? [{ kind: 'viewContext' as const, pane: id, named: false }, { kind: 'closeAgent' as const, pane: id }] : [])];
     if (!actions.length) return;
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
@@ -2493,6 +2555,7 @@ export class App {
     const tab = target.kind === 'tab' ? this.resolveTarget(target).tab : undefined;
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
+    if (tab) actions.push(...this.contextActions(tab.panes));
     if (target.kind === 'workspace' && this.resolveTarget(target).p?.repo) actions.push({ kind: 'mergeCheck', workspace: target.workspace });
     if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
     if (target.kind === 'workspace') actions.push(...this.closedAgentsMenu(target.workspace));
@@ -2531,6 +2594,7 @@ export class App {
     if (a.kind === 'sendTodo') return this.todoAgent(a.pane)?.label ?? '';
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
     if (a.kind === 'agentFold') return a.collapsed ? 'collapse' : 'expand';
+    if (a.kind === 'viewContext') return this.contextLabel(a.pane, a.named);
     if (a.kind === 'closeAgent') return 'close agent';
     if (a.kind === 'mergeCheck') return 'merge check';
     if (a.kind === 'showFlow') return 'show flow';
@@ -2603,6 +2667,7 @@ export class App {
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
     else if (a.kind === 'agentFold') this.setAgentFold(a.pane, a.collapsed);
+    else if (a.kind === 'viewContext') this.bug(CONTEXT_NEEDS);
     else if (a.kind === 'closeAgent') this.askCloseAgent(a.pane);
     else if (a.kind === 'sendTodo') this.sendTodo(a.todo, a.pane);
     else if (a.kind === 'mergeCheck') this.bug(MERGE_NEED);
@@ -3332,7 +3397,7 @@ export class App {
       { id: 'soundDone', section: '', label: 'sound when it finishes', value: 'built-in', note: "an absolute or ~/ path on the window's computer; empty: built-in" },
       { id: 'soundSubagents', section: '', label: 'sound for subagents', value: '[ ] off', note: 'agents started by another agent or by a flow' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] every hour' : '[ ] never', note: 'asks GitHub for the latest release' },
-      { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] now and then' : '[ ] never', note: 'asks for a GitHub star after two weeks of use' },
+      { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] once' : '[ ] never', note: 'asks for a GitHub star once, after your 5th prompt' },
       this.prefixRow(),
     ];
   }

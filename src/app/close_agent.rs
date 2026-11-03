@@ -38,12 +38,17 @@ impl Plan {
 pub(super) struct CloseAgent {
     pub(super) plan: Plan,
     pub(super) scroll: usize,
+    pub(super) stop: bool,
 }
 
 impl App {
     pub(in crate::app) fn agent_close_plan(&self, pane: u64) -> Result<Plan, Refusal> {
+        self.close_plan(pane, true)
+    }
+
+    fn close_plan(&self, pane: u64, agent_needed: bool) -> Result<Plan, Refusal> {
         let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?.workspace();
-        if self.projects.pane_by(pane).and_then(|term| term.agent.status()).is_none() {
+        if agent_needed && self.projects.pane_by(pane).and_then(|term| term.agent.status()).is_none() {
             return Err(conflict(format!("pane {pane} runs no agent cornercase reads")));
         }
         let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
@@ -76,6 +81,13 @@ impl App {
         }
     }
 
+    pub(super) fn ask_stop_run(&mut self, pane: u64) {
+        match self.close_plan(pane, false) {
+            Ok(plan) => self.overlay = Some(Overlay::CloseAgent(Box::new(CloseAgent { plan, scroll: 0, stop: true }))),
+            Err(refusal) => self.refused_close(&refusal),
+        }
+    }
+
     fn refused_close(&mut self, refusal: &Refusal) {
         if refusal.code != Code::NotFound {
             self.messages.toast = Some(Toast::new(refusal.message.clone(), ui::ToastIcon::Check));
@@ -83,14 +95,16 @@ impl App {
     }
 
     fn open_close_agent(&mut self, plan: Plan) {
-        self.overlay = Some(Overlay::CloseAgent(Box::new(CloseAgent { plan, scroll: 0 })));
+        self.overlay = Some(Overlay::CloseAgent(Box::new(CloseAgent { plan, scroll: 0, stop: false })));
     }
 
     pub(super) fn confirm_close_agent(&mut self) {
         let Some(Overlay::CloseAgent(dialog)) = self.overlay.take() else { return };
-        match self.agent_close_plan(dialog.plan.pane) {
+        match self.close_plan(dialog.plan.pane, !dialog.stop) {
             Err(refusal) => self.refused_close(&refusal),
-            Ok(plan) if plan.grew(&dialog.plan) => self.open_close_agent(plan),
+            Ok(plan) if plan.grew(&dialog.plan) => {
+                self.overlay = Some(Overlay::CloseAgent(Box::new(CloseAgent { plan, scroll: 0, stop: dialog.stop })));
+            }
             Ok(plan) => {
                 log::info!(
                     "agents",

@@ -45,6 +45,7 @@ pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold,
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;
 pub(crate) use chrome::{help_button, more_button, plugin_buttons};
+pub(crate) use dialog::context::{ContextView, Fill, Row, Section, Slice, context_notes};
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_row_at, flows_text, flows_wide,
     preview_body,
@@ -217,7 +218,6 @@ pub(crate) struct View<'a> {
     pub(crate) tab: Option<TabView>,
     pub(crate) overlay: Option<Overlay>,
     pub(crate) toast: Option<Toast<'a>>,
-    pub(crate) star: bool,
     pub(crate) tour: Option<TourCard>,
     pub(crate) field_menu: Option<FieldMenu>,
     pub(crate) nav: Option<Nav>,
@@ -418,9 +418,6 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         f.buffer_mut().set_style(area, Style::default().add_modifier(Modifier::DIM));
     }
     draw_overlay(f, view, &areas);
-    if view.star {
-        draw_star(f, view);
-    }
     if let Some(card) = &view.tour {
         draw_tour(f, view, card);
     }
@@ -464,6 +461,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::ShareSettings(share)) => draw_share_settings(f, view, share),
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
+        Some(Overlay::Star) => draw_star(f, view),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
         Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
         Some(Overlay::Ports(ports)) => draw_ports(f, view, ports),

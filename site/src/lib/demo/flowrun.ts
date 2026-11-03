@@ -1,5 +1,5 @@
 import type { App } from './app';
-import { type Flow, type Message, Progress, TRAVEL } from './flow';
+import { type Edge, type Flow, type Message, Progress, TRAVEL } from './flow';
 import { type Project, markPane } from './model';
 import { Agent } from './programs';
 
@@ -13,13 +13,19 @@ const POLL = 300;
 const AGAIN_AFTER = 20000;
 const FRAME = 50;
 
+export interface RunMessage extends Message {
+  seq: number;
+  edge: Edge | null;
+}
+
 export interface Run {
   workspace: number;
   flow: Flow;
   task: string;
   members: { role: string; pane: number }[];
   progress: Progress;
-  messages: Message[];
+  messages: RunMessage[];
+  recorded: number;
   files: RunFile[];
   ended: boolean;
 }
@@ -28,6 +34,7 @@ export interface RunFile {
   name: string;
   at: number;
   text: string;
+  bytes: number;
 }
 
 export const FULL_ISSUE: Flow = {
@@ -75,7 +82,7 @@ function agentOf(app: App, run: Run, role: string): Agent | null {
 
 export function startRun(app: App, p: Project): Run {
   const w = app.addWorkspace(p, RUN_BRANCH, true);
-  const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], files: [], ended: false };
+  const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], recorded: 0, files: [], ended: false };
   for (const role of [FULL_ISSUE.orchestrator, ...FULL_ISSUE.roles]) {
     const pane = app.newPane(p, w);
     if (run.members.length) pane.parent = run.members[0].pane;
@@ -93,15 +100,16 @@ export function startRun(app: App, p: Project): Run {
 
 export function record(app: App, run: Run, to: string, text: string): void {
   const message = { from: ORCHESTRATOR, to, text, at: app.now() };
-  run.messages.push(message);
-  run.progress.send(run.flow, message);
+  const edge = run.progress.send(run.flow, message);
+  run.messages.push({ ...message, seq: ++run.recorded, edge });
   for (let t = FRAME; t <= TRAVEL + FRAME; t += FRAME) app.after(t, () => app.dirty());
   app.dirty();
 }
 
 function write(app: App, run: Run, role: string, summary: string): void {
   const n = run.files.filter((f) => f.name.startsWith(`${role}-`)).length + 1;
-  run.files.push({ name: `${role}-${n}.md`, at: app.now(), text: `# ${role}, answer ${n}\n\n${summary}\n` });
+  const text = `# ${role}, answer ${n}\n\n${summary}\n`;
+  run.files.push({ name: `${role}-${n}.md`, at: app.now(), text, bytes: text.length });
   app.dirty();
 }
 
@@ -148,6 +156,7 @@ function play(app: App, run: Run): void {
           run.progress = new Progress();
           run.ended = false;
           run.messages = [];
+          run.recorded = 0;
           run.files = [];
           begin();
         },

@@ -38,6 +38,7 @@ pub(super) struct AgentRuntime {
     pub(super) stats: agents::stats::Stats,
     pub(super) restarts: Restarts,
     pub(super) closed: ClosedAgents,
+    pub(super) contexts: super::context_dialog::Contexts,
 }
 
 impl AgentRuntime {
@@ -51,6 +52,7 @@ impl AgentRuntime {
             stats: agents::stats::Stats::new(SystemTime::now()),
             restarts: Restarts::default(),
             closed: ClosedAgents::default(),
+            contexts: super::context_dialog::Contexts::default(),
         }
     }
 
@@ -113,15 +115,17 @@ impl App {
             stats: &mut self.agents.stats,
             samples: Vec::new(),
             notices: Vec::new(),
+            prompts: 0,
         };
         for (project, open) in self.projects.iter_mut().zip(open) {
             round.project(project, if tree { open } else { active == Some(project.id) });
         }
-        let Round { samples, notices, .. } = round;
+        let Round { samples, notices, prompts, .. } = round;
         if read {
             self.agents.stats.sample(clock, elapsed, &samples);
             self.agents.stats.prune(clock);
         }
+        self.count_star_prompts(prompts);
         self.send_notices(notices);
         self.retag_posts(now);
     }
@@ -275,6 +279,7 @@ struct Round<'a> {
     orchestrators: Vec<u64>,
     quiet: HashSet<u64>,
     jobs: bool,
+    prompts: usize,
     stats: &'a mut agents::stats::Stats,
     samples: Vec<agents::stats::Sample>,
     notices: Vec<(NoticeKey, Vec<u64>)>,
@@ -344,7 +349,9 @@ impl Round<'_> {
         if let Some(kind) = term.context.kind()
             && let Some((pid, _)) = term.context.agent()
         {
-            self.stats.counted(kind, term.context.take_counted());
+            let counted = term.context.take_counted();
+            self.prompts += counted.prompts.len();
+            self.stats.counted(kind, counted);
             self.samples.push(agents::stats::Sample {
                 pane: term.id,
                 kind,

@@ -49,8 +49,20 @@ fn flow_list(list: &args::FlowListArgs) -> Result<()> {
     print_out(&listing(&answer(value)?))
 }
 
-fn flow_run(run: args::FlowRunArgs) -> Result<()> {
+fn gives_issue_prompt(run: &args::FlowRunArgs) -> bool {
+    run.issue.key.is_some() && (run.prompt.is_some() || run.prompt_file.is_some())
+}
+
+fn flow_issue_features(run: &args::FlowRunArgs) -> Result<()> {
     super::issue_features(&run.issue)?;
+    if gives_issue_prompt(run) {
+        client::use_flow_issue_prompt()?;
+    }
+    Ok(())
+}
+
+fn flow_run(run: args::FlowRunArgs) -> Result<()> {
+    flow_issue_features(&run)?;
     let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
     let request = control::FlowRun {
         name: run.name,

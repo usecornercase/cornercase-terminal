@@ -1,15 +1,25 @@
-use std::fs::Permissions;
-use std::os::unix::fs::PermissionsExt;
-
 use super::*;
+use crate::os::fs::set_mode;
 use crate::test_util::TempDir;
 
 fn listening(dir: &Path, name: &str) -> (PathBuf, UnixListener) {
     fs::create_dir_all(dir).expect("folder");
-    fs::set_permissions(dir, Permissions::from_mode(0o700)).expect("chmod");
+    set_mode(dir, 0o700).expect("chmod");
     let path = dir.join(name);
     let listener = UnixListener::bind(&path).expect("bind");
     (path, listener)
+}
+
+#[cfg(unix)]
+fn open_to_everyone(dir: &Path) {
+    set_mode(dir, 0o777).expect("chmod");
+}
+
+#[cfg(windows)]
+fn open_to_everyone(dir: &Path) {
+    use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_READ, FILE_GENERIC_WRITE};
+
+    crate::os::fs::share_with_everyone(dir, FILE_GENERIC_READ | FILE_GENERIC_WRITE).expect("share the folder");
 }
 
 #[test]
@@ -39,7 +49,7 @@ fn an_earlier_socket_in_an_unsafe_folder_is_skipped() {
     let tmp = TempDir::new();
     let primary = tmp.path().join("a").join("server.sock");
     let (earlier, _b) = listening(&tmp.path().join("b"), "server.sock");
-    fs::set_permissions(earlier.parent().expect("folder"), Permissions::from_mode(0o777)).expect("chmod");
+    open_to_everyone(earlier.parent().expect("folder"));
 
     assert!(find_among(&primary, &[earlier]).expect("no error").is_none());
 }
@@ -85,6 +95,7 @@ fn a_held_lock_means_a_server_is_starting_so_nothing_is_touched() {
     assert!(socket.exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_folder_that_cannot_be_written_names_the_socket_setting() {
     if protocol::own_uid() == 0 {
@@ -93,11 +104,11 @@ fn a_folder_that_cannot_be_written_names_the_socket_setting() {
     let tmp = TempDir::new();
     let dir = tmp.path().join("ro");
     fs::create_dir(&dir).expect("folder");
-    fs::set_permissions(&dir, Permissions::from_mode(0o500)).expect("chmod");
+    set_mode(&dir, 0o500).expect("chmod");
 
     let error = can_listen(&dir.join("server.sock"), Folder::Own).expect_err("cannot listen");
 
     assert!(matches!(error, Error::Listen { custom: false, .. }));
     assert!(error.to_string().contains("CORNERCASE_SOCKET"));
-    fs::set_permissions(&dir, Permissions::from_mode(0o700)).expect("chmod back");
+    set_mode(&dir, 0o700).expect("chmod back");
 }

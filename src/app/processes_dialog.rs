@@ -31,6 +31,13 @@ const BASELINE: Duration = Duration::from_millis(500);
 
 const COMMAND_WIDTH: usize = 40;
 
+const STOPS: &str = if cfg!(windows) {
+    "Their windows are asked to close, then what still runs after 3 s is ended (at once if none has a window). \
+     The pane's shell keeps running."
+} else {
+    "Each gets SIGTERM, then SIGKILL if it is still running after 3 s. The pane's shell keeps running."
+};
+
 #[derive(Debug, Default)]
 pub(super) struct ProcessesState {
     refresh: Refresh,
@@ -67,7 +74,7 @@ impl App {
         let job = Job::new(Level::Debug, "processes", "sample");
         self.spawn_job(
             job,
-            move || Ok(processes::sample(&places, previous, BASELINE)),
+            move || processes::sample(&places, previous, BASELINE),
             move |result, job| {
                 job.note("panes", result.as_ref().map_or(0, |sample| sample.panes.len()));
                 Some(AppEvent::Processes(ProcessesEvent::Sampled { generation, result }))
@@ -365,9 +372,7 @@ fn stop_lines(target: &Target) -> Vec<Line<'static>> {
         None => {}
     }
     lines.push(Line::raw(""));
-    lines.push(Line::raw(
-        "Each gets SIGTERM, then SIGKILL if it is still running after 3 s. The pane's shell keeps running.",
-    ));
+    lines.push(Line::raw(STOPS));
     lines
 }
 

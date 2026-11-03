@@ -1,12 +1,11 @@
-use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
 use std::iter::once;
-use std::os::fd::AsFd as _;
 
 use clap::Parser as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use self::imp::isolate;
 use super::args::requests::RequestsArgs;
 use super::args::{Cli, Command};
 use super::line::{self, Printed};
@@ -15,6 +14,7 @@ use super::reach::{self, Kind};
 use super::{quietly, usage};
 use crate::client;
 use crate::error::{Error, Result};
+use crate::os::console::AsFd as _;
 
 const ONLY_STANDARD_INPUT: &str =
     "--follow reads its commands from standard input, one per line: give - as the only argument";
@@ -61,14 +61,6 @@ pub(super) fn run(args: &RequestsArgs) -> Result<()> {
     let served = serve(&lines::read(input), &mut answers, ran);
     client::unshare();
     served
-}
-
-fn isolate() -> Result<(File, File)> {
-    let answers = rustix::io::dup(rustix::stdio::stdout()).map_err(io::Error::from)?;
-    let input = rustix::io::dup(rustix::stdio::stdin()).map_err(io::Error::from)?;
-    rustix::stdio::dup2_stdin(File::open("/dev/null")?).map_err(io::Error::from)?;
-    rustix::stdio::dup2_stdout(rustix::stdio::stderr()).map_err(io::Error::from)?;
-    Ok((answers.into(), input.into()))
 }
 
 fn serve(lines: &Lines, out: &mut impl Write, mut run: impl FnMut(&[u8]) -> Option<Ran>) -> Result<()> {
@@ -177,6 +169,60 @@ fn outcome(result: Result<bool>, printed: Printed, name: &str) -> Answer {
 
 fn own_connection(name: &str) -> String {
     format!("`{name}` keeps a connection of its own (a stream): run `cornercase {name}` as a command of its own")
+}
+
+#[cfg(unix)]
+mod imp {
+    use std::fs::File;
+    use std::io;
+
+    use crate::error::Result;
+
+    pub(super) fn isolate() -> Result<(File, File)> {
+        let answers = rustix::io::dup(rustix::stdio::stdout()).map_err(io::Error::from)?;
+        let input = rustix::io::dup(rustix::stdio::stdin()).map_err(io::Error::from)?;
+        rustix::stdio::dup2_stdin(File::open("/dev/null")?).map_err(io::Error::from)?;
+        rustix::stdio::dup2_stdout(rustix::stdio::stderr()).map_err(io::Error::from)?;
+        Ok((answers.into(), input.into()))
+    }
+}
+
+#[cfg(windows)]
+mod imp {
+    use std::fs::File;
+    use std::io;
+    use std::os::windows::io::{BorrowedHandle, IntoRawHandle, OwnedHandle};
+
+    use windows_sys::Win32::Foundation::{HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Console::{
+        GetStdHandle, STD_ERROR_HANDLE, STD_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetStdHandle,
+    };
+
+    use crate::error::Result;
+
+    pub(super) fn isolate() -> Result<(File, File)> {
+        let (answers, input) = (copied(STD_OUTPUT_HANDLE)?, copied(STD_INPUT_HANDLE)?);
+        set_standard(STD_INPUT_HANDLE, File::open("NUL")?.into_raw_handle())?;
+        set_standard(STD_OUTPUT_HANDLE, standard(STD_ERROR_HANDLE)?)?;
+        Ok((answers.into(), input.into()))
+    }
+
+    fn copied(which: STD_HANDLE) -> io::Result<OwnedHandle> {
+        let handle = standard(which)?;
+        unsafe { BorrowedHandle::borrow_raw(handle) }.try_clone_to_owned()
+    }
+
+    fn standard(which: STD_HANDLE) -> io::Result<HANDLE> {
+        let handle = unsafe { GetStdHandle(which) };
+        if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "no standard handle"));
+        }
+        Ok(handle)
+    }
+
+    fn set_standard(which: STD_HANDLE, handle: HANDLE) -> io::Result<()> {
+        if unsafe { SetStdHandle(which, handle) } == 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
+    }
 }
 
 #[cfg(test)]

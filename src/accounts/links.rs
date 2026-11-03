@@ -3,6 +3,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::agents::Known;
+use crate::os::fs::{link_to, links_to};
 
 fn listed(links: &[&str], name: &str) -> bool {
     links.iter().any(|link| match link.strip_suffix('*') {
@@ -37,7 +38,7 @@ pub(crate) fn ensure(kind: Known, default: &Path, account: &Path) -> io::Result<
         match fs::symlink_metadata(&link) {
             Ok(_) => {}
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
-                std::os::unix::fs::symlink(from.join(&name), &link)?;
+                link_to(from.join(&name), &link)?;
                 made += 1;
             }
             Err(e) => return Err(e),
@@ -47,9 +48,15 @@ pub(crate) fn ensure(kind: Known, default: &Path, account: &Path) -> io::Result<
 }
 
 pub(crate) fn status(kind: Known, default: &Path, account: &Path) -> Vec<String> {
-    let Some((_, to)) = folders(kind, default, account) else { return Vec::new() };
+    let Some((from, to)) = folders(kind, default, account) else { return Vec::new() };
     shared(kind, default)
         .into_iter()
-        .filter(|name| fs::symlink_metadata(to.join(name)).is_ok_and(|meta| !meta.file_type().is_symlink()))
+        .filter(|name| {
+            let link = to.join(name);
+            fs::symlink_metadata(&link).is_ok_and(|meta| !links_to(&meta, &link, &from.join(name)))
+        })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

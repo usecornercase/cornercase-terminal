@@ -1,17 +1,16 @@
 pub(crate) mod restart;
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant, SystemTime};
 
-use rustix::fs::{Access, access};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
 use crate::http::{self, Service};
+use crate::os::fs::{set_mode, writable};
 use crate::text::hex;
 
 use crate::version::newer;
@@ -176,7 +175,7 @@ pub(crate) fn install(exe: &Path, target: Option<&str>) -> Install {
     if BREW_DIRS.iter().any(|dir| path.contains(dir)) {
         return Install::Command(BREW);
     }
-    let writable = exe.parent().is_some_and(|dir| access(dir, Access::WRITE_OK).is_ok());
+    let writable = exe.parent().is_some_and(writable);
     if target.is_none() || !writable {
         return Install::Command(INSTALLER);
     }
@@ -240,7 +239,7 @@ fn unpack(archive: &[u8], staging: &Path) -> Result<PathBuf> {
         .chain(nested)
         .find(|path| path.is_file())
         .ok_or_else(|| Error::Api(format!("the download has no `{BINARY}`")))?;
-    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755))?;
+    set_mode(&binary, 0o755)?;
     Ok(binary)
 }
 

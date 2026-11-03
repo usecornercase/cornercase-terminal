@@ -1,6 +1,8 @@
+#![cfg(unix)]
+
 use std::cell::Cell;
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use super::*;
 use crate::test_util::TempDir;

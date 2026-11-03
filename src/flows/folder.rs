@@ -1,10 +1,10 @@
 use std::fs::{self, DirBuilder, Metadata};
 use std::io;
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::issues::slug;
+use crate::os::fs::{DirBuilderExt, set_mode};
 use crate::time;
 
 pub(crate) const ENV: &str = "CORNERCASE_RUN_DIR";
@@ -36,7 +36,7 @@ pub(crate) fn valid(name: &str) -> bool {
 }
 
 fn private(path: &Path) -> io::Result<()> {
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+    set_mode(path, 0o700)
 }
 
 pub(crate) fn make(root: &Path, workspace: &Path, millis: i64) -> io::Result<PathBuf> {

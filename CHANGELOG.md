@@ -2,10 +2,84 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.268
+
+- **On Windows, the cornercase server stops cleanly when you sign out, restart or shut down**, the next step of the native port (it still says it does not run on Windows yet). Windows asks it before the programs in its panes, and it stops the way `kill-server` stops it: plugins stop and the TODO list, the queue and the stats are saved, without holding up the end of the session for more than a few seconds. `taskkill /pid` without `/f` stops it the same way. Nothing changes on Linux and macOS.
+
+## 0.12.266
+
+- **On Windows, the Ports dialog and `cornercase ports` list the TCP ports a workspace's programs listen on**, another step towards running cornercase natively there. It still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.265
+
+- **Another step towards running natively on Windows: panes there now run their shell in ConPTY**, Windows' own pseudo console. A new pane starts your `SHELL` when Windows can start it, else PowerShell 7 (`pwsh`), else Windows PowerShell, else `cmd`, with the folder, size and variables cornercase gives it; the tab's name follows the program you run, and a shell that exits closes its pane. cornercase still says it does not run on Windows yet, since the window and the server are not ported. Nothing changes on Linux and macOS.
+
+## 0.12.261
+
+- **On Windows, cornercase can now stop a program and everything it started**, the next step of the native port (it still says it does not run on Windows yet). A program with a window is asked to close it and ended if it still runs 3 s later; a console program, which has no window to close, is ended at once. On Windows the dialogs and `cornercase processes stop` and `ports stop` say so without naming Unix signals. Nothing changes on Linux and macOS.
+
+## 0.12.259
+
+- **On Windows, cornercase now reads processes**: their trees, names, arguments, folders, memory and CPU, another step towards running there natively. It still says that it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.258
+
+- Nothing changes for users: five tests that failed now and then on a busy machine now wait for what they check.
+
+## 0.12.257
+
+- **On Windows, the window reads the console the way it reads a Unix terminal**, another step towards running cornercase natively there. It puts the console in raw VT mode, so keys, clicks, the wheel and pastes arrive as the same sequences; it follows resizes, leaves Ctrl+C to the program in the pane, detaches when the console window closes, and gives the console back as it found it, also after a panic. A token typed for `cornercase config secret` is not shown; in a terminal that cannot hide it, such as mintty, it asks you to pipe the token in instead. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.256
+
+- **The Windows port can now open File Explorer, an editor or the default app, play the notification sounds and keep the machine awake while agents work**, ready for when cornercase runs there. On Windows it still only says that it does not run there yet. Nothing changes on Linux and macOS.
+
+## 0.12.254
+
+- **On Windows, the cornercase server runs in the background**: it keeps running when the terminal that started it closes, stops with `kill-server`, and restarts in place. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.250
+
+- **On Windows, cornercase reads git's paths**, the next step towards running there: the changes panel, the merge check and the worktrees understand Git for Windows' forward slashes and names out of ASCII. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.249
+
+- **On Windows, cornercase's window and server can now talk to each other over a local socket** that only you can reach, another step towards running it there natively. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.244
+
+- **The Windows port now knows where to keep cornercase's files**: settings in `%APPDATA%\cornercase`, the session and the log in `%LOCALAPPDATA%\cornercase`. cornercase still does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.243
+
+- **See what fills an agent's context.** Right-click a tab running an agent (or click its ` ⋯ `), or an agent's row in the agents section, and pick **view context**. For Claude Code a dialog shows how its window splits between the system prompt, the tools, MCP servers, memory files such as a long `AGENTS.md`, skills and the conversation, with each memory file and MCP server, the skill count and the biggest tools under it. cornercase asks a second `claude` that loads the same conversation in the same folder, account and model, so nothing is typed into your agent and no tokens are spent (your MCP servers are started a second time while it looks); ` refresh ` reads again. The other agents show their model and how full their context is.
+- **`cornercase context`** prints the same numbers for scripts and other apps (`--json`, `--cached`), and `context` is a new request over the socket.
+
+## 0.12.242
+
+- **cornercase now builds on Windows**, the first step towards running it there natively. For now it only says that it does not run on Windows yet, with a link to follow the port, and exits with 1; `--help` and `--version` work. Nothing changes on Linux and macOS.
+
+## 0.12.241
+
+- **cornercase asks for a GitHub star once, right after your 5th prompt, in a dialog in the middle of the window.** It replaces the small card at the bottom right, which waited two weeks of use and went away by itself as soon as an agent worked or a toast showed, often before you could read it. The dialog stays until you answer: **star on GitHub** copies the repository's link, **no thanks** or `Esc` close it, and a click outside or `Enter` do nothing. Whatever you answer, it never asks again, and if you already answered the card with **star on GitHub** or **don't show again** it never asks at all. Turn it off in **Settings › UI › star prompt**, or with `"star_prompt": false` in `config.json`.
+
+## 0.12.240
+
+- **`‹` in a file you opened from the Flow panel goes back to the Flow panel**, scrolled where you left it. It used to show the files panel's tree, and the Flow panel had to be opened again. A file opened from the tree, a search or a path in a pane still goes back to the tree.
+
+## 0.12.239
+
+- **`cornercase flow run --issue` takes a prompt of your own.** `--prompt` or `--prompt-file` give the team your text in place of the one your prompt template makes from the issue, as editing the prompt in **start a flow** does, while the issue still names the branch and the workspace (`--worktree` and `--workspace-name` name others). It used to refuse `--prompt` with `--issue`. Apps that drive cornercase send `prompt` with `issue` in `flow-run` once `cornercase contract` lists `flow-issue-prompt`.
+
+## 0.12.238
+
+- **The Flow panel shows where a run stands, its team and what they sent each other.** Above the diagram: whether the run is running or reached its end, where it runs, its number and how many messages went through, a bar of its stages with `stage 2 of 3 · findings 1/3`, ` orchestrator ` to go to its pane and ` stop ` to close the whole team (it asks first). Then the team, one row per role with its status, agent, branch and pane: click one to go to it.
+- **Every message, newest first.** Under the diagram, each message the team sent, with the step it moved the work along (`stage 1 → 2`, a loop, `outside the plan`), its number and age and its first lines, in the colour of the role it went to. Click one to read it whole and copy it.
+- **The run's files show their size**, and ` open folder ` opens the run's folder in your file manager or editor (or copies its path when the window can open nothing).
+
 ## 0.12.237
 
-- **The search finds settings.** Typing in the search now also lists matching settings, after your projects, workspaces and tabs, so those keep their places. Each shows where it lives and its value, such as `UI › prefix key`. Click one or press `Enter` and Settings opens on that row, with nothing changed. A row that doesn't show yet is listed muted with what it needs.
-- **`cornercase search TEXT --settings`** adds the matching settings to what was said, for scripts and other apps.
+- **`cornercase pull-request` reads a workspace's pull request as its dialog shows it.** It asks gh (or glab) at once, as opening the dialog does, even while cornercase waits after a failed read, and prints the pull request with every check: failed, pending, passed and skipped, each with its workflow (a GitLab job's stage) and the link to its job. `--json` gives the `pull_request` object of `status --json` plus `all_checks`, so a program that draws cornercase can show the same dialog and hand an agent the failed jobs' links. A read that fails exits with 1 and says why (`gh is not logged in: run gh auth login`); a workspace that is not on a branch, is on the default branch or has pull requests turned off says so.
 
 ## 0.12.236
 

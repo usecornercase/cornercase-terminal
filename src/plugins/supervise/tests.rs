@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::plugins::Registry;
 use crate::plugins::manifest::FILE;
@@ -151,6 +153,7 @@ fn a_plugin_turned_off_on_disk_is_not_started_from_a_stale_list() {
 
 #[test]
 fn a_spawn_is_skipped_while_removal_holds_the_lock() {
+    use rustix::fs::{FlockOperation, flock};
     let fixture = Fixture::new(true);
     let plugin = Registry::load(&fixture.places.registry).plugins().remove(0);
     let command = plugin.runs().expect("runs").service[0].command.clone();

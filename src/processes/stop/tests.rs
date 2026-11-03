@@ -1,15 +1,16 @@
 use std::process::{Child, Command, Stdio};
 
-use rustix::process::Signal;
-
 use super::*;
 use crate::process::escalation::Outcome;
-use crate::test_util::{Family, wait_until};
+#[cfg(unix)]
+use crate::test_util::Family;
+use crate::test_util::wait_until;
 
 fn pid_of(child: &Child) -> i32 {
     i32::try_from(child.id()).expect("a pid")
 }
 
+#[cfg(unix)]
 fn spawn(script: &str) -> Child {
     Command::new("/bin/sh").args(["-c", script]).stdin(Stdio::null()).spawn().expect("spawn sh")
 }
@@ -18,6 +19,7 @@ fn gone(pid: i32) -> bool {
     !process::running(pid, None)
 }
 
+#[cfg(unix)]
 mod stopping {
     use super::*;
 
@@ -77,6 +79,7 @@ mod stopping {
     }
 }
 
+#[cfg(unix)]
 mod reused_pids {
     use super::*;
 
@@ -138,12 +141,30 @@ mod saying {
         assert_eq!(said(Ok(Outcome::Stopped), 2), "stopped node (pid 48211) and 2 programs it started");
         assert_eq!(said(Ok(Outcome::Stopped), 1), "stopped node (pid 48211) and 1 program it started");
         assert_eq!(said(Ok(Outcome::Stopped), 0), "stopped node (pid 48211)");
-        assert_eq!(said(Ok(Outcome::Killed), 0), "killed node (pid 48211): it ignored SIGTERM");
-        assert_eq!(said(Ok(Outcome::StillRunning), 0), "node (pid 48211) is still running after SIGKILL");
         assert_eq!(said(Err("it is gone".into()), 0), "did not stop node (pid 48211): it is gone");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_hard_step_is_named_by_its_signals() {
+        let said = |outcome: Result<Outcome, String>| summary(&[(group(0), outcome)]);
+        assert_eq!(said(Ok(Outcome::Killed)), "killed node (pid 48211): it ignored SIGTERM");
+        assert_eq!(said(Ok(Outcome::StillRunning)), "node (pid 48211) is still running after SIGKILL");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_hard_step_names_no_signal() {
+        let said = |outcome: Result<Outcome, String>| summary(&[(group(0), outcome)]);
+        assert_eq!(
+            said(Ok(Outcome::Killed)),
+            "killed node (pid 48211): it had no window to close, or did not close within 3 s"
+        );
+        assert_eq!(said(Ok(Outcome::StillRunning)), "node (pid 48211) is still running after being terminated");
     }
 }
 
+#[cfg(unix)]
 mod inside {
     use super::*;
 
@@ -153,5 +174,80 @@ mod inside {
         let grandchild = family.grandchild().expect("grandchild");
         assert!(inside(grandchild, family.pid()));
         assert!(!inside(family.pid(), grandchild));
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use std::time::{Duration, Instant};
+
+    use super::*;
+    use crate::test_util::{Running, wait_until_within};
+
+    const PING: &str = r"%SystemRoot%\System32\ping.exe -n 30 127.0.0.1";
+
+    const STARTS_WITHIN: Duration = Duration::from_secs(30);
+
+    const FORM: &str = "Add-Type -AssemblyName System.Windows.Forms; \
+                        $form = New-Object System.Windows.Forms.Form; $form.StartPosition = 'Manual'; \
+                        $form.Location = New-Object System.Drawing.Point(-30000, -30000); ";
+
+    const KEEP_OPEN: &str = "$form.Add_FormClosing({ $_.Cancel = $true }); ";
+
+    const SHOW: &str = "[System.Windows.Forms.Application]::Run($form)";
+
+    fn quiet(command: &mut Command) -> Child {
+        command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().expect("spawn")
+    }
+
+    fn pings(pid: i32) -> usize {
+        let named = |pid: &i32| process::name(*pid).is_some_and(|name| name.eq_ignore_ascii_case("ping"));
+        process::descendants(pid).into_iter().filter(named).count()
+    }
+
+    fn window(script: &str) -> Running {
+        let mut shell = Command::new("powershell.exe");
+        shell.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+        let form = Running::spawn(shell.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()));
+        wait_until_within("the window shows", Duration::from_secs(60), || askable(form.pid()));
+        form
+    }
+
+    #[test]
+    fn a_tree_without_a_window_is_ended_at_once_with_everything_it_started() {
+        let mut root = quiet(Command::new("cmd.exe").args(["/d", "/c", &format!("start /b {PING} & {PING}")]));
+        let pid = pid_of(&root);
+        wait_until_within("cmd starts both pings", STARTS_WITHIN, || pings(pid) == 2);
+        let tree: Vec<i32> = std::iter::once(pid).chain(process::descendants(pid)).collect();
+        let started = Instant::now();
+
+        let stopped = stop(Group::live(pid));
+
+        assert!(matches!(&stopped[..], [(group, Ok(Outcome::Killed))] if group.size() == tree.len()), "{stopped:?}");
+        assert!(started.elapsed() < Duration::from_secs(3), "{:?}", started.elapsed());
+        wait_until("the whole tree is gone", || tree.iter().all(|pid| gone(*pid)));
+        root.wait().expect("reap");
+    }
+
+    #[test]
+    fn a_program_whose_window_closes_when_asked_is_stopped() {
+        let form = window(&format!("{FORM}{SHOW}"));
+
+        let stopped = stop(Group::live(form.pid()));
+
+        assert!(matches!(&stopped[..], [(_, Ok(Outcome::Stopped))]), "{stopped:?}");
+        assert!(gone(form.pid()));
+    }
+
+    #[test]
+    fn a_program_that_keeps_its_window_open_is_ended_after_the_wait() {
+        let form = window(&format!("{FORM}{KEEP_OPEN}{SHOW}"));
+        let started = Instant::now();
+
+        let stopped = stop(Group::live(form.pid()));
+
+        assert!(matches!(&stopped[..], [(_, Ok(Outcome::Killed))]), "{stopped:?}");
+        assert!(started.elapsed() >= Duration::from_secs(3), "{:?}", started.elapsed());
+        assert!(gone(form.pid()));
     }
 }

@@ -1,7 +1,6 @@
-use rustix::process::{Pid, Signal, kill_process};
-
+use crate::os::process::{Pid, Signal, askable, kill_process};
 use crate::process;
-use crate::process::escalation::{self, Outcome, Stoppable};
+use crate::process::escalation::{self, HARD_STEP, KILLED_BECAUSE, Outcome, Stoppable};
 use crate::text;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +73,10 @@ impl Stoppable for Group {
         Ok(())
     }
 
+    fn askable(&self) -> bool {
+        std::iter::once(&self.root).chain(&self.members).any(|member| member.running() && askable(member.pid))
+    }
+
     fn signal(&self, signal: Signal) -> Result<(), String> {
         let sent = |member: &Member| {
             let pid = Pid::from_raw(member.pid).ok_or_else(String::new)?;
@@ -117,8 +120,8 @@ pub(crate) fn summary(stopped: &[Stopped]) -> String {
     };
     match outcome {
         Ok(Outcome::Stopped) => format!("stopped {label}{also}"),
-        Ok(Outcome::Killed) => format!("killed {label}{also}: it ignored SIGTERM"),
-        Ok(Outcome::StillRunning) => format!("{label} is still running after SIGKILL"),
+        Ok(Outcome::Killed) => format!("killed {label}{also}: {KILLED_BECAUSE}"),
+        Ok(Outcome::StillRunning) => format!("{label} is still running after {HARD_STEP}"),
         Err(reason) => format!("did not stop {label}: {reason}"),
     }
 }

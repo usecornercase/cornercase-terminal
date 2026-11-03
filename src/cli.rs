@@ -1,6 +1,5 @@
 use std::io::{self, Read as _, Write as _};
 use std::ops::ControlFlow;
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -15,6 +14,8 @@ use self::status::run_status;
 use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, Until, What};
 use crate::error::{Error, Result};
+use crate::os::console;
+use crate::os::socket::UnixStream;
 use crate::remote::{self, Remote};
 use crate::{log, server};
 
@@ -24,6 +25,7 @@ mod args;
 mod arrange;
 mod changes;
 mod config;
+mod context;
 mod contract;
 mod files;
 mod flow;
@@ -34,6 +36,7 @@ mod lines;
 mod plugin;
 mod ports;
 mod processes;
+mod pull_request;
 mod queue;
 mod reach;
 mod read;
@@ -76,6 +79,9 @@ impl WhenArgs {
 }
 
 pub fn run(cli: Cli) -> Result<bool> {
+    if cfg!(not(unix)) {
+        return Err(Error::NotOnWindows);
+    }
     let remote = reach::chosen(&cli, &|name| std::env::var_os(name))?;
     match (cli.command, remote) {
         (None, None) => client::run()?,
@@ -140,7 +146,7 @@ fn print_log(path: &Path, args: &LogsArgs) -> Result<bool> {
     }
     let Some(follower) = follower else { return Ok(true) };
     let mut follower = follower?;
-    let mut reader = client::watched(rustix::stdio::stdout());
+    let mut reader = client::watched(console::stdout());
     loop {
         let new = follower.read()?;
         if !new.is_empty() && quietly(out.write_all(&new).and_then(|()| out.flush()))? {
@@ -290,6 +296,8 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
         Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
         Control::Processes(args) => return ControlFlow::Break(processes::run(&args)),
+        Control::PullRequest(args) => return ControlFlow::Break(pull_request::run(&args)),
+        Control::Context(args) => return ControlFlow::Break(context::run(&args)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),

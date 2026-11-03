@@ -1,5 +1,4 @@
 use super::*;
-use crate::test_util::TempDir;
 
 mod via {
     use super::*;
@@ -114,10 +113,12 @@ mod choices {
     }
 }
 
+#[cfg(unix)]
 mod saved {
     use std::os::unix::fs::PermissionsExt;
 
     use super::*;
+    use crate::test_util::TempDir;
 
     #[test]
     fn the_paired_chat_comes_back_from_a_private_file() {

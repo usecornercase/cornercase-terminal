@@ -107,7 +107,7 @@ See [Changes panel](../../guides/changes/).
 | Gesture | Where | Does |
 | --- | --- | --- |
 | Click | A folder, a file | Opens or closes the folder, reads the file. |
-| Click | `‹` | Goes back to the tree, or to the search results. |
+| Click | `‹` | Goes back to the tree, or to the search results; a file opened from the Flow panel goes back to the Flow panel, scrolled where it was. |
 | Click, or press and drag | The line numbers of a file | Selects a line, or several. Held on the first or last line shown, or past it, the file scrolls with the selection. |
 | Press and drag | The text of a file | Selects the characters from the press to the pointer, across lines, shown reversed. A click on the text selects its line. Edge scrolling works as with lines. |
 | Click | A change mark (`▎`, `▁`, `▔`) | Shows or hides the lines it replaced or deleted. |
@@ -148,8 +148,14 @@ See [TODO list](../../guides/todo/).
 | --- | --- | --- |
 | Click | A role's box | Shows its tab and focuses its pane. |
 | Click | An arrow, or a loop's label | Shows the last message sent along it, with **`copy`**; a branch into a parallel stage shows the one its role got. Only the arrows that carried a message light up under the mouse. |
+| Click | A team row | Shows its tab and focuses its pane; a closed member does nothing. |
+| Click | ` orchestrator ` | Shows the orchestrator's tab and focuses its pane. |
+| Click | ` stop ` | Asks, then closes the orchestrator and its whole team, and the run ends. |
+| Click | A message | Shows it whole, with **`copy`**. |
+| Click | A file | Opens it in the files panel; its `‹` brings you back here. |
+| Click | ` open folder ` | Opens the run's folder through **open in…**, or copies its path when the window can open nothing. |
 | Click | `×` | Closes the panel. |
-| Wheel | The diagram | Scrolls it, when it is taller than the panel. |
+| Wheel | The panel | Scrolls it, when its content is taller than the panel. |
 | Drag, double-click | The panel's left border | Resizes it, gives it back its automatic width. |
 
 See [Flows](../../guides/flows/#the-flow-panel).
