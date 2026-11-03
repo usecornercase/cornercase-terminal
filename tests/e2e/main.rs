@@ -657,7 +657,7 @@ fn fake_agent_writing(dir: &std::path::Path, redirect: &str) -> PathBuf {
     let agent = dir.join("agent");
     let agent_script = format!(
         "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
-         printf '\\033[2J\\033[Hagent ready> '\nread line\nprintf '%s' \"$line\" {redirect} got\n"
+         printf '\\033[2J\\033[Hagent ready> '\nstty -icanon\nread line\nprintf '%s' \"$line\" {redirect} got\n"
     );
     write_executable(&agent, &agent_script);
     agent

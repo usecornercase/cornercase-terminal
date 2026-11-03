@@ -71,6 +71,21 @@ impl OnVps {
     fn wait_there(&self, what: &str, cond: impl Fn(&Value) -> bool) {
         wait_until(what, || self.there().iter().any(&cond));
     }
+
+    fn why(&self, pane: &str) -> String {
+        let folder = self.machine.dir.join("worktrees").display().to_string();
+        let listing = std::process::Command::new("ls").args(["-laR", &folder]).output().expect("run ls");
+        let screen = self.machine.cli(&["read", "--pane", pane, "--lines", "40"]);
+        let log = std::fs::read_to_string(self.machine.dir.join("server.log")).unwrap_or_default();
+        let tail = log.lines().skip(log.lines().count().saturating_sub(40)).collect::<Vec<_>>().join("\n");
+        let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+        format!(
+            "--- worktrees there ---\n{}\n--- the orchestrator's screen ---\n{}{}\n--- server.log there ---\n{tail}",
+            text(&listing.stdout),
+            text(&screen.stdout),
+            text(&screen.stderr),
+        )
+    }
 }
 
 #[test]
@@ -108,10 +123,18 @@ fn a_flow_run_on_a_machine_starts_its_team_in_a_worktree_there() {
     let run = answer(&vps.here.says(&[&args[..], &["--worktree", "dark-mode", "--json"]].concat()));
 
     assert_eq!(run["machine"], VPS, "{run}");
+    let members = run["members"].as_array().cloned().unwrap_or_default();
+    let mut roles: Vec<&str> = members.iter().filter_map(|member| member["role"].as_str()).collect();
+    roles.sort_unstable();
+    assert_eq!(roles, ["coder", "orchestrator", "reviewer"], "{run}");
+    let orchestrator = members.iter().find(|member| member["role"] == "orchestrator").expect("the orchestrator");
+    let pane = orchestrator["pane"].to_string();
     let got = vps.machine.dir.join("worktrees").join("shop").join("dark-mode").join("got");
-    let got = got.display().to_string();
-    vps.machine
-        .wait_for_file(&got, "the team's orchestrator there gets the task", |text| text.contains("add dark mode"));
+    let deadline = Instant::now() + TIMEOUT;
+    while !std::fs::read_to_string(&got).unwrap_or_default().contains("add dark mode") {
+        assert!(Instant::now() < deadline, "the orchestrator there never got the task\n{}", vps.why(&pane));
+        thread::sleep(POLL);
+    }
     let branched = |project: &Value| workspaces(project).iter().any(|w| w["branch"] == "dark-mode");
     vps.wait_there("here lists the run's workspace under vps", branched);
 }
