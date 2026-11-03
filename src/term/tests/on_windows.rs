@@ -13,25 +13,25 @@ fn system_path() -> String {
 }
 
 fn spawn_cmd(cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
-    let (tx, rx) = mpsc::channel();
     let env = [("PATH", system_path()), ("PROMPT", "$G".into()), ("CORNERCASE_PROBE", "from-cornercase".into())]
         .map(|(key, value)| (key.to_string(), value));
+    spawn_cmd_with(&env, cwd)
+}
+
+fn spawn_cmd_with(env: &[(String, String)], cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
+    let (tx, rx) = mpsc::channel();
     let args = ["/d".to_string()];
     let theme = HostTheme::default();
-    let opts = SpawnOptions {
-        id: 1,
-        shell: "cmd.exe",
-        args: &args,
-        env: &env,
-        remove: &[],
-        rows: 24,
-        cols: 80,
-        cwd,
-        theme: &theme,
-    };
+    let opts =
+        SpawnOptions { id: 1, shell: "cmd.exe", args: &args, env, remove: &[], rows: 24, cols: 80, cwd, theme: &theme };
     let mut term = Term::spawn(opts, tx).expect("spawn cmd.exe");
     term.became_shell();
     (term, rx)
+}
+
+fn in_folder(term: &mut Term, rx: &Receiver<Event>, folder: &Path) -> bool {
+    let _ = contents(term, rx);
+    term.cwd().and_then(|cwd| cwd.canonicalize().ok()).as_deref() == Some(folder)
 }
 
 fn typed(term: &mut Term, rx: &Receiver<Event>, line: &str, shows: &str) {
@@ -112,10 +112,22 @@ mod pane {
         let (mut term, rx) = spawn_cmd(Some(dir.path().to_path_buf()));
         let folder = dir.path().canonicalize().expect("canonicalize");
 
-        wait_until("cmd reports its folder", || {
+        wait_until("cmd reports its folder", || in_folder(&mut term, &rx, &folder));
+    }
+
+    #[test]
+    fn starts_with_the_environment_of_the_process_that_started_it() {
+        let (mut term, rx) = spawn_cmd_with(&[("PROMPT".into(), "$G".into())], None);
+        let own = std::env::var("PATH").expect("PATH");
+        let shell = term.shell_pid().expect("the shell's pid");
+        let path = |pid| process::env(pid).into_iter().find(|(key, _)| key.eq_ignore_ascii_case("PATH"));
+
+        wait_until("the shell's environment can be read", || {
             let _ = contents(&mut term, &rx);
-            term.cwd().and_then(|cwd| cwd.canonicalize().ok()) == Some(folder.clone())
+            path(shell).is_some()
         });
+
+        assert_eq!(path(shell).map(|(_, value)| value), Some(own));
     }
 
     #[test]
@@ -217,6 +229,37 @@ mod foreground {
     }
 
     #[test]
+    fn is_the_deepest_shell_with_its_folder_through_nested_shells() {
+        let dir = TempDir::new();
+        let folder = dir.path().canonicalize().expect("canonicalize");
+        let (mut term, rx) = spawn_cmd(None);
+        term.write(b"cmd /d\r");
+        wait_until_within("a second cmd is in the foreground", SLOW, || {
+            program_is(&mut term, &rx, "cmd") && term.foreground_pid() != term.shell_pid()
+        });
+
+        typed(&mut term, &rx, &format!("cd /d \"{}\" & echo cc-mo^ved", dir.path().display()), "cc-moved");
+
+        wait_until("the folder is the second cmd's", || in_folder(&mut term, &rx, &folder));
+        assert!(term.shell_in_foreground());
+    }
+
+    #[test]
+    fn is_powershell_in_the_folder_its_prompt_reports() {
+        let dir = TempDir::new();
+        let folder = dir.path().canonicalize().expect("canonicalize");
+        let (mut term, rx) = spawn_cmd(None);
+        typed(&mut term, &rx, "powershell -NoProfile", "PS ");
+        let prompt = r"function prompt { [char]27 + ']9;9;' + $PWD.ProviderPath + [char]27 + '\' + 'cc-p' + 's> ' }";
+        typed(&mut term, &rx, prompt, "cc-ps>");
+
+        term.write(format!("Set-Location '{}'\r", dir.path().display()).as_bytes());
+
+        wait_until_within("the reported folder", SLOW, || in_folder(&mut term, &rx, &folder));
+        assert!(term.shell_in_foreground());
+    }
+
+    #[test]
     fn is_the_first_program_that_is_not_a_shell() {
         let (mut term, rx) = spawn_cmd(None);
 
@@ -225,6 +268,24 @@ mod foreground {
         wait_until_within("forfiles runs ping", SLOW, || {
             program_is(&mut term, &rx, "forfiles") && term.foreground_pid().is_some_and(runs_ping)
         });
+    }
+}
+
+mod reported_folder {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::osc_7_with_a_host("file://box/C:/Users/me%20too", Some("C:/Users/me too"))]
+    #[case::osc_7_without_a_host("file:///C:/Users/me", Some("C:/Users/me"))]
+    #[case::conemu_quoted(r#""C:\Users\me""#, Some(r"C:\Users\me"))]
+    #[case::conemu_plain(r"C:\Users\me", Some(r"C:\Users\me"))]
+    #[case::a_unix_folder("file://box/home/me", None)]
+    #[case::a_relative_folder(r"Users\me", None)]
+    #[case::nothing_reported("", None)]
+    fn is_a_windows_folder_from_osc_7_or_9_9(#[case] reported: &str, #[case] expected: Option<&str>) {
+        assert_eq!(imp::folder_from(reported), expected.map(PathBuf::from));
     }
 }
 
@@ -242,7 +303,7 @@ mod exit {
     }
 
     #[test]
-    fn a_pane_dropped_while_the_console_waits_for_the_cursor_still_closes() {
+    fn a_pane_dropped_with_the_cursor_request_unanswered_closes_even_under_openconsole() {
         let (term, rx) = spawn_cmd(None);
         let _ = until_asked(&rx);
 

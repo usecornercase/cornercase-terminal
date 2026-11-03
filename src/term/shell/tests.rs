@@ -29,11 +29,29 @@ mod on_windows {
     }
 
     #[test]
+    fn a_quoted_shell_is_taken_without_its_quotes() {
+        let dir = TempDir::new();
+        let bash = program(dir.path(), "bash.exe");
+
+        assert_eq!(startable(&format!(" \"{bash}\" "), None), Some(bash));
+    }
+
+    #[test]
     fn a_shell_given_by_its_name_is_found_on_the_path() {
         let (empty, tools) = (TempDir::new(), TempDir::new());
         let nu = program(tools.path(), "nu.exe");
 
         assert_eq!(startable("nu", Some(&folders(&[empty.path(), tools.path()]))), Some(nu));
+    }
+
+    #[test]
+    fn a_shim_without_a_program_extension_is_passed_over() {
+        let (shims, tools) = (TempDir::new(), TempDir::new());
+        let _ = program(shims.path(), "nu");
+        let _ = program(tools.path(), "nu");
+        let nu = program(tools.path(), "nu.exe");
+
+        assert_eq!(startable("nu", Some(&folders(&[shims.path(), tools.path()]))), Some(nu));
     }
 
     #[rstest]
@@ -42,9 +60,10 @@ mod on_windows {
     #[case::a_path_relative_to_a_drive("C:bash")]
     #[case::a_program_that_is_not_there(r"C:\nonexistent\bash.exe")]
     #[case::a_name_on_no_folder("nonexistent-shell")]
+    #[case::a_batch_file("bash.cmd")]
     fn a_shell_windows_cannot_start_is_skipped(#[case] shell: &str) {
         let dir = TempDir::new();
-        let _ = program(dir.path(), "bash.exe");
+        let _ = [program(dir.path(), "bash.exe"), program(dir.path(), "bash.cmd")];
 
         assert_eq!(startable(shell, Some(&folders(&[dir.path()]))), None);
     }
@@ -55,7 +74,7 @@ mod on_windows {
         let _ = program(old.path(), "powershell.exe");
         let pwsh = program(new.path(), "pwsh.exe");
 
-        assert_eq!(fallback(Some(&folders(&[old.path(), new.path()])), Some("cmd.exe".into())), pwsh);
+        assert_eq!(fallback(Some(&folders(&[old.path(), new.path()])), Some("cmd.exe")), pwsh);
     }
 
     #[test]
@@ -63,16 +82,18 @@ mod on_windows {
         let dir = TempDir::new();
         let powershell = program(dir.path(), "powershell.exe");
 
-        assert_eq!(fallback(Some(&folders(&[dir.path()])), Some("cmd.exe".into())), powershell);
+        assert_eq!(fallback(Some(&folders(&[dir.path()])), Some("cmd.exe")), powershell);
     }
 
     #[rstest]
     #[case::comspec_without_powershell(Some(r"C:\Windows\system32\cmd.exe"), r"C:\Windows\system32\cmd.exe")]
+    #[case::a_quoted_comspec(Some(r#""C:\Windows\system32\cmd.exe""#), r"C:\Windows\system32\cmd.exe")]
+    #[case::cmd_for_a_comspec_that_is_not_there(Some(r"C:\nonexistent\cmd.exe"), "cmd.exe")]
     #[case::cmd_without_comspec(None, "cmd.exe")]
     #[case::cmd_with_an_empty_comspec(Some(""), "cmd.exe")]
     fn the_last_resort_is_the_command_interpreter(#[case] comspec: Option<&str>, #[case] expected: &str) {
         let dir = TempDir::new();
 
-        assert_eq!(fallback(Some(&folders(&[dir.path()])), comspec.map(str::to_string)), expected);
+        assert_eq!(fallback(Some(&folders(&[dir.path()])), comspec), expected);
     }
 }

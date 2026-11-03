@@ -238,6 +238,22 @@ mod title {
     }
 }
 
+mod pwd {
+    use super::*;
+
+    #[rstest]
+    #[case::osc_7("\x1b]7;file://host/C:/Users/me\x1b\\", "file://host/C:/Users/me")]
+    #[case::conemu_osc_9_9("\x1b]9;9;\"C:\\Users\\me\"\x1b\\", "\"C:\\Users\\me\"")]
+    #[case::the_latest("\x1b]7;file:///a\x07\x1b]9;9;C:\\b\x07", "C:\\b")]
+    #[case::none_reported("hello", "")]
+    fn is_the_raw_folder_the_shell_reported(#[case] output: &str, #[case] expected: &str) {
+        let (mut emu, _) = emulator();
+        emu.feed(output.as_bytes());
+
+        assert_eq!(emu.pwd(), expected);
+    }
+}
+
 mod selection {
     use super::*;
 

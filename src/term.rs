@@ -245,7 +245,7 @@ impl Term {
     pub(crate) fn feed(&mut self, bytes: &[u8]) {
         self.output_at = Instant::now();
         let pid = self.foreground_pid();
-        let reporting = if self.interactive && pid == self.shell_pid() {
+        let reporting = if self.interactive && imp::at_prompt(pid, self.shell_pid()) {
             self.status_agent.as_ref().filter(|(pid, _)| process::alive(*pid)).map(|(pid, _)| *pid).or(pid)
         } else {
             pid
@@ -298,7 +298,8 @@ impl Term {
     }
 
     pub(crate) fn cwd(&self) -> Option<PathBuf> {
-        process::cwd(self.foreground_pid()?)
+        let pid = self.foreground_pid()?;
+        imp::reported_folder(pid, || self.emulator.pwd()).or_else(|| process::cwd(pid))
     }
 
     pub(crate) fn program(&self, config: &Config) -> Option<String> {
@@ -318,7 +319,7 @@ impl Term {
 
     pub(crate) fn shell_in_foreground(&self) -> bool {
         let shell = self.shell_pid();
-        self.interactive && shell.is_some() && self.foreground_pid() == shell
+        self.interactive && shell.is_some() && imp::at_prompt(self.foreground_pid(), shell)
     }
 
     pub(crate) fn became_shell(&mut self) {
@@ -463,6 +464,8 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
 
 #[cfg(unix)]
 mod imp {
+    use std::path::PathBuf;
+
     use portable_pty::{CommandBuilder, MasterPty, PtyPair, PtySize};
 
     use super::{Started, Writer};
@@ -486,12 +489,21 @@ mod imp {
         master.0.process_group_leader()
     }
 
+    pub(super) fn at_prompt(foreground: Option<i32>, shell: Option<i32>) -> bool {
+        foreground == shell
+    }
+
+    pub(super) fn reported_folder(_foreground: i32, _reported: impl FnOnce() -> String) -> Option<PathBuf> {
+        None
+    }
+
     pub(super) fn inherit(_cmd: &mut CommandBuilder) {}
 }
 
 #[cfg(windows)]
 mod imp {
     use std::os::windows::io::{AsRawHandle, BorrowedHandle, OwnedHandle};
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::thread;
 
@@ -501,10 +513,12 @@ mod imp {
 
     use super::{Started, Writer, write_to};
     use crate::error::BoxError;
-    use crate::process;
+    use crate::{process, text};
 
     const CURSOR_REPORT: &[u8] = b"\x1b[1;1R";
     const MAX_SHELLS: usize = 16;
+    const POWERSHELLS: [&str; 2] = ["pwsh", "powershell"];
+    const FILE_URL: &str = "file://";
 
     type Shared = Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>;
 
@@ -570,7 +584,7 @@ mod imp {
             }
             at = child;
         }
-        shell
+        at
     }
 
     fn newest_child(pid: i32) -> Option<i32> {
@@ -579,6 +593,33 @@ mod imp {
 
     fn is_shell(pid: i32) -> bool {
         process::name(pid).is_some_and(|name| process::is_shell(&name))
+    }
+
+    pub(super) fn at_prompt(foreground: Option<i32>, shell: Option<i32>) -> bool {
+        foreground == shell || (shell.is_some() && foreground.is_some_and(is_shell))
+    }
+
+    pub(super) fn reported_folder(foreground: i32, reported: impl FnOnce() -> String) -> Option<PathBuf> {
+        let named = |name: &str| POWERSHELLS.iter().any(|shell| process::same_file_name(shell, name));
+        let powershell = process::name(foreground).is_some_and(|name| named(&name));
+        powershell.then(|| folder_from(&reported())).flatten().filter(|folder| folder.is_dir())
+    }
+
+    pub(super) fn folder_from(reported: &str) -> Option<PathBuf> {
+        let reported = reported.trim().trim_matches('"');
+        let path = match reported.strip_prefix(FILE_URL) {
+            Some(url) => text::percent_decoded(url.get(url.find('/')?..)?)?,
+            None => reported.to_string(),
+        };
+        let path = PathBuf::from(without_slash_before_drive(&path));
+        path.is_absolute().then_some(path)
+    }
+
+    fn without_slash_before_drive(path: &str) -> &str {
+        match path.as_bytes() {
+            [b'/', drive, b':', ..] if drive.is_ascii_alphabetic() => &path[1..],
+            _ => path,
+        }
     }
 
     pub(super) fn inherit(cmd: &mut CommandBuilder) {
