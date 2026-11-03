@@ -1,27 +1,31 @@
 use std::ffi::c_void;
 use std::fs::{File, Metadata, OpenOptions};
 use std::io;
+use std::ops::BitOr;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::path::Path;
 use std::ptr::{null, null_mut};
 
-use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, GENERIC_ALL, GENERIC_WRITE, HANDLE, LocalFree};
+use windows_sys::Win32::Foundation::{
+    ERROR_ACCESS_DENIED, GENERIC_ALL, GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, HANDLE, LocalFree,
+};
 use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT, SetSecurityInfo};
 use windows_sys::Win32::Security::{
     ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, ACL_REVISION, AddAccessAllowedAceEx, CONTAINER_INHERIT_ACE, CopySid,
     CreateWellKnownSid, DACL_SECURITY_INFORMATION, EqualSid, GetAce, GetSidIdentifierAuthority, GetTokenInformation,
-    InitializeAcl, InitializeSecurityDescriptor, IsWellKnownSid, OBJECT_INHERIT_ACE, OWNER_SECURITY_INFORMATION,
-    PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SE_DACL_PROTECTED, SECURITY_APP_PACKAGE_AUTHORITY,
-    SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR, SECURITY_MAX_SID_SIZE, SetSecurityDescriptorControl,
-    SetSecurityDescriptorDacl, SetSecurityDescriptorOwner, TOKEN_QUERY, TOKEN_USER, TokenUser, WELL_KNOWN_SID_TYPE,
-    WinBuiltinAdministratorsSid, WinCreatorOwnerRightsSid, WinCreatorOwnerSid, WinLocalSystemSid,
+    INHERIT_ONLY_ACE, InitializeAcl, InitializeSecurityDescriptor, IsWellKnownSid, OBJECT_INHERIT_ACE,
+    OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SE_DACL_PROTECTED,
+    SECURITY_APP_PACKAGE_AUTHORITY, SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR, SECURITY_MAX_SID_SIZE,
+    SetSecurityDescriptorControl, SetSecurityDescriptorDacl, SetSecurityDescriptorOwner, TOKEN_QUERY, TOKEN_USER,
+    TokenUser, WELL_KNOWN_SID_TYPE, WinAnonymousSid, WinBuiltinAdministratorsSid, WinCreatorOwnerRightsSid,
+    WinCreatorOwnerSid, WinLocalSystemSid, WinWorldSid,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateDirectoryW, DELETE, FILE_ALL_ACCESS, FILE_APPEND_DATA, FILE_DELETE_CHILD, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, READ_CONTROL, WRITE_DAC,
-    WRITE_OWNER,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_WRITE_ATTRIBUTES,
+    FILE_WRITE_DATA, FILE_WRITE_EA, READ_CONTROL, WRITE_DAC, WRITE_OWNER,
 };
 use windows_sys::Win32::System::SystemServices::{
     ACCESS_ALLOWED_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_ACE_TYPE, ACCESS_DENIED_ACE_TYPE, ACCESS_DENIED_CALLBACK_ACE_TYPE,
@@ -103,6 +107,20 @@ impl Acl {
     }
 }
 
+enum Ace {
+    Allows(Rule),
+    Denies(Rule),
+    DeniesSometimes,
+    Unknown,
+}
+
+struct Rule {
+    sid: PSID,
+    mask: u32,
+    here: bool,
+    files: bool,
+}
+
 struct Descriptor {
     memory: PSECURITY_DESCRIPTOR,
     owner: PSID,
@@ -156,7 +174,7 @@ pub(crate) fn process_uid(pid: u32) -> io::Result<u32> {
 
 #[cfg(test)]
 pub(crate) fn share_with_everyone(path: &Path, access: u32) -> io::Result<()> {
-    let everyone = Sid::well_known(windows_sys::Win32::Security::WinWorldSid)?;
+    let everyone = Sid::well_known(WinWorldSid)?;
     set_dacl(path, &mut Acl::of(&[(user()?, FILE_ALL_ACCESS), (everyone, access)])?)
 }
 
@@ -211,34 +229,81 @@ fn others(user: &Sid, dacl: *const ACL) -> u32 {
         return OTHERS_WRITE;
     }
     let count = unsafe { (*dacl).AceCount };
-    (0..u32::from(count)).map(|index| granted(user, dacl, index)).fold(0, |all, one| all | one)
+    let aces: Vec<Ace> = (0..u32::from(count)).map(|index| ace(dacl, index)).collect();
+    let granted = aces.iter().enumerate().map(|(index, ace)| match ace {
+        Ace::Allows(rule) => allowed(user, rule, &aces[..index]),
+        Ace::Denies(_) | Ace::DeniesSometimes => 0,
+        Ace::Unknown => OTHERS_WRITE,
+    });
+    granted.fold(0, BitOr::bitor)
 }
 
-fn granted(user: &Sid, dacl: *const ACL, index: u32) -> u32 {
+fn ace(dacl: *const ACL, index: u32) -> Ace {
     let mut ace: *mut c_void = null_mut();
     if unsafe { GetAce(dacl, index, &raw mut ace) } == 0 {
-        return OTHERS_WRITE;
+        return Ace::Unknown;
     }
-    match u32::from(unsafe { (*ace.cast::<ACE_HEADER>()).AceType }) {
-        ACCESS_DENIED_ACE_TYPE
-        | ACCESS_DENIED_CALLBACK_ACE_TYPE
-        | ACCESS_DENIED_OBJECT_ACE_TYPE
-        | ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE => 0,
-        ACCESS_ALLOWED_ACE_TYPE | ACCESS_ALLOWED_CALLBACK_ACE_TYPE => allowed(user, ace.cast()),
-        _ => OTHERS_WRITE,
+    let header = unsafe { ace.cast::<ACE_HEADER>().read() };
+    match u32::from(header.AceType) {
+        ACCESS_ALLOWED_ACE_TYPE | ACCESS_ALLOWED_CALLBACK_ACE_TYPE => Ace::Allows(rule(ace.cast(), header.AceFlags)),
+        ACCESS_DENIED_ACE_TYPE => Ace::Denies(rule(ace.cast(), header.AceFlags)),
+        ACCESS_DENIED_CALLBACK_ACE_TYPE | ACCESS_DENIED_OBJECT_ACE_TYPE | ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE => {
+            Ace::DeniesSometimes
+        }
+        _ => Ace::Unknown,
     }
 }
 
-fn allowed(user: &Sid, ace: *const ACCESS_ALLOWED_ACE) -> u32 {
-    let mask = unsafe { (*ace).Mask };
-    let sid: PSID = unsafe { &raw const (*ace).SidStart }.cast_mut().cast();
-    if harmless(user, sid) || mask == 0 {
-        0
-    } else if mask & WRITES != 0 {
-        OTHERS_WRITE
-    } else {
-        OTHERS_READ
+fn rule(ace: *const ACCESS_ALLOWED_ACE, flags: u8) -> Rule {
+    let flags = u32::from(flags);
+    Rule {
+        sid: unsafe { &raw const (*ace).SidStart }.cast_mut().cast(),
+        mask: mapped(unsafe { (*ace).Mask }),
+        here: flags & INHERIT_ONLY_ACE == 0,
+        files: flags & OBJECT_INHERIT_ACE != 0,
     }
+}
+
+fn mapped(mask: u32) -> u32 {
+    let generic = [
+        (GENERIC_READ, FILE_GENERIC_READ),
+        (GENERIC_WRITE, FILE_GENERIC_WRITE),
+        (GENERIC_EXECUTE, FILE_GENERIC_EXECUTE),
+        (GENERIC_ALL, FILE_ALL_ACCESS),
+    ];
+    generic.iter().filter(|(bit, _)| mask & bit != 0).fold(mask, |mapped, (bit, rights)| (mapped & !bit) | rights)
+}
+
+fn allowed(user: &Sid, rule: &Rule, earlier: &[Ace]) -> u32 {
+    if harmless(user, rule.sid) || !(rule.here || rule.files) {
+        return 0;
+    }
+    let mask = rule.mask & !denied(rule, earlier);
+    if mask & WRITES != 0 {
+        OTHERS_WRITE
+    } else if mask != 0 {
+        OTHERS_READ
+    } else {
+        0
+    }
+}
+
+fn denied(allow: &Rule, earlier: &[Ace]) -> u32 {
+    let at = |reaches: fn(&Rule) -> bool| {
+        let covering = earlier.iter().filter_map(|ace| match ace {
+            Ace::Denies(deny) if reaches(deny) && names(deny, allow) => Some(deny.mask),
+            _ => None,
+        });
+        covering.fold(0, BitOr::bitor)
+    };
+    let here = if allow.here { at(|rule| rule.here) } else { u32::MAX };
+    let files = if allow.files { at(|rule| rule.files) } else { u32::MAX };
+    here & files
+}
+
+fn names(deny: &Rule, allow: &Rule) -> bool {
+    let everyone = known(deny.sid, WinWorldSid) && !known(allow.sid, WinAnonymousSid);
+    everyone || unsafe { EqualSid(deny.sid, allow.sid) != 0 }
 }
 
 fn descriptor(path: &Path) -> io::Result<Descriptor> {

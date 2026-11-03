@@ -1,12 +1,23 @@
 use std::path::PathBuf;
 
-use windows_sys::Win32::Security::{WinBuiltinAnyPackageSid, WinBuiltinUsersSid, WinWorldSid};
+use rstest::rstest;
+use windows_sys::Win32::Security::{
+    AddAccessDeniedAceEx, WinBuiltinAnyPackageSid, WinBuiltinGuestsSid, WinBuiltinUsersSid,
+};
 use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_READ, FILE_GENERIC_WRITE};
 
 use super::*;
 use crate::test_util::TempDir;
 
 const OPEN: u32 = FILE_GENERIC_READ | FILE_GENERIC_WRITE;
+const BOTH: u32 = OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
+const HERE: u32 = 0;
+const FILES_ONLY: u32 = INHERIT_ONLY_ACE | OBJECT_INHERIT_ACE;
+const FOLDERS_ONLY: u32 = INHERIT_ONLY_ACE | CONTAINER_INHERIT_ACE;
+const ALLOW: bool = true;
+const DENY: bool = false;
+
+type Entry = (bool, WELL_KNOWN_SID_TYPE, u32, u32);
 
 fn folder(tmp: &TempDir, name: &str) -> PathBuf {
     let dir = tmp.path().join(name);
@@ -24,8 +35,15 @@ fn read(dir: &Path) -> (u32, u32) {
     owner_and_mode(dir, &std::fs::symlink_metadata(dir).expect("metadata"))
 }
 
-fn with(dir: &Path, entries: &[(Sid, u32)]) {
-    set_dacl(dir, &mut Acl::of(entries).expect("an ACL")).expect("set the ACL");
+fn with(dir: &Path, entries: &[Entry]) {
+    let mut acl = Acl([0; ACL_WORDS]);
+    ok(unsafe { InitializeAcl(acl.ptr(), bytes_of::<Acl>(), ACL_REVISION) }).expect("an ACL");
+    ok(unsafe { AddAccessAllowedAceEx(acl.ptr(), ACL_REVISION, BOTH, FILE_ALL_ACCESS, me().ptr()) }).expect("mine");
+    for &(allows, kind, access, flags) in entries {
+        let add = if allows { AddAccessAllowedAceEx } else { AddAccessDeniedAceEx };
+        ok(unsafe { add(acl.ptr(), ACL_REVISION, flags, access, sid(kind).ptr()) }).expect("an entry");
+    }
+    set_dacl(dir, &mut acl).expect("set the ACL");
 }
 
 fn sid(kind: WELL_KNOWN_SID_TYPE) -> Sid {
@@ -60,27 +78,56 @@ mod reading_a_folder {
         assert_eq!(read(&shared(&tmp, FILE_GENERIC_READ)), (uid(), 0o755));
     }
 
-    #[test]
-    fn another_group_that_can_write_finds_it_open() {
+    #[rstest]
+    #[case::another_group_that_can_write(&[(ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH)], 0o777)]
+    #[case::system_administrators_and_app_packages(&[
+        (ALLOW, WinLocalSystemSid, FILE_ALL_ACCESS, BOTH),
+        (ALLOW, WinBuiltinAdministratorsSid, FILE_ALL_ACCESS, BOTH),
+        (ALLOW, WinCreatorOwnerSid, FILE_ALL_ACCESS, BOTH),
+        (ALLOW, WinBuiltinAnyPackageSid, FILE_ALL_ACCESS, BOTH),
+    ], 0o700)]
+    #[case::everyone_denied_before_a_group_is_allowed(&[
+        (DENY, WinWorldSid, FILE_GENERIC_WRITE, BOTH),
+        (ALLOW, WinBuiltinUsersSid, OPEN, BOTH),
+    ], 0o755)]
+    #[case::a_group_denied_before_it_is_allowed(&[
+        (DENY, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH),
+        (ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH),
+    ], 0o700)]
+    #[case::a_generic_deny_before_a_specific_allow(&[
+        (DENY, WinWorldSid, GENERIC_WRITE, BOTH),
+        (ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH),
+    ], 0o700)]
+    #[case::another_group_denied_before_a_group_is_allowed(&[
+        (DENY, WinBuiltinGuestsSid, FILE_GENERIC_WRITE, BOTH),
+        (ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH),
+    ], 0o777)]
+    #[case::a_deny_after_the_allow(&[
+        (ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH),
+        (DENY, WinWorldSid, FILE_GENERIC_WRITE, BOTH),
+    ], 0o777)]
+    #[case::a_deny_that_stops_at_the_folder(&[
+        (DENY, WinWorldSid, FILE_GENERIC_WRITE, HERE),
+        (ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH),
+    ], 0o777)]
+    #[case::a_deny_split_between_the_folder_and_its_files(&[
+        (DENY, WinWorldSid, FILE_GENERIC_WRITE, HERE),
+        (DENY, WinWorldSid, FILE_GENERIC_WRITE, FILES_ONLY),
+        (ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH),
+    ], 0o700)]
+    #[case::a_deny_that_skips_the_folder(&[
+        (DENY, WinWorldSid, FILE_GENERIC_WRITE, FILES_ONLY),
+        (ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, BOTH),
+    ], 0o777)]
+    #[case::an_allow_for_files_only(&[(ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, FILES_ONLY)], 0o777)]
+    #[case::an_allow_for_folders_inside_only(&[(ALLOW, WinBuiltinUsersSid, FILE_GENERIC_WRITE, FOLDERS_ONLY)], 0o700)]
+    fn by_its_entries_in_order(#[case] entries: &[Entry], #[case] mode: u32) {
         let tmp = TempDir::new();
         let dir = folder(&tmp, "dir");
 
-        with(&dir, &[(me(), FILE_ALL_ACCESS), (sid(WinBuiltinUsersSid), FILE_GENERIC_WRITE)]);
+        with(&dir, entries);
 
-        assert_eq!(read(&dir), (uid(), 0o777));
-    }
-
-    #[test]
-    fn system_administrators_and_app_packages_keep_it_private() {
-        let tmp = TempDir::new();
-        let dir = folder(&tmp, "dir");
-        let trusted = [WinLocalSystemSid, WinBuiltinAdministratorsSid, WinCreatorOwnerSid, WinBuiltinAnyPackageSid];
-        let mut entries = vec![(me(), FILE_ALL_ACCESS)];
-        entries.extend(trusted.map(|kind| (sid(kind), FILE_ALL_ACCESS)));
-
-        with(&dir, &entries);
-
-        assert_eq!(read(&dir), (uid(), 0o700));
+        assert_eq!(read(&dir), (uid(), mode));
     }
 
     #[test]
@@ -206,7 +253,7 @@ fn a_well_known_sid_is_found_only_as_itself() {
     assert!(ours(&me(), me().ptr()));
 }
 
-#[rstest::rstest]
+#[rstest]
 #[case::the_user(None, true)]
 #[case::the_system(Some(WinLocalSystemSid), true)]
 #[case::the_administrators(Some(WinBuiltinAdministratorsSid), true)]

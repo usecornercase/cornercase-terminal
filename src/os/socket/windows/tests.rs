@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::Instant;
 
@@ -10,6 +10,7 @@ use crate::protocol::{self, ClientMessage, ServerMessage};
 use crate::test_util::TempDir;
 
 const WAIT: Duration = Duration::from_secs(10);
+const SHORT: Duration = Duration::from_millis(50);
 
 fn inherited(socket: &Socket) -> bool {
     let mut flags = 0;
@@ -25,6 +26,25 @@ fn read_all(mut stream: UnixStream) -> mpsc::Receiver<io::Result<Vec<u8>>> {
         let _ = tx.send(stream.read_to_end(&mut got).map(|_| got));
     });
     rx
+}
+
+fn reading_after_a_byte(mut stream: UnixStream) -> (mpsc::Receiver<()>, mpsc::Receiver<io::Result<Vec<u8>>>) {
+    let (began, reading) = mpsc::channel();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        if let Err(error) = stream.read_exact(&mut [0; 1]) {
+            let _ = tx.send(Err(error));
+            return;
+        }
+        let _ = began.send(());
+        let mut rest = Vec::new();
+        let _ = tx.send(stream.read_to_end(&mut rest).map(|_| rest));
+    });
+    (reading, rx)
+}
+
+fn still_reading(read: &mpsc::Receiver<io::Result<Vec<u8>>>, within: Duration) -> bool {
+    matches!(read.recv_timeout(within), Err(RecvTimeoutError::Timeout))
 }
 
 mod a_listener {
@@ -151,7 +171,7 @@ mod a_read_timeout {
     #[test]
     fn ends_a_read_that_waits_too_long() {
         let (mut ours, _theirs) = UnixStream::pair().expect("a pair");
-        ours.set_read_timeout(Some(Duration::from_millis(50))).expect("a timeout");
+        ours.set_read_timeout(Some(SHORT)).expect("a timeout");
         let started = Instant::now();
 
         let error = ours.read(&mut [0; 4]).expect_err("timed out");
@@ -162,19 +182,18 @@ mod a_read_timeout {
 
     #[test]
     fn of_none_waits_again() {
-        let (mut ours, mut theirs) = UnixStream::pair().expect("a pair");
-        ours.set_read_timeout(Some(Duration::from_millis(50))).expect("a timeout");
+        let (ours, mut theirs) = UnixStream::pair().expect("a pair");
+        ours.set_read_timeout(Some(SHORT)).expect("a timeout");
         ours.set_read_timeout(None).expect("no timeout");
+        let (reading, read) = reading_after_a_byte(ours);
+        theirs.write_all(b"1").expect("the first byte");
+        reading.recv_timeout(WAIT).expect("the reader reads");
 
-        let writer = thread::spawn(move || {
-            thread::sleep(Duration::from_millis(200));
-            theirs.write_all(b"late").expect("write");
-        });
-        let mut got = [0; 4];
-        ours.read_exact(&mut got).expect("read");
+        assert!(still_reading(&read, SHORT * 4), "the read ended although no timeout is set");
+        theirs.write_all(b"late").expect("write");
+        drop(theirs);
 
-        writer.join().expect("the writer");
-        assert_eq!(&got, b"late");
+        assert_eq!(read.recv_timeout(WAIT).expect("read").expect("the rest"), b"late");
     }
 
     #[test]
@@ -210,9 +229,11 @@ mod shutting_down {
 
     #[test]
     fn both_sides_wakes_a_read_blocked_on_a_clone() {
-        let (ours, _theirs) = UnixStream::pair().expect("a pair");
-        let read = read_all(ours.try_clone().expect("a clone"));
-        thread::sleep(Duration::from_millis(100));
+        let (ours, mut theirs) = UnixStream::pair().expect("a pair");
+        let (reading, read) = reading_after_a_byte(ours.try_clone().expect("a clone"));
+        theirs.write_all(b"1").expect("the first byte");
+        reading.recv_timeout(WAIT).expect("the reader reads");
+        assert!(still_reading(&read, SHORT), "the read waits for more");
 
         ours.shutdown(Shutdown::Both).expect("shutdown");
 

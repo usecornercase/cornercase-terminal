@@ -331,7 +331,9 @@ mod socket_path {
     fn the_longest_socket_path_allowed_can_listen() {
         let tmp = TempDir::new();
         let dir = tmp.path().join("s");
-        let pad = MAX_SOCKET_PATH - dir.as_os_str().len() - 1;
+        let pad = MAX_SOCKET_PATH.checked_sub(dir.as_os_str().len() + 1).filter(|&pad| pad > 0).unwrap_or_else(|| {
+            panic!("the temporary folder {} leaves no room for a socket name", tmp.path().display())
+        });
         let socket = dir.join("x".repeat(pad));
         assert_eq!(socket.as_os_str().len(), MAX_SOCKET_PATH);
         std::fs::create_dir_all(tmp.path().join("s")).expect("folder");
