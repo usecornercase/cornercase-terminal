@@ -25,7 +25,7 @@ use crate::host::pointer;
 use crate::host::sound;
 use crate::host::theme::HostTheme;
 use crate::log::{self, Level};
-use crate::os::process::{on_stop_signal, setsid};
+use crate::os::process::{leave_launch_folder, on_stop_signal, setsid};
 use crate::os::socket::{UnixListener, UnixStream};
 use crate::panics;
 use crate::paths;
@@ -291,6 +291,11 @@ pub(crate) fn run() -> Result<()> {
     let level = log::level_from_env();
     if let Err(e) = log::start(&paths::log(), level) {
         eprintln!("cornercase server: cannot write its log to {}: {e}", paths::log().display());
+    }
+    if let Some(state) = path.parent().filter(|dir| dir.is_absolute())
+        && let Err(e) = leave_launch_folder(state)
+    {
+        log::warning!("server", "could not leave the folder it started in", folder = state.display(), error = e);
     }
     let (tx, rx) = mpsc::channel();
     spawn_acceptor(listener, tx.clone());
