@@ -51,7 +51,7 @@ jobs:
         run: cargo test --locked
 
   windows:
-    name: clippy (windows-2025)
+    name: clippy + tests (windows-2025)
     runs-on: windows-2025
     timeout-minutes: 30
     env:
@@ -77,6 +77,9 @@ jobs:
 
       - name: clippy
         run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: tests
+        run: cargo test --locked
 
   guardrails:
     name: fmt + machete + jscpd
