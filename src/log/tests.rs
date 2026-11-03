@@ -1,3 +1,5 @@
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::time::UNIX_EPOCH;
 
 use rstest::rstest;

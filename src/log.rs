@@ -9,7 +9,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use crate::os::console::redirect_stderr;
-use crate::os::fs::{MetadataExt, OpenOptionsExt, set_file_mode, set_mode};
+use crate::os::fs::{OpenOptionsExt, set_file_mode, set_mode, stat, stat_file, truncate};
 use crate::time::Stamp;
 
 pub(crate) const LEVEL_ENV: &str = "CORNERCASE_LOG";
@@ -247,7 +247,7 @@ impl Sink {
         if let Err(e) = std::fs::rename(&self.path, rotated(&self.path)) {
             let note =
                 format!("could not keep the old log in {}, so it starts over: {e}", rotated(&self.path).display());
-            let _ = self.file.set_len(0);
+            let _ = truncate(&self.file, &self.path);
             let _ = self.file.write_all(note_line(Level::Error, &note).as_bytes());
             return;
         }
@@ -280,25 +280,25 @@ pub(crate) fn tail(path: &Path, lines: usize) -> io::Result<String> {
 pub(crate) struct Follower {
     path: PathBuf,
     file: File,
-    inode: u64,
+    id: (u64, u64),
 }
 
 impl Follower {
     pub(crate) fn at_end(path: &Path) -> io::Result<Self> {
         let mut file = File::open(path)?;
-        let inode = file.metadata()?.ino();
+        let id = stat_file(&file)?.id();
         file.seek(SeekFrom::End(0))?;
-        Ok(Self { path: path.to_path_buf(), file, inode })
+        Ok(Self { path: path.to_path_buf(), file, id })
     }
 
     pub(crate) fn read(&mut self) -> io::Result<Vec<u8>> {
         let mut new = Vec::new();
         self.file.read_to_end(&mut new)?;
-        let Ok(meta) = std::fs::metadata(&self.path) else { return Ok(new) };
+        let Ok(now) = stat(&self.path) else { return Ok(new) };
         let read_to = self.file.stream_position()?;
-        if meta.ino() != self.inode || meta.len() < read_to {
+        if now.id() != self.id || now.meta.len() < read_to {
             self.file = File::open(&self.path)?;
-            self.inode = meta.ino();
+            self.id = now.id();
             self.file.read_to_end(&mut new)?;
         }
         Ok(new)
