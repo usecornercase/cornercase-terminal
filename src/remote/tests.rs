@@ -422,13 +422,11 @@ mod proxy {
         assert!(matches!(rebuilt(ClientMessage::KillServer, "b".into()), ClientMessage::KillServer));
     }
 
-    #[cfg(unix)]
     struct Stalled {
         gate: mpsc::Receiver<()>,
         got: Arc<Mutex<Vec<u8>>>,
     }
 
-    #[cfg(unix)]
     impl Write for Stalled {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
             if self.got.lock().is_empty() {
@@ -443,7 +441,6 @@ mod proxy {
         }
     }
 
-    #[cfg(unix)]
     #[test]
     fn a_slow_ssh_never_holds_the_server_back() {
         let (mut server, proxy) = UnixStream::pair().expect("a socket pair");

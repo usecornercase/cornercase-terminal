@@ -31,8 +31,7 @@ pub(crate) fn unshare() {
 }
 
 #[cfg(test)]
-#[cfg(unix)]
-pub(crate) fn share_socket(stream: std::os::unix::net::UnixStream) {
+pub(crate) fn share_socket(stream: crate::os::socket::UnixStream) {
     share(Link::socket(stream).expect("a link"), None);
 }
 
