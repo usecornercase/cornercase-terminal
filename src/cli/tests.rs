@@ -963,6 +963,7 @@ mod cloning;
 mod flows;
 mod focus;
 mod known_agents;
+mod on_a_machine;
 mod terminal;
 
 mod reading_capped {

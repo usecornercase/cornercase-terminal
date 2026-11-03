@@ -25,6 +25,7 @@ enum Reply {
     Restarted,
     Down,
     Found(fn() -> Value),
+    Made(fn() -> Value),
 }
 
 impl Reply {
@@ -37,6 +38,7 @@ impl Reply {
             (Self::Restarted, Some(boot)) if boot != RESTARTED => {
                 refuse(Code::StaleBoot, format!("this request is for the cornercase server started as {boot}"))
             }
+            (Self::Made(made), _) => Structured::Ok(made()),
             _ => Structured::Ok(json!({})),
         }
     }
@@ -101,6 +103,13 @@ fn seeing(reply: Reply) -> Remote {
 }
 
 fn seeing_in(reply: Reply, report: control::Report) -> Remote {
+    let mut remote = unseen(reply);
+    serve(&mut remote.theirs, 1, report);
+    remote.rig.until("the snapshot arrives", |app| app.machines.held()[0].seen.is_some());
+    remote
+}
+
+fn unseen(reply: Reply) -> Remote {
     let mut rig = Rig::new(Vec::new(), There::Missing);
     let (ends, asked) = (Ends::default(), Asked::default());
     let (watched, given, seen) = (Arc::clone(&ends), Arc::clone(&asked), rig.seen.clone());
@@ -117,8 +126,7 @@ fn seeing_in(reply: Reply, report: control::Report) -> Remote {
     let mut theirs = ends.lock().remove(0);
     answer(&mut theirs, BOOT, version::CURRENT);
     request(&mut theirs);
-    serve(&mut theirs, 1, report);
-    rig.until("the snapshot arrives", |app| app.machines.held()[0].seen.is_some());
+    rig.until("the machine links", |app| app.machines.held()[0].status.state == State::Linked);
     let link = rig.links()[0];
     Remote { rig, theirs, asked, link, ends }
 }
@@ -356,3 +364,4 @@ mod the_row {
 mod dialogs;
 mod following;
 mod menus;
+mod relay;

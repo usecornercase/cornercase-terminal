@@ -9,6 +9,7 @@ use crate::agents::context::{self};
 use crate::agents::launch::{self};
 use crate::agents::usage;
 use crate::error::Result;
+use crate::git::clone::{Failure, files::Unwritten};
 use crate::graphics::encode;
 use crate::machines::stream::StreamEvent;
 use crate::term;
@@ -44,7 +45,7 @@ pub(crate) enum AppEvent {
     Login(crate::agents::Known, String, crate::accounts::login::Login),
     Restarted(Box<super::account_restart::Restarted>),
     Machine(MachineEvent),
-    Cloned { request: u64, result: std::result::Result<(), crate::git::clone::Failure> },
+    Cloned { request: u64, result: std::result::Result<Vec<Unwritten>, Failure> },
 }
 
 impl AppEvent {

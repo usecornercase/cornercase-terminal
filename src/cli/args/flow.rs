@@ -4,7 +4,7 @@ use clap::{Args, Subcommand, ValueEnum};
 
 use super::changes::Where;
 use super::{Create, Print, branch};
-use super::{accounts, issue};
+use super::{accounts, issue, machine};
 use crate::cli::help::{
     FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP,
     FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP, FLOW_SAVE_HELP,
@@ -24,7 +24,7 @@ pub(crate) enum FlowAction {
         about = "Start a flow in a worktree, and print its workspace's id and each role's pane id",
         after_help = FLOW_RUN_HELP
     )]
-    Run(FlowRunArgs),
+    Run(Box<FlowRunArgs>),
     #[command(
         about = "Print a flow as text to share it: a file to send to a teammate, or to commit",
         after_help = FLOW_EXPORT_HELP
@@ -295,6 +295,8 @@ pub(crate) struct FlowRunArgs {
     pub(crate) issue: issue::IssueArg,
     #[command(flatten)]
     pub(crate) profile: accounts::ProfileArg,
+    #[command(flatten)]
+    pub(crate) on: machine::MachineArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }

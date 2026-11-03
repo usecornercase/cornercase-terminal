@@ -421,6 +421,10 @@ mod logins {
         (bin, out)
     }
 
+    fn installed(info: &AccountsInfo, agent: &str) -> Option<(String, bool)> {
+        info.agents.iter().find(|a| a.agent == agent).map(|a| (a.command.clone(), a.installed))
+    }
+
     fn checked(s: &mut Setup) -> AccountsInfo {
         let reply = asked(&mut s.app, &s.rx, "account-list", &json!({"check": true})).expect("the accounts");
         serde_json::from_value(reply).expect("the accounts")
@@ -452,6 +456,23 @@ mod logins {
         assert!(ran.lines().any(|line| line == format!("auth status --json|{}", home.display())), "{ran}");
         let listed = s.info("account-list", &json!({}));
         assert_eq!(login(&listed, "claude", "work").map(|l| l.state), Some(State::SignedIn));
+        assert_eq!(installed(&info, "claude").map(|(_, found)| found), Some(true));
+    }
+
+    #[test]
+    fn a_check_says_which_agents_this_server_can_run_and_a_plain_list_does_not() {
+        let mut s = setup();
+        let bin = TempDir::new();
+        let codex = bin.path().join("codex").display().to_string();
+        write_executable(&bin.path().join("codex"), CODEX_STATUS);
+        s.app.config.agent_commands.insert("claude".into(), "/nonexistent/claude".into());
+        s.app.config.agent_commands.insert("codex".into(), codex.clone());
+
+        let info = s.info("account-list", &json!({"check": true}));
+
+        assert_eq!(installed(&info, "claude"), Some(("/nonexistent/claude".into(), false)));
+        assert_eq!(installed(&info, "codex"), Some((codex, true)));
+        assert_eq!(s.info("account-list", &json!({})).agents, []);
     }
 
     #[test]

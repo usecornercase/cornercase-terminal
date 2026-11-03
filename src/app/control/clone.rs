@@ -1,5 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use ratatui::layout::Rect;
 use serde_json::Value;
 
@@ -8,9 +10,11 @@ use crate::app::App;
 use crate::app::event::AppEvent;
 use crate::config;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{CloneRepository, Cloned, Done, Item};
-use crate::git::clone::{self, Failure};
+use crate::control::{CloneFile, CloneRepository, Cloned, Done, Item, Unwritten};
+use crate::git::clone::files::{self, File, MAX_FILES, MAX_TOTAL_BYTES};
+use crate::git::clone::{self, Failure, Target};
 use crate::log::{self, Job, Level};
+use crate::machines::send;
 
 pub(super) struct Cloning {
     path: PathBuf,
@@ -20,7 +24,7 @@ pub(super) struct Cloning {
 
 fn refusal(failure: &Failure) -> Refusal {
     let code = match failure {
-        Failure::NoName | Failure::GitFolder => Code::Malformed,
+        Failure::NoName | Failure::GitFolder | Failure::Files(_) => Code::Malformed,
         Failure::NotEmpty(_) => Code::Conflict,
         Failure::NotRepository(_) => Code::NotFound,
         Failure::Folder(_) | Failure::AccessDenied(_) | Failure::Failed(_) => Code::Failed,
@@ -52,6 +56,32 @@ fn checked_parent(parent: PathBuf, given: &Path) -> Result<PathBuf, Refusal> {
     Ok(parent)
 }
 
+fn decoded(files: &[CloneFile]) -> Result<Vec<File>, Failure> {
+    if files.len() > MAX_FILES {
+        return Err(Failure::Files(format!("the files are over the {MAX_FILES} a clone takes")));
+    }
+    let mut total = 0;
+    let mut decoded = Vec::with_capacity(files.len());
+    for (at, file) in files.iter().enumerate() {
+        total += file.size();
+        if total > MAX_TOTAL_BYTES {
+            let limit = MAX_TOTAL_BYTES >> 20;
+            return Err(Failure::Files(format!("the files are over the {limit} MiB a clone takes")));
+        }
+        let bytes = STANDARD
+            .decode(&file.data)
+            .map_err(|e| Failure::Files(format!("the `data` of files[{at}] is not base64: {e}")))?;
+        decoded.push(File { path: file.path.clone(), bytes, mode: file.mode });
+    }
+    Ok(decoded)
+}
+
+fn clone_with(target: &Target, files: &[CloneFile]) -> Result<Vec<files::Unwritten>, Failure> {
+    let files = decoded(files).inspect_err(|_| target.undo())?;
+    clone::run(target)?;
+    Ok(files::write(&target.path, &files))
+}
+
 fn overlapping<'a>(pending: &'a Pending, path: &Path) -> Option<&'a Path> {
     match &pending.stage {
         Stage::Clone(cloning) if cloning.path.starts_with(path) || path.starts_with(&cloning.path) => {
@@ -62,9 +92,9 @@ fn overlapping<'a>(pending: &'a Pending, path: &Path) -> Option<&'a Path> {
 }
 
 impl App {
-    pub(super) fn clone_request(&mut self, asked: Asked, request: &CloneRepository) -> Handled {
+    pub(super) fn clone_request(&mut self, asked: Asked, request: CloneRepository) -> Handled {
         sized(asked.area)?;
-        let (url, path) = self.clone_destination(request)?;
+        let (url, path) = self.clone_destination(&request)?;
         if let Some(running) = self.clients.requests.pending.iter().find_map(|p| overlapping(p, &path)) {
             let message = format!("a clone into `{}` is already running", running.display());
             return Err(Refusal::new(Code::Busy, message));
@@ -72,13 +102,17 @@ impl App {
         let target = clone::prepare(&url, path.clone()).map_err(|failure| refusal(&failure))?;
         let key = self.clients.requests.key();
         let job = Job::new(Level::Info, "git", "clone").with("path", path.display());
+        let job = job.with("files", request.files.len()).with("bytes", send::bytes(&request.files));
+        let files = request.files;
         self.spawn_job(
             job,
-            move || Ok(clone::run(&target)),
+            move || Ok(clone_with(&target, &files)),
             move |result, job| {
                 let result = result.unwrap_or_else(|e| Err(Failure::Failed(e.to_string())));
-                if let Err(failure) = &result {
-                    job.fail(failure.kind());
+                match &result {
+                    Ok(unwritten) if !unwritten.is_empty() => job.note("unwritten", unwritten.len()),
+                    Ok(_) => {}
+                    Err(failure) => job.fail(failure.kind()),
                 }
                 Some(AppEvent::Cloned { request: key, result })
             },
@@ -97,21 +131,29 @@ impl App {
         Ok((url, path))
     }
 
-    pub(in crate::app) fn clone_answered(&mut self, key: u64, result: Result<(), Failure>, area: Rect) {
+    pub(in crate::app) fn clone_answered(
+        &mut self,
+        key: u64,
+        result: Result<Vec<files::Unwritten>, Failure>,
+        area: Rect,
+    ) {
         let Some(pending) = self.clients.requests.take(key) else { return };
         let Stage::Clone(cloning) = pending.stage else { return };
-        let reply = result.map_err(|failure| refusal(&failure)).and_then(|()| self.cloned(&cloning, area));
+        let reply = result.map_err(|failure| refusal(&failure)).and_then(|unwritten| {
+            let unwritten = unwritten.into_iter().map(|file| Unwritten { path: file.path, why: file.why }).collect();
+            self.cloned(&cloning, unwritten, area)
+        });
         self.refuse_or_answer(pending.client, reply);
     }
 
-    fn cloned(&mut self, cloning: &Cloning, area: Rect) -> Result<Value, Refusal> {
+    fn cloned(&mut self, cloning: &Cloning, unwritten: Vec<Unwritten>, area: Rect) -> Result<Value, Refusal> {
         let path = cloning.path.canonicalize().unwrap_or_else(|_| cloning.path.clone());
         let p = self.open_folder(path.clone(), Some(area)).map_err(|e| {
             format!("the repository was cloned into `{}`, but it could not be opened as a project: {e}", path.display())
         })?;
         let ids = self.shown_ids(p);
         let projection = self.show_clone(cloning, self.projects[p].id)?;
-        Ok(json(&Cloned { path, ids, projection }))
+        Ok(json(&Cloned { path, ids, projection, unwritten }))
     }
 
     fn show_clone(&mut self, cloning: &Cloning, project: u64) -> Result<Option<u64>, Refusal> {

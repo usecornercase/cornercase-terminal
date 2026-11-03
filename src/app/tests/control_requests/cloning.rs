@@ -1,6 +1,11 @@
+use std::os::unix::fs::PermissionsExt;
+
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use rstest::rstest;
 
 use super::*;
+use crate::git::clone::files::MAX_TOTAL_BYTES;
 use crate::test_util::FakeHttp;
 
 fn clone_args(url: &str, parent: &Path) -> Value {
@@ -227,6 +232,84 @@ mod a_clone {
             !app.projects.is_empty()
         });
         assert_eq!(app.take_answers(), Vec::new());
+    }
+}
+
+mod a_clone_with_files {
+    use super::*;
+
+    fn with_files(repo: &TempDir, parent: &TempDir, files: &Value) -> Value {
+        json!({"url": repo.path().display().to_string(), "parent": parent.path(), "files": files})
+    }
+
+    fn the_clone(repo: &TempDir, parent: &TempDir) -> PathBuf {
+        parent.path().join(repo.path().file_name().expect("a name"))
+    }
+
+    #[test]
+    fn writes_them_in_the_clone_and_answers_those_it_could_not_write() {
+        let repo = git_repo(&[("config/app.json", "{\"tracked\": true}")]);
+        let parent = TempDir::new();
+        let (mut app, rx) = empty_app();
+        let files = json!([
+            {"path": ".env", "data": STANDARD.encode("KEY=1\n"), "mode": 0o600},
+            {"path": "config/app.json", "data": STANDARD.encode("{}"), "mode": 0o644},
+        ]);
+
+        let answer = asked(&mut app, &rx, "clone", &with_files(&repo, &parent, &files)).expect("cloned");
+
+        let clone = the_clone(&repo, &parent);
+        assert_eq!(answer["unwritten"], json!([{"path": "config/app.json", "why": "it is already in the clone"}]));
+        assert_eq!(std::fs::read_to_string(clone.join(".env")).expect("written"), "KEY=1\n");
+        let mode = std::fs::metadata(clone.join(".env")).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(std::fs::read_to_string(clone.join("config/app.json")).expect("kept"), "{\"tracked\": true}");
+        assert_eq!(app.projects.len(), 1);
+    }
+
+    #[test]
+    fn that_all_land_answers_without_unwritten() {
+        let repo = git_repo(&[("README.md", "hi\n")]);
+        let parent = TempDir::new();
+        let (mut app, rx) = empty_app();
+        let files = json!([{"path": "config/secrets.dev.json", "data": STANDARD.encode("{}")}]);
+
+        let answer = asked(&mut app, &rx, "clone", &with_files(&repo, &parent, &files)).expect("cloned");
+
+        assert_eq!(answer.get("unwritten"), None);
+        let written = the_clone(&repo, &parent).join("config/secrets.dev.json");
+        assert_eq!(std::fs::metadata(written).expect("written").permissions().mode() & 0o777, 0o644);
+    }
+
+    #[test]
+    fn that_is_not_base64_is_malformed_and_clones_nothing() {
+        let repo = git_repo(&[("README.md", "hi\n")]);
+        let parent = TempDir::new();
+        let (mut app, rx) = empty_app();
+        let files = json!([{"path": ".env", "data": "not base64!"}]);
+
+        let refused = asked(&mut app, &rx, "clone", &with_files(&repo, &parent, &files)).expect_err("refused");
+
+        assert_eq!(refused.code, "malformed", "{}", refused.message);
+        assert!(refused.message.contains("files[0] is not base64"), "{}", refused.message);
+        assert!(!refused.message.contains(".env"), "{}", refused.message);
+        assert!(!the_clone(&repo, &parent).exists(), "no folder is left");
+        assert!(app.projects.is_empty());
+    }
+
+    #[test]
+    fn over_the_total_size_is_malformed_and_clones_nothing() {
+        let repo = git_repo(&[("README.md", "hi\n")]);
+        let parent = TempDir::new();
+        let (mut app, rx) = empty_app();
+        let half = STANDARD.encode(vec![b'x'; usize::try_from(MAX_TOTAL_BYTES / 2 + 1).expect("a size")]);
+        let files = json!([{"path": "a.bin", "data": half}, {"path": "b.bin", "data": half}]);
+
+        let refused = asked(&mut app, &rx, "clone", &with_files(&repo, &parent, &files)).expect_err("refused");
+
+        assert_eq!(refused.code, "malformed", "{}", refused.message);
+        assert!(refused.message.contains("over the 8 MiB"), "{}", refused.message);
+        assert!(!the_clone(&repo, &parent).exists(), "no folder is left");
     }
 }
 

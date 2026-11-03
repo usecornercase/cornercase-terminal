@@ -6,9 +6,9 @@ use super::link;
 use crate::control::contract::{Code, Refusal, Structured};
 use crate::control::{Close, Command, Item, RemovalCheck, Rename};
 
-const QUICK: Duration = Duration::from_secs(15);
+pub(super) const QUICK: Duration = Duration::from_secs(15);
 const CHECK: Duration = Duration::from_secs(60);
-const REMOVE: Duration = Duration::from_mins(10);
+pub(super) const REMOVE: Duration = Duration::from_mins(10);
 pub(crate) const UNREADABLE: &str = "its answer could not be read";
 pub(crate) const WARNING: &str = "warning";
 

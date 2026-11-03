@@ -310,28 +310,31 @@ impl App {
     }
 
     fn waiting_on(&self, stage: &Stage, pane: u64) -> String {
-        let watch = match stage {
-            Stage::Worktree(_) | Stage::Run(..) => return "git is still creating the worktree".into(),
-            Stage::Removing { .. } => return "git is still removing the worktree".into(),
-            Stage::Check => return "git is still checking the worktree".into(),
-            Stage::Issue(asking) => return format!("{} is still looking the issue up", asking.source().name()),
-            Stage::Usage(_) => return "the agents have not said their usage yet".into(),
-            Stage::Ports | Stage::Processes | Stage::Machines(_) | Stage::Clone(_) => return stage.listing().into(),
-            Stage::Held(_) => return held::waiting(pane, self.blocked(pane, Instant::now())),
-            Stage::Launch { .. } => return format!("pane {pane} is still starting"),
-            Stage::Setup(workspace) => {
-                return format!("workspace {workspace} is still running its setup in pane {pane}");
+        match stage {
+            Stage::Worktree(_) | Stage::Run(..) => "git is still creating the worktree".into(),
+            Stage::Removing { .. } => "git is still removing the worktree".into(),
+            Stage::Check => "git is still checking the worktree".into(),
+            Stage::Issue(asking) => format!("{} is still looking the issue up", asking.source().name()),
+            Stage::Usage(_) => "the agents have not said their usage yet".into(),
+            Stage::Ports | Stage::Processes | Stage::Machines(_) | Stage::Clone(_) | Stage::Relay(_) => {
+                stage.listing().into()
             }
-            Stage::Confirm(confirm) => return self.unrecorded(confirm),
-            Stage::Reading => return format!("the record of pane {pane} is still being read"),
-            Stage::Restart { caller } => return holding(&self.holding(*caller, Instant::now())),
+            Stage::Held(_) => held::waiting(pane, self.blocked(pane, Instant::now())),
+            Stage::Launch { .. } => format!("pane {pane} is still starting"),
+            Stage::Setup(workspace) => format!("workspace {workspace} is still running its setup in pane {pane}"),
+            Stage::Confirm(confirm) => self.unrecorded(confirm),
+            Stage::Reading => format!("the record of pane {pane} is still being read"),
+            Stage::Restart { caller } => holding(&self.holding(*caller, Instant::now())),
             Stage::Several { parts, .. } => {
                 let pending = parts.iter().filter(|part| part.done.ended.is_none());
                 let waits = pending.map(|part| self.waiting_on(&part.stage, part.done.ids.pane.unwrap_or_default()));
-                return waits.collect::<Vec<_>>().join("; ");
+                waits.collect::<Vec<_>>().join("; ")
             }
-            Stage::Watch(watch) => watch,
-        };
+            Stage::Watch(watch) => self.watching(watch),
+        }
+    }
+
+    fn watching(&self, watch: &Watch) -> String {
         let pane = watch.pane;
         let Some(term) = self.projects.pane_by(pane) else { return format!("pane {pane} closed") };
         match &watch.until {

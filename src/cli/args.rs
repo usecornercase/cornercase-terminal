@@ -6,6 +6,7 @@ pub(crate) mod config;
 pub(crate) mod files;
 pub(crate) mod flow;
 pub(crate) mod issue;
+pub(crate) mod machine;
 pub(crate) mod machines;
 pub(crate) mod plugin;
 pub(crate) mod ports;
@@ -397,6 +398,8 @@ pub(crate) struct NewWorkspaceArgs {
     #[arg(long, help = "Check the branch out in a git worktree of its own, at a repository's root only")]
     pub(crate) worktree: bool,
     #[command(flatten)]
+    pub(crate) on: machine::MachineArg,
+    #[command(flatten)]
     pub(crate) create: Create,
 }
 
@@ -482,6 +485,8 @@ pub(crate) struct StartArgs {
     pub(crate) issue: issue::IssueArg,
     #[command(flatten)]
     pub(crate) profile: accounts::ProfileArg,
+    #[command(flatten)]
+    pub(crate) on: machine::MachineArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }

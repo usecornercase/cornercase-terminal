@@ -180,6 +180,13 @@ cornercase stats --machine all
 cornercase usage --machine all --json
 ```
 
+`start`, `new-workspace` and `flow run` take `--machine NAME` too: your server sends the command to that machine's server, which starts the agent, the workspace or the flow there, with its own accounts, agents and trackers. `--project` and `--workspace`, and the ids printed, are the machine's, as `status` lists them under it; `--focus` shows what started once the machine lists it, and `--wait`, `--until` and `--timeout` are refused. See [Start work on a machine](../../guides/scripts-and-agents/#start-work-on-a-machine).
+
+```sh
+cornercase start claude --issue '#482' --project 2 --machine vps --focus
+cornercase flow run Quick --prompt 'Fix the login form' --project 2 --machine vps
+```
+
 ### `cornercase tour`
 
 Shows the [guided tour](../../first-steps/#the-guided-tour-and-help) in the window, where it stopped. `tour start TOUR` starts another one (`--step` at a step), `next`, `back`, `skip` and `end` move it, `complete TOUR STEP` marks a step done, and `reset [TOUR]` forgets the progress. `tour list` prints every tour and its steps with your progress; with `--json` the steps come as data (ids, texts, what each points at and what completes it), so another UI can draw the same tour, and `start --no-card` keeps the window's card hidden for it.

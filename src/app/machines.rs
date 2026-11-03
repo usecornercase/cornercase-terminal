@@ -30,6 +30,7 @@ mod drag;
 mod mouse;
 mod notices;
 pub(super) mod panels;
+pub(super) mod relay;
 mod repo;
 mod report;
 mod rows;
@@ -59,6 +60,7 @@ pub(crate) enum MachineEvent {
     Followed(Followed),
     Read(Box<panels::FileRead>),
     Stream(StreamReport),
+    Relayed(relay::Relayed),
 }
 
 impl From<Report> for AppEvent {
@@ -94,6 +96,8 @@ pub(super) struct Machines {
     pub(super) acting: acting::Acting,
     selection: Option<selection::RemoteSelection>,
     pub(super) panels: panels::RemotePanels,
+    awaited: Option<selection::Awaited>,
+    picks: u64,
     folded: Vec<(String, PathBuf)>,
     watched: Option<stream::Watched>,
     streams: u64,
@@ -115,6 +119,8 @@ impl Machines {
             acting: acting::Acting::default(),
             selection: None,
             panels: panels::RemotePanels::default(),
+            awaited: None,
+            picks: 0,
             folded: Vec::new(),
             watched: None,
             streams: 1,
@@ -225,6 +231,7 @@ impl App {
         self.refresh_machines_page();
         self.follow_stream();
         self.drop_late_typed(now);
+        self.drop_late_awaited(now);
     }
 
     pub(super) fn follow_machines(&mut self) {
@@ -292,6 +299,7 @@ impl App {
             MachineEvent::Followed(followed) => self.remote_followed(followed),
             MachineEvent::Read(read) => self.remote_file_read(*read),
             MachineEvent::Stream(report) => self.stream_reported(report),
+            MachineEvent::Relayed(relayed) => self.relayed(relayed),
         }
     }
 
@@ -431,5 +439,6 @@ impl App {
         self.machines.synced.clear();
         self.machines.selection = None;
         self.machines.panels.reset();
+        self.machines.awaited = None;
     }
 }

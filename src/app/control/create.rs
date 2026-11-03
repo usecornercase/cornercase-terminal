@@ -14,6 +14,7 @@ use crate::control::contract::Refusal;
 use crate::control::{self, Done, Ids, Item};
 use crate::error;
 use crate::git;
+use crate::machines::send::Send;
 use crate::project::split::Dir;
 use crate::project::{Hierarchy, WorkspaceAt};
 
@@ -81,6 +82,9 @@ impl App {
         new: control::NewWorkspace,
         area: Option<Rect>,
     ) -> Handled {
+        if let Some(machine) = new.machine.clone() {
+            return self.relay_request(client, &machine, Send::NewWorkspace(new));
+        }
         let area = sized(area)?;
         let name = name_of(Some(new.name)).ok_or("the workspace needs a name")?;
         let p = self.project_of(asker, new.project)?;
@@ -143,6 +147,9 @@ impl App {
     }
 
     pub(super) fn start_request(&mut self, asked: Asked, start: control::Start) -> Handled {
+        if let Some(machine) = start.machine.clone() {
+            return self.relay_request(asked.client, &machine, Send::Start(start));
+        }
         let area = sized(asked.area)?;
         let timeout = deadline(start.timeout, asked.now)?;
         let accounts = self.requested_accounts_from(asked.asker.caller, start.profile.as_deref(), &start.accounts)?;

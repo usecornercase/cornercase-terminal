@@ -240,7 +240,7 @@ impl Open {
 impl NewWorkspace {
     fn fields(&self, fields: &mut Fields) {
         fields.add("name", &self.name).maybe("project", self.project).add("worktree", self.worktree);
-        fields.add("focus", self.focus);
+        fields.add("focus", self.focus).maybe("machine", self.machine.as_ref());
     }
 }
 
@@ -270,6 +270,7 @@ impl Start {
         fields.add("wait", self.wait).maybe("until", self.wait.then(|| self.until.name()));
         fields.maybe("timeout", self.timeout).add("focus", self.focus);
         fields.maybe("profile", self.profile.as_ref()).maybe("accounts", chosen(&self.accounts));
+        fields.maybe("machine", self.machine.as_ref());
     }
 }
 

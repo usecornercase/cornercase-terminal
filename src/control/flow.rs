@@ -28,6 +28,8 @@ pub(crate) struct FlowRun {
     pub(crate) focus: bool,
     pub(crate) profile: Option<String>,
     pub(crate) accounts: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -405,6 +407,7 @@ impl FlowRun {
         fields.add("prompt_bytes", self.prompt.len()).add("focus", self.focus);
         fields.add("issue", self.issue.is_some()).maybe("source", self.source.as_ref());
         fields.maybe("profile", self.profile.as_ref()).maybe("accounts", super::chosen(&self.accounts));
+        fields.maybe("machine", self.machine.as_ref());
     }
 }
 

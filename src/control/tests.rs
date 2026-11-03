@@ -516,9 +516,49 @@ fn an_imports_logged_fields_carry_its_size_and_never_its_text() {
 #[test]
 fn a_clones_logged_fields_carry_its_folder_and_never_its_url() {
     let url = "https://ana:SECRET@example.com/acme/shop.git".into();
-    let clone = CloneRepository { url, parent: "/srv/src".into(), focus: true };
+    let clone = CloneRepository { url, parent: "/srv/src".into(), focus: true, files: Vec::new() };
     let fields = Command::Clone(clone).fields();
     assert_eq!(fields, [("parent", "/srv/src".to_string()), ("focus", "true".to_string())]);
+}
+
+#[test]
+fn a_clones_logged_fields_count_its_files_and_never_carry_them() {
+    let file = CloneFile { path: ".env".into(), data: "S0VZPVNFQ1JFVA==".into(), mode: 0o600 };
+    let clone = CloneRepository { files: vec![file.clone(), file], ..CloneRepository::default() };
+    let fields = Command::Clone(clone).fields();
+    assert!(fields.contains(&("files", "2".to_string())), "{fields:?}");
+    assert!(fields.iter().all(|(_, value)| !value.contains(".env") && !value.contains("S0VZ")), "{fields:?}");
+}
+
+#[test]
+fn a_clone_without_files_reads_and_writes_as_before() {
+    let clone =
+        CloneRepository { url: "/srv/shop.git".into(), parent: "/srv/src".into(), ..CloneRepository::default() };
+    let cloned = Cloned { path: "/srv/src/shop".into(), ..Cloned::default() };
+
+    assert_eq!(
+        serde_json::to_value(&clone).expect("json"),
+        json!({"url": "/srv/shop.git", "parent": "/srv/src", "focus": false})
+    );
+    assert_eq!(serde_json::to_value(&cloned).expect("json"), json!({"path": "/srv/src/shop"}));
+}
+
+#[rstest::rstest]
+#[case::start(Command::Start(Start::default()), Command::Start(Start { machine: Some("vps".into()), ..Start::default() }))]
+#[case::new_workspace(
+    Command::NewWorkspace(NewWorkspace::default()),
+    Command::NewWorkspace(NewWorkspace { machine: Some("vps".into()), ..NewWorkspace::default() })
+)]
+#[case::flow_run(
+    Command::FlowRun(FlowRun::default()),
+    Command::FlowRun(FlowRun { machine: Some("vps".into()), ..FlowRun::default() })
+)]
+fn a_start_names_its_machine_only_when_it_has_one(#[case] here: Command, #[case] there: Command) {
+    let sent = |command: &Command| serde_json::to_value(command).expect("json")["args"].get("machine").cloned();
+
+    assert_eq!((sent(&here), sent(&there)), (None, Some(json!("vps"))));
+    assert!(!here.fields().iter().any(|(key, _)| *key == "machine"), "{:?}", here.fields());
+    assert!(there.fields().contains(&("machine", "vps".to_string())), "{:?}", there.fields());
 }
 
 mod events_v1 {

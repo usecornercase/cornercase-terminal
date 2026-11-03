@@ -14,6 +14,7 @@ pub(crate) mod form;
 pub(crate) mod heard;
 pub(crate) mod link;
 pub(crate) mod repo;
+pub(crate) mod send;
 pub(crate) mod stream;
 pub(crate) mod wake;
 
