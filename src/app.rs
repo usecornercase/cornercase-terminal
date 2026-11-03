@@ -37,6 +37,7 @@ use crate::issues::browser::Tab as IssueTab;
 use crate::issues::cache::Cache as IssueCache;
 #[cfg(test)]
 use crate::issues::{Account, Source};
+use crate::os::process::launch_folder;
 use crate::paths;
 use crate::project::search::said;
 use crate::project::split::Dir;
@@ -350,7 +351,7 @@ impl App {
     }
 
     pub(crate) fn open_here(&mut self, area: Rect) -> Result<()> {
-        let here = std::env::current_dir().ok().or_else(|| self.home.clone()).unwrap_or_else(|| PathBuf::from("/"));
+        let here = launch_folder().or_else(|| self.home.clone()).unwrap_or_else(|| PathBuf::from("/"));
         self.open_project(here, area)
     }
 
