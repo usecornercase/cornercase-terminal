@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.265
+
+- **Another step towards running natively on Windows: panes there now run their shell in ConPTY**, Windows' own pseudo console. A new pane starts your `SHELL` when Windows can start it, else PowerShell 7 (`pwsh`), else Windows PowerShell, else `cmd`, with the folder, size and variables cornercase gives it; the tab's name follows the program you run, and a shell that exits closes its pane. cornercase still says it does not run on Windows yet, since the window and the server are not ported. Nothing changes on Linux and macOS.
+
 ## 0.12.261
 
 - **On Windows, cornercase can now stop a program and everything it started**, the next step of the native port (it still says it does not run on Windows yet). A program with a window is asked to close it and ended if it still runs 3 s later; a console program, which has no window to close, is ended at once. On Windows the dialogs and `cornercase processes stop` and `ports stop` say so without naming Unix signals. Nothing changes on Linux and macOS.
