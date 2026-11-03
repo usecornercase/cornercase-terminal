@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **On Windows, project, workspace and worktree folders are stored and shown without the `\\?\` prefix**, and sessions saved with it open with plain folders. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
 
+## 0.12.268
+
+- **On Windows, the cornercase server stops cleanly when you sign out, restart or shut down**, the next step of the native port (it still says it does not run on Windows yet). Windows asks it before the programs in its panes, and it stops the way `kill-server` stops it: plugins stop and the TODO list, the queue and the stats are saved, without holding up the end of the session for more than a few seconds. `taskkill /pid` without `/f` stops it the same way. Nothing changes on Linux and macOS.
+
 ## 0.12.266
 
 - **On Windows, the Ports dialog and `cornercase ports` list the TCP ports a workspace's programs listen on**, another step towards running cornercase natively there. It still says it does not run on Windows yet. Nothing changes on Linux and macOS.
