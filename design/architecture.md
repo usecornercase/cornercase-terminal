@@ -51,6 +51,7 @@ src/discord/      Discord: REST, gateway.rs (WebSocket), markdown.rs, forum.rs (
 src/term.rs       a shell in a PTY and its Emulator; term/reader.rs forwards output with permits held through parsing; term/emulator.rs wraps libghostty-vt and takes plain Snapshots for ui
                   term/status.rs OSC 7501 reports, records and lifetimes; term/status/stream.rs bounded escape parsing
                   term/keys.rs KeyEvent -> bytes; term/mouse.rs MouseEvent -> bytes; term/memory.rs how much memory a pane uses
+                  term/shell.rs the shell a new pane starts ($SHELL, or on Windows pwsh, Windows PowerShell or %COMSPEC%)
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state)
 src/tour.rs       the guided tours: steps, what completes each, the section each opens, progress in tour.json, first-run detection; tour/steps.rs the tours as data
 src/processes/    every pane's process tree with CPU and memory: mod.rs (the model and the CPU arithmetic), sample.rs (the job that walks the trees), stop.rs (a process and what it started), dialog.rs (the Processes dialog's rows, sort, filter, keys and confirmation)

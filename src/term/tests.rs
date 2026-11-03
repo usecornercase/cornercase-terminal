@@ -397,3 +397,6 @@ mod kill {
         assert!(exited, "no Exited(1) event received");
     }
 }
+
+#[cfg(windows)]
+mod on_windows;

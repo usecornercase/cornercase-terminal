@@ -54,7 +54,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Keeping awake](design/keeping-awake.md) (`agents/awake.rs`, `os/desktop.rs`, `app/agent_watch.rs`, #600): holding off idle sleep while agents work.
 - [Flows](design/flows.md) (`flows/`, `app/flow_runs.rs`, `app/flow_panel.rs`, `app/flows_dialog.rs`, `app/start_flow_dialog.rs`, `app/control/flow.rs`, `app/control/flow/`, `control/flow.rs`, `cli/flow.rs`, `ui/flow.rs`, `ui/flow/`, `ui/dialog/flows.rs`, `ui/dialog/start_flow.rs`, #263): teams of agents run by an orchestrator, the Flow panel.
 - [Settings](design/settings.md) (`config.rs`, `settings.rs`, `settings/`, `settings/share.rs`, `app/settings_dialog.rs`, `app/share_settings.rs`, `app/share_settings_dialog.rs`, `ui/dialog/share_settings.rs`, #414): the settings modal, `config.json` watched, the `config` request, sharing settings with a colleague.
-- [Terminals](design/terminals.md) (`term.rs`, `term/emulator.rs`): libghostty-vt, writes to a PTY, colours, snapshots.
+- [Terminals](design/terminals.md) (`term.rs`, `term/emulator.rs`, `term/shell.rs`): libghostty-vt, writes to a PTY, colours, snapshots, the default shell, ConPTY.
 - [Keys and mouse](design/keys-and-mouse.md) (`term/keys.rs`, `term/mouse.rs`, `app/input.rs`, `app/panes.rs`): decoding input, encoding keys and mouse, selection.
 - [Scrollback](design/scrollback.md) (`term/emulator.rs`, `app/panes.rs`, `ui/pane.rs`): the wheel in a pane's history.
 - [Keyboard shortcuts](design/keyboard-shortcuts.md) (`shortcuts.rs`, `app/shortcuts.rs`, `ui/keys.rs`): the opt-in prefix key and the keys menu.
@@ -69,7 +69,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Plugins](design/plugins.md) (`plugins/`, `app/plugins.rs`, `app/plugin_popup.rs`, `ui/dialog/popup.rs`, `cli/plugin.rs`, `client/window.rs`): manifests, trust, actions, buttons, popups, hooks, services, installing, the catalogue.
 - [Updates](design/updates.md) (`update.rs`, `cli/update.rs`, `version.rs`, `http.rs`, `app/update_dialog.rs`): checking, installing and restarting, also once agents are idle.
 - [Releases](design/releases.md) (`.github/`, `dist-workspace.toml`): how a push to `main` becomes a release.
-- [Windows](design/windows.md) (`os.rs`, `os/`, `paths.rs`, `.github/workflows/ci.yml`, #586, #588, #589, #590, #600): the native Windows port, step by step, the per-OS layer and its stubs, git's paths, its CI job, the folders, file modes, identity and links.
+- [Windows](design/windows.md) (`os.rs`, `os/`, `paths.rs`, `term.rs`, `term/shell.rs`, `.github/workflows/ci.yml`, #586, #588, #589, #590, #594, #600): the native Windows port, step by step, the per-OS layer and its stubs, git's paths, its CI job, the folders, file modes, identity and links, panes in ConPTY and the default shell.
 - [Saved session](design/saved-session.md) (`state.rs`, `persist.rs`, `app.rs`, `app/session.rs`, `app/closed_agents.rs`, `app/closed_agents/`, `control/closed_agents.rs`, `cli/agents.rs`, #430): `session.json`, restoring, resuming agents, closing a workspace's agents and reopening them.
 - [Website](design/website.md) (`site/`): the brand, the landing demo, captures, translations.
 - [Test helpers](design/test-helpers.md) (`test_util.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot,vibe}/fake.rs`, `app/tests.rs`): fakes, fixtures, keeping tests away from the user's files.

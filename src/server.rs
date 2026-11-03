@@ -33,6 +33,7 @@ use crate::persist::{self, Saver};
 use crate::protocol::{self, ClientMessage, Folder, ServerMessage};
 use crate::queue;
 use crate::state;
+use crate::term::shell;
 use crate::todo;
 use crate::version;
 
@@ -303,8 +304,7 @@ pub(crate) fn run() -> Result<()> {
     let (app_tx, app_rx) = mpsc::channel();
     spawn_forwarder(app_rx, tx.clone());
 
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-    let mut app = App::new(shell, HostTheme::default(), paths::config(), app_tx);
+    let mut app = App::new(shell::default(), HostTheme::default(), paths::config(), app_tx);
     let session = paths::session();
     log_started(&path, &session, level);
     let todo_saver = prepare_app(&mut app, &path, &session);
