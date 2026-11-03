@@ -231,7 +231,7 @@ impl Reader {
             return Some(dir.to_path_buf());
         }
         if self.home.as_ref().is_none_or(|(pid, args, _)| *pid != look.pid || *args != look.args) {
-            let own = (look.pid > 0).then(|| own_dir(crate::process::env(look.pid))).flatten();
+            let own = (look.pid > 0).then(|| own_dir(&crate::process::env(look.pid))).flatten();
             self.home = Some((look.pid, look.args.clone(), own));
         }
         self.home.as_ref().and_then(|(_, _, own)| own.clone()).or_else(|| look.claude_dir.map(Path::to_path_buf))
@@ -272,9 +272,8 @@ pub(crate) fn claude_dir(home: Option<&Path>) -> Option<PathBuf> {
     claude_dir_from(std::env::var_os(CLAUDE_DIR_ENV), home)
 }
 
-fn own_dir(env: Vec<(String, String)>) -> Option<PathBuf> {
-    let (_, dir) = env.into_iter().find(|(name, _)| name == CLAUDE_DIR_ENV)?;
-    Some(PathBuf::from(dir)).filter(|dir| dir.is_absolute())
+fn own_dir(env: &[(String, String)]) -> Option<PathBuf> {
+    Some(PathBuf::from(discovery::variable(env, CLAUDE_DIR_ENV)?)).filter(|dir| dir.is_absolute())
 }
 
 fn claude_dir_from(env: Option<OsString>, home: Option<&Path>) -> Option<PathBuf> {

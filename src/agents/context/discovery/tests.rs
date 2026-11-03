@@ -24,6 +24,14 @@ fn an_npm_script_is_matched_by_its_last_folders(#[case] arg: &str, #[case] expec
     assert_eq!(npm_script(arg, &["codex", "bin", "codex.js"]), expected);
 }
 
+#[test]
+fn a_variable_is_named_in_any_case_only_on_windows_and_never_empty() {
+    let env = vec![("CODEX_HOME".to_string(), String::new()), ("Codex_Home".to_string(), "x".to_string())];
+    assert_eq!(variable(&env, "CODEX_HOME"), if cfg!(windows) { Some("x") } else { None });
+    assert_eq!(variable(&env, "Codex_Home"), Some("x"));
+    assert_eq!(variable_key("Codex_Home".to_string()), if cfg!(windows) { "CODEX_HOME" } else { "Codex_Home" });
+}
+
 #[cfg(windows)]
 mod on_windows {
     use std::process::{Command, Stdio};

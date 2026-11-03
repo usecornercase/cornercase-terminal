@@ -42,6 +42,9 @@ pub(crate) const AUTO: &str = "auto";
 pub(crate) const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
+const POWERSHELL_BARE: &str = r"-_./\+=";
+const POWERSHELL_START: &str = r"-_./\";
+const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
     ("droid", "droid"),
@@ -295,23 +298,47 @@ pub(crate) fn split_args(text: &str) -> Vec<String> {
 }
 
 pub(crate) fn quote(arg: &str) -> String {
-    quoted(arg, "-_./:@%+=,", r"'\''")
-}
-
-fn typed(arg: &str) -> String {
-    if cfg!(windows) { quoted(arg, r"-_./:\%+=", "''") } else { quote(arg) }
+    let safe = |c: char| c.is_ascii_alphanumeric() || "-_./:@%+=,".contains(c);
+    if !arg.is_empty() && arg.chars().all(safe) {
+        return arg.to_string();
+    }
+    format!("'{}'", arg.replace('\'', r"'\''"))
 }
 
 pub(crate) fn typed_line(words: impl IntoIterator<Item = String>) -> String {
-    let line = words.into_iter().map(|word| typed(&word)).collect::<Vec<_>>().join(" ");
-    if cfg!(windows) && line.starts_with('\'') { format!("& {line}") } else { line }
+    if cfg!(windows) {
+        return powershell_line(words);
+    }
+    words.into_iter().map(|word| quote(&word)).collect::<Vec<_>>().join(" ")
 }
 
-fn quoted(arg: &str, safe: &str, inner_quote: &str) -> String {
-    if !arg.is_empty() && arg.chars().all(|c| c.is_ascii_alphanumeric() || safe.contains(c)) {
-        return arg.to_string();
+fn powershell_line(words: impl IntoIterator<Item = String>) -> String {
+    let mut words = words.into_iter();
+    let program = words.next().map(|program| {
+        let named = !program.starts_with('-');
+        if named && powershell_bare(&program) { program } else { format!("& {}", powershell_quoted(&program)) }
+    });
+    let words = words.map(|word| if powershell_bare(&word) { word } else { powershell_quoted(&word) });
+    program.into_iter().chain(words).collect::<Vec<_>>().join(" ")
+}
+
+fn powershell_bare(word: &str) -> bool {
+    word.starts_with(|c: char| c.is_ascii_alphanumeric() || POWERSHELL_START.contains(c))
+        && word != "--"
+        && word.chars().all(|c| c.is_ascii_alphanumeric() || POWERSHELL_BARE.contains(c))
+}
+
+fn powershell_quoted(word: &str) -> String {
+    let mut quoted = String::with_capacity(word.len() + 2);
+    quoted.push('\'');
+    for c in word.chars() {
+        if POWERSHELL_QUOTES.contains(&c) {
+            quoted.push(c);
+        }
+        quoted.push(c);
     }
-    format!("'{}'", arg.replace('\'', inner_quote))
+    quoted.push('\'');
+    quoted
 }
 
 pub(crate) fn join_args(args: &[String]) -> String {
