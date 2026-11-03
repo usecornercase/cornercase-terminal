@@ -38,6 +38,7 @@ pub(super) struct AgentRuntime {
     pub(super) stats: agents::stats::Stats,
     pub(super) restarts: Restarts,
     pub(super) closed: ClosedAgents,
+    pub(super) contexts: super::context_dialog::Contexts,
 }
 
 impl AgentRuntime {
@@ -51,6 +52,7 @@ impl AgentRuntime {
             stats: agents::stats::Stats::new(SystemTime::now()),
             restarts: Restarts::default(),
             closed: ClosedAgents::default(),
+            contexts: super::context_dialog::Contexts::default(),
         }
     }
 

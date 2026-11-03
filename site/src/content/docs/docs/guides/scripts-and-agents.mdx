@@ -924,6 +924,36 @@ With `--json` it prints `{"agents": [...]}`, one entry per agent with every key 
 
 It is the request `{"command": "usage", "args": {"cached": false}}`. An older server answers that it has no `usage` command.
 
+### Context
+
+```sh
+cornercase context
+cornercase context --pane 4 --json
+cornercase context --tab 3 --cached
+```
+
+`context` prints what the [Context dialog](../projects-workspaces-tabs/#what-fills-the-context) shows for an agent's pane, so a script can see what fills its context before it compacts. Without `--pane` or `--tab` it reads the pane it runs in; a tab means its agent's pane.
+
+```text
+Claude Code · Opus 5.5  read just now
+251.9k of 1M tokens · 25%
+  System prompt        2.7k    0.3%
+  System tools         4.9k    0.5%
+  MCP tools            8.5k    0.8%
+  Memory files        19.7k    2.0%
+  Messages           206.2k   20.6%
+  Free space         715.1k   71.5%
+not loaded: MCP tools 199.9k · System tools 19.0k
+memory files:
+  ~/code/web-shop/AGENTS.md  8.5k
+```
+
+For Claude Code it starts a second `claude` on the server's machine (the one [`agent_commands`](../../reference/agents/#your-own-agents) names) that loads the same conversation in the same folder, account and model. It sends no prompt and spends no tokens, starts your MCP servers a second time, turns the hooks off and waits up to 8 seconds for the MCP servers, so a read takes 3 to 10 seconds. `--cached` prints the last answer with its age and starts nothing. The other agents answer their model and percentage with a `notice`; a pane that runs no agent exits with 1.
+
+With `--json` it prints `{"pane", "agent", "title", "model", "percent", "compacted", "loading", "read_at", "age", "breakdown", "notice", "error"}` with every key present (`null` when it has no value). `breakdown` is `null` until a read worked, then `{"model", "conversation", "total_tokens", "max_tokens", "percent", "auto_compact_at", "categories", "memory_files", "mcp_servers", "mcp_instructions", "skills", "messages"}`: `categories` are `{id, name, tokens, kind}` with `kind` one of `used`, `deferred`, `buffer` and `free` (read it as a string: a newer Claude Code may add one), `memory_files` `{path, kind, tokens}`, `mcp_servers` `{name, tools, loaded, tokens}` (the tokens of the loaded tools), `mcp_instructions` `{name, tokens}` (the server's display name, which is not always the name of `mcp_servers`), `skills` `{total, included, tokens}` and `messages` the tokens of the calls, results, attachments, assistant and user text, with the tools and attachment kinds that took the most. `conversation` is `null` when the pane had none yet and the numbers are those of a new one. When the read fails, `error` says why beside the numbers of the last good read, and the command exits with 3.
+
+It is the request `{"command": "context", "args": {"pane": 4, "cached": false}}`. A pane that runs no agent is a `conflict` and an unknown pane `not-found`. An older server answers that it has no `context` command.
+
 ### Pull requests
 
 ```sh

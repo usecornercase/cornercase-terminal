@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use crate::agents::activity::Activity;
+use crate::agents::breakdown::Target;
 use crate::agents::{self, Known, claude, codex, copilot, cursor, gemini, grok, opencode, vibe};
 use crate::error::Result;
 
@@ -300,6 +301,14 @@ impl Pane {
 
     pub(crate) fn folder(&self) -> Option<&Path> {
         self.reader.as_ref()?.folder()
+    }
+
+    pub(crate) fn breakdown_target(&self, account: Option<PathBuf>) -> Option<Target> {
+        let (pid, _) = self.agent?;
+        match self.reader.as_ref()? {
+            Reader::Claude(reader) => reader.target(pid, account),
+            _ => None,
+        }
     }
 
     pub(crate) fn conversation_files(&self) -> Option<Vec<(PathBuf, PathBuf)>> {

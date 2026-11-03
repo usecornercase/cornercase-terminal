@@ -147,6 +147,8 @@ const HELP_LABELS: Record<HelpItem, string> = {
 };
 const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
+const CONTEXT_NEEDS = "this needs cornercase on your computer: the demo's agents are not real Claude Code sessions";
+const AGENT_TITLES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', opencode: 'opencode', grok: 'Grok Build', cursor: 'Cursor CLI', copilot: 'GitHub Copilot CLI', vibe: 'Vibe CLI' };
 const MERGE_NEED = 'this needs cornercase on your computer: the demo has no git repositories to merge';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const PORTS_NEED = 'this needs cornercase on your computer: the demo runs no servers';
@@ -2510,6 +2512,20 @@ export class App {
     return { kind: 'mark', panes: agents.map((pane) => pane.id), pending: !agents.some((pane) => pane.pending) };
   }
 
+  private contextActions(panes: Pane[]): MenuAction[] {
+    const agents = panes.filter((pane) => pane.agent);
+    return agents.map((pane) => ({ kind: 'viewContext', pane: pane.id, named: agents.length > 1 }));
+  }
+
+  private contextLabel(pane: number, named: boolean): string {
+    const found = this.findPane(pane);
+    const title = AGENT_TITLES[found?.pane.agent ?? ''];
+    if (!named || !found || !title) return 'view context';
+    const same = found.t.panes.filter((x) => x.agent && AGENT_TITLES[x.agent] === title);
+    const at = same.findIndex((x) => x.id === pane);
+    return at > 0 ? `view context · ${title} ${at + 1}` : `view context · ${title}`;
+  }
+
   private mark(a: Extract<MenuAction, { kind: 'mark' }>): void {
     for (const id of a.panes) {
       const found = this.findPane(id);
@@ -2524,7 +2540,7 @@ export class App {
     const pane = this.findPane(id)?.pane;
     const mark = pane && this.markAction([pane]);
     const row = this.agentShown().find((r) => r.pane === id);
-    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : []), ...(row ? [{ kind: 'closeAgent' as const, pane: id }] : [])];
+    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : []), ...(row ? [{ kind: 'viewContext' as const, pane: id, named: false }, { kind: 'closeAgent' as const, pane: id }] : [])];
     if (!actions.length) return;
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
@@ -2537,6 +2553,7 @@ export class App {
     const tab = target.kind === 'tab' ? this.resolveTarget(target).tab : undefined;
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
+    if (tab) actions.push(...this.contextActions(tab.panes));
     if (target.kind === 'workspace' && this.resolveTarget(target).p?.repo) actions.push({ kind: 'mergeCheck', workspace: target.workspace });
     if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
     if (target.kind === 'workspace') actions.push(...this.closedAgentsMenu(target.workspace));
@@ -2575,6 +2592,7 @@ export class App {
     if (a.kind === 'sendTodo') return this.todoAgent(a.pane)?.label ?? '';
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
     if (a.kind === 'agentFold') return a.collapsed ? 'collapse' : 'expand';
+    if (a.kind === 'viewContext') return this.contextLabel(a.pane, a.named);
     if (a.kind === 'closeAgent') return 'close agent';
     if (a.kind === 'mergeCheck') return 'merge check';
     if (a.kind === 'showFlow') return 'show flow';
@@ -2647,6 +2665,7 @@ export class App {
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
     else if (a.kind === 'agentFold') this.setAgentFold(a.pane, a.collapsed);
+    else if (a.kind === 'viewContext') this.bug(CONTEXT_NEEDS);
     else if (a.kind === 'closeAgent') this.askCloseAgent(a.pane);
     else if (a.kind === 'sendTodo') this.sendTodo(a.todo, a.pane);
     else if (a.kind === 'mergeCheck') this.bug(MERGE_NEED);

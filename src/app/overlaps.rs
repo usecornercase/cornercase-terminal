@@ -52,6 +52,7 @@ impl App {
     pub(super) fn scan_overlaps(&mut self, now: Instant) {
         self.git.overlaps.scans.retain(|id, _| self.projects.project_index(*id).is_some());
         self.close_gone_merge_check();
+        self.close_gone_context();
         if !self.config.shared_files {
             self.git.overlaps.scans.clear();
             return;

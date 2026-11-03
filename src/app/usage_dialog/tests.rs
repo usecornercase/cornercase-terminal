@@ -80,7 +80,7 @@ fn a_failure_keeps_the_last_answer() {
     state.start(vec![(Known::Claude, None)]);
     state.answered((Known::Claude, None), Ok(claude_tests::report(claude_tests::RECORDED)), now);
     state.start(vec![(Known::Claude, None)]);
-    state.answered((Known::Claude, None), Err(Error::Usage("claude did not answer in time".into())), now);
+    state.answered((Known::Claude, None), Err(Error::Probe("claude did not answer in time".into())), now);
     let section = &sections(&state, &Config::default(), now, CLOCK)[0];
     assert_eq!(
         (section.windows.len(), section.error.as_deref()),

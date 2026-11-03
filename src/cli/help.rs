@@ -746,6 +746,7 @@ Examples:
   cornercase changes discard src/main.rs --yes
   cornercase changes discard src/main.rs --digest 550a7a517a389403 --yes";
 
+mod context;
 mod files;
 mod flow;
 mod paste_file;
@@ -754,6 +755,7 @@ mod pull_request;
 mod requests;
 mod worktrees;
 
+pub(in crate::cli) use context::CONTEXT_HELP;
 pub(in crate::cli) use files::FILES_HELP;
 pub(in crate::cli) use flow::{
     FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HELP, FLOW_HIDE_HELP,

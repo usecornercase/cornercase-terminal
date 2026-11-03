@@ -138,6 +138,7 @@ fn every_menu_action() -> Vec<MenuAction> {
         MenuAction::PluginButton { plugin: 0, revision: 0 },
         MenuAction::More(MoreItem::Settings),
         MenuAction::Ports(1),
+        MenuAction::ViewContext { pane: 1, named: false },
     ]);
     actions
 }
@@ -213,6 +214,7 @@ fn later_menu_index(action: &MenuAction) -> usize {
         MenuAction::PluginButton { .. } => 36,
         MenuAction::More(_) => 37,
         MenuAction::Ports(_) => 38,
+        MenuAction::ViewContext { .. } => 39,
         other => panic!("{other:?} is counted by menu_index"),
     }
 }
