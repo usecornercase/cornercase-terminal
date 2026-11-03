@@ -1,11 +1,12 @@
 pub(crate) use imp::{
-    CommandExt, ExitStatusExt, Pid, Signal, alive, kill_process, kill_process_group, on_stop_signal, setsid,
-    spawn_detached,
+    CommandExt, ExitStatusExt, Pid, Signal, alive, kill_process, kill_process_group, launch_folder,
+    leave_launch_folder, on_stop_signal, setsid, spawn_detached,
 };
 
 #[cfg(unix)]
 mod imp {
     use std::io;
+    use std::path::{Path, PathBuf};
     use std::process::{Child, Command};
     use std::thread;
 
@@ -33,6 +34,15 @@ mod imp {
 
     pub(crate) fn spawn_detached(command: &mut Command) -> io::Result<Child> {
         command.spawn()
+    }
+
+    #[expect(clippy::unnecessary_wraps, reason = "it keeps the Windows signature, where moving can fail")]
+    pub(crate) fn leave_launch_folder(_to: &Path) -> io::Result<()> {
+        Ok(())
+    }
+
+    pub(crate) fn launch_folder() -> Option<PathBuf> {
+        std::env::current_dir().ok()
     }
 }
 

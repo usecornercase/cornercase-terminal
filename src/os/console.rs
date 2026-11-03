@@ -20,8 +20,9 @@ mod imp {
     use std::fs::File;
     use std::io;
     use std::marker::PhantomData;
-    use std::os::windows::io::{FromRawHandle, IntoRawHandle};
+    use std::os::windows::io::{AsRawHandle, OwnedHandle};
 
+    use parking_lot::Mutex;
     use windows_sys::Win32::Foundation::FALSE;
     use windows_sys::Win32::System::Console::{STD_ERROR_HANDLE, SetStdHandle};
 
@@ -56,13 +57,36 @@ mod imp {
         BorrowedFd(PhantomData)
     }
 
-    pub(crate) fn redirect_stderr(file: &File) -> io::Result<()> {
-        let handle = file.try_clone()?.into_raw_handle();
-        if unsafe { SetStdHandle(STD_ERROR_HANDLE, handle) } == FALSE {
-            let error = io::Error::last_os_error();
-            drop(unsafe { File::from_raw_handle(handle) });
-            return Err(error);
+    #[derive(Debug)]
+    pub(super) struct Taken {
+        current: Option<OwnedHandle>,
+        previous: Option<OwnedHandle>,
+    }
+
+    impl Taken {
+        pub(super) const fn new() -> Self {
+            Self { current: None, previous: None }
         }
+
+        pub(super) fn take(&mut self, handle: OwnedHandle) -> Option<OwnedHandle> {
+            let closing = self.previous.take();
+            self.previous = self.current.replace(handle);
+            closing
+        }
+    }
+
+    static TAKEN: Mutex<Taken> = Mutex::new(Taken::new());
+
+    pub(crate) fn redirect_stderr(file: &File) -> io::Result<()> {
+        let handle = OwnedHandle::from(file.try_clone()?);
+        if unsafe { SetStdHandle(STD_ERROR_HANDLE, handle.as_raw_handle()) } == FALSE {
+            return Err(io::Error::last_os_error());
+        }
+        let closing = TAKEN.lock().take(handle);
+        drop(closing);
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
