@@ -343,3 +343,28 @@ mod lock_holder_on_windows {
         assert_eq!(holder_of_a_lock_naming(gone), Some(Holder::Gone(gone)));
     }
 }
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::test_util::verbatim;
+
+    #[test]
+    fn a_checkout_is_made_locked_and_removed_through_verbatim_paths() {
+        let repo = git_repo(&[("README", "hi"), (".worktreeinclude", ".env\n"), (".gitignore", ".env\n")]);
+        std::fs::write(repo.path().join(".env"), "secret").expect("write .env");
+        let tmp = TempDir::new();
+        let path = tmp.path().join("año");
+
+        create(&verbatim(repo.path()), "feat", &verbatim(&path)).expect("create");
+
+        assert_eq!(read(&path.join("README")).as_deref(), Some("hi"));
+        assert_eq!(read(&path.join(".env")).as_deref(), Some("secret"));
+        let dot_git = read(&path.join(".git")).expect("the .git file");
+        assert!(!dot_git.contains('?'), "{dot_git}");
+        git(repo.path(), &["worktree", "lock", "--reason", "busy", &path.display().to_string()]);
+        assert_eq!(lock(&verbatim(&path)).expect("lock").map(|lock| lock.reason), Some("busy".into()));
+        remove(&verbatim(repo.path()), &verbatim(&path), false, true).expect("remove");
+        assert!(!path.exists());
+    }
+}
