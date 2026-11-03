@@ -14,7 +14,8 @@ pub(crate) fn simplified(path: PathBuf) -> PathBuf {
 }
 
 fn plain(path: &Path) -> Option<&str> {
-    let rest = path.to_str()?.strip_prefix(VERBATIM)?;
+    let text = path.to_str()?;
+    let rest = text.strip_prefix(VERBATIM)?;
     let mut components = path.components();
     let drive = matches!(
         components.next(),
@@ -22,7 +23,7 @@ fn plain(path: &Path) -> Option<&str> {
     );
     let rooted = components.next() == Some(Component::RootDir);
     let names = components.all(|component| matches!(component, Component::Normal(name) if usable(name)));
-    (drive && rooted && names && rest.encode_utf16().count() < MAX_PATH).then_some(rest)
+    (drive && rooted && names && text.encode_utf16().count() <= MAX_PATH).then_some(rest)
 }
 
 fn usable(name: &OsStr) -> bool {

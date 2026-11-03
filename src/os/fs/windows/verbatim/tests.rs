@@ -4,9 +4,10 @@ use super::*;
 
 fn verbatim_of_length(units: usize) -> String {
     let first = "a".repeat(120);
-    let plain = format!(r"C:\{first}\{}", "b".repeat(units - r"C:\".len() - first.len() - 1));
-    assert_eq!(plain.len(), units);
-    format!("{VERBATIM}{plain}")
+    let rest = units - VERBATIM.len() - r"C:\".len() - first.len() - 1;
+    let verbatim = format!(r"{VERBATIM}C:\{first}\{}", "b".repeat(rest));
+    assert_eq!(verbatim.len(), units);
+    verbatim
 }
 
 #[rstest]
@@ -46,10 +47,10 @@ fn a_path_win32_would_read_otherwise_keeps_the_prefix(#[case] path: &str) {
 }
 
 #[test]
-fn a_path_keeps_the_prefix_once_win32_could_not_take_it_whole() {
-    let longest = verbatim_of_length(MAX_PATH - 1);
+fn a_path_keeps_the_prefix_once_it_is_over_max_path_with_it() {
+    let longest = verbatim_of_length(MAX_PATH);
     assert_eq!(simplified(PathBuf::from(&longest)).as_os_str(), &longest[VERBATIM.len()..]);
-    let too_long = verbatim_of_length(MAX_PATH);
+    let too_long = verbatim_of_length(MAX_PATH + 1);
     assert_eq!(simplified(PathBuf::from(&too_long)).as_os_str(), too_long.as_str());
 }
 

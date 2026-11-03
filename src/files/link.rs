@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::expand_home;
-use crate::os::fs::canonicalize;
+use crate::os::fs::simplified;
 use crate::term::emulator::Cell;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,7 +85,7 @@ pub(crate) fn at(row: &[Cell], col: u16) -> Option<Link> {
 }
 
 pub(crate) fn resolve(link: &Link, cwd: Option<&Path>, root: &Path, home: Option<&Path>) -> Option<Target> {
-    let root = canonicalize(root).ok()?;
+    let root = std::fs::canonicalize(root).ok()?;
     let given = expand_home(&link.path, home);
     let candidates: Vec<PathBuf> = if given.is_absolute() {
         vec![given]
@@ -93,8 +93,10 @@ pub(crate) fn resolve(link: &Link, cwd: Option<&Path>, root: &Path, home: Option
         cwd.map(|dir| dir.join(&given)).into_iter().chain(std::iter::once(root.join(&given))).collect()
     };
     candidates.into_iter().find_map(|candidate| {
-        let real = canonicalize(&candidate).ok().filter(|p| p.is_file())?;
-        let path = real.strip_prefix(&root).unwrap_or(&real).to_string_lossy().into_owned();
+        let real = std::fs::canonicalize(&candidate).ok().filter(|p| p.is_file())?;
+        let inside = real.strip_prefix(&root).ok().map(|inside| inside.to_string_lossy().into_owned());
+        let real = simplified(real);
+        let path = inside.unwrap_or_else(|| real.to_string_lossy().into_owned());
         Some(Target { path, real, lines: link.lines })
     })
 }
