@@ -14,12 +14,16 @@ mod imp {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod imp {
     use std::convert::Infallible;
     use std::fs::File;
     use std::io;
     use std::marker::PhantomData;
+    use std::os::windows::io::{FromRawHandle, IntoRawHandle};
+
+    use windows_sys::Win32::Foundation::FALSE;
+    use windows_sys::Win32::System::Console::{STD_ERROR_HANDLE, SetStdHandle};
 
     #[derive(Debug, Clone, Copy)]
     pub(crate) struct BorrowedFd<'fd>(PhantomData<&'fd ()>);
@@ -52,7 +56,13 @@ mod imp {
         BorrowedFd(PhantomData)
     }
 
-    pub(crate) fn redirect_stderr(_file: &File) -> io::Result<()> {
-        Err(io::ErrorKind::Unsupported.into())
+    pub(crate) fn redirect_stderr(file: &File) -> io::Result<()> {
+        let handle = file.try_clone()?.into_raw_handle();
+        if unsafe { SetStdHandle(STD_ERROR_HANDLE, handle) } == FALSE {
+            let error = io::Error::last_os_error();
+            drop(unsafe { File::from_raw_handle(handle) });
+            return Err(error);
+        }
+        Ok(())
     }
 }
