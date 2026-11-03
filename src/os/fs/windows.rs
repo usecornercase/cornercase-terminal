@@ -17,6 +17,12 @@ use windows_sys::Win32::System::Ioctl::FSCTL_SET_REPARSE_POINT;
 
 use super::{Lock, Stat};
 
+#[cfg(test)]
+pub(crate) use self::acl::share_with_everyone;
+pub(crate) use self::acl::{create_private_dir_all, make_private, owner_and_mode, process_uid};
+
+mod acl;
+
 pub(crate) const NONBLOCK: i32 = 0;
 pub(crate) const NOFOLLOW: i32 = FILE_FLAG_OPEN_REPARSE_POINT.cast_signed();
 
