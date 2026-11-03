@@ -1,4 +1,4 @@
-use super::{ModeTable, claude, codex, copilot, cursor, gemini, grok, opencode, usage, vibe};
+use super::{ModeTable, breakdown, claude, codex, copilot, cursor, gemini, grok, opencode, usage, vibe};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Known {
@@ -356,6 +356,19 @@ impl Known {
             Self::Cursor => cursor::USAGE,
             Self::Copilot => copilot::USAGE,
             Self::Vibe => vibe::USAGE,
+        }
+    }
+
+    pub(crate) fn breakdown(self) -> Option<breakdown::Spec> {
+        match self {
+            Self::Claude => claude::BREAKDOWN,
+            Self::Codex => codex::BREAKDOWN,
+            Self::Gemini => gemini::BREAKDOWN,
+            Self::Opencode => opencode::BREAKDOWN,
+            Self::Grok => grok::BREAKDOWN,
+            Self::Cursor => cursor::BREAKDOWN,
+            Self::Copilot => copilot::BREAKDOWN,
+            Self::Vibe => vibe::BREAKDOWN,
         }
     }
 }

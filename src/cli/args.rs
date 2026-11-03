@@ -3,6 +3,7 @@ pub(crate) mod agents;
 pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod config;
+pub(crate) mod context;
 pub(crate) mod files;
 pub(crate) mod flow;
 pub(crate) mod issue;
@@ -37,8 +38,8 @@ use super::help::{
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use super::help::{
-    AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP, PULL_REQUEST_HELP,
-    REQUESTS_HELP,
+    AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
+    PULL_REQUEST_HELP, REQUESTS_HELP,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -266,6 +267,11 @@ pub(crate) enum Control {
     )]
     PullRequest(pull_request::PullRequestArgs),
     #[command(
+        about = "Print what fills an agent's context, as its Context dialog shows it",
+        after_help = CONTEXT_HELP
+    )]
+    Context(context::ContextArgs),
+    #[command(
         about = "List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program",
         after_help = PROCESSES_HELP
     )]
@@ -300,6 +306,7 @@ impl Control {
             Self::Send(a) => a.target.view.view,
             Self::Keys(a) => a.target.view.view,
             Self::Mark(a) => a.target.view.view,
+            Self::Context(a) => a.target.view.view,
             Self::Read(a) => a.view.view,
             Self::Wait(a) => a.view.view,
             Self::Focus(a) => a.view.view,

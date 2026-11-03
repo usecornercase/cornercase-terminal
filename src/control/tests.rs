@@ -180,6 +180,7 @@ fn newest_commands() -> Vec<Command> {
         Command::StopProcess(StopProcess::default()),
         Command::Worktrees(ListWorktrees::default()),
         Command::PullRequest(PullRequestRead::default()),
+        Command::Context(ContextRead::default()),
     ]
 }
 
