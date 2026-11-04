@@ -686,6 +686,7 @@ mod path_links;
 mod pull_request_stacks;
 mod pull_requests;
 mod queue;
+mod recap_panel;
 mod remote_access;
 mod restarting;
 mod shared_files;

@@ -627,6 +627,7 @@ mod ports;
 mod processes;
 mod pull_request;
 mod queue;
+mod recap;
 mod searching;
 mod setup;
 mod start_server;

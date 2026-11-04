@@ -42,6 +42,12 @@
   "accept_trust_prompts": true,
   "resume_agents": false,
   "keep_awake": true,
+  "recap_agent": "codex",
+  "recap_account": "work",
+  "recap_model": "gpt-5",
+  "recap_effort": "high",
+  "recap_language": "Spanish",
+  "recap_instructions": "group by client",
   "hidden_flows": [
     "Arena"
   ],

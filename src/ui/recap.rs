@@ -98,37 +98,57 @@ pub(crate) fn body(area: Rect) -> Rect {
     Rect::new(area.x + 1, y, area.width.saturating_sub(2), area.bottom() - y)
 }
 
-struct Word {
+struct Frag {
     text: String,
     bold: bool,
     quote: bool,
     link: Option<String>,
 }
 
-fn words(block: &Block) -> Vec<Word> {
-    let mut found: Vec<Word> = Vec::new();
+fn words(block: &Block) -> Vec<Vec<Frag>> {
+    let mut found: Vec<Vec<Frag>> = Vec::new();
+    let mut current: Vec<Frag> = Vec::new();
+    let flush = |current: &mut Vec<Frag>, found: &mut Vec<Vec<Frag>>| {
+        if !current.is_empty() {
+            found.push(std::mem::take(current));
+        }
+    };
     for segment in &block.segments {
-        for piece in segment.text.split_whitespace() {
-            found.push(Word {
+        if segment.text.starts_with(char::is_whitespace) {
+            flush(&mut current, &mut found);
+        }
+        for (i, piece) in segment.text.split_whitespace().enumerate() {
+            if i > 0 {
+                flush(&mut current, &mut found);
+            }
+            current.push(Frag {
                 text: piece.to_string(),
                 bold: segment.bold,
                 quote: segment.quote,
                 link: segment.link.clone(),
             });
         }
+        if segment.text.ends_with(char::is_whitespace) {
+            flush(&mut current, &mut found);
+        }
     }
+    flush(&mut current, &mut found);
     found
 }
 
-fn place(line: &mut Line, x: u16, word: &Word, heading: bool) {
-    line.runs.push(Run {
-        x,
-        text: word.text.clone(),
-        bold: word.bold,
-        quote: word.quote,
-        heading,
-        link: word.link.clone(),
-    });
+fn place(line: &mut Line, x: u16, word: &[Frag], heading: bool) {
+    let mut at = x;
+    for frag in word {
+        line.runs.push(Run {
+            x: at,
+            text: frag.text.clone(),
+            bold: frag.bold,
+            quote: frag.quote,
+            heading,
+            link: frag.link.clone(),
+        });
+        at += width_of(&frag.text);
+    }
 }
 
 fn wrap_block(block: &Block, width: u16) -> Vec<Line> {
@@ -140,7 +160,7 @@ fn wrap_block(block: &Block, width: u16) -> Vec<Line> {
     let mut lines = vec![Line { bullet: block.kind == Kind::Bullet, runs: Vec::new() }];
     let mut x = first;
     for word in words(block) {
-        let length = width_of(&word.text);
+        let length: u16 = word.iter().map(|frag| width_of(&frag.text)).sum();
         let empty = lines.last().is_some_and(|line| line.runs.is_empty());
         if !empty && x + 1 + length > width {
             lines.push(Line::default());

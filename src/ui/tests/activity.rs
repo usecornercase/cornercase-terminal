@@ -98,6 +98,7 @@ mod places {
                 (Item::Files, 5),
                 (Item::Todo, 7),
                 (Item::Worktrees, 9),
+                (Item::Recap, 11),
             ]
         );
     }
@@ -107,7 +108,7 @@ mod places {
         let shown = Shown { changes: false, ..everything() };
         let top: Vec<(Item, u16)> =
             places(Rect::new(0, 0, WIDTH, 24), shown).into_iter().filter(|(_, y)| *y < 10).collect();
-        assert_eq!(top, [(Item::Issues, 1), (Item::Files, 3), (Item::Todo, 5), (Item::Worktrees, 7)]);
+        assert_eq!(top, [(Item::Issues, 1), (Item::Files, 3), (Item::Todo, 5), (Item::Worktrees, 7), (Item::Recap, 9)]);
     }
 
     #[test]
@@ -197,6 +198,7 @@ mod drawing {
                 icons::NERD.files,
                 icons::NERD.todo,
                 icons::WORKTREES,
+                icons::RECAP,
                 icons::HELP,
                 icons::MORE
             ]

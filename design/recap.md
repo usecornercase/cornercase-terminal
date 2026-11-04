@@ -1,0 +1,80 @@
+# Recap
+
+Code: `recap/` (`mod.rs`, `journal.rs`, `journal/files.rs`, `range.rs`, `dossier.rs`, `dossier/`, `prompt.rs`, `store.rs`, `text.rs`, `run.rs`), `agents/recap.rs`, `agents/claude/recap.rs`, `agents/codex/recap.rs`, `agents/probe.rs`, `app/recap_panel.rs`, `app/recap_panel/`, `app/control/recap.rs`, `control/recap.rs`, `cli/recap.rs`, `cli/args/recap.rs`, `cli/help/recap.rs`, `ui/recap.rs`, `settings/recap.rs`, `paths.rs` (#656)
+
+A **Recap** is a summary of what your agents did, written by an agent. It answers the daily's question ("what did I do yesterday?") and the midday one ("where do things stand?"), across every project, workspace and agent of the server. It covers only agent conversations: work done by hand in shells, and git activity no agent was part of, is not in it.
+
+## One mode, always written by an agent
+
+- There is no "plain" recap that cornercase writes itself. A list of prompts is not a summary, and a heuristic summary would be a second, worse feature to keep. The three choices (`now`, `yesterday`, `7 days`) differ only in the range and the prompt.
+- What cornercase does without a model is the **dossier**: a bounded Markdown file of facts. `cornercase recap --dossier` prints it, so the input is inspectable and the agent's work is checkable.
+- `now` is where things stand: what waits on you first (a question an agent asked, failing checks, work closed halfway), then what is in progress, then what was done since yesterday. `yesterday` is Done / In progress / On you. `7 days` is per project: themes, what was closed, what is still open.
+
+## "Yesterday" is the last day with agent activity
+
+On Monday "yesterday" is Friday and after a holiday it still works, which is what the daily needs. The day is the last local day before today with a `prompt` entry or a `status → working` entry in the journal, searched back over the 30 days the journal keeps. The label carries the real date (`yesterday · fri 31 oct`). With no activity in 30 days it answers `No agent activity in the last 30 days.` and runs no agent. The day is in the client's zone: the window's (the queue keeps it, `App::panels.queued.zone()`) or the CLI's, sent with the request.
+
+## The journal
+
+The past has to be readable, and cornercase only knew the present: search in sessions reads the panes still open, `stats.json` counts but does not say where, and a workspace closed yesterday leaves nothing. So cornercase keeps a journal of conversations beside `stats.json` (`paths::journal`, per server, private instances included: `x.journal/` for `CORNERCASE_SOCKET=x.sock`), for 30 days (`KEPT_DAYS`).
+
+- **A folder of day files**, `journal/YYYY-MM-DD.jsonl`, one JSON object per line, UTC days. Each file is append-only, and keeping 30 days is deleting old files, never rewriting a file the server is appending to. A `yesterday` recap reads one to three files. Rejected: one `journal.jsonl` pruned by rewriting it (a rewrite races the appender, and a crash in the middle loses the journal).
+- **Pointers, not content**: time, agent, account, conversation, the transcript's path (`Pointer`, the journal's own shape mapped to and from `agents::context::Record`, so renaming a `Record` variant never breaks an old file), and the project, workspace (label, branch, path, whether a worktree) and tab as they were then, plus the workspace's pull request and its checks at that moment. Transcripts stay on disk after a pane closes; what is lost with a worktree is which workspace they belonged to, and that is what the journal keeps.
+- **Events**: `seen` (a conversation first seen in a pane, or a pane changing conversation), `prompt` (at the prompt's own time, from `Counted.prompts`), `status` (to `working`, `waiting`, `done`, `idle`, `pending` or `failed`) and `closed` (the pane closed, or another conversation took it over). `Journal::observe` is the pure diff, run after each agent read (every 500 ms, `app/recap_panel/journal.rs`), and it builds a place only for a pane that emits an entry.
+- Appending is synchronous, in append mode, with no fsync: a few hundred bytes, and a lost last line costs one entry (readers skip a line that does not parse). `server.rs` has no room for a shutdown flush, which is the other reason to write as events happen. About 300 KB a busy day, 10 MB at 30 days.
+- Pruning is a job (`recap prune journal`) at the first agent read and when the UTC day changes: a file older than 30 days goes, day 30 stays.
+- The eight known agents are journaled through the readers `Record::said` already has. No server folder, no journal: app tests that set none write nowhere.
+- It does not see other machines (each server has its own journal; see Remote windows) or anything before this version.
+
+## The dossier
+
+`recap::dossier::build` takes the journal entries of the range, a snapshot of the open panes (`Live`, built on the main thread before the job, like the search sources: status, place, the last 15 screen lines of a pane that waits, each workspace's pull request) and the transcripts, and writes Markdown with ids in reading order (waiting first for `now`, then by project and workspace): `[c3]` a conversation, `[p1]` a pull request. Per conversation: place, branch, agent, account, first and last activity, status now (or closed, and when), the pull request and its checks, the transcript's path, my prompts in the range, the last reply and, while waiting, the question.
+
+- **Prompts**: every message is read through `Record::said` (it is not ordered the same way across agents, so they are sorted by their time when all have one) and kept inside the range, the newest ones past the cap dropped. A message without a time is kept when the journal saw a prompt in the range. `now` shows the newest first.
+- **Noise is skipped**: empty prompts, slash commands, `!` shell lines, and `yes`, `go on`, `ok`, `thanks`, `sí`, `dale` and the like. A paste (over 2,000 characters or 20 lines) is its first line and `(pasted N lines)`.
+- **Caps** (`Caps`): prompts per conversation 6 (now), 8 (yesterday), 4 (7 days); characters per prompt 500, 500, 300; last reply 800, 800, 300; screen lines while waiting 15 by 160; conversations 60, 60, 120; the whole dossier 40 KB, 60 KB, 100 KB. Past the total a conversation keeps only its header, and past even that it is left out; the dossier says how many.
+- `7 days` lists the pull requests whose last known state in the journal is merged. Rejected: the merged-pull-request cache (`pull_request::merged`) has keys and times but no titles or workspaces, and matching its remotes to projects is a second source of truth for one line.
+- A conversation whose worktree is gone keeps its place from the journal, which is the point.
+
+## The background agent
+
+Claude Code and Codex, run **without a pane**, through the same runner as the usage probes (`agents::probe`, which gained `Limits::close_input`: stdin is closed after the first write, so a non-interactive agent reads end of input). Each agent folder has a `recap.rs` (`Known::recap()` is `Some` for those two only, `None` for the other six) with the arguments and a reader of the agent's JSON stream. Checked live with Claude Code 2.1.318 and Codex 0.164.0:
+
+- `claude -p --setting-sources '' --no-session-persistence --strict-mcp-config --output-format stream-json --verbose --max-turns 40 --allowedTools Read,Grep,Glob,Bash(cornercase search:*) --disallowedTools Edit,Write,NotebookEdit,WebFetch,WebSearch,Task [--model M] [--effort E] -- <prompt>`. The `--` matters: `--allowedTools` takes a list, and without it the prompt would be read as a tool. The answer is the `result` line (`is_error` or a `subtype` other than `success` is a failure, with the agent's own text), its `usage` is the tokens, and the model comes from `system/init`. Each `tool_use` is a step of the progress.
+- `codex exec --json --skip-git-repo-check --ephemeral --sandbox read-only -C <folder> [--model M] [-c model_reasoning_effort=E] -- <prompt>`. The answer is the last `agent_message` item, completed by `turn.completed` (its usage), or `turn.failed`.
+- It runs in `recap/<choice>/` under the state directory (`paths::recap`, 0700), never in a project or a worktree, with the same environment as the usage probes (the session variables of Claude removed, the account's variable set) and `CORNERCASE_SOCKET` when the server's panes get one (a dev build), so `cornercase search` reaches this server.
+- **Who writes `recap.md`: cornercase, from the agent's final message** (the issue said the agent writes it). The agent gets read-only tools (Claude: no edit tool; Codex: the OS sandbox), so "cannot edit a project" is enforced by the tool list and the sandbox, not by a path rule a model could break; the run never depends on the model remembering to write a file; and the fakes are `test_util::fake_program` fakes (canned output, recorded argv and folder) that run on every OS. `recap.md` and `recap.json` are written in the folder next to `dossier.md`, 0600.
+- **git is left out for Claude**: a read-only `Bash(git …)` prefix rule does not stop `git log --output=FILE`, and the folder is not a repository; the dossier already carries the branch and the pull request. Codex's sandbox could run read-only git, but its prompt does not ask for it, so both agents get the same input. `cornercase search` may not work inside Codex's sandbox (a socket); it is optional.
+- `--setting-sources ''` drops the user's settings (a custom base URL in `env`), as the usage probes do.
+- **Failures** carry the agent's words (`Not logged in`, `usage limit`), or `claude exited without answering`, `could not run claude: …`, `claude did not answer in time` (10 minutes, `RECAP_TIMEOUT`, with a knob in the app's state for tests). The panel shows the reason with ` retry `.
+- **Not counted in Stats**: the run is no pane's agent, so `watch_agents` never sees it, and Claude runs with `--no-session-persistence`, so its transcript is not kept either. The panel's header says the agent, the tokens and the age.
+
+The prompt (`recap/prompt.rs`) carries the choice (and, for `yesterday`, the date), asks to quote the prompts literally, to name every conversation and pull request by its id and never by a path, and to write in the language: `auto` is "the language most of the developer's prompts are written in", anything else as typed. The settings' instructions are appended after `Also:`.
+
+## The cache
+
+Each choice keeps its last result in `recap/<choice>/recap.json` (loaded once at startup, shown with its age). `now` is written again when it is older than 30 minutes when shown (`NOW_FRESH`); `yesterday` once per active day (the job compares the day it computes with the cached one and answers `Kept`, so opening the panel never runs an agent for a day already written); `7 days` once per local day. ↻ and `--fresh` always write it again. An override on the command line (`--agent`, `--model`, …) writes it again too, since the cached result was written with other settings. One run per choice at a time: a second click only shows the progress. An empty dossier runs no agent.
+
+## The panel
+
+A side panel in the column the Changes, Files, TODO and Flow panels share (`Side::Recap`; one at a time, `Esc` closes it), not a dialog, so it stays open while you click from one line of work to the next. Header: ` Recap   now · yesterday · 7 days   ↻  × `, the current choice cyan and bold. Under it one status line: the date, agent, conversations, tokens and age; the progress while it runs (the previous result stays visible); or the failure in red with ` retry `. The body is the recap's Markdown: headings bold, bullets `▸`, quotes in soft text, and every `[c3]` or `[p1]` a link in cyan, drawn as `project › workspace › tab` or `#212`, wrapped by our own word wrap so each link keeps its row and columns (`highlight::markdown` drops which span is which link). Geometry and hits come from the same `rows`.
+
+- A link goes to the live pane whose agent and conversation match (`jump_to_pane`); else to the workspace whose path matches, in the project whose path matches; else to the project; else a toast (`api › rate-limit is closed`). A pull request opens the workspace's pull request dialog when the workspace is open, else its address is copied.
+- Opened from the footer button ` Recap ` (beside ` Worktrees `, since it belongs to no project, which is also why Worktrees is there), the icon bar (an icon right after Worktrees', codicon `history`), the compact projects menu and `s` in the keys menu (`r` is rename tab). It is not restored after a restart (no field in `session.json`): it reopens with one click and its results are on disk.
+- It shares the right column, its width and its drag, and takes the whole screen below the bar in compact mode, like the others.
+
+## Settings
+
+Settings › Agents › Recap: `recap_agent` (auto: the default agent when it can write a recap, else Claude Code), `recap_account` (that agent's default account), `recap_model`, `recap_effort` (low by default: quick and cheap), `recap_language` (auto) and `recap_instructions`. Each is one flat key, so the `config` request has them. All but `recap_account` are shared by *share settings* (#414); the account is personal. Changing the agent clears a model, an effort and an account the new agent does not have. An effort that the agent does not know is ignored when the run starts.
+
+## External clients
+
+The `recap` request (feature `recap`, additive; `cornercase recap` refuses an older server by name) takes `range`, `fresh`, `dossier`, `agent`, `account`, `model`, `effort`, `language` and `zone`. A cached current answer comes at once; a run of that range already going is waited for when the options are the same and refused with `busy` when they differ; otherwise it starts one and waits. A client that leaves drops its request and the run fills the cache. Every key of the answer is always present, `null` when it has no value, as `usage`'s is. `dossier: true` answers with the dossier and its `places`, runs no agent. `events` reports `{"event":"recap","state":"started|finished|failed","range","agent","error"}` to every reader that did not filter by `--pane` (like `dropped`): a few events a day need no opt-in. `server.log` has `recap run` job lines (range, agent, outcome) and never prompts, text, instructions or transcript paths.
+
+## Tests
+
+The journal, ranges, dossier, text and cache are pure and run on every OS; the agents' readers are tested against real streams cut down (`tests/fixtures/claude/2.1.318/recap-*.jsonl`, `tests/fixtures/codex/0.164.0/recap-*.jsonl`), and the runs with `test_util::fake_program` fakes named `claude` and `codex` (`fake_program` also records the folder it ran in, `.cwd`). Nothing runs a real agent.
+
+## Rejected
+
+- One `journal.jsonl` (see above); importing the agents' past history (the journal starts when this version does); a dialog instead of a panel; a plain recap without an agent; sending a recap to Telegram or Discord or writing it on a schedule (a routine, #653, could do that later); other machines (#539, #547).

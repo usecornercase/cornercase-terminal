@@ -72,7 +72,7 @@ impl App {
         self.panels.recap.run(choice).last.as_ref()?.places.get(id).cloned()
     }
 
-    fn recap_go(&mut self, id: &str) {
+    pub(in crate::app) fn recap_go(&mut self, id: &str) {
         let Some(place) = self.recap_place(id) else { return };
         if place.kind == "pull" {
             self.recap_open_pull(&place);

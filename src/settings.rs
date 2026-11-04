@@ -500,9 +500,9 @@ impl Settings {
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
-        rows.extend(RecapRow::ALL.map(Row::Recap));
         rows.extend(self.account_rows());
         rows.extend(LOOK_ROWS);
+        rows.extend(RecapRow::ALL.map(Row::Recap));
         rows.extend(self.remote_rows());
         rows.extend(self.plugins.iter().map(|plugin| Row::Plugin(plugin.id.clone())));
         if self.plugins.is_empty() {

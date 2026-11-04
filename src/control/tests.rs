@@ -182,6 +182,7 @@ fn newest_commands() -> Vec<Command> {
         Command::Worktrees(ListWorktrees::default()),
         Command::PullRequest(PullRequestRead::default()),
         Command::Context(ContextRead::default()),
+        Command::Recap(RecapAsk::default()),
     ]
 }
 
@@ -535,6 +536,16 @@ mod events_v1 {
         Event { time: TIME.into(), what, ids }
     }
 
+    fn recap(state: &str, range: &str, agent: &str, error: Option<&str>) -> Event {
+        let what = What::Recap {
+            state: state.into(),
+            range: range.into(),
+            agent: agent.into(),
+            error: error.map(str::to_string),
+        };
+        event(what, Ids::default())
+    }
+
     fn pane() -> Ids {
         Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
     }
@@ -563,6 +574,9 @@ mod events_v1 {
                 fixture!("control/events/v1/clipboard.json"),
             ),
             (event(What::Bell { count: 3 }, pane()), fixture!("control/events/v1/bell.json")),
+            (recap("started", "yesterday", "claude", None), fixture!("control/events/v1/recap-started.json")),
+            (recap("finished", "yesterday", "claude", None), fixture!("control/events/v1/recap-finished.json")),
+            (recap("failed", "week", "codex", Some("Not logged in")), fixture!("control/events/v1/recap-failed.json")),
         ]
     }
 

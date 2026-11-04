@@ -53,11 +53,8 @@ fn the_header_names_the_three_choices_with_refresh_and_close() {
     let terminal = drawn(&view(State::Idle), None);
     let header = row(&terminal, 0);
     assert!(header.starts_with(" Recap   now · yesterday · 7 days"), "{header}");
-    assert!(header.ends_with("↻ ×"), "{header}");
-    assert_eq!(
-        row(&terminal, 1),
-        " yesterday · sat 31 oct · Claude Code · 1 conversation".chars().take(40).collect::<String>()
-    );
+    assert!(header.ends_with("↻  ×"), "{header}");
+    assert_eq!(row(&terminal, 1), " yesterday · sat 31 oct · Claude Code ·");
 }
 
 #[test]
@@ -116,8 +113,8 @@ fn hits_find_the_buttons_the_choices_and_the_links() {
 
 #[test]
 fn a_hovered_link_is_underlined() {
-    let terminal = drawn(&view(State::Idle), Some(Position::new(8, 4)));
-    assert!(terminal.backend().buffer()[(8, 4)].modifier.contains(Modifier::UNDERLINED));
+    let terminal = drawn(&view(State::Idle), Some(Position::new(4, 4)));
+    assert!(terminal.backend().buffer()[(4, 4)].modifier.contains(Modifier::UNDERLINED));
 }
 
 #[test]
