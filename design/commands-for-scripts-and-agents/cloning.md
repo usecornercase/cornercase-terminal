@@ -2,7 +2,7 @@
 
 Code: `git/clone.rs`, `git/clone/files.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run_clone`, `clone_url`, `clone_parent`), `cli/help/clone.rs`, #541
 
-- **One operation, `clone`** (index 114 of `Command::NAMES`): `url`, `parent` and `focus`.
+- **One operation, `clone`** (index 116 of `Command::NAMES`): `url`, `parent` and `focus`.
   - It runs `git clone` into a new folder inside `parent`. The folder is named after the repository as git names it: the URL's last part without `/`, `.git` or `.bundle` (`git/clone.rs` `folder_name`).
   - A URL that is not a local path loses its `user:password@`, its `?query` and its `#fragment` first (`https://host/shop.git?token=…` is `shop`, `https://user:token@host` is `host`). Each can carry a token, and the folder's name reaches the path, the job's log line, the `busy` and `conflict` messages and the project's name. The userinfo goes before the query is cut, so a raw `?` or `#` in a password cannot leave a piece of it as the name. A local path keeps `?` and `#`, since they are ordinary characters in a folder's name.
   - It then opens that folder as a project as `open` does, through `App::open_folder`, which both share: an open project of that path is reused, else `add_project`. So the project is saved with the session and shows in the sidebar.

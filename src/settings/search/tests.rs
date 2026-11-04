@@ -95,7 +95,9 @@ mod matching {
         let (s, title) = with_a_machine();
         assert_eq!(titles(&s, "vps"), [title]);
         let here = titles(&s, "this computer");
-        assert!(matches!(here.as_slice(), [only] if only.starts_with("Machines › ") && only.ends_with(" this computer")));
+        assert!(
+            matches!(here.as_slice(), [only] if only.starts_with("Machines › ") && only.ends_with(" this computer"))
+        );
     }
 
     #[test]
