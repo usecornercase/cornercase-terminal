@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.284
 
-- **On Windows, a pane's shell waiting at its prompt no longer stops cornercase from seeing which files agents hold open.** Every program in a pane shares the pane's console input, and while one of them reads it Windows cannot name it through any of them. cornercase let each program's copy take one of the 16 questions it lets wait, so a few programs in panes could use them all up and leave Codex, Copilot, Cursor and opencode without their model and context line. Such a file now takes one, however many programs hold it. Nothing changes on Linux and macOS.
+- **On Windows, programs sharing a pane's console use up fewer of the questions cornercase lets wait when it looks for which files agents hold open.** Every program in a pane holds a copy of the pane's console input, and while one of them reads it Windows cannot name it through any of them. cornercase gave each program's copy one of the 16 questions it lets wait, so a few programs in panes could use them all up, and Codex, Copilot, Cursor and opencode could then lose their model and context line. Such a file now takes one, however many programs hold it. Nothing changes on Linux and macOS.
 
 ## 0.12.281
 
