@@ -13,22 +13,26 @@ The rules for every change are in [AGENTS.md](AGENTS.md), and the design and the
 
 ## Setup
 
-You need Linux or macOS (with the Xcode Command Line Tools), [rustup](https://rustup.rs) (it installs the pinned Rust version by itself), `git` and [Zig 0.15.2](https://ziglang.org/download/) on your `PATH` (exactly this version). The first build fetches Ghostty's sources and takes a couple of minutes.
+You need Linux, macOS (with the Xcode Command Line Tools) or Windows (with the Visual Studio Build Tools' C++ workload and [long paths in git](https://usecornercase.dev/docs/installation/#on-windows)), [rustup](https://rustup.rs) (it installs the pinned Rust version by itself), `git` and [Zig 0.15.2](https://ziglang.org/download/) on your `PATH` (exactly this version). The first build fetches Ghostty's sources and takes a couple of minutes.
 
 ```sh
 cargo run                  # build and attach
 cargo run -- kill-server   # needed after every rebuild: a client never attaches to a server from another build
 ```
 
-`cargo run` builds and attaches to this checkout's own server, so `kill-server` stops only that one. Each checkout and worktree gets its own server, session, log, stats, TODOs and queue in `~/.local/state/cornercase-dev/<key>/` (8 hex digits from the checkout's path; a `source` file names the checkout). Settings, tokens, flows and plugins live in `~/.config/cornercase-dev/`, shared by every checkout and empty at first: copy your `config.json` there. Release builds (`cargo run --release`, `cargo install --path .`) use your usual folders and server.
+`cargo run` builds and attaches to this checkout's own server, so `kill-server` stops only that one. Each checkout and worktree gets its own server, session, log, stats, TODOs and queue in `~/.local/state/cornercase-dev/<key>/` (`%LOCALAPPDATA%\cornercase-dev\<key>\` on Windows; 8 hex digits from the checkout's path; a `source` file names the checkout). Settings, tokens, flows and plugins live in `~/.config/cornercase-dev/` (`%APPDATA%\cornercase-dev\` on Windows), shared by every checkout and empty at first: copy your `config.json` there. Release builds (`cargo run --release`, `cargo install --path .`) use your usual folders and server.
 
-`CORNERCASE_SOCKET` still overrides all of it, for a second server from one checkout:
+`CORNERCASE_SOCKET` still overrides all of it, for a second server from one checkout (in `sh`, `bash` or Git Bash; the PowerShell line follows):
 
 ```sh
 CORNERCASE_SOCKET=/tmp/cc-dev/server.sock cargo run
 ```
 
-From a terminal inside cornercase, start the window with `env -u CORNERCASE cargo run`, and never run your installed `cornercase kill-server` there.
+```powershell
+$env:CORNERCASE_SOCKET = "$env:TEMP\cc-dev\server.sock"; cargo run
+```
+
+From a terminal inside cornercase, start the window with `env -u CORNERCASE cargo run` (in PowerShell, `Remove-Item Env:CORNERCASE; cargo run`), and never run your installed `cornercase kill-server` there.
 
 ## Checks
 

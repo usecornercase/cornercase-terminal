@@ -1,18 +1,18 @@
 ---
 title: Installation
-description: Install cornercase on Linux or macOS with one command or Homebrew, keep it up to date from the app, or build it from source.
+description: Install cornercase on Linux, macOS or Windows with one command or Homebrew, keep it up to date from the app, or build it from source.
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-cornercase ships as a single binary for Linux and macOS, on x86_64 and arm64. Install it with the install script or with Homebrew; building from source is there for contributors and for platforms without a prebuilt binary.
+cornercase ships as a single binary for Linux and macOS, on x86_64 and arm64, and for Windows on x64. Install it with the install script, with Homebrew or, on Windows, with PowerShell; building from source is there for contributors and for platforms without a prebuilt binary.
 
 ## Requirements
 
 | To install | You need |
 | --- | --- |
-| **A prebuilt binary** | **Linux** with glibc 2.35 or newer (Ubuntu 22.04 or later, and similar), or **macOS**. `curl` or `wget` for the install script. |
-| **From source** | Linux or macOS, [rustup](https://rustup.rs), [Zig **0.15.2**](https://ziglang.org/download/) on your `PATH`, `git`, and network access for the first build. See [From source](#from-source). |
+| **A prebuilt binary** | **Linux** with glibc 2.35 or newer (Ubuntu 22.04 or later, and similar), or **macOS**. `curl` or `wget` for the install script. Or **Windows** 11, or 10 from version 1809, on x64 (Windows on Arm runs the x64 build), with PowerShell for the installer; a few features [don't work there yet](../help/limitations/#on-windows). |
+| **From source** | Linux, macOS or Windows, [rustup](https://rustup.rs), [Zig **0.15.2**](https://ziglang.org/download/) on your `PATH`, `git`, and network access for the first build. See [From source](#from-source). |
 
 Optional, for some features:
 
@@ -38,6 +38,14 @@ Optional, for some features:
    brew install usecornercase/tap/cornercase
    ```
 
+   On Windows, from PowerShell or a command prompt:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -c "irm https://usecornercase.dev/install.ps1 | iex"
+   ```
+
+   It downloads `cornercase.exe` from the latest release, puts it in `%USERPROFILE%\.local\bin` and adds that folder to your user `PATH`. Open a new terminal, such as Windows Terminal, so it picks it up. Running the line again while cornercase runs works too: it sets the running `cornercase.exe` aside as `cornercase.old.exe`, which cornercase deletes once nothing runs from it, and the server keeps the old version until it restarts.
+
 2. Check that it runs:
 
    ```sh
@@ -61,7 +69,7 @@ cornercase is built with Cargo. The build also compiles Ghostty's terminal core,
 
 | You need | Why |
 | --- | --- |
-| **Linux** or **macOS** | The only supported platforms. On macOS, install the Xcode Command Line Tools: `xcode-select --install`. |
+| **Linux**, **macOS** or **Windows** | On macOS, install the Xcode Command Line Tools: `xcode-select --install`. On Windows, install the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the C++ workload, and see the [note below](#on-windows). |
 | [rustup](https://rustup.rs) | The Rust version is pinned in `rust-toolchain.toml`; rustup installs it by itself on the first build. |
 | [Zig **0.15.2**](https://ziglang.org/download/) on your `PATH` | It builds Ghostty's terminal core, which refuses any other Zig version. |
 | `git` | To clone the repository. |
@@ -101,6 +109,16 @@ Package managers such as Homebrew may ship a newer Zig. If `zig version` doesn't
 If you already have a checkout of Ghostty, point `GHOSTTY_SOURCE_DIR` at it before building and the download is skipped.
 </Aside>
 
+#### On Windows
+
+Ghostty's sources hold files whose paths pass Windows' 260-character limit, so let `git` handle long paths before the first build, which clones them:
+
+```powershell
+git config --global core.longpaths true
+```
+
+Keep the checkout in a short folder, such as `C:\src\cornercase-terminal`: a `target` folder deep in the file system makes the linker fail with `LNK1104`. Setting `CARGO_TARGET_DIR` to a short folder works too. Cargo puts the binary in `%USERPROFILE%\.cargo\bin`.
+
 ## Update
 
 cornercase updates itself. When the server starts, and then every hour, it asks GitHub for the latest release. That is a single request to GitHub's API (plus the changelog once a new version is out); nothing about you or your projects is sent.
@@ -116,6 +134,8 @@ When a newer version is out, a toast says *a new cornercase is out* and **`More 
 3. Click **restart now**. Before you do, the dialog says what is running and will stop: how many agents are working or waiting for you, and which other programs run in which project, or that nothing is running. cornercase saves your session, restarts the server on the new binary, and every attached terminal reopens on it. Your projects, workspaces, tabs and splits come back, but running programs don't survive: each pane gets a new shell in its folder, so an agent at work is stopped. Claude Code and Codex then [resume their conversations](../guides/sessions/#agents-resume-their-conversations) in their tabs.
 
 </Steps>
+
+On Windows, the file of a running program can't be replaced, so cornercase renames the running `cornercase.exe` to `cornercase.old.exe` and puts the new one in its place. The old file goes the next time cornercase starts once nothing runs from it, which after a restart is once you have closed that window.
 
 Not ready to restart? Click **later**: the old version keeps running, and the entry in **`More ▴`** becomes **restart to update** for later. The next natural restart of the server, after `cornercase kill-server` or a reboot, also starts the new version, and running `cornercase` from another terminal against the old server asks whether to restart it (see [Command line](../reference/command-line/#a-server-from-another-build)).
 
@@ -137,6 +157,8 @@ When cornercase can't replace its own binary, because Homebrew installed it, bec
 brew update && brew upgrade cornercase                # Homebrew
 curl -fsSL https://usecornercase.dev/install.sh | sh  # everything else
 ```
+
+On Windows, it is the PowerShell line from [Install](#install).
 
 To turn the check off, set **settings → UI → check for updates** to *never*, or `check_updates` to `false` in [`config.json`](../reference/configuration/#check_updates).
 
@@ -171,4 +193,16 @@ Then remove what cornercase saved, if you don't want to keep it:
 rm -rf ~/.config/cornercase ~/.local/state/cornercase
 ```
 
-If you set `XDG_CONFIG_HOME` or `XDG_STATE_HOME`, the folders are there instead. [Files and environment](../reference/files-and-environment/) lists everything cornercase writes. Git worktrees it created stay in `~/.cornercase/worktrees` until you remove them with `git worktree remove`.
+If you set `XDG_CONFIG_HOME` or `XDG_STATE_HOME`, the folders are there instead.
+
+On Windows, in PowerShell:
+
+```powershell
+cornercase kill-server
+Remove-Item "$HOME\.local\bin\cornercase.exe", "$HOME\.local\bin\cornercase.old*.exe"
+Remove-Item -Recurse "$env:APPDATA\cornercase", "$env:LOCALAPPDATA\cornercase"
+```
+
+The installer added `%USERPROFILE%\.local\bin` to your user `PATH`, which you can leave or remove in **Settings → System → About → Advanced system settings → Environment Variables**.
+
+[Files and environment](../reference/files-and-environment/) lists everything cornercase writes. Git worktrees it created stay in `~/.cornercase/worktrees` until you remove them with `git worktree remove`.

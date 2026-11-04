@@ -10,6 +10,7 @@ const t = words(Astro.url);
 const ways: [string, string][] = [
   [t.install.script, 'curl -fsSL https://usecornercase.dev/install.sh | sh'],
   ['Homebrew', 'brew install usecornercase/tap/cornercase'],
+  ['Windows', 'powershell -ExecutionPolicy Bypass -c "irm https://usecornercase.dev/install.ps1 | iex"'],
 ];
 ---
 

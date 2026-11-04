@@ -37,12 +37,18 @@ Or with Homebrew:
 brew install usecornercase/tap/cornercase
 ```
 
+Windows, x64, from PowerShell or a command prompt (a few features don't work there yet: [Known limitations](https://usecornercase.dev/docs/help/limitations/#on-windows)):
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://usecornercase.dev/install.ps1 | iex"
+```
+
 cornercase checks GitHub for a new release every hour. When there is one, a ` ↑ ` button next to ` Settings ` shows what is new and installs it; `cornercase update` does the same from a shell. [Installation](https://usecornercase.dev/docs/installation/)
 
 <details>
 <summary>From source</summary>
 
-You need Linux or macOS (on macOS, the Xcode Command Line Tools: `xcode-select --install`), [rustup](https://rustup.rs), which installs the Rust version pinned in `rust-toolchain.toml` on the first build, [Zig 0.15.2](https://ziglang.org/download/) on your `PATH` (exactly this version: it builds Ghostty's terminal core, which refuses any other, so download it from ziglang.org rather than a package manager if in doubt), `git`, and network access for the first build, which fetches Ghostty's sources.
+You need Linux, macOS or Windows (on macOS, the Xcode Command Line Tools: `xcode-select --install`; on Windows, the Visual Studio Build Tools' C++ workload and [long paths in git](https://usecornercase.dev/docs/installation/#on-windows)), [rustup](https://rustup.rs), which installs the Rust version pinned in `rust-toolchain.toml` on the first build, [Zig 0.15.2](https://ziglang.org/download/) on your `PATH` (exactly this version: it builds Ghostty's terminal core, which refuses any other, so download it from ziglang.org rather than a package manager if in doubt), `git`, and network access for the first build, which fetches Ghostty's sources.
 
 ```sh
 git clone https://github.com/usecornercase/cornercase-terminal.git

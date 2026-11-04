@@ -5,6 +5,13 @@ use super::*;
 use crate::test_util::write_executable;
 use crate::test_util::{FakeHttp, TempDir};
 
+fn assert_refused_as_not_running(result: Result<()>, exe: &Path) {
+    let err = result.err().map(|e| e.to_string());
+    assert_eq!(err.as_deref(), Some("the new cornercase does not run here: missing library"));
+    assert_eq!(fs::read_to_string(exe).expect("old binary"), "old");
+    assert_eq!(fs::read_dir(exe.parent().expect("bin")).expect("bin").count(), 1);
+}
+
 mod check {
     use super::*;
 
@@ -140,6 +147,34 @@ mod install {
     use super::*;
 
     #[rstest]
+    #[case::linux("x86_64-unknown-linux-gnu", "cornercase-x86_64-unknown-linux-gnu.tar.gz")]
+    #[case::macos("aarch64-apple-darwin", "cornercase-aarch64-apple-darwin.tar.gz")]
+    #[case::windows("x86_64-pc-windows-msvc", "cornercase-x86_64-pc-windows-msvc.zip")]
+    fn each_target_downloads_its_own_archive(#[case] target: &str, #[case] expected: &str) {
+        assert_eq!(archive_name(target), expected);
+    }
+
+    #[test]
+    fn windows_runs_the_tar_of_its_system_folder_by_its_path() {
+        let folder = PathBuf::from("Windows");
+
+        assert_eq!(tar_in(true, Some(folder.clone())), folder.join("System32").join("tar.exe"));
+    }
+
+    #[rstest]
+    #[case::unix(false, Some("Windows"))]
+    #[case::no_windows_folder(true, None)]
+    fn elsewhere_tar_is_looked_up(#[case] windows: bool, #[case] folder: Option<&str>) {
+        assert_eq!(tar_in(windows, folder.map(PathBuf::from)), PathBuf::from("tar"));
+    }
+
+    #[test]
+    fn the_installer_command_fits_the_system() {
+        let expected = if cfg!(windows) { "install.ps1 | iex" } else { "install.sh | sh" };
+        assert!(INSTALLER.contains(expected), "{INSTALLER}");
+    }
+
+    #[rstest]
     #[case::cellar("/opt/homebrew/Cellar/cornercase/0.1.0/bin/cornercase")]
     #[case::linuxbrew("/home/linuxbrew/.linuxbrew/bin/cornercase")]
     fn homebrew_installs_ask_for_brew(#[case] exe: &str) {
@@ -247,7 +282,7 @@ pub(crate) mod replace {
         let bytes = archive_for(tmp, target, NEW);
         let checksums = sums(&bytes);
         let files = FakeHttp::start(vec![("GET /a.tar.gz", 200, bytes), ("GET /a.sha256", 200, checksums.into())]);
-        let name = format!("cornercase-{target}.tar.gz");
+        let name = archive_name(target);
         let json = serde_json::json!({"tag_name": "v9.0.0", "assets": [
             {"name": name, "browser_download_url": format!("{}/a.tar.gz", files.url())},
             {"name": format!("{name}.sha256"), "browser_download_url": format!("{}/a.sha256", files.url())},
@@ -318,10 +353,113 @@ pub(crate) mod replace {
         let exe = installed(&tmp);
         let bytes = archive(&tmp, "#!/bin/sh\necho 'missing library' >&2\nexit 127\n");
 
-        let err = replace(&bytes, &sums(&bytes), "9.0.0", &exe).err().map(|e| e.to_string());
+        let result = replace(&bytes, &sums(&bytes), "9.0.0", &exe);
 
-        assert_eq!(err.as_deref(), Some("the new cornercase does not run here: missing library"));
-        assert_eq!(fs::read_to_string(&exe).expect("old binary"), "old");
-        assert_eq!(fs::read_dir(exe.parent().expect("bin")).expect("bin").count(), 1);
+        assert_refused_as_not_running(result, &exe);
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use std::process::Stdio;
+
+    use super::*;
+    use crate::os::fs::stat;
+    use crate::test_util::{Running, fake_program, verbatim, wait_until};
+
+    const TARGET: &str = "x86_64-pc-windows-msvc";
+
+    fn sums(bytes: &[u8]) -> String {
+        format!("{} *{}\n", hex(&Sha256::digest(bytes)), archive_name(TARGET))
+    }
+
+    fn zipped(tmp: &TempDir, seed: &Path, says: &[(&str, &str)]) -> Vec<u8> {
+        let build = tmp.path().join("build");
+        fs::create_dir_all(&build).expect("build folder");
+        fs::copy(seed, build.join("cornercase.exe")).expect("the new binary");
+        let mut names = vec!["cornercase.exe".to_string()];
+        for (extension, text) in says {
+            let name = format!("cornercase.{extension}");
+            fs::write(build.join(&name), text).expect("what the new binary says");
+            names.push(name);
+        }
+        let zip = tmp.path().join("build.zip");
+        let status = Command::new(tar())
+            .arg("-a")
+            .arg("-cf")
+            .arg(&zip)
+            .arg("-C")
+            .arg(&build)
+            .args(&names)
+            .status()
+            .expect("tar");
+        assert!(status.success());
+        fs::read(zip).expect("read zip")
+    }
+
+    fn bin(tmp: &TempDir) -> PathBuf {
+        let bin = verbatim(tmp.path()).join("bin");
+        fs::create_dir(&bin).expect("bin folder");
+        bin.join("cornercase.exe")
+    }
+
+    fn running(exe: &Path, seed: &Path) -> Running {
+        fs::copy(seed, exe).expect("the old binary");
+        fs::write(exe.with_extension("hold"), "").expect("keep it running");
+        Running::spawn(Command::new(exe).stdout(Stdio::null()))
+    }
+
+    #[test]
+    fn the_tar_is_the_one_in_system32() {
+        let tar = tar();
+
+        assert!(tar.is_file(), "{}", tar.display());
+        assert!(tar.ends_with(Path::new("System32").join("tar.exe")), "{}", tar.display());
+    }
+
+    #[test]
+    fn a_flat_zip_is_unpacked_by_the_system_tar() {
+        let tmp = TempDir::new();
+        let seed = fake_program(tmp.path(), "seed");
+        let staging = verbatim(tmp.path()).join("staging");
+        fs::create_dir(&staging).expect("staging folder");
+
+        let binary = unpack(&zipped(&tmp, &seed, &[("out", "cornercase 9.0.0\n")]), &staging).expect("unpack");
+
+        assert_eq!(binary, staging.join("cornercase.exe"));
+    }
+
+    #[test]
+    fn a_running_binary_is_replaced_and_its_old_copy_goes_once_it_ends() {
+        let tmp = TempDir::new();
+        let seed = fake_program(tmp.path(), "seed");
+        let exe = bin(&tmp);
+        let old = running(&exe, &seed);
+        let id = stat(&exe).expect("the old binary").id();
+        let bytes = zipped(&tmp, &seed, &[("out", "cornercase 9.0.0\n")]);
+
+        replace(&bytes, &sums(&bytes), "9.0.0", &exe).expect("replace");
+
+        let aside = exe.with_file_name("cornercase.old.exe");
+        assert_eq!(stat(&aside).expect("the old binary, set aside").id(), id);
+        assert_ne!(stat(&exe).expect("the new binary").id(), id);
+        drop(old);
+        wait_until("the old copy is removed", || {
+            swap::remove_old(&exe);
+            !aside.exists()
+        });
+    }
+
+    #[test]
+    fn a_new_binary_that_does_not_run_leaves_the_old_one() {
+        let tmp = TempDir::new();
+        let seed = fake_program(tmp.path(), "seed");
+        let exe = bin(&tmp);
+        fs::write(&exe, "old").expect("old binary");
+        let bytes = zipped(&tmp, &seed, &[("err", "missing library"), ("code", "127")]);
+
+        let result = replace(&bytes, &sums(&bytes), "9.0.0", &exe);
+
+        assert_refused_as_not_running(result, &exe);
     }
 }
