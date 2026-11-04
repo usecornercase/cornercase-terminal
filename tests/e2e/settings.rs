@@ -153,3 +153,13 @@ fn config_search_prints_what_the_modal_finds() {
     let found: Value = serde_json::from_str(&session.says(&["config", "search", "ose", "--json"])).expect("json");
     assert_eq!(found["results"], serde_json::json!([]));
 }
+
+#[test]
+fn search_with_settings_prints_them_after_the_matches() {
+    let session = Session::new();
+    session.says(&["start-server"]);
+
+    let said = session.says(&["search", "--settings", "prefix", "key"]);
+
+    assert!(said.contains("place\tkey\tvalue\tnote\nUI › prefix key"), "{said}");
+}

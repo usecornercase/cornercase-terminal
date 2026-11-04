@@ -1,4 +1,5 @@
 use super::*;
+use crate::control::config::FoundSetting;
 
 fn hit(pane: u64, text: &str) -> Hit {
     Hit {
@@ -21,7 +22,7 @@ fn no_match_prints_the_header_alone() {
 
 #[test]
 fn a_row_has_a_dash_for_what_is_missing() {
-    let found = Matches { matches: vec![hit(5, "fixed the checkout")], capped: false };
+    let found = Matches { matches: vec![hit(5, "fixed the checkout")], capped: false, ..Matches::default() };
 
     assert_eq!(
         table(&found).expect("a table"),
@@ -31,7 +32,7 @@ fn a_row_has_a_dash_for_what_is_missing() {
 
 #[test]
 fn control_characters_and_tabs_become_spaces_so_a_row_stays_one_line() {
-    let found = Matches { matches: vec![hit(5, "a\tb\u{1b}[0m\nc")], capped: false };
+    let found = Matches { matches: vec![hit(5, "a\tb\u{1b}[0m\nc")], capped: false, ..Matches::default() };
 
     let text = table(&found).expect("a table");
 
@@ -56,4 +57,15 @@ fn the_columns_are_the_keys_of_a_hit_in_order() {
 )]
 fn only_a_lost_match_is_warned_about(#[case] answer: Value, #[case] warning: Option<&str>) {
     assert_eq!(unrevealed(&answer, control::Item::Pane(12)).as_deref(), warning);
+}
+
+#[test]
+fn settings_print_as_their_own_table_after_the_matches() {
+    let setting = FoundSetting { title: "UI › prefix key".into(), shown: "off".into(), ..FoundSetting::default() };
+    let found = Matches { settings: vec![setting], ..Matches::default() };
+
+    assert_eq!(
+        with_settings(&found).expect("a table"),
+        "pane\twho\tsource\tplace\tline\ttext\n\nplace\tkey\tvalue\tnote\nUI › prefix key\t-\toff\t-\n"
+    );
 }
