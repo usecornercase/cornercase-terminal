@@ -457,12 +457,17 @@ pub(crate) fn verbatim(path: &Path) -> PathBuf {
 
 #[cfg(windows)]
 pub(crate) fn holding(file: &Path, vars: &[(&str, &str)]) -> Running {
+    holding_reading(file, vars, std::process::Stdio::piped())
+}
+
+#[cfg(windows)]
+pub(crate) fn holding_reading(file: &Path, vars: &[(&str, &str)], input: std::process::Stdio) -> Running {
     let held = std::fs::OpenOptions::new().create(true).append(true).open(file).expect("open the file to hold");
     Running::spawn(
         std::process::Command::new("findstr")
             .arg("held")
             .envs(vars.iter().copied())
-            .stdin(std::process::Stdio::piped())
+            .stdin(input)
             .stdout(held)
             .stderr(std::process::Stdio::null()),
     )
