@@ -1354,9 +1354,10 @@ screen_queue() {
     const states = [{state:"pending"}, {state:"started",pane:7,server:"previous-server"}, {state:"failed",reason:"codex is not installed"}, {state:"missed"}];
     const hour = Math.floor(Date.now()/3600000)*3600;
     const entries = labels.map((label, i) => ({id:i+1,at:hour+3600+i*60,zone:"UTC",label,agent:"claude",command:"claude",program:"claude",mode:null,prompt:label,submit:true,place:{project,workspace:null,workspace_name:null,branch:"fix-login"},...states[i]}));
-    const routine = {id:5,at:hour+86400,zone:"UTC",label:"Check the dependencies",agent:"claude",command:"claude",program:"claude",mode:null,prompt:"Check the dependencies",submit:true,place:{project,workspace:null,workspace_name:null,branch:null},repeat:"day 09:00",state:"pending"};
+    const nine = Math.floor(Date.now()/86400000)*86400 + 9*3600;
+    const routine = {id:5,at:nine+86400,zone:"UTC",label:"Check the dependencies",agent:"claude",command:"claude",program:"claude",mode:null,prompt:"Check the dependencies",submit:true,place:{project,workspace:null,workspace_name:null,branch:null},repeat:"day 09:00",state:"pending"};
     const run = (id, at, state, pane) => ({...routine, id, at, repeat:undefined, routine:5, state, ...(pane === undefined ? {} : {pane, server:"previous-server"})});
-    entries.push(run(6, hour-86400, "removed"), run(7, hour-3600, "started", 7), routine);
+    entries.push(run(6, nine-86400, "removed"), run(7, nine, "started", 7), routine);
     fs.writeFileSync(path, JSON.stringify({version:2,next_id:8,entries}));
   ' "$CC_RUN/server.queue.json" "$CC_HOME"
   cc_start 140 38
