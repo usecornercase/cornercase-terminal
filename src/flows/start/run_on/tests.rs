@@ -5,7 +5,7 @@ use super::*;
 use crate::agents::Known;
 use crate::flows::builtin;
 use crate::flows::dialog::{CANCEL, EDIT};
-use crate::flows::start::{Focus, Hit};
+use crate::flows::start::Hit;
 use crate::flows::start::{Room, START};
 use crate::flows::store::{Listing, Origin, Saved};
 
@@ -165,55 +165,30 @@ mod from_an_issue_on_a_machine {
         s
     }
 
-    fn takes_no_typing(s: &mut Start) {
+    #[test]
+    fn takes_typing_in_the_prompt() {
+        let mut s = from_an_issue();
+
         assert_eq!(s.hit(Hit::Prompt { line: 0, col: 0 }, ROOM), Action::None);
-        s.focus = Focus::List;
-        s.paste("more", ROOM);
-        s.key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), ROOM);
+        s.paste(" first", ROOM);
 
-        assert_eq!((s.focus, s.prompt.text().as_str()), (Focus::Branch, "Add dark mode"));
+        assert!(s.typing_prompt());
+        assert_eq!(s.prompt.text(), " firstAdd dark mode");
     }
 
     #[test]
-    fn says_the_machine_writes_the_prompt() {
-        let s = from_an_issue();
-
-        assert_eq!(s.templated().as_deref(), Some("from vps's template (the issue's URL by default)"));
-        assert_eq!((s.focus, s.typing_prompt()), (Focus::Branch, false));
-    }
-
-    #[test]
-    fn takes_no_typing_in_the_prompt() {
+    fn starts_with_the_prompt_as_edited() {
         let mut s = from_an_issue();
-
-        takes_no_typing(&mut s);
-    }
-
-    #[test]
-    fn starts_without_a_prompt_of_its_own() {
-        let mut s = from_an_issue();
-        s.prompt = crate::editor::Editor::default();
 
         assert!(matches!(s.press(START), Action::Start { .. }));
     }
 
     #[test]
-    fn keeps_the_prompt_to_the_machine_once_the_machine_is_gone() {
+    fn refuses_an_empty_prompt_as_on_this_computer() {
         let mut s = from_an_issue();
-        s.run_on = RunOn::kept(None, s.run_on.as_ref());
+        s.prompt = crate::editor::Editor::default();
 
-        assert_eq!(s.templated().as_deref(), Some("from the machine's template (the issue's URL by default)"));
-        takes_no_typing(&mut s);
-    }
-
-    #[test]
-    fn gives_the_prompt_back_on_this_computer() {
-        let mut s = from_an_issue();
-
-        assert_eq!(s.hit(Hit::RunOn(None), ROOM), Action::RunOn);
-
-        assert_eq!(s.templated(), None);
-        assert_eq!(s.key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE), ROOM), Action::None);
-        assert_eq!(s.focus, Focus::Prompt);
+        assert_eq!(s.press(START), Action::None);
+        assert_eq!(s.notice.as_deref(), Some("say what the team should do in the prompt"));
     }
 }

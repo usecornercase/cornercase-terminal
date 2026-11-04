@@ -112,11 +112,10 @@ impl App {
             return;
         };
         let (issue, source) = start.asked.clone().unzip();
-        let prompt = if issue.is_some() { String::new() } else { run.task };
         log::info!("flows", "start on a machine", name = target.name, project = id);
         let flow = FlowRun {
             name: run.name,
-            prompt,
+            prompt: run.task,
             worktree: Some(run.branch),
             project: Some(id),
             issue,

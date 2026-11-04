@@ -160,7 +160,6 @@ pub(crate) struct StartFlow {
     pub(crate) cursor: usize,
     pub(crate) preview_scroll: u16,
     pub(crate) prompt: Editor,
-    pub(crate) template: Option<String>,
     pub(crate) branch: String,
     pub(crate) workspace: Option<String>,
     pub(crate) focus: Focus,
@@ -299,15 +298,12 @@ fn draw_start_prompt(f: &mut Frame, view: &View, start: &StartFlow, area: Rect) 
     let shape = start.shape();
     let (label, prompt) = (prompt_label(area, shape), prompt_area(area, shape));
     let dim = Style::default().fg(view.muted);
-    let template = start.template.as_deref();
-    let focused = start.focus == Focus::Prompt && template.is_none();
-    let lit = if focused { Style::default().fg(Color::Cyan) } else { dim };
+    let lit = if start.focus == Focus::Prompt { Style::default().fg(Color::Cyan) } else { dim };
     f.render_widget(Paragraph::new(Span::styled("prompt", lit)), label);
-    let empty = Editor::default();
-    let cursor = draw_text(f, view, prompt, if template.is_some() { &empty } else { &start.prompt }, focused);
-    if let Some(shown) = template.or(start.prompt.is_empty().then_some(PLACEHOLDER)) {
+    let cursor = draw_text(f, view, prompt, &start.prompt, start.focus == Focus::Prompt);
+    if start.prompt.is_empty() {
         let at = text_inside(prompt);
-        let placeholder = truncate_right(shown, usize::from(at.width));
+        let placeholder = truncate_right(PLACEHOLDER, usize::from(at.width));
         f.render_widget(Paragraph::new(Span::styled(placeholder, dim.bg(view.surface()))), Rect { height: 1, ..at });
     }
     cursor

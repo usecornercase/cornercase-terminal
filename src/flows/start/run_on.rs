@@ -3,11 +3,9 @@ use std::collections::BTreeMap;
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
 
-use super::{Action, Focus, Start};
+use super::{Action, Start};
 use crate::accounts::AgentAccounts;
-use crate::machines::run_on::{self, RunOn, Target};
-
-const LOST: &str = "the machine";
+use crate::machines::run_on::{RunOn, Target};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[expect(
@@ -52,7 +50,6 @@ impl Start {
         self.notice = None;
         self.picked_there.clear();
         self.close_accounts();
-        self.leave_prompt();
         true
     }
 
@@ -66,19 +63,6 @@ impl Start {
         kept.extend(std::mem::take(&mut self.picked_there));
         self.accounts = accounts;
         self.seed_accounts(&kept);
-    }
-
-    pub(crate) fn templated(&self) -> Option<String> {
-        if self.asked.is_none() || !self.elsewhere() {
-            return None;
-        }
-        Some(run_on::from_template(self.machine().map_or(LOST, |target| target.name.as_str())))
-    }
-
-    pub(crate) fn leave_prompt(&mut self) {
-        if self.focus == Focus::Prompt && self.templated().is_some() {
-            self.focus = Focus::Branch;
-        }
     }
 
     pub(crate) fn run_on_spans(&self, dim: Style) -> Option<Vec<Span<'static>>> {

@@ -106,6 +106,8 @@ impl Reading {
             start(app).there().is_some_and(|there| there.listed && there.accounted && there.tracked)
         });
         let app = &mut self.remote.rig.app;
+        assert!(start(app).typing_prompt(), "the prompt takes typing on a machine too");
+        type_text(app, " A test first.");
         send_key(app, KeyCode::Tab, KeyModifiers::NONE);
         send_key(app, KeyCode::Enter, KeyModifiers::NONE);
     }
@@ -241,7 +243,7 @@ fn says_the_project_left_the_machine_instead_of_starting_nothing_in_silence() {
 }
 
 #[test]
-fn from_an_issue_keeps_the_machine_and_sends_the_issue() {
+fn from_an_issue_keeps_the_machine_and_sends_the_issue_with_the_prompt_as_edited() {
     let mut reading = reading_with(Reply::Told(running), vec![web_shop()]);
     reading.checked();
 
@@ -250,7 +252,7 @@ fn from_an_issue_keeps_the_machine_and_sends_the_issue() {
 
     let sent = reading.sent("flow-run").expect("a flow run");
     assert_eq!((&sent["issue"], &sent["source"], &sent["project"]), (&json!("#7"), &json!("github"), &json!(1)));
-    assert_eq!(sent["prompt"], json!(""));
+    assert_eq!(sent["prompt"], json!("A test first.https://github.com/acme/web-shop/issues/7"));
 }
 
 fn flows_answered(app: &App) -> bool {

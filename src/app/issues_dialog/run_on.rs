@@ -242,7 +242,6 @@ impl App {
             run_on.chosen = run_on.targets.iter().position(|target| target.link == link);
             start.notice = None;
         }
-        start.leave_prompt();
         start
     }
 }
