@@ -36,6 +36,7 @@ export type KeysAction =
   | { kind: 'reopenAgents' }
   | { kind: 'issues' }
   | { kind: 'todo' }
+  | { kind: 'recap' }
   | { kind: 'settings' }
   | { kind: 'usage' }
   | { kind: 'processes' }
@@ -76,6 +77,7 @@ const ROOT: KeysItem[] = [
   open('w', 'workspace'),
   run('i', 'issues', { kind: 'issues' }),
   run('t', 'todo', { kind: 'todo' }),
+  run('s', 'recap', { kind: 'recap' }),
   run(',', 'settings', { kind: 'settings' }),
   run('u', 'usage', { kind: 'usage' }),
   run('k', 'processes', { kind: 'processes' }),
