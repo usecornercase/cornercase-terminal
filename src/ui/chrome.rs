@@ -37,6 +37,10 @@ pub const MORE_LABEL: &str = "More ▴";
 
 pub(crate) const WORKTREES_LABEL: &str = "Worktrees";
 
+const MACHINE_MARK: &str = " ▴";
+
+const MACHINE_GAP: u16 = 1;
+
 pub(crate) const TODO_LABEL: &str = "TODO";
 
 const TODO_DOT: &str = "●";
@@ -60,9 +64,37 @@ pub(super) fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
         draw_button(f, help, "", HELP_LABEL, style);
     }
     draw_more_button(f, view, more_button(areas.more));
-    if !areas.worktrees.is_empty() {
-        let style = button_style(view, areas.worktrees, Style::default().fg(view.muted), Color::Cyan);
-        draw_button(f, areas.worktrees, " ", WORKTREES_LABEL, style);
+    if areas.worktrees.is_empty() {
+        return;
+    }
+    let machine = view.machine.as_deref().map(|label| machine_button(areas.worktrees, label));
+    let worktrees = worktrees_button(areas.worktrees, machine.as_ref().map(|(r, _)| *r));
+    let style = button_style(view, worktrees, Style::default().fg(view.muted), Color::Cyan);
+    draw_button(f, worktrees, " ", WORKTREES_LABEL, style);
+    if let Some((r, text)) = machine.filter(|(r, _)| !r.is_empty()) {
+        let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
+        draw_button(f, r, "", &text, style);
+    }
+}
+
+pub(crate) fn machine_button(row: Rect, label: &str) -> (Rect, String) {
+    let start = row.x.saturating_add(1).saturating_add(button_width(WORKTREES_LABEL)).saturating_add(MACHINE_GAP);
+    let room = row.right().saturating_sub(start).saturating_sub(1);
+    let mark = u16::try_from(MACHINE_MARK.chars().count()).unwrap_or(u16::MAX);
+    if room < button_width("…") + mark {
+        return (Rect::default(), String::new());
+    }
+    let text = format!("{}{MACHINE_MARK}", truncate_right(label, usize::from(room - 2 - mark)));
+    let width = button_width(&text);
+    let column = row.x.saturating_add(1).saturating_add(row.width / 2);
+    let x = column.min(row.right().saturating_sub(width + 1)).max(start);
+    (Rect { x, width, ..row }.intersection(row), text)
+}
+
+pub(crate) fn worktrees_button(row: Rect, machine: Option<Rect>) -> Rect {
+    match machine.filter(|r| !r.is_empty()) {
+        Some(machine) => Rect { width: machine.x.saturating_sub(row.x), ..row },
+        None => row,
     }
 }
 

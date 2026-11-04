@@ -22,7 +22,15 @@ const NEW_GROUP_HINT: &str = "right-click a project or its ⋯ to move it into t
 const WORKTREE_TOGGLE: &str = "with its own worktree";
 
 impl App {
-    pub(super) fn new_group_view(input: &Editor) -> ui::Overlay {
+    pub(super) fn name_view(overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::NewGroup { input } => Some(Self::new_group_view(input)),
+            Overlay::NewMachine { input, error } => Some(Self::new_machine_view(input, error.as_deref())),
+            _ => None,
+        }
+    }
+
+    fn new_group_view(input: &Editor) -> ui::Overlay {
         ui::Overlay::Form(ui::Form {
             title: "New group",
             label: "name",
@@ -242,6 +250,7 @@ impl App {
             Overlay::Rename { target, input } => self.submit_rename(target, &input.text()),
             Overlay::NewGroup { input } if input.text().trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => self.submit_new_group(&input.text()),
+            Overlay::NewMachine { input, .. } => self.submit_new_machine(input),
             Overlay::GroupStyle { .. }
             | Overlay::Usage
             | Overlay::Remote

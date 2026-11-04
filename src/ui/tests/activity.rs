@@ -4,7 +4,7 @@ use crate::ui::activity::{Item, Shown, WIDTH, items};
 const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 24 };
 
 fn everything() -> Shown {
-    Shown { issues: true, changes: true, files: true, flow: false, plugins: 0 }
+    Shown { issues: true, changes: true, files: true, flow: false, plugins: 0, machine: false }
 }
 
 fn with_bar(hover: Option<Position>) -> View<'static> {

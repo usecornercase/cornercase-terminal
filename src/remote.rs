@@ -21,6 +21,7 @@ use crate::version::{self, CURRENT};
 
 mod attempts;
 mod known;
+pub(crate) mod machines;
 mod shell;
 
 const SSH: &str = "ssh";

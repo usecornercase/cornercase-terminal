@@ -404,3 +404,102 @@ fn a_command_that_checks_the_server_first_opens_one_ssh_connection() {
 
     assert_eq!((focused, hidden), (1, 1));
 }
+
+fn remote_window(session: &Arc<Session>) -> Harness {
+    remote_window_with(session, &[])
+}
+
+fn remote_window_with(session: &Arc<Session>, env: &[(&str, &str)]) -> Harness {
+    let path = fake_ssh(&session.dir, "");
+    let exe = env!("CARGO_BIN_EXE_cornercase");
+    std::os::unix::fs::symlink(exe, session.dir.join("bin/cornercase"))
+        .expect("cornercase for a machine without --command");
+    let args = ["remote", "devbox", "--command", exe];
+    let env: Vec<(&str, &str)> = [("PATH", path.as_str())].into_iter().chain(env.iter().copied()).collect();
+    let mut app = Harness::run(exe.as_ref(), &args, Arc::clone(session), (ROWS, COLS), &env);
+    app.wait_for("the remote window names its machine", |s| s.contains(&first_entry()) && s.contains("devbox ▴"));
+    app
+}
+
+fn click_on(app: &mut Harness, text: &str) {
+    app.wait_for(text, |s| s.contains(text));
+    let at = app.position_of(text);
+    app.click(at);
+}
+
+#[test]
+fn a_window_switches_between_this_machine_and_the_one_it_reached() {
+    let session = Session::new();
+    let mut app = remote_window(&session);
+    let runs = ssh_runs(&session);
+
+    click_on(&mut app, "devbox ▴");
+    click_on(&mut app, "  this machine");
+    app.wait_for("the window is on this machine", |s| s.contains("this machine ▴"));
+    let local_runs = ssh_runs(&session);
+    click_on(&mut app, "this machine ▴");
+    click_on(&mut app, "  devbox");
+    app.wait_for("the window is on devbox again", |s| s.contains("devbox ▴") && !s.contains("this machine ▴"));
+
+    assert_eq!((local_runs, ssh_runs(&session)), (runs, runs + 1), "only devbox goes through ssh");
+    app.send(b"echo still-\"\"here\r");
+    app.wait_for("the shell answers", |s| s.contains("still-here"));
+    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
+    assert!(saved.contains("\"devbox\"") && saved.contains(env!("CARGO_BIN_EXE_cornercase")), "{saved}");
+    assert_eq!(session.servers(), 1);
+}
+
+fn add_newbox(app: &mut Harness) {
+    click_on(app, "devbox ▴");
+    click_on(app, "add machine…");
+    app.wait_for("the dialog asks for it", |s| s.contains("ssh destination"));
+    app.send(b"newbox\r");
+    app.wait_for_raw("the window asks before reaching it", |raw| raw.contains("connect to newbox?"));
+}
+
+#[test]
+fn a_machine_added_by_hand_is_reached_once_the_window_asks() {
+    let session = Session::new();
+    let mut app = remote_window(&session);
+    add_newbox(&mut app);
+    let runs = ssh_runs(&session);
+
+    app.send(b"\r");
+
+    app.wait_for("the window is on newbox", |s| s.contains("newbox ▴"));
+    assert_eq!(ssh_runs(&session), runs + 1);
+    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
+    assert!(saved.contains("\"newbox\""), "{saved}");
+}
+
+#[test]
+fn going_back_before_connecting_keeps_the_window_where_it_was() {
+    let session = Session::new();
+    let mut app = remote_window(&session);
+    let runs = ssh_runs(&session);
+    add_newbox(&mut app);
+
+    app.send(b"\x1b");
+
+    app.wait_for("the screen comes back", |s| !s.contains("connect to newbox?") && s.contains("devbox ▴"));
+    app.send(b"echo back-\"\"here\r");
+    app.wait_for("the same window answers", |s| s.contains("back-here"));
+    assert_eq!(ssh_runs(&session), runs, "nothing was reached");
+}
+
+#[test]
+fn a_window_inside_a_pane_of_this_machine_stays_where_it_is() {
+    let session = Session::new();
+    let mut app = remote_window_with(&session, &[("CORNERCASE", "1")]);
+    click_on(&mut app, "devbox ▴");
+    click_on(&mut app, "  this machine");
+    app.wait_for("the window says why", |s| s.contains("already running in this terminal"));
+
+    app.send(b"\x1b");
+
+    app.wait_for("the screen comes back", |s| {
+        !s.contains("already running in this terminal") && s.contains("devbox ▴")
+    });
+    app.send(b"echo still-\"\"there\r");
+    app.wait_for("the same window answers", |s| s.contains("still-there"));
+}

@@ -135,6 +135,7 @@ mod groups;
 mod hover;
 mod issues;
 mod layout;
+mod machine_button;
 mod muted;
 mod overlay;
 mod pane_footer;

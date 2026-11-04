@@ -220,7 +220,8 @@ fn wait_for_restart(stream: &mut UnixStream, mut input: Option<BorrowedFd<'_>>, 
                 | ServerMessage::Detached
                 | ServerMessage::Sound(_)
                 | ServerMessage::Open(_)
-                | ServerMessage::Browse(_),
+                | ServerMessage::Browse(_)
+                | ServerMessage::Machine(_),
             )) => {}
             Ok(None) | Err(_) if report.is_some() => return Ok(Waited::Restarted(report.map(Box::new))),
             Ok(None) | Err(_) => return Err(Error::ServerGone),

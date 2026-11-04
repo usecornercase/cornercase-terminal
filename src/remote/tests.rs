@@ -458,6 +458,7 @@ mod proxy {
             pointer: None,
             graphics: Support::default(),
             probe: String::new(),
+            machines: Some(protocol::Machines { here: Some("devbox".into()), known: vec!["devbox".into()] }),
         }
     }
 
@@ -483,6 +484,15 @@ mod proxy {
         assert!(
             matches!(message, ClientMessage::Hello(hello) if hello.build == "the server's" && hello.openers.is_empty())
         );
+    }
+
+    #[test]
+    fn keeps_the_machines_the_window_can_reach() {
+        let sent = hello().machines;
+
+        let message = rebuilt(ClientMessage::Hello(Box::new(hello())), "the server's".into());
+
+        assert!(matches!(message, ClientMessage::Hello(hello) if hello.machines == sent));
     }
 
     #[test]

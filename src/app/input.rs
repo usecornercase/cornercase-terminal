@@ -220,7 +220,7 @@ impl App {
         if self.plugin_row_mouse(areas.plugins, pos, left) {
             return ControlFlow::Break(Ok(()));
         }
-        if let Some(item) = Self::footer_hit(areas, pos) {
+        if let Some(item) = self.footer_hit(areas, pos) {
             return ControlFlow::Break(if left { self.activity_click(item, pos, area) } else { Ok(()) });
         }
         if areas.list.contains(pos) {
@@ -376,6 +376,7 @@ impl App {
             files: self.project().is_some(),
             flow: self.has_run(),
             plugins: u16::try_from(self.buttoned_plugins().count()).unwrap_or(u16::MAX),
+            machine: self.machine_label().is_some(),
         }
     }
 
@@ -399,6 +400,7 @@ impl App {
             ui::ActivityItem::Plugin(plugin) => self.click_plugin_button(plugin, pos),
             ui::ActivityItem::Help => self.open_help(pos),
             ui::ActivityItem::More => self.open_more(pos),
+            ui::ActivityItem::Machine => self.open_machines(pos),
         }
         Ok(())
     }
@@ -409,11 +411,13 @@ impl App {
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 
-    fn footer_hit(areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
+    fn footer_hit(&self, areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
+        let machine = self.machine_label().map(|label| ui::machine_button(areas.worktrees, &label).0);
         [
             (ui::help_button(areas.more), ui::ActivityItem::Help),
             (ui::more_button(areas.more), ui::ActivityItem::More),
-            (areas.worktrees, ui::ActivityItem::Worktrees),
+            (machine.unwrap_or_default(), ui::ActivityItem::Machine),
+            (ui::worktrees_button(areas.worktrees, machine), ui::ActivityItem::Worktrees),
         ]
         .into_iter()
         .find_map(|(r, item)| r.contains(pos).then_some(item))
