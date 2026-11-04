@@ -10,6 +10,11 @@ pub(crate) const MAX_FILES: usize = 200;
 pub(crate) const MAX_TOTAL_BYTES: u64 = 8 * 1024 * 1024;
 const PERMISSIONS: u32 = 0o777;
 const PRIVATE: u32 = 0o600;
+#[cfg(unix)]
+const REFUSED: Option<&str> = None;
+#[cfg(windows)]
+const REFUSED: Option<&str> =
+    Some("writing files into a clone is not supported on Windows yet: their names and access are not checked there");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct File {
@@ -30,6 +35,9 @@ pub(crate) fn write(root: &Path, files: &[File]) -> Vec<Unwritten> {
 }
 
 fn written(root: &Path, file: &File) -> Result<(), String> {
+    if let Some(why) = REFUSED {
+        return Err(why.into());
+    }
     let parts = parts(&file.path)?;
     let Some((name, folders)) = parts.split_last() else { return Err("its path is empty".into()) };
     let path = folders_in(root, folders)?.join(name);
