@@ -195,6 +195,17 @@ mod pasting {
     }
 
     #[test]
+    fn goes_in_at_the_cursor_of_a_url_already_written() {
+        let mut form = opened();
+        form.url = Editor::new("github.com:acme/api.git");
+        assert_eq!(press(&mut form, KeyCode::Home), Step::None);
+
+        form.paste("git@", WIDTH);
+
+        assert_eq!(form.url.text(), "git@github.com:acme/api.git");
+    }
+
+    #[test]
     fn changes_nothing_while_it_clones() {
         let mut form = listed();
         form.cloning = true;
