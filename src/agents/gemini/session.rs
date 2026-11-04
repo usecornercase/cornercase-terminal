@@ -4,8 +4,9 @@ use std::time::SystemTime;
 
 use serde_json::Value;
 
+use super::is_gemini;
 use crate::agents::context::counting::{self, Record, Usage};
-use crate::agents::context::discovery::{folder, home, named};
+use crate::agents::context::discovery::{folder, home};
 use crate::agents::context::jsonl::{Tail, head};
 use crate::agents::context::message::{self, Backwards, Each, Role, Said, Spoken};
 use crate::agents::context::{Compaction, Context, percent};
@@ -13,7 +14,6 @@ use crate::error::{Error, Result};
 use crate::process;
 use crate::time::Stamp;
 
-const NAME: &str = "gemini";
 const REPLIES: usize = 512;
 
 #[derive(Debug)]
@@ -214,7 +214,7 @@ fn look_among(
 ) -> Option<Session> {
     let others = scan();
     let family: Vec<i32> = std::iter::once(pid).chain(process::descendants(pid)).collect();
-    let holder = family.iter().rev().copied().find(|&pid| named(&process::args(pid), NAME)).unwrap_or(pid);
+    let holder = family.iter().rev().copied().find(|&pid| is_gemini(&process::args(pid))).unwrap_or(pid);
     let dir = home(holder, "GEMINI_CLI_HOME", ".gemini", ".gemini")?;
     let cwd = folder(holder)?;
     if taken_by_another(others, &family, pid, &cwd, &dir) {
@@ -242,7 +242,7 @@ fn look_among(
 fn taken_by_another(others: Vec<i32>, family: &[i32], pid: i32, cwd: &Path, dir: &Path) -> bool {
     others.into_iter().any(|other| {
         !family.contains(&other)
-            && named(&process::args(other), NAME)
+            && is_gemini(&process::args(other))
             && folder(other).as_deref() == Some(cwd)
             && home(other, "GEMINI_CLI_HOME", ".gemini", ".gemini").as_deref() == Some(dir)
             && !process::descendants(other).contains(&pid)

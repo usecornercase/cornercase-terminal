@@ -133,6 +133,8 @@ Fields cornercase doesn't know are ignored, so a manifest written for a newer co
 
 A `command` is a list: the program, then its arguments. It never goes through a shell, so nothing in it is expanded or split. A program with a `/` in its name, like `bin/notes`, is looked up in the plugin's folder and must stay inside it: `..`, and symbolic links that lead out of the folder, are refused when the plugin is linked, installed or turned on, and `plugin list` and Settings say why. So is a program that is not there yet: build it before you link the folder. That program, and every folder between the plugin's folder and it, must be yours and not writable by other users. A bare name, like `python3`, is looked up on the `PATH`.
 
+On Windows, a program runs as Windows starts it: an `.exe` (with or without the extension), a `.cmd` or `.bat`, or a bare name found as `name.exe` on the `PATH` (write `npm.cmd`, not `npm`). A script whose first line starts with `#!`, like `bin/notes` above, runs with the `sh` that comes with Git for Windows, which reads that line as Linux and macOS do (`#!/bin/sh`, `#!/usr/bin/env node`). Without Git for Windows such a script cannot run, and `plugin list` and Settings say so. On Windows the plugin's folder and its manifest must belong to you (or to SYSTEM or Administrators) and give no one else write access, and a manifest that is a link or another reparse point, such as a file OneDrive syncs on demand, is refused.
+
 Each command's output, and its errors, go to the plugin's log, with a line from cornercase when a service or window process starts, stops or exits. `cornercase plugin logs <id>` prints it.
 
 ### Actions

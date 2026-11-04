@@ -15,6 +15,7 @@ use crate::git::worktree::setup;
 use crate::host::notify::Notification;
 use crate::log;
 use crate::project::{Hierarchy, Project, TabAt, Workspace, WorkspaceAt};
+use crate::script::Shell;
 use crate::term::Term;
 use crate::ui;
 
@@ -75,8 +76,18 @@ impl App {
         let status = setup::status_file(&self.setups.dir, id);
         let _ = std::fs::remove_file(&status);
         let branch = git::branch(&path).unwrap_or_default();
-        let args = setup::args(script, &status, self.shells.shell(), &self.projects[project].path, &branch);
-        let spawning = Spawning { id, size, shell: "/bin/sh", args: &args, cwd: path, run };
+        let root = &self.projects[project].path;
+        let wrapper = setup::Wrapper {
+            script,
+            status: &status,
+            shell: self.shells.shell(),
+            root,
+            branch: &branch,
+            worktree: &path,
+            home: std::env::var_os("HOME").is_some(),
+        };
+        let line = setup::line(Shell::here(), &wrapper);
+        let spawning = Spawning { id, size, shell: &line.program, args: &line.args, env: &line.env, cwd: path, run };
         let mut term = self.spawn_term(spawning, accounts)?;
         self.setups.running.insert(id, (workspace, status.clone()));
         term.setup = Some(setup::Pane::Running { status, since: Instant::now() });

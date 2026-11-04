@@ -83,7 +83,7 @@ pub(crate) fn command(kind: Known, program: &str, home: &Path) -> Option<Command
 
 pub(crate) fn system(kind: Known, program: &str, home: Option<&Path>) -> Option<Command> {
     let account = kind.account()?;
-    let mut command = Command::new(program);
+    let mut command = process::program::command(program);
     command.args(account.status?);
     if let Some(home) = home.filter(|home| home.is_dir()) {
         command.current_dir(home);

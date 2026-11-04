@@ -25,13 +25,18 @@ struct Base {
 }
 
 #[cfg(unix)]
-const CONFIG_BASE: Base = Base { var: "XDG_CONFIG_HOME", home: "HOME", in_home: &[".config"] };
+pub(crate) const HOME_VAR: &str = "HOME";
+#[cfg(not(unix))]
+pub(crate) const HOME_VAR: &str = "USERPROFILE";
+
 #[cfg(unix)]
-const STATE_BASE: Base = Base { var: "XDG_STATE_HOME", home: "HOME", in_home: &[".local", "state"] };
+const CONFIG_BASE: Base = Base { var: "XDG_CONFIG_HOME", home: HOME_VAR, in_home: &[".config"] };
+#[cfg(unix)]
+const STATE_BASE: Base = Base { var: "XDG_STATE_HOME", home: HOME_VAR, in_home: &[".local", "state"] };
 #[cfg(not(unix))]
-const CONFIG_BASE: Base = Base { var: "APPDATA", home: "USERPROFILE", in_home: &["AppData", "Roaming"] };
+const CONFIG_BASE: Base = Base { var: "APPDATA", home: HOME_VAR, in_home: &["AppData", "Roaming"] };
 #[cfg(not(unix))]
-const STATE_BASE: Base = Base { var: "LOCALAPPDATA", home: "USERPROFILE", in_home: &["AppData", "Local"] };
+const STATE_BASE: Base = Base { var: "LOCALAPPDATA", home: HOME_VAR, in_home: &["AppData", "Local"] };
 
 fn process_var(name: &str) -> Option<OsString> {
     std::env::var_os(name)

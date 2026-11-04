@@ -63,7 +63,7 @@ fn served(pid: i32, since: SystemTime) -> Option<PathBuf> {
 }
 
 fn daemon(home: &Path) -> Option<i32> {
-    let text = std::fs::read_to_string(home.join("app-server-daemon/daemon.pid")).ok()?;
+    let text = std::fs::read_to_string(home.join("app-server-daemon").join("daemon.pid")).ok()?;
     let pid = i32::try_from(serde_json::from_str::<Value>(&text).ok()?.get("pid")?.as_i64()?).ok()?;
     let args = process::args(pid);
     (args.iter().take(2).any(|arg| is_codex(arg)) && args.iter().any(|arg| arg == "app-server")).then_some(pid)
@@ -83,7 +83,7 @@ fn single<T>(mut items: impl Iterator<Item = T>) -> Option<T> {
 }
 
 fn is_codex(arg: &str) -> bool {
-    Path::new(arg).file_name().is_some_and(|name| name == "codex")
+    crate::agents::is_program(arg, "codex")
 }
 
 fn home(pid: i32) -> Option<PathBuf> {

@@ -9,7 +9,7 @@ use crate::accounts::login::{Login, State};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::breakdown::Target;
 use crate::agents::context::counting::Ledger;
-use crate::agents::context::discovery::Job;
+use crate::agents::context::discovery::{self, Job};
 use crate::agents::context::{Compaction, Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "claude";
@@ -60,7 +60,7 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("skip permissions (dangerous)", &["--dangerously-skip-permissions"]),
 ];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = false;
-pub(in crate::agents) const RUNS_AS: bool = false;
+const NPM_SCRIPT: [&str; 3] = ["@anthropic-ai", "claude-code", "cli.js"];
 pub(in crate::agents) const LOCAL_COMMAND: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(crate::agents::usage::Spec {
     command: usage::command,
@@ -102,6 +102,10 @@ fn clean(text: Option<String>) -> Option<String> {
 
 pub(in crate::agents) fn normalized(args: &[String]) -> Vec<String> {
     args.to_vec()
+}
+
+pub(in crate::agents) fn runs_as(arg: &str) -> bool {
+    cfg!(windows) && discovery::npm_script(arg, &NPM_SCRIPT)
 }
 
 #[expect(clippy::unnecessary_wraps, reason = "Known dispatch shares an optional resume signature across agents")]
@@ -227,7 +231,7 @@ impl Reader {
             return Some(dir.to_path_buf());
         }
         if self.home.as_ref().is_none_or(|(pid, args, _)| *pid != look.pid || *args != look.args) {
-            let own = (look.pid > 0).then(|| own_dir(crate::process::env(look.pid))).flatten();
+            let own = (look.pid > 0).then(|| own_dir(&crate::process::env(look.pid))).flatten();
             self.home = Some((look.pid, look.args.clone(), own));
         }
         self.home.as_ref().and_then(|(_, _, own)| own.clone()).or_else(|| look.claude_dir.map(Path::to_path_buf))
@@ -268,9 +272,8 @@ pub(crate) fn claude_dir(home: Option<&Path>) -> Option<PathBuf> {
     claude_dir_from(std::env::var_os(CLAUDE_DIR_ENV), home)
 }
 
-fn own_dir(env: Vec<(String, String)>) -> Option<PathBuf> {
-    let (_, dir) = env.into_iter().find(|(name, _)| name == CLAUDE_DIR_ENV)?;
-    Some(PathBuf::from(dir)).filter(|dir| dir.is_absolute())
+fn own_dir(env: &[(String, String)]) -> Option<PathBuf> {
+    Some(PathBuf::from(discovery::variable(env, CLAUDE_DIR_ENV)?)).filter(|dir| dir.is_absolute())
 }
 
 fn claude_dir_from(env: Option<OsString>, home: Option<&Path>) -> Option<PathBuf> {
