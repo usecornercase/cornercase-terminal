@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
+use crate::os::fs::reaches_network;
 use crate::text;
 
 pub(crate) const EXTENSION: &str = "code-workspace";
@@ -43,19 +44,20 @@ pub(crate) fn read(file: &Path) -> Result<Workspace> {
     let parsed: File = serde_json::from_str(&strip_jsonc(text)).map_err(|e| invalid(e.to_string()))?;
     let base = file.parent().unwrap_or(Path::new("/"));
     let name = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let folders = parsed
-        .folders
-        .into_iter()
-        .filter_map(|entry| {
-            let path = match (entry.path, entry.uri) {
-                (Some(path), _) => base.join(path),
-                (None, Some(uri)) => PathBuf::from(file_uri(&uri)?),
-                (None, None) => return None,
-            };
-            Some(Folder { path, name: entry.name.filter(|n| !n.trim().is_empty()) })
-        })
-        .collect();
+    let folders = parsed.folders.into_iter().filter_map(|entry| folder(base, entry)).collect();
     Ok(Workspace { name, folders })
+}
+
+fn folder(base: &Path, entry: Entry) -> Option<Folder> {
+    let path = match (entry.path, entry.uri) {
+        (Some(path), _) => base.join(path),
+        (None, Some(uri)) => PathBuf::from(file_uri(&uri)?),
+        (None, None) => return None,
+    };
+    if reaches_network(&path.to_string_lossy()) {
+        return None;
+    }
+    Some(Folder { path, name: entry.name.filter(|n| !n.trim().is_empty()) })
 }
 
 fn file_uri(uri: &str) -> Option<String> {
