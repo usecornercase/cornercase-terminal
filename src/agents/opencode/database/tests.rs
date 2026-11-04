@@ -404,7 +404,7 @@ mod counting_records {
 #[cfg(windows)]
 mod on_windows {
     use super::*;
-    use crate::test_util::holding;
+    use crate::test_util::{holding, wait_until};
 
     #[test]
     fn finds_the_database_a_process_holds() {

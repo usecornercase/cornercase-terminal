@@ -468,7 +468,7 @@ fn a_rollout_outside_a_sessions_folder_has_no_conversation_to_move() {
 #[cfg(windows)]
 mod on_windows {
     use super::*;
-    use crate::test_util::holding;
+    use crate::test_util::{holding, wait_until};
 
     #[test]
     fn follows_the_rollout_a_process_holds_under_its_canonical_home() {
