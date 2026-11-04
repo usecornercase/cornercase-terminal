@@ -73,7 +73,8 @@ fn resolves_from_the_programs_folder_then_the_workspace() {
     let link = |path: &str| Link { start: 0, end: 1, path: path.into(), lines: Some((3, 3)) };
     let from = |path: &str, cwd: &Path| resolve(&link(path), Some(cwd), root.path(), None).map(|t| t.path);
     let cwd = root.path().join("crate");
-    assert_eq!(from("src/lib.rs", &cwd).as_deref(), Some("crate/src/lib.rs"));
+    let lib = Path::new("crate").join("src").join("lib.rs").display().to_string();
+    assert_eq!(from("src/lib.rs", &cwd), Some(lib));
     assert_eq!(from("README.md", &cwd).as_deref(), Some("README.md"));
     assert_eq!(from("missing.rs", &cwd), None);
     assert_eq!(from("crate/src", &cwd), None, "folders are not opened");
@@ -95,10 +96,11 @@ fn expands_home_paths(#[case] inside: bool) {
     let (root, other) = (TempDir::new(), TempDir::new());
     let home = if inside { root.path() } else { other.path() };
     fs::create_dir_all(home.join(".claude/plans")).expect("mkdir");
-    let file = home.join(".claude/plans/fix.md");
+    let in_home = Path::new(".claude").join("plans").join("fix.md");
+    let file = home.join(&in_home);
     fs::write(&file, "# Plan").expect("write");
     let link = Link { start: 0, end: 1, path: "~/.claude/plans/fix.md".into(), lines: Some((3, 9)) };
-    let path = if inside { ".claude/plans/fix.md".to_string() } else { file.display().to_string() };
+    let path = if inside { in_home } else { file }.display().to_string();
     assert_eq!(shown(resolve(&link, Some(root.path()), root.path(), Some(home))), Some((path, link.lines)));
     assert!(resolve(&link, None, root.path(), None).is_none());
 }
@@ -131,6 +133,7 @@ fn an_absolute_path_inside_the_workspace_stays_relative() {
     assert_eq!(shown(resolve(&link, None, root.path(), None)), Some(("note.md".into(), None)));
 }
 
+#[cfg(unix)]
 #[test]
 fn under_finds_the_path_and_says_whether_it_is_inside() {
     let (root, other) = (TempDir::new(), TempDir::new());

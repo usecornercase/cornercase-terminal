@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::agents::activity::Status;
 use crate::agents::claude::fake::FakeClaude;

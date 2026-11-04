@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::time::Duration;
 
 use super::flow_panel::{TALL, run_in, spot};

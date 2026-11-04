@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::process::{Command, Stdio};
 use std::time::UNIX_EPOCH;
 

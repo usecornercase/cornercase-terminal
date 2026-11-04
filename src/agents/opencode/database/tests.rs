@@ -1,19 +1,30 @@
 use rstest::rstest;
 
 use super::*;
+#[cfg(unix)]
 use crate::agents::Known;
+#[cfg(unix)]
 use crate::agents::activity::Activity;
+#[cfg(unix)]
 use crate::agents::context::tests::pane_look;
+#[cfg(unix)]
 use crate::agents::context::{Pane, Role};
+#[cfg(unix)]
 use crate::agents::opencode::fake::FakeOpencode;
-use crate::test_util::{Sleeper, TempDir, wait_until};
+#[cfg(unix)]
+use crate::test_util::Sleeper;
+use crate::test_util::TempDir;
+#[cfg(unix)]
+use crate::test_util::wait_until;
 
 const REPLY: &str = crate::test_util::fixture!("opencode/1.18.35/reply.jsonl");
 const WORKING: &str = crate::test_util::fixture!("opencode/1.18.35/working.jsonl");
 const ABORTED: &str = crate::test_util::fixture!("opencode/1.18.35/aborted.jsonl");
 const COMPACTION: &str = crate::test_util::fixture!("opencode/1.18.35/compaction.jsonl");
 const MODELS: &str = crate::test_util::fixture!("opencode/1.18.35/models.json");
+#[cfg(unix)]
 const REPLY_PARTS: &str = crate::test_util::fixture!("opencode/1.18.35/reply-parts.jsonl");
+#[cfg(unix)]
 const TOOL_PARTS: &str = crate::test_util::fixture!("opencode/1.18.35/tool-parts.jsonl");
 const FLASH: &str =
     r#"{"role":"user","time":{"created":1},"model":{"providerID":"deepseek","modelID":"deepseek-v4-flash"}}"#;
@@ -127,12 +138,14 @@ fn the_database_is_known_by_its_name(#[case] path: &str, #[case] named: Option<&
     assert_eq!(is_database(Path::new(path), named), expected);
 }
 
+#[cfg(unix)]
 struct Running {
     opencode: Sleeper,
     fake: FakeOpencode,
     project: TempDir,
 }
 
+#[cfg(unix)]
 impl Running {
     fn start() -> Self {
         let fake = FakeOpencode::new();
@@ -149,6 +162,7 @@ impl Running {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn the_session_is_the_one_in_the_agents_folder_written_since_it_started() {
     let running = Running::start();
@@ -168,6 +182,7 @@ fn the_session_is_the_one_in_the_agents_folder_written_since_it_started() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn a_subagents_session_is_not_the_pane() {
     let running = Running::start();
@@ -180,6 +195,7 @@ fn a_subagents_session_is_not_the_pane() {
     assert_eq!(running.look(SystemTime::UNIX_EPOCH).map(|s| s.turn), Some(false));
 }
 
+#[cfg(unix)]
 #[test]
 fn two_opencode_in_one_folder_show_nothing() {
     let running = Running::start();
@@ -191,6 +207,7 @@ fn two_opencode_in_one_folder_show_nothing() {
     assert!(running.look(SystemTime::UNIX_EPOCH).is_some());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_database_that_cannot_be_queried_gives_no_status() {
     let running = Running::start();
@@ -201,6 +218,7 @@ fn a_database_that_cannot_be_queried_gives_no_status() {
     assert_eq!(running.look(SystemTime::UNIX_EPOCH), None);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_process_without_the_database_open_has_no_session() {
     let project = TempDir::new();
@@ -209,6 +227,7 @@ fn a_process_without_the_database_open_has_no_session() {
     assert_eq!(look(sleeper.pid(), SystemTime::UNIX_EPOCH, &mut super::Models::default()), None);
 }
 
+#[cfg(unix)]
 #[test]
 fn the_pane_follows_the_turn_and_clears_when_opencode_exits() {
     let mut running = Running::start();
@@ -233,6 +252,7 @@ fn the_pane_follows_the_turn_and_clears_when_opencode_exits() {
     });
 }
 
+#[cfg(unix)]
 mod last_message {
     use super::*;
 
@@ -384,7 +404,7 @@ mod counting_records {
 #[cfg(windows)]
 mod on_windows {
     use super::*;
-    use crate::test_util::holding;
+    use crate::test_util::{holding, wait_until};
 
     #[test]
     fn finds_the_database_a_process_holds() {

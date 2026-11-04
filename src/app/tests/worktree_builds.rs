@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::worktrees_dialog::{Setup, at, dialog, opened, path_of, shown, tick, view, with};
 use super::*;
 use crate::config::ProjectSettings;

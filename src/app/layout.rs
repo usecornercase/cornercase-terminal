@@ -55,11 +55,13 @@ impl Scrolls {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn forget_followed_pane(&mut self) {
         self.followed_pane = None;
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn before_first_follow(&mut self) {
         self.pane_followed = false;
     }

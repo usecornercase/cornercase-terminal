@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use ratatui::buffer::Buffer;
 use rstest::rstest;
 

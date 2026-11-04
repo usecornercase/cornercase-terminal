@@ -11,6 +11,7 @@ fn devbox() -> Remote {
     Remote { destination: "me@devbox".into(), command: None, option: "--command" }
 }
 
+#[cfg(unix)]
 fn exited(code: i32) -> ExitStatus {
     Command::new("/bin/sh").args(["-c", &format!("exit {code}")]).status().expect("run sh")
 }
@@ -55,6 +56,7 @@ mod ssh {
         assert_eq!(devbox().ssh_args(false, Run::Terminal, &["update"])[0], "-t");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_tied_command_tells_cornercase_there_that_its_input_is_the_link() {
         let remote = Remote { command: Some("env".into()), ..devbox() };
@@ -84,6 +86,7 @@ mod ssh {
         assert!(args.last().is_some_and(|script| script.contains("CORNERCASE_TIED=1")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn arguments_arrive_as_they_were_given() {
         let out = Command::new("/bin/sh")
@@ -103,6 +106,7 @@ mod ssh {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn runs_the_given_command_as_sh_reads_it() {
         let remote = Remote { command: Some("~/bin/cornercase".into()), ..devbox() };
@@ -226,6 +230,7 @@ mod versions {
 mod failures {
     use super::*;
 
+    #[cfg(unix)]
     fn with(lines: &[&str]) -> Stderr {
         let stderr = Stderr::default();
         for line in lines {
@@ -234,6 +239,7 @@ mod failures {
         stderr
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_missing_command_names_the_option_given() {
         let remote = Remote { option: "--remote-command", ..devbox() };
@@ -243,6 +249,7 @@ mod failures {
         assert!(error.to_string().ends_with("with --remote-command"), "{error}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_missing_command_says_how_to_point_at_it() {
         let error = devbox().failure(Some(exited(127)), &with(&["sh: 1: exec: cornercase: not found"]));
@@ -250,6 +257,7 @@ mod failures {
         assert!(matches!(error, Error::RemoteMissing { .. }));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_missing_path_in_bash_says_so_too() {
         let stderr = with(&["sh: line 0: exec: /opt/cornercase: cannot execute: No such file or directory"]);
@@ -257,6 +265,7 @@ mod failures {
         assert!(matches!(devbox().failure(Some(exited(126)), &stderr), Error::RemoteMissing { .. }));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_command_that_cannot_run_shows_why() {
         let stderr = with(&["sh: line 0: exec: /opt/cornercase: cannot execute: Permission denied"]);
@@ -264,6 +273,7 @@ mod failures {
         assert!(matches!(devbox().failure(Some(exited(126)), &stderr), Error::Ssh { .. }));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_cornercase_without_the_proxy_is_too_old() {
         let stderr = with(&["error: unrecognized subcommand 'proxy'", "", "For more information, try '--help'."]);
@@ -271,6 +281,7 @@ mod failures {
         assert!(matches!(devbox().failure(Some(exited(2)), &stderr), Error::RemoteTooOld(_)));
     }
 
+    #[cfg(unix)]
     #[test]
     fn ssh_errors_show_its_last_line_and_are_retried() {
         let error = devbox().failure(Some(exited(255)), &with(&["ssh: connect to host devbox: Connection refused"]));
@@ -299,6 +310,7 @@ mod failures {
         assert_eq!(kept.tail.back().map(String::as_str), Some((KEPT_HEAD + KEPT_LINES - 1).to_string().as_str()));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_proxy_error_followed_by_a_long_backtrace_still_says_what_failed() {
         let mut lines = vec!["Error: no cornercase server is running".to_string(), "Stack backtrace:".to_string()];
@@ -315,6 +327,7 @@ mod failures {
     }
 }
 
+#[cfg(unix)]
 mod ended {
     use super::*;
 

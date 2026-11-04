@@ -1,7 +1,9 @@
 use super::*;
+#[cfg(unix)]
 use crate::project::group;
 use crate::state;
 
+#[cfg(unix)]
 fn locked_restore() -> (TempDir, Locked, App, Receiver<AppEvent>, WorkspaceState) {
     let (dir, locked) = (TempDir::new(), Locked::new());
     let (app, rx) = empty_app();
@@ -59,6 +61,7 @@ fn restoring_multiple_panels_prefers_files_then_todo_then_changes(
     assert_eq!((again.changes.is_some_and(|changes| changes.open), again.todo, again.files), expected);
 }
 
+#[cfg(unix)]
 #[rstest::rstest]
 #[case::changes(true, false, false)]
 #[case::todo(false, true, false)]
@@ -197,6 +200,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
     assert_eq!(app.state(), saved);
 }
 
+#[cfg(unix)]
 #[test]
 fn reopens_projects_workspaces_and_tabs() {
     let (a, b) = (TempDir::new(), TempDir::new());
@@ -252,6 +256,7 @@ fn the_first_draw_keeps_a_folded_active_project_folded() {
     assert!(app.projects[0].collapsed);
 }
 
+#[cfg(unix)]
 fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
     let mut ws = WorkspaceState::plain(dir.to_path_buf(), vec![None, None], 0);
     ws.tabs[0].panes.push(PaneState {
@@ -269,6 +274,7 @@ fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
     ws
 }
 
+#[cfg(unix)]
 #[test]
 fn a_tab_whose_shell_cannot_start_is_left_out_and_the_rest_comes_back() {
     let (first, last, locked) = (TempDir::new(), TempDir::new(), Locked::new());
@@ -283,6 +289,7 @@ fn a_tab_whose_shell_cannot_start_is_left_out_and_the_rest_comes_back() {
     assert_eq!(toast(&app), Some("could not restore 1 tab (locked), see server.log"));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
     let (dir, _locked, mut app, _rx, ws) = locked_restore();
@@ -294,6 +301,7 @@ fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
     assert_eq!(toast(&app), Some(format!("could not restore 1 tab ({label}), see server.log").as_str()));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_tab_that_cannot_start_names_the_folder_and_why() {
     let (dir, locked, mut app, _rx, ws) = locked_restore();
@@ -337,6 +345,7 @@ fn skips_workspaces_whose_folder_is_gone() {
     assert_eq!(app.projects[0].workspaces.len(), 1);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_pane_whose_folder_is_gone_opens_in_the_workspace() {
     let dir = TempDir::new();
@@ -349,6 +358,7 @@ fn a_pane_whose_folder_is_gone_opens_in_the_workspace() {
     wait_until("the pane starts in the workspace", || term(&app, 0).cwd() == Some(path.clone()));
 }
 
+#[cfg(unix)]
 #[test]
 fn keeps_the_names() {
     let dir = TempDir::new();
@@ -379,6 +389,7 @@ fn clamps_the_active_project() {
     assert_eq!(app.active, 0);
 }
 
+#[cfg(unix)]
 #[test]
 fn state_lists_projects_workspaces_and_tabs() {
     let (mut app, rx, dirs) = app_with(2);
@@ -396,6 +407,7 @@ fn state_lists_projects_workspaces_and_tabs() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn a_window_that_comes_later_gives_its_colours_to_the_panes_already_open() {
     let (mut app, _rx, _dirs) = app_with(2);
@@ -427,6 +439,7 @@ mod parents {
         app.projects.terms().map(|term| (term.id, term.parent)).collect()
     }
 
+    #[cfg(unix)]
     #[test]
     fn children_come_back_under_their_parents_with_new_ids() {
         let (a, b) = (TempDir::new(), TempDir::new());
@@ -454,6 +467,7 @@ mod parents {
         assert_eq!(ids, [(Some(child), Some(parent)), (Some(parent), None), (None, Some(child))]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_fold_comes_back_with_its_pane() {
         let dir = TempDir::new();
@@ -476,11 +490,13 @@ mod parents {
         assert_eq!(written, [true, false]);
     }
 
+    #[cfg(unix)]
     fn saved_parents(state: &State) -> Vec<(Option<u64>, Option<u64>)> {
         let workspaces = state.projects.iter().flat_map(|p| &p.workspaces);
         workspaces.flat_map(|w| &w.tabs).flat_map(|t| &t.panes).map(|pane| (pane.id, pane.parent)).collect()
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_saved_session_names_open_parents_and_forgets_closed_ones() {
         let (mut app, rx, _dirs) = app_with(1);
@@ -519,6 +535,7 @@ mod parents {
         assert!(parents(&app).iter().all(|(_, parent)| parent.is_none()));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_parent_not_older_than_its_child_is_dropped() {
         let dir = TempDir::new();

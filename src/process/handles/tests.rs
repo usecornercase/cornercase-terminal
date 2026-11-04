@@ -257,7 +257,7 @@ mod on_windows {
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
     use super::*;
-    use crate::test_util::{Running, TempDir, exited_pid, holding, this_pid, wait_until_within};
+    use crate::test_util::{Running, TempDir, exited_pid, holding_reading, this_pid, wait_until_within};
 
     fn within(pid: i32) -> Vec<PathBuf> {
         let (answer, answered) = mpsc::channel();
@@ -347,20 +347,25 @@ mod on_windows {
         assert!(locked(&path));
     }
 
+    fn asked_about(object: &dyn Object) -> bool {
+        WAITING.asked.lock().iter().any(|question| question.object.same(object))
+    }
+
     #[test]
     fn names_what_another_process_holds_while_a_read_blocks_one_of_its_handles() {
         let dir = TempDir::new();
         let path = dir.path().join("held.txt");
-        let holder = holding(&path, &[]);
+        let (input, _writer) = std::io::pipe().expect("a pipe");
+        let here = unsafe { GetCurrentProcess() };
+        let read = imp::duplicate(here, input.as_raw_handle().addr()).expect("a copy of the end it reads");
+        let holder = holding_reading(&path, &[], input.into());
         let pid = holder.pid();
 
-        wait_until_within("a handle blocked in a read is skipped", PATIENT, || {
-            within(pid).contains(&canonical(&path)) && !waiting_on(&WAITING, pid).is_empty()
+        wait_until_within("its blocked standard input is skipped", PATIENT, || {
+            within(pid).contains(&canonical(&path)) && asked_about(&read)
         });
         drop(holder);
 
-        wait_until_within("the blocked question ends with the process", PATIENT, || {
-            waiting_on(&WAITING, pid).is_empty()
-        });
+        wait_until_within("the question its read blocked ends with the process", PATIENT, || !asked_about(&read));
     }
 }

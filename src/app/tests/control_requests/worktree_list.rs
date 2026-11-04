@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::build_folders::with_builds;
 use super::*;
 use crate::app::tests::worktrees_dialog::{Setup, closed, dialog, path_of, ready, with};

@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::host::open::{Failed, Open, Opener};
 use crate::ui::files::{self as files_ui, Action};

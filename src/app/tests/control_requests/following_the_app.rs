@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use super::*;
 use crate::control::{AppState, Snapshot};
+#[cfg(unix)]
 use crate::ui::todo as panel;
 
 type Fed = Snapshot<AppState>;
@@ -68,6 +69,7 @@ fn a_todo_added_by_a_request_sends_the_next_snapshot() {
     assert_eq!(snapshot.report.todos.iter().map(|t| t.text.as_str()).collect::<Vec<_>>(), ["write the docs"]);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_change_made_in_the_panel_shows_too() {
     let (mut app, _rx, _dirs) = app_with(1);
@@ -84,6 +86,7 @@ fn a_change_made_in_the_panel_shows_too() {
     assert_eq!(snapshot.report.todos.iter().map(|t| (t.id, t.done)).collect::<Vec<_>>(), [(id, true)]);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_queue_entry_shows_as_queue_list_has_it() {
     let (mut app, _rx, _dirs) = app_with(1);

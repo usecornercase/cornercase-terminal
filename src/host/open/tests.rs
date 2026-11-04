@@ -43,6 +43,7 @@ fn arguments(step: &Step) -> Vec<String> {
 mod detection {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn linux_finds_the_file_manager_the_default_app_and_editors_in_menu_order() {
         let bin = bin_with(&["xdg-open", "subl", "code", "cursor"]);
@@ -50,6 +51,7 @@ mod detection {
         assert_eq!(openers.ids(), [Opener::Files, Opener::Vscode, Opener::Cursor, Opener::Sublime, Opener::Default]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn macos_finds_finder_and_the_default_app_through_open() {
         let bin = bin_with(&["open"]);
@@ -57,6 +59,7 @@ mod detection {
         assert_eq!(openers.ids(), [Opener::Finder, Opener::Default]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_window_over_ssh_finds_nothing() {
         let bin = bin_with(&["xdg-open", "code"]);
@@ -64,12 +67,14 @@ mod detection {
         assert_eq!(found(Os::Linux, &bin, vec![("SSH_TTY", "/dev/pts/1".into())], &[]).ids(), NONE);
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_empty_ssh_variable_counts_as_local() {
         let bin = bin_with(&["xdg-open"]);
         assert_ne!(found(Os::Linux, &bin, vec![("SSH_CONNECTION", String::new())], &[]).ids(), NONE);
     }
 
+    #[cfg(unix)]
     #[test]
     fn linux_needs_a_graphical_session() {
         let bin = bin_with(&["xdg-open", "code"]);
@@ -79,6 +84,7 @@ mod detection {
         assert_ne!(Openers::find(Os::Linux, &wayland, &[]).ids(), NONE);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_zed_command_outside_zed_app_is_ignored_but_zeditor_counts() {
         let zfs = bin_with(&["xdg-open", "zed"]);
@@ -87,6 +93,7 @@ mod detection {
         assert!(found(Os::Linux, &packaged, vec![], &[]).ids().contains(&Opener::Zed));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_zed_command_inside_zed_app_counts() {
         let tmp = TempDir::new();
@@ -99,6 +106,7 @@ mod detection {
         assert!(openers.ids().contains(&Opener::Zed));
     }
 
+    #[cfg(unix)]
     #[test]
     fn macos_finds_an_editor_by_its_bundle_and_a_command_beats_it() {
         let apps = TempDir::new();
@@ -123,6 +131,7 @@ mod detection {
     }
 }
 
+#[cfg(unix)]
 mod commands {
     use super::*;
 
@@ -223,6 +232,7 @@ mod uris {
 mod running {
     use super::*;
 
+    #[cfg(unix)]
     fn run_one(script: &str) -> Result<(), String> {
         let tmp = TempDir::new();
         let program = tmp.path().join("xdg-open");
@@ -230,11 +240,13 @@ mod running {
         run(&[Step::Run(vec![program.into_os_string()])])
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_failing_opener_reports_its_exit_status() {
         assert_eq!(run_one("#!/bin/sh\nexit 3\n"), Err("exit status 3".to_string()));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_working_opener_reports_nothing() {
         assert_eq!(run_one("#!/bin/sh\nexit 0\n"), Ok(()));
@@ -532,6 +544,7 @@ mod on_windows {
 
     mod real_names {
         use super::*;
+        use crate::test_util::verbatim;
 
         fn written(name: &str) -> (TempDir, String) {
             let tmp = TempDir::new();
@@ -565,7 +578,7 @@ mod on_windows {
         #[test]
         fn a_verbatim_name_is_not_trimmed_so_it_is_gone() {
             let (tmp, _folder) = written("hello.bat");
-            let order = open(Opener::Default, &format!(r"{}\hello.bat.", tmp.path().display()), None);
+            let order = open(Opener::Default, &format!(r"{}\hello.bat.", verbatim(tmp.path()).display()), None);
             assert_eq!(refusal(&every().openers(vec![]), &order), "it is gone");
         }
 

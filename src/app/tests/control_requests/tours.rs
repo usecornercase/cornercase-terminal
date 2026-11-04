@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn tour(app: &mut App, args: &Value) -> Value {

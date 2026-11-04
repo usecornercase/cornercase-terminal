@@ -33,6 +33,7 @@ pub(super) struct MergedPulls {
 
 impl MergedPulls {
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn asking(&self) -> bool {
         self.asking
     }

@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use super::posts::{Posting, THREAD, first_post};
 use super::*;
 use crate::control::{AwayInfo, ForumInfo, WorkspaceInfo};
@@ -8,11 +9,13 @@ fn discord_of(app: &mut App) -> Value {
     away.into_iter().find(|platform| platform["platform"] == "discord").expect("discord")
 }
 
+#[cfg(unix)]
 fn workspaces(app: &mut App) -> Vec<Value> {
     let status = ok(app, "status", &json!({}));
     status["projects"][0]["workspaces"].as_array().expect("the workspaces").clone()
 }
 
+#[cfg(unix)]
 #[test]
 fn without_forum_mode_neither_the_forum_nor_a_post_is_in_the_answers() {
     let mut posting = Posting::new();
@@ -49,6 +52,7 @@ fn a_forum_still_being_set_up_says_its_first_missing_step() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn a_ready_forum_names_its_server_and_channel_and_a_workspace_links_its_post() {
     let mut posting = Posting::new();
@@ -67,6 +71,7 @@ fn a_ready_forum_names_its_server_and_channel_and_a_workspace_links_its_post() {
     assert_eq!(api.get("post"), None, "{api}");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_new_post_changes_the_watched_status() {
     let mut posting = Posting::new();
@@ -79,6 +84,7 @@ fn a_new_post_changes_the_watched_status() {
     assert_ne!(posting.agent.app.refreshed(), before);
 }
 
+#[cfg(unix)]
 #[test]
 fn turned_off_with_a_forum_kept_it_still_shows_as_off() {
     let mut posting = Posting::new();

@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::plugins::Registry;
 use crate::plugins::manifest::FILE;

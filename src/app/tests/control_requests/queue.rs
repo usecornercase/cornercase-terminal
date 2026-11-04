@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::queue::{Entry, Queue, State, Task};
 

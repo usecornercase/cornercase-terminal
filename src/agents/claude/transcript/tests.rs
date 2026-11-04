@@ -3,11 +3,19 @@ use std::io::Write;
 use rstest::rstest;
 
 use super::*;
+#[cfg(unix)]
 use crate::agents::Known;
+use crate::agents::context::Compaction;
+#[cfg(unix)]
+use crate::agents::context::Look;
+#[cfg(unix)]
+use crate::agents::context::Pane;
 use crate::agents::context::counting::Ledger;
+#[cfg(unix)]
 use crate::agents::context::tests::pane_look;
-use crate::agents::context::{Compaction, Look, Pane};
-use crate::test_util::{Sleeper, TempDir};
+#[cfg(unix)]
+use crate::test_util::Sleeper;
+use crate::test_util::TempDir;
 use crate::time::Stamp;
 
 fn assistant(model: &str, input: u64, created: u64, read: u64) -> String {
@@ -531,12 +539,14 @@ mod limits {
     }
 }
 
+#[cfg(unix)]
 struct Setup {
     claude_dir: TempDir,
     project: TempDir,
     sleeper: Sleeper,
 }
 
+#[cfg(unix)]
 impl Setup {
     fn new(vars: &[(&str, &str)]) -> Self {
         Self { claude_dir: TempDir::new(), project: TempDir::new(), sleeper: Sleeper::with_env(vars) }
@@ -560,6 +570,7 @@ impl Setup {
     }
 }
 
+#[cfg(unix)]
 mod settings {
     use super::*;
 
@@ -595,6 +606,7 @@ mod settings {
     }
 }
 
+#[cfg(unix)]
 mod pane {
     use super::*;
 

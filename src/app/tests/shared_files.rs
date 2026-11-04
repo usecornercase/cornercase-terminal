@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::app::merge_check::MergeAnswer;
 use crate::app::overlaps::SCAN_EVERY;

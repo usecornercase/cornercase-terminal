@@ -185,7 +185,7 @@ mod setup {
         let mut s = Setup::opened(vec![("GET /oauth2/applications/@me", 200, NO_GUILD_INSTALL)]);
         s.app.config.discord_forum = true;
         refreshing(&mut s.app, &s.rx, "the app is read", |app| {
-            app.forum_view(Via::Discord).steps[0].1.starts_with("turn on")
+            app.messenger_settings(Via::Discord).forum.starts_with("turn on Guild")
         });
         s.click(ui::ForumHit::Done);
         s.app.refresh(Instant::now() + Duration::from_secs(20));

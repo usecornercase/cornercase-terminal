@@ -52,6 +52,7 @@ fn these_are_refused(#[case] spec: &str) {
     assert!(Origin::parse(spec).is_err(), "{spec}");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_folder_uses_the_file_protocol_and_the_rest_https() {
     let local = Origin::parse("/srv/notes").expect("folder");

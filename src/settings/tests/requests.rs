@@ -113,6 +113,7 @@ mod describing {
 
 mod applying {
     use super::*;
+    use crate::test_util::os_path;
 
     fn apply(key: &str, value: &Value) -> (Settings, Result<Option<String>, Refused>) {
         let mut s = full();
@@ -199,14 +200,15 @@ mod applying {
         let mut s = full();
         assert!(s.apply("sound", &json!(true)).is_ok());
         assert!(s.apply("sound_subagents", &json!(true)).is_ok());
-        assert!(s.apply("sound_done", &json!("/tmp/done.wav")).is_ok());
+        let done = os_path("/tmp/done.wav");
+        assert!(s.apply("sound_done", &json!(done)).is_ok());
         assert!(matches!(s.apply("sound_waiting", &json!("bad\u{7}.wav")), Err(Refused::Invalid(_))));
         let c = &s.config;
         assert_eq!(
             (c.sound, c.sound_subagents, c.sound_done.as_str(), c.sound_waiting.as_str()),
-            (true, true, "/tmp/done.wav", "")
+            (true, true, done.as_str(), "")
         );
-        assert_eq!(value_of(&s, "sound_done"), json!("/tmp/done.wav"));
+        assert_eq!(value_of(&s, "sound_done"), json!(done));
     }
 
     #[test]

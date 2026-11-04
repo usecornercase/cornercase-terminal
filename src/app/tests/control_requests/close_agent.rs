@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use rstest::rstest;
 
 use super::super::close_agent::{agent, tabs, team};

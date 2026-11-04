@@ -186,6 +186,7 @@ impl Emulator {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(crate) fn default_background(&self) -> Option<libghostty_vt::style::RgbColor> {
         self.vt.default_bg_color().ok().flatten()
     }

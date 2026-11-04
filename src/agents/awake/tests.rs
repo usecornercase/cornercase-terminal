@@ -1,13 +1,18 @@
 use super::*;
+#[cfg(unix)]
 use crate::test_util::{TempDir, wait_until, write_executable};
 
+#[cfg(unix)]
 const HOLDS: &str = "#!/bin/sh\necho \"$@\" >> \"$0.args\"\necho $$ > \"$0.pid\"\nexec cat\n";
+#[cfg(unix)]
 const REFUSES: &str = "#!/bin/sh\necho \"$@\" >> \"$0.args\"\necho 'Failed to inhibit: Access denied' >&2\nexit 1\n";
 
+#[cfg(unix)]
 struct Fakes {
     dir: TempDir,
 }
 
+#[cfg(unix)]
 impl Fakes {
     fn new() -> Self {
         Self { dir: TempDir::new() }
@@ -30,10 +35,12 @@ impl Fakes {
     }
 }
 
+#[cfg(unix)]
 fn gone(pid: i32) -> bool {
     !crate::process::alive(pid)
 }
 
+#[cfg(unix)]
 fn settled(awake: &mut Awake, working: usize, now: Instant) {
     wait_until("the refusal is seen", || {
         awake.update(true, working, now);
@@ -41,6 +48,7 @@ fn settled(awake: &mut Awake, working: usize, now: Instant) {
     });
 }
 
+#[cfg(unix)]
 #[test]
 fn holds_while_an_agent_works_with_the_tools_arguments() {
     let fakes = Fakes::new();
@@ -54,6 +62,7 @@ fn holds_while_an_agent_works_with_the_tools_arguments() {
     assert!(!gone(pid));
 }
 
+#[cfg(unix)]
 #[test]
 fn nothing_is_held_while_no_agent_works_or_the_setting_is_off() {
     let fakes = Fakes::new();
@@ -66,6 +75,7 @@ fn nothing_is_held_while_no_agent_works_or_the_setting_is_off() {
     assert_eq!((idle, awake.state(), fakes.calls("holds")), (State::Released, State::Off, 0));
 }
 
+#[cfg(unix)]
 #[test]
 fn lets_go_once_no_agent_has_worked_for_a_while() {
     let fakes = Fakes::new();
@@ -83,6 +93,7 @@ fn lets_go_once_no_agent_has_worked_for_a_while() {
     wait_until("the holder ends", || gone(pid));
 }
 
+#[cfg(unix)]
 #[test]
 fn work_again_within_the_grace_keeps_the_same_holder() {
     let fakes = Fakes::new();
@@ -99,6 +110,7 @@ fn work_again_within_the_grace_keeps_the_same_holder() {
     assert_eq!((awake.state(), fakes.calls("holds")), (State::Held("holds".into()), 1));
 }
 
+#[cfg(unix)]
 #[test]
 fn turning_it_off_lets_go_at_once() {
     let fakes = Fakes::new();
@@ -112,6 +124,7 @@ fn turning_it_off_lets_go_at_once() {
     wait_until("the holder ends", || gone(pid));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_refused_lock_falls_back_to_the_next_tool() {
     let fakes = Fakes::new();
@@ -122,6 +135,7 @@ fn a_refused_lock_falls_back_to_the_next_tool() {
     assert_eq!((awake.state(), fakes.calls("refuses")), (State::Held("holds".into()), 1));
 }
 
+#[cfg(unix)]
 #[test]
 fn says_why_when_every_tool_refuses_and_stops_trying() {
     let fakes = Fakes::new();
@@ -143,6 +157,7 @@ fn a_missing_tool_is_named() {
     assert_eq!(awake.state(), State::Unavailable("systemd-inhibit is not installed".into()));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_holder_ends_with_the_end_of_its_input_as_when_the_server_dies() {
     let fakes = Fakes::new();

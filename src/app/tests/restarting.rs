@@ -5,6 +5,7 @@ fn open(app: &mut App) {
     click(app, ui::settings_restart(ui::settings_area(AREA)).as_position());
 }
 
+#[cfg(unix)]
 fn notes(app: &App) -> String {
     let Some(ui::Overlay::Update(dialog)) = app.overlay_view(app.overlay.as_ref().expect("open"), AREA) else {
         panic!("the restart dialog");
@@ -12,6 +13,7 @@ fn notes(app: &App) -> String {
     dialog.notes.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")
 }
 
+#[cfg(unix)]
 #[test]
 fn the_settings_button_says_what_stops_before_restarting() {
     let (mut app, _rx) = empty_app();

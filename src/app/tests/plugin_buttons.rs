@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::plugins::{Plugged, plugged_among};
 use super::*;
 

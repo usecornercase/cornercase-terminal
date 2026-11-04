@@ -1,7 +1,9 @@
 use std::time::{Duration, Instant};
 
 use super::*;
+#[cfg(unix)]
 use crate::process;
+#[cfg(unix)]
 use crate::test_util::{Family, Running, wait_until};
 
 fn times(at: Instant, used: &[((i32, Option<u64>), u64)]) -> Times {
@@ -65,6 +67,7 @@ mod sums {
     }
 }
 
+#[cfg(unix)]
 mod sampling {
     use super::*;
 

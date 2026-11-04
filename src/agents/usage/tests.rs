@@ -2,8 +2,11 @@ use rstest::rstest;
 
 use super::*;
 use crate::accounts::Account;
+#[cfg(unix)]
 use crate::agents::claude::usage::tests as claude_tests;
+#[cfg(unix)]
 use crate::agents::codex::usage::tests as codex_tests;
+#[cfg(unix)]
 use crate::test_util::{TempDir, write_executable};
 
 #[rstest]
@@ -16,6 +19,7 @@ fn reset_times_are_relative(#[case] secs: i64, #[case] expected: &str) {
     assert_eq!(until(secs), expected);
 }
 
+#[cfg(unix)]
 fn fake(name: &str, script: &str) -> (TempDir, String) {
     let dir = TempDir::new();
     let path = dir.path().join(name);
@@ -24,6 +28,7 @@ fn fake(name: &str, script: &str) -> (TempDir, String) {
     (dir, command)
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::claude(Known::Claude, 2, claude_tests::RECORDED, claude_tests::report)]
 #[case::codex(Known::Codex, 3, codex_tests::RECORDED, codex_tests::report)]
@@ -39,6 +44,7 @@ fn the_probe_answers_after_reading_the_requests(
     assert_eq!(probe(agent, &command, None, TIMEOUT).expect("a report"), report(recorded));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_codex_probe_runs_the_app_server() {
     let (_dir, command) = fake(
@@ -49,6 +55,7 @@ fn the_codex_probe_runs_the_app_server() {
     assert_eq!(error.to_string(), "app-server");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_codex_that_takes_no_params_reads_its_limits() {
     let script = format!(
@@ -61,6 +68,7 @@ fn a_codex_that_takes_no_params_reads_its_limits() {
     assert_eq!(report, codex_tests::report(codex_tests::RECORDED));
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::hangs(Known::Claude, "exec sleep 30", Duration::from_millis(300), "claude did not answer in time")]
 #[case::exits(Known::Claude, "exit 1", TIMEOUT, "claude exited without answering")]
@@ -131,6 +139,7 @@ fn without_accounts_the_probes_are_the_agents_in_their_order() {
     assert_eq!(shown, [(Known::Claude, false), (Known::Codex, false)]);
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::claude(Known::Claude, 2, "CLAUDE_CONFIG_DIR", claude_tests::RECORDED)]
 #[case::codex(Known::Codex, 3, "CODEX_HOME", codex_tests::RECORDED)]

@@ -5,18 +5,23 @@ use std::time::Duration;
 use rstest::rstest;
 
 use super::*;
+#[cfg(unix)]
 use crate::test_util::{TempDir, is_sh, wait_until};
 
+#[cfg(unix)]
 const RECV_TIMEOUT: Duration = Duration::from_secs(5);
 
+#[cfg(unix)]
 fn spawn_sh_in(cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
     spawn_with(&[], cwd)
 }
 
+#[cfg(unix)]
 fn spawn_with(args: &[String], cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
     crate::test_util::spawn_term(1, args, cwd)
 }
 
+#[cfg(unix)]
 fn spawn_sh() -> (Term, Receiver<Event>) {
     spawn_sh_in(None)
 }
@@ -48,6 +53,7 @@ mod scrollback {
     }
 }
 
+#[cfg(unix)]
 mod shell_in_foreground {
     use super::*;
 
@@ -89,6 +95,7 @@ mod spawn {
         assert_matches!(result, Err(Error::SpawnShell { .. }));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_removed_variable_never_reaches_the_shell() {
         let dir = TempDir::new();
@@ -116,6 +123,7 @@ mod spawn {
         assert!(!written.lines().any(|line| line.starts_with("CORNERCASE_GONE=")), "{written}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn starts_in_requested_dir() {
         let tmp = std::env::temp_dir().canonicalize().expect("temp dir");
@@ -125,6 +133,7 @@ mod spawn {
     }
 }
 
+#[cfg(unix)]
 mod shell_pid {
     use super::*;
 
@@ -143,6 +152,7 @@ mod shell_pid {
     }
 }
 
+#[cfg(unix)]
 mod output {
     use super::*;
 
@@ -165,6 +175,7 @@ mod output {
     }
 }
 
+#[cfg(unix)]
 mod pasting {
     use super::*;
 
@@ -211,6 +222,7 @@ mod writing {
         assert_eq!(bracketed("ls\x1b[201~\rrm -rf x"), "\x1b[200~ls\rrm -rf x\x1b[201~");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_program_that_does_not_read_never_blocks_the_writer() {
         let (mut term, _rx) = spawn_sh();
@@ -225,6 +237,7 @@ mod writing {
     }
 }
 
+#[cfg(unix)]
 mod replies {
     use super::*;
 
@@ -238,6 +251,7 @@ mod replies {
     }
 }
 
+#[cfg(unix)]
 mod cwd {
     use super::*;
 
@@ -294,6 +308,7 @@ mod program {
         assert_eq!(label(name, argv), expected);
     }
 
+    #[cfg(unix)]
     #[test]
     fn is_the_shell_when_idle() {
         let (term, _rx) = spawn_sh();
@@ -301,6 +316,7 @@ mod program {
         wait_until("shows the shell", || term.program(&Config::default()).as_deref().is_some_and(is_sh));
     }
 
+    #[cfg(unix)]
     #[test]
     fn is_the_foreground_program_while_it_runs() {
         let (mut term, _rx) = spawn_sh();
@@ -310,6 +326,7 @@ mod program {
         wait_until("shows the foreground program", || term.program(&Config::default()).as_deref() == Some("sleep"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn falls_back_to_shell_when_program_ends() {
         let (mut term, _rx) = spawn_sh();
@@ -321,6 +338,7 @@ mod program {
         wait_until("back to the shell", || term.program(&Config::default()).as_deref().is_some_and(is_sh));
     }
 
+    #[cfg(unix)]
     #[test]
     fn is_the_script_an_interpreter_runs() {
         let dir = TempDir::new();
@@ -343,6 +361,7 @@ mod program {
     }
 }
 
+#[cfg(unix)]
 mod current_job {
     use super::*;
 
@@ -360,6 +379,7 @@ mod current_job {
     }
 }
 
+#[cfg(unix)]
 mod resize {
     use super::*;
 
@@ -383,6 +403,7 @@ mod resize {
     }
 }
 
+#[cfg(unix)]
 mod kill {
     use super::*;
 

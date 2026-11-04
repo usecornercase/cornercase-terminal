@@ -128,14 +128,15 @@ fn agents_with_modes_are_listed() {
 
 mod folder {
     use super::*;
+    use crate::test_util::os_path;
 
     #[test]
     fn is_edited_and_saved() {
         let mut s = settings();
         press(&mut s, KeyCode::Enter);
         s.edit.as_mut().expect("editing").input.clear();
-        type_text(&mut s, "/srv/w");
-        assert_eq!(saved(press(&mut s, KeyCode::Enter)).worktrees_dir, "/srv/w");
+        type_text(&mut s, &os_path("/srv/w"));
+        assert_eq!(saved(press(&mut s, KeyCode::Enter)).worktrees_dir, os_path("/srv/w"));
     }
 
     #[test]

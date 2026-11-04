@@ -1,7 +1,9 @@
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{FakeHttp, TempDir, write_executable};
+#[cfg(unix)]
+use crate::test_util::write_executable;
+use crate::test_util::{FakeHttp, TempDir};
 
 mod check {
     use super::*;
@@ -164,6 +166,7 @@ mod install {
     }
 }
 
+#[cfg(unix)]
 pub(crate) mod replace {
     use super::*;
 

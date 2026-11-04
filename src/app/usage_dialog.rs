@@ -36,6 +36,7 @@ impl Usages {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn set_timeout(&mut self, timeout: Duration) {
         self.timeout = timeout;
     }

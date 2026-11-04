@@ -128,6 +128,7 @@ impl Web {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(crate) fn listening(&self) -> Option<u16> {
         self.listening.as_ref().map(|l| l.port)
     }

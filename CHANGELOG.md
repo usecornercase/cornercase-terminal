@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.281
+
+- **The test suite now also runs on Windows in CI**, so every change to cornercase is checked there before it is released, as on Linux and macOS. Nothing changes in the app.
+
 ## 0.12.280
 
 - **The search finds settings.** Typing in the search now also lists matching settings, after your projects, workspaces and tabs, so those keep their places. Each shows where it lives and its value, such as `UI › prefix key`. Click one or press `Enter` and Settings opens on that row, with nothing changed. A row that doesn't show yet is listed muted with what it needs.

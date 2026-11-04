@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::accounts::{self, Accounts};
 use crate::agents::{AgentState, Known};

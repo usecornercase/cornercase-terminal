@@ -51,9 +51,9 @@ jobs:
         run: cargo test --locked
 
   windows:
-    name: clippy (windows-2025)
+    name: clippy + tests (windows-2025)
     runs-on: windows-2025
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
@@ -72,11 +72,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          key: tests
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: clippy
         run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: tests
+        run: cargo test --locked
 
   guardrails:
     name: fmt + machete + jscpd

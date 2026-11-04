@@ -1,16 +1,20 @@
+#[cfg(unix)]
 use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
 use crate::test_util::{Sleeper, TITLE_SIGNAL, TempDir, append, fixture, signal, write_executable};
 
+pub(crate) const ID: &str = "00000000-0000-4000-8000-000000000001";
+
+#[cfg(unix)]
 pub(crate) struct FakeGemini {
     pub(crate) dir: TempDir,
     pub(crate) script: PathBuf,
     pub(crate) session: PathBuf,
 }
 
+#[cfg(unix)]
 impl FakeGemini {
-    pub(crate) const ID: &str = "00000000-0000-4000-8000-000000000001";
-
     pub(crate) fn new(cwd: &Path) -> Self {
         let dir = TempDir::new();
         let project = dir.path().join(".gemini/tmp/project");
@@ -69,6 +73,7 @@ done
     }
 }
 
+#[cfg(unix)]
 impl Drop for FakeGemini {
     fn drop(&mut self) {
         signal(self.dir.path(), "quit", "");

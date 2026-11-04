@@ -37,6 +37,7 @@ impl Shells {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn set_editor(&mut self, visual: &str) {
         self.editor_env = vec![("VISUAL".into(), visual.into())];
     }
@@ -220,6 +221,7 @@ impl App {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn push_tab(&mut self, at: WorkspaceAt, area: Rect, name: Option<String>) -> Result<TabAt> {
         let accounts = self.active_accounts();
         self.push_tab_in(at, area, name, accounts)

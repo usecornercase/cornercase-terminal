@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::test_util::{exited_pid, git};
 

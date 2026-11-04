@@ -1,12 +1,17 @@
 use std::path::{Path, PathBuf};
 
-use super::{Owner, Trees, folder, owner, trees};
+use super::folder;
+#[cfg(unix)]
+use super::{Owner, Trees, owner, trees};
+#[cfg(unix)]
 use crate::test_util::{Family, Running, TempDir};
 
+#[cfg(unix)]
 fn me() -> i32 {
     i32::try_from(std::process::id()).expect("a pid")
 }
 
+#[cfg(unix)]
 mod trees {
     use super::*;
 
@@ -38,6 +43,7 @@ mod trees {
     }
 }
 
+#[cfg(unix)]
 mod server {
     use super::*;
 

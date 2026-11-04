@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::app::pull_requests::{ASK_AGENT, COPY_LINK, DONE};
 use crate::pull_request::State;

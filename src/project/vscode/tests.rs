@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::TempDir;
+use crate::test_util::{TempDir, os_path};
 
 fn write(dir: &Path, name: &str, text: &str) -> PathBuf {
     let file = dir.join(name);
@@ -37,11 +37,13 @@ mod reading {
     #[test]
     fn keeps_absolute_folders_and_their_names() {
         let tmp = TempDir::new();
-        let file = write(tmp.path(), "w.code-workspace", r#"{"folders": [{"path": "/srv/api", "name": "API"}]}"#);
+        let api = os_path("/srv/api");
+        let file =
+            write(tmp.path(), "w.code-workspace", &format!(r#"{{"folders": [{{"path": "{api}", "name": "API"}}]}}"#));
 
         let folders = read(&file).expect("read").folders;
 
-        assert_eq!(folders, [Folder { path: PathBuf::from("/srv/api"), name: Some("API".into()) }]);
+        assert_eq!(folders, [Folder { path: PathBuf::from(api), name: Some("API".into()) }]);
     }
 
     #[test]
