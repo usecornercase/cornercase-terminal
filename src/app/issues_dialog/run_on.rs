@@ -135,6 +135,7 @@ impl App {
             issue: Some(issue.key.clone()),
             source: Some(issue.source.id().to_string()),
             accounts: self.chosen_accounts(),
+            placed: true,
             ..control::Start::default()
         }
     }

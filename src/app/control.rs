@@ -765,13 +765,18 @@ impl App {
     }
 
     fn launch_within(&mut self, client: u64, launch: Option<Launch>, waits: Waits) -> Option<Value> {
-        let Some(mut launch) = launch else { return Some(json(&waits.done)) };
+        let Some(launch) = launch else { return Some(json(&waits.done)) };
         let key = self.clients.requests.key();
-        launch.key = Some(key);
-        launch.trust = self.panels.queued.trust(client).then_some(agents::launch::Trust::Accepted);
-        self.agents.launches.add(launch);
+        self.add_launch(Some(client), launch, Some(key));
         self.clients.requests.push(client, key, waits);
         None
+    }
+
+    fn add_launch(&mut self, client: Option<u64>, mut launch: Launch, key: Option<u64>) {
+        launch.key = key;
+        launch.trust =
+            client.is_some_and(|client| self.panels.queued.trust(client)).then_some(agents::launch::Trust::Accepted);
+        self.agents.launches.add(launch);
     }
 
     fn show_if(&mut self, view: Option<u64>, focus: bool, item: Item) -> Result<Option<u64>, Refusal> {

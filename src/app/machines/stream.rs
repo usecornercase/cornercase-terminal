@@ -341,6 +341,13 @@ impl App {
                 self.typed_dropped(dropped);
                 self.remote_answered(report.stream, &answer);
             }
+            StreamEvent::Copied { pane, text } => {
+                let shown = watched.screen.as_ref().is_some_and(|screen| screen.panes.iter().any(|p| p.pane == pane));
+                log::debug!("machines", "copied there", pane = pane, bytes = text.len(), shown = shown);
+                if shown {
+                    self.copy(&text);
+                }
+            }
         }
     }
 }

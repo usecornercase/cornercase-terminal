@@ -272,7 +272,7 @@ impl Start {
         fields.add("wait", self.wait).maybe("until", self.wait.then(|| self.until.name()));
         fields.maybe("timeout", self.timeout).add("focus", self.focus);
         fields.maybe("profile", self.profile.as_ref()).maybe("accounts", chosen(&self.accounts));
-        fields.maybe("machine", self.machine.as_ref());
+        fields.maybe("machine", self.machine.as_ref()).maybe("placed", self.placed.then_some(true));
     }
 }
 

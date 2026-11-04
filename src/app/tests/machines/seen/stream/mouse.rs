@@ -124,6 +124,19 @@ fn dragging_over_a_pane_there_selects_and_copies_its_text_here() {
 }
 
 #[test]
+fn what_a_program_there_copies_in_a_pane_shown_reaches_the_clipboard_here() {
+    let mut streaming = streaming();
+    live(&mut streaming, "hello");
+    let copied = |pane: u64, text: &str| json!({"ok": {"event": "clipboard", "text": text, "tab": 13, "pane": pane}});
+
+    say(&mut streaming.copies, &copied(99, "a pane not shown"));
+    say(&mut streaming.copies, &copied(1, "picked in claude"));
+
+    streaming.seeing.rig.until("the copy arrives", |app| toast(app) == Some(COPIED));
+    assert_eq!(streaming.seeing.rig.app.take_host_writes(), vec![clipboard::osc52("picked in claude")]);
+}
+
+#[test]
 fn dragging_a_divider_there_sends_its_ratio() {
     let mut streaming = divider_grabbed();
     let app = &mut streaming.seeing.rig.app;

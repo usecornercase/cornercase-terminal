@@ -617,6 +617,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         profile,
         accounts,
         machine: machine(start.on)?,
+        placed: false,
     };
     let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
     say(ask(name, command)?, start.create.print.json, |done| {

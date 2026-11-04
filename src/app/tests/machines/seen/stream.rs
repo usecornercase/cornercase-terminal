@@ -37,6 +37,7 @@ struct Streaming {
     seeing: Seeing,
     view: UnixStream,
     surface: UnixStream,
+    copies: UnixStream,
 }
 
 fn streaming() -> Streaming {
@@ -47,7 +48,14 @@ fn streaming() -> Streaming {
     say(&mut view, &THERE.view_line(1));
     let mut surface = reach(&seeing.ends);
     assert_eq!(request(&mut surface)["command"], "surface");
-    Streaming { seeing, view, surface }
+    let copies = copies(&seeing.ends);
+    Streaming { seeing, view, surface, copies }
+}
+
+fn copies(ends: &Ends) -> UnixStream {
+    let mut copies = reach(ends);
+    assert_eq!(request(&mut copies)["command"], "events");
+    copies
 }
 
 fn live(streaming: &mut Streaming, text: &str) {
@@ -58,7 +66,7 @@ fn live(streaming: &mut Streaming, text: &str) {
 fn stream_fallen() -> (Seeing, UnixStream) {
     let mut streaming = streaming();
     live(&mut streaming, "hello");
-    let Streaming { mut seeing, view, surface } = streaming;
+    let Streaming { mut seeing, view, surface, copies: _copies } = streaming;
     drop(surface);
     seeing.rig.until("the stream falls", |app| matches!(flow(app), Some(Flow::Down(_))));
     (seeing, view)
@@ -140,7 +148,7 @@ mod moving {
 
     #[test]
     fn another_workspace_ends_the_stream_and_opens_one_on_its_tab() {
-        let Streaming { mut seeing, mut view, mut surface } = streaming();
+        let Streaming { mut seeing, mut view, mut surface, copies: _copies } = streaming();
 
         assert!(seeing.rig.app.select_remote("vps", RemoteItem::Workspace(20)));
 
@@ -166,7 +174,7 @@ mod ending {
     #[case::the_last_window_going(Away::WindowGone)]
     #[case::stopping_the_server(Away::Stopped)]
     fn ends_its_lines(#[case] away: Away) {
-        let Streaming { mut seeing, mut view, mut surface } = streaming();
+        let Streaming { mut seeing, mut view, mut surface, copies: _copies } = streaming();
 
         match away {
             Away::Here => seeing.rig.app.leave_remote(),
@@ -183,7 +191,7 @@ mod ending {
     fn a_fallen_link_ends_it_and_keeps_the_last_frame() {
         let mut streaming = streaming();
         live(&mut streaming, "hello");
-        let Streaming { mut seeing, mut view, mut surface } = streaming;
+        let Streaming { mut seeing, mut view, mut surface, copies: _copies } = streaming;
 
         fall(&mut seeing);
 
@@ -194,7 +202,7 @@ mod ending {
 
     #[test]
     fn the_link_back_opens_it_again_on_the_same_tab() {
-        let Streaming { mut seeing, view, surface } = streaming();
+        let Streaming { mut seeing, view, surface, copies: _copies } = streaming();
         fall(&mut seeing);
         drop((view, surface));
 
@@ -211,7 +219,7 @@ mod ending {
     #[case::closing_it(Act::Close)]
     #[case::removing_its_worktree(Act::Remove { force: false, unlock: false })]
     fn acting_on_it_from_its_row_ends_its_lines_once_the_machine_drops_it(#[case] act: Act) {
-        let Streaming { mut seeing, mut view, mut surface } = streaming();
+        let Streaming { mut seeing, mut view, mut surface, copies: _copies } = streaming();
         let era = seeing.rig.app.machines.held()[0].era;
 
         seeing.rig.app.send_act(Aim { link: seeing.rig.links()[0], era, workspace: 10 }, act);
@@ -280,7 +288,7 @@ mod drawn {
 
     #[test]
     fn a_stream_fallen_before_a_frame_shows_the_card_reconnecting() {
-        let Streaming { mut seeing, view: _view, surface } = streaming();
+        let Streaming { mut seeing, view: _view, surface, copies: _copies } = streaming();
 
         drop(surface);
 
@@ -373,7 +381,7 @@ mod in_status {
     fn tells_a_watcher_once_it_falls(#[case] fallen: Fallen) {
         let mut streaming = streaming();
         live(&mut streaming, "hello");
-        let Streaming { mut seeing, view: _view, surface } = streaming;
+        let Streaming { mut seeing, view: _view, surface, copies: _copies } = streaming;
         let before = watched_from_now(&mut seeing.rig.app);
 
         match fallen {
@@ -388,7 +396,7 @@ mod in_status {
 
     #[test]
     fn tells_a_watcher_once_the_link_back_connects_it_again() {
-        let Streaming { mut seeing, view: _view, surface: _surface } = streaming();
+        let Streaming { mut seeing, view: _view, surface: _surface, copies: _copies } = streaming();
         fall(&mut seeing);
         let before = watched_from_now(&mut seeing.rig.app);
 

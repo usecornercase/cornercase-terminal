@@ -51,6 +51,7 @@ fn left_out(command: &str, key: &str, value: &Value) -> bool {
     match key {
         "machine" => value.is_null() && ON_A_MACHINE.contains(&command),
         "files" => command == "clone" && value.as_array().is_some_and(Vec::is_empty),
+        "placed" => value == &Value::Bool(false) && matches!(command, "start" | "start-with"),
         _ => false,
     }
 }

@@ -109,7 +109,7 @@ mod sizes {
 
         say(&mut view, &json!({"ok": {"revision": 1, "boot": BOOT, "view": {"id": VIEW, "projection": 1}}}));
         assert_eq!(rig.event(), StreamEvent::Opened { view: VIEW });
-        let asked = [request(&mut rig.reach()), request(&mut rig.reach())];
+        let asked = [request(&mut rig.reach()), request(&mut rig.reach()), request(&mut rig.reach())];
 
         let sizes = asked.iter().filter(|asked| asked["command"] == "view-set").map(|asked| &asked["args"]["cols"]);
         assert_eq!(sizes.collect::<Vec<_>>(), [&json!(90)]);

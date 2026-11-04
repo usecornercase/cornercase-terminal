@@ -146,7 +146,7 @@ fn weight(events: &[InputEvent]) -> usize {
         .sum()
 }
 
-fn selected(text: &str, most: usize) -> String {
+pub(super) fn selected(text: &str, most: usize) -> String {
     text.chars()
         .filter_map(|c| match c {
             '\n' => Some(c),

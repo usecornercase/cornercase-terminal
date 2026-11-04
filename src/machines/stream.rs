@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -23,6 +23,7 @@ use orders::{Order, Orders};
 use screen::RemoteScreen;
 
 mod alarm;
+mod copies;
 pub(crate) mod orders;
 pub(crate) mod screen;
 
@@ -44,6 +45,7 @@ pub(crate) enum StreamEvent {
     Frame(Arc<RemoteScreen>),
     Down(String),
     Answer(orders::Answer),
+    Copied { pane: u64, text: String },
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -324,15 +326,25 @@ impl Running {
         let wanted = *self.shared.wanted.lock();
         let opened = open_view(&mut view, wanted, &self.shared)?;
         self.opened(&opened);
-        let reader = std::mem::replace(&mut view.reader, Box::new(io::empty()));
-        drain(reader, opened.view, Arc::clone(&self.shared), Arc::clone(group));
-        let mut surface = self.line(group)?;
+        let shared = Arc::clone(&self.shared);
+        drain(&mut view, group, move |text| {
+            if let Some(projection) = projection_of(text) {
+                shared.seen(opened.view, projection);
+            }
+        });
         let envelope = Envelope { view: Some(opened.view), boot: Some(opened.boot.clone()) };
         let command = Command::Surface(Surface { patches: true, ..Surface::default() });
-        if !link::send(&mut surface, &envelope, command) {
-            return Err(Outcome::Failed(link::why(&surface, None)));
-        }
+        let mut surface = self.asked(group, &envelope, command)?;
+        copies::follow(Arc::clone(&self.connector), Arc::clone(group), opened.boot.clone(), Arc::clone(&self.tell));
         Ok(self.frames(&mut surface, &opened, alarm))
+    }
+
+    fn asked(&self, group: &Arc<Group>, envelope: &Envelope, command: Command) -> Result<Line, Outcome> {
+        let mut line = self.line(group)?;
+        if !link::send(&mut line, envelope, command) {
+            return Err(Outcome::Failed(link::why(&line, None)));
+        }
+        Ok(line)
     }
 
     fn line(&self, group: &Arc<Group>) -> Result<Line, Outcome> {
@@ -439,12 +451,12 @@ fn open_view(line: &mut Line, wanted: Wanted, shared: &Shared) -> Result<Opened,
     Ok(Opened { view: info.id, boot: snapshot.report.boot, wanted })
 }
 
-fn drain(mut reader: Box<dyn Read + Send>, view: u64, shared: Arc<Shared>, group: Arc<Group>) {
+fn drain(line: &mut Line, group: &Arc<Group>, mut each: impl FnMut(&str) + Send + 'static) {
+    let mut reader = std::mem::replace(&mut line.reader, Box::new(io::empty()));
+    let group = Arc::clone(group);
     thread::spawn(move || {
         while let Heard::Answer(text) = link::listen(&mut reader) {
-            if let Some(projection) = projection_of(&text) {
-                shared.seen(view, projection);
-            }
+            each(&text);
         }
         group.cut();
     });
