@@ -58,6 +58,7 @@ pub(super) struct Rig {
     reports: Receiver<StreamReport>,
     waits: Receiver<Duration>,
     alarms: Receiver<Arc<Armed>>,
+    copies: Mutex<Vec<UnixStream>>,
 }
 
 impl Rig {
@@ -71,7 +72,7 @@ impl Rig {
         let alarms_here = Alarms::new(Arc::new(Bells(Mutex::new(armed))), WAIT);
         let timing = Timing { clock: Box::new(Ticks(napped)), alarms: alarms_here };
         let stream = Stream::spawn(1, connector, wanted, &tx, timing);
-        Self { stream, lines, reports, waits, alarms }
+        Self { stream, lines, reports, waits, alarms, copies: Mutex::default() }
     }
 
     pub(super) fn alarm(&self) -> Arc<Armed> {
@@ -106,10 +107,18 @@ impl Rig {
     }
 
     pub(super) fn opened(&self) -> (UnixStream, UnixStream) {
+        let (view, surface, copies) = self.copying();
+        self.copies.lock().push(copies);
+        (view, surface)
+    }
+
+    pub(super) fn copying(&self) -> (UnixStream, UnixStream, UnixStream) {
         let view = self.viewing();
         let mut surface = self.reach();
         assert_eq!(request(&mut surface)["command"], "surface");
-        (view, surface)
+        let mut copies = self.reach();
+        assert_eq!(request(&mut copies)["command"], "events");
+        (view, surface, copies)
     }
 }
 
@@ -220,6 +229,77 @@ mod opening {
 
         assert_eq!(rig.event(), StreamEvent::Down("no tab 9[2J".into()));
         assert_eq!(rig.waited(), remote::backoff(1));
+    }
+}
+
+mod copies {
+    use super::*;
+
+    fn clipboard(pane: u64, text: &str) -> Value {
+        json!({
+            "time": "2026-11-04T09:30:00.123Z", "event": "clipboard", "text": text,
+            "project": 1, "workspace": 2, "tab": TAB, "pane": pane
+        })
+    }
+
+    #[test]
+    fn then_asks_the_server_there_for_what_its_panes_copy() {
+        let rig = Rig::new();
+        let _view = rig.viewing();
+        request(&mut rig.reach());
+        let mut copies = rig.reach();
+
+        let asked = request(&mut copies);
+
+        assert_eq!((&asked["command"], &asked["boot"], asked.get("view")), (&json!("events"), &json!(BOOT), None));
+        assert_eq!((&asked["args"]["host"], &asked["args"]["panes"]), (&json!(true), &json!([])));
+    }
+
+    #[test]
+    fn what_a_pane_there_copies_arrives_cleaned_and_other_events_do_not() {
+        let rig = Rig::new();
+        let (_view, _surface, mut copies) = rig.copying();
+
+        say(&mut copies, &json!({"ok": {}}));
+        say(&mut copies, &json!({"time": "2026-11-04T09:30:00.123Z", "event": "bell", "count": 1, "pane": 4}));
+        say(&mut copies, &clipboard(4, "one\r\ntwo\u{1b}[2J\u{200b}"));
+
+        assert_eq!(rig.event(), StreamEvent::Copied { pane: 4, text: "one\ntwo[2J".into() });
+    }
+
+    #[test]
+    fn a_copy_with_nothing_left_once_cleaned_does_not_arrive() {
+        let rig = Rig::new();
+        let (_view, _surface, mut copies) = rig.copying();
+
+        say(&mut copies, &clipboard(4, "\u{7}\u{200b}"));
+        say(&mut copies, &clipboard(5, "kept"));
+
+        assert_eq!(rig.event(), StreamEvent::Copied { pane: 5, text: "kept".into() });
+    }
+
+    #[test]
+    fn its_connection_ending_leaves_the_tab_streaming() {
+        let rig = Rig::new();
+        let (_view, mut surface, copies) = rig.copying();
+
+        drop(copies);
+        say(&mut surface, &THERE.complete(1, 1, "still here"));
+
+        assert!(matches!(rig.event(), StreamEvent::Frame(screen) if fake::text(&screen) == "still here"));
+    }
+
+    #[test]
+    fn a_refusal_there_copies_nothing_and_leaves_the_tab_streaming() {
+        let rig = Rig::new();
+        let (_view, mut surface, mut copies) = rig.copying();
+
+        say(&mut copies, &json!({"error": {"code": "unavailable", "message": "no"}}));
+        say(&mut copies, &clipboard(4, "after"));
+
+        assert_eq!(rig.event(), StreamEvent::Copied { pane: 4, text: "after".into() });
+        say(&mut surface, &THERE.complete(1, 1, "live"));
+        assert!(matches!(rig.event(), StreamEvent::Frame(_)));
     }
 }
 

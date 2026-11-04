@@ -38,7 +38,7 @@ The link is one `ssh` connection from your cornercase server to the cornercase s
 - **It uses the server running there**, or starts one when none runs, as [`cornercase start-server`](../../reference/command-line/#cornercase-start-server) does.
 - **It never stops anything there.** Removing the machine, stopping or restarting cornercase on this computer, this computer going to sleep and a dropped connection all end the link only; the server on the machine and everything in it keep running.
 - **A server you stop there comes back.** After `cornercase kill-server` on the machine, the link starts it again on its next try. To stop it for good, remove the machine here first.
-- **It goes one way.** The machine can't act on this computer through the link: a tab you look at is drawn as text and colours only, nothing it sends is played or opened here, the one thing copied is the text you select on it, and the link's `ssh` forwards neither your agent, nor X11, nor any port.
+- **It goes one way.** The machine can't act on this computer through the link: a tab you look at is drawn as text and colours only, nothing it sends is played or opened here, the one thing that reaches your clipboard is text (what you select on it, or what a program in the tab you look at copies), and the link's `ssh` forwards neither your agent, nor X11, nor any port.
 
 ## States
 
@@ -132,6 +132,7 @@ Once its screen shows, the tab works as one of yours, on the machine:
 - **The mouse** goes to a program that reads it, such as `vim` or `htop`, as it would here. A click on another pane makes it the active one; a right-click on it goes on to its program when it reads the mouse.
 - **The wheel** scrolls a pane's history, or moves through a full-screen program's lines, and a click on ` ↓ 12 more `, at the bottom of a pane that is scrolled up, takes it back down.
 - **Selecting text** with the mouse, where no program reads it, copies it to this computer's clipboard, cleaned as a selection here is, and a toast says so. A click where you pressed clears it.
+- **What a program there copies** reaches this computer's clipboard too, cleaned the same way, while its tab shows here: Claude Code reads the mouse and copies what you select in it, as it does in a tab here.
 - **The dividers** between its panes drag, and a double click puts one back in the middle. `Esc` ends a drag.
 
 Before its first screen arrives, and while the machine is down, nothing you type, click or scroll there is sent, or kept for later: a toast says `vps unreachable: nothing was sent`. When the program in a pane doesn't take what you send, the toast says so too.

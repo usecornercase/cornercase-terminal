@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -14,8 +14,9 @@ use super::link::{self, Asked, Clock, Connect, Control, Ends, Envelope, Heard, L
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::mirror::{Mirror, Unapplied};
 use crate::control::surface::{COLS, ROWS};
-use crate::control::{Command, OpenView, Snapshot, Surface, ViewInfo};
+use crate::control::{Command, Events, OpenView, Snapshot, Surface, ViewInfo};
 use crate::error::Error;
+use crate::log;
 use crate::panics;
 use crate::remote::{self, Killer};
 use alarm::{Alarm, Alarms, Timer};
@@ -30,6 +31,7 @@ const UNREADABLE: &str = "cannot read the answer from there";
 const NO_VIEW: &str = "the server there opened no view";
 const REDRAWN: &str = "the server there could not draw the tab again";
 const AFTER_A_BUG: u32 = 5;
+const COPIED_MOST: usize = 1 << 20;
 pub(crate) const ANSWERS_WITHIN: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +46,7 @@ pub(crate) enum StreamEvent {
     Frame(Arc<RemoteScreen>),
     Down(String),
     Answer(orders::Answer),
+    Copied { pane: u64, text: String },
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -324,15 +327,44 @@ impl Running {
         let wanted = *self.shared.wanted.lock();
         let opened = open_view(&mut view, wanted, &self.shared)?;
         self.opened(&opened);
-        let reader = std::mem::replace(&mut view.reader, Box::new(io::empty()));
-        drain(reader, opened.view, Arc::clone(&self.shared), Arc::clone(group));
-        let mut surface = self.line(group)?;
+        let shared = Arc::clone(&self.shared);
+        drain(&mut view, Some(group), move |text| {
+            if let Some(projection) = projection_of(text) {
+                shared.seen(opened.view, projection);
+            }
+        });
         let envelope = Envelope { view: Some(opened.view), boot: Some(opened.boot.clone()) };
         let command = Command::Surface(Surface { patches: true, ..Surface::default() });
-        if !link::send(&mut surface, &envelope, command) {
-            return Err(Outcome::Failed(link::why(&surface, None)));
-        }
+        let mut surface = self.asked(group, &envelope, command)?;
+        let _copies = self.copies(group, &opened.boot);
         Ok(self.frames(&mut surface, &opened, alarm))
+    }
+
+    fn asked(&self, group: &Arc<Group>, envelope: &Envelope, command: Command) -> Result<Line, Outcome> {
+        let mut line = self.line(group)?;
+        if !link::send(&mut line, envelope, command) {
+            return Err(Outcome::Failed(link::why(&line, None)));
+        }
+        Ok(line)
+    }
+
+    fn copies(&self, group: &Arc<Group>, boot: &str) -> Option<Line> {
+        let envelope = Envelope { view: None, boot: Some(boot.to_string()) };
+        let command = Command::Events(Events { host: true, ..Events::default() });
+        let Ok(mut events) = self.asked(group, &envelope, command) else {
+            log::warning!("machines", "the copies there cannot be followed");
+            return None;
+        };
+        let tell = Arc::clone(&self.tell);
+        drain(&mut events, None, move |text| match clipboard(text) {
+            Copy::Copied(pane, text) => tell(StreamEvent::Copied { pane, text }),
+            Copy::Refused(refusal) => {
+                let refused = format!("{:?}, {} bytes", refusal.code, refusal.message.len());
+                log::warning!("machines", "the copies there were refused", refused = refused);
+            }
+            Copy::Other => {}
+        });
+        Some(events)
     }
 
     fn line(&self, group: &Arc<Group>) -> Result<Line, Outcome> {
@@ -439,15 +471,41 @@ fn open_view(line: &mut Line, wanted: Wanted, shared: &Shared) -> Result<Opened,
     Ok(Opened { view: info.id, boot: snapshot.report.boot, wanted })
 }
 
-fn drain(mut reader: Box<dyn Read + Send>, view: u64, shared: Arc<Shared>, group: Arc<Group>) {
+fn drain(line: &mut Line, ends: Option<&Arc<Group>>, mut each: impl FnMut(&str) + Send + 'static) {
+    let mut reader = std::mem::replace(&mut line.reader, Box::new(io::empty()));
+    let group = ends.map(Arc::clone);
     thread::spawn(move || {
         while let Heard::Answer(text) = link::listen(&mut reader) {
-            if let Some(projection) = projection_of(&text) {
-                shared.seen(view, projection);
-            }
+            each(&text);
         }
-        group.cut();
+        if let Some(group) = group {
+            group.cut();
+        }
     });
+}
+
+enum Copy {
+    Copied(u64, String),
+    Refused(Refusal),
+    Other,
+}
+
+#[derive(Deserialize)]
+struct Clipboard {
+    event: String,
+    pane: u64,
+    text: String,
+}
+
+fn clipboard(line: &str) -> Copy {
+    if let Some(Err(refusal)) = link::replied(line) {
+        return Copy::Refused(refusal);
+    }
+    let Some(event) = serde_json::from_str::<Clipboard>(line).ok().filter(|event| event.event == "clipboard") else {
+        return Copy::Other;
+    };
+    let text = orders::selected(&event.text, COPIED_MOST);
+    if text.is_empty() { Copy::Other } else { Copy::Copied(event.pane, text) }
 }
 
 fn projection_of(text: &str) -> Option<u64> {

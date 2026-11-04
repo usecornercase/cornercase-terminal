@@ -89,6 +89,6 @@ Code: `remote.rs`, `client.rs`, `client/window.rs`, `client/requests.rs`, `cli/r
 
 ## Topics
 
-- [A machine's tab](remote-windows/machine-tab.md): the view and its surface, three connections and the orders, patches, cleaning, drawing, acting on it (keys, the mouse, selecting, dividers, nothing queued, what is left out), only with a window, its size, down and back, over the socket, tests.
+- [A machine's tab](remote-windows/machine-tab.md): the view and its surface, four connections (its copies among them) and the orders, patches, cleaning, drawing, acting on it (keys, the mouse, selecting, dividers, nothing queued, what is left out), only with a window, its size, down and back, over the socket, tests.
 - [The side panels on a machine](remote-windows/machine-panels.md): Changes and Files of a machine's workspace, a connection per stream (`machines/follow.rs`), cleaning what comes back (`machines/heard.rs`), when the streams live, retries.
 - [Starting work on a machine](remote-windows/run-on.md): the `run on` row, where it starts there, the checks and their cache, the relay and its caps, the awaited selection, Issues, the login tab, New workspace, cloning with git-ignored files, forks and ssh aliases, no feature there, what is left out, tests.
