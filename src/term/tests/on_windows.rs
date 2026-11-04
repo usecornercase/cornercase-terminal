@@ -54,9 +54,9 @@ fn single_quoted(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "''"))
 }
 
-fn titled(term: &mut Term, rx: &Receiver<Event>, title: &str) -> bool {
+fn title(term: &mut Term, rx: &Receiver<Event>) -> String {
     let _ = contents(term, rx);
-    term.emulator.title() == title
+    term.emulator.title()
 }
 
 fn program_is(term: &mut Term, rx: &Receiver<Event>, name: &str) -> bool {
@@ -162,12 +162,12 @@ mod console_sequences {
     use super::*;
 
     #[test]
-    fn a_title_set_through_the_console_reaches_the_emulator() {
+    fn a_title_set_through_the_console_reaches_the_emulator_after_what_an_elevated_cmd_puts_first() {
         let (mut term, rx) = spawn_cmd(None);
 
         term.write("title cc-\u{2733} console\r".as_bytes());
 
-        wait_until("the title arrives", || titled(&mut term, &rx, "cc-\u{2733} console"));
+        wait_until_within("the title arrives", SLOW, || title(&mut term, &rx).ends_with("cc-\u{2733} console"));
     }
 
     #[test]
@@ -176,7 +176,7 @@ mod console_sequences {
 
         term.write("prompt $E]2;cc-\u{2733} osc$E\\$G\r".as_bytes());
 
-        wait_until("the title arrives", || titled(&mut term, &rx, "cc-\u{2733} osc"));
+        wait_until_within("the title arrives", SLOW, || title(&mut term, &rx) == "cc-\u{2733} osc");
     }
 
     #[test]
