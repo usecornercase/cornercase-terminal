@@ -367,12 +367,10 @@ fn a_control_character_that_could_rewrite_the_preview_is_refused(#[case] extra: 
 
 #[cfg(windows)]
 mod on_windows {
-    use std::ptr::null_mut;
-
     use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_READ, FILE_GENERIC_WRITE};
 
     use super::*;
-    use crate::os::fs::{link_to, share_with_everyone};
+    use crate::os::fs::{link_to, make_reparse_point, share_with_everyone};
 
     const OPEN: u32 = FILE_GENERIC_READ | FILE_GENERIC_WRITE;
 
@@ -419,43 +417,10 @@ mod on_windows {
         assert!(refused(&dir).contains("other users can write to the plugin's folder"), "{}", refused(&dir));
     }
 
-    fn make_reparse_point(path: &Path) {
-        use std::os::windows::io::AsRawHandle as _;
-
-        use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT};
-        use windows_sys::Win32::System::IO::DeviceIoControl;
-        use windows_sys::Win32::System::Ioctl::FSCTL_SET_REPARSE_POINT;
-
-        let flags = (FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS).cast_signed();
-        let file = std::fs::OpenOptions::new().write(true).custom_flags(flags).open(path).expect("open it");
-        let data = [0x5a_u8; 4];
-        let mut buffer = Vec::new();
-        buffer.extend(0x0000_1234_u32.to_le_bytes());
-        buffer.extend(u16::try_from(data.len()).expect("a length").to_le_bytes());
-        buffer.extend([0; 2]);
-        buffer.extend([0xa5; 16]);
-        buffer.extend(data);
-        let (size, mut returned) = (u32::try_from(buffer.len()).expect("a size"), 0);
-        let set = unsafe {
-            let input = buffer.as_ptr().cast();
-            DeviceIoControl(
-                file.as_raw_handle(),
-                FSCTL_SET_REPARSE_POINT,
-                input,
-                size,
-                null_mut(),
-                0,
-                &raw mut returned,
-                null_mut(),
-            )
-        };
-        assert_ne!(set, 0, "set the reparse point: {}", std::io::Error::last_os_error());
-    }
-
     #[test]
     fn a_manifest_that_is_a_reparse_point_is_refused() {
         let dir = TempDir::new();
-        make_reparse_point(&plugin(&dir));
+        make_reparse_point(&plugin(&dir)).expect("a reparse point");
 
         assert!(refused(&dir).contains("it is a link or another reparse point"), "{}", refused(&dir));
     }

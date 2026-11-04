@@ -154,7 +154,11 @@ mod on_windows {
     }
 
     fn git_sh() -> Shell {
-        Shell::pick(Some(&script::git_sh().expect("Git for Windows' sh, which these tests need")), None)
+        Shell::pick(Some(&script::git_sh().expect("Git for Windows' sh, which these tests need")), None, None)
+    }
+
+    fn windows_powershell() -> Shell {
+        Shell::pick(None, None, crate::os::desktop::windows_folder().as_deref())
     }
 
     fn setup(interpreter: &Shell, script: &str, typed: &str) -> Ran {
@@ -222,7 +226,7 @@ mod on_windows {
     fn without_git_s_sh_a_setup_runs_through_powershell_then_stays_in_it() {
         let script =
             "Write-Output \"script:${env:CORNERCASE_BRANCH}:${env:CORNERCASE_ROOT}:${env:CORNERCASE_WORKTREE}\"";
-        let powershell = Shell::pick(None, None);
+        let powershell = windows_powershell();
         let typed =
             "Write-Output \"shell:${env:CORNERCASE_BRANCH}:$(Get-Location):$($null -eq $cornercase)\"\r\nexit\r\n";
 
@@ -234,7 +238,7 @@ mod on_windows {
 
     #[test]
     fn a_failing_setup_through_powershell_reports_its_status() {
-        let ran = setup(&Shell::pick(None, None), "Write-Error boom\nWrite-Output never", "exit\r\n");
+        let ran = setup(&windows_powershell(), "Write-Error boom\nWrite-Output never", "exit\r\n");
 
         ran.failed();
     }

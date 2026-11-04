@@ -33,19 +33,30 @@ mod picking {
 
         let program = sh.to_string_lossy().into_owned();
         let pwsh = dir.path().join("pwsh.exe");
-        assert_eq!(Shell::pick(Some(&sh), Some(&pwsh)), Shell::Sh(Sh { program, git: true }));
+        assert_eq!(Shell::pick(Some(&sh), Some(&pwsh), Some(dir.path())), Shell::Sh(Sh { program, git: true }));
     }
 
     #[test]
     fn without_it_powershell_7_runs_scripts() {
         let pwsh = PathBuf::from(r"C:\Program Files\PowerShell\7\pwsh.exe");
+        let windows = Path::new(r"C:\Windows");
 
-        assert_eq!(Shell::pick(None, Some(&pwsh)), Shell::PowerShell(pwsh.to_string_lossy().into_owned()));
+        let picked = Shell::pick(None, Some(&pwsh), Some(windows));
+
+        assert_eq!(picked, Shell::PowerShell(pwsh.to_string_lossy().into_owned()));
     }
 
     #[test]
-    fn without_either_windows_powershell_runs_scripts() {
-        assert_eq!(Shell::pick(None, None), Shell::PowerShell("powershell.exe".into()));
+    fn without_either_windows_powershell_runs_from_the_windows_folder() {
+        let windows = Path::new(r"C:\Windows");
+        let expected = windows.join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+
+        assert_eq!(Shell::pick(None, None, Some(windows)), Shell::PowerShell(expected.to_string_lossy().into_owned()));
+    }
+
+    #[test]
+    fn only_a_windows_folder_nobody_could_read_leaves_the_bare_name() {
+        assert_eq!(Shell::pick(None, None, None), Shell::PowerShell("powershell.exe".into()));
     }
 }
 
@@ -204,15 +215,16 @@ mod on_windows {
 
     fn through_git() -> Shell {
         let sh = git_sh().expect("Git for Windows' sh, which these tests need");
-        Shell::pick(Some(&sh), None)
+        Shell::pick(Some(&sh), None, None)
     }
 
     mod finding_git_s_sh {
         use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_READ, FILE_GENERIC_WRITE};
 
         use super::*;
-        use crate::os::fs::share_with_everyone;
+        use crate::os::fs::{make_reparse_point, share_with_everyone};
 
+        const PRIVILEGE_NOT_HELD: i32 = 1314;
         const INSTALL: [&str; 5] =
             [r"cmd\git.exe", r"bin\git.exe", r"mingw64\bin\git.exe", r"mingw64\libexec\git-core\git.exe", SH_EXE];
         const SH_EXE: &str = r"usr\bin\sh.exe";
@@ -275,6 +287,60 @@ mod on_windows {
 
             assert_eq!(sh_in(dir.path()), None);
         }
+
+        #[test]
+        fn an_sh_that_is_a_reparse_point_is_refused() {
+            let dir = TempDir::new();
+            files(&dir, &[r"cmd\git.exe", SH_EXE]);
+            assert_eq!(sh_in(dir.path()), Some(dir.path().join(SH_EXE)));
+
+            make_reparse_point(&dir.path().join(SH_EXE)).expect("a reparse point");
+
+            assert_eq!(sh_in(dir.path()), None);
+        }
+
+        fn writable_elsewhere(dir: &TempDir) -> PathBuf {
+            files(dir, &[r"cmd\git.exe", r"elsewhere\sh.exe"]);
+            let elsewhere = dir.path().join(r"elsewhere\sh.exe");
+            share_with_everyone(&elsewhere, FILE_GENERIC_READ | FILE_GENERIC_WRITE).expect("shared");
+            std::fs::create_dir_all(dir.path().join(r"usr\bin")).expect("its folder");
+            elsewhere
+        }
+
+        #[test]
+        fn a_hard_link_to_an_sh_others_can_write_to_is_refused() {
+            let dir = TempDir::new();
+            let elsewhere = writable_elsewhere(&dir);
+
+            std::fs::hard_link(&elsewhere, dir.path().join(SH_EXE)).expect("a hard link");
+
+            assert_eq!(sh_in(dir.path()), None);
+        }
+
+        #[test]
+        fn a_symbolic_link_to_an_sh_others_can_write_to_is_refused() {
+            let dir = TempDir::new();
+            let elsewhere = writable_elsewhere(&dir);
+
+            match std::os::windows::fs::symlink_file(&elsewhere, dir.path().join(SH_EXE)) {
+                Err(e) if e.raw_os_error() == Some(PRIVILEGE_NOT_HELD) => {
+                    eprintln!("skipped: a symbolic link needs Developer Mode or an administrator ({e})");
+                }
+                made => {
+                    made.expect("a symbolic link");
+                    assert_eq!(sh_in(dir.path()), None);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn windows_powershell_is_the_one_in_the_windows_folder() {
+        let Shell::PowerShell(program) = Shell::pick(None, None, desktop::windows_folder().as_deref()) else {
+            panic!("PowerShell")
+        };
+
+        assert!(Path::new(&program).is_absolute() && Path::new(&program).is_file(), "{program}");
     }
 
     fn ran(line: &Line, dir: &Path) -> Output {
@@ -328,7 +394,7 @@ mod on_windows {
     #[test]
     fn a_script_through_powershell_stops_at_the_first_error() {
         let dir = TempDir::new();
-        let powershell = Shell::pick(None, None);
+        let powershell = Shell::pick(None, None, desktop::windows_folder().as_deref());
 
         let failed = ran(&powershell.run("Write-Output 'it''s'\nWrite-Error boom\nWrite-Output never"), dir.path());
         let exited = ran(&powershell.run("exit 4"), dir.path());

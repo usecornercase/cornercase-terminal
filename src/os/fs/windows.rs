@@ -315,4 +315,16 @@ fn set_reparse_point(dir: &Path, buffer: &[u8]) -> io::Result<()> {
 }
 
 #[cfg(test)]
+pub(crate) fn make_reparse_point(file: &Path) -> io::Result<()> {
+    let data = [0x5a_u8; 4];
+    let mut buffer = Vec::new();
+    buffer.extend(0x0000_1234_u32.to_le_bytes());
+    buffer.extend(u16_of(data.len())?.to_le_bytes());
+    buffer.extend([0; 2]);
+    buffer.extend([0xa5; 16]);
+    buffer.extend(data);
+    set_reparse_point(file, &buffer)
+}
+
+#[cfg(test)]
 mod tests;

@@ -8,8 +8,8 @@ use std::time::Duration;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 
-use crate::os::ffi;
-use crate::os::fs::{owner_and_mode, uid};
+use crate::os::fs::{owner_and_mode, reparse_point, uid};
+use crate::os::{desktop, ffi};
 use crate::process::{self, program};
 
 const SH: &str = "/bin/sh";
@@ -22,7 +22,8 @@ const ARGS_ENV: &str = "CORNERCASE_ARGS";
 const ADAPTER: &str = r#"eval "set -- $CORNERCASE_ARGS"; cornercase_script=$CORNERCASE_SCRIPT; unset CORNERCASE_ARGS CORNERCASE_SCRIPT; eval "$cornercase_script""#;
 const EXEC: &str = r#"exec "$@""#;
 const PWSH: &str = "pwsh";
-const WINDOWS_POWERSHELL: &str = "powershell.exe";
+const WINDOWS_POWERSHELL: &str = r"System32\WindowsPowerShell\v1.0\powershell.exe";
+const POWERSHELL_EXE: &str = "powershell.exe";
 const STRICT: &str = "$ErrorActionPreference = 'Stop'\n$PSNativeCommandUseErrorActionPreference = $true\n";
 const QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201a}', '\u{201b}'];
 const SHEBANG: [u8; 2] = *b"#!";
@@ -74,7 +75,11 @@ impl Shell {
     pub(crate) fn here() -> &'static Self {
         static HERE: OnceLock<Shell> = OnceLock::new();
         HERE.get_or_init(|| {
-            if cfg!(windows) { Self::pick(git_sh().as_deref(), program::locate(PWSH).as_deref()) } else { Self::sh() }
+            if !cfg!(windows) {
+                return Self::sh();
+            }
+            let pwsh = program::locate(PWSH);
+            Self::pick(git_sh().as_deref(), pwsh.as_deref(), desktop::windows_folder().as_deref())
         })
     }
 
@@ -82,13 +87,13 @@ impl Shell {
         Self::Sh(Sh { program: SH.into(), git: false })
     }
 
-    pub(crate) fn pick(git_sh: Option<&Path>, pwsh: Option<&Path>) -> Self {
-        match git_sh {
-            Some(sh) => Self::Sh(Sh { program: sh.to_string_lossy().into_owned(), git: true }),
-            None => {
-                Self::PowerShell(pwsh.map_or_else(|| WINDOWS_POWERSHELL.into(), |pwsh| pwsh.to_string_lossy().into()))
-            }
+    pub(crate) fn pick(git_sh: Option<&Path>, pwsh: Option<&Path>, windows: Option<&Path>) -> Self {
+        if let Some(sh) = git_sh {
+            return Self::Sh(Sh { program: sh.to_string_lossy().into_owned(), git: true });
         }
+        let windows_powershell =
+            || windows.map_or_else(|| PathBuf::from(POWERSHELL_EXE), |folder| folder.join(WINDOWS_POWERSHELL));
+        Self::PowerShell(pwsh.map_or_else(windows_powershell, Path::to_path_buf).to_string_lossy().into_owned())
     }
 
     pub(crate) fn run(&self, script: &str) -> Line {
@@ -199,9 +204,12 @@ fn sh_in(root: &Path) -> Option<PathBuf> {
 }
 
 fn only_ours(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|meta| {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| {
+        if !meta.is_file() || reparse_point(&meta) {
+            return false;
+        }
         let (owner, mode) = owner_and_mode(path, &meta);
-        meta.is_file() && owner == uid() && mode & 0o022 == 0
+        owner == uid() && mode & 0o022 == 0
     })
 }
 
