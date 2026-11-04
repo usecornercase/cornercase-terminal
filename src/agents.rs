@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use self::launch::Refusal;
 use crate::config::Config;
 use crate::{paths, process};
 
@@ -47,6 +48,8 @@ const POWERSHELL_START: &str = r"-_./\";
 const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
 const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
 const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
+const STOP_PARSING: &str = "--%";
+const CMD: &str = "cmd";
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
     ("droid", "droid"),
@@ -60,6 +63,13 @@ const OTHERS: [(&str, &str); 8] = [
 pub(in crate::agents) type ModeTable = &'static [(&'static str, &'static [&'static str])];
 
 pub(crate) type Mode = (String, Vec<String>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PaneShell {
+    PowerShell,
+    Cmd,
+    Other,
+}
 
 pub(crate) fn kinds(config: &Config) -> Vec<String> {
     let mut kinds: Vec<String> = Known::ALL
@@ -343,20 +353,58 @@ fn powershell_quoted(word: &str) -> String {
     quoted
 }
 
-pub(crate) fn for_powershell(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Result<String, String> {
-    let Some(words) = typed_words(line) else { return Ok(line.to_string()) };
-    if let Some(refusal) = split_word(&words) {
-        return Err(refusal);
+impl PaneShell {
+    pub(crate) fn of(shell: Option<i32>) -> Self {
+        Self::named(shell.and_then(process::name).as_deref())
     }
-    without_cmd(line, words, runs)
+
+    pub(crate) fn named(name: Option<&str>) -> Self {
+        match name {
+            None => Self::PowerShell,
+            Some(name) if process::program::is_powershell(name) => Self::PowerShell,
+            Some(name) if process::same_file_name(process::program_name(name), CMD) => Self::Cmd,
+            Some(_) => Self::Other,
+        }
+    }
 }
 
-fn split_word(words: &[String]) -> Option<String> {
+pub(crate) fn typed_on_windows(
+    line: &str,
+    shell: PaneShell,
+    runs: impl Fn(&str) -> Option<PathBuf>,
+) -> Result<String, Refusal> {
+    let Some(words) = typed_words(line) else { return Ok(line.to_string()) };
+    let refusal = match shell {
+        PaneShell::PowerShell => split_word(&words),
+        PaneShell::Cmd => cmd_word(&words),
+        PaneShell::Other => None,
+    };
+    if let Some(refusal) = refusal {
+        return Err(refusal);
+    }
+    without_cmd(line, words, shell == PaneShell::PowerShell, runs)
+}
+
+fn refusal(reason: &'static str, message: &str) -> Refusal {
+    Refusal { reason, message: format!("not started: {message}") }
+}
+
+fn split_word(words: &[String]) -> Option<Refusal> {
+    if words.iter().any(|word| word == STOP_PARSING) {
+        return Some(refusal(
+            "the stop-parsing token",
+            "the argument `--%` makes Windows PowerShell 5.1 pass the words after it without their quotes, so a word \
+             with a space could reach the agent as options of its own; remove it",
+        ));
+    }
     let word = words.iter().find(|word| splits(word))?;
     let why = if word.contains('"') { "holds a `\"`" } else { "holds whitespace and ends with `\\`" };
-    Some(format!(
-        "not started: the argument `{word}` {why}, which Windows PowerShell 5.1 passes on in pieces when it starts a \
-         program, so part of it could reach the agent as an option of its own; change the argument"
+    Some(refusal(
+        "a word PowerShell would split",
+        &format!(
+            "the argument `{word}` {why}, which Windows PowerShell 5.1 passes on in pieces when it starts a program, \
+             so part of it could reach the agent as an option of its own; change the argument"
+        ),
     ))
 }
 
@@ -364,23 +412,55 @@ fn splits(word: &str) -> bool {
     word.contains('"') || (word.ends_with('\\') && word.contains(char::is_whitespace))
 }
 
-fn without_cmd(line: &str, words: Vec<String>, runs: impl Fn(&str) -> Option<PathBuf>) -> Result<String, String> {
+fn cmd_word(words: &[String]) -> Option<Refusal> {
+    if let Some(special) = special(words) {
+        return Some(refusal(
+            "a character cmd.exe reads",
+            &format!(
+                "the pane's shell is cmd.exe, which would read the `{special}` in the line as its own; start the \
+                 agent in a PowerShell pane"
+            ),
+        ));
+    }
+    let word = words.iter().find(|word| word.contains(char::is_whitespace))?;
+    Some(refusal(
+        "a word cmd.exe would split",
+        &format!(
+            "the pane's shell is cmd.exe, which does not read the quotes around `{word}`, so it would reach the agent \
+             in pieces; start the agent in a PowerShell pane"
+        ),
+    ))
+}
+
+fn special(words: &[String]) -> Option<char> {
+    words.iter().flat_map(|word| word.chars()).find(|c| BATCH_SPECIAL.contains(c))
+}
+
+fn without_cmd(
+    line: &str,
+    words: Vec<String>,
+    powershell: bool,
+    runs: impl Fn(&str) -> Option<PathBuf>,
+) -> Result<String, Refusal> {
     let Some(program) = words.first() else { return Ok(line.to_string()) };
     let target = runs(program).unwrap_or_else(|| PathBuf::from(program));
     if !is_batch(&target) {
         return Ok(line.to_string());
     }
-    if let Some(shim) = shim_words(&target, &runs) {
+    if let Some(shim) = powershell.then(|| shim_words(&target, &runs)).flatten() {
         return Ok(powershell_line(shim.into_iter().chain(words.into_iter().skip(1))));
     }
-    let Some(special) = words.iter().flat_map(|word| word.chars()).find(|c| BATCH_SPECIAL.contains(c)) else {
+    let Some(special) = special(&words) else {
         return Ok(line.to_string());
     };
-    Err(format!(
-        "not started: `{}` is a batch file that is not an npm shim cornercase can read, so it runs through cmd.exe, \
-         and cmd.exe would read the `{special}` in the line as its own; install the agent as an .exe or with npm, \
-         or keep its .ps1",
-        target.display()
+    Err(refusal(
+        "a batch file",
+        &format!(
+            "`{}` is a batch file that is not an npm shim cornercase can read, so it runs through cmd.exe, and cmd.exe \
+             would read the `{special}` in the line as its own; install the agent as an .exe or with npm, or keep its \
+             .ps1",
+            target.display()
+        ),
     ))
 }
 

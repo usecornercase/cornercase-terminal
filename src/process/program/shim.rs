@@ -1,7 +1,11 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 const LIMIT: u64 = 4096;
+const READ_TIME: Duration = Duration::from_secs(2);
 const HEAD: &str =
     "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n";
 const NODE: &str = "\r\nIF EXIST \"%dp0%\\node.exe\" (\r\n  SET \"_prog=%dp0%\\node.exe\"\r\n) ELSE (\r\n  SET \
@@ -24,7 +28,7 @@ pub(crate) fn target(shim: &Path, find: impl Fn(&str) -> Option<PathBuf>) -> Opt
     if !shim.is_absolute() {
         return None;
     }
-    let text = read(shim)?;
+    let text = read_within(shim, READ_TIME)?;
     let body = text.strip_prefix(HEAD)?;
     let (runs, relative) =
         SHAPES.iter().find_map(|(runs, start, end)| Some((*runs, body.strip_prefix(start)?.strip_suffix(end)?)))?;
@@ -34,6 +38,15 @@ pub(crate) fn target(shim: &Path, find: impl Fn(&str) -> Option<PathBuf>) -> Opt
         Runs::Node => Some(vec![node(dir, find)?, script]),
         Runs::Itself => is_exe(&script).then(|| vec![script]),
     }
+}
+
+fn read_within(shim: &Path, time: Duration) -> Option<String> {
+    let (tx, rx) = mpsc::channel();
+    let shim = shim.to_path_buf();
+    thread::spawn(move || {
+        let _ = tx.send(read(&shim));
+    });
+    rx.recv_timeout(time).ok().flatten()
 }
 
 fn read(shim: &Path) -> Option<String> {

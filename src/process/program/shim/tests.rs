@@ -1,3 +1,6 @@
+use std::ffi::OsStr;
+use std::path::Component;
+
 use rstest::rstest;
 
 use super::*;
@@ -106,20 +109,39 @@ fn a_shim_is_read_up_to_its_limit_and_one_longer_is_not() {
     assert_eq!(read(&dir, None), None);
 }
 
+fn volume(path: &Path) -> Option<Component<'_>> {
+    path.components().next().filter(|part| matches!(part, Component::Prefix(_)))
+}
+
+fn normal(path: &Path) -> impl Iterator<Item = &OsStr> {
+    path.components().filter(|part| matches!(part, Component::Normal(_))).map(Component::as_os_str)
+}
+
 #[test]
 fn a_shim_named_by_a_relative_path_is_not_read() {
     let dir = folder(NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
     let shim = dir.path().join("claude.cmd");
     let here = std::env::current_dir().expect("the working folder");
-    let normal = |path: &Path| -> Vec<std::ffi::OsString> {
-        let parts = path.components().filter(|part| matches!(part, std::path::Component::Normal(_)));
-        parts.map(|part| part.as_os_str().to_owned()).collect()
-    };
-    let up: PathBuf = normal(&here).iter().map(|_| "..").collect();
-    let relative = normal(&shim).iter().fold(up, |path, part| path.join(part));
+    if volume(&here) != volume(&shim) {
+        eprintln!("skipped: no relative path leads from {} to {}", here.display(), shim.display());
+        return;
+    }
+    let up: PathBuf = normal(&here).map(|_| "..").collect();
+    let relative = normal(&shim).fold(up, |path, part| path.join(part));
     assert!(relative.is_relative() && relative.is_file(), "{}", relative.display());
     assert!(target(&shim, |_| None).is_some());
     assert_eq!(target(&relative, |_| None), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_shim_that_does_not_answer_in_time_is_not_read() {
+    let dir = TempDir::new();
+    let fifo = dir.path().join("claude.cmd");
+    let made = std::process::Command::new("mkfifo").arg(&fifo).status().expect("run mkfifo");
+    assert!(made.success(), "mkfifo {}", fifo.display());
+    assert_eq!(read_within(&fifo, Duration::from_millis(100)), None);
+    drop(std::fs::OpenOptions::new().write(true).open(&fifo).expect("let the reader go"));
 }
 
 #[rstest]

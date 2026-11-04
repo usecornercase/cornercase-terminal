@@ -1,4 +1,5 @@
 use super::*;
+use crate::agents::PaneShell;
 use crate::agents::activity::Activity;
 use crate::term::mouse::MouseMode;
 use crate::test_util::{TempDir, wait_until, wait_until_within};
@@ -19,12 +20,19 @@ fn spawn_cmd(cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
 }
 
 fn spawn_cmd_with(env: &[(String, String)], cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
+    spawn_shell("cmd.exe", &["/d".to_string()], env, cwd)
+}
+
+fn spawn_shell(
+    shell: &str,
+    args: &[String],
+    env: &[(String, String)],
+    cwd: Option<PathBuf>,
+) -> (Term, Receiver<Event>) {
     let (tx, rx) = mpsc::channel();
-    let args = ["/d".to_string()];
     let theme = HostTheme::default();
-    let opts =
-        SpawnOptions { id: 1, shell: "cmd.exe", args: &args, env, remove: &[], rows: 24, cols: 80, cwd, theme: &theme };
-    let mut term = Term::spawn(opts, tx).expect("spawn cmd.exe");
+    let opts = SpawnOptions { id: 1, shell, args, env, remove: &[], rows: 24, cols: 80, cwd, theme: &theme };
+    let mut term = Term::spawn(opts, tx).expect("spawn the shell");
     term.became_shell();
     (term, rx)
 }
@@ -347,6 +355,15 @@ mod foreground {
 
         wait_until("the folder is the second cmd's", || in_folder(&mut term, &rx, &folder));
         assert!(term.shell_in_foreground());
+    }
+
+    #[test]
+    fn names_the_shell_an_agent_line_is_checked_for() {
+        let (cmd, _rx) = spawn_cmd(None);
+        let env = [("PATH".to_string(), system_path())];
+        let (powershell, _ps) = spawn_shell("powershell.exe", &["-NoProfile".to_string()], &env, None);
+        let shell = |term: &Term| PaneShell::of(term.shell_pid());
+        assert_eq!((shell(&cmd), shell(&powershell)), (PaneShell::Cmd, PaneShell::PowerShell));
     }
 
     #[test]

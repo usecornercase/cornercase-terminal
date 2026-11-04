@@ -28,7 +28,7 @@ fn step_typing(
     launch: &mut Launch,
     now: Instant,
     world: &World,
-    typed: &dyn Fn(&str) -> Result<String, String>,
+    typed: &dyn Fn(&str) -> Result<String, Refusal>,
 ) -> Step {
     let screen = world.screen.clone();
     let mut read = move || screen.clone();
@@ -77,9 +77,13 @@ fn waits_for_the_shell_prompt_before_typing_the_agent() {
 fn a_refused_line_is_never_typed() {
     let t0 = Instant::now();
     let mut launch = Launch::new(1, spec(false), t0);
-    let typed = |line: &str| if line.contains("plan") { Err(format!("refused {line}")) } else { Ok(line.to_string()) };
+    let typed = |line: &str| if line.contains("plan") { Err(refusal(line)) } else { Ok(line.to_string()) };
     let refused = step_typing(&mut launch, t0 + SHELL_LATEST, &shell(), &typed);
-    assert_eq!(refused, Step::Refuse("refused claude --permission-mode plan".into()));
+    assert_eq!(refused, Step::Refuse(refusal("claude --permission-mode plan")));
+}
+
+fn refusal(line: &str) -> Refusal {
+    Refusal { reason: "a test", message: format!("refused {line}") }
 }
 
 #[test]
@@ -87,9 +91,9 @@ fn an_agent_line_powershell_would_split_is_refused_and_never_typed() {
     let t0 = Instant::now();
     let command = r#"claude --add-dir 'a b" --dangerously-skip-permissions "c'"#.to_string();
     let mut launch = Launch::new(1, Spec { command, ..spec(false) }, t0);
-    let typed = |line: &str| crate::agents::for_powershell(line, |_| None);
+    let typed = |line: &str| crate::agents::typed_on_windows(line, crate::agents::PaneShell::PowerShell, |_| None);
     let refused = step_typing(&mut launch, t0 + SHELL_LATEST, &shell(), &typed);
-    assert!(matches!(&refused, Step::Refuse(why) if why.contains("PowerShell 5.1")), "{refused:?}");
+    assert!(matches!(&refused, Step::Refuse(why) if why.message.contains("PowerShell 5.1")), "{refused:?}");
 }
 
 #[test]
@@ -108,7 +112,7 @@ fn the_line_the_shell_gets_is_typed_and_waited_on_in_place_of_the_command() {
 fn a_plain_command_is_not_checked() {
     let t0 = Instant::now();
     let mut launch = Launch::command(1, "npm run dev".into(), t0);
-    let refused = step_typing(&mut launch, t0 + SHELL_LATEST, &shell(), &|_| Err("refused".into()));
+    let refused = step_typing(&mut launch, t0 + SHELL_LATEST, &shell(), &|line| Err(refusal(line)));
     assert_eq!(refused, Step::Done(b"npm run dev\r".to_vec()));
 }
 
@@ -129,6 +133,7 @@ fn waits_until_the_agent_has_been_quiet_for_a_second() {
 #[rstest]
 #[case::the_typed_command("$ claude --permission-mode plan")]
 #[case::part_of_its_echo("$ claude --perm")]
+#[case::the_end_of_a_line_taller_than_the_pane("ission-\nmode plan\n")]
 #[case::nothing("")]
 fn waits_while_the_screen_shows_only(#[case] screen: &str) {
     let (mut launch, t) = started(false);
