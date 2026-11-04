@@ -68,6 +68,7 @@ fn answers_with_the_new_pane_and_the_agent_still_gets_its_prompt_once_you_trust_
     let mut asking = Asking::new();
 
     let pane = asking.started(None).ids.pane.expect("the pane");
+    assert!(asking.app.projects.pane_by(pane).is_some(), "the tab is open when the answer comes");
 
     let folder = asking.repo.path().to_path_buf();
     asking.prompted(pane, &folder);
