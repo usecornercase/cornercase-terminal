@@ -89,7 +89,7 @@ const GROUPS: Record<KeysGroup, KeysItem[]> = {
     run('f', 'files by name', { kind: 'findNames' }),
     run('w', 'text in files', { kind: 'findText' }),
     run('e', 'file tree', { kind: 'files' }),
-    run('p', 'projects, workspaces, tabs', { kind: 'search' }),
+    run('p', 'projects, workspaces, tabs, settings', { kind: 'search' }),
     run('s', 'said in sessions', { kind: 'findSaid' }),
     run(',', 'settings', { kind: 'settings' }),
   ],

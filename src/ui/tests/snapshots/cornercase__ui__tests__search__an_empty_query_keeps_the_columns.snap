@@ -2,7 +2,7 @@
 source: src/ui/tests/search.rs
 expression: "render(&with(search(\"\", Vec::new()))).backend()"
 ---
-"  ⌕ projects, workspaces, tabs                        ❯  │                                          "
+"  ⌕ projects, workspaces, tabs, settings              ❯  │                                          "
 "                                                         │                                          "
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "

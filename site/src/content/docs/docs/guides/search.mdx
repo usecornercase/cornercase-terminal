@@ -1,11 +1,11 @@
 ---
 title: Search
-description: Jump to any group, project, workspace, branch or tab by typing a few letters, or find the pane where something was said.
+description: Jump to any group, project, workspace, branch or tab by typing a few letters, reach any setting, or find the pane where something was said.
 ---
 
 import Screen from '../../../../components/Screen.astro';
 
-When your session grows, the quickest way to get somewhere is to search for it. One search covers every group, project, workspace and tab you have open.
+When your session grows, the quickest way to get somewhere is to search for it. One search covers every group, project, workspace and tab you have open, and the settings.
 
 <Screen
   name="search"
@@ -33,6 +33,14 @@ When your session grows, the quickest way to get somewhere is to search for it. 
 So typing a branch name finds the workspace on that branch and all the tabs inside it.
 
 Matching ignores case. Results are ranked by how well they match: exact names first, then names that start with your text, then names that contain it. Among equally good matches, groups come first, then projects, workspaces and tabs, in the order they appear in the sidebar. The part of each name that matches is highlighted.
+
+## Settings
+
+Settings are listed after everything else, so the names above keep their places. Each one shows where it lives and, on the right, its value and the word `settings`, such as `UI › prefix key` with `off · settings`.
+
+They match as they do [inside Settings](../../reference/configuration/#search-the-settings): every word you type must start a word of the setting's name, tab, section, value or note, in any order, so `pre key` finds the prefix key and `refix` doesn't. Every setting, tab name and plugin is listed, however many match: the list scrolls with `↑` `↓` and the wheel.
+
+Choosing one opens Settings on that row. It only selects the row, and nothing is changed or saved. A row that only shows under another is listed muted with what it needs, and choosing it lands on the nearest row that shows, with a note. Single flows aren't listed; `flows` finds the Flows tab.
 
 ## In sessions
 
