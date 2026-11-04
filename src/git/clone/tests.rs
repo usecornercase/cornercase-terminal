@@ -33,6 +33,21 @@ mod folder_name {
     }
 
     #[rstest]
+    #[case::a_drive_path(r"C:\code\shop", "shop")]
+    #[case::forward_slashes("C:/code/shop.git/", "shop")]
+    #[case::a_share(r"\\host\share\shop", "shop")]
+    #[case::backslashes_in_a_url(r"https://example.com/a\..\..\evil", "evil")]
+    #[case::a_git_folder(r"C:\code\shop\.git", "shop")]
+    fn takes_backslashes_as_folders_on_windows(#[case] url: &str, #[case] name: &str) {
+        assert_eq!(folder_name_on(url, true).as_deref(), Ok(name));
+    }
+
+    #[test]
+    fn keeps_a_backslash_in_a_name_on_unix() {
+        assert_eq!(folder_name_on(r"/srv/a\b", false).as_deref(), Ok(r"a\b"));
+    }
+
+    #[rstest]
     #[case::empty("")]
     #[case::only_slashes("///")]
     #[case::dots("/srv/..")]
@@ -64,6 +79,16 @@ mod is_local_path {
     #[case::scp_like_without_a_slash("host:shop", false)]
     fn tells_a_path_from_a_url(#[case] url: &str, #[case] local: bool) {
         assert_eq!(is_local_path(url), local);
+    }
+
+    #[rstest]
+    #[case::a_drive_path(r"C:\code\shop", true)]
+    #[case::forward_slashes("C:/code/shop", true)]
+    #[case::a_share(r"\\host\share\shop", true)]
+    #[case::scp_like("git@github.com:acme/shop.git", false)]
+    #[case::https("https://github.com/acme/shop", false)]
+    fn takes_drives_and_shares_as_paths_on_windows(#[case] url: &str, #[case] local: bool) {
+        assert_eq!(is_local_path_on(url, true), local);
     }
 }
 

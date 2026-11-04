@@ -4,7 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::worktree::git_env;
-use crate::os::fs::{canonical, canonicalize};
+use crate::os::fs::{canonical, canonicalize, drive_path, unc_or_device};
 
 pub(crate) mod files;
 
@@ -73,8 +73,15 @@ impl fmt::Display for Failure {
 }
 
 pub(crate) fn is_local_path(url: &str) -> bool {
+    is_local_path_on(url, cfg!(windows))
+}
+
+fn is_local_path_on(url: &str, windows: bool) -> bool {
     if url.contains("://") {
         return false;
+    }
+    if windows && (drive_path(url) || unc_or_device(url)) {
+        return true;
     }
     match (url.find(':'), url.find('/')) {
         (Some(colon), Some(slash)) => slash < colon,
@@ -83,8 +90,8 @@ pub(crate) fn is_local_path(url: &str) -> bool {
     }
 }
 
-fn naming_part(url: &str) -> String {
-    if is_local_path(url) {
+fn naming_part(url: &str, windows: bool) -> String {
+    if is_local_path_on(url, windows) {
         return url.to_string();
     }
     match url.split_once("://") {
@@ -100,7 +107,12 @@ fn bare(url: &str) -> String {
 }
 
 pub(crate) fn folder_name(url: &str) -> Result<String, Failure> {
-    let url = naming_part(url.trim());
+    folder_name_on(url, cfg!(windows))
+}
+
+fn folder_name_on(url: &str, windows: bool) -> Result<String, Failure> {
+    let named = naming_part(url.trim(), windows);
+    let url = if windows { named.replace('\\', "/") } else { named };
     let url = url.trim_end_matches('/');
     let url = url.strip_suffix("/.git").unwrap_or(url).trim_end_matches('/');
     let last = url.rsplit(['/', ':']).next().unwrap_or_default();
