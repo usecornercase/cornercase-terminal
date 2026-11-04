@@ -107,10 +107,14 @@ impl CloneForm {
     }
 
     pub(crate) fn intro(&self) -> String {
-        if !ignored::copied_here() {
+        self.intro_on(ignored::copied_here())
+    }
+
+    fn intro_on(&self, read_here: bool) -> String {
+        if !read_here {
             return format!(
-                "{} clones it from the URL. Copying git-ignored files (such as .env) into the clone is not supported \
-                 on Windows yet.",
+                "{} clones it from the URL, without git-ignored files (such as .env): this computer runs Windows, \
+                 where reading them to copy is not supported yet.",
                 self.machine
             );
         }

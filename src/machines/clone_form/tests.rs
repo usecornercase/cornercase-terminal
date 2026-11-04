@@ -179,6 +179,24 @@ mod cloning {
     }
 }
 
+mod the_intro {
+    use super::*;
+
+    #[test]
+    fn says_this_computer_cannot_read_the_ignored_files_when_it_runs_windows() {
+        assert_eq!(
+            opened().intro_on(false),
+            "vps clones it from the URL, without git-ignored files (such as .env): this computer runs Windows, \
+             where reading them to copy is not supported yet."
+        );
+    }
+
+    #[test]
+    fn offers_the_files_to_tick_where_this_computer_reads_them() {
+        assert!(opened().intro_on(true).contains("then copies the git-ignored files you tick"));
+    }
+}
+
 mod the_note {
     use super::*;
 
