@@ -245,11 +245,22 @@ pub(crate) fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
 #[derive(Debug)]
 pub(crate) struct UnixListener(Socket);
 
+impl Socket {
+    fn bound(path: &Path) -> io::Result<Self> {
+        let socket = Self::new()?;
+        let (address, length) = address(path)?;
+        checked(unsafe { winsock::bind(socket.raw, (&raw const address).cast::<SOCKADDR>(), length) })?;
+        Ok(socket)
+    }
+}
+
+pub(crate) fn bind_without_listening(path: &Path) -> io::Result<()> {
+    Socket::bound(path).map(drop)
+}
+
 impl UnixListener {
     pub(crate) fn bind(path: impl AsRef<Path>) -> io::Result<Self> {
-        let socket = Socket::new()?;
-        let (address, length) = address(path.as_ref())?;
-        checked(unsafe { winsock::bind(socket.raw, (&raw const address).cast::<SOCKADDR>(), length) })?;
+        let socket = Socket::bound(path.as_ref())?;
         checked(unsafe { winsock::listen(socket.raw, BACKLOG) })?;
         Ok(Self(socket))
     }

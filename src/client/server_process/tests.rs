@@ -1,5 +1,9 @@
+use std::sync::Barrier;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use super::*;
 use crate::os::fs::set_mode;
+use crate::os::socket::UnixListener;
 use crate::test_util::TempDir;
 
 fn listening(dir: &Path, name: &str) -> (PathBuf, UnixListener) {
@@ -111,4 +115,46 @@ fn a_folder_that_cannot_be_written_names_the_socket_setting() {
     assert!(matches!(error, Error::Listen { custom: false, .. }));
     assert!(error.to_string().contains("CORNERCASE_SOCKET"));
     set_mode(&dir, 0o700).expect("chmod back");
+}
+
+const CHECKS: usize = 1000;
+
+fn knock_until(socket: &Path, started: &Barrier, done: &AtomicBool) -> usize {
+    started.wait();
+    let mut answered = 0;
+    while !done.load(Ordering::Relaxed) {
+        answered += usize::from(UnixStream::connect(socket).is_ok());
+    }
+    answered
+}
+
+#[test]
+fn a_client_connecting_during_the_listen_check_is_never_answered() {
+    let tmp = TempDir::new();
+    let socket = tmp.path().join("server.sock");
+    let (started, done) = (Barrier::new(2), AtomicBool::new(false));
+
+    let answered = thread::scope(|s| {
+        let knocking = s.spawn(|| knock_until(&socket, &started, &done));
+        started.wait();
+        for _ in 0..CHECKS {
+            can_listen(&socket, Folder::Given).expect("can listen");
+        }
+        done.store(true, Ordering::Relaxed);
+        knocking.join().expect("the knocking thread")
+    });
+
+    assert_eq!(answered, 0, "a client starting during the check would take it for the server");
+}
+
+#[test]
+fn a_socket_path_that_cannot_be_bound_is_refused() {
+    let tmp = TempDir::new();
+    let socket = tmp.path().join("server.sock");
+    fs::create_dir(&socket).expect("a folder where the socket goes");
+
+    let error = can_listen(&socket, Folder::Given).expect_err("cannot listen");
+
+    assert!(matches!(error, Error::Listen { custom: true, .. }));
+    assert!(error.to_string().contains("CORNERCASE_SOCKET"));
 }
