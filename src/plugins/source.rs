@@ -1,8 +1,15 @@
+use std::borrow::Cow;
+use std::ffi::OsStr;
 use std::path::Path;
+
+use crate::os::ffi;
+use crate::os::fs::{drive_path, network_link, reaches_network};
+use crate::text;
 
 const MAX_REF: usize = 200;
 const MAX_URL: usize = 2000;
 const GITHUB: &str = "https://github.com/";
+const INSTEAD: &str = "install from a folder on this computer, owner/repo or an https:// address";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Origin {
@@ -26,7 +33,10 @@ impl Origin {
             valid_ref(reference)?;
         }
         let reference = reference.map(str::to_string);
-        if place.starts_with('/') {
+        if reaches_network(place) {
+            return Err(format!("`{place}` is a folder on the network; {INSTEAD}"));
+        }
+        if folder(place) {
             let (path, subdir) = split_subdir(place, place.find("//"))?;
             return Ok(Self { repo: path.to_string(), url: path.to_string(), reference, subdir });
         }
@@ -74,6 +84,17 @@ impl Origin {
         if self.local() { "file" } else { "https" }
     }
 
+    pub(crate) fn address(&self) -> Cow<'_, OsStr> {
+        match ffi::plain(Path::new(&self.url)) {
+            Cow::Borrowed(_) => Cow::Borrowed(OsStr::new(&self.url)),
+            Cow::Owned(plain) => Cow::Owned(plain.into_os_string()),
+        }
+    }
+
+    pub(crate) fn on_this_computer(&self) -> Result<(), String> {
+        if self.local() { folder_on_this_computer(Path::new(&self.url)) } else { Ok(()) }
+    }
+
     pub(crate) fn spec(&self) -> String {
         let subdir = self.subdir.as_ref().map_or_else(String::new, |subdir| format!("//{subdir}"));
         let at = self.reference.as_ref().map_or_else(String::new, |reference| format!("@{reference}"));
@@ -86,6 +107,23 @@ impl Origin {
             None => self.repo.clone(),
         }
     }
+}
+
+fn folder(place: &str) -> bool {
+    place.starts_with('/') || (cfg!(windows) && drive_path(place))
+}
+
+pub(crate) fn folder_on_this_computer(folder: &Path) -> Result<(), String> {
+    let refused = match network_link(folder) {
+        Ok(None) => return Ok(()),
+        Ok(Some(share)) => format!(
+            "`{}` leads through a link to `{}`, a folder on the network; {INSTEAD}",
+            folder.display(),
+            share.display()
+        ),
+        Err(e) => format!("cannot tell whether `{}` leads to the network: {e}", folder.display()),
+    };
+    Err(text::escape_hidden(&refused))
 }
 
 fn github(path: &str, reference: Option<String>) -> Result<Origin, String> {

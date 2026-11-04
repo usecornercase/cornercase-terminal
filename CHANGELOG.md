@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.285
+
+- **On Windows, paths work the way Windows writes them.** A path a program prints in a pane with backslashes, with or without a drive (`C:\src\app\main.rs:10:5`, `.\src\x.rs`, `src\x.rs:3`), is a link that opens the file at its line, as `src/main.rs:12` already was; a UNC path to a share (`\\server\share\…`) is never a link. In the folder picker, `\` goes into the selected folder as `/` does, `/` or `\` with nothing typed goes to the root of the drive (or network share) you are on, and a drive such as `D:` followed by `\` goes to that drive, so a pasted `C:\Users\you\code\web` walks there. `cornercase plugin install` takes a folder with its drive (`C:\code\tools`, `C:/code/tools`) or starting with `~\` or `.\`, and refuses a UNC path to a share (`\\server\share\…`), or a folder that leads to one through a symbolic link, with a message saying so, before anything opens it; a drive letter you mapped to a share is not refused. Nothing changes on Linux and macOS.
+
 ## 0.12.284
 
 - **On Windows, programs sharing a pane's console use up fewer of the questions cornercase lets wait when it looks for which files agents hold open.** Every program in a pane holds a copy of the pane's console input, and while one of them reads it Windows cannot name it through any of them. cornercase gave each program's copy one of the 16 questions it lets wait, so a few programs in panes could use them all up, and Codex, Copilot, Cursor and opencode could then lose their model and context line. Such a file now takes one, however many programs hold it. Nothing changes on Linux and macOS.

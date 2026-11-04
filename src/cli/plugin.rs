@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 use std::io::{self, IsTerminal as _, Write as _};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::json;
@@ -13,11 +13,11 @@ use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::control::{Command, Item, PluginActions, PluginList, PluginPopupClose, PluginRun};
 use crate::error::{Error, Result};
-use crate::os::fs::canonical;
+use crate::os::fs::{canonical, drive_path, reaches_network};
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
 use crate::plugins::registry::{missing, short};
-use crate::plugins::source::Origin;
+use crate::plugins::source::{Origin, folder_on_this_computer};
 use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
 
@@ -254,7 +254,7 @@ fn ran_text(ran: &ActionRan, item: Option<Item>) -> String {
 }
 
 fn install_from(places: &Places, args: &InstallArgs) -> Result<()> {
-    let origin = Origin::parse(&folder_spec(&args.source)).map_err(Error::Plugin)?;
+    let origin = Origin::parse(&folder_spec(&args.source)?).map_err(Error::Plugin)?;
     progress(args.json, &format!("fetching {}…", crate::text::escape_hidden(&origin.spec())));
     let fetched = install::fetch(&origin, places).map_err(Error::Plugin)?;
     if args.preview {
@@ -305,9 +305,14 @@ fn same_commit(found: &str, wanted: Option<&str>, what: &str, kept: &str) -> Res
     }
 }
 
-fn folder_spec(spec: &str) -> String {
-    if !spec.starts_with(['.', '~', '/']) {
-        return spec.to_string();
+fn folder_spec(spec: &str) -> Result<String> {
+    let home = std::env::var_os(paths::HOME_VAR).map(PathBuf::from);
+    folder_spec_from(spec, home.as_deref())
+}
+
+fn folder_spec_from(spec: &str, home: Option<&Path>) -> Result<String> {
+    if !names_a_folder(spec) || reaches_network(spec) {
+        return Ok(spec.to_string());
     }
     let (place, at) = match spec.split_once('@') {
         Some((place, at)) => (place, format!("@{at}")),
@@ -317,9 +322,24 @@ fn folder_spec(spec: &str) -> String {
         Some((folder, subdir)) => (folder, format!("//{subdir}")),
         None => (place, String::new()),
     };
-    let home = std::env::var_os(paths::HOME_VAR).map(std::path::PathBuf::from);
-    let path = canonical(config::expand_home(folder, home.as_deref()));
-    format!("{}{subdir}{at}", Path::new(&path).display())
+    let folder = absolute(config::expand_home(&home_with_a_slash(folder), home));
+    folder_on_this_computer(&folder).map_err(Error::Plugin)?;
+    Ok(format!("{}{subdir}{at}", canonical(folder).display()))
+}
+
+fn absolute(folder: PathBuf) -> PathBuf {
+    if cfg!(windows) { std::path::absolute(&folder).unwrap_or(folder) } else { folder }
+}
+
+fn names_a_folder(spec: &str) -> bool {
+    spec.starts_with(['.', '~', '/']) || (cfg!(windows) && (spec.starts_with('\\') || drive_path(spec)))
+}
+
+fn home_with_a_slash(folder: &str) -> String {
+    match folder.strip_prefix(r"~\") {
+        Some(rest) if cfg!(windows) => format!("~/{rest}"),
+        _ => folder.to_string(),
+    }
 }
 
 fn update(places: &Places, registry: &Registry, args: &UpdatePluginArgs) -> Result<()> {
