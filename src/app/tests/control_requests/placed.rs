@@ -34,6 +34,21 @@ impl Asking {
     }
 }
 
+impl Asking {
+    fn trusted(&mut self, pane: u64) {
+        self.asks_you(pane);
+        let term = self.app.projects.pane_by_mut(pane).expect("the pane");
+        assert!(term.write(b"yes\r"), "the pane takes the answer");
+    }
+
+    fn prompted(&mut self, pane: u64, folder: &Path) {
+        self.trusted(pane);
+        let got = folder.join("got");
+        refreshing(&mut self.app, &self.rx, "the prompt is typed", |_| got.exists());
+        assert_eq!(std::fs::read_to_string(&got).expect("the prompt"), "fix the login");
+    }
+}
+
 fn placed(worktree: Option<&str>) -> Command {
     Command::Start(start(worktree))
 }
@@ -54,12 +69,8 @@ fn answers_with_the_new_pane_and_the_agent_still_gets_its_prompt_once_you_trust_
 
     let pane = asking.started(None).ids.pane.expect("the pane");
 
-    asking.asks_you(pane);
-    let term = asking.app.projects.pane_by_mut(pane).expect("the pane");
-    assert!(term.write(b"yes\r"), "the pane takes the answer");
-    let got = asking.repo.path().join("got");
-    refreshing(&mut asking.app, &asking.rx, "the prompt is typed", |_| got.exists());
-    assert_eq!(std::fs::read_to_string(&got).expect("the prompt"), "fix the login");
+    let folder = asking.repo.path().to_path_buf();
+    asking.prompted(pane, &folder);
 }
 
 #[test]
@@ -69,8 +80,9 @@ fn in_a_new_worktree_answers_once_the_worktree_opens() {
     let started = asking.started(Some("feat/login"));
 
     let at = asking.app.projects.workspace_index(started.ids.workspace.expect("the workspace")).expect("it");
+    let checkout = asking.app.projects.workspace(at).path.clone();
     assert!(asking.app.projects.workspace(at).worktree);
-    asking.asks_you(started.ids.pane.expect("the pane"));
+    asking.prompted(started.ids.pane.expect("the pane"), &checkout);
 }
 
 #[rstest::rstest]

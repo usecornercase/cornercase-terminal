@@ -20,13 +20,13 @@ pub(super) const TAB: u64 = 9;
 const THERE: There = There { boot: BOOT, view: VIEW, tab: TAB };
 
 struct Script {
-    lines: Mutex<Receiver<Option<Line>>>,
+    lines: Mutex<Receiver<Option<Result<Line>>>>,
 }
 
 impl Connect for Script {
     fn connect(&self, killer: &Killer) -> Result<Line> {
         let next = self.lines.lock().recv().map_err(|_| refused())?;
-        next.map_or_else(|| Hanging.connect(killer), Ok)
+        next.unwrap_or_else(|| Hanging.connect(killer))
     }
 }
 
@@ -54,7 +54,7 @@ impl Clock for Ticks {
 
 pub(super) struct Rig {
     pub(super) stream: Stream,
-    lines: Sender<Option<Line>>,
+    lines: Sender<Option<Result<Line>>>,
     reports: Receiver<StreamReport>,
     waits: Receiver<Duration>,
     alarms: Receiver<Arc<Armed>>,
@@ -82,12 +82,16 @@ impl Rig {
     pub(super) fn reach(&self) -> UnixStream {
         let (line, theirs) = line("0.12.225", None);
         theirs.set_read_timeout(Some(WAIT)).expect("a read timeout");
-        self.lines.send(Some(line)).expect("the stream connects");
+        self.lines.send(Some(Ok(line))).expect("the stream connects");
         theirs
     }
 
     pub(super) fn hang(&self) {
         self.lines.send(None).expect("the stream connects");
+    }
+
+    pub(super) fn refuse(&self) {
+        self.lines.send(Some(Err(refused()))).expect("the stream connects");
     }
 
     pub(super) fn event(&self) -> StreamEvent {
@@ -212,7 +216,7 @@ mod opening {
         let connector = Box::new(Script { lines: Mutex::new(script) });
         let _stream = Stream::start(1, connector, Wanted { tab: TAB, cols: 5000, rows: 0 }, &tx);
         let (line, mut view) = line("0.12.225", None);
-        lines.send(Some(line)).expect("the stream connects");
+        lines.send(Some(Ok(line))).expect("the stream connects");
 
         let asked = request(&mut view);
 
@@ -234,19 +238,25 @@ mod opening {
 
 mod copies {
     use super::*;
+    use crate::control::{Event, Ids, What};
+
+    fn still_streams(rig: &Rig, surface: &mut UnixStream) {
+        say(surface, &THERE.complete(1, 1, "still here"));
+        assert!(matches!(rig.event(), StreamEvent::Frame(screen) if fake::text(&screen) == "still here"));
+    }
 
     fn clipboard(pane: u64, text: &str) -> Value {
-        json!({
-            "time": "2026-11-04T09:30:00.123Z", "event": "clipboard", "text": text,
-            "project": 1, "workspace": 2, "tab": TAB, "pane": pane
-        })
+        let ids = Ids { project: Some(1), workspace: Some(2), tab: Some(TAB), pane: Some(pane) };
+        let event = Event { time: "2026-11-04T09:30:00.123Z".into(), what: What::Clipboard { text: text.into() }, ids };
+        serde_json::from_str(&event.streamed().expect("the line")).expect("json")
     }
 
     #[test]
     fn then_asks_the_server_there_for_what_its_panes_copy() {
         let rig = Rig::new();
         let _view = rig.viewing();
-        request(&mut rig.reach());
+        let mut surface = rig.reach();
+        request(&mut surface);
         let mut copies = rig.reach();
 
         let asked = request(&mut copies);
@@ -261,7 +271,7 @@ mod copies {
         let (_view, _surface, mut copies) = rig.copying();
 
         say(&mut copies, &json!({"ok": {}}));
-        say(&mut copies, &json!({"time": "2026-11-04T09:30:00.123Z", "event": "bell", "count": 1, "pane": 4}));
+        say(&mut copies, &json!({"ok": {"time": "2026-11-04T09:30:00.123Z", "event": "bell", "count": 1, "pane": 4}}));
         say(&mut copies, &clipboard(4, "one\r\ntwo\u{1b}[2J\u{200b}"));
 
         assert_eq!(rig.event(), StreamEvent::Copied { pane: 4, text: "one\ntwo[2J".into() });
@@ -284,9 +294,20 @@ mod copies {
         let (_view, mut surface, copies) = rig.copying();
 
         drop(copies);
-        say(&mut surface, &THERE.complete(1, 1, "still here"));
 
-        assert!(matches!(rig.event(), StreamEvent::Frame(screen) if fake::text(&screen) == "still here"));
+        still_streams(&rig, &mut surface);
+    }
+
+    #[test]
+    fn a_connection_that_cannot_be_made_leaves_the_tab_streaming() {
+        let rig = Rig::new();
+        let _view = rig.viewing();
+        let mut surface = rig.reach();
+        request(&mut surface);
+
+        rig.refuse();
+
+        still_streams(&rig, &mut surface);
     }
 
     #[test]

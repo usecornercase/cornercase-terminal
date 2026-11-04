@@ -94,3 +94,15 @@ fn a_machine_that_goes_down_leaves_its_changes_listed_and_says_so() {
         s.contains("vps unreachable") && s.contains("notes.txt")
     });
 }
+
+#[test]
+fn what_a_program_there_copies_reaches_this_computer_s_clipboard() {
+    let Shown { machine, mut app } = showing();
+    let there = status(&machine)["projects"].clone();
+    let pane = project_named(&there, "api")["workspaces"][0]["tabs"][0]["panes"][0]["id"].to_string();
+
+    machine.says(&["send", "--pane", &pane, "--enter", "printf '\\033]52;c;Y29weS1tZQ==\\007'"]);
+
+    let osc52 = String::from_utf8(cornercase::host::clipboard::osc52("copy-me")).expect("utf-8");
+    app.wait_for_raw("the copy there reaches this computer's clipboard", |raw| raw.contains(&osc52));
+}
