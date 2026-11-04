@@ -63,7 +63,10 @@ fn a_recap_is_written_by_the_agent_and_names_its_places() {
     let session = Session::new();
     let claude = session.dir.join("claude-recap");
     let result = r###"{"type":"result","subtype":"success","is_error":false,"result":"## On you\n- [c1] asked \"add a rate limit\"","usage":{"input_tokens":3,"output_tokens":4}}"###;
-    write_executable(&claude, &format!("#!/bin/sh\necho x >> \"$0.runs\"\ncat > /dev/null\necho '{result}'\n"));
+    write_executable(
+        &claude,
+        &format!("#!/bin/sh\necho x >> \"$0.runs\"\ncat > /dev/null\nprintf '%s\\n' '{result}'\n"),
+    );
     start(&session, &format!(r#"{{"agent_commands": {{"claude": "{}"}}, "recap_agent": "claude"}}"#, claude.display()));
     written(&session, &session.dir);
 
