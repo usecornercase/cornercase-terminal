@@ -295,6 +295,17 @@ mod requested {
     }
 
     #[test]
+    fn refuses_a_machine_with_a_problem_as_not_found() {
+        let mut rig = Rig::new(vec![machine("vps", "vps.lan"), machine("box", "vps.lan")], There::Missing);
+
+        let error = focused(&mut rig.app, "box", &json!({"workspace": 10})).expect_err("refused");
+
+        assert_eq!(error["code"], "not-found");
+        let message = error["message"].as_str().unwrap_or_default();
+        assert!(message.contains("`box` has no link until it is fixed"), "{error}");
+    }
+
+    #[test]
     fn refuses_a_machine_that_has_sent_nothing_yet() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
 

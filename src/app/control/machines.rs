@@ -105,7 +105,7 @@ impl App {
     pub(super) fn focus_machine_request(&mut self, focus: &FocusMachine) -> Handled {
         let item = remote_item(focus.item)?;
         let name = focus.machine.trim();
-        let at = self.machine_at(name).ok_or_else(|| unknown(name))?;
+        let at = self.linkable(name)?;
         let name = self.config.machines[at].name.clone();
         if !self.sent_workspaces(&name) {
             let message = format!("`{name}` has not sent its workspaces yet: `cornercase machines` says how it is");
@@ -125,6 +125,17 @@ impl App {
 
     fn machine_at(&self, name: &str) -> Option<usize> {
         position(&self.config.machines, name)
+    }
+
+    fn linkable(&self, name: &str) -> Result<usize, Refusal> {
+        let at = self.machine_at(name).ok_or_else(|| unknown(name))?;
+        match machines::problems(&self.config.machines).swap_remove(at) {
+            Some(problem) => {
+                let name = &self.config.machines[at].name;
+                Err(Refusal::new(Code::NotFound, format!("`{name}` has no link until it is fixed: {problem}")))
+            }
+            None => Ok(at),
+        }
     }
 
     fn set_machine(&mut self, set: &MachineSet) -> Result<(), Refusal> {
@@ -165,17 +176,16 @@ impl App {
                 Ok(None)
             }
             Update::Running => Err(conflict(format!("`{name}` is already updating"))),
-            Update::Unknown if self.machine_at(name).is_none() => Err(unknown(name)),
-            Update::NotOlder | Update::Unknown => {
-                Err(conflict(format!("`{name}` is not older than this cornercase: nothing to install")))
-            }
+            Update::NotOlder | Update::Unknown => Err(self.linkable(name).err().unwrap_or_else(|| {
+                conflict(format!("`{name}` is not older than this cornercase: nothing to install"))
+            })),
         }
     }
 
     fn retry_machines(&mut self, name: Option<&str>) -> Result<(), Refusal> {
         let name = name.map(str::trim);
-        if let Some(name) = name.filter(|name| self.machine_at(name).is_none()) {
-            return Err(unknown(name));
+        if let Some(name) = name {
+            self.linkable(name)?;
         }
         self.follow_machines();
         self.machines.retry(name);

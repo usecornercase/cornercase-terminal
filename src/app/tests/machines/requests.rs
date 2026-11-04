@@ -247,12 +247,20 @@ mod update {
 
     #[test]
     fn of_a_machine_that_is_not_older_is_a_conflict() {
+        let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
+
+        let message = "`vps` is not older than this cornercase: nothing to install";
+        assert_eq!(rig.ask(&json!({"action": "update", "entry": "vps"})), refused("conflict", message));
+    }
+
+    #[test]
+    fn of_a_machine_with_a_problem_says_it_has_no_link() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan"), machine("my vps", "box.lan")], There::Missing);
 
-        for name in ["vps", "my vps"] {
-            let message = format!("`{name}` is not older than this cornercase: nothing to install");
-            assert_eq!(rig.ask(&json!({"action": "update", "entry": name})), refused("conflict", &message));
-        }
+        let (code, message) = rig.ask(&json!({"action": "update", "entry": "my vps"})).expect_err("refused");
+
+        assert_eq!(code, "not-found");
+        assert!(message.contains("`my vps` has no link until it is fixed"), "{message}");
     }
 }
 
@@ -288,6 +296,16 @@ mod retry {
             rig.ask(&json!({"action": "retry", "entry": "pi"})).map(|_| ()).map_err(|(code, _)| code),
             Err("not-found".into())
         );
+    }
+
+    #[test]
+    fn of_a_machine_with_a_problem_says_it_has_no_link() {
+        let mut rig = Rig::new(vec![machine("vps", "vps.lan"), machine("box", "vps.lan")], There::Missing);
+
+        let (code, message) = rig.ask(&json!({"action": "retry", "entry": "box"})).expect_err("refused");
+
+        assert_eq!(code, "not-found");
+        assert!(message.contains("`box` has no link until it is fixed"), "{message}");
     }
 }
 
