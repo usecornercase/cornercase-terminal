@@ -2,10 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.278
+## 0.12.280
 
 - **On Windows, an agent installed by npm as a `.cmd` starts in any folder**, `R&D` included: cornercase reads the shim npm wrote and types `node` with the agent's script instead, so its arguments never go through `cmd.exe`, and such a launch is no longer refused. A batch file it cannot read as an npm shim (pnpm's, an older npm's, one of your own) is still refused a line holding a character `cmd.exe` would read. Nothing changes on Linux and macOS.
 - **On Windows, an agent is not started with an argument PowerShell would split**: an argument holding a `"`, or a space and a last `\`, reaches the agent in pieces under Windows PowerShell 5.1, so part of it could become an option of its own. Such a launch is refused, and the message names the argument. JSON in `agent_args` was already losing its quotes there and is refused too. Nothing changes on Linux and macOS.
+
+## 0.12.279
+
+- **cornercase now runs natively on Windows** (Windows 10 1809 or later): the window, the background server, the shells in ConPTY (PowerShell by default, or the shell `SHELL` names, such as Git Bash), worktrees, the changes and files panels, processes, ports, the coding agents and the commands for scripts and agents. For now it is built from source, which needs Zig 0.15.2 and the Visual Studio build tools; there is no Windows release, installer or `cornercase update` yet. `cornercase remote` from Windows reaches a Linux or macOS machine, but a Windows machine cannot be the remote end yet; the Telegram and Discord bots have not been tried on Windows; and an agent installed as an npm `.cmd` shim does not start when its launch line holds one of cmd's special characters (`& | < > ^ % ! "`). Also on Windows: browser pairing tokens come from the system's random generator; a plugin that declares `platforms = ["linux"]` no longer loads there, and one that declares `windows` does and shows in the plugin catalogue; code in the changes and files panels is coloured; `~` means your user folder; a sound file can be given as a `C:\…` path; and cornercase does not open a network path (`\\host\share\…`) that comes from imported settings, a pane's output or a `.code-workspace` file, which could otherwise hand your Windows sign-in to that machine. Nothing changes on Linux and macOS.
 
 ## 0.12.277
 

@@ -317,7 +317,7 @@ fn folder_spec(spec: &str) -> String {
         Some((folder, subdir)) => (folder, format!("//{subdir}")),
         None => (place, String::new()),
     };
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let home = std::env::var_os(paths::HOME_VAR).map(std::path::PathBuf::from);
     let path = canonical(config::expand_home(folder, home.as_deref()));
     format!("{}{subdir}{at}", Path::new(&path).display())
 }

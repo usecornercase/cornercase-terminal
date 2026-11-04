@@ -7,10 +7,12 @@ use super::{Repository, Section, Shared, secrets, settings_of};
 use crate::agents;
 use crate::config::{self, Config, ProjectSettings};
 use crate::control::config::{NoteKind, SectionPreview, SetupChange, SetupNote, SetupPreview};
+use crate::os::fs::reaches_network;
 use crate::settings::Settings;
 use crate::text;
 
 const NOTHING: &str = "nothing";
+const BEYOND_THE_DRIVES: &str = "is a network or device path";
 const SETUP: &str = "repositories.setup";
 const TEARDOWN: &str = "repositories.teardown";
 
@@ -54,6 +56,24 @@ pub(crate) fn preview(shared: &Shared, settings: &Settings, here: &Here) -> Setu
 
 pub(crate) fn matches<'a>(repository: &Repository, here: &'a Here) -> Vec<&'a OpenRepository> {
     here.projects.iter().filter(|project| shares_a_remote(repository, project)).collect()
+}
+
+pub(crate) fn runs_here(key: &str, value: &Value) -> Result<(), String> {
+    let commands: Vec<&str> = match (key, value) {
+        ("gh" | "glab", Value::String(program)) => vec![program],
+        ("agent_commands", Value::Object(commands)) => commands.values().filter_map(Value::as_str).collect(),
+        _ => Vec::new(),
+    };
+    match commands.into_iter().find(|command| reaches_network(program_start(command))) {
+        Some(command) => {
+            Err(format!("`{key}` runs {command}, which {BEYOND_THE_DRIVES}: cornercase runs no program from there"))
+        }
+        None => Ok(()),
+    }
+}
+
+fn program_start(command: &str) -> &str {
+    command.trim_start_matches(|c: char| c.is_whitespace() || matches!(c, '&' | '"' | '\''))
 }
 
 pub(crate) fn with_value(config: &Config, key: &str, value: &Value) -> Result<Config, String> {
@@ -236,8 +256,8 @@ impl Compared<'_> {
     fn worktree_notes(&self) -> Vec<SetupNote> {
         let mut notes = Vec::new();
         let dir = &self.next.worktrees_dir;
-        if self.changed("worktrees_dir").is_some() && !self.exists(dir) {
-            notes.push(missing(format!("{dir} does not exist here yet: it will be made with the first worktree")));
+        if self.changed("worktrees_dir").is_some() {
+            notes.extend(self.folder_note(dir));
         }
         for (key, program, place) in [("gh", &self.next.gh, "GitHub"), ("glab", &self.next.glab, "GitLab")] {
             if self.changed(key).is_some() {
@@ -257,11 +277,23 @@ impl Compared<'_> {
     }
 
     fn exists(&self, path: &str) -> bool {
-        config::expand_home(path.trim(), self.here.home.as_deref()).exists()
+        let path = config::expand_home(path.trim(), self.here.home.as_deref());
+        !reaches_network(&path.to_string_lossy()) && path.exists()
+    }
+
+    fn folder_note(&self, dir: &str) -> Option<SetupNote> {
+        if reaches_network(dir.trim()) {
+            return Some(risk(format!("{dir} {BEYOND_THE_DRIVES}")));
+        }
+        (!self.exists(dir))
+            .then(|| missing(format!("{dir} does not exist here yet: it will be made with the first worktree")))
     }
 
     fn program_note(&self, program: &str) -> Option<SetupNote> {
         let name = program.split_whitespace().next()?;
+        if reaches_network(program_start(program)) {
+            return Some(risk(format!("{name} {BEYOND_THE_DRIVES}")));
+        }
         if name.contains('/') {
             (!self.exists(name)).then(|| missing(format!("{name} does not exist here")))
         } else {
