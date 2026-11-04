@@ -1,8 +1,10 @@
 use super::*;
+#[cfg(unix)]
 use crate::test_util::{TempDir, write_executable};
 
 const LIMITS: Limits = Limits { name: "fake", timeout: Duration::from_secs(10), grace: Duration::from_secs(2) };
 
+#[cfg(unix)]
 fn fake(script: &str) -> (TempDir, Command) {
     let dir = TempDir::new();
     let path = dir.path().join("fake");
@@ -15,6 +17,7 @@ fn echoes(line: &str) -> Step<String> {
     if line.starts_with("answer") { Step::Answer(Ok(line.to_string())) } else { Step::Read }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_probe_that_gets_no_answer_fails() {
     let (_dir, command) = fake("exec sleep 30");
@@ -23,6 +26,7 @@ fn a_probe_that_gets_no_answer_fails() {
     assert_eq!(error.to_string(), "fake did not answer in time");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_program_that_exits_fails_at_once() {
     let (_dir, command) = fake("exit 1");
@@ -36,6 +40,7 @@ fn a_missing_program_fails() {
     assert!(error.to_string().starts_with("could not run /nonexistent/fake"), "{error}");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_follow_up_is_written_after_an_answer() {
     let (_dir, command) = fake("read -r a\necho first\nread -r b\necho \"answer $b\"\nexec sleep 30");
@@ -46,6 +51,7 @@ fn a_follow_up_is_written_after_an_answer() {
     assert_eq!(run(LIMITS, command, "hi\n", talk).expect("an answer"), "answer again");
 }
 
+#[cfg(unix)]
 #[test]
 fn closing_its_input_lets_the_probe_exit_on_its_own() {
     let (dir, command) = fake("read -r a\necho answer\ncat > /dev/null\ntouch \"$0.done\"");
@@ -65,6 +71,7 @@ fn each_answer_counts_once_and_a_running_probe_is_not_restarted() {
     assert_eq!((probe.answers(), probe.error()), (2, Some("no")));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_probe_that_times_out_is_killed_without_waiting_for_the_grace() {
     let (_dir, command) = fake("exec sleep 30");

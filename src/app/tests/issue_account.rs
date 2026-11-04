@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::collections::BTreeMap;
 
 use super::issue_list::{Setup, browser, enter, listing, open_loaded, setup, shortcut_with_token};

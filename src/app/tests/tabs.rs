@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn exited_last_tab() -> (App, Receiver<AppEvent>, Vec<TempDir>) {

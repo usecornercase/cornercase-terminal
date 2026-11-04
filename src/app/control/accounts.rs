@@ -577,6 +577,7 @@ impl App {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 impl App {
     pub(in crate::app) fn account_login(&self, kind: Known, name: &str) -> Option<&LoginInfo> {
         self.accounts.logins.seen.get(&(kind, name.to_string()))

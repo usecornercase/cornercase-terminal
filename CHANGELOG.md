@@ -7,6 +7,10 @@ Every pull request that changes the app adds a section here for its new version.
 - **On Windows, an agent installed by npm as a `.cmd` starts in any folder**, `R&D` included: cornercase reads the shim npm wrote and types `node` with the agent's script instead, so its arguments never go through `cmd.exe`, and such a launch is no longer refused. A batch file it cannot read as an npm shim (pnpm's, an older npm's, one of your own) is still refused a line holding a character `cmd.exe` would read. Nothing changes on Linux and macOS.
 - **On Windows, an agent is not started with an argument its pane's shell would split**: in a PowerShell pane, an argument holding a `"`, or a space and a last `\`, or a bare `--%`, reaches the agent in pieces under Windows PowerShell 5.1, so part of it could become an option of its own; in a cmd pane, so does one holding a space or a character `cmd.exe` reads. Such a launch is refused, and the message names the argument. JSON in `agent_args` was already losing its quotes in PowerShell and is refused there too. A Git Bash pane passes every argument whole, so nothing is refused there. Nothing changes on Linux and macOS.
 
+## 0.12.281
+
+- **The test suite now also runs on Windows in CI**, so every change to cornercase is checked there before it is released, as on Linux and macOS. Nothing changes in the app.
+
 ## 0.12.280
 
 - **The search finds settings.** Typing in the search now also lists matching settings, after your projects, workspaces and tabs, so those keep their places. Each shows where it lives and its value, such as `UI › prefix key`. Click one or press `Enter` and Settings opens on that row, with nothing changed. A row that doesn't show yet is listed muted with what it needs.

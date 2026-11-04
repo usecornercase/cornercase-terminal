@@ -834,6 +834,7 @@ pub(super) fn set_forum(app: &mut App, via: Via, forum: Option<crate::messenger:
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 pub(super) fn run(app: &App, via: Via) -> &str {
     &app.messenger(via).run
 }

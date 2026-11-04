@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::*;

@@ -271,6 +271,7 @@ impl App {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 impl App {
     pub(super) fn ports_scanning(&self) -> bool {
         self.panels.ports.refresh.busy()

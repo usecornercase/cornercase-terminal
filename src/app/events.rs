@@ -72,6 +72,7 @@ impl<T: Clone + PartialEq + Serialize + Default> Snapshots<T> {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn built(&self) -> Option<Instant> {
         self.built
     }

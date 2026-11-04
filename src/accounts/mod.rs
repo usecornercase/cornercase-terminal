@@ -156,6 +156,7 @@ impl Accounts {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

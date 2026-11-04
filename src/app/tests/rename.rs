@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn open_rename(app: &mut App, at: Position) {

@@ -106,6 +106,7 @@ impl Default for Clients {
 
 #[cfg(test)]
 impl Clients {
+    #[cfg(unix)]
     pub(super) fn set_confirm_within(&mut self, within: Duration) {
         self.confirm_within = within;
     }

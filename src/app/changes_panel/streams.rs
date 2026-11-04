@@ -102,11 +102,13 @@ impl Streams {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(in crate::app) fn set_every(&mut self, every: Duration) {
         self.every = every;
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(in crate::app) fn mode_of(&self, stream: u64) -> Option<Mode> {
         self.open.iter().find(|s| s.id == stream).map(|s| s.mode)
     }

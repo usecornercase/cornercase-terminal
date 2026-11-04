@@ -8,6 +8,7 @@ fn a_bug_says_where_to_look_and_stays_a_while() {
     assert_eq!(shown, Some(("cornercase hit a bug, see server.log", ui::ToastIcon::Bug, BUG_FOR)));
 }
 
+#[cfg(unix)]
 #[test]
 fn resetting_the_interaction_closes_dialogs_and_ends_drags() {
     let (mut app, _rx) = app();
@@ -23,6 +24,7 @@ fn resetting_the_interaction_closes_dialogs_and_ends_drags() {
     assert_eq!((app.screen.nav, app.screen.hover, app.screen.drag), (None, None, None));
 }
 
+#[cfg(unix)]
 #[test]
 fn resetting_the_interaction_drops_the_todo_field_and_gives_the_filter_keys_back() {
     let (mut app, _rx) = app();

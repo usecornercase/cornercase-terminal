@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn todo_send(id: u64, pane: Option<u64>) -> Command {

@@ -6,14 +6,27 @@ macro_rules! fixture {
 
 pub(crate) use fixture;
 
+mod program;
+
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::os::fs::{canonicalize, set_mode};
+use crate::os::fs::canonicalize;
+#[cfg(unix)]
+use crate::os::fs::set_mode;
+#[cfg(unix)]
 use crate::os::process::{Pid, Signal, kill_process};
 
 pub(crate) const SHORTCUT_MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
+
+const PROGRAM: &str = include_str!("test_util/program.rs");
+const PROGRAM_MAIN: &str = r#"fn main() {
+    let program = std::env::current_exe().expect("the fake program's path");
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    std::process::exit(run(&program, &args, &mut std::io::stdout(), &mut std::io::stderr()));
+}"#;
 
 const PID_WINDOWS_NEVER_GIVES: i32 = i32::MAX - 3;
 
@@ -87,11 +100,13 @@ impl Drop for TempDir {
     }
 }
 
+#[cfg(unix)]
 pub(crate) struct Locked {
     path: PathBuf,
     _dir: TempDir,
 }
 
+#[cfg(unix)]
 impl Locked {
     pub(crate) fn new() -> Self {
         let dir = TempDir::new();
@@ -109,14 +124,17 @@ impl Locked {
     }
 }
 
+#[cfg(unix)]
 impl Drop for Locked {
     fn drop(&mut self) {
         let _ = set_mode(&self.path, 0o755);
     }
 }
 
+#[cfg(unix)]
 pub(crate) struct Sleeper(std::process::Child);
 
+#[cfg(unix)]
 impl Sleeper {
     pub(crate) fn with_env(vars: &[(&str, &str)]) -> Self {
         Self::named(Path::new("/bin/sleep"), &std::env::temp_dir(), vars)
@@ -158,14 +176,17 @@ impl Sleeper {
     }
 }
 
+#[cfg(unix)]
 impl Drop for Sleeper {
     fn drop(&mut self) {
         self.stop();
     }
 }
 
+#[cfg(unix)]
 pub(crate) struct Family(std::process::Child);
 
+#[cfg(unix)]
 impl Family {
     pub(crate) fn new() -> Self {
         let child = std::process::Command::new("/bin/sh")
@@ -194,6 +215,7 @@ impl Family {
     }
 }
 
+#[cfg(unix)]
 impl Drop for Family {
     fn drop(&mut self) {
         if let Some(pid) = self.grandchild().and_then(Pid::from_raw) {
@@ -204,10 +226,12 @@ impl Drop for Family {
     }
 }
 
+#[cfg(unix)]
 pub(crate) fn is_sh(name: &str) -> bool {
     matches!(name, "sh" | "bash" | "dash")
 }
 
+#[cfg(unix)]
 pub(crate) fn child_running(parent: i32, program: &str) -> i32 {
     let mut found = None;
     wait_until(&format!("a child of {parent} runs {program}"), || {
@@ -219,6 +243,7 @@ pub(crate) fn child_running(parent: i32, program: &str) -> i32 {
     found.expect("the child")
 }
 
+#[cfg(unix)]
 pub(crate) fn sleep_named(path: &Path) -> Running {
     let copied = std::process::Command::new("cp").arg("/bin/sleep").arg(path).status().expect("run cp");
     assert!(copied.success(), "copy sleep to {}", path.display());
@@ -226,6 +251,10 @@ pub(crate) fn sleep_named(path: &Path) -> Running {
 }
 
 pub(crate) fn write_executable(path: &Path, contents: &str) {
+    if cfg!(windows) {
+        std::fs::write(path, contents).unwrap_or_else(|e| panic!("failed to write {}: {e}", path.display()));
+        return;
+    }
     let mut child = std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg("cat > \"$1\" && chmod 755 \"$1\"")
@@ -238,6 +267,7 @@ pub(crate) fn write_executable(path: &Path, contents: &str) {
     assert!(child.wait().expect("wait for sh").success(), "failed to write {}", path.display());
 }
 
+#[cfg(unix)]
 pub(crate) fn append(path: &Path, text: &str) -> std::fs::File {
     use std::io::Write;
     let mut file = std::fs::OpenOptions::new().append(true).open(path).expect("open agent records");
@@ -245,10 +275,12 @@ pub(crate) fn append(path: &Path, text: &str) -> std::fs::File {
     file
 }
 
+#[cfg(unix)]
 pub(crate) const TITLE_SIGNAL: &str = r#"if mv "$2/title" "$2/.shown" 2>/dev/null; then
     printf '\033]0;%s\007' "$(cat "$2/.shown")"
   fi"#;
 
+#[cfg(unix)]
 pub(crate) fn signal(dir: &Path, name: &str, contents: &str) {
     let next = dir.join(format!(".{name}"));
     std::fs::write(&next, contents).expect("write an agent signal");
@@ -288,6 +320,64 @@ impl Drop for Running {
     }
 }
 
+pub(crate) fn fake_program(dir: &Path, name: &str) -> PathBuf {
+    let path = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+    let built = built_program();
+    if std::fs::hard_link(built, &path).is_err() {
+        copy_program(built, &path);
+    }
+    path
+}
+
+fn copy_program(from: &Path, to: &Path) {
+    if cfg!(windows) {
+        std::fs::copy(from, to).expect("copy the fake program");
+        return;
+    }
+    let copied = std::process::Command::new("cp").arg(from).arg(to).status().expect("run cp");
+    assert!(copied.success(), "copy the fake program to {}", to.display());
+}
+
+fn built_program() -> &'static Path {
+    static BUILT: OnceLock<PathBuf> = OnceLock::new();
+    BUILT.get_or_init(|| build_program(&program_cache()))
+}
+
+fn program_cache() -> PathBuf {
+    let test_binary = std::env::current_exe().expect("the test binary's path");
+    test_binary.parent().expect("the test binary's folder").to_path_buf()
+}
+
+fn build_program(cache: &Path) -> PathBuf {
+    let source = format!("{PROGRAM}\n{PROGRAM_MAIN}\n");
+    let mut hasher = std::hash::DefaultHasher::new();
+    std::hash::Hash::hash(&source, &mut hasher);
+    let stem = format!("cornercase-test-program-{:016x}", std::hash::Hasher::finish(&hasher));
+    let built = cache.join(format!("{stem}{}", std::env::consts::EXE_SUFFIX));
+    if !built.exists() {
+        compile_program(&source, &cache.join(format!("{stem}-{}", std::process::id())), &built);
+    }
+    built
+}
+
+fn compile_program(source: &str, work: &Path, built: &Path) {
+    let _ = std::fs::remove_dir_all(work);
+    std::fs::create_dir(work).expect("create the fake program's build folder");
+    let (main, output) = (work.join("main.rs"), work.join(format!("program{}", std::env::consts::EXE_SUFFIX)));
+    std::fs::write(&main, source).expect("write the fake program's source");
+    let status = std::process::Command::new("rustc")
+        .args(["--edition", "2024", "-C", "debuginfo=0", "-o"])
+        .arg(&output)
+        .arg(&main)
+        .status()
+        .expect("run rustc");
+    assert!(status.success(), "rustc could not build the fake program");
+    let _ = std::fs::rename(&output, built);
+    let _ = std::fs::remove_dir_all(work);
+    assert!(built.exists(), "the fake program is not at {}", built.display());
+}
+
+#[cfg(unix)]
 pub(crate) fn fake_tool(dir: &Path, name: &str, script: &str) -> PathBuf {
     let path = dir.join(name);
     write_executable(&path, &format!("#!/bin/sh\n{script}\n"));
@@ -317,10 +407,12 @@ pub(crate) fn npm_install(dir: &Path, shim: &str, files: &[&[&str]]) -> PathBuf 
     path
 }
 
+#[cfg(unix)]
 pub(crate) fn fake_gh(dir: &Path, script: &str) -> PathBuf {
     fake_tool(dir, "gh", script)
 }
 
+#[cfg(unix)]
 pub(crate) fn fake_glab(dir: &Path, script: &str) -> PathBuf {
     fake_tool(dir, "glab", script)
 }
@@ -377,6 +469,10 @@ pub(crate) fn clone_of(remote: &Path) -> (TempDir, PathBuf) {
     (dir, path)
 }
 
+pub(crate) fn os_path(path: &str) -> String {
+    if cfg!(windows) && path.starts_with('/') { format!("C:{path}") } else { path.to_string() }
+}
+
 #[cfg(not(unix))]
 pub(crate) fn verbatim(path: &Path) -> PathBuf {
     PathBuf::from(format!(r"\\?\{}", path.display()))
@@ -384,12 +480,17 @@ pub(crate) fn verbatim(path: &Path) -> PathBuf {
 
 #[cfg(windows)]
 pub(crate) fn holding(file: &Path, vars: &[(&str, &str)]) -> Running {
+    holding_reading(file, vars, std::process::Stdio::piped())
+}
+
+#[cfg(windows)]
+pub(crate) fn holding_reading(file: &Path, vars: &[(&str, &str)], input: std::process::Stdio) -> Running {
     let held = std::fs::OpenOptions::new().create(true).append(true).open(file).expect("open the file to hold");
     Running::spawn(
         std::process::Command::new("findstr")
             .arg("held")
             .envs(vars.iter().copied())
-            .stdin(std::process::Stdio::piped())
+            .stdin(input)
             .stdout(held)
             .stderr(std::process::Stdio::null()),
     )
@@ -397,7 +498,12 @@ pub(crate) fn holding(file: &Path, vars: &[(&str, &str)]) -> Running {
 
 type Route = (&'static str, u16, Vec<u8>);
 
-fn answer(stream: &mut std::net::TcpStream, routes: &[Route], used: &mut [bool]) -> String {
+fn answer(
+    stream: &mut std::net::TcpStream,
+    routes: &[Route],
+    used: &mut [bool],
+    log: &parking_lot::Mutex<Vec<String>>,
+) {
     let request = read_request(stream);
     let line = request.lines().next().unwrap_or_default().to_string();
     let mut parts = line.split(' ');
@@ -419,8 +525,8 @@ fn answer(stream: &mut std::net::TcpStream, routes: &[Route], used: &mut [bool])
         "HTTP/1.1 {status} X\r\n{location}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );
+    log.lock().push(request);
     let _ = std::io::Write::write_all(stream, &[head.as_bytes(), body].concat());
-    request
 }
 
 fn serve(
@@ -435,7 +541,7 @@ fn serve(
             return;
         }
         let Ok(mut stream) = stream else { continue };
-        log.lock().push(answer(&mut stream, routes, &mut used));
+        answer(&mut stream, routes, &mut used, log);
     }
 }
 
@@ -568,3 +674,6 @@ impl std::io::Write for BrokenPipe {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

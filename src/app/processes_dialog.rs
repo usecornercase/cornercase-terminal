@@ -255,6 +255,7 @@ impl App {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 impl App {
     pub(super) fn processes_sampling(&self) -> bool {
         self.panels.processes.refresh.busy()

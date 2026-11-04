@@ -32,17 +32,20 @@ impl StarPrompt {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn with_saved(&mut self, saved: Saved, path: PathBuf) {
         self.saved = saved;
         self.path = Some(path);
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn saved(&self) -> &Saved {
         &self.saved
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn forget_window(&mut self) {
         self.window = None;
     }

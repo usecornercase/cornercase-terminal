@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn known_conversation() -> (Agent, u64) {

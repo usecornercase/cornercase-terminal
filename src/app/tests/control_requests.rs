@@ -1,13 +1,22 @@
 use serde_json::{Value, json};
 
 use super::*;
+#[cfg(unix)]
 use crate::agents::claude::fake::FakeClaude;
 use crate::app::messenger::{self as wiring, MessengerEvent};
-use crate::control::{self as wire, Command, Done, Item, Report, Response, Until};
+#[cfg(unix)]
+use crate::control::Until;
+use crate::control::{self as wire, Command, Done, Response};
+#[cfg(unix)]
+use crate::control::{Item, Report};
 use crate::messenger::link::Event as LinkEvent;
-use crate::messenger::{Chat, Keyboard, Message, Order, Press, Update, Via};
+use crate::messenger::{Chat, Order, Via};
+#[cfg(unix)]
+use crate::messenger::{Keyboard, Message, Press, Update};
+#[cfg(unix)]
 use crate::test_util::write_executable;
 
+#[cfg(unix)]
 fn wait_after_typing(app: &mut App, rx: &Receiver<AppEvent>) -> Instant {
     let id = done(answered(app, rx, "the command is typed")).ids.pane.expect("the pane");
     let typed = Instant::now();
@@ -58,6 +67,7 @@ fn reply_of(text: &str) -> std::result::Result<Value, Refused> {
     }
 }
 
+#[cfg(unix)]
 fn send_waiting(
     app: &mut App,
     rx: &Receiver<AppEvent>,
@@ -69,6 +79,7 @@ fn send_waiting(
     send_headed(app, rx, &json!({"caller": caller, "server": server}), command, args)
 }
 
+#[cfg(unix)]
 fn send_headed(
     app: &mut App,
     rx: &Receiver<AppEvent>,
@@ -91,10 +102,12 @@ fn send_headed(
     got
 }
 
+#[cfg(unix)]
 fn asked(app: &mut App, rx: &Receiver<AppEvent>, command: &str, args: &Value) -> std::result::Result<Value, Refused> {
     asked_by(app, rx, None, command, args)
 }
 
+#[cfg(unix)]
 fn asked_by(
     app: &mut App,
     rx: &Receiver<AppEvent>,
@@ -118,6 +131,7 @@ fn refused(app: &mut App, command: &str, args: &Value) -> Refused {
     }
 }
 
+#[cfg(unix)]
 fn call_later(
     app: &mut App,
     rx: &Receiver<AppEvent>,
@@ -142,6 +156,7 @@ fn answers(app: &mut App) -> Vec<Response> {
     answers.into_iter().map(|(_, text)| serde_json::from_str(&text).expect("a response")).collect()
 }
 
+#[cfg(unix)]
 fn answered(app: &mut App, rx: &Receiver<AppEvent>, what: &str) -> Response {
     let mut got = Vec::new();
     wait_until(what, || {
@@ -160,6 +175,7 @@ fn done(response: Response) -> Done {
     }
 }
 
+#[cfg(unix)]
 fn error(response: Response) -> String {
     match response {
         Response::Error(message) => message,
@@ -181,10 +197,12 @@ fn value(app: &mut App, caller: Option<u64>, command: Command) -> Value {
     }
 }
 
+#[cfg(unix)]
 fn pane(app: &App, id: u64) -> &Term {
     app.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms).find(|t| t.id == id).expect("the pane")
 }
 
+#[cfg(unix)]
 struct Agent {
     app: App,
     rx: Receiver<AppEvent>,
@@ -193,6 +211,7 @@ struct Agent {
     _project: TempDir,
 }
 
+#[cfg(unix)]
 impl Agent {
     fn new() -> Self {
         let (config, project) = (TempDir::new(), TempDir::new());
@@ -242,6 +261,7 @@ impl Agent {
     }
 }
 
+#[cfg(unix)]
 impl Agent {
     fn transcript(&mut self, id: u64, lines: &[&str]) {
         let (app, rx) = (&mut self.app, &self.rx);
@@ -258,6 +278,7 @@ impl Agent {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_send_leaves_a_scrolled_pane_where_it_is() {
     let (mut app, rx) = app();
@@ -275,37 +296,45 @@ fn a_send_leaves_a_scrolled_pane_where_it_is() {
     assert!(pane(&app, id).emulator.below() >= 3, "the view moved: {}", pane(&app, id).emulator.below());
 }
 
+#[cfg(unix)]
 fn pane_screen(app: &App, id: u64) -> String {
     pane(app, id).emulator.screen_text().expect("the screen")
 }
 
+#[cfg(unix)]
 fn first(app: &App) -> u64 {
     term(app, app.active).id
 }
 
+#[cfg(unix)]
 fn new_tab(command: Option<&str>) -> Command {
     Command::NewTab(wire::NewTab { command: command.map(str::to_string), ..wire::NewTab::default() })
 }
 
+#[cfg(unix)]
 fn wait_for(pane: u64, until: Until, timeout: Option<f64>) -> Command {
     Command::Wait(wire::Wait { pane: Some(pane), until, timeout, ..wire::Wait::default() })
 }
 
+#[cfg(unix)]
 fn wait_on(panes: &[u64], tabs: &[u64], all: bool, until: Until, timeout: Option<f64>) -> Command {
     let (panes, tabs) = (panes.to_vec(), tabs.to_vec());
     Command::WaitSeveral(wire::Wait { panes, tabs, all, until, timeout, ..wire::Wait::default() })
 }
 
+#[cfg(unix)]
 fn send_text(pane: u64, text: &str, enter: bool, wait: bool) -> Command {
     let text = Some(text.to_string()).filter(|t| !t.is_empty());
     Command::Send(wire::SendText { pane: Some(pane), text, enter, wait, ..wire::SendText::default() })
 }
 
+#[cfg(unix)]
 fn send_enter(app: &mut App, text: &str) {
     let pane = first(app);
     ask(app, None, send_text(pane, text, true, false));
 }
 
+#[cfg(unix)]
 fn last_message(app: &mut App, rx: &Receiver<AppEvent>, pane: u64) -> Value {
     let wanted = wire::LastMessage { pane: Some(pane), ..wire::LastMessage::default() };
     ask(app, None, Command::LastMessage(wanted));
@@ -315,12 +344,14 @@ fn last_message(app: &mut App, rx: &Receiver<AppEvent>, pane: u64) -> Value {
     }
 }
 
+#[cfg(unix)]
 fn a_local_command_needs_no_record(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
     send_enter(app, text);
     done(answered(app, rx, "the local command is submitted"));
     assert_eq!(app.term().and_then(|t| t.context.prompted()), None);
 }
 
+#[cfg(unix)]
 fn an_unconfirmed_send_gives_up(app: &mut App, rx: &Receiver<AppEvent>) {
     app.clients.set_confirm_within(Duration::from_millis(300));
     send_enter(app, "fix the login");
@@ -328,24 +359,29 @@ fn an_unconfirmed_send_gives_up(app: &mut App, rx: &Receiver<AppEvent>) {
     assert!(message.contains("not confirmed"), "{message}");
 }
 
+#[cfg(unix)]
 fn a_waiting_agent_refuses_a_send(app: &mut App) {
     send_enter(app, "continue");
     assert!(error(answers(app).remove(0)).contains("waiting for an answer"));
 }
 
+#[cfg(unix)]
 fn press_keys(pane: u64, keys: &[&str]) -> Command {
     Command::Keys(wire::Keys { pane: Some(pane), tab: None, keys: keys.iter().map(ToString::to_string).collect() })
 }
 
+#[cfg(unix)]
 fn follow(app: &mut App, panes: &[u64]) {
     follow_with(app, panes, false);
 }
 
+#[cfg(unix)]
 fn follow_with(app: &mut App, panes: &[u64], host: bool) {
     let ack = done(now(app, None, Command::Events(wire::Events { panes: panes.to_vec(), host, notices: false })));
     assert_eq!(ack, Done::default());
 }
 
+#[cfg(unix)]
 fn streamed(app: &mut App) -> Vec<Streamed> {
     app.trace();
     let streamed = app.take_events();
@@ -353,6 +389,7 @@ fn streamed(app: &mut App) -> Vec<Streamed> {
     streamed.into_iter().map(|(_, streamed)| streamed).collect()
 }
 
+#[cfg(unix)]
 fn lines(app: &mut App) -> Vec<Value> {
     streamed(app)
         .into_iter()
@@ -366,6 +403,7 @@ fn lines(app: &mut App) -> Vec<Value> {
         .collect()
 }
 
+#[cfg(unix)]
 fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
     streamed
         .iter()
@@ -383,6 +421,7 @@ fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
         .collect()
 }
 
+#[cfg(unix)]
 fn until_told(
     app: &mut App,
     rx: &Receiver<AppEvent>,
@@ -399,6 +438,7 @@ fn until_told(
     got
 }
 
+#[cfg(unix)]
 fn statuses(streamed: &[Streamed], pane: u64) -> Vec<(Option<String>, Option<String>)> {
     told(streamed)
         .into_iter()
@@ -409,6 +449,7 @@ fn statuses(streamed: &[Streamed], pane: u64) -> Vec<(Option<String>, Option<Str
         .collect()
 }
 
+#[cfg(unix)]
 fn change(from: Option<&str>, to: Option<&str>) -> (Option<String>, Option<String>) {
     (from.map(str::to_string), to.map(str::to_string))
 }
@@ -427,6 +468,7 @@ fn chat() -> Chat {
     Chat { id: CHAT, user: USER, name: "@ada".into(), paired: 1 }
 }
 
+#[cfg(unix)]
 fn html(order: &Order) -> &str {
     match order {
         Order::Send { text, .. } | Order::Edit { text, .. } => text,
@@ -434,6 +476,7 @@ fn html(order: &Order) -> &str {
     }
 }
 
+#[cfg(unix)]
 fn keyboard(order: &Order) -> &Keyboard {
     static NONE: Keyboard = Vec::new();
     match order {
@@ -442,11 +485,13 @@ fn keyboard(order: &Order) -> &Keyboard {
     }
 }
 
+#[cfg(unix)]
 fn button(order: &Order, text: &str) -> String {
     let key = keyboard(order).iter().flatten().find(|key| key.text.contains(text));
     key.unwrap_or_else(|| panic!("no `{text}` button in {order:?}")).data.clone()
 }
 
+#[cfg(unix)]
 fn update(app: &mut App, via: Via, update: Update) {
     let event = AppEvent::Messenger(MessengerEvent::Link(via, LinkEvent::Updates(1, vec![update])));
     app.handle_event(event, AREA).expect("the update is handled");
@@ -480,6 +525,7 @@ impl Phone {
         got
     }
 
+    #[cfg(unix)]
     fn message(&mut self, app: &mut App, text: &str, reply_to: Option<i64>, from: (i64, i64)) -> i64 {
         self.next += 1;
         let (chat, user) = from;
@@ -498,19 +544,23 @@ impl Phone {
         self.next
     }
 
+    #[cfg(unix)]
     fn says(&mut self, app: &mut App, text: &str) -> i64 {
         self.message(app, text, None, (CHAT, USER))
     }
 
+    #[cfg(unix)]
     fn replies(&mut self, app: &mut App, to: i64, text: &str) -> i64 {
         self.message(app, text, Some(to), (CHAT, USER))
     }
 
+    #[cfg(unix)]
     fn taps(&self, app: &mut App, message: i64, data: &str) {
         let press = Press { id: format!("q{message}"), chat: CHAT, user: USER, message, data: data.into() };
         update(app, self.via, Update::Press(press));
     }
 
+    #[cfg(unix)]
     fn waits(&mut self, agent: &mut Agent, what: &str, pick: impl Fn(&Order) -> bool) -> (i64, Order) {
         let mut found = None;
         wait_until(what, || {
@@ -522,11 +572,13 @@ impl Phone {
         found.expect("an order")
     }
 
+    #[cfg(unix)]
     fn says_in_html(&mut self, agent: &mut Agent, what: &str, text: &str) -> (i64, Order) {
         self.waits(agent, what, |order| html(order).contains(text))
     }
 }
 
+#[cfg(unix)]
 fn reacted(message: i64) -> impl Fn(&Order) -> bool {
     move |order| matches!(order, Order::React { message: m, .. } if *m == message)
 }

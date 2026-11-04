@@ -51,6 +51,7 @@ fn installed(app: &mut App) -> String {
     update.message
 }
 
+#[cfg(unix)]
 #[test]
 fn nothing_running_is_said_before_restarting() {
     let (mut app, _rx) = found(replaced());
@@ -62,6 +63,7 @@ fn nothing_running_is_said_before_restarting() {
     assert!(shown_notes(&app).join(" ").contains("Nothing is running in your terminals."));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_whole_restart_list_is_shown() {
     let (mut app, _rx) = found(replaced());
@@ -148,6 +150,7 @@ fn the_restart_list_starts_at_its_top() {
     assert_eq!((step(&app), app.update.scroll()), (Some(&UpdateStep::Installed), 0));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_dialog_buttons_update_and_cancel() {
     let (mut app, _rx) = found(replaced());

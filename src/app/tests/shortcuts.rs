@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::agents::activity::{Activity, Status};
 use crate::files::Mode;

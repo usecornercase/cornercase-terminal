@@ -3,7 +3,10 @@ use std::net::{IpAddr, TcpListener};
 use rstest::rstest;
 
 use super::listen::Listener;
-use super::{Attribution, Pane, Place, Places, Via, host, merge, scan};
+#[cfg(unix)]
+use super::{Attribution, Place, Via};
+use super::{Pane, Places, host, merge, scan};
+#[cfg(unix)]
 use crate::test_util::{Family, Running, TempDir, wait_until};
 
 fn me() -> i32 {
@@ -56,6 +59,7 @@ mod urls {
     }
 }
 
+#[cfg(unix)]
 mod attribution {
     use super::*;
 

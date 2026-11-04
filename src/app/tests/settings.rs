@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::issues::secrets;
 use crate::settings::{Detail, Row};

@@ -125,16 +125,19 @@ impl Runs {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn push(&mut self, run: Run) {
         self.list.push(run);
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn clear(&mut self) {
         self.list.clear();
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn first_mut(&mut self) -> &mut Run {
         self.list.first_mut().expect("a run")
     }

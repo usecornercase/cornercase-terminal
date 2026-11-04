@@ -1,9 +1,12 @@
 use std::io::Write;
+#[cfg(unix)]
 use std::time::UNIX_EPOCH;
 
 use rstest::rstest;
 
 use super::*;
+use crate::agents::gemini::fake;
+#[cfg(unix)]
 use crate::agents::gemini::fake::FakeGemini;
 use crate::test_util::TempDir;
 
@@ -16,7 +19,7 @@ fn written(text: &str) -> (TempDir, Session) {
     let dir = TempDir::new();
     let path = dir.path().join("session.jsonl");
     std::fs::write(&path, format!("{INITIAL}{text}")).expect("write session");
-    let mut session = Session::new(path, FakeGemini::ID.into());
+    let mut session = Session::new(path, fake::ID.into());
     session.update(None).expect("read session");
     (dir, session)
 }
@@ -42,7 +45,7 @@ fn real_prompts_and_replies_supply_times_model_usage_and_resume() {
     let (_dir, session) = written(&format!("{PROMPT}{REPLY}"));
     let prompt: Value = serde_json::from_str(PROMPT).expect("prompt");
     assert_eq!(session.prompted, prompt["timestamp"].as_str().and_then(Stamp::parse));
-    assert_eq!(session.id(), Some(FakeGemini::ID));
+    assert_eq!(session.id(), Some(fake::ID));
     assert_eq!(session.context, Some(Context { model: "gemini-3.8-flash".into(), percent: Some(1) }));
     assert_eq!(last_message(&session.path).expect("message").map(|s| s.text), Some("OK".into()));
 }
@@ -70,7 +73,7 @@ fn compression_replaces_the_history_and_clears_old_usage_without_confirming_a_pr
     assert_eq!(session.prompted, before);
     assert_eq!(session.context, Some(Context { model: "gemini-3.8-flash".into(), percent: None }));
     assert_eq!(last_message(&session.path).expect("no hidden summary"), None);
-    assert_eq!(session.id(), Some(FakeGemini::ID));
+    assert_eq!(session.id(), Some(fake::ID));
 }
 
 #[test]
@@ -88,7 +91,7 @@ fn a_compression_is_said_until_a_reply_with_usage_follows() {
 #[test]
 fn a_compressed_history_is_resumable_when_discovered_without_its_original_prompts() {
     let (_dir, session) = written(COMPACTED);
-    assert_eq!(session.id(), Some(FakeGemini::ID));
+    assert_eq!(session.id(), Some(fake::ID));
     assert_eq!((session.prompted, session.context.as_ref()), (None, None));
     assert_eq!(last_message(&session.path).expect("no hidden summary"), None);
 }
@@ -164,7 +167,7 @@ fn the_current_footer_takes_precedence_over_historical_model_settings() {
         "{REPLY}{{\"id\":\"setting\",\"type\":\"info\",\"content\":\"Model set to auto\",\
              \"timestamp\":\"2026-10-10T13:00:00.000Z\"}}\n"
     ));
-    let mut first = Session::new(session.path, FakeGemini::ID.into());
+    let mut first = Session::new(session.path, fake::ID.into());
     first.update(Some("gemini-3.5-flash-lite".into())).expect("first discovery with the current footer");
     assert_eq!(first.context, Some(Context { model: "gemini-3.5-flash-lite".into(), percent: None }));
 }
@@ -194,6 +197,7 @@ fn replacement_and_deletion_do_not_keep_old_context() {
     assert!(session.update(None).is_none());
 }
 
+#[cfg(unix)]
 #[test]
 fn discovery_uses_one_home_and_folder_and_rejects_stale_or_subagent_sessions() {
     let project = TempDir::new();
@@ -212,6 +216,7 @@ fn discovery_uses_one_home_and_folder_and_rejects_stale_or_subagent_sessions() {
     assert!(look(first.pid(), UNIX_EPOCH, None, None).is_none());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_process_the_agent_starts_during_the_scan_is_not_another_gemini() {
     let project = TempDir::new();

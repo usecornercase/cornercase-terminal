@@ -226,6 +226,7 @@ mod navigation {
         assert_eq!(picker.dir(), tmp.path());
     }
 
+    #[cfg(unix)]
     #[test]
     fn typing_a_path_walks_it() {
         let tmp = tree(&["projects/cornercase", "projects/cornercase-web"]);

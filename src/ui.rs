@@ -74,6 +74,7 @@ pub(crate) use dialog::popup::{Popup, Wanted as PopupWanted, popup_close, popup_
 pub(crate) use dialog::ports::{ConfirmBody, PortRow, Ports, PortsHit, ports_hit, ports_room};
 pub(crate) use dialog::processes::{ProcessLine, Processes, ProcessesHit, processes_hit, processes_room};
 #[cfg(test)]
+#[cfg(unix)]
 pub(crate) use dialog::project_settings::project_settings_buttons;
 pub(crate) use dialog::project_settings::{
     ProjectSettings, ProjectSettingsHit, project_settings_field, project_settings_hit,
@@ -81,13 +82,16 @@ pub(crate) use dialog::project_settings::{
 #[cfg(test)]
 pub(crate) use dialog::search::result_item;
 pub(crate) use dialog::search::{ResultRow, SESSIONS_PITCH, Search, mode_button, result_hit, results_list};
+#[cfg(test)]
+#[cfg(unix)]
+pub(crate) use dialog::settings::pick_list_in;
 pub(crate) use dialog::settings::{
     Settings, SettingsEdit, SettingsFind, SettingsHit, SettingsLayout, SettingsPick, SettingsRow, settings_area,
     settings_find, settings_hit, settings_pick_list,
 };
 #[cfg(test)]
 pub(crate) use dialog::settings::{
-    SettingsLine, line_rect, pick_list_in, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
+    SettingsLine, line_rect, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
     settings_remove, settings_restart, settings_row, settings_scroll, settings_share, settings_tabs,
 };
 #[cfg(test)]
@@ -99,6 +103,7 @@ pub(crate) use dialog::start_flow::{
     AccountField as StartAccount, Shape as StartShape, StartFlow, StartHit, start_hit, start_preview, start_prompt,
 };
 #[cfg(test)]
+#[cfg(unix)]
 pub(crate) use dialog::start_flow::{
     start_account, start_account_list, start_branch, start_buttons, start_list, start_workspace,
 };

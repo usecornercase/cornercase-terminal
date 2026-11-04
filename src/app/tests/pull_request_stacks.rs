@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::pull_requests::{Repo, VIEW, notes, repo_on, row_text};
 use super::*;
 use crate::app::pull_requests::PullRequests;

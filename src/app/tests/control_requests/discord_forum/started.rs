@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::posts::{Posting, THREAD, first_post, posts, sends};
 use super::*;
 

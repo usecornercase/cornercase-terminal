@@ -19,8 +19,10 @@ mod alive {
 
 mod descendants {
     use super::*;
+    #[cfg(unix)]
     use crate::test_util::Family;
 
+    #[cfg(unix)]
     #[test]
     fn reach_the_children_of_children() {
         let family = Family::new();
@@ -37,8 +39,10 @@ mod descendants {
 
 mod parent {
     use super::*;
+    #[cfg(unix)]
     use crate::test_util::Family;
 
+    #[cfg(unix)]
     #[test]
     fn is_the_process_that_started_it() {
         let family = Family::new();
@@ -74,6 +78,7 @@ mod started {
 mod start_stamp {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn stays_the_same_for_a_process_and_differs_for_a_later_one() {
         let ours = start_stamp(this_pid()).expect("a stamp");
@@ -170,8 +175,10 @@ mod this_process {
 
 mod env {
     use super::*;
+    #[cfg(unix)]
     use crate::test_util::Sleeper;
 
+    #[cfg(unix)]
     #[test]
     fn is_what_the_process_started_with() {
         let sleeper = Sleeper::with_env(&[("CORNERCASE_PROBE", "a=b")]);
@@ -245,10 +252,13 @@ mod status {
 
 mod output_within {
     use std::process::Command;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
+    #[cfg(unix)]
+    use std::time::Instant;
 
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn gives_what_the_command_printed_and_its_status() {
         let mut command = Command::new("/bin/sh");
@@ -260,6 +270,7 @@ mod output_within {
         assert_eq!(output.status.code(), Some(3));
     }
 
+    #[cfg(unix)]
     fn gives_up_quickly(script: &str) {
         let started = Instant::now();
         let mut command = Command::new("/bin/sh");
@@ -271,11 +282,13 @@ mod output_within {
         assert!(started.elapsed() < Duration::from_secs(10));
     }
 
+    #[cfg(unix)]
     #[test]
     fn kills_a_command_that_hangs() {
         gives_up_quickly("exec sleep 30");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_child_left_holding_the_output_is_stopped_too() {
         let tmp = crate::test_util::TempDir::new();
@@ -318,8 +331,10 @@ mod stat {
 
 mod cpu_time {
     use super::*;
+    #[cfg(unix)]
     use crate::test_util::{Running, wait_until};
 
+    #[cfg(unix)]
     #[test]
     fn grows_for_a_busy_process_by_a_fair_share_of_the_wall_time() {
         let busy = Running::spawn(Command::new("/bin/sh").args(["-c", "while :; do :; done"]));
@@ -339,6 +354,7 @@ mod cpu_time {
     }
 }
 
+#[cfg(unix)]
 mod running {
     use super::*;
     use crate::test_util::{Running, wait_until};
@@ -363,6 +379,7 @@ mod running {
     }
 }
 
+#[cfg(unix)]
 mod tree {
     use super::*;
     use crate::test_util::Family;
