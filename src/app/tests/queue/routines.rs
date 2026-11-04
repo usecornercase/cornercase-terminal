@@ -152,3 +152,47 @@ mod missing_and_pausing {
         assert_eq!(world.app.tick_at(Instant::now(), at - 10), None);
     }
 }
+
+mod across_a_clock_change {
+    use super::*;
+
+    #[test]
+    fn a_daily_routine_stays_at_nine_local_when_the_tick_crosses_the_change() {
+        let mut world = routines();
+        world.app.set_queue_area(AREA);
+        let zone = "Europe/Madrid";
+        let eve: jiff::Timestamp = "2026-10-24T07:00:00Z".parse().expect("time");
+        let at = eve.as_second();
+        let place = Place { project: world.app.projects[0].path.clone(), ..Place::default() };
+        let repeat = Repeat::parse("day 09:00", zone, at - 86_400).expect("repeat");
+        let mut routine =
+            Task { repeat: Some(repeat), place, program: "/nonexistent/agent".into(), ..task(&world.app, at, None) };
+        routine.zone = zone.into();
+        let id = world.app.panels.queued.schedule(None, routine).expect("routine");
+        assert_eq!(world.app.tick_at(Instant::now(), at - 10), Some(Duration::from_secs(10)));
+        world.app.refresh_at(Instant::now(), at);
+        let next = world.app.panels.queued.queue().entry(id).expect("routine").task.at;
+        assert_eq!(next, at + 86_400 + 3600);
+        assert_eq!(world.app.tick_at(Instant::now(), at + 10), Some(Duration::from_secs(86_400 + 3600 - 10)));
+    }
+}
+
+#[test]
+fn an_account_removed_between_runs_fails_the_next_run_with_its_reason() {
+    use super::accounts::{claude, with_profiles};
+    let mut world = routines();
+    with_profiles(&mut world.app, &world.config);
+    let at = time::now() + 3600;
+    let task = Task { agent: "claude".into(), accounts: claude("home"), ..routine(&world.app, at, "2h") };
+    let id = world.app.panels.queued.schedule(None, task).expect("routine");
+    crate::accounts::remove(&world.config.path().join("accounts"), agents::Known::Claude, "home").expect("remove");
+    world.app.relist_accounts();
+    world.app.run_queued(id, Instant::now()).expect("start now");
+    let found = runs(&world.app, id);
+    assert!(
+        matches!(&found[0].state, QueueState::Failed { reason } if reason.contains("there is no claude account `home`")),
+        "{:?}",
+        found[0].state
+    );
+    assert_eq!(world.app.panels.queued.queue().entry(id).expect("routine").state, QueueState::Pending);
+}

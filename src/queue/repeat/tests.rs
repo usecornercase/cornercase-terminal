@@ -148,3 +148,14 @@ fn accepts_the_text_it_was_made_from_with_or_without_its_clock() {
     assert!(!three.accepts("3d 11:00"));
     assert!(!three.accepts("4d"));
 }
+
+#[test]
+fn a_gap_that_ends_after_midnight_does_not_skip_a_day() {
+    let zone = "XXX0YYY,M3.5.0/23,M10.5.0/0";
+    let day = Repeat::parse("day 23:30", zone, 0).expect("repeat");
+    let eve = at("2026-03-28T23:30:00Z");
+    let shifted = day.after(zone, eve).expect("the gap");
+    assert_eq!(shifted, at("2026-03-29T23:30:00Z"));
+    let next = day.after(zone, shifted).expect("the day after");
+    assert_eq!(next, at("2026-03-30T22:30:00Z"));
+}

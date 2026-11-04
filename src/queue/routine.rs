@@ -1,6 +1,14 @@
 use super::repeat::Repeat;
 use super::{Entry, GRACE, Place, Queue, RUNS_KEPT, State, Task, missing};
 
+fn keeps_its_place(run: &Entry) -> bool {
+    match &run.state {
+        State::Pending | State::Starting => true,
+        State::Started { server, .. } => run.task.cleanup && server == crate::control::server_token(),
+        _ => false,
+    }
+}
+
 fn not_a_routine(id: u64) -> String {
     format!("entry {id} is not a routine")
 }
@@ -36,7 +44,7 @@ impl Queue {
             if dropped == extra {
                 break;
             }
-            let settled = self.entry(id).is_some_and(|run| !matches!(run.state, State::Pending | State::Starting));
+            let settled = self.entry(id).is_some_and(|run| !keeps_its_place(run));
             if settled {
                 self.entries.retain(|entry| entry.id != id);
                 dropped += 1;

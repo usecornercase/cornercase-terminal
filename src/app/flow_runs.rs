@@ -189,8 +189,11 @@ fn make_trees(repo: &Path, dir: &Path, trees: RunTrees) -> crate::error::Result<
     let built = || -> crate::error::Result<Vec<(RoleWorktree, bool)>> {
         if let Some(path) = &run {
             made_paths.push(path.clone());
-            let base = if fresh { worktree::fresh::base(repo)? } else { "HEAD".into() };
-            worktree::create_from(repo, branch, path, &base)?;
+            if fresh {
+                worktree::fresh::create(repo, branch, path)?;
+            } else {
+                worktree::create(repo, branch, path)?;
+            }
         }
         let mut trees = Vec::with_capacity(roles.len());
         for (role, role_branch) in roles {

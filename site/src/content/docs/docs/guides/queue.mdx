@@ -61,7 +61,7 @@ A **routine** is a queue entry that repeats. Choose **`every`**, **`every day at
 | Repeat | Text | Meaning |
 | --- | --- | --- |
 | `every 30m`, `every 2h` | `30m`, `2h` | A fixed time apart, however the clocks change. |
-| `every 3d`, `every 2w` | `3d`, `2w` | Every 3 days or 2 weeks, at the clock time you added it. |
+| `every 3d`, `every 2w` | `3d`, `2w` | Every 3 days or 2 weeks, at the clock time you added it; the first run is 3 days or 2 weeks from today. |
 | `every day at 09:00` | `'day 09:00'` | Every day at that local time. |
 | `every weekday at 09:00` | `'weekday 09:00'` | Monday to Friday. |
 | `every week on monday at 09:00` | `'monday 09:00'` | That day of every week. |
@@ -82,7 +82,7 @@ The checkbox **`remove the workspace when it finishes`** (`--cleanup`, off by de
 - **Only when nothing would be lost.** First comes the same check as the [Worktrees dialog](../worktrees/): nothing uncommitted, nothing unpushed and no lock, in the run's worktree and in every role's. If anything is there, the workspace stays, the run shows `kept · 2 uncommitted, 1 unpushed`, and a toast and notification say `routine <name> left changes in <workspace>`. Otherwise it is removed as in the Worktrees dialog (its teardown, shells, processes and ports stopped, the worktree and its folder), the run shows `removed`, and the local branch is deleted if it holds nothing unpushed.
 - The conversation goes with the workspace, since removing it forgets its closed agents: that is what ticking the box asks for.
 - An agent cornercase cannot read the status of (a custom command) cannot have the checkbox: it is greyed out with the reason.
-- The 3 minutes are counted in memory: removing the run from the list, closing its workspace or restarting the server cancels the count and the workspace stays.
+- The 3 minutes are counted in memory, by the server that started the run: removing the run from the list, closing its workspace or restarting the server (an update included) cancels the count and the workspace stays. A run that is still counting is not dropped from the last 10.
 
 ## Commands
 

@@ -80,12 +80,6 @@ fn local_default(repo: &Path) -> Result<String> {
     Ok("HEAD".into())
 }
 
-pub(crate) fn base(repo: &Path) -> Result<String> {
-    let turn = one_at_a_time(repo);
-    let _held = turn.lock();
-    resolved(repo)
-}
-
 fn resolved(repo: &Path) -> Result<String> {
     match remote_name(repo) {
         Some(remote) => {

@@ -318,3 +318,26 @@ mod routines {
         assert_eq!(text["paused"], true);
     }
 }
+
+mod trimming {
+    use super::*;
+    use crate::queue::repeat::Repeat;
+
+    #[test]
+    fn a_started_run_whose_cleanup_still_counts_is_not_dropped_but_one_of_an_old_server_is() {
+        let mut queue = Queue::default();
+        let repeat = Repeat::parse("30m", "UTC", 0).expect("repeat");
+        let id = queue.add(Task { repeat: Some(repeat), cleanup: true, ..task(100) }).expect("routine");
+        let mine = State::Started { pane: 1, server: crate::control::server_token().into() };
+        let first = queue.run_now(id, 1).expect("first");
+        queue.entry_mut(first).expect("run").state = mine;
+        let old = queue.run_now(id, 2).expect("old");
+        queue.entry_mut(old).expect("run").state = State::Started { pane: 2, server: "gone".into() };
+        for at in 3..=14 {
+            let run = queue.run_now(id, at).expect("run");
+            queue.entry_mut(run).expect("run").state = State::Removed;
+        }
+        assert!(queue.entry(first).is_some());
+        assert!(queue.entry(old).is_none());
+    }
+}

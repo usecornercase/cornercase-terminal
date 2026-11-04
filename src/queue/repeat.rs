@@ -249,12 +249,22 @@ impl Repeat {
         self.on_date(&zone, date)
     }
 
+    fn intended_date(self, zone: &TimeZone, at: i64) -> Result<Date, String> {
+        let date = date_of(zone, at)?;
+        match self.clock() {
+            Some(clock) if self.step().is_none_or(|(_, unit)| unit.civil()) && clock_in(zone, at)? < clock => {
+                plus_days(date, -1)
+            }
+            _ => Ok(date),
+        }
+    }
+
     pub(crate) fn after(self, zone: &str, at: i64) -> Result<i64, String> {
         if let Some(step) = self.absolute() {
             return at.checked_add(step).ok_or_else(|| TOO_RARE.into());
         }
         let zone = clock::zone(zone)?;
-        self.on_date(&zone, self.after_date(date_of(&zone, at)?)?)
+        self.on_date(&zone, self.after_date(self.intended_date(&zone, at)?)?)
     }
 
     pub(crate) fn walk(self, zone: &str, at: i64, now: i64) -> Result<Walk, String> {
