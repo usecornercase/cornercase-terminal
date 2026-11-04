@@ -579,8 +579,8 @@ or put this text in an AGENTS.md or CLAUDE.md.";
 
 pub(super) const REMOTE_ARG: &str = "Run the command against the cornercase of another machine, through ssh: a host from \
     ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)";
-pub(super) const COMMAND_THERE: &str = "How to run cornercase there, as sh reads it [default: cornercase, also looked for in \
-    ~/.local/bin, ~/.cargo/bin and Homebrew's folders]";
+pub(super) const COMMAND_THERE: &str = "How to run cornercase there, as sh reads it, or on a Windows machine its path (~\\ for \
+    the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]";
 pub(super) const REMOTE_HELP: &str =
     "cornercase runs `ssh DESTINATION cornercase proxy`, so your ssh config, keys, agent and
 ProxyJump apply, and starts the server there if none is running. The shells, agents and files stay
@@ -588,10 +588,13 @@ on that machine; this one only shows them, and copies and notifications go throu
 If the connection drops, the window stays and reconnects by itself; Esc or quit gives up. Both
 machines need the same version of cornercase. Reconnecting never asks for a password, so use a
 key or an agent. To send the commands for scripts and agents there, give them --remote DESTINATION.
+The other machine may run Windows: the first time, cornercase finds out whether its sshd runs
+commands with cmd.exe or PowerShell, and remembers it.
 
 Examples:
   cornercase remote devbox
-  cornercase remote me@10.0.0.5 --command '~/bin/cornercase'";
+  cornercase remote me@10.0.0.5 --command '~/bin/cornercase'
+  cornercase remote me@winbox --command 'C:\\tools\\cornercase.exe'";
 pub(super) const LOGS_HELP: &str =
     "The server writes one line per event: the time in UTC, the level, where it happened and what,
 then key=value details. It says which windows attached, which commands ran and how they were

@@ -48,7 +48,7 @@ const POWERSHELL_START: &str = r"-_./\";
 const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
 const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
 const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
-const STOP_PARSING: &str = "--%";
+pub(crate) const STOP_PARSING: &str = "--%";
 const CMD: &str = "cmd";
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
@@ -340,7 +340,7 @@ fn powershell_bare(word: &str) -> bool {
         && word.chars().all(|c| c.is_ascii_alphanumeric() || POWERSHELL_BARE.contains(c))
 }
 
-fn powershell_quoted(word: &str) -> String {
+pub(crate) fn powershell_quoted(word: &str) -> String {
     let mut quoted = String::with_capacity(word.len() + 2);
     quoted.push('\'');
     for c in word.chars() {
@@ -408,7 +408,7 @@ fn split_word(words: &[String]) -> Option<Refusal> {
     ))
 }
 
-fn splits(word: &str) -> bool {
+pub(crate) fn splits(word: &str) -> bool {
     word.contains('"') || (word.ends_with('\\') && word.contains(char::is_whitespace))
 }
 
