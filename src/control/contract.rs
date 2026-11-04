@@ -14,7 +14,7 @@ pub(crate) const CHANGES_VERSION: u32 = 1;
 pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
 pub(crate) const FILES_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 34] = [
+pub(crate) const FEATURES: [&str; 35] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -49,6 +49,7 @@ pub(crate) const FEATURES: [&str; 34] = [
     "machine-usage",
     "machine-workspaces",
     "machine-start",
+    "search-settings",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

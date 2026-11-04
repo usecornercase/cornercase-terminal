@@ -2,7 +2,7 @@ use super::*;
 use crate::control::Matches;
 
 fn search(query: &str) -> Command {
-    Command::Search(wire::Search { query: query.into() })
+    Command::Search(wire::Search { query: query.into(), ..wire::Search::default() })
 }
 
 fn matches(response: Response) -> Matches {
@@ -144,4 +144,44 @@ fn a_focus_without_reveal_answers_as_before() {
     let id = first(&app);
 
     assert_eq!(ok(&mut app, "focus", &json!({"item": {"pane": id}})), json!({}));
+}
+
+mod settings {
+    use super::*;
+
+    fn with_settings(query: &str, settings: Option<bool>) -> Command {
+        Command::Search(wire::Search { query: query.into(), settings })
+    }
+
+    #[test]
+    fn asked_for_they_come_in_their_own_list_after_the_matches() {
+        let (mut app, rx) = app();
+
+        ask(&mut app, None, with_settings("prefix key", Some(true)));
+        let found = matches(answered(&mut app, &rx, "the search answers"));
+
+        assert!(found.settings.iter().any(|setting| setting.title == "UI › prefix key"), "{found:?}");
+    }
+
+    #[test]
+    fn a_hidden_row_says_so() {
+        let (mut app, rx) = app();
+
+        ask(&mut app, None, with_settings("closed workspaces", Some(true)));
+        let found = matches(answered(&mut app, &rx, "the search answers"));
+
+        assert!(found.settings.iter().any(|setting| setting.hidden), "{found:?}");
+    }
+
+    #[rstest::rstest]
+    #[case::not_named(None)]
+    #[case::turned_off(Some(false))]
+    fn otherwise_a_search_lists_none(#[case] settings: Option<bool>) {
+        let (mut app, rx) = app();
+
+        ask(&mut app, None, with_settings("prefix key", settings));
+        let Response::Ok(value) = answered(&mut app, &rx, "the search answers") else { panic!("an answer") };
+
+        assert_eq!(value.get("settings"), None);
+    }
 }

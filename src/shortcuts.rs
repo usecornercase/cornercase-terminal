@@ -243,7 +243,7 @@ const FIND: [Item; 6] = [
     run("f", "files by name", Action::FindNames),
     run("w", "text in files", Action::FindText),
     run("e", "file tree", Action::Files),
-    run("p", "projects, workspaces, tabs", Action::Search),
+    run("p", "projects, workspaces, tabs, settings", Action::Search),
     run("s", "said in sessions", Action::FindSaid),
     run(",", "settings", Action::Settings),
 ];

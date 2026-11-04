@@ -5,6 +5,7 @@ use crate::git;
 use crate::list;
 use crate::project::group::Group;
 use crate::project::{Project, Workspace, group_indices};
+use crate::settings::Hit;
 
 pub(crate) mod said;
 
@@ -29,6 +30,7 @@ pub(crate) struct Finder {
     pub(crate) field: list::Search,
     pub(crate) mode: Mode,
     pub(crate) enter: bool,
+    pub(crate) settings: Option<(String, Vec<Hit>)>,
 }
 
 impl Finder {

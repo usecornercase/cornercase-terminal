@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.280
+## Unreleased
 
 - **Machines: run your agents on another computer, and follow them from here.** List a cloud VM, the desktop at home or a Mac mini in the new **Settings › Machines** tab, and start issues, flows and workspaces on it from the dialogs you already use. Its workspaces show in your sidebar beside yours, you hear when its agents need you, and a click shows its tab here, live, to work in. Your cornercase server keeps a link to the cornercase server on each machine through your own `ssh` (your config, keys and jump hosts apply; cornercase never sees a password or a key). It starts the server there when none runs and never stops it: closing the window, restarting cornercase here, this computer sleeping or the link dropping leave everything on the machine running. The guide is at https://usecornercase.dev/docs/guides/machines/.
 - **To start**, install cornercase on the machine (this version or a newer one, on the `PATH` of a command run through `ssh`, or in `~/.local/bin`, `~/.cargo/bin` or Homebrew's folders), connect once by hand (`ssh you@host true`) so the key and the host are known, since the link never asks, then click **+ add machine** and give it a name, an icon, the `ssh` destination (`user@host` or a `Host` of your `~/.ssh/config`) and the folder its clones go in (`~/code` by default). Each row says whether the machine is **linked** (with its version), **unreachable** (for how long, and what `ssh` said) or runs an **older** cornercase, with an **update…** row that updates it there. The settings search finds the tab and each machine.
@@ -16,6 +16,11 @@ Every pull request that changes the app adds a section here for its new version.
 - **Clone a repository from a terminal or a script.** `cornercase clone URL [FOLDER]` clones into a new folder named after the repository inside FOLDER (the current one by default), opens it as a project and prints its path; with `--remote` it clones on that machine. It refuses a folder that is there and not empty, a failed clone leaves nothing behind, and its messages never repeat the URL, so a token in it stays out of them and the log.
 - A removal of a worktree, here or on a machine, whose teardown or a role's worktree fails now says `removed …, cleanup failed in part, see server.log`, and the log keeps the whole reason that a one-line toast used to cut. `account list --check` also says which agents the server finds installed, under `agents`.
 - **What machines don't do yet.** A machine's tabs have no `×`, ` ⋯ ` or `+ Tab`, and its panes can't be split, closed or moved from here; clicking a path, opening links and pictures don't work in its tab; Changes and Files only read. Scheduling an agent there, sending it a TODO or a Telegram or Discord message, and starting work from a project that is only on the machine come later. A machine must run Linux or macOS (the link needs `sh` there): a Windows computer can link to machines but can't be one, and from a Windows computer a clone copies no git-ignored files yet. The links have been tested against a stand-in for `ssh`, not yet against every SSH server setup: if one misbehaves, please open an issue. A machine can't be called `all`.
+
+## 0.12.280
+
+- **The search finds settings.** Typing in the search now also lists matching settings, after your projects, workspaces and tabs, so those keep their places. Each shows where it lives and its value, such as `UI › prefix key`. Click one or press `Enter` and Settings opens on that row, with nothing changed. A row that doesn't show yet is listed muted with what it needs.
+- **`cornercase search TEXT --settings`** adds the matching settings to what was said, for scripts and other apps.
 
 ## 0.12.279
 
