@@ -94,7 +94,7 @@ fn strings(values: &[&str]) -> Value {
 }
 
 impl Settings {
-    fn base(&self, row: &Row, key: &str, kind: Kind) -> Setting {
+    pub(super) fn base(&self, row: &Row, key: &str, kind: Kind) -> Setting {
         let text = self.row_text(row);
         Setting {
             key: key.into(),
@@ -129,6 +129,9 @@ impl Settings {
             let mut setting = self.base(row, key, Kind::Text);
             setting.field = Some(Self::field_label(row));
             return Some(setting);
+        }
+        if let Row::Recap(recap) = row {
+            return Some(self.recap_setting(row, *recap));
         }
         let (key, items, value) = match row {
             Row::DefaultAgent => ("agent", self.agent_items(), config.agent.clone()),

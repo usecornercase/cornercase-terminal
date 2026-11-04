@@ -71,19 +71,9 @@ pub(crate) struct PullLive {
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct Merged {
-    pub(crate) project: String,
-    pub(crate) number: u64,
-    pub(crate) title: String,
-    pub(crate) url: String,
-    pub(crate) at: i64,
-}
-
-#[derive(Debug, Clone, Default)]
 pub(crate) struct Live {
     pub(crate) panes: Vec<LivePane>,
     pub(crate) pulls: Vec<PullLive>,
-    pub(crate) merged: Vec<Merged>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

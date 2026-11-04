@@ -73,6 +73,7 @@ pub(super) enum Side {
     Todo,
     Files,
     Flow,
+    Recap,
 }
 
 impl App {
@@ -98,6 +99,7 @@ impl App {
             Some(Side::Todo) => true,
             Some(Side::Files) => self.files_shown(),
             Some(Side::Flow) => self.has_run(),
+            Some(Side::Recap) => true,
             None => false,
         }
     }
@@ -110,7 +112,7 @@ impl App {
             Some(Side::Changes) => self.panels.changes.close(),
             Some(Side::Todo) => self.close_todo(),
             Some(Side::Files) => self.panels.files.close(),
-            Some(Side::Flow) | None => {}
+            Some(Side::Flow | Side::Recap) | None => {}
         }
         self.screen.side = side;
     }

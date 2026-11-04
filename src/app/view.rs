@@ -225,6 +225,7 @@ impl App {
             changes_button: self.changes_button_view(),
             todo: (self.screen.side == Some(Side::Todo))
                 .then(|| self.todo_view(self.layout(area).shown(self.screen.nav).changes)),
+            recap: (self.screen.side == Some(Side::Recap)).then(|| self.recap_view(area)),
             flow: (self.screen.side == Some(Side::Flow)).then(|| self.flow_view(now, self.spin(now))).flatten(),
             flow_run: self.has_run(),
             tour: self.tour_card(area),

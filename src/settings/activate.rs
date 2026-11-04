@@ -71,6 +71,7 @@ impl Settings {
                 ["the computer stays awake while an agent works", "the computer sleeps as usual"],
             ),
             Row::Kind(kind) => self.pick_mode(kind),
+            Row::Recap(recap) => self.activate_recap(row, recap),
             Row::AddAgent => self.pick_new_agent(row),
             _ => Action::None,
         }
@@ -316,6 +317,7 @@ impl Settings {
                 agents::mode_of(kind, &agents::args(&self.config, kind), &agents::modes(&self.config, kind))
                     .unwrap_or_else(|| "default".into()),
             ),
+            Row::Recap(recap) => Some(self.recap_current(*recap)),
             _ => None,
         };
         let mut search = Search::default();

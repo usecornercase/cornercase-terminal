@@ -13,13 +13,14 @@ pub(crate) const HEADER: &str =
 pub(crate) const NEVER_SHARED: [&str; 4] =
     ["tokens, bots, paired chats and browsers", "jira_email", "accounts and profiles", "remote access and keep awake"];
 #[cfg(test)]
-pub(crate) const LEFT_OUT: [&str; 14] = [
+pub(crate) const LEFT_OUT: [&str; 15] = [
     "jira_email",
     "discord_forum",
     "discord_forum_close",
     "remote",
     "remote_port",
     "keep_awake",
+    "recap_account",
     "projects",
     "profiles",
     "profile",
@@ -30,7 +31,7 @@ pub(crate) const LEFT_OUT: [&str; 14] = [
     "flow_order",
 ];
 
-const AGENTS: [&str; 9] = [
+const AGENTS: [&str; 14] = [
     "agent",
     "agent_args",
     "agent_modes",
@@ -40,6 +41,11 @@ const AGENTS: [&str; 9] = [
     "accept_trust_prompts",
     "resume_agents",
     "trust_prompt_pattern",
+    "recap_agent",
+    "recap_model",
+    "recap_effort",
+    "recap_language",
+    "recap_instructions",
 ];
 const ISSUES: [&str; 10] = [
     "issue_branch",

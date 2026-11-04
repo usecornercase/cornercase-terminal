@@ -28,6 +28,10 @@ impl Shells {
         Self { shell, pane_socket: None, editor_env: Vec::new() }
     }
 
+    pub(super) fn pane_socket(&self) -> Option<&str> {
+        self.pane_socket.as_deref()
+    }
+
     pub(super) fn shell(&self) -> &str {
         &self.shell
     }

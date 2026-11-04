@@ -123,6 +123,7 @@ impl Settings {
             }
             Row::KeepAwake => self.keep_awake_row(),
             Row::Kind(kind) => kind_row(config, kind),
+            Row::Recap(row) => self.recap_row(*row),
             _ => ("+ another agent…".into(), String::new(), String::new(), false),
         }
     }
@@ -301,6 +302,7 @@ impl Settings {
             Row::SoundWaiting => format!("sound when it needs you ({SOUND_FILE_NOTE})"),
             Row::SoundDone => format!("sound when it finishes ({SOUND_FILE_NOTE})"),
             Row::Kind(kind) => format!("{kind} extra arguments"),
+            Row::Recap(row) => row.field().to_string(),
             Row::Bot(via) => via.token_field().to_string(),
             Row::AddAccount(kind) => format!("name of the new {} account, such as work", kind.name()),
             Row::RenameAccount(kind, name) if name.is_empty() => {
@@ -335,6 +337,7 @@ impl Settings {
             Row::Notifications => "How should your terminal notify you?".to_string(),
             Row::ForumClose(_) => "What happens to a workspace's post when you close it?".to_string(),
             Row::Kind(kind) => format!("How should {kind} start?"),
+            Row::Recap(row) => row.question().to_string(),
             _ => "Which agent do you want to set up?".to_string(),
         }
     }

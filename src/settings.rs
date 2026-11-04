@@ -6,6 +6,8 @@ use crate::issues::{Account, Secret, Source};
 use crate::list::Search;
 use crate::messenger::Via;
 
+pub(crate) use recap::RecapRow;
+
 pub(crate) use self::accounts::{Listed, Order};
 pub(crate) use self::search::{Finder, Hit};
 
@@ -86,6 +88,7 @@ pub(crate) enum Row {
     Plugin(String),
     NoPlugins,
     ServerTokens,
+    Recap(RecapRow),
     Account(Known, String),
     AddAccount(Known),
     System(Known),
@@ -113,6 +116,7 @@ impl Row {
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
+            Self::Recap(_) => "Recap",
             _ => "",
         }
     }
@@ -131,6 +135,7 @@ impl Row {
             | Self::Resume
             | Self::KeepAwake
             | Self::Kind(_)
+            | Self::Recap(_)
             | Self::AddAgent => Page::Agents,
             Self::Token(_)
             | Self::GitlabUrl
@@ -495,6 +500,7 @@ impl Settings {
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
+        rows.extend(RecapRow::ALL.map(Row::Recap));
         rows.extend(self.account_rows());
         rows.extend(LOOK_ROWS);
         rows.extend(self.remote_rows());
@@ -600,6 +606,7 @@ mod activate;
 mod apply;
 mod describe;
 mod input;
+mod recap;
 mod search;
 pub(crate) mod share;
 mod submit;

@@ -72,11 +72,7 @@ fn heading(id: &str, group: &Group) -> String {
     format!("## [{id}] {name}\n")
 }
 
-fn facts(
-    group: &Group,
-    range: &Range,
-    pull: Option<(&str, &crate::recap::journal::PullPlace, Option<&str>)>,
-) -> String {
+fn facts(group: &Group, range: &Range, pull: Option<(&str, &PullPlace, Option<&str>)>) -> String {
     let template = &group.template;
     let agent = crate::agents::Known::of(&template.agent).map_or(template.agent.as_str(), |kind| kind.title());
     let mut line = format!("- {agent}");
@@ -145,25 +141,19 @@ fn waiting(group: &Group, talk: &Talk, caps: &Caps) -> String {
 }
 
 fn merged(range: &Range, groups: &[Group], live: &Live, ids: &mut Ids) -> String {
-    let projects: Vec<&str> = groups.iter().filter_map(|g| project_of(g)).map(|named| named.path.as_str()).collect();
+    if range.choice != Choice::Week {
+        return String::new();
+    }
     let mut text = String::new();
-    for pull in
-        live.merged.iter().filter(|p| p.at >= range.from && p.at < range.to && projects.contains(&p.project.as_str()))
-    {
-        let place = Place {
-            kind: "pull".into(),
-            number: Some(pull.number),
-            url: Some(pull.url.clone()),
-            state: Some("merged".into()),
-            ..Place::default()
+    for group in groups {
+        let Some((id, pull, title)) = pull_id(group, live, ids).filter(|(_, pull, _)| pull.state == "merged") else {
+            continue;
         };
-        let id = ids.pull(&pull.project, pull.number, place);
-        text.push_str(&format!(
-            "- [{id}] #{} \"{}\" · merged {}\n",
-            pull.number,
-            pull.title,
-            stamp(pull.at, &range.zone)
-        ));
+        let title = title.map(|title| format!(" \"{title}\"")).unwrap_or_default();
+        let line = format!("- [{id}] #{}{title} · merged, last seen {}\n", pull.number, stamp(group.last, &range.zone));
+        if !text.contains(&line) {
+            text.push_str(&line);
+        }
     }
     if text.is_empty() { text } else { format!("## Merged pull requests\n{text}") }
 }
@@ -176,6 +166,12 @@ fn pull_id(group: &Group, live: &Live, ids: &mut Ids) -> Option<(String, PullPla
         number: Some(pull.number),
         url: Some(pull.url.clone()),
         state: Some(pull.state.clone()),
+        project: group.template.project.clone(),
+        workspace: group
+            .template
+            .workspace
+            .as_ref()
+            .map(|w| crate::recap::Named { label: w.label.clone(), path: w.path.clone() }),
         ..Place::default()
     };
     Some((ids.pull(&workspace, pull.number, place), pull, title))

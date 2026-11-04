@@ -37,6 +37,8 @@ pub const MORE_LABEL: &str = "More ▴";
 
 pub(crate) const WORKTREES_LABEL: &str = "Worktrees";
 
+pub(crate) const RECAP_LABEL: &str = "Recap";
+
 pub(crate) const TODO_LABEL: &str = "TODO";
 
 const TODO_DOT: &str = "●";
@@ -60,10 +62,31 @@ pub(super) fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
         draw_button(f, help, "", HELP_LABEL, style);
     }
     draw_more_button(f, view, more_button(areas.more));
-    if !areas.worktrees.is_empty() {
-        let style = button_style(view, areas.worktrees, Style::default().fg(view.muted), Color::Cyan);
-        draw_button(f, areas.worktrees, " ", WORKTREES_LABEL, style);
+    let worktrees = worktrees_button(areas.worktrees);
+    if !worktrees.is_empty() {
+        let style = button_style(view, worktrees, Style::default().fg(view.muted), Color::Cyan);
+        draw_button(f, worktrees, " ", WORKTREES_LABEL, style);
     }
+    let recap = recap_button(areas.worktrees);
+    if !recap.is_empty() {
+        let lit = view.recap.is_some();
+        let idle = if lit { Style::default().fg(Color::Cyan) } else { Style::default().fg(view.muted) };
+        let style = button_style(view, recap, idle, Color::Cyan);
+        draw_button(f, recap, "", RECAP_LABEL, style);
+    }
+}
+
+pub(crate) fn recap_button(row: Rect) -> Rect {
+    let needed = button_width(WORKTREES_LABEL) + button_width(RECAP_LABEL) + 3;
+    if row.is_empty() || row.width < needed {
+        return Rect::default();
+    }
+    changes_button(row, RECAP_LABEL)
+}
+
+pub(crate) fn worktrees_button(row: Rect) -> Rect {
+    let recap = recap_button(row);
+    if recap.is_empty() { row } else { Rect { width: recap.x.saturating_sub(row.x), ..row } }
 }
 
 pub(crate) fn help_button(more: Rect) -> Rect {

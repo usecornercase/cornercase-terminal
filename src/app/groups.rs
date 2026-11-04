@@ -18,7 +18,7 @@ use super::toast::Toast;
 use super::tour_card::TourRuntime;
 use super::worktrees::Upstream;
 use super::worktrees_dialog::{Cleanup, Frees, Scans};
-use super::{flow_panel, merged_pull_requests, ports_dialog, processes_dialog, pull_requests};
+use super::{flow_panel, merged_pull_requests, ports_dialog, processes_dialog, pull_requests, recap_panel};
 
 #[derive(Default)]
 pub(super) struct Screen {
@@ -62,4 +62,5 @@ pub(super) struct Panels {
     pub(super) ports: ports_dialog::PortsState,
     pub(super) processes: processes_dialog::ProcessesState,
     pub(super) merges: MergeChecks,
+    pub(super) recap: recap_panel::Recaps,
 }

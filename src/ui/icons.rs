@@ -52,6 +52,8 @@ pub(crate) const FLOW: &str = "\u{ebb9}";
 
 pub(crate) const WORKTREES: &str = "\u{ea63}";
 
+pub(crate) const RECAP: &str = "\u{ea82}";
+
 pub(crate) const HELP: &str = "\u{eb32}";
 
 pub(crate) const MORE: &str = "\u{eb51}";

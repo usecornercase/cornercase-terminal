@@ -134,8 +134,7 @@ impl Entry {
     }
 
     pub(crate) fn key(&self) -> Option<String> {
-        let id = self.conversation.clone().or_else(|| self.record.as_ref().map(Pointer::path))?;
-        Some(format!("{}:{id}", self.agent))
+        key_of(&self.agent, self.conversation.as_deref(), self.record.as_ref().map(Pointer::path))
     }
 
     pub(crate) fn seconds(&self) -> Option<i64> {
@@ -147,6 +146,11 @@ impl Entry {
     fn at(&self, event: Event, to: Option<&str>, time: SystemTime) -> Self {
         Self { at: Stamp(time).to_string(), event, to: to.map(str::to_string), ..self.clone() }
     }
+}
+
+pub(crate) fn key_of(agent: &str, conversation: Option<&str>, record: Option<String>) -> Option<String> {
+    let id = conversation.map(str::to_string).or(record)?;
+    Some(format!("{agent}:{id}"))
 }
 
 #[derive(Debug)]

@@ -219,23 +219,16 @@ fn nothing_in_the_range_gives_no_dossier() {
 }
 
 #[test]
-fn the_week_adds_the_merged_pull_requests_of_its_projects() {
+fn the_week_adds_the_pull_requests_that_were_merged() {
     let dir = TempDir::new();
-    let (_, entries) = conversation(dir.path());
+    let (path, mut entries) = conversation(dir.path());
+    let pull = PullPlace { number: 99, url: "u".into(), state: "merged".into(), ci: None };
+    entries[3] = Entry { pull_request: Some(pull), ..entry(Event::Closed, "2026-11-03T17:02:00.000Z", "c1", &path) };
     let range = resolve(Choice::Week, &entries, seconds("2026-11-04T09:00:00.000Z"), MADRID).expect("a week");
-    let merged = Merged {
-        project: "/p/api".into(),
-        number: 99,
-        title: "Cache keys".into(),
-        url: "u".into(),
-        at: seconds("2026-11-03T12:00:00.000Z"),
-    };
-    let other = Merged { project: "/p/other".into(), number: 7, ..merged.clone() };
-    let live = Live { merged: vec![merged, other], ..Live::default() };
-    let text = build(&range, &entries, &live).expect("a dossier").text;
-    assert!(text.contains("## Merged pull requests"), "{text}");
-    assert!(text.contains("#99 \"Cache keys\""));
-    assert!(!text.contains("#7 "));
+    let text = build(&range, &entries, &Live::default()).expect("a dossier").text;
+    assert!(text.contains("## Merged pull requests\n- [p1] #99"), "{text}");
+    let day = resolve(Choice::Yesterday, &entries, seconds("2026-11-04T09:00:00.000Z"), MADRID).expect("a day");
+    assert!(!build(&day, &entries, &Live::default()).expect("a dossier").text.contains("## Merged"));
 }
 
 #[test]

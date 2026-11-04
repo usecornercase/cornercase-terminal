@@ -12,6 +12,7 @@ pub(crate) mod ports;
 pub(crate) mod processes;
 pub(crate) mod pull_request;
 pub(crate) mod queue;
+pub(crate) mod recap;
 pub(crate) mod requests;
 pub(crate) mod terminal;
 pub(crate) mod theme;
@@ -39,7 +40,7 @@ use super::help::{
 };
 use super::help::{
     AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
-    PULL_REQUEST_HELP, REQUESTS_HELP,
+    PULL_REQUEST_HELP, RECAP_HELP, REQUESTS_HELP,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -271,6 +272,11 @@ pub(crate) enum Control {
         after_help = CONTEXT_HELP
     )]
     Context(context::ContextArgs),
+    #[command(
+        about = "Print the Recap panel's summary of what your agents did: now, yesterday or the last 7 days",
+        after_help = RECAP_HELP
+    )]
+    Recap(recap::RecapArgs),
     #[command(
         about = "List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program",
         after_help = PROCESSES_HELP
