@@ -8,6 +8,7 @@ use crate::settings::{Page, Row};
 
 const WIDE: Rect = Rect { x: 0, y: 0, width: 144, height: 42 };
 const NARROW: Rect = Rect { x: 0, y: 0, width: 80, height: 24 };
+const VERSION_ROOM: usize = 12;
 
 impl Rig {
     fn machines_page(&mut self) {
@@ -53,7 +54,9 @@ impl Rig {
     }
 
     fn shown(&mut self, area: Rect) -> String {
-        render(&mut self.app, area).backend().to_string().replace(version::CURRENT, "<version>")
+        let room = VERSION_ROOM.saturating_sub(version::CURRENT.len());
+        let drawn = format!("{}{}", version::CURRENT, " ".repeat(room));
+        render(&mut self.app, area).backend().to_string().replace(&drawn, &format!("{:<VERSION_ROOM$}", "<version>"))
     }
 }
 

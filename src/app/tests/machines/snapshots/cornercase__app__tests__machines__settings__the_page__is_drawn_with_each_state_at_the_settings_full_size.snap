@@ -6,7 +6,7 @@ expression: every_state().shown(WIDE)
 "  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
 " P│  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins   Machines                                                       │  "
 "  │  ⌕ search settings                                                                                                                       │  "
-"  │ ▌   ▭ this computer         <version>                                                                                                     │  "
+"  │ ▌   ▭ this computer         <version>                                                                                                    │  "
 "  │   ● ☁ vps                   miguel@vps.example.com   ~/code     linked · 0.12.200                                                        │  "
 "  │   ○ ▣ mini                  mac-mini.local           /srv/code  unreachable · not seen yet                                               │  "
 "  │   ◐ ◫ pi                    pi.lan                   ~/code     older · 0.12.200                                                         │  "

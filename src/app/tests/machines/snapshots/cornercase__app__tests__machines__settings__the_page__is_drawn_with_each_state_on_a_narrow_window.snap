@@ -6,7 +6,7 @@ expression: every_state().shown(NARROW)
 "  ╭─ Settings ───────────────────────────────────────────────────────────────╮  "
 "  │ Worktrees Agents Accounts Flows Issues UI Remote Plugins Machines        │  "
 "  │  ⌕ search settings                                                       │  "
-"  │ ▌   ▭ this computer         <version>                                     │  "
+"  │ ▌   ▭ this computer         <version>                                    │  "
 "  │   ● ☁ vps                   miguel@vps.e…   ~/code    linked · 0.12.200  │  "
 "  │   ○ ▣ mini                  mac-mini.loc…   …rv/code  unreachable · not  │  "
 "  │   ◐ ◫ pi                    pi.lan          ~/code    older · 0.12.200   │  "
