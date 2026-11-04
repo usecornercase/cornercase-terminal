@@ -382,7 +382,8 @@ pub(crate) fn typed_on_windows(
     if let Some(refusal) = refusal {
         return Err(refusal);
     }
-    without_cmd(line, words, shell == PaneShell::PowerShell, runs)
+    let typed = if shell == PaneShell::Other { join_args(&words) } else { line.to_string() };
+    without_cmd(typed, words, shell == PaneShell::PowerShell, runs)
 }
 
 fn refusal(reason: &'static str, message: &str) -> Refusal {
@@ -441,21 +442,21 @@ fn special_in(words: &[String]) -> Option<(&str, char)> {
 }
 
 fn without_cmd(
-    line: &str,
+    line: String,
     words: Vec<String>,
     powershell: bool,
     runs: impl Fn(&str) -> Option<PathBuf>,
 ) -> Result<String, Refusal> {
-    let Some(program) = words.first() else { return Ok(line.to_string()) };
+    let Some(program) = words.first() else { return Ok(line) };
     let target = runs(program).unwrap_or_else(|| PathBuf::from(program));
     if !is_batch(&target) {
-        return Ok(line.to_string());
+        return Ok(line);
     }
     if let Some(shim) = powershell.then(|| shim_words(&target, &runs)).flatten() {
         return Ok(powershell_line(shim.into_iter().chain(words.into_iter().skip(1))));
     }
     let Some(special) = special(&words) else {
-        return Ok(line.to_string());
+        return Ok(line);
     };
     Err(refusal(
         "a batch file",
