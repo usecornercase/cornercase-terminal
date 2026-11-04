@@ -3,6 +3,7 @@
 use std::os::unix::fs::PermissionsExt;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use crossterm::event::Event;
 
 use super::*;
 use crate::app::clone_on_machine::{packed, told};
@@ -194,6 +195,20 @@ fn opens_from_start_with_the_url_and_every_ignored_file_unticked() {
     let app = &mut reading.remote.rig.app;
     assert_eq!((form(app).url.text().as_str(), form(app).destination().as_str()), (URL, "~/code/web-shop"));
     insta::assert_snapshot!(dialog(app, WIDE));
+}
+
+#[test]
+fn shows_the_end_of_a_pasted_url_longer_than_its_field() {
+    let mut reading = not_there(cloned);
+    reading.clone_dialog();
+    let app = &mut reading.remote.rig.app;
+    let tail = format!("/{}/end-of-the-url.git", "deep".repeat(40));
+
+    app.handle_event(AppEvent::Input(Event::Paste(tail)), WIDE).expect("handle paste");
+
+    let shown = dialog(app, WIDE);
+    assert!(shown.contains("end-of-the-url.git"), "{shown}");
+    assert!(!shown.contains("https://github.com"), "{shown}");
 }
 
 #[test]
