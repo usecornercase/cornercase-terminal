@@ -926,6 +926,24 @@ With `--json` it prints `{"agents": [...]}`, one entry per agent with every key 
 
 It is the request `{"command": "usage", "args": {"cached": false}}`. An older server answers that it has no `usage` command.
 
+### Recap
+
+```sh
+cornercase recap
+cornercase recap yesterday --language Spanish
+cornercase recap week --fresh --json
+cornercase recap --dossier yesterday
+```
+
+`recap` prints the [Recap panel](../recap/)'s summary: `now` (the default), `yesterday` (the last day with agent activity) or `week`. A current result is printed at once; otherwise the command waits for the agent that writes it. The text starts with a line such as `yesterday · fri 31 oct · Claude Code · 14 conversations · 41k tokens · 2 h ago`, and names each conversation `project › workspace › tab` and each pull request `#212`.
+
+- `--fresh` writes it again. `--agent`, `--account`, `--model`, `--effort` and `--language` change the settings for that run only, and write it again.
+- `--dossier` prints the dossier the agent would read, with no agent run.
+- Nothing to sum up prints why and exits 0. A run that fails prints the last good text, then `recap unavailable:` and the reason, and exits with 3.
+- With `--json` it prints `range`, `day`, `label`, `from`, `to`, `zone`, `written_at`, `age`, `agent`, `title`, `account`, `model`, `effort`, `language`, `tokens`, `conversations`, `text`, `places`, `dossier`, `loading`, `progress`, `empty` and `error`, every key present (`null` when it has no value). `text` keeps the ids (`[c3]`, `[p1]`), and `places` maps each to its project, workspace, tab, agent, conversation and, for a pull request, its number and address.
+- It is the request `{"command": "recap", "args": {"range": "yesterday", "fresh": false, "dossier": false, "agent": null, "account": null, "model": null, "effort": null, "language": null, "zone": null}}`. A run of that range already going is waited for when the options are the same and refused with `busy` when they differ. An older server is refused by the contract feature `recap`.
+- `events` reports `{"event": "recap", "state": "started" | "finished" | "failed", "range", "agent", "error"}` to every reader that did not filter by `--pane`.
+
 ### Context
 
 ```sh
