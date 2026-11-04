@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.283
+
+- **On Windows, paths work the way Windows writes them.** A path a program prints in a pane with backslashes, with or without a drive (`C:\src\app\main.rs:10:5`, `.\src\x.rs`, `src\x.rs:3`), is a link that opens the file at its line, as `src/main.rs:12` already was; a path on the network (`\\server\share\…`) is never a link. In the folder picker, `\` goes into the selected folder as `/` does, `/` or `\` with nothing typed goes to the root of the drive you are on, and a drive such as `D:` followed by `\` goes to that drive, so a pasted `C:\Users\you\code\web` walks there. `cornercase plugin install` takes a folder with its drive (`C:\code\tools`, `C:/code/tools`) or starting with `~\` or `.\`, and refuses a folder on the network with a message saying so. Nothing changes on Linux and macOS.
+
 ## 0.12.281
 
 - **The test suite now also runs on Windows in CI**, so every change to cornercase is checked there before it is released, as on Linux and macOS. Nothing changes in the app.
