@@ -63,6 +63,17 @@ fn a_relative_folder_is_made_absolute() {
     assert!(absolute("web").expect("a path").is_absolute());
 }
 
+#[test]
+fn a_folder_on_another_machine_follows_its_rules() {
+    let remote = Remote { destination: "devbox".into(), command: None, option: "--command" };
+    let sent = |path: &str| absolute_on(path, Some(&remote), true).map(|path| path.display().to_string());
+
+    assert_eq!(sent(r"/srv\a").expect("a path"), "/srv/a");
+    assert_eq!(sent("~/code").expect("a path"), "~/code");
+    assert!(matches!(sent(r"C:\srv\a"), Err(Error::WrongUsage(why)) if why.contains("is a Windows path")));
+    assert!(matches!(sent("web"), Err(Error::WrongUsage(why)) if why.contains("is relative")));
+}
+
 fn described() -> Described {
     Described {
         revision: 3,
