@@ -4,6 +4,7 @@ use std::path::Path;
 
 use crate::os::ffi;
 use crate::os::fs::{drive_path, network_link, reaches_network};
+use crate::text;
 
 const MAX_REF: usize = 200;
 const MAX_URL: usize = 2000;
@@ -113,15 +114,16 @@ fn folder(place: &str) -> bool {
 }
 
 pub(crate) fn folder_on_this_computer(folder: &Path) -> Result<(), String> {
-    match network_link(folder) {
-        Ok(None) => Ok(()),
-        Ok(Some(share)) => Err(format!(
+    let refused = match network_link(folder) {
+        Ok(None) => return Ok(()),
+        Ok(Some(share)) => format!(
             "`{}` leads through a link to `{}`, a folder on the network; {INSTEAD}",
             folder.display(),
             share.display()
-        )),
-        Err(e) => Err(format!("cannot tell whether `{}` leads to the network: {e}", folder.display())),
-    }
+        ),
+        Err(e) => format!("cannot tell whether `{}` leads to the network: {e}", folder.display()),
+    };
+    Err(text::escape_hidden(&refused))
 }
 
 fn github(path: &str, reference: Option<String>) -> Result<Origin, String> {

@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 use std::io::{self, IsTerminal as _, Write as _};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::json;
@@ -306,7 +306,7 @@ fn same_commit(found: &str, wanted: Option<&str>, what: &str, kept: &str) -> Res
 }
 
 fn folder_spec(spec: &str) -> Result<String> {
-    let home = std::env::var_os(paths::HOME_VAR).map(std::path::PathBuf::from);
+    let home = std::env::var_os(paths::HOME_VAR).map(PathBuf::from);
     folder_spec_from(spec, home.as_deref())
 }
 
@@ -322,9 +322,13 @@ fn folder_spec_from(spec: &str, home: Option<&Path>) -> Result<String> {
         Some((folder, subdir)) => (folder, format!("//{subdir}")),
         None => (place, String::new()),
     };
-    let folder = config::expand_home(&home_with_a_slash(folder), home);
+    let folder = absolute(config::expand_home(&home_with_a_slash(folder), home));
     folder_on_this_computer(&folder).map_err(Error::Plugin)?;
     Ok(format!("{}{subdir}{at}", canonical(folder).display()))
+}
+
+fn absolute(folder: PathBuf) -> PathBuf {
+    if cfg!(windows) { std::path::absolute(&folder).unwrap_or(folder) } else { folder }
 }
 
 fn names_a_folder(spec: &str) -> bool {
