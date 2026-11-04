@@ -389,13 +389,34 @@ mod arguments {
         assert_eq!(typed.err().map(|refusal| refusal.reason), reason);
     }
 
-    #[rstest]
-    #[case::in_powershell(PaneShell::PowerShell)]
-    #[case::in_cmd(PaneShell::Cmd)]
-    fn powershell_and_cmd_panes_get_the_line_as_it_was_quoted(#[case] shell: PaneShell) {
+    #[test]
+    fn a_powershell_pane_gets_the_line_as_it_was_quoted() {
         let line = powershell_line(strings(&["claude", "--model", "it's"]));
-        let typed = typed_on_windows(&line, shell, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        let typed = typed_on_windows(&line, PaneShell::PowerShell, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
         assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(line));
+    }
+
+    #[rstest]
+    #[case::a_plain_word("opus", "opus")]
+    #[case::an_apostrophe("it's", "it's")]
+    #[case::a_typographic_apostrophe("Sergio\u{2019}s", "Sergio\u{2019}s")]
+    #[case::a_dollar("$HOME", "$HOME")]
+    #[case::braces("{a,b}", "{a,b}")]
+    #[case::a_relative_folder(r"..\docs", r"..\docs")]
+    fn a_cmd_pane_gets_each_word_as_it_is(#[case] word: &str, #[case] expected: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word]));
+        let typed = typed_on_windows(&line, PaneShell::Cmd, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(format!("claude --add-dir {expected}")));
+    }
+
+    #[rstest]
+    #[case::an_empty_word(&["claude", "--model", ""], "a word cmd.exe would split")]
+    #[case::a_program_with_an_equals(&[r"C:\tools\a=b\claude.exe", "--resume"], "a program name cmd.exe would cut")]
+    #[case::a_program_with_a_comma(&[r"C:\tools\a,b\claude.exe"], "a program name cmd.exe would cut")]
+    fn a_cmd_pane_refuses_what_cmd_cannot_pass(#[case] words: &[&str], #[case] reason: &str) {
+        let line = powershell_line(strings(words));
+        let typed = typed_on_windows(&line, PaneShell::Cmd, |program| Some(PathBuf::from(program)));
+        assert_eq!(typed.err().map(|refusal| refusal.reason), Some(reason));
     }
 
     #[rstest]

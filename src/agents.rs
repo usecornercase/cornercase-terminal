@@ -49,6 +49,7 @@ const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', 
 const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
 const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
 const STOP_PARSING: &str = "--%";
+const CMD_NAME_ENDS: [char; 3] = ['=', ',', ';'];
 const CMD: &str = "cmd";
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
@@ -382,7 +383,11 @@ pub(crate) fn typed_on_windows(
     if let Some(refusal) = refusal {
         return Err(refusal);
     }
-    let typed = if shell == PaneShell::Other { join_args(&words) } else { line.to_string() };
+    let typed = match shell {
+        PaneShell::PowerShell => line.to_string(),
+        PaneShell::Cmd => words.join(" "),
+        PaneShell::Other => join_args(&words),
+    };
     without_cmd(typed, words, shell == PaneShell::PowerShell, runs)
 }
 
@@ -423,12 +428,21 @@ fn cmd_word(words: &[String]) -> Option<Refusal> {
             ),
         ));
     }
-    let word = words.iter().find(|word| word.contains(char::is_whitespace))?;
+    if let Some(word) = words.iter().find(|word| word.is_empty() || word.contains(char::is_whitespace)) {
+        return Some(refusal(
+            "a word cmd.exe would split",
+            &format!(
+                "the pane's shell is cmd.exe, which does not read the quotes around `{word}`, so it would reach the \
+                 agent in pieces or not at all; start the agent in a PowerShell pane"
+            ),
+        ));
+    }
+    let program = words.first().filter(|program| program.contains(CMD_NAME_ENDS))?;
     Some(refusal(
-        "a word cmd.exe would split",
+        "a program name cmd.exe would cut",
         &format!(
-            "the pane's shell is cmd.exe, which does not read the quotes around `{word}`, so it would reach the agent \
-             in pieces; start the agent in a PowerShell pane"
+            "the pane's shell is cmd.exe, which ends a program's name at `=`, `,` or `;`, so `{program}` would not \
+             start; start the agent in a PowerShell pane"
         ),
     ))
 }
