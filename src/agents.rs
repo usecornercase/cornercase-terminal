@@ -413,11 +413,11 @@ fn splits(word: &str) -> bool {
 }
 
 fn cmd_word(words: &[String]) -> Option<Refusal> {
-    if let Some(special) = special(words) {
+    if let Some((word, special)) = special_in(words) {
         return Some(refusal(
             "a character cmd.exe reads",
             &format!(
-                "the pane's shell is cmd.exe, which would read the `{special}` in the line as its own; start the \
+                "the pane's shell is cmd.exe, which would read the `{special}` in `{word}` as its own; start the \
                  agent in a PowerShell pane"
             ),
         ));
@@ -433,7 +433,11 @@ fn cmd_word(words: &[String]) -> Option<Refusal> {
 }
 
 fn special(words: &[String]) -> Option<char> {
-    words.iter().flat_map(|word| word.chars()).find(|c| BATCH_SPECIAL.contains(c))
+    special_in(words).map(|(_, special)| special)
+}
+
+fn special_in(words: &[String]) -> Option<(&str, char)> {
+    words.iter().find_map(|word| word.chars().find(|c| BATCH_SPECIAL.contains(c)).map(|c| (word.as_str(), c)))
 }
 
 fn without_cmd(

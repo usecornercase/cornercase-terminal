@@ -389,6 +389,14 @@ mod arguments {
         assert_eq!(typed.map_err(|refusal| refusal.reason), reason.map_or(Ok(line), Err));
     }
 
+    #[test]
+    fn a_cmd_refusal_names_the_word_that_holds_the_character() {
+        let line = powershell_line(strings(&["claude", "--add-dir", r"C:\R&D"]));
+        let typed = typed_on_windows(&line, PaneShell::Cmd, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        let message = typed.expect_err("a cmd pane refuses the `&`").message;
+        assert!(message.contains(r"`&` in `C:\R&D`"), "{message}");
+    }
+
     #[rstest]
     #[case::pwsh(Some("pwsh"), PaneShell::PowerShell)]
     #[case::windows_powershell(Some("powershell"), PaneShell::PowerShell)]
