@@ -197,8 +197,10 @@ pub(crate) fn fetch(origin: &Origin, places: &Places) -> Result<Fetched, String>
 }
 
 fn fetch_from(origin: &Origin, places: &Places) -> Result<Fetched, String> {
+    origin.on_this_computer()?;
     let staging = Staging(stage(places).map_err(|e| format!("cannot make a folder to fetch into: {e}"))?);
     let checkout = staging.0.join(CHECKOUT);
+    let address = origin.address();
     git(
         origin,
         None,
@@ -207,7 +209,7 @@ fn fetch_from(origin: &Origin, places: &Places) -> Result<Fetched, String> {
             "--quiet".as_ref(),
             "--no-checkout".as_ref(),
             "--".as_ref(),
-            origin.url.as_ref(),
+            address.as_ref(),
             checkout.as_os_str(),
         ],
     )?;

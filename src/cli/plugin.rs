@@ -17,7 +17,7 @@ use crate::os::fs::{canonical, drive_path, reaches_network};
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
 use crate::plugins::registry::{missing, short};
-use crate::plugins::source::Origin;
+use crate::plugins::source::{Origin, folder_on_this_computer};
 use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
 
@@ -254,7 +254,7 @@ fn ran_text(ran: &ActionRan, item: Option<Item>) -> String {
 }
 
 fn install_from(places: &Places, args: &InstallArgs) -> Result<()> {
-    let origin = Origin::parse(&folder_spec(&args.source)).map_err(Error::Plugin)?;
+    let origin = Origin::parse(&folder_spec(&args.source)?).map_err(Error::Plugin)?;
     progress(args.json, &format!("fetching {}…", crate::text::escape_hidden(&origin.spec())));
     let fetched = install::fetch(&origin, places).map_err(Error::Plugin)?;
     if args.preview {
@@ -305,14 +305,14 @@ fn same_commit(found: &str, wanted: Option<&str>, what: &str, kept: &str) -> Res
     }
 }
 
-fn folder_spec(spec: &str) -> String {
+fn folder_spec(spec: &str) -> Result<String> {
     let home = std::env::var_os(paths::HOME_VAR).map(std::path::PathBuf::from);
     folder_spec_from(spec, home.as_deref())
 }
 
-fn folder_spec_from(spec: &str, home: Option<&Path>) -> String {
+fn folder_spec_from(spec: &str, home: Option<&Path>) -> Result<String> {
     if !names_a_folder(spec) || reaches_network(spec) {
-        return spec.to_string();
+        return Ok(spec.to_string());
     }
     let (place, at) = match spec.split_once('@') {
         Some((place, at)) => (place, format!("@{at}")),
@@ -322,8 +322,9 @@ fn folder_spec_from(spec: &str, home: Option<&Path>) -> String {
         Some((folder, subdir)) => (folder, format!("//{subdir}")),
         None => (place, String::new()),
     };
-    let path = canonical(config::expand_home(&home_with_a_slash(folder), home));
-    format!("{}{subdir}{at}", Path::new(&path).display())
+    let folder = config::expand_home(&home_with_a_slash(folder), home);
+    folder_on_this_computer(&folder).map_err(Error::Plugin)?;
+    Ok(format!("{}{subdir}{at}", canonical(folder).display()))
 }
 
 fn names_a_folder(spec: &str) -> bool {
