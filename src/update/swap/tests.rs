@@ -85,9 +85,23 @@ mod aside {
 
         let result = swap_aside(&tmp.path().join("missing.exe"), &exe);
 
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Io(ref cause)) if cause.kind() == io::ErrorKind::NotFound), "{result:?}");
         assert_eq!(fs::read_to_string(&exe).expect("old binary"), "old");
         assert_eq!(names(tmp.path()), ["cornercase.exe", "new.exe"]);
+    }
+
+    #[test]
+    fn an_old_binary_that_cannot_be_moved_back_is_named_with_both_failures() {
+        let tmp = TempDir::new();
+        let exe = tmp.path().join("cornercase.exe");
+        let old = tmp.path().join("cornercase.old.exe");
+
+        let error = moved_back(io::Error::other("the new one is locked"), old.clone(), &exe);
+
+        assert!(matches!(error, Error::NotRestored(_)), "{error:?}");
+        let message = error.to_string();
+        let named = [exe.display().to_string(), old.display().to_string(), "the new one is locked".into()];
+        assert!(named.iter().all(|part| message.contains(part.as_str())), "{message}");
     }
 
     #[test]

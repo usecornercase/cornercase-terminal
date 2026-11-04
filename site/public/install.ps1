@@ -24,11 +24,13 @@
         if (-not $aside) {
             throw "cornercase was not installed: 100 old copies of $exe are still in $folder"
         }
-        Move-Item -LiteralPath $exe -Destination $aside -ErrorAction Stop
     }
 
     $installer = Join-Path ([IO.Path]::GetTempPath()) "cornercase-installer-$([guid]::NewGuid()).ps1"
     try {
+        if ($aside) {
+            Move-Item -LiteralPath $exe -Destination $aside -ErrorAction Stop
+        }
         $text = Invoke-RestMethod -Uri $url -ErrorAction Stop
         [IO.File]::WriteAllText($installer, $text, (New-Object Text.UTF8Encoding $true))
         $global:LASTEXITCODE = 0
