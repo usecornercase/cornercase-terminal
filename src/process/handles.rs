@@ -46,7 +46,6 @@ struct Waiting {
 }
 
 struct Question {
-    key: (i32, usize),
     object: Arc<dyn Object>,
     since: Instant,
     answer: Arc<Slot>,
@@ -112,12 +111,12 @@ impl Waiting {
         Self { asked: Mutex::new(Vec::new()), most, full: AtomicBool::new(false) }
     }
 
-    fn take(&self, key: (i32, usize), object: &Arc<dyn Object>, within: Duration, progress: &Progress) -> Turn {
+    fn take(&self, object: &Arc<dyn Object>, within: Duration, progress: &Progress) -> Turn {
         let mut asked = self.asked.lock();
         if progress.abandoned.load(Ordering::Relaxed) {
             return Turn::Stop;
         }
-        if let Some(question) = asked.iter().find(|question| question.key == key && object.same(&*question.object)) {
+        if let Some(question) = asked.iter().find(|question| object.same(&*question.object)) {
             let until = question.since + within;
             return if until > Instant::now() { Turn::Wait(Arc::clone(&question.answer), until) } else { Turn::Skip };
         }
@@ -126,7 +125,7 @@ impl Waiting {
         }
         let answer = Arc::new(Slot::default());
         let since = Instant::now();
-        asked.push(Question { key, object: Arc::clone(object), since, answer: Arc::clone(&answer) });
+        asked.push(Question { object: Arc::clone(object), since, answer: Arc::clone(&answer) });
         Turn::Ask(answer)
     }
 
@@ -178,19 +177,19 @@ fn type_of(snapshot: &[u8], handle: usize) -> Option<u32> {
     entries(snapshot).find(|(value, _)| *value == handle).map(|(_, index)| index)
 }
 
-fn names(pid: i32, handles: Vec<usize>, asking: &Asking) -> Vec<PathBuf> {
+fn names(handles: Vec<usize>, asking: &Asking) -> Vec<PathBuf> {
     let mut left = handles;
     let mut found = Vec::new();
     while !left.is_empty() {
-        let Some(answered) = batch(pid, &left, asking, &mut found) else { break };
+        let Some(answered) = batch(&left, asking, &mut found) else { break };
         left = left.split_off(answered.saturating_add(1).min(left.len()));
     }
     found
 }
 
-fn batch(pid: i32, handles: &[usize], asking: &Asking, found: &mut Vec<PathBuf>) -> Option<usize> {
+fn batch(handles: &[usize], asking: &Asking, found: &mut Vec<PathBuf>) -> Option<usize> {
     let progress = Arc::new(Progress::default());
-    let answers = start(pid, handles.to_vec(), asking.clone(), Arc::clone(&progress))?;
+    let answers = start(handles.to_vec(), asking.clone(), Arc::clone(&progress))?;
     let mut answered = 0;
     loop {
         match answers.recv_timeout(asking.within) {
@@ -212,11 +211,11 @@ fn full(waiting: &Waiting) -> Option<usize> {
     None
 }
 
-fn start(pid: i32, handles: Vec<usize>, asking: Asking, progress: Arc<Progress>) -> Option<Receiver<Answer>> {
+fn start(handles: Vec<usize>, asking: Asking, progress: Arc<Progress>) -> Option<Receiver<Answer>> {
     let (answers, answered) = mpsc::channel();
     let work = move || {
         for handle in handles {
-            let Some(answer) = answer(pid, handle, &asking, &progress) else { return };
+            let Some(answer) = answer(handle, &asking, &progress) else { return };
             let full = matches!(answer, Answer::Full);
             if answers.send(answer).is_err() || full {
                 return;
@@ -227,11 +226,11 @@ fn start(pid: i32, handles: Vec<usize>, asking: Asking, progress: Arc<Progress>)
     Some(answered)
 }
 
-fn answer(pid: i32, handle: usize, asking: &Asking, progress: &Progress) -> Option<Answer> {
+fn answer(handle: usize, asking: &Asking, progress: &Progress) -> Option<Answer> {
     let Some(object) = (asking.open)(handle) else {
         return asking.waiting.passed(progress).then_some(Answer::Named(None));
     };
-    let path = match asking.waiting.take((pid, handle), &object, asking.within, progress) {
+    let path = match asking.waiting.take(&object, asking.within, progress) {
         Turn::Stop => return None,
         Turn::Full => return Some(Answer::Full),
         Turn::Ask(answer) => return ask(&object, &answer, asking.waiting, progress),
@@ -310,7 +309,7 @@ mod imp {
         let process = Process(process);
         let asking =
             Asking { open: Arc::new(move |handle| process.object(handle)), within: NAME_WITHIN, waiting: &WAITING };
-        names(pid, of_type(as_bytes(&snapshot), file), &asking)
+        names(of_type(as_bytes(&snapshot), file), &asking)
     }
 
     fn file_type() -> Option<u32> {
