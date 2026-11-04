@@ -224,7 +224,7 @@ mod paths {
     use super::*;
 
     fn there(path: &str, windows: bool) -> Result<PathBuf> {
-        path_on(Path::new(path), Some(&devbox()), windows)
+        path_on(Path::new(path), Some(&devbox()), windows, &|| false)
     }
 
     #[rstest]
@@ -278,8 +278,49 @@ mod paths {
         assert!(open_path(Path::new("./~/x")).expect("absolute").is_absolute());
     }
 
+    fn on_windows(path: &str, windows: bool) -> Result<PathBuf> {
+        path_on(Path::new(path), Some(&devbox()), windows, &|| true)
+    }
+
+    #[rstest]
+    #[case::a_drive(r"C:\srv\x", r"C:\srv\x")]
+    #[case::a_drive_with_slashes("C:/srv/x", r"C:\srv\x")]
+    #[case::a_share(r"\\host\share\x", r"\\host\share\x")]
+    #[case::the_root_of_a_share(r"\\host\share", r"\\host\share")]
+    fn a_windows_machine_takes_its_own_absolute_paths(#[case] path: &str, #[case] sent: &str) {
+        for windows in [false, true] {
+            assert_eq!(on_windows(path, windows).expect("kept").to_str(), Some(sent));
+        }
+    }
+
+    #[rstest]
+    #[case::the_root_of_a_drive(r"\srv\x")]
+    #[case::relative_to_a_drive("c:x")]
+    #[case::a_share_without_its_name(r"\\host")]
+    #[case::a_share_with_an_empty_name(r"\\host\\x")]
+    fn a_windows_machine_refuses_a_path_relative_to_something_here(#[case] path: &str) {
+        let error = on_windows(path, true).expect_err("refused");
+
+        assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
+        assert!(error.to_string().contains("devbox is a Windows machine"), "{error}");
+    }
+
+    #[test]
+    fn a_unix_path_goes_without_asking_what_the_machine_runs() {
+        let asked = std::cell::Cell::new(false);
+        let ask = || {
+            asked.set(true);
+            true
+        };
+
+        let sent = path_on(Path::new("/srv/x"), Some(&devbox()), false, &ask);
+
+        assert_eq!(sent.expect("kept"), PathBuf::from("/srv/x"));
+        assert!(!asked.get());
+    }
+
     #[test]
     fn here_it_becomes_absolute() {
-        assert!(path_on(Path::new("src"), None, cfg!(windows)).expect("absolute").is_absolute());
+        assert!(path_on(Path::new("src"), None, cfg!(windows), &|| false).expect("absolute").is_absolute());
     }
 }

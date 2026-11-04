@@ -226,6 +226,10 @@ impl Remote {
         Some(shell)
     }
 
+    pub(crate) fn on_windows(&self) -> bool {
+        known::shell(&self.destination).or_else(|| self.heard(true)).is_some_and(RemoteShell::windows)
+    }
+
     pub(crate) fn kill_server(&self) -> Result<bool> {
         Ok(self.run(false, Run::Plain, &["kill-server"])?.success())
     }

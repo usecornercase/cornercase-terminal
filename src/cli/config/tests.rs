@@ -66,12 +66,22 @@ fn a_relative_folder_is_made_absolute() {
 #[test]
 fn a_folder_on_another_machine_follows_its_rules() {
     let remote = Remote { destination: "devbox".into(), command: None, option: "--command" };
-    let sent = |path: &str| absolute_on(path, Some(&remote), true).map(|path| path.display().to_string());
+    let sent = |path: &str| absolute_on(path, Some(&remote), true, &|| false).map(|path| path.display().to_string());
 
     assert_eq!(sent(r"/srv\a").expect("a path"), "/srv/a");
     assert_eq!(sent("~/code").expect("a path"), "~/code");
     assert!(matches!(sent(r"C:\srv\a"), Err(Error::WrongUsage(why)) if why.contains("is a Windows path")));
     assert!(matches!(sent("web"), Err(Error::WrongUsage(why)) if why.contains("is relative")));
+}
+
+#[test]
+fn a_folder_on_a_windows_machine_follows_its_rules() {
+    let remote = Remote { destination: "winbox".into(), command: None, option: "--command" };
+    let sent = |path: &str| absolute_on(path, Some(&remote), false, &|| true).map(|path| path.display().to_string());
+
+    assert_eq!(sent("C:/srv/a").expect("a path"), r"C:\srv\a");
+    assert_eq!(sent("~/code").expect("a path"), "~/code");
+    assert!(matches!(sent(r"\srv\a"), Err(Error::WrongUsage(why)) if why.contains("is a Windows machine")));
 }
 
 fn described() -> Described {

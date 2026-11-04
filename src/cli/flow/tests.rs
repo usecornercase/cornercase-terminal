@@ -384,9 +384,20 @@ mod saving {
     fn a_path_on_another_machine_is_cleaned_by_its_rules_with_slashes(#[case] windows: bool, #[case] given: &str) {
         let remote = Remote { destination: "devbox".into(), command: None, option: "--command" };
 
-        let listed = listed_on(Path::new(given), Some(&remote), windows).expect("a path");
+        let listed = listed_on(Path::new(given), Some(&remote), windows, &|| false).expect("a path");
 
         assert_eq!(listed.to_str(), Some("/srv/flows/mine.toml"));
+    }
+
+    #[rstest::rstest]
+    #[case::from_unix(false, "C:/flows/../flows/./mine.toml")]
+    #[case::from_windows(true, r"C:\flows\..\flows\.\mine.toml")]
+    fn a_path_on_a_windows_machine_is_cleaned_by_its_rules(#[case] windows: bool, #[case] given: &str) {
+        let remote = Remote { destination: "winbox".into(), command: None, option: "--command" };
+
+        let listed = listed_on(Path::new(given), Some(&remote), windows, &|| true).expect("a path");
+
+        assert_eq!(listed.to_str(), Some(r"C:\flows\mine.toml"));
     }
 
     #[test]
