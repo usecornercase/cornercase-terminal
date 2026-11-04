@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.284
+
+- **On Windows, a pane's shell waiting at its prompt no longer stops cornercase from seeing which files agents hold open.** Every program in a pane shares the pane's console input, and while one of them reads it Windows cannot name it through any of them. cornercase let each program's copy take one of the 16 questions it lets wait, so a few programs in panes could use them all up and leave Codex, Copilot, Cursor and opencode without their model and context line. Such a file now takes one, however many programs hold it. Nothing changes on Linux and macOS.
+
 ## 0.12.281
 
 - **The test suite now also runs on Windows in CI**, so every change to cornercase is checked there before it is released, as on Linux and macOS. Nothing changes in the app.
