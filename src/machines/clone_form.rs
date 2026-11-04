@@ -7,7 +7,7 @@ use crate::control::Unwritten;
 use crate::editor::Editor;
 use crate::git::clone::files::{MAX_FILES, MAX_TOTAL_BYTES};
 use crate::git::clone::folder_name;
-use crate::git::ignored::{IgnoredFile, Listing, Root};
+use crate::git::ignored::{self, IgnoredFile, Listing, Root};
 use crate::text;
 
 pub(crate) const BACK: &str = "back";
@@ -107,6 +107,13 @@ impl CloneForm {
     }
 
     pub(crate) fn intro(&self) -> String {
+        if !ignored::copied_here() {
+            return format!(
+                "{} clones it from the URL. Copying git-ignored files (such as .env) into the clone is not supported \
+                 on Windows yet.",
+                self.machine
+            );
+        }
         format!(
             "{} clones it from the URL, then copies the git-ignored files you tick (such as .env) into the clone. \
              Ignored folders, such as node_modules, are never offered.",

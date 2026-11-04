@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
-use self::imp::{open_folder, open_within};
+use self::imp::{REFUSED, open_folder, open_within};
 use super::clone::files::MAX_FILES;
 use super::worktree::{check, git};
 use crate::error::Result;
@@ -50,7 +50,14 @@ impl Root {
     }
 }
 
+pub(crate) fn copied_here() -> bool {
+    REFUSED.is_none()
+}
+
 pub(crate) fn list(root: &Path) -> Result<Listing> {
+    if let Some(why) = REFUSED {
+        return Err(io::Error::new(io::ErrorKind::Unsupported, why).into());
+    }
     let top = toplevel(root)?;
     let pinned = Root::pinned(top.clone())?;
     let args = ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "--full-name", "-z"];
@@ -116,6 +123,8 @@ mod imp {
 
     use crate::error::Result;
 
+    pub(super) const REFUSED: Option<&str> = None;
+
     pub(super) fn open_within(root: File, folders: &Path, name: &OsStr) -> Result<File> {
         let folder = OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::RDONLY | OFlags::CLOEXEC;
         let mut dir = root;
@@ -143,6 +152,8 @@ mod imp {
     use crate::error::Result;
 
     const UNSUPPORTED: &str = "copying git-ignored files into a clone is not supported on Windows yet";
+
+    pub(super) const REFUSED: Option<&str> = Some(UNSUPPORTED);
 
     pub(super) fn open_within(_root: File, _folders: &Path, _name: &OsStr) -> Result<File> {
         Err(io::Error::new(io::ErrorKind::Unsupported, UNSUPPORTED).into())
