@@ -83,19 +83,10 @@ A connection that died without a word is noticed within about 15 seconds: `ssh` 
 
 Once a machine is linked, your server reads what it has, and the sidebar shows it beside your own projects:
 
-```text
-▌ web-shop (2)          !
-  blog (1)          ☁ vps
-
-  ▾ login
-▌ ├ › nvim
-  └ + Tab
-
-  ▾ api           ! ☁ vps
-  ├ ! claude
-  │   opus · 40%
-  └ › zsh
-```
+<Screen
+  name="machines-sidebar"
+  alt="The sidebar with web-shop's workspaces: after feat/gift-cards come main and fix/login, both tagged ☁ vps, where claude is working at Opus 5.5 · 31%; fix/login is picked, and the pane shows that claude's tab on vps, running cargo test"
+/>
 
 - **A workspace on a machine shows under the project here that is a clone of the same repository**, after its own workspaces, with the machine's icon and name. Two clones pair whatever address each one was cloned with: `git@github.com:acme/web-shop.git`, `https://github.com/acme/web-shop` and an ssh alias from that machine's `~/.ssh/config` are the same repository, read from the `upstream` remote, else `origin`, else the first one. The project's count and its `!` include them.
 - **A project on the machine with no clone here** is a row of its own at the end of the list, outside your groups, with the machine's tag.
@@ -181,19 +172,11 @@ Scripts get them from [`cornercase events --notices`](../scripts-and-agents/#fol
 
 With at least one machine listed, the **Issues** dialog, **start a flow…** and **new workspace** have a `run on` row:
 
-```text
- ╭─ Issues · web-shop ──────────────────────────────────────────────────────────╮
- │ #482 Returns page crashes on empty address                                   │
- │ open                                                                         │
- │                                                                              │
- │ run on  ○ this computer   ● ☁ vps                                            │
- │ start   in its own worktree on vps, in ~/code/web-shop                       │
- │ agent   claude  (default)  not logged in on vps                              │
- │ account work  (in use)  (vps's accounts)                                     │
- │                                                                              │
- │   start   start a flow   agent…   run on…   open login tab   account…   back │
- ╰──────────────────────────────────────────────────────────────────────────────╯
-```
+<Screen
+  name="machines-run-on"
+  alt="Issue #482 in the Issues dialog with run on set to ☁ vps: start in its own worktree on vps, in ~/vps/web-shop; agent claude; the prompt from vps's template"
+  crop={[2, 4, 106, 10]}
+/>
 
 **this computer** is chosen each time a dialog opens. Pick a machine (**run on…** on an issue's page, a click on the row in the other two) and what you start is sent to the server on that machine, which starts it as if you had clicked there: it belongs to that machine, shows [in your sidebar](#in-your-sidebar) under it, and once the machine lists it, it is selected, so its tab shows here.
 
@@ -220,23 +203,11 @@ The answers are kept until that machine restarts, and asked again each time you 
 
 When the project isn't on the machine, the row says `not on vps · clone…`, and **start** opens **Clone web-shop on vps** first:
 
-```text
- ╭─ Clone web-shop on vps ─────────────────────────────────────────────╮
- │ vps clones it from the URL, then copies the git-ignored files you    │
- │ tick (such as .env) into the clone. Ignored folders, such as         │
- │ node_modules, are never offered.                                     │
- │                                                                      │
- │ from    git@github.com:acme/web-shop.git                             │
- │ into    ~/code/web-shop                                              │
- │ files to copy into the clone                                         │
- │ [x] .env  312 B                                                      │
- │ [ ] .env.local  1 KB                                                 │
- │ [ ] config/secrets.dev.json  4 KB                                    │
- │     data/dump.sql  12 MB · too big to copy                           │
- │                                                                      │
- │                                           back   skip files   clone  │
- ╰──────────────────────────────────────────────────────────────────────╯
-```
+<Screen
+  name="machines-clone"
+  alt="Clone web-shop on vps: from git@github.com:acme/web-shop.git into ~/vps/web-shop, with .env ticked and .env.local and config/dev.json not; back, skip files and clone"
+  crop={[2, 1, 106, 20]}
+/>
 
 - **from** is the address of this project's `upstream` remote, else `origin`, without a password or token, and you can change it. A clone from `upstream` pairs with this project, but its `origin` there is then the upstream repository; clone your fork's address if you want to push from there. An address that uses an alias of your `~/.ssh/config`, such as `gh-work:acme/web-shop`, only works if the machine has the same alias.
 - **into** is the machine's **folder**, with the repository's name.
