@@ -143,6 +143,7 @@ mod plugin_buttons;
 mod ports_dialog;
 mod processes_dialog;
 mod queue;
+mod recap_button;
 mod reorder;
 mod resuming;
 mod row_hover;

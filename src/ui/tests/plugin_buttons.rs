@@ -177,10 +177,17 @@ mod icon_bar {
     #[test]
     fn puts_a_slot_for_each_plugin_after_flow() {
         let shown = Shown { flow: true, plugins: 2, ..Shown::default() };
-        let top: Vec<(Item, u16)> = places(24, shown).into_iter().filter(|(_, y)| *y < 12).collect();
+        let top: Vec<(Item, u16)> = places(24, shown).into_iter().filter(|(_, y)| *y < 13).collect();
         assert_eq!(
             top,
-            [(Item::Todo, 1), (Item::Worktrees, 3), (Item::Flow, 5), (Item::Plugin(0), 7), (Item::Plugin(1), 9)]
+            [
+                (Item::Todo, 1),
+                (Item::Worktrees, 3),
+                (Item::Recap, 5),
+                (Item::Flow, 7),
+                (Item::Plugin(0), 9),
+                (Item::Plugin(1), 11)
+            ]
         );
     }
 
@@ -198,8 +205,8 @@ mod icon_bar {
 
     #[test]
     fn names_a_hovered_plugin_with_its_title() {
-        let t = render_sized(&with_bar(Some(Position::new(1, 7))), W, 24);
-        assert!(row_text(&t, Rect::new(WIDTH, 7, 10, 1)).starts_with(" Deploy "));
+        let t = render_sized(&with_bar(Some(Position::new(1, 9))), W, 24);
+        assert!(row_text(&t, Rect::new(WIDTH, 9, 10, 1)).starts_with(" Deploy "));
     }
 }
 

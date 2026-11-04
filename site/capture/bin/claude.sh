@@ -11,6 +11,24 @@ dir=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 mkdir -p "$dir/sessions"
 slug=$(printf '%s' "$PWD" | tr -c 'a-zA-Z0-9' '-')
 mkdir -p "$dir/projects/$slug"
+if [ "${1:-}" = -p ] && ! printf '%s' "$*" | grep -q -- '--input-format'; then
+  printf '{"type":"system","subtype":"init","model":"claude-opus-5-5"}\n'
+  node -e '
+    const lines = require("fs").readFileSync("dossier.md", "utf8").split("\n");
+    const out = ["## On you"];
+    let id = null;
+    for (const line of lines) {
+      const head = line.match(/^## \[(c\d+)\]/);
+      if (head) id = head[1];
+      const now = line.match(/^- .* · now: (.*)$/);
+      if (now && id) out.push(`- [${id}]: ${now[1]}`);
+    }
+    const text = out.length > 1 ? out.join("\n") : "Nothing needs you.";
+    const usage = { input_tokens: 2100, cache_creation_input_tokens: 9000, cache_read_input_tokens: 30000, output_tokens: 650 };
+    process.stdout.write(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: text, usage }) + "\n");
+  '
+  exit 0
+fi
 if [ "${1:-}" = -p ]; then
   printf '{"type":"system"}\n'
   while IFS= read -r line; do

@@ -38,5 +38,5 @@ expression: "render_sized(&with(Overlay::Usage(merged_usage(true))), W, 38).back
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Worktrees                    │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
 "  More ▴                 Help  │                         │                                          "

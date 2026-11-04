@@ -797,6 +797,7 @@ screen_recap() {
   cc_s1_at 140 38
   cc_click 'Recap' 0 -1
   cc_wait 'Recap   now'
+  cc_wait 'Claude Code'
   cc_shot recap
 }
 

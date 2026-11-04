@@ -21,7 +21,7 @@ TestBackend { buffer: Buffer {
         "                               │                         │      move here      │                    ",
         "                               │                         │                     │                    ",
         " ───────────────────────────── │                         │                     │                    ",
-        "  Worktrees                    │                         │                     │                    ",
+        "  Worktrees      Recap         │                         │                     │                    ",
         "  More ▴                 Help  │                         │                     │                    ",
     ],
     styles: [
@@ -163,6 +163,8 @@ TestBackend { buffer: Buffer {
         x: 0, y: 16, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 1, y: 16, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
         x: 12, y: 16, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 16, y: 16, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 23, y: 16, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 31, y: 16, fg: Indexed(239), bg: Reset, underline: Reset, modifier: NONE,
         x: 32, y: 16, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 57, y: 16, fg: Indexed(239), bg: Reset, underline: Reset, modifier: NONE,

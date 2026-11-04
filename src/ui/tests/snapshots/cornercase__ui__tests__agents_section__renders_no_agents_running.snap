@@ -29,6 +29,6 @@ expression: "render_sized(&shown(Sidebar::ProjectsOnTop, Vec::new()), W,\nTALL.h
 " ───────────────────────────── │                                                                    "
 "  Issues                       │                                                                    "
 "  Files          TODO          │                                                                    "
-"  Worktrees                    │                                                                    "
+"  Worktrees      Recap         │                                                                    "
 " ───────────────────────────── │                                                                    "
 "  More ▴                 Help  │                                                                    "
