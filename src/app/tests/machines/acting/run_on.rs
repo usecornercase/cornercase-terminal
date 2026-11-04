@@ -497,8 +497,8 @@ mod starting_there {
             (&json!(1), &json!("#7"), &json!("github"), &json!("claude"))
         );
         assert_eq!(
-            (&sent["accounts"], &sent["focus"], sent.get("machine")),
-            (&json!({ "claude": "home" }), &json!(false), None)
+            (&sent["accounts"], &sent["focus"], sent.get("machine"), &sent["placed"]),
+            (&json!({ "claude": "home" }), &json!(false), None, &json!(true))
         );
     }
 

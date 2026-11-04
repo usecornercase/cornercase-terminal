@@ -571,6 +571,7 @@ mod pane_moves;
 mod parents;
 #[cfg(unix)]
 mod pasting;
+mod placed;
 mod plugins;
 mod ports;
 mod processes;

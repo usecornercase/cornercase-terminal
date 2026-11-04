@@ -101,6 +101,10 @@ mod opting_in {
         r#"{"contract":1,"command":"notify","args":{"text":"hi","files":[]}}"#,
         "args.files"
     )]
+    #[case::not_placed_where_nothing_starts(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","placed":false}}"#,
+        "args.placed"
+    )]
     fn an_unknown_field_is_refused_and_does_nothing(#[case] text: &str, #[case] field: &str) {
         let (mut app, _rx) = app();
 
@@ -136,6 +140,7 @@ mod opting_in {
         r#"{"contract":1,"command":"start-with","args":{"project":999,"machine":null}}"#
     )]
     #[case::no_files(r#"{"contract":1,"command":"clone","args":{"url":"","files":[]}}"#)]
+    #[case::not_placed(r#"{"contract":1,"command":"start","args":{"project":999,"placed":false}}"#)]
     fn an_argument_left_out_by_its_empty_value_is_not_an_unknown_field(#[case] text: &str) {
         let (mut app, _rx) = app();
 

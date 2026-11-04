@@ -44,7 +44,10 @@ pub(super) struct Then {
     parent: Option<u64>,
     named: Option<String>,
     accounts: Accounts,
+    placed: bool,
 }
+
+const PLACED_UNWAITED: &str = "`placed` answers once the tab is open, so it takes no `wait` or `timeout`";
 
 const NO_AGENT: &str = "say which agent to start, such as `cornercase start claude`: settings → agents is on auto \
     and no agent runs here";
@@ -95,7 +98,8 @@ impl App {
             }
             let accounts = self.active_accounts();
             let (focus, view) = (new.focus, asker.view);
-            let then = Then { start: None, wait: None, focus, view, parent: None, named: None, accounts };
+            let then =
+                Then { start: None, wait: None, focus, view, parent: None, named: None, accounts, placed: false };
             self.create_worktree(client, Worktree { project: p, branch: &name }, then, None)?;
             return Ok(None);
         }
@@ -151,6 +155,9 @@ impl App {
         if let Some(machine) = start.machine.clone() {
             return self.relay_request(asked.client, &machine, Send::Start(start));
         }
+        if start.placed && (start.wait || start.timeout.is_some()) {
+            return Err(super::malformed(PLACED_UNWAITED));
+        }
         let area = sized(asked.area)?;
         let timeout = deadline(start.timeout, asked.now)?;
         let accounts = self.requested_accounts_from(asked.asker.caller, start.profile.as_deref(), &start.accounts)?;
@@ -182,8 +189,8 @@ impl App {
         let at = match self.start_place(asker, start, named.as_deref())? {
             Place::Open(at) => at,
             Place::Create(p, branch) => {
-                let (focus, view, parent) = (start.focus, asker.view, asker.caller);
-                let then = Then { start: Some((spec, name)), wait, focus, view, parent, named, accounts };
+                let (focus, view, parent, placed) = (start.focus, asker.view, asker.caller, start.placed);
+                let then = Then { start: Some((spec, name)), wait, focus, view, parent, named, accounts, placed };
                 self.create_worktree(client, Worktree { project: p, branch: &branch }, then, timeout)?;
                 return Ok(None);
             }
@@ -193,9 +200,14 @@ impl App {
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
         let projection = self.show_if(asker.view, start.focus, Item::Pane(pane))?;
-        let launch = Some(Launch::new(pane, spec, now));
-        let waits = Waits { done: Done { ids, projection, ..Done::default() }, stage: Stage::launch(wait), timeout };
-        Ok(self.launch_within(client, launch, waits))
+        let launch = Launch::new(pane, spec, now);
+        let done = Done { ids, projection, ..Done::default() };
+        if start.placed {
+            self.add_launch(Some(client), launch, None);
+            return Ok(Some(json(&done)));
+        }
+        let waits = Waits { done, stage: Stage::launch(wait), timeout };
+        Ok(self.launch_within(client, Some(launch), waits))
     }
 
     fn start_spec(&self, client: u64, asker: Asker, start: &control::Start) -> Result<launch::Spec, Refusal> {
@@ -348,7 +360,13 @@ impl App {
         let Some((spec, _)) = launch else {
             return Ok(self.settle_worktree(at, pending));
         };
-        self.launch_in_worktree(spec, pane, then.wait, pending);
+        let launch = Launch::new(pane, spec, Instant::now());
+        if then.placed {
+            self.add_launch(pending.client, launch, None);
+            return Ok(false);
+        }
+        self.add_launch(pending.client, launch, Some(pending.key));
+        pending.stage = Stage::launch(then.wait);
         Ok(true)
     }
 
@@ -358,14 +376,5 @@ impl App {
             pending.stage = Stage::Setup(workspace.id);
         }
         workspace.setting_up()
-    }
-
-    fn launch_in_worktree(&mut self, spec: launch::Spec, pane: u64, wait: Option<Condition>, pending: &mut Pending) {
-        let mut launch = Launch::new(pane, spec, Instant::now());
-        launch.key = Some(pending.key);
-        launch.trust =
-            pending.client.is_some_and(|client| self.panels.queued.trust(client)).then_some(launch::Trust::Accepted);
-        self.agents.launches.add(launch);
-        pending.stage = Stage::launch(wait);
     }
 }
