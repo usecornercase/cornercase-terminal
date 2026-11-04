@@ -49,6 +49,7 @@ mod on_unix {
 
 mod for_windows {
     use super::*;
+    use crate::test_util::{NPM_SCRIPT, NPM_SHIM, npm_install, under};
 
     fn npm_folder() -> TempDir {
         let dir = TempDir::new();
@@ -59,6 +60,11 @@ mod for_windows {
     }
 
     const SHIM: &str = "@echo off\r\necho shim %*\r\n";
+
+    fn for_powershell(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Result<String, String> {
+        let shell = crate::agents::PaneShell::PowerShell;
+        crate::agents::typed_on_windows(line, shell, runs).map_err(|refusal| refusal.message)
+    }
 
     fn path_with(dir: &TempDir) -> OsString {
         std::env::join_paths([dir.path().join("nonexistent"), dir.path().to_path_buf()]).expect("a path")
@@ -115,9 +121,26 @@ mod for_windows {
         let path = dir.path().as_os_str().to_owned();
         let runs = |program: &str| powershell_finds(program, Some(&path), None);
         let line = r"claude --add-dir 'C:\Users\me\R&D'";
-        assert!(crate::agents::batch_refusal(line, runs).is_some_and(|refused| refused.contains("claude.cmd")));
+        assert!(for_powershell(line, runs).is_err_and(|refused| refused.contains("claude.cmd")));
         std::fs::write(dir.path().join("claude.ps1"), "").expect("write the ps1 shim");
-        assert_eq!(crate::agents::batch_refusal(line, runs), None);
+        assert_eq!(for_powershell(line, runs), Ok(line.to_string()));
+    }
+
+    #[test]
+    fn an_npm_shim_alone_runs_with_the_node_powershell_finds_unless_that_is_a_batch_file() {
+        let (npm, nodejs, nvm) = (TempDir::new(), TempDir::new(), TempDir::new());
+        npm_install(npm.path(), NPM_SHIM, &[&NPM_SCRIPT]);
+        std::fs::write(nodejs.path().join("node.exe"), "").expect("write node");
+        std::fs::write(nvm.path().join("node.cmd"), SHIM).expect("write a node shim");
+        let typed = |folders: &[&TempDir]| {
+            let path = std::env::join_paths(folders.iter().map(|dir| dir.path())).expect("a path");
+            for_powershell("claude 'R&D'", |program| powershell_finds(program, Some(&path), None))
+        };
+        let words = [nodejs.path().join("node.exe"), under(npm.path(), &NPM_SCRIPT)].map(|p| p.display().to_string());
+        let line = typed(&[&npm, &nodejs]).expect("typed past the shim");
+        let at = |word: &str| line.find(word).unwrap_or(usize::MAX);
+        assert!(at(&words[0]) < at(&words[1]) && at(&words[1]) < line.len() && line.ends_with(" 'R&D'"), "{line}");
+        assert!(typed(&[&npm, &nvm, &nodejs]).is_err_and(|refused| refused.contains("claude.cmd")));
     }
 
     #[test]

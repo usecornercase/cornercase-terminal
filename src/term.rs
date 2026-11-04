@@ -517,7 +517,6 @@ mod imp {
 
     const CURSOR_REPORT: &[u8] = b"\x1b[1;1R";
     const MAX_SHELLS: usize = 16;
-    const POWERSHELLS: [&str; 2] = ["pwsh", "powershell"];
     const FILE_URL: &str = "file://";
 
     type Shared = Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>;
@@ -600,8 +599,7 @@ mod imp {
     }
 
     pub(super) fn reported_folder(foreground: i32, reported: impl FnOnce() -> String) -> Option<PathBuf> {
-        let named = |name: &str| POWERSHELLS.iter().any(|shell| process::same_file_name(shell, name));
-        let powershell = process::name(foreground).is_some_and(|name| named(&name));
+        let powershell = process::name(foreground).is_some_and(|name| process::program::is_powershell(&name));
         powershell.then(|| folder_from(&reported())).flatten().filter(|folder| folder.is_dir())
     }
 

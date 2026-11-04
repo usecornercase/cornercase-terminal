@@ -1,6 +1,7 @@
+use std::ffi::OsStr;
 use std::fs::{File, Metadata};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[cfg(windows)]
 pub(crate) use imp::process_uid;
@@ -11,7 +12,9 @@ pub(crate) use imp::{
 };
 #[cfg(test)]
 #[cfg(windows)]
-pub(crate) use imp::{make_reparse_point, share_with_everyone};
+pub(crate) use imp::{make_junction, make_reparse_point, share_with_everyone};
+
+const MAX_LINKS: usize = 63;
 
 pub(crate) fn canonicalize(path: impl AsRef<Path>) -> io::Result<PathBuf> {
     std::fs::canonicalize(path).map(simplified)
@@ -25,6 +28,79 @@ pub(crate) fn reaches_network(path: &str) -> bool {
     cfg!(windows) && unc_or_device(path)
 }
 
+pub(crate) fn network_link(path: &Path) -> io::Result<Option<PathBuf>> {
+    if cfg!(windows) { network_link_through(&std::path::absolute(path)?, link_target) } else { Ok(None) }
+}
+
+fn link_target(path: &Path) -> io::Result<Option<PathBuf>> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => std::fs::read_link(path).map(Some),
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(None),
+    }
+}
+
+fn network_link_through(
+    path: &Path,
+    target: impl FnMut(&Path) -> io::Result<Option<PathBuf>>,
+) -> io::Result<Option<PathBuf>> {
+    let mut walk = Walk { walked: PathBuf::new(), links: 0, target };
+    walk.path(path)?;
+    Ok(walk.on_network().then_some(walk.walked))
+}
+
+struct Walk<F> {
+    walked: PathBuf,
+    links: usize,
+    target: F,
+}
+
+impl<F: FnMut(&Path) -> io::Result<Option<PathBuf>>> Walk<F> {
+    fn path(&mut self, path: &Path) -> io::Result<()> {
+        if unc_or_device(&path.to_string_lossy()) {
+            self.walked = path.to_path_buf();
+            return Ok(());
+        }
+        for component in path.components() {
+            self.step(component)?;
+            if self.on_network() {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn step(&mut self, component: Component<'_>) -> io::Result<()> {
+        match component {
+            Component::Normal(name) => return self.name(name),
+            Component::ParentDir => {
+                self.walked.pop();
+            }
+            Component::CurDir => {}
+            root => self.walked.push(root),
+        }
+        Ok(())
+    }
+
+    fn name(&mut self, name: &OsStr) -> io::Result<()> {
+        let next = self.walked.join(name);
+        let Some(link) = (self.target)(&next)? else {
+            self.walked = next;
+            return Ok(());
+        };
+        self.links += 1;
+        if self.links > MAX_LINKS {
+            return Err(io::Error::other(format!("{} goes through too many links", next.display())));
+        }
+        self.path(&link)
+    }
+
+    fn on_network(&self) -> bool {
+        let walked = self.walked.to_string_lossy();
+        unc_or_device(&walked) && !verbatim_drive(&walked)
+    }
+}
+
 pub(crate) fn unc_or_device(path: &str) -> bool {
     let mut chars = path.chars();
     let doubled = matches!((chars.next(), chars.next()), (Some('\\' | '/'), Some('\\' | '/')));
@@ -36,6 +112,13 @@ pub(crate) fn drive_path(path: &str) -> bool {
         Some(verbatim) => drive_root(verbatim, &['\\']),
         None => drive_root(path, &['\\', '/']),
     }
+}
+
+fn verbatim_drive(path: &str) -> bool {
+    path.strip_prefix(r"\\?\").is_some_and(|drive| {
+        let mut chars = drive.chars();
+        matches!((chars.next(), chars.next(), chars.next()), (Some(letter), Some(':'), None) if letter.is_ascii_alphabetic())
+    })
 }
 
 fn drive_root(path: &str, separators: &[char]) -> bool {

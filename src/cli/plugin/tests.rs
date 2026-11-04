@@ -219,16 +219,20 @@ mod folders {
         (home, expected)
     }
 
+    fn spec(typed: &str, home: Option<&Path>) -> String {
+        folder_spec_from(typed, home).expect("a spec")
+    }
+
     #[test]
     fn one_in_the_home_folder_becomes_absolute_and_keeps_its_subfolder_and_ref() {
         let (home, expected) = home_with_tools();
 
-        assert_eq!(folder_spec_from("~/tools.git//notes@v1", Some(home.path())), expected);
+        assert_eq!(spec("~/tools.git//notes@v1", Some(home.path())), expected);
     }
 
     #[test]
     fn owner_and_repo_is_left_as_it_is() {
-        assert_eq!(folder_spec_from("acme/notes@v1", None), "acme/notes@v1");
+        assert_eq!(spec("acme/notes@v1", None), "acme/notes@v1");
     }
 
     #[cfg(windows)]
@@ -237,8 +241,8 @@ mod folders {
         let (home, expected) = home_with_tools();
         let typed = format!(r"{}\tools.git\..\tools.git//notes@v1", home.path().display());
 
-        assert_eq!(folder_spec_from(r"~\tools.git//notes@v1", Some(home.path())), expected);
-        assert_eq!(folder_spec_from(&typed, None), expected);
+        assert_eq!(spec(r"~\tools.git//notes@v1", Some(home.path())), expected);
+        assert_eq!(spec(&typed, None), expected);
         assert!(Origin::parse(&expected).expect("a folder").local());
     }
 
@@ -247,7 +251,19 @@ mod folders {
     fn a_network_folder_is_left_for_the_source_to_refuse() {
         let share = r"\\host\share\tools.git";
 
-        assert_eq!(folder_spec_from(share, None), share);
+        assert_eq!(spec(share, None), share);
         assert!(Origin::parse(share).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_folder_that_leads_to_the_network_through_a_link_is_refused_before_it_is_canonicalised() {
+        let home = TempDir::new();
+        let link = home.path().join("shared");
+        crate::os::fs::make_junction(&link, Path::new(r"UNC\cornercase.invalid\share")).expect("a junction");
+
+        let refused = folder_spec_from(r"~\shared\tools.git", Some(home.path())).expect_err("refused").to_string();
+
+        assert!(refused.contains("cornercase.invalid") && refused.contains("on the network"), "{refused}");
     }
 }

@@ -286,3 +286,144 @@ mod paths_beyond_the_drives {
         assert!(!reaches_network(r"C:\ding.wav"));
     }
 }
+
+mod links_to_the_network {
+    use super::*;
+
+    type Walked = (io::Result<Option<PathBuf>>, Vec<PathBuf>);
+
+    fn walk(path: &str, links: &[(&str, &str)]) -> Walked {
+        let mut read = Vec::new();
+        let found = network_link_through(Path::new(path), |next: &Path| {
+            read.push(next.to_path_buf());
+            Ok(links.iter().find(|(link, _)| Path::new(link) == next).map(|(_, target)| PathBuf::from(target)))
+        });
+        (found, read)
+    }
+
+    fn paths(paths: &[&str]) -> Vec<PathBuf> {
+        paths.iter().map(PathBuf::from).collect()
+    }
+
+    #[test]
+    fn a_folder_without_links_leads_nowhere_else() {
+        let (found, read) = walk("/code/tools", &[]);
+        assert_eq!(found.expect("walked"), None);
+        assert_eq!(read, paths(&["/code", "/code/tools"]));
+    }
+
+    #[test]
+    fn a_link_above_the_folder_is_found_and_nothing_under_it_is_read() {
+        let (found, read) = walk("/code/shared/tools", &[("/code/shared", r"\\host\share")]);
+        assert_eq!(found.expect("walked"), Some(PathBuf::from(r"\\host\share")));
+        assert_eq!(read, paths(&["/code", "/code/shared"]));
+    }
+
+    #[test]
+    fn the_folder_itself_as_a_link_is_found() {
+        let (found, _) = walk("/code/tools", &[("/code/tools", "//host/share/tools")]);
+        assert_eq!(found.expect("walked"), Some(PathBuf::from("//host/share/tools")));
+    }
+
+    #[test]
+    fn a_relative_link_is_walked_from_its_folder_into_the_next_link() {
+        let links = [("/code/vendor", "../srv"), ("/srv/tools", r"\\?\UNC\host\share\tools")];
+        let (found, read) = walk("/code/vendor/tools/notes", &links);
+        assert_eq!(found.expect("walked"), Some(PathBuf::from(r"\\?\UNC\host\share\tools")));
+        assert_eq!(read, paths(&["/code", "/code/vendor", "/srv", "/srv/tools"]));
+    }
+
+    #[test]
+    fn a_link_to_a_local_folder_is_walked_on() {
+        let (found, read) = walk("/code/vendor/tools", &[("/code/vendor", "/srv/plugins")]);
+        assert_eq!(found.expect("walked"), None);
+        assert_eq!(read, paths(&["/code", "/code/vendor", "/srv", "/srv/plugins", "/srv/plugins/tools"]));
+    }
+
+    #[test]
+    fn a_parent_folder_goes_back_by_name_as_windows_reads_it() {
+        let (found, read) = walk("/code/../srv/tools", &[]);
+        assert_eq!(found.expect("walked"), None);
+        assert_eq!(read, paths(&["/code", "/srv", "/srv/tools"]));
+    }
+
+    #[test]
+    fn links_in_a_loop_are_an_error() {
+        let (found, read) = walk("/a/tools", &[("/a", "/b"), ("/b", "/a")]);
+        assert!(found.is_err());
+        assert_eq!(read.len(), MAX_LINKS + 1);
+    }
+
+    #[test]
+    fn a_link_that_cannot_be_read_is_an_error() {
+        let found = network_link_through(Path::new("/code/tools"), |_: &Path| Err(io::Error::other("unreadable")));
+        assert_eq!(found.expect_err("unreadable").to_string(), "unreadable");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn on_unix_nothing_is_on_the_network() {
+        let dir = TempDir::new();
+        let link = dir.path().join("shared");
+        link_to("//host/share", &link).expect("a link");
+        assert_eq!(network_link(&link.join("tools")).expect("walked"), None);
+    }
+
+    #[cfg(windows)]
+    mod on_windows {
+        use super::*;
+
+        const PRIVILEGE_NOT_HELD: i32 = 1314;
+
+        fn reached(path: &Path) -> Option<String> {
+            network_link(path).expect("walked").map(|share| share.to_string_lossy().into_owned())
+        }
+
+        #[test]
+        fn a_junction_to_a_folder_on_the_disk_leads_nowhere_else() {
+            let dir = TempDir::new();
+            let real = dir.path().join("real");
+            fs::create_dir_all(real.join("tools")).expect("a folder");
+            link_to(&real, dir.path().join("linked")).expect("a junction");
+            assert_eq!(reached(&dir.path().join("linked").join("tools")), None);
+        }
+
+        #[test]
+        fn a_verbatim_folder_on_the_disk_leads_nowhere_else() {
+            let dir = TempDir::new();
+            fs::create_dir_all(dir.path().join("tools")).expect("a folder");
+            assert_eq!(reached(&crate::test_util::verbatim(&dir.path().join("tools"))), None);
+        }
+
+        #[test]
+        fn a_link_to_a_verbatim_folder_on_the_disk_is_walked_on() {
+            let (found, _) = walk(r"C:\code\vendor\tools", &[(r"C:\code\vendor", r"\\?\D:\srv")]);
+            assert_eq!(found.expect("walked"), None);
+        }
+
+        #[test]
+        fn a_junction_written_to_lead_to_a_share_is_found_without_following_it() {
+            let dir = TempDir::new();
+            let link = dir.path().join("shared");
+            make_junction(&link, Path::new(r"UNC\cornercase.invalid\share")).expect("a junction");
+            let share = reached(&link.join("tools")).expect("on the network");
+            assert!(unc_or_device(&share) && share.contains("cornercase.invalid"), "{share}");
+        }
+
+        #[test]
+        fn a_symbolic_link_to_a_share_is_found_without_following_it() {
+            let dir = TempDir::new();
+            let link = dir.path().join("shared");
+            match std::os::windows::fs::symlink_dir(r"\\cornercase.invalid\share", &link) {
+                Err(e) if e.raw_os_error() == Some(PRIVILEGE_NOT_HELD) => {
+                    eprintln!("skipped: a symbolic link needs Developer Mode or an administrator ({e})");
+                }
+                made => {
+                    made.expect("a symbolic link");
+                    let share = reached(&link.join("tools")).expect("on the network");
+                    assert!(unc_or_device(&share) && share.contains("cornercase.invalid"), "{share}");
+                }
+            }
+        }
+    }
+}

@@ -5,8 +5,8 @@ use ratatui::layout::Rect;
 use super::App;
 use super::event::Start;
 use super::toast::Toast;
-use crate::agents;
-use crate::agents::launch::{self, Launch, Step, Trust};
+use crate::agents::launch::{self, Launch, Refusal, Step, Trust};
+use crate::agents::{self, PaneShell};
 use crate::error::Result;
 use crate::log::{self};
 use crate::process::program;
@@ -87,9 +87,7 @@ impl App {
         let regex = self.agents.launches.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
-        let refusal =
-            |line: &str| cfg!(windows).then(|| agents::batch_refusal(line, program::powershell_runs)).flatten();
-        let round = Round { now, trust, asks: &asks, refusal: &refusal };
+        let round = Round { now, trust, asks: &asks };
         let mut out = Outcomes::default();
         let mut finished = Vec::new();
         let starting: Vec<u64> = self.agents.launches.list.iter().map(|launch| launch.term).collect();
@@ -106,8 +104,8 @@ impl App {
             }
         }
         for (pane, refusal) in out.refused {
-            self.fail_pane_requests(pane, &refusal);
-            self.messages.toast = Some(Toast::new(refusal, ui::ToastIcon::Bug));
+            self.fail_pane_requests(pane, &refusal.message);
+            self.messages.toast = Some(Toast::new(refusal.message, ui::ToastIcon::Bug));
         }
         for (i, started) in finished.into_iter().rev() {
             if let Some(key) = self.agents.launches.list.remove(i).key {
@@ -143,13 +141,12 @@ struct Round<'a> {
     now: Instant,
     trust: Trust,
     asks: &'a dyn Fn(&str) -> bool,
-    refusal: &'a dyn Fn(&str) -> Option<String>,
 }
 
 #[derive(Default)]
 struct Outcomes {
     parked: Vec<u64>,
-    refused: Vec<(u64, String)>,
+    refused: Vec<(u64, Refusal)>,
 }
 
 fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes) -> Option<bool> {
@@ -171,6 +168,8 @@ fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
     let shell_in_foreground = term.shell_in_foreground();
     let bracketed_paste = term.emulator.bracketed_paste();
     let application_cursor = term.emulator.application_cursor();
+    let shell = term.shell_pid();
+    let typed = |line: &str| typed_in(line, shell);
     let emulator = &mut term.emulator;
     let mut screen = || emulator.active_contents().unwrap_or_default();
     let mut seen = launch::Seen {
@@ -180,9 +179,16 @@ fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
         screen: &mut screen,
         trust_prompt: round.asks,
         trust: launch.trust.unwrap_or(round.trust),
-        refusal: round.refusal,
+        typed: &typed,
     };
     launch.step(round.now, &mut seen)
+}
+
+fn typed_in(line: &str, shell: Option<i32>) -> std::result::Result<String, Refusal> {
+    if !cfg!(windows) {
+        return Ok(line.to_string());
+    }
+    agents::typed_on_windows(line, PaneShell::of(shell), program::powershell_runs)
 }
 
 fn log_step(step: &Step, (pane, kind): (u64, &str), (before, stage): (&str, &str)) {
@@ -195,7 +201,9 @@ fn log_step(step: &Step, (pane, kind): (u64, &str), (before, stage): (&str, &str
             log::info!("launch", message, pane = pane, kind = kind, from = before, to = stage, bytes = bytes);
         }
         Step::Abandon => log::warning!("launch", "the agent did not start", pane = pane, kind = kind),
-        Step::Refuse(_) => log::warning!("launch", "refused for a batch file", pane = pane, kind = kind),
+        Step::Refuse(refusal) => {
+            log::warning!("launch", "refused", pane = pane, kind = kind, reason = refusal.reason);
+        }
     }
 }
 
