@@ -1,4 +1,3 @@
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -62,7 +61,7 @@ pub(in crate::agents) fn local_command(text: &str) -> bool {
 }
 
 pub(in crate::agents) fn runs_as(arg: &str) -> bool {
-    super::named(Path::new(arg).file_name().and_then(OsStr::to_str), "vibe-rs")
+    super::is_program(arg, "vibe-rs")
 }
 
 #[derive(Debug)]

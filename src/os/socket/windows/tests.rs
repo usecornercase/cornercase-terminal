@@ -260,3 +260,27 @@ mod shutting_down {
         assert_eq!(read.recv_timeout(WAIT).expect("read").expect("the end"), b"");
     }
 }
+
+mod the_end_right_after_the_last_bytes {
+    use super::*;
+
+    fn wakes_one_blocked_read() -> bool {
+        let (ours, mut theirs) = UnixStream::pair().expect("a pair");
+        let (reading, read) = reading_after_a_byte(ours);
+        theirs.write_all(b"1").expect("the first byte");
+        reading.recv_timeout(WAIT).expect("the reader reads");
+        assert!(still_reading(&read, Duration::from_millis(5)), "the read waits for more");
+
+        theirs.write_all(b"last").expect("the last bytes");
+        drop(theirs);
+
+        matches!(read.recv_timeout(WAIT), Ok(Ok(rest)) if rest == b"last")
+    }
+
+    #[test]
+    fn wakes_every_read_blocked_on_it() {
+        let readers: Vec<_> = (0..8).map(|_| thread::spawn(|| (0..25).all(|_| wakes_one_blocked_read()))).collect();
+
+        assert!(readers.into_iter().all(|reader| reader.join().expect("a reader")), "a read missed the end");
+    }
+}

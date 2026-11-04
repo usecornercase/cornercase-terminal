@@ -4,42 +4,87 @@ use rstest::rstest;
 
 use super::*;
 
-mod installed {
-    use super::*;
-    use crate::test_util::{TempDir, write_executable};
-
-    fn bin() -> TempDir {
-        let dir = TempDir::new();
-        write_executable(&dir.path().join("codex"), "#!/bin/sh\n");
-        std::fs::write(dir.path().join("notes"), "").expect("write a plain file");
-        dir
-    }
-
-    #[test]
-    fn a_program_is_looked_up_in_the_path() {
-        let dir = bin();
-        let path = std::env::join_paths(["/nonexistent", dir.path().to_str().expect("utf-8")]).expect("a path");
-        assert_eq!(
-            [found("codex", Some(&path)), found("claude", Some(&path)), found("notes", Some(&path))],
-            [true, false, false]
-        );
-    }
-
-    #[test]
-    fn a_program_with_a_slash_is_checked_as_is() {
-        let dir = bin();
-        let codex = dir.path().join("codex").display().to_string();
-        assert_eq!([found(&codex, None), found("/nonexistent/codex", None)], [true, false]);
-    }
-
-    #[test]
-    fn without_a_path_nothing_is_found() {
-        assert!(!found("sh", None));
-    }
-}
-
 fn strings(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| (*s).to_string()).collect()
+}
+
+#[cfg(windows)]
+const POWERSHELL_CASES: &[&[&str]] = &[
+    &["claude", "--model", "a\u{2019}; Write-Output INJECTED; \u{2019}"],
+    &["claude", "--model", "a\u{2018}; Write-Output INJECTED; \u{2018}"],
+    &["claude", "--model", "a\u{201A}; Write-Output INJECTED; \u{201B}"],
+    &["claude", "--model", "it's", "'", "''", "Sergio\u{2019}s code"],
+    &["claude", "--%", "a | Write-Output INJECTED"],
+    &["claude", "@notes", "$env:PATH", "`n", "(1)", "{1}", "<x", ">x", "#x", "a,b", "a;b", "a&b", "a|b", "--", "%x"],
+    &["claude", r"--add-dir=C:\Users\me\R&D", "-x:y", "opus[1m]", "50%", r#"{"a":1}"#, ""],
+    &["claude", "\u{2013}%", "\u{2014}x", "\u{201C}a\u{201D}", "1kb", "0x10", "-1", r".\x", "a=b", "+x"],
+    &[r"C:\Program Files\Claude\claude.exe", "--resume", "a1"],
+    &["-claude", "x"],
+    &["/opt/claude", "x"],
+    &[r"..\bin\claude.exe", "x"],
+];
+
+#[cfg(windows)]
+mod powershell {
+    use std::process::Command;
+
+    use base64::Engine;
+    use base64::engine::general_purpose::STANDARD;
+
+    const PARSE: &str = r"
+        foreach ($encoded in @(LINES)) {
+            $line = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseInput($line, [ref]$tokens, [ref]$errors)
+            $statements = $ast.EndBlock.Statements
+            $command = $null
+            if ($statements.Count -eq 1 -and $statements[0].PipelineElements.Count -eq 1) {
+                $command = $statements[0].PipelineElements[0]
+            }
+            if ($errors.Count -ne 0 -or $command -isnot [System.Management.Automation.Language.CommandAst]) {
+                'not one command'
+                continue
+            }
+            $words = foreach ($element in $command.CommandElements) {
+                $text = $element.Extent.Text
+                if ($element -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
+                    $text = $element.Value
+                }
+                [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))
+            }
+            $called = ''
+            if ($command.InvocationOperator -eq 'Ampersand') { $called = '&' }
+            $called + ($words -join '.')
+        }
+    ";
+
+    fn utf16(text: &str) -> Vec<u8> {
+        text.encode_utf16().flat_map(u16::to_le_bytes).collect()
+    }
+
+    pub(super) fn parse(lines: &[String]) -> Vec<Option<(bool, Vec<String>)>> {
+        let encoded: Vec<String> = lines.iter().map(|line| format!("'{}'", STANDARD.encode(utf16(line)))).collect();
+        let script = PARSE.replace("LINES", &encoded.join(","));
+        let output = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &STANDARD.encode(utf16(&script))])
+            .output()
+            .expect("run powershell");
+        let parsed: Vec<_> = String::from_utf8_lossy(&output.stdout).lines().map(command).collect();
+        assert_eq!(parsed.len(), lines.len(), "{output:?}");
+        parsed
+    }
+
+    fn command(printed: &str) -> Option<(bool, Vec<String>)> {
+        let (called, words) = printed.strip_prefix('&').map_or((false, printed), |words| (true, words));
+        Some((called, words.split('.').map(decode).collect::<Option<Vec<String>>>()?))
+    }
+
+    fn decode(word: &str) -> Option<String> {
+        let bytes = STANDARD.decode(word).ok()?;
+        let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
+        String::from_utf16(&units).ok()
+    }
 }
 
 fn config() -> Config {
@@ -226,6 +271,61 @@ mod arguments {
     }
 
     #[test]
+    fn a_typed_line_quotes_for_the_shell_of_this_system() {
+        let line = typed_line(strings(&["claude", "--model", "opus[1m]", "it's"]));
+        let expected =
+            if cfg!(windows) { "claude --model 'opus[1m]' 'it''s'" } else { r"claude --model 'opus[1m]' 'it'\''s'" };
+        assert_eq!(line, expected);
+    }
+
+    #[rstest]
+    #[case::a_flag("--permission-mode=plan", "--permission-mode=plan")]
+    #[case::a_relative_folder(r"..\docs", r"..\docs")]
+    #[case::a_folder_with_its_drive(r"C:\Users\me\repo", r"'C:\Users\me\repo'")]
+    #[case::a_folder_with_a_space(r"C:\Users\me\my repo", r"'C:\Users\me\my repo'")]
+    #[case::an_apostrophe("it's", "'it''s'")]
+    #[case::a_typographic_apostrophe("Sergio\u{2019}s code", "'Sergio\u{2019}\u{2019}s code'")]
+    #[case::every_single_quote_powershell_reads(
+        "'\u{2018}\u{2019}\u{201A}\u{201B}",
+        "'''\u{2018}\u{2018}\u{2019}\u{2019}\u{201A}\u{201A}\u{201B}\u{201B}'"
+    )]
+    #[case::stop_parsing("--%", "'--%'")]
+    #[case::end_of_parameters("--", "'--'")]
+    #[case::a_splat("@notes", "'@notes'")]
+    #[case::a_variable("$env:PATH", "'$env:PATH'")]
+    #[case::an_escape("`n", "'`n'")]
+    #[case::a_list("Read,Write", "'Read,Write'")]
+    #[case::a_comment("#x", "'#x'")]
+    #[case::a_sign_first("+x", "'+x'")]
+    #[case::a_percent("50%", "'50%'")]
+    #[case::a_typographic_dash("\u{2013}%", "'\u{2013}%'")]
+    #[case::empty("", "''")]
+    fn a_word_is_quoted_for_powershell_unless_every_character_is_plain(#[case] word: &str, #[case] expected: &str) {
+        assert_eq!(powershell_line(["claude".to_string(), word.to_string()]), format!("claude {expected}"));
+    }
+
+    #[rstest]
+    #[case::with_a_space(&[r"C:\Program Files\Claude\claude.exe", "--resume", "a1"], r"& 'C:\Program Files\Claude\claude.exe' --resume a1")]
+    #[case::starting_with_a_dash(&["-claude", "x"], "& '-claude' x")]
+    #[case::by_its_name(&["claude", "x"], "claude x")]
+    #[case::by_a_relative_path(&[r".\claude.exe", "x"], r".\claude.exe x")]
+    #[case::by_a_unix_path(&["/opt/claude", "x"], "/opt/claude x")]
+    fn powershell_calls_a_quoted_program_with_its_call_operator(#[case] words: &[&str], #[case] expected: &str) {
+        assert_eq!(powershell_line(strings(words)), expected);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn powershell_parses_each_typed_line_as_one_command_with_the_words_given() {
+        let cases: Vec<Vec<String>> = POWERSHELL_CASES.iter().map(|words| strings(words)).collect();
+        let lines: Vec<String> = cases.iter().map(|words| powershell_line(words.clone())).collect();
+        let parsed = powershell::parse(&lines);
+        for ((words, line), found) in cases.iter().zip(&lines).zip(parsed) {
+            assert_eq!(found, Some((line.starts_with("& "), words.clone())), "{line}");
+        }
+    }
+
+    #[test]
     fn the_command_line_is_the_binary_and_its_arguments() {
         let mut c = config();
         c.agent_args.insert("cursor".into(), strings(&["--model", "a b"]));
@@ -335,6 +435,57 @@ mod arguments {
         let mut c = config();
         c.agent_commands.insert("mine".into(), "/opt/bin/my-agent".into());
         assert_eq!((command(&c, "mine"), kinds(&c).contains(&"mine".to_string())), ("/opt/bin/my-agent".into(), true));
+    }
+}
+
+mod batch_files {
+    use super::*;
+
+    fn refusal(words: &[&str], runs: &str) -> Option<String> {
+        let runs = PathBuf::from(runs);
+        batch_refusal(&powershell_line(strings(words)), move |_| Some(runs.clone()))
+    }
+
+    #[rstest]
+    #[case::an_ampersand(r"C:\Users\me\R&D", '&')]
+    #[case::a_pipe("a|b", '|')]
+    #[case::a_redirection("a<b", '<')]
+    #[case::another_redirection("a>b", '>')]
+    #[case::cmds_escape("a^b", '^')]
+    #[case::a_variable("%PATH%", '%')]
+    #[case::a_delayed_variable("!x!", '!')]
+    #[case::a_double_quote(r#"{"a":1}"#, '"')]
+    fn a_word_cmd_reads_is_refused_for_a_cmd_shim(#[case] word: &str, #[case] special: char) {
+        let refused = refusal(&["claude", "--add-dir", word], r"C:\npm\claude.cmd").expect("refused");
+        assert!(refused.contains(&format!("`{special}`")) && refused.contains(r"C:\npm\claude.cmd"), "{refused}");
+    }
+
+    #[rstest]
+    #[case::the_ps1_shim(r"C:\npm\claude.ps1")]
+    #[case::a_program(r"C:\Users\me\.local\bin\claude.exe")]
+    fn the_same_word_is_quoted_and_typed_for_anything_else(#[case] runs: &str) {
+        let words = ["claude", "--add-dir", r"C:\Users\me\R&D"];
+        assert_eq!(powershell_line(strings(&words)), r"claude --add-dir 'C:\Users\me\R&D'");
+        assert_eq!(refusal(&words, runs), None);
+    }
+
+    #[test]
+    fn plain_words_go_to_a_cmd_shim() {
+        assert_eq!(refusal(&["claude", "--permission-mode", "plan", r"..\docs"], r"C:\npm\claude.CMD"), None);
+    }
+
+    #[test]
+    fn a_batch_file_named_as_the_program_counts_when_it_is_not_found() {
+        let line = powershell_line(strings(&[r"C:\Program Files\x\claude.bat", "50%"]));
+        let refused = batch_refusal(&line, |_| None).expect("refused");
+        assert!(refused.contains(r"`C:\Program Files\x\claude.bat`") && refused.contains("`%`"), "{refused}");
+    }
+
+    #[test]
+    fn the_program_is_read_back_from_the_typed_line() {
+        let line = powershell_line(strings(&[r"C:\R&D\Sergio’s\claude.cmd", "--resume", "a1"]));
+        let refused = batch_refusal(&line, |program| Some(PathBuf::from(program))).expect("refused");
+        assert!(refused.contains(r"`C:\R&D\Sergio’s\claude.cmd`") && refused.contains("`&`"), "{refused}");
     }
 }
 
@@ -459,6 +610,35 @@ mod choosing {
         &[r"C:\Users\a\.local\bin\agent.exe", r"C:\Users\a\AppData\Local\Cursor-Agent\Versions\2026.10.14-941492e\INDEX.JS"],
         Some("cursor")
     )]
+    #[case::claude_npm_script(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\Users\a\AppData\Roaming\npm\\node_modules\@anthropic-ai\claude-code\cli.js"],
+        Some("claude")
+    )]
+    #[case::claude_npm_binary(
+        &[r"C:\Users\a\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe"],
+        Some("claude")
+    )]
+    #[case::codex_npm_script(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\Users\a\AppData\Roaming\npm\node_modules\@openai\codex\bin\codex.js"],
+        Some("codex")
+    )]
+    #[case::codex_npm_script_in_capitals(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\@openai\Codex\BIN\Codex.JS"],
+        Some("codex")
+    )]
+    #[case::codex_native(&[r"C:\Users\a\AppData\Roaming\npm\node_modules\@openai\codex\vendor\codex.exe"], Some("codex"))]
+    #[case::gemini_bundle(
+        &[r"C:\Program Files\nodejs\node.exe", "--no-warnings=DEP0040", r"C:\npm\node_modules\@google\gemini-cli\bundle\gemini.js"],
+        Some("gemini")
+    )]
+    #[case::gemini_dist(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\@google\gemini-cli\dist\index.js"],
+        Some("gemini")
+    )]
+    #[case::opencode_binary(&[r"C:\npm\node_modules\opencode-ai\bin\opencode.exe"], Some("opencode"))]
+    #[case::opencode_launcher(&[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\opencode-ai\bin\opencode"], Some("opencode"))]
+    #[case::vibe_binary(&[r"C:\Users\a\AppData\Roaming\uv\tools\mistral-vibe\Lib\site-packages\vibe\_bin\Vibe-RS.EXE"], Some("vibe"))]
+    #[case::another_cli_js(&[r"C:\Program Files\nodejs\node.exe", r"C:\npm\node_modules\other\cli.js"], None)]
     #[case::a_shell(&[r"C:\WINDOWS\system32\cmd.exe", "/d"], None)]
     fn detects_the_agent_in_a_windows_tab(#[case] argv: &[&str], #[case] expected: Option<&str>) {
         assert_eq!(detect(&config(), &strings(argv)).as_deref(), expected);
@@ -504,5 +684,30 @@ mod trust {
         let mut trust = TrustPrompt::default();
         trust.regex(DEFAULT_TRUST_PROMPT);
         assert!(trust.regex("how can i help").is_some_and(|re| asks_trust(re, "> How can I help?")));
+    }
+}
+
+#[cfg(windows)]
+mod account_homes_on_windows {
+    use super::*;
+
+    const PROFILE: (&str, &str) = ("USERPROFILE", r"C:\Users\me");
+
+    #[rstest]
+    #[case::claude(Known::Claude, &[PROFILE], Some(r"C:\Users\me\.claude"))]
+    #[case::codex(Known::Codex, &[PROFILE], Some(r"C:\Users\me\.codex"))]
+    #[case::gemini(Known::Gemini, &[PROFILE], Some(r"C:\Users\me"))]
+    #[case::home_is_not_read(Known::Claude, &[("HOME", r"C:\home"), PROFILE], Some(r"C:\Users\me\.claude"))]
+    #[case::only_home(Known::Codex, &[("HOME", r"C:\home")], None)]
+    #[case::the_variable_first(Known::Claude, &[PROFILE, ("CLAUDE_CONFIG_DIR", r"D:\claude")], Some(r"D:\claude"))]
+    #[case::a_relative_profile(Known::Codex, &[("USERPROFILE", "me")], None)]
+    fn are_in_the_profile_when_home_is_unset(
+        #[case] kind: Known,
+        #[case] env: &[(&str, &str)],
+        #[case] expected: Option<&str>,
+    ) {
+        let var = |name: &str| env.iter().find(|(key, _)| *key == name).map(|(_, value)| OsString::from(*value));
+        let found = kind.account().and_then(|account| account.default_home(var));
+        assert_eq!(found, expected.map(PathBuf::from));
     }
 }

@@ -37,6 +37,7 @@ use crate::issues::browser::Tab as IssueTab;
 use crate::issues::cache::Cache as IssueCache;
 #[cfg(test)]
 use crate::issues::{Account, Source};
+use crate::os::fs::canonical;
 use crate::os::process::launch_folder;
 use crate::paths;
 use crate::project::search::said;
@@ -205,7 +206,7 @@ pub(crate) struct App {
 
 impl App {
     pub(crate) fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
-        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let home = std::env::var_os(paths::HOME_VAR).map(PathBuf::from);
         let (config, config_file) = config_file::ConfigFile::open(config_path);
         let config_path = config_file.path();
         Self {
@@ -563,7 +564,7 @@ impl App {
         area: Rect,
         parents: &mut session::Parents,
     ) -> Option<(Project, usize)> {
-        let path = saved_project.path.canonicalize().unwrap_or_else(|_| saved_project.path.clone());
+        let path = canonical(&saved_project.path);
         if !path.is_dir() || self.projects.iter().any(|p| p.path == path) {
             return None;
         }

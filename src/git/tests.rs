@@ -47,7 +47,8 @@ mod linked_worktrees {
         git(repo.path(), &["worktree", "add", "--quiet", "-b", "b", &b_path.display().to_string()]);
         git(repo.path(), &["worktree", "add", "--quiet", "-b", "a", &a_path.display().to_string()]);
 
-        let mut expected = vec![a_path.canonicalize().expect("a"), b_path.canonicalize().expect("b")];
+        let canonical = |path: &Path| crate::os::fs::canonicalize(path).expect("canonical");
+        let mut expected = vec![canonical(&a_path), canonical(&b_path)];
         expected.sort();
         assert_eq!(linked_worktrees(repo.path()), expected);
     }
@@ -90,7 +91,7 @@ mod linked_worktrees {
 
         let registered = registered_worktrees(repo.path()).expect("the registry");
 
-        assert_eq!(registered, [path.canonicalize().expect("canonical")]);
+        assert_eq!(registered, [crate::os::fs::canonicalize(&path).expect("canonical")]);
     }
 
     #[test]
@@ -294,6 +295,25 @@ mod user_name {
         let missing = dir.path().join("missing");
         assert_eq!(user_name_in(&[missing, repo, global]).as_deref(), Some("Grace"));
     }
+
+    const ALL: &[(&str, &str)] = &[("HOME", "/h"), ("HOMEDRIVE", "C:"), ("HOMEPATH", r"\d"), ("USERPROFILE", r"C:\u")];
+
+    #[rstest]
+    #[case::home_first(ALL, true, Some("/h"))]
+    #[case::then_the_drive_and_its_path(&ALL[1..], true, Some(r"C:\d"))]
+    #[case::then_the_profile(&ALL[3..], true, Some(r"C:\u"))]
+    #[case::the_profile_when_the_drive_s_folder_is_gone(&[("HOMEDRIVE", "C:"), ("HOMEPATH", r"\gone"), ("USERPROFILE", r"C:\u")], true, Some(r"C:\u"))]
+    #[case::only_home_on_unix(&ALL[1..], false, None)]
+    #[case::home_on_unix(ALL, false, Some("/h"))]
+    fn finds_the_home_folder_as_git_does(
+        #[case] vars: &[(&str, &str)],
+        #[case] windows: bool,
+        #[case] expected: Option<&str>,
+    ) {
+        let set = |name: &str| vars.iter().find(|(key, _)| *key == name).map(|(_, value)| OsString::from(value));
+        let is_dir = |path: &Path| path != Path::new(r"C:\gone");
+        assert_eq!(git_home(&set, windows, &is_dir), expected.map(PathBuf::from));
+    }
 }
 
 mod index_and_objects {
@@ -335,10 +355,9 @@ mod on_windows {
         git(repo.path(), &["worktree", "add", "--quiet", "-b", "feat", &path.display().to_string()]);
         let gitdir = std::fs::read_to_string(repo.path().join(".git/worktrees/año/gitdir")).expect("gitdir");
         assert!(gitdir.starts_with(&format!("{}:/", &path.display().to_string()[..1])), "{gitdir}");
-        let canonical = path.canonicalize().expect("canonical");
 
-        assert_eq!(linked_worktrees(&verbatim(repo.path())), std::slice::from_ref(&canonical));
-        assert_eq!(checkout_of(&verbatim(repo.path()), "feat"), Some(canonical));
+        assert_eq!(linked_worktrees(&verbatim(repo.path())), std::slice::from_ref(&path));
+        assert_eq!(checkout_of(&verbatim(repo.path()), "feat"), Some(path.clone()));
         assert_eq!(branch(&verbatim(&path)).as_deref(), Some("feat"));
         let objects = objects_dir(&verbatim(&path)).and_then(|dir| dir.canonicalize().ok());
         assert_eq!(objects, repo.path().join(".git").join("objects").canonicalize().ok());

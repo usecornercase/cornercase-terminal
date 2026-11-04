@@ -555,3 +555,21 @@ mod retrying {
         assert!(again.resumable && again.context.is_some());
     }
 }
+
+#[cfg(windows)]
+mod on_windows {
+    use super::*;
+    use crate::test_util::{holding, wait_until};
+
+    #[test]
+    fn finds_the_store_a_process_holds() {
+        let dir = TempDir::new();
+        let chat = dir.path().join("chats/0123456789abcdef0123456789abcdef/abc-1");
+        std::fs::create_dir_all(&chat).expect("create the chat");
+        let store = chat.join("store.db");
+        let cursor = holding(&store, &[]);
+        let expected = Some((store.canonicalize().expect("canonical store"), "abc-1".to_string()));
+
+        wait_until("the store is found", || store_of(cursor.pid()) == expected);
+    }
+}

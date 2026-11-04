@@ -10,6 +10,7 @@ use crate::control;
 use crate::error::Result;
 use crate::flows::folder;
 use crate::log;
+use crate::os::fs::canonical;
 use crate::paths;
 use crate::project::split::Dir;
 use crate::project::{Hierarchy, Project, Tab, TabAt, Workspace, WorkspaceAt};
@@ -46,6 +47,7 @@ pub(super) struct Spawning<'a> {
     pub(super) size: (u16, u16),
     pub(super) shell: &'a str,
     pub(super) args: &'a [String],
+    pub(super) env: &'a [(String, String)],
     pub(super) cwd: PathBuf,
     pub(super) run: Option<&'a Path>,
 }
@@ -98,14 +100,14 @@ impl App {
     ) -> Result<Term> {
         let size = self.pane_size(area);
         let id = self.take_id();
-        self.spawn_term(Spawning { id, size, shell: &self.shells.shell, args: &[], cwd, run }, accounts)
+        self.spawn_term(Spawning { id, size, shell: &self.shells.shell, args: &[], env: &[], cwd, run }, accounts)
     }
 
     pub(super) fn respawn_in(&mut self, pane: u64, cwd: PathBuf, accounts: Accounts) -> Result<bool> {
         let Some(old) = self.projects.pane_by(pane) else { return Ok(false) };
         let (generation, size, parent, collapsed) =
             (old.generation().wrapping_add(1), old.size(), old.parent, old.collapsed);
-        let spawning = Spawning { id: pane, size, shell: &self.shells.shell, args: &[], cwd, run: None };
+        let spawning = Spawning { id: pane, size, shell: &self.shells.shell, args: &[], env: &[], cwd, run: None };
         let mut term = self.spawn_as(spawning, generation, accounts)?;
         term.parent = parent;
         term.collapsed = collapsed;
@@ -121,9 +123,10 @@ impl App {
     }
 
     fn spawn_as(&self, spawning: Spawning, generation: u32, accounts: Accounts) -> Result<Term> {
-        let Spawning { id, size: (rows, cols), shell, args, cwd, run } = spawning;
+        let Spawning { id, size: (rows, cols), shell, args, env: extra, cwd, run } = spawning;
         accounts.link(|kind| self.accounts.default_home(kind));
-        let env = self.pane_env(id, run, &accounts);
+        let mut env = self.pane_env(id, run, &accounts);
+        env.extend_from_slice(extra);
         let removed = accounts.removed();
         let opts = SpawnOptions {
             id,
@@ -160,7 +163,7 @@ impl App {
     }
 
     pub(super) fn open_project(&mut self, dir: PathBuf, area: Rect) -> Result<()> {
-        let path = dir.canonicalize().unwrap_or(dir);
+        let path = canonical(dir);
         self.active = match self.projects.iter().position(|p| p.path == path) {
             Some(i) => i,
             None => self.add_project(path, area)?,

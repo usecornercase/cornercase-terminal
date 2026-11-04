@@ -19,6 +19,7 @@ use crate::control::{
     ProfileNew, ProfileSet, ProfileUse,
 };
 use crate::log::{self, Job, Level};
+use crate::os::fs::canonical;
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::time::Stamp;
 
@@ -200,8 +201,7 @@ impl App {
     }
 
     fn account_info(&self, kind: Known, name: String, default: Option<&Path>) -> AccountInfo {
-        let path = accounts::path(&self.accounts.dir, kind, &name);
-        let path = path.canonicalize().unwrap_or(path);
+        let path = canonical(accounts::path(&self.accounts.dir, kind, &name));
         let unshared = default.map(|default| links::status(kind, default, &path)).unwrap_or_default();
         let login = self.accounts.logins.seen.get(&(kind, name.clone())).cloned();
         let label = self.saved_label(kind, &name).to_string();

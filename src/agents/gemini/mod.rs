@@ -3,7 +3,7 @@ use std::time::SystemTime;
 
 use crate::agents::activity::{Activity, glyph};
 use crate::agents::context::counting::Ledger;
-use crate::agents::context::discovery::Job;
+use crate::agents::context::discovery::{self, Job};
 use crate::agents::context::{Compaction, Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "gemini";
@@ -37,7 +37,8 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("yolo (dangerous)", &["--yolo"]),
 ];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
-pub(in crate::agents) const RUNS_AS: bool = false;
+const NPM_SCRIPTS: [&[&str]; 2] =
+    [&["@google", "gemini-cli", "bundle", "gemini.js"], &["@google", "gemini-cli", "dist", "index.js"]];
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
@@ -64,6 +65,14 @@ pub(in crate::agents) fn normalized(args: &[String]) -> Vec<String> {
 
 pub(in crate::agents) fn local_command(text: &str) -> bool {
     text.trim_start().starts_with(['/', '?', '!'])
+}
+
+pub(in crate::agents) fn runs_as(arg: &str) -> bool {
+    cfg!(windows) && NPM_SCRIPTS.iter().any(|script| discovery::npm_script(arg, script))
+}
+
+fn is_gemini(args: &[String]) -> bool {
+    discovery::named(args, NAME) || args.iter().any(|arg| runs_as(arg))
 }
 
 fn from_title(title: &str) -> Option<Activity> {

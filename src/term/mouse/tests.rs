@@ -85,10 +85,17 @@ mod legacy {
     }
 
     #[test]
-    fn default_encoding_clamps_coordinates_that_do_not_fit_a_byte() {
-        let out = encode(event(K::Down(LEFT)), 400, 0, M::Press, E::Default).expect("press is wanted");
+    fn default_encoding_clamps_coordinates_that_do_not_fit_a_byte_without_a_limit() {
+        let out = encode_within(event(K::Down(LEFT)), (400, 0), M::Press, E::Default, None).expect("press is wanted");
 
         assert_eq!(out[4], u8::MAX);
+    }
+
+    #[test]
+    fn only_windows_limits_the_default_encoding() {
+        let past = encode(event(K::Down(LEFT)), LEGACY_LAST_ON_WINDOWS + 1, 0, M::Press, E::Default);
+
+        assert_eq!(past.is_none(), cfg!(windows));
     }
 
     #[test]
@@ -98,5 +105,51 @@ mod legacy {
         let chars: Vec<u32> = String::from_utf8(out).expect("valid utf8").chars().map(u32::from).collect();
 
         assert_eq!(chars, [0x1b, u32::from(b'['), u32::from(b'M'), 32, 32 + 300, 32 + 1]);
+    }
+}
+
+mod past_the_legacy_limit {
+    use super::*;
+
+    const LAST: Option<u16> = Some(94);
+
+    fn x10(kind: MouseEventKind, col: u16, row: u16) -> Option<Vec<u8>> {
+        encode_within(event(kind), (col, row), M::AnyMotion, E::Default, LAST)
+    }
+
+    #[rstest]
+    #[case::the_last_column(94, 0, Some(vec![0x1b, b'[', b'M', 32, 0x7f, 32 + 1]))]
+    #[case::a_column_past_it(95, 0, None)]
+    #[case::a_row_past_it(0, 95, None)]
+    fn a_press_is_sent_up_to_the_last_coordinate(
+        #[case] col: u16,
+        #[case] row: u16,
+        #[case] expected: Option<Vec<u8>>,
+    ) {
+        assert_eq!(x10(K::Down(LEFT), col, row), expected);
+    }
+
+    #[rstest]
+    #[case::wheel(K::ScrollDown)]
+    #[case::motion(K::Moved)]
+    fn the_wheel_and_motion_are_dropped(#[case] kind: MouseEventKind) {
+        assert_eq!(x10(kind, 120, 3), None);
+    }
+
+    #[rstest]
+    #[case::release(K::Up(LEFT), 32 + 3)]
+    #[case::drag(K::Drag(LEFT), 32 + 32)]
+    fn a_release_or_a_drag_comes_at_the_last_coordinate(#[case] kind: MouseEventKind, #[case] button: u8) {
+        assert_eq!(x10(kind, 120, 130), Some(vec![0x1b, b'[', b'M', button, 0x7f, 0x7f]));
+    }
+
+    #[rstest]
+    #[case::sgr(E::Sgr)]
+    #[case::utf8(E::Utf8)]
+    fn other_encodings_have_no_limit(#[case] encoding: MouseEncoding) {
+        let out = encode_within(event(K::Down(LEFT)), (199, 0), M::Press, encoding, LAST);
+
+        assert_eq!(out, encode_within(event(K::Down(LEFT)), (199, 0), M::Press, encoding, None));
+        assert!(out.is_some());
     }
 }

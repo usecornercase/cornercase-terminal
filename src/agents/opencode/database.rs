@@ -9,12 +9,12 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agents::context::counting::{Record, Usage};
-use crate::agents::context::discovery::{folder, named};
+use crate::agents::context::discovery::{folder, named, variable};
 use crate::agents::context::message::{self, Each, Role, Said, Spoken};
 use crate::agents::context::{Compaction, Context, percent};
 use crate::error::{self, Error};
-use crate::process;
 use crate::time::Stamp;
+use crate::{paths, process};
 
 const NAME: &str = "opencode";
 const BUSY_FOR: Duration = Duration::from_millis(100);
@@ -96,7 +96,7 @@ fn read_model(path: &Path, provider: &str, model: &str) -> Option<Model> {
 pub(in crate::agents) fn model_ids() -> Vec<String> {
     let var = |name| std::env::var_os(name).filter(|value| !value.is_empty()).map(PathBuf::from);
     let path = var("OPENCODE_MODELS_PATH").or_else(|| {
-        let cache = var("XDG_CACHE_HOME").or_else(|| var("HOME").map(|home| home.join(".cache")))?;
+        let cache = var("XDG_CACHE_HOME").or_else(|| var(paths::HOME_VAR).map(|home| home.join(".cache")))?;
         Some(cache.join(NAME).join("models.json"))
     });
     path.map(|path| ids_in(&path)).unwrap_or_default()
@@ -148,8 +148,8 @@ fn database(pid: i32) -> Option<(i32, PathBuf)> {
 
 fn configured(pid: i32) -> Option<String> {
     let env = process::env(pid);
-    let value = env.into_iter().find(|(key, value)| key == "OPENCODE_DB" && !value.is_empty())?.1;
-    Path::new(&value).file_name()?.to_str().map(str::to_string)
+    let value = variable(&env, "OPENCODE_DB")?;
+    Path::new(value).file_name()?.to_str().map(str::to_string)
 }
 
 fn is_database(path: &Path, named: Option<&str>) -> bool {
@@ -178,9 +178,9 @@ fn shared(holder: i32, database: &Path, cwd: &Path) -> bool {
 
 fn models_file(pid: i32) -> Option<PathBuf> {
     let env = process::env(pid);
-    let var = |name| env.iter().find(|(key, value)| key == name && !value.is_empty()).map(|(_, v)| PathBuf::from(v));
+    let var = |name| variable(&env, name).map(PathBuf::from);
     let path = var("OPENCODE_MODELS_PATH").or_else(|| {
-        let cache = var("XDG_CACHE_HOME").or_else(|| var("HOME").map(|home| home.join(".cache")))?;
+        let cache = var("XDG_CACHE_HOME").or_else(|| var(paths::HOME_VAR).map(|home| home.join(".cache")))?;
         Some(cache.join(NAME).join("models.json"))
     })?;
     if path.is_absolute() { Some(path) } else { Some(process::cwd(pid)?.join(path)) }

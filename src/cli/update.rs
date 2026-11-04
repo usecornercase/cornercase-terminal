@@ -1,4 +1,3 @@
-use std::fs;
 use std::io::{self, IsTerminal, Write, stdin, stdout};
 use std::net::Shutdown;
 use std::time::Duration;
@@ -9,6 +8,7 @@ use crate::client::{
 };
 use crate::error::{Error, Result};
 use crate::os::console::{self, AsFd, BorrowedFd};
+use crate::os::fs::canonicalize;
 use crate::os::socket::UnixStream;
 use crate::protocol::{self, ServerMessage};
 use crate::update::{self, Install, Outcome};
@@ -40,7 +40,7 @@ pub(super) fn update(check_only: bool, yes: bool, when: When) -> Result<bool> {
     }
     let url = url.unwrap_or_else(|| update::DEFAULT_LATEST.into());
     let target = update::target();
-    let install = update::install(&fs::canonicalize(std::env::current_exe()?)?, target);
+    let install = update::install(&canonicalize(std::env::current_exe()?)?, target);
     if check_only {
         match update::check(&url, CURRENT)? {
             Some(release) => {

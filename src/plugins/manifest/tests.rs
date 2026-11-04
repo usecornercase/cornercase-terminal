@@ -1,10 +1,10 @@
-#![cfg(unix)]
-
+#[cfg(unix)]
 use std::os::unix::fs::symlink;
 
 use super::*;
 use crate::test_util::TempDir;
 
+#[cfg(unix)]
 const FULL: &str = r#"
 id = "acme.notes"
 name = "Notes"
@@ -37,6 +37,7 @@ fn with(extra: &str) -> String {
     format!("id = \"acme.notes\"\nname = \"Notes\"\nversion = \"1\"\n{extra}")
 }
 
+#[cfg(unix)]
 mod parsing {
     use super::*;
 
@@ -138,6 +139,7 @@ mod parsing {
     }
 }
 
+#[cfg(unix)]
 mod buttons {
     use super::*;
 
@@ -217,6 +219,7 @@ mod buttons {
     }
 }
 
+#[cfg(unix)]
 mod loading {
     use super::*;
 
@@ -235,6 +238,7 @@ mod loading {
     }
 }
 
+#[cfg(unix)]
 mod programs {
     use std::fs::Permissions;
     use std::os::unix::fs::PermissionsExt;
@@ -309,6 +313,7 @@ mod programs {
     }
 }
 
+#[cfg(unix)]
 mod pipes {
     use super::*;
 
@@ -321,6 +326,7 @@ mod pipes {
     }
 }
 
+#[cfg(unix)]
 mod owners {
     use std::os::unix::fs::PermissionsExt;
 
@@ -357,4 +363,97 @@ mod owners {
 fn a_control_character_that_could_rewrite_the_preview_is_refused(#[case] extra: &str) {
     let error = Manifest::parse(&with(extra)).expect_err("refused");
     assert!(error.contains("control character"), "{error}");
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_READ, FILE_GENERIC_WRITE};
+
+    use super::*;
+    use crate::os::fs::{link_to, make_reparse_point, share_with_everyone};
+
+    const OPEN: u32 = FILE_GENERIC_READ | FILE_GENERIC_WRITE;
+
+    fn plugin(dir: &TempDir) -> PathBuf {
+        let path = dir.path().join(FILE);
+        std::fs::write(&path, with("")).expect("manifest");
+        path
+    }
+
+    fn refused(dir: &TempDir) -> String {
+        Manifest::read(dir.path()).expect_err("refused")
+    }
+
+    #[test]
+    fn a_plugin_for_linux_and_macos_only_is_refused() {
+        let error = Manifest::parse(&with("platforms = [\"linux\", \"macos\"]")).expect_err("refused");
+        assert!(error.contains("runs on linux, macos only"), "{error}");
+    }
+
+    #[test]
+    fn a_plugin_for_windows_is_accepted() {
+        assert!(Manifest::parse(&with("platforms = [\"Windows\"]")).is_ok());
+    }
+
+    #[test]
+    fn a_private_manifest_is_read() {
+        let dir = TempDir::new();
+        plugin(&dir);
+
+        assert_eq!(Manifest::read(dir.path()).expect("read").id, "acme.notes");
+    }
+
+    #[test]
+    fn a_manifest_everyone_can_only_read_is_read() {
+        let dir = TempDir::new();
+        share_with_everyone(&plugin(&dir), FILE_GENERIC_READ).expect("shared");
+
+        assert_eq!(Manifest::read(dir.path()).expect("read").id, "acme.notes");
+    }
+
+    #[test]
+    fn a_manifest_everyone_can_write_to_is_refused() {
+        let dir = TempDir::new();
+        share_with_everyone(&plugin(&dir), OPEN).expect("shared");
+
+        assert!(refused(&dir).contains("other users can write to cornercase-plugin.toml"), "{}", refused(&dir));
+    }
+
+    #[test]
+    fn a_folder_everyone_can_write_to_is_refused() {
+        let dir = TempDir::new();
+        plugin(&dir);
+        share_with_everyone(dir.path(), OPEN).expect("shared");
+
+        assert!(refused(&dir).contains("other users can write to the plugin's folder"), "{}", refused(&dir));
+    }
+
+    #[test]
+    fn a_manifest_that_is_a_reparse_point_is_refused() {
+        let dir = TempDir::new();
+        make_reparse_point(&plugin(&dir)).expect("a reparse point");
+
+        assert!(refused(&dir).contains("it is a link or another reparse point"), "{}", refused(&dir));
+    }
+
+    #[test]
+    fn a_junction_in_the_manifest_s_place_is_refused() {
+        let (dir, elsewhere) = (TempDir::new(), TempDir::new());
+        link_to(elsewhere.path(), dir.path().join(FILE)).expect("a junction in the manifest's place");
+
+        assert!(refused(&dir).starts_with("cannot read"), "{}", refused(&dir));
+    }
+
+    #[test]
+    fn a_program_everyone_can_write_to_is_refused() {
+        let dir = TempDir::new();
+        std::fs::create_dir(dir.path().join("bin")).expect("bin");
+        let run = dir.path().join("bin").join("run.exe");
+        std::fs::write(&run, "MZ").expect("program");
+
+        assert!(program(dir.path(), &["bin/run.exe".into()]).is_ok());
+        share_with_everyone(&run, OPEN).expect("shared");
+        let error = program(dir.path(), &["bin/run.exe".into()]).expect_err("refused");
+        assert!(error.contains(r"other users can write to `bin\run.exe`"), "{error}");
+    }
 }

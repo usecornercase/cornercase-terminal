@@ -93,8 +93,16 @@ mod config_dir {
     #[case::empty(&[("CLAUDE_CONFIG_DIR", "")], None)]
     #[case::relative(&[("CLAUDE_CONFIG_DIR", "work")], None)]
     fn of_an_agent_comes_from_its_own_environment(#[case] env: &[(&str, &str)], #[case] expected: Option<&str>) {
-        let env = env.iter().map(|(name, value)| ((*name).to_string(), (*value).to_string())).collect();
-        assert_eq!(own_dir(env), expected.map(PathBuf::from));
+        let env: Vec<(String, String)> =
+            env.iter().map(|(name, value)| ((*name).to_string(), (*value).to_string())).collect();
+        assert_eq!(own_dir(&env), expected.map(PathBuf::from));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn of_an_agent_is_read_whatever_the_case_of_its_variable_on_windows() {
+        let env = vec![("Claude_Config_Dir".to_string(), r"C:\Users\me\work".to_string())];
+        assert_eq!(own_dir(&env), Some(PathBuf::from(r"C:\Users\me\work")));
     }
 }
 

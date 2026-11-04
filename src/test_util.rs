@@ -10,8 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::os::ffi;
-use crate::os::fs::set_mode;
+use crate::os::fs::{canonicalize, set_mode};
 use crate::os::process::{Pid, Signal, kill_process};
 
 pub(crate) const SHORTCUT_MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
@@ -74,7 +73,7 @@ impl TempDir {
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("cornercase-test-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("create temp dir");
-        Self(ffi::plain(&dir.canonicalize().expect("canonicalize temp dir")).into_owned())
+        Self(canonicalize(&dir).expect("canonicalize temp dir"))
     }
 
     pub(crate) fn path(&self) -> &Path {
@@ -266,6 +265,20 @@ impl Running {
     pub(crate) fn pid(&self) -> i32 {
         i32::try_from(self.0.id()).expect("pid fits in i32")
     }
+
+    #[cfg(windows)]
+    pub(crate) fn first_line(&mut self) -> String {
+        use std::io::BufRead;
+        let output = self.0.stdout.take().expect("the output is piped");
+        let (line, read) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut first = String::new();
+            let _ = std::io::BufReader::new(output).read_line(&mut first);
+            let _ = line.send(first);
+        });
+        let first = read.recv_timeout(Duration::from_secs(30));
+        first.expect("the child writes its first line within 30 s").trim().to_string()
+    }
 }
 
 impl Drop for Running {
@@ -344,6 +357,19 @@ pub(crate) fn clone_of(remote: &Path) -> (TempDir, PathBuf) {
 #[cfg(not(unix))]
 pub(crate) fn verbatim(path: &Path) -> PathBuf {
     PathBuf::from(format!(r"\\?\{}", path.display()))
+}
+
+#[cfg(windows)]
+pub(crate) fn holding(file: &Path, vars: &[(&str, &str)]) -> Running {
+    let held = std::fs::OpenOptions::new().create(true).append(true).open(file).expect("open the file to hold");
+    Running::spawn(
+        std::process::Command::new("findstr")
+            .arg("held")
+            .envs(vars.iter().copied())
+            .stdin(std::process::Stdio::piped())
+            .stdout(held)
+            .stderr(std::process::Stdio::null()),
+    )
 }
 
 type Route = (&'static str, u16, Vec<u8>);

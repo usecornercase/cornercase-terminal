@@ -63,6 +63,7 @@ impl App {
         let changed = changed(shared, sections, &current);
         let mut next = self.config.clone();
         for (key, value) in changed.iter().filter(|(key, _)| ROWLESS.contains(key)) {
+            preview::runs_here(key, value).map_err(malformed)?;
             next = preview::with_value(&next, key, value).map_err(malformed)?;
         }
         let mut model = self.settings_model(Page::default());

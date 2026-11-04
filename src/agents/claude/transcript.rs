@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use super::MODEL_FLAG;
 use crate::agents::context::counting::{self, Record as CountRecord, Usage as CountUsage};
+use crate::agents::context::discovery::variable_key;
 use crate::agents::context::jsonl::{Batch, Tail};
 use crate::agents::context::{Compaction, Context, Look, fresh, percent};
 use crate::process;
@@ -472,9 +473,12 @@ impl Limits {
                 .iter()
                 .filter_map(|path| serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok())
                 .collect();
-        let mut env: HashMap<String, String> = process::env(look.pid).into_iter().collect();
+        let mut env: HashMap<String, String> =
+            process::env(look.pid).into_iter().map(|(key, value)| (variable_key(key), value)).collect();
         for vars in files.iter().filter_map(|file| file.get("env")?.as_object()) {
-            env.extend(vars.iter().filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string()))));
+            env.extend(
+                vars.iter().filter_map(|(key, value)| Some((variable_key(key.clone()), value.as_str()?.to_string()))),
+            );
         }
         let model = files.iter().rev().find_map(|file| file.get("model")?.as_str().map(str::to_string));
         Self::new(&look.args, &env, model)

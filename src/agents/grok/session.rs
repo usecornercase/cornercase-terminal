@@ -659,13 +659,7 @@ enum Found {
 }
 
 fn grok_home(pid: i32) -> Option<PathBuf> {
-    let env = process::env(pid);
-    let var = |name: &str| {
-        env.iter().find(|(key, value)| key == name && !value.is_empty()).map(|(_, value)| PathBuf::from(value))
-    };
-    let path = var("GROK_HOME").or_else(|| var("HOME").map(|home| home.join(".grok")))?;
-    let path = if path.is_absolute() { path } else { process::cwd(pid)?.join(path) };
-    path.canonicalize().ok()
+    context::discovery::home(pid, "GROK_HOME", "", ".grok")
 }
 
 fn row(home: &Path, pid: i32) -> Option<(String, String)> {

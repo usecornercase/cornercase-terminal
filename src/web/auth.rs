@@ -1,10 +1,11 @@
-use std::io::{self, Read};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::os::random;
 use crate::text::hex;
 
 pub(super) const COOKIE: &str = "cornercase";
@@ -15,7 +16,7 @@ const VERSION: u32 = 1;
 
 pub(crate) fn random_hex(bytes: usize) -> io::Result<String> {
     let mut buf = vec![0u8; bytes];
-    std::fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
+    random::fill(&mut buf)?;
     Ok(hex(&buf))
 }
 

@@ -198,3 +198,91 @@ mod writing {
         fs::write(&path, "{\"a\":1}").expect("still ours to write");
     }
 }
+
+mod canonical_paths {
+    use super::*;
+
+    fn inner(dir: &TempDir) -> PathBuf {
+        let inner = dir.path().join("inner");
+        fs::create_dir(&inner).expect("a folder");
+        inner
+    }
+
+    #[test]
+    fn a_folder_reached_the_long_way_is_canonical() {
+        let dir = TempDir::new();
+        let inner = inner(&dir);
+        let roundabout = inner.join("..").join("inner");
+        assert_eq!(canonicalize(&roundabout).expect("canonical"), inner);
+        assert_eq!(canonical(&roundabout), inner);
+    }
+
+    #[test]
+    fn a_missing_folder_is_kept_as_given() {
+        let dir = TempDir::new();
+        let missing = dir.path().join("missing");
+        assert_eq!(canonicalize(&missing).expect_err("missing").kind(), io::ErrorKind::NotFound);
+        assert_eq!(canonical(&missing), missing);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_is_what_std_makes_of_it() {
+        let dir = TempDir::new();
+        let link = dir.path().join("link");
+        link_to(inner(&dir), &link).expect("a link");
+        assert_eq!(canonicalize(&link).expect("canonical"), fs::canonicalize(&link).expect("std"));
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn a_folder_comes_back_without_the_verbatim_prefix() {
+        let dir = TempDir::new();
+        let inner = inner(&dir);
+        assert!(fs::canonicalize(&inner).expect("std").to_string_lossy().starts_with(r"\\?\"));
+        assert!(!inner.to_string_lossy().starts_with(r"\\?\"));
+        assert_eq!(canonicalize(&inner).expect("canonical"), inner);
+        assert_eq!(canonicalize(crate::test_util::verbatim(&inner)).expect("canonical"), inner);
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn a_missing_verbatim_folder_is_kept_without_the_prefix() {
+        let dir = TempDir::new();
+        let missing = dir.path().join("missing");
+        assert_eq!(canonical(crate::test_util::verbatim(&missing)), missing);
+    }
+}
+
+mod paths_beyond_the_drives {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::a_share(r"\\host\share\ding.wav", true, false)]
+    #[case::a_share_with_slashes("//host/share/ding.wav", true, false)]
+    #[case::mixed_slashes(r"/\host\share\ding.wav", true, false)]
+    #[case::a_verbatim_share(r"\\?\UNC\host\share\ding.wav", true, false)]
+    #[case::a_volume(r"\\?\Volume{0b1c}\ding.wav", true, false)]
+    #[case::a_device(r"\\.\C:\ding.wav", true, false)]
+    #[case::a_device_with_slashes("//?/C:/ding.wav", true, false)]
+    #[case::a_verbatim_drive(r"\\?\C:\ding.wav", false, true)]
+    #[case::a_verbatim_name_with_a_slash(r"\\?\C:/ding.wav", true, false)]
+    #[case::a_drive(r"C:\Users\ana\ding.wav", false, true)]
+    #[case::a_drive_with_slashes("d:/sounds/ding.wav", false, true)]
+    #[case::a_drive_without_its_root("C:ding.wav", false, false)]
+    #[case::the_drive_s_root(r"\ding.wav", false, false)]
+    #[case::unix("/usr/share/sounds/ding.wav", false, false)]
+    #[case::home("~/ding.wav", false, false)]
+    #[case::relative("ding.wav", false, false)]
+    fn are_told_apart(#[case] path: &str, #[case] beyond: bool, #[case] drive: bool) {
+        assert_eq!((unc_or_device(path), drive_path(path)), (beyond, drive));
+    }
+
+    #[test]
+    fn reach_the_network_only_on_windows() {
+        assert_eq!(reaches_network(r"\\host\share\ding.wav"), cfg!(windows));
+        assert!(!reaches_network(r"C:\ding.wav"));
+    }
+}

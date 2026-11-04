@@ -2,10 +2,33 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.269
+## 0.12.279
 
-- **The search finds settings.** Typing in the search now also lists matching settings, after your projects, workspaces and tabs, so those keep their places. Each shows where it lives and its value, such as `UI › prefix key`. Click one or press `Enter` and Settings opens on that row, with nothing changed. A row that doesn't show yet is listed muted with what it needs.
-- **`cornercase search TEXT --settings`** adds the matching settings to what was said, for scripts and other apps.
+- **cornercase now runs natively on Windows** (Windows 10 1809 or later): the window, the background server, the shells in ConPTY (PowerShell by default, or the shell `SHELL` names, such as Git Bash), worktrees, the changes and files panels, processes, ports, the coding agents and the commands for scripts and agents. For now it is built from source, which needs Zig 0.15.2 and the Visual Studio build tools; there is no Windows release, installer or `cornercase update` yet. `cornercase remote` from Windows reaches a Linux or macOS machine, but a Windows machine cannot be the remote end yet; the Telegram and Discord bots have not been tried on Windows; and an agent installed as an npm `.cmd` shim does not start when its launch line holds one of cmd's special characters (`& | < > ^ % ! "`). Also on Windows: browser pairing tokens come from the system's random generator; a plugin that declares `platforms = ["linux"]` no longer loads there, and one that declares `windows` does and shows in the plugin catalogue; code in the changes and files panels is coloured; `~` means your user folder; a sound file can be given as a `C:\…` path; and cornercase does not open a network path (`\\host\share\…`) that comes from imported settings, a pane's output or a `.code-workspace` file, which could otherwise hand your Windows sign-in to that machine. Nothing changes on Linux and macOS.
+
+## 0.12.277
+
+- **On Windows, worktree setup and teardown scripts and plugin scripts run without a Unix machine's `sh`**, the next step of the native port (it still says it does not run on Windows yet). They go through Git for Windows' own `sh`, found only inside Git's install, or through PowerShell when Git is missing, and a plugin's arguments reach its program as written. A plugin's manifest is checked by its owner and access list, as its mode is on Unix. Nothing changes on Linux and macOS.
+
+## 0.12.276
+
+- **On Windows, cornercase can now see which files a program holds open**, the next step of the native port (it still says it does not run on Windows yet). That is how it finds the records of Codex, Copilot, Cursor and opencode for a tab's model and context line, so those agents can show it there as they do on Linux and macOS. A file whose name Windows cannot give at once (a pipe or console another thread is reading) is skipped rather than holding the rest up. Nothing changes on Linux and macOS.
+
+## 0.12.275
+
+- **On Windows, a read on cornercase's socket no longer waits forever when the other end sends its last bytes and closes right away.** Windows could leave such a read blocked although the connection was over, which would have hung `kill-server` waiting for the server to stop, or kept a server thread waiting for a client that had left. Nothing changes on Linux and macOS.
+
+## 0.12.274
+
+- **On Windows, cornercase finds the coding agents installed with npm, reads their folders from your profile and types their commands in PowerShell's syntax**, another step towards running there natively. It still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.272
+
+- **On Windows, project, workspace and worktree folders are stored and shown without the `\\?\` prefix**, and sessions saved with it open with plain folders. cornercase still says it does not run on Windows yet. Nothing changes on Linux and macOS.
+
+## 0.12.270
+
+- **On Windows, programs in a pane get the mouse**, the next step of the native port (it still says it does not run on Windows yet). vim with `set mouse=a` and other programs that ask for the mouse, with escape codes or through the Windows console, get clicks, drags and the wheel through ConPTY. A program using the oldest mouse encoding gets no click past column or row 95, where Windows would turn it into stray keys, as in Windows Terminal. Nothing changes on Linux and macOS.
 
 ## 0.12.268
 

@@ -436,19 +436,15 @@ fn chosen(value: Option<&String>) -> Option<&str> {
     value.map(|value| value.trim()).filter(|value| !value.is_empty())
 }
 
-fn quoted(words: impl IntoIterator<Item = String>) -> String {
-    words.into_iter().map(|word| agents::quote(&word)).collect::<Vec<_>>().join(" ")
-}
-
 pub(crate) fn command(config: &Config, role: &Role, dir: Option<&Path>) -> Option<String> {
     let (_, words, args) = parts(config, role, dir)?;
-    Some(quoted(words.into_iter().chain(args)))
+    Some(agents::typed_line(words.into_iter().chain(args)))
 }
 
 pub(crate) fn resume(config: &Config, role: &Role, conversation: String, dir: Option<&Path>) -> Option<String> {
     let (kind, words, args) = parts(config, role, dir)?;
     let args = kind.resume(args, conversation)?;
-    Some(quoted(words.into_iter().chain(args)))
+    Some(agents::typed_line(words.into_iter().chain(args)))
 }
 
 pub(crate) fn role_branch(branch: &str, role: &str) -> String {

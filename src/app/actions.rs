@@ -9,6 +9,7 @@ use crate::changes::Checkout;
 use crate::error::Result;
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Tab};
+use crate::script::{self, Line, Shell};
 use crate::term::{SpawnOptions, Term};
 use crate::ui::{self};
 
@@ -22,18 +23,36 @@ const BUSY: &str = "a message is going into the agent's input, so the reference 
 
 const EDIT_SCRIPT: &str = "exec ${VISUAL:-${EDITOR:-vi}} \"+$1\" \"$2\"";
 
+const POWERSHELL_EDIT: &str = "$editor = if ($env:VISUAL) { $env:VISUAL } else { $env:EDITOR }
+if (-not $editor) { notepad.exe $file; exit 0 }
+$first, $rest = -split $editor
+& $first @rest \"+$line\" $file
+exit $LASTEXITCODE
+";
+
+fn editor(shell: &Shell, line: u32, file: String) -> Line {
+    match shell {
+        Shell::Sh(sh) => sh.line("-c", EDIT_SCRIPT, &["sh".into(), line.to_string(), file]).on_git_path(sh),
+        Shell::PowerShell(program) => {
+            let text = format!("$line = {line}\n$file = {}\n{POWERSHELL_EDIT}", script::literal(&file));
+            Line { program: program.clone(), args: vec!["-NoProfile".into(), "-Command".into(), text], env: Vec::new() }
+        }
+    }
+}
+
 impl App {
     pub(super) fn open_in_editor(&mut self, target: &Checkout, path: &str, line: u32, area: Rect) -> Result<()> {
         let Some(at) = self.projects.workspace_index(target.workspace) else { return Ok(()) };
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
         let file = target.dir.join(path).display().to_string();
-        let args = ["-c".to_string(), EDIT_SCRIPT.to_string(), "sh".to_string(), line.max(1).to_string(), file];
-        let env = [self.pane_env(id, None, &Accounts::default()), self.shells.editor_env().to_vec()].concat();
+        let command = editor(Shell::here(), line.max(1), file);
+        let env =
+            [self.pane_env(id, None, &Accounts::default()), self.shells.editor_env().to_vec(), command.env].concat();
         let opts = SpawnOptions {
             id,
-            shell: "/bin/sh",
-            args: &args,
+            shell: &command.program,
+            args: &command.args,
             env: &env,
             remove: &[],
             rows,

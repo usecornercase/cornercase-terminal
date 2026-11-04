@@ -2,9 +2,11 @@ pub(crate) mod remote;
 pub(crate) mod upstream;
 pub(crate) mod worktree;
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use crate::os::ffi;
+use crate::os::fs::canonical;
 
 const SHORT_SHA_LEN: usize = 7;
 
@@ -60,7 +62,8 @@ pub(crate) fn remote_urls(dir: &Path) -> Vec<(String, String)> {
 }
 
 pub(crate) fn user_name(dir: &Path) -> Option<String> {
-    let home = std::env::var_os("HOME").filter(|home| !home.is_empty()).map(PathBuf::from);
+    let set = |name: &str| std::env::var_os(name).filter(|value| !value.is_empty());
+    let home = git_home(&set, cfg!(windows), &|path: &Path| path.is_dir());
     let xdg = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .filter(|xdg| xdg.is_absolute())
@@ -69,6 +72,20 @@ pub(crate) fn user_name(dir: &Path) -> Option<String> {
     files.extend(home.map(|home| home.join(".gitconfig")));
     files.extend(xdg.map(|xdg| xdg.join("git/config")));
     user_name_in(&files)
+}
+
+fn git_home(set: &dyn Fn(&str) -> Option<OsString>, windows: bool, is_dir: &dyn Fn(&Path) -> bool) -> Option<PathBuf> {
+    if let Some(home) = set("HOME") {
+        return Some(home.into());
+    }
+    if !windows {
+        return None;
+    }
+    let drive = set("HOMEDRIVE").zip(set("HOMEPATH")).map(|(mut drive, path)| {
+        drive.push(path);
+        PathBuf::from(drive)
+    });
+    drive.filter(|home| is_dir(home)).or_else(|| set("USERPROFILE").map(PathBuf::from))
 }
 
 pub(crate) fn user_name_in(files: &[PathBuf]) -> Option<String> {
@@ -141,7 +158,7 @@ pub(crate) fn registered_worktrees(repo: &Path) -> std::io::Result<Vec<PathBuf>>
             ffi::join(&entry.path(), gitdir.trim()).parent().map(Path::to_path_buf)
         })
         .filter(|path| path.is_dir())
-        .map(|path| path.canonicalize().unwrap_or(path))
+        .map(canonical)
         .collect();
     worktrees.sort();
     Ok(worktrees)

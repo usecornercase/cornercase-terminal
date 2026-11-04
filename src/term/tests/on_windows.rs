@@ -36,7 +36,15 @@ fn in_folder(term: &mut Term, rx: &Receiver<Event>, folder: &Path) -> bool {
 
 fn typed(term: &mut Term, rx: &Receiver<Event>, line: &str, shows: &str) {
     term.write(format!("{line}\r").as_bytes());
-    wait_until_within(shows, SLOW, || contents(term, rx).contains(shows));
+    until_shown(term, rx, shows);
+}
+
+fn until_shown(term: &mut Term, rx: &Receiver<Event>, text: &str) {
+    wait_until_within(text, SLOW, || contents(term, rx).contains(text));
+}
+
+fn single_quoted(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "''"))
 }
 
 fn titled(term: &mut Term, rx: &Receiver<Event>, title: &str) -> bool {
@@ -183,9 +191,106 @@ mod console_sequences {
         assert!(matches!(term.emulator.program_activity(), Some(Activity::Working)));
         assert!(term.emulator.take_copied().iter().any(|copied| copied == "cc-copy"));
     }
+}
+
+mod mouse {
+    use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use rstest::rstest;
+
+    use super::*;
+    use crate::term::mouse::{self, MouseEncoding};
+
+    const LEFT: MouseButton = MouseButton::Left;
+    const READER: &str = crate::test_util::fixture!("conpty/mouse.cs");
+    const REFUSED: &str = "cc-refused";
+
+    fn start_reader(term: &mut Term, rx: &Receiver<Event>, dir: &TempDir, call: &str) {
+        let source = dir.path().join("mouse.cs");
+        std::fs::write(&source, READER).expect("write the reader");
+        let path = single_quoted(&source);
+        let compile = format!("Add-Type -Path {path} -ErrorAction Stop; [CcMouse]::{call}");
+        let refused = "'cc-re' + 'fused: ' + $_";
+        let line =
+            format!("powershell -NoProfile -NonInteractive -Command \"try {{ {compile} }} catch {{ {refused} }}\"");
+        term.write(format!("{line}\r").as_bytes());
+        let mut shown = String::new();
+        wait_until_within("the reader starts", SLOW, || {
+            shown = contents(term, rx);
+            shown.contains("cc-ready") || shown.contains(REFUSED)
+        });
+        let refusal = shown.lines().find(|line| line.contains(REFUSED));
+        assert!(refusal.is_none(), "PowerShell did not run the reader: {refusal:?}");
+    }
+
+    fn asks_for(term: &mut Term, rx: &Receiver<Event>, mode: MouseMode) -> bool {
+        let _ = contents(term, rx);
+        term.emulator.mouse_mode() == mode
+    }
+
+    fn click(term: &mut Term, kind: MouseEventKind, col: u16) -> Vec<u8> {
+        let ev = MouseEvent { kind, column: col, row: 4, modifiers: KeyModifiers::NONE };
+        let (mode, encoding) = (term.emulator.mouse_mode(), term.emulator.mouse_encoding());
+        let bytes = mouse::encode(ev, col, 4, mode, encoding).expect("the program wants the click");
+        term.write(&bytes);
+        bytes
+    }
+
+    fn read_as(bytes: &[u8]) -> String {
+        let units: Vec<String> =
+            String::from_utf8_lossy(bytes).chars().map(|unit| format!("{:x}", u32::from(unit))).collect();
+        format!("cc-read {}", units.join(" "))
+    }
+
+    #[rstest]
+    #[case::sgr("1000;1006", MouseEncoding::Sgr, 2)]
+    #[case::x10_at_its_last_column("1000", MouseEncoding::Default, 94)]
+    #[case::utf8_past_it("1000;1005", MouseEncoding::Utf8, 199)]
+    fn a_program_reading_vt_input_gets_its_mouse_mode_through_and_reads_a_click_as_sent(
+        #[case] modes: &str,
+        #[case] encoding: MouseEncoding,
+        #[case] col: u16,
+    ) {
+        let dir = TempDir::new();
+        let (mut term, rx) = spawn_cmd(None);
+        start_reader(&mut term, &rx, &dir, &format!("Vt('{modes}')"));
+        wait_until("the mouse mode arrives", || asks_for(&mut term, &rx, MouseMode::PressRelease));
+        assert_eq!(term.emulator.mouse_encoding(), encoding);
+
+        let mut sent = click(&mut term, MouseEventKind::Down(LEFT), col);
+        sent.extend(click(&mut term, MouseEventKind::Up(LEFT), col));
+        term.write(b"q");
+
+        until_shown(&mut term, &rx, &read_as(&sent));
+        wait_until("the mouse mode ends", || asks_for(&mut term, &rx, MouseMode::None));
+    }
 
     #[test]
-    fn a_mouse_mode_a_program_asks_for_stays_in_the_console() {
+    fn a_byte_past_0x7f_reaches_the_program_as_a_replacement_character() {
+        let dir = TempDir::new();
+        let (mut term, rx) = spawn_cmd(None);
+        start_reader(&mut term, &rx, &dir, "Vt('1000')");
+
+        term.write(b"\x1b[M \x80%q");
+
+        until_shown(&mut term, &rx, "cc-read 1b 5b 4d 20 fffd 25");
+    }
+
+    #[test]
+    fn a_program_asking_the_console_for_mouse_input_gets_a_click_as_a_mouse_record() {
+        let dir = TempDir::new();
+        let (mut term, rx) = spawn_cmd(None);
+        start_reader(&mut term, &rx, &dir, "Records()");
+        wait_until("the console asks for the mouse", || asks_for(&mut term, &rx, MouseMode::AnyMotion));
+        assert_eq!(term.emulator.mouse_encoding(), MouseEncoding::Sgr);
+
+        click(&mut term, MouseEventKind::Down(LEFT), 2);
+
+        until_shown(&mut term, &rx, "cc-click 2,4");
+        wait_until("the console lets the mouse go", || asks_for(&mut term, &rx, MouseMode::None));
+    }
+
+    #[test]
+    fn a_mouse_mode_written_without_vt_input_stays_in_the_console() {
         let (mut term, rx) = spawn_cmd(None);
 
         typed(&mut term, &rx, "prompt $E[?1000h$E[?1006hcc-mouse$G", "cc-mouse>");
@@ -253,7 +358,7 @@ mod foreground {
         let prompt = r"function prompt { [char]27 + ']9;9;' + $PWD.ProviderPath + [char]27 + '\' + 'cc-p' + 's> ' }";
         typed(&mut term, &rx, prompt, "cc-ps>");
 
-        term.write(format!("Set-Location '{}'\r", dir.path().display()).as_bytes());
+        term.write(format!("Set-Location {}\r", single_quoted(dir.path())).as_bytes());
 
         wait_until_within("the reported folder", SLOW, || in_folder(&mut term, &rx, &folder));
         assert!(term.shell_in_foreground());

@@ -290,3 +290,53 @@ mod matching {
         assert_eq!(found(&["GitHub.com/acme/web-shop"], &[&[SHOP], &["github.com/ACME/web-shop"]]), [1]);
     }
 }
+
+#[cfg(windows)]
+mod beyond_the_drives {
+    use super::*;
+
+    #[test]
+    fn a_worktrees_folder_is_named_without_being_looked_up() {
+        let shared = with(&json!({"worktrees_dir": r"\\.\C:\nonexistent\worktrees"}));
+
+        let preview = preview(&shared, &settings(), &nobody());
+
+        assert_eq!(
+            section(&preview, "worktrees").notes,
+            [note(NoteKind::Risk, r"\\.\C:\nonexistent\worktrees is a network or device path")]
+        );
+    }
+
+    #[test]
+    fn an_agent_s_program_is_named_without_being_looked_up() {
+        let shared = with(&json!({"agent_commands": {"claude": r"\\.\C:\nonexistent\claude.exe --x"}}));
+
+        let preview = preview(&shared, &settings(), &nobody());
+
+        assert_eq!(
+            section(&preview, "agents").notes,
+            [
+                note(NoteKind::Risk, r"runs \\.\C:\nonexistent\claude.exe --x as the claude agent"),
+                note(NoteKind::Risk, r"\\.\C:\nonexistent\claude.exe is a network or device path"),
+            ]
+        );
+    }
+
+    #[rstest::rstest]
+    #[case::gh("gh", json!(r"\\attacker\share\gh.exe"))]
+    #[case::glab("glab", json!("//attacker/share/glab.exe"))]
+    #[case::an_agent("agent_commands", json!({"codex": "codex", "claude": r"& '\\attacker\share\claude.exe' --x"}))]
+    fn a_program_on_another_machine_is_not_imported(#[case] key: &str, #[case] value: Value) {
+        let error = runs_here(key, &value).expect_err("refused");
+        assert!(error.contains("is a network or device path"), "{error}");
+    }
+
+    #[rstest::rstest]
+    #[case::gh("gh", json!(r"C:\tools\gh.exe"))]
+    #[case::on_the_path("glab", json!("glab"))]
+    #[case::an_agent("agent_commands", json!({"claude": r"& 'C:\tools\claude.exe' --x"}))]
+    #[case::another_key("worktrees_dir", json!(r"\\host\share\worktrees"))]
+    fn a_program_on_this_machine_is_imported(#[case] key: &str, #[case] value: Value) {
+        assert_eq!(runs_here(key, &value), Ok(()));
+    }
+}

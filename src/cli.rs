@@ -79,9 +79,6 @@ impl WhenArgs {
 }
 
 pub fn run(cli: Cli) -> Result<bool> {
-    if cfg!(not(unix)) {
-        return Err(Error::NotOnWindows);
-    }
     let remote = reach::chosen(&cli, &|name| std::env::var_os(name))?;
     match (cli.command, remote) {
         (None, None) => client::run()?,

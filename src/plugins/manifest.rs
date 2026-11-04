@@ -5,7 +5,10 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::os::fs::{MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, gid};
+use crate::os::fs::{
+    MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, file_owner_and_mode, gid, owner_and_mode, reparse_point,
+};
+use crate::script::Shell;
 use crate::{text, version};
 
 pub(crate) const FILE: &str = "cornercase-plugin.toml";
@@ -186,7 +189,13 @@ pub(crate) struct Build {
 }
 
 pub(crate) fn platform() -> &'static str {
-    if cfg!(target_os = "macos") { "macos" } else { "linux" }
+    if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(windows) {
+        "windows"
+    } else {
+        "linux"
+    }
 }
 
 impl Manifest {
@@ -209,12 +218,15 @@ impl Manifest {
             .open(&path)
             .map_err(|e| cannot(&e))?;
         let meta = file.metadata().map_err(|e| cannot(&e))?;
+        if reparse_point(&meta) {
+            return Err(cannot(&"it is a link or another reparse point"));
+        }
         if !meta.is_file() {
             return Err(cannot(&"it is not a file"));
         }
         let folder = std::fs::metadata(root).map_err(|e| cannot(&e))?;
-        guarded("the plugin's folder", &folder)?;
-        guarded(FILE, &meta)?;
+        guarded("the plugin's folder", owner_and_mode(root, &folder), &folder)?;
+        guarded(FILE, file_owner_and_mode(&file, &meta), &meta)?;
         let mut text = String::new();
         file.take(MAX_BYTES + 1).read_to_string(&mut text).map_err(|e| cannot(&e))?;
         if text.len() as u64 > MAX_BYTES {
@@ -531,25 +543,29 @@ fn resolve(root: &Path, command: &[String]) -> Result<(PathBuf, Vec<String>), St
     let Ok(inside) = program.strip_prefix(&root) else {
         return Err(outside());
     };
-    guarded("the plugin's folder", &metadata(&root)?)?;
+    checked("the plugin's folder", &root)?;
     let mut part = PathBuf::new();
     for component in inside.components() {
         part.push(component);
-        guarded(&format!("`{}`", part.display()), &metadata(&root.join(&part))?)?;
+        checked(&format!("`{}`", part.display()), &root.join(&part))?;
+    }
+    if let Some(why) = Shell::here().refuses(&program) {
+        return Err(format!("cannot run `{first}`: {why}"));
     }
     Ok((program, args.to_vec()))
 }
 
-fn metadata(path: &Path) -> Result<Metadata, String> {
-    std::fs::metadata(path).map_err(|e| format!("cannot read {}: {e}", path.display()))
+fn checked(what: &str, path: &Path) -> Result<(), String> {
+    let meta = std::fs::metadata(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    guarded(what, owner_and_mode(path, &meta), &meta)
 }
 
-fn guarded(what: &str, meta: &Metadata) -> Result<(), String> {
-    if meta.uid() != crate::protocol::own_uid() {
+fn guarded(what: &str, (owner, mode): (u32, u32), meta: &Metadata) -> Result<(), String> {
+    if owner != crate::protocol::own_uid() {
         return Err(format!("{what} belongs to another user; a plugin runs as you"));
     }
-    let shared_group = meta.mode() & 0o020 != 0 && meta.gid() != gid();
-    if meta.mode() & 0o002 != 0 || shared_group {
+    let shared_group = mode & 0o020 != 0 && meta.gid() != gid();
+    if mode & 0o002 != 0 || shared_group {
         return Err(format!("other users can write to {what}; a plugin runs as you"));
     }
     Ok(())

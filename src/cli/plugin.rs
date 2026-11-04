@@ -13,6 +13,7 @@ use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::control::{Command, Item, PluginActions, PluginList, PluginPopupClose, PluginRun};
 use crate::error::{Error, Result};
+use crate::os::fs::canonical;
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
 use crate::plugins::registry::{missing, short};
@@ -316,9 +317,8 @@ fn folder_spec(spec: &str) -> String {
         Some((folder, subdir)) => (folder, format!("//{subdir}")),
         None => (place, String::new()),
     };
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    let path = config::expand_home(folder, home.as_deref());
-    let path = path.canonicalize().unwrap_or(path);
+    let home = std::env::var_os(paths::HOME_VAR).map(std::path::PathBuf::from);
+    let path = canonical(config::expand_home(folder, home.as_deref()));
     format!("{}{subdir}{at}", Path::new(&path).display())
 }
 

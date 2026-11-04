@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use super::canonical;
 use crate::app::App;
 use crate::app::event::AppEvent;
 use crate::app::overlay::Overlay;
@@ -10,6 +9,7 @@ use crate::app::worktrees::{RemoveOptions, WorktreeEvent};
 use crate::error::Result;
 use crate::flows::run::RoleWorktree;
 use crate::log::{self, Job, Level};
+use crate::os::fs::canonical;
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::text::plural;
 use crate::ui;

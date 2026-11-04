@@ -1,16 +1,50 @@
 use std::fs::{File, Metadata};
 use std::io;
+use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
 pub(crate) use imp::process_uid;
+pub(crate) use imp::{
+    DirBuilderExt, MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, PermissionsExt, create_private_dir_all,
+    file_owner_and_mode, gid, link_to, links_to, make_private, owner_and_mode, reparse_point, set_file_mode, set_mode,
+    simplified, stat, stat_file, truncate, try_lock, uid, writable,
+};
 #[cfg(test)]
 #[cfg(windows)]
-pub(crate) use imp::share_with_everyone;
-pub(crate) use imp::{
-    DirBuilderExt, MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, PermissionsExt, create_private_dir_all, gid,
-    link_to, links_to, make_private, owner_and_mode, set_file_mode, set_mode, stat, stat_file, truncate, try_lock, uid,
-    writable,
-};
+pub(crate) use imp::{make_reparse_point, share_with_everyone};
+
+pub(crate) fn canonicalize(path: impl AsRef<Path>) -> io::Result<PathBuf> {
+    std::fs::canonicalize(path).map(simplified)
+}
+
+pub(crate) fn canonical(path: impl AsRef<Path> + Into<PathBuf>) -> PathBuf {
+    canonicalize(path.as_ref()).unwrap_or_else(|_| simplified(path.into()))
+}
+
+pub(crate) fn reaches_network(path: &str) -> bool {
+    cfg!(windows) && unc_or_device(path)
+}
+
+pub(crate) fn unc_or_device(path: &str) -> bool {
+    let mut chars = path.chars();
+    let doubled = matches!((chars.next(), chars.next()), (Some('\\' | '/'), Some('\\' | '/')));
+    doubled && !drive_path(path)
+}
+
+pub(crate) fn drive_path(path: &str) -> bool {
+    match path.strip_prefix(r"\\?\") {
+        Some(verbatim) => drive_root(verbatim, &['\\']),
+        None => drive_root(path, &['\\', '/']),
+    }
+}
+
+fn drive_root(path: &str, separators: &[char]) -> bool {
+    let mut chars = path.chars();
+    match (chars.next(), chars.next(), chars.next()) {
+        (Some(letter), Some(':'), Some(separator)) => letter.is_ascii_alphabetic() && separators.contains(&separator),
+        _ => false,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Lock {
@@ -43,7 +77,7 @@ pub(crate) fn locked(file: File, lock: Lock) -> io::Result<Option<File>> {
 mod imp {
     use std::fs::{File, Metadata, Permissions};
     use std::io;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use rustix::fs::{Access, FlockOperation, OFlags, access, flock};
     use rustix::io::Errno;
@@ -73,12 +107,24 @@ mod imp {
         (meta.uid(), meta.mode())
     }
 
+    pub(crate) fn file_owner_and_mode(_file: &File, meta: &Metadata) -> (u32, u32) {
+        (meta.uid(), meta.mode())
+    }
+
+    pub(crate) fn reparse_point(meta: &Metadata) -> bool {
+        meta.file_type().is_symlink()
+    }
+
     pub(crate) fn make_private(dir: &Path) -> io::Result<()> {
         set_mode(dir, 0o700)
     }
 
     pub(crate) fn truncate(file: &File, _path: &Path) -> io::Result<()> {
         file.set_len(0)
+    }
+
+    pub(crate) fn simplified(path: PathBuf) -> PathBuf {
+        path
     }
 
     pub(crate) fn links_to(meta: &Metadata, _link: &Path, _original: &Path) -> bool {

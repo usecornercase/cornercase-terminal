@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::config::expand_home;
 use crate::log;
 use crate::os::desktop;
-use crate::os::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt, set_file_mode};
+use crate::os::fs::{DirBuilderExt, OpenOptionsExt, drive_path, set_file_mode};
+use crate::process::program;
 
 const RATE: u16 = 22_050;
 const VOLUME: f32 = 0.3;
@@ -20,7 +21,6 @@ const GAP: Duration = Duration::from_secs(1);
 const KILL_AFTER: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(50);
 const FOLDER: &str = "sounds";
-const RUNNABLE: [&str; 4] = [".com", ".exe", ".bat", ".cmd"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -85,12 +85,7 @@ impl Os {
     }
 
     pub(super) fn extensions(self, pathext: Option<&str>) -> Vec<String> {
-        if self != Self::Windows {
-            return Vec::new();
-        }
-        let listed = pathext.unwrap_or_default().split(';').map(|extension| extension.trim().to_lowercase());
-        let runnable: Vec<String> = listed.filter(|extension| RUNNABLE.contains(&extension.as_str())).collect();
-        if runnable.is_empty() { RUNNABLE.map(String::from).to_vec() } else { runnable }
+        if self == Self::Windows { program::extensions(pathext) } else { Vec::new() }
     }
 }
 
@@ -127,22 +122,7 @@ pub(super) fn on_path<'a>(
     path: Option<&'a OsStr>,
     extensions: &'a [String],
 ) -> impl Fn(&str) -> Option<PathBuf> + 'a {
-    move |name| {
-        std::env::split_paths(path?)
-            .filter(|dir| dir.is_absolute())
-            .find_map(|dir| named(&dir, name, extensions).into_iter().find(|candidate| executable(os, candidate)))
-    }
-}
-
-fn named(dir: &Path, name: &str, extensions: &[String]) -> Vec<PathBuf> {
-    if extensions.is_empty() {
-        return vec![dir.join(name)];
-    }
-    extensions.iter().map(|extension| dir.join(format!("{name}{extension}"))).collect()
-}
-
-fn executable(os: Os, path: &Path) -> bool {
-    path.metadata().is_ok_and(|m| m.is_file() && (os == Os::Windows || m.permissions().mode() & 0o111 != 0))
+    program::on_path(os == Os::Windows, path, extensions)
 }
 
 fn resolve(path: &str, home: Option<&Path>) -> Option<PathBuf> {
@@ -151,7 +131,7 @@ fn resolve(path: &str, home: Option<&Path>) -> Option<PathBuf> {
         return None;
     }
     let path = expand_home(path, home);
-    if !path.is_absolute() {
+    if !path.is_absolute() || (cfg!(windows) && !drive_path(&path.to_string_lossy())) {
         return None;
     }
     let readable = path.metadata().is_ok_and(|m| m.is_file()) && File::open(&path).is_ok();
@@ -242,7 +222,7 @@ impl Player {
     pub(crate) fn detect(dir: PathBuf) -> Self {
         let (os, path) = (Os::current(), std::env::var_os("PATH"));
         let device = player(os, on_path(os, path.as_deref(), &[]));
-        Self::new(device, dir, std::env::var_os("HOME").map(PathBuf::from))
+        Self::new(device, dir, std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from))
     }
 
     pub(crate) fn play(&mut self, cue: &Cue, now: Instant) -> bool {

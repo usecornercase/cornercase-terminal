@@ -67,7 +67,7 @@ fn read(home: &Path, id: String, previous: Option<Session>) -> Option<Session> {
 }
 
 fn lease(home: &Path, pid: i32) -> Option<String> {
-    let entries = std::fs::read_dir(home.join("logs/session/active")).ok()?;
+    let entries = std::fs::read_dir(home.join("logs").join("session").join("active")).ok()?;
     let mut family = vec![pid];
     let mut found: Vec<String> = Vec::new();
     for entry in entries.flatten() {

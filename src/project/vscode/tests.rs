@@ -9,6 +9,11 @@ fn write(dir: &Path, name: &str, text: &str) -> PathBuf {
     file
 }
 
+fn folders_read(dir: &Path, text: &str) -> Vec<PathBuf> {
+    let file = write(dir, "w.code-workspace", text);
+    read(&file).expect("read").folders.into_iter().map(|f| f.path).collect()
+}
+
 mod reading {
     use super::*;
 
@@ -23,9 +28,8 @@ mod reading {
     #[test]
     fn resolves_relative_folders_from_the_file() {
         let tmp = TempDir::new();
-        let file = write(tmp.path(), "w.code-workspace", r#"{"folders": [{"path": "api"}, {"path": "../web"}]}"#);
 
-        let paths: Vec<PathBuf> = read(&file).expect("read").folders.into_iter().map(|f| f.path).collect();
+        let paths = folders_read(tmp.path(), r#"{"folders": [{"path": "api"}, {"path": "../web"}]}"#);
 
         assert_eq!(paths, [tmp.path().join("api"), tmp.path().join("../web")]);
     }
@@ -49,11 +53,24 @@ mod reading {
                 {"uri": "file://server/share/web"},
                 {"uri": "vscode-remote://ssh-remote+box/srv/api"}
             ]}"#;
-        let file = write(tmp.path(), "w.code-workspace", text);
 
-        let paths: Vec<PathBuf> = read(&file).expect("read").folders.into_iter().map(|f| f.path).collect();
+        let paths = folders_read(tmp.path(), text);
 
         assert_eq!(paths, [PathBuf::from("/home/me/my app"), PathBuf::from("/srv/api")]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn skips_folders_on_another_machine() {
+        let tmp = TempDir::new();
+        let text = r#"{"folders": [
+                {"path": "api"},
+                {"path": "\\\\server\\share\\web"},
+                {"path": "//server/share/docs"},
+                {"uri": "file:////server/share/lib"}
+            ]}"#;
+
+        assert_eq!(folders_read(tmp.path(), text), [tmp.path().join("api")]);
     }
 
     #[test]
