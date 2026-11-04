@@ -7,6 +7,10 @@ Every pull request that changes the app adds a section here for its new version.
 - **On Windows, an agent installed by npm as a `.cmd` starts in any folder**, `R&D` included: cornercase reads the shim npm wrote and types `node` with the agent's script instead, so its arguments never go through `cmd.exe`, and such a launch is no longer refused. A batch file it cannot read as an npm shim (pnpm's, an older npm's, one of your own) is still refused a line holding a character `cmd.exe` would read. Nothing changes on Linux and macOS.
 - **On Windows, an agent is not started with an argument PowerShell would split**: an argument holding a `"`, or a space and a last `\`, reaches the agent in pieces under Windows PowerShell 5.1, so part of it could become an option of its own. Such a launch is refused, and the message names the argument. JSON in `agent_args` was already losing its quotes there and is refused too. Nothing changes on Linux and macOS.
 
+## 0.12.277
+
+- **On Windows, worktree setup and teardown scripts and plugin scripts run without a Unix machine's `sh`**, the next step of the native port (it still says it does not run on Windows yet). They go through Git for Windows' own `sh`, found only inside Git's install, or through PowerShell when Git is missing, and a plugin's arguments reach its program as written. A plugin's manifest is checked by its owner and access list, as its mode is on Unix. Nothing changes on Linux and macOS.
+
 ## 0.12.276
 
 - **On Windows, cornercase can now see which files a program holds open**, the next step of the native port (it still says it does not run on Windows yet). That is how it finds the records of Codex, Copilot, Cursor and opencode for a tab's model and context line, so those agents can show it there as they do on Linux and macOS. A file whose name Windows cannot give at once (a pipe or console another thread is reading) is skipped rather than holding the rest up. Nothing changes on Linux and macOS.

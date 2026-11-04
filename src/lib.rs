@@ -32,6 +32,7 @@ pub(crate) mod processes;
 pub mod project;
 pub(crate) mod pull_request;
 pub(crate) mod queue;
+pub(crate) mod script;
 pub(crate) mod settings;
 pub(crate) mod shortcuts;
 pub(crate) mod star;

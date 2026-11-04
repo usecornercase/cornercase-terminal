@@ -189,8 +189,7 @@ mod listing {
         fs::write(&path, "").expect("a file");
         let meta = fs::metadata(&path).expect("metadata");
         assert_ne!(meta.ino(), fs::metadata(&path).expect("again").ino());
-        assert_ne!((meta.uid(), meta.gid()), (uid(), gid()));
-        assert_eq!(meta.mode() & 0o022, 0o022);
+        assert_ne!(meta.gid(), gid());
     }
 }
 

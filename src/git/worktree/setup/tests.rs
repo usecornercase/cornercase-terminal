@@ -1,24 +1,32 @@
-#![cfg(unix)]
-
-use std::os::unix::fs::PermissionsExt;
-use std::process::Command;
-
 use super::*;
 use crate::test_util::TempDir;
 
+#[cfg(unix)]
 fn fake_shell(dir: &Path) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
     let path = dir.join("shell");
     std::fs::write(&path, "#!/bin/sh\necho \"shell:$CORNERCASE_BRANCH:$CORNERCASE_ROOT\"\n").expect("write");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     path
 }
 
+#[cfg(unix)]
 fn run(script: &str) -> (String, Option<i32>) {
     let dir = TempDir::new();
-    let shell = fake_shell(dir.path());
+    let shell = fake_shell(dir.path()).display().to_string();
     let status = dir.path().join("status");
-    let out = Command::new("/bin/sh")
-        .args(args(script, &status, &shell.display().to_string(), Path::new("/repo"), "feat/x"))
+    let wrapper = Wrapper {
+        script,
+        status: &status,
+        shell: &shell,
+        root: Path::new("/repo"),
+        branch: "feat/x",
+        worktree: dir.path(),
+        home: true,
+    };
+    let out = line(&Shell::sh(), &wrapper)
+        .command()
         .current_dir(dir.path())
         .env("CORNERCASE_BRANCH", "inherited")
         .output()
@@ -26,6 +34,7 @@ fn run(script: &str) -> (String, Option<i32>) {
     (String::from_utf8_lossy(&out.stdout).into_owned(), read_status(&status))
 }
 
+#[cfg(unix)]
 mod wrapper {
     use super::*;
 
@@ -85,6 +94,7 @@ mod status_file {
     }
 }
 
+#[cfg(unix)]
 mod teardown {
     use super::*;
 
@@ -124,5 +134,125 @@ mod teardown {
         let dir = TempDir::new();
         let why = teardown("sleep 30", dir.path(), dir.path(), "b", Duration::from_millis(200));
         assert!(why.is_some_and(|w| w.starts_with("did not finish")));
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use std::io::Write as _;
+    use std::process::Stdio;
+
+    use super::*;
+
+    const CMD: &str = r"C:\Windows\System32\cmd.exe";
+
+    struct Ran {
+        out: String,
+        status: Option<i32>,
+        dir: TempDir,
+        root: TempDir,
+    }
+
+    fn git_sh() -> Shell {
+        Shell::pick(Some(&script::git_sh().expect("Git for Windows' sh, which these tests need")), None, None)
+    }
+
+    fn windows_powershell() -> Shell {
+        Shell::pick(None, None, crate::os::desktop::windows_folder().as_deref())
+    }
+
+    fn setup(interpreter: &Shell, script: &str, typed: &str) -> Ran {
+        let (dir, root) = (TempDir::new(), TempDir::new());
+        let status = dir.path().join("setup-1.status");
+        let wrapper = Wrapper {
+            script,
+            status: &status,
+            shell: CMD,
+            root: root.path(),
+            branch: "feat/it's",
+            worktree: dir.path(),
+            home: false,
+        };
+        let mut child = line(interpreter, &wrapper)
+            .command()
+            .current_dir(dir.path())
+            .env("CORNERCASE_BRANCH", "inherited")
+            .env_remove("HOME")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("start the setup");
+        child.stdin.take().expect("its input").write_all(typed.as_bytes()).expect("type into it");
+        let output = child.wait_with_output().expect("the setup ends");
+        let out = String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n");
+        Ran { out, status: read_status(&status), dir, root }
+    }
+
+    impl Ran {
+        fn succeeded(&self) {
+            let (dir, root) = (self.dir.path().display(), self.root.path().display());
+            assert_eq!(self.status, Some(0), "{}", self.out);
+            assert!(self.out.contains(&format!("script:feat/it's:{root}:{dir}")), "{}", self.out);
+            assert!(self.out.contains(" setup finished"), "{}", self.out);
+        }
+
+        fn failed(&self) {
+            assert_eq!(self.status, Some(1), "{}", self.out);
+            assert!(!self.out.contains("never"), "{}", self.out);
+            assert!(self.out.contains(" setup failed with exit status 1"), "{}", self.out);
+        }
+    }
+
+    #[test]
+    fn a_setup_runs_through_git_s_sh_then_starts_the_shell() {
+        let script = "echo \"script:$CORNERCASE_BRANCH:$CORNERCASE_ROOT:$CORNERCASE_WORKTREE\"\nls -d . >/dev/null\ntest -n \"$HOME\"";
+
+        let ran = setup(&git_sh(), script, "echo shell:%CORNERCASE_BRANCH%:%PWD%:%SHLVL%:%HOME%\r\nexit\r\n");
+
+        ran.succeeded();
+        assert!(ran.out.contains("✓ setup finished"), "{}", ran.out);
+        assert!(ran.out.contains("shell:inherited:%PWD%:%SHLVL%:%HOME%"), "{}", ran.out);
+    }
+
+    #[test]
+    fn a_setup_through_git_s_sh_stops_at_the_first_failing_command() {
+        let ran = setup(&git_sh(), "false\necho never", "exit\r\n");
+
+        ran.failed();
+        assert!(ran.out.contains("✗ setup failed"), "{}", ran.out);
+    }
+
+    #[test]
+    fn without_git_s_sh_a_setup_runs_through_powershell_then_stays_in_it() {
+        let script =
+            "Write-Output \"script:${env:CORNERCASE_BRANCH}:${env:CORNERCASE_ROOT}:${env:CORNERCASE_WORKTREE}\"";
+        let powershell = windows_powershell();
+        let typed =
+            "Write-Output \"shell:${env:CORNERCASE_BRANCH}:$(Get-Location):$($null -eq $cornercase)\"\r\nexit\r\n";
+
+        let ran = setup(&powershell, script, typed);
+
+        ran.succeeded();
+        assert!(ran.out.contains(&format!("shell::{}:True", ran.dir.path().display())), "{}", ran.out);
+    }
+
+    #[test]
+    fn a_failing_setup_through_powershell_reports_its_status() {
+        let ran = setup(&windows_powershell(), "Write-Error boom\nWrite-Output never", "exit\r\n");
+
+        ran.failed();
+    }
+
+    #[test]
+    fn a_teardown_runs_with_the_variables_and_names_its_last_line() {
+        let (dir, root) = (TempDir::new(), TempDir::new());
+        let script =
+            "echo \"$CORNERCASE_WORKTREE $CORNERCASE_BRANCH\" > \"$CORNERCASE_ROOT/out\"\necho boom >&2\nexit 4";
+
+        let why = teardown(script, dir.path(), root.path(), "feat", TEARDOWN_WITHIN);
+
+        assert_eq!(why.as_deref(), Some("exit status 4: boom"));
+        let out = std::fs::read_to_string(root.path().join("out")).expect("out");
+        assert_eq!(out.trim(), format!("{} feat", dir.path().display()));
     }
 }
