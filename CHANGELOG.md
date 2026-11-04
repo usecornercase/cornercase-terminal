@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.290
+
+- Nothing changes for users: a test that failed now and then on a busy machine now reads the answer to its own request.
+
 ## 0.12.289
 
 - **Two windows started at the same moment now both open.** With no cornercase server running, a window started together with another one (two terminal tabs restored at login, say) could close at once with nothing on screen: the other window, checking that the server's socket could be made, listened on it for an instant, and the first took that check for the server. The check no longer takes connections, so both windows reach the one server. A folder where the socket cannot be made is now refused at once, with what to do about it, instead of after five seconds of trying to start the server.
