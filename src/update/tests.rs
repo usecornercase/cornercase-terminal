@@ -5,6 +5,13 @@ use super::*;
 use crate::test_util::write_executable;
 use crate::test_util::{FakeHttp, TempDir};
 
+fn assert_refused_as_not_running(result: Result<()>, exe: &Path) {
+    let err = result.err().map(|e| e.to_string());
+    assert_eq!(err.as_deref(), Some("the new cornercase does not run here: missing library"));
+    assert_eq!(fs::read_to_string(exe).expect("old binary"), "old");
+    assert_eq!(fs::read_dir(exe.parent().expect("bin")).expect("bin").count(), 1);
+}
+
 mod check {
     use super::*;
 
@@ -346,11 +353,9 @@ pub(crate) mod replace {
         let exe = installed(&tmp);
         let bytes = archive(&tmp, "#!/bin/sh\necho 'missing library' >&2\nexit 127\n");
 
-        let err = replace(&bytes, &sums(&bytes), "9.0.0", &exe).err().map(|e| e.to_string());
+        let result = replace(&bytes, &sums(&bytes), "9.0.0", &exe);
 
-        assert_eq!(err.as_deref(), Some("the new cornercase does not run here: missing library"));
-        assert_eq!(fs::read_to_string(&exe).expect("old binary"), "old");
-        assert_eq!(fs::read_dir(exe.parent().expect("bin")).expect("bin").count(), 1);
+        assert_refused_as_not_running(result, &exe);
     }
 }
 
@@ -453,10 +458,8 @@ mod on_windows {
         fs::write(&exe, "old").expect("old binary");
         let bytes = zipped(&tmp, &seed, &[("err", "missing library"), ("code", "127")]);
 
-        let err = replace(&bytes, &sums(&bytes), "9.0.0", &exe).err().map(|e| e.to_string());
+        let result = replace(&bytes, &sums(&bytes), "9.0.0", &exe);
 
-        assert_eq!(err.as_deref(), Some("the new cornercase does not run here: missing library"));
-        assert_eq!(fs::read_to_string(&exe).expect("old binary"), "old");
-        assert_eq!(fs::read_dir(exe.parent().expect("bin")).expect("bin").count(), 1);
+        assert_refused_as_not_running(result, &exe);
     }
 }
