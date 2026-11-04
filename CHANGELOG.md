@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.289
+
+- **Two windows started at the same moment now both open.** With no cornercase server running, a window started together with another one (two terminal tabs restored at login, say) could close at once with nothing on screen: the other window, checking that the server's socket could be made, listened on it for an instant, and the first took that check for the server. The check no longer takes connections, so both windows reach the one server. A folder where the socket cannot be made is now refused at once, with what to do about it, instead of after five seconds of trying to start the server.
+
 ## 0.12.288
 
 - **A Windows computer can be the other end of `cornercase remote` and `--remote`**: when its OpenSSH Server runs commands with cmd or PowerShell instead of `sh`, cornercase finds out which on the first connection, remembers it for that host (in `remote-shells.json` in its state folder), and asks again by itself if the name later reaches another machine. It runs the proxy in a line written for that shell, looking for cornercase on the `PATH`, in `%USERPROFILE%\.local\bin` (where the installer puts it) and in `.cargo\bin`. `--command` takes the path of `cornercase.exe` (`~\` for your profile folder), and `open`, `config project` and `flow save --path` take Windows paths such as `C:\Users\me\src` for that machine. The first time, `update`, `restart` and `kill-server` through `--remote` ask you to run them again rather than repeat themselves there. Linux and macOS machines get the same command as before, and pay one extra `ssh` session only after a connection that fails before reaching cornercase.
