@@ -313,7 +313,7 @@ pub(in crate::agents) fn probe(target: &Target, program: &str, timeout: Duration
         return Err(Error::Probe(format!("the folder Claude Code runs in is gone: {}", target.folder.display())));
     }
     let command = build(program, target, &process::args(target.pid), process::env(target.pid));
-    let limits = Limits { name: "claude", timeout, grace: GRACE };
+    let limits = Limits { name: "claude", timeout, grace: GRACE, close_input: false };
     let mut breakdown = probe::run(limits, command, FIRST, exchange(Instant::now()))?;
     breakdown.conversation.clone_from(&target.conversation);
     Ok(breakdown)

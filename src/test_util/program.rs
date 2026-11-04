@@ -15,6 +15,8 @@ pub(crate) fn run(program: &Path, args: &[String], out: &mut impl Write, err: &m
 fn record(program: &Path, args: &[String]) {
     append(&program.with_extension("args"), &format!("{}\n", args.join(" ")));
     append(&program.with_extension("argv"), &format!("{args:?}\n"));
+    let folder = std::env::current_dir().map(|dir| dir.display().to_string()).unwrap_or_default();
+    append(&program.with_extension("cwd"), &format!("{folder}\n"));
 }
 
 fn append(path: &Path, line: &str) {

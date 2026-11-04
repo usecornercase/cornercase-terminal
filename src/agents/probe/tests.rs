@@ -2,7 +2,8 @@ use super::*;
 #[cfg(unix)]
 use crate::test_util::{TempDir, write_executable};
 
-const LIMITS: Limits = Limits { name: "fake", timeout: Duration::from_secs(10), grace: Duration::from_secs(2) };
+const LIMITS: Limits =
+    Limits { name: "fake", timeout: Duration::from_secs(10), grace: Duration::from_secs(2), close_input: false };
 
 #[cfg(unix)]
 fn fake(script: &str) -> (TempDir, Command) {
@@ -79,4 +80,12 @@ fn a_probe_that_times_out_is_killed_without_waiting_for_the_grace() {
     let started = Instant::now();
     run(limits, command, "hi\n", echoes).expect_err("no answer");
     assert!(started.elapsed() < Duration::from_secs(4), "{:?}", started.elapsed());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_program_reads_end_of_input_when_stdin_is_closed() {
+    let (_dir, command) = fake("cat > /dev/null\necho answer eof");
+    let limits = Limits { close_input: true, ..LIMITS };
+    assert_eq!(run(limits, command, "prompt\n", echoes).expect("answer"), "answer eof");
 }

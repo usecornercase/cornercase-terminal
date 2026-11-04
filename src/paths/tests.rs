@@ -162,6 +162,18 @@ fn pasted_files_live_beside_the_session(#[case] session: &str, #[case] expected:
     assert_eq!(pasted(Path::new(session)), PathBuf::from(expected));
 }
 
+#[rstest::rstest]
+#[case::default("/c/cornercase/session.json", "/c/cornercase/journal", "/c/cornercase/recap")]
+#[case::custom("/c/server.json", "/c/server.journal", "/c/server.recap")]
+fn the_journal_and_the_recaps_live_beside_the_session(
+    #[case] session: &str,
+    #[case] journal_dir: &str,
+    #[case] recap_dir: &str,
+) {
+    assert_eq!(journal(Path::new(session)), PathBuf::from(journal_dir));
+    assert_eq!(recap(Path::new(session)), PathBuf::from(recap_dir));
+}
+
 #[cfg(windows)]
 mod on_windows {
     use super::*;

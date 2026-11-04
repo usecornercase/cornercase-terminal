@@ -197,6 +197,14 @@ pub(crate) fn pasted(session: &Path) -> PathBuf {
     beside_session(session, "pasted")
 }
 
+pub(crate) fn journal(session: &Path) -> PathBuf {
+    beside_session(session, "journal")
+}
+
+pub(crate) fn recap(session: &Path) -> PathBuf {
+    beside_session(session, "recap")
+}
+
 fn beside_session(session: &Path, name: &str) -> PathBuf {
     if session.file_name().is_some_and(|file| file == "session.json") {
         session.with_file_name(name)
