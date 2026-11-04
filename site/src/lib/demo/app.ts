@@ -3219,7 +3219,8 @@ export class App {
       add({ page, title: name, value: '', note: 'the tab' }, name, '');
       if (page === PAGE.flows) return;
       this.settingsRows(page).forEach((row, i) => {
-        const title = row.section && this.sharedLabel(row.label) ? `${name} › ${row.section} › ${row.label}` : `${name} › ${row.label}`;
+        const label = row.label.trim();
+        const title = row.section && this.sharedLabel(row.label) ? `${name} › ${row.section} › ${label}` : `${name} › ${label}`;
         add({ page, i, row, title, value: row.value, note: row.note }, `${name} ${row.section}`, `${row.value} ${row.note}`);
       });
     });
