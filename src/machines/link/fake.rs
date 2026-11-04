@@ -79,8 +79,10 @@ impl Connect for Once {
     }
 }
 
+#[cfg(unix)]
 pub(crate) struct Hanging;
 
+#[cfg(unix)]
 impl Connect for Hanging {
     fn connect(&self, killer: &Killer) -> Result<Line> {
         let mut ssh = std::process::Command::new("/bin/sleep").arg("60").spawn().expect("run sleep");

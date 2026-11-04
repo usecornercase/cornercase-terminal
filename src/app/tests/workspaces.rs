@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn external_checkout() -> (TempDir, App, Receiver<AppEvent>, TempDir, PathBuf) {

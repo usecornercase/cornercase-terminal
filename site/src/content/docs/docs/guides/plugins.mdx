@@ -23,7 +23,7 @@ cornercase plugin install acme/tools/plugins/notes   # a plugin in a folder of t
 cornercase plugin install https://git.example.com/acme/tools.git//plugins/notes@v2
 ```
 
-`install` takes `owner/repo` on GitHub, any `https://` git address, or a git folder on your machine. A repository can hold several plugins, each in its own folder with its own `cornercase-plugin.toml`: on GitHub, add the folder after the repository (`owner/repo/plugins/notes`); for any other address or a folder on your machine, put it after `//` (`https://host/acme/tools.git//plugins/notes`, `~/code/tools//plugins/notes`). The folder is the plugin's: only it is installed, and its commands must stay inside it. Folder parts are letters, digits, `.`, `_` and `-`, never `.`, `..` or starting with `-`. It fetches the plugin at one commit and, before anything in it runs, shows where it comes from, that commit, what it asks for, how it is built or downloaded, and every command it will run once on. Then it asks; with no terminal to ask in, pass `--yes` once you have read the preview. The plugin is installed **turned off**.
+`install` takes `owner/repo` on GitHub, any `https://` git address, or a git folder on your machine. On Windows, give the folder with its drive (`C:\code\tools`) or start it with `~\`, `.\` or `\` (the root of the current drive); a UNC path to a share, such as `\\server\share\tools`, or a folder that leads to one through a symbolic link, is refused: copy it to your disk first. A drive letter you mapped to a share, such as `Z:\tools`, is not refused. A repository can hold several plugins, each in its own folder with its own `cornercase-plugin.toml`: on GitHub, add the folder after the repository (`owner/repo/plugins/notes`); for any other address or a folder on your machine, put it after `//` (`https://host/acme/tools.git//plugins/notes`, `~/code/tools//plugins/notes`). The folder is the plugin's: only it is installed, and its commands must stay inside it. Folder parts are letters, digits, `.`, `_` and `-`, never `.`, `..` or starting with `-`. It fetches the plugin at one commit and, before anything in it runs, shows where it comes from, that commit, what it asks for, how it is built or downloaded, and every command it will run once on. Then it asks; with no terminal to ask in, pass `--yes` once you have read the preview. The plugin is installed **turned off**.
 
 `--preview` prints the same preview and exits without asking or installing, also with no terminal. `--json` prints it as data for a program (see [scripts and agents](../scripts-and-agents/#plugins)). `--commit` then installs exactly the commit the preview showed, and refuses if the plugin has changed since. Unlike `acme/notes@<commit>`, which pins the plugin, the plugin keeps following its branch or tag.
 
@@ -83,7 +83,7 @@ version = "1.0.0"
 description = "A notes file per workspace"
 min_cornercase = "0.12.87"         # optional: refused by an older cornercase
 api = 1                            # optional: the plugin API it was written for
-platforms = ["macos", "linux"]     # optional: where it runs; empty means everywhere
+platforms = ["macos", "linux", "windows"]  # optional: where it runs; empty means everywhere
 permissions = ["read", "send"]     # shown before turning it on, not enforced
 
 [button]                           # optional: the plugin's own button
@@ -125,7 +125,7 @@ url = "https://github.com/acme/notes/releases/download/v1.0.0/notes-aarch64-appl
 sha256 = "9f2c…"                   # 64 hexadecimal digits
 ```
 
-`[download]` may name `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu` and `x86_64-unknown-linux-gnu`. An archive is a `.tar.gz` served over `https://`; its files are unpacked into the plugin's folder. Links, devices and paths that lead out of the folder refuse the whole archive. When the archive's sha256 differs, nothing is unpacked. If a build step changes `cornercase-plugin.toml`, nothing is installed.
+`[download]` may name `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`. An archive is a `.tar.gz` served over `https://`; its files are unpacked into the plugin's folder. Links, devices and paths that lead out of the folder refuse the whole archive. When the archive's sha256 differs, nothing is unpacked. If a build step changes `cornercase-plugin.toml`, nothing is installed.
 
 Fields cornercase doesn't know are ignored, so a manifest written for a newer cornercase still loads. The plugin's folder and its manifest must be yours and not writable by other users. Its texts may not hold control characters or invisible ones (bidirectional overrides, zero-width spaces and the like), which could make a command read differently from what runs. A manifest that cannot be read shows in `plugin list` and in Settings with the reason, and never hides the other plugins.
 

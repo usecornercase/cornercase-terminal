@@ -51,7 +51,7 @@ mod the_servers_home {
     fn is_only_read_from_the_report_when_it_names_one() {
         let report = Report { home: None, ..Report::default() };
 
-        assert_eq!(home(&report), std::env::var_os("HOME").map(PathBuf::from));
+        assert_eq!(home(&report), std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from));
     }
 }
 

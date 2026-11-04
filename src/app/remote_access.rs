@@ -46,16 +46,19 @@ impl Remote {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn phase(&self) -> &Phase {
         &self.phase
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn listening(&self) -> Option<u16> {
         self.web.listening()
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn set_tailscale(&mut self, program: PathBuf) {
         self.tailscale = Some(program);
     }

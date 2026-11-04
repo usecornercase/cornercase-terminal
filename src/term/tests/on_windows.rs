@@ -1,10 +1,13 @@
 use super::*;
+use crate::agents::PaneShell;
 use crate::agents::activity::Activity;
 use crate::term::mouse::MouseMode;
 use crate::test_util::{TempDir, wait_until, wait_until_within};
 
 const SLOW: Duration = Duration::from_secs(30);
 const PING: &str = "ping -n 30 127.0.0.1";
+const STOPS_BEFORE_PING_ENDS: Duration = Duration::from_secs(10);
+const CTRL_C_EVERY: u32 = 25;
 const CURSOR_REQUEST: &[u8] = b"\x1b[6n";
 
 fn system_path() -> String {
@@ -18,13 +21,25 @@ fn spawn_cmd(cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
     spawn_cmd_with(&env, cwd)
 }
 
+fn ctrl_c_reaches_the_panes() {
+    unsafe { windows_sys::Win32::System::Console::SetConsoleCtrlHandler(None, windows_sys::Win32::Foundation::FALSE) };
+}
+
 fn spawn_cmd_with(env: &[(String, String)], cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
+    spawn_shell("cmd.exe", &["/d".to_string()], env, cwd)
+}
+
+fn spawn_shell(
+    shell: &str,
+    args: &[String],
+    env: &[(String, String)],
+    cwd: Option<PathBuf>,
+) -> (Term, Receiver<Event>) {
+    ctrl_c_reaches_the_panes();
     let (tx, rx) = mpsc::channel();
-    let args = ["/d".to_string()];
     let theme = HostTheme::default();
-    let opts =
-        SpawnOptions { id: 1, shell: "cmd.exe", args: &args, env, remove: &[], rows: 24, cols: 80, cwd, theme: &theme };
-    let mut term = Term::spawn(opts, tx).expect("spawn cmd.exe");
+    let opts = SpawnOptions { id: 1, shell, args, env, remove: &[], rows: 24, cols: 80, cwd, theme: &theme };
+    let mut term = Term::spawn(opts, tx).expect("spawn the shell");
     term.became_shell();
     (term, rx)
 }
@@ -47,9 +62,9 @@ fn single_quoted(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "''"))
 }
 
-fn titled(term: &mut Term, rx: &Receiver<Event>, title: &str) -> bool {
+fn title(term: &mut Term, rx: &Receiver<Event>) -> String {
     let _ = contents(term, rx);
-    term.emulator.title() == title
+    term.emulator.title()
 }
 
 fn program_is(term: &mut Term, rx: &Receiver<Event>, name: &str) -> bool {
@@ -155,12 +170,12 @@ mod console_sequences {
     use super::*;
 
     #[test]
-    fn a_title_set_through_the_console_reaches_the_emulator() {
+    fn a_title_set_through_the_console_reaches_the_emulator_after_what_an_elevated_cmd_puts_first() {
         let (mut term, rx) = spawn_cmd(None);
 
         term.write("title cc-\u{2733} console\r".as_bytes());
 
-        wait_until("the title arrives", || titled(&mut term, &rx, "cc-\u{2733} console"));
+        wait_until_within("the title arrives", SLOW, || title(&mut term, &rx).ends_with("cc-\u{2733} console"));
     }
 
     #[test]
@@ -169,7 +184,7 @@ mod console_sequences {
 
         term.write("prompt $E]2;cc-\u{2733} osc$E\\$G\r".as_bytes());
 
-        wait_until("the title arrives", || titled(&mut term, &rx, "cc-\u{2733} osc"));
+        wait_until_within("the title arrives", SLOW, || title(&mut term, &rx) == "cc-\u{2733} osc");
     }
 
     #[test]
@@ -319,9 +334,14 @@ mod foreground {
         let job = term.current_job(&Config::default()).expect("a job");
         assert_eq!((Some(job.pid), term.shell_in_foreground()), (term.foreground_pid(), false));
 
-        term.write(b"\x03");
-
-        wait_until_within("back to cmd", SLOW, || program_is(&mut term, &rx, "cmd"));
+        let mut polls = 0;
+        wait_until_within("back to cmd", STOPS_BEFORE_PING_ENDS, || {
+            if polls % CTRL_C_EVERY == 0 {
+                term.write(b"\x03");
+            }
+            polls += 1;
+            program_is(&mut term, &rx, "cmd")
+        });
     }
 
     #[test]
@@ -347,6 +367,15 @@ mod foreground {
 
         wait_until("the folder is the second cmd's", || in_folder(&mut term, &rx, &folder));
         assert!(term.shell_in_foreground());
+    }
+
+    #[test]
+    fn names_the_shell_an_agent_line_is_checked_for() {
+        let (cmd, _rx) = spawn_cmd(None);
+        let env = [("PATH".to_string(), system_path())];
+        let (powershell, _ps) = spawn_shell("powershell.exe", &["-NoProfile".to_string()], &env, None);
+        let shell = |term: &Term| PaneShell::of(term.shell_pid());
+        assert_eq!((shell(&cmd), shell(&powershell)), (PaneShell::Cmd, PaneShell::PowerShell));
     }
 
     #[test]

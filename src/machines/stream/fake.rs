@@ -30,6 +30,7 @@ impl There {
         }})
     }
 
+    #[cfg(unix)]
     pub(crate) fn split(self, revision: u64, projection: u64, mouse: &str) -> Value {
         let pane = |id: u64, x: u16| {
             json!({

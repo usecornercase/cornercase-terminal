@@ -61,16 +61,19 @@ impl AgentRuntime {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn set_claude_dir(&mut self, dir: &Path) {
         self.claude_dir = Some(dir.to_path_buf());
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn set_vibe_dir(&mut self, dir: &Path) {
         self.vibe_dir = Some(dir.to_path_buf());
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn set_watched(&mut self, at: Option<Instant>) {
         self.watched = at;
     }

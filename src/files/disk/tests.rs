@@ -309,6 +309,7 @@ mod a_raw_read {
         assert_eq!(loaded(&dir.path().join("a.png")), Raw::Image { format: "PNG", bytes });
     }
 
+    #[cfg(unix)]
     #[test]
     fn tells_a_folder_a_device_and_a_missing_file_apart() {
         let dir = TempDir::new();

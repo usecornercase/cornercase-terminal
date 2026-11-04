@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::app::worktrees::RemoveOptions;
 use crate::config::ProjectSettings;

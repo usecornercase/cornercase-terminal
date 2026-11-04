@@ -82,6 +82,7 @@ mod ordering {
         assert!(dialog(&s.app).edit.is_some());
     }
 
+    #[cfg(unix)]
     #[test]
     fn ordering_in_one_project_keeps_another_projects_flow_in_place() {
         let mut s = setup(true);
@@ -174,6 +175,7 @@ mod default {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn renaming_the_flow_the_default_did_not_resolve_to_leaves_the_default() {
         let mut s = setup(true);

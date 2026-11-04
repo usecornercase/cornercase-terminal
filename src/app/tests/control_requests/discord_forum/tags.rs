@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::posts::{Posting, THREAD, first_post, sends};
 use super::*;
 use crate::app::messenger::By;

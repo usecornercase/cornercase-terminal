@@ -1,5 +1,6 @@
 use super::*;
 
+#[cfg(unix)]
 #[test]
 fn status_lists_every_pane_and_marks_the_caller() {
     let (mut app, _rx, _dirs) = app_with(2);
@@ -20,6 +21,7 @@ fn status_lists_every_pane_and_marks_the_caller() {
     assert_eq!((report.caller, report.shown.pane), (Some(caller), Some(other)));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_pane_of_another_server_is_not_the_caller() {
     let (mut app, _rx, _dirs) = app_with(1);
@@ -45,6 +47,7 @@ fn a_pane_of_another_server_is_not_the_caller() {
     assert_eq!(report.caller, None);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_project_being_closed_is_opened_again() {
     let (mut app, _rx, dirs) = app_with(1);
@@ -57,6 +60,7 @@ fn a_project_being_closed_is_opened_again() {
     assert!(opened.ids.project.is_some_and(|id| id != old), "{opened:?}");
 }
 
+#[cfg(unix)]
 #[test]
 fn open_adds_a_folder_once_and_leaves_the_window_as_it_is() {
     let (mut app, _rx, _dirs) = app_with(1);
@@ -70,6 +74,7 @@ fn open_adds_a_folder_once_and_leaves_the_window_as_it_is() {
     assert_eq!((opened.ids.project, found.ids.project), (Some(app.projects[1].id), Some(app.projects[1].id)));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_new_tab_leaves_the_window_as_it_is() {
     let (mut app, _rx, _dirs) = app_with(2);
@@ -85,6 +90,7 @@ fn a_new_tab_leaves_the_window_as_it_is() {
     assert_eq!(made.ids.pane, tabs[1].pane().map(|t| t.id));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_command_is_typed_into_the_new_tab_before_the_answer() {
     let (mut app, rx) = app();
@@ -97,6 +103,7 @@ fn a_command_is_typed_into_the_new_tab_before_the_answer() {
     pump_until(&mut app, &rx, "the command runs", |a| pane_screen(a, id).contains("typed-42"));
 }
 
+#[cfg(unix)]
 #[test]
 fn focus_shows_what_it_names() {
     let (mut app, _rx, _dirs) = app_with(2);
@@ -107,6 +114,7 @@ fn focus_shows_what_it_names() {
     assert_eq!((app.active, app.term().map(|t| t.id)), (0, Some(id)));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_split_keeps_the_focus_where_it_was() {
     let (mut app, _rx) = app();
@@ -119,6 +127,7 @@ fn a_split_keeps_the_focus_where_it_was() {
     assert_eq!(made.ids.pane, Some(tab.panes[1].id));
 }
 
+#[cfg(unix)]
 #[test]
 fn new_terminals_need_a_window_to_take_their_size_from() {
     let (mut app, _rx) = app();
@@ -128,6 +137,7 @@ fn new_terminals_need_a_window_to_take_their_size_from() {
     assert!(error(answers(&mut app).remove(0)).contains("cornercase start-server"));
 }
 
+#[cfg(unix)]
 #[test]
 fn an_unknown_command_names_the_version_of_the_server() {
     let (mut app, _rx) = app();
@@ -138,6 +148,7 @@ fn an_unknown_command_names_the_version_of_the_server() {
     assert!(message.contains("has no `teleport` command") && message.contains(version::CURRENT), "{message}");
 }
 
+#[cfg(unix)]
 fn logging_claude(dir: &Path, args: &[&str]) -> (App, Receiver<AppEvent>, PathBuf) {
     let (fake, log) = (dir.join("claude"), dir.join("args"));
     write_executable(
@@ -153,6 +164,7 @@ fn logging_claude(dir: &Path, args: &[&str]) -> (App, Receiver<AppEvent>, PathBu
     (app, rx, log)
 }
 
+#[cfg(unix)]
 #[test]
 fn start_with_a_mode_and_a_model_types_them_in_place_of_the_settings() {
     let dir = TempDir::new();
@@ -172,6 +184,7 @@ fn start_with_a_mode_and_a_model_types_them_in_place_of_the_settings() {
     assert_eq!(typed.trim(), "--permission-mode plan --model opus --effort high");
 }
 
+#[cfg(unix)]
 #[test]
 fn start_with_a_mode_the_agent_lacks_opens_nothing() {
     let dir = TempDir::new();

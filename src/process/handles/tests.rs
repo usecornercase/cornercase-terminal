@@ -46,13 +46,14 @@ fn waiting(most: usize) -> &'static Waiting {
     Box::leak(Box::new(Waiting::new(most)))
 }
 
-fn waiting_on(waiting: &Waiting, pid: i32) -> Vec<usize> {
-    waiting.asked.lock().iter().filter(|question| question.key.0 == pid).map(|question| question.key.1).collect()
+fn waiting_on(waiting: &Waiting) -> Vec<usize> {
+    waiting.asked.lock().iter().map(|question| question.object.raw()).collect()
 }
 
-fn holders(waiting: &Waiting, key: (i32, usize)) -> usize {
+fn holders(waiting: &Waiting, object: usize) -> usize {
     let asked = waiting.asked.lock();
-    asked.iter().find(|question| question.key == key).map_or(0, |question| Arc::strong_count(&question.answer))
+    let question = asked.iter().find(|question| question.object.raw() == object);
+    question.map_or(0, |question| Arc::strong_count(&question.answer))
 }
 
 fn opening(ask: &Ask, object: impl Fn(usize) -> usize + Send + Sync + 'static) -> Open {
@@ -138,6 +139,39 @@ mod the_snapshot {
 
         assert_eq!((type_of(&bytes, 8), type_of(&bytes, 16)), (Some(12), None));
     }
+
+    fn with_attributes(entries: &[(usize, u32)]) -> Vec<u8> {
+        let mut bytes = snapshot(&entries.iter().map(|(handle, _)| (*handle, 0)).collect::<Vec<_>>());
+        for (at, (_, attributes)) in entries.iter().enumerate() {
+            let start = HEADER + at * ENTRY + ATTRIBUTES;
+            bytes[start..start + 4].copy_from_slice(&attributes.to_ne_bytes());
+        }
+        bytes
+    }
+
+    #[test]
+    fn hands_down_only_the_handles_marked_inheritable() {
+        let bytes = with_attributes(&[(4, INHERIT), (8, 0), (12, INHERIT | 1), (16, 4)]);
+
+        assert_eq!(handed_down(&bytes), [4, 12]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn finds_the_inheritable_handles_of_this_process() {
+        use std::os::windows::io::AsRawHandle;
+
+        use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
+
+        let (kept, handed) = (std::fs::File::open("NUL").expect("NUL"), std::fs::File::open("NUL").expect("NUL"));
+        let set = unsafe { SetHandleInformation(handed.as_raw_handle(), HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) };
+        assert_ne!(set, 0, "made inheritable");
+
+        let found = imp::own_handed_down();
+
+        assert!(found.contains(&handed.as_raw_handle().addr()), "{found:?}");
+        assert!(!found.contains(&kept.as_raw_handle().addr()), "{found:?}");
+    }
 }
 
 mod naming {
@@ -148,8 +182,8 @@ mod naming {
         let waiting = waiting(16);
         let ask: Ask = Arc::new(even);
 
-        assert_eq!(names(1, vec![2, 3, 4], &asking(&ask, PATIENT, waiting)), [file(2), file(4)]);
-        assert_eq!(waiting_on(waiting, 1), Vec::<usize>::new());
+        assert_eq!(names(vec![2, 3, 4], &asking(&ask, PATIENT, waiting)), [file(2), file(4)]);
+        assert_eq!(waiting_on(waiting), Vec::<usize>::new());
     }
 
     #[test]
@@ -157,15 +191,15 @@ mod naming {
         let waiting = waiting(16);
         let mut gated = Gated::new(|object| object == 2);
 
-        assert_eq!(names(1, vec![2, 4, 6], &asking(&gated.ask, BLOCKED_AFTER, waiting)), [file(4), file(6)]);
-        assert_eq!(waiting_on(waiting, 1), [2]);
-        assert_eq!(names(1, vec![2, 4], &asking(&gated.ask, BLOCKED_AFTER, waiting)), [file(4)]);
+        assert_eq!(names(vec![2, 4, 6], &asking(&gated.ask, BLOCKED_AFTER, waiting)), [file(4), file(6)]);
+        assert_eq!(waiting_on(waiting), [2]);
+        assert_eq!(names(vec![2, 4], &asking(&gated.ask, BLOCKED_AFTER, waiting)), [file(4)]);
         assert_eq!(gated.blocked(), 1);
 
         gated.open();
-        wait_until("the blocked name is answered", || waiting_on(waiting, 1).is_empty());
+        wait_until("the blocked name is answered", || waiting_on(waiting).is_empty());
 
-        assert_eq!(names(1, vec![2], &asking(&gated.ask, PATIENT, waiting)), [file(2)]);
+        assert_eq!(names(vec![2], &asking(&gated.ask, PATIENT, waiting)), [file(2)]);
         assert_eq!(gated.blocked(), 2);
     }
 
@@ -174,17 +208,17 @@ mod naming {
         let waiting = waiting(16);
         let mut gated = Gated::new(|object| object == 2);
         let first = asking(&gated.ask, PATIENT, waiting);
-        let earlier = thread::spawn(move || names(1, vec![2], &first));
+        let earlier = thread::spawn(move || names(vec![2], &first));
         wait_until("the first call asks", || gated.blocked() == 1);
         let second = asking(&gated.ask, PATIENT, waiting);
-        let later = thread::spawn(move || names(1, vec![2, 4], &second));
-        wait_until("the second call waits for that answer", || holders(waiting, (1, 2)) == 3);
+        let later = thread::spawn(move || names(vec![2, 4], &second));
+        wait_until("the second call waits for that answer", || holders(waiting, 2) == 3);
 
         gated.open();
 
         assert_eq!(later.join().expect("the second call ends"), [file(2), file(4)]);
         assert_eq!(earlier.join().expect("the first call ends"), [file(2)]);
-        assert_eq!((gated.blocked(), waiting_on(waiting, 1)), (1, vec![]));
+        assert_eq!((gated.blocked(), waiting_on(waiting)), (1, vec![]));
     }
 
     #[test]
@@ -195,14 +229,30 @@ mod naming {
         let next = Arc::clone(&reused);
         let open = opening(&gated.ask, move |handle| handle + 100 * next.load(Ordering::SeqCst));
         let first = Asking { open, within: ONLY_BLOCKED_AFTER, waiting };
-        assert_eq!(names(1, vec![2], &first), Vec::<PathBuf>::new());
+        assert_eq!(names(vec![2], &first), Vec::<PathBuf>::new());
         reused.store(1, Ordering::SeqCst);
 
-        let again = names(1, vec![2], &Asking { within: BLOCKED_AFTER, ..first });
+        let again = names(vec![2], &Asking { within: BLOCKED_AFTER, ..first });
 
-        assert_eq!((again, gated.blocked(), waiting_on(waiting, 1)), (vec![file(102)], 1, vec![2]));
+        assert_eq!((again, gated.blocked(), waiting_on(waiting)), (vec![file(102)], 1, vec![2]));
         gated.open();
-        wait_until("the blocked name is answered", || waiting_on(waiting, 1).is_empty());
+        wait_until("the blocked name is answered", || waiting_on(waiting).is_empty());
+    }
+
+    #[test]
+    fn asks_once_about_an_object_whichever_processes_and_handles_hold_it() {
+        let waiting = waiting(16);
+        let mut gated = Gated::new(|object| object == 8);
+        let open = opening(&gated.ask, |handle| if handle < 4 { 8 } else { handle });
+        let holder = Asking { open, within: BLOCKED_AFTER, waiting };
+        let another = Asking { open: opening(&gated.ask, |_| 8), ..holder.clone() };
+
+        assert_eq!(names(vec![2, 3, 4], &holder), [file(4)]);
+        assert_eq!(names(vec![6], &another), Vec::<PathBuf>::new());
+
+        assert_eq!((gated.blocked(), waiting_on(waiting)), (1, vec![8]));
+        gated.open();
+        wait_until("the blocked name is answered", || waiting_on(waiting).is_empty());
     }
 
     #[test]
@@ -210,20 +260,20 @@ mod naming {
         let waiting = waiting(2);
         let mut gated = Gated::new(|_| true);
         let first = asking(&gated.ask, PATIENT, waiting);
-        let earlier = thread::spawn(move || names(1, vec![1], &first));
+        let earlier = thread::spawn(move || names(vec![1], &first));
         wait_until("the first call asks", || gated.blocked() == 1);
-        assert_eq!(names(2, vec![1], &asking(&gated.ask, ONLY_BLOCKED_AFTER, waiting)), Vec::<PathBuf>::new());
+        assert_eq!(names(vec![3], &asking(&gated.ask, ONLY_BLOCKED_AFTER, waiting)), Vec::<PathBuf>::new());
         assert!(!waiting.full.load(Ordering::Relaxed));
 
-        let full = names(3, vec![2, 4], &asking(&gated.ask, PATIENT, waiting));
-        let again = names(4, vec![2], &asking(&gated.ask, PATIENT, waiting));
+        let full = names(vec![2, 4], &asking(&gated.ask, PATIENT, waiting));
+        let again = names(vec![2], &asking(&gated.ask, PATIENT, waiting));
 
         assert_eq!((full, again, gated.blocked()), (vec![], vec![], 2));
         assert!(!waiting.filled(), "the first full call warned, and only it");
         gated.open();
         assert_eq!(earlier.join().expect("the first call ends"), Vec::<PathBuf>::new());
         wait_until("every name is answered", || waiting.asked.lock().is_empty());
-        assert_eq!(names(3, vec![2, 4], &asking(&gated.ask, PATIENT, waiting)), [file(2), file(4)]);
+        assert_eq!(names(vec![2, 4], &asking(&gated.ask, PATIENT, waiting)), [file(2), file(4)]);
     }
 
     #[test]
@@ -241,8 +291,8 @@ mod naming {
             even(handle)
         });
 
-        assert_eq!(names(1, vec![2, 4, 6], &asking(&ask, PATIENT, waiting)), [file(2), file(6)]);
-        assert_eq!(waiting_on(waiting, 1), Vec::<usize>::new());
+        assert_eq!(names(vec![2, 4, 6], &asking(&ask, PATIENT, waiting)), [file(2), file(6)]);
+        assert_eq!(waiting_on(waiting), Vec::<usize>::new());
     }
 }
 
@@ -257,7 +307,7 @@ mod on_windows {
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
     use super::*;
-    use crate::test_util::{Running, TempDir, exited_pid, holding, this_pid, wait_until_within};
+    use crate::test_util::{Running, TempDir, exited_pid, holding_reading, this_pid, wait_until_within};
 
     fn within(pid: i32) -> Vec<PathBuf> {
         let (answer, answered) = mpsc::channel();
@@ -347,20 +397,52 @@ mod on_windows {
         assert!(locked(&path));
     }
 
+    fn places_for(object: &dyn Object) -> usize {
+        WAITING.asked.lock().iter().filter(|question| question.object.same(object)).count()
+    }
+
+    fn asked_about(object: &dyn Object) -> bool {
+        places_for(object) > 0
+    }
+
     #[test]
     fn names_what_another_process_holds_while_a_read_blocks_one_of_its_handles() {
         let dir = TempDir::new();
         let path = dir.path().join("held.txt");
-        let holder = holding(&path, &[]);
+        let (input, _writer) = std::io::pipe().expect("a pipe");
+        let here = unsafe { GetCurrentProcess() };
+        let read = imp::duplicate(here, input.as_raw_handle().addr()).expect("a copy of the end it reads");
+        let holder = holding_reading(&path, &[], input.into());
         let pid = holder.pid();
 
-        wait_until_within("a handle blocked in a read is skipped", PATIENT, || {
-            within(pid).contains(&canonical(&path)) && !waiting_on(&WAITING, pid).is_empty()
+        wait_until_within("its blocked standard input is skipped", PATIENT, || {
+            within(pid).contains(&canonical(&path)) && asked_about(&read)
         });
         drop(holder);
 
-        wait_until_within("the blocked question ends with the process", PATIENT, || {
-            waiting_on(&WAITING, pid).is_empty()
+        wait_until_within("the question its read blocked ends with the process", PATIENT, || !asked_about(&read));
+    }
+
+    #[test]
+    fn two_processes_reading_one_pipe_take_one_place() {
+        let dir = TempDir::new();
+        let paths = [dir.path().join("first.txt"), dir.path().join("second.txt")];
+        let (input, _writer) = std::io::pipe().expect("a pipe");
+        let here = unsafe { GetCurrentProcess() };
+        let read = imp::duplicate(here, input.as_raw_handle().addr()).expect("a copy of the end they read");
+        let copy = input.try_clone().expect("a second handle to that end");
+        let holders = [holding_reading(&paths[0], &[], input.into()), holding_reading(&paths[1], &[], copy.into())];
+        let pids = holders.each_ref().map(Running::pid);
+
+        wait_until_within("the first one's blocked pipe is skipped", PATIENT, || {
+            within(pids[0]).contains(&canonical(&paths[0])) && asked_about(&read)
         });
+        wait_until_within("the second one's file is named", PATIENT, || {
+            within(pids[1]).contains(&canonical(&paths[1]))
+        });
+
+        assert_eq!(places_for(&read), 1);
+        drop(holders);
+        wait_until_within("the question ends with the processes", PATIENT, || !asked_about(&read));
     }
 }

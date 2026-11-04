@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::agents::Known;
 use crate::app::account_menu::AccountItem;

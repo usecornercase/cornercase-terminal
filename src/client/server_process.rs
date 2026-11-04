@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use crate::error::{Error, Result};
 use crate::os::fs::{OpenOptionsExt, set_file_mode};
 use crate::os::process::spawn_detached;
-use crate::os::socket::{UnixListener, UnixStream};
+use crate::os::socket::{UnixStream, bind_without_listening};
 use crate::process::reap;
 use crate::protocol::{self, ClientMessage, Folder, ServerMessage};
 use crate::{control, log, paths};
@@ -87,10 +87,9 @@ fn can_listen(socket: &Path, folder: Folder) -> Result<()> {
     let listen_error = |cause| Error::Listen { path: socket.to_path_buf(), cause, custom: folder == Folder::Given };
     let Some(_lock) = protocol::try_lock(socket).map_err(listen_error)? else { return Ok(()) };
     let _ = fs::remove_file(socket);
-    let bound = UnixListener::bind(socket).map_err(listen_error);
-    drop(bound);
+    let bound = bind_without_listening(socket);
     let _ = fs::remove_file(socket);
-    Ok(())
+    bound.map_err(listen_error)
 }
 
 fn start(path: &Path) -> Result<UnixStream> {

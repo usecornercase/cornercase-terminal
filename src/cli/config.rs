@@ -1,20 +1,21 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::io::{IsTerminal as _, Read as _};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
 use self::imp::Hidden;
 use super::args::config::{ConfigAction, ConfigArgs};
 use super::{line, print_json, print_out};
-use crate::client::{answer, ask, use_build_folders, use_settings_search};
+use crate::client::{self, answer, ask, use_build_folders, use_settings_search};
 use crate::control::Command;
 use crate::control::config::{
     Configure, Connection, Described, Kind, ProjectChange, SecretChange, Setting, SettingsFound, State,
 };
 use crate::error::{Error, Result};
 use crate::issues::Secret;
+use crate::remote::Remote;
 
 mod share;
 
@@ -79,10 +80,19 @@ pub(super) fn render_found(found: &SettingsFound) -> String {
 }
 
 fn absolute(path: &str) -> Result<PathBuf> {
-    if path.starts_with('~') || std::path::Path::new(path).is_absolute() {
+    absolute_on(path, client::used_remote(), cfg!(windows), &super::reach::far_windows)
+}
+
+fn absolute_on(
+    path: &str,
+    remote: Option<&Remote>,
+    windows: bool,
+    far_is_windows: &dyn Fn() -> bool,
+) -> Result<PathBuf> {
+    if path.starts_with('~') || (remote.is_none() && Path::new(path).is_absolute()) {
         return Ok(PathBuf::from(path));
     }
-    super::reach::server_path(std::path::Path::new(path))
+    super::reach::path_on(Path::new(path), remote, windows, far_is_windows)
 }
 
 fn converted(pairs: &[String]) -> Result<BTreeMap<String, Value>> {

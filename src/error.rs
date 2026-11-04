@@ -92,6 +92,16 @@ pub enum Error {
     FlowFile { path: PathBuf, reason: String },
     #[error("`{0}` already exists")]
     PathExists(PathBuf),
+    #[error(
+        "the new cornercase could not take the place of `{}`: {}. Moving the old one back failed too ({}), so it \
+         is still `{}`: rename it to `{}`",
+        .0.exe.display(),
+        .0.cause,
+        .0.restore,
+        .0.old.display(),
+        .0.exe.display()
+    )]
+    NotRestored(Box<NotRestored>),
     #[error("no cornercase server is running")]
     NoServer,
     #[error("{0}")]
@@ -149,6 +159,14 @@ pub enum Error {
     RemoteNewer { host: String, there: String },
     #[error(transparent)]
     Io(#[from] std::io::Error),
+}
+
+#[derive(Debug)]
+pub struct NotRestored {
+    pub(crate) exe: PathBuf,
+    pub(crate) old: PathBuf,
+    pub(crate) cause: std::io::Error,
+    pub(crate) restore: std::io::Error,
 }
 
 #[derive(Debug)]

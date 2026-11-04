@@ -70,6 +70,7 @@ mod checks {
     }
 }
 
+#[cfg(unix)]
 mod forgotten_checks {
     use super::*;
     use crate::git::worktree::Status;
@@ -94,6 +95,7 @@ mod forgotten_checks {
     }
 }
 
+#[cfg(unix)]
 mod forgotten_pull_requests {
     use super::*;
     use crate::test_util::git_repo;

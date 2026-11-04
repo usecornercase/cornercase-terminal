@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn parent(app: &App, id: u64) -> Option<u64> {

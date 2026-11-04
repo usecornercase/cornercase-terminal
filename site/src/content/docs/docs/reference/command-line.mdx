@@ -49,9 +49,10 @@ Opens the window on the server of another machine, through your own `ssh`:
 ```sh
 cornercase remote devbox                                  # a host from ~/.ssh/config, or user@host
 cornercase remote devbox --command '~/tools/cornercase'   # where cornercase is on that machine
+cornercase remote winbox --command 'C:\tools\cornercase.exe'   # on a Windows machine, its path
 ```
 
-It runs `ssh devbox cornercase proxy`, which starts the server there if none is running. If the connection drops, the window stays, says `reconnecting to devbox…` and tries again by itself; `Esc` or its ` quit ` gives up. Both machines need the same version: when they differ it says which one to update, and offers to update the other machine through `ssh` when that one is older. [Remote machines](../../guides/remote/) explains it all.
+It runs `ssh devbox cornercase proxy`, which starts the server there if none is running. On a Windows machine it runs it through cmd or PowerShell, whichever that machine's OpenSSH Server uses, after finding out which on the first connection ([A Windows machine at the other end](../../guides/remote/#a-windows-machine-at-the-other-end)). If the connection drops, the window stays, says `reconnecting to devbox…` and tries again by itself; `Esc` or its ` quit ` gives up. Both machines need the same version: when they differ it says which one to update, and offers to update the other machine through `ssh` when that one is older. [Remote machines](../../guides/remote/) explains it all.
 
 ### `--remote`
 

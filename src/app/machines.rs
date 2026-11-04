@@ -184,6 +184,7 @@ impl Machines {
 
 #[cfg(test)]
 impl Machines {
+    #[cfg(unix)]
     pub(super) fn held_mut(&mut self) -> &mut [Held] {
         &mut self.held
     }
@@ -196,10 +197,12 @@ impl Machines {
         self.update = update;
     }
 
+    #[cfg(unix)]
     pub(super) fn set_network(&mut self, network: Network) {
         self.network = network;
     }
 
+    #[cfg(unix)]
     pub(super) fn set_status(&mut self, at: usize, status: Status) {
         self.held[at].status = status;
     }

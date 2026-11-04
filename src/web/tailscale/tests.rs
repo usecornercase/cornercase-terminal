@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{TempDir, write_executable};
+use crate::test_util::{TempDir, fake_program};
 
 fn status_json(state: &str, certs: &str) -> String {
     format!(
@@ -40,47 +40,97 @@ mod parse_status {
     }
 }
 
+mod finding {
+    use super::*;
+
+    fn placed(dir: &Path, name: &str) -> PathBuf {
+        std::fs::create_dir_all(dir).expect("folder");
+        let path = dir.join(name);
+        std::fs::write(&path, "").expect("program");
+        path
+    }
+
+    #[test]
+    fn windows_finds_tailscale_exe_in_the_absolute_folders_of_the_path() {
+        let dir = TempDir::new();
+        let program = placed(&dir.path().join("bin"), "tailscale.exe");
+        let folders = [PathBuf::from("bin"), PathBuf::new(), dir.path().join("empty"), dir.path().join("bin")];
+        let path = std::env::join_paths(folders).expect("path");
+
+        assert_eq!(found(true, Some(&path), None), Some(program));
+    }
+
+    #[test]
+    fn finds_the_program_on_the_path_as_this_system_names_it() {
+        let dir = TempDir::new();
+        let program = fake_program(dir.path(), "tailscale");
+
+        assert_eq!(found(cfg!(windows), Some(dir.path().as_os_str()), None), Some(program));
+    }
+
+    #[test]
+    fn windows_finds_it_in_program_files_when_the_path_misses_it() {
+        let dir = TempDir::new();
+        let program = placed(&dir.path().join("Tailscale"), "tailscale.exe");
+
+        assert_eq!(found(true, None, Some(dir.path().as_os_str())), Some(program));
+    }
+
+    #[test]
+    fn windows_takes_program_files_only_as_an_absolute_folder() {
+        assert_eq!(installed(true, Some(OsStr::new("Program Files"))), None);
+        assert_eq!(installed(true, None), None);
+    }
+
+    #[test]
+    fn windows_without_it_finds_nothing() {
+        let dir = TempDir::new();
+        placed(&dir.path().join("bin"), "tailscale");
+
+        assert_eq!(found(true, Some(dir.path().join("bin").as_os_str()), Some(dir.path().as_os_str())), None);
+    }
+}
+
 mod commands {
     use super::*;
 
-    fn fake(dir: &TempDir, script: &str) -> PathBuf {
-        let path = dir.path().join("tailscale");
-        write_executable(&path, &format!("#!/bin/sh\n{script}\n"));
-        path
+    fn fake(dir: &TempDir, out: &str, err: &str, code: i32) -> PathBuf {
+        let program = fake_program(dir.path(), "tailscale");
+        for (extension, text) in [("out", out), ("err", err), ("code", &code.to_string())] {
+            std::fs::write(program.with_extension(extension), text).expect("write the fake's answer");
+        }
+        program
+    }
+
+    fn calls(program: &Path) -> String {
+        std::fs::read_to_string(program.with_extension("args")).expect("calls")
     }
 
     #[test]
     fn start_serves_the_local_port_on_the_https_port() {
         let dir = TempDir::new();
-        let log = dir.path().join("args");
-        let status = status_json("Running", r#"["mac.tail1234.ts.net"]"#);
-        let program = fake(
-            &dir,
-            &format!("echo \"$@\" >> '{}'\nif [ \"$1\" = status ]; then cat <<'EOF'\n{status}\nEOF\nfi", log.display()),
-        );
+        let program = fake(&dir, &status_json("Running", r#"["mac.tail1234.ts.net"]"#), "", 0);
 
         let node = start(&program, 4321).expect("started");
 
         assert_eq!(node.host, "mac.tail1234.ts.net");
-        let calls = std::fs::read_to_string(&log).expect("calls");
-        assert_eq!(calls, "status --json\nserve --bg --yes --https=8443 http://127.0.0.1:4321\n");
+        assert_eq!(calls(&program), "status --json\nserve --bg --yes --https=8443 http://127.0.0.1:4321\n");
     }
 
     #[test]
     fn stop_turns_the_https_port_off() {
         let dir = TempDir::new();
-        let log = dir.path().join("args");
-        let program = fake(&dir, &format!("echo \"$@\" >> '{}'", log.display()));
+        let program = fake(&dir, "", "", 0);
 
         stop(&program).expect("stopped");
 
-        assert_eq!(std::fs::read_to_string(&log).expect("calls"), "serve --https=8443 off\n");
+        assert_eq!(calls(&program), "serve --https=8443 off\n");
     }
 
     #[test]
     fn a_failing_command_reports_its_last_line() {
         let dir = TempDir::new();
-        let program = fake(&dir, "echo 'first' >&2\necho 'serve config denied' >&2\nexit 1");
+        let program = fake(&dir, "", "first\nserve config denied\n", 1);
 
         assert_eq!(stop(&program), Err(Problem::Failed("serve config denied".into())));
     }

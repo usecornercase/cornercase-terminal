@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use rstest::rstest;
 
 use super::worktrees_dialog::{Setup, alive, path_of, with};

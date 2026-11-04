@@ -84,6 +84,7 @@ impl Clicks {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn age(&mut self, by: Duration) {
         self.border = self.border.map(|(b, at)| (b, at.checked_sub(by).expect("an earlier instant")));
         self.field = self.field.map(|(f, p, at)| (f, p, at.checked_sub(by).expect("an earlier instant")));

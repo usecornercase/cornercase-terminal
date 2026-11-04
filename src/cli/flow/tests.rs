@@ -308,6 +308,7 @@ mod runs {
 mod saving {
     use super::*;
     use crate::control::RoleSpec;
+    use crate::test_util::os_path;
 
     fn saved(path: Option<&str>, origin: &str, problems: &[&str]) -> FlowSaved {
         FlowSaved {
@@ -370,11 +371,33 @@ mod saving {
     #[test]
     fn a_path_is_made_absolute_without_dots_before_it_is_matched_with_a_listed_file() {
         assert_eq!(
-            listed_path(Path::new("/c/flows/../flows/./mine.toml")).expect("a path"),
-            Path::new("/c/flows/mine.toml")
+            listed_path(Path::new(&os_path("/c/flows/../flows/./mine.toml"))).expect("a path"),
+            Path::new(&os_path("/c/flows/mine.toml"))
         );
         let here = std::env::current_dir().expect("a folder");
         assert_eq!(listed_path(Path::new("a/../mine.toml")).expect("a path"), here.join("mine.toml"));
+    }
+
+    #[rstest::rstest]
+    #[case::from_unix(false, "/srv/flows/../flows/./mine.toml")]
+    #[case::from_windows(true, r"/srv/flows\..\flows\.\mine.toml")]
+    fn a_path_on_another_machine_is_cleaned_by_its_rules_with_slashes(#[case] windows: bool, #[case] given: &str) {
+        let remote = Remote { destination: "devbox".into(), command: None, option: "--command" };
+
+        let listed = listed_on(Path::new(given), Some(&remote), windows, &|| false).expect("a path");
+
+        assert_eq!(listed.to_str(), Some("/srv/flows/mine.toml"));
+    }
+
+    #[rstest::rstest]
+    #[case::from_unix(false, "C:/flows/../flows/./mine.toml")]
+    #[case::from_windows(true, r"C:\flows\..\flows\.\mine.toml")]
+    fn a_path_on_a_windows_machine_is_cleaned_by_its_rules(#[case] windows: bool, #[case] given: &str) {
+        let remote = Remote { destination: "winbox".into(), command: None, option: "--command" };
+
+        let listed = listed_on(Path::new(given), Some(&remote), windows, &|| true).expect("a path");
+
+        assert_eq!(listed.to_str(), Some(r"C:\flows\mine.toml"));
     }
 
     #[test]

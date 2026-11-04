@@ -11,8 +11,27 @@ fn devbox() -> Remote {
     Remote { destination: "me@devbox".into(), command: None, option: "--command" }
 }
 
-fn exited(code: i32) -> ExitStatus {
-    Command::new("/bin/sh").args(["-c", &format!("exit {code}")]).status().expect("run sh")
+#[cfg(unix)]
+pub(super) fn exited(code: i32) -> ExitStatus {
+    std::os::unix::process::ExitStatusExt::from_raw(code << 8)
+}
+
+#[cfg(windows)]
+pub(super) fn exited(code: i32) -> ExitStatus {
+    std::os::windows::process::ExitStatusExt::from_raw(code.cast_unsigned())
+}
+
+pub(super) fn with(lines: &[&str]) -> Stderr {
+    let stderr = Stderr::default();
+    for line in lines {
+        stderr.keep(line);
+    }
+    stderr
+}
+
+fn ssh_args(remote: &Remote, batch: bool, run: Run, args: &[&str]) -> Vec<String> {
+    let line = remote.command_for(RemoteShell::Posix, args, run == Run::Tied).expect("a line for sh");
+    remote.ssh_line(batched(batch), run, line)
 }
 
 mod ssh {
@@ -20,7 +39,7 @@ mod ssh {
 
     #[test]
     fn runs_the_proxy_after_the_destination_without_a_terminal() {
-        let args = devbox().ssh_args(&[], Run::Plain, &["proxy"]);
+        let args = ssh_args(&devbox(), false, Run::Plain, &["proxy"]);
 
         assert_eq!(args[0], "-T");
         let at = args.iter().position(|a| a == "--").expect("options end before the destination");
@@ -31,18 +50,18 @@ mod ssh {
 
     #[test]
     fn never_prompts_when_it_reconnects() {
-        assert!(!devbox().ssh_args(&[], Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
-        assert!(devbox().ssh_args(&BATCH, Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
+        assert!(!ssh_args(&devbox(), false, Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
+        assert!(ssh_args(&devbox(), true, Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
     }
 
     #[test]
     fn notices_a_dead_connection() {
-        assert!(devbox().ssh_args(&[], Run::Plain, &["proxy"]).contains(&"ServerAliveInterval=5".to_string()));
+        assert!(ssh_args(&devbox(), false, Run::Plain, &["proxy"]).contains(&"ServerAliveInterval=5".to_string()));
     }
 
     #[test]
     fn a_command_has_no_terminal_and_never_asks_for_a_password() {
-        let args = devbox().ssh_args(&BATCH, Run::Plain, &["logs", "--path"]);
+        let args = ssh_args(&devbox(), true, Run::Plain, &["logs", "--path"]);
 
         assert_eq!(args[0], "-T");
         assert!(args.contains(&"BatchMode=yes".to_string()));
@@ -52,9 +71,10 @@ mod ssh {
 
     #[test]
     fn a_terminal_is_asked_for() {
-        assert_eq!(devbox().ssh_args(&[], Run::Terminal, &["update"])[0], "-t");
+        assert_eq!(ssh_args(&devbox(), false, Run::Terminal, &["update"])[0], "-t");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_tied_command_tells_cornercase_there_that_its_input_is_the_link() {
         let remote = Remote { command: Some("env".into()), ..devbox() };
@@ -70,20 +90,21 @@ mod ssh {
 
     #[test]
     fn the_proxy_is_never_tied() {
-        let args = devbox().ssh_args(&[], Run::Plain, &["proxy"]);
+        let args = ssh_args(&devbox(), false, Run::Plain, &["proxy"]);
 
         assert!(!args.iter().any(|arg| arg.contains("CORNERCASE_TIED")));
     }
 
     #[test]
     fn a_tied_command_has_no_terminal_and_never_asks_for_a_password() {
-        let args = devbox().ssh_args(&BATCH, Run::Tied, &["restart"]);
+        let args = ssh_args(&devbox(), true, Run::Tied, &["restart"]);
 
         assert_eq!(args[0], "-T");
         assert!(args.contains(&"BatchMode=yes".to_string()));
         assert!(args.last().is_some_and(|script| script.contains("CORNERCASE_TIED=1")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn arguments_arrive_as_they_were_given() {
         let out = Command::new("/bin/sh")
@@ -103,6 +124,7 @@ mod ssh {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn runs_the_given_command_as_sh_reads_it() {
         let remote = Remote { command: Some("~/bin/cornercase".into()), ..devbox() };
@@ -121,7 +143,8 @@ mod one_way {
     use super::*;
 
     fn options(usage: Use) -> Vec<String> {
-        let args = devbox().ssh_args(usage.options(), Run::Plain, &["proxy"]);
+        let remote = devbox();
+        let args = remote.ssh_line(usage.options(), Run::Plain, remote.remote_command(&["proxy"], false));
         let at = args.iter().position(|a| a == "--").expect("options end before the destination");
         assert_eq!(args[at + 1], "me@devbox");
         args[..at].to_vec()
@@ -158,6 +181,7 @@ mod one_way {
 mod machine_update {
     use super::*;
 
+    #[cfg(unix)]
     fn run(script: &str) -> Result<()> {
         let mut sh = Command::new("/bin/sh");
         sh.args(["-c", script]);
@@ -175,11 +199,13 @@ mod machine_update {
         assert_eq!(args.len(), at + 3);
     }
 
+    #[cfg(unix)]
     #[test]
     fn that_ends_well_is_done() {
         assert!(run("echo updated cornercase; exit 0").is_ok());
     }
 
+    #[cfg(unix)]
     #[test]
     fn that_cannot_install_says_the_last_line_it_printed() {
         let error = run("echo 'cornercase 9.9.9 is out. Update it with:'; echo 'brew upgrade cornercase'; exit 1")
@@ -187,18 +213,21 @@ mod machine_update {
         assert_eq!(reason(&error), "brew upgrade cornercase");
     }
 
+    #[cfg(unix)]
     #[test]
     fn that_fails_says_what_cornercase_said_there() {
         let error = run("echo 'Error: no release for this machine' >&2; echo more >&2; exit 1").expect_err("failed");
         assert_eq!(reason(&error), "no release for this machine");
     }
 
+    #[cfg(unix)]
     #[test]
     fn never_waits_for_an_answer() {
         let error = run("read answer; echo \"read $?\"; exit 1").expect_err("no answer");
         assert_eq!(reason(&error), "read 1");
     }
 
+    #[cfg(unix)]
     #[test]
     fn without_cornercase_there_is_a_missing_cornercase() {
         assert!(matches!(run("exit 127"), Err(Error::RemoteMissing { .. })));
@@ -246,7 +275,7 @@ mod banner {
     fn skips_what_the_remote_shell_prints_first() {
         let input = format!("motd\n\n{}\n", banner());
 
-        assert!(matches!(read_banner(&mut input.as_bytes()), Found::Banner(_)));
+        assert!(matches!(read_line(&mut input.as_bytes(), parse_banner), Found::Line(_)));
     }
 
     #[test]
@@ -255,7 +284,7 @@ mod banner {
         protocol::send(&mut input, &protocol::ServerMessage::Detached).expect("encode");
         let mut reader = BufReader::new(input.as_slice());
 
-        assert!(matches!(read_banner(&mut reader), Found::Banner(_)));
+        assert!(matches!(read_line(&mut reader, parse_banner), Found::Line(_)));
         assert!(matches!(protocol::recv(&mut reader), Ok(Some(protocol::ServerMessage::Detached))));
     }
 
@@ -263,7 +292,7 @@ mod banner {
     fn gives_up_on_endless_output() {
         let input = "noise\n".repeat(BANNER_LINES + 1);
 
-        assert!(matches!(read_banner(&mut input.as_bytes()), Found::Garbage));
+        assert!(matches!(read_line(&mut input.as_bytes(), parse_banner), Found::Garbage));
     }
 }
 
@@ -333,14 +362,6 @@ mod versions {
 
 mod failures {
     use super::*;
-
-    fn with(lines: &[&str]) -> Stderr {
-        let stderr = Stderr::default();
-        for line in lines {
-            stderr.keep(line);
-        }
-        stderr
-    }
 
     #[test]
     fn a_missing_command_names_the_option_given() {
@@ -423,16 +444,9 @@ mod failures {
     }
 }
 
+#[cfg(unix)]
 mod ended {
     use super::*;
-
-    fn with(lines: &[&str]) -> Stderr {
-        let stderr = Stderr::default();
-        for line in lines {
-            stderr.keep(line);
-        }
-        stderr
-    }
 
     fn spawned(script: &str) -> (Child, Stderr, JoinHandle<()>) {
         let mut child = Command::new("/bin/sh").args(["-c", script]).stderr(Stdio::piped()).spawn().expect("run sh");
@@ -478,6 +492,67 @@ mod ended {
         let (mut child, stderr, collector) = spawned("exit 0");
 
         assert!(devbox().ended(&mut child, &stderr, Some(collector)).is_none());
+    }
+}
+
+mod shells {
+    use super::*;
+
+    #[rstest]
+    #[case::a_marked_line(Found::Line(RemoteShell::Cmd), None, Some(RemoteShell::Cmd))]
+    #[case::a_shell_that_printed_no_mark(Found::Ended, Some(1), Some(RemoteShell::Posix))]
+    #[case::a_shell_that_printed_nothing(Found::Ended, Some(0), Some(RemoteShell::Posix))]
+    #[case::ssh_failed(Found::Ended, Some(SSH_FAILED), None)]
+    #[case::ssh_killed(Found::Ended, None, None)]
+    #[case::too_much_output(Found::Garbage, None, None)]
+    fn reads_what_the_probe_got(
+        #[case] found: Found<RemoteShell>,
+        #[case] code: Option<i32>,
+        #[case] shell: Option<RemoteShell>,
+    ) {
+        assert_eq!(answered(found, code), shell);
+    }
+
+    #[test]
+    fn a_windows_path_given_as_the_command_asks_first() {
+        let windows = Remote { command: Some(r"C:\a&b\cornercase.exe".into()), ..devbox() };
+        let unix = Remote { command: Some("~/bin/cornercase".into()), ..devbox() };
+
+        assert!(windows.probe_first() && !unix.probe_first() && !devbox().probe_first());
+    }
+
+    #[test]
+    fn sh_still_gets_the_same_line() {
+        let line = devbox().command_for(RemoteShell::Posix, &["proxy"], false).expect("a line");
+
+        assert_eq!(line, format!("sh -c 'PATH=\"{SEARCHED}\"; export PATH; exec cornercase proxy'"));
+    }
+
+    #[rstest]
+    #[case::cmd(RemoteShell::Cmd, r#"&& "cornercase" proxy"#)]
+    #[case::powershell(RemoteShell::PowerShell, "try { & 'cornercase' 'proxy' }")]
+    fn a_windows_machine_gets_a_line_for_its_shell(#[case] shell: RemoteShell, #[case] runs: &str) {
+        let line = devbox().command_for(shell, &["proxy"], false).expect("a line");
+
+        assert!(line.contains(runs) && !line.contains("sh -c"), "{line}");
+    }
+
+    #[test]
+    fn what_a_windows_shell_cannot_take_is_refused_with_where_and_why() {
+        let remote = Remote { command: Some(r"C:\100%\cornercase.exe".into()), ..devbox() };
+
+        let error = remote.command_for(RemoteShell::Cmd, &["proxy"], false).expect_err("refused");
+
+        assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
+        assert!(error.to_string().contains("on `me@devbox` through cmd.exe") && error.to_string().contains("`%`"));
+    }
+
+    #[test]
+    fn the_probe_goes_as_it_is_and_never_asks_for_a_password_once_the_window_is_open() {
+        let args = devbox().ssh_line(&BATCH, Run::Plain, shell::PROBE.to_string());
+
+        assert_eq!(args.last().map(String::as_str), Some(shell::PROBE));
+        assert!(args[0] == "-T" && args.contains(&"BatchMode=yes".to_string()), "{args:?}");
     }
 }
 

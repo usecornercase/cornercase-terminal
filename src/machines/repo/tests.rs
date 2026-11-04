@@ -4,7 +4,7 @@ use std::sync::mpsc;
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{self, TempDir, git_repo, write_executable};
+use crate::test_util::{self, TempDir, git_repo};
 
 fn counted(hostname: Option<&'static str>) -> (Resolve, Arc<Mutex<Vec<String>>>) {
     let asked = Arc::new(Mutex::new(Vec::new()));
@@ -125,15 +125,17 @@ mod hostnames {
 mod ssh_hostname {
     use super::*;
 
+    #[cfg(unix)]
     fn fake_ssh(dir: &TempDir, script: &str) -> String {
         let path = dir.path().join("ssh");
-        write_executable(
+        test_util::write_executable(
             &path,
             &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"{}/args\"\n{script}", dir.path().display()),
         );
         path.display().to_string()
     }
 
+    #[cfg(unix)]
     #[test]
     fn is_the_hostname_ssh_g_prints() {
         let dir = TempDir::new();
@@ -143,6 +145,7 @@ mod ssh_hostname {
         assert_eq!(std::fs::read_to_string(dir.path().join("args")).expect("read args"), "-G\n--\ngh-work\n");
     }
 
+    #[cfg(unix)]
     #[test]
     fn is_none_when_ssh_fails_or_is_missing() {
         let dir = TempDir::new();
@@ -152,6 +155,7 @@ mod ssh_hostname {
         assert_eq!(hostname("/nonexistent/ssh", "gh-work"), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn never_runs_ssh_for_a_host_that_looks_like_an_option_or_holds_spaces() {
         let dir = TempDir::new();
@@ -177,6 +181,7 @@ mod ssh_hostname {
         assert_eq!(configured("hostname Git_Hub-1.example.com\n").as_deref(), Some("git_hub-1.example.com"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn keeps_the_host_as_it_is_when_ssh_prints_an_odd_hostname() {
         let dir = TempDir::new();

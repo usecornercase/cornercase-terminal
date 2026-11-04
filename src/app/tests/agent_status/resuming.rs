@@ -102,7 +102,7 @@ fn gemini_comes_back_in_its_conversation_and_plan_mode() {
     gemini.append(crate::test_util::fixture!("gemini/0.63.0/prompt.jsonl"));
     let saved = remembered(&mut app, &rx);
     let (mut back, rx, _bin) = restored(&saved, agents::Known::Gemini.name(), true);
-    wait_resumed(&mut back, &rx, &format!("--approval-mode plan --resume {}", FakeGemini::ID));
+    wait_resumed(&mut back, &rx, &format!("--approval-mode plan --resume {}", agents::gemini::fake::ID));
     assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("plan"));
 }
 

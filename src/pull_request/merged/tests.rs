@@ -2,12 +2,18 @@ use rstest::rstest;
 
 use super::*;
 use crate::git::remote::remote;
-use crate::test_util::{TempDir, fake_gh, fake_glab, fixture};
+use crate::test_util::TempDir;
+#[cfg(unix)]
+use crate::test_util::{fake_gh, fake_glab, fixture};
 
 const NOW: u64 = 1_792_065_600;
+#[cfg(unix)]
 const GH_STATUS: &str = fixture!("gh/2.101.0/auth-status.json");
+#[cfg(unix)]
 const GH_SEARCH: &str = fixture!("gh/2.101.0/merged-search.json");
+#[cfg(unix)]
 const GLAB_STATUS: &str = fixture!("glab/1.123.0/auth-status.json");
+#[cfg(unix)]
 const GLAB_MERGES: &str = fixture!("glab/1.123.0/merged-requests.json");
 
 fn now() -> SystemTime {
@@ -60,6 +66,7 @@ const SHOP: &str = "git@github.com:acme/web-shop.git";
 mod github_discovery {
     use super::*;
 
+    #[cfg(unix)]
     fn gh(tmp: &TempDir, status: &str) -> std::path::PathBuf {
         std::fs::write(tmp.path().join("status.json"), status).expect("status");
         std::fs::write(tmp.path().join("search.json"), GH_SEARCH).expect("search");
@@ -77,6 +84,7 @@ mod github_discovery {
         )
     }
 
+    #[cfg(unix)]
     fn accounts(read: Read) -> Vec<Account> {
         match read {
             Read::Accounts(accounts) => accounts,
@@ -84,6 +92,7 @@ mod github_discovery {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn keeps_the_accounts_that_work_and_skips_the_broken_one() {
         let tmp = TempDir::new();
@@ -94,6 +103,7 @@ mod github_discovery {
         assert_eq!(names, [("ghe.acme.dev", "ana"), ("github.com", "ana"), ("github.com", "ana-work")]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn reads_the_token_of_an_inactive_account_and_never_switches() {
         let tmp = TempDir::new();
@@ -110,6 +120,7 @@ mod github_discovery {
         assert!(queries.iter().all(|c| c.contains("--hostname")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn counts_every_page_and_names_repositories_in_lower_case() {
         let tmp = TempDir::new();
@@ -122,6 +133,7 @@ mod github_discovery {
         assert!(!one.truncated);
     }
 
+    #[cfg(unix)]
     #[test]
     fn leaves_out_what_merged_before_counting_began() {
         let tmp = TempDir::new();
@@ -133,6 +145,7 @@ mod github_discovery {
         assert_eq!(one.merged.iter().map(|m| m.key.number).collect::<Vec<_>>(), [1, 9]);
     }
 
+    #[cfg(unix)]
     #[rstest]
     #[case::none("{\"hosts\":{}}")]
     #[case::only_broken(r#"{"hosts":{"github.com":[{"state":"error","active":false,"login":"x"}]}}"#)]
@@ -153,6 +166,7 @@ mod github_discovery {
         assert!(matches!(read, Read::Unavailable(why) if why.contains("install gh")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_gh_without_json_status_is_unavailable() {
         let tmp = TempDir::new();
@@ -163,6 +177,7 @@ mod github_discovery {
         assert!(matches!(read, Read::Unavailable(why) if why.contains("update gh")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_failing_query_is_an_error_of_that_account_only() {
         let tmp = TempDir::new();
@@ -182,6 +197,7 @@ mod github_discovery {
         assert_eq!(errors, [None, None, Some("bad …".into())]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn splits_the_dates_when_a_search_passes_the_cap() {
         let tmp = TempDir::new();
@@ -206,6 +222,7 @@ mod github_discovery {
         assert!(!one.truncated);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_range_that_cannot_be_split_further_is_truncated() {
         let tmp = TempDir::new();
@@ -227,6 +244,7 @@ mod github_discovery {
 mod gitlab_discovery {
     use super::*;
 
+    #[cfg(unix)]
     fn glab(tmp: &TempDir) -> std::path::PathBuf {
         std::fs::write(tmp.path().join("status.json"), GLAB_STATUS).expect("status");
         std::fs::write(tmp.path().join("page-1.json"), GLAB_MERGES).expect("merges");
@@ -239,6 +257,7 @@ mod gitlab_discovery {
         )
     }
 
+    #[cfg(unix)]
     #[test]
     fn reads_the_hosts_that_work_even_when_glab_exits_with_one() {
         let tmp = TempDir::new();
@@ -253,6 +272,7 @@ mod gitlab_discovery {
         assert!(log.contains("api --hostname gitlab.com merge_requests?scope=created_by_me&state=merged"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn counts_every_page_skips_unmerged_ones_and_reads_offsets() {
         let tmp = TempDir::new();
@@ -265,6 +285,7 @@ mod gitlab_discovery {
         assert_eq!(one.merged[1].at, UNIX_EPOCH + Duration::from_hours(497_671));
     }
 
+    #[cfg(unix)]
     fn pages(tmp: &TempDir, full: u32, last: Option<usize>) {
         let page = |n: u32, count: usize| {
             let nodes: Vec<String> = (0..count)
@@ -286,11 +307,13 @@ mod gitlab_discovery {
         }
     }
 
+    #[cfg(unix)]
     fn first(read: Read) -> Listed {
         let Read::Accounts(found) = read else { panic!("expected accounts") };
         found[0].listed.clone().expect("listed")
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_short_page_ends_the_list_complete() {
         let tmp = TempDir::new();
@@ -304,6 +327,7 @@ mod gitlab_discovery {
         assert_eq!(log.lines().filter(|l| l.starts_with("api")).count(), 2);
     }
 
+    #[cfg(unix)]
     #[test]
     fn stops_at_the_page_bound_and_says_the_count_is_partial() {
         let tmp = TempDir::new();
@@ -317,6 +341,7 @@ mod gitlab_discovery {
         assert_eq!(log.lines().filter(|l| l.starts_with("api")).count(), gitlab::MAX_PAGES as usize);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_later_page_failing_keeps_the_pages_read_as_partial() {
         let tmp = TempDir::new();
@@ -328,6 +353,7 @@ mod gitlab_discovery {
         assert_eq!((listed.merged.len(), listed.truncated), (100, true));
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_first_page_failing_is_an_error_of_the_account() {
         let tmp = TempDir::new();
@@ -339,6 +365,7 @@ mod gitlab_discovery {
         assert!(found[0].listed.is_err());
     }
 
+    #[cfg(unix)]
     #[rstest]
     #[case::missing_flag("echo 'unknown flag: --output' >&2; exit 1", "update glab")]
     #[case::none_logged_in("echo 'no GitLab instances have been authenticated' >&2; exit 1", "not logged in")]
@@ -360,6 +387,7 @@ mod gitlab_discovery {
         assert!(matches!(read, Read::Unavailable(why) if why.contains("install glab")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn another_failure_keeps_the_sources() {
         let tmp = TempDir::new();

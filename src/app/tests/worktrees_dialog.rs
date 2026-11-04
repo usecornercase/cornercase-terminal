@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::cell::RefCell;
 
 use ratatui::style::{Color, Style};

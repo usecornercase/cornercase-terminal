@@ -1,5 +1,7 @@
 use super::*;
+#[cfg(unix)]
 use crate::app::messenger::By;
+#[cfg(unix)]
 use crate::project::Workspace;
 use crate::test_util::FakeHttp;
 
@@ -192,6 +194,7 @@ mod pairing {
     }
 }
 
+#[cfg(unix)]
 mod chat {
     use super::*;
 
@@ -334,6 +337,7 @@ mod chat {
     }
 }
 
+#[cfg(unix)]
 mod away {
     use super::*;
 

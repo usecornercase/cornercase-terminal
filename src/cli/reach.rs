@@ -128,27 +128,84 @@ fn outcome(remote: &Remote, status: ExitStatus) -> Result<bool> {
 }
 
 pub(super) fn server_path(path: &Path) -> Result<PathBuf> {
-    path_on(path, client::used_remote())
+    path_on(path, client::used_remote(), cfg!(windows), &far_windows)
+}
+
+pub(super) fn far_windows() -> bool {
+    client::used_remote().is_some_and(Remote::on_windows)
 }
 
 pub(super) fn open_path(path: &Path) -> Result<PathBuf> {
-    open_path_on(path, client::used_remote())
+    if path.starts_with("~") { Ok(path.to_path_buf()) } else { server_path(path) }
 }
 
 pub(super) fn open_path_on(path: &Path, remote: Option<&Remote>) -> Result<PathBuf> {
-    if path.starts_with("~") { Ok(path.to_path_buf()) } else { path_on(path, remote) }
+    if path.starts_with("~") {
+        return Ok(path.to_path_buf());
+    }
+    path_on(path, remote, cfg!(windows), &|| remote.is_some_and(Remote::on_windows))
 }
 
-fn path_on(path: &Path, remote: Option<&Remote>) -> Result<PathBuf> {
+pub(super) fn path_on(
+    path: &Path,
+    remote: Option<&Remote>,
+    windows: bool,
+    far_is_windows: &dyn Fn() -> bool,
+) -> Result<PathBuf> {
     match remote {
         None => Ok(std::path::absolute(path)?),
-        Some(_) if path.is_absolute() => Ok(path.to_path_buf()),
-        Some(remote) => Err(Error::WrongUsage(format!(
+        Some(remote) if windows_path(&path.to_string_lossy()) && far_is_windows() => windows_there(path, remote),
+        Some(remote) => path_there(path, remote, windows),
+    }
+}
+
+fn windows_there(path: &Path, remote: &Remote) -> Result<PathBuf> {
+    let text = path.to_string_lossy().replace('/', "\\");
+    if windows_root(&text).is_none() {
+        return Err(Error::WrongUsage(format!(
+            "`{}` is relative: {} is a Windows machine, so give its absolute path there, such as C:\\Users\\me\\src",
+            path.display(),
+            remote.host()
+        )));
+    }
+    Ok(PathBuf::from(text))
+}
+
+pub(super) fn windows_root(text: &str) -> Option<(&str, &str)> {
+    if let Some(share) = text.strip_prefix(r"\\") {
+        let host = share.find('\\').filter(|at| *at > 0)?;
+        let end = share[host + 1..].find('\\').map_or(share.len(), |at| host + 1 + at);
+        return (end > host + 1).then(|| text.split_at(end + 2));
+    }
+    let mut chars = text.chars();
+    let drive = chars.next().is_some_and(|c| c.is_ascii_alphabetic()) && chars.next() == Some(':');
+    (drive && chars.next() == Some('\\')).then(|| text.split_at(2))
+}
+
+fn path_there(path: &Path, remote: &Remote, windows: bool) -> Result<PathBuf> {
+    let text = path.to_string_lossy();
+    if windows && windows_path(&text) {
+        return Err(Error::WrongUsage(format!(
+            "`{}` is a Windows path, and {} takes Unix ones, such as /srv/x; \
+             Git Bash turns /srv/x into a Windows path: write //srv/x there, or set MSYS_NO_PATHCONV=1",
+            path.display(),
+            remote.host()
+        )));
+    }
+    if !text.starts_with('/') {
+        return Err(Error::WrongUsage(format!(
             "`{}` is relative: with --remote, give its absolute path on {}",
             path.display(),
             remote.host()
-        ))),
+        )));
     }
+    Ok(if windows { PathBuf::from(text.replace('\\', "/")) } else { path.to_path_buf() })
+}
+
+fn windows_path(text: &str) -> bool {
+    let mut chars = text.chars();
+    let drive = chars.next().is_some_and(|c| c.is_ascii_alphabetic()) && chars.next() == Some(':');
+    drive || text.starts_with('\\')
 }
 
 #[cfg(test)]

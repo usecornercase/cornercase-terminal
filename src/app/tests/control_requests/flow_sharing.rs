@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::control::{Exported, FlowExport, FlowImport, Imported};
 use crate::flows::share::{self, MAX_BYTES};

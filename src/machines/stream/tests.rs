@@ -7,7 +7,7 @@ use super::alarm::{Armed, Bell};
 use super::fake::{self, SURFACE, There};
 use super::*;
 use crate::error::Result;
-use crate::machines::link::fake::{Hanging, ended, line, refused, request};
+use crate::machines::link::fake::{ended, line, refused, request};
 use crate::os::socket::UnixStream;
 use crate::protocol::{self, ServerMessage};
 use crate::remote::Killer;
@@ -26,8 +26,18 @@ struct Script {
 impl Connect for Script {
     fn connect(&self, killer: &Killer) -> Result<Line> {
         let next = self.lines.lock().recv().map_err(|_| refused())?;
-        next.unwrap_or_else(|| Hanging.connect(killer))
+        next.unwrap_or_else(|| hanging(killer))
     }
+}
+
+#[cfg(unix)]
+fn hanging(killer: &Killer) -> Result<Line> {
+    link::fake::Hanging.connect(killer)
+}
+
+#[cfg(windows)]
+fn hanging(_: &Killer) -> Result<Line> {
+    Err(refused())
 }
 
 struct Ticks(Sender<Duration>);
@@ -86,6 +96,7 @@ impl Rig {
         theirs
     }
 
+    #[cfg(unix)]
     pub(super) fn hang(&self) {
         self.lines.send(None).expect("the stream connects");
     }
@@ -531,6 +542,7 @@ mod silence {
         assert_eq!(request(&mut rig.reach())["command"], "view");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_connection_stuck_before_its_banner_is_cut_in_time_and_tried_again() {
         let rig = Rig::new();

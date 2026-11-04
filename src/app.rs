@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[cfg(unix)]
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
@@ -15,27 +16,34 @@ use ratatui::layout::Rect;
 use crate::agents;
 use crate::agents::activity::{self};
 #[cfg(test)]
+#[cfg(unix)]
 use crate::agents::awake::Awake;
 #[cfg(test)]
+#[cfg(unix)]
 use crate::agents::launch::Launch;
 #[cfg(test)]
+#[cfg(unix)]
 use crate::agents::usage;
 use crate::changes::{self};
 use crate::config::Config;
 use crate::control::theme::{ThemeFrom, ThemeInfo};
 use crate::error::{Error, Result};
 #[cfg(test)]
+#[cfg(unix)]
 use crate::files;
 use crate::host::notify::Notification;
 use crate::host::pointer;
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
 #[cfg(test)]
+#[cfg(unix)]
 use crate::issues::People;
 #[cfg(test)]
+#[cfg(unix)]
 use crate::issues::browser::Tab as IssueTab;
 use crate::issues::cache::Cache as IssueCache;
 #[cfg(test)]
+#[cfg(unix)]
 use crate::issues::{Account, Source};
 use crate::os::fs::canonical;
 use crate::os::process::launch_folder;
@@ -45,6 +53,7 @@ use crate::project::split::Dir;
 use crate::project::{Group, Hierarchy, Project, group};
 use crate::settings::Page;
 #[cfg(test)]
+#[cfg(unix)]
 use crate::state::IssuesState;
 use crate::state::{self, ChangesState, ProjectState, State};
 use crate::todo::{self, Todos};
@@ -52,10 +61,12 @@ use crate::ui::{self};
 #[cfg(test)]
 use crate::update::Install;
 #[cfg(test)]
+#[cfg(unix)]
 use crate::update::restart;
 use crate::web::Web;
 use agent_watch::AgentRuntime;
 #[cfg(test)]
+#[cfg(unix)]
 use agent_watch::WATCH_AGENTS_EVERY;
 use changes_panel::ChangesEvent;
 use files_panel::FilesEvent;
@@ -65,6 +76,7 @@ use interaction::LINES_SCROLL_EVERY;
 use issues_dialog::IssueEvent;
 use launches::LAUNCH_EVERY;
 #[cfg(test)]
+#[cfg(unix)]
 use layout::List;
 use layout::{Scrolls, Side};
 use machines::RemoteDrag;
@@ -284,6 +296,7 @@ impl App {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(crate) fn backgrounds(&self) -> Vec<Option<libghostty_vt::style::RgbColor>> {
         self.projects.terms().map(|term| term.emulator.default_background()).collect()
     }

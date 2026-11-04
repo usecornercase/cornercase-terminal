@@ -26,6 +26,7 @@ pub(super) struct Setups {
 
 impl Setups {
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn running(&self) -> &HashMap<u64, (u64, PathBuf)> {
         &self.running
     }

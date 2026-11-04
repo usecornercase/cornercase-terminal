@@ -3,12 +3,18 @@ use std::path::{Path, PathBuf};
 use rstest::rstest;
 
 use super::*;
+#[cfg(unix)]
 use crate::project::Phase;
 use crate::project::group::GroupEntry;
-use crate::project::split::{Dir, Node};
+#[cfg(unix)]
+use crate::project::split::Dir;
+#[cfg(unix)]
+use crate::project::split::Node;
+#[cfg(unix)]
 use crate::test_util::spawn_term;
 use crate::ui::{self, SidebarRow};
 
+#[cfg(unix)]
 fn hierarchy() -> Vec<Project> {
     let mut first = Project::new(10, PathBuf::from("/first"), None);
     let mut second = Project::new(20, PathBuf::from("/second"), None);
@@ -37,6 +43,7 @@ fn tab_at(project: usize, workspace: usize, tab: usize) -> TabAt {
     TabAt { workspace: workspace_at(project, workspace), tab }
 }
 
+#[cfg(unix)]
 mod lookups {
     use super::*;
 
@@ -198,6 +205,7 @@ mod places {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn reach_the_workspace_and_tab_they_name() {
         let mut projects = hierarchy();
@@ -209,6 +217,7 @@ mod places {
         assert_eq!(projects[1].workspaces[0].tabs[0].name.as_deref(), Some("second"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn come_from_positions_only_when_something_is_there() {
         let projects = hierarchy();
@@ -222,6 +231,7 @@ mod places {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn follow_the_active_workspace_and_tab() {
         let mut projects = hierarchy();
@@ -237,6 +247,7 @@ mod places {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn find_workspaces_by_id_or_by_what_they_hold() {
         let mut projects = hierarchy();
@@ -249,6 +260,7 @@ mod places {
         assert_eq!(projects.find_workspace(2, |_| true), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn walk_a_projects_tabs_with_their_places() {
         let projects = hierarchy();
@@ -256,6 +268,7 @@ mod places {
         assert_eq!(walked, [(tab_at(0, 0, 0), 12), (tab_at(0, 1, 0), 15), (tab_at(0, 1, 1), 17)]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn name_what_was_just_pushed() {
         let mut projects = hierarchy();
@@ -269,6 +282,7 @@ mod places {
 mod iterators {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn visit_every_level_in_storage_order_including_closing_items() {
         let mut projects = hierarchy();
@@ -331,6 +345,7 @@ mod iterators {
     }
 }
 
+#[cfg(unix)]
 mod layout {
     use super::*;
 

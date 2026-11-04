@@ -2,7 +2,7 @@ use rstest::rstest;
 
 use super::*;
 use crate::machines::Machine;
-use crate::test_util::TempDir;
+use crate::test_util::{TempDir, os_path};
 
 mod file {
     use super::*;
@@ -349,7 +349,8 @@ mod check_worktrees_dir {
     #[case::empty("  ", Err("the folder is required"))]
     #[case::relative("worktrees", Err("use an absolute path or one starting with ~/"))]
     fn accepts_only_absolute_folders(#[case] input: &str, #[case] expected: Result<String, &'static str>) {
-        assert_eq!(check_worktrees_dir(input, Some(Path::new("/home/ana"))), expected);
+        let home = PathBuf::from(os_path("/home/ana"));
+        assert_eq!(check_worktrees_dir(&os_path(input), Some(&home)), expected.map(|dir| os_path(&dir)));
     }
 }
 

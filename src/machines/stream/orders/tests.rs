@@ -208,6 +208,7 @@ mod answers {
         assert_eq!(events(&request(&mut rig.reach())), [key("b")]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn one_whose_connection_is_stuck_before_its_banner_is_told_late() {
         let rig = Rig::new();

@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use rstest::rstest;
 
 use super::posts::{Posting, THREAD, first_post, needs_you, sends};

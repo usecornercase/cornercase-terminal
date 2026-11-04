@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::collections::BTreeMap;
 
 use rstest::rstest;
@@ -126,7 +128,9 @@ fn behind_a_program_the_accounts_are_disabled_and_say_why() {
     let mut s = setup();
     let pane = s.pane();
     type_line(&mut s.app, "sleep 30");
-    pump_until(&mut s.app, &s.rx, "sleep runs", |app| app.term().is_some_and(|t| !t.shell_in_foreground()));
+    pump_until(&mut s.app, &s.rx, "sleep runs", |app| {
+        app.term().and_then(|t| t.program(&app.config)).as_deref() == Some("sleep")
+    });
     let old = s.app.term().and_then(Term::shell_pid);
     s.open();
 

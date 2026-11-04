@@ -1,12 +1,11 @@
 use std::thread::JoinHandle;
-use std::time::Instant;
 
 use rstest::rstest;
 use serde_json::json;
 
 use super::*;
 use crate::control::{Response, Stats};
-use crate::machines::link::fake::{Hanging, Once, REFUSED, ended, line, request, respond, window_messages};
+use crate::machines::link::fake::{Once, REFUSED, ended, line, request, respond, window_messages};
 use crate::os::socket::UnixStream;
 use crate::protocol::{self, ClientMessage, ServerMessage};
 
@@ -129,11 +128,12 @@ mod the_deadline {
         assert_eq!(answered(asking), Err(LATE.into()));
     }
 
+    #[cfg(unix)]
     #[test]
     fn ends_an_ssh_that_has_not_answered() {
-        let started = Instant::now();
+        let started = std::time::Instant::now();
 
-        let asked = ask(&Hanging, "vps", stats(), None, Duration::from_millis(50));
+        let asked = ask(&link::fake::Hanging, "vps", stats(), None, Duration::from_millis(50));
 
         assert_eq!(asked, Err(LATE.into()));
         assert!(started.elapsed() < WAIT, "{:?}", started.elapsed());

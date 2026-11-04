@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::issue_list::{self, browser, checkout, enter, listing, open_loaded, start};
 use super::*;
 use crate::issues::browser::Naming;

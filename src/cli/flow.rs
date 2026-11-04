@@ -16,6 +16,7 @@ use crate::error::{Error, Result};
 use crate::flows::registry::{self, Source};
 use crate::flows::share;
 use crate::flows::{Flow, Worktree};
+use crate::remote::Remote;
 
 pub(super) fn run(action: FlowAction) -> Result<()> {
     match action {
@@ -148,8 +149,25 @@ fn listed_place(flows: &Flows, path: &Path) -> Option<ImportTo> {
 }
 
 fn listed_path(path: &Path) -> Result<PathBuf> {
+    listed_on(path, client::used_remote(), cfg!(windows), &super::reach::far_windows)
+}
+
+fn listed_on(
+    path: &Path,
+    remote: Option<&Remote>,
+    windows: bool,
+    far_is_windows: &dyn Fn() -> bool,
+) -> Result<PathBuf> {
+    let path = super::reach::path_on(path, remote, windows, far_is_windows)?;
+    match path.to_str() {
+        Some(text) if remote.is_some() => Ok(PathBuf::from(clean_there(text))),
+        _ => Ok(clean_here(&path)),
+    }
+}
+
+fn clean_here(path: &Path) -> PathBuf {
     let mut clean = PathBuf::new();
-    for part in super::reach::server_path(path)?.components() {
+    for part in path.components() {
         match part {
             Component::ParentDir => {
                 clean.pop();
@@ -158,7 +176,28 @@ fn listed_path(path: &Path) -> Result<PathBuf> {
             other => clean.push(other),
         }
     }
-    Ok(clean)
+    clean
+}
+
+fn clean_there(text: &str) -> String {
+    match super::reach::windows_root(text) {
+        Some((root, rest)) => format!("{root}\\{}", cleaned(rest, '\\').join("\\")),
+        None => format!("/{}", cleaned(text, '/').join("/")),
+    }
+}
+
+fn cleaned(text: &str, separator: char) -> Vec<&str> {
+    let mut parts = Vec::new();
+    for part in text.split(separator) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            part => parts.push(part),
+        }
+    }
+    parts
 }
 
 fn into_place(origin: &str) -> &'static str {

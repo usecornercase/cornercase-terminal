@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::changes::diff::Status;
 use crate::files::Mark;

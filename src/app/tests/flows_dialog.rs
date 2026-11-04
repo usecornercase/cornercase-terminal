@@ -12,6 +12,10 @@ struct Setup {
     app: App,
     _rx: Receiver<AppEvent>,
     config: TempDir,
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "only the tests that open a project read it, and they need a shell")
+    )]
     project: Option<TempDir>,
 }
 
@@ -248,6 +252,7 @@ mod files_on_disk {
         assert_eq!(dialog(&s.app).entries(), 5);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_flow_can_be_saved_into_the_project() {
         let mut s = open(true);
@@ -321,6 +326,7 @@ mod deleting_built_ins {
         config::load(&s.config.path().join("config.json")).hidden_flows
     }
 
+    #[cfg(unix)]
     #[test]
     fn deleting_one_asks_then_hides_it_in_the_config_and_everywhere() {
         let mut s = settings_tab(true);
@@ -458,6 +464,7 @@ mod list_preview {
         assert_eq!(view(&s.app, WIDE).cursor, 1);
     }
 
+    #[cfg(unix)]
     #[test]
     fn built_in_edited_and_project_flows_are_all_previewed() {
         let mut s = open(true);

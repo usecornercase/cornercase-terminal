@@ -86,6 +86,7 @@ pub(crate) struct Relayed {
 
 #[cfg(test)]
 impl Relayed {
+    #[cfg(unix)]
     pub(in crate::app) fn result(&self) -> &Result<Value, Refusal> {
         &self.result
     }

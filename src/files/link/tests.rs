@@ -73,7 +73,8 @@ fn resolves_from_the_programs_folder_then_the_workspace() {
     let link = |path: &str| Link { start: 0, end: 1, path: path.into(), lines: Some((3, 3)) };
     let from = |path: &str, cwd: &Path| resolve(&link(path), Some(cwd), root.path(), None).map(|t| t.path);
     let cwd = root.path().join("crate");
-    assert_eq!(from("src/lib.rs", &cwd).as_deref(), Some("crate/src/lib.rs"));
+    let lib = Path::new("crate").join("src").join("lib.rs").display().to_string();
+    assert_eq!(from("src/lib.rs", &cwd), Some(lib));
     assert_eq!(from("README.md", &cwd).as_deref(), Some("README.md"));
     assert_eq!(from("missing.rs", &cwd), None);
     assert_eq!(from("crate/src", &cwd), None, "folders are not opened");
@@ -95,10 +96,11 @@ fn expands_home_paths(#[case] inside: bool) {
     let (root, other) = (TempDir::new(), TempDir::new());
     let home = if inside { root.path() } else { other.path() };
     fs::create_dir_all(home.join(".claude/plans")).expect("mkdir");
-    let file = home.join(".claude/plans/fix.md");
+    let in_home = Path::new(".claude").join("plans").join("fix.md");
+    let file = home.join(&in_home);
     fs::write(&file, "# Plan").expect("write");
     let link = Link { start: 0, end: 1, path: "~/.claude/plans/fix.md".into(), lines: Some((3, 9)) };
-    let path = if inside { ".claude/plans/fix.md".to_string() } else { file.display().to_string() };
+    let path = if inside { in_home } else { file }.display().to_string();
     assert_eq!(shown(resolve(&link, Some(root.path()), root.path(), Some(home))), Some((path, link.lines)));
     assert!(resolve(&link, None, root.path(), None).is_none());
 }
@@ -146,6 +148,44 @@ fn under_finds_the_path_and_says_whether_it_is_inside() {
     assert!(under(&row("see a.rs"), 1, None, root.path(), None).is_none());
 }
 
+mod separators {
+    use super::*;
+
+    fn link_with(text: &str, word: &str, separators: Separators) -> Option<(String, Option<(u32, u32)>)> {
+        let col = u16::try_from(text.find(word).expect("the word is in the line")).expect("fits");
+        at_with(&row(text), col, separators).map(|link| (link.path, link.lines))
+    }
+
+    #[rstest]
+    #[case::a_drive_a_line_and_a_column(r"error at C:\src\app\main.rs:10:5", "app", r"C:\src\app\main.rs", Some((10, 10)))]
+    #[case::the_current_folder(r"see .\src\x.rs now", "src", r".\src\x.rs", None)]
+    #[case::a_relative_one_with_a_line(r"src\x.rs:3: warning", "x.rs", r"src\x.rs", Some((3, 3)))]
+    #[case::a_drive_with_slashes("C:/src/main.rs:7", "main", "C:/src/main.rs", Some((7, 7)))]
+    fn on_windows_a_backslash_parts_a_path(
+        #[case] text: &str,
+        #[case] word: &str,
+        #[case] path: &str,
+        #[case] lines: Option<(u32, u32)>,
+    ) {
+        assert_eq!(link_with(text, word, Separators::Both), Some((path.to_string(), lines)));
+    }
+
+    #[test]
+    fn on_unix_a_backslash_ends_the_path_as_before() {
+        assert_eq!(link_with(r"src\x.rs:3", "x.rs", Separators::Slash), Some(("x.rs".to_string(), Some((3, 3)))));
+    }
+
+    #[test]
+    fn dots_and_backslashes_alone_are_no_link_on_windows() {
+        assert_eq!(link_with(r"run .\ now", ".", Separators::Both), None);
+    }
+
+    #[test]
+    fn this_system_uses_its_own() {
+        assert_eq!(Separators::here(), if cfg!(windows) { Separators::Both } else { Separators::Slash });
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn outside_folders_devices_and_fifos_are_not_links() {
@@ -178,6 +218,44 @@ mod on_windows {
 
         assert_eq!((target.path.as_str(), target.inside()), (r"src\aux.rs", true));
         assert_eq!(target.real, file);
+    }
+
+    fn hovered(text: &str, word: &str, root: &Path) -> Option<(Link, Target)> {
+        let col = u16::try_from(text.find(word).expect("the word is in the line")).expect("fits");
+        under(&row(text), col, None, root, None)
+    }
+
+    #[test]
+    fn a_drive_path_with_backslashes_in_a_pane_opens_its_file_at_its_line() {
+        let (root, other) = (TempDir::new(), TempDir::new());
+        fs::create_dir(other.path().join("src")).expect("mkdir");
+        let file = other.path().join("src").join("main.rs");
+        fs::write(&file, "").expect("write");
+
+        let (found, target) =
+            hovered(&format!("error at {}:10:5", file.display()), "main", root.path()).expect("a link");
+
+        assert_eq!((found.path, target.lines, target.inside()), (file.display().to_string(), Some((10, 10)), false));
+        assert_eq!(target.real, file);
+    }
+
+    #[test]
+    fn a_relative_path_with_backslashes_opens_in_the_workspace() {
+        let root = TempDir::new();
+        fs::create_dir(root.path().join("src")).expect("mkdir");
+        fs::write(root.path().join("src").join("x.rs"), "").expect("write");
+
+        let (_, target) = hovered(r"src\x.rs:3: warning", "x.rs", root.path()).expect("a link");
+
+        assert_eq!((target.path.as_str(), target.lines, target.inside()), (r"src\x.rs", Some((3, 3)), true));
+    }
+
+    #[test]
+    fn a_network_path_in_a_pane_is_no_link() {
+        let root = TempDir::new();
+
+        assert!(hovered(r"see \\host\share\x.rs:3", "share", root.path()).is_none());
+        assert!(hovered("see //host/share/x.rs:3", "share", root.path()).is_none());
     }
 
     #[test]

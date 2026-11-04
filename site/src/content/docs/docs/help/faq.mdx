@@ -99,11 +99,11 @@ Yes, in the [files panel](../../guides/files/#images): click a PNG, JPEG, GIF, W
 
 ### Which platforms does it run on?
 
-Linux and macOS, on x86_64 and arm64. The prebuilt Linux binaries need glibc 2.35 or newer; elsewhere, [build from source](../../installation/#from-source).
+Linux and macOS, on x86_64 and arm64, and Windows 11 or 10 (from version 1809) on x64, natively, without WSL; Windows on Arm runs the x64 build. The prebuilt Linux binaries need glibc 2.35 or newer; elsewhere, [build from source](../../installation/#from-source). A few features don't work on Windows yet: see [Known limitations](../limitations/#on-windows).
 
 ### How do I update it?
 
-From the app: when a new version is out, `More ▴` turns cyan and its menu offers **update to** the new version. Click it to update, then restart; before restarting it says what is running and will stop, and your layout comes back with new shells, agents in their conversations. From a shell, `cornercase update` does the same at any time. Homebrew installs update with `brew update && brew upgrade cornercase`. See [Update](../../installation/#update).
+From the app: when a new version is out, `More ▴` turns cyan and its menu offers **update to** the new version. Click it to update, then restart; before restarting it says what is running and will stop, and your layout comes back with new shells, agents in their conversations. From a shell, `cornercase update` does the same at any time. Homebrew installs update with `brew update && brew upgrade cornercase`. On Windows it works the same, even while cornercase runs. See [Update](../../installation/#update).
 
 ### Does it phone home?
 

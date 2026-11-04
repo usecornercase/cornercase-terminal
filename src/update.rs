@@ -1,5 +1,7 @@
 pub(crate) mod restart;
+mod swap;
 
+use std::env::consts::EXE_SUFFIX;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,6 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
 use crate::http::{self, Service};
+use crate::os::desktop;
 use crate::os::fs::{canonicalize, set_mode, writable};
 use crate::text::hex;
 
@@ -18,11 +21,15 @@ use crate::version::newer;
 pub const LATEST_ENV: &str = "CORNERCASE_RELEASES_URL";
 pub(crate) const DEFAULT_LATEST: &str =
     "https://api.github.com/repos/usecornercase/cornercase-terminal/releases/latest";
-pub(crate) const INSTALLER: &str = "curl -fsSL https://usecornercase.dev/install.sh | sh";
+pub(crate) const INSTALLER: &str = if cfg!(windows) { POWERSHELL_INSTALLER } else { SHELL_INSTALLER };
+const SHELL_INSTALLER: &str = "curl -fsSL https://usecornercase.dev/install.sh | sh";
+const POWERSHELL_INSTALLER: &str =
+    "powershell -ExecutionPolicy Bypass -c \"irm https://usecornercase.dev/install.ps1 | iex\"";
 pub(crate) const BREW: &str = "brew update && brew upgrade cornercase";
 pub(crate) const CHECK_EVERY: Duration = Duration::from_hours(1);
 const SERVICE: Service = Service { name: "GitHub", rejected: "GitHub refused the update check" };
 const BINARY: &str = "cornercase";
+const ARCHIVE: &str = if cfg!(windows) { "archive.zip" } else { "archive.tar.gz" };
 const BREW_DIRS: [&str; 3] = ["/Cellar/", "/homebrew/", "/linuxbrew/"];
 const NOTES_HEADING: &str = "## Release Notes";
 const CHANGELOG: &str = "CHANGELOG.md";
@@ -166,7 +173,21 @@ pub fn target() -> Option<&'static str> {
         ("aarch64", "linux") => Some("aarch64-unknown-linux-gnu"),
         ("x86_64", "macos") => Some("x86_64-apple-darwin"),
         ("aarch64", "macos") => Some("aarch64-apple-darwin"),
+        ("x86_64", "windows") => Some("x86_64-pc-windows-msvc"),
         _ => None,
+    }
+}
+
+fn archive_name(target: &str) -> String {
+    let extension = if target.contains("-windows-") { "zip" } else { "tar.gz" };
+    format!("{BINARY}-{target}.{extension}")
+}
+
+pub(crate) fn remove_old_binaries() {
+    if cfg!(windows)
+        && let Ok(exe) = std::env::current_exe()
+    {
+        swap::remove_old(&exe);
     }
 }
 
@@ -195,7 +216,7 @@ pub(crate) fn install_latest(url: &str, current: &str, install: &Install, target
 }
 
 pub(crate) fn update(release: &Release, target: &str, exe: &Path) -> Result<()> {
-    let name = format!("{BINARY}-{target}.tar.gz");
+    let name = archive_name(target);
     let archive = http::download(&SERVICE, release.asset(&name)?)?;
     let sums = http::download(&SERVICE, release.asset(&format!("{name}.sha256"))?)?;
     replace(&archive, &String::from_utf8_lossy(&sums), &release.version, exe)
@@ -210,7 +231,7 @@ pub(crate) fn replace(archive: &[u8], sums: &str, version: &str, exe: &Path) -> 
         .map_err(Error::from)
         .and_then(|()| unpack(archive, &staging))
         .and_then(|binary| check_binary(&binary, version).map(|()| binary))
-        .and_then(|binary| fs::rename(&binary, exe).map_err(Error::from));
+        .and_then(|binary| swap::swap(&binary, exe));
     let _ = fs::remove_dir_all(&staging);
     result
 }
@@ -224,21 +245,33 @@ fn verify(archive: &[u8], sums: &str) -> Result<()> {
     }
 }
 
+fn tar() -> PathBuf {
+    tar_in(cfg!(windows), desktop::windows_folder())
+}
+
+fn tar_in(windows: bool, folder: Option<PathBuf>) -> PathBuf {
+    match folder {
+        Some(folder) if windows => folder.join("System32").join("tar.exe"),
+        _ => PathBuf::from("tar"),
+    }
+}
+
 fn unpack(archive: &[u8], staging: &Path) -> Result<PathBuf> {
-    let file = staging.join("archive.tar.gz");
+    let file = staging.join(ARCHIVE);
     fs::write(&file, archive)?;
-    let output = Command::new("tar").arg("-xzf").arg(&file).arg("-C").arg(staging).output()?;
+    let output = Command::new(tar()).arg("-xzf").arg(&file).arg("-C").arg(staging).output()?;
     if !output.status.success() {
         return Err(Error::Api(format!(
             "could not unpack the download: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
-    let nested = fs::read_dir(staging)?.flatten().map(|entry| entry.path().join(BINARY));
-    let binary = std::iter::once(staging.join(BINARY))
+    let name = format!("{BINARY}{EXE_SUFFIX}");
+    let nested = fs::read_dir(staging)?.flatten().map(|entry| entry.path().join(&name));
+    let binary = std::iter::once(staging.join(&name))
         .chain(nested)
         .find(|path| path.is_file())
-        .ok_or_else(|| Error::Api(format!("the download has no `{BINARY}`")))?;
+        .ok_or_else(|| Error::Api(format!("the download has no `{name}`")))?;
     set_mode(&binary, 0o755)?;
     Ok(binary)
 }

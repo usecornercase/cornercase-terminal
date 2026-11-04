@@ -1,5 +1,5 @@
 use std::sync::mpsc::{self, Receiver};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use parking_lot::Mutex;
 use rstest::rstest;
@@ -7,7 +7,7 @@ use serde_json::json;
 
 use super::*;
 use crate::control::{Changes, Response};
-use crate::machines::link::fake::{Hanging, Once, REFUSED, ended, line, request, respond, window_messages};
+use crate::machines::link::fake::{Once, REFUSED, ended, line, request, respond, window_messages};
 use crate::os::socket::UnixStream;
 use crate::protocol::{self, ServerMessage};
 use crate::remote::Killer;
@@ -177,12 +177,13 @@ mod dropping {
         assert!(heard.recv_timeout(Duration::from_millis(100)).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn ends_an_ssh_that_has_not_answered() {
-        let started = Instant::now();
+        let started = std::time::Instant::now();
         let (tx, heard) = mpsc::channel::<Followed>();
         let wanted = Wanted { command: changes(), boot: BOOT.into(), once: false };
-        let follow = Follow::start(3, Box::new(Hanging), "vps", wanted, &tx);
+        let follow = Follow::start(3, Box::new(link::fake::Hanging), "vps", wanted, &tx);
         drop(tx);
 
         drop(follow);

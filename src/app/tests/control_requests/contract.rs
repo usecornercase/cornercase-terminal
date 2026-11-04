@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::control::contract::{
     CONTRACT, Code, Descriptor, EVENTS_VERSION, Refusal, SURFACE_VERSION, Stream, Structured,

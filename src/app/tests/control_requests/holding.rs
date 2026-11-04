@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn cat_pane(app: &mut App, rx: &Receiver<AppEvent>) -> u64 {

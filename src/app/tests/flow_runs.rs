@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::flow_panel::team;
 use super::*;
 use crate::agents::AgentState;

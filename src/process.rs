@@ -23,7 +23,7 @@ pub(crate) use imp::{
 
 pub(crate) mod escalation;
 #[cfg(any(windows, test))]
-mod handles;
+pub(crate) mod handles;
 pub(crate) mod owners;
 pub(crate) mod program;
 

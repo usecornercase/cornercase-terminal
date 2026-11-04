@@ -1,32 +1,46 @@
+#[cfg(unix)]
 use std::path::PathBuf;
 
 use rstest::rstest;
+#[cfg(unix)]
 use serde_json::Value;
 
 use super::*;
-use crate::test_util::{TempDir, fake_glab, fixture};
+use crate::test_util::TempDir;
+#[cfg(unix)]
+use crate::test_util::{fake_glab, fixture};
 
+#[cfg(unix)]
 const VIEW: &str = fixture!("glab/1.124.0/mr-view.json");
 
+#[cfg(unix)]
 const CONFLICTING: &str = fixture!("glab/1.124.0/mr-view-conflicting.json");
 
+#[cfg(unix)]
 const JOBS: &str = fixture!("glab/1.124.0/pipeline-jobs.json");
 
+#[cfg(unix)]
 const JOBS_FAILED: &str = fixture!("glab/1.124.0/pipeline-jobs-failed.json");
 
+#[cfg(unix)]
 const NONE_STDOUT: &str = fixture!("glab/1.124.0/mr-view-none.stdout");
 
+#[cfg(unix)]
 const NONE_STDERR: &str = fixture!("glab/1.124.0/mr-view-none.stderr");
 
+#[cfg(unix)]
 const SEVERAL_STDOUT: &str = fixture!("glab/1.124.0/mr-view-several.stdout");
 
+#[cfg(unix)]
 const SEVERAL_STDERR: &str = fixture!("glab/1.124.0/mr-view-several.stderr");
 
+#[cfg(unix)]
 struct Fake {
     tmp: TempDir,
     glab: PathBuf,
 }
 
+#[cfg(unix)]
 impl Fake {
     fn new(files: &[(&str, &str)], script: &str) -> Self {
         let tmp = TempDir::new();
@@ -52,14 +66,17 @@ impl Fake {
     }
 }
 
+#[cfg(unix)]
 fn found(view: &str, jobs: &str) -> PullRequest {
     Fake::answering(view, jobs).find().expect("find").expect("a merge request")
 }
 
+#[cfg(unix)]
 fn names(pull: &PullRequest, outcome: Outcome) -> Vec<String> {
     pull.checks.iter().filter(|c| c.outcome == outcome).map(|c| format!("{} ({})", c.name, c.workflow)).collect()
 }
 
+#[cfg(unix)]
 fn edited(json: &str, change: impl FnOnce(&mut Value)) -> String {
     let mut value: Value = serde_json::from_str(json).expect("a fixture");
     change(&mut value);
@@ -70,6 +87,7 @@ fn raw(json: &str) -> Raw {
     serde_json::from_str(json).expect("a merge request")
 }
 
+#[cfg(unix)]
 mod find {
     use super::*;
 
@@ -242,6 +260,7 @@ mod jobs {
         assert_eq!(outcome(status, allowed), expected);
     }
 
+    #[cfg(unix)]
     fn with_pipeline(status: &str, jobs: &[(&str, &str)]) -> Vec<Check> {
         let job = |(name, status): &(&str, &str)| {
             format!(r#"{{"name":"{name}","stage":"test","status":"{status}","web_url":"https://x/{name}"}}"#)
@@ -253,6 +272,7 @@ mod jobs {
         found(&view, &format!("[{jobs}]")).checks
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_failed_pipeline_with_passed_jobs_is_one_failed_check_with_its_link() {
         let checks = with_pipeline("failed", &[("lint", "success")]);
@@ -269,6 +289,7 @@ mod jobs {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_running_pipeline_with_finished_jobs_is_pending() {
         let checks = with_pipeline("running", &[("lint", "success")]);
@@ -276,6 +297,7 @@ mod jobs {
         assert_eq!(checks.iter().filter(|c| c.outcome == Outcome::Pending).count(), 1);
     }
 
+    #[cfg(unix)]
     #[rstest]
     #[case::passed("success", "success")]
     #[case::failed_with_a_failed_job("failed", "failed")]
@@ -285,6 +307,7 @@ mod jobs {
         assert_eq!(with_pipeline(pipeline, &[("lint", job)]).len(), 1);
     }
 
+    #[cfg(unix)]
     #[test]
     fn missing_and_null_fields_are_tolerated() {
         let view = r#"{"iid":3,"title":null,"state":null,"head_pipeline":{"id":9,"project_id":2,"status":null}}"#;
@@ -295,6 +318,7 @@ mod jobs {
         assert!(checks.iter().all(|c| c.outcome == Outcome::Pending));
     }
 
+    #[cfg(unix)]
     #[rstest]
     #[case::no_status(r#"{"id":9,"project_id":2}"#)]
     #[case::null_status(r#"{"id":9,"project_id":2,"status":null}"#)]
@@ -305,6 +329,7 @@ mod jobs {
         assert_eq!(found(&view, "[]").checks, Vec::<Check>::new());
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_pipeline_without_an_id_asks_for_no_jobs() {
         let fake = Fake::answering(r#"{"iid":3,"head_pipeline":{"status":"failed"}}"#, "[]");
@@ -352,6 +377,7 @@ mod conflicts {
         assert_eq!(raw(&json.to_string()).into_pull(Vec::new()).conflicting, expected);
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_conflicting_fixture_is_a_draft_that_conflicts_and_failed() {
         let pull = found(CONFLICTING, JOBS_FAILED);
@@ -368,6 +394,7 @@ mod conflicts {
         assert_eq!(names(&pull, Outcome::Failed), ["commit-lint (checks)", "lint (test)"]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_unchecked_answer_keeps_the_last_known_conflict() {
         let before = found(CONFLICTING, JOBS_FAILED);

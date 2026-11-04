@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 
 fn two_pane_positions() -> (App, Receiver<AppEvent>, u64, u64, Vec<Rect>) {

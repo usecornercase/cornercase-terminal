@@ -702,6 +702,7 @@ fn row_age(row: &Row, now: SystemTime) -> String {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 impl App {
     pub(super) fn worktree_outside_running(&self) -> bool {
         matches!(self.git.scans.outside, Outside::Running { .. })

@@ -224,17 +224,46 @@ mod outcomes {
 mod paths {
     use super::*;
 
-    #[test]
-    fn a_relative_path_is_refused_there() {
-        let error = path_on(Path::new("src"), Some(&devbox())).expect_err("refused");
+    fn there(path: &str, windows: bool) -> Result<PathBuf> {
+        path_on(Path::new(path), Some(&devbox()), windows, &|| false)
+    }
+
+    #[rstest]
+    #[case::a_name("src", false)]
+    #[case::a_name_from_windows("src", true)]
+    #[case::a_drive_from_unix(r"C:\srv", false)]
+    fn a_relative_path_is_refused_there(#[case] path: &str, #[case] windows: bool) {
+        let error = there(path, windows).expect_err("refused");
 
         assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
         assert!(error.to_string().contains("absolute path on devbox"), "{error}");
     }
 
-    #[test]
-    fn an_absolute_one_goes_as_it_is() {
-        assert_eq!(path_on(Path::new("/a/../b"), Some(&devbox())).expect("kept"), PathBuf::from("/a/../b"));
+    #[rstest]
+    #[case::with_dots("/a/../b", false, "/a/../b")]
+    #[case::from_windows("/srv/x", true, "/srv/x")]
+    #[case::with_backslashes_from_windows(r"/srv\shop\x", true, "/srv/shop/x")]
+    #[case::a_backslash_from_unix(r"/srv\x", false, r"/srv\x")]
+    fn a_path_from_the_root_goes_with_the_remote_s_slashes(
+        #[case] path: &str,
+        #[case] windows: bool,
+        #[case] sent: &str,
+    ) {
+        assert_eq!(there(path, windows).expect("kept").to_str(), Some(sent));
+    }
+
+    #[rstest]
+    #[case::a_drive(r"C:\srv\x")]
+    #[case::turned_by_git_bash("C:/Program Files/Git/srv/x")]
+    #[case::the_root_of_a_drive(r"\srv\x")]
+    #[case::a_share(r"\\host\share\x")]
+    #[case::relative_to_a_drive("c:x")]
+    fn a_windows_path_is_refused_with_how_to_give_a_unix_one(#[case] path: &str) {
+        let error = there(path, true).expect_err("refused");
+
+        assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
+        assert!(error.to_string().contains("is a Windows path"), "{error}");
+        assert!(error.to_string().contains("MSYS_NO_PATHCONV=1"), "{error}");
     }
 
     #[rstest]
@@ -250,8 +279,49 @@ mod paths {
         assert!(open_path(Path::new("./~/x")).expect("absolute").is_absolute());
     }
 
+    fn on_windows(path: &str, windows: bool) -> Result<PathBuf> {
+        path_on(Path::new(path), Some(&devbox()), windows, &|| true)
+    }
+
+    #[rstest]
+    #[case::a_drive(r"C:\srv\x", r"C:\srv\x")]
+    #[case::a_drive_with_slashes("C:/srv/x", r"C:\srv\x")]
+    #[case::a_share(r"\\host\share\x", r"\\host\share\x")]
+    #[case::the_root_of_a_share(r"\\host\share", r"\\host\share")]
+    fn a_windows_machine_takes_its_own_absolute_paths(#[case] path: &str, #[case] sent: &str) {
+        for windows in [false, true] {
+            assert_eq!(on_windows(path, windows).expect("kept").to_str(), Some(sent));
+        }
+    }
+
+    #[rstest]
+    #[case::the_root_of_a_drive(r"\srv\x")]
+    #[case::relative_to_a_drive("c:x")]
+    #[case::a_share_without_its_name(r"\\host")]
+    #[case::a_share_with_an_empty_name(r"\\host\\x")]
+    fn a_windows_machine_refuses_a_path_relative_to_something_here(#[case] path: &str) {
+        let error = on_windows(path, true).expect_err("refused");
+
+        assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
+        assert!(error.to_string().contains("devbox is a Windows machine"), "{error}");
+    }
+
+    #[test]
+    fn a_unix_path_goes_without_asking_what_the_machine_runs() {
+        let asked = std::cell::Cell::new(false);
+        let ask = || {
+            asked.set(true);
+            true
+        };
+
+        let sent = path_on(Path::new("/srv/x"), Some(&devbox()), false, &ask);
+
+        assert_eq!(sent.expect("kept"), PathBuf::from("/srv/x"));
+        assert!(!asked.get());
+    }
+
     #[test]
     fn here_it_becomes_absolute() {
-        assert!(path_on(Path::new("src"), None).expect("absolute").is_absolute());
+        assert!(path_on(Path::new("src"), None, cfg!(windows), &|| false).expect("absolute").is_absolute());
     }
 }

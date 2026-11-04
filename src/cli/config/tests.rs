@@ -2,6 +2,7 @@ use serde_json::json;
 
 use super::*;
 use crate::control::config::{ConnectionKind, FoundSetting, ProjectEntry};
+use crate::test_util::os_path;
 
 fn setting(kind: Kind) -> Setting {
     Setting { key: "x".into(), kind, ..Setting::default() }
@@ -58,8 +59,29 @@ fn an_odd_number_of_words_is_wrong_usage_before_the_server_is_asked() {
 #[test]
 fn a_relative_folder_is_made_absolute() {
     assert_eq!(absolute("~/code").expect("a path"), PathBuf::from("~/code"));
-    assert_eq!(absolute("/srv/a").expect("a path"), PathBuf::from("/srv/a"));
+    assert_eq!(absolute(&os_path("/srv/a")).expect("a path"), PathBuf::from(os_path("/srv/a")));
     assert!(absolute("web").expect("a path").is_absolute());
+}
+
+#[test]
+fn a_folder_on_another_machine_follows_its_rules() {
+    let remote = Remote { destination: "devbox".into(), command: None, option: "--command" };
+    let sent = |path: &str| absolute_on(path, Some(&remote), true, &|| false).map(|path| path.display().to_string());
+
+    assert_eq!(sent(r"/srv\a").expect("a path"), "/srv/a");
+    assert_eq!(sent("~/code").expect("a path"), "~/code");
+    assert!(matches!(sent(r"C:\srv\a"), Err(Error::WrongUsage(why)) if why.contains("is a Windows path")));
+    assert!(matches!(sent("web"), Err(Error::WrongUsage(why)) if why.contains("is relative")));
+}
+
+#[test]
+fn a_folder_on_a_windows_machine_follows_its_rules() {
+    let remote = Remote { destination: "winbox".into(), command: None, option: "--command" };
+    let sent = |path: &str| absolute_on(path, Some(&remote), false, &|| true).map(|path| path.display().to_string());
+
+    assert_eq!(sent("C:/srv/a").expect("a path"), r"C:\srv\a");
+    assert_eq!(sent("~/code").expect("a path"), "~/code");
+    assert!(matches!(sent(r"\srv\a"), Err(Error::WrongUsage(why)) if why.contains("is a Windows machine")));
 }
 
 fn described() -> Described {

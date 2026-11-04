@@ -63,8 +63,6 @@ impl Signal {
 pub(crate) trait CommandExt {
     fn process_group(&mut self, pgroup: i32) -> &mut Command;
     fn exec(&mut self) -> io::Error;
-    #[cfg(test)]
-    fn arg0(&mut self, arg: impl AsRef<std::ffi::OsStr>) -> &mut Command;
 }
 
 impl CommandExt for Command {
@@ -77,11 +75,6 @@ impl CommandExt for Command {
             Ok(code) => process::exit(code),
             Err(error) => error,
         }
-    }
-
-    #[cfg(test)]
-    fn arg0(&mut self, _arg: impl AsRef<std::ffi::OsStr>) -> &mut Command {
-        self
     }
 }
 

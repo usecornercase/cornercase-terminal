@@ -5,7 +5,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 use rstest::rstest;
 use serde_json::{Value, json};
 
-use super::fake::{Hanging, REFUSED, answer, ended, line, refused, request, respond, serve, window_messages};
+use super::fake::{REFUSED, answer, ended, line, refused, request, respond, serve, window_messages};
 use super::*;
 use crate::control::{GroupInfo, Ids, PaneInfo, ProjectInfo, TabInfo, WorkspaceInfo};
 use crate::error::Behind;
@@ -297,10 +297,11 @@ mod stopping {
         assert_eq!(reports.recv_timeout(WAIT), Err(RecvTimeoutError::Disconnected));
     }
 
+    #[cfg(unix)]
     #[test]
     fn while_ssh_has_not_answered_ends_that_ssh() {
         let (tx, reports) = mpsc::channel::<Report>();
-        let link = Link::start(1, Box::new(Hanging), &Servers::new(HERE), &tx);
+        let link = Link::start(1, Box::new(fake::Hanging), &Servers::new(HERE), &tx);
         drop(tx);
         drop(link);
         assert_eq!(reports.recv_timeout(WAIT), Err(RecvTimeoutError::Disconnected));

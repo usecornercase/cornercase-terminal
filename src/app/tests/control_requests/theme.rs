@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use libghostty_vt::style::RgbColor;
 use serde_json::{Value, json};
 

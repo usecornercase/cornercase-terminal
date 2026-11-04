@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::app::changes_panel::Hunk;
 use crate::app::worktrees::RemoveOptions;

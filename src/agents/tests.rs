@@ -8,7 +8,10 @@ fn strings(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| (*s).to_string()).collect()
 }
 
-#[cfg(windows)]
+fn for_powershell(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Result<String, String> {
+    typed_on_windows(line, PaneShell::PowerShell, runs).map_err(|refusal| refusal.message)
+}
+
 const POWERSHELL_CASES: &[&[&str]] = &[
     &["claude", "--model", "a\u{2019}; Write-Output INJECTED; \u{2019}"],
     &["claude", "--model", "a\u{2018}; Write-Output INJECTED; \u{2018}"],
@@ -22,6 +25,8 @@ const POWERSHELL_CASES: &[&[&str]] = &[
     &["-claude", "x"],
     &["/opt/claude", "x"],
     &[r"..\bin\claude.exe", "x"],
+    &["claude", "--add-dir", r#"a b" --dangerously-skip-permissions "c"#, r"C:\my dir\", "a\tb\\", r"C:\dir\"],
+    &["claude", "--model", "opus --some-flag", "--%", "--%x", "x--%", "--% "],
 ];
 
 #[cfg(windows)]
@@ -326,6 +331,164 @@ mod arguments {
     }
 
     #[test]
+    fn each_typed_line_reads_back_as_the_words_powershell_parses() {
+        for words in POWERSHELL_CASES.iter().map(|words| strings(words)) {
+            let line = powershell_line(words.clone());
+            assert_eq!(typed_words(&line), Some(words), "{line}");
+        }
+    }
+
+    #[rstest]
+    #[case::a_double_quote_with_a_space(r#"a b" --dangerously-skip-permissions "c"#, "`\"`")]
+    #[case::json(r#"{"a":1}"#, "`\"`")]
+    #[case::a_folder_ending_with_its_separator(r"C:\my dir\", "ends with")]
+    #[case::a_tab_and_backslashes("a\tb\\\\", "ends with")]
+    fn a_word_powershell_would_pass_on_in_pieces_is_refused_for_any_program(#[case] word: &str, #[case] why: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word, "-v"]));
+        let refused = for_powershell(&line, |_| Some(PathBuf::from(r"C:\bin\claude.exe"))).expect_err("refused");
+        assert!(refused.contains(word) && refused.contains(why), "{refused}");
+    }
+
+    #[rstest]
+    #[case::a_folder_ending_with_its_separator(r"C:\dir\")]
+    #[case::a_backslash_inside(r"C:\my dir\x")]
+    #[case::typographic_double_quotes("\u{201C}a b\u{201D}")]
+    fn a_word_powershell_passes_on_whole_is_typed(#[case] word: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word]));
+        assert_eq!(for_powershell(&line, |_| Some(PathBuf::from(r"C:\bin\claude.exe"))), Ok(line));
+    }
+
+    #[rstest]
+    #[case::alone(&["claude", "--%", "opus --some-flag"], true)]
+    #[case::last(&["claude", "--model", "opus", "--%"], true)]
+    #[case::inside_a_word(&["claude", "--%x", "x--%", "--% "], false)]
+    fn the_stop_parsing_token_is_refused_as_a_word_of_its_own(#[case] words: &[&str], #[case] refused: bool) {
+        let line = powershell_line(strings(words));
+        let typed = typed_on_windows(&line, PaneShell::PowerShell, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        let expected = if refused { Err("the stop-parsing token") } else { Ok(line) };
+        assert_eq!(typed.map_err(|refusal| refusal.reason), expected);
+    }
+
+    #[rstest]
+    #[case::json_in_powershell(PaneShell::PowerShell, r#"{"a":1}"#, Some("a word PowerShell would split"))]
+    #[case::json_in_git_bash(PaneShell::Other, r#"{"a":1}"#, None)]
+    #[case::stop_parsing_in_git_bash(PaneShell::Other, "--%", None)]
+    #[case::an_ampersand_in_cmd(PaneShell::Cmd, r"C:\R&D", Some("a character cmd.exe reads"))]
+    #[case::an_ampersand_in_powershell(PaneShell::PowerShell, r"C:\R&D", None)]
+    #[case::an_ampersand_in_git_bash(PaneShell::Other, r"C:\R&D", None)]
+    #[case::a_space_in_cmd(PaneShell::Cmd, "x --dangerously-skip-permissions y", Some("a word cmd.exe would split"))]
+    #[case::a_space_in_powershell(PaneShell::PowerShell, "x --dangerously-skip-permissions y", None)]
+    #[case::a_plain_word_in_cmd(PaneShell::Cmd, "opus", None)]
+    fn what_is_refused_follows_the_panes_shell(
+        #[case] shell: PaneShell,
+        #[case] word: &str,
+        #[case] reason: Option<&str>,
+    ) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word]));
+        let typed = typed_on_windows(&line, shell, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        assert_eq!(typed.err().map(|refusal| refusal.reason), reason);
+    }
+
+    #[test]
+    fn a_powershell_pane_gets_the_line_as_it_was_quoted() {
+        let line = powershell_line(strings(&["claude", "--model", "it's"]));
+        let typed = typed_on_windows(&line, PaneShell::PowerShell, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(line));
+    }
+
+    #[rstest]
+    #[case::a_plain_word("opus", "opus")]
+    #[case::an_apostrophe("it's", "it's")]
+    #[case::a_typographic_apostrophe("Sergio\u{2019}s", "Sergio\u{2019}s")]
+    #[case::a_dollar("$HOME", "$HOME")]
+    #[case::braces("{a,b}", "{a,b}")]
+    #[case::a_relative_folder(r"..\docs", r"..\docs")]
+    fn a_cmd_pane_gets_each_word_as_it_is(#[case] word: &str, #[case] expected: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word]));
+        let typed = typed_on_windows(&line, PaneShell::Cmd, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(format!("claude --add-dir {expected}")));
+    }
+
+    #[rstest]
+    #[case::an_empty_word(&["claude", "--model", ""], "a word cmd.exe would split")]
+    #[case::a_program_with_an_equals(&[r"C:\tools\a=b\claude.exe", "--resume"], "a program name cmd.exe would cut")]
+    #[case::a_program_with_a_comma(&[r"C:\tools\a,b\claude.exe"], "a program name cmd.exe would cut")]
+    fn a_cmd_pane_refuses_what_cmd_cannot_pass(#[case] words: &[&str], #[case] reason: &str) {
+        let line = powershell_line(strings(words));
+        let typed = typed_on_windows(&line, PaneShell::Cmd, |program| Some(PathBuf::from(program)));
+        assert_eq!(typed.err().map(|refusal| refusal.reason), Some(reason));
+    }
+
+    #[rstest]
+    #[case::a_plain_word("opus", "opus")]
+    #[case::an_apostrophe("O'Brien", r"'O'\''Brien'")]
+    #[case::a_typographic_apostrophe("Sergio\u{2019}s code", "'Sergio\u{2019}s code'")]
+    #[case::every_single_quote_powershell_reads(
+        "'\u{2018}\u{2019}\u{201A}\u{201B}",
+        "''\\''\u{2018}\u{2019}\u{201A}\u{201B}'"
+    )]
+    #[case::json(r#"{"a":1}"#, r#"'{"a":1}'"#)]
+    #[case::stop_parsing("--%", "--%")]
+    #[case::an_ampersand(r"C:\R&D", r"'C:\R&D'")]
+    #[case::a_relative_folder(r"..\docs", r"'..\docs'")]
+    #[case::a_folder_ending_with_its_separator(r"C:\my dir\", r"'C:\my dir\'")]
+    #[case::empty("", "''")]
+    fn a_git_bash_pane_gets_each_word_quoted_for_a_posix_shell(#[case] word: &str, #[case] expected: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word]));
+        let typed = typed_on_windows(&line, PaneShell::Other, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(format!("claude --add-dir {expected}")));
+    }
+
+    #[test]
+    fn a_git_bash_pane_runs_a_quoted_program_without_powershells_call_operator() {
+        let line = powershell_line(strings(&[r"C:\Program Files\Claude\claude.exe", "--resume", "a1"]));
+        let typed = typed_on_windows(&line, PaneShell::Other, |program| Some(PathBuf::from(program)));
+        assert_eq!(
+            typed.map_err(|refusal| refusal.reason),
+            Ok(r"'C:\Program Files\Claude\claude.exe' --resume a1".into())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_posix_shell_reads_each_git_bash_line_as_the_words_given() {
+        for words in POWERSHELL_CASES.iter().map(|words| strings(words)) {
+            let typed = typed_on_windows(&powershell_line(words.clone()), PaneShell::Other, |_| None);
+            let line = typed.map_err(|refusal| refusal.reason).expect("typed");
+            let script = format!("set -- {line}; printf '%s\\n' \"$@\"");
+            let output = std::process::Command::new("/bin/sh").args(["-c", &script]).output().expect("run sh");
+            let read: Vec<String> = String::from_utf8_lossy(&output.stdout).lines().map(str::to_string).collect();
+            assert_eq!(read, words, "{line}");
+        }
+    }
+
+    #[test]
+    fn a_cmd_refusal_names_the_word_that_holds_the_character() {
+        let line = powershell_line(strings(&["claude", "--add-dir", r"C:\R&D"]));
+        let typed = typed_on_windows(&line, PaneShell::Cmd, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        let message = typed.expect_err("a cmd pane refuses the `&`").message;
+        assert!(message.contains(r"`&` in `C:\R&D`"), "{message}");
+    }
+
+    #[rstest]
+    #[case::pwsh(Some("pwsh"), PaneShell::PowerShell)]
+    #[case::windows_powershell(Some("powershell"), PaneShell::PowerShell)]
+    #[case::cmd(Some("cmd"), PaneShell::Cmd)]
+    #[case::git_bash(Some("bash"), PaneShell::Other)]
+    #[case::unknown(None, PaneShell::PowerShell)]
+    fn the_panes_shell_is_known_by_its_process_name(#[case] name: Option<&str>, #[case] expected: PaneShell) {
+        assert_eq!(PaneShell::named(name), expected);
+    }
+
+    #[cfg(windows)]
+    #[rstest]
+    #[case::pwsh_exe("PWSH.EXE", PaneShell::PowerShell)]
+    #[case::cmd_exe("Cmd.exe", PaneShell::Cmd)]
+    fn on_windows_the_panes_shell_is_named_in_any_case_with_its_exe(#[case] name: &str, #[case] expected: PaneShell) {
+        assert_eq!(PaneShell::named(Some(name)), expected);
+    }
+
+    #[test]
     fn the_command_line_is_the_binary_and_its_arguments() {
         let mut c = config();
         c.agent_args.insert("cursor".into(), strings(&["--model", "a b"]));
@@ -440,10 +603,85 @@ mod arguments {
 
 mod batch_files {
     use super::*;
+    use crate::test_util::{NPM_SCRIPT, NPM_SHIM, TempDir, npm_install, under};
+
+    fn typed(words: &[&str], runs: &str) -> Result<String, String> {
+        let runs = PathBuf::from(runs);
+        for_powershell(&powershell_line(strings(words)), move |_| Some(runs.clone()))
+    }
 
     fn refusal(words: &[&str], runs: &str) -> Option<String> {
-        let runs = PathBuf::from(runs);
-        batch_refusal(&powershell_line(strings(words)), move |_| Some(runs.clone()))
+        typed(words, runs).err()
+    }
+
+    fn shown(path: PathBuf) -> String {
+        path.into_os_string().into_string().expect("utf-8")
+    }
+
+    fn through(shim: &Path, line: &str) -> Result<String, String> {
+        for_powershell(line, |program| (program == "claude").then(|| shim.to_path_buf()))
+    }
+
+    const WORDS: [&str; 7] = ["--add-dir", r"C:\Users\me\R&D", "50%", "!x!", "a^b|c", "<in", "Sergio\u{2019}s code"];
+
+    #[test]
+    fn an_npm_shim_is_passed_over_only_in_a_powershell_pane() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let runs = |program: &str| (program == "claude").then(|| shim.clone());
+        assert_eq!(typed_on_windows("claude --resume a1", PaneShell::Other, runs), Ok("claude --resume a1".into()));
+        let refused = typed_on_windows("claude 'R&D'", PaneShell::Other, runs).expect_err("refused");
+        assert_eq!(refused.reason, "a batch file");
+    }
+
+    #[test]
+    fn a_word_powershell_would_split_is_refused_past_an_npm_shim_too() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let line = powershell_line(strings(&["claude", "--add-dir", r#"a b" --dangerously-skip-permissions "c"#]));
+        let refused = through(&shim, &line).expect_err("refused");
+        assert!(refused.contains("--dangerously-skip-permissions") && refused.contains("`\"`"), "{refused}");
+    }
+
+    #[test]
+    fn an_npm_shim_is_passed_over_for_node_and_its_script_with_every_word() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let node = [dir.path().join("node.exe"), under(dir.path(), &NPM_SCRIPT)].map(shown);
+        let line = powershell_line(strings(&["claude"]).into_iter().chain(strings(&WORDS)));
+        let expected = powershell_line(node.into_iter().chain(strings(&WORDS)));
+        assert_eq!(through(&shim, &line), Ok(expected.clone()));
+        let quoted = powershell_line(std::iter::once(shown(shim.clone())).chain(strings(&WORDS)));
+        assert_eq!(for_powershell(&quoted, |program| Some(PathBuf::from(program))), Ok(expected));
+    }
+
+    #[test]
+    fn an_npm_shim_alone_is_typed_with_no_word_after_it() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let node = [dir.path().join("node.exe"), under(dir.path(), &NPM_SCRIPT)].map(shown);
+        assert_eq!(through(&shim, "claude"), Ok(powershell_line(node)));
+    }
+
+    #[test]
+    fn an_npm_shim_without_a_node_to_run_keeps_the_refusal() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT]);
+        let refused = through(&shim, r"claude --add-dir 'C:\Users\me\R&D'").expect_err("refused");
+        assert!(refused.contains("`&`") && refused.contains("claude.cmd"), "{refused}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn powershell_reads_the_line_past_an_npm_shim_as_node_its_script_and_every_word_and_it_is_claude() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let line = through(&shim, &powershell_line(strings(&["claude"]).into_iter().chain(strings(&WORDS))));
+        let parsed = powershell::parse(&[line.expect("typed")]);
+        let node = [dir.path().join("node.exe"), under(dir.path(), &NPM_SCRIPT)].map(shown);
+        let argv: Vec<String> = node.into_iter().chain(strings(&WORDS)).collect();
+        assert_eq!(parsed, [Some((true, argv.clone()))]);
+        assert_eq!(detect(&config(), &argv).as_deref(), Some("claude"));
     }
 
     #[rstest]
@@ -454,7 +692,6 @@ mod batch_files {
     #[case::cmds_escape("a^b", '^')]
     #[case::a_variable("%PATH%", '%')]
     #[case::a_delayed_variable("!x!", '!')]
-    #[case::a_double_quote(r#"{"a":1}"#, '"')]
     fn a_word_cmd_reads_is_refused_for_a_cmd_shim(#[case] word: &str, #[case] special: char) {
         let refused = refusal(&["claude", "--add-dir", word], r"C:\npm\claude.cmd").expect("refused");
         assert!(refused.contains(&format!("`{special}`")) && refused.contains(r"C:\npm\claude.cmd"), "{refused}");
@@ -466,25 +703,26 @@ mod batch_files {
     fn the_same_word_is_quoted_and_typed_for_anything_else(#[case] runs: &str) {
         let words = ["claude", "--add-dir", r"C:\Users\me\R&D"];
         assert_eq!(powershell_line(strings(&words)), r"claude --add-dir 'C:\Users\me\R&D'");
-        assert_eq!(refusal(&words, runs), None);
+        assert_eq!(typed(&words, runs), Ok(r"claude --add-dir 'C:\Users\me\R&D'".to_string()));
     }
 
     #[test]
-    fn plain_words_go_to_a_cmd_shim() {
-        assert_eq!(refusal(&["claude", "--permission-mode", "plan", r"..\docs"], r"C:\npm\claude.CMD"), None);
+    fn plain_words_go_to_a_cmd_shim_it_cannot_read() {
+        let words = ["claude", "--permission-mode", "plan", r"..\docs"];
+        assert_eq!(typed(&words, r"C:\npm\claude.CMD"), Ok(powershell_line(strings(&words))));
     }
 
     #[test]
     fn a_batch_file_named_as_the_program_counts_when_it_is_not_found() {
         let line = powershell_line(strings(&[r"C:\Program Files\x\claude.bat", "50%"]));
-        let refused = batch_refusal(&line, |_| None).expect("refused");
+        let refused = for_powershell(&line, |_| None).expect_err("refused");
         assert!(refused.contains(r"`C:\Program Files\x\claude.bat`") && refused.contains("`%`"), "{refused}");
     }
 
     #[test]
     fn the_program_is_read_back_from_the_typed_line() {
         let line = powershell_line(strings(&[r"C:\R&D\Sergio’s\claude.cmd", "--resume", "a1"]));
-        let refused = batch_refusal(&line, |program| Some(PathBuf::from(program))).expect("refused");
+        let refused = for_powershell(&line, |program| Some(PathBuf::from(program))).expect_err("refused");
         assert!(refused.contains(r"`C:\R&D\Sergio’s\claude.cmd`") && refused.contains("`&`"), "{refused}");
     }
 }

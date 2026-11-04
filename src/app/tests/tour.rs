@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use super::*;
 use crate::tour::{self, CORE, Saved, TOURS};
 use crate::ui::TourButton;
