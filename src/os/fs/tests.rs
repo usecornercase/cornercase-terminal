@@ -253,3 +253,36 @@ mod canonical_paths {
         assert_eq!(canonical(crate::test_util::verbatim(&missing)), missing);
     }
 }
+
+mod paths_beyond_the_drives {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::a_share(r"\\host\share\ding.wav", true, false)]
+    #[case::a_share_with_slashes("//host/share/ding.wav", true, false)]
+    #[case::mixed_slashes(r"/\host\share\ding.wav", true, false)]
+    #[case::a_verbatim_share(r"\\?\UNC\host\share\ding.wav", true, false)]
+    #[case::a_volume(r"\\?\Volume{0b1c}\ding.wav", true, false)]
+    #[case::a_device(r"\\.\C:\ding.wav", true, false)]
+    #[case::a_device_with_slashes("//?/C:/ding.wav", true, false)]
+    #[case::a_verbatim_drive(r"\\?\C:\ding.wav", false, true)]
+    #[case::a_verbatim_name_with_a_slash(r"\\?\C:/ding.wav", true, false)]
+    #[case::a_drive(r"C:\Users\ana\ding.wav", false, true)]
+    #[case::a_drive_with_slashes("d:/sounds/ding.wav", false, true)]
+    #[case::a_drive_without_its_root("C:ding.wav", false, false)]
+    #[case::the_drive_s_root(r"\ding.wav", false, false)]
+    #[case::unix("/usr/share/sounds/ding.wav", false, false)]
+    #[case::home("~/ding.wav", false, false)]
+    #[case::relative("ding.wav", false, false)]
+    fn are_told_apart(#[case] path: &str, #[case] beyond: bool, #[case] drive: bool) {
+        assert_eq!((unc_or_device(path), drive_path(path)), (beyond, drive));
+    }
+
+    #[test]
+    fn reach_the_network_only_on_windows() {
+        assert_eq!(reaches_network(r"\\host\share\ding.wav"), cfg!(windows));
+        assert!(!reaches_network(r"C:\ding.wav"));
+    }
+}

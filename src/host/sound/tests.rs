@@ -290,6 +290,18 @@ mod on_windows {
     use super::*;
 
     #[test]
+    fn a_file_is_played_only_from_its_drive() {
+        let tmp = TempDir::new();
+        let file = tmp.path().join("ding.wav");
+        std::fs::write(&file, "x").expect("write");
+        let through_a_device = format!(r"\\.\{}", file.display());
+
+        assert_eq!(resolve(&file.display().to_string(), None), Some(file.clone()));
+        assert!(Path::new(&through_a_device).is_file(), "the device path reaches the file");
+        assert_eq!(resolve(&through_a_device, None), None);
+    }
+
+    #[test]
     fn this_build_plays_through_play_sound() {
         let tmp = TempDir::new();
         assert_eq!((Os::current(), Player::detect(tmp.path().into()).device), (Os::Windows, Some(Device::PlaySound)));

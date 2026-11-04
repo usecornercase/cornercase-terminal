@@ -367,7 +367,34 @@ mod check_sound_file {
     #[case::another_home("~ana/ding.wav", Err(ABSOLUTE))]
     #[case::control("bad\u{7}.wav", Err("a file's path cannot hold control or invisible characters"))]
     fn accepts_only_absolute_files(#[case] input: &str, #[case] expected: Result<String, &'static str>) {
-        assert_eq!(check_sound_file(input), expected);
+        assert_eq!(check_sound_file_on(input, false), expected);
+    }
+
+    #[test]
+    fn follows_the_rule_of_this_system() {
+        assert_eq!(check_sound_file(r"C:\ding.wav").is_ok(), cfg!(windows));
+    }
+
+    #[rstest]
+    #[case::a_drive(r"C:\Users\ana\ding.wav")]
+    #[case::a_drive_with_slashes("D:/sounds/ding.wav")]
+    #[case::a_verbatim_drive(r"\\?\C:\sounds\ding.wav")]
+    #[case::tilde("~/ding.wav")]
+    #[case::empty("")]
+    fn takes_a_file_on_a_drive_on_windows(#[case] input: &str) {
+        assert_eq!(check_sound_file_on(input, true), Ok(input.to_string()));
+    }
+
+    #[rstest]
+    #[case::a_share(r"\\attacker\share\ding.wav")]
+    #[case::a_share_with_slashes("//attacker/share/ding.wav")]
+    #[case::a_verbatim_share(r"\\?\UNC\attacker\share\ding.wav")]
+    #[case::a_device(r"\\.\pipe\ding")]
+    #[case::a_volume(r"\\?\Volume{0b1c}\ding.wav")]
+    #[case::the_drive_s_root("/sounds/ding.wav")]
+    #[case::relative("ding.wav")]
+    fn refuses_what_is_not_on_a_drive_on_windows(#[case] input: &str) {
+        assert_eq!(check_sound_file_on(input, true), Err(SOUND_FILE_ON_A_DRIVE));
     }
 }
 

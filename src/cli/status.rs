@@ -45,7 +45,7 @@ fn home(report: &Report) -> Option<PathBuf> {
     if report.home.is_some() || crate::client::used_remote().is_some() {
         return report.home.clone();
     }
-    std::env::var_os("HOME").map(PathBuf::from)
+    std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from)
 }
 
 pub(crate) fn render(report: &Report, home: Option<&Path>, now: SystemTime) -> String {

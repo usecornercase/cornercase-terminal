@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::paths::STATE_VAR;
+
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug)]
@@ -48,11 +50,6 @@ pub enum Error {
     },
     #[error("cornercase is already running in this terminal; nesting it is not supported")]
     Nested,
-    #[error(
-        "cornercase does not run on Windows yet; follow the port at \
-         https://github.com/usecornercase/cornercase-terminal/issues/586"
-    )]
-    NotOnWindows,
     #[error("{0}")]
     Rejected(String),
     #[error("this is a development build; `cornercase update` only updates released builds")]
@@ -180,9 +177,7 @@ fn too_long_advice(custom: bool) -> String {
     if custom {
         "Point CORNERCASE_SOCKET at a shorter path".into()
     } else {
-        format!(
-            "Set XDG_STATE_HOME to a shorter folder, or CORNERCASE_SOCKET to a shorter socket path {KEEPS_NEXT_TO_IT}"
-        )
+        format!("Set {STATE_VAR} to a shorter folder, or CORNERCASE_SOCKET to a shorter socket path {KEEPS_NEXT_TO_IT}")
     }
 }
 
@@ -191,7 +186,7 @@ fn listen_advice(custom: bool) -> String {
         "Point CORNERCASE_SOCKET at a socket on a local disk".into()
     } else {
         format!(
-            "Its folder may be on a network disk that cannot hold a socket: set XDG_STATE_HOME to a folder on a \
+            "Its folder may be on a network disk that cannot hold a socket: set {STATE_VAR} to a folder on a \
              local disk, or CORNERCASE_SOCKET to a socket on one {KEEPS_NEXT_TO_IT}"
         )
     }

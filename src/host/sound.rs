@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::expand_home;
 use crate::log;
 use crate::os::desktop;
-use crate::os::fs::{DirBuilderExt, OpenOptionsExt, set_file_mode};
+use crate::os::fs::{DirBuilderExt, OpenOptionsExt, drive_path, set_file_mode};
 use crate::process::program;
 
 const RATE: u16 = 22_050;
@@ -131,7 +131,7 @@ fn resolve(path: &str, home: Option<&Path>) -> Option<PathBuf> {
         return None;
     }
     let path = expand_home(path, home);
-    if !path.is_absolute() {
+    if !path.is_absolute() || (cfg!(windows) && !drive_path(&path.to_string_lossy())) {
         return None;
     }
     let readable = path.metadata().is_ok_and(|m| m.is_file()) && File::open(&path).is_ok();
@@ -222,7 +222,7 @@ impl Player {
     pub(crate) fn detect(dir: PathBuf) -> Self {
         let (os, path) = (Os::current(), std::env::var_os("PATH"));
         let device = player(os, on_path(os, path.as_deref(), &[]));
-        Self::new(device, dir, std::env::var_os("HOME").map(PathBuf::from))
+        Self::new(device, dir, std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from))
     }
 
     pub(crate) fn play(&mut self, cue: &Cue, now: Instant) -> bool {

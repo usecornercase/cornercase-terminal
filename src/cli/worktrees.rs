@@ -64,7 +64,7 @@ fn run_free(args: &FreeArgs) -> Result<()> {
 }
 
 fn home() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
+    std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from)
 }
 
 fn folders(folders: &[BuildFolder]) -> String {
