@@ -30,7 +30,6 @@ use super::picker_dialog::PICKER_SUBMIT;
 use super::session::RESUME_GRACE;
 use super::toast::BUG_FOR;
 use super::toast::COPIED;
-#[cfg(target_os = "linux")]
 use super::toast::NOT_READING;
 use super::toast::TOAST_FOR;
 use super::toast::UNDO_FOR;
@@ -169,10 +168,15 @@ impl crate::machines::link::Connect for NoSsh {
 }
 
 fn new_app(config_path: impl AsRef<Path>) -> (App, Receiver<AppEvent>) {
+    new_app_with_shell("/bin/sh", config_path)
+}
+
+fn new_app_with_shell(shell: &str, config_path: impl AsRef<Path>) -> (App, Receiver<AppEvent>) {
     let (tx, rx) = mpsc::channel();
-    let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path.as_ref(), tx);
+    let mut app = App::new(shell.into(), HostTheme::default(), config_path.as_ref(), tx);
     app.config.sidebar = config::Sidebar::SideBySide.id().into();
     app.config.sound = false;
+    app.config.star_prompt = false;
     app.clients.set_typing_holds(Duration::ZERO);
     app.set_default_homes(&std::env::temp_dir().join("cornercase-test-no-default-homes"));
     if app.config.gh == config::DEFAULT_GH {
@@ -248,7 +252,7 @@ fn tab_term(app: &App, w: usize, t: usize) -> &Term {
 }
 
 fn canonical(dir: &TempDir) -> PathBuf {
-    dir.path().canonicalize().expect("canonicalize")
+    crate::os::fs::canonicalize(dir.path()).expect("canonicalize")
 }
 
 fn click_button(app: &mut App, area: Rect, labels: &[&str], rects: &[Rect], label: &str) {
@@ -537,6 +541,7 @@ fn branch_exists(repo: &Path, branch: &str) -> bool {
 }
 
 mod account_pills;
+#[cfg(unix)]
 mod account_restart;
 mod accounts;
 mod accounts_page;
@@ -546,6 +551,7 @@ mod close_agent;
 mod closed_agents;
 mod compact;
 mod context_menu;
+mod context_menus;
 mod dispatch;
 mod groups;
 mod icon_bar;

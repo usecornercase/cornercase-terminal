@@ -37,6 +37,8 @@ use crate::issues::browser::Tab as IssueTab;
 use crate::issues::cache::Cache as IssueCache;
 #[cfg(test)]
 use crate::issues::{Account, Source};
+use crate::os::fs::canonical;
+use crate::os::process::launch_folder;
 use crate::paths;
 use crate::project::search::said;
 use crate::project::split::Dir;
@@ -88,6 +90,7 @@ mod clone_on_machine;
 mod close_agent;
 mod closed_agents;
 mod config_file;
+mod context_dialog;
 mod control;
 mod dialogs;
 mod event;
@@ -165,6 +168,7 @@ pub(crate) use event::AppEvent;
 pub(crate) use events::Streamed;
 pub(crate) use images::{Placed, Sight};
 #[cfg(test)]
+#[cfg(unix)]
 pub(crate) use surfaces::FRAME_EVERY;
 pub(crate) use surfaces::Surfaced;
 
@@ -366,7 +370,7 @@ impl App {
     }
 
     pub(crate) fn open_here(&mut self, area: Rect) -> Result<()> {
-        let here = std::env::current_dir().ok().or_else(|| self.home.clone()).unwrap_or_else(|| PathBuf::from("/"));
+        let here = launch_folder().or_else(|| self.home.clone()).unwrap_or_else(|| PathBuf::from("/"));
         self.open_project(here, area)
     }
 
@@ -463,6 +467,7 @@ impl App {
         self.refresh_files(now);
         self.refresh_file_streams(now);
         self.refresh_run_files(now);
+        self.refresh_run_branch(now);
         self.flush_run_dirs();
         self.ask_sessions(now);
         self.refresh_changes(now);
@@ -582,7 +587,7 @@ impl App {
         area: Rect,
         parents: &mut session::Parents,
     ) -> Option<(Project, usize)> {
-        let path = saved_project.path.canonicalize().unwrap_or_else(|_| saved_project.path.clone());
+        let path = canonical(&saved_project.path);
         if !path.is_dir() || self.projects.iter().any(|p| p.path == path) {
             return None;
         }
@@ -614,6 +619,7 @@ impl App {
             AppEvent::Search(event) => self.search_answered(event),
             AppEvent::Queue(event) => self.queue_prepared(*event),
             AppEvent::Usage(key, result) => self.usages.state.answered(key, result, Instant::now()),
+            AppEvent::Breakdown { pane, pid, result } => self.breakdown_answered(pane, pid, *result),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
@@ -621,6 +627,7 @@ impl App {
             AppEvent::Processes(event) => self.processes_answered(event, area),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::RunFiles(run, result) => self.run_files_listed(run, result),
+            AppEvent::RunBranch(workspace, branch) => self.run_branch_read(workspace, branch),
             AppEvent::FlowFiles { request, result } => self.flow_files_listed(request, result),
             AppEvent::Web(event) => self.web_event(event),
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
@@ -689,6 +696,7 @@ impl App {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(crate) fn queue_sound(&mut self, cue: Cue) {
         self.outbox.play(cue);
     }

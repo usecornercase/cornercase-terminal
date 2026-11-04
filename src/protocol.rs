@@ -1,12 +1,8 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
 use crossterm::event::Event;
-use rustix::fs::{FlockOperation, flock};
-use rustix::io::Errno;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -16,10 +12,12 @@ use crate::host::notify::Channel;
 use crate::host::open::{Browse, Failed, Open, Opener};
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
+use crate::os::fs::{Lock, create_private_dir_all, locked, make_private, owner_and_mode, uid};
+use crate::os::socket::UnixStream;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 9;
+pub(crate) const VERSION: u32 = 10;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const REMOTE_ENV: &str = "CORNERCASE_REMOTE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
@@ -99,11 +97,7 @@ pub(crate) fn undecoded(error: &io::Error) -> bool {
 
 pub(crate) fn try_lock(socket: &Path) -> io::Result<Option<File>> {
     let file = OpenOptions::new().create(true).write(true).truncate(false).open(paths::lock(socket))?;
-    match flock(&file, FlockOperation::NonBlockingLockExclusive) {
-        Ok(()) => Ok(Some(file)),
-        Err(Errno::WOULDBLOCK) => Ok(None),
-        Err(e) => Err(e.into()),
-    }
+    locked(file, Lock::Exclusive)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -138,18 +132,19 @@ pub(crate) fn check_socket_dir(socket: &Path, folder: Folder) -> Result<(), Erro
         });
     }
     let dir = socket_folder(socket)?;
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir)?;
+    create_private_dir_all(&dir)?;
     let meta = std::fs::symlink_metadata(&dir)?;
     let kind = meta.file_type();
-    let reason = unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid());
+    let (owner, mode) = owner_and_mode(&dir, &meta);
+    let reason = unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), owner, mode, own_uid());
     let refuse = |reason| Error::UnsafeSocketDir { path: dir.clone(), reason, custom: folder == Folder::Given };
-    let tighten = || std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    let tighten = || make_private(&dir);
     match reason {
         Some("can be written by other users") if folder == Folder::Own => {
             tighten().map_err(|_| refuse("can be written by other users"))
         }
         Some(reason) => Err(refuse(reason)),
-        None if folder == Folder::Own && meta.mode() & 0o077 != 0 => Ok(tighten()?),
+        None if folder == Folder::Own && mode & 0o077 != 0 => Ok(tighten()?),
         None => Ok(()),
     }
 }
@@ -158,7 +153,8 @@ pub(crate) fn socket_dir_is_safe(socket: &Path) -> bool {
     let Ok(dir) = socket_folder(socket) else { return false };
     let Ok(meta) = std::fs::symlink_metadata(&dir) else { return false };
     let kind = meta.file_type();
-    unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid()).is_none()
+    let (owner, mode) = owner_and_mode(&dir, &meta);
+    unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), owner, mode, own_uid()).is_none()
 }
 
 fn unsafe_dir_reason(is_symlink: bool, is_dir: bool, owner: u32, mode: u32, uid: u32) -> Option<&'static str> {
@@ -176,7 +172,7 @@ fn unsafe_dir_reason(is_symlink: bool, is_dir: bool, owner: u32, mode: u32, uid:
 }
 
 pub fn own_uid() -> u32 {
-    rustix::process::getuid().as_raw()
+    uid()
 }
 
 pub(crate) fn check_peer(stream: &UnixStream, uid: u32) -> Result<(), Error> {

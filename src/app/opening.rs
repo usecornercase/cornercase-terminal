@@ -22,6 +22,7 @@ pub(super) enum Subject {
     File(u64),
     Row(u64),
     MachineRow(u64),
+    Run(u64),
 }
 
 #[derive(Debug, Default)]
@@ -98,11 +99,11 @@ impl App {
         }
     }
 
-    pub(super) fn open_file_menu(&mut self, workspace: u64, at: Position) {
+    pub(super) fn open_menu_or_copy(&mut self, subject: Subject, at: Position) {
         if self.opening.openers.is_empty() {
-            self.copy_path(Subject::File(workspace));
+            self.copy_path(subject);
         } else {
-            self.open_in_menu(Subject::File(workspace), at);
+            self.open_in_menu(subject, at);
         }
     }
 
@@ -176,6 +177,7 @@ impl App {
                 let line = viewer.selected().filter(|_| !image).map(|(first, _)| first);
                 Some(Place { kind: Kind::of(&path).unwrap_or(Kind::File), path, line, remote: false })
             }
+            Subject::Run(workspace) => Some(folder(self.run_of(workspace)?.dir.clone()?)),
             Subject::Row(workspace) => {
                 let path = self.workspace_path(workspace)?.join(self.opened_row(workspace)?);
                 Some(Place { kind: Kind::of(&path)?, path, line: None, remote: false })

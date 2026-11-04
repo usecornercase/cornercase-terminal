@@ -15,6 +15,7 @@ use crate::agents::usage;
 use crate::config::Config;
 use crate::control::usage::PlanInfo;
 use crate::log::{Job, Level};
+use crate::os::fs::canonical;
 use crate::time;
 use crate::ui;
 
@@ -85,8 +86,7 @@ impl App {
             probes.push((agent, None));
             let names = listed.iter().find(|(kind, _)| *kind == agent).map(|(_, names)| names.as_slice());
             for name in names.unwrap_or_default() {
-                let home = accounts::path(self.accounts.dir(), agent, name);
-                let home = home.canonicalize().unwrap_or(home);
+                let home = canonical(accounts::path(self.accounts.dir(), agent, name));
                 probes.push((agent, Some(Account { kind: agent, name: name.clone(), home })));
             }
         }

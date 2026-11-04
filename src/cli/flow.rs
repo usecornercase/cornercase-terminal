@@ -6,7 +6,7 @@ use super::args::{
     self, FlowAction, FlowDefaultArgs, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowOrderArgs,
     FlowRunsArgs, FlowSaveArgs, ImportTo,
 };
-use super::{print_json, print_out, quietly, read_limited, read_prompt, stream_json, workspace};
+use super::{note, print_json, print_out, quietly, read_limited, read_prompt, stream_json, workspace};
 use crate::client::{self, answer, ask, confirm};
 use crate::control::{
     self, Exported, FlowBacklog, FlowDefaultSet, FlowInfo, FlowMessage, FlowOrdered, FlowRemoved, FlowRuns, FlowSaved,
@@ -49,8 +49,20 @@ fn flow_list(list: &args::FlowListArgs) -> Result<()> {
     print_out(&listing(&answer(value)?))
 }
 
-fn flow_run(run: args::FlowRunArgs) -> Result<()> {
+fn gives_issue_prompt(run: &args::FlowRunArgs) -> bool {
+    run.issue.key.is_some() && (run.prompt.is_some() || run.prompt_file.is_some())
+}
+
+fn flow_issue_features(run: &args::FlowRunArgs) -> Result<()> {
     super::issue_features(&run.issue)?;
+    if gives_issue_prompt(run) {
+        client::use_flow_issue_prompt()?;
+    }
+    Ok(())
+}
+
+fn flow_run(run: args::FlowRunArgs) -> Result<()> {
+    flow_issue_features(&run)?;
     let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
     let request = control::FlowRun {
         name: run.name,
@@ -70,11 +82,11 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         return print_json(&value);
     }
     let run: RunInfo = answer(value)?;
-    if let Some(note) = &run.note {
-        eprintln!("{note}");
+    if let Some(text) = &run.note {
+        note(&format!("{text}\n"));
     }
-    if let Some(note) = folder_note(&run) {
-        eprintln!("{note}");
+    if let Some(text) = folder_note(&run) {
+        note(&format!("{text}\n"));
     }
     print_out(&started(&run))
 }
@@ -86,8 +98,8 @@ fn flow_export(export: args::FlowExportArgs) -> Result<()> {
         return print_json(&value);
     }
     let exported: Exported = answer(value)?;
-    if let Some(note) = &exported.note {
-        eprintln!("{note}");
+    if let Some(text) = &exported.note {
+        note(&format!("{text}\n"));
     }
     print_out(&exported.text)
 }
@@ -274,11 +286,11 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
     if args.check {
         return checked_import(request, &flow, &source, args.print.json);
     }
-    eprint!("{}", share::summary(&flow));
+    note(&share::summary(&flow));
     if let Some(risks) = asked.filter(|_| !args.yes)
         && !confirmed_import(&mut request, &source, &risks, args.to)?
     {
-        println!("not imported");
+        print_out("not imported\n")?;
         return Ok(());
     }
     let value = ask("flow import", control::Command::FlowImport(request))?;
@@ -286,8 +298,8 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         return print_json(&value);
     }
     let imported: Imported = answer(value)?;
-    if let Some(note) = &imported.note {
-        eprintln!("{note}");
+    if let Some(text) = &imported.note {
+        note(&format!("{text}\n"));
     }
     print_out(&imported_line(&imported))
 }
@@ -338,7 +350,7 @@ fn import_text(source: &Source) -> Result<String> {
         Source::Stdin => read_shared(Path::new("-")),
         Source::File(path) => read_shared(path),
         remote => {
-            eprintln!("fetching {}", remote.label());
+            note(&format!("fetching {}\n", remote.label()));
             registry::fetch(remote).map_err(|e| Error::Control(share::visible(&e)))
         }
     }
@@ -577,7 +589,7 @@ fn files_of(args: &FlowFilesArgs) -> Result<()> {
     }
     let files: RunFiles = answer(value)?;
     if files.more {
-        eprintln!("only the newest {} files are listed", files.files.len());
+        note(&format!("only the newest {} files are listed\n", files.files.len()));
     }
     print_out(&files_text(&files))
 }

@@ -4,11 +4,14 @@ use super::{Handled, Pending, Stage, json, malformed};
 use crate::app::App;
 use crate::config::{self, Config, ProjectSettings};
 use crate::control::Done;
-use crate::control::config::{ConfigImport, Configure, Described, ProjectChange, ProjectEntry, SecretChange};
+use crate::control::config::{
+    ConfigImport, Configure, Described, ProjectChange, ProjectEntry, SecretChange, SettingsFound,
+};
 use crate::control::contract::{Code, Refusal};
 use crate::error::Error;
 use crate::git;
 use crate::issues::{Account, Secret, Source};
+use crate::os::fs::canonical;
 use crate::project::Hierarchy;
 use crate::settings::share::{self, Section};
 use crate::settings::{Action, Page, Refused};
@@ -57,7 +60,16 @@ impl App {
             Configure::Project(change) => self.config_project(change),
             Configure::Secret(secret) => self.config_secret(client, &secret),
             Configure::Remove(key) => self.config_remove(&key),
+            Configure::Search(text) => self.config_search(&text),
         }
+    }
+
+    fn config_search(&self, text: &str) -> Handled {
+        if text.trim().is_empty() {
+            return Err(malformed("give the text to search for"));
+        }
+        let results = self.settings_model(Page::default()).found(text);
+        Ok(Some(json(&SettingsFound { results })))
     }
 
     pub(super) fn config_export_request(&self) -> Handled {
@@ -95,8 +107,7 @@ impl App {
             .projects
             .iter()
             .map(|(key, settings)| {
-                let folder = config::expand_home(key, home);
-                let folder = folder.canonicalize().unwrap_or(folder);
+                let folder = canonical(config::expand_home(key, home));
                 ProjectEntry {
                     project: open(&folder),
                     repository: git::is_repo_root(&folder),
@@ -162,7 +173,7 @@ impl App {
                 if !folder.is_absolute() {
                     return Err(Refusal::new(Code::Malformed, "use an absolute path or one starting with ~/"));
                 }
-                Ok(folder.canonicalize().unwrap_or(folder))
+                Ok(canonical(folder))
             }
             _ => Err(Refusal::new(Code::Malformed, "give the project's `project` id or its `path`, not both")),
         }

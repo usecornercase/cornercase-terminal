@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/settings.rs
+expression: "render(&with(searching(\"def\", results()))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────╮  "
+" P│  Worktrees 0   Agents 2   Issues 0   TUI 1                                                   │  "
+"  │  ⌕ def                                                                                       │  "
+"▌ │   Agents › default agent                      claude                                         │  "
+"  │ ▌ Remote › Telegram › bot                     not set  paste its token                       │  "
+"  │   Remote › closed workspaces                  shows once forum mode is on                    │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │ ↑↓ picks a result · enter goes to it · esc clears the search                                 │  "
+" ─│                                                                      share   restart   done  │  "
+"  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
+"  More ▴                 Help  │                         │                                          "

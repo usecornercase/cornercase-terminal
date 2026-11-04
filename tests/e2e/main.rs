@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -28,6 +30,7 @@ mod agents;
 mod arranging;
 mod browser;
 mod commands;
+mod context;
 mod contract;
 mod flows;
 mod input;
@@ -41,8 +44,10 @@ mod panes;
 mod plugins;
 mod ports;
 mod processes;
+mod pull_requests;
 mod queue;
 mod remote;
+mod requests;
 mod run_on;
 mod server;
 mod settings;
@@ -94,6 +99,7 @@ impl Session {
         let dir = std::env::temp_dir().join(format!("cornercase-e2e-sock-{}-{n}", std::process::id()));
         std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).expect("create socket dir");
         std::fs::write(dir.join("tour.json"), r#"{"version":1,"offered":true,"announced":true}"#).expect("write tour");
+        std::fs::write(dir.join("star.json"), r#"{"version":2,"shown":1}"#).expect("write star");
         Arc::new(Self { dir })
     }
 

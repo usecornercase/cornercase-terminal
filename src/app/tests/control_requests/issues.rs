@@ -1,3 +1,4 @@
+use rstest::rstest;
 use serde_json::{Value, json};
 
 use super::super::issue_list::{Setup, VIEW, checkout, listing, secrets_file, setup, shortcut};
@@ -376,11 +377,10 @@ fn an_issue_in_a_workspace_opens_a_tab_named_after_it() {
 }
 
 #[test]
-fn an_issue_and_a_prompt_are_not_both_taken() {
+fn start_takes_an_issue_or_a_prompt_not_both() {
     let mut s = listing();
     assert_eq!(bad(&mut s, "start", &json!({"issue": "#7", "prompt": "do it"})).code, "malformed");
     assert_eq!(bad(&mut s, "start", &json!({"source": "github"})).code, "malformed");
-    assert_eq!(bad(&mut s, "flow-run", &json!({"name": "Quick", "issue": "#7", "prompt": "x"})).code, "malformed");
     assert_eq!(s.app.projects[0].workspaces.len(), 1);
 }
 
@@ -485,18 +485,55 @@ mod branch_names {
         assert_eq!((git::branch(&workspace.path), workspace.name.as_deref()), (Some("ana/7".into()), Some("login")));
     }
 
-    #[test]
-    fn a_flow_from_an_issue_takes_the_template_and_the_workspace_s_name() {
+    fn flow_ready() -> Setup {
         let mut s = listing();
         let fake = s.config.path().join("claude");
         write_executable(&fake, "#!/bin/sh\nexec sleep 60\n");
         s.app.config.agent = "claude".into();
         s.app.config.agent_commands.insert("claude".into(), fake.display().to_string());
         s.app.config.issue_branch = "feat/{key}-{slug}".into();
-        let _: Value = good(&mut s, "flow-run", &json!({"name": "Quick", "issue": "#7", "workspace_name": "Login"}));
+        s.app.config.prompt = "Work on {key}: {title}".into();
+        s
+    }
+
+    #[rstest]
+    #[case::without_a_prompt_the_template_s(
+        r##"{"name":"Quick","issue":"#7"}"##,
+        "feat/7-fix-the-login",
+        "#7 Fix the login",
+        "Work on #7: Fix the login"
+    )]
+    #[case::a_blank_prompt_keeps_the_template_s(
+        r##"{"name":"Quick","issue":"#7","prompt":" \n"}"##,
+        "feat/7-fix-the-login",
+        "#7 Fix the login",
+        "Work on #7: Fix the login"
+    )]
+    #[case::a_prompt_of_its_own_replaces_it(
+        r##"{"name":"Quick","issue":"#7","prompt":"Fix #7, a test first\n"}"##,
+        "feat/7-fix-the-login",
+        "#7 Fix the login",
+        "Fix #7, a test first"
+    )]
+    #[case::a_prompt_a_branch_and_a_name_of_their_own(
+        r##"{"name":"Quick","issue":"#7","prompt":"Fix it","worktree":"ana/7","workspace_name":"Login"}"##,
+        "ana/7",
+        "Login",
+        "Fix it"
+    )]
+    fn a_flow_from_an_issue_takes_its_task_branch_and_name(
+        #[case] request: &str,
+        #[case] branch: &str,
+        #[case] name: &str,
+        #[case] task: &str,
+    ) {
+        let mut s = flow_ready();
+        let args: Value = serde_json::from_str(request).expect("request");
+        let _: Value = good(&mut s, "flow-run", &args);
         let workspace = &s.app.projects[0].workspaces[1];
-        assert_eq!(git::branch(&workspace.path).as_deref(), Some("feat/7-fix-the-login"));
-        assert_eq!(workspace.name.as_deref(), Some("Login"));
+        assert_eq!(git::branch(&workspace.path).as_deref(), Some(branch));
+        assert_eq!(workspace.name.as_deref(), Some(name));
+        assert_eq!(s.app.runs.all()[0].task, task);
     }
 
     #[test]

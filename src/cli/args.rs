@@ -3,6 +3,7 @@ pub(crate) mod agents;
 pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod config;
+pub(crate) mod context;
 pub(crate) mod files;
 pub(crate) mod flow;
 pub(crate) mod issue;
@@ -11,7 +12,9 @@ pub(crate) mod machines;
 pub(crate) mod plugin;
 pub(crate) mod ports;
 pub(crate) mod processes;
+pub(crate) mod pull_request;
 pub(crate) mod queue;
+pub(crate) mod requests;
 pub(crate) mod terminal;
 pub(crate) mod theme;
 pub(crate) mod todo;
@@ -35,7 +38,10 @@ use super::help::{
     START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP,
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
-use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP};
+use super::help::{
+    AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
+    PULL_REQUEST_HELP, REQUESTS_HELP,
+};
 use super::help::{CLONE_HELP, MACHINES_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
@@ -194,6 +200,11 @@ pub(crate) enum Control {
         after_help = INPUT_HELP
     )]
     Input(terminal::InputArgs),
+    #[command(
+        about = "Keep one connection and run each command of standard input as it arrives, for programs that send many",
+        after_help = REQUESTS_HELP
+    )]
+    Requests(requests::RequestsArgs),
     #[command(about = "Scroll a pane's view through its history", after_help = SCROLL_HELP)]
     Scroll(terminal::ScrollArgs),
     #[command(about = "Select text in a pane, print or copy the selection, or clear it", after_help = SELECTION_HELP)]
@@ -260,6 +271,16 @@ pub(crate) enum Control {
     )]
     Ports(ports::PortsArgs),
     #[command(
+        about = "Print a workspace's pull request and every check with its link, as its dialog shows it, asking gh at once",
+        after_help = PULL_REQUEST_HELP
+    )]
+    PullRequest(pull_request::PullRequestArgs),
+    #[command(
+        about = "Print what fills an agent's context, as its Context dialog shows it",
+        after_help = CONTEXT_HELP
+    )]
+    Context(context::ContextArgs),
+    #[command(
         about = "List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program",
         after_help = PROCESSES_HELP
     )]
@@ -300,6 +321,7 @@ impl Control {
             Self::Send(a) => a.target.view.view,
             Self::Keys(a) => a.target.view.view,
             Self::Mark(a) => a.target.view.view,
+            Self::Context(a) => a.target.view.view,
             Self::Read(a) => a.view.view,
             Self::Wait(a) => a.view.view,
             Self::Focus(a) => a.view.view,
@@ -471,9 +493,14 @@ pub(crate) struct StartArgs {
     pub(crate) project: Option<u64>,
     #[arg(long, help = "The tab's name [default: the agent's]")]
     pub(crate) name: Option<String>,
-    #[arg(long, value_name = "TEXT", conflicts_with = "prompt_file", help = "What to ask it")]
+    #[arg(long, value_name = "TEXT", conflicts_with_all = ["prompt_file", "issue"], help = "What to ask it")]
     pub(crate) prompt: Option<String>,
-    #[arg(long, value_name = "FILE", help = "Read the prompt from a file, or from standard input with -")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        conflicts_with = "issue",
+        help = "Read the prompt from a file, or from standard input with -"
+    )]
     pub(crate) prompt_file: Option<PathBuf>,
     #[arg(long, help = "Then wait until the agent stops working, and print how it ended")]
     pub(crate) wait: bool,

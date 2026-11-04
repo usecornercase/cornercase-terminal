@@ -15,7 +15,7 @@ instead, in that same project. Only `focus`, `go` and `--focus` change what the 
 commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no workspace is on
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
-answer but some of them failed, or input --follow could not send some lines: each failed entry says
+answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
@@ -539,7 +539,7 @@ handle, or for Jira, Plane and Asana an id from `issue people`. A tracker that f
 stderr, its cached list is still printed, and the command exits 3 after listing the others. read prints an issue's details, its
 description in Markdown and its comments. people lists whom a tracker's filters can name.
 
-To work on one: `cornercase start --issue KEY`, or `cornercase flow run NAME --issue KEY`.
+To work on one: `cornercase start --issue KEY`, or `cornercase flow run NAME --issue KEY` (`--prompt` gives the team your own task).
 
 Examples:
   cornercase issue sources
@@ -723,15 +723,20 @@ Examples:
   cornercase changes discard src/main.rs --digest 550a7a517a389403 --yes";
 
 mod clone;
+mod context;
 mod files;
 mod flow;
 mod machines;
 mod paste_file;
+mod ports;
 mod processes;
+mod pull_request;
+mod requests;
 mod start;
 mod worktrees;
 
 pub(in crate::cli) use clone::CLONE_HELP;
+pub(in crate::cli) use context::CONTEXT_HELP;
 pub(in crate::cli) use files::FILES_HELP;
 pub(in crate::cli) use flow::{
     FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HELP, FLOW_HIDE_HELP,
@@ -740,7 +745,10 @@ pub(in crate::cli) use flow::{
 };
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
-pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_HELP};
+pub(in crate::cli) use ports::{PORTS_HELP, PORTS_STOP_ABOUT, PORTS_STOP_HELP};
+pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_ABOUT, PROCESSES_STOP_HELP};
+pub(in crate::cli) use pull_request::PULL_REQUEST_HELP;
+pub(in crate::cli) use requests::REQUESTS_HELP;
 pub(in crate::cli) use start::{NEW_WORKSPACE_HELP, START_HELP};
 pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
 
@@ -852,44 +860,10 @@ Examples:
   cornercase tour list --json
   cornercase tour reset";
 
-pub(super) const PORTS_HELP: &str =
-    "Lists the TCP ports in LISTEN state held by the programs of a workspace: the processes its panes
-started (and their children), and, in a workspace with a worktree of its own, any of your processes
-working in that worktree. Each line gives the URL to open (http://localhost:PORT when it listens on
-every address or on 127.0.0.1), the addresses, the program and its pid, and how it belongs to the
-workspace: pane N, agent claude in pane N (the agent itself or a program it started), or cwd. A
-plain workspace (no worktree of its own) shares its folder with the others, so only its panes count.
---all lists every port your processes listen on, those of no workspace too. Ports published by
-Docker are held by Docker, not by the workspace that started the containers, so they show only
-with --all. With --json it prints {\"ports\": [...]}: port, addresses, url, pid, program, args,
-project, workspace, pane, via (pane, agent or cwd) and agent, null when they do not apply.
-
-The text shows the program and its arguments cut to 40 characters; --json gives them whole.
-`cornercase ports stop PORT` stops one (see its --help).
-
-Examples:
-  cornercase ports
-  cornercase ports --worktree feat/login --json
-  cornercase ports --all
-  cornercase ports stop 5173";
-
 pub(crate) const ISSUE_LIST_HELP: &str =
     "A tracker that fails does not stop the others: it is named on stderr with its reason, its cached
 list is still printed (with --json, its entry in sources has an error), and the command exits 3
 after listing the others.";
-
-pub(crate) const PORTS_STOP_HELP: &str =
-    "Stops the program that listens on PORT, if it belongs to a workspace (`cornercase ports --all`
-lists the others, which it refuses). It checks first that the program still holds the port, sends
-it SIGTERM, waits up to 3 s for the port to be released, then sends SIGKILL. Only that process is
-signalled, never its process group, so the shell or the agent that started it stays. When several
-programs listen on the port, --pid says which. It prints stopped, killed (it ignored SIGTERM) or
-still running, and exits with 1 when it is still running. With --json it prints {\"port\",
-\"pid\", \"program\", \"outcome\"}, the outcome being stopped, killed or still-running.
-
-Examples:
-  cornercase ports stop 5173
-  cornercase ports stop 3000 --pid 48211 --json";
 
 pub(super) const USAGE_HELP: &str =
     "Asks Claude Code and Codex for your plan limits as the Limits tab of the Usage dialog does, and

@@ -1,17 +1,21 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 
-use super::{Color, Hit, dim, put};
-use crate::text;
+use super::stack::{Look, Slot, cells, count};
+use super::{Hit, dim};
+use crate::ui::widgets::action_style;
 
 const TITLE: &str = "Files";
 const EMPTY: &str = "nothing yet";
+const FOLDER: &str = " open folder ";
 const LEAD: u16 = 2;
+const MIN_NAME: u16 = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FileRow {
     pub(crate) name: String,
+    pub(crate) size: String,
     pub(crate) age: String,
 }
 
@@ -22,57 +26,48 @@ pub(crate) struct Files {
 }
 
 pub(super) fn height(files: Option<&Files>) -> u16 {
-    files.map_or(0, |files| LEAD.saturating_add(u16::try_from(files.rows.len().max(1)).unwrap_or(u16::MAX)))
+    files.map_or(0, |files| LEAD.saturating_add(count(files.rows.len().max(1))))
 }
 
-fn content_row(area: Rect, scroll: u16, y: u16) -> Option<u16> {
-    (y >= area.y && y < area.bottom()).then(|| (y - area.y).saturating_add(scroll))
+fn folder(slot: &Slot) -> Option<Rect> {
+    let y = slot.y(1)?;
+    let width = cells(FOLDER).min(slot.area.width);
+    Some(Rect { x: slot.area.right() - width, y, width, height: 1 })
 }
 
-pub(super) fn hit(area: Rect, files: &Files, top: u16, scroll: u16, pos: Position) -> Option<Hit> {
-    if !area.contains(pos) {
-        return None;
+pub(super) fn hit(slot: &Slot, files: &Files, pos: Position) -> Option<Hit> {
+    if folder(slot).is_some_and(|rect| rect.contains(pos)) {
+        return Some(Hit::Folder);
     }
-    let row = content_row(area, scroll, pos.y)?.checked_sub(top.saturating_add(LEAD))?;
+    let row = slot.row_at(pos)?.checked_sub(LEAD)?;
     let index = usize::from(row);
     (index < files.rows.len()).then_some(Hit::File(index))
 }
 
-#[derive(Clone, Copy)]
-pub(super) struct Look {
-    pub(super) muted: Color,
-    pub(super) light: bool,
-    pub(super) hover: Option<Position>,
+fn draw_row(buf: &mut Buffer, slot: &Slot, (i, file): (u16, &FileRow), muted: ratatui::style::Color) {
+    let row = LEAD + i;
+    let width = slot.area.width;
+    let both = format!("{} · {}", file.size, file.age);
+    let tail = if width.saturating_sub(cells(&both).saturating_add(1)) >= MIN_NAME { both } else { file.age.clone() };
+    let tail = slot.put_right(buf, row, &tail, dim(muted));
+    let room = usize::from(width.saturating_sub(tail.saturating_add(1)));
+    slot.put(buf, (row, 0), &crate::text::truncate_cells(&file.name, room), Style::default());
 }
 
-pub(super) fn draw(buf: &mut Buffer, area: Rect, files: &Files, (top, scroll): (u16, u16), look: Look) {
-    let Look { muted, light, hover } = look;
-    let at = |row: u16| {
-        let content = top.saturating_add(row);
-        let y = content.checked_sub(scroll)?;
-        (y < area.height).then(|| area.y + y)
-    };
-    if let Some(y) = at(1) {
-        let count = if files.more { format!("{}+", files.rows.len()) } else { files.rows.len().to_string() };
-        put(buf, (area.x, y), TITLE, Style::default().add_modifier(Modifier::BOLD), area.right());
-        let after = area.x + u16::try_from(text::cells(TITLE)).unwrap_or(0);
-        put(buf, (after, y), &format!(" · {count}"), dim(muted), area.right());
+pub(super) fn draw(buf: &mut Buffer, slot: &Slot, files: &Files, look: Look) {
+    let n = if files.more { format!("{}+", files.rows.len()) } else { files.rows.len().to_string() };
+    slot.title(buf, 1, (TITLE, &n), look.muted);
+    if let Some(rect) = folder(slot) {
+        let lit = look.hover.is_some_and(|pos| rect.contains(pos));
+        slot.put(buf, (1, rect.x - slot.area.x), FOLDER, action_style(lit));
     }
     if files.rows.is_empty() {
-        if let Some(y) = at(LEAD) {
-            put(buf, (area.x, y), EMPTY, dim(muted), area.right());
-        }
+        slot.put(buf, (LEAD, 0), EMPTY, dim(look.muted));
         return;
     }
-    let fill = Style::default().bg(Color::Indexed(if light { 255 } else { 235 }));
-    for (i, row) in files.rows.iter().enumerate() {
-        let Some(y) = u16::try_from(i).ok().and_then(|i| at(LEAD + i)) else { continue };
-        if hover.is_some_and(|p| p.y == y && area.contains(p)) {
-            buf.set_style(Rect { y, height: 1, ..area }, fill);
-        }
-        let age = u16::try_from(text::cells(&row.age)).unwrap_or(0).min(area.width);
-        let room = usize::from(area.width.saturating_sub(age.saturating_add(1)));
-        put(buf, (area.x, y), &text::truncate_cells(&row.name, room), Style::default(), area.right());
-        put(buf, (area.right() - age, y), &row.age, dim(muted), area.right());
+    for (i, file) in files.rows.iter().enumerate() {
+        let i = count(i);
+        slot.shade(buf, LEAD + i..LEAD + i + 1, look);
+        draw_row(buf, slot, (i, file), look.muted);
     }
 }

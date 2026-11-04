@@ -2,7 +2,6 @@ use rstest::rstest;
 
 use super::*;
 use crate::accounts::Account;
-use crate::agents::claude::usage as claude;
 use crate::agents::claude::usage::tests as claude_tests;
 use crate::agents::codex::usage::tests as codex_tests;
 use crate::test_util::{TempDir, write_executable};
@@ -78,14 +77,6 @@ fn a_probe_that_gets_no_answer_fails(
 }
 
 #[test]
-fn an_agent_gone_before_the_requests_fails_at_once() {
-    let gone = Some(Err(std::io::ErrorKind::BrokenPipe.into()));
-    let error = await_answer(gone, None::<&'static [u8]>, claude::answer, "claude", Duration::from_secs(2))
-        .expect_err("no report");
-    assert_eq!(error.to_string(), "claude exited without answering");
-}
-
-#[test]
 fn a_missing_agent_fails() {
     let error = probe(Known::Codex, "/nonexistent/codex", None, TIMEOUT).expect_err("no report");
     assert!(error.to_string().starts_with("could not run /nonexistent/codex"), "{error}");
@@ -100,7 +91,7 @@ fn each_answer_counts_once_and_a_running_probe_is_not_restarted() {
     state.answered((Known::Claude, None), Ok(Report::default()), Instant::now());
     assert_eq!(state.probe(Known::Claude).answers(), 1);
     assert_eq!(state.start(vec![(Known::Claude, None)]), [(Known::Claude, None)]);
-    state.answered((Known::Claude, None), Err(Error::Usage("no".into())), Instant::now());
+    state.answered((Known::Claude, None), Err(Error::Probe("no".into())), Instant::now());
     assert_eq!(state.probe(Known::Claude).answers(), 2);
     assert_eq!(state.probe(Known::Codex).answers(), 0);
 }

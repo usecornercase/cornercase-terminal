@@ -12,6 +12,11 @@ pub(crate) struct ConfigArgs {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ConfigAction {
+    #[command(about = "Find settings by the start of each word, as the search of the settings modal does")]
+    Search {
+        #[arg(required = true, value_name = "TEXT", help = "The words to look for; every word must match")]
+        text: Vec<String>,
+    },
     #[command(about = "Change settings: KEY VALUE pairs, checked together, all or none")]
     Set {
         #[arg(required = true, num_args = 2.., value_names = ["KEY", "VALUE"])]

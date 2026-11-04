@@ -245,6 +245,8 @@ impl App {
         let pane = pending.done.ids.pane.unwrap_or_default();
         match &pending.stage {
             Stage::Usage(waiting) => self.usage_read(waiting, now).map(|plans| Ok(json(&plans))),
+            Stage::PullRequest(workspace) => self.pull_request_reply(*workspace),
+            Stage::Context { pane, answers } => self.context_reply(*pane, *answers),
             Stage::Machines(gathering) => self.gathered(gathering, now),
             Stage::Setup(workspace) if !self.workspace_setting_up(*workspace) => {
                 Some(self.setup_failure(pane).map_or_else(|| Ok(json(&pending.done)), Err))
@@ -316,9 +318,13 @@ impl App {
             Stage::Check => "git is still checking the worktree".into(),
             Stage::Issue(asking) => format!("{} is still looking the issue up", asking.source().name()),
             Stage::Usage(_) => "the agents have not said their usage yet".into(),
-            Stage::Ports | Stage::Processes | Stage::Machines(_) | Stage::Clone(_) | Stage::Relay(_) => {
-                stage.listing().into()
-            }
+            Stage::Ports
+            | Stage::Processes
+            | Stage::PullRequest(_)
+            | Stage::Context { .. }
+            | Stage::Machines(_)
+            | Stage::Clone(_)
+            | Stage::Relay(_) => stage.listing(),
             Stage::Held(_) => held::waiting(pane, self.blocked(pane, Instant::now())),
             Stage::Launch { .. } => format!("pane {pane} is still starting"),
             Stage::Setup(workspace) => format!("workspace {workspace} is still running its setup in pane {pane}"),

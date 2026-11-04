@@ -1,5 +1,4 @@
 use std::fs;
-use std::process::Command;
 
 use rstest::rstest;
 
@@ -104,6 +103,7 @@ fn expands_home_paths(#[case] inside: bool) {
     assert!(resolve(&link, None, root.path(), None).is_none());
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::from_an_outside_cwd("x.txt", "other")]
 #[case::from_a_parent("../other/x.txt", "repo")]
@@ -146,8 +146,10 @@ fn under_finds_the_path_and_says_whether_it_is_inside() {
     assert!(under(&row("see a.rs"), 1, None, root.path(), None).is_none());
 }
 
+#[cfg(unix)]
 #[test]
 fn outside_folders_devices_and_fifos_are_not_links() {
+    use std::process::Command;
     let (root, other) = (TempDir::new(), TempDir::new());
     let fifo = other.path().join("pipe");
     assert!(Command::new("mkfifo").arg(&fifo).status().expect("create fifo").success());
@@ -156,5 +158,25 @@ fn outside_folders_devices_and_fifos_are_not_links() {
     for path in [other.path(), fifo.as_path(), device.as_path(), Path::new("/dev/zero")] {
         let link = Link { start: 0, end: 1, path: path.display().to_string(), lines: None };
         assert!(resolve(&link, None, root.path(), None).is_none(), "{} is not a regular file", path.display());
+    }
+}
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::test_util::verbatim;
+
+    #[test]
+    fn a_file_named_like_a_device_inside_the_workspace_stays_inside() {
+        let root = TempDir::new();
+        fs::create_dir(root.path().join("src")).expect("mkdir");
+        let file = verbatim(&root.path().join("src").join("aux.rs"));
+        fs::write(&file, "").expect("write");
+        let link = Link { start: 0, end: 1, path: "src/aux.rs".into(), lines: Some((10, 10)) };
+
+        let target = resolve(&link, None, root.path(), None).expect("the file");
+
+        assert_eq!((target.path.as_str(), target.inside()), (r"src\aux.rs", true));
+        assert_eq!(target.real, file);
     }
 }

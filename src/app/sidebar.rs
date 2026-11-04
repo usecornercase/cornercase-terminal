@@ -187,13 +187,16 @@ impl App {
 
     fn open_agent_menu(&mut self, areas: &ui::Areas, pos: Position) {
         let Some(at) = self.agent_row_at(areas, pos) else { return };
-        let actions: Vec<MenuAction> = self
-            .mark_action(Marked::Pane(at.pane))
-            .into_iter()
-            .chain(at.fold.map(|collapsed| MenuAction::AgentFold(at.pane, !collapsed)))
-            .chain(std::iter::once(MenuAction::CloseAgent(at.pane)))
-            .collect();
+        let actions = self.agent_row_actions(at.pane, at.fold);
         self.overlay = Some(Overlay::Menu { at: pos, actions });
+    }
+
+    pub(super) fn agent_row_actions(&self, pane: u64, fold: Option<bool>) -> Vec<MenuAction> {
+        self.mark_action(Marked::Pane(pane))
+            .into_iter()
+            .chain(fold.map(|collapsed| MenuAction::AgentFold(pane, !collapsed)))
+            .chain([MenuAction::ViewContext { pane, named: false }, MenuAction::CloseAgent(pane)])
+            .collect()
     }
 
     fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {

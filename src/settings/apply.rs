@@ -9,7 +9,7 @@ use super::describe::Target;
 use super::{Action, Refused, Row, Settings, Status, TAB_IDS};
 
 impl Settings {
-    fn go_to(&mut self, row: &Row) {
+    pub(super) fn go_to(&mut self, row: &Row) {
         self.page = row.page();
         self.edit = None;
         self.pick = None;

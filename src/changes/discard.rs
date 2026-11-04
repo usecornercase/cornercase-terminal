@@ -3,6 +3,7 @@ use std::path::Path;
 use super::act::{self, Outcome};
 use super::diff::{File, Status};
 use crate::error::Result;
+use crate::os::ffi;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Target {
@@ -54,7 +55,7 @@ pub(crate) fn done(path: &str, old_path: Option<&str>, status: Status) -> String
 pub(crate) fn discard(dir: &Path, path: &str, digest: u64) -> Result<Outcome> {
     act::on_seen(dir, path, digest, |from, file| {
         if file.status == Status::Untracked {
-            std::fs::remove_file(dir.join(&file.path))?;
+            std::fs::remove_file(ffi::join(dir, &file.path))?;
             Ok(())
         } else {
             act::restore(dir, from, file, true)

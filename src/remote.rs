@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
-use std::os::unix::net::UnixStream;
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -14,6 +13,7 @@ use serde_json::Value;
 
 use crate::control;
 use crate::error::{Behind, Error, Result};
+use crate::os::socket::UnixStream;
 use crate::process;
 use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};

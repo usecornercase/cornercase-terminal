@@ -56,6 +56,7 @@ export interface FilesViewer {
   stretch: Stretch<number> | null;
   unfolded: Set<number>;
   find: FindState | null;
+  origin: 'flow' | null;
 }
 
 export interface FilesPlace {
@@ -90,7 +91,11 @@ export class FilesPanel {
     this.open = false;
     this.full = false;
     this.selecting = null;
-    for (const place of this.places.values()) if (place.viewer) place.viewer.find = null;
+    for (const place of this.places.values()) {
+      if (!place.viewer) continue;
+      place.viewer.find = null;
+      place.viewer.origin = null;
+    }
     this.unfocus();
   }
 
@@ -108,7 +113,7 @@ export const typing = (place: FilesPlace): boolean => (place.viewer ? !!place.vi
 
 export function viewFile(place: FilesPlace, path: string, lines: Lines | null = null, find: FindState | null = null): void {
   place.last = path;
-  place.viewer = { path, top: { line: 0, row: 0 }, jump: lines ? lines[0] : null, selection: lines, stretch: null, unfolded: new Set(), find };
+  place.viewer = { path, top: { line: 0, row: 0 }, jump: lines ? lines[0] : null, selection: lines, stretch: null, unfolded: new Set(), find, origin: null };
 }
 
 export const ordered = ([a, b]: Lines): Lines => [Math.min(a, b), Math.max(a, b)];
@@ -590,7 +595,7 @@ function drawFound(p: Painter, f: Panel, rows: Found[]): void {
   });
 }
 
-function size(bytes: number): string {
+export function size(bytes: number): string {
   if (bytes < 1024) return `${bytes} bytes`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -629,7 +634,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   const { app, inner, body } = f;
   const back = rect(inner.x, inner.y, 3, 1);
   p.span(back.x, back.y, ' ‹ ', p.hovered(back) ? { fg: 0, bg: 6, add: BOLD } : { fg: 6 });
-  p.region({ r: back, click: () => app.closeFile(), cursor: 'pointer' });
+  p.region({ r: back, click: () => app.backFromFile(), cursor: 'pointer' });
   const full = rect(close.x - 3, inner.y, 3, 1);
   const fits = full.x >= right(back);
   const content = f.files.get(viewer.path);

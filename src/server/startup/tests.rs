@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc;
 

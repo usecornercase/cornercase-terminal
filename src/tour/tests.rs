@@ -186,7 +186,7 @@ mod first_run {
     fn a_session_stats_or_star_mean_an_old_install() {
         let dir = TempDir::new();
         let (session, stats) = (dir.path().join("session.json"), dir.path().join("stats.json"));
-        let star = crate::star::Saved { days: 1, ..crate::star::Saved::default() };
+        let star = crate::star::Saved { prompts: 1, ..crate::star::Saved::default() };
         assert!(!first_run(&session, &stats, &star));
         std::fs::write(&stats, "{}").expect("stats");
         assert!(!first_run(&session, &stats, &crate::star::Saved::default()));

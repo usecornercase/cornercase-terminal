@@ -173,6 +173,7 @@ export type MenuAction =
   | { kind: 'newGroup' }
   | { kind: 'mark'; panes: number[]; pending: boolean }
   | { kind: 'agentFold'; pane: number; collapsed: boolean }
+  | { kind: 'viewContext'; pane: number; named: boolean }
   | { kind: 'closeAgent'; pane: number }
   | { kind: 'closeAgents'; workspace: number }
   | { kind: 'reopenAgents'; workspace: number }
@@ -205,6 +206,8 @@ export interface SettingsOverlay {
   kind: 'settings';
   page: number;
   cursor: number;
+  query?: string;
+  found?: number;
   pick?: { row: string; title: string; items: PickItem[]; selected: number; filter: string };
   edit?: { row: string; label: string; input: string; token: boolean; error?: string };
   notice?: string;
@@ -261,7 +264,7 @@ export type Overlay =
   | { kind: 'keys'; group: KeysGroup | null }
   | { kind: 'closePane'; pane: number }
   | { kind: 'discard'; key: string; path: string; status: string; untracked: boolean; old?: string }
-  | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; scroll: number }
+  | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; seq?: number; scroll: number }
   | import('./queue').QueueForm
   | SettingsOverlay
   | IssuesOverlay;

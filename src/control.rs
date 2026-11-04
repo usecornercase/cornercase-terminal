@@ -13,6 +13,7 @@ pub(crate) mod changes;
 pub(crate) mod clone;
 pub(crate) mod closed_agents;
 pub(crate) mod config;
+pub(crate) mod context;
 pub(crate) mod contract;
 mod events;
 mod fields;
@@ -23,6 +24,7 @@ pub(crate) mod machines;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
+pub(crate) mod pull_request;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -55,6 +57,7 @@ pub(crate) use changes::{
 pub(crate) use clone::{CloneFile, CloneRepository, Cloned, Unwritten};
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
+pub(crate) use context::{ContextInfo, ContextRead};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
 pub(crate) use files::{FilesList, FilesRead, FilesSearch};
@@ -71,10 +74,11 @@ pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Ma
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
+pub(crate) use pull_request::{PullRequestAnswer, PullRequestRead};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{
-    GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RemoteInfo, RunStatus, SharedInfo, StackInfo,
+    CheckInfo, GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RemoteInfo, RunStatus, SharedInfo, StackInfo,
 };
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
@@ -242,6 +246,8 @@ pub(crate) enum Command {
     WorktreeSize(WorktreeSize),
     FreeBuilds(FreeBuilds),
     Worktrees(ListWorktrees),
+    PullRequest(PullRequestRead),
+    Context(ContextRead),
     Machines(Machines),
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
@@ -280,7 +286,7 @@ impl Command {
             Self::Mark(_) => 21,
             Self::Notify(_) => 13,
             Self::Focus(_) => 12,
-            Self::FocusMachine(_) => 115,
+            Self::FocusMachine(_) => 117,
             _ => return None,
         })
     }
@@ -426,8 +432,10 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
-            Self::Machines(_) => 113,
-            Self::Clone(_) => 114,
+            Self::PullRequest(_) => 113,
+            Self::Context(_) => 114,
+            Self::Machines(_) => 115,
+            Self::Clone(_) => 116,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -439,7 +447,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 116] = [
+    pub(crate) const NAMES: [&str; 118] = [
         "status",
         "open",
         "new-workspace",
@@ -553,6 +561,8 @@ impl Command {
         "processes",
         "stop-process",
         "worktrees",
+        "pull-request",
+        "context",
         "machines",
         "clone",
         "focus-machine",

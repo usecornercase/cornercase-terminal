@@ -13,6 +13,7 @@ use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::control::{Command, Item, PluginActions, PluginList, PluginPopupClose, PluginRun};
 use crate::error::{Error, Result};
+use crate::os::fs::canonical;
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
 use crate::plugins::registry::{missing, short};
@@ -117,7 +118,7 @@ fn disable(registry: &mut Registry, id: &str) -> Result<()> {
 fn status(json: bool) -> Result<bool> {
     let value = ask("plugin-list", Command::PluginList(PluginList {}))?;
     if json {
-        super::print_out(&shown_json(&value))?;
+        super::print_json_text(&shown_json(&value))?;
     } else {
         super::print_out(&status_text(&answer(value)?))?;
     }
@@ -317,8 +318,7 @@ fn folder_spec(spec: &str) -> String {
         None => (place, String::new()),
     };
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    let path = config::expand_home(folder, home.as_deref());
-    let path = path.canonicalize().unwrap_or(path);
+    let path = canonical(config::expand_home(folder, home.as_deref()));
     format!("{}{subdir}{at}", Path::new(&path).display())
 }
 

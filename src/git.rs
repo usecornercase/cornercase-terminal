@@ -7,6 +7,9 @@ pub(crate) mod worktree;
 
 use std::path::{Path, PathBuf};
 
+use crate::os::ffi;
+use crate::os::fs::canonical;
+
 const SHORT_SHA_LEN: usize = 7;
 
 pub(crate) fn branch(dir: &Path) -> Option<String> {
@@ -88,7 +91,7 @@ fn config_user(config: &str) -> Option<String> {
 
 fn common_dir(dir: &Path) -> Option<PathBuf> {
     let git = git_dir(dir)?;
-    Some(std::fs::read_to_string(git.join("commondir")).map_or_else(|_| git.clone(), |c| git.join(c.trim())))
+    Some(std::fs::read_to_string(git.join("commondir")).map_or_else(|_| git.clone(), |c| ffi::join(&git, c.trim())))
 }
 
 pub(crate) fn index_file(dir: &Path) -> Option<PathBuf> {
@@ -130,10 +133,12 @@ pub(crate) fn registered_worktrees(repo: &Path) -> std::io::Result<Vec<PathBuf>>
     };
     let mut worktrees: Vec<PathBuf> = entries
         .flatten()
-        .filter_map(|entry| std::fs::read_to_string(entry.path().join("gitdir")).ok())
-        .filter_map(|gitdir| Path::new(gitdir.trim()).parent().map(Path::to_path_buf))
+        .filter_map(|entry| {
+            let gitdir = std::fs::read_to_string(entry.path().join("gitdir")).ok()?;
+            ffi::join(&entry.path(), gitdir.trim()).parent().map(Path::to_path_buf)
+        })
         .filter(|path| path.is_dir())
-        .map(|path| path.canonicalize().unwrap_or(path))
+        .map(canonical)
         .collect();
     worktrees.sort();
     Ok(worktrees)
@@ -147,7 +152,7 @@ fn git_dir(dir: &Path) -> Option<PathBuf> {
         }
         let link = std::fs::read_to_string(&dot_git).ok()?;
         let target = link.trim().strip_prefix("gitdir:")?.trim();
-        Some(d.join(target))
+        Some(ffi::join(d, target))
     })
 }
 

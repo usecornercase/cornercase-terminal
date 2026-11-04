@@ -35,6 +35,7 @@ mod parsing {
             (Some("7"), Some("github"), Some(3))
         );
         assert!(parse(&["start", "--issue", "7", "--prompt", "x"]).is_err());
+        assert!(parse(&["start", "--issue", "7", "--prompt-file", "task.md"]).is_err());
         assert!(parse(&["start", "--source", "github"]).is_err());
         assert!(parse(&["start", "--issue", "7", "--source", "bugzilla"]).is_err());
         assert!(parse(&["start", "--issue", "7", "--project", "1", "--workspace", "2"]).is_err());
@@ -59,10 +60,12 @@ mod parsing {
     }
 
     #[test]
-    fn a_flow_needs_a_task_or_an_issue() {
+    fn a_flow_needs_a_task_or_an_issue_and_takes_both() {
         assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42"]).is_ok());
         assert!(parse(&["flow", "run", "Quick"]).is_err());
-        assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42", "--prompt", "x"]).is_err());
+        assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42", "--prompt", "x"]).is_ok());
+        assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42", "--prompt-file", "task.md"]).is_ok());
+        assert!(parse(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "f"]).is_err());
     }
 
     #[test]
@@ -255,6 +258,20 @@ mod parsing {
             Ok(several) => assert_eq!(Some(several), expected),
             Err(e) => assert_eq!((expected, e.exit_code()), (None, 2)),
         }
+    }
+
+    #[test]
+    fn a_usage_message_has_no_error_prefix_and_no_trailing_newline() {
+        let error = parse(&["wait", "--pane", "1", "--pane", "2"]).ok().and_then(|cli| match cli.command {
+            Some(Command::Control(Control::Wait(wait))) => several(&wait).err(),
+            _ => None,
+        });
+
+        let text = usage(&error.expect("a usage error"));
+
+        assert!(text.starts_with("several panes need --any or --all"), "{text}");
+        assert!(text.contains("Usage: cornercase wait"), "{text}");
+        assert!(!text.ends_with('\n'));
     }
 
     #[rstest]

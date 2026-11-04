@@ -239,12 +239,13 @@ const ROOT: [Item; 27] = [
     run("q", "quit", Action::Quit),
 ];
 
-const FIND: [Item; 5] = [
+const FIND: [Item; 6] = [
     run("f", "files by name", Action::FindNames),
     run("w", "text in files", Action::FindText),
     run("e", "file tree", Action::Files),
     run("p", "projects, workspaces, tabs", Action::Search),
     run("s", "said in sessions", Action::FindSaid),
+    run(",", "settings", Action::Settings),
 ];
 
 const GIT: [Item; 3] = [

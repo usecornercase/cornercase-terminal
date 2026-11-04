@@ -139,6 +139,7 @@ fn a_theme_given_at_start_answers_programs_and_a_change_follows() {
 fn a_new_install_shows_the_tour_on_its_first_window() {
     let session = Session::new();
     std::fs::remove_file(session.dir.join("tour.json")).expect("a new install has no tour file");
+    std::fs::remove_file(session.dir.join("star.json")).expect("a new install has no star file");
 
     let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
     app.wait_for("the tour's card", |s| s.contains("Get started") && s.contains("Projects"));

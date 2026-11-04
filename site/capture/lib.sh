@@ -56,6 +56,7 @@ cc_home_fresh() {
   mkdir -p "$CC_RUN"
   chmod 700 "$CC_RUN"
   printf '%s\n' '{"version":1,"offered":true,"announced":true}' > "$CC_RUN/tour.json"
+  printf '%s\n' '{"version":2,"shown":1}' > "$CC_RUN/star.json"
   sh "$CC_CAPTURE/home.sh"
 }
 

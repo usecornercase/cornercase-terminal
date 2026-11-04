@@ -1,6 +1,5 @@
 use std::io::{self, Read as _, Write as _};
 use std::ops::ControlFlow;
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -15,6 +14,8 @@ use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, Until, What};
 use crate::error::{Error, Result};
 use crate::machines::send;
+use crate::os::console;
+use crate::os::socket::UnixStream;
 use crate::remote::{self, Remote};
 use crate::{git, log, server};
 
@@ -24,18 +25,23 @@ mod args;
 mod arrange;
 mod changes;
 mod config;
+mod context;
 mod contract;
 mod files;
 mod flow;
 mod help;
 mod issue;
+mod line;
+mod lines;
 mod machines;
 mod plugin;
 mod ports;
 mod processes;
+mod pull_request;
 mod queue;
 mod reach;
 mod read;
+mod requests;
 mod search;
 mod start_server;
 mod stats;
@@ -75,6 +81,9 @@ impl WhenArgs {
 }
 
 pub fn run(cli: Cli) -> Result<bool> {
+    if cfg!(not(unix)) {
+        return Err(Error::NotOnWindows);
+    }
     let remote = reach::chosen(&cli, &|name| std::env::var_os(name))?;
     match (cli.command, remote) {
         (None, None) => client::run()?,
@@ -139,7 +148,7 @@ fn print_log(path: &Path, args: &LogsArgs) -> Result<bool> {
     }
     let Some(follower) = follower else { return Ok(true) };
     let mut follower = follower?;
-    let mut reader = client::watched(rustix::stdio::stdout());
+    let mut reader = client::watched(console::stdout());
     loop {
         let new = follower.read()?;
         if !new.is_empty() && quietly(out.write_all(&new).and_then(|()| out.flush()))? {
@@ -190,10 +199,12 @@ fn run_control(command: Control) -> Result<bool> {
     if let Some(view) = command.view() {
         client::use_view(view)?;
     }
-    match control_route(command) {
+    let done = match control_route(command) {
         ControlFlow::Break(done) => done,
         ControlFlow::Continue(_) => Err(Error::Control("no area runs this command".into())),
-    }
+    };
+    client::close_unused_link();
+    done
 }
 
 fn control_route(command: Control) -> ControlFlow<Result<bool>, Control> {
@@ -254,6 +265,7 @@ fn stream_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
             Control::Status(status) => run_status(&status),
             Control::Events(events) => follow_events(events),
             Control::Contract(contract) => contract::run(contract.print.json),
+            Control::Requests(args) => requests::run(&args),
             Control::Surface(args) => stream_surface(&args),
             Control::View(args) => view::open(&args),
             Control::ViewSet(args) => view::set(&args),
@@ -287,6 +299,8 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
         Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
         Control::Processes(args) => return ControlFlow::Break(processes::run(&args)),
+        Control::PullRequest(args) => return ControlFlow::Break(pull_request::run(&args)),
+        Control::Context(args) => return ControlFlow::Break(context::run(&args)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Machines(args) => machines::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
@@ -412,7 +426,7 @@ fn run_close(close: &args::CloseArgs) -> Result<bool> {
         control::Close { item, remove_worktree: close.remove_worktree, force: close.force, unlock: close.unlock };
     let value = ask("close", control::Command::Close(request))?;
     if let Some(warning) = value.get("warning").and_then(Value::as_str) {
-        eprintln!("warning: {warning}");
+        note(&format!("warning: {warning}\n"));
     }
     Ok(true)
 }
@@ -431,7 +445,7 @@ fn run_focus(focus: &args::FocusArgs) -> Result<()> {
         return print_json(&value);
     }
     if let Some(warning) = search::unrevealed(&value, item) {
-        eprintln!("warning: {warning}");
+        note(&format!("warning: {warning}\n"));
     }
     Ok(())
 }
@@ -614,7 +628,7 @@ fn run_start(start: StartArgs) -> Result<()> {
 }
 
 fn run_wait(wait: WaitArgs) -> Result<()> {
-    let several = several(&wait).unwrap_or_else(|e| e.exit());
+    let several = several(&wait).map_err(|e| Error::WrongUsage(usage(&e)))?;
     let until = match (wait.until, wait.text, wait.quiet) {
         (Some(until), ..) => until.into(),
         (None, Some(text), _) => Until::Text(text),
@@ -634,6 +648,11 @@ fn run_wait(wait: WaitArgs) -> Result<()> {
     say(ask("wait", control::Command::WaitSeveral(request))?, wait.print.json, endings)
 }
 
+pub(super) fn usage(error: &clap::Error) -> String {
+    let text = error.to_string();
+    text.strip_prefix("error: ").unwrap_or(&text).trim_end().to_string()
+}
+
 fn several(wait: &WaitArgs) -> std::result::Result<bool, clap::Error> {
     if wait.any || wait.all {
         return Ok(true);
@@ -651,11 +670,21 @@ fn partial_unless(all_answered: bool) -> Result<bool> {
 }
 
 fn print_json(value: &impl serde::Serialize) -> Result<()> {
-    let text = serde_json::to_string_pretty(value).map_err(|e| Error::Control(e.to_string()))?;
-    print_out(&(text + "\n"))
+    let text = serde_json::to_string_pretty(value).map_err(|e| Error::Control(e.to_string()))? + "\n";
+    print_json_text(&text)
+}
+
+fn print_json_text(text: &str) -> Result<()> {
+    if line::json(text) {
+        return Ok(());
+    }
+    print_out(text)
 }
 
 fn print_out(text: &str) -> Result<()> {
+    if line::text(text) {
+        return Ok(());
+    }
     let mut out = io::stdout().lock();
     quietly(out.write_all(text.as_bytes()).and_then(|()| out.flush())).map(drop)
 }
@@ -665,9 +694,15 @@ fn say(value: Value, json: bool, lines: impl Fn(&Done) -> Vec<String>) -> Result
         return print_json(&value);
     }
     for line in lines(&answer(value)?) {
-        println!("{line}");
+        print_out(&format!("{line}\n"))?;
     }
     Ok(())
+}
+
+pub(super) fn note(text: &str) {
+    if !line::stderr(text) {
+        eprint!("{text}");
+    }
 }
 
 fn id(id: Option<u64>) -> Vec<String> {
@@ -699,7 +734,7 @@ fn read_capped(file: &Path, limit: usize) -> Result<Vec<u8>> {
     let most = limit as u64 + 1;
     let mut bytes = Vec::new();
     if file == Path::new("-") {
-        io::stdin().take(most).read_to_end(&mut bytes)?;
+        line::input().take(most).read_to_end(&mut bytes)?;
     } else {
         let open =
             std::fs::File::open(file).map_err(|e| Error::Control(format!("cannot read `{}`: {e}", file.display())))?;
@@ -718,7 +753,7 @@ fn read_limited(file: &Path, limit: usize, too_long: &str) -> Result<String> {
 
 fn stdin() -> Result<String> {
     let mut text = String::new();
-    io::stdin().read_to_string(&mut text)?;
+    line::input().read_to_string(&mut text)?;
     Ok(trimmed(&text))
 }
 

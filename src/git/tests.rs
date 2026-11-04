@@ -47,7 +47,8 @@ mod linked_worktrees {
         git(repo.path(), &["worktree", "add", "--quiet", "-b", "b", &b_path.display().to_string()]);
         git(repo.path(), &["worktree", "add", "--quiet", "-b", "a", &a_path.display().to_string()]);
 
-        let mut expected = vec![a_path.canonicalize().expect("a"), b_path.canonicalize().expect("b")];
+        let canonical = |path: &Path| crate::os::fs::canonicalize(path).expect("canonical");
+        let mut expected = vec![canonical(&a_path), canonical(&b_path)];
         expected.sort();
         assert_eq!(linked_worktrees(repo.path()), expected);
     }
@@ -76,6 +77,21 @@ mod linked_worktrees {
 
         assert!(registered_worktrees(repo.path()).is_err());
         assert_eq!(linked_worktrees(repo.path()), Vec::<PathBuf>::new());
+    }
+
+    #[test]
+    fn reads_a_relative_gitdir_from_its_own_entry() {
+        let repo = git_repo(&[]);
+        let tmp = TempDir::new();
+        let path = tmp.path().join("relative");
+        git(repo.path(), &["worktree", "add", "--quiet", "-b", "relative", &path.display().to_string()]);
+        let name = tmp.path().file_name().and_then(|name| name.to_str()).expect("a folder name");
+        let entry = repo.path().join(".git").join("worktrees").join("relative");
+        std::fs::write(entry.join("gitdir"), format!("../../../../{name}/relative/.git\n")).expect("a relative gitdir");
+
+        let registered = registered_worktrees(repo.path()).expect("the registry");
+
+        assert_eq!(registered, [crate::os::fs::canonicalize(&path).expect("canonical")]);
     }
 
     #[test]
@@ -413,7 +429,7 @@ mod index_and_objects {
         assert_eq!(index.parent().and_then(Path::parent).and_then(Path::file_name), Some("worktrees".as_ref()));
         assert_eq!(index.file_name(), Some("index".as_ref()));
         let objects = objects_dir(&path).and_then(|dir| dir.canonicalize().ok());
-        assert_eq!(objects, Some(repo.path().join(".git/objects")));
+        assert_eq!(objects, repo.path().join(".git/objects").canonicalize().ok());
     }
 
     #[test]
@@ -421,5 +437,27 @@ mod index_and_objects {
         let repo = git_repo(&[]);
         assert_eq!(index_file(repo.path()), Some(repo.path().join(".git/index")));
         assert_eq!(objects_dir(repo.path()), Some(repo.path().join(".git/objects")));
+    }
+}
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::test_util::{git, git_repo, verbatim};
+
+    #[test]
+    fn a_worktree_git_wrote_with_forward_slashes_is_read_from_a_verbatim_folder() {
+        let repo = git_repo(&[]);
+        let tmp = TempDir::new();
+        let path = tmp.path().join("año");
+        git(repo.path(), &["worktree", "add", "--quiet", "-b", "feat", &path.display().to_string()]);
+        let gitdir = std::fs::read_to_string(repo.path().join(".git/worktrees/año/gitdir")).expect("gitdir");
+        assert!(gitdir.starts_with(&format!("{}:/", &path.display().to_string()[..1])), "{gitdir}");
+
+        assert_eq!(linked_worktrees(&verbatim(repo.path())), std::slice::from_ref(&path));
+        assert_eq!(checkout_of(&verbatim(repo.path()), "feat"), Some(path.clone()));
+        assert_eq!(branch(&verbatim(&path)).as_deref(), Some("feat"));
+        let objects = objects_dir(&verbatim(&path)).and_then(|dir| dir.canonicalize().ok());
+        assert_eq!(objects, repo.path().join(".git").join("objects").canonicalize().ok());
     }
 }

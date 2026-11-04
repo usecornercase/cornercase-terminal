@@ -24,6 +24,7 @@ use crate::git::upstream;
 use crate::git::worktree;
 pub(super) use crate::git::worktree::RemoveOptions;
 use crate::log::{self, Job, Level};
+use crate::os::fs::canonical;
 use crate::project::{Hierarchy, Phase, Workspace, WorkspaceAt};
 use crate::pull_request::glab::Host;
 use crate::ui::{self};
@@ -321,7 +322,7 @@ impl App {
         start: Option<Start>,
         area: Rect,
     ) -> Result<()> {
-        let Ok(path) = result.map(|path| path.canonicalize().unwrap_or(path)) else { return Ok(()) };
+        let Ok(path) = result.map(canonical) else { return Ok(()) };
         let Some(p) = self.projects.project_index(project) else { return Ok(()) };
         let at = self.worktree_workspace(p, path);
         self.open_workspace(at, start, area, true)

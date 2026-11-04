@@ -68,6 +68,27 @@ fn get_lists_the_settings_with_their_values_defaults_and_notes() {
 }
 
 #[test]
+fn a_search_answers_the_matches_of_the_modal() {
+    let mut s = setup();
+    let found = call(&mut s, &json!({"action": "search", "entry": "def ag"})).expect("an answer");
+    assert_eq!(found["results"][0]["title"], "Agents › default agent");
+    assert_eq!(found["results"][0]["key"], "agent");
+}
+
+#[test]
+fn a_search_with_no_match_is_an_empty_answer() {
+    let mut s = setup();
+    let found = call(&mut s, &json!({"action": "search", "entry": "ose"})).expect("an answer");
+    assert_eq!(found["results"], json!([]));
+}
+
+#[test]
+fn a_blank_search_is_refused() {
+    let mut s = setup();
+    assert_eq!(refused(&mut s, &json!({"action": "search", "entry": "  "})).code, "malformed");
+}
+
+#[test]
 fn a_set_is_applied_live_and_saved() {
     let mut s = setup();
     let before = s.app.report(None).config.expect("a revision").revision;

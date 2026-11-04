@@ -1,19 +1,19 @@
 use std::fmt::Write as _;
-use std::fs::{OpenOptions, Permissions};
+use std::fs::OpenOptions;
 use std::io::{IsTerminal as _, Write as _};
-use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::Path;
 
 use serde_json::Value;
 
 use super::render;
-use crate::cli::{print_json, print_out, read_limited};
+use crate::cli::{note, print_json, print_out, read_limited};
 use crate::client::{answer, ask, confirm};
 use crate::control::Command;
 use crate::control::config::{
     ConfigExport, ConfigImport, Described, NoteKind, SetupChange, SetupExported, SetupNote, SetupPreview,
 };
 use crate::error::{Error, Result};
+use crate::os::fs::{OpenOptionsExt as _, set_file_mode};
 use crate::settings::share::{self, MAX_BYTES};
 
 pub(super) struct Import {
@@ -27,10 +27,10 @@ pub(super) fn export(to: Option<&Path>, json: bool) -> Result<()> {
     let value = ask("config export", Command::ConfigExport(ConfigExport {}))?;
     let exported: SetupExported = answer(value.clone())?;
     if !exported.left_out.is_empty() {
-        eprintln!("left out: {}", exported.left_out.join("; "));
+        note(&format!("left out: {}\n", exported.left_out.join("; ")));
     }
     for warning in &exported.warnings {
-        eprintln!("! {warning}");
+        note(&format!("! {warning}\n"));
     }
     if let Some(file) = to {
         written(file, &exported.text)?;
@@ -52,7 +52,7 @@ fn written(file: &Path, text: &str) -> Result<()> {
         return Err(Error::WrongUsage(format!("`{}` is a folder: give the file to write", file.display())));
     }
     let only_mine = |mut out: std::fs::File| {
-        out.set_permissions(Permissions::from_mode(0o600))?;
+        set_file_mode(&out, 0o600)?;
         out.set_len(0)?;
         out.write_all(text.as_bytes())
     };
@@ -75,7 +75,7 @@ pub(super) fn import(import: &Import, json: bool) -> Result<()> {
         return show_preview(&value, json);
     }
     let preview: SetupPreview = answer(value.clone())?;
-    eprint!("{}", preview_text(&preview));
+    note(&preview_text(&preview));
     if !changes_anything(&preview) {
         return stopped(&value, json, "nothing to import");
     }

@@ -70,8 +70,10 @@ fn a_folder_is_refused_as_the_file_to_write() {
     assert!(refused.to_string().contains("is a folder"), "{refused}");
 }
 
+#[cfg(unix)]
 #[test]
 fn an_export_file_is_readable_only_by_its_owner() {
+    use std::fs::Permissions;
     use std::os::unix::fs::PermissionsExt as _;
     let dir = crate::test_util::TempDir::new();
     let (new, old) = (dir.path().join("new.toml"), dir.path().join("old.toml"));

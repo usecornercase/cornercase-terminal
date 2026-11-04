@@ -1,6 +1,6 @@
 use super::args::CloseArgs;
 use super::args::arrange::{FoldArgs, GroupAction, MoveArgs, MovePaneArgs};
-use super::{id, print_json, print_out, say, workspace};
+use super::{id, note, print_json, print_out, say, workspace};
 use crate::client::{answer, ask, use_agent_folds, use_close_agent_tabs};
 use crate::control::arrange::{
     AgentClosing, CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Locked, Move, MovePane, PaneRef, Removal,
@@ -112,7 +112,7 @@ pub(super) fn close_agent(args: &CloseArgs) -> Result<()> {
     }
     let closing: AgentClosing = answer(value)?;
     if let Some(warning) = &closing.warning {
-        eprintln!("warning: {warning}");
+        note(&format!("warning: {warning}\n"));
     }
     if args.check {
         return print_out(&(closing_lines(&closing).join("\n") + "\n"));

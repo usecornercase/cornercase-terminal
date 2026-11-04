@@ -1,12 +1,12 @@
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::Duration;
 
 use crate::error::{Error, Result};
 use crate::log;
+use crate::os::ffi;
 use crate::process;
 
 pub(crate) mod setup;
@@ -53,6 +53,7 @@ pub(crate) fn create_from(repo: &Path, branch: &str, path: &Path, base: &str) ->
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
+    let path = ffi::plain(path);
     let path = path.as_os_str();
     if branch_exists(repo, branch)? {
         check(git(repo, [OsStr::new("worktree"), "add".as_ref(), path, branch.as_ref()])?)?;
@@ -71,14 +72,15 @@ pub(crate) fn create_from(repo: &Path, branch: &str, path: &Path, base: &str) ->
 }
 
 pub(crate) fn remove(repo: &Path, path: &Path, force: bool, unlock: bool) -> Result<()> {
+    let given = ffi::plain(path);
     if unlock && !matches!(lock(path), Ok(None)) {
-        check(git(repo, [OsStr::new("worktree"), "unlock".as_ref(), path.as_os_str()])?)?;
+        check(git(repo, [OsStr::new("worktree"), "unlock".as_ref(), given.as_os_str()])?)?;
     }
     let mut args = vec![OsStr::new("worktree"), "remove".as_ref()];
     if force {
         args.push("--force".as_ref());
     }
-    args.push(path.as_os_str());
+    args.push(given.as_os_str());
     check(git(repo, args)?).map(drop)
 }
 
@@ -131,7 +133,7 @@ pub(crate) fn status(path: &Path) -> Status {
 
 pub(crate) fn lock(path: &Path) -> Result<Option<Lock>> {
     let out = check(git(path, ["rev-parse", "--absolute-git-dir"])?)?;
-    let dir = Path::new(OsStr::from_bytes(out.trim_ascii_end())).join("locked");
+    let dir = ffi::to_path(out.trim_ascii_end()).join("locked");
     let reason = match std::fs::read_to_string(dir) {
         Ok(reason) => reason.trim().to_string(),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -190,7 +192,7 @@ fn scoped<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I, env:
 fn command<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> Command {
     let mut cmd = Command::new("git");
     cmd.arg("-C")
-        .arg(repo)
+        .arg(&*ffi::plain(repo))
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_ASKPASS", "")
@@ -245,7 +247,7 @@ fn included_files(repo: &Path) -> Result<Vec<PathBuf>> {
         return Ok(Vec::new());
     }
     let mut exclude_from = OsString::from("--exclude-from=");
-    exclude_from.push(&include);
+    exclude_from.push(&*ffi::plain(&include));
     let matching = check(git(
         repo,
         [OsStr::new("ls-files"), "--others".as_ref(), "--ignored".as_ref(), "-z".as_ref(), &exclude_from],
@@ -254,7 +256,7 @@ fn included_files(repo: &Path) -> Result<Vec<PathBuf>> {
         return Ok(Vec::new());
     }
     let ignored = ignored_by_git(repo, matching)?;
-    Ok(ignored.split(|b| *b == 0).filter(|p| !p.is_empty()).map(|p| PathBuf::from(OsStr::from_bytes(p))).collect())
+    Ok(ignored.split(|b| *b == 0).filter(|p| !p.is_empty()).map(ffi::to_path).collect())
 }
 
 fn ignored_by_git(repo: &Path, paths: Vec<u8>) -> Result<Vec<u8>> {

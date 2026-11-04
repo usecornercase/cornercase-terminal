@@ -119,6 +119,7 @@ impl App {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(super) fn ask_restart(&mut self, pane: u64, kind: Known, to: &str) -> std::result::Result<Restart, String> {
         self.ask_restart_for(pane, kind, to, None)
     }

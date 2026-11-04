@@ -8,6 +8,7 @@ Examples:
   cornercase flow list
   cornercase flow run Quick --prompt 'Fix the login form'
   cornercase flow run 'Full issue' --issue ENG-42 --project 3
+  cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
   cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
   cornercase flow export Quick > quick.toml
   cornercase flow import quick.toml
@@ -25,9 +26,11 @@ answering their trust prompts. The orchestrator starts last, with a brief: the t
 its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
 pass --focus.
 
-With --issue KEY instead of --prompt, the task is the issue's, from the same prompt template and branch the
-Issues dialog's start a flow uses; an issue that isn't tied to a repository needs --project when several
-projects are repositories. Otherwise, without --worktree, the branch comes from the task's first words, with a short suffix when that
+With --issue KEY, the task, the branch and the workspace's name are the issue's: the same prompt template
+and branch the Issues dialog's start a flow uses. --prompt or --prompt-file give a task of your own instead,
+as editing that dialog's prompt does, and --worktree and --workspace-name name the branch and the
+workspace. An issue that isn't tied to a repository needs --project when several
+projects are repositories. Without --issue or --worktree, the branch comes from the task's first words, with a short suffix when that
 says nothing, is a default branch or is already taken. A chosen branch that is main, master, the
 project's default or the one its own folder is on is refused: a flow works on a branch of its own.
 
@@ -49,6 +52,7 @@ window once the machine lists it. It needs a server that knows the `machine-star
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'
   cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json
+  cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
   cornercase flow run Quick --issue '#482' --project 2 --machine vps";
 pub(in crate::cli) const FLOW_EXPORT_HELP: &str =
     "It prints the flow as TOML, the file a flow is kept in, so a teammate can read its prompts, variables

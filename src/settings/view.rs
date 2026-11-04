@@ -186,8 +186,8 @@ impl Settings {
                 ("check for updates".into(), value.into(), "asks GitHub for the latest release".into(), false)
             }
             Row::StarPrompt => {
-                let value = if config.star_prompt { "[x] now and then" } else { "[ ] never" };
-                ("star prompt".into(), value.into(), "asks for a GitHub star after two weeks of use".into(), false)
+                let value = if config.star_prompt { "[x] once" } else { "[ ] never" };
+                ("star prompt".into(), value.into(), "asks for a GitHub star once, after your 5th prompt".into(), false)
             }
             Row::Tour | Row::TourStart | Row::TourReset => tour_row(config, row),
             _ => self.prefix_row(),
@@ -348,7 +348,9 @@ impl Settings {
 
     pub(crate) fn hint(&self) -> String {
         self.notice.clone().unwrap_or_else(|| {
-            if self.capturing {
+            if self.find.searching() {
+                "↑↓ picks a result · enter goes to it · esc clears the search".into()
+            } else if self.capturing {
                 "press the keys you want · backspace turns them off · esc cancels".into()
             } else if self.edit.is_some() {
                 "enter saves · esc cancels".into()

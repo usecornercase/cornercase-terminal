@@ -1,6 +1,7 @@
 use super::*;
 
 const SSH_PID: &str = "ssh.pid";
+const SSH_RUNS: &str = "ssh.runs";
 const REFUSED: &str = "*) echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255 ;;";
 
 pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
@@ -26,8 +27,8 @@ fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
     write_executable(
         &bin.join("ssh"),
         &format!(
-            "#!/bin/sh\necho $$ > '{dir}/{SSH_PID}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    \
-             --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
+            "#!/bin/sh\necho $$ > '{dir}/{SSH_PID}'\necho $$ >> '{dir}/{SSH_RUNS}'\nwhile [ $# -gt 0 ]; do\n  \
+             case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
              if [ -e '{dir}/ssh-'\"$1\"'.held' ]; then\n  \
              echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255\nfi\n\
              echo $$ > '{dir}/ssh-'\"$1\"'.pid'\necho $$ >> '{dir}/ssh-'\"$1\"'.pids'\n\
@@ -59,6 +60,10 @@ pub(super) fn let_ssh_to(session: &Session, destination: &str) {
 
 fn pid_in(session: &Session, file: &str) -> String {
     std::fs::read_to_string(session.dir.join(file)).unwrap_or_default().trim().to_string()
+}
+
+fn ssh_runs(session: &Session) -> usize {
+    std::fs::read_to_string(session.dir.join(SSH_RUNS)).unwrap_or_default().lines().count()
 }
 
 fn remote_refusal(args: &[&str], command: &str) -> std::process::Output {
@@ -255,6 +260,25 @@ fn input_follow_types_through_one_ssh_connection() {
 }
 
 #[test]
+fn requests_follow_sends_every_line_through_one_ssh_connection() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let pane = remote_says(&session, &["new-tab"]);
+    let mut typist = input::Typist::start(remotely(&session, &["requests", "--follow", "-"]));
+
+    let status = typist.types(&serde_json::json!({"args": ["status", "--json"]}));
+    assert_eq!(status["status"], 0, "{status}");
+    let proxy = ssh_pid(&session);
+    typist.types(&serde_json::json!({"args": ["send", "--pane", &pane, "-"], "stdin": "echo remote-\"\"requests"}));
+    typist.types(&serde_json::json!({"args": ["keys", "--pane", &pane, "enter"]}));
+    wait_until("the text is typed", || session.says(&["read", "--pane", &pane]).contains("remote-requests\n"));
+    let ended = typist.ends();
+
+    assert_eq!((ssh_pid(&session), ended.status.code()), (proxy.clone(), Some(0)), "{ended:?}");
+    wait_until("the proxy there ends", || gone(&proxy));
+}
+
+#[test]
 fn a_remote_follow_ends_when_its_reader_leaves() {
     let session = Session::new();
     remote_says(&session, &["start-server"]);
@@ -413,4 +437,25 @@ fn killing_a_remote_restart_when_idle_calls_it_off_there() {
 
     app.wait_for("the restart is called off", |s| !s.contains("restart pending"));
     wait_until("the command there and its ssh end", || gone(&there));
+}
+
+#[test]
+fn a_command_that_checks_the_server_first_opens_one_ssh_connection() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let created: serde_json::Value = serde_json::from_str(&session.says(&["new-tab", "--json"])).expect("json");
+    let tab = created["tab"].to_string();
+    let (mut opened, _followed, view) = views::opened(&session, &tab);
+    let runs = |args: &[&str]| {
+        let before = ssh_runs(&session);
+        remote_says(&session, args);
+        ssh_runs(&session) - before
+    };
+
+    let focused = runs(&["focus", "--tab", &tab, "--view", &view]);
+    let hidden = runs(&["view-set", "--view", &view, "--hidden"]);
+    let _ = opened.kill();
+    let _ = opened.wait();
+
+    assert_eq!((focused, hidden), (1, 1));
 }

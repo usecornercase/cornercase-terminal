@@ -91,6 +91,7 @@ const GROUPS: Record<KeysGroup, KeysItem[]> = {
     run('e', 'file tree', { kind: 'files' }),
     run('p', 'projects, workspaces, tabs', { kind: 'search' }),
     run('s', 'said in sessions', { kind: 'findSaid' }),
+    run(',', 'settings', { kind: 'settings' }),
   ],
   git: [
     run('d', 'changes', { kind: 'changes' }),

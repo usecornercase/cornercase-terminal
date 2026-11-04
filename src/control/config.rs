@@ -16,6 +16,7 @@ pub(crate) enum Configure {
     Project(ProjectChange),
     Secret(SecretChange),
     Remove(String),
+    Search(String),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,6 +51,7 @@ impl Configure {
                 .add("teardown", change.teardown.is_some()),
             Self::Secret(secret) => fields.add("action", "secret").add("key", &secret.key),
             Self::Remove(key) => fields.add("action", "remove").add("key", key),
+            Self::Search(text) => fields.add("action", "search").add("text_bytes", text.len()),
         };
     }
 }
@@ -245,6 +247,26 @@ pub(crate) struct Described {
     pub(crate) projects: Vec<ProjectEntry>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) notices: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FoundSetting {
+    pub(crate) title: String,
+    pub(crate) page: String,
+    pub(crate) section: String,
+    pub(crate) label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) key: Option<String>,
+    pub(crate) shown: String,
+    pub(crate) note: String,
+    pub(crate) hidden: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SettingsFound {
+    pub(crate) results: Vec<FoundSetting>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

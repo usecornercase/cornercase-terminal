@@ -21,6 +21,13 @@ Examples:
   cornercase processes --workspace 3 --interval 2000
   cornercase processes stop 48211";
 
+pub(in crate::cli) const PROCESSES_STOP_ABOUT: &str = if cfg!(windows) {
+    "Stop a program of a pane and what it started: close their windows, then end them after 3 s"
+} else {
+    "Stop a program of a pane and what it started: SIGTERM, then SIGKILL after 3 s"
+};
+
+#[cfg(not(windows))]
 pub(in crate::cli) const PROCESSES_STOP_HELP: &str =
     "Stops a program of a pane and everything it started: PID and its descendants, found when the
 command runs. It sends them SIGTERM, waits up to 3 s for them to end, then sends SIGKILL to
@@ -31,6 +38,23 @@ with a conflict. A pid that is not running is refused as not found. With --start
 prints stopped, killed (they ignored SIGTERM) or still running, and exits with 1 when something
 is still running. With --json it prints {\"pid\", \"program\", \"pane\", \"outcome\", \"processes\"}, the
 outcome being stopped, killed or still-running and processes how many were signalled.
+
+Examples:
+  cornercase processes stop 48211
+  cornercase processes stop 48211 --started 81240 --json";
+
+#[cfg(windows)]
+pub(in crate::cli) const PROCESSES_STOP_HELP: &str =
+    "Stops a program of a pane and everything it started: PID and its descendants, found when the
+command runs. It asks their windows to close, waits up to 3 s for them to end, then ends the ones
+still running with TerminateProcess; when none of them has a window, it ends them at once. It
+never stops a pane's shell (close the pane instead: `cornercase close --pane ID`), cornercase
+itself, or a process that belongs to no pane; each of those is refused with a conflict. A pid that
+is not running is refused as not found. With --started (the value `processes --json` gave), a pid
+that was reused by another program since is refused too. It prints stopped, killed (they had no
+window to close, or did not close) or still running, and exits with 1 when something is still
+running. With --json it prints {\"pid\", \"program\", \"pane\", \"outcome\", \"processes\"}, the
+outcome being stopped, killed or still-running and processes how many were stopped.
 
 Examples:
   cornercase processes stop 48211

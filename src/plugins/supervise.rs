@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Write as _;
-use std::os::unix::fs::OpenOptionsExt;
-use std::process::Child;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -10,13 +8,12 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use rustix::fs::{FlockOperation, flock};
-use rustix::io::Errno;
-use rustix::process::Signal;
 
 use super::registry::{Entry, Plugin, Registry, Watch};
 use super::run::{Places, private_dir};
 use crate::log;
+use crate::os::fs::{Lock, OpenOptionsExt, locked, try_lock};
+use crate::os::process::{Grouped, Signal};
 use crate::panics;
 use crate::process;
 
@@ -56,7 +53,7 @@ struct Spec {
 
 struct Running {
     spec: Spec,
-    child: Child,
+    child: Grouped,
     since: Instant,
 }
 
@@ -95,7 +92,7 @@ pub(crate) struct Supervisor {
     stop: Option<Sender<()>>,
     thread: Option<JoinHandle<()>>,
     notes: Notes,
-    #[cfg_attr(not(test), expect(dead_code, reason = "tests wait until the supervisor has looked"))]
+    #[cfg_attr(not(all(test, unix)), expect(dead_code, reason = "tests wait until the supervisor has looked"))]
     steps: Arc<AtomicUsize>,
 }
 
@@ -114,6 +111,7 @@ impl Supervisor {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     fn steps(&self) -> usize {
         self.steps.load(Ordering::SeqCst)
     }
@@ -211,21 +209,19 @@ impl State {
         }
     }
 
-    fn start_child(&self, lock: &std::io::Result<Option<File>>, spec: &Spec) -> Option<std::io::Result<Child>> {
+    fn start_child(&self, lock: &std::io::Result<Option<File>>, spec: &Spec) -> Option<std::io::Result<Grouped>> {
         Some(match lock {
             Ok(Some(_)) if !on_disk(&self.places, &spec.plugin.entry) => return None,
             Ok(Some(_)) if !spec.plugin.root().is_dir() => {
                 Err(std::io::Error::new(std::io::ErrorKind::NotFound, "the plugin's folder is gone"))
             }
-            Ok(Some(_)) => {
-                self.places.command(&spec.plugin, &spec.command, &self.env, None).and_then(|mut c| c.spawn())
-            }
+            Ok(Some(_)) => self.places.spawn(&spec.plugin, &spec.command, &self.env, None),
             Ok(None) => return None,
             Err(e) => Err(std::io::Error::new(e.kind(), e.to_string())),
         })
     }
 
-    fn started(&mut self, key: &Key, spec: &Spec, child: Child, now: Instant) {
+    fn started(&mut self, key: &Key, spec: &Spec, child: Grouped, now: Instant) {
         let kind = self.kind.name();
         log::info!("plugins", "started", kind = kind, plugin = key.plugin, entry = key.entry, pid = child.id());
         self.places.note(&key.plugin, &format!("{kind} started"), &[("entry", &key.entry), ("pid", &child.id())]);
@@ -334,25 +330,17 @@ fn lock_file(places: &Places, plugin: &str) -> std::io::Result<File> {
     fs::OpenOptions::new().create(true).write(true).truncate(false).mode(0o600).open(dir.join(LOCK_FILE))
 }
 
-fn locked(file: File, operation: FlockOperation) -> std::io::Result<Option<File>> {
-    match flock(&file, operation) {
-        Ok(()) => Ok(Some(file)),
-        Err(Errno::WOULDBLOCK) => Ok(None),
-        Err(e) => Err(e.into()),
-    }
-}
-
 pub(crate) fn try_shared(places: &Places, plugin: &str) -> std::io::Result<Option<File>> {
-    locked(lock_file(places, plugin)?, FlockOperation::NonBlockingLockShared)
+    locked(lock_file(places, plugin)?, Lock::Shared)
 }
 
 pub(crate) fn exclude_spawns(places: &Places, plugin: &str, until: Instant) -> Result<(), String> {
     let file = lock_file(places, plugin).map_err(|e| format!("cannot open the lock of `{plugin}`: {e}"))?;
     loop {
-        match flock(&file, FlockOperation::NonBlockingLockExclusive) {
-            Ok(()) => return Ok(()),
-            Err(Errno::WOULDBLOCK) if Instant::now() < until => thread::sleep(Duration::from_millis(20)),
-            Err(Errno::WOULDBLOCK) => return Err(format!("a supervisor is still starting `{plugin}`")),
+        match try_lock(&file, Lock::Exclusive) {
+            Ok(true) => return Ok(()),
+            Ok(false) if Instant::now() < until => thread::sleep(Duration::from_millis(20)),
+            Ok(false) => return Err(format!("a supervisor is still starting `{plugin}`")),
             Err(e) => return Err(format!("cannot lock `{plugin}`: {e}")),
         }
     }
@@ -409,10 +397,11 @@ fn stop_children(places: &Places, mut running: Vec<Running>) {
 }
 
 fn stop_all_of(running: &mut Vec<Running>) {
+    let mut asked = false;
     for run in running.iter() {
-        super::run::signal(&run.child, Signal::TERM);
+        asked |= run.child.signal(Signal::TERM);
     }
-    let until = Instant::now() + STOP_WITHIN;
+    let until = Instant::now() + if asked { STOP_WITHIN } else { Duration::ZERO };
     while Instant::now() < until {
         running.retain_mut(|run| !matches!(run.child.try_wait(), Ok(Some(_)) | Err(_)));
         if running.is_empty() {
@@ -421,7 +410,7 @@ fn stop_all_of(running: &mut Vec<Running>) {
         thread::sleep(Duration::from_millis(20));
     }
     for mut run in std::mem::take(running) {
-        super::run::signal(&run.child, Signal::KILL);
+        run.child.signal(Signal::KILL);
         let _ = run.child.wait();
     }
 }

@@ -9,10 +9,11 @@ import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, type Spot, changesLineEdge, changesLineNear, changesStretchNear, compareSpots, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
 import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, insertText, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
-import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
+import { type Edge, describe as describeRole, live, plan, roleColour } from './flow';
+import { type PanelHit, type PanelHistory, type PanelMember, type PanelStep, type PanelView, fileAge, scrolled as flowScrolled } from './flowpanel';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, size as fileSize, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -149,6 +150,8 @@ const HELP_LABELS: Record<HelpItem, string> = {
 };
 const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
+const CONTEXT_NEEDS = "this needs cornercase on your computer: the demo's agents are not real Claude Code sessions";
+const AGENT_TITLES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', opencode: 'opencode', grok: 'Grok Build', cursor: 'Cursor CLI', copilot: 'GitHub Copilot CLI', vibe: 'Vibe CLI' };
 const MERGE_NEED = 'this needs cornercase on your computer: the demo has no git repositories to merge';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const PORTS_NEED = 'this needs cornercase on your computer: the demo runs no servers';
@@ -168,6 +171,17 @@ const FLOWS_NEED = 'this needs cornercase on your computer: the demo only plays 
 const NO_RUN = 'this workspace runs no flow';
 const NO_AGENT_TO_CLOSE = 'no agent to close in this workspace';
 const NO_CLOSED_AGENTS = 'this workspace has no closed agents';
+
+const searchWords = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+export interface SettingsHit {
+  page: number;
+  i?: number;
+  row?: SettingsRow;
+  title: string;
+  value: string;
+  note: string;
+}
 
 export interface SettingsRow {
   id: string;
@@ -1723,8 +1737,36 @@ export class App {
     const own = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
     if (own !== undefined && this.findPane(own)?.pane.pending) run.ended = true;
     const diagram = live(plan(run.flow), run.progress, state, run.ended, this.now());
-    const files = run.files.map((f) => ({ name: f.name, age: fileAge(this.now() - f.at) })).reverse();
-    return { name: run.flow.name, task: run.task, diagram, files, scroll: this.flowScroll };
+    const files = run.files.map((f) => ({ name: f.name, size: fileSize(f.bytes), age: fileAge(this.now() - f.at) })).reverse();
+    const heading = { place: this.runPlace(run), run: 1, messages: run.recorded, active: run.progress.active, lead: state(ORCHESTRATOR) !== 'closed' };
+    return { name: run.flow.name, task: run.task, heading, team: this.runTeam(run, state), diagram, history: this.runHistory(run), files, scroll: this.flowScroll };
+  }
+
+  private runPlace(run: Run): string {
+    const project = this.projects.find((p) => p.workspaces.some((w) => w.id === run.workspace));
+    const workspace = project?.workspaces.find((w) => w.id === run.workspace);
+    return project && workspace ? `${project.folder} › ${workspaceLabel(workspace)}` : '';
+  }
+
+  private runTeam(run: Run, state: (role: string) => PanelMember['state']): PanelMember[] {
+    return [run.flow.orchestrator, ...run.flow.roles].map((role, i) => {
+      const pane = run.members.find((m) => m.role === role.name)?.pane ?? null;
+      return { role: role.name, agent: describeRole(role), colour: roleColour(i), state: state(role.name), branch: null, pane };
+    });
+  }
+
+  private runHistory(run: Run): PanelHistory {
+    const colour = (role: string) => roleColour(run.flow.roles.findIndex((r) => r.name === role) + 1);
+    const step = (edge: Edge | null): PanelStep | null => {
+      if (!edge) return null;
+      if (edge.kind === 'forward') return { kind: 'forward', stage: edge.stage };
+      if (edge.kind === 'loop') return { kind: 'loop', when: (run.flow.stages[edge.stage]?.back?.when ?? '').trim() };
+      return { kind: 'outside' };
+    };
+    const entries = run.messages
+      .map((m) => ({ seq: m.seq, from: m.from, to: m.to, kind: 'sent', step: step(m.edge), colour: colour(m.to), age: fileAge(this.now() - m.at), head: m.text.slice(0, 1024) }))
+      .reverse();
+    return { entries, recorded: run.recorded };
   }
 
   scrollFlow(delta: number): boolean {
@@ -1735,10 +1777,15 @@ export class App {
     return true;
   }
 
-  flowClick(hit: DiagramHit): void {
+  flowClick(hit: PanelHit): void {
     const run = this.shownRun();
     if (!run) return;
-    if (hit.role) {
+    if (hit.stop) {
+      const lead = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
+      if (lead !== undefined) this.askCloseAgent(lead);
+    } else if (hit.folder) this.bug(OPEN_IN_NEEDS);
+    else if (hit.message !== undefined) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: '', to: null, seq: hit.message, scroll: 0 };
+    else if (hit.role) {
       const pane = run.members.find((m) => m.role === hit.role)?.pane;
       if (pane === undefined || !this.findPane(pane)) return;
       if (this.areas().compact) this.flowOpen = false;
@@ -1749,13 +1796,16 @@ export class App {
       this.openFiles();
       this.nav = null;
       this.showFile(`${RUN_DIR}/${name}`);
+      const viewer = this.filesPlace()?.viewer;
+      if (viewer) viewer.origin = 'flow';
     } else if (hit.edge) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: hit.edge, to: hit.to ?? null, scroll: 0 };
     this.dirty();
   }
 
-  flowMessage(o: { workspace: number; edge: string; to: string | null }): { from: string; to: string; text: string } | null {
+  flowMessage(o: { workspace: number; edge: string; to: string | null; seq?: number }): { from: string; to: string; text: string } | null {
     const run = this.runOf(o.workspace);
     if (!run) return null;
+    if (o.seq !== undefined) return run.messages.find((m) => m.seq === o.seq) ?? null;
     const progress = run.progress;
     const [kind, a, b] = o.edge.split(':');
     const edge =
@@ -2183,6 +2233,15 @@ export class App {
     return true;
   }
 
+  backFromFile(): void {
+    const origin = this.filesPlace()?.viewer?.origin ?? null;
+    this.closeFile();
+    if (origin !== 'flow' || !this.shownRun()) return;
+    this.files.close();
+    this.flowOpen = true;
+    this.dirty();
+  }
+
   closeFile(): void {
     const place = this.filesPlace();
     if (place) place.viewer = null;
@@ -2456,6 +2515,20 @@ export class App {
     return { kind: 'mark', panes: agents.map((pane) => pane.id), pending: !agents.some((pane) => pane.pending) };
   }
 
+  private contextActions(panes: Pane[]): MenuAction[] {
+    const agents = panes.filter((pane) => pane.agent);
+    return agents.map((pane) => ({ kind: 'viewContext', pane: pane.id, named: agents.length > 1 }));
+  }
+
+  private contextLabel(pane: number, named: boolean): string {
+    const found = this.findPane(pane);
+    const title = AGENT_TITLES[found?.pane.agent ?? ''];
+    if (!named || !found || !title) return 'view context';
+    const same = found.t.panes.filter((x) => x.agent && AGENT_TITLES[x.agent] === title);
+    const at = same.findIndex((x) => x.id === pane);
+    return at > 0 ? `view context · ${title} ${at + 1}` : `view context · ${title}`;
+  }
+
   private mark(a: Extract<MenuAction, { kind: 'mark' }>): void {
     for (const id of a.panes) {
       const found = this.findPane(id);
@@ -2470,7 +2543,7 @@ export class App {
     const pane = this.findPane(id)?.pane;
     const mark = pane && this.markAction([pane]);
     const row = this.agentShown().find((r) => r.pane === id);
-    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : []), ...(row ? [{ kind: 'closeAgent' as const, pane: id }] : [])];
+    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : []), ...(row ? [{ kind: 'viewContext' as const, pane: id, named: false }, { kind: 'closeAgent' as const, pane: id }] : [])];
     if (!actions.length) return;
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
@@ -2483,6 +2556,7 @@ export class App {
     const tab = target.kind === 'tab' ? this.resolveTarget(target).tab : undefined;
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
+    if (tab) actions.push(...this.contextActions(tab.panes));
     if (target.kind === 'workspace' && this.resolveTarget(target).p?.repo) actions.push({ kind: 'mergeCheck', workspace: target.workspace });
     if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
     if (target.kind === 'workspace') actions.push(...this.closedAgentsMenu(target.workspace));
@@ -2521,6 +2595,7 @@ export class App {
     if (a.kind === 'sendTodo') return this.todoAgent(a.pane)?.label ?? '';
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
     if (a.kind === 'agentFold') return a.collapsed ? 'collapse' : 'expand';
+    if (a.kind === 'viewContext') return this.contextLabel(a.pane, a.named);
     if (a.kind === 'closeAgent') return 'close agent';
     if (a.kind === 'mergeCheck') return 'merge check';
     if (a.kind === 'showFlow') return 'show flow';
@@ -2593,6 +2668,7 @@ export class App {
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
     else if (a.kind === 'agentFold') this.setAgentFold(a.pane, a.collapsed);
+    else if (a.kind === 'viewContext') this.bug(CONTEXT_NEEDS);
     else if (a.kind === 'closeAgent') this.askCloseAgent(a.pane);
     else if (a.kind === 'sendTodo') this.sendTodo(a.todo, a.pane);
     else if (a.kind === 'mergeCheck') this.bug(MERGE_NEED);
@@ -3130,11 +3206,66 @@ export class App {
     if (o?.kind === 'settings') o.cursor = Math.max(0, this.settingsRows(page).findIndex((row) => row.id === id));
   }
 
+  settingsHits(query: string): SettingsHit[] {
+    const needles = searchWords(query);
+    if (!needles.length) return [];
+    const hits: (SettingsHit & { tier: number })[] = [];
+    const add = (hit: SettingsHit, place: string, rest: string) => {
+      const groups = [searchWords(hit.row?.label ?? PAGE_NAMES[hit.page]), searchWords(place), searchWords(rest)];
+      const tiers = needles.map((n) => groups.findIndex((g) => g.some((word) => word.startsWith(n))));
+      if (!tiers.includes(-1)) hits.push({ ...hit, tier: Math.max(...tiers) });
+    };
+    PAGE_NAMES.forEach((name, page) => {
+      add({ page, title: name, value: '', note: 'the tab' }, name, '');
+      if (page === PAGE.flows) return;
+      this.settingsRows(page).forEach((row, i) => {
+        const title = row.section && this.sharedLabel(row.label) ? `${name} › ${row.section} › ${row.label}` : `${name} › ${row.label}`;
+        add({ page, i, row, title, value: row.value, note: row.note }, `${name} ${row.section}`, `${row.value} ${row.note}`);
+      });
+    });
+    return hits.sort((a, b) => a.tier - b.tier || a.page - b.page);
+  }
+
+  private sharedLabel(label: string): boolean {
+    return PAGE_NAMES.flatMap((_, page) => this.settingsRows(page)).filter((row) => row.label === label).length > 1;
+  }
+
+  chooseHit(i: number): void {
+    const o = this.overlay;
+    if (o?.kind !== 'settings') return;
+    const hit = this.settingsHits(o.query ?? '')[i];
+    if (!hit) return;
+    this.settingsPage(hit.page);
+    o.cursor = hit.i ?? 0;
+  }
+
+  settingsHitsWheel(dy: number): boolean {
+    const o = this.overlay;
+    if (o?.kind !== 'settings' || !o.query) return false;
+    const last = this.settingsHits(o.query).length - 1;
+    o.found = Math.max(0, Math.min((o.found ?? 0) + Math.sign(dy), last));
+    this.dirty();
+    return true;
+  }
+
+  private searchKey(o: SettingsOverlay, k: Key, ch: string | null): void {
+    const hits = this.settingsHits(o.query ?? '').length;
+    o.notice = undefined;
+    if (k.key === 'Escape') o.query = '';
+    else if (k.key === 'Enter') this.chooseHit(Math.min(o.found ?? 0, hits - 1));
+    else if (k.key === 'ArrowDown') o.found = Math.min((o.found ?? 0) + 1, hits - 1);
+    else if (k.key === 'ArrowUp') o.found = Math.max(0, (o.found ?? 0) - 1);
+    else if (k.key === 'Backspace') { o.query = (o.query ?? '').slice(0, -1); o.found = 0; }
+    else if (ch) { o.query = `${o.query ?? ''}${ch}`; o.found = 0; }
+  }
+
   settingsPage(i: number): void {
     const o = this.overlay;
     if (o?.kind !== 'settings') return;
     o.page = i;
     o.cursor = 0;
+    o.query = '';
+    o.found = 0;
     o.pick = undefined;
     o.edit = undefined;
     o.notice = undefined;
@@ -3263,7 +3394,7 @@ export class App {
       { id: 'soundDone', section: '', label: 'sound when it finishes', value: 'built-in', note: "an absolute or ~/ path on the window's computer; empty: built-in" },
       { id: 'soundSubagents', section: '', label: 'sound for subagents', value: '[ ] off', note: 'agents started by another agent or by a flow' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] every hour' : '[ ] never', note: 'asks GitHub for the latest release' },
-      { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] now and then' : '[ ] never', note: 'asks for a GitHub star after two weeks of use' },
+      { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] once' : '[ ] never', note: 'asks for a GitHub star once, after your 5th prompt' },
       this.prefixRow(),
     ];
   }
@@ -3276,6 +3407,7 @@ export class App {
   }
 
   settingsHint(o: SettingsOverlay): string {
+    if (o.query) return '↑↓ picks a result · enter goes to it · esc clears the search';
     if (o.capturing) return 'press the keys you want · backspace turns them off · esc cancels';
     if (o.edit) return 'enter saves · esc cancels';
     if (o.pick) return 'enter picks · type to filter · esc goes back';
@@ -4830,6 +4962,7 @@ export class App {
       else if (o.kind === 'search') o.query += text;
       else if (o.kind === 'picker') o.filter += text;
       else if (o.kind === 'settings' && o.edit) o.edit.input += o.edit.token ? text.replace(/\s/g, '') : text;
+      else if (o.kind === 'settings' && !o.pick) o.query = `${o.query ?? ''}${text}`;
       else if (o.kind === 'issues') o.token.input += text.trim();
       this.dirty();
       return;
@@ -5032,6 +5165,11 @@ export class App {
         o.pick.filter += ch;
         o.pick.selected = 0;
       }
+      this.dirty();
+      return true;
+    }
+    if (o.query || (ch && ch !== ' ')) {
+      this.searchKey(o, k, ch);
       this.dirty();
       return true;
     }

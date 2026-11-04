@@ -64,7 +64,7 @@ pub(super) fn run(action: QueueAction) -> Result<()> {
         return super::print_out(&lines(&value, &clock::local_zone()));
     }
     if let Some(id) = value.get("undo").or_else(|| value.get("id")).and_then(Value::as_u64) {
-        println!("{id}");
+        super::print_out(&format!("{id}\n"))?;
     }
     Ok(())
 }

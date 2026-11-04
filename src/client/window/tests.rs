@@ -137,3 +137,52 @@ mod reconnecting {
         assert_eq!(until_next_second(Duration::from_secs(3)), SECOND);
     }
 }
+
+#[cfg(windows)]
+mod console {
+    use rstest::rstest;
+    use windows_sys::Win32::System::Console::{
+        CTRL_BREAK_EVENT, CTRL_C_EVENT, CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT,
+    };
+
+    use super::imp::{Size, ctrl_incoming};
+    use super::*;
+
+    #[rstest]
+    #[case::ctrl_c_sent_by_another_program(CTRL_C_EVENT)]
+    #[case::ctrl_break(CTRL_BREAK_EVENT)]
+    #[case::the_window_closed(CTRL_CLOSE_EVENT)]
+    #[case::logging_off(CTRL_LOGOFF_EVENT)]
+    #[case::shutting_down(CTRL_SHUTDOWN_EVENT)]
+    fn a_console_signal_ends_the_window_as_a_unix_signal_does(#[case] event: u32) {
+        assert!(matches!(ctrl_incoming(event), Some(Incoming::Signal)));
+    }
+
+    #[rstest]
+    #[case::unused(3)]
+    #[case::unknown(7)]
+    fn other_console_events_are_left_to_the_next_handler(#[case] event: u32) {
+        assert!(ctrl_incoming(event).is_none());
+    }
+
+    #[test]
+    fn a_new_size_is_a_resize_once() {
+        let mut size = Size(Some((80, 24)));
+        assert_eq!(size.changed(Some((80, 24))), None);
+        assert_eq!(size.changed(Some((100, 30))), Some(Event::Resize(100, 30)));
+        assert_eq!(size.changed(Some((100, 30))), None);
+    }
+
+    #[test]
+    fn a_size_that_cannot_be_read_keeps_the_last_one() {
+        let mut size = Size(Some((80, 24)));
+        assert_eq!(size.changed(None), None);
+        assert_eq!(size.changed(Some((80, 24))), None);
+    }
+
+    #[test]
+    fn the_first_size_read_after_an_unknown_one_is_sent() {
+        let mut size = Size::default();
+        assert_eq!(size.changed(Some((80, 24))), Some(Event::Resize(80, 24)));
+    }
+}

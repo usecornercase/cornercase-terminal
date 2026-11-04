@@ -4,7 +4,8 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::close_agent::CloseAgent;
 use super::closed_agents::dialog::{CLOSE_AGENTS_SUBMIT, CloseAgents, FORGET_SUBMIT};
-use super::flow_panel::COPY;
+use super::context_dialog::REFRESH;
+use super::flow_panel::{COPY, Shown};
 use super::flows_dialog::flows_view;
 use super::issues_dialog::{room, view};
 use super::menus::MenuAction;
@@ -20,7 +21,6 @@ use crate::changes::{self, BranchPicker};
 use crate::editor::Editor;
 use crate::error::Result;
 use crate::flows::dialog::Dialog;
-use crate::flows::progress::Edge;
 use crate::flows::start::Start;
 use crate::git::worktree;
 use crate::issues::browser::Browser;
@@ -147,10 +147,13 @@ pub(super) enum Overlay {
         workspace: u64,
         scroll: usize,
     },
+    Context {
+        pane: u64,
+        scroll: usize,
+    },
     FlowMessage {
         workspace: u64,
-        edge: Edge,
-        to: Option<String>,
+        shown: Shown,
         scroll: usize,
     },
     Keys(Option<KeysGroup>),
@@ -165,6 +168,7 @@ pub(super) enum Overlay {
     },
     Popup(Box<super::plugin_popup::Popup>),
     MachineWorkspace(Box<super::machines::acting::dialog::Dialog>),
+    Star,
 }
 
 impl Overlay {
@@ -199,15 +203,34 @@ impl Overlay {
             Self::Forum(_) => "forum",
             Self::Branches(_) => "branches",
             Self::Restart => "restart",
-            Self::PullRequest { .. } | Self::MergeCheck { .. } | Self::FlowMessage { .. } => self.notes_name(),
+            Self::PullRequest { .. } | Self::MergeCheck { .. } | Self::FlowMessage { .. } | Self::Context { .. } => {
+                self.notes_name()
+            }
             Self::Keys(_) => "keys",
-            Self::Worktrees(_) => "worktrees",
-            Self::Ports(_) => "ports",
-            Self::Processes(_) => "processes",
+            Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) => self.listing_name(),
+            Self::CloseAgent(_) | Self::CloseAgents(_) | Self::ForgetAgents { .. } => self.agents_name(),
+            Self::Popup(_) => "plugin popup",
+            Self::Star => "star",
+        }
+    }
+
+    fn agents_name(&self) -> &'static str {
+        match self {
             Self::CloseAgent(_) => "close agent",
             Self::CloseAgents(_) => "close agents",
-            Self::ForgetAgents { .. } => "forget agents",
-            Self::Popup(_) => "plugin popup",
+            _ => "forget agents",
+        }
+    }
+
+    pub(super) fn closes_from_outside(&self) -> bool {
+        !matches!(self, Self::Popup(_) | Self::Star)
+    }
+
+    fn listing_name(&self) -> &'static str {
+        match self {
+            Self::Worktrees(_) => "worktrees",
+            Self::Ports(_) => "ports",
+            _ => "processes",
         }
     }
 
@@ -230,6 +253,7 @@ impl Overlay {
         match self {
             Self::PullRequest { .. } => "pull request",
             Self::MergeCheck { .. } => "merge check",
+            Self::Context { .. } => "context",
             _ => "flow message",
         }
     }
@@ -291,6 +315,7 @@ impl Overlay {
             Self::Update(_) => UPDATE_SUBMIT,
             Self::PullRequest { .. } => COPY_LINK,
             Self::MergeCheck { .. } => CHECK_AGAIN,
+            Self::Context { .. } => REFRESH,
             Self::FlowMessage { .. } => COPY,
             _ => CREATE_SUBMIT,
         }
@@ -299,7 +324,9 @@ impl Overlay {
     pub(super) fn cancel_label(&self) -> &'static str {
         match self {
             Self::Update(UpdateStep::Installed) => LATER,
-            Self::PullRequest { .. } | Self::MergeCheck { .. } | Self::FlowMessage { .. } => DONE,
+            Self::PullRequest { .. } | Self::MergeCheck { .. } | Self::FlowMessage { .. } | Self::Context { .. } => {
+                DONE
+            }
             _ => ui::CANCEL_LABEL,
         }
     }
@@ -356,6 +383,7 @@ impl App {
             Some(Overlay::Branches(_)) => self.branches_mouse(ev, pos, area),
             Some(Overlay::Issues(_)) => return self.issues_mouse(ev, pos, area),
             Some(Overlay::Queue(_)) => self.queue_form_mouse(ev, pos, area),
+            Some(Overlay::Star) => self.star_mouse(ev, pos, area),
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
             Some(Overlay::ShareSettings(_)) => self.share_settings_mouse(ev, pos, area),
             Some(Overlay::Machine(_)) => self.machine_form_mouse(ev, pos, area),
@@ -367,6 +395,7 @@ impl App {
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
             Some(Overlay::PullRequest { .. }) => self.pull_request_mouse(ev, pos, area),
             Some(Overlay::MergeCheck { .. }) => self.merge_check_mouse(ev, pos, area),
+            Some(Overlay::Context { .. }) => self.context_mouse(ev, pos, area),
             Some(Overlay::FlowMessage { .. }) => self.flow_message_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
             Some(Overlay::Pairing(via)) => self.pairing_mouse(*via, ev, pos, area),
@@ -394,7 +423,6 @@ impl App {
             Overlay::NewWorkspace { .. } => self.new_workspace_view(overlay)?,
             Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
             Overlay::ShareSettings(dialog) => ui::Overlay::ShareSettings(Box::new(ui::ShareSettings::of(dialog, area))),
-            Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
             Overlay::RemoveAccount { kind, name } => Self::remove_account_view(*kind, name),
             Overlay::DiscardChanges(target) => Self::discard_view(target),
             Overlay::Flows { dialog, .. } => flows_view(dialog, area),
@@ -417,19 +445,28 @@ impl App {
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
             Overlay::Restart => self.restart_view(area),
-            Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
-            Overlay::Remote => ui::Overlay::Remote(self.remote_view()),
+            Overlay::Usage | Overlay::Remote => self.access_view(overlay),
             Overlay::Pairing(_) | Overlay::Forum(_) => self.messenger_view(overlay)?,
-            Overlay::Branches(picker) => Self::branches_view(picker),
-            Overlay::PullRequest { .. } | Overlay::MergeCheck { .. } | Overlay::FlowMessage { .. } => {
-                self.notes_view(overlay, area)?
-            }
-            Overlay::Popup(popup) => super::plugin_popup::popup_view(popup),
+            Overlay::PullRequest { .. }
+            | Overlay::MergeCheck { .. }
+            | Overlay::FlowMessage { .. }
+            | Overlay::Context { .. } => self.notes_view(overlay, area)?,
+            Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
+            Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
         })
     }
 }
 
 impl App {
+    fn own_view(overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::Popup(popup) => Some(super::plugin_popup::popup_view(popup)),
+            Overlay::Star => Some(ui::Overlay::Star),
+            Overlay::Branches(picker) => Some(Self::branches_view(picker)),
+            _ => None,
+        }
+    }
+
     fn machine_dialog_view(overlay: &Overlay) -> Option<ui::Overlay> {
         match overlay {
             Overlay::Machine(form) => Some(ui::Overlay::Machine(form.clone())),
@@ -445,12 +482,20 @@ impl App {
         }
     }
 
+    fn access_view(&self, overlay: &Overlay) -> ui::Overlay {
+        match overlay {
+            Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
+            _ => ui::Overlay::Remote(self.remote_view()),
+        }
+    }
+
     fn notes_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
         Some(match overlay {
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll, area)?,
             Overlay::MergeCheck { workspace, scroll } => self.merge_check_view(*workspace, *scroll, area)?,
-            Overlay::FlowMessage { workspace, edge, to, scroll } => {
-                self.flow_message_view(*workspace, (*edge, to.as_deref()), *scroll, area)?
+            Overlay::Context { pane, scroll } => self.context_view(*pane, *scroll, area)?,
+            Overlay::FlowMessage { workspace, shown, scroll } => {
+                self.flow_message_view(*workspace, shown, *scroll, area)?
             }
             _ => return None,
         })

@@ -1,8 +1,5 @@
-use std::fs;
 use std::io::{self, IsTerminal, Write, stdin, stdout};
 use std::net::Shutdown;
-use std::os::fd::{AsFd, BorrowedFd};
-use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 use crate::client::{
@@ -10,6 +7,9 @@ use crate::client::{
     running_now, wait_for_exit, watched,
 };
 use crate::error::{Error, Result};
+use crate::os::console::{self, AsFd, BorrowedFd};
+use crate::os::fs::canonicalize;
+use crate::os::socket::UnixStream;
 use crate::protocol::{self, ServerMessage};
 use crate::update::{self, Install, Outcome};
 use crate::version::CURRENT;
@@ -40,7 +40,7 @@ pub(super) fn update(check_only: bool, yes: bool, when: When) -> Result<bool> {
     }
     let url = url.unwrap_or_else(|| update::DEFAULT_LATEST.into());
     let target = update::target();
-    let install = update::install(&fs::canonicalize(std::env::current_exe()?)?, target);
+    let install = update::install(&canonicalize(std::env::current_exe()?)?, target);
     if check_only {
         match update::check(&url, CURRENT)? {
             Some(release) => {
@@ -167,7 +167,7 @@ fn restart_if_confirmed(intro: Option<&str>, yes: bool, when: When) -> Result<bo
 }
 
 fn tied_input() -> Option<BorrowedFd<'static>> {
-    std::env::var_os(protocol::TIED_ENV).and_then(|_| watched(rustix::stdio::stdin()))
+    std::env::var_os(protocol::TIED_ENV).and_then(|_| watched(console::stdin()))
 }
 
 #[derive(Debug)]

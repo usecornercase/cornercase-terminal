@@ -24,6 +24,7 @@ pub(super) enum TextField {
     SharePaste,
     Machine(MachineField),
     CloneUrl,
+    SettingsFind,
     Name,
 }
 
@@ -89,6 +90,7 @@ impl App {
             TextField::SharePaste => self.share_text(area),
             TextField::Machine(field) => self.machine_text(area, field),
             TextField::CloneUrl => self.clone_url_text(area),
+            TextField::SettingsFind => self.settings_find_text(area),
             TextField::Name => self.name_text(area),
         }
     }
@@ -107,6 +109,7 @@ impl App {
                 (!form.icon.is_open() && form.editor_of(form.focus).is_some()).then_some(TextField::Machine(form.focus))
             }
             Some(Overlay::CloneOnMachine(cloning)) => (!cloning.form().cloning).then_some(TextField::CloneUrl),
+            Some(Overlay::Settings(s)) => s.idle().then_some(TextField::SettingsFind),
             Some(overlay) if overlay.takes_input() => Some(TextField::Name),
             None if self.tour_typing() => Some(TextField::Tour),
             None if self.todo_typing() => Some(TextField::Todo),
@@ -138,6 +141,7 @@ impl App {
                 [MachineField::Name, MachineField::Destination, MachineField::Folder].map(TextField::Machine).into()
             }
             Some(Overlay::CloneOnMachine(_)) => vec![TextField::CloneUrl],
+            Some(Overlay::Settings(_)) => vec![TextField::SettingsFind],
             Some(overlay) if overlay.takes_input() => vec![TextField::Name],
             None if self.screen.side == Some(Side::Todo) => vec![TextField::Todo],
             Some(_) | None => Vec::new(),

@@ -20,11 +20,28 @@ const LEGACY_RELEASE: u32 = 3;
 const MOTION: u32 = 32;
 const WHEEL: u32 = 64;
 const LEGACY_OFFSET: u32 = 32;
+const LEGACY_LAST_ON_WINDOWS: u16 = 94;
 
 pub(crate) fn encode(ev: MouseEvent, col: u16, row: u16, mode: MouseMode, encoding: MouseEncoding) -> Option<Vec<u8>> {
+    encode_within(ev, (col, row), mode, encoding, legacy_last())
+}
+
+fn legacy_last() -> Option<u16> {
+    cfg!(windows).then_some(LEGACY_LAST_ON_WINDOWS)
+}
+
+fn encode_within(
+    ev: MouseEvent,
+    at: (u16, u16),
+    mode: MouseMode,
+    encoding: MouseEncoding,
+    legacy_last: Option<u16>,
+) -> Option<Vec<u8>> {
     if !is_wanted(ev.kind, mode) {
         return None;
     }
+    let last = legacy_last.filter(|_| encoding == MouseEncoding::Default);
+    let (col, row) = fitted(ev.kind, at, last)?;
 
     let sgr = encoding == MouseEncoding::Sgr;
     let code = button_code(ev.kind, sgr) + modifier_bits(ev.modifiers);
@@ -48,6 +65,12 @@ pub(crate) fn encode(ev: MouseEvent, col: u16, row: u16, mode: MouseMode, encodi
             out
         }
     })
+}
+
+fn fitted(kind: MouseEventKind, (col, row): (u16, u16), last: Option<u16>) -> Option<(u16, u16)> {
+    let Some(last) = last.filter(|last| col.max(row) > *last) else { return Some((col, row)) };
+    let held = matches!(kind, MouseEventKind::Up(_) | MouseEventKind::Drag(_));
+    held.then(|| (col.min(last), row.min(last)))
 }
 
 fn is_wanted(kind: MouseEventKind, mode: MouseMode) -> bool {

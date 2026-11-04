@@ -1,29 +1,30 @@
 use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, Read, Write};
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use rustix::event::{PollFd, PollFlags, Timespec, poll};
 
+use self::imp::wait_in;
 use super::syntax::{self, Segments};
 use super::worker;
+use crate::os::process::Grouped;
 use crate::process::{self, kill_group};
 
 const PAINT_BUDGET: Duration = Duration::from_secs(5);
 
 enum Fail {
+    #[cfg_attr(not(unix), expect(dead_code, reason = "only the Unix wait can time out"))]
     Timeout,
     Broken,
 }
 
 #[derive(Default)]
 struct Session {
-    child: Option<Child>,
+    child: Option<Grouped>,
     stdin: Option<ChildStdin>,
     stdout: Option<ChildStdout>,
     failed: HashSet<u64>,
@@ -43,14 +44,14 @@ fn session() -> &'static Mutex<Session> {
     SESSION.get_or_init(|| Mutex::new(Session::default()))
 }
 
-fn spawn_worker() -> io::Result<Child> {
-    Command::new(worker_exe()?)
-        .env("CORNERCASE_HIGHLIGHT_WORKER", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .process_group(0)
-        .spawn()
+fn spawn_worker() -> io::Result<Grouped> {
+    Grouped::spawn(
+        Command::new(worker_exe()?)
+            .env("CORNERCASE_HIGHLIGHT_WORKER", "1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
 }
 
 fn worker_exe() -> io::Result<PathBuf> {
@@ -78,7 +79,7 @@ impl Session {
         source: &str,
         language: &str,
         budget: Duration,
-        spawn: &mut dyn FnMut() -> io::Result<Child>,
+        spawn: &mut dyn FnMut() -> io::Result<Grouped>,
     ) -> Option<Vec<Segments>> {
         let key = hash_of(language, source);
         if self.failed.contains(&key) || budget.is_zero() {
@@ -105,7 +106,7 @@ impl Session {
         language: &str,
         source: &str,
         budget: Duration,
-        spawn: &mut dyn FnMut() -> io::Result<Child>,
+        spawn: &mut dyn FnMut() -> io::Result<Grouped>,
     ) -> Result<Option<Vec<Segments>>, Fail> {
         self.ensure(spawn)?;
         let deadline = Instant::now() + budget;
@@ -114,7 +115,7 @@ impl Session {
         read_response(stdout, deadline)
     }
 
-    fn ensure(&mut self, spawn: &mut dyn FnMut() -> io::Result<Child>) -> Result<(), Fail> {
+    fn ensure(&mut self, spawn: &mut dyn FnMut() -> io::Result<Grouped>) -> Result<(), Fail> {
         if self.child.is_some() {
             return Ok(());
         }
@@ -212,31 +213,54 @@ fn read_exact(stdout: &mut ChildStdout, buf: &mut [u8], deadline: Instant) -> Re
     Ok(())
 }
 
-fn wait_in(stdout: &ChildStdout, deadline: Instant) -> Result<(), Fail> {
-    loop {
-        let left = deadline.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            return Err(Fail::Timeout);
+#[cfg(unix)]
+mod imp {
+    use std::io;
+    use std::process::ChildStdout;
+    use std::time::Instant;
+
+    use rustix::event::{PollFd, PollFlags, Timespec, poll};
+
+    use super::Fail;
+
+    pub(super) fn wait_in(stdout: &ChildStdout, deadline: Instant) -> Result<(), Fail> {
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(Fail::Timeout);
+            }
+            let timeout = Timespec::try_from(left).map_err(|_| Fail::Broken)?;
+            let mut fds = [PollFd::new(stdout, PollFlags::IN)];
+            match poll(&mut fds, Some(&timeout)) {
+                Ok(_) => return ready(&fds[0]),
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
+                Err(_) => return Err(Fail::Broken),
+            }
         }
-        let timeout = Timespec::try_from(left).map_err(|_| Fail::Broken)?;
-        let mut fds = [PollFd::new(stdout, PollFlags::IN)];
-        match poll(&mut fds, Some(&timeout)) {
-            Ok(_) => return ready(&fds[0]),
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
-            Err(_) => return Err(Fail::Broken),
+    }
+
+    fn ready(fd: &PollFd<'_>) -> Result<(), Fail> {
+        let flags = fd.revents();
+        if flags.contains(PollFlags::IN) {
+            return Ok(());
         }
+        if flags.contains(PollFlags::ERR) || flags.contains(PollFlags::HUP) {
+            return Err(Fail::Broken);
+        }
+        Err(Fail::Timeout)
     }
 }
 
-fn ready(fd: &PollFd<'_>) -> Result<(), Fail> {
-    let flags = fd.revents();
-    if flags.contains(PollFlags::IN) {
-        return Ok(());
+#[cfg(not(unix))]
+mod imp {
+    use std::process::ChildStdout;
+    use std::time::Instant;
+
+    use super::Fail;
+
+    pub(super) fn wait_in(_stdout: &ChildStdout, _deadline: Instant) -> Result<(), Fail> {
+        Err(Fail::Broken)
     }
-    if flags.contains(PollFlags::ERR) || flags.contains(PollFlags::HUP) {
-        return Err(Fail::Broken);
-    }
-    Err(Fail::Timeout)
 }
 
 #[cfg(test)]

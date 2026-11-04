@@ -1,12 +1,12 @@
 use std::fs::{self, OpenOptions};
 use std::io;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Component, Path, PathBuf};
 
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use tar::EntryType;
 
+use crate::os::fs::OpenOptionsExt;
 use crate::text::hex;
 
 const MAX_ENTRIES: usize = 20_000;

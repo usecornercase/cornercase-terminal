@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::mpsc;
 
 use super::*;
@@ -90,6 +91,50 @@ mod forgotten_checks {
 
         assert_eq!(app.projects[0].workspaces[0].phase, Phase::Open);
         assert_eq!(app.take_answers(), Vec::new());
+    }
+}
+
+mod forgotten_pull_requests {
+    use super::*;
+    use crate::test_util::git_repo;
+
+    #[test]
+    fn a_pull_request_read_whose_client_left_is_dropped() {
+        let repo = git_repo(&[("README", "hi")]);
+        let (tx, _rx) = mpsc::channel();
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), &repo.path().join("config.json"), tx);
+        app.open_here(Rect::new(0, 0, 120, 40)).expect("open the project");
+        let waiting =
+            Pending { client: Some(1), key: 1, timeout: None, done: Done::default(), stage: Stage::PullRequest(1) };
+        app.clients.requests.pending.push(waiting);
+        app.clients.requests.open.push(1);
+
+        app.forget(1);
+
+        assert_eq!(app.clients.requests.pending.len(), 0);
+    }
+}
+
+mod forgotten_contexts {
+    use super::*;
+
+    #[test]
+    fn a_context_read_whose_client_left_is_dropped() {
+        let (tx, _rx) = mpsc::channel();
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), Path::new("/nonexistent/config.json"), tx);
+        let stage = Stage::Context { pane: 1, answers: 0 };
+        app.clients.requests.pending.push(Pending {
+            client: Some(1),
+            key: 1,
+            timeout: None,
+            done: Done::default(),
+            stage,
+        });
+        app.clients.requests.open.push(1);
+
+        app.forget(1);
+
+        assert_eq!(app.clients.requests.pending.len(), 0);
     }
 }
 

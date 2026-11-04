@@ -1,5 +1,3 @@
-use std::os::unix::fs::PermissionsExt;
-
 use rstest::rstest;
 
 use super::*;
@@ -192,8 +190,10 @@ fn unchanged_samples_and_repeated_pruning_keep_the_revision() {
     assert!(stats.hours.is_empty());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_private_file_round_trips_without_transient_process_state() {
+    use std::os::unix::fs::PermissionsExt;
     let dir = TempDir::new();
     let path = crate::paths::stats(&dir.path().join("session.json"));
     let mut stats = Stats::new(at(1_000));

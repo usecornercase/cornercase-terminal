@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use std::os::unix::net::UnixStream;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use rstest::rstest;
@@ -356,7 +355,10 @@ fn an_input_failure_is_retried_with_a_pause(#[case] in_read: bool, #[case] panic
 #[rstest]
 #[case::eof(None)]
 #[case::hangup(Some(io::Error::from(io::ErrorKind::UnexpectedEof)))]
-#[case::gone(Some(io::Error::from_raw_os_error(rustix::io::Errno::IO.raw_os_error())))]
+#[cfg_attr(unix, case::gone(Some(io::Error::from_raw_os_error(rustix::io::Errno::IO.raw_os_error()))))]
+#[cfg_attr(windows, case::gone(Some(io::Error::from_raw_os_error(
+    windows_sys::Win32::Foundation::ERROR_INVALID_HANDLE.cast_signed()
+))))]
 fn the_end_of_input_stops_the_reader(#[case] error: Option<io::Error>) {
     let mut error = error;
     run(
@@ -463,9 +465,10 @@ fn repeated_errors_back_off_until_stopped() {
     assert_eq!(pauses, 3);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_hung_up_fd_is_the_end_of_input() {
-    let (input, peer) = UnixStream::pair().expect("socket pair");
+    let (input, peer) = std::os::unix::net::UnixStream::pair().expect("socket pair");
     drop(peer);
     assert!(readable(&input, Duration::ZERO).is_err_and(|error| ended(&error)));
 }

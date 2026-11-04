@@ -37,6 +37,7 @@ mod puts_the_path_back {
 mod deletes {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn a_symlink_removes_the_link_only() {
         let repo = git_repo(&[("a.txt", "one\n")]);

@@ -6,12 +6,16 @@ macro_rules! fixture {
 
 pub(crate) use fixture;
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::os::fs::{canonicalize, set_mode};
+use crate::os::process::{Pid, Signal, kill_process};
+
 pub(crate) const SHORTCUT_MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
+
+const PID_WINDOWS_NEVER_GIVES: i32 = i32::MAX - 3;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
@@ -33,6 +37,9 @@ pub(crate) fn this_pid() -> i32 {
 }
 
 pub(crate) fn exited_pid() -> i32 {
+    if cfg!(windows) {
+        return PID_WINDOWS_NEVER_GIVES;
+    }
     let mut child = std::process::Command::new("/bin/sh").arg("-c").arg("exit 0").spawn().expect("spawn sh");
     child.wait().expect("wait for sh");
     i32::try_from(child.id()).expect("pid fits in i32")
@@ -66,7 +73,7 @@ impl TempDir {
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("cornercase-test-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("create temp dir");
-        Self(dir.canonicalize().expect("canonicalize temp dir"))
+        Self(canonicalize(&dir).expect("canonicalize temp dir"))
     }
 
     pub(crate) fn path(&self) -> &Path {
@@ -90,7 +97,7 @@ impl Locked {
         let dir = TempDir::new();
         let path = dir.path().join("locked");
         std::fs::create_dir(&path).expect("create the locked folder");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).expect("lock the folder");
+        set_mode(&path, 0o000).expect("lock the folder");
         let locked = Self { path, _dir: dir };
         let entered = std::process::Command::new("/bin/sh").arg("-c").arg("true").current_dir(&locked.path).status();
         assert!(entered.is_err(), "a locked folder can still be entered, so the test would prove nothing (root?)");
@@ -104,7 +111,7 @@ impl Locked {
 
 impl Drop for Locked {
     fn drop(&mut self) {
-        let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o755));
+        let _ = set_mode(&self.path, 0o755);
     }
 }
 
@@ -124,7 +131,7 @@ impl Sleeper {
     }
 
     fn spawn(name: &Path, dir: &Path, vars: &[(&str, &str)], stdin: std::process::Stdio) -> Self {
-        use std::os::unix::process::CommandExt;
+        use crate::os::process::CommandExt;
         let child = std::process::Command::new("/bin/sleep")
             .arg0(name)
             .arg("30")
@@ -189,8 +196,8 @@ impl Family {
 
 impl Drop for Family {
     fn drop(&mut self) {
-        if let Some(pid) = self.grandchild().and_then(rustix::process::Pid::from_raw) {
-            let _ = rustix::process::kill_process(pid, rustix::process::Signal::KILL);
+        if let Some(pid) = self.grandchild().and_then(Pid::from_raw) {
+            let _ = kill_process(pid, Signal::KILL);
         }
         let _ = self.0.kill();
         let _ = self.0.wait();
@@ -199,6 +206,17 @@ impl Drop for Family {
 
 pub(crate) fn is_sh(name: &str) -> bool {
     matches!(name, "sh" | "bash" | "dash")
+}
+
+pub(crate) fn child_running(parent: i32, program: &str) -> i32 {
+    let mut found = None;
+    wait_until(&format!("a child of {parent} runs {program}"), || {
+        found = crate::process::children(parent)
+            .into_iter()
+            .find(|pid| crate::process::name(*pid).as_deref() == Some(program));
+        found.is_some()
+    });
+    found.expect("the child")
 }
 
 pub(crate) fn sleep_named(path: &Path) -> Running {
@@ -320,6 +338,11 @@ pub(crate) fn clone_of(remote: &Path) -> (TempDir, PathBuf) {
     git(dir.path(), &["clone", "--quiet", &remote.display().to_string(), "clone"]);
     let path = dir.path().join("clone");
     (dir, path)
+}
+
+#[cfg(not(unix))]
+pub(crate) fn verbatim(path: &Path) -> PathBuf {
+    PathBuf::from(format!(r"\\?\{}", path.display()))
 }
 
 type Route = (&'static str, u16, Vec<u8>);
@@ -482,4 +505,16 @@ pub(crate) fn theme(background: libghostty_vt::style::RgbColor) -> crate::host::
         *slot = Some(RgbColor { r, g, b });
     }
     theme
+}
+
+pub(crate) struct BrokenPipe;
+
+impl std::io::Write for BrokenPipe {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::ErrorKind::BrokenPipe.into())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }

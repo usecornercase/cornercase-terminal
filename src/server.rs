@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io;
 use std::net::Shutdown;
 use std::ops::ControlFlow;
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -14,8 +13,6 @@ use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKin
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::{Terminal, TerminalOptions, Viewport};
-use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
-use signal_hook::iterator::Signals;
 
 use crate::app::{App, AppEvent, Streamed};
 use crate::control::start_server::SizeFrom;
@@ -28,12 +25,15 @@ use crate::host::pointer;
 use crate::host::sound;
 use crate::host::theme::HostTheme;
 use crate::log::{self, Level};
+use crate::os::process::{leave_launch_folder, on_stop_signal, setsid};
+use crate::os::socket::{UnixListener, UnixStream};
 use crate::panics;
 use crate::paths;
 use crate::persist::{self, Saver};
 use crate::protocol::{self, ClientMessage, Folder, ServerMessage};
 use crate::queue;
 use crate::state;
+use crate::term::shell;
 use crate::todo;
 use crate::version;
 
@@ -66,6 +66,7 @@ enum ServerEvent {
     Shutdown,
 }
 
+#[cfg_attr(not(unix), expect(clippy::large_enum_variant, reason = "paths are larger on Windows"))]
 enum Step {
     Refresh,
     Answer,
@@ -281,12 +282,17 @@ fn prepare_app(app: &mut App, path: &Path, session: &Path) -> Saver<todo::Saved>
 
 pub(crate) fn run() -> Result<()> {
     panics::log_to_stderr();
-    let _ = rustix::process::setsid();
+    let _ = setsid();
     let path = paths::socket();
     let (listener, _lock) = bind(&path)?;
     let level = log::level_from_env();
     if let Err(e) = log::start(&paths::log(), level) {
         eprintln!("cornercase server: cannot write its log to {}: {e}", paths::log().display());
+    }
+    if let Some(state) = path.parent().filter(|dir| dir.is_absolute())
+        && let Err(e) = leave_launch_folder(state)
+    {
+        log::warning!("server", "could not leave the folder it started in", folder = state.display(), error = e);
     }
     let (tx, rx) = mpsc::channel();
     spawn_acceptor(listener, tx.clone());
@@ -294,8 +300,7 @@ pub(crate) fn run() -> Result<()> {
     let (app_tx, app_rx) = mpsc::channel();
     spawn_forwarder(app_rx, tx.clone());
 
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-    let mut app = App::new(shell, HostTheme::default(), &paths::config(), app_tx);
+    let mut app = App::new(shell::default(), HostTheme::default(), &paths::config(), app_tx);
     let session = paths::session();
     log_started(&path, &session, level);
     let todo_saver = prepare_app(&mut app, &path, &session);
@@ -342,13 +347,10 @@ fn spawn_acceptor(listener: UnixListener, tx: Sender<ServerEvent>) {
 }
 
 fn spawn_signal_thread(tx: Sender<ServerEvent>) -> Result<()> {
-    let mut signals = Signals::new([SIGTERM, SIGINT, SIGHUP]).map_err(Error::Signals)?;
-    thread::spawn(move || {
-        if signals.forever().any(|signal| signal != SIGHUP) {
-            let _ = tx.send(ServerEvent::Shutdown);
-        }
-    });
-    Ok(())
+    on_stop_signal(move || {
+        let _ = tx.send(ServerEvent::Shutdown);
+    })
+    .map_err(Error::Signals)
 }
 
 fn spawn_forwarder(app_rx: Receiver<AppEvent>, tx: Sender<ServerEvent>) {
@@ -823,6 +825,7 @@ impl Server {
     }
 
     fn input(&mut self, id: u64, ev: Event) {
+        let shown = self.area;
         let Some(client) = self.client_mut(id).filter(|c| c.size.is_some()) else { return };
         if let Event::Resize(cols, rows) = ev {
             client.size = Some((cols, rows));
@@ -830,6 +833,9 @@ impl Server {
             return;
         }
         if let Event::FocusGained | Event::FocusLost = ev {
+            if let (Event::FocusGained, Some(area)) = (&ev, shown) {
+                client.reset_screen(area);
+            }
             self.app.window_focus(id, ev == Event::FocusGained);
             return;
         }
@@ -899,8 +905,6 @@ impl Server {
     }
 
     fn shutdown(&mut self) {
-        self.app.stop_background();
-        self.answer();
         if let Err(e) = self.stats_saver.flush(self.app.stats(), SystemTime::now()) {
             log::error!("stats", "failed to save", error = e);
         }
@@ -920,6 +924,8 @@ impl Server {
         {
             log::error!("server", "failed to save the queue", error = e);
         }
+        self.app.stop_background();
+        self.answer();
         for client in self.clients.drain(..) {
             client.leave(self.restart.clone().map_or(ServerMessage::Shutdown, ServerMessage::Restart));
             let Client { out, screen, writer, .. } = client;

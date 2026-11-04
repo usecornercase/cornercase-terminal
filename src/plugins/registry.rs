@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::manifest::{self, Manifest};
+use crate::os::fs::canonicalize;
 use crate::{persist, text};
 
 const VERSION: u32 = 1;
@@ -155,7 +156,7 @@ impl Registry {
 
     pub(crate) fn link(&mut self, folder: &Path) -> Result<(Manifest, bool), String> {
         let cannot = |e: io::Error| text::escape_hidden(&format!("cannot open {}: {e}", folder.display()));
-        let path = folder.canonicalize().map_err(cannot)?;
+        let path = canonicalize(folder).map_err(cannot)?;
         let manifest = Manifest::load(&path)?;
         let source = Source::Link { path };
         let enabled = match self.entries.iter_mut().find(|entry| entry.id == manifest.id) {

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::io::{self, Read};
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -10,6 +9,7 @@ use serde_json::{Map, Value};
 use crate::agents;
 use crate::host::notify;
 use crate::machines::Machine;
+use crate::os::fs::{NONBLOCK, OpenOptionsExt, canonicalize};
 use crate::persist;
 use crate::shortcuts::Prefix;
 
@@ -544,11 +544,7 @@ pub(crate) fn load(path: &Path) -> Config {
 const MAX_BYTES: u64 = 4 << 20;
 
 pub(crate) fn read(path: &Path) -> Result<Option<Config>, String> {
-    let file = match std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().cast_signed())
-        .open(path)
-    {
+    let file = match std::fs::OpenOptions::new().read(true).custom_flags(NONBLOCK).open(path) {
         Ok(file) => file,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e.to_string()),
@@ -646,7 +642,7 @@ pub(crate) fn save(path: &Path, config: &Config) -> io::Result<persist::Mark> {
 
 pub(crate) fn names_folder(key: &str, folder: &Path, home: Option<&Path>) -> bool {
     let key = expand_home(key, home);
-    key == folder || key.canonicalize().is_ok_and(|key| key == folder)
+    key == folder || canonicalize(&key).is_ok_and(|key| key == folder)
 }
 
 pub(crate) fn expand_home(path: &str, home: Option<&Path>) -> PathBuf {

@@ -101,7 +101,7 @@ fn credits(credits: &Credits) -> Option<String> {
 }
 
 pub(super) fn parse(result: Value) -> Result<Report> {
-    let body: Body = serde_json::from_value(result).map_err(|e| Error::Usage(format!("unexpected answer: {e}")))?;
+    let body: Body = serde_json::from_value(result).map_err(|e| Error::Probe(format!("unexpected answer: {e}")))?;
     let windows = windows(&body);
     Ok(Report {
         plan: body.rate_limits.plan_type.clone().filter(|plan| plan != UNKNOWN_PLAN),
@@ -124,7 +124,7 @@ pub(in crate::agents) fn answer(line: &str, _heard: &mut Heard) -> Option<Result
         if id == USAGE_REQUEST && text.contains(SIGNED_OUT) {
             return Some(Ok(Report { notice: Some(SIGN_IN), ..Report::default() }));
         }
-        return Some(Err(Error::Usage(text.to_string())));
+        return Some(Err(Error::Probe(text.to_string())));
     }
     (id == USAGE_REQUEST).then(|| parse(message["result"].clone()))
 }

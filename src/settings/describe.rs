@@ -238,6 +238,18 @@ impl Settings {
         kinds.iter().flat_map(|kind| self.kind_settings(kind)).collect()
     }
 
+    pub(super) fn key_of(&self, row: &Row) -> Option<String> {
+        match row {
+            Row::Tab(_) => Some("issue_tabs".into()),
+            Row::Kind(kind) => self.kind_settings(kind).into_iter().next().map(|(setting, _)| setting.key),
+            Row::Token(source) => Some(source.id().into()),
+            Row::Bot(via) => Some(via.target().into()),
+            Row::Chat(via) => Some(format!("{}.chat", via.target())),
+            Row::Browsers => Some("browsers".into()),
+            row => self.setting_of(row).map(|setting| setting.key),
+        }
+    }
+
     pub(crate) fn describe(&self) -> Vec<Setting> {
         self.entries().into_iter().map(|(setting, _)| setting).collect()
     }

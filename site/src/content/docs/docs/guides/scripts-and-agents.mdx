@@ -108,6 +108,7 @@ group 9  personal  collapsed
 | `paste-file --pane ID [FILE]` | Keeps a file of the machine you run it on next to the server's session and pastes its path into a pane, so an agent there can open it: see [Paste a file from another machine](#paste-a-file-from-another-machine). |
 | `plugin actions`, `plugin run PLUGIN ACTION`, `plugin popup-close` | List the actions your [plugins](../plugins/) add to the menus and buttons, run one on a project, workspace, tab or pane as its menu entry does (or on what the window shows, as its button does), waiting for it to end, and close a plugin's popup. See [Plugins](#plugins). |
 | `skill` | Prints the instructions that teach coding agents these commands. |
+| `pull-request` | Prints a workspace's [pull request](../worktrees/#pull-requests-and-their-checks) and every check with the link to its job, as its dialog shows it, asking gh (or glab) at once: [pull requests](#pull-requests). |
 | `contract` | Says what the running server supports: its version, the [contract](#contract-and-compatibility) it speaks, its boot and its operations and streams. |
 
 `cornercase --help` and `cornercase COMMAND --help` describe every option, with examples.
@@ -394,6 +395,27 @@ cornercase link --pane 12 --cell 10,3
 - `input --follow` ends when standard input ends, after the last answer: with 0, with 3 if some line wasn't sent, or with 1 once the server stops or the connection drops (it notices at the next line). A program on the socket does the same by keeping its connection and sending each `input` after the answer to the one before.
 - Requests on different connections aren't ordered: send the next `input` after the answer to the previous one, put several events in one request, or keep one `input --follow` running. Unlike the other commands, these six log at debug level, since a program sends them as fast as someone types or drags.
 
+#### Many commands through one process
+
+A program that draws cornercase (a window of its own, an editor's panel) sends many small commands: a focus, a scroll, a split. Run one by one, each is a whole process, and through [`--remote`](../remote/#commands-for-scripts-and-agents) a whole `ssh` session. `requests --follow -` keeps one running and sends them all through one connection:
+
+```sh
+cornercase requests --follow -
+cornercase --remote devbox requests --follow -
+printf '%s\n' '{"args": ["status", "--json"]}' | cornercase requests --follow -
+```
+
+```json
+{"args": ["focus", "--tab", "6", "--view", "21"]}
+{"args": ["send", "--pane", "5", "-"], "stdin": "cargo test"}
+```
+
+- A line is one JSON object: `args` is the command line after `cornercase`, read by the same parser, so every flag works and each command's `--help` stays the contract; `stdin` is what the command reads from `-` (text; for bytes use a file argument). Other keys are refused, so a typo never runs `send -` with no text. Blank lines are skipped.
+- Each line gets one answer line, in order: `status` (the exit status the command would have had: 0, 1, 2 or 3), `json` (what it printed with `--json`), `text` (what else it printed, such as the id `new-tab` prints), `stderr` (its warnings) and `error` (its message). Only `status` is always there: empty `json`, `text`, `stderr` and `error` are left out, and a status 1 or 3 may have no `error` (its reason is in `stderr` or in its `json`). New fields may be added; read what you know. A line that isn't JSON, is refused or fails does not stop the next ones.
+- It runs the commands that send requests. The streams (`events`, `surface`, `view`, `changes list`, every `--follow`), `update`, `restart`, `kill-server` and `logs` need a process of their own and are refused with status 2, as are `start-server` (it needs no connection, and `requests` needs a running server: run it first), `--remote` on a line and the commands that act on this machine (`remote`, `skill`, `plugin link` and so on).
+- Lines run one at a time, each after the answer to the one before. A line that waits (`wait`, `send --wait`, `start --wait`) holds the lines after it; to put a key before a focus, send both through `requests`. Lines aren't ordered with other connections.
+- It ends when standard input ends, after the last answer: with 0 if every line had status 0, with 3 if some didn't, with 1 once the server stops or the connection drops (it never reconnects, because ids change with a restart: start it again and look at `status`), and with 0 when what reads its answers is gone, even while a line waits. Between lines it waits for the next one without watching the server or the reader, so it notices that either is gone at the next line.
+
 #### A plugin's popup
 
 A plugin's [popup](../plugins/#popups) is a terminal too, so a program that draws cornercase can show it and type into it the same way, with `--popup` instead of a tab or a pane:
@@ -582,6 +604,7 @@ cornercase flow list
 cornercase flow run Quick --prompt 'Fix the login form'
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login --json
 cornercase flow run 'Full issue' --issue ENG-42 --project 3
+cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
 ```
 
 `flow list` prints each [flow](../flows/), yours, the built-in ones (those you have not replaced) and the project's, in the user's [order](../flows/#choose-a-default-and-an-order) (by name for the flows not placed in it) with the default one tagged `default`, with its description, its roles with their agents, models and efforts, and what keeps it from running, if anything; files it cannot read are listed with their error. `flow run` starts one as the window's **start** does: it makes the worktree (from `--worktree`, else from the task's first words, with a short suffix when they give nothing, a default branch or a branch already taken), opens a tab per role, starts every agent without permission prompts and answers their trust questions, and starts the orchestrator last with its brief. It answers once the tabs exist, while the agents are still starting: the workspace's id, then one line per role with its pane's id and the role's name, separated by a tab. The run's [folder for its files](../flows/#the-runs-folder) is printed on stderr (`run_dir` with `--json`), and every pane of the team has it in `$CORNERCASE_RUN_DIR`. To follow a run's end, watch `run.reached` in `status --follow`.
@@ -594,7 +617,7 @@ cornercase flow run 'Full issue' --issue ENG-42 --project 3
 ```
 
 - A role set to `worktree = "own"` gets a [worktree of its own](../flows/#a-worktree-of-its-own) on the branch `<branch>--<role>`, made from the run's branch, with the project's setup. `--json` then adds, for each such role, its `worktree` (the folder) and `branch`; the other roles' entries have neither. The answer waits for every worktree and its setup, and a role worktree that cannot be made opens nothing.
-- The task comes from `--prompt`, or from a file with `--prompt-file` (`-` reads standard input), or from an issue with `--issue KEY`, as the dialog's **start a flow** takes it: its branch (`--worktree` names another), its prompt template, the workspace named after it (`--workspace-name NAME` names it otherwise, behind the `issue-names` feature) and, for an issue that isn't tied to a repository, `--project ID` when several projects are repositories (see [Issues](#issues)).
+- The task comes from `--prompt`, or from a file with `--prompt-file` (`-` reads standard input), or from an issue with `--issue KEY`, as the dialog's **start a flow** takes it: its branch (`--worktree` names another), its prompt template (`--prompt` or `--prompt-file` with `--issue` replace it with your own task and keep the issue's branch and name, behind the `flow-issue-prompt` feature, which the command checks first), the workspace named after it (`--workspace-name NAME` names it otherwise, behind the `issue-names` feature) and, for an issue that isn't tied to a repository, `--project ID` when several projects are repositories (see [Issues](#issues)).
 - The flows of the project the command runs in, else the shown one, else `--project ID`, are found too. A name is looked up in yours, then the built-in flows, then the project's: yours replaces a built-in flow of its name, and a project's flow, which comes with the repository, never stands in for another of the same name; the command says so on standard error when a name is in several places. A built-in flow you deleted in [settings → Flows](../flows/#edit-flows) is refused, and keeps its name: a project's flow named like it does not run either. An unknown name lists the flows.
 - It refuses before anything opens a flow with problems, an agent that is not installed, a project that is not the root of a git repository, a branch that already runs a flow, and a `--worktree` that is `main`, `master`, the project's default branch or the one its own folder is on: a flow works on a branch of its own.
 - Nothing changes in the window unless you pass `--focus`, which shows the orchestrator's tab and opens the [Flow panel](../flows/#the-flow-panel).
@@ -655,7 +678,7 @@ It ends with the places an issue that isn't tied to a repository can be worked o
 
 `issue read KEY` prints the issue's title, the dialog's info line, its URL and the branch `start` would use, then its description as Markdown and its comments. `KEY` is a key or a URL, as for `start --issue`; a URL of another repository, site or workspace than the project's is refused. `issue people SOURCE` prints whom that tracker's filters can name, one per line with the handle, name and id.
 
-With `--json`, `sources` prints `{"project", "closed", "sources": [...], "places": [...]}`, `list` prints `{"project", "issues": [...], "sources": [{"source", "count", "cached", "account", "error"}]}`, `read` prints `{"issue", "info", "body", "comments", "prompt"}` and `people` prints `{"source", "fields", "cached", "people"}`. They are four requests, `issue-sources`, `issue-list`, `issue-read` and `issue-people`, with the same options as fields (`people` is the two filters in the order `fields` names them: `"me"`, `"anyone"` or `{"person": {"handle": "bo", "id": null}}`). A request is refused with `not-found` for an unknown project, `malformed` for an unknown source or a person without one, and `conflict` for an issue of a tracker that is not connected or that was reconnected while it was read. `start` and `flow-run` take `issue` and `source`, which an older server would ignore, so check the `issues` [feature](#ask-the-server-first) first.
+With `--json`, `sources` prints `{"project", "closed", "sources": [...], "places": [...]}`, `list` prints `{"project", "issues": [...], "sources": [{"source", "count", "cached", "account", "error"}]}`, `read` prints `{"issue", "info", "body", "comments", "prompt"}` and `people` prints `{"source", "fields", "cached", "people"}`. They are four requests, `issue-sources`, `issue-list`, `issue-read` and `issue-people`, with the same options as fields (`people` is the two filters in the order `fields` names them: `"me"`, `"anyone"` or `{"person": {"handle": "bo", "id": null}}`). A request is refused with `not-found` for an unknown project, `malformed` for an unknown source or a person without one, and `conflict` for an issue of a tracker that is not connected or that was reconnected while it was read. `start` and `flow-run` take `issue` and `source`, which an older server would ignore, so check the `issues` [feature](#ask-the-server-first) first. `flow-run` also takes `prompt` together with `issue`, in place of the template's; an older server refuses both as `malformed`, so check `flow-issue-prompt`.
 
 ### Talk to a pane
 
@@ -950,6 +973,61 @@ An agent whose account can be told apart has `identity`, the same text on every 
 
 The request is `{"command": "usage", "args": {"machine": "all"}}`. [`contract`](#contract-and-compatibility) lists the feature `machine-usage`: an older server ignores `machine` and answers for this computer, so check it first, as `--machine` does.
 
+### Context
+
+```sh
+cornercase context
+cornercase context --pane 4 --json
+cornercase context --tab 3 --cached
+```
+
+`context` prints what the [Context dialog](../projects-workspaces-tabs/#what-fills-the-context) shows for an agent's pane, so a script can see what fills its context before it compacts. Without `--pane` or `--tab` it reads the pane it runs in; a tab means its agent's pane.
+
+```text
+Claude Code · Opus 5.5  read just now
+251.9k of 1M tokens · 25%
+  System prompt        2.7k    0.3%
+  System tools         4.9k    0.5%
+  MCP tools            8.5k    0.8%
+  Memory files        19.7k    2.0%
+  Messages           206.2k   20.6%
+  Free space         715.1k   71.5%
+not loaded: MCP tools 199.9k · System tools 19.0k
+memory files:
+  ~/code/web-shop/AGENTS.md  8.5k
+```
+
+For Claude Code it starts a second `claude` on the server's machine (the one [`agent_commands`](../../reference/agents/#your-own-agents) names) that loads the same conversation in the same folder, account and model. It sends no prompt and spends no tokens, starts your MCP servers a second time, turns the hooks off and waits up to 8 seconds for the MCP servers, so a read takes 3 to 10 seconds. `--cached` prints the last answer with its age and starts nothing. The other agents answer their model and percentage with a `notice`; a pane that runs no agent exits with 1.
+
+With `--json` it prints `{"pane", "agent", "title", "model", "percent", "compacted", "loading", "read_at", "age", "breakdown", "notice", "error"}` with every key present (`null` when it has no value). `breakdown` is `null` until a read worked, then `{"model", "conversation", "total_tokens", "max_tokens", "percent", "auto_compact_at", "categories", "memory_files", "mcp_servers", "mcp_instructions", "skills", "messages"}`: `categories` are `{id, name, tokens, kind}` with `kind` one of `used`, `deferred`, `buffer` and `free` (read it as a string: a newer Claude Code may add one), `memory_files` `{path, kind, tokens}`, `mcp_servers` `{name, tools, loaded, tokens}` (the tokens of the loaded tools), `mcp_instructions` `{name, tokens}` (the server's display name, which is not always the name of `mcp_servers`), `skills` `{total, included, tokens}` and `messages` the tokens of the calls, results, attachments, assistant and user text, with the tools and attachment kinds that took the most. `conversation` is `null` when the pane had none yet and the numbers are those of a new one. When the read fails, `error` says why beside the numbers of the last good read, and the command exits with 3.
+
+It is the request `{"command": "context", "args": {"pane": 4, "cached": false}}`. A pane that runs no agent is a `conflict` and an unknown pane `not-found`. An older server answers that it has no `context` command.
+
+### Pull requests
+
+```sh
+cornercase pull-request
+cornercase pull-request --worktree feat/login --json
+cornercase pull-request --workspace 4
+```
+
+`pull-request` prints a workspace's [pull request](../worktrees/#pull-requests-and-their-checks) (the merge request on GitLab) as its dialog shows it: its state, the rollup and every check, failed first, then pending, passed and skipped, each with its workflow (a GitLab job's stage) and the link to its job. An agent can read why its checks fail and open the failed jobs' logs with `gh run view` or `glab ci trace`:
+
+```text
+pull request #482 open, checks failing
+Returns page crashes on an empty address
+https://github.com/acme/web-shop/pull/482
+failed   tests (ubuntu-24.04)  CI  https://github.com/acme/web-shop/actions/runs/1001/job/2001
+pending  tests (macos-15)  CI  https://github.com/acme/web-shop/actions/runs/1001/job/2002
+passed   lint  CI  https://github.com/acme/web-shop/actions/runs/1001/job/2003
+passed   review-bot
+skipped  deploy  Pages  https://github.com/acme/web-shop/actions/runs/1002/job/2004
+```
+
+From a pane it reads that pane's workspace, elsewhere the one shown; `--workspace ID` or `--worktree BRANCH` picks another. It asks gh (or glab) at once, as opening the dialog does, even while cornercase waits after a failed read, and answers when that workspace was read. A read that fails exits with 1 and says why (`gh is not logged in: run gh auth login`, `install gh, GitHub's CLI, to see them`, gh's own line). A workspace cornercase never asks about is answered at once, with exit 0 and `null`, saying why: pull requests are off in settings, it is not on a branch, its repository has no remote, or it is on the default branch. So is a branch without a pull request (`no pull request for feat/x`).
+
+With `--json` it prints `{"workspace", "branch", "pull_request", "reason"}`, every key present. `pull_request` is the object [`status --json`](#look) gives (`number`, `title`, `url`, `state`, `checks`, `failed`, `conflicts`, `base`, `provider`, `stack`) plus `all_checks`, a list of `{"name", "workflow", "outcome", "url"}` in the dialog's order: `outcome` is `failed`, `pending`, `passed` or `skipped`, `workflow` is empty for a commit status and `url` for a check without a link. `pull_request` is `null` and `reason` says why when there is none. It is the request `{"command": "pull-request", "args": {"workspace": 4}}`, answered once gh has answered; an older server answers that it has no `pull-request` command.
+
 ### Ports
 
 ```sh
@@ -1085,6 +1163,7 @@ The numbers add up hour by hour. `most_at_once` is the largest peak of one machi
 ```sh
 cornercase config
 cornercase config --json
+cornercase config search def ag
 cornercase config set sidebar tree
 cornercase config set fetch_minutes 10 counts false
 cornercase config set issue_tabs github,linear
@@ -1102,7 +1181,9 @@ A token is never an argument. `secret KEY` reads it from standard input (hidden 
 
 `project` sets what a project's folder runs when a worktree is made and before one goes; `--project ID` or the folder names it, and an empty text removes the commands. Only a repository's root has worktrees, so a folder that isn't one is refused.
 
-Over the socket, every answer has the same shape and the request is `{"command": "config", "args": {"action": "get"}}` (or `"set"`, `"project"`, `"secret"`, `"remove"`, each with its `entry`):
+`search` finds settings as the [search of the Settings dialog](../../reference/configuration/#search-the-settings) does, with the same matching and order: every word must start a word of a row's label, section, tab, value or note. It prints one tab-separated row per result under a header (`place`, `key`, `value`, `note`, `-` for what is missing), or with `--json` `{"results": [...]}`, each with `title`, `page`, `section`, `label`, `key` (absent on a tab or a row with no key), `shown`, `note` and `hidden`, true for a row that does not show now, whose `note` says what it needs. No match prints the header alone and exits 0.
+
+Over the socket, every other answer has the same shape and the request is `{"command": "config", "args": {"action": "get"}}` (or `"set"`, `"project"`, `"secret"`, `"remove"`, each with its `entry`; `"search"` takes the text as its `entry`, needs the feature `settings-search` and answers `results`):
 
 ```json
 {"command": "config", "args": {"action": "set", "entry": {"fetch_minutes": 10, "sidebar": "tree"}}}
@@ -1332,11 +1413,11 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `0` | Done. |
 | `1` | An error or a timeout; the message says which. |
 | `2` | Wrong usage, such as an unknown option. |
-| `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds` and `read --last-message` with several targets printed their whole answer, but an agent, a machine, a tracker, a folder, a worktree or a pane in it failed, or `input --follow` couldn't send some of its lines. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
+| `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds` and `read --last-message` with several targets printed their whole answer, but an agent, a machine, a tracker, a folder, a worktree or a pane in it failed, `input --follow` couldn't send some of its lines, or a line of `requests --follow` failed. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
 
 A command that follows something until it ends (`events`, `status --follow`, `status --app --follow`, `changes list --follow`, `files list --follow`, `files read --follow`, `flow runs --follow`, `flow messages --follow`, `surface` and `view`) also ends with 0, without a message, soon after whatever reads its output is gone: the program it prints into exited or closed its end, or the `ssh` running it on another machine was killed or lost its connection. A terminal that closes ends it like any program, and one printing into a file or `/dev/null` runs until it ends by itself.
 
-`input --follow` ends when its standard input ends, once the last line is answered, or with `--json` when what reads its answers is gone.
+`input --follow` and `requests --follow` end when their standard input ends, once the last line is answered, or when what reads their answers is gone (`input --follow` with `--json`); while they wait for the next line they notice neither that nor a stopped server, until that line comes.
 
 Some messages you may meet:
 
@@ -1395,7 +1476,7 @@ features boot, structured-errors, strict-fields, views, host-events, theme, noti
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it), `sound` (a notice's `sound` field: an older server never sends it), `issues` (the `issue` and `source` fields of `start` and `flow-run`, which an older server ignores and then starts the agent without the issue; check it before sending them), `todo-panel` (the `todo` request's `edit`, `undone`, `move`, `clear-done` and `restore`; an older server refuses them as malformed, so check it before sending them), `changes` (the `changes` requests and the `changes` count of `status`), `agent-folds` (the `pane` item of `collapse` and `expand`; an older server refuses it as malformed, so check it before sending it), `accounts` (the `account-*` and `profile-*` requests and the `profile` field of `start`, `start-with`, `new-tab` and `flow-run`, which an older server ignores and then starts the agent with its own login; check it before sending it), `account-login` (the `check` field of `account-list` and each account's `login`; an older server ignores `check` and answers without asking, so check it before sending it), `account-switch` (the `account-rename` and `account-use` requests and the `accounts` field of `start`, `start-with`, `new-tab`, `flow-run` and the queue's `add` and `edit`, which an older server ignores and then starts with the default accounts; check it before sending it), `issue-names` (the `workspace_name` field of `start`, `start-with` and `flow-run`, which an older server ignores and then names the workspace after the issue; check it before sending it), `close-agent-tabs` (`close-agent` only closes tabs and never removes a worktree; check it before sending `close-agent`, since an older server removes an agent's own worktree), `queue-undo` (`queue remove` returns undo data, and the queue accepts `clear-started` and `restore`; check it before removing anything, since an older server removes without undo), `focus-reveal` (the `reveal` field of `focus`, which an older server ignores and then only shows the pane; check it before sending it), and `popup-terminal` (the `popup` field of `surface` and `input`; an older server refuses `surface` and `input` with `popup` alone for their missing tab or pane, but takes `input` with `popup` and `pane` as input to pane `pane`, so check it before sending `popup`), `files` (the `files-*` requests, the `files` stream, `home` in `status` and `~/` in `open`, which an older server takes as a folder named `~`; check it first), `shared-files` (`shared` in each workspace of `status` and the `changes-merge-check` request), `machines` (the [`machines`](#machines) request and the `machines` key of `status --app`), `machine-usage` (the `machine` field of `stats` and `usage`, which an older server ignores and then answers for itself; check it before sending it), `machine-workspaces` (`remotes`, `repo`, `machines` and `shown_remote` in `status`, and the `focus-machine` request; see [Machines' workspaces](#machines-workspaces)), and `machine-start` (the `machine` field of `start`, `start-with`, `new-workspace` and `flow-run`, which an older server ignores and then starts the work on this computer; check it before sending it; see [Start work on a machine](#start-work-on-a-machine)).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it), `sound` (a notice's `sound` field: an older server never sends it), `issues` (the `issue` and `source` fields of `start` and `flow-run`, which an older server ignores and then starts the agent without the issue; check it before sending them), `todo-panel` (the `todo` request's `edit`, `undone`, `move`, `clear-done` and `restore`; an older server refuses them as malformed, so check it before sending them), `changes` (the `changes` requests and the `changes` count of `status`), `agent-folds` (the `pane` item of `collapse` and `expand`; an older server refuses it as malformed, so check it before sending it), `accounts` (the `account-*` and `profile-*` requests and the `profile` field of `start`, `start-with`, `new-tab` and `flow-run`, which an older server ignores and then starts the agent with its own login; check it before sending it), `account-login` (the `check` field of `account-list` and each account's `login`; an older server ignores `check` and answers without asking, so check it before sending it), `account-switch` (the `account-rename` and `account-use` requests and the `accounts` field of `start`, `start-with`, `new-tab`, `flow-run` and the queue's `add` and `edit`, which an older server ignores and then starts with the default accounts; check it before sending it), `issue-names` (the `workspace_name` field of `start`, `start-with` and `flow-run`, which an older server ignores and then names the workspace after the issue; check it before sending it), `close-agent-tabs` (`close-agent` only closes tabs and never removes a worktree; check it before sending `close-agent`, since an older server removes an agent's own worktree), `queue-undo` (`queue remove` returns undo data, and the queue accepts `clear-started` and `restore`; check it before removing anything, since an older server removes without undo), `focus-reveal` (the `reveal` field of `focus`, which an older server ignores and then only shows the pane; check it before sending it), and `popup-terminal` (the `popup` field of `surface` and `input`; an older server refuses `surface` and `input` with `popup` alone for their missing tab or pane, but takes `input` with `popup` and `pane` as input to pane `pane`, so check it before sending `popup`), `files` (the `files-*` requests, the `files` stream, `home` in `status` and `~/` in `open`, which an older server takes as a folder named `~`; check it first), `shared-files` (`shared` in each workspace of `status` and the `changes-merge-check` request), `settings-search` (the `search` action of `config`), `flow-issue-prompt` (the `prompt` field of `flow-run` together with `issue`; an older server refuses the two as malformed, so check it before sending both), `machines` (the [`machines`](#machines) request and the `machines` key of `status --app`), `machine-usage` (the `machine` field of `stats` and `usage`, which an older server ignores and then answers for itself; check it before sending it), `machine-workspaces` (`remotes`, `repo`, `machines` and `shown_remote` in `status`, and the `focus-machine` request; see [Machines' workspaces](#machines-workspaces)), and `machine-start` (the `machine` field of `start`, `start-with`, `new-workspace` and `flow-run`, which an older server ignores and then starts the work on this computer; check it before sending it; see [Start work on a machine](#start-work-on-a-machine)).
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`, and `{"name": "app", "version": 1}` for [`status --app`](#follow-the-rest-of-the-app), `{"name": "changes", "version": 1}` for [`changes`](#follow-a-workspaces-changes), `{"name": "flow-runs", "version": 1}` and `{"name": "flow-messages", "version": 1}` for [`flow runs`](#follow-a-flow-run) and `flow messages`, and `{"name": "files", "version": 1}` for [`files list --follow` and `files read --follow`](#browse-and-read-a-workspaces-files).
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
@@ -1433,7 +1514,7 @@ With `boot` set to the value from `contract` or `status`, a request kept across 
 
 ### Talking to the socket directly
 
-The [socket](../../reference/command-line/#the-socket) takes one request at a time per connection: send the next once the previous one is answered (`input --follow` types through one connection this way). Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4, and `app`, the request behind `status --app --follow`, does the same with the rest of the app's state; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
+The [socket](../../reference/command-line/#the-socket) takes one request at a time per connection: send the next once the previous one is answered (`input --follow` and `requests --follow` send through one connection this way). Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4, and `app`, the request behind `status --app --follow`, does the same with the rest of the app's state; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
 
 ## Teach your agents
 

@@ -7,15 +7,15 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
-    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, LayerInfo, PaneInfo, ProjectInfo, PullRequestInfo,
-    RemoteInfo, Report, RunStatus, StackInfo, TabInfo, WorkspaceInfo,
+    self, AppState, CheckInfo, ConfigInfo, Done, GroupInfo, KeepAwake, LayerInfo, PaneInfo, ProjectInfo,
+    PullRequestInfo, RemoteInfo, Report, RunStatus, StackInfo, TabInfo, WorkspaceInfo,
 };
 use crate::git;
 use crate::log::{self, Level};
 use crate::process;
 use crate::project::{Group, Hierarchy, Project, Tab, Workspace};
 use crate::pull_request::stack::Layer;
-use crate::pull_request::{Ci, PullRequest};
+use crate::pull_request::{Check, Ci, PullRequest};
 use crate::term::Term;
 use crate::version;
 
@@ -30,7 +30,7 @@ fn remote_infos(remotes: &[(String, String)]) -> Vec<RemoteInfo> {
     remotes.iter().map(|(name, url)| RemoteInfo { name: name.clone(), url: url.clone() }).collect()
 }
 
-fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
+pub(super) fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
     PullRequestInfo {
         number: pull.number,
         title: pull.title.clone(),
@@ -42,6 +42,16 @@ fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
         base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
         provider: pull.provider.id().into(),
         stack: stack_info(pull),
+        all_checks: None,
+    }
+}
+
+pub(super) fn check_info(check: &Check) -> CheckInfo {
+    CheckInfo {
+        name: check.name.clone(),
+        workflow: check.workflow.clone(),
+        outcome: check.outcome.name().into(),
+        url: check.url.clone(),
     }
 }
 
@@ -246,7 +256,7 @@ impl App {
 
     fn pane_refreshed(term: &Term, resuming: bool, parent: Option<u64>, hash: &mut DefaultHasher) {
         let pid = term.foreground_pid();
-        (term.id, pid, pid.and_then(process::name), pid.and_then(process::cwd), term.shell_pid()).hash(hash);
+        (term.id, pid, pid.and_then(process::name), term.cwd(), term.shell_pid()).hash(hash);
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
         term.context.compaction().hides.hash(hash);

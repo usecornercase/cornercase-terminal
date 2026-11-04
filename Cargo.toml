@@ -1,6 +1,6 @@
 [package]
 name = "cornercase"
-version = "0.12.232"
+version = "0.12.272"
 edition = "2024"
 description = "A terminal multiplexer for projects, git worktrees and coding agents, driven by the mouse"
 license = "MIT OR Apache-2.0"
@@ -46,11 +46,9 @@ ratatui = "0.30.2"
 ratatui-textarea = { version = "0.9.3", default-features = false }
 regex = { version = "1.13.1", default-features = false, features = ["std", "unicode-case", "unicode-perl", "perf"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
-rustix = { version = "1.1.5", features = ["event", "fs", "net", "param", "process", "stdio", "termios"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
-signal-hook = "0.4.4"
 similar = "3.2.0"
 tar = { version = "0.4.46", default-features = false }
 thiserror = "2.0.21"
@@ -60,14 +58,36 @@ unicode-segmentation = "1.13.3"
 unicode-width = "0.2.2"
 ureq = "3.4.2"
 
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1.5", features = ["event", "fs", "net", "param", "process", "stdio", "termios"] }
+signal-hook = "0.4.4"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+  "Wdk_System_SystemInformation", "Wdk_System_Threading", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Media_Audio",
+  "Wdk_System_SystemInformation", "Wdk_System_Threading", "Win32_Foundation", "Win32_Media_Audio",
+  "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug",
+  "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_Kernel", "Win32_System_Memory", "Win32_System_Power",
+  "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation",
+  "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem",
+  "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_IO",
+  "Win32_System_Ioctl", "Win32_System_JobObjects", "Win32_System_Kernel", "Win32_System_Memory",
+  "Win32_System_Power", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation",
+  "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming",
+  "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"
+] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.189"
 
 [dev-dependencies]
 insta = "1.48.0"
 rstest = "0.27.0"
-rustix = { version = "1.1.5", features = ["mm"] }
 vt100 = "0.16.2"
+
+[target.'cfg(unix)'.dev-dependencies]
+rustix = { version = "1.1.5", features = ["mm"] }
 
 [lints.rust]
 future_incompatible = { level = "warn", priority = -1 }

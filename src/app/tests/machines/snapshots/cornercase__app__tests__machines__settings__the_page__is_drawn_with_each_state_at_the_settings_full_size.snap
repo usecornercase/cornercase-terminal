@@ -1,12 +1,11 @@
 ---
 source: src/app/tests/machines/settings.rs
-assertion_line: 103
 expression: every_state().shown(WIDE)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                      "
 "  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
 " P│  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins   Machines                                                       │  "
-"  │                                                                                                                                          │  "
+"  │  ⌕ search settings                                                                                                                       │  "
 "  │ ▌   ▭ this computer         <version>                                                                                                     │  "
 "  │   ● ☁ vps                   miguel@vps.example.com   ~/code     linked · 0.12.200                                                        │  "
 "  │   ○ ▣ mini                  mac-mini.local           /srv/code  unreachable · not seen yet                                               │  "

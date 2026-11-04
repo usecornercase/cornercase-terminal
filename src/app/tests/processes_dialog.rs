@@ -7,6 +7,7 @@ use crate::process;
 use crate::processes::dialog::{Action, Dialog, Hit, Line};
 use crate::processes::{Pane, PaneTree, Proc, Sample, Times};
 use crate::project::Hierarchy;
+use crate::test_util::child_running;
 
 fn dialog(app: &mut App) -> &mut Dialog {
     match &mut app.overlay {
@@ -191,8 +192,7 @@ mod stopping {
         let (mut app, rx, _dirs) = app_with(1);
         type_line(&mut app, "sleep 30");
         let shell = shell_of(&app);
-        wait_until("the sleep starts", || !process::children(shell).is_empty());
-        let sleeper = process::children(shell)[0];
+        let sleeper = child_running(shell, "sleep");
         opened(&mut app);
         let mut later = Instant::now();
         wait_until("the sleep is listed", || {

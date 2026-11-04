@@ -1,5 +1,6 @@
 pub(crate) mod activity;
 pub(crate) mod awake;
+pub(crate) mod breakdown;
 pub mod claude;
 pub(crate) mod closing;
 pub(crate) mod codex;
@@ -11,6 +12,7 @@ pub(crate) mod grok;
 mod known;
 pub(crate) mod launch;
 pub(crate) mod opencode;
+pub(crate) mod probe;
 pub mod stats;
 pub(crate) mod tree;
 pub(crate) mod usage;
@@ -19,12 +21,13 @@ pub(crate) mod vibe;
 pub use known::Known;
 
 use std::ffi::{OsStr, OsString};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
+use crate::os::fs::PermissionsExt;
+use crate::process;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AgentState {
@@ -393,7 +396,11 @@ pub(crate) fn resolve(config: &Config, explicit: Option<&str>, running: Option<&
 }
 
 fn basename(arg: &str) -> &str {
-    Path::new(arg).file_name().and_then(|n| n.to_str()).unwrap_or(arg)
+    process::program_name(Path::new(arg).file_name().and_then(|n| n.to_str()).unwrap_or(arg))
+}
+
+fn named(part: Option<&str>, name: &str) -> bool {
+    part.is_some_and(|part| process::same_file_name(part, name))
 }
 
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
@@ -402,7 +409,7 @@ pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     let scripts: Vec<&str> = argv.first().into_iter().chain(script).map(String::as_str).collect();
     kinds(config).into_iter().find(|kind| {
         let bin = command(config, kind);
-        names.contains(&basename(&bin))
+        names.iter().any(|name| process::same_file_name(name, basename(&bin)))
             || Known::of(kind).is_some_and(|kind| scripts.iter().any(|arg| kind.runs_as(arg)))
     })
 }

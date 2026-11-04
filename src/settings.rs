@@ -9,6 +9,7 @@ use crate::machines::{Info, State};
 use crate::messenger::Via;
 
 pub(crate) use self::accounts::{Listed, Order};
+pub(crate) use self::search::{Finder, Hit};
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
@@ -423,6 +424,7 @@ pub(crate) struct Settings {
     pub(crate) accounts: Listed,
     pub(crate) machines: Vec<Info>,
     pub(crate) now: SystemTime,
+    pub(crate) find: Finder,
 }
 
 impl Settings {
@@ -449,6 +451,7 @@ impl Settings {
             accounts: Listed::default(),
             machines: Vec::new(),
             now: UNIX_EPOCH,
+            find: Finder::default(),
         }
     }
 
@@ -570,6 +573,7 @@ impl Settings {
         self.pick = None;
         self.notice = None;
         self.capturing = false;
+        self.find.clear();
     }
 
     fn switch_page(&mut self, delta: isize) {
@@ -609,6 +613,7 @@ impl Settings {
     }
 
     pub(crate) fn select(&mut self, row: usize) {
+        self.find.settle();
         if row < self.rows().len() {
             self.cursor = row;
         }
@@ -621,6 +626,7 @@ mod apply;
 mod describe;
 mod input;
 mod machines;
+mod search;
 pub(crate) mod share;
 mod submit;
 mod trackers;

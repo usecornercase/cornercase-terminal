@@ -1,8 +1,12 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::edit::{Editing, Row};
-use super::{Action, Dialog, Entry, Hit, Room};
+use super::{Action, Dialog, Entry, Erase, Hit, Room};
 use crate::editor::Editor;
+
+fn typing(key: KeyEvent) -> bool {
+    !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+}
 
 impl Dialog {
     pub(crate) fn text(&self) -> Option<&Editor> {
@@ -37,7 +41,7 @@ impl Dialog {
             self.import_key(key, room);
             return Action::None;
         }
-        let typing = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        let typing = typing(key);
         let Some(edit) = &mut self.edit else { return self.list_key(key) };
         if typed_key(edit, key, typing, room) {
             return Action::None;
@@ -81,6 +85,9 @@ impl Dialog {
     }
 
     fn list_key(&mut self, key: KeyEvent) -> Action {
+        if !matches!(key.code, KeyCode::Delete | KeyCode::Backspace) {
+            self.erase = Erase::Asks;
+        }
         match key.code {
             KeyCode::Esc => return Action::Close,
             KeyCode::Enter => return self.activate(),
@@ -88,7 +95,8 @@ impl Dialog {
             KeyCode::BackTab | KeyCode::Left if self.in_settings => return Action::StepTab(-1),
             KeyCode::Up | KeyCode::BackTab => self.select(self.cursor.saturating_sub(1)),
             KeyCode::Down | KeyCode::Tab => self.select(self.cursor + 1),
-            KeyCode::Delete | KeyCode::Backspace => self.ask_delete(),
+            KeyCode::Delete | KeyCode::Backspace if self.erase == Erase::Asks => self.ask_delete(),
+            KeyCode::Char(c) if self.settings_tabs() && c != ' ' && typing(key) => return Action::Find(c),
             _ => {}
         }
         Action::None
@@ -119,6 +127,7 @@ impl Dialog {
             return self.press(label);
         }
         self.notice = None;
+        self.erase = Erase::Asks;
         if let Some(importing) = &mut self.importing {
             if let Hit::Text { line, col } = hit {
                 let scroll = importing.editor.scroll();
@@ -176,6 +185,7 @@ impl Dialog {
             return;
         }
         let Some(edit) = &mut self.edit else {
+            self.erase = Erase::Asks;
             self.select(self.cursor.saturating_add_signed(delta).min(self.entries().saturating_sub(1)));
             return;
         };

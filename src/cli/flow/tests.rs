@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::args::{Command, Control};
 
 fn shared_flow() -> Flow {
     let spec: FlowSpec =
@@ -389,4 +390,16 @@ mod saving {
         assert_eq!(listed_place(&flows, Path::new("/r/b.toml")), Some(ImportTo::Project));
         assert_eq!(listed_place(&flows, Path::new("/x.toml")), None);
     }
+}
+
+#[rstest::rstest]
+#[case::the_issue_alone(&["flow", "run", "Quick", "--issue", "7"], false)]
+#[case::a_prompt_alone(&["flow", "run", "Quick", "--prompt", "x"], false)]
+#[case::an_issue_and_a_prompt(&["flow", "run", "Quick", "--issue", "7", "--prompt", "x"], true)]
+#[case::an_issue_and_a_prompt_file(&["flow", "run", "Quick", "--issue", "7", "--prompt-file", "-"], true)]
+fn the_feature_is_needed_only_for_a_prompt_with_an_issue(#[case] args: &[&str], #[case] needed: bool) {
+    let cli = super::super::tests::parse(args).expect("parse");
+    let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not a flow command") };
+    let FlowAction::Run(run) = flow.action else { panic!("not a run") };
+    assert_eq!(gives_issue_prompt(&run), needed);
 }

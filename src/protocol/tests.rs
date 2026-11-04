@@ -329,9 +329,164 @@ mod compatibility {
     }
 }
 
+mod socket_path {
+    use super::*;
+    use crate::error::Error;
+    use crate::os::socket::UnixListener;
+    use crate::test_util::TempDir;
+
+    #[test]
+    fn a_socket_path_too_long_is_refused_before_anything_is_created() {
+        let tmp = TempDir::new();
+        let nested = tmp.path().join("missing");
+        let name = "x".repeat(MAX_SOCKET_PATH);
+        let socket = nested.join(name);
+
+        let result = check_socket_dir(&socket, Folder::Own);
+
+        assert!(matches!(result, Err(Error::SocketTooLong { .. })));
+        assert!(!nested.exists());
+    }
+
+    #[test]
+    fn the_longest_socket_path_allowed_can_listen() {
+        let tmp = TempDir::new();
+        let dir = tmp.path().join("s");
+        let pad = MAX_SOCKET_PATH.checked_sub(dir.as_os_str().len() + 1).filter(|&pad| pad > 0).unwrap_or_else(|| {
+            panic!("the temporary folder {} leaves no room for a socket name", tmp.path().display())
+        });
+        let socket = dir.join("x".repeat(pad));
+        assert_eq!(socket.as_os_str().len(), MAX_SOCKET_PATH);
+        std::fs::create_dir_all(tmp.path().join("s")).expect("folder");
+
+        UnixListener::bind(&socket).expect("a path of the maximum length binds");
+    }
+}
+
+mod peers {
+    use super::*;
+    use crate::error::Error;
+    use crate::os::socket::UnixStream;
+
+    #[test]
+    fn a_peer_of_the_same_user_is_accepted() {
+        let (ours, _theirs) = UnixStream::pair().expect("a socket pair");
+
+        assert!(check_peer(&ours, own_uid()).is_ok());
+    }
+
+    #[test]
+    fn a_peer_of_another_user_is_refused() {
+        let (ours, _theirs) = UnixStream::pair().expect("a socket pair");
+
+        let result = check_peer(&ours, own_uid().wrapping_add(1));
+
+        assert!(matches!(result, Err(Error::OtherUser(peer)) if peer == own_uid()));
+    }
+}
+
+#[cfg(windows)]
+mod windows_socket_dir {
+    use rstest::rstest;
+    use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_READ, FILE_GENERIC_WRITE};
+
+    use super::*;
+    use crate::error::Error;
+    use crate::os::fs::{link_to, share_with_everyone};
+    use crate::test_util::TempDir;
+
+    const READ: u32 = FILE_GENERIC_READ;
+    const WRITE: u32 = FILE_GENERIC_READ | FILE_GENERIC_WRITE;
+
+    fn folder(tmp: &TempDir, shared: Option<u32>) -> PathBuf {
+        let dir = tmp.path().join("sock");
+        std::fs::create_dir(&dir).expect("create the folder");
+        if let Some(access) = shared {
+            share_with_everyone(&dir, access).expect("share the folder");
+        }
+        dir
+    }
+
+    fn access(dir: &Path) -> (u32, u32) {
+        owner_and_mode(dir, &std::fs::symlink_metadata(dir).expect("metadata"))
+    }
+
+    #[test]
+    fn a_missing_folder_is_created_private_to_the_user_even_in_a_shared_one() {
+        let tmp = TempDir::new();
+        let shared = folder(&tmp, Some(WRITE));
+        let socket = shared.join("nested").join("server.sock");
+
+        check_socket_dir(&socket, Folder::Given).expect("a new folder is fine");
+
+        assert_eq!(access(&shared.join("nested")), (own_uid(), 0o700));
+    }
+
+    #[rstest]
+    #[case::private(None)]
+    #[case::readable_by_others(Some(READ))]
+    fn a_folder_only_the_user_can_write_is_accepted_as_it_is(#[case] shared: Option<u32>) {
+        let tmp = TempDir::new();
+        let dir = folder(&tmp, shared);
+        let before = access(&dir);
+
+        assert!(check_socket_dir(&dir.join("server.sock"), Folder::Given).is_ok());
+        assert_eq!(access(&dir), before);
+    }
+
+    #[test]
+    fn a_folder_others_can_write_is_refused() {
+        let tmp = TempDir::new();
+        let dir = folder(&tmp, Some(WRITE));
+
+        let result = check_socket_dir(&dir.join("server.sock"), Folder::Given);
+
+        assert!(matches!(result, Err(Error::UnsafeSocketDir { reason: "can be written by other users", .. })));
+    }
+
+    #[rstest]
+    #[case::writable_by_everyone(WRITE)]
+    #[case::readable_by_everyone(READ)]
+    fn cornercases_own_folder_is_made_private(#[case] shared: u32) {
+        let tmp = TempDir::new();
+        let dir = folder(&tmp, Some(shared));
+
+        check_socket_dir(&dir.join("server.sock"), Folder::Own).expect("tightened");
+
+        assert_eq!(access(&dir), (own_uid(), 0o700));
+    }
+
+    #[test]
+    fn a_junction_is_refused_even_to_a_private_folder() {
+        let tmp = TempDir::new();
+        let dir = folder(&tmp, None);
+        let link = tmp.path().join("link");
+        link_to(&dir, &link).expect("a junction");
+
+        let error = check_socket_dir(&link.join("server.sock"), Folder::Own).expect_err("refused");
+
+        assert!(matches!(error, Error::UnsafeSocketDir { reason: "is a symbolic link", .. }));
+        assert!(error.to_string().contains("CORNERCASE_SOCKET"), "{error}");
+    }
+
+    #[test]
+    fn the_folder_probe_never_creates_or_changes_anything() {
+        let tmp = TempDir::new();
+        let missing = tmp.path().join("missing").join("server.sock");
+        let open = folder(&tmp, Some(WRITE));
+
+        assert!(!socket_dir_is_safe(&missing));
+        assert!(!tmp.path().join("missing").exists());
+        assert!(!socket_dir_is_safe(&open.join("server.sock")));
+        assert_eq!(access(&open), (own_uid(), 0o777));
+        make_private(&open).expect("made private");
+        assert!(socket_dir_is_safe(&open.join("server.sock")));
+    }
+}
+
+#[cfg(unix)]
 mod socket_dir {
     use std::os::unix::fs::PermissionsExt;
-    use std::os::unix::net::UnixStream;
 
     use rstest::rstest;
 
@@ -346,10 +501,6 @@ mod socket_dir {
         std::fs::create_dir(&dir).expect("create the folder");
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(permissions)).expect("chmod");
         dir
-    }
-
-    fn uid() -> u32 {
-        rustix::process::getuid().as_raw()
     }
 
     #[test]
@@ -436,31 +587,6 @@ mod socket_dir {
     }
 
     #[test]
-    fn a_socket_path_too_long_is_refused_before_anything_is_created() {
-        let tmp = TempDir::new();
-        let nested = tmp.path().join("missing");
-        let name = "x".repeat(MAX_SOCKET_PATH);
-        let socket = nested.join(name);
-
-        let result = check_socket_dir(&socket, Folder::Own);
-
-        assert!(matches!(result, Err(Error::SocketTooLong { .. })));
-        assert!(!nested.exists());
-    }
-
-    #[test]
-    fn the_longest_socket_path_allowed_can_listen() {
-        let tmp = TempDir::new();
-        let dir = tmp.path().join("s");
-        let pad = MAX_SOCKET_PATH - dir.as_os_str().len() - 1;
-        let socket = dir.join("x".repeat(pad));
-        assert_eq!(socket.as_os_str().len(), MAX_SOCKET_PATH);
-        std::fs::create_dir_all(tmp.path().join("s")).expect("folder");
-
-        std::os::unix::net::UnixListener::bind(&socket).expect("a path of the maximum length binds");
-    }
-
-    #[test]
     fn the_folder_probe_never_creates_or_changes_anything() {
         let tmp = TempDir::new();
         let missing = tmp.path().join("missing").join("server.sock");
@@ -490,19 +616,5 @@ mod socket_dir {
         #[case] expected: Option<&str>,
     ) {
         assert_eq!(unsafe_dir_reason(is_symlink, is_dir, owner, mode, ME), expected);
-    }
-
-    #[test]
-    fn a_peer_of_the_same_user_is_accepted() {
-        let (ours, _theirs) = UnixStream::pair().expect("a socket pair");
-
-        assert!(check_peer(&ours, uid()).is_ok());
-    }
-
-    #[test]
-    fn a_peer_of_another_user_is_refused() {
-        let (ours, _theirs) = UnixStream::pair().expect("a socket pair");
-
-        assert!(matches!(check_peer(&ours, uid().wrapping_add(1)), Err(Error::OtherUser(peer)) if peer == uid()));
     }
 }

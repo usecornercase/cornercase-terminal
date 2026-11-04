@@ -1,5 +1,3 @@
-use std::os::unix::fs::PermissionsExt;
-use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 
@@ -210,8 +208,11 @@ fn nothing_in_the_repository_changes() {
     assert_eq!(state_of(&[&first, &second], project.repo.path()), before);
 }
 
+#[cfg(unix)]
 #[test]
 fn the_scratch_folder_is_new_and_private() {
+    use std::os::unix::fs::PermissionsExt;
+
     let root = crate::test_util::TempDir::new();
     let taken = root.path().join(format!("cornercase-merge-{}-5", std::process::id()));
     std::fs::create_dir(&taken).expect("a folder already there");
@@ -225,6 +226,7 @@ fn the_scratch_folder_is_new_and_private() {
     assert_eq!(std::fs::read_dir(&taken).map_or(0, Iterator::count), 0);
 }
 
+#[cfg(unix)]
 #[rstest]
 #[case::plain("/repo/.git/objects", "/repo/.git/objects")]
 #[case::a_colon("/a:b/.git/objects", "\"/a:b/.git/objects\"")]
@@ -233,10 +235,20 @@ fn the_alternates_are_quoted_as_git_reads_them(#[case] path: &str, #[case] expec
     assert_eq!(quoted(Path::new(path)), OsString::from(expected));
 }
 
+#[cfg(not(unix))]
+#[rstest]
+#[case::plain(r"C:\repo\.git\objects", "C:/repo/.git/objects")]
+#[case::verbatim(r"\\?\C:\repo\.git\objects", "C:/repo/.git/objects")]
+#[case::a_semicolon(r"C:\a;b\.git\objects", "\"C:/a;b/.git/objects\"")]
+#[case::out_of_ascii(r"C:\Users\José\año\.git\objects", "C:/Users/José/año/.git/objects")]
+fn the_alternates_are_quoted_as_git_for_windows_reads_them(#[case] path: &str, #[case] expected: &str) {
+    assert_eq!(quoted(Path::new(path)), OsString::from(expected));
+}
+
 #[test]
-fn a_repository_whose_path_has_a_colon_is_checked() {
+fn a_repository_whose_path_has_the_list_separator_is_checked() {
     let tmp = crate::test_util::TempDir::new();
-    let repo = tmp.path().join("a:b");
+    let repo = tmp.path().join(format!("a{}b", char::from(ffi::LIST_SEPARATOR)));
     std::fs::create_dir(&repo).expect("create the repository folder");
     git(&repo, &["init", "--quiet"]);
     write(&repo, "a", LINES);
@@ -254,6 +266,32 @@ fn a_repository_whose_path_has_a_colon_is_checked() {
     assert_eq!(merged(&checked).conflicts.len(), 1);
 }
 
+#[cfg(not(unix))]
+#[test]
+fn verbatim_folders_and_names_out_of_ascii_are_checked() {
+    let mut project = Checkouts::new(&[("año/ñandú.txt", LINES)]);
+    let (first, second) = (project.add("w1", "main"), project.add("w2", "main"));
+    write(&first, "año/ñandú.txt", "one\nfirst\nthree\n");
+    write(&second, "año/ñandú.txt", "one\nsecond\nthree\n");
+    write(&first, "nuevo é.txt", "first\n");
+    write(&second, "nuevo é.txt", "second\n");
+    let verbatim = crate::test_util::verbatim;
+
+    let checked = check(&Check { with_base: true, ..pair(&verbatim(&first), &verbatim(&second)) });
+
+    assert_eq!(merged(&checked).conflicts, Vec::<Conflict>::new());
+    let mut paths: Vec<&str> = checked.merges[1]
+        .result
+        .as_ref()
+        .expect("the check answers")
+        .conflicts
+        .iter()
+        .map(|c| c.path.as_str())
+        .collect();
+    paths.sort_unstable();
+    assert_eq!(paths, ["año/ñandú.txt", "nuevo é.txt"]);
+}
+
 #[test]
 fn the_scratch_folder_goes_away_with_the_check() {
     let scratch = Scratch::new().expect("a scratch folder");
@@ -265,8 +303,18 @@ fn the_scratch_folder_goes_away_with_the_check() {
     assert!(!dir.exists());
 }
 
+#[cfg(unix)]
+fn exit_status(code: i32) -> ExitStatus {
+    std::os::unix::process::ExitStatusExt::from_raw(code << 8)
+}
+
+#[cfg(windows)]
+fn exit_status(code: i32) -> ExitStatus {
+    std::os::windows::process::ExitStatusExt::from_raw(code.cast_unsigned())
+}
+
 fn failed_with(code: i32, stderr: &str) -> Output {
-    Output { status: ExitStatus::from_raw(code << 8), stdout: Vec::new(), stderr: stderr.as_bytes().to_vec() }
+    Output { status: exit_status(code), stdout: Vec::new(), stderr: stderr.as_bytes().to_vec() }
 }
 
 #[rstest]

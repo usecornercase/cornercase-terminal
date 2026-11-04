@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
+pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug)]
 pub struct Workspaces {
@@ -48,12 +48,19 @@ pub enum Error {
     },
     #[error("cornercase is already running in this terminal; nesting it is not supported")]
     Nested,
+    #[error(
+        "cornercase does not run on Windows yet; follow the port at \
+         https://github.com/usecornercase/cornercase-terminal/issues/586"
+    )]
+    NotOnWindows,
     #[error("{0}")]
     Rejected(String),
     #[error("this is a development build; `cornercase update` only updates released builds")]
     DevelopmentBuild,
     #[error("failed to register signal handlers")]
     Signals(#[source] std::io::Error),
+    #[error("failed to put the console in raw VT mode")]
+    Console(#[source] std::io::Error),
     #[error("failed to run git: {0}")]
     RunGit(std::io::Error),
     #[error("{0}")]
@@ -73,7 +80,7 @@ pub enum Error {
     #[error("{0}")]
     TokenRejected(String),
     #[error("{0}")]
-    Usage(String),
+    Probe(String),
     #[error("{0}")]
     Plugin(String),
     #[error("{0}")]
@@ -109,6 +116,10 @@ pub enum Error {
         "the cornercase server closed the connection without stopping: it crashed, or this command stopped reading what it sends"
     )]
     ServerLost,
+    #[error("this command keeps a connection of its own, so it cannot run on a line of `cornercase requests`")]
+    OwnConnection,
+    #[error("what reads the answers is gone")]
+    ReaderGone,
     #[error("cornercase hit a bug, see server.log")]
     Bug,
     #[error("failed to run ssh: {0}")]

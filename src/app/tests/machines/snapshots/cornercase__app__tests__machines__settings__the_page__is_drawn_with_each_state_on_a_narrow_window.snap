@@ -1,12 +1,11 @@
 ---
 source: src/app/tests/machines/settings.rs
-assertion_line: 108
 expression: every_state().shown(NARROW)
 ---
 "                                                                                "
 "  ╭─ Settings ───────────────────────────────────────────────────────────────╮  "
 "  │ Worktrees Agents Accounts Flows Issues UI Remote Plugins Machines        │  "
-"  │                                                                          │  "
+"  │  ⌕ search settings                                                       │  "
 "  │ ▌   ▭ this computer         <version>                                     │  "
 "  │   ● ☁ vps                   miguel@vps.e…   ~/code    linked · 0.12.200  │  "
 "  │   ○ ▣ mini                  mac-mini.loc…   …rv/code  unreachable · not  │  "

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::fs::Metadata;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+
+use crate::os::fs::MetadataExt;
 
 const BLOCK: u64 = 512;
 

@@ -50,6 +50,34 @@ jobs:
       - name: tests
         run: cargo test --locked
 
+  windows:
+    name: clippy (windows-2025)
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - name: long paths
+        run: git config --system core.longpaths true
+
+      - uses: actions/checkout@v7
+
+      - name: toolchain
+        run: rustup toolchain install
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+          use-cache: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: clippy
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
   guardrails:
     name: fmt + machete + jscpd
     runs-on: ubuntu-24.04

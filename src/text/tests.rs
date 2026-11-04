@@ -46,6 +46,15 @@ fn wrap_cells_keeps_every_character_within_the_width(#[case] text: &str, #[case]
     assert_eq!(wrap_cells(text, max), rows);
 }
 
+#[rstest]
+#[case::plain("/C:/Users/me", Some("/C:/Users/me"))]
+#[case::escapes("/a%20b/%C3%B1", Some("/a b/ñ"))]
+#[case::a_percent_without_digits("/50%/x%2", Some("/50%/x%2"))]
+#[case::bytes_that_are_not_utf8("/%FF", None)]
+fn percent_decoded_turns_escapes_into_utf8(#[case] text: &str, #[case] expected: Option<&str>) {
+    assert_eq!(percent_decoded(text).as_deref(), expected);
+}
+
 #[test]
 fn plural_names_one_in_the_singular() {
     assert_eq!(

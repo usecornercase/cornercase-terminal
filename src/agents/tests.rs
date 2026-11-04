@@ -440,6 +440,29 @@ mod choosing {
     fn detects_the_agent_in_a_tab(#[case] argv: &[&str], #[case] expected: Option<&str>) {
         assert_eq!(detect(&config(), &strings(argv)).as_deref(), expected);
     }
+
+    #[cfg(windows)]
+    #[rstest]
+    #[case::native_binary(&[r"C:\Users\a\.local\bin\claude.exe", "--resume"], Some("claude"))]
+    #[case::extension_in_capitals(&[r"C:\Users\a\.local\bin\claude.EXE"], Some("claude"))]
+    #[case::name_in_capitals(&[r"C:\Users\a\.local\bin\CLAUDE.EXE"], Some("claude"))]
+    #[case::binary_named_without_its_extension(&["claude"], Some("claude"))]
+    #[case::copilot_npm_through_its_cmd_shim_which_doubles_a_separator(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\Users\a\AppData\Roaming\npm\\node_modules\@github\copilot\npm-loader.js"],
+        Some("copilot")
+    )]
+    #[case::copilot_npm_in_capitals(
+        &[r"C:\Program Files\nodejs\node.exe", r"C:\Users\a\AppData\Roaming\npm\node_modules\@GitHub\Copilot\NPM-LOADER.JS"],
+        Some("copilot")
+    )]
+    #[case::cursor_through_its_launcher_in_capitals(
+        &[r"C:\Users\a\.local\bin\agent.exe", r"C:\Users\a\AppData\Local\Cursor-Agent\Versions\2026.10.14-941492e\INDEX.JS"],
+        Some("cursor")
+    )]
+    #[case::a_shell(&[r"C:\WINDOWS\system32\cmd.exe", "/d"], None)]
+    fn detects_the_agent_in_a_windows_tab(#[case] argv: &[&str], #[case] expected: Option<&str>) {
+        assert_eq!(detect(&config(), &strings(argv)).as_deref(), expected);
+    }
 }
 
 mod trust {

@@ -1,7 +1,6 @@
 use std::fmt::{Display, Write as _};
-use std::fs::{File, OpenOptions, Permissions};
+use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -9,6 +8,8 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::os::console::redirect_stderr;
+use crate::os::fs::{OpenOptionsExt, set_file_mode, set_mode, stat, stat_file, truncate};
 use crate::time::Stamp;
 
 pub(crate) const LEVEL_ENV: &str = "CORNERCASE_LOG";
@@ -211,14 +212,14 @@ impl Sink {
         if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir)?;
         }
-        match std::fs::set_permissions(rotated(&path), Permissions::from_mode(PRIVATE)) {
+        match set_mode(rotated(&path), PRIVATE) {
             Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
             _ => {}
         }
         let file = OpenOptions::new().create(true).append(true).mode(PRIVATE).open(&path)?;
-        file.set_permissions(Permissions::from_mode(PRIVATE))?;
+        set_file_mode(&file, PRIVATE)?;
         if stderr {
-            rustix::stdio::dup2_stderr(&file)?;
+            redirect_stderr(&file)?;
         }
         Ok(Self { path, file, max, stderr })
     }
@@ -246,7 +247,7 @@ impl Sink {
         if let Err(e) = std::fs::rename(&self.path, rotated(&self.path)) {
             let note =
                 format!("could not keep the old log in {}, so it starts over: {e}", rotated(&self.path).display());
-            let _ = self.file.set_len(0);
+            let _ = truncate(&self.file, &self.path);
             let _ = self.file.write_all(note_line(Level::Error, &note).as_bytes());
             return;
         }
@@ -279,25 +280,25 @@ pub(crate) fn tail(path: &Path, lines: usize) -> io::Result<String> {
 pub(crate) struct Follower {
     path: PathBuf,
     file: File,
-    inode: u64,
+    id: (u64, u64),
 }
 
 impl Follower {
     pub(crate) fn at_end(path: &Path) -> io::Result<Self> {
         let mut file = File::open(path)?;
-        let inode = file.metadata()?.ino();
+        let id = stat_file(&file)?.id();
         file.seek(SeekFrom::End(0))?;
-        Ok(Self { path: path.to_path_buf(), file, inode })
+        Ok(Self { path: path.to_path_buf(), file, id })
     }
 
     pub(crate) fn read(&mut self) -> io::Result<Vec<u8>> {
         let mut new = Vec::new();
         self.file.read_to_end(&mut new)?;
-        let Ok(meta) = std::fs::metadata(&self.path) else { return Ok(new) };
+        let Ok(now) = stat(&self.path) else { return Ok(new) };
         let read_to = self.file.stream_position()?;
-        if meta.ino() != self.inode || meta.len() < read_to {
+        if now.id() != self.id || now.meta.len() < read_to {
             self.file = File::open(&self.path)?;
-            self.inode = meta.ino();
+            self.id = now.id();
             self.file.read_to_end(&mut new)?;
         }
         Ok(new)

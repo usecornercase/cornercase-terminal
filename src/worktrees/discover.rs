@@ -3,6 +3,8 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::git::worktree::{check, git};
 use crate::log;
+use crate::os::ffi;
+use crate::os::fs::{canonical, canonicalize};
 
 use super::{Found, Kind};
 
@@ -42,10 +44,6 @@ fn orphan(found: &mut Vec<Found>, seen: &mut HashSet<PathBuf>, (repo, project, p
 }
 
 type Place = (PathBuf, String, PathBuf);
-
-fn canonical(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-}
 
 fn folders(worktrees_dir: &Path) -> Vec<(String, PathBuf)> {
     let mut folders = Vec::new();
@@ -87,15 +85,15 @@ pub(super) fn repo_of(folder: &Path) -> Origin {
     }
     let Ok(text) = std::fs::read_to_string(&dot_git) else { return Origin::None };
     let Some(target) = text.trim().strip_prefix("gitdir:").map(str::trim) else { return Origin::None };
-    let gitdir = folder.join(target);
-    let Ok(gitdir) = gitdir.canonicalize() else { return Origin::Gone(folder.join(target)) };
+    let joined = ffi::join(folder, target);
+    let Ok(gitdir) = canonicalize(&joined) else { return Origin::Gone(joined) };
     if gitdir.join("objects").is_dir() {
         return Origin::None;
     }
     let common = std::fs::read_to_string(gitdir.join("commondir"))
         .ok()
-        .map(|text| gitdir.join(text.trim()))
-        .and_then(|common| common.canonicalize().ok());
+        .map(|text| ffi::join(&gitdir, text.trim()))
+        .and_then(|common| canonicalize(common).ok());
     match common.as_deref().and_then(Path::parent) {
         Some(repo) => Origin::Repo(repo.to_path_buf()),
         None => Origin::Unknown(gitdir),
@@ -116,7 +114,7 @@ pub(crate) fn gitdir_of(folder: &Path) -> Option<PathBuf> {
         return Some(dot_git);
     }
     let text = std::fs::read_to_string(&dot_git).ok()?;
-    Some(folder.join(text.trim().strip_prefix("gitdir:")?.trim()))
+    Some(ffi::join(folder, text.trim().strip_prefix("gitdir:")?.trim()))
 }
 
 pub(crate) fn branch_at(folder: &Path) -> Option<String> {
@@ -175,7 +173,7 @@ fn admins(repo: &Path) -> Vec<(String, PathBuf)> {
         .flatten()
         .filter_map(|entry| {
             let gitdir = std::fs::read_to_string(entry.path().join("gitdir")).ok()?;
-            let path = lexical(&canonical(&entry.path()).join(gitdir.trim())).parent()?.to_path_buf();
+            let path = lexical(&ffi::join(&canonical(entry.path()), gitdir.trim())).parent()?.to_path_buf();
             Some((entry.file_name().to_string_lossy().into_owned(), canonical(&path)))
         })
         .collect()
@@ -199,7 +197,7 @@ pub(super) fn parse_porcelain(text: &str) -> Vec<(PathBuf, Option<String>, bool)
     let mut entries: Vec<(PathBuf, Option<String>, bool)> = Vec::new();
     for line in text.lines() {
         if let Some(path) = line.strip_prefix("worktree ") {
-            entries.push((PathBuf::from(path), None, false));
+            entries.push((ffi::to_path(path.as_bytes()), None, false));
         } else if let Some(last) = entries.last_mut() {
             if let Some(branch) = line.strip_prefix("branch ") {
                 last.1 = Some(branch.strip_prefix("refs/heads/").unwrap_or(branch).to_string());

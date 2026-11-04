@@ -29,8 +29,10 @@ fn commit_at(dir: &Path, date: &str) {
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
 }
 
+#[cfg(unix)]
 mod builds;
 mod dialog;
+#[cfg(unix)]
 mod disk;
 mod fill;
 mod list;
@@ -72,6 +74,7 @@ mod discover {
         assert!(found.iter().all(|f| f.project == "repo" && f.kind == Kind::Linked));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_worktree_is_listed_once_through_a_symlinked_folder() {
         let repo = main_repo();
@@ -159,6 +162,7 @@ mod discover {
         assert_eq!(discover(&[], dir.path()), Vec::new());
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_symlinked_folder_in_the_worktrees_folder_is_not_followed() {
         let parent = TempDir::new();
@@ -181,6 +185,7 @@ mod discover {
 
 mod scan {
     use super::*;
+    #[cfg(unix)]
     use crate::worktrees::scan::{Panes, outside};
 
     fn worktree(repo: &Path, branch: &str) -> (TempDir, PathBuf) {
@@ -318,6 +323,7 @@ mod scan {
         assert!(scan(dir.path(), Some("main")).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn finds_a_process_working_in_a_worktree_unless_its_own_workspace_runs_it() {
         let repo = main_repo();
@@ -338,6 +344,7 @@ mod scan {
         assert_eq!(sleeping(&Panes::from([(pid, vec![0])])), [true]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_plugin_process_in_a_worktree_is_reported() {
         let repo = main_repo();
@@ -366,5 +373,44 @@ mod scan {
         let found = names(&Panes::default());
         assert!(found.contains(&"sleep".to_string()) && !found.contains(&"git".to_string()), "{found:?}");
         assert_eq!(names(&Panes::from([(me, vec![0])])), Vec::<String>::new());
+    }
+}
+
+#[cfg(not(unix))]
+mod on_windows {
+    use super::*;
+    use crate::os::ffi;
+    use crate::test_util::verbatim;
+
+    #[test]
+    fn git_s_list_is_read_for_a_verbatim_repository() {
+        let repo = main_repo();
+        let dirs = TempDir::new();
+        let at = dirs.path().join("año");
+        add(repo.path(), "feat-ñ", &at);
+        std::fs::write(at.join("nuevo é.txt"), "x").expect("write");
+
+        let found = discover(&[verbatim(repo.path())], TempDir::new().path());
+
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].kind, found[0].branch.as_deref()), (Kind::Linked, Some("feat-ñ")));
+        assert!(found[0].admin.is_some());
+        assert!(ffi::same(&found[0].path, &at), "{}", found[0].path.display());
+        assert_eq!(scan(&verbatim(&at), Some("main")).expect("scan").changed, 1);
+    }
+
+    #[test]
+    fn a_missing_folder_of_a_verbatim_repository_is_prunable_with_its_admin() {
+        let repo = main_repo();
+        let dirs = TempDir::new();
+        let at = dirs.path().join("año");
+        add(repo.path(), "feat", &at);
+        std::fs::remove_dir_all(&at).expect("remove");
+
+        let found = discover(&[verbatim(repo.path())], dirs.path());
+
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].kind, found[0].admin.as_deref()), (Kind::Prunable, Some("año")));
+        assert!(ffi::same(&found[0].path, &at), "{}", found[0].path.display());
     }
 }

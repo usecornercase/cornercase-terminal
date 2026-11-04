@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::time::{Duration, SystemTime};
