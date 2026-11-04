@@ -44,3 +44,13 @@ test('every docs link on the landing leads to a page', () => {
     assert.ok(ok, `no docs page for ${p}`);
   }
 });
+
+test('the README picture and og.png take the hero text from the landing', () => {
+  const brand = readFileSync('capture/brand.mjs', 'utf8').replace(/<br\s*\/?>/g, ' ');
+  const { title, pitch, strip } = en.page.hero;
+  const phrases = [...title, pitch, strip].flatMap((text) => text.split(/[,.]/)).map((s) => s.trim()).filter((s) => s.includes(' '));
+  assert.ok(phrases.length > 5, `only ${phrases.length} phrases`);
+  for (const phrase of phrases) assert.ok(!brand.includes(phrase), `capture/brand.mjs copies "${phrase}" instead of reading page.hero from src/i18n/en.ts`);
+  assert.ok(brand.includes("'site/src/i18n/en.ts'"), 'capture/brand.mjs does not read src/i18n/en.ts');
+  for (const key of ['title', 'pitch', 'strip']) assert.ok(brand.includes(`hero.${key}`), `capture/brand.mjs does not show hero.${key}`);
+});
