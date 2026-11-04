@@ -134,7 +134,15 @@ impl Drop for Descriptor {
 }
 
 pub(crate) fn owner_and_mode(path: &Path, _meta: &Metadata) -> (u32, u32) {
-    match user().and_then(|user| Ok((user, descriptor(path)?))) {
+    read_owner_and_mode(|| descriptor(path))
+}
+
+pub(crate) fn file_owner_and_mode(file: &File, _meta: &Metadata) -> (u32, u32) {
+    read_owner_and_mode(|| descriptor_of(file))
+}
+
+fn read_owner_and_mode(read: impl FnOnce() -> io::Result<Descriptor>) -> (u32, u32) {
+    match user().and_then(|user| Ok((user, read()?))) {
         Ok((user, read)) => (owner(&user, read.owner), PRIVATE | others(&user, read.dacl)),
         Err(_) => (NOBODY, ANYONE_MAY_WRITE),
     }
@@ -307,7 +315,10 @@ fn names(deny: &Rule, allow: &Rule) -> bool {
 }
 
 fn descriptor(path: &Path) -> io::Result<Descriptor> {
-    let file = opened(path, READ_CONTROL)?;
+    descriptor_of(&opened(path, READ_CONTROL)?)
+}
+
+fn descriptor_of(file: &File) -> io::Result<Descriptor> {
     let mut read = Descriptor { memory: null_mut(), owner: null_mut(), dacl: null_mut() };
     let wanted = OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
     let (owner, dacl, memory) = (&raw mut read.owner, &raw mut read.dacl, &raw mut read.memory);

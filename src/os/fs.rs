@@ -4,14 +4,14 @@ use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
 pub(crate) use imp::process_uid;
+pub(crate) use imp::{
+    DirBuilderExt, MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, PermissionsExt, create_private_dir_all,
+    file_owner_and_mode, gid, link_to, links_to, make_private, owner_and_mode, reparse_point, set_file_mode, set_mode,
+    simplified, stat, stat_file, truncate, try_lock, uid, writable,
+};
 #[cfg(test)]
 #[cfg(windows)]
-pub(crate) use imp::share_with_everyone;
-pub(crate) use imp::{
-    DirBuilderExt, MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, PermissionsExt, create_private_dir_all, gid,
-    link_to, links_to, make_private, owner_and_mode, set_file_mode, set_mode, simplified, stat, stat_file, truncate,
-    try_lock, uid, writable,
-};
+pub(crate) use imp::{make_reparse_point, share_with_everyone};
 
 pub(crate) fn canonicalize(path: impl AsRef<Path>) -> io::Result<PathBuf> {
     std::fs::canonicalize(path).map(simplified)
@@ -80,6 +80,14 @@ mod imp {
 
     pub(crate) fn owner_and_mode(_dir: &Path, meta: &Metadata) -> (u32, u32) {
         (meta.uid(), meta.mode())
+    }
+
+    pub(crate) fn file_owner_and_mode(_file: &File, meta: &Metadata) -> (u32, u32) {
+        (meta.uid(), meta.mode())
+    }
+
+    pub(crate) fn reparse_point(meta: &Metadata) -> bool {
+        meta.file_type().is_symlink()
     }
 
     pub(crate) fn make_private(dir: &Path) -> io::Result<()> {

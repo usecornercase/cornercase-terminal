@@ -12,6 +12,7 @@ use crate::log::{self, Level};
 use crate::os::fs::{DirBuilderExt, OpenOptionsExt, set_file_mode, set_mode};
 use crate::os::process::{Grouped, Signal};
 use crate::paths;
+use crate::script::Shell;
 
 pub(crate) const BIN_ENV: &str = "CORNERCASE_BIN";
 pub(crate) const ID_ENV: &str = "CORNERCASE_PLUGIN_ID";
@@ -78,6 +79,11 @@ impl Places {
         env: &[(String, String)],
         cwd: Option<&Path>,
     ) -> io::Result<Launch> {
+        self.launched(plugin, Invocation { argv: command, env, cwd }, None)
+    }
+
+    fn launched(&self, plugin: &Plugin, invocation: Invocation<'_>, log: Option<&Path>) -> io::Result<Launch> {
+        let Invocation { argv: command, env, cwd } = invocation;
         let id = &plugin.entry.id;
         let (config, state) = (self.config(id), self.state(id));
         private_dir(&config)?;
@@ -93,7 +99,14 @@ impl Places {
             (STATE_ENV.into(), state.into()),
         ];
         vars.extend(env.iter().map(|(key, value)| (key.into(), value.into())));
-        Ok(Launch { program, args, cwd: cwd.unwrap_or(root).to_path_buf(), env: vars })
+        let cwd = cwd.unwrap_or(root).to_path_buf();
+        Ok(match Shell::here().interpreted(&program, &args, log) {
+            Some(line) => {
+                vars.extend(line.os_env());
+                Launch { program: line.program.into(), args: line.args, cwd, env: vars }
+            }
+            None => Launch { program, args, cwd, env: vars },
+        })
     }
 
     pub(crate) fn command(
@@ -103,7 +116,8 @@ impl Places {
         env: &[(String, String)],
         cwd: Option<&Path>,
     ) -> io::Result<Command> {
-        let launch = self.launch(plugin, command, env, cwd)?;
+        let launch =
+            self.launched(plugin, Invocation { argv: command, env, cwd }, Some(&self.log(&plugin.entry.id)))?;
         let log = self.open_log(&plugin.entry.id)?;
         let mut built = Command::new(launch.program);
         built.args(launch.args).current_dir(launch.cwd).stdin(Stdio::null()).stdout(log.try_clone()?).stderr(log);
