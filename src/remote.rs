@@ -10,12 +10,18 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use serde_json::Value;
 
+use self::attempts::{Ask, Attempt, Failed};
+use self::shell::RemoteShell;
 use crate::control;
 use crate::error::{Behind, Error, Result};
 use crate::os::socket::UnixStream;
 use crate::process;
 use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
+
+mod attempts;
+mod known;
+mod shell;
 
 const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";
@@ -27,6 +33,8 @@ const ERROR_PREFIX: &str = "Error: ";
 const KEPT_CHARS: usize = 300;
 const NOT_FOUND: i32 = 127;
 const CANNOT_EXECUTE: i32 = 126;
+const SSH_FAILED: i32 = 255;
+const NO_SH: i32 = 1;
 const NO_SUCH_FILE: &str = "No such file or directory";
 const OLD_CLI: &str = "unrecognized subcommand";
 const GARBAGE: &str = "the remote shell printed too much before cornercase started";
@@ -125,10 +133,29 @@ pub(crate) struct Piped {
     pub(crate) collector: Option<JoinHandle<()>>,
 }
 
-enum Found {
-    Banner(Banner),
+enum Found<T> {
+    Line(T),
     Ended,
     Garbage,
+}
+
+struct Asked<'a> {
+    remote: &'a Remote,
+    batch: bool,
+}
+
+impl Ask for Asked<'_> {
+    fn remembered(&mut self) -> Option<RemoteShell> {
+        known::shell(&self.remote.destination)
+    }
+
+    fn probe(&mut self) -> Option<RemoteShell> {
+        self.remote.probe(self.batch)
+    }
+
+    fn learn(&mut self, shell: RemoteShell) {
+        known::learn(&self.remote.destination, shell);
+    }
 }
 
 impl Remote {
@@ -136,25 +163,33 @@ impl Remote {
         &self.destination
     }
 
+    fn asked(&self, batch: bool) -> Asked<'_> {
+        Asked { remote: self, batch }
+    }
+
+    fn probe_first(&self) -> bool {
+        self.command.as_deref().is_some_and(shell::windows_program)
+    }
+
     pub(crate) fn connect(&self, usage: Use) -> Result<Piped> {
-        let mut child = Command::new(SSH)
-            .args(self.ssh_args(usage.batch(), Run::Plain, &["proxy"]))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(Error::RunSsh)?;
-        let (Some(input), Some(output), Some(errors)) = (child.stdin.take(), child.stdout.take(), child.stderr.take())
-        else {
-            let _ = child.kill();
-            return Err(Error::RunSsh(io::Error::other("ssh started without its pipes")));
-        };
+        let mut asked = self.asked(usage.batch());
+        match attempts::linked(&mut asked, self.probe_first(), |shell| self.attempt(usage, shell))? {
+            Ok(piped) => Ok(piped),
+            Err(failed) => Err(self.failure(failed.status, &failed.stderr)),
+        }
+    }
+
+    fn attempt(&self, usage: Use, shell: RemoteShell) -> Result<Attempt<Piped>> {
+        let line = self.command_for(shell, &["proxy"], false)?;
+        let (mut child, input, output, errors) = spawn_piped(self.ssh_line(usage.batch(), Run::Plain, line))?;
         let stderr = Stderr::default();
         let collector = stderr.clone().collect(errors);
         let mut reader = BufReader::new(output);
-        match read_banner(&mut reader) {
-            Found::Banner(banner) => match self.check(&banner, usage) {
-                Ok(()) => Ok(Piped { reader, writer: input, child, stderr, collector: Some(collector) }),
+        match read_line(&mut reader, parse_banner) {
+            Found::Line(banner) => match self.check(&banner, usage) {
+                Ok(()) => {
+                    Ok(Attempt::Linked(Piped { reader, writer: input, child, stderr, collector: Some(collector) }))
+                }
                 Err(e) => {
                     process::stop(child);
                     Err(e)
@@ -168,9 +203,31 @@ impl Remote {
                 drop(input);
                 let status = child.wait().ok();
                 let _ = collector.join();
-                Err(self.failure(status, &stderr))
+                Ok(Attempt::Failed(Failed { status, stderr }))
             }
         }
+    }
+
+    fn probe(&self, batch: bool) -> Option<RemoteShell> {
+        let mut child = Command::new(SSH)
+            .args(self.ssh_line(batch, Run::Plain, shell::PROBE.to_string()))
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        let found = child.stdout.take().map_or(Found::Garbage, |out| read_line(&mut BufReader::new(out), shell::heard));
+        if !matches!(found, Found::Ended) {
+            process::stop(child);
+            return answered(found, None);
+        }
+        let code = process::wait_until(&mut child, Instant::now() + ENDED_WAIT).ok().flatten().and_then(|s| s.code());
+        process::stop(child);
+        answered(found, code)
+    }
+
+    pub(crate) fn on_windows(&self) -> bool {
+        attempts::windows_there(&mut self.asked(true))
     }
 
     pub(crate) fn kill_server(&self) -> Result<bool> {
@@ -182,8 +239,29 @@ impl Remote {
     }
 
     pub(crate) fn run(&self, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
+        let words: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
+        let mut asked = self.asked(batch);
+        let ran =
+            attempts::ran(&mut asked, self.probe_first(), &words, |shell| self.run_with(shell, batch, run, &words))?;
+        if let Some(shell) = ran.learned {
+            let then = if ran.again {
+                "it ran the command again through it"
+            } else {
+                "run the command again, since cornercase does not repeat one that may have changed something there"
+            };
+            eprintln!(
+                "`{}` runs commands with {}, which cornercase uses from now on: {then}",
+                self.destination,
+                shell.name()
+            );
+        }
+        Ok(ran.status)
+    }
+
+    fn run_with(&self, shell: RemoteShell, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
+        let line = self.command_for(shell, args, run == Run::Tied)?;
         let mut command = Command::new(SSH);
-        command.args(self.ssh_args(batch, run, args));
+        command.args(self.ssh_line(batch, run, line));
         if run != Run::Tied {
             return command.status().map_err(Error::RunSsh);
         }
@@ -194,14 +272,30 @@ impl Remote {
         status
     }
 
-    fn ssh_args(&self, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Vec<String> {
+    fn ssh_line(&self, batch: bool, run: Run, line: String) -> Vec<String> {
         let mut ssh = vec![if run == Run::Terminal { "-t" } else { "-T" }.to_string()];
         ssh.extend(ALIVE.iter().map(ToString::to_string));
         if batch {
             ssh.extend(BATCH.iter().map(ToString::to_string));
         }
-        ssh.extend(["--".to_string(), self.destination.clone(), self.remote_command(args, run == Run::Tied)]);
+        ssh.extend(["--".to_string(), self.destination.clone(), line]);
         ssh
+    }
+
+    fn command_for(&self, shell: RemoteShell, args: &[impl AsRef<str>], tied: bool) -> Result<String> {
+        let words: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
+        let line = match shell {
+            RemoteShell::Posix => return Ok(self.remote_command(&words, tied)),
+            RemoteShell::Cmd => shell::cmd_line(self.command.as_deref(), &words, tied),
+            RemoteShell::PowerShell => shell::powershell_line(self.command.as_deref(), &words, tied),
+        };
+        line.map_err(|why| {
+            Error::WrongUsage(format!(
+                "cannot run cornercase on `{}` through {}: {why}",
+                self.destination,
+                shell.name()
+            ))
+        })
     }
 
     fn remote_command(&self, args: &[impl AsRef<str>], tied: bool) -> String {
@@ -328,18 +422,42 @@ fn parse_banner(line: &str) -> Option<Banner> {
     Some(Banner { protocol, release })
 }
 
-fn read_banner(reader: &mut impl BufRead) -> Found {
+fn read_line<T>(reader: &mut impl BufRead, parse: impl Fn(&str) -> Option<T>) -> Found<T> {
     for _ in 0..BANNER_LINES {
         let mut line = Vec::new();
         match reader.take(BANNER_BYTES).read_until(b'\n', &mut line) {
             Ok(0) | Err(_) => return Found::Ended,
             Ok(_) => {}
         }
-        if let Some(banner) = parse_banner(&String::from_utf8_lossy(&line)) {
-            return Found::Banner(banner);
+        if let Some(found) = parse(&String::from_utf8_lossy(&line)) {
+            return Found::Line(found);
         }
     }
     Found::Garbage
+}
+
+fn answered(found: Found<RemoteShell>, code: Option<i32>) -> Option<RemoteShell> {
+    match (found, code) {
+        (Found::Line(shell), _) => Some(shell),
+        (Found::Ended, Some(code)) if code != SSH_FAILED => Some(RemoteShell::Posix),
+        _ => None,
+    }
+}
+
+fn spawn_piped(args: Vec<String>) -> Result<(Child, ChildStdin, ChildStdout, ChildStderr)> {
+    let mut child = Command::new(SSH)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(Error::RunSsh)?;
+    let (Some(input), Some(output), Some(errors)) = (child.stdin.take(), child.stdout.take(), child.stderr.take())
+    else {
+        let _ = child.kill();
+        return Err(Error::RunSsh(io::Error::other("ssh started without its pipes")));
+    };
+    Ok((child, input, output, errors))
 }
 
 fn rebuilt(message: ClientMessage, build: String) -> ClientMessage {
@@ -365,6 +483,8 @@ fn starts(first: &ClientMessage) -> bool {
 }
 
 pub(crate) fn proxy(connect: impl FnOnce(bool) -> Result<UnixStream>) -> Result<()> {
+    #[cfg(windows)]
+    process::handles::hand_down_nothing();
     let mut out = io::stdout().lock();
     writeln!(out, "{}", banner())?;
     out.flush()?;

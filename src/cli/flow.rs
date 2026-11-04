@@ -148,11 +148,16 @@ fn listed_place(flows: &Flows, path: &Path) -> Option<ImportTo> {
 }
 
 fn listed_path(path: &Path) -> Result<PathBuf> {
-    listed_on(path, client::used_remote(), cfg!(windows))
+    listed_on(path, client::used_remote(), cfg!(windows), &super::reach::far_windows)
 }
 
-fn listed_on(path: &Path, remote: Option<&Remote>, windows: bool) -> Result<PathBuf> {
-    let path = super::reach::path_on(path, remote, windows)?;
+fn listed_on(
+    path: &Path,
+    remote: Option<&Remote>,
+    windows: bool,
+    far_is_windows: &dyn Fn() -> bool,
+) -> Result<PathBuf> {
+    let path = super::reach::path_on(path, remote, windows, far_is_windows)?;
     match path.to_str() {
         Some(text) if remote.is_some() => Ok(PathBuf::from(clean_there(text))),
         _ => Ok(clean_here(&path)),
@@ -174,8 +179,15 @@ fn clean_here(path: &Path) -> PathBuf {
 }
 
 fn clean_there(text: &str) -> String {
+    match super::reach::windows_root(text) {
+        Some((root, rest)) => format!("{root}\\{}", cleaned(rest, '\\').join("\\")),
+        None => format!("/{}", cleaned(text, '/').join("/")),
+    }
+}
+
+fn cleaned(text: &str, separator: char) -> Vec<&str> {
     let mut parts = Vec::new();
-    for part in text.split('/') {
+    for part in text.split(separator) {
         match part {
             "" | "." => {}
             ".." => {
@@ -184,7 +196,7 @@ fn clean_there(text: &str) -> String {
             part => parts.push(part),
         }
     }
-    format!("/{}", parts.join("/"))
+    parts
 }
 
 fn into_place(origin: &str) -> &'static str {

@@ -218,6 +218,10 @@ pub(crate) fn stats(session: &Path) -> PathBuf {
     session.with_file_name("stats.json")
 }
 
+pub(crate) fn remote_shells(session: &Path) -> PathBuf {
+    session.with_file_name("remote-shells.json")
+}
+
 pub(crate) fn star(session: &Path) -> PathBuf {
     session.with_file_name("star.json")
 }

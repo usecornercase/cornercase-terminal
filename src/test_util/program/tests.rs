@@ -23,6 +23,17 @@ fn it_records_its_arguments_prints_its_answers_and_exits_with_its_code() {
 }
 
 #[test]
+fn it_records_where_each_argument_ends() {
+    let dir = TempDir::new();
+    let ssh = dir.path().join("ssh");
+
+    run(&ssh, &args(&["a b", "", "c"]), &mut Vec::new(), &mut Vec::new());
+
+    let recorded = std::fs::read_to_string(ssh.with_extension("argv")).expect("read the arguments");
+    assert_eq!(recorded, "[\"a b\", \"\", \"c\"]\n");
+}
+
+#[test]
 fn with_nothing_beside_it_it_prints_nothing_and_succeeds() {
     let dir = TempDir::new();
     let (mut out, mut err) = (Vec::new(), Vec::new());

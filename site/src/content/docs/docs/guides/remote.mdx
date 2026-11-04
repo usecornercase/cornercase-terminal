@@ -31,6 +31,27 @@ cornercase remote devbox --command '~/tools/cornercase'
 
 The other machine's `sh` reads it, so `~` and `$HOME` work.
 
+## A Windows machine at the other end
+
+The other machine can run Windows, with [cornercase installed there](../../installation/) and Windows' OpenSSH Server running (an optional feature of Windows; adding it needs an administrator). Its `sshd` runs commands with cmd or PowerShell rather than `sh`, so the first time you connect, cornercase finds out which one with a harmless `echo`, then runs the proxy in a line written for that shell, and remembers the answer for that host, so later connections and reconnects go straight to it. That first connection takes three `ssh` sessions instead of one (three password prompts, if you log in with a password). A Linux or macOS machine pays nothing when the connection works; only when it fails before reaching cornercase in a way that cmd or PowerShell could explain (an exit status of 1) does cornercase send that `echo` once before reporting the error, one more `ssh` session and, with a password login, one more prompt.
+
+The answer is kept in `remote-shells.json`, in cornercase's state folder on the machine you connect from (`~/.local/state/cornercase/`, or `%LOCALAPPDATA%\cornercase\` on Windows). When the remembered shell stops working, for instance because the name now reaches another machine, cornercase asks again by itself; deleting the file, or that host's entry in it, makes it forget.
+
+The first time, `cornercase --remote winbox kill-server`, `restart` and `update` fail there and tell you to run them again, since cornercase doesn't repeat a command that may already have done something; `logs` is run again through the right shell by itself.
+
+There, cornercase is looked for on the `PATH`, then in `%USERPROFILE%\.local\bin`, where the PowerShell installer puts it, and `%USERPROFILE%\.cargo\bin`. `--command` takes the path of `cornercase.exe`, the same for cmd and PowerShell, with `~\` for your profile folder:
+
+```sh
+cornercase remote me@winbox --command 'C:\tools\cornercase.exe'
+cornercase --remote me@winbox --remote-command '~\tools\cornercase.exe' status
+```
+
+A path holding `%`, `!` or `"` is refused when the shell there is cmd, which would read them as its own.
+
+<Aside type="caution">
+For an administrator account, Windows' OpenSSH Server opens elevated sessions, so a server that `cornercase remote` starts there runs its shells and agents as administrator, and a window opened at that computer's desktop attaches to the same server. To keep them unelevated, start cornercase at the desktop first, or connect with an account that is not an administrator.
+</Aside>
+
 ## What runs where
 
 Everything that touches files or programs stays on the other machine: the shells, the agents, worktrees and git, the [changes](../changes/) and [files](../files/) panels, ` open ` (your editor opens in a new tab there), Usage and stats, the issue trackers (`gh` and your tokens live there), and its `config.json`, `session.json` and `stats.json`. A stats share link still copies to your local clipboard through OSC 52.
@@ -95,7 +116,7 @@ cornercase --remote devbox start-server
 - **It never asks** for a password, a passphrase or an unknown host key, since a script cannot answer: use a key in your SSH agent, and connect once by hand to accept the host key.
 - **Only `start-server` starts a server there.** The other commands say `no cornercase server is running on devbox`, as they do on your machine.
 - **A stream ends there when the command ends here**, even when it is killed, so `events` or `status --follow` never leaves a command running on `devbox`.
-- **Paths are the other machine's**, and the ones you type must be absolute: `open`, `config project` and `flow save --path` refuse a relative one. `open` also takes `~/…`, in that machine's home folder, and `status` shows `~/…` for paths there. `files` paths are relative to the workspace, or absolute or `~/…`. The exception is `paste-file`'s file, which is read here.
+- **Paths are the other machine's**, and the ones you type must be absolute: `open`, `config project` and `flow save --path` refuse a relative one. On a Windows machine they are Windows paths, such as `C:\Users\me\src` or `\\host\share\src`. `open` also takes `~/…`, in that machine's home folder, and `status` shows `~/…` for paths there. `files` paths are relative to the workspace, or absolute or `~/…`. The exception is `paste-file`'s file, which is read here.
 - **Give an agent there a file from here**: `cornercase --remote devbox paste-file --pane 12 shot.png` copies the file to `devbox`, keeps it in cornercase's state folder there and pastes its path into pane 12, so the agent in it can open it, with no `scp`. See [Paste a file from another machine](../scripts-and-agents/#paste-a-file-from-another-machine).
 - **Another interface can show that machine's files**: `files list`, `files read` and `files search` give the files panel's tree, viewer and search, and `files list ~/` a folder picker's listing, so a UI on your laptop needs no `ssh` of its own to read that disk. See [Browse and read a workspace's files](../scripts-and-agents/#browse-and-read-a-workspaces-files).
 - **`update`, `restart`, `kill-server` and `logs` run on that machine**, as its own `cornercase` through `ssh`: they ask their questions when you are at a terminal (`--yes` skips them), print what they print there and exit with the status they have there. `logs --follow` follows that machine's log and ends when nothing reads it. Ending or killing the command here calls off a `--when-idle` restart that waits there, as `Ctrl+C` does on your own machine (both machines need 0.12.226 or newer). The plugin commands that install or change plugins still act on the machine they run on and refuse `--remote`, with status 2.

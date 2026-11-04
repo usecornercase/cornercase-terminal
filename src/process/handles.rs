@@ -10,7 +10,7 @@ use parking_lot::{Condvar, Mutex};
 use crate::{log, panics};
 
 #[cfg(windows)]
-pub(crate) use imp::open_files;
+pub(crate) use imp::{hand_down_nothing, open_files};
 
 #[cfg(windows)]
 const NAME_WITHIN: Duration = Duration::from_secs(1);
@@ -20,6 +20,8 @@ const WORD: usize = size_of::<usize>();
 const HEADER: usize = 2 * WORD;
 const TYPE_INDEX: usize = 3 * WORD + 4;
 const ENTRY: usize = 3 * WORD + 16;
+const ATTRIBUTES: usize = 3 * WORD + 8;
+const INHERIT: u32 = 2;
 
 #[cfg(windows)]
 static WAITING: Waiting = Waiting::new(MOST_ASKED);
@@ -159,14 +161,23 @@ fn word(bytes: &[u8], at: usize) -> Option<usize> {
     Some(usize::from_ne_bytes(bytes.get(at..at.checked_add(WORD)?)?.try_into().ok()?))
 }
 
-fn type_index(entry: &[u8]) -> Option<u32> {
-    Some(u32::from_ne_bytes(entry.get(TYPE_INDEX..TYPE_INDEX + 4)?.try_into().ok()?))
+fn number(entry: &[u8], at: usize) -> Option<u32> {
+    Some(u32::from_ne_bytes(entry.get(at..at + 4)?.try_into().ok()?))
+}
+
+fn listed(snapshot: &[u8]) -> impl Iterator<Item = &[u8; ENTRY]> {
+    let count = word(snapshot, 0).unwrap_or(0);
+    snapshot.get(HEADER..).unwrap_or_default().as_chunks::<ENTRY>().0.iter().take(count)
 }
 
 fn entries(snapshot: &[u8]) -> impl Iterator<Item = (usize, u32)> {
-    let count = word(snapshot, 0).unwrap_or(0);
-    let listed = snapshot.get(HEADER..).unwrap_or_default().as_chunks::<ENTRY>().0.iter().take(count);
-    listed.filter_map(|entry| Some((word(entry, 0)?, type_index(entry)?)))
+    listed(snapshot).filter_map(|entry| Some((word(entry, 0)?, number(entry, TYPE_INDEX)?)))
+}
+
+fn handed_down(snapshot: &[u8]) -> Vec<usize> {
+    let inherits =
+        |entry: &&[u8; ENTRY]| number(*entry, ATTRIBUTES).is_some_and(|attributes| attributes & INHERIT != 0);
+    listed(snapshot).filter(inherits).filter_map(|entry| word(entry, 0)).collect()
 }
 
 fn of_type(snapshot: &[u8], wanted: u32) -> Vec<usize> {
@@ -257,12 +268,13 @@ mod imp {
 
     use windows_sys::Wdk::System::Threading::{NtQueryInformationProcess, ProcessHandleInformation};
     use windows_sys::Win32::Foundation::{
-        CompareObjectHandles, DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE, STATUS_INFO_LENGTH_MISMATCH,
+        CompareObjectHandles, DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE, HANDLE_FLAG_INHERIT,
+        STATUS_INFO_LENGTH_MISMATCH, SetHandleInformation,
     };
     use windows_sys::Win32::Storage::FileSystem::{GetFinalPathNameByHandleW, VOLUME_NAME_DOS};
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, PROCESS_DUP_HANDLE, PROCESS_QUERY_INFORMATION};
 
-    use super::{Asking, NAME_WITHIN, Object, WAITING, names, of_type, type_of};
+    use super::{Asking, NAME_WITHIN, Object, WAITING, handed_down, names, of_type, type_of};
     use crate::process::imp::{Owned, as_bytes};
 
     const SNAPSHOT_FIRST_WORDS: usize = 1 << 11;
@@ -310,6 +322,16 @@ mod imp {
         let asking =
             Asking { open: Arc::new(move |handle| process.object(handle)), within: NAME_WITHIN, waiting: &WAITING };
         names(of_type(as_bytes(&snapshot), file), &asking)
+    }
+
+    pub(crate) fn hand_down_nothing() {
+        for handle in own_handed_down() {
+            unsafe { SetHandleInformation(ptr::without_provenance_mut(handle), HANDLE_FLAG_INHERIT, 0) };
+        }
+    }
+
+    pub(super) fn own_handed_down() -> Vec<usize> {
+        snapshot(unsafe { GetCurrentProcess() }).map(|snapshot| handed_down(as_bytes(&snapshot))).unwrap_or_default()
     }
 
     fn file_type() -> Option<u32> {

@@ -80,14 +80,19 @@ pub(super) fn render_found(found: &SettingsFound) -> String {
 }
 
 fn absolute(path: &str) -> Result<PathBuf> {
-    absolute_on(path, client::used_remote(), cfg!(windows))
+    absolute_on(path, client::used_remote(), cfg!(windows), &super::reach::far_windows)
 }
 
-fn absolute_on(path: &str, remote: Option<&Remote>, windows: bool) -> Result<PathBuf> {
+fn absolute_on(
+    path: &str,
+    remote: Option<&Remote>,
+    windows: bool,
+    far_is_windows: &dyn Fn() -> bool,
+) -> Result<PathBuf> {
     if path.starts_with('~') || (remote.is_none() && Path::new(path).is_absolute()) {
         return Ok(PathBuf::from(path));
     }
-    super::reach::path_on(Path::new(path), remote, windows)
+    super::reach::path_on(Path::new(path), remote, windows, far_is_windows)
 }
 
 fn converted(pairs: &[String]) -> Result<BTreeMap<String, Value>> {
