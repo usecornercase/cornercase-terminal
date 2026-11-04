@@ -1,6 +1,6 @@
 ---
 title: Queue agents
-description: Schedule issues and prompts for a clock time, a delay or the next plan reset.
+description: Schedule issues and prompts for a clock time, a delay or the next plan reset, or repeat them as routines, each run in a new worktree.
 ---
 
 import Screen from '../../../../components/Screen.astro';
@@ -24,10 +24,13 @@ For a free prompt, click **`new`** on the **`Queue`** tab and type the prompt. T
 | `at` | a clock, `14:30` | The next 14:30, today or tomorrow. |
 | `tomorrow at` | a clock | Tomorrow at that time. |
 | `on` | a date, `2026-10-20`, and a clock | That date at that time. |
-| `in` | a number and minutes, hours or days | After that delay. |
+| `in` | a number and minutes, hours, days or weeks | After that delay. |
+| `every` | a number and minutes, hours, days or weeks | A [routine](#routines): repeats on that interval. |
+| `every day at`, `every weekday at` | a clock | A routine: every day, or Monday to Friday, at that time. |
+| `every week on` | a day and a clock | A routine: that day of every week, at that time. |
 | `Claude reset`, `Codex reset` | none | At the next reset of that agent's five-hour plan window. |
 
-The commands take the same times as text: `14:30`, `tomorrow 9:00`, `2026-10-20 09:00`, `in 30m`, `in 2h`, `claude reset` and `codex reset`.
+The commands take the same times as text: `14:30`, `tomorrow 9:00`, `2026-10-20 09:00`, `in 30m`, `in 2h`, `in 1w`, `claude reset` and `codex reset`. A routine takes `--every` instead (see below).
 
 Clock times use the zone shown in the form, supplied by the client that opened it, including a remote terminal or browser. Dates use that zone's daylight saving rules. A local time that does not exist or occurs twice is rejected; choose another time or a delay. A time such as `02:30` that has already passed today means tomorrow, even on the day the clocks change. The entry is saved as an absolute UTC instant.
 
@@ -49,6 +52,38 @@ Started entries stay until **`clear started`** or **`remove`** removes them, bot
 
 The agent command, mode, prompt and destination are captured when scheduled. Editing the prompt or time keeps that agent and mode, even if their settings changed or a custom agent was removed; choosing another agent or mode captures its current command. A closed project or workspace, a workspace that cannot be uniquely identified after restart, or a missing executable fails with a reason. If the server stops partway through starting, the entry asks you to check its workspace before retrying.
 
+## Routines
+
+A **routine** is a queue entry that repeats. Choose **`every`**, **`every day at`**, **`every weekday at`** or **`every week on`** as the kind of time (or `--every` on the command line), and each time the routine fires it starts its agent, or a [flow](../flows/) (choose it in the **Agent** list as `Name (flow)`, or `--flow`; the prompt is the orchestrator's task), in **a new workspace of its own**.
+
+<Screen name="queue-routine" alt="The schedule form with When set to every day at 09:00, Where limited to repository roots, Open in a new worktree in grey, and the checkbox to remove the workspace when it finishes" caption="A routine: each run gets a new worktree, and the checkbox removes it when the run finishes." />
+
+| Repeat | Text | Meaning |
+| --- | --- | --- |
+| `every 30m`, `every 2h` | `30m`, `2h` | A fixed time apart, however the clocks change. |
+| `every 3d`, `every 2w` | `3d`, `2w` | Every 3 days or 2 weeks, at the clock time you added it. |
+| `every day at 09:00` | `'day 09:00'` | Every day at that local time. |
+| `every weekday at 09:00` | `'weekday 09:00'` | Monday to Friday. |
+| `every week on monday at 09:00` | `'monday 09:00'` | That day of every week. |
+
+- **At least 30 minutes apart, and at most a year**, since each run makes a worktree; the form and the commands refuse anything else and say why.
+- Occurrences are counted from the schedule, not from when the last run ended, so they never drift. Days and weeks follow the local clock of the zone shown in the form, so `every day at 09:00` stays at 09:00 across daylight saving changes. Unlike a one-off entry, a local time that does not exist or occurs twice does not fail: it shifts as Jiff's `Compatible` rule does (a 02:30 that does not exist runs at 03:30 that day, and at 02:30 again the next).
+- **Each run makes its own workspace.** cornercase fetches the project's remote (`origin`, else its first remote) and makes a new worktree from the remote's default branch, on `routine/<name>-<date>-<time>`, then the project's [setup script](../worktrees/) runs as in any worktree. If the fetch fails (offline, authentication), the run **fails and says why**: it never starts from stale code without telling you. A project without a remote uses its local `main` or `master`. Only git repositories can have routines: a plain folder is refused when you add it. The form's **Where** lists only repository roots, and **Open in** says `new worktree` in grey.
+- **A run always starts**, even while the previous one is still working or waiting. Nothing is skipped and nothing is stopped; an interval shorter than the work is yours to fix.
+- **The server must be running.** A routine only fires while cornercase's server is up, as for any queued entry: nothing wakes a sleeping machine or starts a stopped server. If the server was down for several occurrences, one **`missed`** run records the gap and the routine goes on with the next occurrence after now; there is no catch-up. A run less than ten minutes late still starts.
+- The row of a routine shows its next time (or `paused`), its name and `↻ every day 09:00 · agent · project`. Its **last 10 runs** show under the same name as ordinary rows (`started` with a link to the pane, `failed`, `missed`, `removed` or `kept`); older ones drop out of the list, and dropping a run never stops its agent or removes its workspace. **`pause`** and **`resume`** stop and restart it (resuming picks the next occurrence after now, with no catch-up), **`start now`** runs it once more right away without moving its schedule, a click or `Enter` edits it (the runs to come, not the ones already going), and **`remove`** removes the routine and its runs, with **`undo`**. **`clear started`** clears finished runs, never a routine.
+- Each run uses the accounts chosen on the routine (`--account`), checked when it runs: an account removed meanwhile fails that run with the reason. A run starting, failing, missed or kept appears in a toast and a desktop notification, and in Telegram and Discord while you are [away](../telegram/).
+
+### Remove the workspace when it finishes
+
+The checkbox **`remove the workspace when it finishes`** (`--cleanup`, off by default) removes a run's workspace and the branch the routine made once the run is finished:
+
+- **Finished** means the agent's status is `done` and stays `done` for 3 minutes, so a turn that ends while subagents or background work are still running is not cut short. If the agent works again during those 3 minutes, the count starts over. An agent that is `waiting`, has failed or is waiting for review is never removed, and **looking at a run's tab keeps its workspace** (the status then becomes `idle`): the routine leaves it to you. For a flow, finished is the run's end, followed by the same 3 minutes.
+- **Only when nothing would be lost.** First comes the same check as the [Worktrees dialog](../worktrees/): nothing uncommitted, nothing unpushed and no lock, in the run's worktree and in every role's. If anything is there, the workspace stays, the run shows `kept · 2 uncommitted, 1 unpushed`, and a toast and notification say `routine <name> left changes in <workspace>`. Otherwise it is removed as in the Worktrees dialog (its teardown, shells, processes and ports stopped, the worktree and its folder), the run shows `removed`, and the local branch is deleted if it holds nothing unpushed.
+- The conversation goes with the workspace, since removing it forgets its closed agents: that is what ticking the box asks for.
+- An agent cornercase cannot read the status of (a custom command) cannot have the checkbox: it is greyed out with the reason.
+- The 3 minutes are counted in memory: removing the run from the list, closing its workspace or restarting the server cancels the count and the workspace stays.
+
 ## Commands
 
 ```sh
@@ -67,18 +102,25 @@ cornercase queue remove 2 --json
 cornercase queue clear-started
 cornercase queue clear-started --json
 cornercase queue restore 7
+cornercase queue add --every 2h --agent claude --prompt 'Check the CI of main'
+cornercase queue add --every 'day 09:00' --agent claude --cleanup --prompt 'Review the open pull requests'
+cornercase queue add --every 'weekday 09:00' --agent codex --prompt 'Triage the new issues'
+cornercase queue add --every 'monday 09:00' --flow Quick --prompt 'Update the dependencies'
+cornercase queue pause 3
+cornercase queue resume 3
+cornercase queue run 3
 ```
 
-`add` prints the entry's persistent id. `--workspace` selects an open workspace; `--project` selects an open project root; `--worktree` selects or creates a branch in that project. Without a destination, a prompt uses the current workspace and an issue uses its usual worktree when the project is a repository root. Use `--source` for ambiguous keys and self-hosted tracker URLs.
+`add` prints the entry's persistent id. `--every` makes a [routine](#routines) and does not mix with `--at`, `--issue`, `--workspace` or `--worktree`; `--project` names its repository, and `--flow` and `--cleanup` (or `--no-cleanup`) belong to routines. `pause` and `resume` take a routine's id, and `run` on a routine starts one more run and prints its id. `queue list` adds ` · ↻ every day 09:00` to a routine and ` · routine 3` to its runs. `--workspace` selects an open workspace; `--project` selects an open project root; `--worktree` selects or creates a branch in that project. Without a destination, a prompt uses the current workspace and an issue uses its usual worktree when the project is a repository root. Use `--source` for ambiguous keys and self-hosted tracker URLs.
 
-An issue URL must belong to the project: GitHub and GitLab issues are read from the project's own repository, and Jira, Plane, Linear, Shortcut and Asana ones from the site or workspace you are connected to, so a URL of another repository or site is refused instead of starting the wrong issue. An Asana link works in its old (`/0/<project>/<task>`) and new (`/1/<workspace>/project/<project>/task/<task>`) forms and must name a task of the account you are connected to. A bare key goes to the only tracker that can read it: `#7` to the project's GitHub or GitLab, `sc-482` to Shortcut, a number to the repository or Shortcut, and keys such as `ENG-7` to Linear, Jira, Plane or Asana. A bare number is never taken for Asana: use `--source asana` to read a task by its id. When two trackers could read it, add `--source`. `--mode` names a configured agent mode, `--account AGENT=ACCOUNT` the [account](../accounts/) that agent starts with (`AGENT=` for its own login; without it, the default when it runs; `edit` changes only the agents it names, and cannot set one back to the default when it runs: remove the entry and add it again), and `--name` sets the entry and tab name. `edit` can omit `--at` to keep the exact scheduled instant; `add` needs `--at` and either `--prompt` or `--issue`. Editing an entry's `--issue` moves it to the new issue's branch, unless you also pass `--worktree`. `add`, `edit`, `list`, `remove` and `clear-started` support `--json`.
+An issue URL must belong to the project: GitHub and GitLab issues are read from the project's own repository, and Jira, Plane, Linear, Shortcut and Asana ones from the site or workspace you are connected to, so a URL of another repository or site is refused instead of starting the wrong issue. An Asana link works in its old (`/0/<project>/<task>`) and new (`/1/<workspace>/project/<project>/task/<task>`) forms and must name a task of the account you are connected to. A bare key goes to the only tracker that can read it: `#7` to the project's GitHub or GitLab, `sc-482` to Shortcut, a number to the repository or Shortcut, and keys such as `ENG-7` to Linear, Jira, Plane or Asana. A bare number is never taken for Asana: use `--source asana` to read a task by its id. When two trackers could read it, add `--source`. `--mode` names a configured agent mode, `--account AGENT=ACCOUNT` the [account](../accounts/) that agent starts with (`AGENT=` for its own login; without it, the default when it runs; `edit` changes only the agents it names, and cannot set one back to the default when it runs: remove the entry and add it again), and `--name` sets the entry and tab name. `edit` can omit `--at` to keep the exact scheduled instant; `add` needs `--at` (or `--every`) and either `--prompt` or `--issue`. Editing an entry's `--issue` moves it to the new issue's branch, unless you also pass `--worktree`. `add`, `edit`, `list`, `remove` and `clear-started` support `--json`.
 
-`remove` and `clear-started` print an **undo number**, which is separate from the entry id. `clear-started` removes every started entry at once and leaves pending, starting, failed and missed entries alone; removing history does not stop its agents. With `--json`, both answer `{"entries": [...], "undo": 7}` with the complete removed entries. When nothing started, `clear-started` prints nothing, or `{"entries": []}` with `--json`, without using an undo number.
+`remove` and `clear-started` print an **undo number**, which is separate from the entry id. `clear-started` removes every started entry, and every finished run of a routine, at once and leaves pending, starting, failed and missed one-off entries and routines alone; removing history does not stop its agents. With `--json`, both answer `{"entries": [...], "undo": 7}` with the complete removed entries. When nothing started, `clear-started` prints nothing, or `{"entries": []}` with `--json`, without using an undo number.
 
 `restore 7` puts that removal back with its original ids, captured prompt, agent, mode, destination, accounts and state, in time and insertion order. Restored pending entries follow the usual scheduling and lateness rules; restoring started history does not start agents again. The server keeps the last 16 nonempty command removals until it stops, independently of the window's six-second undo notice. Undo numbers are opaque and change with the server boot. An undo number works once; an unknown, used or expired number fails. The commands check the server's `queue-undo` [feature](../scripts-and-agents/#ask-the-server-first) before removing or restoring anything.
 
 ## Storage
 
-`queue.json` lives next to `session.json`, with its own format version. For a custom socket whose session is `server.json`, the queue is `server.queue.json`, keeping different servers in the same folder separate. Its entry ids survive restarts and are not reused when an entry is removed. The server saves changes after they settle and flushes the queue on shutdown. A missing, corrupt or unsupported-version file starts an empty queue. An unreadable file is kept unchanged until you change the queue.
+`queue.json` lives next to `session.json`, with its own format version (2 only while it holds a routine, its runs or a `removed` or `kept` state, so an older cornercase finds a version it refuses instead of starting a routine once as a plain entry). For a custom socket whose session is `server.json`, the queue is `server.queue.json`, keeping different servers in the same folder separate. Its entry ids survive restarts and are not reused when an entry is removed. The server saves changes after they settle and flushes the queue on shutdown. A missing, corrupt or unsupported-version file starts an empty queue. An unreadable file is kept unchanged until you change the queue.
 
-The queue is independent of the [TODO list](../todo/). Entries run once; recurring schedules are not supported.
+The queue is independent of the [TODO list](../todo/). One-off entries run once; a [routine](#routines) repeats.

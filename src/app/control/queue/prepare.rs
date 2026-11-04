@@ -18,12 +18,12 @@ impl App {
             .transpose()
     }
 
-    pub(super) fn queue_task(
+    pub(super) fn queue_agent(
         &mut self,
         caller: Option<u64>,
         add: &QueueAdd,
         old: Option<&Entry>,
-    ) -> Result<Task, String> {
+    ) -> Result<Chosen, String> {
         let agent = old.filter(|entry| add.agent.as_ref().is_none_or(|agent| *agent == entry.task.agent)).map_or_else(
             || self.agent_kind(caller, add.agent.clone().filter(|agent| agent != agents::AUTO)),
             |entry| Ok(entry.task.agent.clone()),
@@ -38,13 +38,22 @@ impl App {
         {
             apply_mode(&mut config, &agent, mode)?;
         }
-        let place = self.queue_target(caller, add, old)?;
-        let prompt = add.prompt.clone().or_else(|| old.map(|entry| entry.task.prompt.clone())).unwrap_or_default();
         let command =
             preserve.map_or_else(|| agents::command_line(&config, &agent), |entry| entry.task.command.clone());
         let program = preserve.map_or_else(|| agents::command(&config, &agent), |entry| entry.task.program.clone());
+        Ok(Chosen { agent, command, program, mode })
+    }
+
+    pub(super) fn queue_task(
+        &mut self,
+        caller: Option<u64>,
+        add: &QueueAdd,
+        old: Option<&Entry>,
+    ) -> Result<Task, String> {
+        let Chosen { agent, command, program, mode } = self.queue_agent(caller, add, old)?;
+        let place = self.queue_target(caller, add, old)?;
+        let prompt = add.prompt.clone().or_else(|| old.map(|entry| entry.task.prompt.clone())).unwrap_or_default();
         Ok(Task {
-            at: 0,
             zone: queue_zone(add, old),
             label: queue_label(add, &prompt, old),
             agent,
@@ -55,10 +64,11 @@ impl App {
             submit: add.submit.unwrap_or_else(|| old.is_none_or(|entry| entry.task.submit)),
             place,
             accounts: merged_accounts(add, old),
+            ..Task::default()
         })
     }
 
-    fn queue_workspace(&mut self, caller: Option<u64>, add: &QueueAdd) -> Result<WorkspaceAt, String> {
+    pub(super) fn queue_workspace(&mut self, caller: Option<u64>, add: &QueueAdd) -> Result<WorkspaceAt, String> {
         if let Some(workspace) = add.workspace {
             return Ok(self.usable_workspace(workspace)?);
         }
@@ -109,7 +119,15 @@ impl App {
     }
 }
 
-fn queue_mode(config: &Config, agent: &str, add: &QueueAdd, old: Option<&Entry>) -> Option<String> {
+#[derive(Default)]
+pub(super) struct Chosen {
+    pub(super) agent: String,
+    pub(super) command: String,
+    pub(super) program: String,
+    pub(super) mode: Option<String>,
+}
+
+pub(super) fn queue_mode(config: &Config, agent: &str, add: &QueueAdd, old: Option<&Entry>) -> Option<String> {
     let default = || agents::mode_of(agent, &agents::args(config, agent), &agents::modes(config, agent));
     match add.mode.as_deref() {
         Some("default") => default(),
@@ -128,7 +146,7 @@ fn apply_mode(config: &mut Config, agent: &str, mode: &str) -> Result<(), String
     Ok(())
 }
 
-fn queue_label(add: &QueueAdd, prompt: &str, old: Option<&Entry>) -> String {
+pub(super) fn queue_label(add: &QueueAdd, prompt: &str, old: Option<&Entry>) -> String {
     let mut label = add.label.clone().unwrap_or_else(|| prompt.lines().next().unwrap_or_default().trim().to_string());
     if add.label.is_none()
         && add.issue.is_none()
@@ -139,7 +157,7 @@ fn queue_label(add: &QueueAdd, prompt: &str, old: Option<&Entry>) -> String {
     crate::text::one_line(&label.chars().filter(|character| !character.is_control()).collect::<String>())
 }
 
-fn queue_zone(add: &QueueAdd, old: Option<&Entry>) -> String {
+pub(super) fn queue_zone(add: &QueueAdd, old: Option<&Entry>) -> String {
     if add.zone.is_empty() {
         old.map_or_else(crate::queue::clock::local_zone, |entry| entry.task.zone.clone())
     } else {
@@ -147,6 +165,6 @@ fn queue_zone(add: &QueueAdd, old: Option<&Entry>) -> String {
     }
 }
 
-fn merged_accounts(add: &QueueAdd, old: Option<&Entry>) -> BTreeMap<String, String> {
+pub(super) fn merged_accounts(add: &QueueAdd, old: Option<&Entry>) -> BTreeMap<String, String> {
     old.map(|entry| entry.task.accounts.clone()).unwrap_or_default().into_iter().chain(add.accounts.clone()).collect()
 }

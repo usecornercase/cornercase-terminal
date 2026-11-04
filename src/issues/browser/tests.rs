@@ -601,11 +601,18 @@ fn the_start_button_starts_the_selected_issue() {
 
 mod queue_tab {
     use super::*;
-    use crate::issues::browser::{Queued, Tab};
+    use crate::issues::browser::{Queued, QueuedKind, Tab};
     use crate::queue::State;
 
     fn queued(id: u64, label: &str, state: State) -> Queued {
-        Queued { id, when: "2026-10-15 09:00".into(), label: label.into(), meta: "claude · shop".into(), state }
+        Queued {
+            id,
+            when: "2026-10-15 09:00".into(),
+            label: label.into(),
+            meta: "claude · shop".into(),
+            state,
+            kind: QueuedKind::Entry,
+        }
     }
 
     fn on_queue() -> Browser {
@@ -635,6 +642,38 @@ mod queue_tab {
         assert_eq!(b.labels(ROOM.buttons), ["new", "remove", "clear started", "cancel"]);
         press(&mut b, KeyCode::Down);
         assert_eq!(b.labels(ROOM.buttons), ["new", "clear started", "cancel"]);
+    }
+
+    fn on_routines() -> Browser {
+        let mut b = on_queue();
+        b.queued = vec![
+            Queued { kind: QueuedKind::Routine { paused: false }, ..queued(1, "Review", State::Pending) },
+            Queued { kind: QueuedKind::Routine { paused: true }, ..queued(2, "Triage", State::Pending) },
+            Queued { kind: QueuedKind::Run, ..queued(3, "Review", State::Removed) },
+            Queued { kind: QueuedKind::Run, ..queued(4, "Review", State::Pending) },
+        ];
+        b
+    }
+
+    #[test]
+    fn a_routine_offers_pause_or_resume_and_a_run_never_start_now() {
+        let mut b = on_routines();
+        assert_eq!(b.labels(ROOM.buttons), ["new", "start now", "pause", "remove", "clear started", "cancel"]);
+        assert_eq!(b.press(super::super::buttons::Button::Pause), Action::QueuePause(1));
+        press(&mut b, KeyCode::Down);
+        assert_eq!(b.labels(ROOM.buttons), ["new", "start now", "resume", "remove", "clear started", "cancel"]);
+        assert_eq!(b.press(super::super::buttons::Button::Resume), Action::QueueResume(2));
+        press(&mut b, KeyCode::Down);
+        assert_eq!(b.labels(ROOM.buttons), ["new", "remove", "clear started", "cancel"]);
+    }
+
+    #[test]
+    fn clear_started_shows_for_a_removed_run_but_not_for_routines_alone() {
+        let mut b = on_routines();
+        b.queued.retain(|queued| queued.kind != QueuedKind::Run);
+        assert!(!b.labels(ROOM.buttons).contains(&"clear started"));
+        b.queued.push(Queued { kind: QueuedKind::Run, ..queued(5, "Review", State::Removed) });
+        assert!(b.labels(ROOM.buttons).contains(&"clear started"));
     }
 
     #[test]

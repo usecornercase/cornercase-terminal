@@ -36,7 +36,8 @@ impl App {
         let at = entry.as_ref().map_or_else(crate::time::now, |entry| entry.task.at);
         let shown = queue::clock::display(at, &zone);
         let (date, clock) = shown.split_once(' ').unwrap_or((&shown, "09:00"));
-        let choices = Choices { places, place: confirmed.then_some(place), kinds, agent };
+        let flows = self.queue_flows(places.get(place).map(|choice| choice.place.project.as_path()));
+        let choices = Choices { places, place: confirmed.then_some(place), kinds, agent, flows };
         let mut form = Form::new(choices, zone, date);
         if let Some(entry) = &entry {
             fill_from_entry(&mut form, entry, id, clock);
@@ -50,6 +51,11 @@ impl App {
         {
             keep_mode(form, mode);
         }
+        self.queue_cleanup_off();
+    }
+
+    fn queue_flows(&self, project: Option<&std::path::Path>) -> Vec<String> {
+        self.flow_listing(project).flows.iter().map(|saved| saved.flow.name.clone()).collect()
     }
 
     fn current_place(&self, places: &[Choice], matching: &[usize]) -> usize {
@@ -171,6 +177,9 @@ impl App {
 
     fn queue_kind(&self) -> String {
         let Some(Overlay::Queue(form)) = &self.overlay else { return String::new() };
+        if form.flow().is_some() {
+            return String::new();
+        }
         let selected = form.agent.label().filter(|kind| *kind != agents::AUTO).map(str::to_string);
         self.agent_kind(None, selected).unwrap_or_default()
     }
@@ -215,9 +224,42 @@ impl App {
     }
 
     fn queue_chose(&mut self, control: Control) {
-        if control == Control::Agent {
-            self.queue_modes();
-            self.queue_accounts(None);
+        match control {
+            Control::When | Control::Place => self.queue_refit(),
+            Control::Agent => {
+                self.queue_modes();
+                self.queue_accounts(None);
+                self.queue_cleanup_off();
+            }
+            _ => {}
+        }
+    }
+
+    fn queue_refit(&mut self) {
+        let project = match &self.overlay {
+            Some(Overlay::Queue(form)) => form.choice().map(|choice| choice.place.project.clone()),
+            _ => return,
+        };
+        let flows = self.queue_flows(project.as_deref());
+        if let Some(Overlay::Queue(form)) = &mut self.overlay {
+            form.flows = flows;
+            form.refit();
+        }
+        self.queue_modes();
+        self.queue_accounts(None);
+        self.queue_cleanup_off();
+    }
+
+    fn queue_cleanup_off(&mut self) {
+        let kind = self.queue_kind();
+        let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
+        let unknown = form.flow().is_none() && !kind.is_empty() && agents::Known::of(&kind).is_none();
+        form.cleanup_off = unknown.then(|| format!("cornercase cannot tell when {kind} finishes"));
+        if form.cleanup_off.is_some() {
+            form.cleanup = false;
+            if form.focus == Control::Cleanup {
+                form.focus = Control::Agent;
+            }
         }
     }
 
@@ -304,6 +346,9 @@ impl App {
     }
 
     fn queue_add(&self, form: &Form, project: u64, workspace: Option<u64>) -> QueueAdd {
+        if form.kind().repeats() {
+            return self.routine_add(form, project);
+        }
         let agent = form.agent.label().map(str::to_string);
         let mode = form.mode.label().unwrap_or("default").to_string();
         let captured_default = mode == "default"
@@ -323,6 +368,23 @@ impl App {
             label: form.label.clone(),
             submit: form.id.is_none().then_some(true),
             accounts: self.queue_chosen_accounts(form),
+            ..QueueAdd::default()
+        }
+    }
+
+    fn routine_add(&self, form: &Form, project: u64) -> QueueAdd {
+        let flow = form.flow().map(str::to_string);
+        QueueAdd {
+            zone: form.zone.clone(),
+            agent: flow.is_none().then(|| form.agent.label().map(str::to_string)).flatten(),
+            mode: flow.is_none().then(|| form.mode.label().map(str::to_string)).flatten(),
+            project: Some(project),
+            prompt: Some(form.prompt.text()),
+            label: form.label.clone(),
+            accounts: self.queue_chosen_accounts(form),
+            repeat: form.repeat(),
+            cleanup: Some(form.cleanup),
+            flow,
             ..QueueAdd::default()
         }
     }
@@ -349,7 +411,8 @@ impl App {
                 if form.is_some() {
                     self.close_queue_form(true);
                 }
-                self.messages.toast = Some(Toast::new(format!("scheduled queue entry {id}"), ui::ToastIcon::Check));
+                let text = self.scheduled_text(id);
+                self.messages.toast = Some(Toast::new(text, ui::ToastIcon::Check));
             }
             (Err(reason), Some(form)) => {
                 form.busy = false;
@@ -358,6 +421,16 @@ impl App {
             (Err(reason), None) => {
                 self.messages.toast = Some(Toast::new(format!("could not schedule: {reason}"), ui::ToastIcon::Bug));
             }
+        }
+    }
+
+    fn scheduled_text(&self, id: u64) -> String {
+        match self.panels.queued.queue().entry(id).filter(|entry| entry.is_routine()) {
+            Some(entry) => {
+                let next = queue::clock::display(entry.task.at, &entry.task.zone);
+                format!("scheduled routine {id}, next at {next}")
+            }
+            None => format!("scheduled queue entry {id}"),
         }
     }
 
@@ -395,6 +468,40 @@ fn matching_places(places: &[Choice], entry: Option<&queue::Entry>) -> Vec<usize
     places.iter().enumerate().filter(|(_, choice)| matches_place(choice, entry)).map(|(i, _)| i).collect()
 }
 
+fn fill_routine(form: &mut Form, entry: &queue::Entry) {
+    let Some(repeat) = entry.task.repeat else { return };
+    let text = repeat.to_string();
+    let (head, clock) = text.split_once(' ').map_or((text.as_str(), None), |(head, clock)| (head, Some(clock)));
+    let day = queue::form::DAYS.iter().position(|day| *day == head);
+    let (kind, amount) = match (head, day) {
+        ("day", _) => (When::Daily, None),
+        ("weekday", _) => (When::Weekdays, None),
+        (_, Some(_)) => (When::Weekly, None),
+        _ => (When::Every, Some(head)),
+    };
+    form.when = kind.combo();
+    if let Some(clock) = clock {
+        form.clock = Editor::new(clock);
+    }
+    if let Some(day) = day {
+        form.day.choose(day);
+    }
+    if let Some(amount) = amount {
+        let split = amount.len().saturating_sub(1);
+        let unit = amount.get(split..).and_then(|letter| letter.chars().next());
+        form.amount = Editor::new(amount.get(..split).unwrap_or_default());
+        if let Some(at) = queue::form::UNITS.iter().position(|(_, letter)| Some(*letter) == unit) {
+            form.unit.choose(at);
+        }
+    }
+    form.cleanup = entry.task.cleanup;
+    form.refit();
+    let flow = entry.task.flow.as_ref().map(|flow| format!("{flow} (flow)"));
+    if let Some(at) = flow.and_then(|flow| form.agent.options().iter().position(|option| *option == flow)) {
+        form.agent.choose(at);
+    }
+}
+
 fn fill_from_entry(form: &mut Form, entry: &queue::Entry, id: Option<u64>, clock: &str) {
     form.id = id;
     form.label =
@@ -402,6 +509,7 @@ fn fill_from_entry(form: &mut Form, entry: &queue::Entry, id: Option<u64>, clock
     form.prompt = Editor::new(&entry.task.prompt);
     form.when = When::On.combo();
     form.clock = Editor::new(clock);
+    fill_routine(form, entry);
     form.open_in.choose(usize::from(entry.task.place.branch.is_some()));
     form.branch = Editor::new(entry.task.place.branch.as_deref().unwrap_or_default());
 }
@@ -440,6 +548,10 @@ fn press_control(form: &mut Form, area: Rect, (control, row, col): (Control, usi
     let r = ui::queue_form::text(area, form, control);
     let opening = form.combo_of(control).is_some_and(|combo| !combo.is_open());
     form.focus_on(control);
+    if control == Control::Cleanup {
+        form.cleanup = !form.cleanup;
+        return;
+    }
     if let Some(editor) = form.editor(control) {
         let line = ui::queue_form::first_line(editor, r) + row;
         editor.place(usize::from(r.width.max(1)), line, col);

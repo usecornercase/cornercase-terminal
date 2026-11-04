@@ -188,7 +188,7 @@ impl App {
         let made = existing
             .is_none()
             .then(|| worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &path, &branch));
-        self.spawn_run_worktrees(p, RunTrees { run: made, branch, roles }, key);
+        self.spawn_run_worktrees(p, RunTrees { run: made, branch, roles, fresh: self.fresh_run(client) }, key);
         let stage = Stage::Run(project, Box::new(starting));
         self.clients.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
         Ok(None)

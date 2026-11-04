@@ -185,7 +185,7 @@ export const page: Page = {
           ['Uso e estatísticas', 'Os limites dos seus planos e o trabalho dos seus agentes em paralelo.'],
           ['No Telegram ou Discord', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],
           ['Worktrees, organizados', 'Cada frente de trabalho ganha seu próprio branch e pasta. Os criados em outro lugar aparecem também.'],
-          ['Agentes agendados', 'Agende uma issue ou um prompt para depois, ou para a próxima renovação do limite do plano.'],
+          ['Agentes agendados', 'Agende uma issue ou um prompt para depois, ou repita-o num horário, cada execução num worktree novo.'],
         ],
       },
       {

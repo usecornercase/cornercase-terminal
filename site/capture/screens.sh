@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-run-on machines-clone"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-run-on machines-clone"
 
 pane_in() {
   cc status --json | node -e '
@@ -1352,8 +1352,12 @@ screen_queue() {
     const project = process.argv[2] + "/code/web-shop";
     const labels = ["#482 Fix the login form", "Update the docs", "Fix logout", "Review the tests"];
     const states = [{state:"pending"}, {state:"started",pane:7,server:"previous-server"}, {state:"failed",reason:"codex is not installed"}, {state:"missed"}];
-    const entries = labels.map((label, i) => ({id:i+1,at:Math.floor(Date.now()/3600000)*3600+3600+i*60,zone:"UTC",label,agent:"claude",command:"claude",program:"claude",mode:null,prompt:label,submit:true,place:{project,workspace:null,workspace_name:null,branch:"fix-login"},...states[i]}));
-    fs.writeFileSync(path, JSON.stringify({version:1,next_id:4,entries}));
+    const hour = Math.floor(Date.now()/3600000)*3600;
+    const entries = labels.map((label, i) => ({id:i+1,at:hour+3600+i*60,zone:"UTC",label,agent:"claude",command:"claude",program:"claude",mode:null,prompt:label,submit:true,place:{project,workspace:null,workspace_name:null,branch:"fix-login"},...states[i]}));
+    const routine = {id:5,at:hour+86400,zone:"UTC",label:"Check the dependencies",agent:"claude",command:"claude",program:"claude",mode:null,prompt:"Check the dependencies",submit:true,place:{project,workspace:null,workspace_name:null,branch:null},repeat:"day 09:00",state:"pending"};
+    const run = (id, at, state, pane) => ({...routine, id, at, repeat:undefined, routine:5, state:pane === undefined ? state : {state, pane, server:"previous-server"}});
+    entries.push(run(6, hour-86400, "removed"), run(7, hour-3600, "started", 7), routine);
+    fs.writeFileSync(path, JSON.stringify({version:2,next_id:8,entries}));
   ' "$CC_RUN/server.queue.json" "$CC_HOME"
   cc_start 140 38
   cc_wait 'web-shop'
@@ -1363,6 +1367,28 @@ screen_queue() {
   cc_wait 'clear started'
   cc_hover 'Issues · web-shop'
   cc_shot queue
+}
+
+screen_queue_routine() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  cc_start 110 38
+  cc_wait 'web-shop'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click 'Queue'
+  cc_wait 'nothing queued'
+  cc_click 'new   cancel'
+  cc_wait 'Schedule an agent'
+  cc_type 'Check the dependencies'
+  cc_keys Tab
+  cc_keys Down
+  cc_keys Down
+  cc_keys Down
+  cc_keys Enter
+  cc_wait 'remove the workspace'
+  cc_hover 'Workspaces'
+  cc_shot queue-routine
 }
 
 screen_queue_form() {

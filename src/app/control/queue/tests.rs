@@ -31,6 +31,8 @@ fn queue_removal_requests_keep_their_wire_shape_and_have_no_unknown_fields() {
         (control::Queue::Remove(5), json!({"action": "remove", "entry": 5})),
         (control::Queue::ClearStarted, json!({"action": "clear-started"})),
         (control::Queue::Restore(8), json!({"action": "restore", "entry": 8})),
+        (control::Queue::Pause(3), json!({"action": "pause", "entry": 3})),
+        (control::Queue::Resume(3), json!({"action": "resume", "entry": 3})),
     ];
     for (command, args) in cases {
         let raw = json!({"contract": 1, "command": "queue", "args": args});

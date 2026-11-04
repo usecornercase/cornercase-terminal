@@ -97,6 +97,10 @@ pub(crate) fn use_queue_undo() -> Result<()> {
     require("queue-undo", "cannot undo queue removals or clear started entries")
 }
 
+pub(crate) fn use_queue_routines() -> Result<()> {
+    require("queue-routines", "cannot repeat queue entries, run flows from the queue, or pause and resume routines")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }

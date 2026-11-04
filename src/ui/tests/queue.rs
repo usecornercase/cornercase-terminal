@@ -48,7 +48,8 @@ fn form(prompt: &str, note: Option<&str>) -> Form {
         Choice { label: "shop · root".into(), place: Place::default(), worktree: true },
         Choice { label: "shop › main".into(), place: Place::default(), worktree: false },
     ];
-    let choices = Choices { places, place: Some(0), kinds: vec!["auto".into(), "claude".into()], agent: 1 };
+    let choices =
+        Choices { places, place: Some(0), kinds: vec!["auto".into(), "claude".into()], agent: 1, flows: Vec::new() };
     let mut form = Form::new(choices, "Europe/Madrid".into(), "2026-10-14");
     form.prompt = Editor::new(prompt);
     form.open_in.choose(1);
@@ -182,4 +183,90 @@ fn an_unfocused_field_draws_no_selection() {
     let before = reversed(&shown(f.clone(), 100, 24));
     f.prompt.select_all();
     assert_eq!(reversed(&shown(f, 100, 24)), before);
+}
+
+fn routine_form(when: When) -> Form {
+    let mut f = form("Review the open pull requests", None);
+    f.when = when.combo();
+    f.flows = vec!["Quick".into()];
+    f.refit();
+    f
+}
+
+#[test]
+fn a_routine_shows_its_repeat_the_checkbox_and_a_worktree_it_makes_itself() {
+    let mut f = routine_form(When::Daily);
+    f.cleanup = true;
+    f.focus = Control::Cleanup;
+    let t = shown(f, 100, 24);
+    insta::assert_snapshot!(t.backend());
+    let lines = lines(&t);
+    assert!(lines.iter().any(|l| l.contains("When      every day at")), "{lines:#?}");
+    assert!(lines.iter().any(|l| l.contains("Open in   new worktree")), "{lines:#?}");
+    assert!(lines.iter().any(|l| l.contains("[x] remove the workspace when it finishes")), "{lines:#?}");
+}
+
+#[test]
+fn the_checkbox_is_greyed_with_its_reason_when_the_agent_cannot_be_read() {
+    let mut f = routine_form(When::Every);
+    f.cleanup_off = Some("cornercase cannot tell when mine finishes".into());
+    let t = shown(f, 100, 24);
+    insta::assert_snapshot!(t.backend());
+    let lines = lines(&t);
+    assert!(lines.iter().any(|l| l.contains("at least 30 minutes apart")), "{lines:#?}");
+    let at = lines.iter().position(|l| l.contains("[ ] remove the workspace")).expect("the checkbox row");
+    let x = lines[at].find("[ ]").expect("its box");
+    let x = u16::try_from(lines[at][..x].chars().count()).expect("column");
+    let y = u16::try_from(at).expect("row");
+    assert_eq!(t.backend().buffer()[(x, y)].fg, view(&["shop"]).muted);
+}
+
+#[test]
+fn a_flow_replaces_the_mode_and_the_account() {
+    let mut f = routine_form(When::Weekly);
+    f.agent.choose(2);
+    let t = shown(f, 100, 24);
+    insta::assert_snapshot!(t.backend());
+    let lines = lines(&t);
+    assert!(lines.iter().any(|l| l.contains("set by the flow's roles")), "{lines:#?}");
+}
+
+#[test]
+fn the_queue_tab_shows_routines_their_runs_and_a_paused_one() {
+    let row = |when: &str, label: &str, meta: &str, colour| IssueRow {
+        key: when.into(),
+        title: label.into(),
+        meta: meta.into(),
+        colour,
+    };
+    let items = vec![
+        row("2026-10-15 09:00", "Review the open pull requests", "↻ every day 09:00 · claude · shop", None),
+        row("paused", "Triage new issues", "↻ every 2h · claude · shop", Some(Color::DarkGray)),
+        row(
+            "2026-10-14 09:00",
+            "Review the open pull requests",
+            "started · pane 7 · claude · shop › routine/review",
+            Some(Color::Green),
+        ),
+        row("2026-10-13 09:00", "Review the open pull requests", "removed · claude · shop", Some(Color::DarkGray)),
+        row(
+            "2026-10-12 09:00",
+            "Review the open pull requests",
+            "kept · 2 uncommitted · claude · shop",
+            Some(Color::Yellow),
+        ),
+    ];
+    let issues = Issues {
+        title: "Issues · shop".into(),
+        tabs: vec!["All", "GitHub", "Queue"],
+        tab: 2,
+        toggles: Vec::new(),
+        on: Vec::new(),
+        body: IssuesBody::List { filter: String::new(), items, selected: Some(0), scroll: 0, empty: String::new() },
+        note: None,
+        hint: "enter edits it · start now runs it once more".into(),
+        buttons: vec!["new", "start now", "pause", "remove", "clear started", "cancel"],
+    };
+    let view = View { overlay: Some(Overlay::Issues(issues)), ..view(&["shop"]) };
+    insta::assert_snapshot!(render_sized(&view, 120, 24).backend());
 }

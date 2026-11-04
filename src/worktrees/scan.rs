@@ -152,3 +152,24 @@ pub(crate) fn processes(paths: &[PathBuf], shells: &[(i32, Vec<usize>)]) -> Vec<
     let found = outside(paths, &panes, server);
     found.into_iter().map(|(at, name, tab)| (paths[at].clone(), name, tab)).collect()
 }
+
+pub(crate) fn left_over(paths: &[PathBuf], base: Option<&str>) -> Option<String> {
+    let (mut changed, mut unpushed) = (0, 0);
+    for path in paths {
+        let found = match scan(path, base) {
+            Ok(found) => found,
+            Err(error) => return Some(format!("could not check it: {error}")),
+        };
+        if let Some(lock) = &found.lock {
+            return Some(if lock.reason.is_empty() { "locked".into() } else { format!("locked: {}", lock.reason) });
+        }
+        changed += found.changed;
+        unpushed += found.unpushed;
+    }
+    let parts: Vec<String> = [(changed, "uncommitted"), (unpushed, "unpushed")]
+        .into_iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, what)| format!("{count} {what}"))
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(", "))
+}

@@ -1,0 +1,28 @@
+---
+source: src/ui/tests/queue.rs
+expression: t.backend()
+---
+"  ⌕ search pro╭─ Schedule an agent ──────────────────────────────────────────────────╮              "
+"              │ Prompt                                                               │              "
+" Projects     │ Review the open pull requests                                        │              "
+"              │                                                                      │              "
+"▌ shop (1)    │                                                                      │              "
+"              │                                                                      │              "
+"  + New       │ When      every          ▾                                           │              "
+"              │           2      hours    ▾  at least 30 minutes apart               │              "
+"              │                                                                      │              "
+"              │ Where     shop · root                              ▾                 │              "
+"              │                                                                      │              "
+"              │ Open in   new worktree                                               │              "
+"              │                                                                      │              "
+"              │ Agent     claude         ▾                                           │              "
+"              │                                                                      │              "
+"              │ Mode      plan           ▾                                           │              "
+"              │                                                                      │              "
+"              │          [ ] remove the workspace when it finishes                   │              "
+"              │              cornercase cannot tell when mine finishes               │              "
+"              │ Times use Europe/Madrid. Each run gets a new worktree from the       │              "
+"              │ up-to-date default branch and accepts its folder trust question.     │              "
+" ─────────────│                                                   schedule   cancel  │              "
+"  Worktrees   ╰──────────────────────────────────────────────────────────────────────╯              "
+"  More ▴                 Help  │                         │                                          "

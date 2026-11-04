@@ -19,6 +19,7 @@ fn seed(app: &mut App, states: &[State]) -> Vec<Entry> {
             submit: true,
             accounts: [("claude".into(), "home".into())].into(),
             place: crate::queue::Place { project: PathBuf::from("/project"), ..Default::default() },
+            ..Task::default()
         };
         let id = queue.add(task).expect("scheduled");
         queue.entry_mut(id).expect("entry").state = state.clone();
@@ -137,9 +138,11 @@ fn removing_an_entry_while_it_starts_leaves_it_and_creates_no_undo() {
     let (mut app, _rx) = app();
     let before = seed(&mut app, &[State::Pending]);
     let id = before[0].id;
-    app.panels.queued.start(id);
+    app.panels.queued.start(id, Instant::now());
     let error = refused(&mut app, "queue", &json!({"action": "remove", "entry": id}));
     assert!(error.message.contains("already starting"));
     assert_eq!(app.panels.queued.queue().entry(id).expect("entry kept").state, State::Starting);
     assert!(app.panels.queued.take_removed(1).is_none());
 }
+
+mod routines;

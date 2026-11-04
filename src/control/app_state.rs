@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{KeepAwake, TodoItem};
 use crate::machines::Info;
-use crate::queue::Entry;
+use crate::queue::Listed;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -17,7 +17,7 @@ pub(crate) struct AppState {
     pub(crate) version: String,
     pub(crate) boot: String,
     pub(crate) todos: Vec<TodoItem>,
-    pub(crate) queue: Vec<Entry>,
+    pub(crate) queue: Vec<Listed>,
     pub(crate) away: Vec<AwayInfo>,
     pub(crate) update: UpdateInfo,
     pub(crate) keep_awake: Option<KeepAwake>,

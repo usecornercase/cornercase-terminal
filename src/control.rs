@@ -902,6 +902,8 @@ pub(crate) enum Queue {
     Run(u64),
     ClearStarted,
     Restore(u64),
+    Pause(u64),
+    Resume(u64),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -920,4 +922,7 @@ pub(crate) struct QueueAdd {
     pub(crate) label: Option<String>,
     pub(crate) submit: Option<bool>,
     pub(crate) accounts: BTreeMap<String, String>,
+    pub(crate) repeat: Option<String>,
+    pub(crate) flow: Option<String>,
+    pub(crate) cleanup: Option<bool>,
 }

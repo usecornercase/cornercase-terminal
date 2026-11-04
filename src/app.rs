@@ -85,6 +85,7 @@ use overlay::Overlay;
 use plugins::{PluginEvent, Plugins};
 use queue_panel::QueueEvent;
 use recap_panel::RecapEvent;
+use routine_cleanup::RoutineEvent;
 use search_dialog::SearchEvent;
 use session::not_restored;
 use toast::Toast;
@@ -152,6 +153,7 @@ mod queue_panel;
 mod recap_panel;
 mod refresh;
 mod remote_access;
+mod routine_cleanup;
 mod search_dialog;
 mod session;
 mod settings_dialog;
@@ -458,6 +460,7 @@ impl App {
         self.drive_launches(now);
         self.latch_run_ends();
         self.watch_agents(now);
+        self.drive_cleanups(now);
         self.follow_sent_work(now);
         self.drive_restarts(now);
         self.keep_awake(now);
@@ -635,6 +638,7 @@ impl App {
             AppEvent::Update(event) => self.update_answered(event),
             AppEvent::Search(event) => self.search_answered(event),
             AppEvent::Queue(event) => self.queue_prepared(*event),
+            AppEvent::Routine(event) => self.routine_event(*event),
             AppEvent::Usage(key, result) => self.usages.state.answered(key, result, Instant::now()),
             AppEvent::Breakdown { pane, pid, result } => self.breakdown_answered(pane, pid, *result),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),

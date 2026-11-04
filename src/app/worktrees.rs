@@ -282,6 +282,26 @@ impl App {
         );
     }
 
+    pub(super) fn spawn_fresh_worktree(&self, p: usize, branch: String, request: u64) {
+        let project = &self.projects[p];
+        let (id, repo) = (project.id, project.path.clone());
+        let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
+        let job = Job::new(Level::Info, "worktree", "add from the default branch").with("project", id);
+        let job = job.with("branch", &branch).with("path", path.display());
+        self.spawn_job(
+            job,
+            move || worktree::fresh::create(&repo, &branch, &path).map(|()| path),
+            move |result, _| {
+                Some(AppEvent::Worktree(WorktreeEvent::Created {
+                    project: id,
+                    result,
+                    start: None,
+                    request: Some(request),
+                }))
+            },
+        );
+    }
+
     pub(super) fn create_workspace(
         &mut self,
         project: u64,
@@ -531,6 +551,10 @@ impl App {
     }
 
     pub(super) fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<Option<String>>) {
+        if let Some(cleaning) = self.panels.queued.cleanups.take_cleaning(workspace) {
+            self.run_removed(project, workspace, cleaning, result);
+            return;
+        }
         if self.cleaning(workspace) {
             self.cleanup_removed(project, workspace, result);
             return;

@@ -9,6 +9,7 @@ use crate::log;
 use crate::os::ffi;
 use crate::process;
 
+pub(crate) mod fresh;
 pub(crate) mod setup;
 
 pub(crate) const INCLUDE_FILE: &str = ".worktreeinclude";

@@ -26,8 +26,12 @@ pub(crate) enum QueueAction {
         #[command(flatten)]
         print: Print,
     },
-    #[command(about = "Start a pending, missed or failed entry now")]
+    #[command(about = "Start a pending, missed or failed entry now, or a routine once more")]
     Run { id: u64 },
+    #[command(about = "Stop a routine from firing until it is resumed")]
+    Pause { id: u64 },
+    #[command(about = "Let a paused routine fire again, from the next occurrence after now")]
+    Resume { id: u64 },
     #[command(about = "Remove every started entry and print the number that restore takes to put them back")]
     ClearStarted(Print),
     #[command(about = "Put back what remove or clear-started removed")]
@@ -39,8 +43,24 @@ pub(crate) enum QueueAction {
 
 #[derive(Debug, Args)]
 pub(crate) struct QueueAdd {
-    #[arg(long, help = "Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, claude reset or codex reset")]
+    #[arg(
+        long,
+        help = "Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, in 1w, claude reset or codex reset"
+    )]
     pub(crate) at: Option<String>,
+    #[arg(
+        long,
+        conflicts_with_all = ["at", "issue", "workspace", "worktree"],
+        help = "Make a routine that repeats: 30m, 2h, 3d, 2w, 'day 09:00', 'weekday 09:00' or 'monday 09:00'. At least \
+                30 minutes apart; each run gets its own worktree from the up-to-date default branch"
+    )]
+    pub(crate) every: Option<String>,
+    #[arg(long, conflicts_with_all = ["agent", "mode"], help = "Run this flow in each run of a routine; the prompt is its task")]
+    pub(crate) flow: Option<String>,
+    #[arg(long, help = "Remove a routine run's workspace when it finishes, if nothing would be lost")]
+    pub(crate) cleanup: bool,
+    #[arg(long, conflicts_with = "cleanup", help = "Keep a routine run's workspace (the default)")]
+    pub(crate) no_cleanup: bool,
     #[arg(long, help = "Agent name, or auto to use the current default or running agent")]
     pub(crate) agent: Option<String>,
     #[arg(long, help = "One of the agent's configured modes")]

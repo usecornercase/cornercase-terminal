@@ -9,7 +9,8 @@ fn choice(label: &str, worktree: bool) -> Choice {
 
 fn form(when: When) -> Form {
     let places = vec![choice("web-shop · root", true), choice("web-shop › main", false)];
-    let choices = Choices { places, place: Some(0), kinds: vec!["auto".into(), "claude".into()], agent: 1 };
+    let choices =
+        Choices { places, place: Some(0), kinds: vec!["auto".into(), "claude".into()], agent: 1, flows: Vec::new() };
     let mut form = Form::new(choices, "Europe/Madrid".into(), "2026-10-20");
     form.prompt = Editor::new("fix the login");
     form.when = when.combo();
@@ -113,4 +114,87 @@ fn ctrl_and_the_arrows_move_a_field_by_word() {
     f.key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL), 60, 8);
     press(&mut f, KeyCode::Char('x'));
     assert_eq!(f.prompt.text(), "fix the xlogin");
+}
+
+mod routines {
+    use super::*;
+
+    fn routine_form(when: When) -> Form {
+        let mut f = form(when);
+        f.places.push(choice("api · root", true));
+        f.flows = vec!["Quick".into()];
+        f.refit();
+        f
+    }
+
+    #[rstest]
+    #[case::every(When::Every, "2h")]
+    #[case::daily(When::Daily, "day 14:30")]
+    #[case::weekdays(When::Weekdays, "weekday 14:30")]
+    #[case::weekly(When::Weekly, "monday 14:30")]
+    fn each_repeat_writes_the_text_the_server_reads(#[case] when: When, #[case] text: &str) {
+        let f = routine_form(when);
+        assert_eq!((f.repeat().as_deref(), f.at().as_str()), (Some(text), ""));
+        assert!(form(When::In).repeat().is_none());
+    }
+
+    #[test]
+    fn weeks_are_a_unit_of_a_delay_and_of_a_repeat() {
+        let mut f = routine_form(When::In);
+        f.unit.choose(3);
+        assert_eq!(f.at(), "in 2w");
+        f.when = When::Every.combo();
+        assert_eq!(f.repeat().as_deref(), Some("2w"));
+    }
+
+    #[rstest]
+    #[case::weekly(When::Weekly, &[Control::Day, Control::Clock][..])]
+    #[case::daily(When::Daily, &[Control::Clock])]
+    #[case::every(When::Every, &[Control::Amount, Control::Unit])]
+    fn a_routine_shows_its_values_but_neither_open_in_nor_a_branch(#[case] when: When, #[case] values: &[Control]) {
+        let f = routine_form(when);
+        let controls = f.controls();
+        let place = controls.iter().position(|control| *control == Control::Place).expect("place");
+        assert_eq!(&controls[2..place], values);
+        assert!(!controls.contains(&Control::OpenIn) && !controls.contains(&Control::Branch));
+        assert_eq!(controls.last(), Some(&Control::Cleanup));
+    }
+
+    #[test]
+    fn only_repository_roots_are_offered_and_the_chosen_project_is_kept() {
+        let mut f = routine_form(When::Daily);
+        assert_eq!(f.place.options(), ["web-shop · root", "api · root"]);
+        f.place.choose(1);
+        f.when = When::In.combo();
+        f.refit();
+        assert_eq!(f.place.options().len(), 3);
+        assert_eq!(f.choice().map(|choice| choice.label.as_str()), Some("api · root"));
+        f.when = When::Daily.combo();
+        f.refit();
+        assert_eq!(f.choice().map(|choice| choice.label.as_str()), Some("api · root"));
+    }
+
+    #[test]
+    fn flows_are_listed_for_routines_only_and_drop_mode_and_account() {
+        let mut f = routine_form(When::Daily);
+        assert_eq!(f.agent.options(), ["auto", "claude", "Quick (flow)"]);
+        assert_eq!(f.flow(), None);
+        f.agent.choose(2);
+        assert_eq!(f.flow(), Some("Quick"));
+        assert!(!f.controls().contains(&Control::Mode));
+        f.when = When::In.combo();
+        f.refit();
+        assert_eq!(f.agent.options(), ["auto", "claude"]);
+        assert_eq!(f.flow(), None);
+    }
+
+    #[test]
+    fn space_toggles_the_cleanup_unless_the_agent_cannot_be_read() {
+        let mut f = routine_form(When::Daily);
+        f.focus = Control::Cleanup;
+        press(&mut f, KeyCode::Char(' '));
+        assert!(f.cleanup);
+        f.cleanup_off = Some("cornercase cannot tell when mine finishes".into());
+        assert!(!f.controls().contains(&Control::Cleanup));
+    }
 }

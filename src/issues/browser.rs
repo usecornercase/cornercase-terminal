@@ -84,11 +84,34 @@ pub(crate) struct Queued {
     pub(crate) label: String,
     pub(crate) meta: String,
     pub(crate) state: State,
+    pub(crate) kind: QueuedKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum QueuedKind {
+    Entry,
+    Routine { paused: bool },
+    Run,
 }
 
 impl Queued {
     pub(crate) fn runnable(&self) -> bool {
-        matches!(self.state, State::Pending | State::Failed { .. } | State::Missed)
+        match self.kind {
+            QueuedKind::Run => false,
+            QueuedKind::Routine { .. } => true,
+            QueuedKind::Entry => matches!(self.state, State::Pending | State::Failed { .. } | State::Missed),
+        }
+    }
+
+    pub(crate) fn clearable(&self) -> bool {
+        match self.kind {
+            QueuedKind::Routine { .. } => false,
+            QueuedKind::Entry => matches!(self.state, State::Started { .. }),
+            QueuedKind::Run => matches!(
+                self.state,
+                State::Started { .. } | State::Removed | State::Kept { .. } | State::Failed { .. } | State::Missed
+            ),
+        }
     }
 
     fn matches(&self, query: &str) -> bool {
@@ -280,6 +303,8 @@ pub(crate) enum Action {
     QueueNew,
     QueueOpen(u64),
     QueueRun(u64),
+    QueuePause(u64),
+    QueueResume(u64),
     QueueRemove(u64),
     QueueClear,
     CheckToken(Source, Secret),

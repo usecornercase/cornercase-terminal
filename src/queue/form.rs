@@ -13,12 +13,14 @@ pub(crate) enum Control {
     Date,
     Amount,
     Unit,
+    Day,
     Place,
     OpenIn,
     Branch,
     Agent,
     Account,
     Mode,
+    Cleanup,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,13 +29,31 @@ pub(crate) enum When {
     Tomorrow,
     On,
     In,
+    Every,
+    Daily,
+    Weekdays,
+    Weekly,
     ClaudeReset,
     CodexReset,
 }
 
 impl When {
-    pub(crate) const ALL: [Self; 6] =
-        [Self::At, Self::Tomorrow, Self::On, Self::In, Self::ClaudeReset, Self::CodexReset];
+    pub(crate) const ALL: [Self; 10] = [
+        Self::At,
+        Self::Tomorrow,
+        Self::On,
+        Self::In,
+        Self::Every,
+        Self::Daily,
+        Self::Weekdays,
+        Self::Weekly,
+        Self::ClaudeReset,
+        Self::CodexReset,
+    ];
+
+    pub(crate) fn repeats(self) -> bool {
+        matches!(self, Self::Every | Self::Daily | Self::Weekdays | Self::Weekly)
+    }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
@@ -41,6 +61,10 @@ impl When {
             Self::Tomorrow => "tomorrow at",
             Self::On => "on",
             Self::In => "in",
+            Self::Every => "every",
+            Self::Daily => "every day at",
+            Self::Weekdays => "every weekday at",
+            Self::Weekly => "every week on",
             Self::ClaudeReset => "Claude reset",
             Self::CodexReset => "Codex reset",
         }
@@ -54,7 +78,9 @@ impl When {
     }
 }
 
-pub(crate) const UNITS: [(&str, char); 3] = [("minutes", 'm'), ("hours", 'h'), ("days", 'd')];
+pub(crate) const UNITS: [(&str, char); 4] = [("minutes", 'm'), ("hours", 'h'), ("days", 'd'), ("weeks", 'w')];
+
+pub(crate) const DAYS: [&str; 7] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 pub(crate) const OPEN_IN: [&str; 2] = ["new tab", "new worktree"];
 
@@ -79,6 +105,7 @@ pub(crate) struct Choices {
     pub(crate) place: Option<usize>,
     pub(crate) kinds: Vec<String>,
     pub(crate) agent: usize,
+    pub(crate) flows: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -91,11 +118,17 @@ pub(crate) struct Form {
     pub(crate) date: Editor,
     pub(crate) amount: Editor,
     pub(crate) unit: Combo,
+    pub(crate) day: Combo,
     pub(crate) places: Vec<Choice>,
+    pub(crate) shown: Vec<usize>,
     pub(crate) place: Combo,
     pub(crate) open_in: Combo,
     pub(crate) branch: Editor,
+    pub(crate) kinds: Vec<String>,
+    pub(crate) flows: Vec<String>,
     pub(crate) agent: Combo,
+    pub(crate) cleanup: bool,
+    pub(crate) cleanup_off: Option<String>,
     pub(crate) account: Option<AgentAccounts>,
     pub(crate) mode: Combo,
     pub(crate) focus: Control,
@@ -106,7 +139,7 @@ pub(crate) struct Form {
 
 impl Form {
     pub(crate) fn new(choices: Choices, zone: String, today: &str) -> Self {
-        let Choices { places, place, kinds, agent } = choices;
+        let Choices { places, place, kinds, agent, flows } = choices;
         Self {
             id: None,
             label: None,
@@ -116,11 +149,17 @@ impl Form {
             date: Editor::new(today),
             amount: Editor::new("2"),
             unit: Combo::new(UNITS.iter().map(|(name, _)| (*name).to_string()).collect(), Some(1)),
+            day: Combo::new(DAYS.map(String::from).into(), Some(0)),
             place: Combo::new(places.iter().map(|choice| choice.label.clone()).collect(), place),
+            shown: (0..places.len()).collect(),
             places,
             open_in: Combo::new(OPEN_IN.map(String::from).into(), Some(0)),
             branch: Editor::default(),
-            agent: Combo::new(kinds, Some(agent)),
+            agent: Combo::new(kinds.clone(), Some(agent)),
+            kinds,
+            flows,
+            cleanup: false,
+            cleanup_off: None,
             account: None,
             mode: Combo::new(vec!["default".into()], Some(0)),
             focus: Control::Prompt,
@@ -139,7 +178,37 @@ impl Form {
     }
 
     pub(crate) fn choice(&self) -> Option<&Choice> {
-        self.place.chosen().and_then(|i| self.places.get(i))
+        self.place.chosen().and_then(|i| self.shown.get(i)).and_then(|i| self.places.get(*i))
+    }
+
+    pub(crate) fn flow(&self) -> Option<&str> {
+        let chosen = self.agent.chosen()?;
+        let at = chosen.checked_sub(self.kinds.len())?;
+        self.kind().repeats().then(|| self.flows.get(at)).flatten().map(String::as_str)
+    }
+
+    pub(crate) fn refit(&mut self) {
+        let routine = self.kind().repeats();
+        let place = self.choice().map(|choice| choice.label.clone());
+        self.shown = (0..self.places.len())
+            .filter(|i| {
+                !routine
+                    || self.places.get(*i).is_some_and(|choice| choice.worktree && choice.place.workspace.is_none())
+            })
+            .collect();
+        let labels: Vec<String> =
+            self.shown.iter().filter_map(|i| self.places.get(*i)).map(|choice| choice.label.clone()).collect();
+        let at = place
+            .and_then(|place| labels.iter().position(|label| *label == place))
+            .or(usize::from(!labels.is_empty()).checked_sub(1));
+        self.place = Combo::new(labels, at);
+        let agent = self.agent.label().map(str::to_string);
+        let mut options = self.kinds.clone();
+        if routine {
+            options.extend(self.flows.iter().map(|flow| format!("{flow} (flow)")));
+        }
+        let at = agent.and_then(|agent| options.iter().position(|option| *option == agent)).unwrap_or_default();
+        self.agent = Combo::new(options, Some(at));
     }
 
     pub(crate) fn can_branch(&self) -> bool {
@@ -150,41 +219,74 @@ impl Form {
         self.can_branch() && self.open_in.chosen() == Some(1)
     }
 
+    pub(crate) fn repeat(&self) -> Option<String> {
+        let clock = self.clock.text().trim().to_string();
+        match self.kind() {
+            When::Every => Some(format!("{}{}", self.amount.text().trim(), self.unit_letter())),
+            When::Daily => Some(format!("day {clock}")),
+            When::Weekdays => Some(format!("weekday {clock}")),
+            When::Weekly => {
+                let day = self.day.chosen().and_then(|i| DAYS.get(i)).unwrap_or(&DAYS[0]);
+                Some(format!("{day} {clock}"))
+            }
+            _ => None,
+        }
+    }
+
+    fn unit_letter(&self) -> char {
+        self.unit.chosen().and_then(|i| UNITS.get(i)).map_or('h', |(_, unit)| *unit)
+    }
+
     pub(crate) fn at(&self) -> String {
         let clock = self.clock.text().trim().to_string();
         match self.kind() {
             When::At => clock,
             When::Tomorrow => format!("tomorrow {clock}"),
             When::On => format!("{} {clock}", self.date.text().trim()),
-            When::In => {
-                let unit = self.unit.chosen().and_then(|i| UNITS.get(i)).map_or('h', |(_, unit)| *unit);
-                format!("in {}{unit}", self.amount.text().trim())
-            }
+            When::In => format!("in {}{}", self.amount.text().trim(), self.unit_letter()),
+            When::Every | When::Daily | When::Weekdays | When::Weekly => String::new(),
             When::ClaudeReset => "claude reset".into(),
             When::CodexReset => "codex reset".into(),
         }
     }
 
-    pub(crate) fn controls(&self) -> Vec<Control> {
-        let mut controls = vec![Control::Prompt, Control::When];
-        controls.extend(match self.kind() {
-            When::At | When::Tomorrow => &[Control::Clock][..],
+    fn values(&self) -> &'static [Control] {
+        match self.kind() {
+            When::At | When::Tomorrow | When::Daily | When::Weekdays => &[Control::Clock],
             When::On => &[Control::Date, Control::Clock],
-            When::In => &[Control::Amount, Control::Unit],
+            When::In | When::Every => &[Control::Amount, Control::Unit],
+            When::Weekly => &[Control::Day, Control::Clock],
             When::ClaudeReset | When::CodexReset => &[],
-        });
-        controls.push(Control::Place);
-        if self.can_branch() {
+        }
+    }
+
+    fn after_place(&self) -> Vec<Control> {
+        let routine = self.kind().repeats();
+        let mut controls = Vec::new();
+        if self.can_branch() && !routine {
             controls.push(Control::OpenIn);
         }
-        if self.worktree() {
+        if self.worktree() && !routine {
             controls.push(Control::Branch);
         }
         controls.push(Control::Agent);
-        if self.account.is_some() {
+        if self.account.is_some() && self.flow().is_none() {
             controls.push(Control::Account);
         }
-        controls.push(Control::Mode);
+        if self.flow().is_none() {
+            controls.push(Control::Mode);
+        }
+        if routine && self.cleanup_off.is_none() {
+            controls.push(Control::Cleanup);
+        }
+        controls
+    }
+
+    pub(crate) fn controls(&self) -> Vec<Control> {
+        let mut controls = vec![Control::Prompt, Control::When];
+        controls.extend(self.values());
+        controls.push(Control::Place);
+        controls.extend(self.after_place());
         controls
     }
 
@@ -214,6 +316,7 @@ impl Form {
         match control {
             Control::When => Some(&self.when),
             Control::Unit => Some(&self.unit),
+            Control::Day => Some(&self.day),
             Control::Place => Some(&self.place),
             Control::OpenIn => Some(&self.open_in),
             Control::Agent => Some(&self.agent),
@@ -227,6 +330,7 @@ impl Form {
         match control {
             Control::When => Some(&mut self.when),
             Control::Unit => Some(&mut self.unit),
+            Control::Day => Some(&mut self.day),
             Control::Place => Some(&mut self.place),
             Control::OpenIn => Some(&mut self.open_in),
             Control::Agent => Some(&mut self.agent),
@@ -244,6 +348,7 @@ impl Form {
         for control in [
             Control::When,
             Control::Unit,
+            Control::Day,
             Control::Place,
             Control::OpenIn,
             Control::Agent,
@@ -277,6 +382,7 @@ impl Form {
             KeyCode::Tab => self.step_focus(true),
             KeyCode::BackTab => self.step_focus(false),
             KeyCode::Enter => return Step::Submit,
+            KeyCode::Char(' ') if self.focus == Control::Cleanup => self.cleanup = !self.cleanup,
             _ => {
                 let focus = self.focus;
                 if let Some(combo) = self.combo(focus) {

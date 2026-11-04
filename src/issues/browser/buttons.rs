@@ -1,4 +1,4 @@
-use super::{Action, After, Browser, Pick, Place, Screen, Step, Tab};
+use super::{Action, After, Browser, Pick, Place, Queued, QueuedKind, Screen, Step, Tab};
 use crate::issues::{Issue, Source, Who};
 use crate::queue::State;
 
@@ -27,6 +27,8 @@ pub(super) enum Button {
     Back,
     New,
     RunNow,
+    Pause,
+    Resume,
     Remove,
     ClearStarted,
 }
@@ -57,6 +59,8 @@ impl Button {
             Self::Back => "back",
             Self::New => "new",
             Self::RunNow => "start now",
+            Self::Pause => "pause",
+            Self::Resume => "resume",
             Self::Remove => "remove",
             Self::ClearStarted => "clear started",
         }
@@ -152,11 +156,16 @@ impl Browser {
             if queued.runnable() {
                 buttons.push(Button::RunNow);
             }
+            match queued.kind {
+                QueuedKind::Routine { paused: false } => buttons.push(Button::Pause),
+                QueuedKind::Routine { paused: true } => buttons.push(Button::Resume),
+                QueuedKind::Entry | QueuedKind::Run => {}
+            }
             if queued.state != State::Starting {
                 buttons.push(Button::Remove);
             }
         }
-        if self.queued.iter().any(|queued| matches!(queued.state, State::Started { .. })) {
+        if self.queued.iter().any(Queued::clearable) {
             buttons.push(Button::ClearStarted);
         }
         buttons.push(Button::Cancel);
@@ -195,7 +204,9 @@ impl Browser {
                 self.open_picker(pick, After::Nothing);
                 Action::None
             }
-            Button::New | Button::RunNow | Button::Remove | Button::ClearStarted => self.press_queue(button),
+            Button::New | Button::RunNow | Button::Pause | Button::Resume | Button::Remove | Button::ClearStarted => {
+                self.press_queue(button)
+            }
             Button::Done => self.close_people(),
             Button::Clear => self.clear_people(),
             Button::LoginTab => Action::OpenLoginTab,
@@ -260,6 +271,8 @@ impl Browser {
     fn press_queue(&mut self, button: Button) -> Action {
         match button {
             Button::RunNow => self.selected_queued().map_or(Action::None, |queued| Action::QueueRun(queued.id)),
+            Button::Pause => self.selected_queued().map_or(Action::None, |queued| Action::QueuePause(queued.id)),
+            Button::Resume => self.selected_queued().map_or(Action::None, |queued| Action::QueueResume(queued.id)),
             Button::Remove => self.selected_queued().map_or(Action::None, |queued| Action::QueueRemove(queued.id)),
             Button::ClearStarted => Action::QueueClear,
             _ => Action::QueueNew,
