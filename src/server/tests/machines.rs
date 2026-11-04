@@ -1,4 +1,4 @@
-use super::a_bug::{Attached, Client, hello};
+use super::a_bug::{Attached, COLS, Client, ROWS, hello};
 use super::*;
 use crate::graphics::Support;
 use crate::protocol::MachineOrder;
@@ -81,6 +81,24 @@ fn the_button_follows_the_machines_the_window_sends() {
         let none = Machines { here: None, known: Vec::new() };
         switcher.send(ServerEvent::Message(switcher.id, ClientMessage::Machines(none)));
         switcher.until("the button goes", |client| !client.text().contains(BUTTON));
+    });
+}
+
+#[test]
+fn a_window_used_less_recently_does_not_take_the_button() {
+    let mut attached = Attached::new();
+    let quiet = attached.join_hello(knows(&["devbox"]));
+    let on_gpu = Machines { here: Some("gpu-box".into()), known: Vec::new() };
+    let mut used = attached.join_hello(Hello { machines: Some(on_gpu), ..hello(HostTheme::default()) });
+    attached.serve(Server::step, move |_| {
+        used.shows("gpu-box ▴");
+        let changed = Machines { here: None, known: vec!["devbox".into(), "other".into()] };
+        quiet.send(ServerEvent::Message(quiet.id, ClientMessage::Machines(changed)));
+        let before = used.clears;
+        used.input(Event::Resize(COLS, ROWS));
+        used.until("the screen is drawn again", |client| client.clears > before);
+        used.shows("Worktrees");
+        assert!(used.text().contains("gpu-box ▴"), "{}", used.text());
     });
 }
 

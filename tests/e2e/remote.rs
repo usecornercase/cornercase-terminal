@@ -503,3 +503,32 @@ fn a_window_inside_a_pane_of_this_machine_stays_where_it_is() {
     app.send(b"echo still-\"\"there\r");
     app.wait_for("the same window answers", |s| s.contains("still-there"));
 }
+
+#[test]
+fn a_server_that_refuses_the_window_leaves_it_where_it_was() {
+    let session = Session::new();
+    let mut app = remote_window(&session);
+    let proxy = std::process::Command::new(env!("CARGO_BIN_EXE_cornercase"))
+        .arg("proxy")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("the proxy's banner");
+    let banner = String::from_utf8_lossy(&proxy.stdout).lines().next().expect("a banner").to_string();
+    let refusing = session.dir.join("bin/cornercase");
+    std::fs::remove_file(&refusing).expect("drop the link to the test binary");
+    write_executable(
+        &refusing,
+        &format!("#!/bin/sh\necho '{banner}'\nprintf '\\006\\000\\000\\000\\000\\004nope'\ncat > /dev/null\n"),
+    );
+    add_newbox(&mut app);
+
+    app.send(b"\r");
+
+    app.wait_for("the window says why", |s| s.contains("could not switch to newbox") && s.contains("nope"));
+    app.send(b"\x1b");
+    app.wait_for("the screen comes back", |s| !s.contains("could not switch") && s.contains("devbox ▴"));
+    app.send(b"echo still-\"\"on-devbox\r");
+    app.wait_for("the same window answers", |s| s.contains("still-on-devbox"));
+    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
+    assert!(!saved.contains("newbox"), "{saved}");
+}

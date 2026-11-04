@@ -139,6 +139,40 @@ mod ssh {
     }
 }
 
+#[cfg(unix)]
+mod waiting_for_the_banner {
+    use super::*;
+
+    fn child(script: &str) -> Child {
+        Command::new("/bin/sh").args(["-c", script]).stdout(Stdio::piped()).spawn().expect("a child")
+    }
+
+    #[test]
+    fn a_silent_ssh_is_stopped_once_the_wait_is_over() {
+        let mut silent = child("exec sleep 30");
+        let mut out = silent.stdout.take().expect("its stdout");
+        let started = Instant::now();
+
+        let (kept, read) = watched(silent, Some(Duration::from_millis(100)), move || {
+            let mut bytes = Vec::new();
+            out.read_to_end(&mut bytes).ok()
+        });
+
+        assert!(kept.is_none() && read == Some(0) && started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[rstest]
+    #[case::an_answer_in_time(Some(Duration::from_secs(30)))]
+    #[case::an_ssh_that_may_be_asking_for_a_password(None)]
+    fn ssh_is_kept(#[case] limit: Option<Duration>) {
+        let (kept, ()) = watched(child("exec sleep 30"), limit, || ());
+
+        let mut kept = kept.expect("ssh is kept");
+        let _ = kept.kill();
+        let _ = kept.wait();
+    }
+}
+
 mod banner {
     use super::*;
 

@@ -143,3 +143,39 @@ mod naming {
         assert_eq!([place(&Target::Local), place(&on("devbox"))], [THIS_MACHINE, "devbox"]);
     }
 }
+
+mod answering {
+    use super::*;
+    use crate::client::Ending;
+
+    #[test]
+    fn any_first_message_but_a_rejection_accepts_the_window() {
+        let first = answer(Received::Message(ServerMessage::Frame(b"\x1b[2J".to_vec())));
+
+        assert!(matches!(first, Ok(ServerMessage::Frame(_))));
+    }
+
+    #[test]
+    fn a_rejection_keeps_its_reason() {
+        let refused = answer(Received::Message(ServerMessage::Rejected("another build".into())));
+
+        assert!(matches!(refused, Err(Error::Rejected(reason)) if reason == "another build"));
+    }
+
+    #[test]
+    fn a_link_that_ends_first_says_so() {
+        assert!(matches!(answer(Received::Ended), Err(Error::Control(reason)) if reason == CLOSED));
+    }
+
+    #[test]
+    fn what_cannot_be_read_is_another_build() {
+        assert!(matches!(answer(Received::Invalid), Err(Error::Rejected(reason)) if reason == INCOMPATIBLE));
+    }
+
+    #[test]
+    fn the_first_end_of_the_old_link_wins() {
+        let first = kept(None, Next::End(Ending::Restart));
+
+        assert!(matches!(kept(first, Next::End(Ending::Detached)), Some(Next::End(Ending::Restart))));
+    }
+}

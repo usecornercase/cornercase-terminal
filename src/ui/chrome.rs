@@ -81,7 +81,7 @@ pub(crate) fn machine_button(row: Rect, label: &str) -> (Rect, String) {
     let start = row.x.saturating_add(1).saturating_add(button_width(WORKTREES_LABEL)).saturating_add(MACHINE_GAP);
     let room = row.right().saturating_sub(start).saturating_sub(1);
     let mark = u16::try_from(MACHINE_MARK.chars().count()).unwrap_or(u16::MAX);
-    if room < button_width("…") + mark {
+    if room < button_width("……") + mark {
         return (Rect::default(), String::new());
     }
     let text = format!("{}{MACHINE_MARK}", truncate_right(label, usize::from(room - 2 - mark)));

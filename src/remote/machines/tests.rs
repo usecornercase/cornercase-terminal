@@ -97,6 +97,17 @@ mod reading {
     }
 
     #[test]
+    fn a_broken_entry_leaves_the_others_in_place() {
+        let dir = TempDir::new();
+        let written = r#"[{"destination":null},{"destination":"devbox"},{"command":"/opt/cc"}]"#;
+        std::fs::write(kept_in(&dir), written).expect("an edited file");
+
+        remember(&kept_in(&dir), machine("gpu-box", None));
+
+        assert_eq!(destinations(&kept_in(&dir)), ["devbox", "gpu-box"]);
+    }
+
+    #[test]
     fn a_destination_edited_into_an_option_is_left_out() {
         let dir = TempDir::new();
         let written = r#"[{"destination":"-oProxyCommand=sh"},{"destination":"devbox","command":"/opt/cc"}]"#;

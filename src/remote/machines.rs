@@ -31,8 +31,12 @@ pub(crate) fn file() -> PathBuf {
 
 pub(crate) fn read(file: &Path) -> Vec<Machine> {
     let Ok(bytes) = std::fs::read(file) else { return Vec::new() };
-    let machines: Vec<Machine> = serde_json::from_slice(&bytes).unwrap_or_default();
-    machines.into_iter().filter(|machine| valid(&machine.destination)).collect()
+    let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap_or_default();
+    entries
+        .into_iter()
+        .filter_map(|entry| serde_json::from_value::<Machine>(entry).ok())
+        .filter(|machine| valid(&machine.destination))
+        .collect()
 }
 
 pub(crate) fn remember(file: &Path, machine: Machine) {

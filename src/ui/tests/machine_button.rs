@@ -47,6 +47,15 @@ mod beside_worktrees {
     }
 
     #[test]
+    fn the_narrowest_row_that_shows_it_keeps_its_mark_and_cuts_the_name() {
+        let shown = machine_button(Rect { width: 20, ..row() }, "devbox");
+        let hidden = machine_button(Rect { width: 19, ..row() }, "devbox");
+
+        assert_eq!((shown.1.as_str(), hidden.1.as_str()), ("d… ▴", ""));
+        assert!(shown.0.right() <= row().x + 20 && hidden.0.is_empty());
+    }
+
+    #[test]
     fn hovering_it_lights_it_and_not_worktrees() {
         let (machine, _) = machine_button(row(), "devbox");
         let view = View { hover: Some(Position::new(machine.x + 1, machine.y)), ..on("devbox") };

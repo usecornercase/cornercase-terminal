@@ -318,7 +318,7 @@ fn come_back(exe: io::Result<PathBuf>) -> Result<()> {
     console::restore_modes();
     wait_for_exit(&paths::socket());
     let error = match exe {
-        Ok(exe) => Command::new(exe).env(protocol::RESTARTED_ENV, "1").exec(),
+        Ok(exe) => Command::new(exe).env(protocol::RESTARTED_ENV, "1").env_remove(protocol::REMOTE_ENV).exec(),
         Err(e) => e,
     };
     release_screen();

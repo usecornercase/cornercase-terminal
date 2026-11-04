@@ -864,7 +864,7 @@ impl Server {
         let before = self.clients.len();
         self.clients.retain(|c| c.id != id);
         if self.clients.len() != before {
-            self.machines_after(id);
+            self.show_latest_machines();
             self.fit(None);
             if self.clients.iter().all(|c| c.size.is_none()) {
                 self.app.window_gone();

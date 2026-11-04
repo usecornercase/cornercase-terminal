@@ -3,7 +3,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::Arc;
-use std::sync::mpsc;
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -45,6 +45,8 @@ const ENDED_WAIT: Duration = Duration::from_secs(2);
 const ENDED_POLL: Duration = Duration::from_millis(10);
 const TIED: &str = protocol::TIED_ENV;
 const BATCH: [&str; 2] = ["-o", "BatchMode=yes"];
+const BANNER_WAIT: Duration = Duration::from_secs(30);
+const SILENT: &str = "cornercase did not answer within 30 s";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Remote {
@@ -182,11 +184,16 @@ impl Remote {
 
     fn attempt(&self, usage: Use, shell: RemoteShell) -> Result<Attempt<Piped>> {
         let line = self.command_for(shell, &["proxy"], false)?;
-        let (mut child, input, output, errors) = spawn_piped(self.ssh_line(usage.batch(), Run::Plain, line))?;
+        let (child, input, output, errors) = spawn_piped(self.ssh_line(usage.batch(), Run::Plain, line))?;
         let stderr = Stderr::default();
         let collector = stderr.clone().collect(errors);
         let mut reader = BufReader::new(output);
-        match read_line(&mut reader, parse_banner) {
+        let limit = usage.batch().then_some(BANNER_WAIT);
+        let (child, found) = watched(child, limit, || read_line(&mut reader, parse_banner));
+        let Some(mut child) = child else {
+            return Err(Error::Ssh { host: self.destination.clone(), reason: SILENT.into() });
+        };
+        match found {
             Found::Line(banner) => match self.check(&banner, usage) {
                 Ok(()) => {
                     Ok(Attempt::Linked(Piped { reader, writer: input, child, stderr, collector: Some(collector) }))
@@ -442,6 +449,31 @@ fn answered(found: Found<RemoteShell>, code: Option<i32>) -> Option<RemoteShell>
         (Found::Line(shell), _) => Some(shell),
         (Found::Ended, Some(code)) if code != SSH_FAILED => Some(RemoteShell::Posix),
         _ => None,
+    }
+}
+
+fn watched<T>(child: Child, limit: Option<Duration>, work: impl FnOnce() -> T) -> (Option<Child>, T) {
+    let Some(limit) = limit else { return (Some(child), work()) };
+    let held = Arc::new(Mutex::new(Some(child)));
+    let (done, wait) = mpsc::channel::<()>();
+    let watch = Arc::clone(&held);
+    let watchdog = thread::spawn(move || {
+        let late = matches!(wait.recv_timeout(limit), Err(RecvTimeoutError::Timeout));
+        if let Some(child) = watch.lock().as_mut().filter(|_| late) {
+            let _ = child.kill();
+        }
+        late
+    });
+    let found = work();
+    drop(done);
+    let late = watchdog.join().unwrap_or(false);
+    let child = held.lock().take();
+    match child {
+        Some(child) if late => {
+            process::stop(child);
+            (None, found)
+        }
+        child => (child, found),
     }
 }
 

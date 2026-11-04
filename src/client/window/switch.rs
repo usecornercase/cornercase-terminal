@@ -1,15 +1,22 @@
+use std::sync::mpsc::Sender;
 use std::thread;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
-use super::{Incoming, Next, Window};
-use crate::client::{Ending, Link, Target};
+use super::{INCOMPATIBLE, Incoming, Next, Received, Window, openers_for, spawn_reader, spawn_writer};
+use crate::client::{Ending, Guard, Link, Target};
 use crate::error::{Error, Result};
-use crate::protocol::{self, ClientMessage, MachineOrder, Machines};
+use crate::host::open::Openers;
+use crate::protocol::{self, ClientMessage, MachineOrder, Machines, ServerMessage};
 use crate::remote;
 use crate::remote::machines::{self, Machine};
 use crate::ui::remote::{self as notice, Button, THIS_MACHINE};
+
+const ANSWER_WAIT: Duration = Duration::from_secs(30);
+const NO_ANSWER: &str = "its cornercase server did not answer within 30 s";
+const CLOSED: &str = "the connection closed before its cornercase server answered";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Step {
@@ -23,6 +30,16 @@ pub(super) struct Switch {
     pub(super) step: Step,
     pub(super) hovered: Option<Button>,
     pub(super) left: Option<Next>,
+    pending: Option<Pending>,
+}
+
+struct Pending {
+    id: u64,
+    out: Sender<ClientMessage>,
+    guard: Guard,
+    openers: Openers,
+    size: (u16, u16),
+    until: Instant,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +80,19 @@ pub(super) fn pressed(step: &Step, ev: &Event, screen: Rect) -> Option<Pressed> 
     }
 }
 
+pub(super) fn answer(received: Received) -> std::result::Result<ServerMessage, Error> {
+    match received {
+        Received::Message(ServerMessage::Rejected(reason)) => Err(Error::Rejected(reason)),
+        Received::Message(first) => Ok(first),
+        Received::Invalid => Err(Error::Rejected(INCOMPATIBLE.into())),
+        Received::Ended => Err(Error::Control(CLOSED.into())),
+    }
+}
+
+pub(super) fn kept(left: Option<Next>, next: Next) -> Option<Next> {
+    left.or(Some(next))
+}
+
 fn reach(to: &Target) -> Result<Link> {
     if matches!(to, Target::Local) && std::env::var_os(protocol::NESTED_ENV).is_some() {
         return Err(Error::Nested);
@@ -79,9 +109,9 @@ pub(super) fn place(target: &Target) -> &str {
 }
 
 impl Window<'_> {
-    pub(super) fn machines(&self) -> Machines {
-        let here = self.target.machine().map(str::to_string);
-        Machines { here, known: machines::read(&machines::file()).into_iter().map(|m| m.destination).collect() }
+    pub(super) fn machines_at(here: &Target) -> Machines {
+        let known = machines::read(&machines::file()).into_iter().map(|m| m.destination).collect();
+        Machines { here: here.machine().map(str::to_string), known }
     }
 
     pub(super) fn remember(&self) {
@@ -94,7 +124,7 @@ impl Window<'_> {
         match order {
             MachineOrder::Forget(destination) => {
                 machines::forget(&machines::file(), &destination);
-                self.send_out(ClientMessage::Machines(self.machines()));
+                self.send_out(ClientMessage::Machines(Self::machines_at(&self.target)));
                 Ok(())
             }
             MachineOrder::Switch(to) => self.begin(to),
@@ -107,7 +137,7 @@ impl Window<'_> {
         }
         let Some((to, asks)) = chosen(to, &self.target, machines::read(&machines::file())) else { return Ok(()) };
         let step = if asks { Step::Asking } else { Step::Connecting };
-        self.switch = Some(Switch { to, step, hovered: None, left: None });
+        self.switch = Some(Switch { to, step, hovered: None, left: None, pending: None });
         if !asks {
             self.connect();
         }
@@ -128,21 +158,84 @@ impl Window<'_> {
         if id != self.switches {
             return Ok(());
         }
-        let Some(switch) = &mut self.switch else { return Ok(()) };
         match linked {
-            Ok(link) => {
-                let Some(switch) = self.switch.take() else { return Ok(()) };
-                self.out = None;
-                self.guard = None;
-                self.target = switch.to;
-                self.retarget();
-                self.link(link)
-            }
+            Ok(link) => self.offer(link),
+            Err(error) => self.fail(&error),
+        }
+    }
+
+    fn offer(&mut self, link: Link) -> Result<()> {
+        let Some(to) = self.switch.as_ref().map(|switch| switch.to.clone()) else { return Ok(()) };
+        let openers = openers_for(&to);
+        let hello = self.hello(&to, &openers)?;
+        let size = (hello.cols, hello.rows);
+        let id = self.next_id();
+        let Link { reader, writer, guard } = link;
+        let out = spawn_writer(writer);
+        let _ = out.send(ClientMessage::Hello(Box::new(hello)));
+        spawn_reader(id, reader, self.tx.clone());
+        let until = Instant::now() + ANSWER_WAIT;
+        if let Some(switch) = &mut self.switch {
+            switch.pending = Some(Pending { id, out, guard, openers, size, until });
+        }
+        Ok(())
+    }
+
+    pub(super) fn pending_id(&self) -> Option<u64> {
+        self.switch.as_ref()?.pending.as_ref().map(|pending| pending.id)
+    }
+
+    pub(super) fn answered(&mut self, received: Received) -> Result<Option<Ending>> {
+        match answer(received) {
+            Ok(first) => self.commit(first),
             Err(error) => {
-                switch.step = Step::Failed(failure(&error));
-                self.show_notice()
+                let said = self.switch.as_ref().and_then(|s| s.pending.as_ref()?.guard.stderr.as_ref()?.last());
+                let error = match (error, said) {
+                    (Error::Control(_), Some(said)) => Error::Control(said),
+                    (error, _) => error,
+                };
+                self.fail(&error)?;
+                Ok(None)
             }
         }
+    }
+
+    fn commit(&mut self, first: ServerMessage) -> Result<Option<Ending>> {
+        let Some(switch) = self.switch.take() else { return Ok(None) };
+        let Some(pending) = switch.pending else { return Ok(None) };
+        self.out = Some(pending.out);
+        self.guard = Some(pending.guard);
+        self.generation = pending.id;
+        self.target = switch.to;
+        self.openers = pending.openers;
+        self.sync_plugins();
+        self.remember();
+        self.send_out(ClientMessage::Machines(Self::machines_at(&self.target)));
+        self.lost = None;
+        self.retries.linked();
+        let size = self.terminal.size()?;
+        if (size.width, size.height) != pending.size {
+            self.send_out(ClientMessage::Event(Event::Resize(size.width, size.height)));
+        }
+        self.handle_server(Received::Message(first))
+    }
+
+    fn fail(&mut self, error: &Error) -> Result<()> {
+        let Some(switch) = &mut self.switch else { return Ok(()) };
+        switch.pending = None;
+        switch.step = Step::Failed(failure(error));
+        self.show_notice()
+    }
+
+    pub(super) fn switch_deadline(&self) -> Option<Instant> {
+        self.switch.as_ref()?.pending.as_ref().map(|pending| pending.until)
+    }
+
+    pub(super) fn expire_switch(&mut self, now: Instant) -> Result<()> {
+        if self.switch_deadline().is_some_and(|until| until <= now) {
+            self.fail(&Error::Control(NO_ANSWER.into()))?;
+        }
+        Ok(())
     }
 
     pub(super) fn switch_input(&mut self, ev: &Event) -> Result<Option<Ending>> {
@@ -185,9 +278,9 @@ impl Window<'_> {
     pub(super) fn while_switching(&mut self, next: Next) -> Option<Next> {
         let switch = self.switch.as_mut()?;
         match next {
-            Next::End(_) | Next::Reconnect => switch.left = Some(next),
-            Next::Show(_) | Next::Machine(_) | Next::Open(_) | Next::Browse(_) | Next::Nothing => {}
-            Next::Sound(_) => return Some(next),
+            Next::End(_) | Next::Reconnect => switch.left = kept(switch.left.take(), next),
+            Next::Show(_) | Next::Machine(_) | Next::Nothing => {}
+            Next::Sound(_) | Next::Open(_) | Next::Browse(_) => return Some(next),
         }
         None
     }

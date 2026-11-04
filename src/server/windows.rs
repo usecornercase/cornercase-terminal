@@ -53,7 +53,7 @@ impl Server {
         let Some(client) = self.client_mut(id).filter(|c| c.screen.is_some() && c.machines.is_some()) else { return };
         log::info!("server", "machines changed", client = id, known = machines.known.len());
         client.machines = Some(machines);
-        self.show_machines(id);
+        self.show_latest_machines();
     }
 
     pub(super) fn show_machines(&mut self, id: u64) {
@@ -62,11 +62,11 @@ impl Server {
         }
     }
 
-    pub(super) fn machines_after(&mut self, gone: u64) {
+    pub(super) fn show_latest_machines(&mut self) {
         let latest = self.clients.iter().filter(|c| c.size.is_some()).max_by_key(|c| c.used).map(|c| c.id);
         match latest {
             Some(latest) => self.show_machines(latest),
-            None => self.app.set_machines(gone, None),
+            None => self.app.set_machines(0, None),
         }
     }
 }
