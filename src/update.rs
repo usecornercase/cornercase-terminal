@@ -231,7 +231,7 @@ pub(crate) fn replace(archive: &[u8], sums: &str, version: &str, exe: &Path) -> 
         .map_err(Error::from)
         .and_then(|()| unpack(archive, &staging))
         .and_then(|binary| check_binary(&binary, version).map(|()| binary))
-        .and_then(|binary| swap::swap(&binary, exe).map_err(Error::from));
+        .and_then(|binary| swap::swap(&binary, exe));
     let _ = fs::remove_dir_all(&staging);
     result
 }

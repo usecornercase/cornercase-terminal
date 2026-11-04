@@ -2,6 +2,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::error::{Error, NotRestored, Result};
+
 const OLD: &str = "old";
 const SPARES: u32 = 100;
 
@@ -39,15 +41,20 @@ impl Names {
     }
 }
 
-pub(crate) fn swap(new: &Path, exe: &Path) -> io::Result<()> {
-    if cfg!(windows) { swap_aside(new, exe) } else { fs::rename(new, exe) }
+pub(crate) fn swap(new: &Path, exe: &Path) -> Result<()> {
+    if cfg!(windows) { swap_aside(new, exe) } else { Ok(fs::rename(new, exe)?) }
 }
 
-fn swap_aside(new: &Path, exe: &Path) -> io::Result<()> {
+fn swap_aside(new: &Path, exe: &Path) -> Result<()> {
     let old = set_aside(exe)?;
-    fs::rename(new, exe).inspect_err(|_| {
-        let _ = fs::rename(&old, exe);
-    })
+    fs::rename(new, exe).map_err(|cause| moved_back(cause, old, exe))
+}
+
+fn moved_back(cause: io::Error, old: PathBuf, exe: &Path) -> Error {
+    match fs::rename(&old, exe) {
+        Ok(()) => Error::Io(cause),
+        Err(restore) => Error::NotRestored(Box::new(NotRestored { exe: exe.to_path_buf(), old, cause, restore })),
+    }
 }
 
 fn set_aside(exe: &Path) -> io::Result<PathBuf> {

@@ -49,6 +49,7 @@ const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', 
 const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
 const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
 pub(crate) const STOP_PARSING: &str = "--%";
+const CMD_NAME_ENDS: [char; 3] = ['=', ',', ';'];
 const CMD: &str = "cmd";
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
@@ -382,7 +383,12 @@ pub(crate) fn typed_on_windows(
     if let Some(refusal) = refusal {
         return Err(refusal);
     }
-    without_cmd(line, words, shell == PaneShell::PowerShell, runs)
+    let typed = match shell {
+        PaneShell::PowerShell => line.to_string(),
+        PaneShell::Cmd => words.join(" "),
+        PaneShell::Other => join_args(&words),
+    };
+    without_cmd(typed, words, shell == PaneShell::PowerShell, runs)
 }
 
 fn refusal(reason: &'static str, message: &str) -> Refusal {
@@ -422,12 +428,21 @@ fn cmd_word(words: &[String]) -> Option<Refusal> {
             ),
         ));
     }
-    let word = words.iter().find(|word| word.contains(char::is_whitespace))?;
+    if let Some(word) = words.iter().find(|word| word.is_empty() || word.contains(char::is_whitespace)) {
+        return Some(refusal(
+            "a word cmd.exe would split",
+            &format!(
+                "the pane's shell is cmd.exe, which does not read the quotes around `{word}`, so it would reach the \
+                 agent in pieces or not at all; start the agent in a PowerShell pane"
+            ),
+        ));
+    }
+    let program = words.first().filter(|program| program.contains(CMD_NAME_ENDS))?;
     Some(refusal(
-        "a word cmd.exe would split",
+        "a program name cmd.exe would cut",
         &format!(
-            "the pane's shell is cmd.exe, which does not read the quotes around `{word}`, so it would reach the agent \
-             in pieces; start the agent in a PowerShell pane"
+            "the pane's shell is cmd.exe, which ends a program's name at `=`, `,` or `;`, so `{program}` would not \
+             start; start the agent in a PowerShell pane"
         ),
     ))
 }
@@ -441,21 +456,21 @@ fn special_in(words: &[String]) -> Option<(&str, char)> {
 }
 
 fn without_cmd(
-    line: &str,
+    line: String,
     words: Vec<String>,
     powershell: bool,
     runs: impl Fn(&str) -> Option<PathBuf>,
 ) -> Result<String, Refusal> {
-    let Some(program) = words.first() else { return Ok(line.to_string()) };
+    let Some(program) = words.first() else { return Ok(line) };
     let target = runs(program).unwrap_or_else(|| PathBuf::from(program));
     if !is_batch(&target) {
-        return Ok(line.to_string());
+        return Ok(line);
     }
     if let Some(shim) = powershell.then(|| shim_words(&target, &runs)).flatten() {
         return Ok(powershell_line(shim.into_iter().chain(words.into_iter().skip(1))));
     }
     let Some(special) = special(&words) else {
-        return Ok(line.to_string());
+        return Ok(line);
     };
     Err(refusal(
         "a batch file",

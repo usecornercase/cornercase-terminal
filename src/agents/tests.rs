@@ -386,7 +386,80 @@ mod arguments {
     ) {
         let line = powershell_line(strings(&["claude", "--add-dir", word]));
         let typed = typed_on_windows(&line, shell, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
-        assert_eq!(typed.map_err(|refusal| refusal.reason), reason.map_or(Ok(line), Err));
+        assert_eq!(typed.err().map(|refusal| refusal.reason), reason);
+    }
+
+    #[test]
+    fn a_powershell_pane_gets_the_line_as_it_was_quoted() {
+        let line = powershell_line(strings(&["claude", "--model", "it's"]));
+        let typed = typed_on_windows(&line, PaneShell::PowerShell, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(line));
+    }
+
+    #[rstest]
+    #[case::a_plain_word("opus", "opus")]
+    #[case::an_apostrophe("it's", "it's")]
+    #[case::a_typographic_apostrophe("Sergio\u{2019}s", "Sergio\u{2019}s")]
+    #[case::a_dollar("$HOME", "$HOME")]
+    #[case::braces("{a,b}", "{a,b}")]
+    #[case::a_relative_folder(r"..\docs", r"..\docs")]
+    fn a_cmd_pane_gets_each_word_as_it_is(#[case] word: &str, #[case] expected: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word]));
+        let typed = typed_on_windows(&line, PaneShell::Cmd, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(format!("claude --add-dir {expected}")));
+    }
+
+    #[rstest]
+    #[case::an_empty_word(&["claude", "--model", ""], "a word cmd.exe would split")]
+    #[case::a_program_with_an_equals(&[r"C:\tools\a=b\claude.exe", "--resume"], "a program name cmd.exe would cut")]
+    #[case::a_program_with_a_comma(&[r"C:\tools\a,b\claude.exe"], "a program name cmd.exe would cut")]
+    fn a_cmd_pane_refuses_what_cmd_cannot_pass(#[case] words: &[&str], #[case] reason: &str) {
+        let line = powershell_line(strings(words));
+        let typed = typed_on_windows(&line, PaneShell::Cmd, |program| Some(PathBuf::from(program)));
+        assert_eq!(typed.err().map(|refusal| refusal.reason), Some(reason));
+    }
+
+    #[rstest]
+    #[case::a_plain_word("opus", "opus")]
+    #[case::an_apostrophe("O'Brien", r"'O'\''Brien'")]
+    #[case::a_typographic_apostrophe("Sergio\u{2019}s code", "'Sergio\u{2019}s code'")]
+    #[case::every_single_quote_powershell_reads(
+        "'\u{2018}\u{2019}\u{201A}\u{201B}",
+        "''\\''\u{2018}\u{2019}\u{201A}\u{201B}'"
+    )]
+    #[case::json(r#"{"a":1}"#, r#"'{"a":1}'"#)]
+    #[case::stop_parsing("--%", "--%")]
+    #[case::an_ampersand(r"C:\R&D", r"'C:\R&D'")]
+    #[case::a_relative_folder(r"..\docs", r"'..\docs'")]
+    #[case::a_folder_ending_with_its_separator(r"C:\my dir\", r"'C:\my dir\'")]
+    #[case::empty("", "''")]
+    fn a_git_bash_pane_gets_each_word_quoted_for_a_posix_shell(#[case] word: &str, #[case] expected: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word]));
+        let typed = typed_on_windows(&line, PaneShell::Other, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
+        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(format!("claude --add-dir {expected}")));
+    }
+
+    #[test]
+    fn a_git_bash_pane_runs_a_quoted_program_without_powershells_call_operator() {
+        let line = powershell_line(strings(&[r"C:\Program Files\Claude\claude.exe", "--resume", "a1"]));
+        let typed = typed_on_windows(&line, PaneShell::Other, |program| Some(PathBuf::from(program)));
+        assert_eq!(
+            typed.map_err(|refusal| refusal.reason),
+            Ok(r"'C:\Program Files\Claude\claude.exe' --resume a1".into())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_posix_shell_reads_each_git_bash_line_as_the_words_given() {
+        for words in POWERSHELL_CASES.iter().map(|words| strings(words)) {
+            let typed = typed_on_windows(&powershell_line(words.clone()), PaneShell::Other, |_| None);
+            let line = typed.map_err(|refusal| refusal.reason).expect("typed");
+            let script = format!("set -- {line}; printf '%s\\n' \"$@\"");
+            let output = std::process::Command::new("/bin/sh").args(["-c", &script]).output().expect("run sh");
+            let read: Vec<String> = String::from_utf8_lossy(&output.stdout).lines().map(str::to_string).collect();
+            assert_eq!(read, words, "{line}");
+        }
     }
 
     #[test]

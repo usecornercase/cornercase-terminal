@@ -71,9 +71,9 @@ A build from source (`cargo run`) keeps to folders of its own, one set per sourc
 
 | File | Location |
 | --- | --- |
-| Session, log, stats, TODOs, queue and the rest of the state | `$XDG_STATE_HOME/cornercase-dev/<key>/` (else `~/.local/state/cornercase-dev/<key>/`), with a `source` file naming the tree |
+| Session, log, stats, TODOs, queue and the rest of the state | `$XDG_STATE_HOME/cornercase-dev/<key>/` (else `~/.local/state/cornercase-dev/<key>/`; `%LOCALAPPDATA%\cornercase-dev\<key>\` on Windows), with a `source` file naming the tree |
 | Socket and lock | Next to the session, in the same `cornercase-dev/<key>/` folder |
-| Settings, tokens, flows, plugins | `$XDG_CONFIG_HOME/cornercase-dev/`, shared by every tree |
+| Settings, tokens, flows, plugins | `$XDG_CONFIG_HOME/cornercase-dev/` (else `~/.config/cornercase-dev/`; `%APPDATA%\cornercase-dev\` on Windows), shared by every tree |
 
 `<key>` is the first 8 hex digits of the SHA-256 of the source tree's path. `CORNERCASE_SOCKET` still moves everything next to the socket you give.
 
