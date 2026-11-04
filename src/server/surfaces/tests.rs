@@ -13,16 +13,30 @@ use crate::test_util::wait_until;
 
 const STREAMER: u64 = 1;
 
-fn ask(attached: &mut Attached, request: &str) -> Vec<ServerMessage> {
+fn send(attached: &mut Attached, request: &str) {
     let event = ServerEvent::Message(STREAMER, ClientMessage::Request(request.into()));
     let _ = attached.server.step(Step::Event(event));
     let _ = attached.server.step(Step::Answer);
+}
+
+fn ask(attached: &mut Attached, request: &str) -> Vec<ServerMessage> {
+    send(attached, request);
     let mut got = Vec::new();
     wait_until("the answer arrives", || {
         got.extend(attached.messages());
         !got.is_empty()
     });
     got
+}
+
+fn reply(attached: &mut Attached, request: &str) -> Value {
+    send(attached, request);
+    let mut reply = None;
+    wait_until("the reply arrives", || {
+        reply = attached.messages().iter().map(json).find(|line| line["ok"].get("revision").is_none());
+        reply.is_some()
+    });
+    reply.expect("the reply")
 }
 
 fn json(message: &ServerMessage) -> Value {
@@ -191,7 +205,7 @@ fn using_the_window_takes_back_the_tab_a_view_sizes() {
     let mut attached = Attached::new();
     let opened = json(&ask(&mut attached, r#"{"command":"view","args":{"cols":50,"rows":10}}"#)[0]);
     let controller = |attached: &mut Attached| {
-        let status = json(&ask(attached, r#"{"command":"status","args":{}}"#)[0]);
+        let status = reply(attached, r#"{"command":"status","args":{}}"#);
         status["ok"]["projects"][0]["workspaces"][0]["tabs"][0]["controller"].clone()
     };
     let view = opened["ok"]["view"]["id"].clone();
