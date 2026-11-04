@@ -6,6 +6,11 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **On Windows, programs sharing a pane's console use up fewer of the questions cornercase lets wait when it looks for which files agents hold open.** Every program in a pane holds a copy of the pane's console input, and while one of them reads it Windows cannot name it through any of them. cornercase gave each program's copy one of the 16 questions it lets wait, so a few programs in panes could use them all up, and Codex, Copilot, Cursor and opencode could then lose their model and context line. Such a file now takes one, however many programs hold it. Nothing changes on Linux and macOS.
 
+## 0.12.282
+
+- **On Windows, an agent installed by npm as a `.cmd` starts in any folder**, `R&D` included: cornercase reads the shim npm wrote and types `node` with the agent's script instead, so its arguments never go through `cmd.exe`, and such a launch is no longer refused. A batch file it cannot read as an npm shim (pnpm's, an older npm's, one of your own) is still refused a line holding a character `cmd.exe` would read. Nothing changes on Linux and macOS.
+- **On Windows, an agent is not started with an argument its pane's shell would split**: in a PowerShell pane, an argument holding a `"`, or a space and a last `\`, or a bare `--%`, reaches the agent in pieces under Windows PowerShell 5.1, so part of it could become an option of its own; in a cmd pane, so does one holding a space or a character `cmd.exe` reads. Such a launch is refused, and the message names the argument. JSON in `agent_args` was already losing its quotes in PowerShell and is refused there too. A Git Bash pane passes every argument whole, so nothing is refused there. Nothing changes on Linux and macOS.
+
 ## 0.12.281
 
 - **The test suite now also runs on Windows in CI**, so every change to cornercase is checked there before it is released, as on Linux and macOS. Nothing changes in the app.

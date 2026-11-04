@@ -1,3 +1,5 @@
+pub(crate) mod shim;
+
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -6,6 +8,7 @@ use crate::os::fs::PermissionsExt;
 
 const RUNNABLE: [&str; 4] = [".com", ".exe", ".bat", ".cmd"];
 const SCRIPT: &str = ".ps1";
+const POWERSHELLS: [&str; 2] = ["pwsh", "powershell"];
 
 pub(crate) fn extensions(pathext: Option<&str>) -> Vec<String> {
     let listed = pathext.unwrap_or_default().split(';').map(|extension| extension.trim().to_lowercase());
@@ -31,6 +34,11 @@ pub(crate) fn locate(program: &str) -> Option<PathBuf> {
 
 pub(crate) fn command(program: &str) -> Command {
     Command::new(startable(program, std::env::var_os("PATH").as_deref(), &own_extensions()))
+}
+
+pub(crate) fn is_powershell(name: &str) -> bool {
+    let name = super::program_name(name);
+    POWERSHELLS.iter().any(|shell| super::same_file_name(shell, name))
 }
 
 pub(crate) fn powershell_runs(program: &str) -> Option<PathBuf> {
