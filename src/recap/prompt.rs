@@ -1,4 +1,5 @@
 use super::{Choice, Options};
+use std::fmt::Write as _;
 
 const COMMON: &str = "Read dossier.md in this folder. It lists a developer's conversations with coding agents, each under an id such as [c3], with the prompts they sent, the agent's last reply, what it waits on, its pull request (ids such as [p1]) and its transcript's path. Read a transcript, or run `cornercase search`, only when the dossier is not enough. Change no file. Quote the developer's prompts literally, in quotes; never paraphrase them. Name every conversation and pull request by its id in square brackets, never by a path. Answer with the recap only, in Markdown with `##` headings and `-` bullets, without a preamble.";
 
@@ -29,7 +30,7 @@ pub(crate) fn prompt(choice: Choice, label: &str, options: &Options) -> String {
     let mut text = format!("{COMMON}\n\n{}\n\nWrite in {}.", kind(choice, label), language(options));
     let extra = options.instructions.trim();
     if !extra.is_empty() {
-        text.push_str(&format!("\n\nAlso: {extra}"));
+        let _ = write!(text, "\n\nAlso: {extra}");
     }
     text
 }

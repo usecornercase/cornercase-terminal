@@ -121,6 +121,13 @@ impl Settings {
     }
 
     fn setting_of(&self, row: &Row) -> Option<Setting> {
+        if let Row::Recap(recap) = row {
+            return Some(self.recap_setting(row, *recap));
+        }
+        self.plain_setting_of(row)
+    }
+
+    fn plain_setting_of(&self, row: &Row) -> Option<Setting> {
         let config = &self.config;
         if let Some(key) = switch(row) {
             return Some(self.base(row, key, Kind::Switch));
@@ -129,9 +136,6 @@ impl Settings {
             let mut setting = self.base(row, key, Kind::Text);
             setting.field = Some(Self::field_label(row));
             return Some(setting);
-        }
-        if let Row::Recap(recap) = row {
-            return Some(self.recap_setting(row, *recap));
         }
         let (key, items, value) = match row {
             Row::DefaultAgent => ("agent", self.agent_items(), config.agent.clone()),

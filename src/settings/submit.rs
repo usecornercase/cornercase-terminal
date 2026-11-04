@@ -149,7 +149,7 @@ impl Settings {
             Row::Token(source) => self.submit_token(source),
             Row::Bot(via) => self.submit_bot(via),
             Row::Kind(kind) => self.submit_kind(&kind),
-            Row::Recap(recap) => self.recap_submitted(recap, edit.input.clone()),
+            Row::Recap(recap) => self.recap_submitted(recap, &edit.input.clone()),
             row => self.submit_field(&row),
         }
     }

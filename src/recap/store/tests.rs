@@ -7,37 +7,35 @@ fn cached(day: Option<&str>, written_at: i64) -> Recap {
     Recap { day: day.map(str::to_string), written_at, text: "## Done\n- [c1] x".into(), ..Recap::default() }
 }
 
+fn at(now: i64, today: &'static str, last_day: Option<&'static str>) -> Moment<'static> {
+    Moment { now, today, last_day }
+}
+
 #[rstest]
-#[case::none_yet(Choice::Now, None, 1000, "2026-11-04", None, true)]
-#[case::now_fresh(Choice::Now, Some(cached(None, 900)), 1000, "2026-11-04", None, false)]
-#[case::now_stale(Choice::Now, Some(cached(None, 0)), 2000, "2026-11-04", None, true)]
+#[case::none_yet(Choice::Now, None, at(1000, "2026-11-04", None), true)]
+#[case::now_fresh(Choice::Now, Some(cached(None, 900)), at(1000, "2026-11-04", None), false)]
+#[case::now_stale(Choice::Now, Some(cached(None, 0)), at(2000, "2026-11-04", None), true)]
 #[case::yesterday_kept(
     Choice::Yesterday,
     Some(cached(Some("2026-11-03"), 0)),
-    9_999_999,
-    "2026-11-04",
-    Some("2026-11-03"),
+    at(9_999_999, "2026-11-04", Some("2026-11-03")),
     false
 )]
 #[case::yesterday_new_day(
     Choice::Yesterday,
     Some(cached(Some("2026-11-03"), 0)),
-    9_999_999,
-    "2026-11-05",
-    Some("2026-11-04"),
+    at(9_999_999, "2026-11-05", Some("2026-11-04")),
     true
 )]
-#[case::week_same_day(Choice::Week, Some(cached(Some("2026-11-04"), 0)), 5000, "2026-11-04", None, false)]
-#[case::week_next_day(Choice::Week, Some(cached(Some("2026-11-04"), 0)), 5000, "2026-11-05", None, true)]
+#[case::week_same_day(Choice::Week, Some(cached(Some("2026-11-04"), 0)), at(5000, "2026-11-04", None), false)]
+#[case::week_next_day(Choice::Week, Some(cached(Some("2026-11-04"), 0)), at(5000, "2026-11-05", None), true)]
 fn the_caching_rules_decide_when_a_choice_is_written_again(
     #[case] choice: Choice,
     #[case] cached: Option<Recap>,
-    #[case] now: i64,
-    #[case] today: &str,
-    #[case] last_day: Option<&str>,
+    #[case] moment: Moment<'_>,
     #[case] expected: bool,
 ) {
-    assert_eq!(due(choice, cached.as_ref(), Moment { now, today, last_day }), expected);
+    assert_eq!(due(choice, cached.as_ref(), moment), expected);
 }
 
 #[test]

@@ -20,7 +20,7 @@ mod icons;
 pub(crate) mod keys;
 mod layout;
 mod pane;
-pub mod recap;
+pub(crate) mod recap;
 pub(crate) mod remote;
 pub(crate) mod remote_access;
 mod rows;

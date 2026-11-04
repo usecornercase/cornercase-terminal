@@ -48,14 +48,16 @@ pub(crate) struct Spec {
     pub(in crate::agents) read: fn(&str, &mut Ran) -> Option<Result<()>>,
 }
 
-pub(crate) fn run(
-    agent: Known,
-    program: &str,
-    home: Option<&Path>,
-    ask: &Ask,
-    timeout: Duration,
-    progress: &Arc<AtomicUsize>,
-) -> Result<Ran> {
+#[derive(Clone, Copy)]
+pub(crate) struct Call<'a> {
+    pub(crate) agent: Known,
+    pub(crate) program: &'a str,
+    pub(crate) home: Option<&'a Path>,
+    pub(crate) timeout: Duration,
+}
+
+pub(crate) fn run(call: &Call<'_>, ask: &Ask, progress: &Arc<AtomicUsize>) -> Result<Ran> {
+    let Call { agent, program, home, timeout } = *call;
     let spec = agent.recap().ok_or_else(|| Error::Probe(format!("{} cannot write a recap", agent.name())))?;
     let mut command = (spec.command)(program, ask);
     command.current_dir(&ask.folder);

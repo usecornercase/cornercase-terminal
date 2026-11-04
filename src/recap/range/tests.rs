@@ -61,7 +61,6 @@ fn the_week_is_seven_local_days_ending_now() {
     let now = seconds("2026-11-04T09:00:00.000Z");
     let range = resolve(Choice::Week, &[], now, MADRID).expect("a week");
     assert_eq!(range.to, now);
-    let days = (range.to - range.from) as f64 / 86_400.0;
-    assert!((6.0..7.0).contains(&days), "{days}");
+    assert!((6 * 86_400..7 * 86_400).contains(&(range.to - range.from)), "{}", range.to - range.from);
     assert_eq!(range.label, "7 days");
 }

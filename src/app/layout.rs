@@ -96,10 +96,9 @@ impl App {
     pub(super) fn panel_shown(&self) -> bool {
         match self.screen.side {
             Some(Side::Changes) => self.changes_shown(),
-            Some(Side::Todo) => true,
+            Some(Side::Todo | Side::Recap) => true,
             Some(Side::Files) => self.files_shown(),
             Some(Side::Flow) => self.has_run(),
-            Some(Side::Recap) => true,
             None => false,
         }
     }

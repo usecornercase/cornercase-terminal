@@ -8,7 +8,8 @@ use super::journal::files;
 use super::range::{self, Range};
 use super::store::{self, Moment};
 use super::{Choice, KEPT_DAYS, Options, Recap, prompt};
-use crate::agents::{self, Known, recap::Ask};
+use crate::agents::recap::{Ask, Call};
+use crate::agents::{self, Known};
 use crate::error::{Error, Result};
 
 pub(crate) struct Input {
@@ -53,10 +54,6 @@ pub(crate) fn prepare(input: &Input) -> Option<(Range, Dossier)> {
     Some((range, dossier))
 }
 
-pub(crate) fn dossier_of(input: &Input) -> Option<Dossier> {
-    prepare(input).map(|(_, dossier)| dossier)
-}
-
 fn current(input: &Input, range: &Range) -> bool {
     let today = range::today_of(input.now, &input.zone).unwrap_or_default();
     let moment = Moment { now: input.now, today: &today, last_day: range.day.as_deref() };
@@ -81,7 +78,8 @@ pub(crate) fn run(input: &Input) -> Result<Outcome> {
         folder,
         socket: input.socket.clone(),
     };
-    let ran = agents::recap::run(kind, &input.program, input.home.as_deref(), &ask, input.timeout, &input.progress)?;
+    let call = Call { agent: kind, program: &input.program, home: input.home.as_deref(), timeout: input.timeout };
+    let ran = agents::recap::run(&call, &ask, &input.progress)?;
     let recap = Recap {
         v: 1,
         range: input.choice.name().to_string(),

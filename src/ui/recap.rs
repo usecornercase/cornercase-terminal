@@ -16,7 +16,7 @@ const BODY_FROM: u16 = 3;
 const BULLET: &str = "▸ ";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum State {
+pub(crate) enum State {
     Idle,
     Running(String),
     Failed(String),
@@ -24,14 +24,14 @@ pub enum State {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct View {
-    pub choice: usize,
-    pub line: String,
-    pub state: State,
-    pub blocks: Vec<Block>,
-    pub scroll: usize,
-    pub muted: Color,
-    pub busy: bool,
+pub(crate) struct View {
+    pub(crate) choice: usize,
+    pub(crate) line: String,
+    pub(crate) state: State,
+    pub(crate) blocks: Vec<Block>,
+    pub(crate) scroll: usize,
+    pub(crate) muted: Color,
+    pub(crate) busy: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

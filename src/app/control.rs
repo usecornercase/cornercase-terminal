@@ -193,6 +193,7 @@ enum Stage {
 impl Stage {
     fn listing(&self) -> String {
         match self {
+            Self::Usage(_) => "the agents have not said their usage yet".into(),
             Self::Processes => "the processes are still being measured".into(),
             Self::PullRequest(workspace) => {
                 format!("gh or glab is still reading the pull request of workspace {workspace}")

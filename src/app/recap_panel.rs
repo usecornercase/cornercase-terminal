@@ -52,6 +52,14 @@ pub(super) struct Run {
 }
 
 #[derive(Debug, Clone)]
+pub(super) struct Want<'a> {
+    choice: Choice,
+    options: Options,
+    fresh: bool,
+    zone: Option<&'a str>,
+}
+
+#[derive(Debug, Clone)]
 pub(super) struct Folders {
     pub(super) journal: PathBuf,
     pub(super) recaps: PathBuf,
@@ -112,7 +120,7 @@ impl App {
             return false;
         }
         let options = self.recap_options(overrides);
-        let input = self.recap_input(choice, &folders, options.clone(), fresh, zone);
+        let input = self.recap_input(&folders, Want { choice, options: options.clone(), fresh, zone });
         let run = self.panels.recap.run_mut(choice);
         run.running = true;
         run.announced = false;
@@ -131,18 +139,13 @@ impl App {
         true
     }
 
-    fn recap_input(
-        &self,
-        choice: Choice,
-        folders: &Folders,
-        options: Options,
-        fresh: bool,
-        zone: Option<&str>,
-    ) -> Input {
+    fn recap_input(&self, folders: &Folders, want: Want<'_>) -> Input {
         let queued = self.panels.queued.zone();
-        let zone = zone
-            .map(str::to_string)
-            .unwrap_or_else(|| if queued.is_empty() { crate::queue::clock::local_zone() } else { queued.to_string() });
+        let zone = want.zone.map_or_else(
+            || if queued.is_empty() { crate::queue::clock::local_zone() } else { queued.to_string() },
+            str::to_string,
+        );
+        let Want { choice, options, fresh, .. } = want;
         let kind = Known::of(&options.agent);
         let home = options
             .account
@@ -278,7 +281,7 @@ impl App {
             return token;
         };
         let options = self.recap_options(&Overrides::default());
-        let input = self.recap_input(choice, &folders, options, false, zone);
+        let input = self.recap_input(&folders, Want { choice, options, fresh: false, zone });
         let job = Job::new(Level::Info, "recap", "dossier").with("range", choice.name());
         self.spawn_job(
             job,

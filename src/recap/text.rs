@@ -39,16 +39,13 @@ fn pieces(line: &str) -> Vec<Piece<'_>> {
     let mut rest = line;
     while let Some(open) = rest.find('[') {
         let after = &rest[open + 1..];
-        match after.find(']').filter(|close| is_id(&after[..*close])) {
-            Some(close) => {
-                found.push(Piece::Text(&rest[..open]));
-                found.push(Piece::Id(&after[..close]));
-                rest = &after[close + 1..];
-            }
-            None => {
-                found.push(Piece::Text(&rest[..=open]));
-                rest = after;
-            }
+        if let Some(close) = after.find(']').filter(|close| is_id(&after[..*close])) {
+            found.push(Piece::Text(&rest[..open]));
+            found.push(Piece::Id(&after[..close]));
+            rest = &after[close + 1..];
+        } else {
+            found.push(Piece::Text(&rest[..=open]));
+            rest = after;
         }
     }
     found.push(Piece::Text(rest));
@@ -56,13 +53,11 @@ fn pieces(line: &str) -> Vec<Piece<'_>> {
 }
 
 pub(crate) fn label(id: &str, place: &Place) -> String {
-    match (place.kind.as_str(), place.number) {
-        ("pull", Some(number)) => format!("#{number}"),
-        _ => {
-            let name = place.name();
-            if name.is_empty() { id.to_string() } else { name }
-        }
+    if let ("pull", Some(number)) = (place.kind.as_str(), place.number) {
+        return format!("#{number}");
     }
+    let name = place.name();
+    if name.is_empty() { id.to_string() } else { name }
 }
 
 pub(crate) fn plain(text: &str, places: &BTreeMap<String, Place>) -> String {

@@ -11,6 +11,7 @@ fn at(secs: u64) -> SystemTime {
     UNIX_EPOCH + Duration::from_secs(secs)
 }
 
+#[expect(clippy::unnecessary_wraps, reason = "the callback returns an option")]
 fn template(pane: u64) -> Option<Entry> {
     let mut entry = Entry::blank("claude");
     entry.conversation = Some(format!("c{pane}"));
@@ -64,7 +65,7 @@ fn a_pane_is_seen_once_then_its_prompts_and_status_changes_follow() {
     assert_eq!(kinds(&first), [(Event::Seen, None), (Event::Prompt, None), (Event::Status, Some("working"))]);
     assert_eq!(first[1].at, Stamp(at(90)).to_string());
     let same = journal.observe(at(101), &[observed(1, Some("k"), Some("working"), &[])], &mut template);
-    assert!(same.is_empty());
+    assert_eq!(same, Vec::<Entry>::new());
     let waiting = journal.observe(at(102), &[observed(1, Some("k"), Some("waiting"), &[])], &mut template);
     assert_eq!(kinds(&waiting), [(Event::Status, Some("waiting"))]);
 }
@@ -89,7 +90,8 @@ fn a_pane_that_goes_away_is_closed_with_the_place_it_had() {
 #[test]
 fn a_pane_without_a_conversation_yet_journals_nothing() {
     let mut journal = Journal::default();
-    assert!(journal.observe(at(100), &[observed(1, None, Some("working"), &[100])], &mut template).is_empty());
+    let entries = journal.observe(at(100), &[observed(1, None, Some("working"), &[100])], &mut template);
+    assert_eq!(entries, Vec::<Entry>::new());
 }
 
 fn entry_at(time: &str) -> Entry {

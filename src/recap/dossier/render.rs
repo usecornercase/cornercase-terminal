@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 use super::noise::{fold_paste, trim_to};
 use super::{Caps, Dossier, Group, Live, Talk, project_of, pull_of};
@@ -77,14 +78,14 @@ fn facts(group: &Group, range: &Range, pull: Option<(&str, &PullPlace, Option<&s
     let agent = crate::agents::Known::of(&template.agent).map_or(template.agent.as_str(), |kind| kind.title());
     let mut line = format!("- {agent}");
     if let Some(account) = &template.account {
-        line.push_str(&format!(" · account {account}"));
+        let _ = write!(line, " · account {account}");
     }
     if let Some(workspace) = &template.workspace {
         if let Some(branch) = &workspace.branch {
-            line.push_str(&format!(" · branch {branch}"));
+            let _ = write!(line, " · branch {branch}");
         }
         if workspace.worktree {
-            line.push_str(&format!(" · worktree {}", workspace.path));
+            let _ = write!(line, " · worktree {}", workspace.path);
         }
     }
     let mut text = format!(
@@ -96,10 +97,10 @@ fn facts(group: &Group, range: &Range, pull: Option<(&str, &PullPlace, Option<&s
     if let Some((id, pull, title)) = pull {
         let title = title.map(|title| format!(" \"{title}\"")).unwrap_or_default();
         let checks = pull.ci.as_deref().map(|ci| format!(" · checks {ci}")).unwrap_or_default();
-        text.push_str(&format!("- pull request [{id}] #{}{title} · {}{checks}\n", pull.number, pull.state));
+        let _ = writeln!(text, "- pull request [{id}] #{}{title} · {}{checks}", pull.number, pull.state);
     }
     if let Some(record) = &template.record {
-        text.push_str(&format!("- transcript {}\n", record.path()));
+        let _ = writeln!(text, "- transcript {}", record.path());
     }
     text
 }
@@ -115,10 +116,10 @@ fn body(group: &Group, talk: &Talk, caps: &Caps, range: &Range) -> String {
     }
     for said in prompts {
         let when = said.at.map(|at| format!("{} ", stamp(at, &range.zone))).unwrap_or_default();
-        text.push_str(&format!("- {when}\"{}\"\n", trim_to(&fold_paste(&said.text), caps.prompt_chars)));
+        let _ = writeln!(text, "- {when}\"{}\"", trim_to(&fold_paste(&said.text), caps.prompt_chars));
     }
     if let Some(reply) = &talk.reply {
-        text.push_str(&format!("### Last reply\n> {}\n", trim_to(reply, caps.reply_chars)));
+        let _ = writeln!(text, "### Last reply\n> {}", trim_to(reply, caps.reply_chars));
     }
     text.push_str(&waiting(group, talk, caps));
     text
@@ -130,11 +131,11 @@ fn waiting(group: &Group, talk: &Talk, caps: &Caps) -> String {
     };
     let mut text = String::from("### Waiting on\n");
     if let Some(reply) = &talk.reply {
-        text.push_str(&format!("> {}\n", trim_to(reply, caps.reply_chars)));
+        let _ = writeln!(text, "> {}", trim_to(reply, caps.reply_chars));
     }
     if caps.screen {
         for line in pane.screen.iter().rev().take(15).rev() {
-            text.push_str(&format!("    {}\n", line.chars().take(160).collect::<String>().trim_end()));
+            let _ = writeln!(text, "    {}", line.chars().take(160).collect::<String>().trim_end());
         }
     }
     text
@@ -149,10 +150,11 @@ fn merged(range: &Range, groups: &[Group], live: &Live, ids: &mut Ids) -> String
         let Some((id, pull, title)) = pull_id(group, live, ids).filter(|(_, pull, _)| pull.state == "merged") else {
             continue;
         };
-        let title = title.map(|title| format!(" \"{title}\"")).unwrap_or_default();
-        let line = format!("- [{id}] #{}{title} · merged, last seen {}\n", pull.number, stamp(group.last, &range.zone));
-        if !text.contains(&line) {
-            text.push_str(&line);
+        let named = title.map(|title| format!(" \"{title}\"")).unwrap_or_default();
+        let entry =
+            format!("- [{id}] #{}{named} · merged, last seen {}\n", pull.number, stamp(group.last, &range.zone));
+        if !text.contains(&entry) {
+            text.push_str(&entry);
         }
     }
     if text.is_empty() { text } else { format!("## Merged pull requests\n{text}") }
@@ -202,7 +204,7 @@ pub(super) fn render(range: &Range, caps: &Caps, groups: &[Group], talks: &[Talk
         shown += 1;
         if text.len() + full.len() > caps.total {
             tally.shortened += 1;
-            text.push_str(&format!("{head}\n"));
+            let _ = writeln!(text, "{head}");
         } else {
             text.push_str(&full);
         }
@@ -224,13 +226,14 @@ fn finish(range: &Range, groups: &[Group], tally: &Tally, text: &str) -> String 
         projects.len()
     );
     if tally.shortened > 0 {
-        head.push_str(&format!(
-            "{} conversations were shortened to their header to keep the dossier small.\n",
+        let _ = writeln!(
+            head,
+            "{} conversations were shortened to their header to keep the dossier small.",
             tally.shortened
-        ));
+        );
     }
     if tally.left_out > 0 {
-        head.push_str(&format!("{} more conversations were left out to keep the dossier small.\n", tally.left_out));
+        let _ = writeln!(head, "{} more conversations were left out to keep the dossier small.", tally.left_out);
     }
     format!("{head}\n{text}")
 }

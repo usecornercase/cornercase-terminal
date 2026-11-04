@@ -22,8 +22,25 @@ fn faked(dir: &TempDir, name: &str, out: &str) -> PathBuf {
     program
 }
 
+fn called(agent: Known, program: &str, timeout: Duration) -> Call<'_> {
+    Call { agent, program, home: None, timeout }
+}
+
 fn ran(agent: Known, program: &Path, folder: &Path) -> Result<Ran> {
-    run(agent, &program.display().to_string(), None, &ask(folder), TIMEOUT, &Arc::new(AtomicUsize::new(0)))
+    let program = program.display().to_string();
+    run(&called(agent, &program, TIMEOUT), &ask(folder), &Arc::new(AtomicUsize::new(0)))
+}
+
+fn assert_claude_argv(argv: &str) {
+    for wanted in [
+        "\"--allowedTools\", \"Read,Grep,Glob,Bash(cornercase search:*)\"",
+        "\"--disallowedTools\", \"Edit,Write,NotebookEdit,WebFetch,WebSearch,Task\"",
+        "\"--model\", \"opus\"",
+        "\"--effort\", \"low\"",
+    ] {
+        assert!(argv.contains(wanted), "{wanted} in {argv}");
+    }
+    assert!(argv.trim_end().ends_with("\"--\", \"Sum it up\"]"), "{argv}");
 }
 
 #[test]
@@ -36,12 +53,7 @@ fn claude_runs_in_the_folder_with_read_only_tools_and_the_prompt_last() {
     assert_eq!(result.model.as_deref(), Some("claude-opus-5-5"));
     assert_eq!(result.tokens, Used { input: 4, output: 73, cache_read: 26364, cache_write: 5199 });
     assert_eq!(result.steps, 1);
-    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
-    assert!(argv.contains("\"--allowedTools\", \"Read,Grep,Glob,Bash(cornercase search:*)\""), "{argv}");
-    assert!(argv.contains("\"--disallowedTools\", \"Edit,Write,NotebookEdit,WebFetch,WebSearch,Task\""), "{argv}");
-    assert!(argv.contains("\"--model\", \"opus\""), "{argv}");
-    assert!(argv.contains("\"--effort\", \"low\""), "{argv}");
-    assert!(argv.trim_end().ends_with("\"--\", \"Sum it up\"]"), "{argv}");
+    assert_claude_argv(&std::fs::read_to_string(program.with_extension("argv")).expect("argv"));
     let cwd = std::fs::read_to_string(program.with_extension("cwd")).expect("cwd");
     assert_eq!(Path::new(cwd.trim()), folder.path().canonicalize().expect("canonical"));
 }
@@ -68,7 +80,7 @@ fn the_progress_counts_the_tools_the_agent_used() {
     let program = faked(&dir, "claude", fixture!("claude/2.1.318/recap-ok.jsonl"));
     let progress = Arc::new(AtomicUsize::new(0));
     let command = program.display().to_string();
-    run(Known::Claude, &command, None, &ask(folder.path()), TIMEOUT, &progress).expect("a recap");
+    run(&called(Known::Claude, &command, TIMEOUT), &ask(folder.path()), &progress).expect("a recap");
     assert_eq!(progress.load(Ordering::Relaxed), 1);
 }
 
@@ -114,8 +126,8 @@ fn a_run_that_never_ends_times_out() {
     std::fs::write(program.with_extension("hold"), "").expect("hold");
     let command = program.display().to_string();
     let progress = Arc::new(AtomicUsize::new(0));
-    let error = run(Known::Claude, &command, None, &ask(folder.path()), Duration::from_millis(300), &progress)
-        .expect_err("timeout");
+    let call = called(Known::Claude, &command, Duration::from_millis(300));
+    let error = run(&call, &ask(folder.path()), &progress).expect_err("timeout");
     std::fs::remove_file(program.with_extension("hold")).expect("release");
     assert_eq!(error.to_string(), "claude did not answer in time");
 }

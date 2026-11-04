@@ -1,7 +1,6 @@
 use serde_json::Value;
 
 use super::{Action, PickItem, Row, Settings};
-use crate::accounts;
 use crate::agents::{self, Known};
 use crate::config::{Config, DEFAULT_RECAP_EFFORT, DEFAULT_RECAP_LANGUAGE};
 use crate::control::config::{Choice, Kind, Setting};
@@ -203,7 +202,7 @@ impl Settings {
         config
     }
 
-    pub(super) fn recap_submitted(&mut self, row: RecapRow, value: String) -> Action {
+    pub(super) fn recap_submitted(&mut self, row: RecapRow, value: &str) -> Action {
         self.edit = None;
         let value = value.trim().to_string();
         let notice =

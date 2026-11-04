@@ -115,16 +115,11 @@ fn groups(range: &Range, entries: &[Entry], live: &Live) -> Vec<Group> {
     let mut found: Vec<Group> = Vec::new();
     for entry in sorted {
         let (Some(key), Some(at)) = (entry.key(), entry.seconds()) else { continue };
-        let index = found.iter().position(|group| group.key == key);
-        let group = match index {
-            Some(i) => &mut found[i],
-            None => {
-                found.push(Group::new(&key, entry, at));
-                let last = found.len() - 1;
-                &mut found[last]
-            }
-        };
-        group.add(entry, at);
+        let index = found.iter().position(|group| group.key == key).unwrap_or_else(|| {
+            found.push(Group::new(&key, entry, at));
+            found.len() - 1
+        });
+        found[index].add(entry, at);
     }
     found.retain(|group| range.choice == Choice::Now || group.prompted || group.worked);
     attach_live(found, range, live)

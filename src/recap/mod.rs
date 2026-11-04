@@ -12,8 +12,8 @@ pub(crate) mod store;
 pub(crate) mod text;
 
 pub(crate) const KEPT_DAYS: i64 = 30;
-pub(crate) const NOW_FRESH: Duration = Duration::from_secs(30 * 60);
-pub(crate) const RECAP_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+pub(crate) const NOW_FRESH: Duration = Duration::from_mins(30);
+pub(crate) const RECAP_TIMEOUT: Duration = Duration::from_mins(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum Choice {
@@ -30,14 +30,6 @@ impl Choice {
             Self::Now => "now",
             Self::Yesterday => "yesterday",
             Self::Week => "week",
-        }
-    }
-
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::Now => "now",
-            Self::Yesterday => "yesterday",
-            Self::Week => "7 days",
         }
     }
 
