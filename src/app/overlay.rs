@@ -8,6 +8,7 @@ use super::context_dialog::REFRESH;
 use super::flow_panel::{COPY, Shown};
 use super::flows_dialog::flows_view;
 use super::issues_dialog::{room, view};
+use super::machines::CONNECT_SUBMIT;
 use super::menus::MenuAction;
 use super::menus::Target;
 use super::merge_check::CHECK_AGAIN;
@@ -62,6 +63,7 @@ const COPY_COMMAND_SUBMIT: &str = "copy command";
 pub(super) enum Overlay {
     Menu { at: Position, actions: Vec<MenuAction> },
     NewGroup { input: Editor },
+    NewMachine { input: Editor, error: Option<String> },
     GroupStyle { group: u64 },
     DeleteGroup { group: u64 },
     CloseProject { project: u64 },
@@ -109,6 +111,7 @@ impl Overlay {
         match self {
             Self::Menu { .. } => "menu",
             Self::NewGroup { .. } => "new group",
+            Self::NewMachine { .. } => "new machine",
             Self::GroupStyle { .. } => "group style",
             Self::DeleteGroup { .. } => "delete group",
             Self::CloseProject { .. } => "close project",
@@ -197,6 +200,7 @@ impl Overlay {
         matches!(
             self,
             Overlay::NewGroup { .. }
+                | Overlay::NewMachine { .. }
                 | Overlay::NewWorkspace { .. }
                 | Overlay::Rename { .. }
                 | Overlay::RemoveWorkspace { .. }
@@ -214,6 +218,7 @@ impl Overlay {
     pub(super) fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
+            Self::NewMachine { .. } => CONNECT_SUBMIT,
             Self::RemoveWorkspace { lock: Some(_), .. } => UNLOCK_SUBMIT,
             Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } | Self::RemoveAccount { .. } => REMOVE_SUBMIT,
@@ -252,19 +257,26 @@ impl Overlay {
         match self {
             Self::NewWorkspace { input, creating: false, .. }
             | Self::Rename { input, .. }
-            | Self::NewGroup { input } => Some(input),
+            | Self::NewGroup { input }
+            | Self::NewMachine { input, .. } => Some(input),
             _ => None,
         }
     }
 
     pub(super) fn clear_error(&mut self) {
-        if let Self::NewWorkspace { error, .. } = self {
+        if let Self::NewWorkspace { error, .. } | Self::NewMachine { error, .. } = self {
             *error = None;
         }
     }
 
     pub(super) fn takes_input(&self) -> bool {
-        matches!(self, Self::NewWorkspace { creating: false, .. } | Self::Rename { .. } | Self::NewGroup { .. })
+        matches!(
+            self,
+            Self::NewWorkspace { creating: false, .. }
+                | Self::Rename { .. }
+                | Self::NewGroup { .. }
+                | Self::NewMachine { .. }
+        )
     }
 
     pub(super) fn lists_running(&self) -> bool {
@@ -331,7 +343,7 @@ impl App {
         Some(match overlay {
             Overlay::Menu { at, actions } => self.menu_view(*at, actions),
             Overlay::GroupStyle { group } => self.group_style_view(*group)?,
-            Overlay::NewGroup { input } => Self::new_group_view(input),
+            Overlay::NewGroup { .. } | Overlay::NewMachine { .. } => Self::name_view(overlay)?,
             Overlay::NewWorkspace { .. } => self.new_workspace_view(overlay)?,
             Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
             Overlay::ShareSettings(dialog) => ui::Overlay::ShareSettings(Box::new(ui::ShareSettings::of(dialog, area))),

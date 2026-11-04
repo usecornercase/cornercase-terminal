@@ -211,6 +211,7 @@ impl App {
             nav: self.screen.nav,
             update: self.update_label(),
             remote: self.remote_button(),
+            machine: self.machine_label(),
             attention,
             spin: self.spin(now),
             drag: self.row_drag_view(area),

@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.291
+
+- **Switch machines from the window.** Once a window has reached another machine with `cornercase remote`, the bottom of the sidebar names the machine it is on, beside `Worktrees` (`devbox ▴`, or `this machine ▴` once you come back), and its menu moves the window to this machine or to any machine a window reached before, with the `--command` it was given then, without closing it: the shells and agents of the machine you leave keep running there. **add machine…** reaches a new one once the window itself asks you to confirm, so a server on another machine can't send your laptop's `ssh` anywhere on its own, and **forget…** takes one off the list, kept in `machines.json` in cornercase's state folder. Until the other machine answers, the window stays where it was, so **back** (or `Esc`) and a failure, such as a key `ssh` refused or another version there, leave you there and say why. Like reconnecting, switching never asks for a password: use a key in your SSH agent. With the icon bar, the machine is an icon above Help.
+
 ## 0.12.290
 
 - Nothing changes for users: a test that failed now and then on a busy machine now reads the answer to its own request.

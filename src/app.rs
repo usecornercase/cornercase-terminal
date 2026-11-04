@@ -120,6 +120,7 @@ mod jobs;
 mod launches;
 mod layout;
 mod links;
+mod machines;
 mod menus;
 mod merge_check;
 mod merged_pull_requests;
