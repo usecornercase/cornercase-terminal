@@ -179,6 +179,32 @@ mod cloning {
     }
 }
 
+mod pasting {
+    use super::*;
+
+    #[test]
+    fn puts_a_url_on_one_line_and_clears_the_error() {
+        let mut form = opened();
+        form.url = Editor::new("");
+        assert_eq!(form.press(CLONE), Step::None);
+
+        form.paste("\n  git@github.com:acme/api.git\r\n", WIDTH);
+
+        assert_eq!((form.url.text(), form.error.as_deref()), ("git@github.com:acme/api.git".to_string(), None));
+        assert_eq!(form.destination(), "~/code/api");
+    }
+
+    #[test]
+    fn changes_nothing_while_it_clones() {
+        let mut form = listed();
+        form.cloning = true;
+
+        form.paste("/more", WIDTH);
+
+        assert_eq!(form.url.text(), URL);
+    }
+}
+
 mod the_intro {
     use super::*;
 

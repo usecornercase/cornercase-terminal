@@ -144,6 +144,16 @@ mod patches {
     }
 
     #[test]
+    fn keep_whole_a_diff_whose_every_changed_line_has_three_lines_of_context_on_each_side() {
+        let most = MAX_LINES * (1 + 2 * 3);
+        let sent = Patch { hunks: vec![hunk(most)], ..Patch::default() };
+
+        let heard = patch(&ok(&sent)).expect("a patch");
+
+        assert_eq!(heard.hunks[0].lines.len(), most);
+    }
+
+    #[test]
     fn keep_no_more_emphasis_or_segments_than_their_text_has_bytes() {
         let mut changed = line("abc");
         changed.emphasis = vec![[0, 1]; 50];
