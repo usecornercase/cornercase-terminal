@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.285
+
+- **On Windows, opening cornercase from your phone finds Tailscale**: its command there is `tailscale.exe`, looked for on the `PATH` and then where the installer puts it (`C:\Program Files\Tailscale\`), where cornercase used to say Tailscale was not installed. `cornercase remote` and `--remote` work from Windows with the OpenSSH client that comes with it. A path given with `--remote` is now read as the other machine's: `/srv/shop` is no longer refused as relative from Windows, `flow save --path` and `flow delete --path` find the flow file there, and a Windows path such as `C:\…` is refused with how to write it (from Git Bash, which turns `/srv/shop` into a Windows path, write `//srv/shop`). A Windows computer can't yet be the other end of `cornercase remote`: Windows' OpenSSH Server runs commands in cmd, which has no `sh`. On Linux and macOS, a `tailscale` in a relative `PATH` folder or without its execute bit is now skipped, as the agents' lookup does.
+
 ## 0.12.283
 
 - **On Windows, paths work the way Windows writes them.** A path a program prints in a pane with backslashes, with or without a drive (`C:\src\app\main.rs:10:5`, `.\src\x.rs`, `src\x.rs:3`), is a link that opens the file at its line, as `src/main.rs:12` already was; a path on the network (`\\server\share\…`) is never a link. In the folder picker, `\` goes into the selected folder as `/` does, `/` or `\` with nothing typed goes to the root of the drive you are on, and a drive such as `D:` followed by `\` goes to that drive, so a pasted `C:\Users\you\code\web` walks there. `cornercase plugin install` takes a folder with its drive (`C:\code\tools`, `C:/code/tools`) or starting with `~\` or `.\`, and refuses a folder on the network with a message saying so. Nothing changes on Linux and macOS.
