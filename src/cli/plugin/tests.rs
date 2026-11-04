@@ -237,6 +237,28 @@ mod folders {
 
     #[cfg(windows)]
     #[test]
+    fn one_holding_an_escape_character_comes_back_escaped() {
+        let home = TempDir::new();
+
+        let refused = folder_spec_from("~\\tools\u{1b}[2J.git", Some(home.path())).expect_err("refused").to_string();
+
+        assert!(refused.contains(r"tools\u{1b}[2J.git") && !refused.contains('\u{1b}'), "{refused}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_missing_one_from_the_root_of_the_drive_becomes_absolute_for_git_to_report() {
+        let typed = r"\cornercase.invalid\tools.git";
+        let expected = std::path::absolute(typed).expect("absolute");
+
+        let origin = Origin::parse(&spec(&format!("{typed}//notes@v1"), None)).expect("a folder");
+
+        assert_eq!((Path::new(&origin.url), origin.local()), (expected.as_path(), true));
+        assert_eq!(origin.subdir.as_deref(), Some("notes"));
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn a_drive_path_and_one_in_the_home_folder_with_backslashes_become_canonical() {
         let (home, expected) = home_with_tools();
         let typed = format!(r"{}\tools.git\..\tools.git//notes@v1", home.path().display());
