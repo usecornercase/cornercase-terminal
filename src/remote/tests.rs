@@ -12,16 +12,16 @@ fn devbox() -> Remote {
 }
 
 #[cfg(unix)]
-fn exited(code: i32) -> ExitStatus {
+pub(super) fn exited(code: i32) -> ExitStatus {
     std::os::unix::process::ExitStatusExt::from_raw(code << 8)
 }
 
 #[cfg(windows)]
-fn exited(code: i32) -> ExitStatus {
+pub(super) fn exited(code: i32) -> ExitStatus {
     std::os::windows::process::ExitStatusExt::from_raw(code.cast_unsigned())
 }
 
-fn with(lines: &[&str]) -> Stderr {
+pub(super) fn with(lines: &[&str]) -> Stderr {
     let stderr = Stderr::default();
     for line in lines {
         stderr.keep(line);
@@ -383,25 +383,27 @@ mod ended {
 mod shells {
     use super::*;
 
-    fn failed(code: i32, lines: &[&str]) -> Failed {
-        Failed { status: Some(exited(code)), stderr: with(lines) }
-    }
-
     #[rstest]
-    #[case::cmd_finds_no_sh(1, &["\"sh\" no se reconoce como un comando interno o externo,"], true)]
-    #[case::powershell_finds_no_sh(1, &["sh : The term 'sh' is not recognized as the name of a cmdlet"], true)]
-    #[case::cornercase_missing_under_sh(127, &["sh: 1: exec: cornercase: not found"], false)]
-    #[case::a_missing_path_under_bash(126, &["sh: line 0: exec: /x: cannot execute: No such file or directory"], false)]
-    #[case::ssh_itself(255, &["ssh: connect to host devbox port 22: Connection refused"], false)]
-    #[case::an_old_cornercase(2, &["error: unrecognized subcommand 'proxy'"], false)]
-    #[case::a_clean_end(0, &[], false)]
-    fn asks_which_shell_only_when_sh_may_not_be_there(#[case] code: i32, #[case] lines: &[&str], #[case] asks: bool) {
-        assert_eq!(failed(code, lines).maybe_another_shell(), asks);
+    #[case::a_marked_line(Found::Line(RemoteShell::Cmd), None, Some(RemoteShell::Cmd))]
+    #[case::a_shell_that_printed_no_mark(Found::Ended, Some(1), Some(RemoteShell::Posix))]
+    #[case::a_shell_that_printed_nothing(Found::Ended, Some(0), Some(RemoteShell::Posix))]
+    #[case::ssh_failed(Found::Ended, Some(SSH_FAILED), None)]
+    #[case::ssh_killed(Found::Ended, None, None)]
+    #[case::too_much_output(Found::Garbage, None, None)]
+    fn reads_what_the_probe_got(
+        #[case] found: Found<RemoteShell>,
+        #[case] code: Option<i32>,
+        #[case] shell: Option<RemoteShell>,
+    ) {
+        assert_eq!(answered(found, code), shell);
     }
 
     #[test]
-    fn a_signal_never_asks() {
-        assert!(!Failed { status: None, stderr: Stderr::default() }.maybe_another_shell());
+    fn a_windows_path_given_as_the_command_asks_first() {
+        let windows = Remote { command: Some(r"C:\a&b\cornercase.exe".into()), ..devbox() };
+        let unix = Remote { command: Some("~/bin/cornercase".into()), ..devbox() };
+
+        assert!(windows.probe_first() && !unix.probe_first() && !devbox().probe_first());
     }
 
     #[test]
@@ -412,7 +414,7 @@ mod shells {
     }
 
     #[rstest]
-    #[case::cmd(RemoteShell::Cmd, "&& cornercase proxy")]
+    #[case::cmd(RemoteShell::Cmd, r#"&& "cornercase" proxy"#)]
     #[case::powershell(RemoteShell::PowerShell, "try { & 'cornercase' 'proxy' }")]
     fn a_windows_machine_gets_a_line_for_its_shell(#[case] shell: RemoteShell, #[case] runs: &str) {
         let line = devbox().command_for(shell, &["proxy"], false).expect("a line");

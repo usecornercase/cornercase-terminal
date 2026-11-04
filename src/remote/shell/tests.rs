@@ -6,12 +6,13 @@ mod probe {
     use super::*;
 
     #[rstest]
-    #[case::cmd("cornercase-shell-\"x\"-$true\r\n", Some(RemoteShell::Cmd))]
-    #[case::powershell("cornercase-shell-x-True\r\n", Some(RemoteShell::PowerShell))]
-    #[case::sh("cornercase-shell-x-\n", Some(RemoteShell::Posix))]
+    #[case::cmd("cornercase-shell-\"x\"-$true-$env:OS\r\n", Some(RemoteShell::Cmd))]
+    #[case::powershell_on_windows("cornercase-shell-x-True-Windows_NT\r\n", Some(RemoteShell::PowerShell))]
+    #[case::pwsh_on_linux_or_macos("cornercase-shell-x-True-\n", Some(RemoteShell::Posix))]
+    #[case::sh("cornercase-shell-x--:OS\n", Some(RemoteShell::Posix))]
+    #[case::another_shell("cornercase-shell-x-yes\n", Some(RemoteShell::Posix))]
     #[case::fish_drops_the_word("\n", None)]
     #[case::a_motd("Welcome to devbox\n", None)]
-    #[case::something_else("cornercase-shell-x-yes\n", None)]
     fn each_shell_answers_in_its_own_way(#[case] line: &str, #[case] shell: Option<RemoteShell>) {
         assert_eq!(heard(line), shell);
     }
@@ -19,6 +20,18 @@ mod probe {
     #[test]
     fn runs_nothing_but_echo() {
         assert!(PROBE.starts_with("echo ") && !PROBE.contains(['`', '(', ';', '&', '|', '<', '>', '\'']), "{PROBE}");
+    }
+
+    #[rstest]
+    #[case::a_drive(r"C:\tools\cornercase.exe", true)]
+    #[case::a_drive_with_slashes("c:/tools/cornercase.exe", true)]
+    #[case::a_share(r"\\host\tools\cornercase.exe", true)]
+    #[case::the_profile_folder(r"~\tools\cornercase.exe", true)]
+    #[case::a_unix_home("~/bin/cornercase", false)]
+    #[case::a_unix_path("/opt/cornercase", false)]
+    #[case::a_name("cornercase", false)]
+    fn knows_a_windows_program(#[case] given: &str, #[case] windows: bool) {
+        assert_eq!(windows_program(given), windows);
     }
 }
 
@@ -29,7 +42,7 @@ mod cmd {
     fn looks_for_cornercase_where_the_installers_put_it_and_says_when_it_is_missing() {
         assert_eq!(
             cmd_line(None, &["proxy"], false).expect("a line"),
-            r#"set "PATH=%PATH%;%USERPROFILE%\.local\bin;%USERPROFILE%\.cargo\bin" && ("%SystemRoot%\System32\where.exe" /q cornercase || exit 127) && cornercase proxy"#
+            r#"set "PATH=%PATH:"=%;%USERPROFILE%\.local\bin;%USERPROFILE%\.cargo\bin" && ("%SystemRoot%\System32\where.exe" /q "cornercase" || exit 127) && "cornercase" proxy"#
         );
     }
 
@@ -38,7 +51,7 @@ mod cmd {
         let line = cmd_line(None, &["restart", "--when-idle"], true).expect("a line");
 
         assert!(line.contains(r#"&& set "CORNERCASE_TIED=1" && ("#), "{line}");
-        assert!(line.ends_with("&& cornercase restart --when-idle"), "{line}");
+        assert!(line.ends_with(r#"&& "cornercase" restart --when-idle"#), "{line}");
     }
 
     #[test]
@@ -54,14 +67,23 @@ mod cmd {
         r#""C:\Program Files\cc\:cornercase.exe""#,
         r#""C:\Program Files\cc\cornercase.exe" proxy"#
     )]
-    #[case::forward_slashes("C:/cc/cornercase.exe", r#""C:\cc\:cornercase.exe""#, r"C:\cc\cornercase.exe proxy")]
+    #[case::forward_slashes("C:/cc/cornercase.exe", r#""C:\cc\:cornercase.exe""#, r#""C:\cc\cornercase.exe" proxy"#)]
+    #[case::an_equals_sign_cmd_would_cut_at(
+        r"C:\tools\a=b,c\cornercase.exe",
+        r#""C:\tools\a=b,c\:cornercase.exe""#,
+        r#""C:\tools\a=b,c\cornercase.exe" proxy"#
+    )]
     #[case::the_profile_folder(
         "~/bin/cornercase.exe",
         r#""%USERPROFILE%\bin\:cornercase.exe""#,
         r#""%USERPROFILE%\bin\cornercase.exe" proxy"#
     )]
-    #[case::a_name("cc", "/q cc ||", "&& cc proxy")]
-    fn runs_the_given_program_and_looks_for_it_first(#[case] given: &str, #[case] found: &str, #[case] run: &str) {
+    #[case::a_name("cc", r#"/q "cc" ||"#, r#"&& "cc" proxy"#)]
+    fn runs_the_given_program_quoted_and_looks_for_it_first(
+        #[case] given: &str,
+        #[case] found: &str,
+        #[case] run: &str,
+    ) {
         let line = cmd_line(Some(given), &["proxy"], false).expect("a line");
 
         assert!(line.contains(found) && line.ends_with(run), "{line}");
@@ -75,7 +97,7 @@ mod cmd {
     fn quotes_a_word_for_cmd_and_the_c_runtime(#[case] word: &str, #[case] quoted: &str) {
         let line = cmd_line(None, &[word], false).expect("a line");
 
-        assert!(line.ends_with(&format!("cornercase {quoted}")), "{line}");
+        assert!(line.ends_with(&format!("\"cornercase\" {quoted}")), "{line}");
     }
 
     #[rstest]
@@ -86,6 +108,25 @@ mod cmd {
     fn refuses_what_cmd_would_read(#[case] word: &str) {
         assert!(cmd_line(None, &[word], false).is_err());
         assert!(cmd_line(Some(word), &["proxy"], false).is_err());
+    }
+
+    #[test]
+    fn drops_the_quotes_of_the_path_it_extends() {
+        assert!(cmd_line(None, &["proxy"], false).expect("a line").starts_with(r#"set "PATH=%PATH:"=%;"#));
+    }
+}
+
+mod the_command {
+    use super::*;
+
+    #[rstest]
+    #[case::cmd(true)]
+    #[case::powershell(false)]
+    fn an_empty_one_is_refused(#[case] cmd: bool) {
+        let given = Some("");
+        let line = if cmd { cmd_line(given, &["proxy"], false) } else { powershell_line(given, &["proxy"], false) };
+
+        assert!(line.is_err());
     }
 }
 
@@ -98,7 +139,8 @@ mod powershell {
             powershell_line(None, &["proxy"], false).expect("a line"),
             "$env:PATH = $env:PATH + ';' + $env:USERPROFILE + '\\.local\\bin' + ';' + $env:USERPROFILE + \
              '\\.cargo\\bin'; try { & 'cornercase' 'proxy' } catch [System.Management.Automation.\
-             CommandNotFoundException] { exit 127 }; exit $LASTEXITCODE"
+             CommandNotFoundException] { exit 127 } catch { [Console]::Error.WriteLine($_); exit 126 }; \
+             exit $LASTEXITCODE"
         );
     }
 
@@ -161,14 +203,18 @@ mod on_windows {
         windows_folder().join(r"System32\WindowsPowerShell\v1.0\powershell.exe")
     }
 
-    fn like_sshd<'a>(command: &'a mut Command, home: &Path) -> &'a mut Command {
+    fn session_path() -> String {
         let windows = windows_folder();
         let path = std::env::join_paths([windows.join("System32"), windows.clone(), powershell().with_file_name("")])
             .expect("a PATH");
-        command.env("PATH", path).env("USERPROFILE", home).env_remove(TIED_ENV).current_dir(home)
+        path.to_string_lossy().into_owned()
     }
 
     fn through(shell: RemoteShell, line: &str, home: &Path, session: Session) -> Output {
+        through_with_path(shell, line, home, session, &session_path())
+    }
+
+    fn through_with_path(shell: RemoteShell, line: &str, home: &Path, session: Session, path: &str) -> Output {
         let mut command = match shell {
             RemoteShell::Cmd => Command::new(windows_folder().join(r"System32\cmd.exe")),
             _ => Command::new(powershell()),
@@ -179,7 +225,8 @@ mod on_windows {
             (_, Session::Plain) => command.args(["-NoProfile", "-NonInteractive", "-c", line]),
             (_, Session::Terminal) => command.raw_arg(format!("-NoProfile -NonInteractive -c {line}")),
         };
-        like_sshd(&mut command, home).output().expect("run the shell")
+        command.env("PATH", path).env("USERPROFILE", home).env_remove(TIED_ENV).current_dir(home);
+        command.output().expect("run the shell")
     }
 
     fn line(shell: RemoteShell, given: Option<&str>, args: &[&str], tied: bool) -> String {
@@ -195,8 +242,23 @@ mod on_windows {
     }
 
     fn recorded(program: &Path) -> Vec<String> {
-        let args = std::fs::read_to_string(program.with_extension("args")).unwrap_or_default();
+        let args = std::fs::read_to_string(program.with_extension("argv")).unwrap_or_default();
         args.lines().map(str::to_string).collect()
+    }
+
+    fn called_with(words: &[&str]) -> Vec<String> {
+        vec![format!("{words:?}")]
+    }
+
+    fn runs_the_proxy(shell: RemoteShell, folder: &str, given: impl FnOnce(&Path) -> Option<String>, session: Session) {
+        let home = TempDir::new();
+        let program = installed(home.path(), folder);
+        let given = given(&program);
+
+        let out = through(shell, &line(shell, given.as_deref(), &["proxy"], false), home.path(), session);
+
+        assert!(out.status.success(), "{out:?}");
+        assert_eq!(recorded(&program), called_with(&["proxy"]));
     }
 
     #[rstest]
@@ -217,13 +279,7 @@ mod on_windows {
     #[case::powershell(RemoteShell::PowerShell, Session::Plain)]
     #[case::powershell_in_a_terminal(RemoteShell::PowerShell, Session::Terminal)]
     fn cornercase_is_found_where_the_installer_puts_it(#[case] shell: RemoteShell, #[case] session: Session) {
-        let home = TempDir::new();
-        let program = installed(home.path(), r".local\bin");
-
-        let out = through(shell, &line(shell, None, &["proxy"], false), home.path(), session);
-
-        assert!(out.status.success(), "{out:?}");
-        assert_eq!(recorded(&program), ["proxy"]);
+        runs_the_proxy(shell, r".local\bin", |_| None, session);
     }
 
     #[rstest]
@@ -264,21 +320,14 @@ mod on_windows {
         let out = through(shell, &line(shell, Some(&given), &words, false), home.path(), Session::Plain);
 
         assert!(out.status.success(), "{out:?}");
-        assert_eq!(recorded(&program), [words.join(" ")]);
+        assert_eq!(recorded(&program), called_with(&words));
     }
 
     #[rstest]
     #[case::cmd(RemoteShell::Cmd)]
     #[case::powershell(RemoteShell::PowerShell)]
     fn the_profile_folder_is_written_with_a_tilde(#[case] shell: RemoteShell) {
-        let home = TempDir::new();
-        let program = installed(home.path(), "bin");
-
-        let out =
-            through(shell, &line(shell, Some("~/bin/cornercase.exe"), &["proxy"], false), home.path(), Session::Plain);
-
-        assert!(out.status.success(), "{out:?}");
-        assert_eq!(recorded(&program), ["proxy"]);
+        runs_the_proxy(shell, "bin", |_| Some("~/bin/cornercase.exe".into()), Session::Plain);
     }
 
     #[rstest]
@@ -299,5 +348,40 @@ mod on_windows {
 
         assert!(shown(true).contains(&format!("{TIED_ENV}=1")));
         assert!(!shown(false).contains(&format!("{TIED_ENV}=1")));
+    }
+
+    #[rstest]
+    #[case::cmd(RemoteShell::Cmd)]
+    #[case::powershell(RemoteShell::PowerShell)]
+    fn a_program_in_a_folder_cmd_would_cut_at_still_runs(#[case] shell: RemoteShell) {
+        runs_the_proxy(shell, "a=b,c", |program| Some(program.display().to_string()), Session::Plain);
+    }
+
+    #[test]
+    fn a_program_powershell_cannot_start_is_not_a_success() {
+        let home = TempDir::new();
+        let broken = home.path().join("cornercase.exe");
+        std::fs::write(&broken, "not a program").expect("a file that is not a program");
+        let given = broken.display().to_string();
+        let shell = RemoteShell::PowerShell;
+
+        let out = through(shell, &line(shell, Some(&given), &["kill-server"], false), home.path(), Session::Plain);
+
+        assert_eq!(out.status.code(), Some(CANNOT_EXECUTE), "{out:?}");
+        assert!(!out.stderr.is_empty(), "says why: {out:?}");
+    }
+
+    #[test]
+    fn a_quoted_folder_on_the_path_runs_nothing_of_its_own() {
+        let home = TempDir::new();
+        let program = installed(home.path(), r".local\bin");
+        let path = format!(r#"{};"C:\R&echo INJECTED&rem D Tools\bin""#, session_path());
+        let shell = RemoteShell::Cmd;
+
+        let out = through_with_path(shell, &line(shell, None, &["proxy"], false), home.path(), Session::Plain, &path);
+
+        assert!(out.status.success(), "{out:?}");
+        assert!(!String::from_utf8_lossy(&out.stdout).contains("INJECTED"), "{out:?}");
+        assert_eq!(recorded(&program), called_with(&["proxy"]));
     }
 }

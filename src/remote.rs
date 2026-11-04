@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use serde_json::Value;
 
+use self::attempts::{Ask, Attempt, Failed};
 use self::shell::RemoteShell;
 use crate::control;
 use crate::error::{Behind, Error, Result};
@@ -18,6 +19,7 @@ use crate::process;
 use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
 
+mod attempts;
 mod known;
 mod shell;
 
@@ -137,23 +139,22 @@ enum Found<T> {
     Garbage,
 }
 
-enum Attempt {
-    Linked(Piped),
-    Failed(Failed),
+struct Asked<'a> {
+    remote: &'a Remote,
+    batch: bool,
 }
 
-struct Failed {
-    status: Option<ExitStatus>,
-    stderr: Stderr,
-}
+impl Ask for Asked<'_> {
+    fn remembered(&mut self) -> Option<RemoteShell> {
+        known::shell(&self.remote.destination)
+    }
 
-impl Failed {
-    fn maybe_another_shell(&self) -> bool {
-        match self.status.and_then(|status| status.code()) {
-            None | Some(0 | SSH_FAILED | NOT_FOUND) => false,
-            Some(CANNOT_EXECUTE) if self.stderr.any(NO_SUCH_FILE) => false,
-            Some(_) => !self.stderr.any(OLD_CLI),
-        }
+    fn probe(&mut self) -> Option<RemoteShell> {
+        self.remote.probe(self.batch)
+    }
+
+    fn learn(&mut self, shell: RemoteShell) {
+        known::learn(&self.remote.destination, shell);
     }
 }
 
@@ -162,23 +163,23 @@ impl Remote {
         &self.destination
     }
 
+    fn asked(&self, batch: bool) -> Asked<'_> {
+        Asked { remote: self, batch }
+    }
+
+    fn probe_first(&self) -> bool {
+        self.command.as_deref().is_some_and(shell::windows_program)
+    }
+
     pub(crate) fn connect(&self, usage: Use) -> Result<Piped> {
-        let tried = known::shell(&self.destination).unwrap_or(RemoteShell::Posix);
-        let failed = match self.attempt(usage, tried)? {
-            Attempt::Linked(piped) => return Ok(piped),
-            Attempt::Failed(failed) if failed.maybe_another_shell() => failed,
-            Attempt::Failed(failed) => return Err(self.failure(failed.status, &failed.stderr)),
-        };
-        let Some(shell) = self.relearn(usage.batch(), tried) else {
-            return Err(self.failure(failed.status, &failed.stderr));
-        };
-        match self.attempt(usage, shell)? {
-            Attempt::Linked(piped) => Ok(piped),
-            Attempt::Failed(again) => Err(self.failure(again.status, &again.stderr)),
+        let mut asked = self.asked(usage.batch());
+        match attempts::linked(&mut asked, self.probe_first(), |shell| self.attempt(usage, shell))? {
+            Ok(piped) => Ok(piped),
+            Err(failed) => Err(self.failure(failed.status, &failed.stderr)),
         }
     }
 
-    fn attempt(&self, usage: Use, shell: RemoteShell) -> Result<Attempt> {
+    fn attempt(&self, usage: Use, shell: RemoteShell) -> Result<Attempt<Piped>> {
         let line = self.command_for(shell, &["proxy"], false)?;
         let (mut child, input, output, errors) = spawn_piped(self.ssh_line(usage.batch(), Run::Plain, line))?;
         let stderr = Stderr::default();
@@ -207,11 +208,7 @@ impl Remote {
         }
     }
 
-    fn relearn(&self, batch: bool, tried: RemoteShell) -> Option<RemoteShell> {
-        self.heard(batch).filter(|shell| *shell != tried)
-    }
-
-    fn heard(&self, batch: bool) -> Option<RemoteShell> {
+    fn probe(&self, batch: bool) -> Option<RemoteShell> {
         let mut child = Command::new(SSH)
             .args(self.ssh_line(batch, Run::Plain, shell::PROBE.to_string()))
             .stdin(Stdio::null())
@@ -219,15 +216,18 @@ impl Remote {
             .stderr(Stdio::null())
             .spawn()
             .ok()?;
-        let found = child.stdout.take().map(|out| read_line(&mut BufReader::new(out), shell::heard));
+        let found = child.stdout.take().map_or(Found::Garbage, |out| read_line(&mut BufReader::new(out), shell::heard));
+        if !matches!(found, Found::Ended) {
+            process::stop(child);
+            return answered(found, None);
+        }
+        let code = process::wait_until(&mut child, Instant::now() + ENDED_WAIT).ok().flatten().and_then(|s| s.code());
         process::stop(child);
-        let Some(Found::Line(shell)) = found else { return None };
-        known::learn(&self.destination, shell);
-        Some(shell)
+        answered(found, code)
     }
 
     pub(crate) fn on_windows(&self) -> bool {
-        known::shell(&self.destination).or_else(|| self.heard(true)).is_some_and(RemoteShell::windows)
+        attempts::windows_there(&mut self.asked(true))
     }
 
     pub(crate) fn kill_server(&self) -> Result<bool> {
@@ -239,23 +239,23 @@ impl Remote {
     }
 
     pub(crate) fn run(&self, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
-        let known = known::shell(&self.destination);
-        let tried = known.unwrap_or(RemoteShell::Posix);
-        let status = self.run_with(tried, batch, run, args)?;
-        if known.is_some() || status.code() != Some(NO_SH) {
-            return Ok(status);
+        let words: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
+        let mut asked = self.asked(batch);
+        let ran =
+            attempts::ran(&mut asked, self.probe_first(), &words, |shell| self.run_with(shell, batch, run, &words))?;
+        if let Some(shell) = ran.learned {
+            let then = if ran.again {
+                "it ran the command again through it"
+            } else {
+                "run the command again, since cornercase does not repeat one that may have changed something there"
+            };
+            eprintln!(
+                "`{}` runs commands with {}, which cornercase uses from now on: {then}",
+                self.destination,
+                shell.name()
+            );
         }
-        match self.relearn(batch, tried) {
-            Some(shell) if shell.windows() => {
-                eprintln!(
-                    "`{}` runs commands with {}, not sh: running it again for it",
-                    self.destination,
-                    shell.name()
-                );
-                self.run_with(shell, batch, run, args)
-            }
-            _ => Ok(status),
-        }
+        Ok(ran.status)
     }
 
     fn run_with(&self, shell: RemoteShell, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
@@ -436,6 +436,14 @@ fn read_line<T>(reader: &mut impl BufRead, parse: impl Fn(&str) -> Option<T>) ->
     Found::Garbage
 }
 
+fn answered(found: Found<RemoteShell>, code: Option<i32>) -> Option<RemoteShell> {
+    match (found, code) {
+        (Found::Line(shell), _) => Some(shell),
+        (Found::Ended, Some(code)) if code != SSH_FAILED => Some(RemoteShell::Posix),
+        _ => None,
+    }
+}
+
 fn spawn_piped(args: Vec<String>) -> Result<(Child, ChildStdin, ChildStdout, ChildStderr)> {
     let mut child = Command::new(SSH)
         .args(args)
@@ -475,7 +483,8 @@ fn starts(first: &ClientMessage) -> bool {
 }
 
 pub(crate) fn proxy(connect: impl FnOnce(bool) -> Result<UnixStream>) -> Result<()> {
-    process::hand_down_nothing();
+    #[cfg(windows)]
+    process::handles::hand_down_nothing();
     let mut out = io::stdout().lock();
     writeln!(out, "{}", banner())?;
     out.flush()?;

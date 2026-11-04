@@ -16,8 +16,6 @@ use crate::text;
 
 pub(crate) use crate::os::process::alive;
 #[cfg(windows)]
-pub(crate) use handles::hand_down_nothing;
-#[cfg(windows)]
 pub(crate) use imp::listing;
 pub(crate) use imp::{
     all, args, children, cpu_time, cwd, env, footprint, name, open_files, parent, peer_uid, start_stamp, started,
@@ -25,7 +23,7 @@ pub(crate) use imp::{
 
 pub(crate) mod escalation;
 #[cfg(any(windows, test))]
-mod handles;
+pub(crate) mod handles;
 pub(crate) mod owners;
 pub(crate) mod program;
 
@@ -68,9 +66,6 @@ pub(crate) struct Listing;
 pub(crate) fn listing() -> io::Result<Listing> {
     Ok(Listing)
 }
-
-#[cfg(not(windows))]
-pub(crate) fn hand_down_nothing() {}
 
 fn trim_exe(name: &str) -> &str {
     let cut = name.len().saturating_sub(EXE.len());

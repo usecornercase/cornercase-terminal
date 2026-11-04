@@ -13,8 +13,12 @@ pub(crate) fn run(program: &Path, args: &[String], out: &mut impl Write, err: &m
 }
 
 fn record(program: &Path, args: &[String]) {
-    let line = format!("{}\n", args.join(" "));
-    let log = std::fs::OpenOptions::new().create(true).append(true).open(program.with_extension("args"));
+    append(&program.with_extension("args"), &format!("{}\n", args.join(" ")));
+    append(&program.with_extension("argv"), &format!("{args:?}\n"));
+}
+
+fn append(path: &Path, line: &str) {
+    let log = std::fs::OpenOptions::new().create(true).append(true).open(path);
     let _ = log.and_then(|mut log| log.write_all(line.as_bytes()));
 }
 

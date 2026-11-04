@@ -1,17 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-use super::NOT_FOUND;
+use super::{CANNOT_EXECUTE, NOT_FOUND};
 use crate::agents::{STOP_PARSING, powershell_quoted, splits};
 use crate::protocol::TIED_ENV;
 
-pub(super) const PROBE: &str = r#"echo cornercase-shell-"x"-$true"#;
+pub(super) const PROBE: &str = r#"echo cornercase-shell-"x"-$true-$env:OS"#;
 const HEARD: &str = "cornercase-shell-";
-const HEARD_CMD: &str = r#""x"-$true"#;
-const HEARD_POWERSHELL: &str = "x-True";
-const HEARD_POSIX: &str = "x-";
+const HEARD_CMD: &str = r#""x"-$true-$env:OS"#;
+const HEARD_POWERSHELL: &str = "x-True-Windows_NT";
 const PROGRAM: &str = "cornercase";
 const FOLDERS: [&str; 2] = [r"\.local\bin", r"\.cargo\bin"];
 const WHERE: &str = r#""%SystemRoot%\System32\where.exe" /q"#;
+const CMD_PATH: &str = r#"%PATH:"=%"#;
 const CMD_BARE: &str = r"-_./\:,+=@";
 const CMD_READS: [char; 3] = ['"', '%', '!'];
 const HOME_CMD: &str = "%USERPROFILE%";
@@ -45,9 +45,14 @@ pub(super) fn heard(line: &str) -> Option<RemoteShell> {
     match line.trim().strip_prefix(HEARD)? {
         HEARD_CMD => Some(RemoteShell::Cmd),
         HEARD_POWERSHELL => Some(RemoteShell::PowerShell),
-        HEARD_POSIX => Some(RemoteShell::Posix),
-        _ => None,
+        _ => Some(RemoteShell::Posix),
     }
+}
+
+pub(super) fn windows_program(given: &str) -> bool {
+    let mut chars = given.chars();
+    let drive = chars.next().is_some_and(|c| c.is_ascii_alphabetic()) && chars.next() == Some(':');
+    drive || given.starts_with(r"\\") || given.starts_with(r"~\")
 }
 
 struct Program {
@@ -56,17 +61,20 @@ struct Program {
 }
 
 impl Program {
-    fn of(given: Option<&str>) -> Self {
+    fn of(given: Option<&str>) -> Result<Self, String> {
         let given = given.unwrap_or(PROGRAM);
-        match given.strip_prefix('~').filter(|rest| rest.starts_with(['\\', '/'])) {
+        if given.is_empty() {
+            return Err("the command to run there is empty".into());
+        }
+        Ok(match given.strip_prefix('~').filter(|rest| rest.starts_with(['\\', '/'])) {
             Some(rest) => Self { home: true, path: rest.replace('/', "\\") },
             None => Self { home: false, path: given.replace('/', "\\") },
-        }
+        })
     }
 }
 
 pub(super) fn cmd_line(given: Option<&str>, args: &[&str], tied: bool) -> Result<String, String> {
-    let program = Program::of(given);
+    let program = Program::of(given)?;
     cmd_checked(&program.path)?;
     let mut words = vec![cmd_program(&program)];
     for arg in args {
@@ -76,7 +84,7 @@ pub(super) fn cmd_line(given: Option<&str>, args: &[&str], tied: bool) -> Result
     let folders: Vec<String> = FOLDERS.iter().map(|folder| format!(";{HOME_CMD}{folder}")).collect();
     let tie = if tied { format!("set \"{TIED_ENV}=1\" && ") } else { String::new() };
     Ok(format!(
-        "set \"PATH=%PATH%{}\" && {tie}({WHERE} {} || exit {NOT_FOUND}) && {}",
+        "set \"PATH={CMD_PATH}{}\" && {tie}({WHERE} {} || exit {NOT_FOUND}) && {}",
         folders.concat(),
         cmd_found(&program),
         words.join(" ")
@@ -104,19 +112,20 @@ fn cmd_quoted(text: &str) -> String {
 }
 
 fn cmd_program(program: &Program) -> String {
-    if program.home { cmd_quoted(&format!("{HOME_CMD}{}", program.path)) } else { cmd_word(&program.path) }
+    let home = if program.home { HOME_CMD } else { "" };
+    cmd_quoted(&format!("{home}{}", program.path))
 }
 
 fn cmd_found(program: &Program) -> String {
     let home = if program.home { HOME_CMD } else { "" };
     match program.path.rfind('\\') {
         Some(at) => format!("\"{home}{}:{}\"", &program.path[..=at], &program.path[at + 1..]),
-        None => cmd_word(&program.path),
+        None => cmd_quoted(&program.path),
     }
 }
 
 pub(super) fn powershell_line(given: Option<&str>, args: &[&str], tied: bool) -> Result<String, String> {
-    let program = Program::of(given);
+    let program = Program::of(given)?;
     let mut words = vec![powershell_program(&program)?];
     for arg in args {
         words.push(powershell_word(arg)?);
@@ -124,8 +133,8 @@ pub(super) fn powershell_line(given: Option<&str>, args: &[&str], tied: bool) ->
     let folders: Vec<String> = FOLDERS.iter().map(|folder| format!(" + ';' + $env:USERPROFILE + '{folder}'")).collect();
     let tie = if tied { format!(" $env:{TIED_ENV} = '1';") } else { String::new() };
     Ok(format!(
-        "$env:PATH = $env:PATH{};{tie} try {{ & {} }} catch [{NOT_FOUND_ERROR}] {{ exit {NOT_FOUND} }}; \
-         exit $LASTEXITCODE",
+        "$env:PATH = $env:PATH{};{tie} try {{ & {} }} catch [{NOT_FOUND_ERROR}] {{ exit {NOT_FOUND} }} \
+         catch {{ [Console]::Error.WriteLine($_); exit {CANNOT_EXECUTE} }}; exit $LASTEXITCODE",
         folders.concat(),
         words.join(" ")
     ))
