@@ -61,7 +61,15 @@ pub(crate) fn create_from(repo: &Path, branch: &str, path: &Path, base: &str) ->
     } else {
         check(git(
             repo,
-            [OsStr::new("worktree"), "add".as_ref(), "-b".as_ref(), branch.as_ref(), path, base.as_ref()],
+            [
+                OsStr::new("worktree"),
+                "add".as_ref(),
+                "--no-track".as_ref(),
+                "-b".as_ref(),
+                branch.as_ref(),
+                path,
+                base.as_ref(),
+            ],
         )?)?;
     }
     for file in included_files(repo)? {

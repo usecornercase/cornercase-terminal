@@ -1,6 +1,6 @@
 use super::*;
 use crate::queue::repeat::Repeat;
-use crate::test_util::{clone_of, git};
+use crate::test_util::{clone_of, git, head};
 
 pub(super) struct Routines {
     pub(super) app: App,
@@ -27,11 +27,6 @@ pub(super) fn routine(app: &App, at: i64, every: &str) -> Task {
 
 pub(super) fn runs(app: &App, routine: u64) -> Vec<queue::Entry> {
     app.panels.queued.queue().runs_of(routine).cloned().collect()
-}
-
-fn head(path: &Path) -> String {
-    let out = std::process::Command::new("git").arg("-C").arg(path).args(["rev-parse", "HEAD"]).output().expect("git");
-    String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
 fn all_started(app: &App, id: u64, count: usize) -> bool {

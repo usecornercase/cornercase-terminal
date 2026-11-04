@@ -71,6 +71,10 @@ impl App {
 
     fn run_queue_request(&mut self, id: u64, area: Option<Rect>, now: Instant) -> Handled {
         self.set_queue_area(super::sized(area)?);
+        if self.panels.queued.queue().entry(id).is_some_and(queue::Entry::is_routine) {
+            let run = self.start_routine_now(id, now)?;
+            return Ok(Some(json!({ "id": id, "run": run })));
+        }
         if let Err(reason) = self.run_queued(id, now) {
             let unfinished = |entry: &queue::Entry| !matches!(entry.state, State::Starting | State::Started { .. });
             if self.panels.queued.queue().entry(id).is_some_and(unfinished) {
@@ -211,7 +215,7 @@ impl App {
     pub(in crate::app) fn run_queued(&mut self, id: u64, now: Instant) -> Result<(), String> {
         let entry = self.panels.queued.queue().entry(id).ok_or_else(|| queue::missing(id))?.clone();
         if entry.is_routine() {
-            return self.start_routine_now(id, now);
+            return self.start_routine_now(id, now).map(drop);
         }
         if matches!(entry.state, State::Starting | State::Started { .. }) || self.panels.queued.starting(id) {
             return Err("this queue entry has already started".into());
@@ -223,15 +227,12 @@ impl App {
         if !agents::installed(&entry.task.program) {
             return Err(format!("{} is not installed", entry.task.agent));
         }
-        let start = control::Start {
-            agent: Some(entry.task.agent.clone()),
-            project: Some(self.projects[p].id),
-            workspace: at.map(|at| self.projects.workspace(at).id),
-            worktree: entry.task.place.branch.clone(),
-            name: Some(entry.task.label.clone()),
-            accounts: entry.task.accounts.clone(),
-            ..control::Start::default()
-        };
+        let workspace = at.map(|at| self.projects.workspace(at).id);
+        let start = queued_start(&entry, (self.projects[p].id, workspace), entry.task.place.branch.clone());
+        self.launch_start(id, now, start)
+    }
+
+    pub(super) fn launch_start(&mut self, id: u64, now: Instant, start: control::Start) -> Result<(), String> {
         let client = self.mark_starting(id, now)?;
         let asked = Asked { client, asker: Asker::default(), area: self.panels.queued.area(), now };
         let answer = self.start_request(asked, start);
@@ -257,6 +258,22 @@ impl App {
         if self.show(control::Item::Pane(pane)).is_ok() {
             self.resize(area);
         }
+    }
+}
+
+pub(super) fn queued_start(
+    entry: &queue::Entry,
+    place: (u64, Option<u64>),
+    worktree: Option<String>,
+) -> control::Start {
+    control::Start {
+        agent: Some(entry.task.agent.clone()),
+        project: Some(place.0),
+        workspace: place.1,
+        worktree,
+        name: Some(entry.task.label.clone()),
+        accounts: entry.task.accounts.clone(),
+        ..control::Start::default()
     }
 }
 

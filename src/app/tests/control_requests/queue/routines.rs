@@ -182,3 +182,18 @@ fn a_chat_app_that_is_away_hears_when_a_run_fails() {
     let said: Vec<String> = phone.read(&mut shop.app).iter().map(|(_, order)| html(order).to_string()).collect();
     assert!(said.iter().any(|text| text.contains("routine review the open pull requests failed")), "{said:?}");
 }
+
+#[test]
+fn running_a_routine_answers_the_new_run_and_a_failing_run_never_fails_the_routine() {
+    let mut shop = shop();
+    let id = add(&mut shop.app, &json!({}))["id"].as_u64().expect("id");
+    let at = listed(&mut shop.app, id)["at"].clone();
+    let answer = queue(&mut shop.app, "run", id);
+    let run = answer["run"].as_u64().expect("the new run");
+    assert_eq!(answer["id"], json!(id));
+    let (routine, run) = (listed(&mut shop.app, id), listed(&mut shop.app, run));
+    assert_eq!((&routine["state"], &routine["at"]), (&json!("pending"), &at));
+    assert_eq!((&run["state"], &run["routine"]), (&json!("failed"), &json!(id)));
+    let error = refused(&mut shop.app, "queue", &json!({"action": "run", "entry": 99}));
+    assert_eq!(error.code, "failed");
+}

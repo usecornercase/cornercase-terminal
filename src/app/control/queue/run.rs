@@ -1,11 +1,9 @@
 use std::time::Instant;
 
 use super::super::flow::pick;
-use super::super::{Asked, Asker};
 use crate::agents;
 use crate::app::App;
 use crate::app::flow_runs::Starting;
-use crate::control;
 use crate::git;
 use crate::git::worktree;
 use crate::queue::{self, Entry, State};
@@ -13,10 +11,13 @@ use crate::queue::{self, Entry, State};
 const BRANCHES_TRIED: usize = 1000;
 
 impl App {
-    pub(super) fn start_routine_now(&mut self, routine: u64, now: Instant) -> Result<(), String> {
+    pub(super) fn start_routine_now(&mut self, routine: u64, now: Instant) -> Result<u64, String> {
         let at = crate::time::now();
         let run = self.panels.queued.run_now(routine, at)?;
-        self.run_queued(run, now)
+        if let Err(reason) = self.run_queued(run, now) {
+            self.fail_queued(run, &reason);
+        }
+        Ok(run)
     }
 
     fn branch_taken(&self, p: usize, id: u64, name: &str) -> bool {
@@ -54,18 +55,8 @@ impl App {
         if !agents::installed(&entry.task.program) {
             return Err(format!("{} is not installed", entry.task.agent));
         }
-        let start = control::Start {
-            agent: Some(entry.task.agent.clone()),
-            project: Some(self.projects[p].id),
-            worktree: Some(branch),
-            name: Some(entry.task.label.clone()),
-            accounts: entry.task.accounts.clone(),
-            ..control::Start::default()
-        };
-        let client = self.mark_starting(entry.id, now)?;
-        let asked = Asked { client, asker: Asker::default(), area: self.panels.queued.area(), now };
-        let answer = self.start_request(asked, start);
-        self.routine_started(client, entry.id, answer)
+        let start = super::queued_start(entry, (self.projects[p].id, None), Some(branch));
+        self.launch_start(entry.id, now, start)
     }
 
     fn run_routine_flow(&mut self, entry: &Entry, p: usize, name: &str, branch: String) -> Result<(), String> {

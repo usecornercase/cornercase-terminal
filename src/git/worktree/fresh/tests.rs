@@ -1,10 +1,5 @@
 use super::*;
-use crate::test_util::{TempDir, clone_of, git, git_repo};
-
-fn head(path: &Path) -> String {
-    let out = std::process::Command::new("git").arg("-C").arg(path).args(["rev-parse", "HEAD"]).output().expect("git");
-    String::from_utf8_lossy(&out.stdout).trim().to_string()
-}
+use crate::test_util::{TempDir, clone_of, git, git_repo, head};
 
 #[test]
 fn starts_from_the_newest_commit_of_the_remote() {
