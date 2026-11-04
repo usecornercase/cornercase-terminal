@@ -2,17 +2,21 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.286
+## 0.12.287
 
 - **cornercase now ships for Windows**: every release has a Windows build for x64 (Windows on Arm runs it too), installed from PowerShell or a command prompt with `powershell -ExecutionPolicy Bypass -c "irm https://usecornercase.dev/install.ps1 | iex"`, which also works again while cornercase runs. Updating from the app or with `cornercase update` works while cornercase runs: Windows cannot replace a running program, so the old `cornercase.exe` is kept aside as `cornercase.old.exe` and deleted the next time cornercase starts once nothing runs from it. Plugins can ship a ready-made archive for `x86_64-pc-windows-msvc`. The website says how to install, update and uninstall cornercase on Windows, and its Known limitations list what is not there yet: a Windows computer cannot be the far end of `cornercase remote` (a Windows window reaching a Linux or macOS server works), phone access through `tailscale serve` and the chat bots have not been tried end to end, an agent argument its pane's shell would split is refused (in PowerShell one holding `"`, or a space and a final `\`; in cmd one holding a space), a PowerShell pane is followed from the folder it started in unless its prompt reports one, and a background job counts as the running program. Nothing changes on Linux and macOS.
 
-## 0.12.285
+## 0.12.286
 
 - **On Windows, opening cornercase from your phone finds Tailscale**: its command there is `tailscale.exe`, looked for on the `PATH` and then where the installer puts it (`C:\Program Files\Tailscale\`), where cornercase used to say Tailscale was not installed. `cornercase remote` and `--remote` work from Windows with the OpenSSH client that comes with it. A path given with `--remote` is now read as the other machine's: `/srv/shop` is no longer refused as relative from Windows, `flow save --path` and `flow delete --path` find the flow file there, and a Windows path such as `C:\…` is refused with how to write it (from Git Bash, which turns `/srv/shop` into a Windows path, write `//srv/shop`). A Windows computer can't yet be the other end of `cornercase remote`: Windows' OpenSSH Server runs commands in cmd, which has no `sh`. On Linux and macOS, a `tailscale` in a relative `PATH` folder or without its execute bit is now skipped, as the agents' lookup does.
 
-## 0.12.283
+## 0.12.285
 
 - **On Windows, paths work the way Windows writes them.** A path a program prints in a pane with backslashes, with or without a drive (`C:\src\app\main.rs:10:5`, `.\src\x.rs`, `src\x.rs:3`), is a link that opens the file at its line, as `src/main.rs:12` already was; a path on the network (`\\server\share\…`) is never a link. In the folder picker, `\` goes into the selected folder as `/` does, `/` or `\` with nothing typed goes to the root of the drive (or network share) you are on, and a drive such as `D:` followed by `\` goes to that drive, so a pasted `C:\Users\you\code\web` walks there. `cornercase plugin install` takes a folder with its drive (`C:\code\tools`, `C:/code/tools`) or starting with `~\` or `.\`, and refuses a folder on the network, or one that leads there through a symbolic link, with a message saying so, before anything opens it. Nothing changes on Linux and macOS.
+
+## 0.12.284
+
+- **On Windows, programs sharing a pane's console use up fewer of the questions cornercase lets wait when it looks for which files agents hold open.** Every program in a pane holds a copy of the pane's console input, and while one of them reads it Windows cannot name it through any of them. cornercase gave each program's copy one of the 16 questions it lets wait, so a few programs in panes could use them all up, and Codex, Copilot, Cursor and opencode could then lose their model and context line. Such a file now takes one, however many programs hold it. Nothing changes on Linux and macOS.
 
 ## 0.12.282
 
