@@ -475,6 +475,7 @@ fn starts(first: &ClientMessage) -> bool {
 }
 
 pub(crate) fn proxy(connect: impl FnOnce(bool) -> Result<UnixStream>) -> Result<()> {
+    process::hand_down_nothing();
     let mut out = io::stdout().lock();
     writeln!(out, "{}", banner())?;
     out.flush()?;

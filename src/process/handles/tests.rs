@@ -139,6 +139,39 @@ mod the_snapshot {
 
         assert_eq!((type_of(&bytes, 8), type_of(&bytes, 16)), (Some(12), None));
     }
+
+    fn with_attributes(entries: &[(usize, u32)]) -> Vec<u8> {
+        let mut bytes = snapshot(&entries.iter().map(|(handle, _)| (*handle, 0)).collect::<Vec<_>>());
+        for (at, (_, attributes)) in entries.iter().enumerate() {
+            let start = HEADER + at * ENTRY + ATTRIBUTES;
+            bytes[start..start + 4].copy_from_slice(&attributes.to_ne_bytes());
+        }
+        bytes
+    }
+
+    #[test]
+    fn hands_down_only_the_handles_marked_inheritable() {
+        let bytes = with_attributes(&[(4, INHERIT), (8, 0), (12, INHERIT | 1), (16, 4)]);
+
+        assert_eq!(handed_down(&bytes), [4, 12]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn finds_the_inheritable_handles_of_this_process() {
+        use std::os::windows::io::AsRawHandle;
+
+        use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
+
+        let (kept, handed) = (std::fs::File::open("NUL").expect("NUL"), std::fs::File::open("NUL").expect("NUL"));
+        let set = unsafe { SetHandleInformation(handed.as_raw_handle(), HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) };
+        assert_ne!(set, 0, "made inheritable");
+
+        let found = imp::own_handed_down();
+
+        assert!(found.contains(&handed.as_raw_handle().addr()), "{found:?}");
+        assert!(!found.contains(&kept.as_raw_handle().addr()), "{found:?}");
+    }
 }
 
 mod naming {
