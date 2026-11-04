@@ -64,7 +64,13 @@ pub(crate) struct Seen<'a> {
     pub(crate) screen: &'a mut dyn FnMut() -> String,
     pub(crate) trust_prompt: &'a dyn Fn(&str) -> bool,
     pub(crate) trust: Trust,
-    pub(crate) refusal: &'a dyn Fn(&str) -> Option<String>,
+    pub(crate) typed: &'a dyn Fn(&str) -> Result<String, Refusal>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Refusal {
+    pub(crate) reason: &'static str,
+    pub(crate) message: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,7 +85,7 @@ pub(crate) enum Step {
     Write(Vec<u8>),
     Done(Vec<u8>),
     Abandon,
-    Refuse(String),
+    Refuse(Refusal),
 }
 
 impl Launch {
@@ -217,16 +223,16 @@ impl Launch {
         if !ready {
             return Step::Wait;
         }
-        let typed = format!("{}\r", self.spec.command).into_bytes();
         if !self.agent {
-            return Step::Done(typed);
+            return Step::Done(format!("{}\r", self.spec.command).into_bytes());
         }
-        if let Some(refusal) = (seen.refusal)(&self.spec.command) {
-            return Step::Refuse(refusal);
-        }
-        self.echo = compact(&(seen.screen)()) + &compact(&self.spec.command);
+        let line = match (seen.typed)(&self.spec.command) {
+            Ok(line) => line,
+            Err(refusal) => return Step::Refuse(refusal),
+        };
+        self.echo = compact(&(seen.screen)()) + &compact(&line);
         self.next(Stage::Agent, now);
-        Step::Write(typed)
+        Step::Write(format!("{line}\r").into_bytes())
     }
 
     fn step_agent(&mut self, now: Instant, seen: &mut Seen) -> Step {
@@ -287,8 +293,8 @@ fn compact(text: &str) -> String {
 }
 
 fn only_echo(screen: &str, echo: &str) -> bool {
-    let mut echo = echo.chars();
-    screen.chars().filter(|c| !c.is_whitespace()).all(|c| echo.next() == Some(c))
+    let shown = compact(screen);
+    echo.starts_with(&shown) || echo.ends_with(&shown)
 }
 
 fn option_text(line: &str) -> &str {

@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use self::launch::Refusal;
 use crate::config::Config;
 use crate::{paths, process};
 
@@ -47,6 +48,8 @@ const POWERSHELL_START: &str = r"-_./\";
 const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
 const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
 const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
+const STOP_PARSING: &str = "--%";
+const CMD: &str = "cmd";
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
     ("droid", "droid"),
@@ -60,6 +63,13 @@ const OTHERS: [(&str, &str); 8] = [
 pub(in crate::agents) type ModeTable = &'static [(&'static str, &'static [&'static str])];
 
 pub(crate) type Mode = (String, Vec<String>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PaneShell {
+    PowerShell,
+    Cmd,
+    Other,
+}
 
 pub(crate) fn kinds(config: &Config) -> Vec<String> {
     let mut kinds: Vec<String> = Known::ALL
@@ -343,34 +353,157 @@ fn powershell_quoted(word: &str) -> String {
     quoted
 }
 
-pub(crate) fn batch_refusal(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Option<String> {
-    let (program, rest) = typed_program(line)?;
-    let target = runs(&program).unwrap_or_else(|| PathBuf::from(&program));
-    let batch = target
-        .extension()
-        .and_then(OsStr::to_str)
-        .is_some_and(|extension| BATCH_EXTENSIONS.iter().any(|batch| extension.eq_ignore_ascii_case(batch)));
-    let special = program.chars().chain(rest.chars()).find(|c| BATCH_SPECIAL.contains(c)).filter(|_| batch)?;
-    Some(format!(
-        "not started: `{}` is a batch file, which runs through cmd.exe, and cmd.exe would read the `{special}` in \
-         the line as its own, so a .cmd launcher cannot take it safely; install the agent as an .exe or keep its .ps1",
-        target.display()
+impl PaneShell {
+    pub(crate) fn of(shell: Option<i32>) -> Self {
+        Self::named(shell.and_then(process::name).as_deref())
+    }
+
+    pub(crate) fn named(name: Option<&str>) -> Self {
+        match name {
+            None => Self::PowerShell,
+            Some(name) if process::program::is_powershell(name) => Self::PowerShell,
+            Some(name) if process::same_file_name(process::program_name(name), CMD) => Self::Cmd,
+            Some(_) => Self::Other,
+        }
+    }
+}
+
+pub(crate) fn typed_on_windows(
+    line: &str,
+    shell: PaneShell,
+    runs: impl Fn(&str) -> Option<PathBuf>,
+) -> Result<String, Refusal> {
+    let Some(words) = typed_words(line) else { return Ok(line.to_string()) };
+    let refusal = match shell {
+        PaneShell::PowerShell => split_word(&words),
+        PaneShell::Cmd => cmd_word(&words),
+        PaneShell::Other => None,
+    };
+    if let Some(refusal) = refusal {
+        return Err(refusal);
+    }
+    without_cmd(line, words, shell == PaneShell::PowerShell, runs)
+}
+
+fn refusal(reason: &'static str, message: &str) -> Refusal {
+    Refusal { reason, message: format!("not started: {message}") }
+}
+
+fn split_word(words: &[String]) -> Option<Refusal> {
+    if words.iter().any(|word| word == STOP_PARSING) {
+        return Some(refusal(
+            "the stop-parsing token",
+            "the argument `--%` makes Windows PowerShell 5.1 pass the words after it without their quotes, so a word \
+             with a space could reach the agent as options of its own; remove it",
+        ));
+    }
+    let word = words.iter().find(|word| splits(word))?;
+    let why = if word.contains('"') { "holds a `\"`" } else { "holds whitespace and ends with `\\`" };
+    Some(refusal(
+        "a word PowerShell would split",
+        &format!(
+            "the argument `{word}` {why}, which Windows PowerShell 5.1 passes on in pieces when it starts a program, \
+             so part of it could reach the agent as an option of its own; change the argument"
+        ),
     ))
 }
 
-fn typed_program(line: &str) -> Option<(String, &str)> {
-    let Some(quoted) = line.strip_prefix("& '") else {
-        let (program, rest) = line.split_once(' ').unwrap_or((line, ""));
-        return Some((program.to_string(), rest));
+fn splits(word: &str) -> bool {
+    word.contains('"') || (word.ends_with('\\') && word.contains(char::is_whitespace))
+}
+
+fn cmd_word(words: &[String]) -> Option<Refusal> {
+    if let Some((word, special)) = special_in(words) {
+        return Some(refusal(
+            "a character cmd.exe reads",
+            &format!(
+                "the pane's shell is cmd.exe, which would read the `{special}` in `{word}` as its own; start the \
+                 agent in a PowerShell pane"
+            ),
+        ));
+    }
+    let word = words.iter().find(|word| word.contains(char::is_whitespace))?;
+    Some(refusal(
+        "a word cmd.exe would split",
+        &format!(
+            "the pane's shell is cmd.exe, which does not read the quotes around `{word}`, so it would reach the agent \
+             in pieces; start the agent in a PowerShell pane"
+        ),
+    ))
+}
+
+fn special(words: &[String]) -> Option<char> {
+    special_in(words).map(|(_, special)| special)
+}
+
+fn special_in(words: &[String]) -> Option<(&str, char)> {
+    words.iter().find_map(|word| word.chars().find(|c| BATCH_SPECIAL.contains(c)).map(|c| (word.as_str(), c)))
+}
+
+fn without_cmd(
+    line: &str,
+    words: Vec<String>,
+    powershell: bool,
+    runs: impl Fn(&str) -> Option<PathBuf>,
+) -> Result<String, Refusal> {
+    let Some(program) = words.first() else { return Ok(line.to_string()) };
+    let target = runs(program).unwrap_or_else(|| PathBuf::from(program));
+    if !is_batch(&target) {
+        return Ok(line.to_string());
+    }
+    if let Some(shim) = powershell.then(|| shim_words(&target, &runs)).flatten() {
+        return Ok(powershell_line(shim.into_iter().chain(words.into_iter().skip(1))));
+    }
+    let Some(special) = special(&words) else {
+        return Ok(line.to_string());
     };
-    let mut program = String::new();
+    Err(refusal(
+        "a batch file",
+        &format!(
+            "`{}` is a batch file that is not an npm shim cornercase can read, so it runs through cmd.exe, and cmd.exe \
+             would read the `{special}` in the line as its own; install the agent as an .exe or with npm, or keep its \
+             .ps1",
+            target.display()
+        ),
+    ))
+}
+
+fn is_batch(program: &Path) -> bool {
+    program
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| BATCH_EXTENSIONS.iter().any(|batch| extension.eq_ignore_ascii_case(batch)))
+}
+
+fn shim_words(shim: &Path, runs: impl Fn(&str) -> Option<PathBuf>) -> Option<Vec<String>> {
+    let words = process::program::shim::target(shim, runs)?;
+    words.into_iter().map(|word| word.into_os_string().into_string().ok()).collect()
+}
+
+fn typed_words(line: &str) -> Option<Vec<String>> {
+    let mut rest = line.strip_prefix("& ").unwrap_or(line);
+    let mut words = Vec::new();
+    while !rest.is_empty() {
+        let (word, after) = typed_word(rest)?;
+        words.push(word);
+        rest = after;
+    }
+    Some(words)
+}
+
+fn typed_word(text: &str) -> Option<(String, &str)> {
+    let Some(quoted) = text.strip_prefix('\'') else {
+        let (word, rest) = text.split_once(' ').unwrap_or((text, ""));
+        return Some((word.to_string(), rest));
+    };
+    let mut word = String::new();
     let mut chars = quoted.char_indices().peekable();
     while let Some((at, c)) = chars.next() {
-        let quote = POWERSHELL_QUOTES.contains(&c);
-        if quote && chars.next_if(|(_, next)| *next == c).is_none() {
-            return Some((program, &quoted[at + c.len_utf8()..]));
+        if POWERSHELL_QUOTES.contains(&c) && chars.next_if(|(_, next)| *next == c).is_none() {
+            let after = &quoted[at + c.len_utf8()..];
+            return Some((word, if after.is_empty() { after } else { after.strip_prefix(' ')? }));
         }
-        program.push(c);
+        word.push(c);
     }
     None
 }
