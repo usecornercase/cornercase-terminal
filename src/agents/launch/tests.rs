@@ -83,6 +83,16 @@ fn a_refused_line_is_never_typed() {
 }
 
 #[test]
+fn an_agent_line_powershell_would_split_is_refused_and_never_typed() {
+    let t0 = Instant::now();
+    let command = r#"claude --add-dir 'a b" --dangerously-skip-permissions "c'"#.to_string();
+    let mut launch = Launch::new(1, Spec { command, ..spec(false) }, t0);
+    let typed = |line: &str| crate::agents::for_powershell(line, |_| None);
+    let refused = step_typing(&mut launch, t0 + SHELL_LATEST, &shell(), &typed);
+    assert!(matches!(&refused, Step::Refuse(why) if why.contains("PowerShell 5.1")), "{refused:?}");
+}
+
+#[test]
 fn the_line_the_shell_gets_is_typed_and_waited_on_in_place_of_the_command() {
     let t0 = Instant::now();
     let mut launch = Launch::new(1, spec(false), t0);

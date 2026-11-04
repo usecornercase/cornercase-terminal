@@ -116,9 +116,9 @@ mod for_windows {
         let path = dir.path().as_os_str().to_owned();
         let runs = |program: &str| powershell_finds(program, Some(&path), None);
         let line = r"claude --add-dir 'C:\Users\me\R&D'";
-        assert!(crate::agents::without_cmd(line, runs).is_err_and(|refused| refused.contains("claude.cmd")));
+        assert!(crate::agents::for_powershell(line, runs).is_err_and(|refused| refused.contains("claude.cmd")));
         std::fs::write(dir.path().join("claude.ps1"), "").expect("write the ps1 shim");
-        assert_eq!(crate::agents::without_cmd(line, runs), Ok(line.to_string()));
+        assert_eq!(crate::agents::for_powershell(line, runs), Ok(line.to_string()));
     }
 
     #[test]
@@ -129,7 +129,7 @@ mod for_windows {
         std::fs::write(nvm.path().join("node.cmd"), SHIM).expect("write a node shim");
         let typed = |folders: &[&TempDir]| {
             let path = std::env::join_paths(folders.iter().map(|dir| dir.path())).expect("a path");
-            crate::agents::without_cmd("claude 'R&D'", |program| powershell_finds(program, Some(&path), None))
+            crate::agents::for_powershell("claude 'R&D'", |program| powershell_finds(program, Some(&path), None))
         };
         let words = [nodejs.path().join("node.exe"), under(npm.path(), &NPM_SCRIPT)].map(|p| p.display().to_string());
         let line = typed(&[&npm, &nodejs]).expect("typed past the shim");

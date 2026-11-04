@@ -86,7 +86,7 @@ impl App {
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
         let typed = |line: &str| {
-            if cfg!(windows) { agents::without_cmd(line, program::powershell_runs) } else { Ok(line.to_string()) }
+            if cfg!(windows) { agents::for_powershell(line, program::powershell_runs) } else { Ok(line.to_string()) }
         };
         let round = Round { now, trust, asks: &asks, typed: &typed };
         let mut out = Outcomes::default();

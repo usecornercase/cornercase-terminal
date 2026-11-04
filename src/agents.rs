@@ -343,16 +343,37 @@ fn powershell_quoted(word: &str) -> String {
     quoted
 }
 
-pub(crate) fn without_cmd(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Result<String, String> {
-    let Some((program, rest)) = typed_program(line) else { return Ok(line.to_string()) };
-    let target = runs(&program).unwrap_or_else(|| PathBuf::from(&program));
+pub(crate) fn for_powershell(line: &str, runs: impl Fn(&str) -> Option<PathBuf>) -> Result<String, String> {
+    let Some(words) = typed_words(line) else { return Ok(line.to_string()) };
+    if let Some(refusal) = split_word(&words) {
+        return Err(refusal);
+    }
+    without_cmd(line, words, runs)
+}
+
+fn split_word(words: &[String]) -> Option<String> {
+    let word = words.iter().find(|word| splits(word))?;
+    let why = if word.contains('"') { "holds a `\"`" } else { "holds whitespace and ends with `\\`" };
+    Some(format!(
+        "not started: the argument `{word}` {why}, which Windows PowerShell 5.1 passes on in pieces when it starts a \
+         program, so part of it could reach the agent as an option of its own; change the argument"
+    ))
+}
+
+fn splits(word: &str) -> bool {
+    word.contains('"') || (word.ends_with('\\') && word.contains(char::is_whitespace))
+}
+
+fn without_cmd(line: &str, words: Vec<String>, runs: impl Fn(&str) -> Option<PathBuf>) -> Result<String, String> {
+    let Some(program) = words.first() else { return Ok(line.to_string()) };
+    let target = runs(program).unwrap_or_else(|| PathBuf::from(program));
     if !is_batch(&target) {
         return Ok(line.to_string());
     }
-    if let Some(words) = shim_words(&target, &runs) {
-        return Ok(retyped(words, rest));
+    if let Some(shim) = shim_words(&target, &runs) {
+        return Ok(powershell_line(shim.into_iter().chain(words.into_iter().skip(1))));
     }
-    let Some(special) = program.chars().chain(rest.chars()).find(|c| BATCH_SPECIAL.contains(c)) else {
+    let Some(special) = words.iter().flat_map(|word| word.chars()).find(|c| BATCH_SPECIAL.contains(c)) else {
         return Ok(line.to_string());
     };
     Err(format!(
@@ -375,27 +396,30 @@ fn shim_words(shim: &Path, runs: impl Fn(&str) -> Option<PathBuf>) -> Option<Vec
     words.into_iter().map(|word| word.into_os_string().into_string().ok()).collect()
 }
 
-fn retyped(words: Vec<String>, rest: &str) -> String {
-    let program = powershell_line(words);
-    match rest.trim_start() {
-        "" => program,
-        rest => format!("{program} {rest}"),
+fn typed_words(line: &str) -> Option<Vec<String>> {
+    let mut rest = line.strip_prefix("& ").unwrap_or(line);
+    let mut words = Vec::new();
+    while !rest.is_empty() {
+        let (word, after) = typed_word(rest)?;
+        words.push(word);
+        rest = after;
     }
+    Some(words)
 }
 
-fn typed_program(line: &str) -> Option<(String, &str)> {
-    let Some(quoted) = line.strip_prefix("& '") else {
-        let (program, rest) = line.split_once(' ').unwrap_or((line, ""));
-        return Some((program.to_string(), rest));
+fn typed_word(text: &str) -> Option<(String, &str)> {
+    let Some(quoted) = text.strip_prefix('\'') else {
+        let (word, rest) = text.split_once(' ').unwrap_or((text, ""));
+        return Some((word.to_string(), rest));
     };
-    let mut program = String::new();
+    let mut word = String::new();
     let mut chars = quoted.char_indices().peekable();
     while let Some((at, c)) = chars.next() {
-        let quote = POWERSHELL_QUOTES.contains(&c);
-        if quote && chars.next_if(|(_, next)| *next == c).is_none() {
-            return Some((program, &quoted[at + c.len_utf8()..]));
+        if POWERSHELL_QUOTES.contains(&c) && chars.next_if(|(_, next)| *next == c).is_none() {
+            let after = &quoted[at + c.len_utf8()..];
+            return Some((word, if after.is_empty() { after } else { after.strip_prefix(' ')? }));
         }
-        program.push(c);
+        word.push(c);
     }
     None
 }

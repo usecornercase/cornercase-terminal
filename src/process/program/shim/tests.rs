@@ -78,9 +78,7 @@ fn a_shim_of_a_file_that_is_not_a_program_is_not_read() {
 #[case::shebang_variables(&NPM_SHIM.replace("CALL :find_dp0\r\n", "CALL :find_dp0\r\n@SET FOO=bar\r\n"))]
 #[case::another_command_after_it(&format!("{NPM_SHIM}calc.exe\r\n"))]
 #[case::unix_line_ends(&NPM_SHIM.replace("\r\n", "\n"))]
-#[case::a_quote_in_the_target(&NPM_SHIM.replace("claude-code", "a\" & calc & \"b"))]
-#[case::an_absolute_target(&NPM_SHIM.replace(r"%dp0%\node_modules", r"C:\node_modules"))]
-#[case::another_drive(&NPM_SHIM.replace(r"node_modules\@anthropic-ai", r"D:\@anthropic-ai"))]
+#[case::a_target_outside_the_shims_folder(&NPM_SHIM.replace(r"%dp0%\node_modules", r"C:\node_modules"))]
 #[case::a_missing_script(&NPM_SHIM.replace("cli.js", "gone.js"))]
 #[case::pnpm(
     "@SETLOCAL\r\n@IF EXIST \"%~dp0\\node.exe\" (\r\n  \"%~dp0\\node.exe\"  \
@@ -95,4 +93,52 @@ fn any_other_shim_is_not_read(#[case] shim: &str) {
 #[test]
 fn a_shim_that_is_not_there_is_not_read() {
     assert_eq!(target(Path::new("/nonexistent/claude.cmd"), |_| None), None);
+}
+
+#[test]
+fn a_shim_is_read_up_to_its_limit_and_one_longer_is_not() {
+    let pad = format!(r"{}\..\", "x".repeat(usize::try_from(LIMIT).expect("a size") - NPM_SHIM.len() - 4));
+    let full = NPM_SHIM.replace(r"%dp0%\node_modules", &format!(r"%dp0%\{pad}node_modules"));
+    assert_eq!(u64::try_from(full.len()), Ok(LIMIT));
+    let dir = folder(&full, &[&NPM_SCRIPT, &["node.exe"]]);
+    assert!(read(&dir, None).is_some());
+    let dir = folder(&format!("{full}calc.exe\r\n"), &[&NPM_SCRIPT, &["node.exe"]]);
+    assert_eq!(read(&dir, None), None);
+}
+
+#[test]
+fn a_shim_named_by_a_relative_path_is_not_read() {
+    let dir = folder(NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+    let shim = dir.path().join("claude.cmd");
+    let here = std::env::current_dir().expect("the working folder");
+    let normal = |path: &Path| -> Vec<std::ffi::OsString> {
+        let parts = path.components().filter(|part| matches!(part, std::path::Component::Normal(_)));
+        parts.map(|part| part.as_os_str().to_owned()).collect()
+    };
+    let up: PathBuf = normal(&here).iter().map(|_| "..").collect();
+    let relative = normal(&shim).iter().fold(up, |path, part| path.join(part));
+    assert!(relative.is_relative() && relative.is_file(), "{}", relative.display());
+    assert!(target(&shim, |_| None).is_some());
+    assert_eq!(target(&relative, |_| None), None);
+}
+
+#[rstest]
+#[case::another_drive(r"a\D:\x")]
+#[case::a_forward_slash("a/b")]
+#[case::a_double_quote("a\"b")]
+#[case::a_variable(r"a\%USERNAME%\b")]
+#[case::an_empty_part(r"a\\b")]
+#[case::this_folder(r"a\.\b")]
+#[case::a_control_character("a\u{7}b")]
+fn a_part_cmd_reads_otherwise_is_not_joined(#[case] relative: &str) {
+    let dir = TempDir::new();
+    assert_eq!(joined(dir.path(), relative), None);
+}
+
+#[test]
+fn a_parent_folder_goes_up_but_never_past_the_root() {
+    let dir = TempDir::new();
+    assert_eq!(joined(dir.path(), r"a\..\b\c"), Some(dir.path().join("b").join("c")));
+    let root = dir.path().ancestors().last().expect("a root");
+    assert_eq!(joined(root, r"..\b"), None);
 }

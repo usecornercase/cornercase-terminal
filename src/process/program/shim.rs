@@ -21,6 +21,9 @@ enum Runs {
 }
 
 pub(crate) fn target(shim: &Path, find: impl Fn(&str) -> Option<PathBuf>) -> Option<Vec<PathBuf>> {
+    if !shim.is_absolute() {
+        return None;
+    }
     let text = read(shim)?;
     let body = text.strip_prefix(HEAD)?;
     let (runs, relative) =
@@ -35,8 +38,8 @@ pub(crate) fn target(shim: &Path, find: impl Fn(&str) -> Option<PathBuf>) -> Opt
 
 fn read(shim: &Path) -> Option<String> {
     let mut text = String::new();
-    std::fs::File::open(shim).ok()?.take(LIMIT).read_to_string(&mut text).ok()?;
-    Some(text)
+    let read = std::fs::File::open(shim).ok()?.take(LIMIT + 1).read_to_string(&mut text).ok()?;
+    u64::try_from(read).is_ok_and(|read| read <= LIMIT).then_some(text)
 }
 
 fn joined(dir: &Path, relative: &str) -> Option<PathBuf> {

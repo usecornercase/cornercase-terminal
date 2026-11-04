@@ -8,7 +8,6 @@ fn strings(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| (*s).to_string()).collect()
 }
 
-#[cfg(windows)]
 const POWERSHELL_CASES: &[&[&str]] = &[
     &["claude", "--model", "a\u{2019}; Write-Output INJECTED; \u{2019}"],
     &["claude", "--model", "a\u{2018}; Write-Output INJECTED; \u{2018}"],
@@ -22,6 +21,7 @@ const POWERSHELL_CASES: &[&[&str]] = &[
     &["-claude", "x"],
     &["/opt/claude", "x"],
     &[r"..\bin\claude.exe", "x"],
+    &["claude", "--add-dir", r#"a b" --dangerously-skip-permissions "c"#, r"C:\my dir\", "a\tb\\", r"C:\dir\"],
 ];
 
 #[cfg(windows)]
@@ -326,6 +326,34 @@ mod arguments {
     }
 
     #[test]
+    fn each_typed_line_reads_back_as_the_words_powershell_parses() {
+        for words in POWERSHELL_CASES.iter().map(|words| strings(words)) {
+            let line = powershell_line(words.clone());
+            assert_eq!(typed_words(&line), Some(words), "{line}");
+        }
+    }
+
+    #[rstest]
+    #[case::a_double_quote_with_a_space(r#"a b" --dangerously-skip-permissions "c"#, "`\"`")]
+    #[case::json(r#"{"a":1}"#, "`\"`")]
+    #[case::a_folder_ending_with_its_separator(r"C:\my dir\", "ends with")]
+    #[case::a_tab_and_backslashes("a\tb\\\\", "ends with")]
+    fn a_word_powershell_would_pass_on_in_pieces_is_refused_for_any_program(#[case] word: &str, #[case] why: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word, "-v"]));
+        let refused = for_powershell(&line, |_| Some(PathBuf::from(r"C:\bin\claude.exe"))).expect_err("refused");
+        assert!(refused.contains(word) && refused.contains(why), "{refused}");
+    }
+
+    #[rstest]
+    #[case::a_folder_ending_with_its_separator(r"C:\dir\")]
+    #[case::a_backslash_inside(r"C:\my dir\x")]
+    #[case::typographic_double_quotes("\u{201C}a b\u{201D}")]
+    fn a_word_powershell_passes_on_whole_is_typed(#[case] word: &str) {
+        let line = powershell_line(strings(&["claude", "--add-dir", word]));
+        assert_eq!(for_powershell(&line, |_| Some(PathBuf::from(r"C:\bin\claude.exe"))), Ok(line));
+    }
+
+    #[test]
     fn the_command_line_is_the_binary_and_its_arguments() {
         let mut c = config();
         c.agent_args.insert("cursor".into(), strings(&["--model", "a b"]));
@@ -444,7 +472,7 @@ mod batch_files {
 
     fn typed(words: &[&str], runs: &str) -> Result<String, String> {
         let runs = PathBuf::from(runs);
-        without_cmd(&powershell_line(strings(words)), move |_| Some(runs.clone()))
+        for_powershell(&powershell_line(strings(words)), move |_| Some(runs.clone()))
     }
 
     fn refusal(words: &[&str], runs: &str) -> Option<String> {
@@ -456,10 +484,19 @@ mod batch_files {
     }
 
     fn through(shim: &Path, line: &str) -> Result<String, String> {
-        without_cmd(line, |program| (program == "claude").then(|| shim.to_path_buf()))
+        for_powershell(line, |program| (program == "claude").then(|| shim.to_path_buf()))
     }
 
-    const WORDS: [&str; 7] = ["--add-dir", r"C:\Users\me\R&D", "50%", "!x!", "a^b|c", "<in", r#"{"a":1}"#];
+    const WORDS: [&str; 7] = ["--add-dir", r"C:\Users\me\R&D", "50%", "!x!", "a^b|c", "<in", "Sergio\u{2019}s code"];
+
+    #[test]
+    fn a_word_powershell_would_split_is_refused_past_an_npm_shim_too() {
+        let dir = TempDir::new();
+        let shim = npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+        let line = powershell_line(strings(&["claude", "--add-dir", r#"a b" --dangerously-skip-permissions "c"#]));
+        let refused = through(&shim, &line).expect_err("refused");
+        assert!(refused.contains("--dangerously-skip-permissions") && refused.contains("`\"`"), "{refused}");
+    }
 
     #[test]
     fn an_npm_shim_is_passed_over_for_node_and_its_script_with_every_word() {
@@ -470,7 +507,7 @@ mod batch_files {
         let expected = powershell_line(node.into_iter().chain(strings(&WORDS)));
         assert_eq!(through(&shim, &line), Ok(expected.clone()));
         let quoted = powershell_line(std::iter::once(shown(shim.clone())).chain(strings(&WORDS)));
-        assert_eq!(without_cmd(&quoted, |program| Some(PathBuf::from(program))), Ok(expected));
+        assert_eq!(for_powershell(&quoted, |program| Some(PathBuf::from(program))), Ok(expected));
     }
 
     #[test]
@@ -510,7 +547,6 @@ mod batch_files {
     #[case::cmds_escape("a^b", '^')]
     #[case::a_variable("%PATH%", '%')]
     #[case::a_delayed_variable("!x!", '!')]
-    #[case::a_double_quote(r#"{"a":1}"#, '"')]
     fn a_word_cmd_reads_is_refused_for_a_cmd_shim(#[case] word: &str, #[case] special: char) {
         let refused = refusal(&["claude", "--add-dir", word], r"C:\npm\claude.cmd").expect("refused");
         assert!(refused.contains(&format!("`{special}`")) && refused.contains(r"C:\npm\claude.cmd"), "{refused}");
@@ -534,14 +570,14 @@ mod batch_files {
     #[test]
     fn a_batch_file_named_as_the_program_counts_when_it_is_not_found() {
         let line = powershell_line(strings(&[r"C:\Program Files\x\claude.bat", "50%"]));
-        let refused = without_cmd(&line, |_| None).expect_err("refused");
+        let refused = for_powershell(&line, |_| None).expect_err("refused");
         assert!(refused.contains(r"`C:\Program Files\x\claude.bat`") && refused.contains("`%`"), "{refused}");
     }
 
     #[test]
     fn the_program_is_read_back_from_the_typed_line() {
         let line = powershell_line(strings(&[r"C:\R&D\Sergio’s\claude.cmd", "--resume", "a1"]));
-        let refused = without_cmd(&line, |program| Some(PathBuf::from(program))).expect_err("refused");
+        let refused = for_powershell(&line, |program| Some(PathBuf::from(program))).expect_err("refused");
         assert!(refused.contains(r"`C:\R&D\Sergio’s\claude.cmd`") && refused.contains("`&`"), "{refused}");
     }
 }
