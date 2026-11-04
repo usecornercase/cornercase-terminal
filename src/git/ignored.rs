@@ -1,15 +1,13 @@
-use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, Read};
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 
-use rustix::fs::{Mode, OFlags};
-
+use self::imp::{open_folder, open_within};
 use super::clone::files::MAX_FILES;
 use super::worktree::{check, git};
 use crate::error::Result;
+use crate::os::ffi::to_path;
+use crate::os::fs::{PermissionsExt, stat_file};
 
 pub(crate) const MAX_FILE_BYTES: u64 = 1024 * 1024;
 const PERMISSIONS: u32 = 0o777;
@@ -58,24 +56,24 @@ pub(crate) fn list(root: &Path) -> Result<Listing> {
     let args = ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "--full-name", "-z"];
     let listed = check(git(root, args)?)?;
     let mut entries = listed.split(|b| *b == 0).filter(|entry| !entry.is_empty() && !entry.ends_with(b"/"));
-    let files: Vec<IgnoredFile> = entries
-        .by_ref()
-        .filter_map(|entry| regular(&top, Path::new(OsStr::from_bytes(entry))))
-        .take(MAX_FILES)
-        .collect();
+    let files: Vec<IgnoredFile> =
+        entries.by_ref().filter_map(|entry| regular(&top, &to_path(entry))).take(MAX_FILES).collect();
     Ok(Listing { files, left_out: entries.count(), root: pinned })
 }
 
 pub(crate) fn toplevel(root: &Path) -> Result<PathBuf> {
     let top = check(git(root, ["rev-parse", "--show-toplevel"])?)?;
-    Ok(PathBuf::from(OsStr::from_bytes(top.trim_ascii_end())))
+    Ok(to_path(top.trim_ascii_end()))
 }
 
 pub(crate) fn read(root: &Root, file: &IgnoredFile) -> Result<(Vec<u8>, u32)> {
     if !file.path.components().all(|part| matches!(part, Component::Normal(_))) {
         return Err(io::Error::other(format!("{} is not inside the project", file.path.display())).into());
     }
-    let opened = open_within(root, &file.path)?;
+    let Some(name) = file.path.file_name() else {
+        return Err(io::Error::other(format!("{} is not a file", file.path.display())).into());
+    };
+    let opened = open_within(root.open()?, file.path.parent().unwrap_or(Path::new("")), name)?;
     let metadata = opened.metadata()?;
     if !metadata.file_type().is_file() {
         return Err(io::Error::other(format!("{} is not a regular file", file.path.display())).into());
@@ -93,27 +91,8 @@ pub(crate) fn read(root: &Root, file: &IgnoredFile) -> Result<(Vec<u8>, u32)> {
     Ok((bytes, metadata.permissions().mode() & PERMISSIONS))
 }
 
-fn open_within(root: &Root, path: &Path) -> Result<File> {
-    let Some(name) = path.file_name() else {
-        return Err(io::Error::other(format!("{} is not a file", path.display())).into());
-    };
-    let mut dir = root.open()?;
-    let folder = OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::RDONLY | OFlags::CLOEXEC;
-    for part in path.parent().into_iter().flat_map(Path::components) {
-        dir = File::from(rustix::fs::openat(&dir, part.as_os_str(), folder, Mode::empty()).map_err(io::Error::from)?);
-    }
-    let leaf = OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::RDONLY | OFlags::CLOEXEC;
-    Ok(File::from(rustix::fs::openat(&dir, name, leaf, Mode::empty()).map_err(io::Error::from)?))
-}
-
-fn open_folder(path: &Path) -> Result<File> {
-    let flags = OFlags::DIRECTORY | OFlags::RDONLY | OFlags::CLOEXEC;
-    Ok(File::from(rustix::fs::open(path, flags, Mode::empty()).map_err(io::Error::from)?))
-}
-
 fn identity(folder: &File) -> Result<(u64, u64)> {
-    let metadata = folder.metadata()?;
-    Ok((metadata.dev(), metadata.ino()))
+    Ok(stat_file(folder)?.id())
 }
 
 fn regular(top: &Path, path: &Path) -> Option<IgnoredFile> {
@@ -124,6 +103,54 @@ fn regular(top: &Path, path: &Path) -> Option<IgnoredFile> {
         mode: metadata.permissions().mode() & PERMISSIONS,
         too_big: metadata.len() > MAX_FILE_BYTES,
     })
+}
+
+#[cfg(unix)]
+mod imp {
+    use std::ffi::OsStr;
+    use std::fs::File;
+    use std::io;
+    use std::path::Path;
+
+    use rustix::fs::{Mode, OFlags};
+
+    use crate::error::Result;
+
+    pub(super) fn open_within(root: File, folders: &Path, name: &OsStr) -> Result<File> {
+        let folder = OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::RDONLY | OFlags::CLOEXEC;
+        let mut dir = root;
+        for part in folders.components() {
+            dir =
+                File::from(rustix::fs::openat(&dir, part.as_os_str(), folder, Mode::empty()).map_err(io::Error::from)?);
+        }
+        let leaf = OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::RDONLY | OFlags::CLOEXEC;
+        Ok(File::from(rustix::fs::openat(&dir, name, leaf, Mode::empty()).map_err(io::Error::from)?))
+    }
+
+    pub(super) fn open_folder(path: &Path) -> Result<File> {
+        let flags = OFlags::DIRECTORY | OFlags::RDONLY | OFlags::CLOEXEC;
+        Ok(File::from(rustix::fs::open(path, flags, Mode::empty()).map_err(io::Error::from)?))
+    }
+}
+
+#[cfg(windows)]
+mod imp {
+    use std::ffi::OsStr;
+    use std::fs::File;
+    use std::io;
+    use std::path::Path;
+
+    use crate::error::Result;
+
+    const UNSUPPORTED: &str = "copying git-ignored files into a clone is not supported on Windows yet";
+
+    pub(super) fn open_within(_root: File, _folders: &Path, _name: &OsStr) -> Result<File> {
+        Err(io::Error::new(io::ErrorKind::Unsupported, UNSUPPORTED).into())
+    }
+
+    pub(super) fn open_folder(_path: &Path) -> Result<File> {
+        Err(io::Error::new(io::ErrorKind::Unsupported, UNSUPPORTED).into())
+    }
 }
 
 #[cfg(test)]

@@ -1,6 +1,5 @@
 use std::io::BufReader;
 use std::net::Shutdown;
-use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
@@ -12,6 +11,7 @@ use crate::control::{Report, Response, Snapshot};
 use crate::error::{Error, Result};
 use crate::host::open::{Browse, Open, Opener};
 use crate::host::sound::{Cue, Kind};
+use crate::os::socket::UnixStream;
 use crate::protocol::{self, ClientMessage, ServerMessage};
 use crate::remote::Killer;
 

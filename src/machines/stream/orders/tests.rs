@@ -1,5 +1,3 @@
-use std::os::unix::net::UnixStream;
-
 use rstest::rstest;
 use serde_json::json;
 
@@ -9,6 +7,7 @@ use crate::control::terminal::{End, InputEvent, Key, Point};
 use crate::machines::link::fake::{ended, request};
 use crate::machines::stream::Stream;
 use crate::machines::stream::tests::{BOOT, Rig, TAB, VIEW, complete, say, shown};
+use crate::os::socket::UnixStream;
 
 fn focus(tab: u64) -> Value {
     serde_json::to_value(Item::Tab(tab)).expect("an item")

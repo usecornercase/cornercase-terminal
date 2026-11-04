@@ -4,6 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::worktree::git_env;
+use crate::os::fs::{canonical, canonicalize};
 
 pub(crate) mod files;
 
@@ -113,13 +114,13 @@ pub(crate) fn folder_name(url: &str) -> Result<String, Failure> {
 
 pub(crate) fn destination(url: &str, parent: &Path) -> Result<PathBuf, Failure> {
     let name = folder_name(url)?;
-    let found = parent.ancestors().find_map(|at| at.canonicalize().ok().map(|real| (at, real)));
+    let found = parent.ancestors().find_map(|at| canonicalize(at).ok().map(|real| (at, real)));
     let parent = match found {
         Some((at, real)) => real.join(parent.strip_prefix(at).unwrap_or(Path::new(""))),
         None => parent.to_path_buf(),
     };
     let path = parent.join(name);
-    Ok(path.canonicalize().unwrap_or(path))
+    Ok(canonical(path))
 }
 
 pub(crate) fn prepare(url: &str, path: PathBuf) -> Result<Target, Failure> {

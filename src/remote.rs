@@ -8,11 +8,11 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use rustix::process::{Pid, Signal, kill_process};
 use serde_json::Value;
 
 use crate::control;
 use crate::error::{Behind, Error, Result};
+use crate::os::process::{Pid, Signal, kill_process};
 use crate::os::socket::UnixStream;
 use crate::process;
 use crate::protocol::{self, ClientMessage};

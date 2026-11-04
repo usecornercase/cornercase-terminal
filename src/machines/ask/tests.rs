@@ -1,4 +1,3 @@
-use std::os::unix::net::UnixStream;
 use std::thread::JoinHandle;
 use std::time::Instant;
 
@@ -8,6 +7,7 @@ use serde_json::json;
 use super::*;
 use crate::control::{Response, Stats};
 use crate::machines::link::fake::{Hanging, Once, REFUSED, ended, line, request, respond, window_messages};
+use crate::os::socket::UnixStream;
 use crate::protocol::{self, ClientMessage, ServerMessage};
 
 const WAIT: Duration = Duration::from_secs(10);

@@ -1,9 +1,9 @@
 use std::ffi::OsStr;
-use std::fs::{self, OpenOptions, Permissions};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
+
+use crate::os::fs::{OpenOptionsExt, set_file_mode};
 
 pub(crate) const PLAIN_MODE: u32 = 0o644;
 pub(crate) const MAX_FILES: usize = 200;
@@ -34,8 +34,7 @@ fn written(root: &Path, file: &File) -> Result<(), String> {
     let Some((name, folders)) = parts.split_last() else { return Err("its path is empty".into()) };
     let path = folders_in(root, folders)?.join(name);
     let mut out = OpenOptions::new().write(true).create_new(true).mode(PRIVATE).open(&path).map_err(|e| opened(&e))?;
-    let filled =
-        out.write_all(&file.bytes).and_then(|()| out.set_permissions(Permissions::from_mode(file.mode & PERMISSIONS)));
+    let filled = out.write_all(&file.bytes).and_then(|()| set_file_mode(&out, file.mode & PERMISSIONS));
     if let Err(e) = filled {
         let _ = fs::remove_file(&path);
         return Err(e.to_string());
@@ -47,7 +46,7 @@ fn parts(path: &Path) -> Result<Vec<&OsStr>, String> {
     let mut parts = Vec::new();
     for part in path.components() {
         match part {
-            Component::Normal(name) if name.as_bytes().eq_ignore_ascii_case(b".git") => {
+            Component::Normal(name) if name.eq_ignore_ascii_case(".git") => {
                 return Err("it goes into `.git`".into());
             }
             Component::Normal(name) => parts.push(name),

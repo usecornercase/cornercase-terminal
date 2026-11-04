@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use rstest::rstest;
@@ -13,6 +14,7 @@ fn read(root: &TempDir, path: &str) -> String {
     fs::read_to_string(root.path().join(path)).expect("read")
 }
 
+#[cfg(unix)]
 fn mode_of(root: &TempDir, path: &str) -> u32 {
     fs::metadata(root.path().join(path)).expect("metadata").permissions().mode() & PERMISSIONS
 }
@@ -35,6 +37,7 @@ mod write {
         assert_eq!((read(&clone, ".env"), read(&clone, "config/secrets.dev.json")), ("KEY=1\n".into(), "{}".into()));
     }
 
+    #[cfg(unix)]
     #[rstest]
     #[case::private(0o600)]
     #[case::executable(0o755)]
@@ -47,6 +50,7 @@ mod write {
         assert_eq!(mode_of(&clone, "run.sh"), mode);
     }
 
+    #[cfg(unix)]
     #[test]
     fn keeps_only_the_permission_bits() {
         let clone = TempDir::new();
@@ -97,6 +101,7 @@ mod write {
         assert!(!clone.path().join(".git/hooks/pre-commit").exists());
     }
 
+    #[cfg(unix)]
     #[test]
     fn never_goes_through_a_link_of_the_clone() {
         let outside = TempDir::new();
@@ -109,6 +114,7 @@ mod write {
         assert!(!outside.path().join("secrets.json").exists());
     }
 
+    #[cfg(unix)]
     #[test]
     fn never_writes_through_a_link_in_place_of_the_file() {
         let outside = TempDir::new();

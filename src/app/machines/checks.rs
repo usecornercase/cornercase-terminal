@@ -135,6 +135,7 @@ fn unasked<T>(cached: &mut Cached<T>) {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 impl Checks {
     pub(in crate::app) fn asking_accounts(&self) -> bool {
         self.accounts.asking

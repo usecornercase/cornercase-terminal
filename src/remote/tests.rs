@@ -568,6 +568,7 @@ mod proxy {
     }
 }
 
+#[cfg(unix)]
 mod a_killer {
     use std::os::unix::process::ExitStatusExt;
 

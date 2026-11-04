@@ -15,6 +15,7 @@ use crate::git::clone::files::{self, File, MAX_FILES, MAX_TOTAL_BYTES};
 use crate::git::clone::{self, Failure, Target};
 use crate::log::{self, Job, Level};
 use crate::machines::send;
+use crate::os::fs::canonical;
 
 pub(super) struct Cloning {
     path: PathBuf,
@@ -147,7 +148,7 @@ impl App {
     }
 
     fn cloned(&mut self, cloning: &Cloning, unwritten: Vec<Unwritten>, area: Rect) -> Result<Value, Refusal> {
-        let path = cloning.path.canonicalize().unwrap_or_else(|_| cloning.path.clone());
+        let path = canonical(cloning.path.clone());
         let p = self.open_folder(path.clone(), Some(area)).map_err(|e| {
             format!("the repository was cloned into `{}`, but it could not be opened as a project: {e}", path.display())
         })?;

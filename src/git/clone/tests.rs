@@ -167,6 +167,7 @@ mod failure {
     }
 }
 
+#[cfg(unix)]
 mod destination {
     use super::*;
 

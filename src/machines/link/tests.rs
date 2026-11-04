@@ -1,4 +1,3 @@
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
@@ -10,6 +9,7 @@ use super::fake::{Hanging, REFUSED, answer, ended, line, refused, request, respo
 use super::*;
 use crate::control::{GroupInfo, Ids, PaneInfo, ProjectInfo, TabInfo, WorkspaceInfo};
 use crate::error::Behind;
+use crate::os::socket::UnixStream;
 
 const WAIT: Duration = Duration::from_secs(10);
 const HERE: &str = "4242-1";

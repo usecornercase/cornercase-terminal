@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use base64::Engine as _;
@@ -116,6 +117,7 @@ mod a_clone {
         assert!(!parent.path().join("shop").exists());
     }
 
+    #[cfg(unix)]
     #[test]
     fn into_a_folder_that_is_already_being_cloned_into_is_busy_under_any_spelling() {
         let repo = git_repo(&[]);
@@ -154,6 +156,7 @@ mod a_clone {
         assert_eq!(answered_at_last(&mut app, &rx).len(), 1);
     }
 
+    #[cfg(unix)]
     #[test]
     fn into_the_folder_behind_a_link_that_is_being_cloned_into_is_busy() {
         let (outer, inner) = (git_repo(&[]), git_repo(&[]));
@@ -246,6 +249,7 @@ mod a_clone_with_files {
         parent.path().join(repo.path().file_name().expect("a name"))
     }
 
+    #[cfg(unix)]
     #[test]
     fn writes_them_in_the_clone_and_answers_those_it_could_not_write() {
         let repo = git_repo(&[("config/app.json", "{\"tracked\": true}")]);
@@ -267,6 +271,7 @@ mod a_clone_with_files {
         assert_eq!(app.projects.len(), 1);
     }
 
+    #[cfg(unix)]
     #[test]
     fn that_all_land_answers_without_unwritten() {
         let repo = git_repo(&[("README.md", "hi\n")]);

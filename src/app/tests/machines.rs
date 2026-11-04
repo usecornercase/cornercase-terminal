@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
@@ -13,6 +12,7 @@ use crate::machines::link::fake::{answer, line};
 use crate::machines::link::{Connect, Event, Line, Report};
 use crate::machines::wake::Network;
 use crate::machines::{Machine, State, machine};
+use crate::os::socket::UnixStream;
 use crate::protocol::{self, ClientMessage};
 use crate::remote::Killer;
 

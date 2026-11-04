@@ -1,4 +1,3 @@
-use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
@@ -9,6 +8,7 @@ use super::fake::{self, SURFACE, There};
 use super::*;
 use crate::error::Result;
 use crate::machines::link::fake::{Hanging, ended, line, refused, request};
+use crate::os::socket::UnixStream;
 use crate::protocol::{self, ServerMessage};
 use crate::remote::Killer;
 use crate::test_util;

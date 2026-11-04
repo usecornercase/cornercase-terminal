@@ -1,4 +1,3 @@
-use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
@@ -9,6 +8,7 @@ use serde_json::json;
 use super::*;
 use crate::control::{Changes, Response};
 use crate::machines::link::fake::{Hanging, Once, REFUSED, ended, line, request, respond, window_messages};
+use crate::os::socket::UnixStream;
 use crate::protocol::{self, ServerMessage};
 use crate::remote::Killer;
 
