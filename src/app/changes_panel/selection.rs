@@ -23,7 +23,7 @@ impl App {
         let path = file.path.clone();
         let selection =
             Selection { workspace, path: path.clone(), digest: file.digest, anchor: spot, end: spot, stretch: None };
-        self.panels.changes.select(selection);
+        self.changes_state_mut().select(selection);
         let anchor = Anchor::Diff { spot, text };
         self.screen.drag = Some(Drag::Lines { workspace, path, anchor, area, moved: false, scrolled: None });
     }
@@ -31,8 +31,7 @@ impl App {
     pub(in crate::app) fn shows_diff_lines(&self, workspace: u64, path: &str, spot: Spot) -> bool {
         self.changes_shown()
             && self
-                .panels
-                .changes
+                .changes_state()
                 .selection()
                 .is_some_and(|s| s.workspace == workspace && s.path == path && s.anchor == spot)
             && self.panel_view().is_some_and(|view| view.selection.is_some())
@@ -42,7 +41,7 @@ impl App {
         let Some(view) = self.panel_view() else { return };
         let Some(selected) = view.selection else { return };
         if let Some(end) = panel::line_near(panel_area, &view, selected.file, row) {
-            self.panels.changes.select_to(end);
+            self.changes_state_mut().select_to(end);
         }
     }
 
@@ -52,12 +51,12 @@ impl App {
         let Some(pointer) = panel::stretch_near(panel_area, &view, selected.file, pos) else { return };
         let mut stretch = selected.stretch;
         Stretch::dragged(&mut stretch, anchor, pointer);
-        self.panels.changes.set_stretch(stretch);
+        self.changes_state_mut().set_stretch(stretch);
     }
 
     pub(in crate::app) fn scroll_diff(&mut self, panel_area: Rect, delta: isize) {
         let Some(view) = self.panel_view() else { return };
-        self.panels.changes.scroll_by(delta, panel::max_scroll(panel_area, &view));
+        self.changes_state_mut().scroll_by(delta, panel::max_scroll(panel_area, &view));
     }
 
     pub(super) fn selected_lines_action(&mut self, view: &panel::View, action: LinesAction) {
@@ -66,9 +65,10 @@ impl App {
         let lines = panel::picked(view, &selected);
         match action {
             LinesAction::Copy => self.copy(&match selected.stretch {
-                Some(stretch) => stretch.text(lines.iter().map(|line| line.text)),
+                Some(stretch) => stretch.text(lines.iter().map(|line| line.text.as_ref())),
                 None => selection::text(&lines),
             }),
+            LinesAction::Ask if self.shows_remote_diff() => {}
             LinesAction::Ask => {
                 let reference = selection::reference(
                     file,

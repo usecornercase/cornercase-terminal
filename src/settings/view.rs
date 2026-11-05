@@ -94,8 +94,9 @@ impl Settings {
             Page::Remote => self.remote_row(row),
             Page::Plugins => self.plugin_row(row),
             Page::Accounts => self.account_row(row),
+            Page::Machines => self.machine_row(row),
         };
-        RowText { label, value, note, dangerous }
+        RowText { label, value, note, dangerous, mark: self.machine_mark(row), tail: self.machine_tail(row) }
     }
 
     fn agents_row(&self, row: &Row) -> (String, String, String, bool) {
@@ -123,6 +124,7 @@ impl Settings {
             }
             Row::KeepAwake => self.keep_awake_row(),
             Row::Kind(kind) => kind_row(config, kind),
+            Row::Recap(row) => self.recap_row(*row),
             _ => ("+ another agent…".into(), String::new(), String::new(), false),
         }
     }
@@ -301,6 +303,7 @@ impl Settings {
             Row::SoundWaiting => format!("sound when it needs you ({SOUND_FILE_NOTE})"),
             Row::SoundDone => format!("sound when it finishes ({SOUND_FILE_NOTE})"),
             Row::Kind(kind) => format!("{kind} extra arguments"),
+            Row::Recap(row) => row.field().to_string(),
             Row::Bot(via) => via.token_field().to_string(),
             Row::AddAccount(kind) => format!("name of the new {} account, such as work", kind.name()),
             Row::RenameAccount(kind, name) if name.is_empty() => {
@@ -335,6 +338,7 @@ impl Settings {
             Row::Notifications => "How should your terminal notify you?".to_string(),
             Row::ForumClose(_) => "What happens to a workspace's post when you close it?".to_string(),
             Row::Kind(kind) => format!("How should {kind} start?"),
+            Row::Recap(row) => row.question().to_string(),
             _ => "Which agent do you want to set up?".to_string(),
         }
     }
@@ -355,6 +359,8 @@ impl Settings {
                 "enter saves · esc cancels".into()
             } else if self.pick.is_some() {
                 "enter picks · type to filter · esc goes back".into()
+            } else if self.page == Page::Machines {
+                self.machine_hint()
             } else if self.page == Page::Accounts {
                 "enter makes an account the default · backspace removes it · each pane keeps its own".into()
             } else if self.page == Page::Plugins {

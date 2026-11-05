@@ -20,6 +20,7 @@ use crate::flows::{self, Flow, builtin};
 use crate::git;
 use crate::git::worktree;
 use crate::log;
+use crate::machines::send::Send;
 use crate::os::fs::canonical;
 use crate::paths;
 use crate::project::Hierarchy;
@@ -121,6 +122,9 @@ impl App {
         run: control::FlowRun,
         area: Option<Rect>,
     ) -> Handled {
+        if let Some(machine) = run.machine.clone() {
+            return self.relay_request(client, &machine, Send::FlowRun(run));
+        }
         let area = sized(area)?;
         if run.issue.is_some() {
             return self.flow_issue_request(client, caller, run);
@@ -184,7 +188,7 @@ impl App {
         let made = existing
             .is_none()
             .then(|| worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &path, &branch));
-        self.spawn_run_worktrees(p, RunTrees { run: made, branch, roles }, key);
+        self.spawn_run_worktrees(p, RunTrees { run: made, branch, roles, fresh: self.fresh_run(client) }, key);
         let stage = Stage::Run(project, Box::new(starting));
         self.clients.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
         Ok(None)

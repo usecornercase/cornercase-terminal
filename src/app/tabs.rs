@@ -28,6 +28,10 @@ impl Shells {
         Self { shell, pane_socket: None, editor_env: Vec::new() }
     }
 
+    pub(super) fn pane_socket(&self) -> Option<&str> {
+        self.pane_socket.as_deref()
+    }
+
     pub(super) fn shell(&self) -> &str {
         &self.shell
     }
@@ -165,6 +169,7 @@ impl App {
 
     pub(super) fn open_project(&mut self, dir: PathBuf, area: Rect) -> Result<()> {
         let path = canonical(dir);
+        self.leave_remote();
         self.active = match self.projects.iter().position(|p| p.path == path) {
             Some(i) => i,
             None => self.add_project(path, area)?,
@@ -211,6 +216,7 @@ impl App {
     }
 
     pub(super) fn show_tab(&mut self, at: TabAt) {
+        self.leave_remote();
         self.projects.workspace_mut(at.workspace()).active = at.index();
         self.projects[at.project()].active = at.workspace().index();
         self.active = at.project();

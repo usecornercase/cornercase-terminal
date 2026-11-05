@@ -1,5 +1,7 @@
 pub(crate) mod clock;
 pub(crate) mod form;
+pub(crate) mod repeat;
+pub(crate) mod routine;
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -7,7 +9,10 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) const VERSION: u32 = 1;
+use repeat::Repeat;
+
+pub(crate) const VERSION: u32 = 2;
+pub(crate) const RUNS_KEPT: usize = 10;
 pub(crate) const GRACE: i64 = 600;
 pub(crate) const UNDOS: usize = 16;
 
@@ -37,6 +42,21 @@ pub(crate) struct Task {
     pub(crate) place: Place,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) accounts: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) repeat: Option<Repeat>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) flow: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) cleanup: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) paused: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) routine: Option<u64>,
+}
+
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if passes a reference")]
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +67,8 @@ pub(crate) enum State {
     Started { pane: u64, server: String },
     Failed { reason: String },
     Missed,
+    Removed,
+    Kept { pane: u64, server: String, reason: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,6 +78,50 @@ pub(crate) struct Entry {
     pub(crate) task: Task,
     #[serde(flatten)]
     pub(crate) state: State,
+}
+
+impl Entry {
+    pub(crate) fn is_routine(&self) -> bool {
+        self.task.repeat.is_some()
+    }
+
+    pub(crate) fn is_run(&self) -> bool {
+        self.task.routine.is_some()
+    }
+
+    fn clearable(&self) -> bool {
+        if self.is_routine() {
+            return false;
+        }
+        match self.state {
+            State::Started { .. } => true,
+            State::Removed | State::Kept { .. } | State::Failed { .. } | State::Missed => self.is_run(),
+            State::Pending | State::Starting => false,
+        }
+    }
+
+    fn uses_routines(&self) -> bool {
+        let task = &self.task;
+        task.repeat.is_some()
+            || task.routine.is_some()
+            || task.flow.is_some()
+            || matches!(self.state, State::Removed | State::Kept { .. })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Listed {
+    #[serde(flatten)]
+    pub(crate) entry: Entry,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) next: Option<i64>,
+}
+
+impl From<&Entry> for Listed {
+    fn from(entry: &Entry) -> Self {
+        let next = (entry.is_routine() && !entry.task.paused).then_some(entry.task.at);
+        Self { entry: entry.clone(), next }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,6 +148,12 @@ impl Queue {
 
     pub(crate) fn edit(&mut self, id: u64, task: Task) -> Result<(), String> {
         let entry = self.entry_mut(id).ok_or_else(|| missing(id))?;
+        if let Some(routine) = entry.task.routine {
+            return Err(format!("this is a run of routine {routine}; edit the routine instead"));
+        }
+        if entry.is_routine() != task.repeat.is_some() {
+            return Err("a one-off entry cannot become a routine, or the other way round; add a new entry".into());
+        }
         if matches!(entry.state, State::Starting | State::Started { .. }) {
             return Err("this entry already started; add a new entry instead".into());
         }
@@ -103,15 +175,24 @@ impl Queue {
         self.entries.iter_mut().find(|entry| entry.id == id)
     }
 
-    pub(crate) fn remove(&mut self, id: u64) -> Result<Entry, String> {
-        let at = self.entries.iter().position(|entry| entry.id == id).ok_or_else(|| missing(id))?;
-        Ok(self.entries.remove(at))
+    pub(crate) fn remove(&mut self, id: u64) -> Result<Vec<Entry>, String> {
+        let entry = self.entry(id).ok_or_else(|| missing(id))?;
+        if !entry.is_routine() {
+            let at = self.entries.iter().position(|entry| entry.id == id).ok_or_else(|| missing(id))?;
+            return Ok(vec![self.entries.remove(at)]);
+        }
+        if self.runs_of(id).any(|run| run.state == State::Starting) {
+            return Err(format!("a run of routine {id} is starting; remove it when it has started"));
+        }
+        let (gone, kept) = std::mem::take(&mut self.entries)
+            .into_iter()
+            .partition(|entry| entry.id == id || entry.task.routine == Some(id));
+        self.entries = kept;
+        Ok(gone)
     }
 
     pub(crate) fn clear_started(&mut self) -> Vec<Entry> {
-        let (started, kept) = std::mem::take(&mut self.entries)
-            .into_iter()
-            .partition(|entry| matches!(entry.state, State::Started { .. }));
+        let (started, kept) = std::mem::take(&mut self.entries).into_iter().partition(Entry::clearable);
         self.entries = kept;
         started
     }
@@ -133,14 +214,18 @@ impl Queue {
     pub(crate) fn next(&self, now: i64) -> Option<Duration> {
         self.entries
             .iter()
-            .filter(|entry| entry.state == State::Pending)
+            .filter(|entry| entry.state == State::Pending && !entry.task.paused)
             .map(|entry| Duration::from_secs(u64::try_from(entry.task.at.saturating_sub(now)).unwrap_or_default()))
             .min()
     }
 
     pub(crate) fn due(&mut self, now: i64) -> Vec<u64> {
         let mut due = Vec::new();
-        for entry in self.entries.iter_mut().filter(|entry| entry.state == State::Pending && entry.task.at <= now) {
+        for entry in self
+            .entries
+            .iter_mut()
+            .filter(|entry| entry.state == State::Pending && !entry.is_routine() && entry.task.at <= now)
+        {
             if now.saturating_sub(entry.task.at) > GRACE {
                 entry.state = State::Missed;
             } else {
@@ -151,7 +236,8 @@ impl Queue {
     }
 
     pub(crate) fn saved(&self) -> Saved {
-        Saved { version: VERSION, next_id: self.next_id, entries: self.entries.clone() }
+        let version = if self.entries.iter().any(Entry::uses_routines) { VERSION } else { 1 };
+        Saved { version, next_id: self.next_id, entries: self.entries.clone() }
     }
 }
 
@@ -161,7 +247,7 @@ pub(crate) fn missing(id: u64) -> String {
 
 pub(crate) fn read_saved(path: &Path) -> Option<Saved> {
     let saved = std::fs::read(path).ok().and_then(|bytes| serde_json::from_slice::<Saved>(&bytes).ok());
-    let saved = saved.filter(|saved| saved.version == VERSION)?;
+    let saved = saved.filter(|saved| (1..=VERSION).contains(&saved.version))?;
     let mut ids = HashSet::new();
     if saved.entries.iter().any(|entry| entry.id == 0 || !ids.insert(entry.id)) {
         return None;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { App } from '../src/lib/demo/app';
+import { App, PAGE_NAMES } from '../src/lib/demo/app';
 import { inputKey } from '../src/lib/demo/client';
 import { world } from '../src/lib/demo/world';
 import { DIM } from '../src/lib/term/grid';
@@ -10,6 +10,7 @@ const key = (k: string) => ({ key: k, metaKey: false, isComposing: false, ctrlKe
 test('the UI tab lists the icons choice and the icon bar, which needs a real cornercase', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
+  inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
@@ -70,6 +71,7 @@ test('the UI tab lists the sound rows after desktop notifications, which need a 
 test('the star prompt is a switch on the UI tab', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
+  inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
@@ -201,6 +203,19 @@ test('typing when the settings open searches every tab by the start of each word
   assert.ok(o?.kind === 'settings');
   assert.equal(o.page, 1);
   assert.equal(app.settingsRows(1)[o.cursor].label, 'default agent');
+  app.destroy();
+});
+
+test('the settings search finds this computer and add machine on the Machines tab', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  assert.equal(app.settingsHits('this computer')[0].title, 'Machines › ▭ this computer');
+  for (const ch of 'add mach') inputKey(app, key(ch));
+  inputKey(app, key('Enter'));
+  const o = app.overlay;
+  assert.ok(o?.kind === 'settings');
+  assert.equal(PAGE_NAMES[o.page], 'Machines');
+  assert.equal(app.settingsRows(o.page)[o.cursor].id, 'addMachine');
   app.destroy();
 });
 

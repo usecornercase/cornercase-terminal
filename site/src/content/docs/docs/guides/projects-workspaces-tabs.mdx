@@ -97,6 +97,8 @@ Click **`+ New`** under the workspaces, then **new workspace**, to start another
 - **With its own worktree** (the default in a repository): the name is a branch, and the workspace is a separate checkout of the repository in `~/.cornercase/worktrees/<repo>/<branch>`. Its files, builds and agents don't touch your other work. See [Git worktrees](../worktrees/).
 - **Without**: the workspace uses the project folder itself, under the name you chose. This is handy to keep a group of tabs together, for example a `servers` workspace next to `main`.
 
+With [machines](../machines/) listed, the dialog has a `run on` row: pick a machine and the workspace is made in that machine's clone of the project, and shows under it in your sidebar. When the machine has no clone yet, **create** offers to [clone the project there](../machines/#clone-the-project-there) first.
+
 Workspaces are listed in the order they were created, or the order you [dragged them](#reorder) into, never sorted by name or branch: a new one goes at the end.
 
 <Screen
@@ -108,6 +110,8 @@ Workspaces are listed in the order they were created, or the order you [dragged 
 A workspace is called after its custom name, otherwise its branch, otherwise `default`. When the checkout is on a detached `HEAD`, the short commit hash takes the place of the branch.
 
 Worktrees of the repository that you create outside cornercase, with `git worktree add`, appear as workspaces by themselves, at the end of the list. A worktree you remove outside cornercase goes away once its tabs are closed, also when git forgot it but its folder is still there (after `git worktree prune`, or a removal that failed half way); that folder stays on disk for you to delete.
+
+A workspace on one of your [machines](../machines/#in-your-sidebar) shows after the project's own when that machine has a clone of the same repository, tagged with the machine's icon and name, such as `☁ vps`; a project there with no clone here is a row of its own at the end of the projects. Clicking one shows its tab, streamed from the machine, where a pane would be. Its `×` and ` ⋯ ` [close, rename or remove it on the machine](../machines/#acting-on-a-machines-workspace).
 
 When a workspace's branch is behind its upstream, its row ends with the number of commits to pull, such as `↓3`. See [Commits to pull](../worktrees/#commits-to-pull). When the branch has a pull request on GitHub (or a merge request on GitLab), the row shows its number, coloured by its checks, such as `#485✗` when one failed, or `#486!` in orange when it has merge conflicts; click it to see its checks. See [Pull requests and their checks](../worktrees/#pull-requests-and-their-checks).
 
@@ -242,6 +246,8 @@ When an agent asks you something or finishes in a tab you aren't looking at, cor
 - a **toast** in the bottom right corner says which agent and where, such as `! claude needs you in web-shop › main` or `✓ codex finished in web-shop › main`;
 - your terminal shows a **desktop notification**, so you find out while you are in another window.
 
+An agent on one of your [machines](../machines/#notices-from-a-machine) tells you too, with the machine's name: `! claude on vps needs you in web-shop › main`.
+
 cornercase waits a second before telling you, so a question answered at once stays quiet, and it tells you once each time. The tab on screen doesn't notify you, even while cornercase's window is in the background, and neither does one that a program that draws cornercase shows ([A view of your own](../scripts-and-agents/#a-view-of-your-own)).
 
 The desktop notification is an escape sequence that cornercase writes to your terminal, the way it [copies to your clipboard](../panes-and-splits/#copy-text), so it also arrives when cornercase runs on another machine over SSH. When cornercase starts, it asks your terminal for its name and looks at variables such as `TERM_PROGRAM`, then picks what that terminal understands:
@@ -311,6 +317,8 @@ The headline compares agent time with time when at least one agent worked: **3.4
 Each heatmap square is a 24-hour block, newest at the bottom right. Rows are not weekdays. Up to 26 weeks fit, and every block shows: grey when no agent worked, including the days before counting began; blue otherwise, with four levels of agent time from the nonzero blocks' quartiles. The count of days is whole 24-hour blocks since counting began.
 
 **share** copies a link to [a stats card](https://usecornercase.dev/stats/): a ticket with a holographic finish that tilts as you move the pointer over it, or drag it on a touch screen. The page makes a PNG of it in your browser, with download, copy and supported share options. The card shows the same rows as the Stats tab for the window you pick, so the link holds those numbers for the three windows, plus busy time, counting days and heatmap levels. The merged PRs row goes on the card only when every account was read; a `+` count is never shared. Anyone with the link can see these numbers. It omits agent breakdowns, models, projects, paths and names. The fragment after `#` is never sent to the site, which has no analytics; nothing is uploaded. Attach the downloaded PNG to posts: link previews show an example card.
+
+With [machines](../machines/) listed in **Settings › Machines**, a row above the tabs picks **this computer**, one machine, or **all**, where it starts, and both tabs show what you picked: under **all**, Stats sums every machine and Limits lists each machine's accounts after this computer's. See [In the Usage dialog](../machines/#in-the-usage-dialog). Without machines the row isn't there.
 
 The local numbers live in [`stats.json`](../../reference/files-and-environment/). To start over, delete that file **with the server stopped**. [`cornercase stats`](../scripts-and-agents/#stats) reads the same numbers for scripts, even with no server running.
 
@@ -411,6 +419,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | --- | --- |
 | A tab | Its panes' programs are ended, then the tab goes away. In the compact layout it asks first. |
 | A workspace | All its tabs are closed, then the workspace goes away. In the compact layout it asks first. A workspace with its own worktree asks first, because it also deletes the worktree folder; see [Removing a worktree](../worktrees/#remove-a-worktree). |
+| A machine's workspace | It always asks first, naming the machine, then closes it there, or removes its worktree there; see [Acting on a machine's workspace](../machines/#acting-on-a-machines-workspace). |
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. With **keep projects** its projects stay open, ungrouped, and nothing in them is ended; with **close projects** they close with it, which stops every shell in them (folders and worktrees stay on disk). |
 
@@ -545,9 +554,9 @@ It works in every layout: below the projects in *side_by_side*, below both lists
 
 ### The icon bar
 
-Turn on **settings → UI → icon bar** to move the buttons at the bottom of the sidebar (**`Issues`**, **`Changes`**, **`Files`**, **`TODO`**, **`Worktrees`**, **`Help`** and **`More ▴`**, and the [accounts](../accounts/) when they show, plus **Flow** while the workspace runs a [flow](../flows/)) into a narrow column of icons on the left edge, like an editor's activity bar. The lists then reach the bottom of the window. Off by default.
+Turn on **settings → UI → icon bar** to move the buttons at the bottom of the sidebar (**`Issues`**, **`Changes`**, **`Files`**, **`TODO`**, **`Worktrees`**, **`Recap`**, **`Help`** and **`More ▴`**, and the [accounts](../accounts/) when they show, plus **Flow** while the workspace runs a [flow](../flows/)) into a narrow column of icons on the left edge, like an editor's activity bar. The lists then reach the bottom of the window. Off by default.
 
-- The panels and **`Issues`** are at the top; **`Help`** and a gear at the bottom. The gear opens the same menu as **`More ▴`**: settings, usage, remote, quit and an available update, which turns the gear cyan. A button that doesn't apply, such as **`Changes`** outside a git repository or **Flow** in a workspace that runs no flow, is left out and the others close up.
+- The panels and **`Issues`** are at the top; **`Help`** and a gear at the bottom, with the [machine](../remote/#switch-machines-from-the-window) the window is on above **`Help`** once it has reached another one. The gear opens the same menu as **`More ▴`**: settings, usage, remote, quit and an available update, which turns the gear cyan. A button that doesn't apply, such as **`Changes`** outside a git repository or **Flow** in a workspace that runs no flow, is left out and the others close up.
 - **Hover an icon** to see its name beside it, such as *Changes 3*.
 - The panel that is open is marked with the cyan bar `▌` and a cyan icon. Click its icon again to close it.
 - The number of changed files sits at the corner of the **`Changes`** icon, in a circle (`9+` from ten on); **`TODO`** gets a grey dot while items are left to do, and the gear a green one while a browser is attached or you are away on Telegram or Discord.

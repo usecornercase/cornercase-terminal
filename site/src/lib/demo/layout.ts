@@ -897,11 +897,15 @@ export function rightAligned(row: Rect, labels: string[], width: (l: string) => 
 
 export const buttonWidth = (label: string) => [...label].length + 2;
 
+const dialogTab = (name: string, padding: number) => buttonWidth(name) - 2 + padding;
+
 export function tabsIn(row: Rect, names: string[]): Rect[] {
+  const width = (padding: number, gap: number) => names.reduce((sum, name) => sum + dialogTab(name, padding) + gap, 0) - gap;
+  const [padding, gap] = [[2, 1], [2, 0], [0, 1]].find(([p, g]) => width(p, g) <= row.w) ?? [0, 1];
   let x = row.x;
   return names.map((name) => {
-    const r = intersect(rect(x, row.y, buttonWidth(name), 1), row);
-    x += buttonWidth(name) + 1;
+    const r = intersect(rect(x, row.y, dialogTab(name, padding), 1), row);
+    x += dialogTab(name, padding) + gap;
     return r;
   });
 }
@@ -1059,6 +1063,18 @@ export class Strip {
 
 export const MORE_LABEL = 'More ▴';
 export const WORKTREES_LABEL = 'Worktrees';
+export const RECAP_LABEL = 'Recap';
+
+export function recapButton(row: Rect): Rect {
+  const needed = buttonWidth(WORKTREES_LABEL) + buttonWidth(RECAP_LABEL) + 3;
+  if (isEmpty(row) || row.w < needed) return EMPTY;
+  return changesButton(row, RECAP_LABEL);
+}
+
+export function worktreesButton(row: Rect): Rect {
+  const recap = recapButton(row);
+  return isEmpty(recap) ? row : { ...row, w: Math.max(0, recap.x - row.x) };
+}
 
 export function helpButton(more: Rect): Rect {
   const w = buttonWidth('Help');

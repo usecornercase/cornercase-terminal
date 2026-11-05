@@ -4,11 +4,13 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::closed_agents::forgotten;
 use super::menus::{PaneAction, Target};
+use super::new_workspace_there::{Asked, run_on_row};
 use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, Overlay, RENAME_SUBMIT};
 use super::text_fields::FieldArea;
 use crate::editor::Editor;
 use crate::error::Result;
 use crate::git::worktree;
+use crate::machines::run_on::RunOn;
 use crate::project::Hierarchy;
 use crate::project::group;
 use crate::ui::{self, FormHit};
@@ -22,7 +24,15 @@ const NEW_GROUP_HINT: &str = "right-click a project or its ⋯ to move it into t
 const WORKTREE_TOGGLE: &str = "with its own worktree";
 
 impl App {
-    pub(super) fn new_group_view(input: &Editor) -> ui::Overlay {
+    pub(super) fn name_view(overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::NewGroup { input } => Some(Self::new_group_view(input)),
+            Overlay::NewMachine { input, error } => Some(Self::new_machine_view(input, error.as_deref())),
+            _ => None,
+        }
+    }
+
+    fn new_group_view(input: &Editor) -> ui::Overlay {
         ui::Overlay::Form(ui::Form {
             title: "New group",
             label: "name",
@@ -35,8 +45,35 @@ impl App {
     }
 
     pub(super) fn new_workspace_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
-        let Overlay::NewWorkspace { project, input, worktree, error, creating } = overlay else { return None };
+        let Overlay::NewWorkspace { project, input, worktree, error, creating, run_on } = overlay else { return None };
         let (project, worktree, creating) = (*project, *worktree, *creating);
+        let machine = run_on.as_ref().and_then(RunOn::machine);
+        let error = error.as_deref().map(|e| ui::Note::Error(e.into()));
+        let note = match (machine, creating) {
+            (Some(target), true) => Some(ui::Note::Info(format!("starting on {}…", target.name))),
+            (None, true) => Some(ui::Note::Busy("creating…")),
+            (Some(_), false) => error,
+            (None, false) => error.or_else(|| self.setup_note(project, worktree)),
+        };
+        let form = ui::Form {
+            title: "New workspace",
+            label: "name",
+            value: input.clone(),
+            hint: match machine {
+                Some(target) => self.new_workspace_place_there(target.link, project, worktree == Some(true)),
+                None => self.new_workspace_place(project, worktree, input),
+            },
+            toggle: worktree.map(|on| ui::Toggle { label: WORKTREE_TOGGLE, on }),
+            note,
+            submit: CREATE_SUBMIT,
+        };
+        Some(match run_on {
+            Some(run_on) => ui::Overlay::RunOnForm(form, run_on_row(run_on)),
+            None => ui::Overlay::Form(form),
+        })
+    }
+
+    fn new_workspace_place(&self, project: u64, worktree: Option<bool>, input: &Editor) -> String {
         let home = self.home.as_deref();
         let repo = self.projects.project_index(project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
         let path = if worktree == Some(true) {
@@ -44,31 +81,11 @@ impl App {
         } else {
             repo
         };
-        Some(ui::Overlay::Form(ui::Form {
-            title: "New workspace",
-            label: "name",
-            value: input.clone(),
-            hint: format!("in {}", crate::text::display_path(&path, home)),
-            toggle: worktree.map(|on| ui::Toggle { label: WORKTREE_TOGGLE, on }),
-            note: if creating {
-                Some(ui::Note::Busy("creating…"))
-            } else {
-                error.as_deref().map(|e| ui::Note::Error(e.into())).or_else(|| self.setup_note(project, worktree))
-            },
-            submit: CREATE_SUBMIT,
-        }))
+        format!("in {}", crate::text::display_path(&path, home))
     }
 
     pub(super) fn rename_view(target: Target, input: &Editor) -> ui::Overlay {
-        ui::Overlay::Form(ui::Form {
-            title: target.rename_title(),
-            label: "name",
-            value: input.clone(),
-            hint: target.rename_hint().into(),
-            toggle: None,
-            note: None,
-            submit: RENAME_SUBMIT,
-        })
+        rename_form(target.rename_title(), target.rename_hint(), input)
     }
 
     pub(super) fn group_style_view(&self, group: u64) -> Option<ui::Overlay> {
@@ -196,6 +213,9 @@ impl App {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return Ok(());
         }
+        if self.new_workspace_run_on_mouse(pos, area) {
+            return Ok(());
+        }
         let Some(overlay) = &self.overlay else { return Ok(()) };
         let (submit, extra) = self.dialog_labels(overlay);
         match ui::form_hit(area, submit, extra, pos) {
@@ -229,6 +249,7 @@ impl App {
             Some(Overlay::Flows { .. }) => self.close_flows(),
             Some(Overlay::Star) => self.answer_star(None),
             Some(Overlay::RemoveAccount { .. }) => self.open_settings(),
+            Some(Overlay::CloneOnMachine(_)) => self.clone_back(),
             _ => self.overlay = None,
         }
     }
@@ -236,12 +257,13 @@ impl App {
     pub(super) fn submit_form(&mut self, area: Rect) -> Result<()> {
         let Some(overlay) = self.overlay.take() else { return Ok(()) };
         self.overlay = match overlay {
-            Overlay::NewWorkspace { project, input, worktree, creating: false, .. } => {
-                self.create_workspace(project, input, worktree, area)?
+            Overlay::NewWorkspace { project, input, worktree, run_on, creating: false, .. } => {
+                self.submit_new_workspace(Asked { project, input, worktree, run_on }, area)?
             }
             Overlay::Rename { target, input } => self.submit_rename(target, &input.text()),
             Overlay::NewGroup { input } if input.text().trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => self.submit_new_group(&input.text()),
+            Overlay::NewMachine { input, .. } => self.submit_new_machine(input),
             Overlay::GroupStyle { .. }
             | Overlay::Usage
             | Overlay::Remote
@@ -250,8 +272,8 @@ impl App {
             | Overlay::Worktrees(_)
             | Overlay::Ports(_)
             | Overlay::Processes(_) => None,
-            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
-                self.confirm_removal(project, workspace, check, lock.is_some())
+            overlay @ (Overlay::RemoveWorkspace { .. } | Overlay::MachineWorkspace(_)) => {
+                self.submit_workspace(overlay)
             }
             Overlay::DeleteGroup { group } => self.submit_delete_group(group),
             Overlay::RemoveAccount { kind, name } => Some(self.submit_remove_account(kind, &name)),
@@ -269,6 +291,16 @@ impl App {
             busy => Some(busy),
         };
         Ok(())
+    }
+
+    fn submit_workspace(&mut self, overlay: Overlay) -> Option<Overlay> {
+        match overlay {
+            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
+                self.confirm_removal(project, workspace, check, lock.is_some())
+            }
+            Overlay::MachineWorkspace(dialog) => self.submit_machine_workspace(*dialog),
+            other => Some(other),
+        }
     }
 
     fn submit_again(&mut self, overlay: Overlay) -> Overlay {
@@ -356,7 +388,7 @@ impl App {
     pub(super) fn close_workspace_message(&self, project: u64, workspace: u64) -> Option<String> {
         let workspace = self.projects.workspace(self.projects.workspace_in(project, workspace)?);
         let closed = self.forgotten_note(workspace.id);
-        Some(format!("Close the workspace {}?{}{closed}", workspace.label(), stopped_tabs(workspace.tabs.len())))
+        Some(close_question(&workspace.label(), workspace.tabs.len(), &closed, None))
     }
 
     pub(super) fn close_tab_message(&self, project: u64, workspace: u64, tab: u64) -> Option<String> {
@@ -378,6 +410,29 @@ pub(super) fn confirm_view(
     extra: Option<&'static str>,
 ) -> ui::Overlay {
     ui::Overlay::Confirm(ui::Confirm { title, message, note: None, submit, extra, dangerous: false })
+}
+
+pub(super) fn rename_form(title: &'static str, hint: &str, input: &Editor) -> ui::Overlay {
+    ui::Overlay::Form(ui::Form {
+        title,
+        label: "name",
+        value: input.clone(),
+        hint: hint.into(),
+        toggle: None,
+        note: None,
+        submit: RENAME_SUBMIT,
+    })
+}
+
+pub(super) fn close_question(label: &str, tabs: usize, closed: &str, on: Option<&str>) -> String {
+    format!("Close the workspace {}?{}{closed}", named(label, on), stopped_tabs(tabs))
+}
+
+pub(super) fn named(label: &str, on: Option<&str>) -> String {
+    match on {
+        Some(machine) => format!("{label} on {machine}"),
+        None => label.to_string(),
+    }
 }
 
 fn stopped_tabs(tabs: usize) -> String {

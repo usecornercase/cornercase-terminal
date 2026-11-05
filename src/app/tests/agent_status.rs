@@ -17,6 +17,7 @@ use crate::test_util::write_executable;
 mod agents_section;
 mod copilot;
 mod flows;
+mod journal;
 mod notifications;
 mod osc;
 mod resuming;

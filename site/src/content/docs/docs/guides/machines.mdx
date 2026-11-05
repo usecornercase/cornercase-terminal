@@ -1,0 +1,300 @@
+---
+title: Machines
+description: List the other computers your work can run on, a cloud VM, a desktop at home, a Mac mini, and cornercase keeps a link to the server on each one, from your own.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Screen from '../../../../components/Screen.astro';
+
+**Settings › Machines** lists the other computers your work can run on: a cloud VM, the desktop at home, a Mac mini under the desk. For each one, your cornercase server keeps a link to the cornercase server on that machine, through your own `ssh`. The link is what lets cornercase work with that machine's projects and agents, and the row shows whether it is up.
+
+<Screen
+  name="settings-machines"
+  alt="Settings › Machines: this computer first, then vps linked to cornercase on ana@vps.example.com, homelab unreachable and not seen yet, and mini, whose cornercase is older, with an update… row under it; + add machine last"
+  crop={[2, 1, 106, 10]}
+/>
+
+A linked machine's workspaces show [in your sidebar](#in-your-sidebar), under the project here that is a clone of the same repository, and its agents tell you when they need you as yours do. Your server can also [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). Click one of those workspaces and its tab shows here, live, and you [work in it](#working-in-a-machines-tab) as in one of yours. You can [rename, close and remove the worktree of a machine's workspace](#acting-on-a-machines-workspace) from its row, and [start an issue, a flow or a workspace on a machine](#start-work-on-a-machine) from the dialogs you use for this computer. For everything else, [`cornercase remote`](../remote/) opens a window on one of them.
+
+## Add a machine
+
+Click **`+ add machine`** at the end of the list. The form asks for:
+
+| Field | What it is |
+| --- | --- |
+| **name** | What the window calls it: letters, digits, `.`, `_` and `-`, at most 20 characters, different from every other machine's, and not `all`, which means every machine. |
+| **icon** | One of ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server or ◆ other. |
+| **destination** | Anything `ssh` takes: a `Host` of your `~/.ssh/config`, or `user@host`. Your config, keys and agent apply, and cornercase never sees a password or a key. |
+| **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, `~`, or one starting with `~/`. Nothing is made there yet. |
+
+` add ` saves it, and the link starts at once. A value the form refuses says why under its field, and nothing is saved. Click a machine, or select it and press `Enter`, to change it in the same form; its link carries on unless you change the destination.
+
+The `×` at the end of a row, or `Backspace`, removes a machine at once. The machine's server keeps running there.
+
+This list is not the one behind the machine button at the bottom of the sidebar (`devbox ▴`), which moves the window itself to a machine it reached with `cornercase remote` ([Switch machines from the window](../remote/#switch-machines-from-the-window)). The two are kept apart for now: a machine added here isn't offered there, nor the other way round.
+
+## What a link does
+
+The link is one `ssh` connection from your cornercase server to the cornercase server on the machine. It is the server's, not the window's, so it stays up while no window is open.
+
+- **It uses the server running there**, or starts one when none runs, as [`cornercase start-server`](../../reference/command-line/#cornercase-start-server) does.
+- **It never stops anything there.** Removing the machine, stopping or restarting cornercase on this computer, this computer going to sleep and a dropped connection all end the link only; the server on the machine and everything in it keep running.
+- **A server you stop there comes back.** After `cornercase kill-server` on the machine, the link starts it again on its next try. To stop it for good, remove the machine here first.
+- **It goes one way.** The machine can't act on this computer through the link: a tab you look at is drawn as text and colours only, nothing it sends is played or opened here, the one thing that reaches your clipboard is text (what you select on it, or what a program in the tab you look at copies), and the link's `ssh` forwards neither your agent, nor X11, nor any port.
+
+## States
+
+| Row | Means |
+| --- | --- |
+| `◌ connecting…` | The link's first try hasn't answered yet. |
+| `● linked · 0.12.225` | Linked, with the version of cornercase installed there. When its server still runs an older one, the row adds `· its server runs 0.12.224 until it restarts there`. |
+| `○ unreachable · 8 s` | Down since that long, or `not seen yet` when it has never been up since your server started. Select the row and the line at the bottom shows why: what `ssh` said, `cornercase was not found on vps: install it there`, `that is this computer`, or `the same server as vps` when two destinations reach one machine. |
+| `◐ older · 0.0.1` | Its cornercase is older than yours, so it is not linked. |
+
+A link that drops is tried again after 1, 2, 4 and 8 seconds, then every 15 seconds, and every minute while something on the machine needs you: an older cornercase, a missing one, or a destination that turns out to be this computer or a machine already listed. All of them try again at once when this computer wakes up or changes network, and when you change a machine that is down. `cornercase machines retry` tries them now.
+
+### Update an older machine
+
+An `older` machine has an **`update…`** row under it. It runs `cornercase update` on the machine, without a terminal, so it installs the new release and restarts nothing: the server there keeps running its version until it restarts, and the row says so. Once the update ends, the link tries again. When it fails, the line at the bottom shows what the update printed last, such as the Homebrew command to run there.
+
+## What you need
+
+- **cornercase on the machine**, in your version or a newer one. It is looked for on the `PATH` of a command run through `ssh`, then in `~/.local/bin` (where the [install script](../../installation/) puts it), `~/.cargo/bin` and Homebrew's folders. A machine has no `--command` as `cornercase remote` does: when it lives somewhere else, link it into one of those folders.
+- **A key that never asks.** The link's `ssh` runs with `BatchMode=yes`: it never asks for a password, a passphrase or an unknown host key, since nobody is there to answer. Use a key in your SSH agent, or one without a passphrase, and connect once by hand to accept the host key:
+
+```sh
+ssh ana@vps.example.com true
+```
+
+- **Your own `ControlMaster`, if you like.** The link holds one connection, but `cornercase machines update`, [the side panels on a machine](#changes-and-files-of-a-machines-workspace) and [`--remote` commands](../remote/#commands-for-scripts-and-agents) open their own; a shared one makes them faster:
+
+```text
+Host vps
+  HostName vps.example.com
+  User ana
+  ControlMaster auto
+  ControlPath ~/.ssh/cm-%C
+  ControlPersist 10m
+```
+
+<Aside>
+A connection that died without a word is noticed within about 15 seconds: `ssh` checks it every 5 (`ServerAliveInterval=5`, `ServerAliveCountMax=3`), and gives up on a machine that doesn't answer after 10 (`ConnectTimeout=10`).
+</Aside>
+
+## In your sidebar
+
+Once a machine is linked, your server reads what it has, and the sidebar shows it beside your own projects:
+
+<Screen
+  name="machines-sidebar"
+  alt="The sidebar with web-shop's workspaces: after feat/gift-cards come main and fix/login, both tagged ☁ vps, where claude is working at Opus 5.5 · 31%; fix/login is picked, and the pane shows that claude's tab on vps, running cargo test"
+/>
+
+- **A workspace on a machine shows under the project here that is a clone of the same repository**, after its own workspaces, with the machine's icon and name. Two clones pair whatever address each one was cloned with: `git@github.com:acme/web-shop.git`, `https://github.com/acme/web-shop` and an ssh alias from that machine's `~/.ssh/config` are the same repository, read from the `upstream` remote, else `origin`, else the first one. The project's count and its `!` include them.
+- **A project on the machine with no clone here** is a row of its own at the end of the list, outside your groups, with the machine's tag.
+- **Its tabs show what their agents are doing**, with the same icons and the model and context line as yours.
+- **A machine that is down keeps its rows**, dimmed, and an agent's tab says what it was doing and when the machine was last seen: `working · seen 2 min ago`.
+- **A machine's workspace has a `×` and a ` ⋯ ` menu**, as yours do: see [Acting on a machine's workspace](#acting-on-a-machines-workspace). Its tabs have no buttons, no row has `+ Tab`, and they can't be dragged. Folding a workspace works: it is kept by your server, not on the machine, until your server restarts.
+
+### Acting on a machine's workspace
+
+Hover over a machine's workspace (in compact mode its buttons always show) and use its buttons as you would on yours. Each one sends the machine the request a script would send, over a connection of its own, and the machine does it as if you had clicked in its own window:
+
+- **` ⋯ `**, or a right-click on the row, opens a menu with **rename workspace**. Leave the name empty to go back to the branch name. The new name shows when the machine sends its next update.
+- **`×` on a plain workspace** asks first, also when the window is wide: `Close the workspace notes on vps?`. Its shells stop on the machine.
+- **`×` on a workspace with a worktree** asks the machine what removing it would lose, as the [remove a worktree](../worktrees/#remove-a-worktree) dialog does here: changes that aren't committed (**remove anyway**), a lock (**unlock and remove**), its roles' worktrees and its teardown. Then the row says `removing…` until the machine answers with `removed feat/dark-mode on vps`, or, if its teardown or a role's worktree failed there, `removed feat/dark-mode on vps, cleanup failed in part, see server.log`, as a removal here says; the reason is in this computer's log (`cornercase logs`). If the machine can't check, the dialog closes and a toast says why; nothing is removed.
+- **If the machine is down**, the menu says `vps unreachable` (or why the link is waiting) and its items are greyed out, and the `×` says the same with `nothing was sent`. Nothing is kept to send later.
+- **While the machine works on one of them**, the workspace's **rename workspace** is greyed out and its `×` says `notes on vps is still waiting for its last action` with `nothing was sent`. A row that says `removing…` takes no clicks.
+- **If the machine restarted** after you opened a dialog, the dialog closes, or, if you confirm first, nothing is changed there and a toast says so, since its workspaces may have new ids by then.
+
+A rename or a close gives up after 15 seconds, the check after a minute and a removal after 10 minutes, with `it did not answer in time`; a removal that took longer goes on on the machine. Scripts can do the same with [`--remote`](../scripts-and-agents/#machines).
+
+### Clicking a machine's workspace
+
+Click a machine's workspace or tab, or [`cornercase focus --machine vps --workspace ID`](../scripts-and-agents/#machines), and its row is marked as picked. Where a pane would be, you see that tab, or the workspace's active tab, as it is on the machine: its panes, its splits and what their programs print, as it happens. Its panes take the size of this window's pane area, and follow it when you resize the window or open a side panel, so what runs there draws for this window. If someone uses that tab in the machine's own window meanwhile, the last one to size it wins, and the other sees it cut or with blank space, as with any tab shown in two windows.
+
+Until the machine sends the tab's first screen, a card says where it runs:
+
+```text
+╭─ runs on vps ──────────────────────╮
+│                                    │
+│ claude is waiting for you          │
+│ ~/code/web-shop                    │
+│                                    │
+╰────────────────────────────────────╯
+```
+
+While the machine is down, the tab's last screen stays, dimmed, under a card that reads `vps unreachable`, then `reconnecting in 4 s`, counted down to the link's next try (or why it is waiting, such as an older cornercase there), and `claude keeps working there`: the link going down stops nothing on the machine. When only the connection that shows the tab dropped, the card says `reconnecting…` and the tab comes back by itself. Once the machine is back, the tab is live again, with nothing restarted here or there.
+
+### Working in a machine's tab
+
+Once its screen shows, the tab works as one of yours, on the machine:
+
+- **What you type and paste** goes to its active pane, keys as the program there asked for them.
+- **The mouse** goes to a program that reads it, such as `vim` or `htop`, as it would here. A click on another pane makes it the active one; a right-click on it goes on to its program when it reads the mouse.
+- **The wheel** scrolls a pane's history, or moves through a full-screen program's lines, and a click on ` ↓ 12 more `, at the bottom of a pane that is scrolled up, takes it back down.
+- **Selecting text** with the mouse, where no program reads it, copies it to this computer's clipboard, cleaned as a selection here is, and a toast says so. A click where you pressed clears it.
+- **What a program there copies** reaches this computer's clipboard too, cleaned the same way, while its tab shows here: Claude Code reads the mouse and copies what you select in it, as it does in a tab here.
+- **The dividers** between its panes drag, and a double click puts one back in the middle. `Esc` ends a drag.
+
+Before its first screen arrives, and while the machine is down, nothing you type, click or scroll there is sent, or kept for later: a toast says `vps unreachable: nothing was sent`. When the program in a pane doesn't take what you send, the toast says so too.
+
+While a machine's workspace shows, the sidebar, the tools, the tabs above the pane and the prefix key's menu still work; what that menu does to a tab or a pane, such as a split, first goes back to this computer. The project here it pairs with becomes the active one, and the tabs above the pane keep showing that project's workspace you were on here. **Changes** and **Files** show the machine's workspace, as the next section describes. Click anything of this computer to go back to it.
+
+### Changes and files of a machine's workspace
+
+With a machine's workspace picked, ` Changes ` and ` Files ` show that workspace as it is on the machine, not the copy you have here. Changes lists the files changed there, with the same Uncommitted, Commits and All tabs and the same filter. Files shows the machine's tree, its search and its files in the viewer. Both refresh at the machine's own pace, about every second or two, and the first tab of Changes reads `web-shop › main · vps`.
+
+- **They only read.** Staging, discarding, marking a file as viewed, picking the base, ` open `, **open in…** and **ask agent** aren't offered. The marks the machine has, its `✓`, `●` and its base, show as they are there. ` copy ` and **copy path** put the text, or the machine's path, on this computer's clipboard.
+- **Files start folded in Changes**, and each file you unfold asks the machine for its diff, one at a time.
+- **The button's number** shows once the machine has counted that workspace's changes, usually once you open the panel. Until then the button reads ` Changes ` alone.
+- **When the machine goes down**, both panels keep what they showed with `vps unreachable` and `seen 2 min ago` or `reconnecting in 4 s` under their header. Unfolding a file, opening a folder or a file and searching then send nothing and say so. When the link is back they pick up where they were.
+- While they show a machine's workspace they open `ssh` connections of their own, one for each thing they follow, such as the tree and the open file. [Your own `ControlMaster`](#what-you-need) makes them quicker.
+
+### Notices from a machine
+
+When an agent on a linked machine that was working needs you, fails or finishes, you get the toast, the desktop notification and the [sound](../projects-workspaces-tabs/#a-sound) you'd get for one here, with the machine's name: `claude on vps needs you in web-shop › main`. ` go `, or a click on the notification, shows that workspace of the machine.
+
+- The machine's workspace you have picked never tells you, like the tab on your screen.
+- Nothing is told for what changed while the link was down, nor for a shell an agent left running in the background.
+- A notice you missed while the window was in the background doesn't show again when you come back, unlike one about an agent here.
+
+Scripts get them from [`cornercase events --notices`](../scripts-and-agents/#follow-events), with the machine's name.
+
+### What isn't there yet
+
+- Changes and Files of a machine's workspace only read it: nothing stages, discards or opens a file there.
+- **Every project** in Changes lists only this computer's projects.
+- A project on a machine with no workspaces can't be picked.
+- Starting work from a project that is only on the machine, [scheduling](../queue/) an agent there, and sending a TODO, a Telegram or a Discord message to an agent there.
+- Closing or renaming a machine's tabs, `+ Tab`, splitting or closing its panes, and the prefix key's menu acting there.
+- In a machine's tab: clicking a path, the pane's right-click menu, moving panes, the accounts row, opening links, and pictures.
+- Picking a machine's workspace with ` go ` or `focus --machine` doesn't scroll the tree, or the workspaces column, to its row.
+
+## Start work on a machine
+
+With at least one machine listed, the **Issues** dialog, **start a flow…** and **new workspace** have a `run on` row:
+
+<Screen
+  name="machines-run-on"
+  alt="Issue #482 in the Issues dialog with run on set to ☁ vps: start in its own worktree on vps, in ~/vps/web-shop; agent claude; the prompt from vps's template"
+  crop={[2, 4, 106, 10]}
+/>
+
+**this computer** is chosen each time a dialog opens. Pick a machine (**run on…** on an issue's page, a click on the row in the other two) and what you start is sent to the server on that machine, which starts it as if you had clicked there: it belongs to that machine, shows [in your sidebar](#in-your-sidebar) under it, and once the machine lists it, it is selected, so its tab shows here.
+
+- **A machine that is down** is dimmed with why (`unreachable`, `connecting…`, `not seen yet`, or an older cornercase), and can't be picked. One you already picked stays picked when it goes down, and **start** then says it's unreachable.
+- **A machine that leaves the list** while you have it picked, removed or given another address in Settings, isn't swapped for this computer: the row says `vps is no longer listed` (or `vps changed in Settings; choose it again`) in red, and nothing starts until you pick again; **run on…** then opens with no row highlighted.
+- **A project with no git remote** can't run elsewhere: the row says `needs a git remote`, since its repository is how cornercase finds the same project on the machine. Right after a project opens, the row can say so for a moment, until its remotes are read.
+- **The project there** is the machine's clone of the same repository, the one its sidebar row pairs with. The `start` row says where the work goes: `in its own worktree on vps, in ~/code/web-shop`, or `in a tab on vps, in …`, from the same choice as here.
+- **While it starts**, the dialog says `starting on vps…`, and it closes once the tab or the workspace is there, even while the agent asks whether to trust the folder: answer it in the agent's tab. If the machine refuses, its reason stays in red and nothing changed. If it restarted since you picked it, the dialog says `vps restarted; nothing was started there`.
+
+### What is checked there first
+
+Picking a machine asks it, before anything starts:
+
+- **Its accounts.** The account step of Issues, and the account boxes of **start a flow**, list that machine's [accounts](../accounts/), marked `(vps's accounts)`, with the ones in use there selected. Nothing is copied from here; the agent starts with the account you pick, as the machine knows it.
+- **The agent.** When the agent isn't found by the server there, the row says `not installed on vps`; when the account you picked (or the agent's own login) is logged out there, `not logged in on vps`. Both offer **open login tab**, which opens a tab in the project on that machine running the agent's login for that account (a plain shell when it isn't installed, so you can install it) and shows it here. When the project has no workspace on that machine, it says so and opens nothing. Neither stops **start**: the server there may not see an agent your shell there finds, such as one installed with `nvm`.
+- **The tracker** (an issue, or a flow started from one). When the machine has no access to it, the row says what is missing, such as `vps has no GitHub token for web-shop`, and **start** sends nothing. Connect the tracker on the machine, with its own window or `cornercase --remote vps config secret github`.
+- **Its flows** (**start a flow**). The list is the flows of the machine, so the one you see is the one that runs; **edit** is hidden, since they are the machine's to change.
+
+An issue is started there with its key: the machine reads it with its own tracker, and the prompt is built with its own [prompt template](../../reference/prompt/), which the **prompt** row says instead of showing this computer's. **start a flow** from the issue shows the prompt made here from your template, and you can edit it as on this computer: the team on the machine gets it as its task, and the issue still gives the branch and the workspace's name. The branch and the workspace names you see before starting are the ones used there. **schedule** is hidden while a machine is picked: the [queue](../queue/) starts agents on this computer only.
+
+The answers are kept until that machine restarts, and asked again each time you pick it; the account you picked on that machine stays picked meanwhile. One picked on this computer is let go when you pick a machine, since the machine has its own accounts.
+
+### Clone the project there
+
+When the project isn't on the machine, the row says `not on vps · clone…`, and **start** opens **Clone web-shop on vps** first:
+
+<Screen
+  name="machines-clone"
+  alt="Clone web-shop on vps: from git@github.com:acme/web-shop.git into ~/vps/web-shop, with .env ticked and .env.local and config/dev.json not; back, skip files and clone"
+  crop={[2, 1, 106, 20]}
+/>
+
+- **from** is the address of this project's `upstream` remote, else `origin`, without a password or token, and you can change it. A clone from `upstream` pairs with this project, but its `origin` there is then the upstream repository; clone your fork's address if you want to push from there. An address that uses an alias of your `~/.ssh/config`, such as `gh-work:acme/web-shop`, only works if the machine has the same alias.
+- **into** is the machine's **folder**, with the repository's name.
+- **The list** is the files git ignores in this project's folder, such as `.env`, so the clone there can run as it does here. Every box starts unticked, and **only ticked files are copied**, with their permissions. Ignored folders, like `node_modules` or `target`, are never offered, and neither are links. At most 200 files are listed (a last line says how many more were left out), and a file over 1 MB shows its size and `too big to copy`. The ticked files can add up to 8 MB: a tick past that is refused, and says so.
+- **A click on a file ticks it.** **clone** (or `Enter`) clones it there with the ticked files, **skip files** clones without any, and **back** (or `Esc`) returns with nothing done.
+- **When this computer runs Windows**, the dialog says it cannot read the git-ignored files to copy them yet, and lists none: **clone** and **skip files** clone without them. The files are read here and only written on the machine, and a machine is never a Windows one (it needs `sh`), so any machine takes them from Linux or macOS.
+
+The machine writes the files once the clone is done, and never over a file the repository has. Then you are back in the dialog you came from, with the machine still picked and the new clone checked, and a toast says how it went: `cloned web-shop on vps`, naming any file it couldn't write, as in `· not copied: .env (it is already in the clone)`, or `the clone on vps failed:` with git's reason. **back** still works while it clones and doesn't stop it: the clone goes on with the files you ticked, whatever you do meanwhile. Until it's done, the **start** row of that project on that machine says `cloning on vps…` and **start** waits.
+
+### From a terminal
+
+`start`, `new-workspace` and `flow run` take `--machine`:
+
+```sh
+cornercase status --json | jq '.machines[] | {name, projects: [.projects[] | {id, name, paired}]}'
+cornercase start claude --issue '#482' --project 2 --machine vps --focus
+cornercase new-workspace fix/login --worktree --project 2 --machine vps
+cornercase flow run Quick --prompt 'Fix the login form' --project 2 --machine vps
+```
+
+The ids, of `--project` and `--workspace` and the ones printed, are the machine's, as `status` lists them under the machine. `--focus` shows what started here once the machine lists it. `--wait`, `--until` and `--timeout` can't be used with `--machine`: follow the agent with [`cornercase --remote vps wait`](../remote/#commands-for-scripts-and-agents). See [Start work on a machine](../scripts-and-agents/#start-work-on-a-machine) for scripts and other apps.
+
+A start gives up after 10 minutes with `it did not answer in time` (git and the project's setup run there first), a plain workspace, the tracker and the flows checks after 15 seconds, the accounts check after a minute and a clone after 30 minutes; what was still running goes on on the machine, and your sidebar shows it when it's done.
+
+## Stats and usage of each machine
+
+The [Usage dialog](../projects-workspaces-tabs/#usage-and-stats) and `cornercase stats` and `cornercase usage` read the other machines too. Your server asks the machine's server for them, through a new `ssh` connection each time, as [`--remote`](../remote/#commands-for-scripts-and-agents) does.
+
+### In the Usage dialog
+
+Click **`More ▴`**, then **usage**. With machines listed, a row above **Limits** and **Stats** picks **this computer**, one machine by its name, or **all**. It starts on **all** and keeps your pick until the server restarts. Opening the dialog, switching tabs or picking asks the machines you picked; nothing is asked while it is closed.
+
+- **Stats** shows what you picked: this computer's numbers, one machine's, or under **all** their sum (see [how the numbers add up](#how-the-numbers-add-up)). Under the table, notes say that **most at once** is the largest peak of one machine, not a sum, which machines were summed from the numbers they gave last (`vps: seen 5 min ago`), and which weren't summed and why. **share** copies the link of what you picked: under **all**, the sum.
+- **Limits** under **all** lists this computer, then each machine under its name, with the accounts logged in there and their own labels. A Claude Code account logged in with a claude.ai login on two machines shows once, under the first, marked `on this computer, vps` under its title, with the most recent of the two readings; its percentages are never added, since it is the same limit. Every other row shows once per machine: Codex, API keys, Bedrock and Vertex give no way to tell two machines' accounts apart. Picking one machine shows its accounts as that machine sees them, merged with nothing.
+- A machine that is down shows the numbers it gave last, with when it was last seen; one whose last answer failed shows them too, with why and when they were read (`vps: … · numbers read 5 min ago`); one never read says `not seen yet` or why. With many machines on a narrow window, their names in the row are shortened so that every one, and **all**, can still be clicked.
+
+### From a terminal
+
+`cornercase stats` and `cornercase usage` take `--machine`:
+
+```sh
+cornercase stats --machine vps      # the stats of the agents that run on vps
+cornercase usage --machine vps      # the plan limits of the accounts logged in on vps
+cornercase stats --machine all      # this computer's stats and every machine's, summed
+cornercase usage --machine all      # this computer's limits, then each machine's
+```
+
+A line above the numbers says which machine they come from and when they were read:
+
+```text
+▭ this computer
+Claude Code · max plan  updated just now
+  session (5h)   34% · resets in 2h 14m
+  week           81% · resets in 3d 4h
+
+● vps  read just now
+Claude Code · max plan  updated just now
+  session (5h)   34% · resets in 2h 14m
+  week           81% · resets in 3d 4h
+```
+
+Scripts and other apps send the same `machine` to the `stats` and `usage` requests: see [Stats](../scripts-and-agents/#stats) and [Plan usage](../scripts-and-agents/#plan-usage). To ask a machine you haven't listed, use `cornercase --remote vps usage`.
+
+### How the numbers add up
+
+- **Stats under `all` are a sum**: prompts, turns, tokens and agent time add up, hour by hour, and so does the heatmap. The peak of agents working at once is the largest one machine had, since nobody knows whether two machines' peaks came at the same time. Busy time adds up too, so the hours it shows are machine-hours. Merged pull requests are never added: the row stays only when every machine reads the same accounts. The dialog's notes and the list at the end of `cornercase stats --machine all` say which machines are in the sum and which aren't, and why. A machine that is down is summed from the numbers it gave last: its heatmap moves on by the days since they were read, but its 24 h and 7 days count as they were then, so a machine down for three days still adds its last 24 hours.
+- **Limits are never added**: they are the provider's. Each machine lists the accounts logged in there, with its own labels. The dialog shows an account it can tell is the same on two machines once; `cornercase usage` lists it under each machine, with the same `identity`.
+- **Only a linked machine is asked**, and it gets 15 seconds to answer, plus the time its own probes take for plan limits. When it is down or doesn't answer, you get the numbers it gave last, with why it is down. With none, asking for that machine alone is an error, and `all` lists it with why and no numbers. `usage` exits with status 3 when a machine or an agent couldn't be read.
+- **Its numbers stay in your server's memory**, and are gone when it restarts. `cornercase stats` without a server reads this computer's `stats.json` only.
+- **Each machine runs its own probes**, with the `claude` and `codex` of its own [`agent_commands`](../../reference/agents/#your-own-agents).
+
+## From the command line
+
+`cornercase machines` prints the same list, and its subcommands change it as the Settings tab does:
+
+```sh
+cornercase machines
+cornercase machines add vps ana@vps.example.com --icon server
+cornercase machines edit vps --folder '~/src'
+cornercase machines retry vps
+cornercase machines update mini
+cornercase machines remove vps
+```
+
+Scripts and other apps read and change the list with the `machines` request: see [Machines](../scripts-and-agents/#machines).
+
+The list lives under [`machines`](../../reference/configuration/#machines-1) in `config.json`, and an edit of the file applies within a second. It isn't part of the settings you [share](../../reference/configuration/#share-your-setup): a colleague can't reach your machines.

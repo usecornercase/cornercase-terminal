@@ -182,13 +182,23 @@ fn no_config() -> PathBuf {
     std::env::temp_dir().join("cornercase-test-no-config").join("config.json")
 }
 
-fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
+const NO_SSH: &str = "app tests never run ssh";
+
+struct NoSsh;
+
+impl crate::machines::link::Connect for NoSsh {
+    fn connect(&self, _: &crate::remote::Killer) -> Result<crate::machines::link::Line> {
+        Err(Error::Ssh { host: "a machine".into(), reason: NO_SSH.into() })
+    }
+}
+
+fn new_app(config_path: impl AsRef<Path>) -> (App, Receiver<AppEvent>) {
     new_app_with_shell("/bin/sh", config_path)
 }
 
-fn new_app_with_shell(shell: &str, config_path: PathBuf) -> (App, Receiver<AppEvent>) {
+fn new_app_with_shell(shell: &str, config_path: impl AsRef<Path>) -> (App, Receiver<AppEvent>) {
     let (tx, rx) = mpsc::channel();
-    let mut app = App::new(shell.into(), HostTheme::default(), config_path, tx);
+    let mut app = App::new(shell.into(), HostTheme::default(), config_path.as_ref(), tx);
     app.config.sidebar = config::Sidebar::SideBySide.id().into();
     app.config.sound = false;
     app.config.star_prompt = false;
@@ -200,6 +210,10 @@ fn new_app_with_shell(shell: &str, config_path: PathBuf) -> (App, Receiver<AppEv
     if app.config.glab == config::DEFAULT_GLAB {
         app.config.glab = "/nonexistent/glab".into();
     }
+    app.machines.set_connector(Box::new(|_| Box::new(NoSsh)));
+    app.machines
+        .set_updater(std::sync::Arc::new(|_| Err(Error::Ssh { host: "a machine".into(), reason: NO_SSH.into() })));
+    app.machines.repos.set_resolver(std::sync::Arc::new(|_| None));
     (app, rx)
 }
 
@@ -616,6 +630,9 @@ mod icon_bar;
 mod icons;
 mod keys;
 mod lock_text;
+#[cfg(unix)]
+mod machine_links;
+mod machines;
 mod merge_requests;
 mod merged_pull_requests;
 mod muted_text;
@@ -654,6 +671,7 @@ mod tabs;
 mod tour;
 mod tree_sidebar;
 mod workspace_folds;
+mod workspace_text;
 mod workspaces;
 mod worktree_builds;
 mod worktrees_dialog;
@@ -686,6 +704,7 @@ mod path_links;
 mod pull_request_stacks;
 mod pull_requests;
 mod queue;
+mod recap_panel;
 mod remote_access;
 mod restarting;
 mod shared_files;

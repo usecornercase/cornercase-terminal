@@ -404,7 +404,7 @@ fn lines(app: &mut App) -> Vec<Value> {
 }
 
 #[cfg(unix)]
-fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
+pub(super) fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
     streamed
         .iter()
         .filter_map(|streamed| match streamed {
@@ -590,6 +590,8 @@ mod agents;
 mod arranging;
 mod build_folders;
 mod changes;
+#[cfg(unix)]
+mod cloning;
 mod close_agent;
 mod closed_agents;
 mod compacting;
@@ -615,6 +617,7 @@ mod grok;
 mod groups;
 mod holding;
 mod issues;
+mod journal;
 mod merge_check;
 mod one_folder;
 mod ordering;
@@ -622,11 +625,16 @@ mod pane_moves;
 mod parents;
 #[cfg(unix)]
 mod pasting;
+#[cfg(unix)]
+mod placed;
 mod plugins;
 mod ports;
 mod processes;
 mod pull_request;
 mod queue;
+mod recap;
+#[cfg(unix)]
+mod repos;
 mod searching;
 mod setup;
 mod start_server;

@@ -7,7 +7,7 @@ use crate::control::QueueAdd;
 use crate::queue::form::{Control, Form};
 use rstest::rstest;
 
-fn with_profiles(app: &mut App, config: &TempDir) {
+pub(super) fn with_profiles(app: &mut App, config: &TempDir) {
     let dir = config.path().join("accounts");
     for name in ["home", "work"] {
         accounts::add(&dir, Known::Claude, name, None).expect("add the account");
@@ -21,7 +21,7 @@ fn with_profiles(app: &mut App, config: &TempDir) {
     app.relist_accounts();
 }
 
-fn claude(account: &str) -> BTreeMap<String, String> {
+pub(super) fn claude(account: &str) -> BTreeMap<String, String> {
     BTreeMap::from([("claude".to_string(), account.to_string())])
 }
 

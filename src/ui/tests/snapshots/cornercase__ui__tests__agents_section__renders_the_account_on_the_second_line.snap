@@ -30,5 +30,5 @@ expression: t.backend()
 "                               │                         │                                          "
 "  ↓ 1 more                     │                         │                                          "
 " ───────────────────────────── │ ─────────────────────── │                                          "
-"  Worktrees                    │  Issues                 │                                          "
+"  Worktrees      Recap         │  Issues                 │                                          "
 "  More ▴                 Help  │  Files       TODO       │                                          "

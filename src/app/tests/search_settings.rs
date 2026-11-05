@@ -237,3 +237,42 @@ mod choosing {
         assert_eq!(asked, "prefix key");
     }
 }
+
+mod machine_rows {
+    use super::*;
+    use crate::settings::Row;
+
+    fn with_vps(query: &str) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+        let (mut app, rx, dirs) = app_with(1);
+        app.config.machines = vec![crate::machines::machine("vps", "ana@vps.example.com")];
+        click(&mut app, areas().search.as_position());
+        type_text(&mut app, query);
+        (app, rx, dirs)
+    }
+
+    fn machines_row(app: &App, ends: &str) -> Option<usize> {
+        names(app).iter().position(|name| name.starts_with("Machines › ") && name.ends_with(ends))
+    }
+
+    #[rstest::rstest]
+    #[case::a_machine("vps", " vps")]
+    #[case::this_computer("this computer", " this computer")]
+    #[case::adding_one("add machine", "add machine")]
+    fn is_listed_under_the_machines_tab(#[case] query: &str, #[case] ends: &str) {
+        let (app, _rx, _dirs) = with_vps(query);
+
+        assert!(machines_row(&app, ends).is_some(), "{query} is in {:?}", names(&app));
+    }
+
+    #[test]
+    fn enter_lands_on_the_machine() {
+        let (mut app, _rx, _dirs) = with_vps("vps");
+        let i = machines_row(&app, " vps").expect("the machine is listed");
+
+        down_to(&mut app, i);
+        send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+        let settings = settings(&app);
+        assert_eq!((settings.page, &settings.rows()[settings.cursor]), (Page::Machines, &Row::Machine(0)));
+    }
+}

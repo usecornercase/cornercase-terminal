@@ -73,6 +73,7 @@ pub(super) enum Side {
     Todo,
     Files,
     Flow,
+    Recap,
 }
 
 impl App {
@@ -86,7 +87,14 @@ impl App {
         ui::full_layout(
             area,
             self.screen.widths,
-            ui::Screen { changes: panel, sidebar, agents, icon_bar: icons, plugins: self.has_plugin_buttons() },
+            ui::Screen {
+                changes: panel,
+                sidebar,
+                agents,
+                icon_bar: icons,
+                plugins: self.has_plugin_buttons(),
+                machine: self.machine_label().is_some(),
+            },
         )
         .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
         .with_full_screen(self.file_full_screen(), area)
@@ -95,7 +103,7 @@ impl App {
     pub(super) fn panel_shown(&self) -> bool {
         match self.screen.side {
             Some(Side::Changes) => self.changes_shown(),
-            Some(Side::Todo) => true,
+            Some(Side::Todo | Side::Recap) => true,
             Some(Side::Files) => self.files_shown(),
             Some(Side::Flow) => self.has_run(),
             None => false,
@@ -110,7 +118,7 @@ impl App {
             Some(Side::Changes) => self.panels.changes.close(),
             Some(Side::Todo) => self.close_todo(),
             Some(Side::Files) => self.panels.files.close(),
-            Some(Side::Flow) | None => {}
+            Some(Side::Flow | Side::Recap) | None => {}
         }
         self.screen.side = side;
     }
@@ -130,7 +138,9 @@ impl App {
     }
 
     pub(super) fn visible_tab(&self) -> Option<u64> {
-        self.focus().tab.filter(|_| self.screen.nav.is_none() && !self.file_full_screen())
+        self.focus()
+            .tab
+            .filter(|_| self.screen.nav.is_none() && !self.file_full_screen() && self.shown_remote().is_none())
     }
 
     pub(super) fn focus(&self) -> Focus {
@@ -155,7 +165,7 @@ impl App {
     pub(super) fn follow(&mut self, area: Rect) {
         self.set_queue_area(area);
         if self.focus() != self.scroll.followed {
-            self.panels.files.set_full_screen(false);
+            self.set_file_full_screen(false);
         }
         let areas = self.layout(area);
         let relayout =

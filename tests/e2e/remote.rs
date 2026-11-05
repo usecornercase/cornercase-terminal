@@ -2,25 +2,64 @@ use super::*;
 
 const SSH_PID: &str = "ssh.pid";
 const SSH_RUNS: &str = "ssh.runs";
+const REFUSED: &str = "*) echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255 ;;";
 
 pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
+    fake_ssh_with(dir, &format!("*) there='{prefix}' ;;"))
+}
+
+pub(super) fn fake_ssh_to(dir: &std::path::Path, machines: &[(&str, &str)]) -> String {
+    let mapped: Vec<String> =
+        machines.iter().map(|(destination, prefix)| format!("'{destination}') there='{prefix}' ;;")).collect();
+    let path = fake_ssh_with(dir, &format!("{}\n  {REFUSED}", mapped.join("\n  ")));
+    cornercase_in(&dir.join("bin"));
+    path
+}
+
+pub(super) fn cornercase_in(folder: &std::path::Path) {
+    write_executable(&folder.join("cornercase"), &format!("#!/bin/sh\nexec '{}' \"$@\"\n", bin()));
+}
+
+fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
     let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).expect("create the fake ssh's folder");
-    let pid = dir.join(SSH_PID);
+    let dir = dir.display();
     write_executable(
         &bin.join("ssh"),
         &format!(
-            "#!/bin/sh\necho $$ > '{}'\necho $$ >> '{}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    \
-             -*) shift ;;\n    *) break ;;\n  esac\ndone\nshift\nexec /bin/sh -c \"exec {prefix} $*\"\n",
-            pid.display(),
-            dir.join(SSH_RUNS).display()
+            "#!/bin/sh\necho $$ > '{dir}/{SSH_PID}'\necho $$ >> '{dir}/{SSH_RUNS}'\nwhile [ $# -gt 0 ]; do\n  \
+             case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
+             if [ -e '{dir}/ssh-'\"$1\"'.held' ]; then\n  \
+             echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255\nfi\n\
+             echo $$ > '{dir}/ssh-'\"$1\"'.pid'\necho $$ >> '{dir}/ssh-'\"$1\"'.pids'\n\
+             case \"$1\" in\n  {cases}\nesac\nshift\nexec /bin/sh -c \"exec $there $*\"\n"
         ),
     );
     format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default())
 }
 
 fn ssh_pid(session: &Session) -> String {
-    std::fs::read_to_string(session.dir.join(SSH_PID)).unwrap_or_default().trim().to_string()
+    pid_in(session, SSH_PID)
+}
+
+pub(super) fn ssh_pid_to(session: &Session, destination: &str) -> String {
+    pid_in(session, &format!("ssh-{destination}.pid"))
+}
+
+pub(super) fn ssh_pids_to(session: &Session, destination: &str) -> Vec<String> {
+    pid_in(session, &format!("ssh-{destination}.pids")).lines().map(str::to_string).collect()
+}
+
+pub(super) fn hold_ssh_to(session: &Session, destination: &str) {
+    std::fs::write(session.dir.join(format!("ssh-{destination}.held")), "").expect("hold the destination");
+}
+
+pub(super) fn let_ssh_to(session: &Session, destination: &str) {
+    std::fs::remove_file(session.dir.join(format!("ssh-{destination}.held"))).expect("let the destination go");
+}
+
+fn pid_in(session: &Session, file: &str) -> String {
+    std::fs::read_to_string(session.dir.join(file)).unwrap_or_default().trim().to_string()
 }
 
 fn ssh_runs(session: &Session) -> usize {
@@ -45,13 +84,13 @@ fn remote_says(session: &Session, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()
 }
 
-fn gone(pid: &str) -> bool {
+pub(super) fn gone(pid: &str) -> bool {
     let ps = std::process::Command::new("ps").args(["-o", "stat=", "-p", pid]).output().expect("run ps");
     let state = String::from_utf8_lossy(&ps.stdout);
     state.trim().is_empty() || state.trim().starts_with('Z')
 }
 
-fn boot_of(json: &str) -> serde_json::Value {
+pub(super) fn boot_of(json: &str) -> serde_json::Value {
     serde_json::from_str::<serde_json::Value>(json).expect("json")["boot"].clone()
 }
 
@@ -114,6 +153,22 @@ fn commands_reach_the_server_on_the_other_machine() {
     let there = remote_says(&session, &["status", "--json"]);
     assert_eq!(boot_of(&there), boot_of(&session.says(&["status", "--json"])));
     assert_eq!(session.servers(), 1);
+}
+
+#[test]
+fn clone_puts_the_repository_in_a_folder_of_the_other_machine() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let repo = repository(&session.dir, "shop");
+    let parent = session.dir.join("src");
+
+    let path = remote_says(&session, &["clone", &repo.display().to_string(), &parent.display().to_string()]);
+    let relative = remotely(&session, &["clone", &repo.display().to_string(), "src"]).output().expect("run cornercase");
+
+    let cloned = session.dir.canonicalize().expect("canonical").join("src").join("shop");
+    assert_eq!(path, cloned.display().to_string());
+    assert!(session.report().projects.iter().any(|p| p.path == cloned), "the project is open there");
+    assert!(refused(&relative, 2, "with --remote, give its absolute path on devbox"), "{relative:?}");
 }
 
 #[test]
@@ -403,4 +458,132 @@ fn a_command_that_checks_the_server_first_opens_one_ssh_connection() {
     let _ = opened.wait();
 
     assert_eq!((focused, hidden), (1, 1));
+}
+
+fn remote_window(session: &Arc<Session>) -> Harness {
+    remote_window_with(session, &[])
+}
+
+fn remote_window_with(session: &Arc<Session>, env: &[(&str, &str)]) -> Harness {
+    let path = fake_ssh(&session.dir, "");
+    let exe = env!("CARGO_BIN_EXE_cornercase");
+    std::os::unix::fs::symlink(exe, session.dir.join("bin/cornercase"))
+        .expect("cornercase for a machine without --command");
+    let args = ["remote", "devbox", "--command", exe];
+    let env: Vec<(&str, &str)> = [("PATH", path.as_str())].into_iter().chain(env.iter().copied()).collect();
+    let mut app = Harness::run(exe.as_ref(), &args, Arc::clone(session), (ROWS, COLS), &env);
+    app.wait_for("the remote window names its machine", |s| s.contains(&first_entry()) && s.contains("devbox ▴"));
+    app
+}
+
+fn click_on(app: &mut Harness, text: &str) {
+    app.wait_for(text, |s| s.contains(text));
+    let at = app.position_of(text);
+    app.click(at);
+}
+
+#[test]
+fn a_window_switches_between_this_machine_and_the_one_it_reached() {
+    let session = Session::new();
+    let mut app = remote_window(&session);
+    let runs = ssh_runs(&session);
+
+    click_on(&mut app, "devbox ▴");
+    click_on(&mut app, "  this machine");
+    app.wait_for("the window is on this machine", |s| s.contains("this machine ▴"));
+    let local_runs = ssh_runs(&session);
+    click_on(&mut app, "this machine ▴");
+    click_on(&mut app, "  devbox");
+    app.wait_for("the window is on devbox again", |s| s.contains("devbox ▴") && !s.contains("this machine ▴"));
+
+    assert_eq!((local_runs, ssh_runs(&session)), (runs, runs + 1), "only devbox goes through ssh");
+    app.send(b"echo still-\"\"here\r");
+    app.wait_for("the shell answers", |s| s.contains("still-here"));
+    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
+    assert!(saved.contains("\"devbox\"") && saved.contains(env!("CARGO_BIN_EXE_cornercase")), "{saved}");
+    assert_eq!(session.servers(), 1);
+}
+
+fn add_newbox(app: &mut Harness) {
+    click_on(app, "devbox ▴");
+    click_on(app, "add machine…");
+    app.wait_for("the dialog asks for it", |s| s.contains("ssh destination"));
+    app.send(b"newbox\r");
+    app.wait_for_raw("the window asks before reaching it", |raw| raw.contains("connect to newbox?"));
+}
+
+#[test]
+fn a_machine_added_by_hand_is_reached_once_the_window_asks() {
+    let session = Session::new();
+    let mut app = remote_window(&session);
+    add_newbox(&mut app);
+    let runs = ssh_runs(&session);
+
+    app.send(b"\r");
+
+    app.wait_for("the window is on newbox", |s| s.contains("newbox ▴"));
+    assert_eq!(ssh_runs(&session), runs + 1);
+    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
+    assert!(saved.contains("\"newbox\""), "{saved}");
+}
+
+#[test]
+fn going_back_before_connecting_keeps_the_window_where_it_was() {
+    let session = Session::new();
+    let mut app = remote_window(&session);
+    let runs = ssh_runs(&session);
+    add_newbox(&mut app);
+
+    app.send(b"\x1b");
+
+    app.wait_for("the screen comes back", |s| !s.contains("connect to newbox?") && s.contains("devbox ▴"));
+    app.send(b"echo back-\"\"here\r");
+    app.wait_for("the same window answers", |s| s.contains("back-here"));
+    assert_eq!(ssh_runs(&session), runs, "nothing was reached");
+}
+
+#[test]
+fn a_window_inside_a_pane_of_this_machine_stays_where_it_is() {
+    let session = Session::new();
+    let mut app = remote_window_with(&session, &[("CORNERCASE", "1")]);
+    click_on(&mut app, "devbox ▴");
+    click_on(&mut app, "  this machine");
+    app.wait_for("the window says why", |s| s.contains("already running in this terminal"));
+
+    app.send(b"\x1b");
+
+    app.wait_for("the screen comes back", |s| {
+        !s.contains("already running in this terminal") && s.contains("devbox ▴")
+    });
+    app.send(b"echo still-\"\"there\r");
+    app.wait_for("the same window answers", |s| s.contains("still-there"));
+}
+
+#[test]
+fn a_server_that_refuses_the_window_leaves_it_where_it_was() {
+    let session = Session::new();
+    let mut app = remote_window(&session);
+    let proxy = std::process::Command::new(env!("CARGO_BIN_EXE_cornercase"))
+        .arg("proxy")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("the proxy's banner");
+    let banner = String::from_utf8_lossy(&proxy.stdout).lines().next().expect("a banner").to_string();
+    let refusing = session.dir.join("bin/cornercase");
+    std::fs::remove_file(&refusing).expect("drop the link to the test binary");
+    write_executable(
+        &refusing,
+        &format!("#!/bin/sh\necho '{banner}'\nprintf '\\006\\000\\000\\000\\000\\004nope'\ncat > /dev/null\n"),
+    );
+    add_newbox(&mut app);
+
+    app.send(b"\r");
+
+    app.wait_for("the window says why", |s| s.contains("could not switch to newbox") && s.contains("nope"));
+    app.send(b"\x1b");
+    app.wait_for("the screen comes back", |s| !s.contains("could not switch") && s.contains("devbox ▴"));
+    app.send(b"echo still-\"\"on-devbox\r");
+    app.wait_for("the same window answers", |s| s.contains("still-on-devbox"));
+    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
+    assert!(!saved.contains("newbox"), "{saved}");
 }

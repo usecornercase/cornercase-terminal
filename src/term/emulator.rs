@@ -81,7 +81,7 @@ pub(crate) struct Scrollbar {
 }
 
 impl Scrollbar {
-    fn below(self) -> usize {
+    pub(crate) fn below(self) -> usize {
         usize::try_from(self.total.saturating_sub(self.offset.saturating_add(self.rows))).unwrap_or(usize::MAX)
     }
 }

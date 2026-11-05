@@ -326,6 +326,15 @@ impl App {
         self.posts_relinked(via);
     }
 
+    pub(in crate::app) fn announce(&mut self, text: &str) {
+        for via in Via::ALL {
+            if self.messenger(via).away && self.messenger(via).paired() {
+                let text = via.markup().escape(text);
+                self.say(via, text, Delivery::default());
+            }
+        }
+    }
+
     fn post(&self, via: Via, order: Order) {
         if let Some(link) = &self.messenger(via).link {
             link.send(order);

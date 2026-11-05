@@ -50,6 +50,27 @@ mod framing {
         let err = recv::<ClientMessage>(&mut len.as_slice()).expect_err("too big");
 
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(!undecoded(&err));
+    }
+
+    #[test]
+    fn a_whole_message_it_cannot_decode_leaves_the_next_one_readable() {
+        let mut buf = Vec::new();
+        send(&mut buf, &99u8).expect("send");
+        send(&mut buf, &ServerMessage::Detached).expect("send");
+        let mut reader = buf.as_slice();
+
+        let err = recv::<ServerMessage>(&mut reader).expect_err("an unknown variant");
+
+        assert!(undecoded(&err));
+        assert!(matches!(recv(&mut reader), Ok(Some(ServerMessage::Detached))));
+    }
+
+    #[test]
+    fn a_broken_stream_is_not_an_undecoded_message() {
+        let err = recv::<ServerMessage>(&mut [2u8, 0, 0, 0, 1].as_slice()).expect_err("cut short");
+
+        assert!(!undecoded(&err));
     }
 }
 
@@ -282,9 +303,28 @@ mod compatibility {
             probe: String::new(),
             zone: "UTC".into(),
             openers: vec![Opener::Files, Opener::Vscode],
+            machines: Some(Machines { here: Some("devbox".into()), known: vec!["devbox".into()] }),
         };
         let back = round_trip(&ClientMessage::Hello(Box::new(hello)));
-        assert!(matches!(back, ClientMessage::Hello(h) if h.openers.len() == 2));
+        assert!(
+            matches!(back, ClientMessage::Hello(h) if h.openers.len() == 2 && h.machines.as_ref().is_some_and(|m| m.known == ["devbox"]))
+        );
+    }
+
+    #[test]
+    fn a_machine_order_comes_after_every_older_server_variant_and_round_trips() {
+        let order = MachineOrder::Switch(Some("devbox".into()));
+        assert_eq!(postcard::to_stdvec(&ServerMessage::Machine(order.clone())).expect("encode")[0], 9);
+        assert!(matches!(round_trip(&ServerMessage::Machine(order.clone())), ServerMessage::Machine(o) if o == order));
+    }
+
+    #[test]
+    fn the_machines_come_after_every_older_client_variant_and_round_trip() {
+        let machines = Machines { here: None, known: vec!["devbox".into(), "gpu-box".into()] };
+        assert_eq!(postcard::to_stdvec(&ClientMessage::Machines(machines.clone())).expect("encode")[0], 8);
+        assert!(
+            matches!(round_trip(&ClientMessage::Machines(machines.clone())), ClientMessage::Machines(m) if m == machines)
+        );
     }
 
     fn framed(msg: &impl Serialize) -> String {

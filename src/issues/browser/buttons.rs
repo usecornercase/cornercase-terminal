@@ -1,4 +1,4 @@
-use super::{Action, After, Browser, Pick, Place, Screen, Step, Tab};
+use super::{Action, After, Browser, Pick, Place, Queued, QueuedKind, Screen, Step, Tab};
 use crate::issues::{Issue, Source, Who};
 use crate::queue::State;
 
@@ -8,6 +8,8 @@ pub(super) enum Button {
     Schedule,
     Flow,
     Agent,
+    RunOn,
+    LoginTab,
     Where,
     Account,
     Done,
@@ -25,6 +27,8 @@ pub(super) enum Button {
     Back,
     New,
     RunNow,
+    Pause,
+    Resume,
     Remove,
     ClearStarted,
 }
@@ -36,6 +40,8 @@ impl Button {
             Self::Schedule => "schedule",
             Self::Flow => "start a flow",
             Self::Agent => "agent…",
+            Self::RunOn => "run on…",
+            Self::LoginTab => "open login tab",
             Self::Where => "where…",
             Self::Account => "account…",
             Self::Done => "done",
@@ -53,6 +59,8 @@ impl Button {
             Self::Back => "back",
             Self::New => "new",
             Self::RunNow => "start now",
+            Self::Pause => "pause",
+            Self::Resume => "resume",
             Self::Remove => "remove",
             Self::ClearStarted => "clear started",
         }
@@ -92,6 +100,8 @@ impl Browser {
 
     fn detail_buttons(&self, raw: bool, issue: &Issue) -> Vec<Button> {
         let mut buttons = vec![Button::Start, Button::Schedule, Button::Flow, Button::Agent];
+        buttons.extend(self.run_on.as_ref().map(|_| Button::RunOn));
+        buttons.extend(self.needs_login_tab().then_some(Button::LoginTab));
         if !issue.source.in_repository() && self.places.len() > 1 {
             buttons.push(Button::Where);
         }
@@ -102,6 +112,13 @@ impl Browser {
             buttons.push(Button::MakeDefault);
         }
         buttons.extend([if raw { Button::Rendered } else { Button::Raw }, Button::Copy, Button::Back]);
+        self.unscheduled(buttons)
+    }
+
+    fn unscheduled(&self, mut buttons: Vec<Button>) -> Vec<Button> {
+        if self.elsewhere() {
+            buttons.retain(|button| *button != Button::Schedule);
+        }
         buttons
     }
 
@@ -130,7 +147,7 @@ impl Browser {
             buttons.push(Button::Disconnect);
         }
         buttons.push(Button::Cancel);
-        buttons
+        self.unscheduled(buttons)
     }
 
     fn queue_buttons(&self) -> Vec<Button> {
@@ -139,11 +156,16 @@ impl Browser {
             if queued.runnable() {
                 buttons.push(Button::RunNow);
             }
+            match queued.kind {
+                QueuedKind::Routine { paused: false } => buttons.push(Button::Pause),
+                QueuedKind::Routine { paused: true } => buttons.push(Button::Resume),
+                QueuedKind::Entry | QueuedKind::Run => {}
+            }
             if queued.state != State::Starting {
                 buttons.push(Button::Remove);
             }
         }
-        if self.queued.iter().any(|queued| matches!(queued.state, State::Started { .. })) {
+        if self.queued.iter().any(Queued::clearable) {
             buttons.push(Button::ClearStarted);
         }
         buttons.push(Button::Cancel);
@@ -172,18 +194,22 @@ impl Browser {
             Button::Start if self.naming.is_some() => self.start_named(),
             Button::Start | Button::Schedule => self.press_start(button == Button::Schedule),
             Button::Flow => self.press_flow(),
-            Button::Agent | Button::Where | Button::Account => {
+            Button::Agent | Button::RunOn | Button::Where | Button::Account => {
                 let pick = match button {
                     Button::Agent => Pick::Agent,
+                    Button::RunOn => Pick::Machine,
                     Button::Where => Pick::Place,
                     _ => Pick::Account,
                 };
                 self.open_picker(pick, After::Nothing);
                 Action::None
             }
-            Button::New | Button::RunNow | Button::Remove | Button::ClearStarted => self.press_queue(button),
+            Button::New | Button::RunNow | Button::Pause | Button::Resume | Button::Remove | Button::ClearStarted => {
+                self.press_queue(button)
+            }
             Button::Done => self.close_people(),
             Button::Clear => self.clear_people(),
+            Button::LoginTab => Action::OpenLoginTab,
             Button::MakeDefault => self.agents.chosen.clone().map_or(Action::None, Action::SetDefaultAgent),
             Button::Choose => self.choose(None),
             Button::Refresh => {
@@ -245,6 +271,8 @@ impl Browser {
     fn press_queue(&mut self, button: Button) -> Action {
         match button {
             Button::RunNow => self.selected_queued().map_or(Action::None, |queued| Action::QueueRun(queued.id)),
+            Button::Pause => self.selected_queued().map_or(Action::None, |queued| Action::QueuePause(queued.id)),
+            Button::Resume => self.selected_queued().map_or(Action::None, |queued| Action::QueueResume(queued.id)),
             Button::Remove => self.selected_queued().map_or(Action::None, |queued| Action::QueueRemove(queued.id)),
             Button::ClearStarted => Action::QueueClear,
             _ => Action::QueueNew,
@@ -310,6 +338,12 @@ impl Browser {
     }
 
     pub(super) fn start(&mut self, issue: Issue) -> Action {
+        if let Some(action) = self.lost_there() {
+            return action;
+        }
+        if self.not_cloned() {
+            return Action::CloneThere(issue);
+        }
         if self.needs_place(&issue) {
             self.open_picker(Pick::Place, After::Start);
             return Action::None;
@@ -334,6 +368,12 @@ impl Browser {
     }
 
     pub(super) fn start_flow(&mut self, issue: Issue) -> Action {
+        if let Some(action) = self.lost_there() {
+            return action;
+        }
+        if self.not_cloned() {
+            return Action::CloneThere(issue);
+        }
         if self.needs_place(&issue) {
             self.open_picker(Pick::Place, After::Flow);
             return Action::None;

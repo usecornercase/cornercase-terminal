@@ -18,5 +18,5 @@ expression: render(&one(shell())).backend()
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Worktrees                    │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
 "  More ▴                 Help  │                         │   claude: personal ▾   codex: System ▾   "

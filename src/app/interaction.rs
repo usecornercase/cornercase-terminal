@@ -5,6 +5,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::input::wheel;
+use super::machine_links::{RemoteAt, RemoteDrag};
 use super::menus::Target;
 use super::text_fields::TextField;
 use crate::changes::selection::Spot;
@@ -24,6 +25,7 @@ pub(super) enum Grab {
     Row(Target),
     Todo(u64),
     Agent(u64),
+    Remote(RemoteAt),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,6 +108,7 @@ pub(super) enum Drag {
     Lines { workspace: u64, path: String, anchor: Anchor, area: Rect, moved: bool, scrolled: Option<Instant> },
     Footer(u64),
     Text(TextField),
+    Remote(RemoteDrag),
 }
 
 impl Drag {
@@ -119,7 +122,8 @@ impl Drag {
             | Self::Link(_)
             | Self::Lines { .. }
             | Self::Text(_)
-            | Self::Footer(_) => None,
+            | Self::Footer(_)
+            | Self::Remote(_) => None,
         }
     }
 
@@ -133,7 +137,8 @@ impl Drag {
             | Self::Link(_)
             | Self::Lines { .. }
             | Self::Text(_)
-            | Self::Footer(_) => None,
+            | Self::Footer(_)
+            | Self::Remote(_) => None,
         }
     }
 
@@ -147,7 +152,8 @@ impl Drag {
             | Self::Selection { .. }
             | Self::Lines { .. }
             | Self::Text(_)
-            | Self::Footer(_) => None,
+            | Self::Footer(_)
+            | Self::Remote(_) => None,
         }
     }
 
@@ -161,7 +167,8 @@ impl Drag {
             | Self::Link(_)
             | Self::Lines { .. }
             | Self::Text(_)
-            | Self::Footer(_) => true,
+            | Self::Footer(_)
+            | Self::Remote(_) => true,
         }
     }
 }
@@ -178,7 +185,8 @@ impl App {
                 | Drag::Link(_)
                 | Drag::Lines { .. }
                 | Drag::Text(_)
-                | Drag::Footer(_),
+                | Drag::Footer(_)
+                | Drag::Remote(_),
             )
             | None => None,
         }
@@ -215,6 +223,7 @@ impl App {
                             agents: self.config.agents_section,
                             icon_bar: self.config.icon_bar,
                             plugins: self.has_plugin_buttons(),
+                            machine: self.machine_label().is_some(),
                             ..ui::Screen::default()
                         },
                     )
@@ -240,6 +249,7 @@ impl App {
                 agents: true,
                 icon_bar: self.config.icon_bar,
                 plugins: self.has_plugin_buttons(),
+                machine: self.machine_label().is_some(),
             },
         )
         .agents

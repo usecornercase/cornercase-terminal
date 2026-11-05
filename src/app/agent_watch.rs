@@ -7,7 +7,7 @@ use super::account_restart::Restarts;
 use super::closed_agents::ClosedAgents;
 use super::launches::Launches;
 use super::menus::{Marked, MenuAction};
-use super::notifications::Said;
+use super::notifications::{self, Said};
 use super::overlay::Overlay;
 use crate::accounts;
 use crate::agents;
@@ -119,12 +119,14 @@ impl App {
             samples: Vec::new(),
             notices: Vec::new(),
             prompts: 0,
+            prompt_times: Vec::new(),
         };
         for (project, open) in self.projects.iter_mut().zip(open) {
             round.project(project, if tree { open } else { active == Some(project.id) });
         }
-        let Round { samples, notices, prompts, .. } = round;
+        let Round { samples, notices, prompts, prompt_times, .. } = round;
         if read {
+            self.journal_agents(clock, &prompt_times);
             self.agents.stats.sample(clock, elapsed, &samples);
             self.agents.stats.prune(clock);
         }
@@ -166,16 +168,8 @@ impl App {
     pub(super) fn notify(&mut self, notice: Notice<'_>) {
         let Notice { agent, status, at: (project, workspace), panes, principal } = notice;
         let Some(at) = self.projects.workspace_in(project, workspace) else { return };
-        let what = match status {
-            activity::Status::Waiting => "needs you",
-            activity::Status::Failed => "failed",
-            _ => "finished",
-        };
-        let kind = match status {
-            activity::Status::Waiting | activity::Status::Failed => sound::Kind::NeedsYou,
-            _ => sound::Kind::Finished,
-        };
-        let sound = (self.config.sound && (principal || self.config.sound_subagents)).then_some(kind);
+        let (what, kind) = notifications::wording(status);
+        let sound = self.sound_for(kind, principal);
         let place = self.place_name(at);
         let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let message = notify::clean(&format!("{agent} {what} in {place}"));
@@ -189,7 +183,8 @@ impl App {
             panes = panes.len(),
             sound = sound.map_or("none", sound::Kind::id)
         );
-        self.tell(Said { agent, status, place, message, project: project.id, workspace: workspace.id, panes, sound });
+        let (project, workspace) = (project.id, workspace.id);
+        self.tell(Said { agent, status, place, message, project, workspace, panes, sound, machine: None });
     }
 
     fn marked_panes(&self, marked: Marked) -> Vec<&Term> {
@@ -283,6 +278,7 @@ struct Round<'a> {
     quiet: HashSet<u64>,
     jobs: bool,
     prompts: usize,
+    prompt_times: Vec<(u64, Vec<SystemTime>)>,
     stats: &'a mut agents::stats::Stats,
     samples: Vec<agents::stats::Sample>,
     notices: Vec<(NoticeKey, Vec<u64>)>,
@@ -354,6 +350,7 @@ impl Round<'_> {
         {
             let counted = term.context.take_counted();
             self.prompts += counted.prompts.len();
+            self.prompt_times.push((term.id, counted.prompts.clone()));
             self.stats.counted(kind, counted);
             self.samples.push(agents::stats::Sample {
                 pane: term.id,

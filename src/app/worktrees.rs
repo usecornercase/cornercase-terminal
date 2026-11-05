@@ -5,10 +5,11 @@ use std::time::{Duration, Instant};
 use ratatui::layout::Rect;
 
 use super::App;
+use super::dialogs::named;
 use super::event::AppEvent;
 use super::event::Start;
 use super::flow_runs::Made;
-use super::overlay::Overlay;
+use super::overlay::{FORCE_REMOVE_SUBMIT, Overlay, REMOVE_SUBMIT, UNLOCK_SUBMIT};
 use super::pull_requests::Looked;
 use super::toast::Toast;
 use super::worktrees_dialog::Deleted;
@@ -16,7 +17,7 @@ use crate::agents::launch::Launch;
 use crate::control::BuildsFreed;
 use crate::control::contract::Refusal;
 use crate::editor::Editor;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::flows::run::RoleWorktree;
 use crate::git;
 use crate::git::upstream;
@@ -38,11 +39,15 @@ pub(super) struct Upstream {
     pub(super) unlisted: HashSet<u64>,
 }
 
+pub(super) const NAME_REQUIRED: &str = "the name is required";
+
 pub(super) const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
 
 const UNCOMMITTED_TOO: &str = "It has uncommitted changes, which are deleted.";
 
 const MAX_LOCK_REASON: usize = 100;
+
+const PARTLY_CLEANED: &str = "cleanup failed in part";
 
 pub(super) const SYNC_EVERY: Duration = Duration::from_secs(1);
 
@@ -70,7 +75,7 @@ pub(crate) enum ListFor {
 
 #[derive(Debug)]
 pub(crate) enum WorktreeEvent {
-    Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
+    Created { project: u64, branch: String, result: Result<PathBuf>, start: Option<Box<Start>>, request: Option<u64> },
     Run { project: u64, result: Result<Made>, request: u64 },
     Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
     Removed { project: u64, workspace: u64, result: Result<Option<String>>, request: Option<u64> },
@@ -115,8 +120,9 @@ impl App {
             WorktreeEvent::Created { project, result, request: Some(key), .. } => {
                 self.worktree_ready(key, project, result, area);
             }
-            WorktreeEvent::Created { project, result, start, request: None } => {
-                self.worktree_created(project, result, start, area)?;
+            WorktreeEvent::Created { project, branch, result, start, request: None } => {
+                self.worktree_awaited(project, &branch, result.as_ref().err());
+                self.worktree_created(project, result, start.map(|start| *start), area)?;
             }
             WorktreeEvent::Run { project, result, request } => self.run_worktrees_ready(request, project, result, area),
             WorktreeEvent::Checked { project, workspace, status, request: Some(key) } => {
@@ -264,10 +270,37 @@ impl App {
         let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
         let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
         let job = job.with("path", path.display()).with("issue", start.is_some());
+        let made = branch.clone();
         self.spawn_job(
             job,
             move || worktree::create(&repo, &branch, &path).map(|()| path),
-            move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Created { project: id, result, start, request })),
+            move |result, _| {
+                let start = start.map(Box::new);
+                let created = WorktreeEvent::Created { project: id, branch: made, result, start, request };
+                Some(AppEvent::Worktree(created))
+            },
+        );
+    }
+
+    pub(super) fn spawn_fresh_worktree(&self, p: usize, branch: String, request: u64) {
+        let project = &self.projects[p];
+        let (id, repo) = (project.id, project.path.clone());
+        let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
+        let job = Job::new(Level::Info, "worktree", "add from the default branch").with("project", id);
+        let job = job.with("branch", &branch).with("path", path.display());
+        let made = branch.clone();
+        self.spawn_job(
+            job,
+            move || worktree::fresh::create(&repo, &branch, &path).map(|()| path),
+            move |result, _| {
+                Some(AppEvent::Worktree(WorktreeEvent::Created {
+                    project: id,
+                    branch: made,
+                    result,
+                    start: None,
+                    request: Some(request),
+                }))
+            },
         );
     }
 
@@ -281,17 +314,25 @@ impl App {
         let name = input.text().trim().to_string();
         let Some(p) = self.projects.project_index(project) else { return Ok(None) };
         if name.is_empty() {
-            let error = Some("the name is required".into());
-            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false }));
+            let error = Some(NAME_REQUIRED.into());
+            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false, run_on: None }));
         }
         if worktree == Some(true) {
             self.spawn_worktree(p, name, None, None);
-            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error: None, creating: true }));
+            return Ok(Some(Overlay::NewWorkspace {
+                project,
+                input,
+                worktree,
+                error: None,
+                creating: true,
+                run_on: None,
+            }));
         }
         let repo = self.projects[p].path.clone();
         let workspace = self.new_workspace(area, repo, Some(name), false)?;
         let at = self.projects.push_workspace(p, workspace);
         self.projects[p].active = at.index();
+        self.leave_remote();
         self.active = p;
         Ok(None)
     }
@@ -303,29 +344,45 @@ impl App {
         start: Option<Start>,
         area: Rect,
     ) -> Result<()> {
-        let path = match result {
-            Ok(path) => canonical(path),
-            Err(e) => {
-                match &mut self.overlay {
-                    Some(Overlay::NewWorkspace { error, creating, .. }) => {
-                        *error = Some(e.to_string());
-                        *creating = false;
-                    }
-                    Some(Overlay::Issues(b)) => {
-                        b.error = Some(e.to_string());
-                        b.starting = false;
-                    }
-                    _ => {}
-                }
-                return Ok(());
-            }
-        };
-        if matches!(self.overlay, Some(Overlay::NewWorkspace { .. } | Overlay::Issues(_))) {
-            self.overlay = None;
-        }
+        let Ok(path) = result.map(canonical) else { return Ok(()) };
         let Some(p) = self.projects.project_index(project) else { return Ok(()) };
         let at = self.worktree_workspace(p, path);
         self.open_workspace(at, start, area, true)
+    }
+
+    fn worktree_awaited(&mut self, project: u64, branch: &str, failed: Option<&Error>) {
+        if !self.awaits_worktree(project, branch) {
+            return;
+        }
+        let Some(failed) = failed else {
+            self.overlay = None;
+            return;
+        };
+        match &mut self.overlay {
+            Some(Overlay::NewWorkspace { error, creating, .. }) => {
+                *error = Some(failed.to_string());
+                *creating = false;
+            }
+            Some(Overlay::Issues(b)) => {
+                b.error = Some(failed.to_string());
+                b.starting = false;
+                b.making = None;
+            }
+            _ => {}
+        }
+    }
+
+    fn awaits_worktree(&self, project: u64, branch: &str) -> bool {
+        match &self.overlay {
+            Some(Overlay::NewWorkspace { project: shown, input, creating: true, run_on, .. }) => {
+                let local = run_on.as_ref().is_none_or(|run_on| run_on.awaiting.is_none());
+                local && *shown == project && input.text().trim() == branch
+            }
+            Some(Overlay::Issues(b)) => {
+                b.making.as_ref().is_some_and(|(shown, made)| *shown == project && made == branch)
+            }
+            _ => false,
+        }
     }
 
     pub(super) fn worktree_workspace(&mut self, p: usize, path: PathBuf) -> WorkspaceAt {
@@ -363,6 +420,7 @@ impl App {
             }
         }
         self.projects[at.project()].active = at.index();
+        self.leave_remote();
         self.active = at.project();
         Ok(())
     }
@@ -495,14 +553,17 @@ impl App {
     }
 
     pub(super) fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<Option<String>>) {
+        if let Some(cleaning) = self.panels.queued.cleanups.take_cleaning(workspace) {
+            self.run_removed(project, workspace, cleaning, result);
+            return;
+        }
         if self.cleaning(workspace) {
             self.cleanup_removed(project, workspace, result);
             return;
         }
         let Some(name) = self.settle_removal(project, workspace, result.is_ok()) else { return };
         let toast = match result {
-            Ok(None) => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
-            Ok(Some(why)) => Toast::new(format!("removed {name}, but its teardown failed: {why}"), ui::ToastIcon::Bug),
+            Ok(warning) => removed(&name, None, warning.as_deref()),
             Err(e) => Toast::new(format!("could not remove {name}: {e}"), ui::ToastIcon::Bug),
         };
         self.messages.toast = Some(toast);
@@ -521,48 +582,79 @@ impl App {
 
     pub(super) fn remove_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
         let Overlay::RemoveWorkspace { project, workspace, check, lock } = overlay else { return None };
-        let (check, lock, submit) = (*check, lock.as_ref(), overlay.submit_label());
         let found = self.projects.workspace_in(*project, *workspace);
         let teardown = found.is_some_and(|at| self.teardown_script(at.project()).is_some());
-        let (message, note) = match lock {
-            Some(lock) => (
-                lock_message(&self.found_label(found), lock) + if teardown { " Its teardown runs first." } else { "" },
-                lock_note(lock, check == Check::Changed).map(ui::Note::Error),
-            ),
-            None => (
-                self.remove_question(found, teardown),
-                match check {
-                    Check::Confirmed => Some(ui::Note::Busy("checking…")),
-                    Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
-                    Check::Running | Check::Clean => None,
-                },
-            ),
-        };
-        Some(ui::Overlay::Confirm(ui::Confirm {
-            title: "Remove workspace",
-            message,
-            note,
-            submit,
-            extra: None,
-            dangerous: false,
-        }))
-    }
-
-    fn found_label(&self, found: Option<WorkspaceAt>) -> String {
-        found.map(|at| self.projects.workspace(at).label()).unwrap_or_default()
-    }
-
-    fn remove_question(&self, found: Option<WorkspaceAt>, teardown: bool) -> String {
-        let label = self.found_label(found);
         let found = found.map(|at| self.projects.workspace(at));
+        let label = found.map(Workspace::label).unwrap_or_default();
         let path = found.map(|w| crate::text::display_path(&w.path, self.home.as_deref())).unwrap_or_default();
         let roles = found.map_or(0, |w| w.role_worktrees.iter().filter(|tree| tree.path.is_dir()).count());
-        let kept = if roles == 0 { "The branch is kept." } else { "The branches are kept." };
-        let with_roles = if roles == 0 { String::new() } else { format!(", with the worktrees of its {roles} roles") };
-        let first = if teardown { "Its teardown runs first. " } else { "" };
-        let id = found.map_or(0, |w| w.id);
-        let closed = self.forgotten_note(id);
-        format!("Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {first}{kept}{closed}")
+        let closed = self.forgotten_note(found.map_or(0, |w| w.id));
+        let removing = Removing { label: &label, path: &path, roles, teardown, closed: &closed, on: None };
+        Some(removal_view(&removing, *check, lock.as_ref()))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Removing<'a> {
+    pub(super) label: &'a str,
+    pub(super) path: &'a str,
+    pub(super) roles: usize,
+    pub(super) teardown: bool,
+    pub(super) closed: &'a str,
+    pub(super) on: Option<&'a str>,
+}
+
+pub(super) fn removed(label: &str, machine: Option<&str>, warning: Option<&str>) -> Toast {
+    let name = named(label, machine);
+    let Some(why) = warning else { return Toast::new(format!("removed {name}"), ui::ToastIcon::Check) };
+    let mut fields = vec![("workspace", label.to_string())];
+    fields.extend(machine.map(|machine| ("machine", machine.to_string())));
+    fields.push(("warning", why.to_string()));
+    log::write_fields(Level::Warn, "worktree", &format!("removed, {PARTLY_CLEANED}"), &fields);
+    Toast::new(format!("removed {name}, {PARTLY_CLEANED}, see server.log"), ui::ToastIcon::Bug)
+}
+
+pub(super) fn removal_question(removing: &Removing<'_>) -> String {
+    let Removing { label, path, roles, teardown, closed, on } = *removing;
+    let kept = if roles == 0 { "The branch is kept." } else { "The branches are kept." };
+    let with_roles = if roles == 0 { String::new() } else { format!(", with the worktrees of its {roles} roles") };
+    let first = if teardown { "Its teardown runs first. " } else { "" };
+    let label = named(label, on);
+    format!("Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {first}{kept}{closed}")
+}
+
+pub(super) fn removal_view(removing: &Removing<'_>, check: Check, lock: Option<&worktree::Lock>) -> ui::Overlay {
+    let (message, note) = match lock {
+        Some(lock) => (
+            lock_message(removing.label, lock, removing.on)
+                + if removing.teardown { " Its teardown runs first." } else { "" },
+            lock_note(lock, check == Check::Changed).map(ui::Note::Error),
+        ),
+        None => (
+            removal_question(removing),
+            match check {
+                Check::Confirmed => Some(ui::Note::Busy("checking…")),
+                Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
+                Check::Running | Check::Clean => None,
+            },
+        ),
+    };
+    let submit = removal_submit(check, lock.is_some());
+    ui::Overlay::Confirm(ui::Confirm {
+        title: "Remove workspace",
+        message,
+        note,
+        submit,
+        extra: None,
+        dangerous: false,
+    })
+}
+
+pub(super) fn removal_submit(check: Check, locked: bool) -> &'static str {
+    match check {
+        _ if locked => UNLOCK_SUBMIT,
+        Check::Changed => FORCE_REMOVE_SUBMIT,
+        _ => REMOVE_SUBMIT,
     }
 }
 
@@ -613,7 +705,8 @@ fn checked_status(path: &Path, roles: &[(String, PathBuf)]) -> worktree::Status 
     status
 }
 
-pub(super) fn lock_message(label: &str, lock: &worktree::Lock) -> String {
+pub(super) fn lock_message(label: &str, lock: &worktree::Lock, on: Option<&str>) -> String {
+    let label = named(label, on);
     let reason = crate::text::truncate_right(&lock.reason, MAX_LOCK_REASON);
     let locked = if reason.is_empty() { "is locked".to_string() } else { format!("is locked: {reason}") };
     match &lock.role {

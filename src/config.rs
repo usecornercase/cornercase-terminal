@@ -8,9 +8,13 @@ use serde_json::{Map, Value};
 
 use crate::agents;
 use crate::host::notify;
+use crate::machines::Machine;
 use crate::os::fs::{NONBLOCK, OpenOptionsExt, canonicalize, drive_path};
 use crate::persist;
 use crate::shortcuts::Prefix;
+
+pub(crate) const DEFAULT_RECAP_EFFORT: &str = "low";
+pub(crate) const DEFAULT_RECAP_LANGUAGE: &str = "auto";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Sidebar {
@@ -285,6 +289,12 @@ pub(crate) struct Config {
     pub(crate) accept_trust_prompts: bool,
     pub(crate) resume_agents: bool,
     pub(crate) keep_awake: bool,
+    pub(crate) recap_agent: String,
+    pub(crate) recap_account: String,
+    pub(crate) recap_model: String,
+    pub(crate) recap_effort: String,
+    pub(crate) recap_language: String,
+    pub(crate) recap_instructions: String,
     pub(crate) hidden_flows: Vec<String>,
     pub(crate) default_flow: String,
     pub(crate) flow_order: Vec<String>,
@@ -328,6 +338,8 @@ pub(crate) struct Config {
     pub(crate) account_names: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) active_accounts: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) machines: Vec<Machine>,
 }
 
 impl Config {
@@ -357,6 +369,12 @@ impl Config {
         accept_trust_prompts: false,
         resume_agents: false,
         keep_awake: false,
+        recap_agent: String::new(),
+        recap_account: String::new(),
+        recap_model: String::new(),
+        recap_effort: String::new(),
+        recap_language: String::new(),
+        recap_instructions: String::new(),
         hidden_flows: Vec::new(),
         default_flow: String::new(),
         flow_order: Vec::new(),
@@ -396,6 +414,7 @@ impl Config {
         profile: String::new(),
         account_names: BTreeMap::new(),
         active_accounts: BTreeMap::new(),
+        machines: Vec::new(),
     };
 }
 
@@ -412,6 +431,8 @@ impl Default for Config {
             agent: agents::AUTO.into(),
             prompt: DEFAULT_PROMPT.into(),
             resume_agents: true,
+            recap_effort: DEFAULT_RECAP_EFFORT.into(),
+            recap_language: DEFAULT_RECAP_LANGUAGE.into(),
             trust_prompt_pattern: agents::DEFAULT_TRUST_PROMPT.into(),
             gh: DEFAULT_GH.into(),
             glab: DEFAULT_GLAB.into(),

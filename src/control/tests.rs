@@ -182,6 +182,10 @@ fn newest_commands() -> Vec<Command> {
         Command::Worktrees(ListWorktrees::default()),
         Command::PullRequest(PullRequestRead::default()),
         Command::Context(ContextRead::default()),
+        Command::Recap(RecapAsk::default()),
+        Command::Machines(Machines::default()),
+        Command::Clone(CloneRepository::default()),
+        Command::FocusMachine(FocusMachine { machine: "vps".into(), item: Item::Workspace(1) }),
     ]
 }
 
@@ -523,6 +527,54 @@ fn an_imports_logged_fields_carry_its_size_and_never_its_text() {
     assert!(fields.iter().all(|(_, value)| !value.contains("SECRET")), "{fields:?}");
 }
 
+#[test]
+fn a_clones_logged_fields_carry_its_folder_and_never_its_url() {
+    let url = "https://ana:SECRET@example.com/acme/shop.git".into();
+    let clone = CloneRepository { url, parent: "/srv/src".into(), focus: true, files: Vec::new() };
+    let fields = Command::Clone(clone).fields();
+    assert_eq!(fields, [("parent", "/srv/src".to_string()), ("focus", "true".to_string())]);
+}
+
+#[test]
+fn a_clones_logged_fields_count_its_files_and_never_carry_them() {
+    let file = CloneFile { path: ".env".into(), data: "S0VZPVNFQ1JFVA==".into(), mode: 0o600 };
+    let clone = CloneRepository { files: vec![file.clone(), file], ..CloneRepository::default() };
+    let fields = Command::Clone(clone).fields();
+    assert!(fields.contains(&("files", "2".to_string())), "{fields:?}");
+    assert!(fields.iter().all(|(_, value)| !value.contains(".env") && !value.contains("S0VZ")), "{fields:?}");
+}
+
+#[test]
+fn a_clone_without_files_reads_and_writes_as_before() {
+    let clone =
+        CloneRepository { url: "/srv/shop.git".into(), parent: "/srv/src".into(), ..CloneRepository::default() };
+    let cloned = Cloned { path: "/srv/src/shop".into(), ..Cloned::default() };
+
+    assert_eq!(
+        serde_json::to_value(&clone).expect("json"),
+        json!({"url": "/srv/shop.git", "parent": "/srv/src", "focus": false})
+    );
+    assert_eq!(serde_json::to_value(&cloned).expect("json"), json!({"path": "/srv/src/shop"}));
+}
+
+#[rstest::rstest]
+#[case::start(Command::Start(Start::default()), Command::Start(Start { machine: Some("vps".into()), ..Start::default() }))]
+#[case::new_workspace(
+    Command::NewWorkspace(NewWorkspace::default()),
+    Command::NewWorkspace(NewWorkspace { machine: Some("vps".into()), ..NewWorkspace::default() })
+)]
+#[case::flow_run(
+    Command::FlowRun(FlowRun::default()),
+    Command::FlowRun(FlowRun { machine: Some("vps".into()), ..FlowRun::default() })
+)]
+fn a_start_names_its_machine_only_when_it_has_one(#[case] here: Command, #[case] there: Command) {
+    let sent = |command: &Command| serde_json::to_value(command).expect("json")["args"].get("machine").cloned();
+
+    assert_eq!((sent(&here), sent(&there)), (None, Some(json!("vps"))));
+    assert!(!here.fields().iter().any(|(key, _)| *key == "machine"), "{:?}", here.fields());
+    assert!(there.fields().contains(&("machine", "vps".to_string())), "{:?}", there.fields());
+}
+
 mod events_v1 {
     use rstest::rstest;
 
@@ -535,8 +587,31 @@ mod events_v1 {
         Event { time: TIME.into(), what, ids }
     }
 
+    fn recap(state: &str, range: &str, agent: &str, error: Option<&str>) -> Event {
+        let what = What::Recap {
+            state: state.into(),
+            range: range.into(),
+            agent: agent.into(),
+            error: error.map(str::to_string),
+        };
+        event(what, Ids::default())
+    }
+
     fn pane() -> Ids {
         Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
+    }
+
+    fn notice(token: u64, status: &str, message: &str, sound: Option<&str>, machine: Option<&str>) -> What {
+        What::Notice {
+            token: format!("cc-ab12cd-{token}"),
+            agent: "claude".into(),
+            status: status.into(),
+            place: "shop › default".into(),
+            message: message.into(),
+            panes: vec![4],
+            sound: sound.map(str::to_string),
+            machine: machine.map(str::to_string),
+        }
     }
 
     fn plain_samples() -> Vec<(Event, &'static str)> {
@@ -563,6 +638,9 @@ mod events_v1 {
                 fixture!("control/events/v1/clipboard.json"),
             ),
             (event(What::Bell { count: 3 }, pane()), fixture!("control/events/v1/bell.json")),
+            (recap("started", "yesterday", "claude", None), fixture!("control/events/v1/recap-started.json")),
+            (recap("finished", "yesterday", "claude", None), fixture!("control/events/v1/recap-finished.json")),
+            (recap("failed", "week", "codex", Some("Not logged in")), fixture!("control/events/v1/recap-failed.json")),
         ]
     }
 
@@ -570,15 +648,7 @@ mod events_v1 {
         vec![
             (
                 event(
-                    What::Notice {
-                        token: "cc-ab12cd-3".into(),
-                        agent: "claude".into(),
-                        status: "waiting".into(),
-                        place: "shop › default".into(),
-                        message: "claude needs you in shop › default".into(),
-                        panes: vec![4],
-                        sound: None,
-                    },
+                    notice(3, "waiting", "claude needs you in shop › default", None, None),
                     Ids { pane: None, tab: None, ..pane() },
                 ),
                 fixture!("control/events/v1/notice.json"),
@@ -594,15 +664,7 @@ mod events_v1 {
         vec![
             (
                 event(
-                    What::Notice {
-                        token: "cc-ab12cd-4".into(),
-                        agent: "claude".into(),
-                        status: "done".into(),
-                        place: "shop › default".into(),
-                        message: "claude finished in shop › default".into(),
-                        panes: vec![4],
-                        sound: Some("finished".into()),
-                    },
+                    notice(4, "done", "claude finished in shop › default", Some("finished"), None),
                     Ids { pane: None, tab: None, ..pane() },
                 ),
                 fixture!("control/events/v1/notice-sound.json"),
@@ -624,8 +686,16 @@ mod events_v1 {
         ]
     }
 
+    fn machines() -> Vec<(Event, &'static str)> {
+        let message = "claude on vps needs you in shop › default";
+        vec![(
+            event(notice(5, "waiting", message, None, Some("vps")), Ids::default()),
+            fixture!("control/events/v1/notice-machine.json"),
+        )]
+    }
+
     fn samples() -> Vec<(Event, &'static str)> {
-        [plain_samples(), rich_samples(), sound_and_accounts()].concat()
+        [plain_samples(), rich_samples(), sound_and_accounts(), machines()].concat()
     }
 
     #[test]
@@ -645,6 +715,7 @@ mod events_v1 {
     #[case::notice(7)]
     #[case::notice_with_a_sound(9)]
     #[case::opened_with_accounts(10)]
+    #[case::notice_from_a_machine(11)]
     fn an_event_is_written_as_its_fixture(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 
@@ -663,6 +734,7 @@ mod events_v1 {
     #[case::notice(7)]
     #[case::notice_with_a_sound(9)]
     #[case::opened_with_accounts(10)]
+    #[case::notice_from_a_machine(11)]
     fn a_fixture_reads_back_as_its_event(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 

@@ -104,6 +104,7 @@ fn hello(cols: u16, rows: u16, theme: &Theme) -> Hello {
         probe: "web".into(),
         zone: if theme.zone.is_empty() { "UTC".into() } else { theme.zone.clone() },
         openers: Vec::new(),
+        machines: None,
     }
 }
 
@@ -276,7 +277,8 @@ fn to_page(ws: &mut WebSocket<TcpStream>, from_server: &Receiver<Option<ServerMe
                 ServerMessage::Response(_)
                 | ServerMessage::Sound(_)
                 | ServerMessage::Open(_)
-                | ServerMessage::Browse(_),
+                | ServerMessage::Browse(_)
+                | ServerMessage::Machine(_),
             )) => {}
             Ok(Some(ServerMessage::Rejected(why))) => return Some(finish(ws, "rejected", &why)),
             Ok(Some(ServerMessage::Detached)) => return Some(finish(ws, "detached", "")),

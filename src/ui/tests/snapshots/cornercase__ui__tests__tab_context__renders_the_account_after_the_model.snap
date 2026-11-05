@@ -18,5 +18,5 @@ expression: render(&with_details(work(opus(17)))).backend()
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Worktrees                    │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
 "  More ▴                 Help  │  Files       TODO       │                                          "

@@ -250,3 +250,38 @@ mod events {
         assert!(bytes.contains(";9"), "{bytes:?}");
     }
 }
+
+mod names {
+    use super::*;
+
+    #[rstest]
+    #[case::letter(KeyCode::Char('a'), Some("a"))]
+    #[case::capital(KeyCode::Char('A'), Some("A"))]
+    #[case::multibyte(KeyCode::Char('ñ'), Some("ñ"))]
+    #[case::space(KeyCode::Char(' '), Some("space"))]
+    #[case::back_tab(KeyCode::BackTab, Some("tab"))]
+    #[case::page_down(KeyCode::PageDown, Some("pagedown"))]
+    #[case::escape(KeyCode::Esc, Some("esc"))]
+    #[case::f5(KeyCode::F(5), Some("f5"))]
+    #[case::f13(KeyCode::F(13), None)]
+    #[case::keypad(KeyCode::KeypadBegin, None)]
+    #[case::caps_lock(KeyCode::CapsLock, None)]
+    #[case::null(KeyCode::Null, None)]
+    fn names_a_key_in_the_vocabulary_of_input(#[case] code: KeyCode, #[case] expected: Option<&str>) {
+        assert_eq!(name(code).as_deref(), expected);
+    }
+
+    #[rstest]
+    #[case::letter(KeyCode::Char('x'), NONE)]
+    #[case::ctrl_c(KeyCode::Char('c'), CTRL)]
+    #[case::shifted(KeyCode::Char('Q'), SHIFT)]
+    #[case::shift_tab(KeyCode::BackTab, SHIFT)]
+    #[case::alt_left(KeyCode::Left, ALT)]
+    #[case::f5(KeyCode::F(5), NONE)]
+    #[case::enter(KeyCode::Enter, NONE)]
+    fn a_named_key_builds_the_same_event_back(#[case] code: KeyCode, #[case] mods: KeyModifiers) {
+        let named = name(code).expect("a name");
+
+        assert_eq!(event(&named, mods, KeyEventKind::Press), Some(KeyEvent::new(code, mods)));
+    }
+}

@@ -11,6 +11,8 @@ mod chrome;
 mod code;
 pub(crate) mod combo;
 mod dialog;
+pub(crate) use dialog::clone_on_machine;
+pub(crate) use dialog::machine as machine_form;
 pub(crate) use dialog::queue as queue_form;
 mod drop;
 pub(crate) mod files;
@@ -20,8 +22,11 @@ mod icons;
 pub(crate) mod keys;
 mod layout;
 mod pane;
+pub(crate) mod recap;
 pub(crate) mod remote;
 pub(crate) mod remote_access;
+mod remote_card;
+mod remote_tab;
 mod rows;
 mod sidebar;
 mod star;
@@ -44,7 +49,7 @@ pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as a
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;
-pub(crate) use chrome::{help_button, more_button, plugin_buttons};
+pub(crate) use chrome::{help_button, machine_button, more_button, plugin_buttons, recap_button, worktrees_button};
 pub(crate) use dialog::context::{ContextView, Fill, Row, Section, Slice, context_notes};
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_row_at, flows_text, flows_wide,
@@ -52,7 +57,10 @@ pub(crate) use dialog::flows::{
 };
 #[cfg(test)]
 pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};
-pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit, form_text};
+#[cfg(test)]
+#[cfg(unix)]
+pub(crate) use dialog::form::form_run_on;
+pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit, form_run_on_hit, form_text};
 pub use dialog::form::{form_area, form_buttons};
 #[cfg(test)]
 pub(crate) use dialog::form::{form_extra_button, form_toggle};
@@ -79,6 +87,7 @@ pub(crate) use dialog::project_settings::project_settings_buttons;
 pub(crate) use dialog::project_settings::{
     ProjectSettings, ProjectSettingsHit, project_settings_field, project_settings_hit,
 };
+pub(crate) use dialog::run_on::RunOnRow;
 #[cfg(test)]
 pub(crate) use dialog::search::result_item;
 pub(crate) use dialog::search::{ResultRow, SESSIONS_PITCH, Search, mode_button, result_hit, results_list};
@@ -105,12 +114,14 @@ pub(crate) use dialog::start_flow::{
 #[cfg(test)]
 #[cfg(unix)]
 pub(crate) use dialog::start_flow::{
-    start_account, start_account_list, start_branch, start_buttons, start_list, start_workspace,
+    start_account, start_account_list, start_branch, start_buttons, start_list, start_run_on, start_workspace,
 };
 pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;
-pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
+pub(crate) use dialog::usage::{
+    Usage, UsageMachine, UsageSection, UsageWindow, usage_done, usage_picks, usage_share, usage_tabs,
+};
 #[cfg(test)]
 pub(crate) use dialog::worktrees::worktrees_area;
 pub(crate) use dialog::worktrees::{
@@ -125,12 +136,14 @@ pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, la
 pub(crate) use layout::{Nav, Screen, full_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, restart_notice, resume_notice, scrollback_badge, split_footer};
 pub(crate) use remote_access::{RemoteAccess, done as remote_done};
+pub(crate) use remote_card::{RemoteCard, RemoteNote, Retry, retrying};
+pub(crate) use remote_tab::{RemoteTab, remote_rect};
 pub use rows::row_close_button;
 #[cfg(test)]
 pub(crate) use rows::row_menu_button;
 pub(crate) use rows::{MIN_MENU_ROW_WIDTH, ROW_MENU_ICON, Rows, more_above};
 pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
-pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, project_rows, sidebar_hit};
+pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, machine_rows, project_rows, sidebar_hit};
 #[cfg(test)]
 pub(crate) use star::star_buttons;
 pub(crate) use star::{StarButton, star_area, star_hit};
@@ -150,7 +163,7 @@ pub use widths::SIDEBAR_WIDTH;
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
 pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
 pub(crate) use workspaces::{
-    ICON_WIDTH, REOPEN_ICON, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout,
+    ICON_WIDTH, MachineTag, REOPEN_ICON, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout,
     workspace_rows, workspace_tag,
 };
 
@@ -208,6 +221,9 @@ pub(crate) struct View<'a> {
     pub(crate) active: usize,
     pub(crate) projects_scroll: usize,
     pub(crate) has_project: bool,
+    pub(crate) remote_project: bool,
+    pub(crate) remote_card: Option<RemoteCard>,
+    pub(crate) remote_tab: Option<RemoteTab>,
     pub(crate) workspaces: Vec<WorkspaceEntry>,
     pub(crate) active_workspace: usize,
     pub(crate) active_tab: Option<usize>,
@@ -228,9 +244,11 @@ pub(crate) struct View<'a> {
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
+    pub(crate) machine: Option<String>,
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
     pub(crate) todo: Option<todo::View>,
+    pub(crate) recap: Option<recap::View>,
     pub(crate) flow: Option<flow::View>,
     pub(crate) flow_run: bool,
     pub(crate) todo_dot: bool,
@@ -257,15 +275,27 @@ pub(crate) struct FieldMenu {
 }
 
 impl View<'_> {
+    pub(crate) fn shown_project(&self) -> Option<usize> {
+        (self.has_project || self.remote_project).then_some(self.active)
+    }
+
+    pub(crate) fn marked_project(&self) -> Option<usize> {
+        let theirs = self.projects.get(self.active).is_some_and(|p| p.machine.is_some());
+        (!theirs || self.remote_project).then_some(self.active)
+    }
+
     pub(crate) fn sidebar_rows(&self) -> Vec<SidebarRow> {
-        let groups: Vec<Option<usize>> = self.projects.iter().map(|p| p.group).collect();
+        let local = self.projects.iter().filter(|p| p.machine.is_none());
+        let groups: Vec<Option<usize>> = local.map(|p| p.group).collect();
         let collapsed: Vec<bool> = self.groups.iter().map(|g| g.collapsed).collect();
-        sidebar_rows(&groups, &collapsed)
+        machine_rows(sidebar_rows(&groups, &collapsed), groups.len()..self.projects.len())
     }
 
     pub(crate) fn tab_lines(&self) -> TabLines {
-        let lines = self.workspaces.iter().map(|w| w.tabs.iter().map(|t| t.details.lines()).collect()).collect();
-        TabLines::new(lines, self.tab_bar.is_none()).folded(self.workspaces.iter().map(|w| w.collapsed).collect())
+        let lines = self.workspaces.iter().map(WorkspaceEntry::tab_lines).collect();
+        TabLines::new(lines, self.tab_bar.is_none())
+            .folded(self.workspaces.iter().map(|w| w.collapsed).collect())
+            .bare(self.workspaces.iter().map(|w| w.machine.is_some()).collect())
     }
 
     fn glyphs(&self) -> &'static icons::Glyphs {
@@ -372,10 +402,14 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
 }
 
 fn draw_tab_or_empty(f: &mut Frame, view: &View, areas: &Areas) {
+    if remote_tab::draw_remote(f, view, areas.pane) {
+        return;
+    }
     match &view.tab {
         Some(tab) => draw_tab(f, view, tab, areas.pane),
+        None if view.remote_project => {}
         None if view.has_project => draw_no_tab(f, view, areas.pane),
-        None if view.projects.is_empty() => draw_welcome(f, view, areas.pane),
+        None if view.projects.iter().all(|p| p.machine.is_some()) => draw_welcome(f, view, areas.pane),
         None => {}
     }
 }
@@ -397,11 +431,16 @@ fn draw_chrome(f: &mut Frame, view: &View, areas: &Areas) {
 }
 
 pub(crate) fn draw(f: &mut Frame, view: &View) {
-    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
+    let panel = view.changes.is_some()
+        || view.todo.is_some()
+        || view.files.is_some()
+        || view.flow.is_some()
+        || view.recap.is_some();
     let full = view.files.as_ref().is_some_and(files::View::full_screen);
     let (agents, icon_bar) = (view.agents.is_some(), view.icon_bar);
     let plugins = !view.plugin_buttons.is_empty();
-    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar, plugins };
+    let machine = view.machine.is_some();
+    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar, plugins, machine };
     let areas = full_layout(f.area(), view.widths, screen)
         .with_tab_bar(view.tab_bar.is_some())
         .with_full_screen(full, f.area())
@@ -441,6 +480,11 @@ fn draw_side_panel(f: &mut Frame, view: &View, areas: &Areas) {
     draw_border(f, view, border, Border::Changes);
     let hover = view.hover.filter(|_| view.overlay.is_none());
     match (&view.changes, &view.todo, &view.files, &view.flow) {
+        (None, None, None, None) if view.recap.is_some() => {
+            if let Some(recap) = &view.recap {
+                recap::draw(f, areas.changes, recap, hover);
+            }
+        }
         (Some(changes), ..) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
         (None, Some(todo), ..) => todo::draw(f, areas.changes, todo, hover),
         (None, None, Some(files), _) => files::draw(f, areas.changes, files, hover),
@@ -452,7 +496,8 @@ fn draw_side_panel(f: &mut Frame, view: &View, areas: &Areas) {
 fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
     match &view.overlay {
         Some(Overlay::Menu { at, items, disabled }) => draw_menu(f, view, *at, items, disabled),
-        Some(Overlay::Form(form)) => draw_form(f, view, form),
+        Some(Overlay::Form(form)) => draw_form(f, view, form, None),
+        Some(Overlay::RunOnForm(form, run_on)) => draw_form(f, view, form, Some(run_on)),
         Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),
         Some(Overlay::Confirm(confirm)) => draw_confirm(f, view, confirm),
@@ -464,6 +509,8 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Issues(issues)) => draw_issues(f, view, issues),
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
         Some(Overlay::ShareSettings(share)) => draw_share_settings(f, view, share),
+        Some(Overlay::Machine(form)) => dialog::machine::draw(f, view, form),
+        Some(Overlay::CloneOnMachine(form)) => clone_on_machine::draw(f, view, form),
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::Star) => draw_star(f, view),

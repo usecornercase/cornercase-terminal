@@ -16,7 +16,7 @@ The changes panel shows the diff of the active workspace or the uncommitted chan
 
 ## Open and close it
 
-The panel is there for workspaces inside a git repository. Click **`Changes`** at the bottom of the sidebar, next to `Issues`, to open it, and again (or **`×`** in the panel, or `Esc`) to close it. It shares its column with the [files panel](../files/), the [TODO panel](../todo/) and the [Flow panel](../flows/#the-flow-panel): opening one closes the others. The button shows how many files changed, such as `Changes 3`, even while the panel is closed.
+The panel is there for workspaces inside a git repository. Click **`Changes`** at the bottom of the sidebar, next to `Issues`, to open it, and again (or **`×`** in the panel, or `Esc`) to close it. It shares its column with the [files panel](../files/), the [TODO panel](../todo/), the [Flow panel](../flows/#the-flow-panel) and the [Recap panel](../recap/): opening one closes the others. The button shows how many files changed, such as `Changes 3`, even while the panel is closed.
 
 The first scope tab follows the active workspace: switch workspaces and it shows the other one's changes. Its label is the project's name, with the workspace after `›` when the project has several workspaces. Drag its left border to make it wider or narrower; a double click on the border gives it back its automatic width, half of the room right of the columns. Whether it is open, its scope and mode, and its width are kept in the [saved session](../sessions/#what-is-saved).
 
@@ -163,6 +163,10 @@ The bottom of the panel then says which lines the selection covers, such as `lin
 | **copy** | Copies the selected characters or lines to your clipboard, as it is in the file (tabs included), without the `+`/`-` bar and the line numbers. Removed and added lines are copied in the order shown; unchanged lines between hunks only when they are shown. |
 
 Click an empty spot of the diff (a hunk's top line outside its buttons, or the space between files) to clear the selection and get **collapse all** and the viewed count back. Collapsing the file or marking it viewed clears it too; the filter, another tab or workspace, or closing the panel only hide it until its lines show again, unless the file changed meanwhile.
+
+## On another machine
+
+With a [machine's workspace](../machines/#changes-and-files-of-a-machines-workspace) picked in the sidebar, the panel shows that workspace's changes on the machine: its files, the Uncommitted, Commits and All tabs against its base, the same filter and the same diff, refreshed at the machine's pace. Its first tab reads `web-shop › main · vps`. Files start folded, and each one you unfold asks the machine for its diff. The panel only reads: staging, discarding, marking a file as viewed, picking the base, ` open ` and **ask agent** aren't offered, while the machine's own `✓` and `●` marks show. **Every project** lists only this computer's projects. If the machine goes down, the list stays with `vps unreachable` under the header until it is back.
 
 ## Live, and light on your repository
 

@@ -73,6 +73,10 @@ pub(crate) fn use_close_agent_tabs() -> Result<()> {
     require("close-agent-tabs", "would remove an agent's own worktree when it closes the agent")
 }
 
+pub(crate) fn use_recap() -> Result<()> {
+    require("recap", "has no recap")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }
@@ -91,6 +95,10 @@ pub(crate) fn use_todo_panel() -> Result<()> {
 
 pub(crate) fn use_queue_undo() -> Result<()> {
     require("queue-undo", "cannot undo queue removals or clear started entries")
+}
+
+pub(crate) fn use_queue_routines() -> Result<()> {
+    require("queue-routines", "cannot repeat queue entries, run flows from the queue, or pause and resume routines")
 }
 
 pub(crate) fn use_build_folders() -> Result<()> {
@@ -123,6 +131,14 @@ pub(crate) fn use_account_switch() -> Result<()> {
 
 pub(crate) fn use_account_restart() -> Result<()> {
     require("account-restart", "cannot restart agents on another account")
+}
+
+pub(crate) fn use_machine_usage() -> Result<()> {
+    require("machine-usage", "cannot read the stats and usage of other machines")
+}
+
+pub(crate) fn use_machine_start() -> Result<()> {
+    require("machine-start", "cannot start agents, workspaces or flows on another machine")
 }
 
 fn require(feature: &str, lacks: &str) -> Result<()> {
@@ -256,7 +272,8 @@ fn received(link: &mut Link, name: &'static str) -> Option<Result<Value>> {
             | ServerMessage::Detached
             | ServerMessage::Sound(_)
             | ServerMessage::Open(_)
-            | ServerMessage::Browse(_),
+            | ServerMessage::Browse(_)
+            | ServerMessage::Machine(_),
         )) => None,
         Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_))) => Some(Err(Error::ServerGone)),
         Ok(None) | Err(_) => Some(Err(lost(link, Error::ServerGone))),
@@ -353,7 +370,8 @@ fn follow_on(
                 | ServerMessage::Rejected(_)
                 | ServerMessage::Sound(_)
                 | ServerMessage::Open(_)
-                | ServerMessage::Browse(_),
+                | ServerMessage::Browse(_)
+                | ServerMessage::Machine(_),
             )) => {}
             Ok(None) | Err(_) => return Err(Error::ServerLost),
         }

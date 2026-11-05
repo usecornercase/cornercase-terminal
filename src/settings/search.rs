@@ -162,11 +162,12 @@ fn tab_hit(page: Page) -> Candidate {
 impl Settings {
     fn hit_of(&self, row: &Row, goal: Goal) -> Candidate {
         let text = self.row_text(row);
+        let label = text.label.trim().to_string();
         let hit = Hit {
             page: row.page(),
             section: row.section(),
-            title: format!("{} › {}", row.page().name(), text.label),
-            label: text.label,
+            title: format!("{} › {label}", row.page().name()),
+            label,
             value: text.value.clone(),
             note: text.note.clone(),
             dangerous: text.dangerous,

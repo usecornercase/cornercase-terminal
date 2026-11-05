@@ -1,0 +1,14 @@
+---
+source: src/ui/files/tests.rs
+assertion_line: 936
+expression: render(&view)
+---
+  Files  ~/projects/shop                     ×
+  ⌕ text in the files                        ▤
+  vps unreachable · seen 2 min ago
+
+  ▾ src                                      ●
+    ▸ ui                                     ●
+      main.rs                                M
+▌     lib.rs
+    README.md

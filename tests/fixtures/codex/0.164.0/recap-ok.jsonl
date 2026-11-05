@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a1a854-5b7b-7931-a555-a0a9a8527614"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll read dossier.md."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/usr/bin/zsh -lc 'cat dossier.md'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/usr/bin/zsh -lc 'cat dossier.md'","aggregated_output":"hello\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"hello"}}
+{"type":"turn.completed","usage":{"input_tokens":29614,"cached_input_tokens":27008,"cache_write_input_tokens":0,"output_tokens":47,"reasoning_output_tokens":0}}

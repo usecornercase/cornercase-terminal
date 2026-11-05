@@ -165,6 +165,7 @@ pub(super) struct RunTrees {
     pub(super) run: Option<PathBuf>,
     pub(super) branch: String,
     pub(super) roles: Vec<(String, String)>,
+    pub(super) fresh: bool,
 }
 
 struct RunPanes<'a> {
@@ -181,18 +182,18 @@ pub(crate) struct Made {
     pub(crate) roles: Vec<(RoleWorktree, bool)>,
 }
 
-fn make_trees(
-    repo: &Path,
-    dir: &Path,
-    run: Option<PathBuf>,
-    branch: &str,
-    roles: Vec<(String, String)>,
-) -> crate::error::Result<Made> {
+fn make_trees(repo: &Path, dir: &Path, trees: RunTrees) -> crate::error::Result<Made> {
+    let RunTrees { run, branch, roles, fresh } = trees;
+    let branch = branch.as_str();
     let mut made_paths: Vec<PathBuf> = Vec::new();
     let built = || -> crate::error::Result<Vec<(RoleWorktree, bool)>> {
         if let Some(path) = &run {
             made_paths.push(path.clone());
-            worktree::create(repo, branch, path)?;
+            if fresh {
+                worktree::fresh::create(repo, branch, path)?;
+            } else {
+                worktree::create(repo, branch, path)?;
+            }
         }
         let mut trees = Vec::with_capacity(roles.len());
         for (role, role_branch) in roles {
@@ -305,15 +306,15 @@ impl App {
     }
 
     pub(super) fn spawn_run_worktrees(&self, p: usize, trees: RunTrees, request: u64) {
-        let RunTrees { run, branch, roles } = trees;
+        let (run, branch, roles) = (trees.run.is_some(), trees.branch.clone(), trees.roles.len());
         let project = &self.projects[p];
         let (id, repo) = (project.id, project.path.clone());
         let dir = self.config.worktrees_dir(self.home.as_deref());
         let job = Job::new(Level::Info, "worktree", "add for a flow").with("project", id).with("branch", &branch);
-        let job = job.with("roles", roles.len()).with("run", run.is_some());
+        let job = job.with("roles", roles).with("run", run).with("fresh", trees.fresh);
         self.spawn_job(
             job,
-            move || make_trees(&repo, &dir, run, &branch, roles),
+            move || make_trees(&repo, &dir, trees),
             move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Run { project: id, result, request })),
         );
     }

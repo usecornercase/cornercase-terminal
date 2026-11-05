@@ -7,11 +7,14 @@ pub(crate) mod context;
 pub(crate) mod files;
 pub(crate) mod flow;
 pub(crate) mod issue;
+pub(crate) mod machine;
+pub(crate) mod machines;
 pub(crate) mod plugin;
 pub(crate) mod ports;
 pub(crate) mod processes;
 pub(crate) mod pull_request;
 pub(crate) mod queue;
+pub(crate) mod recap;
 pub(crate) mod requests;
 pub(crate) mod terminal;
 pub(crate) mod theme;
@@ -26,7 +29,6 @@ use std::path::PathBuf;
 use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
-use super::help::WORKTREES_HELP;
 use super::help::{
     ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, COMMAND_THERE, CONFIG_HELP,
     CONTRACT_HELP, EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE,
@@ -39,8 +41,9 @@ use super::help::{
 };
 use super::help::{
     AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
-    PULL_REQUEST_HELP, REQUESTS_HELP,
+    PULL_REQUEST_HELP, RECAP_HELP, REQUESTS_HELP,
 };
+use super::help::{CLONE_HELP, MACHINES_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -87,12 +90,14 @@ pub(crate) enum Command {
     Logs(LogsArgs),
     #[command(
         about = "Show work by agents running in cornercase",
-        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). Merged pull requests need a running server and gh or glab.
+        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats
   cornercase stats --json
-  cornercase stats --share"
+  cornercase stats --share
+  cornercase stats --machine vps
+  cornercase stats --machine all --json"
     )]
     Stats(StatsArgs),
     #[command(about = "Install, add, list, turn on and off the plugins that extend cornercase", after_help = PLUGIN_HELP)]
@@ -109,6 +114,11 @@ pub(crate) enum Control {
     Status(StatusArgs),
     #[command(about = "Open a folder as a project, or find the open one, and print its id", after_help = OPEN_HELP)]
     Open(OpenArgs),
+    #[command(
+        about = "Clone a git repository into a folder, open it as a project, and print its path",
+        after_help = CLONE_HELP
+    )]
+    Clone(CloneArgs),
     #[command(
         about = "Add a workspace to a project, or a git worktree, and print its id",
         after_help = NEW_WORKSPACE_HELP
@@ -272,6 +282,11 @@ pub(crate) enum Control {
     )]
     Context(context::ContextArgs),
     #[command(
+        about = "Print the Recap panel's summary of what your agents did: now, yesterday or the last 7 days",
+        after_help = RECAP_HELP
+    )]
+    Recap(recap::RecapArgs),
+    #[command(
         about = "List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program",
         after_help = PROCESSES_HELP
     )]
@@ -281,6 +296,11 @@ pub(crate) enum Control {
         after_help = WORKTREES_HELP
     )]
     Worktrees(worktrees::WorktreesArgs),
+    #[command(
+        about = "List the machines work can start on with the state of each link, and add, change or remove them",
+        after_help = MACHINES_HELP
+    )]
+    Machines(machines::MachinesArgs),
     #[command(about = "Show the guided tour in the window, or move, end or reset it", after_help = TOUR_HELP)]
     Tour(tour::TourArgs),
     #[command(
@@ -299,6 +319,7 @@ impl Control {
         match self {
             Self::Status(a) => a.view.view,
             Self::Open(a) => a.create.view.view,
+            Self::Clone(a) => a.create.view.view,
             Self::NewWorkspace(a) => a.create.view.view,
             Self::NewTab(a) => a.create.view.view,
             Self::Split(a) => a.create.view.view,
@@ -383,6 +404,20 @@ pub(crate) struct OpenArgs {
 }
 
 #[derive(Debug, Args)]
+pub(crate) struct CloneArgs {
+    #[arg(value_name = "URL", value_parser = NonEmptyStringValueParser::new(), help = "The repository, as `git clone` takes it")]
+    pub(crate) url: String,
+    #[arg(
+        value_name = "FOLDER",
+        help = "The folder the clone goes in, as a new folder named after the repository [default: the current one; \
+                with --remote, the home folder there]"
+    )]
+    pub(crate) folder: Option<PathBuf>,
+    #[command(flatten)]
+    pub(crate) create: Create,
+}
+
+#[derive(Debug, Args)]
 pub(crate) struct NewWorkspaceArgs {
     #[arg(value_name = "NAME", help = "Its name, or its branch with --worktree")]
     pub(crate) name: String,
@@ -390,6 +425,8 @@ pub(crate) struct NewWorkspaceArgs {
     pub(crate) project: Option<u64>,
     #[arg(long, help = "Check the branch out in a git worktree of its own, at a repository's root only")]
     pub(crate) worktree: bool,
+    #[command(flatten)]
+    pub(crate) on: machine::MachineArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }
@@ -481,6 +518,8 @@ pub(crate) struct StartArgs {
     pub(crate) issue: issue::IssueArg,
     #[command(flatten)]
     pub(crate) profile: accounts::ProfileArg,
+    #[command(flatten)]
+    pub(crate) on: machine::MachineArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }
@@ -689,6 +728,13 @@ pub(crate) struct FocusArgs {
     pub(crate) which: Which,
     #[command(flatten)]
     pub(crate) view: ViewArg,
+    #[arg(
+        long,
+        value_name = "NAME",
+        conflicts_with_all = ["pane", "worktree", "project", "view", "reveal"],
+        help = "Pick one of this machine's workspaces or tabs as the one shown, whose tab the window shows from there: --workspace and --tab are its ids"
+    )]
+    pub(crate) machine: Option<String>,
     #[arg(
         long,
         value_name = "TEXT",
@@ -932,4 +978,11 @@ pub(crate) struct StatsArgs {
     pub(super) json: bool,
     #[arg(long, help = "Print a link to a card made locally in the browser")]
     pub(super) share: bool,
+    #[arg(
+        long,
+        value_name = "NAME",
+        value_parser = NonEmptyStringValueParser::new(),
+        help = "Read a machine's stats through the server, or with `all` this computer's and every machine's summed"
+    )]
+    pub(super) machine: Option<String>,
 }

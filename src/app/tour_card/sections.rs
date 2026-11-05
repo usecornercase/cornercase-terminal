@@ -44,6 +44,7 @@ impl App {
             Side::Files => Some(Panel::Files),
             Side::Todo => Some(Panel::Todo),
             Side::Flow => Some(Panel::Flow),
+            Side::Recap => None,
         }
     }
 

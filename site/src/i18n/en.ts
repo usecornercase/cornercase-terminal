@@ -183,7 +183,7 @@ export const page = {
           ['Usage and stats', 'Your plan limits and the work your agents did in parallel.'],
           ['On Telegram or Discord', 'Away from the desk? Your agents message you there. Reply, and it reaches them.'],
           ['Worktrees, sorted', 'Every line of work gets its own branch and folder. Ones made elsewhere show up too.'],
-          ['Agents, scheduled', 'Queue an issue or prompt for later, or for the next plan reset.'],
+          ['Agents, scheduled', 'Queue an issue or prompt for later, or repeat it on a schedule, each run in a fresh worktree.'],
         ],
       },
       {

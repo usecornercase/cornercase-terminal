@@ -137,6 +137,7 @@ pub(super) mod a_bug {
             probe: String::new(),
             zone: "UTC".into(),
             openers: Vec::new(),
+            machines: Some(Machines::default()),
         }
     }
 
@@ -174,7 +175,7 @@ pub(super) mod a_bug {
             let (tx, rx) = mpsc::channel();
             let (app_tx, app_rx) = mpsc::channel();
             spawn_forwarder(app_rx, tx.clone());
-            let app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
+            let app = App::new("/bin/sh".into(), HostTheme::default(), &dir.path().join("config.json"), app_tx);
             let todo_saver = Saver::new(dir.path().join("todos.json"), None);
             let mut server = Server::new(app, session, todo_saver, tx.clone());
             let client = connect(&mut server, tx, 1, Hello { graphics, ..hello(HostTheme::default()) });
@@ -368,6 +369,7 @@ pub(super) mod a_bug {
     }
 }
 
+mod machines;
 mod opening;
 
 mod streaming {
@@ -384,6 +386,7 @@ mod streaming {
             Client {
                 zone: "UTC".into(),
                 openers: Vec::new(),
+                machines: None,
                 id: 1,
                 size: None,
                 notify: Channel::Bell,
@@ -898,14 +901,14 @@ mod queue_persistence {
         let session = dir.path().join("session.json");
         let (tx, _) = mpsc::channel();
         let (app_tx, _) = mpsc::channel();
-        let mut app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), &dir.path().join("config.json"), app_tx);
         app.set_queue(queue::load(&paths::queue(&session), crate::time::now()));
         Server::new(app, session, Saver::new(dir.path().join("todos.json"), None), tx)
     }
 
     #[rstest::rstest]
     #[case::corrupt("invalid JSON")]
-    #[case::unsupported("{\"version\":2,\"next_id\":5,\"entries\":[]}")]
+    #[case::unsupported("{\"version\":99,\"next_id\":5,\"entries\":[]}")]
     fn an_unreadable_queue_is_preserved_until_the_queue_changes(#[case] contents: &str) {
         let dir = TempDir::new();
         let path = paths::queue(&dir.path().join("session.json"));

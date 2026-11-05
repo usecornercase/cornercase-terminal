@@ -12,7 +12,7 @@ use crate::agents::launch::Launch;
 use crate::agents::{self, Known};
 use crate::app::App;
 use crate::app::event::AppEvent;
-use crate::control::accounts::{AccountInfo, LoginInfo, ProfileInfo, ProviderInfo};
+use crate::control::accounts::{AccountInfo, AgentInstalled, LoginInfo, ProfileInfo, ProviderInfo};
 use crate::control::contract::{Code, Refusal};
 use crate::control::{
     AccountAdd, AccountList, AccountRemove, AccountRename, AccountUse, AccountsInfo, Ids, Item, ProfileDelete,
@@ -182,7 +182,19 @@ impl App {
             })
             .collect();
         let tokens = login::tokens(|name| std::env::var_os(name));
-        AccountsInfo { providers, profiles, profile: active.unwrap_or_default().to_string(), login, tokens }
+        let profile = active.unwrap_or_default().to_string();
+        AccountsInfo { providers, profiles, profile, login, tokens, agents: Vec::new() }
+    }
+
+    fn checked_accounts_info(&self) -> AccountsInfo {
+        let agents = agents::kinds(&self.config)
+            .into_iter()
+            .map(|agent| {
+                let command = agents::command(&self.config, &agent);
+                AgentInstalled { installed: agents::installed(&command), agent, command }
+            })
+            .collect();
+        AccountsInfo { agents, ..self.accounts_info(None) }
     }
 
     fn provider_info(&self, kind: Known, names: Vec<String>) -> ProviderInfo {
@@ -304,7 +316,7 @@ impl App {
         if !self.accounts.logins.running.is_empty() {
             return;
         }
-        let reply = Ok(json(&self.accounts_info(None)));
+        let reply = Ok(json(&self.checked_accounts_info()));
         for key in std::mem::take(&mut self.accounts.logins.waiting) {
             if let Some(pending) = self.clients.requests.take(key) {
                 self.refuse_or_answer(pending.client, reply.clone());
@@ -314,8 +326,11 @@ impl App {
 
     pub(super) fn account_list_request(&mut self, client: u64, list: &AccountList) -> Option<serde_json::Value> {
         self.relist_accounts();
-        if !list.check || !self.check_logins() {
+        if !list.check {
             return Some(json(&self.accounts_info(None)));
+        }
+        if !self.check_logins() {
+            return Some(json(&self.checked_accounts_info()));
         }
         let key = self.clients.requests.key();
         self.pend_reading(client, key);

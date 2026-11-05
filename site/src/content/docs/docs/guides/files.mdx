@@ -16,7 +16,7 @@ The files panel shows the files of the active workspace in a column on the right
 
 ## Open and close it
 
-Click **`Files`** at the bottom of the sidebar, under `Issues`, to open the panel, and again (or **`×`** in the panel, or `Esc`) to close it. It takes the same column as the [changes panel](../changes/), the [TODO panel](../todo/) and the [Flow panel](../flows/#the-flow-panel), so only one of them shows at a time: opening one closes the others. Drag its left border to make it wider or narrower.
+Click **`Files`** at the bottom of the sidebar, under `Issues`, to open the panel, and again (or **`×`** in the panel, or `Esc`) to close it. It takes the same column as the [changes panel](../changes/), the [TODO panel](../todo/), the [Flow panel](../flows/#the-flow-panel) and the [Recap panel](../recap/), so only one of them shows at a time: opening one closes the others. Drag its left border to make it wider or narrower.
 
 In the [compact layout](../small-terminals/), a **`▤`** button in the top bar opens it over the whole screen, and a file shown full screen covers the top bar too.
 
@@ -250,6 +250,10 @@ Click **`▤`** at the right of the bar to search file **names** instead, and ag
 **`×`** in the bar clears it too. A click in a pane gives the keys back and keeps the search; a click on the bar takes them again.
 
 The search refreshes its file list when you change the query, take focus again, or the tree sees files added, removed or renamed in the root or an open folder. For changes inside a closed folder, give focus back to the search bar or edit the query. Leaving the search idle does not repeatedly scan the workspace; a new scan cancels the previous one.
+
+## On another machine
+
+With a [machine's workspace](../machines/#changes-and-files-of-a-machines-workspace) picked in the sidebar, the panel shows the tree of that workspace on the machine, searches there and opens its files in the viewer, highlighted here. New files there show within a couple of seconds, and an open file that changes there within about one. Find in the file, full screen, picking lines and ` copy ` work as for a file here. The panel only reads the machine: a right-click on a row offers only **copy path**, the path on the machine, and ` open `, **open in…** and **ask agent** aren't there. If the machine goes down, the panel keeps the tree and the open file and says `vps unreachable` under its header.
 
 ## Paths in your panes are links
 

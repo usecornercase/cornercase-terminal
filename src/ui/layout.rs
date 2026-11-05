@@ -48,11 +48,15 @@ pub(super) fn stack_room(column: Rect, screen: Screen) -> Rect {
 }
 
 fn stack_footer(screen: Screen) -> u16 {
-    if screen.icon_bar { 0 } else { STACK_FOOTER + plugin_rows(screen) }
+    if screen.icon_bar { 0 } else { STACK_FOOTER + plugin_rows(screen) + machine_rows(screen) }
 }
 
 fn plugin_rows(screen: Screen) -> u16 {
     u16::from(screen.plugins && !screen.icon_bar)
+}
+
+fn machine_rows(screen: Screen) -> u16 {
+    u16::from(screen.machine && !screen.icon_bar)
 }
 
 fn split_bottom(r: Rect, rows: u16) -> [Rect; 2] {
@@ -83,6 +87,7 @@ pub struct Areas {
     pub(crate) separator: Rect,
     pub(crate) plugins: Rect,
     pub worktrees: Rect,
+    pub(crate) machine: Rect,
     pub(crate) more_separator: Rect,
     pub more: Rect,
     pub(crate) workspaces: Rect,
@@ -172,6 +177,7 @@ impl Areas {
                 separator: hidden,
                 plugins: hidden,
                 worktrees: hidden,
+                machine: hidden,
                 more_separator: hidden,
                 more: hidden,
                 agents_button: hidden,
@@ -207,19 +213,20 @@ fn sidebar_block() -> Block<'static> {
     Block::default().borders(Borders::RIGHT)
 }
 
-fn projects_column(r: Rect, screen: Screen) -> [Rect; 6] {
+fn projects_column(r: Rect, screen: Screen) -> [Rect; 7] {
     let footer = u16::from(!screen.icon_bar);
-    let [title, _, list, separator, plugins, worktrees, more] = Layout::vertical([
+    let [title, _, list, separator, plugins, worktrees, machine, more] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(GAP),
         Constraint::Min(1),
         Constraint::Length(footer),
         Constraint::Length(plugin_rows(screen)),
         Constraint::Length(footer),
+        Constraint::Length(machine_rows(screen)),
         Constraint::Length(footer),
     ])
     .areas(r);
-    [title, list, separator, plugins, worktrees, more]
+    [title, list, separator, plugins, worktrees, machine, more]
 }
 
 fn workspaces_column(r: Rect, screen: Screen) -> [Rect; 5] {
@@ -231,7 +238,7 @@ fn workspaces_column(r: Rect, screen: Screen) -> [Rect; 5] {
         Constraint::Length(footer),
         Constraint::Length(footer),
         Constraint::Length(footer),
-        Constraint::Length(plugin_rows(screen)),
+        Constraint::Length(plugin_rows(screen) + machine_rows(screen)),
     ])
     .areas(r);
     [title, list, separator, issues, todo]
@@ -257,6 +264,7 @@ pub(crate) struct Screen {
     pub(crate) agents: bool,
     pub(crate) icon_bar: bool,
     pub(crate) plugins: bool,
+    pub(crate) machine: bool,
 }
 
 pub(crate) fn full_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
@@ -323,7 +331,8 @@ fn wide_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
     let [columns, left, workspaces, pane] = wide_columns(area, projects, workspaces);
     let (search, results) = search_and_results(Rect { width: columns.width.saturating_sub(1), ..columns });
     let sidebar = below_header(left);
-    let [title, list, separator, plugins, worktrees, more] = projects_column(sidebar_block().inner(sidebar), screen);
+    let [title, list, separator, plugins, worktrees, machine, more] =
+        projects_column(sidebar_block().inner(sidebar), screen);
     let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
     let (lists, agents_areas) = agents_section(lists, widths, MIN_STACK_SECTION, agents);
     let [title, list] = if agents { section(lists) } else { [title, list] };
@@ -339,6 +348,7 @@ fn wide_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
         separator,
         plugins,
         worktrees,
+        machine,
         more,
         workspaces,
         workspaces_title,
@@ -375,7 +385,8 @@ fn one_column(area: Rect, widths: Widths, keep: u16, screen: Screen) -> (Areas, 
     let room = stack_room(inner, screen);
     let footer_y = inner.bottom().saturating_sub(stack_footer(screen)).max(room.y);
     let footer = Rect { y: footer_y, height: inner.bottom() - footer_y, ..inner };
-    let [separator, issues, todo, worktrees, plugins, more_separator, more] = stack_footer_rows(footer, screen);
+    let [separator, issues, todo, worktrees, machine, plugins, more_separator, more] =
+        stack_footer_rows(footer, screen);
     let frame = Areas {
         pitch: 1,
         search,
@@ -384,6 +395,7 @@ fn one_column(area: Rect, widths: Widths, keep: u16, screen: Screen) -> (Areas, 
         separator,
         plugins,
         worktrees,
+        machine,
         more_separator,
         more,
         issues,
@@ -405,15 +417,16 @@ fn one_column(area: Rect, widths: Widths, keep: u16, screen: Screen) -> (Areas, 
     (frame, sections)
 }
 
-fn stack_footer_rows(footer: Rect, screen: Screen) -> [Rect; 7] {
+fn stack_footer_rows(footer: Rect, screen: Screen) -> [Rect; 8] {
     if screen.icon_bar {
-        return [Rect::default(); 7];
+        return [Rect::default(); 8];
     }
     let row = Constraint::Length(1);
     let plugins = Constraint::Length(plugin_rows(screen));
-    let [separator, issues, todo, worktrees, plugins, more_separator, more] =
-        Layout::vertical([row, row, row, row, plugins, row, row]).areas(footer);
-    [separator, issues, todo, worktrees, plugins, more_separator, more]
+    let machine = Constraint::Length(machine_rows(screen));
+    let [separator, issues, todo, worktrees, machine, plugins, more_separator, more] =
+        Layout::vertical([row, row, row, row, machine, plugins, row, row]).areas(footer);
+    [separator, issues, todo, worktrees, machine, plugins, more_separator, more]
 }
 
 fn stacked_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
@@ -483,10 +496,12 @@ fn compact_column(menu: Rect, bands: u16) -> [Rect; 6] {
     [title, gap, list, separator, extra, footer]
 }
 
-fn compact_projects(menu: Rect, plugins: bool) -> [Rect; 6] {
-    let [title, _, list, separator, extra, more] = compact_column(menu, 1 + u16::from(plugins));
+fn compact_projects(menu: Rect, screen: Screen) -> [Rect; 7] {
+    let (plugins, machine) = (u16::from(screen.plugins), u16::from(screen.machine));
+    let [title, _, list, separator, extra, more] = compact_column(menu, 1 + plugins + machine);
+    let [extra, machine] = split_bottom(extra, COMPACT_PITCH * machine);
     let [plugins, worktrees] = split_bottom(extra, COMPACT_PITCH);
-    [title, list, separator, plugins, worktrees, more]
+    [title, list, separator, plugins, worktrees, machine, more]
 }
 
 fn compact_layout(area: Rect, screen: Screen) -> Areas {
@@ -495,7 +510,7 @@ fn compact_layout(area: Rect, screen: Screen) -> Areas {
     let [bar, below] = Layout::vertical([Constraint::Length(pitch), Constraint::Min(0)]).areas(area);
     let [search_button, todo_button, files_button, changes_button] = compact_buttons(bar);
     let [_, menu] = Layout::vertical([Constraint::Length(GAP), Constraint::Min(0)]).areas(below);
-    let [title, list, separator, plugins, worktrees, more] = compact_projects(menu, screen.plugins);
+    let [title, list, separator, plugins, worktrees, machine, more] = compact_projects(menu, screen);
     let [workspaces_title, _, workspaces_list, workspaces_separator, _, issues] = compact_column(menu, 0);
     let back = Rect { width: button_width(BACK_LABEL) + 2, ..workspaces_title }.intersection(workspaces_title);
     let [agents, agents_title, agents_list, agents_button] = compact_agents(menu, title, agents);
@@ -511,6 +526,7 @@ fn compact_layout(area: Rect, screen: Screen) -> Areas {
         separator,
         plugins,
         worktrees,
+        machine,
         more,
         workspaces: below,
         workspaces_title,

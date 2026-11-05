@@ -305,3 +305,134 @@ mod a_search_answer {
         assert_eq!((found.matches, found.capped, found.mode), (2, true, SearchMode::Text));
     }
 }
+
+mod read_back {
+    use super::*;
+    use crate::files::search::{self};
+
+    fn local(name: &str, bytes: &[u8]) -> (Read, disk::Content) {
+        let dir = TempDir::new();
+        let path = dir.path().join(name);
+        std::fs::write(&path, bytes).expect("write");
+        let read = Read::of(name, &path, disk::load(&path, None).expect("loaded"));
+        (read, disk::read(&path, None).expect("read"))
+    }
+
+    #[test]
+    fn a_text_is_the_body_and_language_read_here() {
+        let (read, here) = local("a.rs", b"fn a() {\r\n\tb();\n}\n");
+
+        let there = read.content();
+
+        assert_eq!((there.language, &there.body), (here.language, &here.body));
+        assert_eq!((there.stamp.len(), there.stamp.modified().is_some()), (Some(18), true));
+    }
+
+    #[test]
+    fn an_image_is_the_picture_read_here() {
+        let content = image_read().content();
+
+        let Body::Image(picture) = content.body else { panic!("not a picture: {:?}", content.body) };
+        assert_eq!((picture.format, picture.width, picture.height), ("PNG", 4, 3));
+    }
+
+    #[rstest]
+    #[case::binary(Raw::Binary, Body::Binary)]
+    #[case::folder(Raw::Folder, Body::Binary)]
+    #[case::too_large(Raw::TooLarge(9_000_000), Body::TooLarge(9_000_000))]
+    #[case::missing(Raw::Missing, Body::Missing)]
+    fn what_has_no_content_is_what_it_is_here(#[case] raw: Raw, #[case] body: Body) {
+        let content = Read::of("x", Path::new("/w/x"), loaded(raw)).content();
+
+        assert_eq!((content.language, content.body), (None, body));
+    }
+
+    #[test]
+    fn a_missing_file_has_no_size() {
+        let content = Read::of("x", Path::new("/w/x"), loaded(Raw::Missing)).content();
+
+        assert_eq!(content.stamp.len(), None);
+    }
+
+    #[test]
+    fn a_listing_gives_each_folder_s_entries_or_none_when_it_failed() {
+        let folders = listing().content.folders;
+
+        let (root, gone) = (folders[0].listed(), folders[1].listed());
+
+        let names: Vec<(String, bool)> =
+            root.1.expect("its entries").into_iter().map(|entry| (entry.name, entry.dir)).collect();
+        assert_eq!(names, [("src".into(), true), (".env".into(), false), ("notes.txt".into(), false)]);
+        assert_eq!((root.0.as_str(), gone.0.as_str(), gone.1), ("", "missing", None));
+    }
+
+    #[test]
+    fn a_search_gives_the_names_and_lines_it_found() {
+        let names = Found { names: vec![NameInfo { path: "src/a.rs".into(), indices: vec![4, 5] }], ..found() };
+
+        let text = names.found_text();
+
+        assert_eq!(names.found_names(), [search::Name { path: "src/a.rs".into(), indices: vec![4, 5] }]);
+        assert_eq!(
+            text.files[0].lines[0],
+            search::Line { number: 1, text: "fn main() {}".into(), ranges: std::iter::once(3..7).collect() }
+        );
+        assert_eq!((text.matches, text.capped), (1, false));
+    }
+}
+
+mod hostile_reads {
+    use super::*;
+
+    fn text(language: &str) -> disk::Content {
+        Read { language: Some(language.into()), text: Some("x".into()), ..Read::default() }.content()
+    }
+
+    #[rstest]
+    #[case::not_base64("%%%not base64%%%")]
+    #[case::cut_short("iVBORw0KGgo")]
+    #[case::not_an_image("aGVsbG8=")]
+    fn a_broken_image_is_unreadable(#[case] data: &str) {
+        let image = ImageInfo { format: "PNG".into(), data: data.into(), ..ImageInfo::default() };
+        let read = Read { kind: ReadKind::Image, bytes: Some(9), image: Some(image), ..Read::default() };
+
+        assert!(matches!(read.content().body, Body::Unreadable { .. }), "{:?}", read.content().body);
+    }
+
+    #[test]
+    fn an_image_without_its_data_is_unreadable() {
+        let read = Read { kind: ReadKind::Image, ..Read::default() };
+
+        assert!(matches!(read.content().body, Body::Unreadable { bytes: 0, .. }));
+    }
+
+    #[rstest]
+    #[case::known("rust", Some("rust"))]
+    #[case::one_of_ours("tsx", Some("tsx"))]
+    #[case::unknown("klingon", None)]
+    #[case::an_extension("rs", None)]
+    #[case::a_path("../../etc/passwd", None)]
+    fn a_language_is_one_highlighted_here_or_none(#[case] language: &str, #[case] kept: Option<&str>) {
+        assert_eq!(text(language).language, kept);
+    }
+
+    #[test]
+    fn an_unreadable_time_leaves_the_stamp_without_one() {
+        let read = Read { modified: Some("yesterday".into()), bytes: Some(1), ..Read::default() };
+
+        assert_eq!(read.content().stamp.modified(), None);
+    }
+
+    #[test]
+    fn ranges_and_indices_stay_within_their_text() {
+        let line = FoundLine { number: 1, text: "añb".into(), ranges: vec![[0, 10_000], [2, 1], [9, 12]] };
+        let found = Found {
+            names: vec![NameInfo { path: "añb".into(), indices: vec![0, 2, 3, 9999] }],
+            files: vec![FoundFile { path: "a".into(), lines: vec![line] }],
+            ..Found::default()
+        };
+
+        assert_eq!(found.found_names()[0].indices, [0, 2]);
+        assert_eq!(found.found_text().files[0].lines[0].ranges, std::iter::once(0..3).collect::<Vec<_>>());
+    }
+}

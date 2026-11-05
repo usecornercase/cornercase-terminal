@@ -8,7 +8,7 @@ use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
     self, AppState, CheckInfo, ConfigInfo, Done, GroupInfo, KeepAwake, LayerInfo, PaneInfo, ProjectInfo,
-    PullRequestInfo, Report, RunStatus, StackInfo, TabInfo, WorkspaceInfo,
+    PullRequestInfo, RemoteInfo, Report, RunStatus, StackInfo, TabInfo, WorkspaceInfo,
 };
 use crate::git;
 use crate::log::{self, Level};
@@ -24,6 +24,10 @@ struct Seen {
     live: HashSet<u64>,
     counted: Option<u64>,
     sweeping: bool,
+}
+
+fn remote_infos(remotes: &[(String, String)]) -> Vec<RemoteInfo> {
+    remotes.iter().map(|(name, url)| RemoteInfo { name: name.clone(), url: url.clone() }).collect()
 }
 
 pub(super) fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
@@ -106,6 +110,8 @@ impl App {
             theme: Some(self.theme_info()),
             config: Some(ConfigInfo { revision: self.config_file.revision() }),
             home: self.home.clone(),
+            machines: self.machines_seen(),
+            shown_remote: self.shown_remote_info(),
         }
     }
 
@@ -136,6 +142,10 @@ impl App {
             workspaces: workspaces.map(|(w, ws)| self.workspace_info(ws, w == project.active, seen)).collect(),
             custom_name: project.name.clone(),
             collapsed: project.collapsed,
+            remotes: remote_infos(&project.repo.remotes),
+            repo: project.repo.identity.clone(),
+            machine: None,
+            paired: None,
         }
     }
 
@@ -159,6 +169,7 @@ impl App {
             closed_agents: Some(self.agents.closed.count(ws.id)).filter(|count| *count > 0),
             post: self.post_info(ws.id),
             shared: self.shared_info(ws.id),
+            machine: None,
         }
     }
 
@@ -185,7 +196,7 @@ impl App {
             version: version::CURRENT.to_string(),
             boot: control::server_token().to_string(),
             todos: self.todo_items(),
-            queue: self.panels.queued.queue().entries.clone(),
+            queue: self.panels.queued.listed(),
             away: self.away_info(),
             update: self.update_info(),
             keep_awake: self.keep_awake_info(),
@@ -193,6 +204,7 @@ impl App {
             profile: self.config.active_profile().map(|(name, _)| name.to_string()),
             accounts: self.config.selected_accounts().clone(),
             popup: self.popup_info(),
+            machines: self.machine_infos(),
         }
     }
 

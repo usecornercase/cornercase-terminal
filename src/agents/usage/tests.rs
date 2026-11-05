@@ -176,3 +176,29 @@ fn a_claude_account_probe_drops_the_secure_storage_folder() {
 fn severities_have_names(#[case] percent: u16, #[case] name: &str) {
     assert_eq!(Severity::of(percent).name(), name);
 }
+
+mod a_fingerprint {
+    use super::*;
+
+    #[test]
+    fn is_the_same_for_the_same_account() {
+        let first = fingerprint(Known::Claude, &["ana@acme.dev", "Acme"]);
+        assert_eq!(first, fingerprint(Known::Claude, &["ana@acme.dev", "Acme"]));
+        assert_eq!(first.len(), 32);
+    }
+
+    #[rstest]
+    #[case::agent(Known::Codex, ["ana@acme.dev", "Acme"])]
+    #[case::email(Known::Claude, ["bea@acme.dev", "Acme"])]
+    #[case::organization(Known::Claude, ["ana@acme.dev", "Other"])]
+    #[case::boundary(Known::Claude, ["ana@acme.devA", "cme"])]
+    fn changes_with_any_part(#[case] agent: Known, #[case] parts: [&str; 2]) {
+        assert_ne!(fingerprint(agent, &parts), fingerprint(Known::Claude, &["ana@acme.dev", "Acme"]));
+    }
+
+    #[test]
+    fn holds_no_part_in_the_clear() {
+        let print = fingerprint(Known::Claude, &["ana@acme.dev", "Acme"]);
+        assert!(["ana", "acme", "Acme", "claude"].iter().all(|part| !print.contains(part)), "{print}");
+    }
+}

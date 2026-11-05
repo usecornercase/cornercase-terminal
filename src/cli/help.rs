@@ -94,15 +94,6 @@ Examples:
 pub(super) const OPEN_HELP: &str = "Examples:
   cornercase open ~/src/shop
   cornercase open . --focus";
-pub(super) const NEW_WORKSPACE_HELP: &str =
-    "The workspace gets one tab. A worktree goes in the worktrees folder from settings, on a new
-branch from HEAD when the branch does not exist yet; the command returns once git made it. The
-project's setup (settings → project settings) then runs in the new tab, which `start --worktree`
-waits for before it types the agent.
-
-Examples:
-  cornercase new-workspace experiments
-  cornercase new-workspace fix/login --worktree --project 3";
 pub(super) const COMMAND_HELP: &str =
     "The words of COMMAND are joined with spaces and typed at the prompt once the shell is ready,
 as ssh does, so quote what the shell should read as one argument. The command returns once it
@@ -113,30 +104,6 @@ pub(super) const NEW_TAB_HELP: &str = "Examples:
 pub(super) const SPLIT_HELP: &str = "Examples:
   cornercase split -- htop
   cornercase split --pane 7 --down -- tail -f server.log";
-pub(super) const START_HELP: &str =
-    "The agent starts with its command and arguments from settings → agents. --mode replaces the mode
-chosen there by another of the agent's modes, --model adds the agent's own model flag and --effort its
-effort (Claude Code, Codex, Grok Build and GitHub Copilot CLI take one; an older server refuses all three rather than
-start the agent without them). If it asks whether
-you trust the folder, the question waits for your answer unless settings → agents accept it for
-you. Once it is ready, the prompt is pasted and
-submitted, and the command prints the pane's id; it fails if the agent never shows up. With
---wait, a second line says how the wait ended: idle, done (it finished out of sight) or waiting
-(it needs an answer); with --until it waits for that state instead, as `cornercase wait --until` does.
-
---issue KEY (a key such as #482, sc-48 or ENG-42, or the issue's URL) starts the agent on that issue as
-the Issues dialog's start does: GitHub and GitLab issues in a worktree on the branch named after the issue, of
-the project's own repository; the prompt comes from settings' prompt template and is always submitted.
-Shortcut, Linear, Jira, Plane and Asana issues aren't tied to a repository: when several places are open the
-command lists them and asks for --project (a new worktree) or --workspace (a new tab). A workspace already
-on the branch gets a new tab. It needs a server that knows the `issues` feature.
-
-Examples:
-  cornercase start claude --issue '#482'
-  cornercase start codex --issue ENG-42 --project 3
-  cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
-  cornercase start codex --prompt-file task.md --wait --timeout 1800
-  cornercase start claude --mode plan --model opus --prompt 'Plan the login rework'";
 pub(super) const SEND_HELP: &str =
     "The text goes in as one paste, bracketed when the program asked for it. A pane whose agent
 waits for an answer to a question or a permission prompt is refused, since the text would answer
@@ -262,19 +229,26 @@ newest place the pane shows the text. The scroll and the selection are the pane'
 every view show them. When the pane no longer holds the text it is still shown, a warning goes to
 stderr and the exit status is 0.
 
+--machine NAME picks one of a machine's workspaces or tabs as the one shown: --workspace and --tab
+take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
+since this server started. The window then shows that tab, or the workspace's active tab, streamed
+from the machine, and `status --json` reports it as `shown_remote`, with its stream's state.
+
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
-view shows changes.
+view shows changes. With --machine it is what was picked, as `shown_remote` in `status --json`.
 
 Examples:
   cornercase focus --pane 12
   cornercase focus --pane 12 --reveal 'migration failed' --line 340
-  cornercase focus --view 41 --tab 7";
+  cornercase focus --view 41 --tab 7
+  cornercase focus --machine vps --workspace 4";
 pub(super) const GO_HELP: &str =
     "Does what a click on an agent's desktop notification does, or the go button of its toast: shows
 the agent's pane (the one still needing you, when the notice covered several), or its workspace once
 they are all closed, and prints the pane's id. With --view ID it moves that view (see
-`cornercase view`) instead of the window. TOKEN is a notice's, from `cornercase events --notices`.
+`cornercase view`) instead of the window; a notice about an agent on one of your machines refuses
+--view, since only the window shows that machine's workspace. TOKEN is from `cornercase events --notices`.
 It fails for a token this server never gave or no longer keeps (the last 64; a restart forgets them),
 and when the agent and its workspace are gone.
 
@@ -360,6 +334,8 @@ With --notices, each notice about an agent is told too, as the window's toast an
 say it, with the same rules (a second's wait, once per change, never for a tab seen in the window or
 in a view), and with --json its token, agent, status, place, message and panes:
   workspace 2  notice  claude needs you in shop › main  cc-3f2a9c-4
+An agent on a linked machine tells its notices too, with the machine's name and without ids here:
+  machine vps  notice  claude on vps needs you in shop › main  cc-3f2a9c-5
 `cornercase go TOKEN` then does what a click on that notification does.
 With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
   pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json
@@ -749,16 +725,21 @@ Examples:
   cornercase changes discard src/main.rs --yes
   cornercase changes discard src/main.rs --digest 550a7a517a389403 --yes";
 
+mod clone;
 mod context;
 mod files;
 mod flow;
+mod machines;
 mod paste_file;
 mod ports;
 mod processes;
 mod pull_request;
+mod recap;
 mod requests;
+mod start;
 mod worktrees;
 
+pub(in crate::cli) use clone::CLONE_HELP;
 pub(in crate::cli) use context::CONTEXT_HELP;
 pub(in crate::cli) use files::FILES_HELP;
 pub(in crate::cli) use flow::{
@@ -766,11 +747,14 @@ pub(in crate::cli) use flow::{
     FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
     FLOW_SAVE_HELP,
 };
+pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use ports::{PORTS_HELP, PORTS_STOP_ABOUT, PORTS_STOP_HELP};
 pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_ABOUT, PROCESSES_STOP_HELP};
 pub(in crate::cli) use pull_request::PULL_REQUEST_HELP;
+pub(in crate::cli) use recap::RECAP_HELP;
 pub(in crate::cli) use requests::REQUESTS_HELP;
+pub(in crate::cli) use start::{NEW_WORKSPACE_HELP, START_HELP};
 pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
 
 #[cfg(test)]
@@ -896,11 +880,15 @@ tokens, and each waits at most ten seconds. A probe already running, from the di
 prints the last answers with their age. With --json it prints {\"agents\": [...]}: each agent's
 plan, its limits (label, kind, scope, percent, severity, resets_at in UTC), extra, notice, error,
 and when it was read (read_at, and age in seconds). It exits with 3 when an agent could not be
-asked, after printing them all, that one with its error.
+asked, after printing them all, that one with its error. --machine NAME asks that machine over ssh
+and adds \"machine\" (name, state, seen, read_at, error); --machine all prints this computer and
+then each machine under \"machines\", and exits with 3 when a machine could not be read either.
 
 Examples:
   cornercase usage
-  cornercase usage --cached --json";
+  cornercase usage --cached --json
+  cornercase usage --machine vps
+  cornercase usage --machine all --json";
 
 pub(super) const ACCOUNT_HELP: &str =
     "An account is a folder of its own under cornercase's state folder in which an agent keeps its

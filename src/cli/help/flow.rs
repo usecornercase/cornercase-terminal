@@ -44,10 +44,16 @@ a built-in flow of its name, and a project's flow never stands in for another of
 command says so on stderr when it happens. A built-in flow deleted in Settings › Flows is refused,
 and keeps its name: a project's flow named like it does not run either.
 
+With --machine NAME the flow runs on that machine of `cornercase machines`, by its server: the flow,
+its agents and accounts are the machine's, --project and the ids printed are that machine's, as
+`status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
+window once the machine lists it. It needs a server that knows the `machine-start` feature.
+
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'
   cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json
-  cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md";
+  cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
+  cornercase flow run Quick --issue '#482' --project 2 --machine vps";
 pub(in crate::cli) const FLOW_EXPORT_HELP: &str =
     "It prints the flow as TOML, the file a flow is kept in, so a teammate can read its prompts, variables
 and arguments before importing it. A name is looked up as `flow run` does. Variables a flow sets are

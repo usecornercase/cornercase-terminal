@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use super::*;
-use crate::changes::diff::{Fold, Hunk, Kind, Line, Status};
+use crate::changes::diff::{Fold, Hunk, Kind, Line, Segments, Status};
 use crate::test_util::fixture;
 
 fn info(path: &str, status: FileStatus, fold: FoldClass, viewed: bool) -> FileInfo {
@@ -292,5 +292,103 @@ mod patches {
         let first = patch.hunks[0].lines[0].syntax.as_ref().expect("syntax");
         assert_eq!(first[0].style, 1);
         assert!(patch.hunks[0].lines[2].syntax.is_none());
+    }
+}
+
+mod read_back {
+    use ratatui::style::Color;
+
+    use super::*;
+
+    fn painted(looks: Option<Segments>) -> Option<Segments> {
+        looks.map(|segments| segments.into_iter().map(|(text, look)| (text, look.bg(Color::Reset))).collect())
+    }
+
+    fn line(text: &str, emphasis: Vec<[usize; 2]>, style: usize) -> Line {
+        let line = LineInfo {
+            text: text.into(),
+            emphasis,
+            syntax: Some(vec![Segment { style, text: text.into() }]),
+            ..LineInfo::default()
+        };
+        let patch = Patch {
+            styles: vec![Style::default()],
+            hunks: vec![HunkInfo { lines: vec![line], ..HunkInfo::default() }],
+            ..Patch::default()
+        };
+        patch.file().hunks.remove(0).lines.remove(0)
+    }
+
+    #[test]
+    fn a_patch_is_the_file_it_came_from() {
+        let mut sent = file();
+        for line in sent.hunks.iter_mut().flat_map(|hunk| hunk.lines.iter_mut()) {
+            line.syntax = painted(line.syntax.take());
+        }
+
+        assert_eq!(patch().file(), File { digest: sent.viewed_digest, ..sent });
+    }
+
+    #[test]
+    fn a_hunk_without_lines_stays_empty() {
+        let patch =
+            Patch { hunks: vec![HunkInfo { old_start: 4, new_start: 5, ..HunkInfo::default() }], ..Patch::default() };
+
+        let hunks = patch.file().hunks;
+
+        assert_eq!((hunks[0].old_start, hunks[0].new_start, hunks[0].lines.len()), (4, 5, 0));
+    }
+
+    #[rstest::rstest]
+    #[case::inverted("say(1);", vec![[5, 2]], vec![])]
+    #[case::empty("say(1);", vec![[3, 3]], vec![])]
+    #[case::past_the_end("say(1);", vec![[0, 10_000]], vec![0..7])]
+    #[case::beyond_the_text("say(1);", vec![[9, 12]], vec![])]
+    #[case::multibyte("añb", vec![[1, 2], [2, 4]], vec![1..2, 2..3])]
+    fn emphasis_stays_within_the_text_s_characters(
+        #[case] text: &str,
+        #[case] sent: Vec<[usize; 2]>,
+        #[case] kept: Vec<Range<usize>>,
+    ) {
+        assert_eq!(line(text, sent, 0).emphasis, kept);
+    }
+
+    #[test]
+    fn a_style_missing_from_the_table_is_the_plain_one() {
+        let syntax = line("x", Vec::new(), 999).syntax.expect("its syntax");
+
+        assert_eq!(syntax, [("x".to_string(), Look::default())]);
+    }
+
+    #[test]
+    fn a_file_keeps_its_staging_and_fold_and_reads_its_digest() {
+        let info = FileInfo {
+            staged: Some(Staging::Partly),
+            ..info("Cargo.lock", FileStatus::Renamed, FoldClass::Lockfile, true)
+        };
+
+        let file = info.file();
+
+        assert_eq!((file.staged, file.fold, file.status), (Some(Staged::Partly), Fold::Lockfile, Status::Renamed));
+        assert_eq!((file.digest, file.viewed_digest), (0x00c0_ffee_1234_5678, 0x00c0_ffee_1234_5678));
+        assert_eq!(file.hunks, Vec::new());
+    }
+
+    #[test]
+    fn an_unreadable_digest_is_zero() {
+        let info = FileInfo { digest: "not a digest".into(), ..FileInfo::default() };
+
+        assert_eq!(info.file().viewed_digest, 0);
+    }
+
+    #[test]
+    fn a_gap_is_the_lines_it_came_from() {
+        let plain = GapLine { old: 3, new: 4, text: "let x = 1;".into(), raw: None, syntax: None };
+        let coloured =
+            GapLine { syntax: Some(vec![("let".into(), Look::default().fg(Color::Indexed(5)))]), ..plain.clone() };
+
+        let lines = Gap::of(2, "src/a.rs", 0, &[plain.clone(), coloured.clone()]).lines();
+
+        assert_eq!(lines, [plain, GapLine { syntax: painted(coloured.syntax.clone()), ..coloured }]);
     }
 }

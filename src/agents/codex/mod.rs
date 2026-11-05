@@ -47,6 +47,8 @@ pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
 pub(in crate::agents) const LOCAL_COMMAND: bool = false;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
+pub(in crate::agents) const RECAP: Option<crate::agents::recap::Spec> =
+    Some(crate::agents::recap::Spec { command: recap::command, read: recap::read });
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(crate::agents::usage::Spec {
     command: usage::command,
@@ -150,6 +152,7 @@ impl Reader {
 }
 
 pub(in crate::agents) mod message;
+pub(in crate::agents) mod recap;
 pub(in crate::agents) mod rollout;
 pub(crate) mod usage;
 

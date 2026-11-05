@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[cfg(unix)]
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 #[cfg(test)]
 use std::time::SystemTime;
@@ -79,10 +79,13 @@ use launches::LAUNCH_EVERY;
 #[cfg(unix)]
 use layout::List;
 use layout::{Scrolls, Side};
+use machine_links::RemoteDrag;
 use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use plugins::{PluginEvent, Plugins};
 use queue_panel::QueueEvent;
+use recap_panel::RecapEvent;
+use routine_cleanup::RoutineEvent;
 use search_dialog::SearchEvent;
 use session::not_restored;
 use toast::Toast;
@@ -97,6 +100,7 @@ mod actions;
 mod agent_watch;
 mod changes_panel;
 mod clock;
+mod clone_on_machine;
 mod close_agent;
 mod closed_agents;
 mod config_file;
@@ -120,11 +124,16 @@ mod jobs;
 mod launches;
 mod layout;
 mod links;
+mod machine_form;
+mod machine_links;
+mod machine_usage;
+mod machines;
 mod menus;
 mod merge_check;
 mod merged_pull_requests;
 mod messenger;
 mod more_menu;
+mod new_workspace_there;
 mod notifications;
 mod opening;
 mod outbox;
@@ -141,8 +150,10 @@ mod project_settings_dialog;
 mod pull_requests;
 mod queue_dialog;
 mod queue_panel;
+mod recap_panel;
 mod refresh;
 mod remote_access;
+mod routine_cleanup;
 mod search_dialog;
 mod session;
 mod settings_dialog;
@@ -214,13 +225,13 @@ pub(crate) struct App {
     seen: trace::Seen,
     images: images::Payloads,
     plugins: Plugins,
+    machines: machine_links::Machines,
 }
 
 impl App {
-    pub(crate) fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
+    pub(crate) fn new(shell: String, theme: HostTheme, config_path: &Path, tx: Sender<AppEvent>) -> Self {
         let home = std::env::var_os(paths::HOME_VAR).map(PathBuf::from);
         let (config, config_file) = config_file::ConfigFile::open(config_path);
-        let config_path = config_file.path();
         Self {
             screen: groups::Screen::default(),
             git: groups::Git::default(),
@@ -253,6 +264,7 @@ impl App {
             seen: trace::Seen::default(),
             images: images::Payloads::default(),
             plugins: Plugins::new(crate::plugins::Places::new(config_path, config_path)),
+            machines: machine_links::Machines::new(),
             config,
             config_file,
             home,
@@ -269,6 +281,11 @@ impl App {
             return None;
         }
         Some(self.update.restart_exe())
+    }
+
+    pub(crate) fn stop_background(&mut self) {
+        self.stop_plugins();
+        self.stop_machines();
     }
 
     pub(crate) fn take_start(&mut self) -> Option<(u64, (u16, u16))> {
@@ -318,27 +335,8 @@ impl App {
 
     pub(crate) fn pointer(&self, area: Rect) -> pointer::Shape {
         let areas = self.layout(area).shown(self.screen.nav);
-        let (border, divider) = (border_shape, divider_shape);
-        match &self.screen.drag {
-            Some(Drag::Border(b)) => return border(*b),
-            Some(Drag::Divider { tab, path }) => {
-                let dividers = self.tab().filter(|t| t.id == *tab).map(|t| t.layout.dividers(areas.pane));
-                return dividers
-                    .and_then(|d| d.into_iter().find(|d| d.path == *path))
-                    .map_or(pointer::Shape::Default, |d| divider(d.dir));
-            }
-            Some(
-                Drag::Row(_)
-                | Drag::Pane(_)
-                | Drag::Selection { .. }
-                | Drag::Link(_)
-                | Drag::Lines { .. }
-                | Drag::Text(_)
-                | Drag::Footer(_),
-            ) => {
-                return pointer::Shape::Default;
-            }
-            None => {}
+        if let Some(drag) = &self.screen.drag {
+            return self.drag_pointer(drag, areas.pane);
         }
         let Some(pos) = self.screen.hover.filter(|_| self.overlay.is_none()) else {
             return pointer::Shape::Default;
@@ -347,13 +345,38 @@ impl App {
             return pointer::Shape::Default;
         }
         if let Some(b) = areas.border_hit(pos) {
-            return border(b);
+            return border_shape(b);
         }
-        let in_pane = areas.pane.contains(pos) && !(self.screen.nav.is_some() && areas.compact());
-        self.tab()
-            .filter(|_| in_pane)
-            .and_then(|t| t.layout.divider_at(areas.pane, pos))
-            .map_or(pointer::Shape::Default, |d| divider(d.dir))
+        if !areas.pane.contains(pos) || (self.screen.nav.is_some() && areas.compact()) {
+            return pointer::Shape::Default;
+        }
+        let dir = if self.shown_remote().is_some() {
+            self.remote_divider_at(pos, areas.pane)
+        } else {
+            self.tab().and_then(|t| t.layout.divider_at(areas.pane, pos)).map(|d| d.dir)
+        };
+        dir.map_or(pointer::Shape::Default, divider_shape)
+    }
+
+    fn drag_pointer(&self, drag: &Drag, pane: Rect) -> pointer::Shape {
+        let dir = match drag {
+            Drag::Border(b) => return border_shape(*b),
+            Drag::Divider { tab, path } => self
+                .tab()
+                .filter(|t| t.id == *tab)
+                .and_then(|t| t.layout.dividers(pane).into_iter().find(|d| d.path == *path))
+                .map(|d| d.dir),
+            Drag::Remote(RemoteDrag::Divider { path, .. }) => self.remote_divider(path),
+            Drag::Row(_)
+            | Drag::Pane(_)
+            | Drag::Selection { .. }
+            | Drag::Link(_)
+            | Drag::Lines { .. }
+            | Drag::Text(_)
+            | Drag::Footer(_)
+            | Drag::Remote(RemoteDrag::Selection { .. } | RemoteDrag::Mouse { .. }) => None,
+        };
+        dir.map_or(pointer::Shape::Default, divider_shape)
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -398,6 +421,8 @@ impl App {
             self.surface_wake(now),
             self.panels.queued.wake(clock),
             self.popup_wake(now),
+            self.card_wake(now),
+            self.typed_wake(now),
         ]
         .into_iter()
         .flatten()
@@ -405,7 +430,7 @@ impl App {
     }
 
     fn agent_working(&self) -> bool {
-        self.projects.tabs().any(|tab| tab.status() == Some(activity::Status::Working))
+        self.projects.tabs().any(|tab| tab.status() == Some(activity::Status::Working)) || self.remote_working()
     }
 
     pub(crate) fn refresh(&mut self, now: Instant) {
@@ -435,6 +460,7 @@ impl App {
         self.drive_launches(now);
         self.latch_run_ends();
         self.watch_agents(now);
+        self.drive_cleanups(now);
         self.follow_sent_work(now);
         self.drive_restarts(now);
         self.keep_awake(now);
@@ -442,6 +468,7 @@ impl App {
         self.offer_tour(now);
         self.watch_messengers(now);
         self.sync_remote();
+        self.sync_machines(now, clock);
         self.sync_messengers();
         self.pair_by_owner(now);
         self.set_up_forums(now);
@@ -463,6 +490,8 @@ impl App {
         self.flush_run_dirs();
         self.ask_sessions(now);
         self.refresh_changes(now);
+        self.sync_remote_panels(now);
+        self.refresh_recaps();
         self.auto_scroll(now);
         self.auto_scroll_lines(now);
     }
@@ -478,6 +507,7 @@ impl App {
         self.forget_files();
         self.forget_pasted();
         self.count_behind(now);
+        self.read_repos(now);
         self.scan_overlaps(now);
         self.ask_pull_requests(now);
         self.ask_merged(now);
@@ -608,6 +638,7 @@ impl App {
             AppEvent::Update(event) => self.update_answered(event),
             AppEvent::Search(event) => self.search_answered(event),
             AppEvent::Queue(event) => self.queue_prepared(*event),
+            AppEvent::Routine(event) => self.routine_event(*event),
             AppEvent::Usage(key, result) => self.usages.state.answered(key, result, Instant::now()),
             AppEvent::Breakdown { pane, pid, result } => self.breakdown_answered(pane, pid, *result),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
@@ -623,9 +654,12 @@ impl App {
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
             AppEvent::Messenger(event) => self.messenger_event(event, area),
             AppEvent::Merged(answer) => self.merged_answered(answer),
+            AppEvent::Recap(event) => self.recap_answered(*event),
             AppEvent::Plugin(event) => self.plugin_answered(event),
             AppEvent::Login(kind, name, login) => self.login_checked(kind, name, login),
             AppEvent::Restarted(restarted) => self.restarted(*restarted),
+            AppEvent::Machine(event) => self.machine_event(event),
+            AppEvent::Cloned { request, result } => self.clone_answered(request, result, area),
         }
         Ok(())
     }
@@ -717,8 +751,10 @@ impl App {
         let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
         let (files, placed) = self.files_seen(sight, area, modal);
         let tab = self.tab_view(area);
+        let (remote_card, remote_tab) = (self.remote_card(now), self.remote_screen());
         self.messages.toast = self.messages.toast.take().filter(|t| t.at.elapsed() < t.lasts());
-        let view = ui::View { tab, overlay, files, ..self.lists_view(area, now) }.with_icons(self.icons_in(sight));
+        let view = ui::View { remote_card, remote_tab, tab, overlay, files, ..self.lists_view(area, now) }
+            .with_icons(self.icons_in(sight));
         ui::draw(f, &view);
         placed.map(|placed| images::owned(f.buffer_mut(), placed))
     }

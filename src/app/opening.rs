@@ -21,6 +21,7 @@ pub(super) enum Subject {
     Pane(u64),
     File(u64),
     Row(u64),
+    MachineRow(u64),
     Run(u64),
 }
 
@@ -29,12 +30,14 @@ pub(super) struct Opening {
     window: u64,
     openers: Vec<Opener>,
     row: Option<(u64, String)>,
+    pub(super) machines: super::machines::Window,
 }
 
 struct Place {
     path: PathBuf,
     line: Option<u32>,
     kind: Kind,
+    remote: bool,
 }
 
 impl App {
@@ -115,6 +118,11 @@ impl App {
         }
     }
 
+    pub(super) fn open_machine_row_menu(&mut self, workspace: u64, row: &str, at: Position) {
+        self.opening.row = Some((workspace, row.to_string()));
+        self.overlay = Some(Overlay::Menu { at, actions: vec![MenuAction::CopyPath(Subject::MachineRow(workspace))] });
+    }
+
     pub(super) fn open_with(&mut self, subject: Subject, opener: Opener) {
         let Some(place) = self.place(subject) else { return };
         if !self.opening.openers.contains(&opener) || !opener.applies(place.kind) {
@@ -139,7 +147,9 @@ impl App {
         };
         self.copy(path);
         let what = if place.kind == Kind::Folder { "folder" } else { "file" };
-        let message = format!("copied the {what}'s path: it is on the server's machine");
+        let machine = self.shown_remote().map(|shown| shown.machine).filter(|_| place.remote);
+        let on = machine.unwrap_or_else(|| "the server's machine".into());
+        let message = format!("copied the {what}'s path: it is on {on}");
         self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
     }
 
@@ -148,7 +158,7 @@ impl App {
     }
 
     fn place(&self, subject: Subject) -> Option<Place> {
-        let folder = |path: PathBuf| Place { path, line: None, kind: Kind::Folder };
+        let folder = |path: PathBuf| Place { path, line: None, kind: Kind::Folder, remote: false };
         match subject {
             Subject::Project(id) => Some(folder(self.projects[self.projects.project_index(id)?].path.clone())),
             Subject::Workspace(id) => Some(folder(self.workspace_path(id)?.to_path_buf())),
@@ -166,17 +176,27 @@ impl App {
                 let path = root.join(&viewer.path);
                 let image = viewer.content.as_ref().is_some_and(|content| content.is_image());
                 let line = viewer.selected().filter(|_| !image).map(|(first, _)| first);
-                Some(Place { kind: Kind::of(&path).unwrap_or(Kind::File), path, line })
+                Some(Place { kind: Kind::of(&path).unwrap_or(Kind::File), path, line, remote: false })
             }
             Subject::Run(workspace) => Some(folder(self.run_of(workspace)?.dir.clone()?)),
             Subject::Row(workspace) => {
-                let (row_workspace, row) = self.opening.row.as_ref()?;
-                if *row_workspace != workspace {
-                    return None;
-                }
-                let path = self.workspace_path(workspace)?.join(row);
-                Some(Place { kind: Kind::of(&path)?, path, line: None })
+                let path = self.workspace_path(workspace)?.join(self.opened_row(workspace)?);
+                Some(Place { kind: Kind::of(&path)?, path, line: None, remote: false })
             }
+            Subject::MachineRow(workspace) => self.machine_row(workspace),
         }
+    }
+
+    fn opened_row(&self, workspace: u64) -> Option<&str> {
+        let (row_workspace, row) = self.opening.row.as_ref()?;
+        (*row_workspace == workspace).then_some(row.as_str())
+    }
+
+    fn machine_row(&self, workspace: u64) -> Option<Place> {
+        let shown = self.shown_remote().filter(|shown| shown.workspace == workspace)?;
+        let row = self.opened_row(workspace)?;
+        let dir = self.files_state().rows(workspace).iter().any(|listed| listed.path == row && listed.dir);
+        let kind = if dir { Kind::Folder } else { Kind::File };
+        Some(Place { path: shown.path.join(row), line: None, kind, remote: true })
     }
 }

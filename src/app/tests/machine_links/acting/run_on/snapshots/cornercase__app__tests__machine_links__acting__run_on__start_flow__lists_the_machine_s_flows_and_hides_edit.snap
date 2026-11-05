@@ -1,0 +1,32 @@
+---
+source: src/app/tests/machine_links/acting/run_on/start_flow.rs
+expression: "dialog(app, WIDE)"
+---
+╭─ Start a flow ───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Quick in its own worktree on vps, in ~/code/web-shop                                                             │
+│ run on  ○ this computer   ● ☁ vps                                                                                │
+│                                                                                                                  │
+│ Flow templates                                                    ╭─ Diagram ──────────────────────────────────╮ │
+│ ▌ Quick  default                                       3 agents   │           ╭─ orchestrator ───╮             │ │
+│ ▌   A coder and one round of review, leaving the commits.         │           │ claude           │             │ │
+│                                                                   │           ╰──────────────────╯             │ │
+│ prompt                                                            │                                            │ │
+│  what the team should do: a feature, a bug, an issue's text…      │           ╭─ coder ──────────╮             │ │
+│                                                                   │           │ claude           │◀──────────╮ │ │
+│                                                                   │           ╰─────────┬────────╯           │ │ │
+│                                                                   │                     │      findings · ≤1 │ │ │
+│                                                                   │                     ▼                    │ │ │
+│                                                                   │           ╭─ reviewer ───────╮           │ │ │
+│                                                                   │           │ claude           │───────────╯ │ │
+│                                                                   │           ╰─────────┬────────╯             │ │
+│                                                                   │                     ▼                      │ │
+│                                                                   │                     ◆ leave the commits    │ │
+│                                                                   │                                            │ │
+│                                                                   │                                            │ │
+│                                                                   ╰────────────────────────────────────────────╯ │
+│                                                                                                                  │
+│ › branch:                                                                                                        │
+│ › claude account:  work                     ▾                                                                    │
+│ what the team should do · enter starts a new line · tab moves to the branch                                      │
+│                                                                                                  cancel   start  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

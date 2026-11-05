@@ -35,6 +35,9 @@ mod contract;
 mod flows;
 mod input;
 mod issues;
+mod machine_actions;
+mod machine_panels;
+mod machines;
 mod opening;
 mod panels;
 mod panes;
@@ -43,8 +46,10 @@ mod ports;
 mod processes;
 mod pull_requests;
 mod queue;
+mod recap;
 mod remote;
 mod requests;
+mod run_on;
 mod server;
 mod settings;
 mod sidebar;
@@ -275,7 +280,7 @@ struct Harness {
     raw: Arc<Mutex<Vec<u8>>>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
-    _master: Box<dyn MasterPty + Send>,
+    master: Box<dyn MasterPty + Send>,
 }
 
 impl Harness {
@@ -360,7 +365,7 @@ impl Harness {
         });
 
         let writer = pair.master.take_writer().expect("pty writer");
-        let mut harness = Self { session, cols, screen, raw, writer, child, _master: pair.master };
+        let mut harness = Self { session, cols, screen, raw, writer, child, master: pair.master };
         harness.wait_for_raw("app asks for the host colors", |raw| raw.contains("\x1b]4;15;?\x1b\\\x1b[>q\x1b[c"));
         harness.send(reply);
         harness
@@ -375,7 +380,8 @@ impl Harness {
     }
 
     fn position_of(&self, text: &str) -> Position {
-        (0..ROWS)
+        let rows = self.screen.lock().screen().size().0;
+        (0..rows)
             .rev()
             .find_map(|y| {
                 let row = self.row(y);
@@ -440,6 +446,12 @@ impl Harness {
     fn send(&mut self, bytes: &[u8]) {
         self.writer.write_all(bytes).expect("write to pty");
         self.writer.flush().expect("flush pty");
+    }
+
+    fn resize(&mut self, rows: u16, cols: u16) {
+        self.screen.lock().screen_mut().set_size(rows, cols);
+        self.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).expect("resize the pty");
+        self.cols = cols;
     }
 
     fn stop(&mut self) {
@@ -556,6 +568,14 @@ fn git(dir: &std::path::Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
 }
 
+fn repository(dir: &std::path::Path, name: &str) -> PathBuf {
+    let repo = dir.join(name);
+    std::fs::create_dir_all(&repo).expect("create the repository's folder");
+    git(&repo, &["init", "--quiet"]);
+    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
+    repo
+}
+
 fn write_executable(path: &std::path::Path, contents: &str) {
     let mut child = std::process::Command::new("/bin/sh")
         .arg("-c")
@@ -636,17 +656,33 @@ fn refused(out: &std::process::Output, code: i32, message: &str) -> bool {
 
 const ISSUES_LIST: &str = r#"[{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"author":{"login":"ana"},"updatedAt":"2026-09-19T12:00:00Z","url":"https://github.com/acme/shop/issues/7"}]"#;
 
-fn fake_issue_tracker(session: &Session, view: &str, trust: &str, repo: &std::path::Path) -> (PathBuf, String) {
-    let worktrees = session.dir.join("worktrees");
-    let gh = session.dir.join("gh");
+fn fake_issue_gh(dir: &std::path::Path, view: &str) -> PathBuf {
+    let gh = dir.join("gh");
     let script = format!(
         "#!/bin/sh\nif [ \"$2\" = view ]; then cat <<'EOF'\n{view}\nEOF\nelse cat <<'EOF'\n{ISSUES_LIST}\nEOF\nfi\n"
     );
     write_executable(&gh, &script);
-    let agent = session.dir.join("agent");
-    let agent_script = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
-        printf '\\033[2J\\033[Hagent ready> '\nread line\nprintf '%s' \"$line\" > got\n";
-    write_executable(&agent, agent_script);
+    gh
+}
+
+fn fake_trusting_agent(dir: &std::path::Path) -> PathBuf {
+    fake_agent_writing(dir, ">")
+}
+
+fn fake_agent_writing(dir: &std::path::Path, redirect: &str) -> PathBuf {
+    let agent = dir.join("agent");
+    let agent_script = format!(
+        "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
+         printf '\\033[2J\\033[Hagent ready> '\nstty -icanon\nread line\nprintf '%s' \"$line\" {redirect} got\n"
+    );
+    write_executable(&agent, &agent_script);
+    agent
+}
+
+fn fake_issue_tracker(session: &Session, view: &str, trust: &str, repo: &std::path::Path) -> (PathBuf, String) {
+    let worktrees = session.dir.join("worktrees");
+    let gh = fake_issue_gh(&session.dir, view);
+    let agent = fake_trusting_agent(&session.dir);
     let config = format!(
         r#"{{"worktrees_dir": "{}", "gh": "{}", "agent": "fake", {trust}"agent_commands": {{"fake": "{}"}}}}"#,
         worktrees.display(),

@@ -36,7 +36,7 @@ pub(super) const VIEW: &str = r#"{"number":7,"title":"Fix the login","state":"OP
 pub(super) const STORIES: &str = r#"{"data":[{"id":482,"name":"Returns page crashes","app_url":"https://app.shortcut.com/acme/story/482",
             "updated_at":"2026-09-30T00:00:00Z"}],"next":null}"#;
 
-pub(super) const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
+pub(in crate::app::tests) const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
             printf '%s' \"$answer\" > answered\nprintf '\\033[2J\\033[H'\n\
             printf 'agent ready> '\nread line\nprintf '%s' \"$line\" > got\n";
 

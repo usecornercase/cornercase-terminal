@@ -9,6 +9,7 @@ use crate::log;
 use crate::os::ffi;
 use crate::process;
 
+pub(crate) mod fresh;
 pub(crate) mod setup;
 
 pub(crate) const INCLUDE_FILE: &str = ".worktreeinclude";
@@ -60,7 +61,15 @@ pub(crate) fn create_from(repo: &Path, branch: &str, path: &Path, base: &str) ->
     } else {
         check(git(
             repo,
-            [OsStr::new("worktree"), "add".as_ref(), "-b".as_ref(), branch.as_ref(), path, base.as_ref()],
+            [
+                OsStr::new("worktree"),
+                "add".as_ref(),
+                "--no-track".as_ref(),
+                "-b".as_ref(),
+                branch.as_ref(),
+                path,
+                base.as_ref(),
+            ],
         )?)?;
     }
     for file in included_files(repo)? {
@@ -151,6 +160,14 @@ fn pid_in(reason: &str) -> Option<i32> {
 
 pub(crate) fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> Result<Output> {
     command(repo, args).stdin(Stdio::null()).output().map_err(Error::RunGit)
+}
+
+pub(crate) fn git_env<I, S>(repo: &Path, args: I, env: &[(&str, &OsStr)]) -> Result<Output>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    scoped(repo, args, env).output().map_err(Error::RunGit)
 }
 
 pub(crate) fn git_within<I, S>(repo: &Path, args: I, timeout: Duration) -> Result<Option<Output>>

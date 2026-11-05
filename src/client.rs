@@ -41,8 +41,9 @@ pub(crate) use requests::{
 pub(crate) use requests::{
     answered, request, use_account_login, use_account_restart, use_account_switch, use_accounts, use_agent_folds,
     use_build_folders, use_close_agent_tabs, use_close_unlock, use_flow_issue_prompt, use_focus_reveal,
-    use_host_events, use_issue_names, use_issues, use_notices, use_popup_terminal, use_queue_undo, use_search_settings,
-    use_settings_search, use_surface_patches, use_todo_panel, use_view,
+    use_host_events, use_issue_names, use_issues, use_machine_start, use_machine_usage, use_notices,
+    use_popup_terminal, use_queue_routines, use_queue_undo, use_recap, use_search_settings, use_settings_search,
+    use_surface_patches, use_todo_panel, use_view,
 };
 pub(crate) use requests::{input_ended, reader_gone_within, use_remote, used_remote, watched};
 pub(crate) use requests::{line_done, share, unshare};
@@ -113,7 +114,7 @@ pub(crate) fn confirm(question: &str) -> bool {
 enum Ending {
     Detached,
     Restart,
-    GaveUp,
+    GaveUp(String),
 }
 
 #[derive(Debug, Clone)]
@@ -138,9 +139,13 @@ impl Target {
     }
 
     fn host(&self) -> &str {
+        self.machine().unwrap_or_default()
+    }
+
+    fn machine(&self) -> Option<&str> {
         match self {
-            Self::Local => "",
-            Self::Remote(remote) => remote.host(),
+            Self::Local => None,
+            Self::Remote(remote) => Some(remote.host()),
         }
     }
 }
@@ -215,6 +220,7 @@ struct Guard {
     stderr: Option<Stderr>,
     collector: Option<JoinHandle<()>>,
     remote: Option<Remote>,
+    socket: Option<UnixStream>,
 }
 
 impl Drop for Guard {
@@ -222,12 +228,17 @@ impl Drop for Guard {
         if let Some(child) = self.child.take() {
             process::stop(child);
         }
+        if let Some(socket) = self.socket.take() {
+            let _ = socket.shutdown(Shutdown::Both);
+        }
     }
 }
 
 impl Link {
     fn socket(stream: UnixStream) -> Result<Self> {
-        Ok(Self { reader: Box::new(stream.try_clone()?), writer: Box::new(stream), guard: Guard::default() })
+        let guard =
+            Guard { child: None, stderr: None, collector: None, remote: None, socket: Some(stream.try_clone()?) };
+        Ok(Self { reader: Box::new(stream.try_clone()?), writer: Box::new(stream), guard })
     }
 
     fn remote(remote: &Remote, usage: Use) -> Result<Self> {
@@ -240,6 +251,7 @@ impl Link {
                 stderr: Some(piped.stderr),
                 collector: piped.collector,
                 remote: Some(remote.clone()),
+                socket: None,
             },
         })
     }
@@ -269,8 +281,8 @@ fn open(target: &Target, restarted: bool) -> Result<()> {
     match result? {
         Ending::Restart => come_back(exe),
         Ending::Detached => Ok(()),
-        Ending::GaveUp => {
-            println!("stopped reconnecting to {}; its shells keep running there", target.host());
+        Ending::GaveUp(host) => {
+            println!("stopped reconnecting to {host}; its shells keep running there");
             Ok(())
         }
     }
@@ -307,7 +319,7 @@ fn come_back(exe: io::Result<PathBuf>) -> Result<()> {
     console::restore_modes();
     wait_for_exit(&paths::socket());
     let error = match exe {
-        Ok(exe) => Command::new(exe).env(protocol::RESTARTED_ENV, "1").exec(),
+        Ok(exe) => Command::new(exe).env(protocol::RESTARTED_ENV, "1").env_remove(protocol::REMOTE_ENV).exec(),
         Err(e) => e,
     };
     release_screen();

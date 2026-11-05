@@ -143,7 +143,7 @@ impl App {
         }
     }
 
-    pub(crate) fn stop_plugins(&mut self) {
+    pub(super) fn stop_plugins(&mut self) {
         self.close_plugin_popup();
         self.plugins.popups.finish();
         self.plugins.services = None;
@@ -523,7 +523,8 @@ fn hook_name(event: &control::Event) -> Option<&'static str> {
         control::What::Dropped { .. }
         | control::What::Clipboard { .. }
         | control::What::Bell { .. }
-        | control::What::Notice { .. } => None,
+        | control::What::Notice { .. }
+        | control::What::Recap { .. } => None,
     }
 }
 

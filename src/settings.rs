@@ -1,10 +1,14 @@
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::agents::{self, Known};
 use crate::config::{Config, DEFAULT_ISSUE_TABS};
 use crate::issues::{Account, Secret, Source};
 use crate::list::Search;
+use crate::machines::{Info, State};
 use crate::messenger::Via;
+
+pub(crate) use recap::RecapRow;
 
 pub(crate) use self::accounts::{Listed, Order};
 pub(crate) use self::search::{Finder, Hit};
@@ -86,10 +90,15 @@ pub(crate) enum Row {
     Plugin(String),
     NoPlugins,
     ServerTokens,
+    Recap(RecapRow),
     Account(Known, String),
     AddAccount(Known),
     System(Known),
     RenameAccount(Known, String),
+    Here,
+    Machine(usize),
+    UpdateMachine(usize),
+    AddMachine,
 }
 
 impl Row {
@@ -113,6 +122,7 @@ impl Row {
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
+            Self::Recap(_) => "Recap",
             _ => "",
         }
     }
@@ -131,6 +141,7 @@ impl Row {
             | Self::Resume
             | Self::KeepAwake
             | Self::Kind(_)
+            | Self::Recap(_)
             | Self::AddAgent => Page::Agents,
             Self::Token(_)
             | Self::GitlabUrl
@@ -152,6 +163,7 @@ impl Row {
             | Self::AddAccount(_)
             | Self::System(_)
             | Self::RenameAccount(..) => Page::Accounts,
+            Self::Here | Self::Machine(_) | Self::UpdateMachine(_) | Self::AddMachine => Page::Machines,
             _ => Page::Ui,
         }
     }
@@ -271,10 +283,11 @@ pub(crate) enum Page {
     Ui,
     Remote,
     Plugins,
+    Machines,
 }
 
 impl Page {
-    pub(crate) const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 9] = [
         Self::Worktrees,
         Self::Agents,
         Self::Accounts,
@@ -283,6 +296,7 @@ impl Page {
         Self::Ui,
         Self::Remote,
         Self::Plugins,
+        Self::Machines,
     ];
 
     pub(crate) fn name(self) -> &'static str {
@@ -295,6 +309,7 @@ impl Page {
             Self::Ui => "UI",
             Self::Remote => "Remote",
             Self::Plugins => "Plugins",
+            Self::Machines => "Machines",
         }
     }
 
@@ -334,6 +349,10 @@ pub(crate) enum Action {
     RemoveAccount(Known, String),
     Tour { reset: bool },
     Share,
+    AddMachine,
+    EditMachine(usize),
+    RemoveMachine(usize),
+    UpdateMachine(usize),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -383,6 +402,8 @@ pub(crate) struct RowText {
     pub(crate) value: String,
     pub(crate) note: String,
     pub(crate) dangerous: bool,
+    pub(crate) mark: Option<State>,
+    pub(crate) tail: String,
 }
 
 #[derive(Debug)]
@@ -406,6 +427,8 @@ pub(crate) struct Settings {
     pub(crate) messengers: [Messenger; Via::ALL.len()],
     pub(crate) plugins: Vec<PluginRow>,
     pub(crate) accounts: Listed,
+    pub(crate) machines: Vec<Info>,
+    pub(crate) now: SystemTime,
     pub(crate) find: Finder,
 }
 
@@ -431,6 +454,8 @@ impl Settings {
             messengers: Default::default(),
             plugins: Vec::new(),
             accounts: Listed::default(),
+            machines: Vec::new(),
+            now: UNIX_EPOCH,
             find: Finder::default(),
         }
     }
@@ -497,11 +522,13 @@ impl Settings {
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
         rows.extend(self.account_rows());
         rows.extend(LOOK_ROWS);
+        rows.extend(RecapRow::ALL.map(Row::Recap));
         rows.extend(self.remote_rows());
         rows.extend(self.plugins.iter().map(|plugin| Row::Plugin(plugin.id.clone())));
         if self.plugins.is_empty() {
             rows.push(Row::NoPlugins);
         }
+        rows.extend(self.machine_rows());
         rows
     }
 
@@ -571,7 +598,11 @@ impl Settings {
         if config.asana_workspace != self.config.asana_workspace {
             self.forget_asana_projects();
         }
+        let picked = self.picked_machine();
         self.config = config;
+        if let Some(picked) = picked {
+            self.pick_machine_again(picked);
+        }
     }
 
     fn forget_asana_projects(&mut self) {
@@ -600,6 +631,8 @@ mod activate;
 mod apply;
 mod describe;
 mod input;
+mod machines;
+mod recap;
 mod search;
 pub(crate) mod share;
 mod submit;

@@ -2,6 +2,7 @@
 set -eu
 mkdir -p "$CC_HOME/code" "$CC_HOME/.claude/sessions" "$CC_HOME/.codex/sessions" "$CC_HOME/.config/cornercase" "$CC_HOME/.local/state/cornercase" "$CC_HOME/.cornercase/worktrees" "$CC_HOME/real"
 printf "PS1='\\W ❯ '\n" > "$CC_HOME/.bashrc"
+: > "$CC_HOME/.sudo_as_admin_successful"
 node "$CC_CAPTURE/dump.mjs" "$CC_TMP/data.mjs" "$CC_DATA"
 cp "$CC_ROOT/tests/fixtures/codex/0.160.0/context.jsonl" "$CC_DATA/codex-context.jsonl"
 sed "s#/home/ana#$CC_HOME#g" "$CC_ROOT/tests/fixtures/claude/2.1.316/context-usage.jsonl" > "$CC_DATA/claude-context.jsonl"

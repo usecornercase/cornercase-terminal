@@ -15,6 +15,11 @@ fn queued_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
 
 fn undrawn_queued_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
     let repo = git_repo(&[("README", "hello")]);
+    let (app, rx, config, worktrees) = undrawn_queued_app_in(repo.path());
+    (app, rx, repo, config, worktrees)
+}
+
+fn undrawn_queued_app_in(repo: &Path) -> (App, Receiver<AppEvent>, TempDir, TempDir) {
     let (config, worktrees) = (TempDir::new(), TempDir::new());
     let agent = config.path().join("fake-agent");
     crate::test_util::write_executable(&agent, issue_list::FAKE_AGENT);
@@ -26,9 +31,9 @@ fn undrawn_queued_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) 
         ..Config::default()
     };
     let config_path = write_config(config.path(), &settings);
-    let (mut app, rx) = app_in(repo.path(), config_path);
+    let (mut app, rx) = app_in(repo, config_path);
     app.issues.clear_env_tokens();
-    (app, rx, repo, config, worktrees)
+    (app, rx, config, worktrees)
 }
 
 fn task(app: &App, at: i64, branch: Option<&str>) -> Task {
@@ -564,7 +569,7 @@ mod panel {
     fn a_starting_entry_opens_no_form_and_cannot_be_removed() {
         let (mut app, _rx, _dirs) = opened();
         let id = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
-        app.panels.queued.start(id);
+        app.panels.queued.start(id, Instant::now());
         click(&mut app, queue_row(0));
         assert!(matches!(app.overlay, Some(Overlay::Issues(_))));
         let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
@@ -683,3 +688,6 @@ mod lists {
 }
 
 mod accounts;
+mod cleanup;
+mod routine_panel;
+mod routines;

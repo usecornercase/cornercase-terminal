@@ -139,6 +139,13 @@ pub(super) fn open_path(path: &Path) -> Result<PathBuf> {
     if path.starts_with("~") { Ok(path.to_path_buf()) } else { server_path(path) }
 }
 
+pub(super) fn open_path_on(path: &Path, remote: Option<&Remote>) -> Result<PathBuf> {
+    if path.starts_with("~") {
+        return Ok(path.to_path_buf());
+    }
+    path_on(path, remote, cfg!(windows), &|| remote.is_some_and(Remote::on_windows))
+}
+
 pub(super) fn path_on(
     path: &Path,
     remote: Option<&Remote>,

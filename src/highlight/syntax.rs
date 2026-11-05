@@ -161,6 +161,12 @@ pub(crate) fn language(path: &Path, first_line: &str) -> Option<&'static str> {
         .or_else(|| extension.as_deref().and_then(|e| lookup(&FAMILIES, e)))
 }
 
+pub(crate) fn named(name: &str) -> Option<&'static str> {
+    let tables = [&NAMES[..], &EXTENSIONS, &FAMILIES, &SCRIPTS, &FENCE_OVERRIDES];
+    let ours = tables.into_iter().flatten().map(|(_, language)| *language).find(|language| *language == name);
+    ours.or_else(|| detected(name)).filter(|language| *language == name && arborium::get_language(language).is_some())
+}
+
 fn style(tag: &str) -> Style {
     let fg = |colour| Style::new().fg(colour);
     match tag {

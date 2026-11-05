@@ -2,6 +2,7 @@ mod account_restart;
 pub(in crate::app) mod accounts;
 mod arrange;
 mod changes;
+mod clone;
 mod close;
 mod closed_agents;
 mod config;
@@ -13,13 +14,17 @@ mod flow;
 mod held;
 mod idle_restart;
 mod issues;
+pub(super) mod machines;
 mod merge_check;
 mod plugins;
 mod ports;
 mod processes;
 mod pull_request;
 mod queue;
+mod recap;
+mod relay;
 mod search;
+mod stats;
 mod status;
 mod talk;
 mod terminal;
@@ -57,6 +62,7 @@ pub(in crate::app) use config::needs_a_repository;
 use create::Then;
 use held::Held;
 use issues::Asking;
+use stats::Gathering;
 use wait::{Condition, Confirm, Watch};
 
 const STARTS_WITHIN: Duration = Duration::from_secs(10);
@@ -142,7 +148,7 @@ impl Requests {
         self.launched.push((key, started));
     }
 
-    fn key(&mut self) -> u64 {
+    pub(in crate::app) fn key(&mut self) -> u64 {
         self.next += 1;
         self.next
     }
@@ -181,20 +187,31 @@ enum Stage {
     Restart { caller: Option<u64> },
     Issue(Box<Asking>),
     Usage(Vec<(agents::usage::Key, u64)>),
+    Machines(Gathering),
     Ports,
     Processes,
     PullRequest(u64),
     Context { pane: u64, answers: u64 },
+    Clone(clone::Cloning),
+    Relay(relay::Relaying),
+    Recap { choice: crate::recap::Choice, answers: u64 },
+    Dossier(u64),
 }
 
 impl Stage {
     fn listing(&self) -> String {
         match self {
+            Self::Usage(_) => "the agents have not said their usage yet".into(),
             Self::Processes => "the processes are still being measured".into(),
             Self::PullRequest(workspace) => {
                 format!("gh or glab is still reading the pull request of workspace {workspace}")
             }
             Self::Context { pane, .. } => format!("the agent is still saying what fills the context of pane {pane}"),
+            Self::Machines(_) => "the machines have not answered yet".into(),
+            Self::Clone(_) => "git is still cloning the repository".into(),
+            Self::Relay(_) => "the machine has not answered yet".into(),
+            Self::Recap { choice, .. } => format!("the agent is still writing the recap of {}", choice.name()),
+            Self::Dossier(_) => "the dossier is still being built".into(),
             _ => "the ports are still being listed".into(),
         }
     }
@@ -215,10 +232,13 @@ impl Stage {
                 | Self::Check
                 | Self::Issue(_)
                 | Self::Usage(_)
+                | Self::Machines(_)
                 | Self::Ports
                 | Self::Processes
                 | Self::PullRequest(_)
                 | Self::Context { .. }
+                | Self::Recap { .. }
+                | Self::Dossier(_)
         )
     }
 }
@@ -555,10 +575,12 @@ impl App {
         let Asked { client, asker, area, now } = asked;
         ControlFlow::Break(match command {
             Command::Open(open) => self.open_request(asker, &open, area),
+            Command::Clone(clone) => self.clone_request(asked, clone),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),
             Command::NewTab(new) => self.new_tab_request(asked, new),
             Command::Split(split) => self.split_request(asked, split),
-            Command::Start(start) | Command::StartWith(start) => self.start_request(asked, start),
+            Command::Start(start) => self.start_request(asked, start),
+            Command::StartWith(start) => self.start_with_request(asked, start),
             Command::Send(send) => self.send_request(client, asker, send, now),
             Command::Keys(keys) => self.keys_request(asker, &keys, now),
             Command::Read(read) => self.read_request(asker, &read),
@@ -568,6 +590,7 @@ impl App {
             Command::Mark(mark) => self.mark_request(asker, &mark),
             Command::Notify(notify) => self.notify_request(&notify.text),
             Command::Focus(focus) => self.focus_request(asker, &focus),
+            Command::FocusMachine(focus) => self.focus_machine_request(&focus),
             other => return ControlFlow::Continue(other),
         })
     }
@@ -599,7 +622,7 @@ impl App {
         let Asked { client, asker, area, now } = asked;
         ControlFlow::Break(match command {
             Command::Status(_) => Ok(Some(self.status_value(asker))),
-            Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
+            Command::Stats(stats) => self.stats_request(client, &stats, now),
             Command::Contract(_) => Ok(Some(json(&contract::descriptor(self.unavailable())))),
             Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
             Command::App(_) => Ok(Some(json(&self.app_snapshots(client, now)))),
@@ -642,6 +665,7 @@ impl App {
             Command::ChangesMergeCheck(check) => self.changes_merge_check_request(client, asker, &check),
             Command::PullRequest(read) => self.pull_request_request(client, asker, &read, now),
             Command::Context(read) => self.context_request(client, asker, &read),
+            Command::Recap(ask) => self.recap_request(client, asker, &ask),
             other => return ControlFlow::Continue(other),
         })
     }
@@ -712,7 +736,7 @@ impl App {
             Command::RestartWhenIdle(restart) => self.restart_request(client, asker.caller, &restart, now),
             Command::StartServer(start) => self.start_server_request(client, &start),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
-            Command::Usage(usage) => Ok(self.usage_request(client, &usage, now)),
+            Command::Usage(usage) => self.usage_request(client, &usage, now),
             Command::Ports(ports) => self.ports_request(client, asker, &ports),
             Command::StopPort(stop) => {
                 self.stop_port_request(client, &stop);
@@ -726,6 +750,7 @@ impl App {
             Command::WorktreeSize(size) => self.worktree_size_request(client, asker, &size),
             Command::FreeBuilds(free) => self.free_builds_request(client, asker, &free),
             Command::Worktrees(list) => self.worktrees_request(client, &list),
+            Command::Machines(machines) => self.machines_request(client, machines),
             Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
@@ -750,13 +775,18 @@ impl App {
     }
 
     fn launch_within(&mut self, client: u64, launch: Option<Launch>, waits: Waits) -> Option<Value> {
-        let Some(mut launch) = launch else { return Some(json(&waits.done)) };
+        let Some(launch) = launch else { return Some(json(&waits.done)) };
         let key = self.clients.requests.key();
-        launch.key = Some(key);
-        launch.trust = self.panels.queued.trust(client).then_some(agents::launch::Trust::Accepted);
-        self.agents.launches.add(launch);
+        self.add_launch(Some(client), launch, Some(key));
         self.clients.requests.push(client, key, waits);
         None
+    }
+
+    fn add_launch(&mut self, client: Option<u64>, mut launch: Launch, key: Option<u64>) {
+        launch.key = key;
+        launch.trust =
+            client.is_some_and(|client| self.panels.queued.trust(client)).then_some(agents::launch::Trust::Accepted);
+        self.agents.launches.add(launch);
     }
 
     fn show_if(&mut self, view: Option<u64>, focus: bool, item: Item) -> Result<Option<u64>, Refusal> {
@@ -898,6 +928,7 @@ impl App {
             let message = format!("`{}` takes no view", request.command.name());
             return Err(Refusal::new(Code::Malformed, message));
         }
+        relay::viewless(&request.command)?;
         if self.clients.views.get(view).is_none() {
             let message = format!(
                 "there is no view {view}: it closed with the connection that opened it, or the server restarted"

@@ -428,6 +428,11 @@ pub(crate) fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
 }
 
+pub(crate) fn head(dir: &Path) -> String {
+    let out = std::process::Command::new("git").arg("-C").arg(dir).args(["rev-parse", "HEAD"]).output().expect("git");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
 pub(crate) fn git_repo(files: &[(&str, &str)]) -> TempDir {
     let repo = TempDir::new();
     git(repo.path(), &["init", "--quiet"]);

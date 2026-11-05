@@ -6,6 +6,7 @@ use super::super::{Action, Page, PluginRow, Row, Settings, Status};
 use super::Goal;
 use crate::config::Config;
 use crate::issues::Source;
+use crate::machines;
 use crate::messenger::Via;
 
 fn settings() -> Settings {
@@ -78,6 +79,33 @@ mod matching {
         };
         s.plugins.push(plugin);
         assert_eq!(titles(&s, "deploy"), ["Plugins › deploy"]);
+    }
+
+    fn with_a_machine() -> (Settings, String) {
+        let mut s = settings();
+        let vps = machines::machine("vps", "ana@vps.example.com");
+        s.machines = vec![machines::Info::of(&vps, None, None, None)];
+        let title = format!("Machines › {} vps", machines::known_icon(&vps.icon));
+        s.config.machines = vec![vps];
+        (s, title)
+    }
+
+    #[test]
+    fn a_machine_and_this_computer_are_rows_of_the_machines_tab() {
+        let (s, title) = with_a_machine();
+        assert_eq!(titles(&s, "vps"), [title]);
+        let here = titles(&s, "this computer");
+        assert!(
+            matches!(here.as_slice(), [only] if only.starts_with("Machines › ") && only.ends_with(" this computer"))
+        );
+    }
+
+    #[test]
+    fn enter_on_a_machine_lands_on_its_row() {
+        let (mut s, _) = with_a_machine();
+        typed(&mut s, "vps");
+        press(&mut s, KeyCode::Enter);
+        assert_eq!((s.page, s.rows()[s.cursor].clone()), (Page::Machines, Row::Machine(0)));
     }
 
     #[test]

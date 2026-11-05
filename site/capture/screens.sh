@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-run-on machines-clone"
 
 pane_in() {
   cc status --json | node -e '
@@ -601,6 +601,7 @@ changes_open() {
   cc_s2_shell
   cc_click 'Changes' 0 -1
   cc_wait 'Uncommitted'
+  cc_wait 'of 2 viewed' 30
 }
 
 changes_commits() {
@@ -793,6 +794,14 @@ screen_todo() {
   cc_shot todo
 }
 
+screen_recap() {
+  cc_s1_at 140 38
+  cc_click 'Recap' 0 -1
+  cc_wait 'Recap   now'
+  cc_wait 'Claude Code'
+  cc_shot recap
+}
+
 screen_todo_add() {
   cc_s1_at 140 38
   todo_items
@@ -875,6 +884,119 @@ screen_settings_ui() {
   cc_wait 'counts'
   cc_hover '╭─ Settings'
   cc_shot settings-ui
+}
+
+screen_settings_machines() {
+  CC_CONFIG='{"machines":[{"name":"vps","icon":"☁","destination":"ana@vps.example.com","folder":"~/code"},{"name":"homelab","icon":"⌂","destination":"homelab.lan","folder":"~/src"},{"name":"mini","icon":"◫","destination":"mac-mini.local","folder":"~/code"}]}'
+  settings_open
+  cc_click 'Machines'
+  cc_wait 'this computer'
+  cc_wait 'linked ·' 30
+  cc_wait 'older · 0.0.1'
+  cc_wait 'not seen yet'
+  cc_keys Down Down
+  cc_wait 'Connection refused'
+  cc_hover '╭─ Settings'
+  cc_shot settings-machines
+}
+
+VPS_CONFIG='{"machines":[{"name":"vps","icon":"☁","destination":"ana@vps.example.com","folder":"~/vps"}]}'
+
+vps() {
+  cc_env env CORNERCASE_SOCKET="$CC_DATA/vps/server.sock" "$CC_BIN" "$@"
+}
+
+vps_pane() {
+  vps status --json | node -e '
+    const s = JSON.parse(require("fs").readFileSync(0, "utf8"));
+    for (const p of s.projects) for (const w of p.workspaces) if (String(w.path).endsWith(process.argv[1])) process.stdout.write(String(w.tabs[0].panes[0].id));
+  ' "$1"
+}
+
+vps_web_shop() {
+  mkdir -p "$CC_DATA/vps" "$CC_HOME/vps"
+  chmod 700 "$CC_DATA/vps"
+  git clone -q "$CC_HOME/code/.origins/web-shop.git" "$CC_HOME/vps/web-shop"
+  git -C "$CC_HOME/vps/web-shop" remote add upstream git@github.com:acme/web-shop.git
+  (cd "$CC_HOME/vps/web-shop" && vps start-server >/dev/null)
+  vps new-workspace fix/login --worktree --project "$(vps open "$CC_HOME/vps/web-shop")" >/dev/null
+  vps send --pane "$(vps_pane fix-login)" --enter 'CC_AGENT_STATE=busy CC_AGENT_TASK=482 CC_AGENT_PERCENT=31 claude'
+}
+
+screen_machines_sidebar() {
+  CC_CONFIG=$VPS_CONFIG
+  vps_web_shop
+  cc_s1
+  vps_paired
+  cc_wheel 'feat/dark-mode' down 4
+  cc_wait '☁ vps'
+  cc_click 'fix/login'
+  cc_wait 'running cargo test' 30
+  cc_hover 'Workspaces'
+  cc_wait '▌     Opus 5.5 · 31%           │'
+  cc_shot machines-sidebar
+}
+
+vps_paired() {
+  git -C "$CC_HOME/code/web-shop" remote add upstream git@github.com:acme/web-shop.git
+  [ ! -e "$CC_HOME/vps/web-shop" ] || cc_wait 'web-shop (5)' 30
+  i=0
+  until cc status --json | grep -qF 'acme/web-shop'; do
+    i=$((i + 1))
+    [ "$i" -lt 150 ] || { echo "capture: the remote of web-shop was never read"; exit 1; }
+    sleep 0.2
+  done
+}
+
+issue_482_on_vps() {
+  cc_s1_at 110 "${1:-38}"
+  vps_paired
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click '#482'
+  cc_wait 'opened by @ana'
+  cc_click 'agent…'
+  cc_wait 'which agent should take it?'
+  cc_click 'claude' 0 -1
+  cc_wait 'agent   claude'
+  i=0
+  until cc machines | grep -qF 'linked ·'; do
+    i=$((i + 1))
+    [ "$i" -lt 150 ] || { echo "capture: vps never linked"; cc machines; exit 1; }
+    sleep 0.2
+  done
+  cc_click 'run on…'
+  cc_wait 'where should it run?'
+  cc_keys Down
+  cc_keys Enter
+  cc_wait '● ☁ vps'
+}
+
+screen_machines_run_on() {
+  CC_CONFIG=$VPS_CONFIG
+  vps_web_shop
+  issue_482_on_vps
+  cc_wait 'own worktree on vps'
+  cc_hover 'Issues · web-shop'
+  cc_shot machines-run-on
+}
+
+screen_machines_clone() {
+  CC_CONFIG=$VPS_CONFIG
+  mkdir -p "$CC_DATA/vps"
+  chmod 700 "$CC_DATA/vps"
+  printf 'STRIPE_KEY=sk_test_1\n' > "$CC_HOME/code/web-shop/.env.local"
+  mkdir -p "$CC_HOME/code/web-shop/config"
+  printf '{"smtp":"localhost"}\n' > "$CC_HOME/code/web-shop/config/dev.json"
+  printf 'config/dev.json\n.env.local\n' >> "$CC_HOME/code/web-shop/.git/info/exclude"
+  issue_482_on_vps 22
+  cc_wait 'not on vps · clone…'
+  cc_click 'start' 0 -1
+  cc_wait 'Clone web-shop on vps'
+  cc_click '.env  '
+  cc_wait '[x] .env  '
+  cc_hover 'Clone web-shop on vps'
+  cc_shot machines-clone
 }
 
 share_open() {
@@ -1230,8 +1352,13 @@ screen_queue() {
     const project = process.argv[2] + "/code/web-shop";
     const labels = ["#482 Fix the login form", "Update the docs", "Fix logout", "Review the tests"];
     const states = [{state:"pending"}, {state:"started",pane:7,server:"previous-server"}, {state:"failed",reason:"codex is not installed"}, {state:"missed"}];
-    const entries = labels.map((label, i) => ({id:i+1,at:Math.floor(Date.now()/3600000)*3600+3600+i*60,zone:"UTC",label,agent:"claude",command:"claude",program:"claude",mode:null,prompt:label,submit:true,place:{project,workspace:null,workspace_name:null,branch:"fix-login"},...states[i]}));
-    fs.writeFileSync(path, JSON.stringify({version:1,next_id:4,entries}));
+    const hour = Math.floor(Date.now()/3600000)*3600;
+    const entries = labels.map((label, i) => ({id:i+1,at:hour+3600+i*60,zone:"UTC",label,agent:"claude",command:"claude",program:"claude",mode:null,prompt:label,submit:true,place:{project,workspace:null,workspace_name:null,branch:"fix-login"},...states[i]}));
+    const nine = Math.floor(Date.now()/86400000)*86400 + 9*3600;
+    const routine = {id:5,at:nine+86400,zone:"UTC",label:"Check the dependencies",agent:"claude",command:"claude",program:"claude",mode:null,prompt:"Check the dependencies",submit:true,place:{project,workspace:null,workspace_name:null,branch:null},repeat:"day 09:00",state:"pending"};
+    const run = (id, at, state, pane) => ({...routine, id, at, repeat:undefined, routine:5, state, ...(pane === undefined ? {} : {pane, server:"previous-server"})});
+    entries.push(run(6, nine-86400, "removed"), run(7, nine, "started", 7), routine);
+    fs.writeFileSync(path, JSON.stringify({version:2,next_id:8,entries}));
   ' "$CC_RUN/server.queue.json" "$CC_HOME"
   cc_start 140 38
   cc_wait 'web-shop'
@@ -1241,6 +1368,28 @@ screen_queue() {
   cc_wait 'clear started'
   cc_hover 'Issues · web-shop'
   cc_shot queue
+}
+
+screen_queue_routine() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  cc_start 110 38
+  cc_wait 'web-shop'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click 'Queue'
+  cc_wait 'nothing queued'
+  cc_click 'new   cancel'
+  cc_wait 'Schedule an agent'
+  cc_type 'Check the dependencies'
+  cc_keys Tab
+  cc_keys Down
+  cc_keys Down
+  cc_keys Down
+  cc_keys Enter
+  cc_wait 'remove the workspace'
+  cc_hover 'Workspaces'
+  cc_shot queue-routine
 }
 
 screen_queue_form() {

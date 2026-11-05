@@ -108,6 +108,10 @@ fn shop_project() -> ProjectInfo {
         workspaces: vec![workspace],
         custom_name: Some("shop".into()),
         collapsed: false,
+        remotes: Vec::new(),
+        repo: None,
+        machine: None,
+        paired: None,
     }
 }
 
@@ -127,6 +131,8 @@ fn snapshot() -> Snapshot {
             theme: None,
             config: Some(ConfigInfo { revision: 2 }),
             home: None,
+            machines: Vec::new(),
+            shown_remote: None,
         },
     }
 }
@@ -218,6 +224,33 @@ fn a_report_from_before_the_snapshot_fields_takes_their_defaults() {
     let tab = &workspace.tabs[0];
     assert_eq!((tab.custom_name.as_deref(), tab.layout.as_ref()), (None, None));
     assert_eq!(tab.panes[0].title, None);
+}
+
+#[test]
+fn a_project_leaves_its_remotes_and_repo_out_without_them() {
+    let sent = serde_json::to_value(shop_project()).expect("a project");
+
+    assert!(sent.get("remotes").is_none() && sent.get("repo").is_none(), "{sent}");
+    assert_eq!(serde_json::from_value::<ProjectInfo>(sent).expect("a project"), shop_project());
+}
+
+#[test]
+fn a_project_names_its_remotes_and_the_identity_of_its_repository() {
+    let remote = |name: &str, url: &str| RemoteInfo { name: name.into(), url: url.into() };
+    let remotes = vec![
+        remote("origin", "git@github.com:me/web-shop.git"),
+        remote("upstream", "https://github.com/acme/web-shop"),
+    ];
+    let project = ProjectInfo { remotes, repo: Some("github.com/acme/web-shop".into()), ..shop_project() };
+
+    let sent = serde_json::to_value(&project).expect("a project");
+
+    let remotes = json!([
+        {"name": "origin", "url": "git@github.com:me/web-shop.git"},
+        {"name": "upstream", "url": "https://github.com/acme/web-shop"},
+    ]);
+    assert_eq!((&sent["remotes"], &sent["repo"]), (&remotes, &json!("github.com/acme/web-shop")));
+    assert_eq!(serde_json::from_value::<ProjectInfo>(sent).expect("a project"), project);
 }
 
 #[test]

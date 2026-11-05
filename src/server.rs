@@ -22,7 +22,6 @@ use crate::graphics::Support;
 use crate::host::notify::{self, Channel};
 use crate::host::open::Opener;
 use crate::host::pointer;
-use crate::host::sound;
 use crate::host::theme::HostTheme;
 use crate::log::{self, Level};
 use crate::os::process::{leave_launch_folder, on_stop_signal, setsid};
@@ -30,7 +29,7 @@ use crate::os::socket::{UnixListener, UnixStream};
 use crate::panics;
 use crate::paths;
 use crate::persist::{self, Saver};
-use crate::protocol::{self, ClientMessage, Folder, ServerMessage};
+use crate::protocol::{self, ClientMessage, Folder, Machines, ServerMessage};
 use crate::queue;
 use crate::state;
 use crate::term::shell;
@@ -41,6 +40,7 @@ mod backend;
 mod images;
 mod startup;
 mod surfaces;
+mod windows;
 
 use backend::{CropBackend, FrameWriter};
 use images::Graphics;
@@ -98,15 +98,11 @@ impl Step {
     }
 
     fn traced(&self) -> bool {
-        !matches!(
-            self,
-            Self::Answer
-                | Self::Flush
-                | Self::Draw
-                | Self::Surfaces
-                | Self::Save
-                | Self::Event(ServerEvent::App(AppEvent::Output(..)))
-        )
+        match self {
+            Self::Answer | Self::Flush | Self::Draw | Self::Surfaces | Self::Save => false,
+            Self::Event(ServerEvent::App(ev)) => !matches!(ev, AppEvent::Output(..)) && !ev.remote_frame(),
+            _ => true,
+        }
     }
 }
 
@@ -136,6 +132,7 @@ struct Client {
     size: Option<(u16, u16)>,
     zone: String,
     openers: Vec<Opener>,
+    machines: Option<Machines>,
     used: u64,
     notify: Channel,
     browser: bool,
@@ -260,6 +257,7 @@ fn prepare_app(app: &mut App, path: &Path, session: &Path) -> Saver<todo::Saved>
         app.set_pane_socket(path);
     }
     app.set_issue_cache(paths::issue_cache(session));
+    app.set_recap_places(&paths::journal(session), &paths::recap(session));
     app.set_plugin_places(crate::plugins::Places::new(&paths::config(), session));
     let todos = todo::load(&paths::todos(session));
     let todo_saver = Saver::new(paths::todos(session), Some(todos.saved()));
@@ -304,7 +302,7 @@ pub(crate) fn run() -> Result<()> {
     let (app_tx, app_rx) = mpsc::channel();
     spawn_forwarder(app_rx, tx.clone());
 
-    let mut app = App::new(shell::default(), HostTheme::default(), paths::config(), app_tx);
+    let mut app = App::new(shell::default(), HostTheme::default(), &paths::config(), app_tx);
     let session = paths::session();
     log_started(&path, &session, level);
     let todo_saver = prepare_app(&mut app, &path, &session);
@@ -634,45 +632,6 @@ impl Server {
         }
     }
 
-    fn flush_notifications(&mut self) {
-        let Self { app, clients, .. } = self;
-        for notification in app.take_notifications() {
-            for client in clients.iter_mut().filter(|c| c.screen.is_some()) {
-                let channel = notification.channel_for(client.notify).id();
-                log::info!("server", "notification sent", client = client.id, channel = channel);
-                client.sent.push(&notification, client.notify);
-                client.send(ServerMessage::Frame(notification.encode(client.notify)));
-            }
-        }
-    }
-
-    fn flush_sounds(&mut self) {
-        let Self { app, clients, .. } = self;
-        if let Some(cue) = sound::loudest(&app.take_sounds()) {
-            for client in clients.iter().filter(|c| c.screen.is_some() && !c.browser) {
-                log::info!("server", "sound sent", client = client.id, kind = cue.kind.id());
-                log::debug!("server", "sound path", client = client.id, path = cue.path);
-                client.send(ServerMessage::Sound(cue.clone()));
-            }
-        }
-    }
-
-    fn flush_opens(&mut self) {
-        let Self { app, clients, .. } = self;
-        for (id, open) in app.take_opens() {
-            if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && !c.browser) {
-                log::info!("server", "open sent", client = id, opener = open.opener.id());
-                client.send(ServerMessage::Open(open));
-            }
-        }
-        for (id, browse) in app.take_browses() {
-            if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && !c.browser) {
-                log::info!("server", "browse sent", client = id, port = browse.port);
-                client.send(ServerMessage::Browse(browse));
-            }
-        }
-    }
-
     fn due(&self, now: Instant) -> bool {
         let since = |at: Option<Instant>| at.map_or(Duration::MAX, |at| now.saturating_duration_since(at));
         self.changed || since(self.drawn) >= TICK || (self.printed && since(self.printed_at) >= FRAME)
@@ -706,11 +665,13 @@ impl Server {
         if log::enabled(Level::Debug) {
             describe(&ev);
         }
-        if let ServerEvent::App(AppEvent::Output(id, ..)) = &ev {
-            self.printed = self.printed || self.app.shows(*id);
-        } else {
-            self.changed = true;
-            self.app.touch_surfaces();
+        match &ev {
+            ServerEvent::App(AppEvent::Output(id, ..)) => self.printed = self.printed || self.app.shows(*id),
+            ServerEvent::App(ev) if ev.remote_frame() => self.printed = true,
+            _ => {
+                self.changed = true;
+                self.app.touch_surfaces();
+            }
         }
         self.dispatch(ev)?;
         if self.restart.is_some() {
@@ -750,6 +711,7 @@ impl Server {
             }
             ClientMessage::Request(text) => self.request(id, &text),
             ClientMessage::Graphics(graphics) => self.images_changed(id, graphics),
+            ClientMessage::Machines(machines) => self.machines_changed(id, machines),
         }
         ControlFlow::Continue(())
     }
@@ -801,6 +763,7 @@ impl Server {
             size: None,
             zone: "UTC".into(),
             openers: Vec::new(),
+            machines: None,
             used: 0,
             notify,
             browser: false,
@@ -850,6 +813,7 @@ impl Server {
         if let Some(client) = self.clients.iter().find(|client| client.id == id) {
             self.app.set_queue_zone(client.zone.clone());
             self.app.set_window(id, &client.openers);
+            self.app.set_machines(id, client.machines.clone());
         }
         if let Err(e) = self.app.handle_event(AppEvent::Input(ev), area) {
             log::warning!("app", "input failed", error = e);
@@ -899,6 +863,7 @@ impl Server {
         let before = self.clients.len();
         self.clients.retain(|c| c.id != id);
         if self.clients.len() != before {
+            self.show_latest_machines();
             self.fit(None);
             if self.clients.iter().all(|c| c.size.is_none()) {
                 self.app.window_gone();
@@ -926,7 +891,7 @@ impl Server {
         {
             log::error!("server", "failed to save the queue", error = e);
         }
-        self.app.stop_plugins();
+        self.app.stop_background();
         self.answer();
         for client in self.clients.drain(..) {
             client.leave(self.restart.clone().map_or(ServerMessage::Shutdown, ServerMessage::Restart));
@@ -948,6 +913,7 @@ fn logged_save(saved: io::Result<bool>, target: &str, (done, failed): (&str, &st
 fn describe(ev: &ServerEvent) {
     match ev {
         ServerEvent::App(AppEvent::Output(..)) => {}
+        ServerEvent::App(ev) if ev.remote_frame() => {}
         ServerEvent::App(ev) => log::debug!("server", "job answered", job = ev.name()),
         ServerEvent::Accepted(_) => log::debug!("server", "connection"),
         ServerEvent::Message(id, ClientMessage::Event(ev)) => {

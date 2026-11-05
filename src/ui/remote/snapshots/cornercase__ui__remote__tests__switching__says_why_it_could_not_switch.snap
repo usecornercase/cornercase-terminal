@@ -1,0 +1,16 @@
+---
+source: src/ui/remote/tests.rs
+expression: "drawn(70, 12, &failed).backend()"
+---
+"                                                                      "
+"                                                                      "
+"     ╭─ Switch machine ─────────────────────────────────────────╮     "
+"     │                                                          │     "
+"     │ could not switch to devbox                               │     "
+"     │ `devbox` runs cornercase 0.11.9 and this machine 0.12.0  │     "
+"     │                                                          │     "
+"     │                                                          │     "
+"     │ you are still on this machine                      back  │     "
+"     ╰──────────────────────────────────────────────────────────╯     "
+"                                                                      "
+"                                                                      "

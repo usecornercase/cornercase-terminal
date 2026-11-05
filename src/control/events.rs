@@ -94,6 +94,12 @@ pub(crate) enum What {
     Bell {
         count: u64,
     },
+    Recap {
+        state: String,
+        range: String,
+        agent: String,
+        error: Option<String>,
+    },
     Notice {
         token: String,
         agent: String,
@@ -103,6 +109,8 @@ pub(crate) enum What {
         panes: Vec<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         sound: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        machine: Option<String>,
     },
 }
 
@@ -121,7 +129,7 @@ impl Event {
             What::Opened { kind, .. } | What::Closed { kind } => Some(*kind),
             What::Status { .. } | What::Exited { .. } | What::Clipboard { .. } | What::Bell { .. } => Some(Kind::Pane),
             What::Notice { .. } => Some(Kind::Workspace),
-            What::Dropped { .. } => None,
+            What::Dropped { .. } | What::Recap { .. } => None,
         }
     }
 
@@ -135,7 +143,8 @@ impl Event {
 
     pub(crate) fn about(&self, panes: &[u64]) -> bool {
         match &self.what {
-            What::Notice { panes: named, .. } => named.iter().any(|pane| panes.contains(pane)),
+            What::Notice { panes: named, machine: None, .. } => named.iter().any(|pane| panes.contains(pane)),
+            What::Notice { .. } => false,
             _ => self.kind() == Some(Kind::Pane) && self.ids.pane.is_some_and(|pane| panes.contains(&pane)),
         }
     }
