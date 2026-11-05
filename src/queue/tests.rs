@@ -341,3 +341,21 @@ mod trimming {
         assert!(queue.entry(old).is_none());
     }
 }
+
+mod capped_trimming {
+    use super::*;
+    use crate::queue::repeat::Repeat;
+
+    #[test]
+    fn runs_that_keep_their_place_stop_at_twice_the_history() {
+        let mut queue = Queue::default();
+        let repeat = Repeat::parse("30m", "UTC", 0).expect("repeat");
+        let id = queue.add(Task { repeat: Some(repeat), cleanup: true, ..task(100) }).expect("routine");
+        for at in 1..=40 {
+            let run = queue.run_now(id, at).expect("run");
+            queue.entry_mut(run).expect("run").state =
+                State::Started { pane: 1, server: crate::control::server_token().into() };
+        }
+        assert_eq!(queue.runs_of(id).count(), RUNS_KEPT * 2);
+    }
+}

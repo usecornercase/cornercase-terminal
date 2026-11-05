@@ -1,10 +1,10 @@
 use super::repeat::Repeat;
 use super::{Entry, GRACE, Place, Queue, RUNS_KEPT, State, Task, missing};
 
-fn keeps_its_place(run: &Entry) -> bool {
+fn keeps_its_place(run: &Entry, spare_counting: bool) -> bool {
     match &run.state {
         State::Pending | State::Starting => true,
-        State::Started { server, .. } => run.task.cleanup && server == crate::control::server_token(),
+        State::Started { server, .. } => spare_counting && run.task.cleanup && server == crate::control::server_token(),
         _ => false,
     }
 }
@@ -36,15 +36,20 @@ impl Queue {
     }
 
     fn trim(&mut self, routine: u64) {
+        self.drop_beyond(routine, RUNS_KEPT, true);
+        self.drop_beyond(routine, RUNS_KEPT * 2, false);
+    }
+
+    fn drop_beyond(&mut self, routine: u64, limit: usize, spare_counting: bool) {
         let mut runs: Vec<u64> = self.runs_of(routine).map(|run| run.id).collect();
         runs.sort_unstable();
-        let extra = runs.len().saturating_sub(RUNS_KEPT);
+        let extra = runs.len().saturating_sub(limit);
         let mut dropped = 0;
         for id in runs {
             if dropped == extra {
                 break;
             }
-            let settled = self.entry(id).is_some_and(|run| !keeps_its_place(run));
+            let settled = self.entry(id).is_some_and(|run| !keeps_its_place(run, spare_counting));
             if settled {
                 self.entries.retain(|entry| entry.id != id);
                 dropped += 1;

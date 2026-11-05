@@ -3,6 +3,10 @@ use crate::queue::repeat::Repeat;
 use crate::queue::{self, State as QueueState};
 
 fn flow_routine(team: &mut Team, label: &str, flow: &str) -> u64 {
+    flow_routine_with(team, label, flow, false)
+}
+
+fn flow_routine_with(team: &mut Team, label: &str, flow: &str, cleanup: bool) -> u64 {
     team.app.set_queue_area(AREA);
     let at = crate::time::now() + 3600;
     let place = queue::Place { project: team.app.projects[0].path.clone(), ..queue::Place::default() };
@@ -12,6 +16,7 @@ fn flow_routine(team: &mut Team, label: &str, flow: &str) -> u64 {
         label: label.into(),
         prompt: "settle the login bug".into(),
         flow: Some(flow.into()),
+        cleanup,
         repeat: Some(Repeat::parse("2h", "UTC", at).expect("repeat")),
         place,
         ..queue::Task::default()
@@ -59,8 +64,7 @@ fn a_finished_flow_run_takes_its_role_worktrees_and_branches_with_it() {
     let mut team = Team::new();
     let flows = paths::flows(&team.config.path().join("config.json"));
     store::save(&flows, &duel(), None).expect("save the duel");
-    let id = flow_routine(&mut team, "nightly duel", "Duel");
-    team.app.panels.queued.queue_task_for_cleanup(id);
+    let id = flow_routine_with(&mut team, "nightly duel", "Duel", true);
     let since = Instant::now();
     team.app.run_queued(id, since).expect("start now");
     let Team { app, rx, .. } = &mut team;

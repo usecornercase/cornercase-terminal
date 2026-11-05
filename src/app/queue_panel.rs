@@ -131,13 +131,6 @@ impl QueueRuntime {
         }
     }
 
-    #[cfg(test)]
-    pub(super) fn queue_task_for_cleanup(&mut self, id: u64) {
-        if let Some(entry) = self.queue.entry_mut(id) {
-            entry.task.cleanup = true;
-        }
-    }
-
     pub(super) fn set_state(&mut self, id: u64, state: State) {
         if let Some(entry) = self.queue.entry_mut(id) {
             entry.state = state;
