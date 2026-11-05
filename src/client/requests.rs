@@ -73,6 +73,10 @@ pub(crate) fn use_close_agent_tabs() -> Result<()> {
     require("close-agent-tabs", "would remove an agent's own worktree when it closes the agent")
 }
 
+pub(crate) fn use_recap() -> Result<()> {
+    require("recap", "has no recap")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }

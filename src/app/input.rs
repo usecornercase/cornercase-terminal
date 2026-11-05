@@ -267,6 +267,7 @@ impl App {
             Side::Files => return self.files_mouse(ev, pos, panel, area),
             Side::Changes => return self.changes_mouse(ev, pos, panel, area),
             Side::Flow => self.flow_mouse(ev, pos, panel),
+            Side::Recap => self.recap_mouse(ev, pos, panel, area),
         }
         Ok(())
     }
@@ -396,6 +397,7 @@ impl App {
             ui::ActivityItem::Files => self.toggle_files(),
             ui::ActivityItem::Todo => self.toggle_todo(),
             ui::ActivityItem::Worktrees => self.open_worktrees(None),
+            ui::ActivityItem::Recap => self.toggle_recap(),
             ui::ActivityItem::Flow => self.toggle_flow(),
             ui::ActivityItem::Plugin(plugin) => self.click_plugin_button(plugin, pos),
             ui::ActivityItem::Help => self.open_help(pos),
@@ -412,12 +414,13 @@ impl App {
     }
 
     fn footer_hit(&self, areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
-        let machine = self.machine_label().map(|label| ui::machine_button(areas.worktrees, &label).0);
+        let machine = self.machine_label().map(|label| ui::machine_button(areas.machine, &label).0);
         [
             (ui::help_button(areas.more), ui::ActivityItem::Help),
             (ui::more_button(areas.more), ui::ActivityItem::More),
+            (ui::recap_button(areas.worktrees), ui::ActivityItem::Recap),
             (machine.unwrap_or_default(), ui::ActivityItem::Machine),
-            (ui::worktrees_button(areas.worktrees, machine), ui::ActivityItem::Worktrees),
+            (ui::worktrees_button(areas.worktrees), ui::ActivityItem::Worktrees),
         ]
         .into_iter()
         .find_map(|(r, item)| r.contains(pos).then_some(item))

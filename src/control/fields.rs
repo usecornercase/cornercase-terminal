@@ -224,6 +224,7 @@ impl Command {
             Self::Worktrees(list) => list.fields(fields),
             Self::PullRequest(read) => read.fields(fields),
             Self::Context(read) => read.fields(fields),
+            Self::Recap(ask) => ask.fields(fields),
             Self::FreeBuilds(free) => free.fields(fields),
             Self::Tour(tour) => tour.fields(fields),
             Self::PluginActions(actions) => actions.fields(fields),

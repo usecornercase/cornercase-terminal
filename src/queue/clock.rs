@@ -21,7 +21,7 @@ fn named<const N: usize>(candidates: [Option<&str>; N]) -> Option<String> {
     })
 }
 
-fn zone(name: &str) -> Result<TimeZone, String> {
+pub(crate) fn zone(name: &str) -> Result<TimeZone, String> {
     jiff::fmt::temporal::DateTimeParser::new()
         .parse_time_zone(name)
         .or_else(|_| TimeZone::posix(name))

@@ -46,6 +46,7 @@ fn every_action() -> Vec<Action> {
         Action::ReopenAgents,
         Action::Issues,
         Action::Todo,
+        Action::Recap,
         Action::Settings,
         Action::Usage,
         Action::Processes,
@@ -88,12 +89,13 @@ fn action_index(action: &Action) -> usize {
         Action::ReopenAgents => 28,
         Action::Issues => 29,
         Action::Todo => 30,
-        Action::Settings => 31,
-        Action::Usage => 32,
-        Action::Processes => 33,
-        Action::Away => 34,
-        Action::Quit => 35,
-        Action::Help => 36,
+        Action::Recap => 31,
+        Action::Settings => 32,
+        Action::Usage => 33,
+        Action::Processes => 34,
+        Action::Away => 35,
+        Action::Quit => 36,
+        Action::Help => 37,
     }
 }
 

@@ -18,5 +18,5 @@ expression: t.backend()
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Worktrees                    │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
 "  More ▴                 Help  │  Files       TODO       │                                          "

@@ -42,7 +42,7 @@ mod layout {
         let a = full_layout(
             TALL,
             Widths::default(),
-            Screen { changes: false, sidebar, agents: false, icon_bar: true, plugins: false },
+            Screen { changes: false, sidebar, agents: false, icon_bar: true, plugins: false, machine: false },
         );
         let footer = [a.separator, a.more_separator, a.more, a.issues, a.todo_button, a.files_button];
         assert_eq!(
@@ -56,12 +56,26 @@ mod layout {
         let without = full_layout(
             TALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: false, plugins: false },
+            Screen {
+                changes: false,
+                sidebar: Sidebar::SideBySide,
+                agents: false,
+                icon_bar: false,
+                plugins: false,
+                machine: false,
+            },
         );
         let with = full_layout(
             TALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
+            Screen {
+                changes: false,
+                sidebar: Sidebar::SideBySide,
+                agents: false,
+                icon_bar: true,
+                plugins: false,
+                machine: false,
+            },
         );
         assert_eq!((without.list.bottom(), with.list.bottom()), (TALL.height - 3, TALL.height));
     }
@@ -76,7 +90,14 @@ mod layout {
         let a = full_layout(
             SMALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
+            Screen {
+                changes: false,
+                sidebar: Sidebar::SideBySide,
+                agents: false,
+                icon_bar: true,
+                plugins: false,
+                machine: false,
+            },
         );
         assert_eq!((a.activity, a.compact()), (Rect::default(), true));
     }
@@ -98,6 +119,7 @@ mod places {
                 (Item::Files, 5),
                 (Item::Todo, 7),
                 (Item::Worktrees, 9),
+                (Item::Recap, 11),
             ]
         );
     }
@@ -107,7 +129,7 @@ mod places {
         let shown = Shown { changes: false, ..everything() };
         let top: Vec<(Item, u16)> =
             places(Rect::new(0, 0, WIDTH, 24), shown).into_iter().filter(|(_, y)| *y < 10).collect();
-        assert_eq!(top, [(Item::Issues, 1), (Item::Files, 3), (Item::Todo, 5), (Item::Worktrees, 7)]);
+        assert_eq!(top, [(Item::Issues, 1), (Item::Files, 3), (Item::Todo, 5), (Item::Worktrees, 7), (Item::Recap, 9)]);
     }
 
     #[test]
@@ -197,6 +219,7 @@ mod drawing {
                 icons::NERD.files,
                 icons::NERD.todo,
                 icons::WORKTREES,
+                icons::RECAP,
                 icons::HELP,
                 icons::MORE
             ]
@@ -210,7 +233,14 @@ mod drawing {
         let a = full_layout(
             SMALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
+            Screen {
+                changes: false,
+                sidebar: Sidebar::SideBySide,
+                agents: false,
+                icon_bar: true,
+                plugins: false,
+                machine: false,
+            },
         );
         let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();
         assert_eq!(
@@ -226,7 +256,14 @@ mod drawing {
         let a = full_layout(
             SMALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
+            Screen {
+                changes: false,
+                sidebar: Sidebar::SideBySide,
+                agents: false,
+                icon_bar: true,
+                plugins: false,
+                machine: false,
+            },
         );
         let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();
         assert_eq!(

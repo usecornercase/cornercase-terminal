@@ -5,23 +5,40 @@ fn on(machine: &str) -> View<'static> {
     View { machine: Some(machine.into()), ..view(&["shop"]) }
 }
 
-fn row() -> Rect {
-    areas().worktrees
+fn with_machine(area: Rect, sidebar: Sidebar) -> Areas {
+    full_layout(area, Widths::default(), Screen { sidebar, machine: true, ..Screen::default() })
 }
 
-mod beside_worktrees {
+fn row() -> Rect {
+    with_machine(AREA, Sidebar::SideBySide).machine
+}
+
+mod on_its_own_row {
     use super::*;
 
     #[test]
-    fn the_machine_sits_at_the_middle_of_the_worktrees_row() {
+    fn the_machine_sits_on_a_row_of_its_own_under_worktrees() {
         let t = render(&on("devbox"));
+        let a = with_machine(AREA, Sidebar::SideBySide);
 
-        assert_eq!(row_text(&t, row()).trim_end(), "  Worktrees      devbox ▴");
+        assert_eq!(a.machine.y, a.worktrees.y + 1);
+        assert_eq!(row_text(&t, a.machine).trim_end(), "  devbox ▴");
+        assert_eq!(row_text(&t, a.worktrees).trim_end(), "  Worktrees      Recap");
     }
 
     #[test]
     fn renders_the_footer_with_the_machine() {
         insta::assert_snapshot!(render(&on("this machine")).backend());
+    }
+
+    #[test]
+    fn a_window_that_knows_no_other_machine_has_the_rows_it_had() {
+        let without = layout(AREA, Widths::default());
+        let with = with_machine(AREA, Sidebar::SideBySide);
+
+        assert_eq!(without.machine.height, 0);
+        assert_eq!(with.more.y, without.more.y);
+        assert_eq!(with.list.height + 1, without.list.height);
     }
 
     #[test]
@@ -32,27 +49,19 @@ mod beside_worktrees {
     }
 
     #[test]
-    fn worktrees_keeps_the_cells_left_of_it() {
-        let (machine, _) = machine_button(row(), "devbox");
-
-        assert_eq!(worktrees_button(row(), Some(machine)), Rect { width: machine.x - row().x, ..row() });
-    }
-
-    #[test]
-    fn a_column_too_narrow_leaves_it_out() {
-        let narrow = Rect { width: 16, ..row() };
+    fn a_row_too_narrow_leaves_it_out() {
+        let narrow = Rect { width: 7, ..row() };
 
         assert_eq!(machine_button(narrow, "devbox"), (Rect::default(), String::new()));
-        assert_eq!(worktrees_button(narrow, Some(Rect::default())), narrow);
     }
 
     #[test]
     fn the_narrowest_row_that_shows_it_keeps_its_mark_and_cuts_the_name() {
-        let shown = machine_button(Rect { width: 20, ..row() }, "devbox");
-        let hidden = machine_button(Rect { width: 19, ..row() }, "devbox");
+        let shown = machine_button(Rect { width: 8, ..row() }, "devbox");
+        let hidden = machine_button(Rect { width: 7, ..row() }, "devbox");
 
         assert_eq!((shown.1.as_str(), hidden.1.as_str()), ("d… ▴", ""));
-        assert!(shown.0.right() <= row().x + 20 && hidden.0.is_empty());
+        assert!(shown.0.right() <= row().x + 8 && hidden.0.is_empty());
     }
 
     #[test]
@@ -62,17 +71,33 @@ mod beside_worktrees {
 
         let t = render(&view);
 
-        let lit = |x| t.backend().buffer()[(x, machine.y)].bg == Color::Cyan;
-        assert_eq!((lit(machine.x + 1), lit(row().x + 2)), (true, false));
+        let lit = |x, y| t.backend().buffer()[(x, y)].bg == Color::Cyan;
+        let worktrees = with_machine(AREA, Sidebar::SideBySide).worktrees;
+        assert_eq!((lit(machine.x + 1, machine.y), lit(worktrees.x + 2, worktrees.y)), (true, false));
+    }
+
+    #[rstest]
+    #[case::stacked(Sidebar::ProjectsOnTop)]
+    #[case::tree(Sidebar::Tree)]
+    fn the_stacked_footer_gains_one_row_for_it(#[case] sidebar: Sidebar) {
+        let tall = Rect { x: 0, y: 0, width: W, height: 30 };
+        let with = with_machine(tall, sidebar);
+        let without = layout_with(tall, Widths::default(), false, sidebar);
+
+        assert_eq!(with.machine.y, with.worktrees.y + 1);
+        assert_eq!(with.more.y, without.more.y);
+        assert_eq!(without.machine.height, 0);
     }
 
     #[test]
-    fn the_compact_menu_shares_the_worktrees_band_with_it() {
-        let band = layout(SMALL, Widths::default()).shown(Some(Nav::Projects)).worktrees;
+    fn the_compact_menu_gets_a_band_for_it_below_worktrees() {
+        let compact = full_layout(SMALL, Widths::default(), Screen { machine: true, ..Screen::default() });
+        let band = compact.shown(Some(Nav::Projects)).machine;
 
         let (r, text) = machine_button(band, "devbox");
 
         assert_eq!((r.y, r.height, text.as_str()), (band.y, band.height, "devbox ▴"));
+        assert!(band.y > compact.worktrees.y);
     }
 }
 

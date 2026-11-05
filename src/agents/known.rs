@@ -1,4 +1,4 @@
-use super::{ModeTable, breakdown, claude, codex, copilot, cursor, gemini, grok, opencode, usage, vibe};
+use super::{ModeTable, breakdown, claude, codex, copilot, cursor, gemini, grok, opencode, recap, usage, vibe};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Known {
@@ -356,6 +356,19 @@ impl Known {
             Self::Cursor => cursor::USAGE,
             Self::Copilot => copilot::USAGE,
             Self::Vibe => vibe::USAGE,
+        }
+    }
+
+    pub(crate) fn recap(self) -> Option<recap::Spec> {
+        match self {
+            Self::Claude => claude::RECAP,
+            Self::Codex => codex::RECAP,
+            Self::Gemini => gemini::RECAP,
+            Self::Opencode => opencode::RECAP,
+            Self::Grok => grok::RECAP,
+            Self::Cursor => cursor::RECAP,
+            Self::Copilot => copilot::RECAP,
+            Self::Vibe => vibe::RECAP,
         }
     }
 

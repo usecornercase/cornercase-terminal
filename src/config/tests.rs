@@ -29,6 +29,18 @@ mod file {
         [("~/code/web-shop".to_string(), shop)].into()
     }
 
+    fn recap_keys() -> Config {
+        Config {
+            recap_agent: "codex".into(),
+            recap_account: "work".into(),
+            recap_model: "gpt-5".into(),
+            recap_effort: "high".into(),
+            recap_language: "Spanish".into(),
+            recap_instructions: "group by client".into(),
+            ..Config::default()
+        }
+    }
+
     fn interface_keys() -> Config {
         Config {
             icon_bar: true,
@@ -64,7 +76,7 @@ mod file {
             )]
             .into(),
             active_accounts: [("claude".into(), "home".into())].into(),
-            ..Config::default()
+            ..recap_keys()
         }
     }
 

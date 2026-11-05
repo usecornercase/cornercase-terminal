@@ -14,7 +14,7 @@ pub(crate) const CHANGES_VERSION: u32 = 1;
 pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
 pub(crate) const FILES_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 31] = [
+pub(crate) const FEATURES: [&str; 32] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -46,6 +46,7 @@ pub(crate) const FEATURES: [&str; 31] = [
     "settings-search",
     "flow-issue-prompt",
     "search-settings",
+    "recap",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -247,6 +247,8 @@ impl App {
             Stage::Usage(waiting) => self.usage_read(waiting, now).map(|plans| Ok(json(&plans))),
             Stage::PullRequest(workspace) => self.pull_request_reply(*workspace),
             Stage::Context { pane, answers } => self.context_reply(*pane, *answers),
+            Stage::Recap { choice, answers } => self.recap_reply(*choice, *answers),
+            Stage::Dossier(token) => self.dossier_reply(*token),
             Stage::Setup(workspace) if !self.workspace_setting_up(*workspace) => {
                 Some(self.setup_failure(pane).map_or_else(|| Ok(json(&pending.done)), Err))
             }
@@ -316,8 +318,6 @@ impl App {
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Check => return "git is still checking the worktree".into(),
             Stage::Issue(asking) => return format!("{} is still looking the issue up", asking.source().name()),
-            Stage::Usage(_) => return "the agents have not said their usage yet".into(),
-            Stage::Ports | Stage::Processes | Stage::PullRequest(_) | Stage::Context { .. } => return stage.listing(),
             Stage::Held(_) => return held::waiting(pane, self.blocked(pane, Instant::now())),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Setup(workspace) => {
@@ -332,6 +332,7 @@ impl App {
                 return waits.collect::<Vec<_>>().join("; ");
             }
             Stage::Watch(watch) => watch,
+            _ => return stage.listing(),
         };
         let pane = watch.pane;
         let Some(term) = self.projects.pane_by(pane) else { return format!("pane {pane} closed") };

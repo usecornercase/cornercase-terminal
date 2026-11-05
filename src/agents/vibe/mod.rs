@@ -26,6 +26,7 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("auto-approve (dangerous)", &["--agent", "auto-approve"]),
 ];
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
+pub(in crate::agents) const RECAP: Option<crate::agents::recap::Spec> = None;
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;

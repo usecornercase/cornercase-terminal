@@ -19,6 +19,7 @@ mod ports;
 mod processes;
 mod pull_request;
 mod queue;
+mod recap;
 mod search;
 mod status;
 mod talk;
@@ -185,16 +186,21 @@ enum Stage {
     Processes,
     PullRequest(u64),
     Context { pane: u64, answers: u64 },
+    Recap { choice: crate::recap::Choice, answers: u64 },
+    Dossier(u64),
 }
 
 impl Stage {
     fn listing(&self) -> String {
         match self {
+            Self::Usage(_) => "the agents have not said their usage yet".into(),
             Self::Processes => "the processes are still being measured".into(),
             Self::PullRequest(workspace) => {
                 format!("gh or glab is still reading the pull request of workspace {workspace}")
             }
             Self::Context { pane, .. } => format!("the agent is still saying what fills the context of pane {pane}"),
+            Self::Recap { choice, .. } => format!("the agent is still writing the recap of {}", choice.name()),
+            Self::Dossier(_) => "the dossier is still being built".into(),
             _ => "the ports are still being listed".into(),
         }
     }
@@ -219,6 +225,8 @@ impl Stage {
                 | Self::Processes
                 | Self::PullRequest(_)
                 | Self::Context { .. }
+                | Self::Recap { .. }
+                | Self::Dossier(_)
         )
     }
 }
@@ -642,6 +650,7 @@ impl App {
             Command::ChangesMergeCheck(check) => self.changes_merge_check_request(client, asker, &check),
             Command::PullRequest(read) => self.pull_request_request(client, asker, &read, now),
             Command::Context(read) => self.context_request(client, asker, &read),
+            Command::Recap(ask) => self.recap_request(client, asker, &ask),
             other => return ControlFlow::Continue(other),
         })
     }

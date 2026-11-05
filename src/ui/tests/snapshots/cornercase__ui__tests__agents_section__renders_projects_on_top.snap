@@ -29,6 +29,6 @@ expression: "render_sized(&shown(Sidebar::ProjectsOnTop, entries()), W,\nTALL.he
 " ───────────────────────────── │                                                                    "
 "  Issues                       │                                                                    "
 "  Files          TODO          │                                                                    "
-"  Worktrees                    │                                                                    "
+"  Worktrees      Recap         │                                                                    "
 " ───────────────────────────── │                                                                    "
 "  More ▴                 Help  │                                                                    "

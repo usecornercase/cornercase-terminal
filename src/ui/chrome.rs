@@ -37,9 +37,9 @@ pub const MORE_LABEL: &str = "More ▴";
 
 pub(crate) const WORKTREES_LABEL: &str = "Worktrees";
 
-const MACHINE_MARK: &str = " ▴";
+pub(crate) const RECAP_LABEL: &str = "Recap";
 
-const MACHINE_GAP: u16 = 1;
+const MACHINE_MARK: &str = " ▴";
 
 pub(crate) const TODO_LABEL: &str = "TODO";
 
@@ -64,38 +64,47 @@ pub(super) fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
         draw_button(f, help, "", HELP_LABEL, style);
     }
     draw_more_button(f, view, more_button(areas.more));
-    if areas.worktrees.is_empty() {
-        return;
+    let worktrees = worktrees_button(areas.worktrees);
+    if !worktrees.is_empty() {
+        let style = button_style(view, worktrees, Style::default().fg(view.muted), Color::Cyan);
+        draw_button(f, worktrees, " ", WORKTREES_LABEL, style);
     }
-    let machine = view.machine.as_deref().map(|label| machine_button(areas.worktrees, label));
-    let worktrees = worktrees_button(areas.worktrees, machine.as_ref().map(|(r, _)| *r));
-    let style = button_style(view, worktrees, Style::default().fg(view.muted), Color::Cyan);
-    draw_button(f, worktrees, " ", WORKTREES_LABEL, style);
+    let recap = recap_button(areas.worktrees);
+    if !recap.is_empty() {
+        let idle =
+            if view.recap.is_some() { Style::default().fg(Color::Cyan) } else { Style::default().fg(view.muted) };
+        let style = button_style(view, recap, idle, Color::Cyan);
+        draw_button(f, recap, "", RECAP_LABEL, style);
+    }
+    let machine = view.machine.as_deref().map(|label| machine_button(areas.machine, label));
     if let Some((r, text)) = machine.filter(|(r, _)| !r.is_empty()) {
         let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
         draw_button(f, r, "", &text, style);
     }
 }
 
+pub(crate) fn recap_button(row: Rect) -> Rect {
+    let needed = button_width(WORKTREES_LABEL) + button_width(RECAP_LABEL) + 3;
+    if row.is_empty() || row.width < needed {
+        return Rect::default();
+    }
+    changes_button(row, RECAP_LABEL)
+}
+
+pub(crate) fn worktrees_button(row: Rect) -> Rect {
+    let recap = recap_button(row);
+    if recap.is_empty() { row } else { Rect { width: recap.x.saturating_sub(row.x), ..row } }
+}
+
 pub(crate) fn machine_button(row: Rect, label: &str) -> (Rect, String) {
-    let start = row.x.saturating_add(1).saturating_add(button_width(WORKTREES_LABEL)).saturating_add(MACHINE_GAP);
-    let room = row.right().saturating_sub(start).saturating_sub(1);
     let mark = u16::try_from(MACHINE_MARK.chars().count()).unwrap_or(u16::MAX);
+    let room = row.width.saturating_sub(2);
     if room < button_width("……") + mark {
         return (Rect::default(), String::new());
     }
     let text = format!("{}{MACHINE_MARK}", truncate_right(label, usize::from(room - 2 - mark)));
     let width = button_width(&text);
-    let column = row.x.saturating_add(1).saturating_add(row.width / 2);
-    let x = column.min(row.right().saturating_sub(width + 1)).max(start);
-    (Rect { x, width, ..row }.intersection(row), text)
-}
-
-pub(crate) fn worktrees_button(row: Rect, machine: Option<Rect>) -> Rect {
-    match machine.filter(|r| !r.is_empty()) {
-        Some(machine) => Rect { width: machine.x.saturating_sub(row.x), ..row },
-        None => row,
-    }
+    (Rect { x: row.x.saturating_add(1), width, ..row }.intersection(row), text)
 }
 
 pub(crate) fn help_button(more: Rect) -> Rect {

@@ -42,6 +42,7 @@ const NPM_SCRIPTS: [&[&str]; 2] =
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
+pub(in crate::agents) const RECAP: Option<crate::agents::recap::Spec> = None;
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const UNFOUND: &str =
     "Gemini has no conversation in its folder yet, or two Gemini share that home and folder";

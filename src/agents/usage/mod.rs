@@ -117,7 +117,7 @@ pub(in crate::agents) fn window(label: String, kind: String, scope: Option<Strin
 type Answer = fn(&str) -> Option<Result<Report>>;
 
 fn run(agent: Known, command: Command, requests: &str, answer: Answer, timeout: Duration) -> Result<Report> {
-    let limits = Limits { name: agent.name(), timeout, grace: Duration::ZERO };
+    let limits = Limits { name: agent.name(), timeout, grace: Duration::ZERO, close_input: false };
     probe::run(limits, command, requests, move |line| answer(line).map_or(Step::Read, Step::Answer))
 }
 

@@ -215,6 +215,7 @@ impl App {
                             agents: self.config.agents_section,
                             icon_bar: self.config.icon_bar,
                             plugins: self.has_plugin_buttons(),
+                            machine: self.machine_label().is_some(),
                             ..ui::Screen::default()
                         },
                     )
@@ -240,6 +241,7 @@ impl App {
                 agents: true,
                 icon_bar: self.config.icon_bar,
                 plugins: self.has_plugin_buttons(),
+                machine: self.machine_label().is_some(),
             },
         )
         .agents

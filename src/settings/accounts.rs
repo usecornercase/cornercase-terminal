@@ -28,7 +28,7 @@ impl Listed {
         self.info.providers.iter().find(|provider| provider.provider == kind.name())
     }
 
-    fn names(&self, kind: Known) -> Vec<&AccountInfo> {
+    pub(super) fn names(&self, kind: Known) -> Vec<&AccountInfo> {
         self.provider(kind).map(|provider| provider.accounts.iter().collect()).unwrap_or_default()
     }
 

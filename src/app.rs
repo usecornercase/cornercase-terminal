@@ -83,6 +83,7 @@ use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use plugins::{PluginEvent, Plugins};
 use queue_panel::QueueEvent;
+use recap_panel::RecapEvent;
 use search_dialog::SearchEvent;
 use session::not_restored;
 use toast::Toast;
@@ -142,6 +143,7 @@ mod project_settings_dialog;
 mod pull_requests;
 mod queue_dialog;
 mod queue_panel;
+mod recap_panel;
 mod refresh;
 mod remote_access;
 mod search_dialog;
@@ -464,6 +466,7 @@ impl App {
         self.flush_run_dirs();
         self.ask_sessions(now);
         self.refresh_changes(now);
+        self.refresh_recaps();
         self.auto_scroll(now);
         self.auto_scroll_lines(now);
     }
@@ -624,6 +627,7 @@ impl App {
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
             AppEvent::Messenger(event) => self.messenger_event(event, area),
             AppEvent::Merged(answer) => self.merged_answered(answer),
+            AppEvent::Recap(event) => self.recap_answered(*event),
             AppEvent::Plugin(event) => self.plugin_answered(event),
             AppEvent::Login(kind, name, login) => self.login_checked(kind, name, login),
             AppEvent::Restarted(restarted) => self.restarted(*restarted),

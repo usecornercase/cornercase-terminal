@@ -18,5 +18,5 @@ expression: render(&v).backend()
 "                               │                         │                                          "
 "                               │                         │                ╭───────────────────────╮ "
 " ───────────────────────────── │                         │                │ ✓ copied to clipboard │ "
-"  Worktrees                    │                         │                ╰───────────────────────╯ "
+"  Worktrees      Recap         │                         │                ╰───────────────────────╯ "
 "  More ▴                 Help  │                         │                                          "

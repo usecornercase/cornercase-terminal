@@ -1059,6 +1059,18 @@ export class Strip {
 
 export const MORE_LABEL = 'More ▴';
 export const WORKTREES_LABEL = 'Worktrees';
+export const RECAP_LABEL = 'Recap';
+
+export function recapButton(row: Rect): Rect {
+  const needed = buttonWidth(WORKTREES_LABEL) + buttonWidth(RECAP_LABEL) + 3;
+  if (isEmpty(row) || row.w < needed) return EMPTY;
+  return changesButton(row, RECAP_LABEL);
+}
+
+export function worktreesButton(row: Rect): Rect {
+  const recap = recapButton(row);
+  return isEmpty(recap) ? row : { ...row, w: Math.max(0, recap.x - row.x) };
+}
 
 export function helpButton(more: Rect): Rect {
   const w = buttonWidth('Help');

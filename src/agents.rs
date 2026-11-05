@@ -13,6 +13,7 @@ mod known;
 pub(crate) mod launch;
 pub(crate) mod opencode;
 pub(crate) mod probe;
+pub(crate) mod recap;
 pub mod stats;
 pub(crate) mod tree;
 pub(crate) mod usage;

@@ -73,6 +73,7 @@ pub(super) enum Side {
     Todo,
     Files,
     Flow,
+    Recap,
 }
 
 impl App {
@@ -86,7 +87,14 @@ impl App {
         ui::full_layout(
             area,
             self.screen.widths,
-            ui::Screen { changes: panel, sidebar, agents, icon_bar: icons, plugins: self.has_plugin_buttons() },
+            ui::Screen {
+                changes: panel,
+                sidebar,
+                agents,
+                icon_bar: icons,
+                plugins: self.has_plugin_buttons(),
+                machine: self.machine_label().is_some(),
+            },
         )
         .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
         .with_full_screen(self.file_full_screen(), area)
@@ -95,7 +103,7 @@ impl App {
     pub(super) fn panel_shown(&self) -> bool {
         match self.screen.side {
             Some(Side::Changes) => self.changes_shown(),
-            Some(Side::Todo) => true,
+            Some(Side::Todo | Side::Recap) => true,
             Some(Side::Files) => self.files_shown(),
             Some(Side::Flow) => self.has_run(),
             None => false,
@@ -110,7 +118,7 @@ impl App {
             Some(Side::Changes) => self.panels.changes.close(),
             Some(Side::Todo) => self.close_todo(),
             Some(Side::Files) => self.panels.files.close(),
-            Some(Side::Flow) | None => {}
+            Some(Side::Flow | Side::Recap) | None => {}
         }
         self.screen.side = side;
     }
