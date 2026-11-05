@@ -149,7 +149,7 @@ impl Entry {
 }
 
 pub(crate) fn key_of(agent: &str, conversation: Option<&str>, record: Option<String>) -> Option<String> {
-    let id = conversation.map(str::to_string).or(record)?;
+    let id = record.or_else(|| conversation.map(str::to_string))?;
     Some(format!("{agent}:{id}"))
 }
 

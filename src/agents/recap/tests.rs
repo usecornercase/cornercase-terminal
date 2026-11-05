@@ -33,7 +33,7 @@ fn ran(agent: Known, program: &Path, folder: &Path) -> Result<Ran> {
 
 fn assert_claude_argv(argv: &str) {
     for wanted in [
-        "\"--allowedTools\", \"Read,Grep,Glob,Bash(cornercase search:*)\"",
+        "\"--allowedTools\", \"Read,Grep,Glob,Bash(cornercase search:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*)\"",
         "\"--disallowedTools\", \"Edit,Write,NotebookEdit,WebFetch,WebSearch,Task\"",
         "\"--model\", \"opus\"",
         "\"--effort\", \"low\"",

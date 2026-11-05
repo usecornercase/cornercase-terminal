@@ -18,7 +18,7 @@ const ARGS: [&str; 10] = [
     "--max-turns",
     "40",
 ];
-const ALLOWED: &str = "Read,Grep,Glob,Bash(cornercase search:*)";
+const ALLOWED: &str = "Read,Grep,Glob,Bash(cornercase search:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*)";
 const DENIED: &str = "Edit,Write,NotebookEdit,WebFetch,WebSearch,Task";
 
 pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {

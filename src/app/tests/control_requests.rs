@@ -615,6 +615,7 @@ mod grok;
 mod groups;
 mod holding;
 mod issues;
+mod journal;
 mod merge_check;
 mod one_folder;
 mod ordering;

@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 use super::*;
-use crate::app::tests::recap_panel::recaps;
+use crate::app::tests::recap_panel::{Recaps, recaps};
+use crate::recap::Choice;
 
 const PROMPTED: Duration = Duration::from_secs(600);
 
@@ -79,4 +80,29 @@ fn a_failed_run_answers_with_its_reason() {
     std::fs::write(r.claude.with_extension("out"), failed).expect("a failing agent");
     let answer = asked(&mut r.app, &r.rx, "recap", &json!({"range": "now"})).expect("an answer");
     assert_eq!(answer["error"], "Not logged in · Please run /login");
+}
+
+#[test]
+fn a_run_tells_its_start_and_its_end_to_the_ones_following() {
+    let mut r = recaps(PROMPTED);
+    follow(&mut r.app, &[]);
+    std::fs::write(r.claude.with_extension("hold"), "").expect("hold");
+    r.app.toggle_recap();
+    let Recaps { app, rx, .. } = &mut r;
+    refreshing(app, rx, "the agent starts", |a| a.panels.recap.run(Choice::Now).announced);
+    std::fs::remove_file(r.claude.with_extension("hold")).expect("release");
+    let Recaps { app, rx, .. } = &mut r;
+    refreshing(app, rx, "the run ends", |a| !a.panels.recap.run(Choice::Now).running);
+
+    let states: Vec<String> = told(&streamed(&mut r.app))
+        .into_iter()
+        .filter_map(|(what, _)| match what {
+            wire::What::Recap { state, range, agent, error } => {
+                assert_eq!((range.as_str(), agent.as_str(), error), ("now", "claude", None));
+                Some(state)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(states, ["started", "finished"]);
 }

@@ -8,12 +8,13 @@ impl App {
     pub(super) fn recap_live(&self) -> Live {
         let mut live = Live::default();
         for term in self.projects.terms() {
-            let Some(kind) = term.context.kind() else { continue };
+            if term.context.kind().is_none() {
+                continue;
+            }
             let Some(template) = self.journal_entry(term.id) else { continue };
             let Some(key) = template.key() else { continue };
             let status = term.agent.status().map(|status| status.name().to_string());
             let screen = if status.as_deref() == Some("waiting") { screen_lines(term) } else { Vec::new() };
-            let _ = kind;
             live.panes.push(LivePane { key, status, template, screen });
         }
         live.pulls = self.recap_pulls();
