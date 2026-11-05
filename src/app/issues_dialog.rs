@@ -243,6 +243,8 @@ impl App {
             Action::QueueNew => self.new_queue_form(None),
             Action::QueueOpen(id) => self.open_queued(id, area),
             Action::QueueRun(id) => self.run_queued_now(id),
+            Action::QueuePause(id) => self.pause_queued(id, true),
+            Action::QueueResume(id) => self.pause_queued(id, false),
             Action::QueueRemove(id) => self.remove_queued(id),
             Action::QueueClear => self.clear_queued(),
             Action::Start(issue, agent, place) => {

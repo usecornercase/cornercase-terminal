@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::*;
 use crate::control::{Snapshot, TodoItem, contract};
-use crate::queue::{Entry, Place, State, Task};
+use crate::queue::{Entry, Listed, Place, State, Task};
 use crate::test_util::fixture;
 
 fn queued() -> Entry {
@@ -20,6 +20,7 @@ fn queued() -> Entry {
             submit: true,
             place: Place { project: "/home/me/web-shop".into(), ..Place::default() },
             accounts: BTreeMap::new(),
+            ..Task::default()
         },
         state: State::Pending,
     }
@@ -55,7 +56,7 @@ fn snapshot() -> Snapshot<AppState> {
                 TodoItem { id: 1, text: "write the docs".into(), done: false },
                 TodoItem { id: 2, text: "review the login fix".into(), done: true },
             ],
-            queue: vec![queued()],
+            queue: vec![Listed::from(&queued())],
             away: vec![
                 AwayInfo { platform: "telegram".into(), ready: true, away: true, forum: None },
                 AwayInfo { platform: "discord".into(), ready: false, away: false, forum: None },

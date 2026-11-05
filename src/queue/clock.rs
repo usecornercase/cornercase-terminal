@@ -2,6 +2,8 @@ use jiff::civil::{DateTime, Time};
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ToSpan};
 
+const USE_IN: &str = "use in 30m, in 2h or in 1w";
+
 pub(crate) fn local_zone() -> String {
     let now = jiff::Zoned::now();
     let tz = std::env::var("TZ").ok();
@@ -28,7 +30,7 @@ pub(crate) fn zone(name: &str) -> Result<TimeZone, String> {
         .map_err(|error| error.to_string())
 }
 
-fn time(text: &str) -> Result<Time, String> {
+pub(super) fn time(text: &str) -> Result<Time, String> {
     let (hour, minute) = text.split_once(':').ok_or("use a time such as 14:30")?;
     Time::new(hour.parse().map_err(|_| "invalid hour")?, minute.parse().map_err(|_| "invalid minute")?, 0, 0)
         .map_err(|error| error.to_string())
@@ -38,13 +40,14 @@ pub(crate) fn parse(text: &str, name: &str, now: i64) -> Result<i64, String> {
     let text = text.trim();
     if let Some(delay) = text.strip_prefix("in ") {
         let at = delay.len().saturating_sub(1);
-        let number = delay.get(..at).ok_or("use in 30m or in 2h")?;
-        let unit = delay.get(at..).ok_or("use in 30m or in 2h")?;
+        let number = delay.get(..at).ok_or(USE_IN)?;
+        let unit = delay.get(at..).ok_or(USE_IN)?;
         let multiplier = match unit {
             "m" => 60,
             "h" => 3600,
             "d" => 86400,
-            _ => return Err("use in 30m or in 2h".into()),
+            "w" => 604_800,
+            _ => return Err(USE_IN.into()),
         };
         let seconds = number
             .parse::<i64>()
@@ -87,6 +90,13 @@ pub(crate) fn display(at: i64, name: &str) -> String {
     Timestamp::from_second(at).ok().zip(zone(name).ok()).map_or_else(
         || at.to_string(),
         |(timestamp, zone)| timestamp.to_zoned(zone).strftime("%Y-%m-%d %H:%M").to_string(),
+    )
+}
+
+pub(crate) fn stamp(at: i64, name: &str) -> String {
+    Timestamp::from_second(at).ok().zip(zone(name).ok()).map_or_else(
+        || at.to_string(),
+        |(timestamp, zone)| timestamp.to_zoned(zone).strftime("%Y%m%d-%H%M").to_string(),
     )
 }
 

@@ -19,6 +19,9 @@ const AGENT: u16 = 12;
 const ACCOUNT: u16 = LABEL + COMBO + 2;
 const MODE: u16 = 14;
 const NOTICE: u16 = 16;
+const CLEANUP: u16 = 16;
+const ROUTINE_NOTICE: u16 = 18;
+const DAY: u16 = 12;
 const COMBO: u16 = 18;
 const WIDE: u16 = 44;
 const CLOCK: u16 = 7;
@@ -68,7 +71,8 @@ pub(crate) fn rect(screen: Rect, form: &Form, control: Control) -> Rect {
         Control::Prompt => row(screen, 1, 3),
         Control::When => cell(screen, 5, LABEL, COMBO),
         Control::Date => cell(screen, 6, LABEL, DATE),
-        Control::Clock => cell(screen, 6, if on { LABEL + DATE + 1 } else { LABEL }, CLOCK),
+        Control::Day => cell(screen, 6, LABEL, DAY),
+        Control::Clock => cell(screen, 6, clock_at(form.kind(), on), CLOCK),
         Control::Amount => cell(screen, 6, LABEL, AMOUNT),
         Control::Unit => cell(screen, 6, LABEL + AMOUNT + 1, UNIT),
         Control::Place => cell(screen, WHERE, LABEL, rest(screen, LABEL).min(WIDE)),
@@ -79,6 +83,15 @@ pub(crate) fn rect(screen: Rect, form: &Form, control: Control) -> Rect {
         Control::Agent => cell(screen, AGENT, LABEL, COMBO),
         Control::Account => cell(screen, AGENT, ACCOUNT + LABEL, COMBO),
         Control::Mode => cell(screen, MODE, LABEL, COMBO),
+        Control::Cleanup => cell(screen, CLEANUP, LABEL, rest(screen, LABEL)),
+    }
+}
+
+fn clock_at(kind: When, on: bool) -> u16 {
+    match kind {
+        When::Weekly => LABEL + DAY + 1,
+        _ if on => LABEL + DATE + 1,
+        _ => LABEL,
     }
 }
 
@@ -178,7 +191,8 @@ fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: EditorField) {
 fn hint(form: &Form) -> &'static str {
     match form.kind() {
         When::At => "today or tomorrow",
-        When::Tomorrow | When::On | When::In => "",
+        When::Every => "at least 30 minutes apart",
+        When::Tomorrow | When::On | When::In | When::Daily | When::Weekdays | When::Weekly => "",
         When::ClaudeReset | When::CodexReset => "read from the plan when you save",
     }
 }
@@ -196,7 +210,34 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     }
     if !controls.contains(&Control::OpenIn) {
         let only = cell(screen, OPEN_IN, LABEL + 1, rest(screen, LABEL + 1));
-        f.render_widget(Paragraph::new(Span::styled(crate::queue::form::OPEN_IN[0], dim)), only);
+        let text = crate::queue::form::OPEN_IN[usize::from(form.kind().repeats())];
+        f.render_widget(Paragraph::new(Span::styled(text, dim)), only);
+    }
+    if form.flow().is_some() {
+        let flow = cell(screen, MODE, LABEL + 1, rest(screen, LABEL + 1));
+        f.render_widget(Paragraph::new(Span::styled("set by the flow's roles", dim)), flow);
+    }
+}
+
+fn draw_cleanup(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
+    if !form.kind().repeats() {
+        return;
+    }
+    let dim = Style::default().fg(view.muted);
+    let mark = if form.cleanup && form.cleanup_off.is_none() { "[x]" } else { "[ ]" };
+    let text = format!("{mark} remove the workspace when it finishes");
+    let focused = form.focus == Control::Cleanup && !form.busy;
+    let style = match (&form.cleanup_off, focused) {
+        (Some(_), _) => dim,
+        (None, true) => Style::default().add_modifier(Modifier::BOLD),
+        (None, false) => Style::default(),
+    };
+    f.render_widget(Paragraph::new(Span::styled(text, style)), cell(screen, CLEANUP, LABEL, rest(screen, LABEL)));
+    if let Some(reason) = &form.cleanup_off {
+        f.render_widget(
+            Paragraph::new(Span::styled(reason.clone(), dim)),
+            cell(screen, CLEANUP + 1, LABEL + 4, rest(screen, LABEL + 4)),
+        );
     }
 }
 
@@ -228,13 +269,21 @@ fn draw_notes(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     let values = form
         .controls()
         .into_iter()
-        .filter(|c| matches!(c, Control::Clock | Control::Date | Control::Amount | Control::Unit));
+        .filter(|c| matches!(c, Control::Clock | Control::Date | Control::Amount | Control::Unit | Control::Day));
     let end = values.map(|c| rect(screen, form, c).right()).max().unwrap_or(inner(screen).x + LABEL);
     let r = row(screen, 6, 1);
     let tip = Rect::new(end.saturating_add(1), r.y, r.right().saturating_sub(end.saturating_add(1)), r.height);
     f.render_widget(Paragraph::new(Span::styled(hint(form), dim)), tip);
-    let notice = format!("Times use {}. Queued agents always accept their folder trust question.", form.zone);
-    f.render_widget(Paragraph::new(Span::styled(notice, dim)).wrap(Wrap { trim: true }), row(screen, NOTICE, 2));
+    let (notice, at) = if form.kind().repeats() {
+        let text = format!(
+            "Times use {}. Each run gets a new worktree from the up-to-date default branch and accepts its folder trust question.",
+            form.zone
+        );
+        (text, ROUTINE_NOTICE)
+    } else {
+        (format!("Times use {}. Queued agents always accept their folder trust question.", form.zone), NOTICE)
+    };
+    f.render_widget(Paragraph::new(Span::styled(notice, dim)).wrap(Wrap { trim: true }), row(screen, at, 2));
     let note = if form.busy { Some("reading the plan reset…".to_string()) } else { form.error.clone() };
     if let Some(note) = note {
         let r = self::note(screen);
@@ -251,6 +300,7 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     f.render_widget(overlay_block(view.muted, "Schedule an agent"), area);
     draw_labels(f, view, screen, form);
     draw_controls(f, view, screen, form);
+    draw_cleanup(f, view, screen, form);
     draw_notes(f, view, screen, form);
     draw_dialog_buttons(f, view, buttons(screen), "schedule", "cancel");
     if let (Some(open), Some(list)) = (form.opened(), list(screen, form))

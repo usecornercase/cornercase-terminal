@@ -908,7 +908,7 @@ mod queue_persistence {
 
     #[rstest::rstest]
     #[case::corrupt("invalid JSON")]
-    #[case::unsupported("{\"version\":2,\"next_id\":5,\"entries\":[]}")]
+    #[case::unsupported("{\"version\":99,\"next_id\":5,\"entries\":[]}")]
     fn an_unreadable_queue_is_preserved_until_the_queue_changes(#[case] contents: &str) {
         let dir = TempDir::new();
         let path = paths::queue(&dir.path().join("session.json"));

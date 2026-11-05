@@ -214,6 +214,10 @@ mod finding_unknown_fields {
     #[case::queue_edit(json!({"command": "queue", "args": {"action": "edit",
         "entry": {"id": 7, "add": {"at": "in 2h", "zone": "UTC"}}}}))]
     #[case::queue_remove(json!({"command": "queue", "args": {"action": "remove", "entry": 7}}))]
+    #[case::queue_routine(json!({"command": "queue", "args": {"action": "add",
+        "entry": {"repeat": "day 09:00", "zone": "UTC", "flow": "Quick", "cleanup": true, "prompt": "go"}}}))]
+    #[case::queue_pause(json!({"command": "queue", "args": {"action": "pause", "entry": 7}}))]
+    #[case::queue_resume(json!({"command": "queue", "args": {"action": "resume", "entry": 7}}))]
     #[case::queue_list(json!({"command": "queue", "args": {"action": "list"}}))]
     #[case::todo_add(json!({"command": "todo", "args": {"add": "write the docs"}}))]
     #[case::todo_list(json!({"command": "todo", "args": "list"}))]
@@ -269,7 +273,7 @@ mod finding_unknown_fields {
     fn an_extra_key_inside_a_queue_entry_is_named_by_its_path() {
         let raw = json!({"command": "queue", "args": {"action": "add", "entry": {"at": "14:30", "zone": "UTC"}}});
 
-        assert_eq!(stray_in(&with(raw, &["args", "entry"], "repeat")).as_deref(), Some("args.entry.repeat"));
+        assert_eq!(stray_in(&with(raw, &["args", "entry"], "colour")).as_deref(), Some("args.entry.colour"));
     }
 
     #[test]

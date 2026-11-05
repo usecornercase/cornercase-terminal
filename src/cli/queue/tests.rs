@@ -79,3 +79,66 @@ fn removals_take_json_and_restore_takes_the_undo_number() {
         assert_eq!(request_of(action(args)).expect("queue request"), (command, json), "{args:?}");
     }
 }
+
+mod routines {
+    use super::*;
+
+    #[test]
+    fn takes_every_flow_and_cleanup_and_the_pause_and_resume_actions() {
+        let QueueAction::Add(add) =
+            action(&["add", "--every", "day 09:00", "--flow", "Quick", "--cleanup", "--prompt", "go"])
+        else {
+            panic!("not add")
+        };
+        let request = queue_add(add, true).expect("request");
+        assert_eq!(request.repeat.as_deref(), Some("day 09:00"));
+        assert_eq!((request.flow.as_deref(), request.cleanup), (Some("Quick"), Some(true)));
+        assert_eq!(request.at, "");
+        let (pause, _) = request_of(action(&["pause", "4"])).expect("pause");
+        let (resume, _) = request_of(action(&["resume", "4"])).expect("resume");
+        assert_eq!((pause, resume), (control::Queue::Pause(4), control::Queue::Resume(4)));
+    }
+
+    #[test]
+    fn a_routine_without_a_prompt_or_a_flow_without_every_is_wrong_usage() {
+        for args in [&["add", "--every", "2h"][..], &["add", "--flow", "Quick", "--prompt", "go", "--at", "in 2h"]] {
+            assert!(matches!(run(action(args)), Err(Error::WrongUsage(_))), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn every_does_not_mix_with_at_an_issue_a_workspace_or_a_worktree() {
+        let cases = [
+            ["--prompt", "go", "--at", "in 2h"],
+            ["--prompt", "go", "--workspace", "3"],
+            ["--prompt", "go", "--worktree", "x"],
+            ["--issue", "7", "--project", "1"],
+        ];
+        for other in cases {
+            let args = ["cornercase", "queue", "add", "--every", "2h"].into_iter().chain(other);
+            let error = Cli::try_parse_from(args).expect_err("clap");
+            assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict, "{other:?}");
+        }
+    }
+
+    #[test]
+    fn lists_a_routine_its_runs_and_a_flow() {
+        let value = json!({"entries": [
+            {"id": 1, "at": 0, "label": "review", "agent": "claude", "state": "pending", "repeat": "day 09:00", "next": 0},
+            {"id": 2, "at": 0, "label": "triage", "agent": "claude", "state": "pending", "repeat": "2h", "paused": true},
+            {"id": 3, "at": 0, "label": "fleet", "agent": "", "state": "pending", "repeat": "monday 09:00", "flow": "Quick"},
+            {"id": 4, "at": 0, "label": "review", "agent": "claude", "state": "kept", "pane": 7, "server": "s",
+             "reason": "2 uncommitted", "routine": 1},
+            {"id": 5, "at": 0, "label": "review", "agent": "claude", "state": "removed", "routine": 1},
+        ]});
+
+        assert_eq!(
+            lines(&value, "UTC"),
+            "1 1970-01-01 00:00 pending review · claude · ↻ every day 09:00\n\
+             2 1970-01-01 00:00 paused triage · claude · ↻ every 2h\n\
+             3 1970-01-01 00:00 pending fleet · flow Quick · ↻ every monday 09:00\n\
+             4 1970-01-01 00:00 kept: 2 uncommitted review · claude · routine 1\n\
+             5 1970-01-01 00:00 removed review · claude · routine 1\n"
+        );
+    }
+}

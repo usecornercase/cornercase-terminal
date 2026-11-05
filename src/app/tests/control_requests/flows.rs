@@ -676,6 +676,7 @@ mod feed;
 mod manage;
 mod own_worktrees;
 mod parents;
+mod routine;
 
 fn told_with_folder(order: &[String], dir: &str) -> bool {
     order

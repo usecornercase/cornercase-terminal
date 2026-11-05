@@ -2,8 +2,8 @@ use crossterm::event::Event;
 
 use super::machine_links::MachineEvent;
 use super::{
-    ChangesEvent, FilesEvent, IssueEvent, MessengerEvent, PluginEvent, QueueEvent, SearchEvent, UpdateEvent,
-    WorktreeEvent,
+    ChangesEvent, FilesEvent, IssueEvent, MessengerEvent, PluginEvent, QueueEvent, RoutineEvent, SearchEvent,
+    UpdateEvent, WorktreeEvent,
 };
 use crate::agents::context::{self};
 use crate::agents::launch::{self};
@@ -20,6 +20,7 @@ use crate::web::{self};
 pub(crate) enum AppEvent {
     Input(Event),
     Queue(Box<QueueEvent>),
+    Routine(Box<RoutineEvent>),
     Output(u64, u32, term::reader::Output),
     Exited(u64, u32),
     Worktree(WorktreeEvent),
@@ -60,6 +61,7 @@ impl AppEvent {
         match self {
             Self::Input(_) => "input",
             Self::Queue(_) => "queue prepared",
+            Self::Routine(_) => "routine cleanup",
             Self::Output(..) => "output",
             Self::Exited(..) => "exited",
             Self::Worktree(event) => event.name(),

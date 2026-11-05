@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
-import { type Combo, chooseCombo, comboLabel, comboList } from '../src/lib/demo/combo';
+import { type Combo, chooseCombo, combo, comboLabel, comboList } from '../src/lib/demo/combo';
 import type { IssuesOverlay } from '../src/lib/demo/model';
 import { Agent } from '../src/lib/demo/programs';
 import { inputKey } from '../src/lib/demo/client';
-import { type QueueControl, type QueueForm, queueAt, queueControls, queueRect, queueWhen, whenCombo } from '../src/lib/demo/queue';
+import { type QueueControl, type QueueForm, focusQueue, queueAt, queueControls, queueRect, queueWhen, whenCombo } from '../src/lib/demo/queue';
 import { world } from '../src/lib/demo/world';
 import { menuArea } from '../src/lib/demo/layout';
 import { rect } from '../src/lib/term/grid';
@@ -154,16 +154,14 @@ for (const cols of [140, 70]) {
     assert.ok(app.textAt('hours'));
     clickControl(app, 'when');
     assert.ok(form(app).when.open);
-    for (const label of ['tomorrow at', 'Claude reset', 'Codex reset']) assert.ok(app.textAt(label), label);
+    for (const label of ['tomorrow at', 'every', 'every day at', 'every week on']) assert.ok(app.textAt(label), label);
     clickOption(app, 'when', 'on');
     const o = form(app);
     assert.equal(o.when.open, null);
     assert.deepEqual(queueControls(o).slice(0, 4), ['prompt', 'when', 'date', 'clock']);
     assert.ok(app.textAt(`${o.date}   09:00`));
     assert.equal(app.textAt('hours'), null);
-    inputKey(app, key('ArrowDown'));
-    inputKey(app, key('ArrowDown'));
-    inputKey(app, key('ArrowDown'));
+    for (let i = 0; i < 7; i++) inputKey(app, key('ArrowDown'));
     inputKey(app, key('Enter'));
     assert.equal(comboLabel(o.when), 'Claude reset');
     assert.equal(app.overlay, o);
@@ -462,5 +460,200 @@ test('right click on another text control focuses it instead of using the prompt
   app.render();
   app.pointerDown(amount.x + 1, amount.y, 2);
   assert.equal(form(app).focus, 'amount');
+  app.destroy();
+});
+
+function routineForm(app: App, kind: string, prompt = 'Check the dependencies'): QueueForm {
+  app.openQueueForm();
+  const o = form(app);
+  o.prompt = prompt;
+  pick(o.agent, 'claude');
+  app.queueChoose(o, 'when', o.when.options.indexOf(kind));
+  return o;
+}
+
+function routine(app: App, kind = 'every', hours = 2): void {
+  const o = routineForm(app, kind);
+  if (kind === 'every') { o.amount = String(hours); pick(o.unit, 'hours'); }
+  app.submitQueue();
+}
+
+const runs = (app: App) => app.queued.filter((entry) => entry.routine !== undefined);
+const worktrees = (app: App) => app.projects.flatMap((project) => project.workspaces).filter((workspace) => !!workspace.branch?.startsWith('routine/'));
+
+test('a routine scheduled from the form fires on its grid and each run gets a new workspace', () => {
+  const app = appAt(140);
+  routine(app);
+  const [entry] = app.queued;
+  assert.equal(entry.repeat, '2h');
+  assert.equal(app.toast?.text, `scheduled routine ${entry.id}, next at ${queueWhen(entry.at)}`);
+  assert.equal(runs(app).length, 0);
+  app.advance(2 * 3600000 + 1000);
+  assert.equal(runs(app).length, 1);
+  assert.equal(worktrees(app).length, 1);
+  app.advance(2 * 3600000);
+  assert.equal(runs(app).length, 2);
+  assert.equal(worktrees(app).length, 2);
+  assert.ok(runs(app).every((run) => run.state === 'started' && run.repeat === undefined && run.routine === entry.id));
+  assert.match(worktrees(app)[0].branch ?? '', /^routine\/check-the-dependencies-\d{8}-\d{4}$/);
+  const browser = queueTab(app);
+  const view = app.issuesView(browser);
+  assert.equal(view.items.filter((item) => item.meta.startsWith('started · pane')).length, 2);
+  assert.ok(view.items.some((item) => item.meta.startsWith('↻ every 2h')));
+  app.destroy();
+});
+
+test('an interval under 30 minutes shows the error in the form', () => {
+  const app = appAt(140);
+  const o = routineForm(app, 'every');
+  o.amount = '20';
+  pick(o.unit, 'minutes');
+  app.submitQueue();
+  assert.equal(o.error, 'a routine repeats at most every 30 minutes, since each run makes a worktree');
+  assert.equal(app.overlay, o);
+  assert.equal(app.queued.length, 0);
+  app.destroy();
+});
+
+test('pause stops a routine and resume restarts it on the grid', () => {
+  const app = appAt(140);
+  routine(app);
+  const [entry] = app.queued;
+  const browser = queueTab(app);
+  assert.deepEqual(app.issuesView(browser).buttons, ['new', 'start now', 'pause', 'remove', 'cancel']);
+  assert.equal(app.issuesView(browser).hint, 'enter edits it · start now runs it once more');
+  pressButton(app, 'pause');
+  assert.equal(app.toast?.text, `paused routine ${entry.id}`);
+  assert.equal(app.issuesView(browser).items[0].key, 'paused');
+  assert.equal(app.issuesView(browser).items[0].colour, 8);
+  app.advance(5 * 3600000);
+  assert.equal(runs(app).length, 0);
+  assert.deepEqual(app.issuesView(browser).buttons, ['new', 'start now', 'resume', 'remove', 'cancel']);
+  pressButton(app, 'resume');
+  assert.match(app.toast?.text ?? '', new RegExp(`^resumed routine ${entry.id}, next at \\d{4}-`));
+  assert.ok(entry.at > app.now());
+  assert.equal(runs(app).length, 0);
+  app.advance(entry.at - app.now() + 1000);
+  assert.equal(runs(app).length, 1);
+  app.destroy();
+});
+
+test('an every day at routine shows its repeat in the row and start now adds a run without moving it', () => {
+  const app = appAt(140);
+  routine(app, 'every day at');
+  const [entry] = app.queued;
+  assert.equal(entry.repeat, 'day 09:00');
+  const at = entry.at;
+  const browser = queueTab(app);
+  assert.ok(app.issuesView(browser).items[0].meta.includes('↻ every day 09:00'));
+  pressButton(app, 'start now');
+  assert.equal(entry.at, at);
+  assert.equal(runs(app).length, 1);
+  assert.equal(app.toast?.text, 'started routine Check the dependencies');
+  const view = app.issuesView(browser);
+  const run = view.items.findIndex((item) => item.meta.startsWith('started'));
+  browser.selected = run;
+  assert.deepEqual(app.issuesView(browser).buttons, ['new', 'remove', 'clear started', 'cancel']);
+  assert.equal(app.issuesView(browser).hint, 'enter opens its pane · a run of a routine');
+  app.destroy();
+});
+
+test('removing a routine removes its runs and undo brings them back', () => {
+  const app = appAt(140);
+  routine(app);
+  const [entry] = app.queued;
+  app.advance(4 * 3600000 + 1000);
+  const before = [...app.queued];
+  assert.equal(before.length, 3);
+  const browser = queueTab(app);
+  browser.selected = app.issuesView(browser).items.findIndex((item) => item.meta.startsWith('↻'));
+  pressButton(app, 'remove');
+  assert.equal(app.queued.length, 0);
+  assert.equal(app.toast?.text, `removed routine ${entry.id} and its 2 runs`);
+  app.toast?.undo?.();
+  assert.equal(app.queued.length, 3);
+  app.advance(2 * 3600000);
+  assert.equal(runs(app).length, 3);
+  app.destroy();
+});
+
+test('the cleanup checkbox toggles with Space and a click, and only shows for repeat kinds', () => {
+  const app = appAt(140);
+  const o = routineForm(app, 'every day at');
+  app.render();
+  assert.ok(app.textAt('[ ] remove the workspace when it finishes'));
+  assert.ok(app.textAt('Each run gets a new worktree'));
+  assert.ok(app.textAt('new worktree'));
+  focusQueue(o, 'cleanup');
+  inputKey(app, key(' '));
+  assert.equal(o.cleanup, true);
+  app.render();
+  assert.ok(app.textAt('[x] remove the workspace when it finishes'));
+  clickControl(app, 'cleanup');
+  assert.equal(o.cleanup, false);
+  app.queueChoose(o, 'when', o.when.options.indexOf('in'));
+  app.render();
+  assert.equal(app.textAt('remove the workspace'), null);
+  app.destroy();
+});
+
+test('a custom agent greys the cleanup checkbox with its reason', () => {
+  const app = appAt(140);
+  const o = routineForm(app, 'every week on');
+  assert.deepEqual(queueControls(o).slice(-3), ['agent', 'mode', 'cleanup']);
+  o.agent = combo([...o.agent.options, 'aider-fake'], o.agent.chosen);
+  o.cleanup = true;
+  app.queueChoose(o, 'agent', o.agent.options.indexOf('aider-fake'));
+  assert.equal(o.cleanup, false);
+  assert.ok(!queueControls(o).includes('cleanup'));
+  app.render();
+  assert.ok(app.textAt('cornercase cannot tell when aider-fake finishes'));
+  app.destroy();
+});
+
+test('a schedule with extra words is refused like the app does', () => {
+  const app = appAt(140);
+  const o = routineForm(app, 'every day at');
+  o.clock = '09:00 junk';
+  app.submitQueue();
+  assert.ok(o.error);
+  assert.equal(app.queued.length, 0);
+  app.destroy();
+});
+
+test('a routine far away does not fire early', () => {
+  const app = appAt(140);
+  const o = routineForm(app, 'every');
+  o.amount = '30';
+  pick(o.unit, 'days');
+  app.submitQueue();
+  app.advance(26 * 86400000);
+  assert.equal(runs(app).length, 0);
+  app.destroy();
+});
+
+test('editing only the prompt of a routine keeps its next time', () => {
+  const app = appAt(140);
+  routine(app);
+  const [entry] = app.queued;
+  const next = entry.at;
+  app.advance(3600000);
+  app.openQueueForm(entry);
+  form(app).prompt = 'Check again';
+  app.submitQueue();
+  assert.equal(app.queued[0].at, next);
+  assert.equal(app.queued[0].prompt, 'Check again');
+  app.destroy();
+});
+
+test('a routine cannot turn into a one-off entry', () => {
+  const app = appAt(140);
+  routine(app);
+  app.openQueueForm(app.queued[0]);
+  const o = form(app);
+  app.queueChoose(o, 'when', o.when.options.indexOf('in'));
+  o.amount = '2';
+  app.submitQueue();
+  assert.match(o.error ?? '', /cannot turn into each other/);
   app.destroy();
 });

@@ -294,7 +294,11 @@ impl App {
             return Err(format!("project {} is not the root of a git repository, so it has no worktrees", project.id));
         }
         let key = self.clients.requests.key();
-        self.spawn_worktree(p, branch.to_string(), None, Some(key));
+        if self.panels.queued.fresh(client) {
+            self.spawn_fresh_worktree(p, branch.to_string(), key);
+        } else {
+            self.spawn_worktree(p, branch.to_string(), None, Some(key));
+        }
         let waits = Waits { done: Done::default(), stage: Stage::Worktree(then), timeout };
         self.clients.requests.push(client, key, waits);
         Ok(())
