@@ -241,9 +241,7 @@ impl Remote {
         let collector = stderr.clone().collect(errors);
         let mut reader = BufReader::new(output);
         let limit = usage.batch().then_some(BANNER_WAIT);
-        killer.arm(&child);
-        let (child, found) = watched(child, limit, || read_line(&mut reader, parse_banner));
-        killer.disarm();
+        let (child, found) = banner_of(child, &mut reader, limit, killer);
         let Some(mut child) = child else {
             return Err(Error::Ssh { host: self.destination.clone(), reason: SILENT.into() });
         };
@@ -541,6 +539,20 @@ fn answered(found: Found<RemoteShell>, code: Option<i32>) -> Option<RemoteShell>
 
 fn batched(batch: bool) -> &'static [&'static str] {
     if batch { &BATCH } else { &[] }
+}
+
+fn banner_of(
+    child: Child,
+    reader: &mut impl BufRead,
+    limit: Option<Duration>,
+    killer: &Killer,
+) -> (Option<Child>, Found<Banner>) {
+    killer.arm(&child);
+    watched(child, limit, || {
+        let found = read_line(reader, parse_banner);
+        killer.disarm();
+        found
+    })
 }
 
 fn watched<T>(child: Child, limit: Option<Duration>, work: impl FnOnce() -> T) -> (Option<Child>, T) {
