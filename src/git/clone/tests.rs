@@ -224,14 +224,14 @@ mod cloning {
 
     #[test]
     fn checks_the_repository_out_in_a_folder_named_after_it() {
-        let repo = git_repo(&[("README.md", "hi\n")]);
+        let repo = git_repo(&[("README.md", "hi")]);
         let parent = TempDir::new();
 
         let target = prepared(&repo.path().display().to_string(), parent.path());
         run(&target).expect("cloned");
 
         assert_eq!(target.path, parent.path().join(repo.path().file_name().expect("a name")));
-        assert_eq!(std::fs::read_to_string(target.path.join("README.md")).expect("the file"), "hi\n");
+        assert_eq!(std::fs::read_to_string(target.path.join("README.md")).expect("the file"), "hi");
     }
 
     #[test]

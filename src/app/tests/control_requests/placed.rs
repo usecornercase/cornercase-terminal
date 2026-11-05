@@ -44,7 +44,9 @@ impl Asking {
     fn prompted(&mut self, pane: u64, folder: &Path) {
         self.trusted(pane);
         let got = folder.join("got");
-        refreshing(&mut self.app, &self.rx, "the prompt is typed", |_| got.exists());
+        refreshing(&mut self.app, &self.rx, "the prompt is typed", |_| {
+            std::fs::read_to_string(&got).is_ok_and(|typed| !typed.is_empty())
+        });
         assert_eq!(std::fs::read_to_string(&got).expect("the prompt"), "fix the login");
     }
 }

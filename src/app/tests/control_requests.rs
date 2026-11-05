@@ -633,6 +633,7 @@ mod processes;
 mod pull_request;
 mod queue;
 mod recap;
+#[cfg(unix)]
 mod repos;
 mod searching;
 mod setup;

@@ -13,7 +13,9 @@ mod the_url {
     fn of_a_repository_here_is_made_absolute_from_the_current_folder() {
         let here = std::env::current_dir().expect("the current folder");
 
-        assert_eq!(clone_url("../repos/shop", None).expect("a url"), here.join("../repos/shop").display().to_string());
+        let wanted = std::path::absolute(here.join("../repos/shop")).expect("an absolute path");
+
+        assert_eq!(clone_url("../repos/shop", None).expect("a url"), wanted.display().to_string());
     }
 
     #[rstest]
@@ -22,7 +24,8 @@ mod the_url {
     #[case::scp_like("git@github.com:acme/shop.git")]
     #[case::home("~/src/shop")]
     fn that_is_not_a_relative_path_goes_as_it_is(#[case] url: &str) {
-        assert_eq!(clone_url(url, None).expect("a url"), url);
+        let url = crate::test_util::os_path(url);
+        assert_eq!(clone_url(&url, None).expect("a url"), url);
     }
 
     #[test]

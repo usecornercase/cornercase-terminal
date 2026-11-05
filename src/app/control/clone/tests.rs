@@ -33,7 +33,8 @@ fn a_relative_path_to_a_repository_is_refused(#[case] url: &str) {
 #[case::https("https://github.com/acme/shop")]
 #[case::scp_like("git@github.com:acme/shop.git")]
 fn other_urls_are_taken(#[case] url: &str) {
-    assert_eq!(checked_url(url.to_string()), Ok(url.to_string()));
+    let url = crate::test_util::os_path(url);
+    assert_eq!(checked_url(url.clone()), Ok(url));
 }
 
 mod the_files {
