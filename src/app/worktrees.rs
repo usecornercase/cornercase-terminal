@@ -288,12 +288,14 @@ impl App {
         let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
         let job = Job::new(Level::Info, "worktree", "add from the default branch").with("project", id);
         let job = job.with("branch", &branch).with("path", path.display());
+        let made = branch.clone();
         self.spawn_job(
             job,
             move || worktree::fresh::create(&repo, &branch, &path).map(|()| path),
             move |result, _| {
                 Some(AppEvent::Worktree(WorktreeEvent::Created {
                     project: id,
+                    branch: made,
                     result,
                     start: None,
                     request: Some(request),
