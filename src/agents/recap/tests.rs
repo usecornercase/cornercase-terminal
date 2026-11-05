@@ -55,7 +55,7 @@ fn claude_runs_in_the_folder_with_read_only_tools_and_the_prompt_last() {
     assert_eq!(result.steps, 1);
     assert_claude_argv(&std::fs::read_to_string(program.with_extension("argv")).expect("argv"));
     let cwd = std::fs::read_to_string(program.with_extension("cwd")).expect("cwd");
-    assert_eq!(Path::new(cwd.trim()), folder.path().canonicalize().expect("canonical"));
+    assert_eq!(Path::new(cwd.trim()), folder.path());
 }
 
 #[test]
