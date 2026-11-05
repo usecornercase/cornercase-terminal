@@ -87,7 +87,14 @@ impl App {
         ui::full_layout(
             area,
             self.screen.widths,
-            ui::Screen { changes: panel, sidebar, agents, icon_bar: icons, plugins: self.has_plugin_buttons() },
+            ui::Screen {
+                changes: panel,
+                sidebar,
+                agents,
+                icon_bar: icons,
+                plugins: self.has_plugin_buttons(),
+                machine: self.machine_label().is_some(),
+            },
         )
         .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
         .with_full_screen(self.file_full_screen(), area)

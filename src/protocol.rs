@@ -17,7 +17,7 @@ use crate::os::socket::UnixStream;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 10;
+pub(crate) const VERSION: u32 = 11;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const REMOTE_ENV: &str = "CORNERCASE_REMOTE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
@@ -35,6 +35,7 @@ pub(crate) enum ClientMessage {
     Graphics(Support),
     Activated(String),
     OpenFailed(Failed),
+    Machines(Machines),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,6 +52,29 @@ pub(crate) struct Hello {
     pub(crate) probe: String,
     pub(crate) zone: String,
     pub(crate) openers: Vec<Opener>,
+    pub(crate) machines: Option<Machines>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Machines {
+    pub(crate) here: Option<String>,
+    pub(crate) known: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum MachineOrder {
+    Switch(Option<String>),
+    Forget(String),
+}
+
+impl MachineOrder {
+    pub(crate) fn id(&self) -> &'static str {
+        match self {
+            Self::Switch(None) => "switch here",
+            Self::Switch(Some(_)) => "switch",
+            Self::Forget(_) => "forget",
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -64,6 +88,7 @@ pub(crate) enum ServerMessage {
     Sound(Cue),
     Open(Open),
     Browse(Browse),
+    Machine(MachineOrder),
 }
 
 pub(crate) fn send<T: Serialize>(w: &mut impl Write, msg: &T) -> io::Result<()> {

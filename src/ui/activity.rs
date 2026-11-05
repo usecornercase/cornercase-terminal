@@ -28,6 +28,7 @@ pub(crate) enum Item {
     Plugin(u16),
     Help,
     More,
+    Machine,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -38,6 +39,7 @@ pub(crate) struct Shown {
     pub(crate) files: bool,
     pub(crate) flow: bool,
     pub(crate) plugins: u16,
+    pub(crate) machine: bool,
 }
 
 impl Shown {
@@ -48,6 +50,7 @@ impl Shown {
             files: view.has_project,
             flow: view.flow_run,
             plugins: u16::try_from(view.plugin_buttons.len()).unwrap_or(u16::MAX),
+            machine: view.machine.is_some(),
         }
     }
 }
@@ -65,6 +68,7 @@ impl Item {
             Self::Plugin(n) => view.plugin_buttons.get(usize::from(n)).map_or("", |face| face.icon.as_str()),
             Self::Help => icons::HELP,
             Self::More => icons::MORE,
+            Self::Machine => icons::MACHINE,
         }
     }
 
@@ -82,6 +86,7 @@ impl Item {
             }
             Self::Help => HELP_LABEL.into(),
             Self::More => MORE.into(),
+            Self::Machine => view.machine.clone().unwrap_or_default(),
         }
     }
 
@@ -105,7 +110,7 @@ impl Item {
                         | Overlay::Remote(_)
                 )
             ),
-            Self::Plugin(_) => false,
+            Self::Plugin(_) | Self::Machine => false,
         }
     }
 
@@ -133,7 +138,8 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
     let slot = |y| Rect { x: bar.x, y, width: SLOT, height: 1 };
     let mut placed = Vec::new();
     let mut floor = bar.bottom();
-    for item in [Item::More, Item::Help] {
+    let machine = shown.machine.then_some(Item::Machine);
+    for item in [Item::More, Item::Help].into_iter().chain(machine) {
         let Some(y) = floor.checked_sub(PITCH).filter(|&y| y > bar.y) else { break };
         floor = y;
         placed.push((item, slot(y)));

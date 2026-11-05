@@ -56,6 +56,8 @@ pub(crate) const RECAP: &str = "\u{ea82}";
 
 pub(crate) const HELP: &str = "\u{eb32}";
 
+pub(crate) const MACHINE: &str = "\u{eb3a}";
+
 pub(crate) const MORE: &str = "\u{eb51}";
 
 pub(crate) const DOT: &str = "\u{f09df}";

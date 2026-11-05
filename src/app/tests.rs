@@ -616,6 +616,7 @@ mod icon_bar;
 mod icons;
 mod keys;
 mod lock_text;
+mod machines;
 mod merge_requests;
 mod merged_pull_requests;
 mod muted_text;

@@ -23,6 +23,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
 | `stats.json` | Local counts of agent work, hourly buckets for 26 weeks and a day, and lifetime totals per agent. Compact versioned JSON, readable only by its owner (`0600`). | Next to `session.json` |
 | `star.json` | The prompts counted for the [star prompt](../configuration/#star_prompt), when it asked and your answer. Nothing else. | Next to `session.json` |
+| `machines.json` | The other machines a window on this computer reached, each with the `--command` it was reached with, for [switching machines from the window](../../guides/remote/#switch-machines-from-the-window). Readable only by you (mode `0600`). | Next to `session.json` |
 | `runs/` | The [folders of flow runs](../../guides/flows/#the-runs-folder), one per run, removed with their workspace. Readable only by you (`0700`). | Next to `session.json` |
 | `pasted/` | Files pasted with [`cornercase paste-file`](../../guides/scripts-and-agents/#paste-a-file-from-another-machine), one folder per paste, removed when their pane closes, or 7 days after an earlier server left them. Private to you (`0700`, files `0600`). | Next to `session.json` |
 | `accounts/<agent>/<name>/` | The folders of your [agent accounts](../../guides/accounts/), each with the agent's login and links to the settings of its usual folder. Private to you (`0700`). | Next to `session.json` |
@@ -39,7 +40,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 Stats contains only numbers and counting times: no prompts, replies, models, projects, paths or conversation ids. It is saved at most once a minute while changed, and flushed on shutdown and before a restart. Deleting `stats.json` with the server stopped starts counting again; a running server keeps its copy in memory.
 
-The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `runs/`, `pasted/`, `issues.json`, `todos.json`, `queue.json`, `stats.json`, `star.json`, `server.log`, `server.sock` and `server.lock` in `$XDG_STATE_HOME/cornercase/`. Without `XDG_STATE_HOME` they go in `~/.local/state/cornercase/`. Set it where every shell reads it, not only in an interactive rc file, or an SSH session without it looks for another server.
+The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `runs/`, `pasted/`, `issues.json`, `todos.json`, `queue.json`, `stats.json`, `star.json`, `machines.json`, `server.log`, `server.sock` and `server.lock` in `$XDG_STATE_HOME/cornercase/`. Without `XDG_STATE_HOME` they go in `~/.local/state/cornercase/`. Set it where every shell reads it, not only in an interactive rc file, or an SSH session without it looks for another server.
 
 On Windows, what sits next to `config.json` goes in `%APPDATA%\cornercase\` and what sits next to `session.json` in `%LOCALAPPDATA%\cornercase\`, which stays on this computer. The `XDG_*` variables and `HOME` are not read there, even when a shell such as Git Bash sets them; `CORNERCASE_SOCKET` still moves everything.
 

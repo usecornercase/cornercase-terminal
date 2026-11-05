@@ -50,6 +50,7 @@ fn log_attached(id: u64, hello: &Hello) {
         } else {
             hello.openers.iter().map(|opener| opener.id()).collect::<Vec<_>>().join(",")
         },
+        machines = hello.machines.as_ref().map_or_else(|| "none".into(), |m| m.known.len().to_string()),
     );
 }
 
@@ -71,10 +72,12 @@ impl Server {
         client.browser = hello.terminal.as_deref() == Some(protocol::BROWSER);
         client.zone = hello.zone;
         client.openers = if client.browser { Vec::new() } else { hello.openers };
+        client.machines = if client.browser { None } else { hello.machines };
         client.pointer = hello.pointer;
         let background = hello.theme.background.map(|c| (c.r, c.g, c.b));
         client.graphics = Graphics::new(id, hello.graphics, background);
         self.touch(id);
+        self.show_machines(id);
         self.fit(Some(id));
         self.app.window_attached();
         self.first_window(id, hello.theme);

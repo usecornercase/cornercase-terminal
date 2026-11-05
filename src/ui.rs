@@ -45,7 +45,7 @@ pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as a
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;
-pub(crate) use chrome::{help_button, more_button, plugin_buttons, recap_button, worktrees_button};
+pub(crate) use chrome::{help_button, machine_button, more_button, plugin_buttons, recap_button, worktrees_button};
 pub(crate) use dialog::context::{ContextView, Fill, Row, Section, Slice, context_notes};
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_row_at, flows_text, flows_wide,
@@ -229,6 +229,7 @@ pub(crate) struct View<'a> {
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
+    pub(crate) machine: Option<String>,
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
     pub(crate) todo: Option<todo::View>,
@@ -407,7 +408,8 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
     let full = view.files.as_ref().is_some_and(files::View::full_screen);
     let (agents, icon_bar) = (view.agents.is_some(), view.icon_bar);
     let plugins = !view.plugin_buttons.is_empty();
-    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar, plugins };
+    let machine = view.machine.is_some();
+    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar, plugins, machine };
     let areas = full_layout(f.area(), view.widths, screen)
         .with_tab_bar(view.tab_bar.is_some())
         .with_full_screen(full, f.area())

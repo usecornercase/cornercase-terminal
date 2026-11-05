@@ -260,7 +260,8 @@ fn received(link: &mut Link, name: &'static str) -> Option<Result<Value>> {
             | ServerMessage::Detached
             | ServerMessage::Sound(_)
             | ServerMessage::Open(_)
-            | ServerMessage::Browse(_),
+            | ServerMessage::Browse(_)
+            | ServerMessage::Machine(_),
         )) => None,
         Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_))) => Some(Err(Error::ServerGone)),
         Ok(None) | Err(_) => Some(Err(lost(link, Error::ServerGone))),
@@ -357,7 +358,8 @@ fn follow_on(
                 | ServerMessage::Rejected(_)
                 | ServerMessage::Sound(_)
                 | ServerMessage::Open(_)
-                | ServerMessage::Browse(_),
+                | ServerMessage::Browse(_)
+                | ServerMessage::Machine(_),
             )) => {}
             Ok(None) | Err(_) => return Err(Error::ServerLost),
         }

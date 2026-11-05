@@ -137,6 +137,7 @@ pub(super) mod a_bug {
             probe: String::new(),
             zone: "UTC".into(),
             openers: Vec::new(),
+            machines: Some(Machines::default()),
         }
     }
 
@@ -368,6 +369,7 @@ pub(super) mod a_bug {
     }
 }
 
+mod machines;
 mod opening;
 
 mod streaming {
@@ -384,6 +386,7 @@ mod streaming {
             Client {
                 zone: "UTC".into(),
                 openers: Vec::new(),
+                machines: None,
                 id: 1,
                 size: None,
                 notify: Channel::Bell,
