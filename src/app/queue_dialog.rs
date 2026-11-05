@@ -236,17 +236,23 @@ impl App {
     }
 
     fn queue_refit(&mut self) {
-        let project = match &self.overlay {
-            Some(Overlay::Queue(form)) => form.choice().map(|choice| choice.place.project.clone()),
+        let (project, kept) = match &self.overlay {
+            Some(Overlay::Queue(form)) => {
+                (form.choice().map(|choice| choice.place.project.clone()), form.flow().map(str::to_string))
+            }
             _ => return,
         };
-        let flows = self.queue_flows(project.as_deref());
+        let before = self.queue_kind();
+        let mut flows = self.queue_flows(project.as_deref());
+        flows.extend(kept.filter(|kept| !flows.contains(kept)));
         if let Some(Overlay::Queue(form)) = &mut self.overlay {
             form.flows = flows;
             form.refit();
         }
-        self.queue_modes();
-        self.queue_accounts(None);
+        if self.queue_kind() != before {
+            self.queue_modes();
+            self.queue_accounts(None);
+        }
         self.queue_cleanup_off();
     }
 
@@ -350,17 +356,12 @@ impl App {
             return self.routine_add(form, project);
         }
         let agent = form.agent.label().map(str::to_string);
-        let mode = form.mode.label().unwrap_or("default").to_string();
-        let captured_default = mode == "default"
-            && form
-                .id
-                .and_then(|id| self.panels.queued.queue().entry(id))
-                .is_some_and(|entry| agent.as_ref() == Some(&entry.task.agent) && entry.task.mode.is_none());
+        let mode = self.chosen_mode(form, agent.as_ref());
         QueueAdd {
             at: form.at(),
             zone: form.zone.clone(),
             agent,
-            mode: (!captured_default).then_some(mode),
+            mode,
             project: Some(project),
             workspace,
             worktree: form.worktree().then(|| form.branch.text()),
@@ -372,12 +373,26 @@ impl App {
         }
     }
 
+    fn chosen_mode(&self, form: &Form, agent: Option<&String>) -> Option<String> {
+        let mode = form.mode.label().unwrap_or("default").to_string();
+        let captured_default = mode == "default"
+            && form
+                .id
+                .and_then(|id| self.panels.queued.queue().entry(id))
+                .is_some_and(|entry| agent == Some(&entry.task.agent) && entry.task.mode.is_none());
+        (!captured_default).then_some(mode)
+    }
+
     fn routine_add(&self, form: &Form, project: u64) -> QueueAdd {
         let flow = form.flow().map(str::to_string);
         QueueAdd {
             zone: form.zone.clone(),
             agent: flow.is_none().then(|| form.agent.label().map(str::to_string)).flatten(),
-            mode: flow.is_none().then(|| form.mode.label().map(str::to_string)).flatten(),
+            mode: if flow.is_none() {
+                self.chosen_mode(form, form.agent.label().map(str::to_string).as_ref())
+            } else {
+                None
+            },
             project: Some(project),
             prompt: Some(form.prompt.text()),
             label: form.label.clone(),
@@ -495,6 +510,11 @@ fn fill_routine(form: &mut Form, entry: &queue::Entry) {
         }
     }
     form.cleanup = entry.task.cleanup;
+    if let Some(flow) = &entry.task.flow
+        && !form.flows.contains(flow)
+    {
+        form.flows.push(flow.clone());
+    }
     form.refit();
     let flow = entry.task.flow.as_ref().map(|flow| format!("{flow} (flow)"));
     if let Some(at) = flow.and_then(|flow| form.agent.options().iter().position(|option| *option == flow)) {

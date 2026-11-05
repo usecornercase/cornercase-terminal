@@ -158,7 +158,9 @@ impl Repeat {
         let repeat = match repeat {
             Repeat::Every { amount, unit, clock: None } if unit.civil() && !given => {
                 let zone = clock::zone(zone)?;
-                Repeat::Every { amount, unit, clock: Some(clock_in(&zone, now)?) }
+                let now = clock_in(&zone, now)?;
+                let clock = Time::new(now.hour(), now.minute(), 0, 0).map_err(|error| failed(&error))?;
+                Repeat::Every { amount, unit, clock: Some(clock) }
             }
             other => other,
         };

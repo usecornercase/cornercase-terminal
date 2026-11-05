@@ -44,3 +44,31 @@ fn falls_back_to_origin_main_without_a_remote_head() {
     create(&clone, "routine/x", &path).expect("create");
     assert_eq!(head(&path), head(origin.path()));
 }
+
+#[test]
+fn follows_the_branch_the_remote_now_calls_its_default() {
+    let origin = git_repo(&[("a", "1")]);
+    let (_keep, clone) = clone_of(origin.path());
+    git(origin.path(), &["checkout", "--quiet", "-b", "trunk"]);
+    std::fs::write(origin.path().join("b"), "2").expect("write");
+    git(origin.path(), &["add", "--all"]);
+    git(origin.path(), &["commit", "--quiet", "-m", "on trunk"]);
+    let target = TempDir::new();
+    let path = target.path().join("run");
+    create(&clone, "routine/x", &path).expect("create");
+    assert_eq!(head(&path), head(origin.path()));
+}
+
+#[test]
+fn takes_the_local_default_branch_while_a_feature_branch_is_checked_out() {
+    let repo = git_repo(&[("a", "1")]);
+    let main = head(repo.path());
+    git(repo.path(), &["checkout", "--quiet", "-b", "feature"]);
+    std::fs::write(repo.path().join("b"), "2").expect("write");
+    git(repo.path(), &["add", "--all"]);
+    git(repo.path(), &["commit", "--quiet", "-m", "feature work"]);
+    let target = TempDir::new();
+    let path = target.path().join("run");
+    create(repo.path(), "routine/x", &path).expect("create");
+    assert_eq!(head(&path), main);
+}

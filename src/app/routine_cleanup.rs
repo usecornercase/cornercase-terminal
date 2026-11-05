@@ -148,8 +148,8 @@ impl App {
         let project = self.projects[at.project()].id;
         let repo = self.projects[at.project()].path.clone();
         let found = self.projects.workspace(at);
-        let mut branches: Vec<String> = found.role_worktrees.iter().map(|tree| tree.branch.clone()).collect();
-        branches.extend(git::branch(&found.path));
+        let own = self.panels.queued.queue().entry(run).and_then(|entry| entry.task.place.branch.clone());
+        let branches = own.map(|own| own_branches(&own, found)).unwrap_or_default();
         let base = crate::changes::git::default_base(&repo);
         if self.start_removal(project, workspace, RemoveOptions::default(), None) {
             self.panels.queued.cleanups.cleaning.insert(workspace, Cleaning { run, repo, base, branches });
@@ -169,10 +169,11 @@ impl App {
         self.settle_removal(project, workspace, result.is_ok());
         self.panels.queued.cleanups.countdowns.remove(&run);
         match result {
-            Ok(_) => {
+            Ok(None) => {
                 self.panels.queued.set_state(run, State::Removed);
                 self.delete_run_branches(repo, base, branches);
             }
+            Ok(Some(warning)) => self.keep_run(run, &format!("removed only in part: {warning}")),
             Err(error) => self.keep_run(run, &format!("could not remove it: {error}")),
         }
         self.sync_queued();
@@ -212,6 +213,14 @@ impl App {
         self.announce(&text);
         self.sync_queued();
     }
+}
+
+fn own_branches(own: &str, found: &crate::project::Workspace) -> Vec<String> {
+    let prefix = format!("{own}--");
+    let roles =
+        found.role_worktrees.iter().map(|tree| tree.branch.clone()).filter(|branch| branch.starts_with(&prefix));
+    let run = git::branch(&found.path).filter(|branch| branch == own);
+    roles.chain(run).collect()
 }
 
 fn delete_clean_branch(repo: &std::path::Path, base: Option<&str>, branch: &str) {

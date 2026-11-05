@@ -189,7 +189,7 @@ impl Form {
 
     pub(crate) fn refit(&mut self) {
         let routine = self.kind().repeats();
-        let place = self.choice().map(|choice| choice.label.clone());
+        let place = self.choice().map(|choice| (choice.label.clone(), choice.place.project.clone()));
         self.shown = (0..self.places.len())
             .filter(|i| {
                 !routine
@@ -198,8 +198,13 @@ impl Form {
             .collect();
         let labels: Vec<String> =
             self.shown.iter().filter_map(|i| self.places.get(*i)).map(|choice| choice.label.clone()).collect();
+        let same_label = |(label, _): &(String, std::path::PathBuf)| labels.iter().position(|shown| shown == label);
+        let same_project = |(_, project): &(String, std::path::PathBuf)| {
+            self.shown.iter().position(|i| self.places.get(*i).is_some_and(|choice| choice.place.project == *project))
+        };
         let at = place
-            .and_then(|place| labels.iter().position(|label| *label == place))
+            .as_ref()
+            .and_then(|place| same_label(place).or_else(|| same_project(place)))
             .or(usize::from(!labels.is_empty()).checked_sub(1));
         self.place = Combo::new(labels, at);
         let agent = self.agent.label().map(str::to_string);

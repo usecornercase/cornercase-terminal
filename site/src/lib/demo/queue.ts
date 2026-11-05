@@ -480,7 +480,9 @@ function parseClock(text: string | undefined): [number, number] | null {
 }
 
 export function parseRepeat(text: string): Repeat | string {
-  const [head, at] = text.trim().toLowerCase().split(/\s+/);
+  const words = text.trim().toLowerCase().split(/\s+/);
+  if (words.length > 2) return ROUTINE_USE;
+  const [head, at] = words;
   const clock = parseClock(at);
   if (at !== undefined && !clock) return ROUTINE_USE;
   const day = DAYS.indexOf(head);

@@ -24,8 +24,20 @@ fn remote_name(repo: &Path) -> Option<String> {
     remotes.iter().find(|(name, _)| name == "origin").or_else(|| remotes.first()).map(|(name, _)| name.clone())
 }
 
-fn fetch_once(repo: &Path, remote: &str) -> Result<()> {
-    let out = git_within(repo, ["fetch", "--quiet", remote], FETCH_WITHIN)?
+fn advertised_default(repo: &Path, remote: &str) -> Option<String> {
+    let out = git_within(repo, ["ls-remote", "--symref", remote, "HEAD"], FETCH_WITHIN).ok()??;
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let line = text.lines().find_map(|line| line.strip_prefix("ref: refs/heads/"))?;
+    out.status
+        .success()
+        .then(|| line.split('\t').next().unwrap_or_default().to_string())
+        .filter(|name| !name.is_empty())
+}
+
+fn fetch_once(repo: &Path, remote: &str, branch: Option<&str>) -> Result<()> {
+    let spec = branch.map(|branch| format!("+refs/heads/{branch}:refs/remotes/{remote}/{branch}"));
+    let args = ["fetch", "--quiet", remote].into_iter().chain(spec.as_deref());
+    let out = git_within(repo, args, FETCH_WITHIN)?
         .ok_or_else(|| Error::Git(format!("could not fetch {remote}: it took longer than {FETCH_WITHIN:?}")))?;
     check(out).map(|_| ()).map_err(|error| Error::Git(format!("could not fetch {remote}: {error}")))
 }
@@ -35,10 +47,10 @@ fn collided(error: &Error) -> bool {
     ["incorrect old value", "cannot lock ref", "Unable to create"].iter().any(|clash| text.contains(clash))
 }
 
-fn fetched(repo: &Path, remote: &str) -> Result<()> {
+fn fetched(repo: &Path, remote: &str, branch: Option<&str>) -> Result<()> {
     let mut tries = 1;
     loop {
-        match fetch_once(repo, remote) {
+        match fetch_once(repo, remote, branch) {
             Err(error) if collided(&error) && tries < FETCH_TRIES => {
                 std::thread::sleep(RETRY_AFTER * tries);
                 tries += 1;
@@ -83,8 +95,12 @@ fn local_default(repo: &Path) -> Result<String> {
 fn resolved(repo: &Path) -> Result<String> {
     match remote_name(repo) {
         Some(remote) => {
-            fetched(repo, &remote)?;
-            remote_default(repo, &remote)
+            let advertised = advertised_default(repo, &remote);
+            fetched(repo, &remote, advertised.as_deref())?;
+            match advertised {
+                Some(branch) => Ok(format!("refs/remotes/{remote}/{branch}")),
+                None => remote_default(repo, &remote),
+            }
         }
         None => local_default(repo),
     }

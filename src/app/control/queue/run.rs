@@ -32,18 +32,21 @@ impl App {
             || self.panels.queued.queue().entries.iter().any(starting)
     }
 
-    fn routine_branch(&self, p: usize, entry: &Entry) -> String {
+    fn routine_branch(&self, p: usize, entry: &Entry) -> Result<String, String> {
         let task = &entry.task;
         let slug = crate::issues::slug(&task.label, 32);
         let slug = if slug.is_empty() { "routine".to_string() } else { slug };
         let base = format!("routine/{slug}-{}", queue::clock::stamp(task.at, &task.zone));
         let name = |n: usize| if n == 1 { base.clone() } else { format!("{base}-{n}") };
-        (1..=BRANCHES_TRIED).map(name).find(|name| !self.branch_taken(p, entry.id, name)).unwrap_or(base.clone())
+        (1..=BRANCHES_TRIED)
+            .map(name)
+            .find(|name| !self.branch_taken(p, entry.id, name))
+            .ok_or_else(|| format!("no free branch name starting with {base}"))
     }
 
     pub(super) fn run_routine(&mut self, entry: &Entry, now: Instant) -> Result<(), String> {
         let (p, _) = self.queue_place(&entry.task.place)?;
-        let branch = self.routine_branch(p, entry);
+        let branch = self.routine_branch(p, entry)?;
         self.panels.queued.set_branch(entry.id, &branch);
         match &entry.task.flow {
             Some(name) => self.run_routine_flow(entry, p, name, branch),

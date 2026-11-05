@@ -610,3 +610,50 @@ test('a custom agent greys the cleanup checkbox with its reason', () => {
   assert.ok(app.textAt('cornercase cannot tell when aider-fake finishes'));
   app.destroy();
 });
+
+test('a schedule with extra words is refused like the app does', () => {
+  const app = appAt(140);
+  const o = routineForm(app, 'every day at');
+  o.clock = '09:00 junk';
+  app.submitQueue();
+  assert.ok(o.error);
+  assert.equal(app.queued.length, 0);
+  app.destroy();
+});
+
+test('a routine far away does not fire early', () => {
+  const app = appAt(140);
+  const o = routineForm(app, 'every');
+  o.amount = '30';
+  pick(o.unit, 'days');
+  app.submitQueue();
+  app.advance(26 * 86400000);
+  assert.equal(runs(app).length, 0);
+  app.destroy();
+});
+
+test('editing only the prompt of a routine keeps its next time', () => {
+  const app = appAt(140);
+  routine(app);
+  const [entry] = app.queued;
+  const next = entry.at;
+  app.advance(3600000);
+  app.openQueueForm(entry);
+  form(app).prompt = 'Check again';
+  app.submitQueue();
+  assert.equal(app.queued[0].at, next);
+  assert.equal(app.queued[0].prompt, 'Check again');
+  app.destroy();
+});
+
+test('a routine cannot turn into a one-off entry', () => {
+  const app = appAt(140);
+  routine(app);
+  app.openQueueForm(app.queued[0]);
+  const o = form(app);
+  app.queueChoose(o, 'when', o.when.options.indexOf('in'));
+  o.amount = '2';
+  app.submitQueue();
+  assert.match(o.error ?? '', /cannot turn into each other/);
+  app.destroy();
+});

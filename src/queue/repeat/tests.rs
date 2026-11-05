@@ -12,6 +12,13 @@ fn repeat(text: &str) -> Repeat {
     Repeat::parse(text, MADRID, at("2026-10-14T08:03:00Z")).expect("repeat")
 }
 
+#[test]
+fn captured_clock_drops_the_seconds() {
+    let parsed = Repeat::parse("3d", MADRID, at("2026-10-14T08:03:27Z")).expect("repeat");
+    assert_eq!(parsed.to_string(), "3d 10:03");
+    assert!(parsed.accepts("3d 10:03"));
+}
+
 fn shown(seconds: i64) -> String {
     clock::display(seconds, MADRID)
 }

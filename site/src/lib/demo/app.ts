@@ -420,6 +420,7 @@ interface Running {
   resumes: boolean;
 }
 
+const MAX_TIMER = 2 ** 31 - 1;
 const counted = (n: number, word: string): string => (n === 1 ? `1 ${word}` : `${n} ${word}s`);
 
 function restartText(running: Running[]): string {
@@ -2022,9 +2023,10 @@ export class App {
 
   private armQueued(entry: QueueEntry): void {
     this.disarmQueued(entry);
-    this.queueTimers.set(entry, this.after(Math.max(0, entry.at - this.now()), () => {
+    this.queueTimers.set(entry, this.after(Math.min(Math.max(0, entry.at - this.now()), MAX_TIMER), () => {
       this.queueTimers.delete(entry);
       if (!this.queued.includes(entry) || entry.state !== 'pending') return;
+      if (this.now() < entry.at) { this.armQueued(entry); return; }
       if (entry.repeat) this.fireRoutine(entry);
       else if (this.now() - entry.at > ROUTINE_GRACE) { entry.state = 'missed'; this.dirty(); }
       else this.runQueue(entry);
@@ -4521,7 +4523,7 @@ export class App {
 
   private removal(entry: QueueEntry): [(item: QueueEntry) => boolean, string] {
     const runs = this.queued.filter((item) => item.routine === entry.id).length;
-    const text = entry.repeat ? `removed routine ${entry.id} and its ${runs} runs` : `removed queue entry ${entry.id}`;
+    const text = entry.repeat ? `removed routine ${entry.id} and its ${counted(runs, 'run')}` : `removed queue entry ${entry.id}`;
     return [(item) => item.id === entry.id || (!!entry.repeat && item.routine === entry.id), text];
   }
 
@@ -4645,12 +4647,17 @@ export class App {
     if (o?.kind !== 'queue') return;
     const place = queueChoice(o);
     const routine = queueRepeats(o);
-    const repeat = routine ? queueRepeat(o, this.now()) : '';
+    const old = this.queued.find((item) => item.id === o.id);
+    const typed = routine ? queueRepeat(o, this.now()) : '';
+    const unchanged = !!old?.repeat && old.state === 'pending' && (typed === old.repeat || old.repeat.startsWith(`${typed} `));
+    const repeat = unchanged && old?.repeat ? old.repeat : typed;
     const parsed = routine ? parseRepeat(repeat) : null;
-    const at = parsed && typeof parsed !== 'string' ? repeatFirst(parsed, this.now()) : routine ? null : queueTime(queueAt(o), this.now());
+    const kept = unchanged ? old?.at ?? null : null;
+    const at = kept ?? (parsed && typeof parsed !== 'string' ? repeatFirst(parsed, this.now()) : routine ? null : queueTime(queueAt(o), this.now()));
     const worktree = queueWorktree(o);
     const error = !place
       ? o.places.length ? 'choose an open place before scheduling' : 'open a project before scheduling an agent'
+      : old && !!old.repeat !== routine ? 'a routine and a one-off entry cannot turn into each other: add a new entry'
       : !o.prompt.trim() ? 'the prompt is empty' : typeof parsed === 'string' ? parsed : !at ? 'choose a time in the future' : worktree && !o.branch.trim() ? 'the worktree branch needs a name' : null;
     if (error || !place || !at) {
       o.error = error ?? undefined;
@@ -4663,7 +4670,6 @@ export class App {
     const ws = project?.workspaces.find((w) => w.id === place.workspace);
     const workspaceName = ws && (ws.name || (ws.root !== project?.root ? ws.root.split('/').pop() : undefined));
     const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? o.prompt, project: place.project, folder: project?.folder ?? '', workspace: place.workspace, workspaceName, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending', ...(routine ? { repeat: parsed && typeof parsed !== 'string' ? repeat : '', cleanup: o.cleanup && !o.cleanupOff } : {}) };
-    const old = this.queued.find((item) => item.id === entry.id);
     const mode = (MODES[entry.agent] ?? []).find(([name]) => name === entry.mode)?.[1];
     entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : this.agentCommand(entry.agent);
     this.queued = [...this.queued.filter((item) => item.id !== entry.id), entry].sort((a, b) => a.at - b.at || a.id - b.id);

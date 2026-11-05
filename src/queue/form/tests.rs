@@ -175,6 +175,27 @@ mod routines {
     }
 
     #[test]
+    fn a_workspace_choice_falls_back_to_a_root_of_its_own_project() {
+        let mut f = routine_form(When::In);
+        let project = |label: &str, path: &str, workspace: Option<&str>| {
+            let mut found = choice(label, true);
+            found.place.project = path.into();
+            found.place.workspace = workspace.map(Into::into);
+            found
+        };
+        f.places = vec![
+            project("web-shop · root", "/web", None),
+            project("api · root", "/api", None),
+            project("api · feature", "/api", Some("/api/feature")),
+        ];
+        f.refit();
+        f.place.choose(2);
+        f.when = When::Daily.combo();
+        f.refit();
+        assert_eq!(f.choice().map(|choice| choice.label.as_str()), Some("api · root"));
+    }
+
+    #[test]
     fn flows_are_listed_for_routines_only_and_drop_mode_and_account() {
         let mut f = routine_form(When::Daily);
         assert_eq!(f.agent.options(), ["auto", "claude", "Quick (flow)"]);

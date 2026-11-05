@@ -70,6 +70,7 @@ fn what_cannot_be_a_routine_is_refused_with_its_reason() {
         (json!({"flow": "Quick", "agent": "claude"}), "flow chooses its own"),
         (json!({"flow": "No such flow", "agent": null}), "no flow named"),
         (json!({"prompt": ""}), "needs --prompt"),
+        (json!({"submit": false}), "keep a draft"),
     ];
     for (extra, why) in cases {
         let error = refused(&mut shop.app, "queue", &json!({"action": "add", "entry": entry(&extra)}));
@@ -196,4 +197,13 @@ fn running_a_routine_answers_the_new_run_and_a_failing_run_never_fails_the_routi
     assert_eq!((&run["state"], &run["routine"]), (&json!("failed"), &json!(id)));
     let error = refused(&mut shop.app, "queue", &json!({"action": "run", "entry": 99}));
     assert_eq!(error.code, "failed");
+}
+
+#[test]
+fn a_mode_cannot_be_sent_to_a_routine_that_keeps_its_flow() {
+    let mut shop = shop();
+    let id = add(&mut shop.app, &json!({"flow": "Quick", "agent": null}))["id"].as_u64().expect("id");
+    let edit = json!({"id": id, "add": {"zone": "UTC", "mode": "plan"}});
+    let error = refused(&mut shop.app, "queue", &json!({"action": "edit", "entry": edit}));
+    assert!(error.message.contains("flow chooses its own"), "{}", error.message);
 }

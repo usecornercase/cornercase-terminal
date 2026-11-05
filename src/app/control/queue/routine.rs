@@ -33,6 +33,7 @@ fn refuse_mix(add: &QueueAdd, old: Option<&Entry>) -> Result<(), String> {
         (add.workspace.is_some(), "a routine always runs in a new worktree: it takes no workspace"),
         (add.worktree.is_some(), "a routine names its own worktrees: it takes no branch"),
         (add.flow.is_some() && (add.agent.is_some() || add.mode.is_some()), "a flow chooses its own agents and modes"),
+        (add.submit == Some(false), "a routine always submits its prompt: it cannot keep a draft"),
     ];
     refused.iter().find(|(wrong, _)| *wrong).map_or(Ok(()), |(_, why)| Err((*why).into()))
 }
@@ -93,6 +94,9 @@ impl App {
         refuse_mix(add, old)?;
         let place = self.routine_place(caller, add, old)?;
         let flow = self.routine_flow(add, old, &place)?;
+        if flow.is_some() && add.mode.is_some() {
+            return Err("a flow chooses its own agents and modes".into());
+        }
         let chosen = if flow.is_some() { Chosen::default() } else { self.queue_agent(caller, add, old)? };
         let prompt = add.prompt.clone().or_else(|| old.map(|entry| entry.task.prompt.clone())).unwrap_or_default();
         if prompt.trim().is_empty() {
