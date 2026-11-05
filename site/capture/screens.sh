@@ -601,6 +601,7 @@ changes_open() {
   cc_s2_shell
   cc_click 'Changes' 0 -1
   cc_wait 'Uncommitted'
+  cc_wait ' viewed'
 }
 
 changes_commits() {

@@ -126,3 +126,13 @@ fn the_wheel_scrolls_the_body_and_the_rest_is_counted() {
     let terminal = drawn(&shown, None);
     assert_eq!(row(&terminal, 3), " ▸ api › rate-limit › claude: asked");
 }
+
+#[test]
+fn a_status_line_longer_than_the_panel_is_cut_with_an_ellipsis_and_retry_stays_whole() {
+    let long = "x".repeat(80);
+    let terminal = drawn(&View { line: long.clone(), ..view(State::Idle) }, None);
+    assert!(row(&terminal, 1).ends_with('…'), "{}", row(&terminal, 1));
+    let failed = drawn(&view(State::Failed(long)), None);
+    let line = row(&failed, 1);
+    assert!(line.contains('…') && line.ends_with("retry"), "{line}");
+}

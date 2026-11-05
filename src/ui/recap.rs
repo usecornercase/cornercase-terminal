@@ -73,6 +73,10 @@ pub(crate) fn refresh(area: Rect) -> Rect {
     Rect::new(close(area).x.saturating_sub(BUTTON_WIDTH), row.y, BUTTON_WIDTH, 1).intersection(row)
 }
 
+fn fitted(text: &str, width: u16) -> String {
+    crate::text::truncate_right(text, usize::from(width))
+}
+
 fn width_of(text: &str) -> u16 {
     u16::try_from(text.chars().count()).unwrap_or(u16::MAX)
 }
@@ -89,7 +93,8 @@ pub(crate) fn choices(area: Rect) -> [Rect; 3] {
 
 pub(crate) fn retry(area: Rect, reason: &str) -> Rect {
     let row = Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 1).intersection(area);
-    let x = row.x + width_of(reason) + 1;
+    let shown = fitted(reason, row.width.saturating_sub(width_of(RETRY) + 1));
+    let x = row.x + width_of(&shown) + 1;
     Rect::new(x, row.y, width_of(RETRY), 1).intersection(row)
 }
 
@@ -252,6 +257,7 @@ fn draw_status(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position
     let muted = Style::default().fg(view.muted);
     match &view.state {
         State::Failed(reason) => {
+            let reason = &fitted(reason, row.width.saturating_sub(width_of(RETRY) + 1));
             put(buf, (row.x, row.y), reason, Style::default().fg(Color::Red), row.right());
             let button = retry(area, reason);
             let style = if hovered(hover, button) {
@@ -262,10 +268,10 @@ fn draw_status(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position
             put(buf, (button.x, button.y), RETRY, style, row.right());
         }
         State::Running(text) => {
-            put(buf, (row.x, row.y), text, Style::default().fg(Color::Cyan), row.right());
+            put(buf, (row.x, row.y), &fitted(text, row.width), Style::default().fg(Color::Cyan), row.right());
         }
         State::Empty(_) | State::Idle => {
-            put(buf, (row.x, row.y), &view.line, muted, row.right());
+            put(buf, (row.x, row.y), &fitted(&view.line, row.width), muted, row.right());
         }
     }
 }
