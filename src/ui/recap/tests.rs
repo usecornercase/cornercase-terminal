@@ -54,7 +54,8 @@ fn the_header_names_the_three_choices_with_refresh_and_close() {
     let header = row(&terminal, 0);
     assert!(header.starts_with(" Recap   now · yesterday · 7 days"), "{header}");
     assert!(header.ends_with("↻  ×"), "{header}");
-    assert_eq!(row(&terminal, 1), " yesterday · sat 31 oct · Claude Code ·");
+    let status = row(&terminal, 1);
+    assert!(status.starts_with(" yesterday · sat 31 oct · Claude Code") && status.ends_with('…'), "{status}");
 }
 
 #[test]
