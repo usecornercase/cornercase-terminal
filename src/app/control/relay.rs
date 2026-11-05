@@ -2,8 +2,8 @@ use serde_json::Value;
 
 use super::{Asked, Handled, Pending, Stage, malformed};
 use crate::app::App;
-use crate::app::machines::RemoteItem;
-use crate::app::machines::relay::{Sent, Then};
+use crate::app::machine_links::RemoteItem;
+use crate::app::machine_links::relay::{Sent, Then};
 use crate::control::contract::Refusal;
 use crate::control::{Command, Done, Start, Until};
 use crate::machines::send::{Send, UNWAITED};

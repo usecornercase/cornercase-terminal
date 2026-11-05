@@ -8,11 +8,12 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind};
 use ratatui::DefaultTerminal;
-use ratatui::backend::Backend;
+use ratatui::backend::{Backend, ClearType};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 
 use self::imp::{Handle, read, watch_signals};
+use self::switch::Switch;
 use super::probe::{env, finish_tmux_check, start_tmux_check, window_cell};
 use super::{Ending, Guard, Host, INPUT_POLL, Link, Source, Target, input};
 use crate::error::{Error, Result};
@@ -24,18 +25,21 @@ use crate::host::sound::{self, Cue, Player};
 use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::plugins::{Kind, Places, Supervisor};
-use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
+use crate::protocol::{self, ClientMessage, Hello, MachineOrder, ServerMessage};
 use crate::remote::{self, Stderr};
-use crate::ui::remote::{self as notice, Notice};
+use crate::ui::remote::{self as notice, Notice, Shown};
 use crate::{host::pointer, version};
+
+mod switch;
 
 enum Incoming {
     Input(Event),
     Activated(String),
-    OpenFailed(Failed),
+    OpenFailed(u64, Failed),
     InputEnded,
     Server(u64, Received),
     Linked(u64, Result<Link>),
+    Switched(u64, Result<Link>),
     Signal,
     Tmux(Option<Outer>),
 }
@@ -53,6 +57,7 @@ enum Next {
     Sound(Cue),
     Open(Open),
     Browse(Browse),
+    Machine(MachineOrder),
     Nothing,
 }
 
@@ -67,6 +72,7 @@ fn next(received: Received, reconnects: bool) -> Result<Next> {
         Received::Message(ServerMessage::Sound(cue)) => Next::Sound(cue),
         Received::Message(ServerMessage::Open(open)) => Next::Open(open),
         Received::Message(ServerMessage::Browse(browse)) => Next::Browse(browse),
+        Received::Message(ServerMessage::Machine(order)) => Next::Machine(order),
         Received::Message(ServerMessage::Detached | ServerMessage::Shutdown) | Received::Ended => {
             Next::End(Ending::Detached)
         }
@@ -126,7 +132,7 @@ struct Lost {
 
 struct Window<'a> {
     terminal: &'a mut DefaultTerminal,
-    target: &'a Target,
+    target: Target,
     tx: Sender<Incoming>,
     theme: HostTheme,
     notify: Channel,
@@ -138,38 +144,25 @@ struct Window<'a> {
     tty: Option<String>,
     tmux_check: TmuxCheck,
     generation: u64,
+    ids: u64,
     out: Option<Sender<ClientMessage>>,
     guard: Option<Guard>,
     lost: Option<Lost>,
     retries: Retries,
     player: Option<Player>,
     openers: Openers,
+    switch: Option<Switch>,
+    switches: u64,
+    plugins: Option<Supervisor>,
 }
 
 impl Window<'_> {
     fn link(&mut self, link: Link) -> Result<()> {
-        self.generation += 1;
+        self.generation = self.next_id();
         let Link { reader, writer, guard } = link;
-        let size = self.terminal.size()?;
+        self.remember();
+        let hello = self.hello(&self.target, &self.openers)?;
         let out = spawn_writer(writer);
-        let (version, build) = (protocol::VERSION, version::build_id());
-        let (theme, notify, terminal) = (self.theme.clone(), self.notify, self.name.clone());
-        let (pointer, graphics, probe) = (self.pointer, self.graphics.clone(), self.probe.clone());
-        let (cols, rows) = (size.width, size.height);
-        let hello = Hello {
-            version,
-            build,
-            cols,
-            rows,
-            theme,
-            notify,
-            terminal,
-            pointer,
-            graphics,
-            probe,
-            zone: crate::queue::clock::local_zone(),
-            openers: self.openers.ids(),
-        };
         let _ = out.send(ClientMessage::Hello(Box::new(hello)));
         spawn_reader(self.generation, reader, self.tx.clone());
         self.out = Some(out);
@@ -179,11 +172,35 @@ impl Window<'_> {
         Ok(())
     }
 
+    fn next_id(&mut self) -> u64 {
+        self.ids += 1;
+        self.ids
+    }
+
+    fn hello(&self, here: &Target, openers: &Openers) -> Result<Hello> {
+        let size = self.terminal.size()?;
+        Ok(Hello {
+            version: protocol::VERSION,
+            build: version::build_id(),
+            cols: size.width,
+            rows: size.height,
+            theme: self.theme.clone(),
+            notify: self.notify,
+            terminal: self.name.clone(),
+            pointer: self.pointer,
+            graphics: self.graphics.clone(),
+            probe: self.probe.clone(),
+            zone: crate::queue::clock::local_zone(),
+            openers: openers.ids(),
+            machines: Some(Self::machines_at(here)),
+        })
+    }
+
     fn wait(&self, now: Instant) -> Duration {
-        match self.lost.as_ref().and_then(|lost| lost.retry_at) {
-            Some(at) => until_next_second(at.saturating_duration_since(now)),
-            None => Duration::MAX,
-        }
+        let retry = self.lost.as_ref().and_then(|lost| lost.retry_at);
+        let retry = retry.map_or(Duration::MAX, |at| until_next_second(at.saturating_duration_since(now)));
+        let answer = self.switch_deadline().map_or(Duration::MAX, |at| at.saturating_duration_since(now));
+        retry.min(answer)
     }
 
     fn handle(&mut self, incoming: Incoming) -> Result<Option<Ending>> {
@@ -194,8 +211,10 @@ impl Window<'_> {
                 self.send_out(ClientMessage::Activated(token));
                 Ok(None)
             }
-            Incoming::OpenFailed(failed) => {
-                self.send_out(ClientMessage::OpenFailed(failed));
+            Incoming::OpenFailed(generation, failed) => {
+                if generation == self.generation {
+                    self.send_out(ClientMessage::OpenFailed(failed));
+                }
                 Ok(None)
             }
             Incoming::Tmux(outer) => {
@@ -203,12 +222,17 @@ impl Window<'_> {
                 Ok(None)
             }
             Incoming::Server(generation, received) if generation == self.generation => self.handle_server(received),
+            Incoming::Server(id, received) if self.pending_id() == Some(id) => self.answered(received),
             Incoming::Linked(generation, linked) if generation == self.generation => {
                 match linked {
                     Ok(link) => self.link(link)?,
                     Err(e) if remote::fatal(&e) => return Err(e),
                     Err(e) => self.failed(&e)?,
                 }
+                Ok(None)
+            }
+            Incoming::Switched(id, linked) => {
+                self.switched(id, linked)?;
                 Ok(None)
             }
             Incoming::Server(..) | Incoming::Linked(..) => Ok(None),
@@ -222,7 +246,11 @@ impl Window<'_> {
     }
 
     fn handle_server(&mut self, received: Received) -> Result<Option<Ending>> {
-        match next(received, self.target.reconnects())? {
+        let next = next(received, self.target.reconnects())?;
+        let Some(next) = (if self.switch.is_some() { self.while_switching(next) } else { Some(next) }) else {
+            return Ok(None);
+        };
+        match next {
             Next::Show(bytes) => {
                 self.retries.showed();
                 let mut out = stdout();
@@ -237,17 +265,18 @@ impl Window<'_> {
                 }
             }
             Next::Open(open) => {
-                let tx = self.tx.clone();
+                let (tx, generation) = (self.tx.clone(), self.generation);
                 self.openers.open(&open, move |failed| {
-                    let _ = tx.send(Incoming::OpenFailed(failed));
+                    let _ = tx.send(Incoming::OpenFailed(generation, failed));
                 });
             }
             Next::Browse(browse) => {
-                let tx = self.tx.clone();
+                let (tx, generation) = (self.tx.clone(), self.generation);
                 self.openers.browse(browse, move |failed| {
-                    let _ = tx.send(Incoming::OpenFailed(failed));
+                    let _ = tx.send(Incoming::OpenFailed(generation, failed));
                 });
             }
+            Next::Machine(order) => self.order(order)?,
             Next::Nothing => {}
         }
         Ok(None)
@@ -263,6 +292,9 @@ impl Window<'_> {
                 self.check_tmux();
             }
         }
+        if self.switch.is_some() {
+            return self.switch_input(&ev);
+        }
         if let Some(out) = &self.out {
             let _ = out.send(ClientMessage::Event(ev));
             return Ok(None);
@@ -271,12 +303,12 @@ impl Window<'_> {
         let Some(lost) = &mut self.lost else { return Ok(None) };
         match ev {
             Event::Key(key) if key.code == KeyCode::Esc && key.kind != KeyEventKind::Release => {
-                return Ok(Some(Ending::GaveUp));
+                return Ok(Some(Ending::GaveUp(self.target.host().to_string())));
             }
             Event::Mouse(mouse) => {
-                let on = notice::hits_quit(screen, Position::new(mouse.column, mouse.row));
+                let on = notice::hit(screen, &[notice::Button::Quit], Position::new(mouse.column, mouse.row)).is_some();
                 if on && mouse.kind == MouseEventKind::Down(MouseButton::Left) {
-                    return Ok(Some(Ending::GaveUp));
+                    return Ok(Some(Ending::GaveUp(self.target.host().to_string())));
                 }
                 if on != lost.hovered {
                     lost.hovered = on;
@@ -284,7 +316,7 @@ impl Window<'_> {
                 }
             }
             Event::Resize(..) => {
-                self.terminal.clear()?;
+                self.wipe()?;
                 self.show_notice()?;
             }
             _ => {}
@@ -332,6 +364,7 @@ impl Window<'_> {
     }
 
     fn tick(&mut self, now: Instant) -> Result<()> {
+        self.expire_switch(now)?;
         let Some(lost) = &mut self.lost else { return Ok(()) };
         if lost.retry_at.is_some_and(|at| at <= now) {
             lost.retry_at = None;
@@ -344,7 +377,7 @@ impl Window<'_> {
     }
 
     fn lose(&mut self) -> Result<()> {
-        self.generation += 1;
+        self.generation = self.next_id();
         self.out = None;
         let stderr = self.guard.take().and_then(|mut guard| guard.stderr.take());
         let retry_at = Some(Instant::now() + self.retries.lost());
@@ -359,6 +392,11 @@ impl Window<'_> {
         self.show_notice()
     }
 
+    fn wipe(&mut self) -> Result<()> {
+        self.terminal.backend_mut().clear_region(ClearType::All)?;
+        Ok(())
+    }
+
     fn screen(&self) -> Result<Rect> {
         let size = self.terminal.size()?;
         Ok(Rect::new(0, 0, size.width, size.height))
@@ -366,10 +404,15 @@ impl Window<'_> {
 
     fn show_notice(&mut self) -> Result<()> {
         let screen = self.screen()?;
-        let Some(lost) = &self.lost else { return Ok(()) };
-        let error = lost.error.clone().or_else(|| lost.stderr.as_ref().and_then(Stderr::last));
-        let retry_in = lost.retry_at.map(|at| seconds(at.saturating_duration_since(Instant::now())));
-        let shown = Notice { host: self.target.host(), retry_in, error: error.as_deref(), hovered: lost.hovered };
+        let error = self.lost.as_ref().and_then(|lost| lost.error.clone().or_else(|| lost.stderr.as_ref()?.last()));
+        let shown = if let Some(switch) = &self.switch {
+            Shown::Switch(switch.shown(&self.target))
+        } else if let Some(lost) = &self.lost {
+            let retry_in = lost.retry_at.map(|at| seconds(at.saturating_duration_since(Instant::now())));
+            Shown::Lost(Notice { host: self.target.host(), retry_in, error: error.as_deref(), hovered: lost.hovered })
+        } else {
+            return Ok(());
+        };
         let mut buf = Buffer::empty(screen);
         notice::draw(&mut buf, &self.theme, &shown);
         let r = notice::area(screen);
@@ -398,7 +441,7 @@ pub(super) fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal
     let (tx, rx) = mpsc::channel();
     let mut window = Window {
         terminal,
-        target,
+        target: target.clone(),
         tx: tx.clone(),
         theme,
         notify,
@@ -410,20 +453,34 @@ pub(super) fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal
         tty,
         tmux_check: TmuxCheck::default(),
         generation: 0,
+        ids: 0,
         out: None,
         guard: None,
         lost: None,
         retries: Retries::default(),
         player: local_player(),
         openers: openers_for(target),
+        switch: None,
+        switches: 0,
+        plugins: None,
     };
+    window.sync_plugins();
     window.link(link)?;
     let _threads = Threads::spawn(tx, probe_timed_out)?;
-    let _plugins = matches!(target, Target::Local).then(|| {
-        let places = Places::new(&paths::config(), &paths::session());
-        Supervisor::start(Kind::Window, places, Vec::new())
-    });
-    run_window(&mut window, &rx)
+    let ended = run_window(&mut window, &rx);
+    if window.target.machine() == target.machine() { ended } else { ended.map_err(|e| Error::Elsewhere(Box::new(e))) }
+}
+
+impl Window<'_> {
+    fn sync_plugins(&mut self) {
+        let local = matches!(self.target, Target::Local);
+        if !local {
+            self.plugins = None;
+        } else if self.plugins.is_none() {
+            let places = Places::new(&paths::config(), &paths::session());
+            self.plugins = Some(Supervisor::start(Kind::Window, places, Vec::new()));
+        }
+    }
 }
 
 fn local_player() -> Option<Player> {

@@ -24,14 +24,21 @@ const NEW_GROUP_HINT: &str = "right-click a project or its ⋯ to move it into t
 const WORKTREE_TOGGLE: &str = "with its own worktree";
 
 impl App {
-    pub(super) fn new_group_view(input: &Editor) -> ui::Overlay {
+    pub(super) fn name_view(overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::NewGroup { input } => Some(Self::new_group_view(input)),
+            Overlay::NewMachine { input, error } => Some(Self::new_machine_view(input, error.as_deref())),
+            _ => None,
+        }
+    }
+
+    fn new_group_view(input: &Editor) -> ui::Overlay {
         ui::Overlay::Form(ui::Form {
             title: "New group",
             label: "name",
             value: input.clone(),
             hint: NEW_GROUP_HINT.into(),
             toggle: None,
-            run_on: None,
             note: None,
             submit: CREATE_SUBMIT,
         })
@@ -48,7 +55,7 @@ impl App {
             (Some(_), false) => error,
             (None, false) => error.or_else(|| self.setup_note(project, worktree)),
         };
-        Some(ui::Overlay::Form(ui::Form {
+        let form = ui::Form {
             title: "New workspace",
             label: "name",
             value: input.clone(),
@@ -57,10 +64,13 @@ impl App {
                 None => self.new_workspace_place(project, worktree, input),
             },
             toggle: worktree.map(|on| ui::Toggle { label: WORKTREE_TOGGLE, on }),
-            run_on: run_on.as_ref().map(run_on_row),
             note,
             submit: CREATE_SUBMIT,
-        }))
+        };
+        Some(match run_on {
+            Some(run_on) => ui::Overlay::RunOnForm(form, run_on_row(run_on)),
+            None => ui::Overlay::Form(form),
+        })
     }
 
     fn new_workspace_place(&self, project: u64, worktree: Option<bool>, input: &Editor) -> String {
@@ -253,6 +263,7 @@ impl App {
             Overlay::Rename { target, input } => self.submit_rename(target, &input.text()),
             Overlay::NewGroup { input } if input.text().trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => self.submit_new_group(&input.text()),
+            Overlay::NewMachine { input, .. } => self.submit_new_machine(input),
             Overlay::GroupStyle { .. }
             | Overlay::Usage
             | Overlay::Remote
@@ -408,7 +419,6 @@ pub(super) fn rename_form(title: &'static str, hint: &str, input: &Editor) -> ui
         value: input.clone(),
         hint: hint.into(),
         toggle: None,
-        run_on: None,
         note: None,
         submit: RENAME_SUBMIT,
     })

@@ -107,7 +107,6 @@ pub(crate) struct Form {
     pub(crate) value: Editor,
     pub(crate) hint: String,
     pub(crate) toggle: Option<Toggle>,
-    pub(crate) run_on: Option<RunOnRow>,
     pub(crate) note: Option<Note>,
     pub(crate) submit: &'static str,
 }
@@ -121,11 +120,11 @@ pub(crate) struct Confirm {
     pub(crate) dangerous: bool,
 }
 
-pub(in crate::ui) fn draw_form(f: &mut Frame, view: &View, form: &Form) {
+pub(in crate::ui) fn draw_form(f: &mut Frame, view: &View, form: &Form, run_on: Option<&RunOnRow>) {
     let r = form_area(f.area());
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, form.title), r);
-    let [label, input, hint, toggle, run_on, note, _, _] = rows(r, u16::from(form.run_on.is_some()));
+    let [label, input, hint, toggle, row, note, _, _] = rows(r, u16::from(run_on.is_some()));
     let dim = Style::default().fg(view.muted);
 
     f.render_widget(Paragraph::new(Span::styled(form.label, dim)), label);
@@ -134,8 +133,8 @@ pub(in crate::ui) fn draw_form(f: &mut Frame, view: &View, form: &Form) {
         let style = if hovered(view, toggle) { Style::default().fg(Color::Cyan) } else { Style::default() };
         f.render_widget(Paragraph::new(Span::styled(format!("{mark}{}", t.label), style)), toggle);
     }
-    if let Some(row) = &form.run_on {
-        row.draw(f, view, run_on);
+    if let Some(run_on) = run_on {
+        run_on.draw(f, view, row);
     }
     f.render_widget(Paragraph::new(Span::styled(INPUT_PROMPT, Style::default().fg(Color::Cyan))), input);
     draw_value(f, &form.value, form_text(f.area()), !matches!(form.note, Some(Note::Busy(_))));

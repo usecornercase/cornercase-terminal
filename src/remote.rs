@@ -3,7 +3,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::Arc;
-use std::sync::mpsc;
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -22,6 +22,7 @@ use crate::version::{self, CURRENT};
 
 mod attempts;
 mod known;
+pub(crate) mod machines;
 mod shell;
 
 const SSH: &str = "ssh";
@@ -48,6 +49,8 @@ const BATCH: [&str; 2] = ["-o", "BatchMode=yes"];
 const LINK: [&str; 6] = ["-o", "BatchMode=yes", "-a", "-x", "-o", "ClearAllForwardings=yes"];
 const SECOND: Duration = Duration::from_secs(1);
 const MAX_BACKOFF: Duration = Duration::from_secs(15);
+const BANNER_WAIT: Duration = Duration::from_secs(30);
+const SILENT: &str = "cornercase did not answer within 30 s";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Remote {
@@ -77,6 +80,10 @@ impl Use {
             Self::Window { again: true } | Self::Command => &BATCH,
             Self::Link => &LINK,
         }
+    }
+
+    fn batch(self) -> bool {
+        !matches!(self, Self::Window { again: false })
     }
 }
 
@@ -229,13 +236,17 @@ impl Remote {
 
     fn attempt(&self, usage: Use, shell: RemoteShell, killer: &Killer) -> Result<Attempt<Piped>> {
         let line = self.command_for(shell, &["proxy"], false)?;
-        let (mut child, input, output, errors) = spawn_piped(self.ssh_line(usage.options(), Run::Plain, line))?;
+        let (child, input, output, errors) = spawn_piped(self.ssh_line(usage.options(), Run::Plain, line))?;
         let stderr = Stderr::default();
         let collector = stderr.clone().collect(errors);
         let mut reader = BufReader::new(output);
+        let limit = usage.batch().then_some(BANNER_WAIT);
         killer.arm(&child);
-        let found = read_line(&mut reader, parse_banner);
+        let (child, found) = watched(child, limit, || read_line(&mut reader, parse_banner));
         killer.disarm();
+        let Some(mut child) = child else {
+            return Err(Error::Ssh { host: self.destination.clone(), reason: SILENT.into() });
+        };
         match found {
             Found::Line(banner) => match self.check(&banner, usage) {
                 Ok(()) => Ok(Attempt::Linked(Piped {
@@ -530,6 +541,31 @@ fn answered(found: Found<RemoteShell>, code: Option<i32>) -> Option<RemoteShell>
 
 fn batched(batch: bool) -> &'static [&'static str] {
     if batch { &BATCH } else { &[] }
+}
+
+fn watched<T>(child: Child, limit: Option<Duration>, work: impl FnOnce() -> T) -> (Option<Child>, T) {
+    let Some(limit) = limit else { return (Some(child), work()) };
+    let held = Arc::new(Mutex::new(Some(child)));
+    let (done, wait) = mpsc::channel::<()>();
+    let watch = Arc::clone(&held);
+    let watchdog = thread::spawn(move || {
+        let late = matches!(wait.recv_timeout(limit), Err(RecvTimeoutError::Timeout));
+        if let Some(child) = watch.lock().as_mut().filter(|_| late) {
+            let _ = child.kill();
+        }
+        late
+    });
+    let found = work();
+    drop(done);
+    let late = watchdog.join().unwrap_or(false);
+    let child = held.lock().take();
+    match child {
+        Some(child) if late => {
+            process::stop(child);
+            (None, found)
+        }
+        child => (child, found),
+    }
 }
 
 fn spawn_piped(args: Vec<String>) -> Result<(Child, ChildStdin, ChildStdout, ChildStderr)> {

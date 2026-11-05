@@ -586,7 +586,8 @@ pub(super) fn listen(reader: &mut impl Read) -> Heard {
                 | ServerMessage::Rejected(_)
                 | ServerMessage::Sound(_)
                 | ServerMessage::Open(_)
-                | ServerMessage::Browse(_),
+                | ServerMessage::Browse(_)
+                | ServerMessage::Machine(_),
             )) => {}
             Err(e) if protocol::undecoded(&e) => {}
             Ok(None) | Err(_) => return Heard::Ended(None),

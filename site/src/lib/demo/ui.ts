@@ -7,6 +7,7 @@ import { type AgentRow, type App, PAGE_NAMES, SETTING_RESULT, crop } from './app
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
 import { drawFlow } from './flowpanel';
+import { drawRecap } from './recap';
 import { type FieldGrip, drawTodo, fieldLines, fieldPosition } from './todo';
 import { type KeysGroup, keyWidth, keysArea, keysFrame, keysItem, keysItems } from './keys';
 import {
@@ -27,7 +28,10 @@ import {
   bottom,
   buttonWidth,
   MORE_LABEL,
+  RECAP_LABEL,
   WORKTREES_LABEL,
+  recapButton,
+  worktreesButton,
   changesButton,
   helpButton,
   moreButton,
@@ -369,6 +373,7 @@ export class Painter {
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
     else if (app.todo.open && !isEmpty(areas.changes)) drawTodo(this, areas);
     else if (app.filesShown() && !isEmpty(areas.changes)) drawFiles(this, areas);
+    else if (app.recap.open && !isEmpty(areas.changes)) drawRecap(this, areas);
     else if (app.flowShown() && !isEmpty(areas.changes)) {
       const view = app.flowView();
       if (view) drawFlow(this, areas, view);
@@ -1005,8 +1010,14 @@ export class Painter {
     this.button(more, ' ', MORE_LABEL, this.buttonStyle(more, DARK, 6));
     this.region({ r: more, click: (x, y) => app.openMore({ x, y }), cursor: 'pointer' });
     if (!isEmpty(areas.worktrees)) {
-      this.button(areas.worktrees, ' ', WORKTREES_LABEL, this.buttonStyle(areas.worktrees, DARK, 6));
-      this.region({ r: areas.worktrees, click: () => app.openWorktrees(), cursor: 'pointer' });
+      const worktrees = worktreesButton(areas.worktrees);
+      this.button(worktrees, ' ', WORKTREES_LABEL, this.buttonStyle(worktrees, DARK, 6));
+      this.region({ r: worktrees, click: () => app.openWorktrees(), cursor: 'pointer' });
+      const recap = recapButton(areas.worktrees);
+      if (!isEmpty(recap)) {
+        this.button(recap, '', RECAP_LABEL, this.buttonStyle(recap, app.recap.open ? { fg: 6 } : DARK, 6));
+        this.region({ r: recap, click: () => app.toggleRecap(), cursor: 'pointer' });
+      }
     }
   }
 

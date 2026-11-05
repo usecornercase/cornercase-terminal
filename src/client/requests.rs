@@ -73,6 +73,10 @@ pub(crate) fn use_close_agent_tabs() -> Result<()> {
     require("close-agent-tabs", "would remove an agent's own worktree when it closes the agent")
 }
 
+pub(crate) fn use_recap() -> Result<()> {
+    require("recap", "has no recap")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }
@@ -264,7 +268,8 @@ fn received(link: &mut Link, name: &'static str) -> Option<Result<Value>> {
             | ServerMessage::Detached
             | ServerMessage::Sound(_)
             | ServerMessage::Open(_)
-            | ServerMessage::Browse(_),
+            | ServerMessage::Browse(_)
+            | ServerMessage::Machine(_),
         )) => None,
         Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_))) => Some(Err(Error::ServerGone)),
         Ok(None) | Err(_) => Some(Err(lost(link, Error::ServerGone))),
@@ -361,7 +366,8 @@ fn follow_on(
                 | ServerMessage::Rejected(_)
                 | ServerMessage::Sound(_)
                 | ServerMessage::Open(_)
-                | ServerMessage::Browse(_),
+                | ServerMessage::Browse(_)
+                | ServerMessage::Machine(_),
             )) => {}
             Ok(None) | Err(_) => return Err(Error::ServerLost),
         }

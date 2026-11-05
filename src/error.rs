@@ -52,6 +52,8 @@ pub enum Error {
     Nested,
     #[error("{0}")]
     Rejected(String),
+    #[error("{0}")]
+    Elsewhere(Box<Error>),
     #[error("this is a development build; `cornercase update` only updates released builds")]
     DevelopmentBuild,
     #[error("failed to register signal handlers")]

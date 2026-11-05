@@ -4,8 +4,8 @@ use serde_json::Value;
 
 use super::IssueStart;
 use crate::app::App;
-use crate::app::machines::checks::{AgentThere, Checked};
-use crate::app::machines::relay::{Sent, Then};
+use crate::app::machine_links::checks::{AgentThere, Checked};
+use crate::app::machine_links::relay::{Sent, Then};
 use crate::app::overlay::Overlay;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{self, NewTab, ProjectInfo};

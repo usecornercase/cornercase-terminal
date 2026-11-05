@@ -8,7 +8,7 @@ use super::interaction::Drag;
 use super::interaction::Grab;
 use super::interaction::RowDrag;
 use super::layout::List;
-use super::machines;
+use super::machine_links;
 use super::menus::Marked;
 use super::menus::MenuAction;
 use super::menus::Target;
@@ -39,7 +39,7 @@ impl App {
         let collapsed: Vec<bool> = self.groups.iter().map(|g| g.entry.collapsed).collect();
         let rows = ui::sidebar_rows(&crate::project::group_indices(&self.projects, &self.groups), &collapsed);
         let ours = self.projects.len();
-        ui::machine_rows(rows, ours..ours + machines::remote_only(&self.remote_projects()).count())
+        ui::machine_rows(rows, ours..ours + machine_links::remote_only(&self.remote_projects()).count())
     }
 
     pub(super) fn active_row(&self, sidebar: &[SidebarRow]) -> Option<usize> {

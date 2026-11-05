@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph};
 
-use super::chrome::{HELP_LABEL, ISSUES_LABEL, TODO_LABEL, WORKTREES_LABEL, draw_column_border};
+use super::chrome::{HELP_LABEL, ISSUES_LABEL, RECAP_LABEL, TODO_LABEL, WORKTREES_LABEL, draw_column_border};
 use super::widgets::{put, sidebar_hovered};
 use super::{Overlay, View, files, flow, icons};
 
@@ -23,10 +23,12 @@ pub(crate) enum Item {
     Files,
     Todo,
     Worktrees,
+    Recap,
     Flow,
     Plugin(u16),
     Help,
     More,
+    Machine,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -37,6 +39,7 @@ pub(crate) struct Shown {
     pub(crate) files: bool,
     pub(crate) flow: bool,
     pub(crate) plugins: u16,
+    pub(crate) machine: bool,
 }
 
 impl Shown {
@@ -47,6 +50,7 @@ impl Shown {
             files: view.has_project,
             flow: view.flow_run,
             plugins: u16::try_from(view.plugin_buttons.len()).unwrap_or(u16::MAX),
+            machine: view.machine.is_some(),
         }
     }
 }
@@ -59,10 +63,12 @@ impl Item {
             Self::Files => icons::NERD.files,
             Self::Todo => icons::NERD.todo,
             Self::Worktrees => icons::WORKTREES,
+            Self::Recap => icons::RECAP,
             Self::Flow => icons::FLOW,
             Self::Plugin(n) => view.plugin_buttons.get(usize::from(n)).map_or("", |face| face.icon.as_str()),
             Self::Help => icons::HELP,
             Self::More => icons::MORE,
+            Self::Machine => icons::MACHINE,
         }
     }
 
@@ -73,12 +79,14 @@ impl Item {
             Self::Files => files::LABEL.into(),
             Self::Todo => TODO_LABEL.into(),
             Self::Worktrees => WORKTREES_LABEL.into(),
+            Self::Recap => RECAP_LABEL.into(),
             Self::Flow => flow::LABEL.into(),
             Self::Plugin(n) => {
                 view.plugin_buttons.get(usize::from(n)).map(|face| face.title.clone()).unwrap_or_default()
             }
             Self::Help => HELP_LABEL.into(),
             Self::More => MORE.into(),
+            Self::Machine => view.machine.clone().unwrap_or_default(),
         }
     }
 
@@ -89,6 +97,7 @@ impl Item {
             Self::Files => view.files.is_some(),
             Self::Todo => view.todo.is_some(),
             Self::Worktrees => matches!(view.overlay, Some(Overlay::Worktrees(_))),
+            Self::Recap => view.recap.is_some(),
             Self::Flow => view.flow.is_some(),
             Self::Help => view.tour.is_some(),
             Self::More => matches!(
@@ -102,7 +111,7 @@ impl Item {
                         | Overlay::Remote(_)
                 )
             ),
-            Self::Plugin(_) => false,
+            Self::Plugin(_) | Self::Machine => false,
         }
     }
 
@@ -130,7 +139,8 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
     let slot = |y| Rect { x: bar.x, y, width: SLOT, height: 1 };
     let mut placed = Vec::new();
     let mut floor = bar.bottom();
-    for item in [Item::More, Item::Help] {
+    let machine = shown.machine.then_some(Item::Machine);
+    for item in [Item::More, Item::Help].into_iter().chain(machine) {
         let Some(y) = floor.checked_sub(PITCH).filter(|&y| y > bar.y) else { break };
         floor = y;
         placed.push((item, slot(y)));
@@ -141,6 +151,7 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
         (Item::Files, shown.files),
         (Item::Todo, true),
         (Item::Worktrees, true),
+        (Item::Recap, true),
         (Item::Flow, shown.flow),
     ];
     let plugins = (0..shown.plugins).map(Item::Plugin);

@@ -221,6 +221,7 @@ impl Command {
             Self::PullRequest(read) => read.fields(fields),
             Self::Context(read) => read.fields(fields),
             Self::Clone(clone) => clone.fields(fields),
+            Self::Recap(ask) => ask.fields(fields),
             Self::FreeBuilds(free) => free.fields(fields),
             Self::Machines(machines) => machines.fields(fields),
             Self::FocusMachine(focus) => focus.fields(fields),

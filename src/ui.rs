@@ -22,6 +22,7 @@ mod icons;
 pub(crate) mod keys;
 mod layout;
 mod pane;
+pub(crate) mod recap;
 pub(crate) mod remote;
 pub(crate) mod remote_access;
 mod remote_card;
@@ -48,7 +49,7 @@ pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as a
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;
-pub(crate) use chrome::{help_button, more_button, plugin_buttons};
+pub(crate) use chrome::{help_button, machine_button, more_button, plugin_buttons, recap_button, worktrees_button};
 pub(crate) use dialog::context::{ContextView, Fill, Row, Section, Slice, context_notes};
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_row_at, flows_text, flows_wide,
@@ -243,9 +244,11 @@ pub(crate) struct View<'a> {
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
+    pub(crate) machine: Option<String>,
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
     pub(crate) todo: Option<todo::View>,
+    pub(crate) recap: Option<recap::View>,
     pub(crate) flow: Option<flow::View>,
     pub(crate) flow_run: bool,
     pub(crate) todo_dot: bool,
@@ -428,11 +431,16 @@ fn draw_chrome(f: &mut Frame, view: &View, areas: &Areas) {
 }
 
 pub(crate) fn draw(f: &mut Frame, view: &View) {
-    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
+    let panel = view.changes.is_some()
+        || view.todo.is_some()
+        || view.files.is_some()
+        || view.flow.is_some()
+        || view.recap.is_some();
     let full = view.files.as_ref().is_some_and(files::View::full_screen);
     let (agents, icon_bar) = (view.agents.is_some(), view.icon_bar);
     let plugins = !view.plugin_buttons.is_empty();
-    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar, plugins };
+    let machine = view.machine.is_some();
+    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar, plugins, machine };
     let areas = full_layout(f.area(), view.widths, screen)
         .with_tab_bar(view.tab_bar.is_some())
         .with_full_screen(full, f.area())
@@ -472,6 +480,11 @@ fn draw_side_panel(f: &mut Frame, view: &View, areas: &Areas) {
     draw_border(f, view, border, Border::Changes);
     let hover = view.hover.filter(|_| view.overlay.is_none());
     match (&view.changes, &view.todo, &view.files, &view.flow) {
+        (None, None, None, None) if view.recap.is_some() => {
+            if let Some(recap) = &view.recap {
+                recap::draw(f, areas.changes, recap, hover);
+            }
+        }
         (Some(changes), ..) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
         (None, Some(todo), ..) => todo::draw(f, areas.changes, todo, hover),
         (None, None, Some(files), _) => files::draw(f, areas.changes, files, hover),
@@ -483,7 +496,8 @@ fn draw_side_panel(f: &mut Frame, view: &View, areas: &Areas) {
 fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
     match &view.overlay {
         Some(Overlay::Menu { at, items, disabled }) => draw_menu(f, view, *at, items, disabled),
-        Some(Overlay::Form(form)) => draw_form(f, view, form),
+        Some(Overlay::Form(form)) => draw_form(f, view, form, None),
+        Some(Overlay::RunOnForm(form, run_on)) => draw_form(f, view, form, Some(run_on)),
         Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),
         Some(Overlay::Confirm(confirm)) => draw_confirm(f, view, confirm),

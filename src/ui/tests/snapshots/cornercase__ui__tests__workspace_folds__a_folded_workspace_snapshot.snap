@@ -18,5 +18,5 @@ expression: "render(&folded(&[Some(Status::Working), Some(Status::Waiting)])).ba
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Worktrees                    │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
 "  More ▴                 Help  │  Files       TODO       │                                          "

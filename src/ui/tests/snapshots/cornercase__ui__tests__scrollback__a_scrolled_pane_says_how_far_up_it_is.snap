@@ -18,5 +18,5 @@ expression: render(&scrolled_view()).backend()
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Worktrees                    │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
 "  More ▴                 Help  │                         │                               ↓ 42 more  "

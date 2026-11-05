@@ -94,7 +94,7 @@ fn strings(values: &[&str]) -> Value {
 }
 
 impl Settings {
-    fn base(&self, row: &Row, key: &str, kind: Kind) -> Setting {
+    pub(super) fn base(&self, row: &Row, key: &str, kind: Kind) -> Setting {
         let text = self.row_text(row);
         Setting {
             key: key.into(),
@@ -121,6 +121,13 @@ impl Settings {
     }
 
     fn setting_of(&self, row: &Row) -> Option<Setting> {
+        if let Row::Recap(recap) = row {
+            return Some(self.recap_setting(row, *recap));
+        }
+        self.plain_setting_of(row)
+    }
+
+    fn plain_setting_of(&self, row: &Row) -> Option<Setting> {
         let config = &self.config;
         if let Some(key) = switch(row) {
             return Some(self.base(row, key, Kind::Switch));

@@ -1,6 +1,6 @@
 # Remote windows › The side panels on a machine
 
-Code: `machines/follow.rs`, `machines/heard.rs`, `app/machines/panels.rs`, `app/machines/panels/` (#546)
+Code: `machines/follow.rs`, `machines/heard.rs`, `app/machine_links/panels.rs`, `app/machine_links/panels/` (#546)
 
 With a machine's workspace shown, Changes and Files read the machine: what each panel shows is in Changes panel › A machine's workspace and Files panel › A machine's workspace. This topic is how they reach it.
 

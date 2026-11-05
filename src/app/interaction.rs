@@ -5,7 +5,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::input::wheel;
-use super::machines::{RemoteAt, RemoteDrag};
+use super::machine_links::{RemoteAt, RemoteDrag};
 use super::menus::Target;
 use super::text_fields::TextField;
 use crate::changes::selection::Spot;
@@ -223,6 +223,7 @@ impl App {
                             agents: self.config.agents_section,
                             icon_bar: self.config.icon_bar,
                             plugins: self.has_plugin_buttons(),
+                            machine: self.machine_label().is_some(),
                             ..ui::Screen::default()
                         },
                     )
@@ -248,6 +249,7 @@ impl App {
                 agents: true,
                 icon_bar: self.config.icon_bar,
                 plugins: self.has_plugin_buttons(),
+                machine: self.machine_label().is_some(),
             },
         )
         .agents

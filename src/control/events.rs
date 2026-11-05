@@ -94,6 +94,12 @@ pub(crate) enum What {
     Bell {
         count: u64,
     },
+    Recap {
+        state: String,
+        range: String,
+        agent: String,
+        error: Option<String>,
+    },
     Notice {
         token: String,
         agent: String,
@@ -123,7 +129,7 @@ impl Event {
             What::Opened { kind, .. } | What::Closed { kind } => Some(*kind),
             What::Status { .. } | What::Exited { .. } | What::Clipboard { .. } | What::Bell { .. } => Some(Kind::Pane),
             What::Notice { .. } => Some(Kind::Workspace),
-            What::Dropped { .. } => None,
+            What::Dropped { .. } | What::Recap { .. } => None,
         }
     }
 

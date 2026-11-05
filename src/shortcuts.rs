@@ -155,6 +155,7 @@ pub(crate) enum Action {
     ReopenAgents,
     Issues,
     Todo,
+    Recap,
     Settings,
     Usage,
     Processes,
@@ -209,7 +210,7 @@ const fn open(key: &'static str, group: Group) -> Item {
     Item { key, label: group.label(), step: Some(Step::Open(group)) }
 }
 
-const ROOT: [Item; 27] = [
+const ROOT: [Item; 28] = [
     run("n", "next tab", Action::NextTab),
     run("p", "previous tab", Action::PreviousTab),
     Item { key: "1-9", label: "go to tab", step: None },
@@ -231,6 +232,7 @@ const ROOT: [Item; 27] = [
     open("w", Group::Workspace),
     run("i", "issues", Action::Issues),
     run("t", "todo", Action::Todo),
+    run("s", "recap", Action::Recap),
     run(",", "settings", Action::Settings),
     run("u", "usage", Action::Usage),
     run("k", "processes", Action::Processes),

@@ -119,12 +119,14 @@ impl App {
             samples: Vec::new(),
             notices: Vec::new(),
             prompts: 0,
+            prompt_times: Vec::new(),
         };
         for (project, open) in self.projects.iter_mut().zip(open) {
             round.project(project, if tree { open } else { active == Some(project.id) });
         }
-        let Round { samples, notices, prompts, .. } = round;
+        let Round { samples, notices, prompts, prompt_times, .. } = round;
         if read {
+            self.journal_agents(clock, &prompt_times);
             self.agents.stats.sample(clock, elapsed, &samples);
             self.agents.stats.prune(clock);
         }
@@ -276,6 +278,7 @@ struct Round<'a> {
     quiet: HashSet<u64>,
     jobs: bool,
     prompts: usize,
+    prompt_times: Vec<(u64, Vec<SystemTime>)>,
     stats: &'a mut agents::stats::Stats,
     samples: Vec<agents::stats::Sample>,
     notices: Vec<(NoticeKey, Vec<u64>)>,
@@ -347,6 +350,7 @@ impl Round<'_> {
         {
             let counted = term.context.take_counted();
             self.prompts += counted.prompts.len();
+            self.prompt_times.push((term.id, counted.prompts.clone()));
             self.stats.counted(kind, counted);
             self.samples.push(agents::stats::Sample {
                 pane: term.id,

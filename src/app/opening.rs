@@ -30,6 +30,7 @@ pub(super) struct Opening {
     window: u64,
     openers: Vec<Opener>,
     row: Option<(u64, String)>,
+    pub(super) machines: super::machines::Window,
 }
 
 struct Place {

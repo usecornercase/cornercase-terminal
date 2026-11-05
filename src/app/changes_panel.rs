@@ -10,7 +10,7 @@ use super::control::{BaseChange, Replied};
 use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
-use super::machines::panels::Feed;
+use super::machine_links::panels::Feed;
 use super::merge_check::MergeAnswer;
 use crate::changes::diff::File as ChangedFile;
 use crate::changes::{self, Checkout, Mode, Tints, every};

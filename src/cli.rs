@@ -41,6 +41,7 @@ mod pull_request;
 mod queue;
 mod reach;
 mod read;
+mod recap;
 mod requests;
 mod search;
 mod start_server;
@@ -299,6 +300,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Processes(args) => return ControlFlow::Break(processes::run(&args)),
         Control::PullRequest(args) => return ControlFlow::Break(pull_request::run(&args)),
         Control::Context(args) => return ControlFlow::Break(context::run(&args)),
+        Control::Recap(args) => return ControlFlow::Break(recap::run(&args)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Machines(args) => machines::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
@@ -539,6 +541,10 @@ fn event_line(value: &Value) -> String {
         (Some(subject), What::Notice { token, message, .. }) => format!("{subject}  notice  {message}  {token}"),
         (None, What::Notice { token, message, machine: Some(machine), .. }) => {
             format!("machine {machine}  notice  {message}  {token}")
+        }
+        (_, What::Recap { state, range, agent, error }) => {
+            let failure = error.as_ref().map(|error| format!(": {error}")).unwrap_or_default();
+            format!("recap {range}  {state} ({agent}){failure}")
         }
         (_, What::Dropped { count }) => format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",

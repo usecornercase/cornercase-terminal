@@ -7,7 +7,7 @@ use super::images::Sight;
 use super::interaction::{Drag, Grab};
 use super::layout::{List, Side};
 use super::links::Resolving;
-use super::machines;
+use super::machine_links;
 use super::toast::Toast;
 use crate::accounts;
 use crate::agents::context::Context;
@@ -29,13 +29,13 @@ impl App {
             let local = p.workspaces.iter().flat_map(|w| &w.tabs).map(Tab::status);
             ui::ProjectEntry {
                 name: self.project_label(p),
-                workspaces: p.workspaces.len() + machines::paired(&remote, p.id).count(),
+                workspaces: p.workspaces.len() + machine_links::paired(&remote, p.id).count(),
                 group,
-                status: activity::attention(local.chain(machines::statuses(machines::paired(&remote, p.id)))),
+                status: activity::attention(local.chain(machine_links::statuses(machine_links::paired(&remote, p.id)))),
                 machine: None,
             }
         });
-        ours.chain(machines::remote_only(&remote)).collect()
+        ours.chain(machine_links::remote_only(&remote)).collect()
     }
 
     pub(super) fn tab_details(&self, tab: &Tab) -> ui::Details {
@@ -233,6 +233,7 @@ impl App {
             nav: self.screen.nav,
             update: self.update_label(),
             remote: self.remote_button(),
+            machine: self.machine_label(),
             attention,
             spin: self.spin(now),
             drag: self.row_drag_view(area),
@@ -247,6 +248,7 @@ impl App {
             changes_button: self.changes_button_view(),
             todo: (self.screen.side == Some(Side::Todo))
                 .then(|| self.todo_view(self.layout(area).shown(self.screen.nav).changes)),
+            recap: (self.screen.side == Some(Side::Recap)).then(|| self.recap_view(area)),
             flow: (self.screen.side == Some(Side::Flow)).then(|| self.flow_view(now, self.spin(now))).flatten(),
             flow_run: self.has_run(),
             tour: self.tour_card(area),

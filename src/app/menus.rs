@@ -4,7 +4,8 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::account_menu::AccountItem;
 use super::help_menu::HelpItem;
-use super::machines::acting::Aim;
+use super::machine_links::acting::Aim;
+use super::machines::MachineItem;
 use super::more_menu::MoreItem;
 use super::opening::Subject;
 use super::overlay::Overlay;
@@ -135,6 +136,7 @@ pub(super) enum MenuAction {
     More(MoreItem),
     RemoteRename(Aim),
     MachineNote(u64),
+    Machine(MachineItem),
 }
 
 impl App {
@@ -172,6 +174,7 @@ impl App {
         self.account_menu_label(action, blocker)
             .or_else(|| self.help_menu_label(action))
             .or_else(|| self.more_menu_label(action))
+            .or_else(|| self.machine_menu_label(action))
             .or_else(|| self.closed_agents_label(action))
             .or_else(|| self.remote_menu_label(action))
             .or_else(|| self.context_menu_label(action))
@@ -367,6 +370,7 @@ impl App {
             MenuAction::AccountsOf(item) => self.open_accounts_of(item, at),
             MenuAction::Help(item) => self.help_action(item, at),
             MenuAction::More(item) => self.more_action(item, at),
+            MenuAction::Machine(item) => self.machine_action(item, at),
             MenuAction::Tour(index) => self.start_tour(usize::from(index), None, true),
             MenuAction::PluginButton { plugin, revision } => self.press_plugin_button(plugin, revision, at),
             other => return Some(other),

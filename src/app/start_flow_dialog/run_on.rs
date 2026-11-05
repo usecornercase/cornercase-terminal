@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::flow_accounts;
 use crate::app::App;
 use crate::app::issues_dialog::run_on::lacking;
-use crate::app::machines::checks::Checked;
+use crate::app::machine_links::checks::Checked;
 use crate::app::overlay::Overlay;
 use crate::control::FlowRun;
 use crate::flows::start::{Start, There};

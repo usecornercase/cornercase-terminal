@@ -46,6 +46,7 @@ mod ports;
 mod processes;
 mod pull_requests;
 mod queue;
+mod recap;
 mod remote;
 mod requests;
 mod run_on;

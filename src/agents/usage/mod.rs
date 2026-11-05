@@ -137,7 +137,7 @@ pub(in crate::agents) struct Heard {
 type Answer = fn(&str, &mut Heard) -> Option<Result<Report>>;
 
 fn run(agent: Known, command: Command, requests: &str, answer: Answer, timeout: Duration) -> Result<Report> {
-    let limits = Limits { name: agent.name(), timeout, grace: Duration::ZERO };
+    let limits = Limits { name: agent.name(), timeout, grace: Duration::ZERO, close_input: false };
     let mut heard = Heard::default();
     probe::run(limits, command, requests, move |line| answer(line, &mut heard).map_or(Step::Read, Step::Answer))
 }

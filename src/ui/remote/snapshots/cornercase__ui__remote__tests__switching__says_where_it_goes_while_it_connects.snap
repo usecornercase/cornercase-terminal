@@ -1,0 +1,16 @@
+---
+source: src/ui/remote/tests.rs
+expression: "drawn(70, 12, &switch(Step::Connecting)).backend()"
+---
+"                                                                      "
+"                                                                      "
+"     ╭─ Switch machine ─────────────────────────────────────────╮     "
+"     │                                                          │     "
+"     │ switching to devbox…                                     │     "
+"     │ connecting…                                              │     "
+"     │                                                          │     "
+"     │                                                          │     "
+"     │ you stay on this machine until it answers          back  │     "
+"     ╰──────────────────────────────────────────────────────────╯     "
+"                                                                      "
+"                                                                      "

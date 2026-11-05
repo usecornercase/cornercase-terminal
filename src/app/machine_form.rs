@@ -18,7 +18,7 @@ fn width_of(area: Rect, field: Field) -> usize {
 }
 
 impl App {
-    pub(super) fn machine_action(&mut self, action: &settings::Action) {
+    pub(super) fn machine_row_action(&mut self, action: &settings::Action) {
         match *action {
             settings::Action::AddMachine => self.open_machine_form(None),
             settings::Action::EditMachine(at) => self.open_machine_form(Some(at)),

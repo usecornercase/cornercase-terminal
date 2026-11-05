@@ -7,7 +7,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::interaction::Drag;
 use super::layout::{List, Side};
-use super::machines::RemoteDrag;
+use super::machine_links::RemoteDrag;
 use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
@@ -235,7 +235,7 @@ impl App {
         if self.plugin_row_mouse(areas.plugins, pos, left) {
             return ControlFlow::Break(Ok(()));
         }
-        if let Some(item) = Self::footer_hit(areas, pos) {
+        if let Some(item) = self.footer_hit(areas, pos) {
             return ControlFlow::Break(if left { self.activity_click(item, pos, area) } else { Ok(()) });
         }
         if areas.list.contains(pos) {
@@ -282,6 +282,7 @@ impl App {
             Side::Files => return self.files_mouse(ev, pos, panel, area),
             Side::Changes => return self.changes_mouse(ev, pos, panel, area),
             Side::Flow => self.flow_mouse(ev, pos, panel),
+            Side::Recap => self.recap_mouse(ev, pos, panel, area),
         }
         Ok(())
     }
@@ -395,6 +396,7 @@ impl App {
             files: self.project().is_some(),
             flow: self.has_run(),
             plugins: u16::try_from(self.buttoned_plugins().count()).unwrap_or(u16::MAX),
+            machine: self.machine_label().is_some(),
         }
     }
 
@@ -414,10 +416,12 @@ impl App {
             ui::ActivityItem::Files => self.toggle_files(),
             ui::ActivityItem::Todo => self.toggle_todo(),
             ui::ActivityItem::Worktrees => self.open_worktrees(None),
+            ui::ActivityItem::Recap => self.toggle_recap(),
             ui::ActivityItem::Flow => self.toggle_flow(),
             ui::ActivityItem::Plugin(plugin) => self.click_plugin_button(plugin, pos),
             ui::ActivityItem::Help => self.open_help(pos),
             ui::ActivityItem::More => self.open_more(pos),
+            ui::ActivityItem::Machine => self.open_machines(pos),
         }
         Ok(())
     }
@@ -428,11 +432,14 @@ impl App {
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 
-    fn footer_hit(areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
+    fn footer_hit(&self, areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
+        let machine = self.machine_label().map(|label| ui::machine_button(areas.machine, &label).0);
         [
             (ui::help_button(areas.more), ui::ActivityItem::Help),
             (ui::more_button(areas.more), ui::ActivityItem::More),
-            (areas.worktrees, ui::ActivityItem::Worktrees),
+            (ui::recap_button(areas.worktrees), ui::ActivityItem::Recap),
+            (machine.unwrap_or_default(), ui::ActivityItem::Machine),
+            (ui::worktrees_button(areas.worktrees), ui::ActivityItem::Worktrees),
         ]
         .into_iter()
         .find_map(|(r, item)| r.contains(pos).then_some(item))

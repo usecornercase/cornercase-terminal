@@ -35,6 +35,7 @@ use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
 use super::dialog::ports::{Ports, ports_area};
 use super::dialog::processes::{Processes, processes_area};
+use super::dialog::run_on::RunOnRow;
 use super::dialog::search::Search;
 use super::dialog::settings::{Settings, settings_area};
 use super::dialog::start_flow::StartFlow;
@@ -165,6 +166,7 @@ pub(crate) enum Note {
 pub(crate) enum Overlay {
     Menu { at: Position, items: Vec<String>, disabled: Vec<bool> },
     Form(Form),
+    RunOnForm(Form, RunOnRow),
     Queue(Box<crate::queue::form::Form>),
     Machine(Box<crate::machines::form::Form>),
     CloneOnMachine(Box<crate::machines::clone_form::CloneForm>),
@@ -199,7 +201,7 @@ impl Overlay {
         match self {
             Self::Queue(form) => Some(queue::area_with_list(area, form)),
             Self::Machine(form) => Some(machine::area_with_list(area, form)),
-            Self::Form(_) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
+            Self::Form(_) | Self::RunOnForm(..) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
             Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),
             Self::Usage(usage) => Some(usage_area(area, usage)),
             Self::Remote(remote) => Some(remote_access::area(area, remote)),

@@ -122,6 +122,7 @@ impl App {
             Action::Flow => self.flow_by_key(),
             Action::StartFlow => self.open_start_flow(self.start_flow_here()),
             Action::Todo => self.todo_by_key(),
+            Action::Recap => self.toggle_recap(),
             Action::Settings => self.dialog_by_key(Self::open_settings),
             Action::Usage => self.dialog_by_key(Self::open_usage),
             Action::Processes => self.dialog_by_key(Self::open_processes),

@@ -1,6 +1,6 @@
 use crossterm::event::Event;
 
-use super::machines::MachineEvent;
+use super::machine_links::MachineEvent;
 use super::{
     ChangesEvent, FilesEvent, IssueEvent, MessengerEvent, PluginEvent, QueueEvent, SearchEvent, UpdateEvent,
     WorktreeEvent,
@@ -48,6 +48,7 @@ pub(crate) enum AppEvent {
     Restarted(Box<super::account_restart::Restarted>),
     Machine(MachineEvent),
     Cloned { request: u64, result: std::result::Result<Vec<Unwritten>, Failure> },
+    Recap(Box<super::RecapEvent>),
 }
 
 impl AppEvent {
@@ -87,6 +88,7 @@ impl AppEvent {
             Self::Restarted(_) => "conversation moved",
             Self::Machine(_) => "machine",
             Self::Cloned { .. } => "cloned",
+            Self::Recap(event) => event.name(),
         }
     }
 }

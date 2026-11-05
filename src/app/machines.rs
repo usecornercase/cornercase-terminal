@@ -1,468 +1,151 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::{Instant, SystemTime};
+use ratatui::layout::Position;
 
 use super::App;
-use super::clone_on_machine::{Packed, Pending};
-use super::control::json;
-use super::event::AppEvent;
-use super::machine_usage::Cache;
+use super::menus::MenuAction;
 use super::overlay::Overlay;
-use crate::agents::stats::View;
-use crate::control;
-use crate::control::contract::{Code, Refusal};
-use crate::control::usage::Plans;
-use crate::error::Result;
-use crate::git::remote::Repo;
-use crate::host::network;
-use crate::log::{self, Job, Level};
-use crate::machines::follow::Followed;
-use crate::machines::link::{self, Connect, Down, Event, Link, Report, Servers};
-use crate::machines::stream::StreamReport;
-use crate::machines::wake::{Network, Sleep};
-use crate::machines::{self, Info, Machine, State, Status};
-use crate::settings::Page;
+use crate::editor::Editor;
+use crate::log;
+use crate::protocol::{MachineOrder, Machines};
+use crate::remote::machines::valid;
+use crate::ui::{self, remote::THIS_MACHINE};
 
-pub(super) mod acting;
-mod card;
-pub(super) mod checks;
-mod clicks;
-mod column;
-mod drag;
-mod mouse;
-mod notices;
-pub(super) mod panels;
-pub(super) mod relay;
-mod repo;
-mod report;
-mod rows;
-mod run_on;
-mod selection;
-mod stream;
-mod typing;
+pub(super) const CONNECT_SUBMIT: &str = "connect";
 
-pub(super) use clicks::RemoteAt;
-pub(super) use drag::RemoteDrag;
-pub(super) use rows::{RemoteProject, machine_project, machine_shape, paired, remote_only, statuses};
-pub(super) use selection::RemoteItem;
-pub(super) use stream::Flow;
+const HINT: &str = "anything ssh takes: a host of ~/.ssh/config or user@host";
 
-pub(super) const OLDER: &str = "its cornercase is older than this one";
-
-pub(super) type Connector = Box<dyn Fn(&str) -> Box<dyn Connect> + Send>;
-pub(super) type Updater = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
-
-#[derive(Debug)]
-pub(crate) enum MachineEvent {
-    Link(Report),
-    Updated { link: u64, result: std::result::Result<(), String>, hidden: std::result::Result<(), String> },
-    Repo { project: u64, repo: Option<Repo> },
-    Stats { link: u64, result: std::result::Result<View, String> },
-    Usage { link: u64, result: std::result::Result<Plans, String> },
-    Acted(acting::Acted),
-    Followed(Followed),
-    Read(Box<panels::FileRead>),
-    Stream(StreamReport),
-    Relayed(relay::Relayed),
-    Ignored { key: u64, result: std::result::Result<crate::git::ignored::Listing, String> },
-    Packed(Box<Packed>),
-}
-
-impl From<Report> for AppEvent {
-    fn from(report: Report) -> Self {
-        Self::Machine(MachineEvent::Link(report))
-    }
-}
-
-pub(super) struct Held {
-    pub(super) name: String,
-    pub(super) destination: String,
-    pub(super) link: Link,
-    pub(super) status: Status,
-    pub(super) seen: Option<Box<control::Report>>,
-    pub(super) seen_at: Option<i64>,
-    pub(super) watching: bool,
-    pub(super) down_at: Option<(Instant, u32)>,
-    pub(super) cache: Cache,
-    pub(super) checks: checks::Checks,
-    pub(super) era: u64,
-}
-
-pub(super) struct Machines {
-    held: Vec<Held>,
-    connect: Connector,
-    update: Updater,
-    network: Network,
-    waiting: Vec<(u64, u64)>,
-    synced: Vec<Machine>,
-    servers: Servers,
-    next: u64,
-    sleep: Sleep,
-    pub(super) repos: repo::Repos,
-    pub(super) acting: acting::Acting,
-    selection: Option<selection::RemoteSelection>,
-    pub(super) panels: panels::RemotePanels,
-    awaited: Option<selection::Awaited>,
-    picks: u64,
-    folded: Vec<(String, PathBuf)>,
-    watched: Option<stream::Watched>,
-    streams: u64,
-    pub(super) clones: Vec<Pending>,
-}
-
-impl Machines {
-    pub(super) fn new() -> Self {
-        Self {
-            held: Vec::new(),
-            connect: Box::new(link::ssh),
-            update: Arc::new(|destination| link::remote(destination).install_update()),
-            network: Network::new(Box::new(network::default_route)),
-            waiting: Vec::new(),
-            synced: Vec::new(),
-            servers: Servers::new(control::server_token()),
-            next: 1,
-            sleep: Sleep::default(),
-            repos: repo::Repos::new(),
-            acting: acting::Acting::default(),
-            selection: None,
-            panels: panels::RemotePanels::default(),
-            awaited: None,
-            picks: 0,
-            folded: Vec::new(),
-            watched: None,
-            streams: 1,
-            clones: Vec::new(),
-        }
-    }
-
-    pub(super) fn held(&self) -> &[Held] {
-        &self.held
-    }
-
-    pub(super) fn by_link(&mut self, link: u64) -> Option<&mut Held> {
-        self.held.iter_mut().find(|held| held.link.id() == link)
-    }
-
-    pub(super) fn named(&mut self, name: &str) -> Option<&mut Held> {
-        self.held.iter_mut().find(|held| held.name.eq_ignore_ascii_case(name))
-    }
-
-    pub(super) fn connector(&self, destination: &str) -> Box<dyn Connect> {
-        (self.connect)(destination)
-    }
-
-    pub(super) fn reason(&self, held: &Held) -> Option<String> {
-        if let Some(failed) = &held.status.update_failed {
-            return Some(failed.clone());
-        }
-        let down = held.status.down.as_ref()?;
-        let other = match down {
-            Down::SameServer(other) => self.held.iter().find(|h| h.link.id() == *other).map(|h| h.name.as_str()),
-            _ => None,
-        };
-        down.reason(&held.name, other)
-    }
-
-    pub(super) fn retry(&self, name: Option<&str>) {
-        let picked = |held: &&Held| name.is_none_or(|name| held.name.eq_ignore_ascii_case(name));
-        for held in self.held.iter().filter(picked) {
-            log::info!("machines", "retrying", name = held.name);
-            held.link.poke();
-        }
-    }
-
-    pub(super) fn wait_for_update(&mut self, link: u64, key: u64) {
-        self.waiting.push((link, key));
-    }
-
-    fn log_down(&self, held: &Held, failed: u32) {
-        let why = self.reason(held).unwrap_or_else(|| OLDER.into());
-        let error = machines::hide_destination(&why, &held.name, &held.destination);
-        log::warning!("machines", "machine unreachable", name = held.name, failed = failed, error = error);
-    }
-}
-
-#[cfg(test)]
-impl Machines {
-    #[cfg(unix)]
-    pub(super) fn held_mut(&mut self) -> &mut [Held] {
-        &mut self.held
-    }
-
-    pub(super) fn set_connector(&mut self, connect: Connector) {
-        self.connect = connect;
-    }
-
-    pub(super) fn set_updater(&mut self, update: Updater) {
-        self.update = update;
-    }
-
-    #[cfg(unix)]
-    pub(super) fn set_network(&mut self, network: Network) {
-        self.network = network;
-    }
-
-    #[cfg(unix)]
-    pub(super) fn set_status(&mut self, at: usize, status: Status) {
-        self.held[at].status = status;
-    }
-}
-
-fn updated(result: Result<Result<()>>, name: &str) -> std::result::Result<(), String> {
-    match result {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(e)) => Err(link::failure(&e, name)),
-        Err(e) => Err(e.to_string()),
-    }
-}
+const NOT_A_DESTINATION: &str = "one word that does not start with -, such as devbox or me@devbox";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Update {
-    Started(u64),
-    Running,
-    NotOlder,
-    Unknown,
+pub(super) enum MachineItem {
+    Here,
+    To(u16),
+    Add,
+    Forgetting,
+    Forget(u16),
+}
+
+#[derive(Debug, Default)]
+pub(super) struct Window {
+    client: u64,
+    shown: Option<Machines>,
+    menu: Vec<String>,
 }
 
 impl App {
-    pub(super) fn sync_machines(&mut self, now: Instant, clock: i64) {
-        self.follow_machines();
-        self.follow_pairing();
-        let woke = self.machines.sleep.woke(clock, now);
-        let moved = if self.machines.held.is_empty() {
-            self.machines.network.rest();
-            false
-        } else {
-            self.machines.network.moved(now)
-        };
-        if (woke || moved) && !self.machines.held.is_empty() {
-            log::info!("machines", "retrying every link", woke = woke, network = moved);
-            self.machines.held.iter().for_each(|held| held.link.poke());
-        }
-        self.refresh_machines_page();
-        self.follow_stream();
-        self.drop_late_typed(now);
-        self.drop_late_awaited(now);
+    pub(crate) fn set_machines(&mut self, client: u64, machines: Option<Machines>) {
+        self.opening.machines.client = client;
+        self.opening.machines.shown = machines;
     }
 
-    pub(super) fn follow_machines(&mut self) {
-        if self.machines.synced != self.config.machines {
-            self.match_machines();
-        }
+    pub(crate) fn take_machine_orders(&mut self) -> Vec<(u64, MachineOrder)> {
+        self.outbox.take_machine_orders()
     }
 
-    fn match_machines(&mut self) {
-        let listed = self.config.machines.clone();
-        let before = std::mem::replace(&mut self.machines.synced, listed.clone());
-        let wanted: Vec<Machine> = machines::accepted(&listed).cloned().collect();
-        self.machines.held.retain(|held| {
-            let kept = wanted.iter().any(|machine| machine.destination == held.destination);
-            if !kept {
-                log::info!("machines", "machine dropped", name = held.name, link = held.link.id());
+    pub(super) fn machine_label(&self) -> Option<String> {
+        let shown = self.opening.machines.shown.as_ref()?;
+        let switches = shown.here.is_some() || !shown.known.is_empty();
+        switches.then(|| shown.here.clone().unwrap_or_else(|| THIS_MACHINE.into()))
+    }
+
+    pub(super) fn open_machines(&mut self, at: Position) {
+        let Some(shown) = &self.opening.machines.shown else { return };
+        let mut menu = shown.known.clone();
+        if let Some(here) = shown.here.as_ref().filter(|here| !menu.contains(here)) {
+            menu.insert(0, here.clone());
+        }
+        let count = u16::try_from(menu.len()).unwrap_or(u16::MAX);
+        let forget = (!shown.known.is_empty()).then_some(MachineItem::Forgetting);
+        self.opening.machines.menu = menu;
+        let actions = std::iter::once(MachineItem::Here)
+            .chain((0..count).map(MachineItem::To))
+            .chain([MachineItem::Add])
+            .chain(forget)
+            .map(MenuAction::Machine)
+            .collect();
+        self.overlay = Some(Overlay::Menu { at, actions });
+    }
+
+    pub(super) fn machine_menu_label(&self, action: MenuAction) -> Option<String> {
+        let MenuAction::Machine(item) = action else { return None };
+        let here = self.opening.machines.shown.as_ref().and_then(|shown| shown.here.as_deref());
+        let mark = |name: Option<&str>| if name == here { "✓" } else { " " };
+        Some(match item {
+            MachineItem::Here => format!("{} {THIS_MACHINE}", mark(None)),
+            MachineItem::To(index) => {
+                let name = self.menu_machine(index).unwrap_or_default();
+                format!("{} {name}", mark(Some(name)))
             }
-            kept
-        });
-        self.follow_selection();
-        self.follow_remote_acts();
-        self.drop_unheld_panels();
-        for machine in wanted {
-            let edited = before.iter().any(|old| old.destination == machine.destination && *old != machine);
-            let Some(held) = self.machines.held.iter_mut().find(|held| held.destination == machine.destination) else {
-                self.start_machine_link(machine);
-                continue;
-            };
-            held.name = machine.name;
-            if edited && held.status.state != State::Linked {
-                held.link.poke();
-            }
-        }
-    }
-
-    fn start_machine_link(&mut self, machine: Machine) {
-        let id = self.machines.next;
-        self.machines.next += 1;
-        let connector = (self.machines.connect)(&machine.destination);
-        let link = Link::start(id, connector, &self.machines.servers, &self.tx);
-        log::info!("machines", "linking", name = machine.name, link = id);
-        let held = Held {
-            name: machine.name,
-            destination: machine.destination,
-            link,
-            status: Status::default(),
-            seen: None,
-            seen_at: None,
-            watching: false,
-            down_at: None,
-            cache: Cache::default(),
-            checks: checks::Checks::default(),
-            era: 0,
-        };
-        self.machines.held.push(held);
-    }
-
-    pub(super) fn machine_event(&mut self, event: MachineEvent) {
-        let streamed = matches!(event, MachineEvent::Stream(_));
-        match event {
-            MachineEvent::Link(report) => self.machine_reported(report),
-            MachineEvent::Updated { link, result, hidden } => self.machine_updated(link, &result, &hidden),
-            MachineEvent::Repo { project, repo } => self.repo_read(project, repo),
-            MachineEvent::Stats { link, result } => self.machine_answered(link, result),
-            MachineEvent::Usage { link, result } => self.machine_answered(link, result),
-            MachineEvent::Acted(acted) => self.acted(acted),
-            MachineEvent::Followed(followed) => self.remote_followed(followed),
-            MachineEvent::Read(read) => self.remote_file_read(*read),
-            MachineEvent::Stream(report) => self.stream_reported(report),
-            MachineEvent::Relayed(relayed) => self.relayed(relayed),
-            MachineEvent::Ignored { key, result } => self.ignored_listed(key, result),
-            MachineEvent::Packed(packed) => self.clone_packed(*packed),
-        }
-        if streamed {
-            return;
-        }
-        self.check_shown(false);
-        self.follow_issues_run_on();
-        self.follow_start_flow_run_on();
-        self.follow_new_workspace_run_on();
-    }
-
-    fn machine_reported(&mut self, report: Report) {
-        let Some(at) = self.machines.held.iter().position(|held| held.link.id() == report.link) else { return };
-        let now = crate::time::now();
-        let held = &mut self.machines.held[at];
-        match report.event {
-            Event::Linked { release, server_version } => {
-                if held.status.state != State::Linked {
-                    log::info!("machines", "machine linked", name = held.name, version = release);
-                }
-                held.status.linked(release, server_version, now);
-                held.checks.relinked();
-                held.down_at = None;
-                held.watching = false;
-            }
-            Event::Seen(seen) => self.seen_arrived(at, seen, now),
-            Event::Down { down, failed } => {
-                held.status.down(down, now);
-                held.down_at = Some((Instant::now(), failed));
-                if !held.another_computer() {
-                    held.cache = Cache::default();
-                }
-                if failed.is_power_of_two() {
-                    self.machines.log_down(&self.machines.held[at], failed);
-                }
-            }
-        }
-        self.follow_stream();
-    }
-
-    fn seen_arrived(&mut self, at: usize, seen: Box<control::Report>, now: i64) {
-        let held = &mut self.machines.held[at];
-        if held.seen.as_ref().is_none_or(|old| old.boot != seen.boot) {
-            held.era += 1;
-            held.checks = checks::Checks::default();
-        }
-        let before = held.seen.replace(seen).filter(|_| held.watching);
-        held.watching = true;
-        held.seen_at = Some(now);
-        self.log_seen(&self.machines.held[at]);
-        self.follow_selection();
-        self.follow_remote_acts();
-        self.tell_turns(at, before.as_deref());
-    }
-
-    pub(super) fn paired(&self, seen: &control::Report) -> Vec<Option<u64>> {
-        let order = crate::project::sidebar_order(&self.projects, &self.groups);
-        let open = order.into_iter().map(|p| &self.projects[p]).filter(|p| !p.closing);
-        let ours: Vec<(u64, Option<&str>)> = open.map(|p| (p.id, p.repo.identity.as_deref())).collect();
-        let theirs: Vec<Option<&str>> = seen.projects.iter().map(|p| p.repo.as_deref()).collect();
-        machines::repo::pairs(&theirs, &ours)
-    }
-
-    fn log_seen(&self, held: &Held) {
-        let Some(seen) = &held.seen else { return };
-        let paired = self.paired(seen).into_iter().flatten().count();
-        log::debug!("machines", "machine seen", name = held.name, projects = seen.projects.len(), paired = paired);
-    }
-
-    pub(super) fn update_machine(&mut self, name: &str) -> Update {
-        let Some(held) = self.machines.named(name) else { return Update::Unknown };
-        if held.status.updating {
-            return Update::Running;
-        }
-        if held.status.state != State::Older {
-            return Update::NotOlder;
-        }
-        held.status.updating = true;
-        held.status.update_failed = None;
-        let (link, destination, name) = (held.link.id(), held.destination.clone(), held.name.clone());
-        let update = Arc::clone(&self.machines.update);
-        let job = Job::new(Level::Info, "machines", "update").with("name", &name);
-        let there = destination.clone();
-        let work = move || Ok(update(&there));
-        self.spawn_job(job, work, move |result, job| {
-            let result = updated(result, &name);
-            let hidden = result.clone().map_err(|why| machines::hide_destination(&why, &name, &destination));
-            if let Err(why) = &hidden {
-                job.fail(why);
-            }
-            Some(AppEvent::Machine(MachineEvent::Updated { link, result, hidden }))
-        });
-        Update::Started(link)
-    }
-
-    fn machine_updated(
-        &mut self,
-        link: u64,
-        result: &std::result::Result<(), String>,
-        told: &std::result::Result<(), String>,
-    ) {
-        if let Some(held) = self.machines.by_link(link) {
-            held.status.updating = false;
-            match result {
-                Ok(()) => held.link.poke(),
-                Err(why) => held.status.update_failed = Some(why.clone()),
-            }
-        }
-        let (asked, left): (Vec<_>, Vec<_>) =
-            std::mem::take(&mut self.machines.waiting).into_iter().partition(|(waits, _)| *waits == link);
-        self.machines.waiting = left;
-        for (_, key) in asked {
-            let result = told.clone();
-            self.answer_read(key, move |app| match result {
-                Ok(()) => Ok(json(&app.machine_list())),
-                Err(why) => Err(Refusal::new(Code::Failed, why)),
-            });
-        }
-    }
-
-    pub(super) fn machine_infos(&self) -> Vec<Info> {
-        let problems = machines::problems(&self.config.machines);
-        let rows = self.config.machines.iter().zip(problems);
-        rows.map(|(machine, problem)| {
-            let unheld = problem.is_some();
-            let held = self.machines.held.iter().find(|held| !unheld && held.destination == machine.destination);
-            let error = held.and_then(|held| self.machines.reason(held));
-            Info::of(machine, held.map(|held| &held.status), problem, error)
+            MachineItem::Add => "add machine…".into(),
+            MachineItem::Forgetting => "forget…".into(),
+            MachineItem::Forget(index) => format!("forget {}", self.menu_machine(index).unwrap_or_default()),
         })
-        .collect()
     }
 
-    pub(super) fn refresh_machines_page(&mut self) {
-        if !matches!(&self.overlay, Some(Overlay::Settings(s)) if s.page == Page::Machines) {
+    fn menu_machine(&self, index: u16) -> Option<&str> {
+        self.opening.machines.menu.get(usize::from(index)).map(String::as_str)
+    }
+
+    pub(super) fn machine_action(&mut self, item: MachineItem, at: Position) {
+        match item {
+            MachineItem::Here => self.switch_machine(None),
+            MachineItem::To(index) => {
+                let to = self.menu_machine(index).map(str::to_string);
+                if to.is_some() {
+                    self.switch_machine(to);
+                }
+            }
+            MachineItem::Add => {
+                self.screen.nav = None;
+                self.overlay = Some(Overlay::NewMachine { input: Editor::default(), error: None });
+            }
+            MachineItem::Forgetting => self.open_forget_menu(at),
+            MachineItem::Forget(index) => {
+                if let Some(destination) = self.menu_machine(index).map(str::to_string) {
+                    log::info!("ui", "forget machine", client = self.opening.machines.client);
+                    self.outbox.order_machine(self.opening.machines.client, MachineOrder::Forget(destination));
+                }
+            }
+        }
+    }
+
+    fn open_forget_menu(&mut self, at: Position) {
+        let Some(shown) = &self.opening.machines.shown else { return };
+        self.opening.machines.menu.clone_from(&shown.known);
+        let count = u16::try_from(self.opening.machines.menu.len()).unwrap_or(u16::MAX);
+        let actions = (0..count).map(|index| MenuAction::Machine(MachineItem::Forget(index))).collect();
+        self.overlay = Some(Overlay::Menu { at, actions });
+    }
+
+    fn switch_machine(&mut self, to: Option<String>) {
+        let here = self.opening.machines.shown.as_ref().and_then(|shown| shown.here.clone());
+        if self.opening.machines.shown.is_none() || to == here {
             return;
         }
-        let infos = self.machine_infos();
-        if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            s.take_machines(infos);
-            s.now = SystemTime::now();
-        }
+        log::info!("ui", "switch machine", client = self.opening.machines.client, here = to.is_none());
+        self.outbox.order_machine(self.opening.machines.client, MachineOrder::Switch(to));
     }
 
-    pub(super) fn stop_machines(&mut self) {
-        self.machines.watched = None;
-        self.machines.held.clear();
-        self.machines.synced.clear();
-        self.machines.selection = None;
-        self.machines.panels.reset();
-        self.machines.awaited = None;
+    pub(super) fn new_machine_view(input: &Editor, error: Option<&str>) -> ui::Overlay {
+        ui::Overlay::Form(ui::Form {
+            title: "Add machine",
+            label: "ssh destination",
+            value: input.clone(),
+            hint: HINT.into(),
+            toggle: None,
+            note: error.map(|error| ui::Note::Error(error.into())),
+            submit: CONNECT_SUBMIT,
+        })
+    }
+
+    pub(super) fn submit_new_machine(&mut self, input: Editor) -> Option<Overlay> {
+        let destination = input.text().trim().to_string();
+        if destination.is_empty() {
+            return Some(Overlay::NewMachine { input, error: None });
+        }
+        if !valid(&destination) {
+            return Some(Overlay::NewMachine { input, error: Some(NOT_A_DESTINATION.into()) });
+        }
+        self.switch_machine(Some(destination));
+        None
     }
 }

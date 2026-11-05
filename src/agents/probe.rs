@@ -17,28 +17,36 @@ pub(crate) struct Limits {
     pub(crate) name: &'static str,
     pub(crate) timeout: Duration,
     pub(crate) grace: Duration,
+    pub(crate) close_input: bool,
 }
 
 fn gone(name: &str) -> Error {
     Error::Probe(format!("{name} exited without answering"))
 }
 
+fn send(stdin: Option<&mut std::process::ChildStdin>, text: &str) -> bool {
+    stdin.is_some_and(|stdin| stdin.write_all(text.as_bytes()).and_then(|()| stdin.flush()).is_ok())
+}
+
 fn converse<T>(
-    mut stdin: std::process::ChildStdin,
+    stdin: std::process::ChildStdin,
     stdout: std::process::ChildStdout,
-    first: &str,
-    name: &str,
+    (first, name, close): (&str, &str, bool),
     mut talk: impl FnMut(&str) -> Step<T>,
 ) -> Result<T> {
-    if stdin.write_all(first.as_bytes()).and_then(|()| stdin.flush()).is_err() {
+    let mut stdin = Some(stdin);
+    if !send(stdin.as_mut(), first) {
         return Err(gone(name));
+    }
+    if close {
+        stdin = None;
     }
     for line in BufReader::new(stdout).lines() {
         let Ok(line) = line else { break };
         match talk(&line) {
             Step::Read => {}
             Step::Write(text) => {
-                if stdin.write_all(text.as_bytes()).and_then(|()| stdin.flush()).is_err() {
+                if !send(stdin.as_mut(), &text) {
                     return Err(gone(name));
                 }
             }
@@ -63,9 +71,9 @@ pub(crate) fn run<T: Send + 'static>(
         .map_err(|e| Error::Probe(format!("could not run {program}: {e}")))?;
     let (tx, rx) = mpsc::channel();
     if let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) {
-        let (first, name) = (first.to_string(), limits.name);
+        let (first, name, close) = (first.to_string(), limits.name, limits.close_input);
         std::thread::spawn(move || {
-            let _ = tx.send(converse(stdin, stdout, &first, name, talk));
+            let _ = tx.send(converse(stdin, stdout, (&first, name, close), talk));
         });
     } else {
         drop(tx);

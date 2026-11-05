@@ -2,7 +2,7 @@ use ratatui::layout::{Position, Rect};
 
 use crate::app::App;
 use crate::app::layout::List;
-use crate::app::machines::{self, RemoteProject};
+use crate::app::machine_links::{self, RemoteProject};
 use crate::app::menus::Target;
 use crate::error::Result;
 use crate::project::{Hierarchy, Project};
@@ -36,7 +36,7 @@ impl App {
         let indices = crate::project::group_indices(&self.projects, &self.groups);
         let ours = self.projects.iter().zip(indices).zip(self.tree_open());
         let ours = ours.map(|((p, group), open)| self.project_shape(p, group, open, &remote));
-        let theirs = self.alone_entries(&remote).map(|entries| machines::machine_project(&entries));
+        let theirs = self.alone_entries(&remote).map(|entries| machine_links::machine_project(&entries));
         let projects = ours.chain(theirs).collect();
         ui::TreeShape { groups, projects, tab_bar: !self.screen.drawn.tab_bar.is_empty() }
     }
@@ -58,7 +58,7 @@ impl App {
             },
         });
         let theirs = self.paired_entries(remote, p.id);
-        let workspaces = ours.chain(theirs.iter().map(|entry| machines::machine_shape(entry, open))).collect();
+        let workspaces = ours.chain(theirs.iter().map(|entry| machine_links::machine_shape(entry, open))).collect();
         ui::ProjectShape { group, collapsed: p.collapsed, machine: false, workspaces }
     }
 

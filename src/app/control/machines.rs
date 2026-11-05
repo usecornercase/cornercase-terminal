@@ -1,6 +1,6 @@
 use super::{Handled, conflict, json, malformed};
 use crate::app::App;
-use crate::app::machines::{RemoteItem, Update};
+use crate::app::machine_links::{RemoteItem, Update};
 use crate::control::contract::{Code, Refusal};
 use crate::control::{FocusMachine, Item, MachineList, MachineSet, Machines, machines::ThisComputer};
 use crate::log;

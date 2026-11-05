@@ -18,6 +18,7 @@ fn open(app: &mut App, side: Side) {
         Side::Files => app.toggle_files(),
         Side::Todo => app.toggle_todo(),
         Side::Flow => app.toggle_flow(),
+        Side::Recap => app.toggle_recap(),
     }
     assert!(app.panel_shown());
 }
@@ -28,7 +29,7 @@ fn focus_field(app: &mut App, side: Side) {
         Side::Changes => ui::changes::filter_button(area),
         Side::Files => ui::files::field(area),
         Side::Todo => ui::todo::rows(area, &app.todo_view(area)).button(),
-        Side::Flow => unreachable!("the flow panel has no field"),
+        Side::Flow | Side::Recap => unreachable!("this panel has no field"),
     };
     click(app, field.as_position());
     assert!(typing(app));
@@ -55,6 +56,7 @@ fn only_the_next_esc_reaches_the_pane(app: &mut App, rx: &Receiver<AppEvent>) {
 #[case::changes(Side::Changes)]
 #[case::files(Side::Files)]
 #[case::todo(Side::Todo)]
+#[case::recap(Side::Recap)]
 fn closes_the_panel_without_reaching_the_pane(#[case] side: Side) {
     let (mut app, rx, _repo) = with_cat();
     open(&mut app, side);

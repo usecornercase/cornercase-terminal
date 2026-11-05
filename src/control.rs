@@ -25,6 +25,7 @@ pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
 pub(crate) mod pull_request;
+pub(crate) mod recap;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -75,6 +76,7 @@ pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun}
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
 pub(crate) use pull_request::{PullRequestAnswer, PullRequestRead};
+pub(crate) use recap::{RecapAsk, RecapInfo};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{
@@ -251,6 +253,7 @@ pub(crate) enum Command {
     Machines(Machines),
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
+    Recap(RecapAsk),
 }
 
 impl Command {
@@ -286,7 +289,7 @@ impl Command {
             Self::Mark(_) => 21,
             Self::Notify(_) => 13,
             Self::Focus(_) => 12,
-            Self::FocusMachine(_) => 117,
+            Self::FocusMachine(_) => 118,
             _ => return None,
         })
     }
@@ -434,8 +437,9 @@ impl Command {
             Self::Worktrees(_) => 112,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
-            Self::Machines(_) => 115,
-            Self::Clone(_) => 116,
+            Self::Recap(_) => 115,
+            Self::Machines(_) => 116,
+            Self::Clone(_) => 117,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -447,7 +451,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 118] = [
+    pub(crate) const NAMES: [&str; 119] = [
         "status",
         "open",
         "new-workspace",
@@ -563,6 +567,7 @@ impl Command {
         "worktrees",
         "pull-request",
         "context",
+        "recap",
         "machines",
         "clone",
         "focus-machine",

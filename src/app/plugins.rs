@@ -523,7 +523,8 @@ fn hook_name(event: &control::Event) -> Option<&'static str> {
         control::What::Dropped { .. }
         | control::What::Clipboard { .. }
         | control::What::Bell { .. }
-        | control::What::Notice { .. } => None,
+        | control::What::Notice { .. }
+        | control::What::Recap { .. } => None,
     }
 }
 

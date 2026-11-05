@@ -78,6 +78,25 @@ It tries again at once, then after 1, 2, 4 and 8 seconds, then every 15 seconds,
 Reconnecting never asks for a password or a passphrase, since the window has your keys: use a key that is in your SSH agent, or one without a passphrase. The first connection, before the window opens, can still ask for them. To notice a connection that died without a word, cornercase asks `ssh` to check every 5 seconds (`ServerAliveInterval=5`, `ServerAliveCountMax=3`), so it reacts within about 15 seconds.
 </Aside>
 
+## Switch machines from the window
+
+Once a window has reached another machine, the bottom of the sidebar names the machine it is on, on a row of its own under **`Worktrees`** and **`Recap`**: `devbox ▴`, or `this machine ▴` once you come back. Click it to move the window somewhere else without closing it:
+
+- **this machine** attaches it to the server on your laptop, and starts one if none is running.
+- Every machine a window reached before, with `cornercase remote` or from this menu, attaches it there, with the `--command` you gave last time. The one the window is on has a `✓`.
+- **add machine…** asks for a destination, anything `ssh` takes, such as `devbox` or `me@gpu-box`.
+- **forget…** takes a machine off the list.
+
+The shells and agents of the machine you leave keep running there, and when you come back the window shows them as they are now. Until the other machine answers, the window says where it's going and stays where it was: **back** (or `Esc`) returns at once. If the switch fails, for instance because `ssh` refused the key or the other machine runs another version, the window says why and you stay where you were.
+
+Before reaching a machine it has never reached, the window asks first: **connect** (or `Enter`) goes, **back** stays. The question comes from the window on your laptop, not from the server it shows, so a server on another machine can't send your laptop's `ssh` anywhere without you.
+
+<Aside>
+Like reconnecting, switching never asks for a password, a passphrase or an unknown host key, since the window holds your terminal. Use a key in your SSH agent, and for a new host run `cornercase remote <host>` once in a terminal, so `ssh` can ask you about its key; that also puts it on the list.
+</Aside>
+
+The list is kept on your laptop, in `machines.json` in cornercase's state folder (`~/.local/state/cornercase/`, or `%LOCALAPPDATA%\cornercase\` on Windows), beside `remote-shells.json`. The button shows only once a window has reached another machine, so it stays out of the way if you never use one. With the [icon bar](../projects-workspaces-tabs/#the-icon-bar) it's an icon above **`Help`**, and on a [small screen](../small-terminals/) it shares the **`Worktrees`** band of the projects menu.
+
 ## Versions
 
 For the window, both machines must run the same version of cornercase. When they don't, it says which one to update before opening the window:

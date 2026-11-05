@@ -38,5 +38,5 @@ expression: "render_sized(&with(Overlay::Usage(picked_usage(1, &[]))), W, 38).ba
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Worktrees                    │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
 "  More ▴                 Help  │                         │                                          "

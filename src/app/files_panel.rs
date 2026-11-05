@@ -9,7 +9,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
 use super::layout::Side;
-use super::machines::panels::Feed;
+use super::machine_links::panels::Feed;
 use super::opening::Subject;
 use super::{App, AppEvent};
 use crate::changes::diff::Status;

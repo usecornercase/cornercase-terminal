@@ -197,6 +197,14 @@ pub(crate) fn pasted(session: &Path) -> PathBuf {
     beside_session(session, "pasted")
 }
 
+pub(crate) fn journal(session: &Path) -> PathBuf {
+    beside_session(session, "journal")
+}
+
+pub(crate) fn recap(session: &Path) -> PathBuf {
+    beside_session(session, "recap")
+}
+
 fn beside_session(session: &Path, name: &str) -> PathBuf {
     if session.file_name().is_some_and(|file| file == "session.json") {
         session.with_file_name(name)
@@ -220,6 +228,10 @@ pub(crate) fn stats(session: &Path) -> PathBuf {
 
 pub(crate) fn remote_shells(session: &Path) -> PathBuf {
     session.with_file_name("remote-shells.json")
+}
+
+pub(crate) fn machines(session: &Path) -> PathBuf {
+    session.with_file_name("machines.json")
 }
 
 pub(crate) fn star(session: &Path) -> PathBuf {

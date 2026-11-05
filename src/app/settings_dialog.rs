@@ -269,7 +269,7 @@ impl App {
             action @ (settings::Action::AddMachine
             | settings::Action::EditMachine(_)
             | settings::Action::RemoveMachine(_)
-            | settings::Action::UpdateMachine(_)) => self.machine_action(&action),
+            | settings::Action::UpdateMachine(_)) => self.machine_row_action(&action),
         }
         self.watch_accounts_page(Instant::now());
         self.refresh_machines_page();

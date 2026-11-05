@@ -10,6 +10,7 @@ import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from '
 import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, type Spot, changesLineEdge, changesLineNear, changesStretchNear, compareSpots, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
 import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, insertText, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
 import { type Edge, describe as describeRole, live, plan, roleColour } from './flow';
+import { RecapPanel, type Choice as RecapChoice, type Place as RecapPlace } from './recap';
 import { type PanelHit, type PanelHistory, type PanelMember, type PanelStep, type PanelView, fileAge, scrolled as flowScrolled } from './flowpanel';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
@@ -490,6 +491,7 @@ export class App {
   files = new FilesPanel();
   runs: Run[] = [];
   flowOpen = false;
+  recap = new RecapPanel();
   flowScroll = 0;
   private flowHinted = false;
   queued: QueueEntry[] = [];
@@ -1681,7 +1683,7 @@ export class App {
   }
 
   panelShown(): boolean {
-    return this.changesShown() || this.todo.open || this.filesShown() || this.flowShown();
+    return this.changesShown() || this.todo.open || this.filesShown() || this.flowShown() || this.recap.open;
   }
 
   runOf(workspace: number): Run | undefined {
@@ -1704,6 +1706,7 @@ export class App {
   toggleFlow(): void {
     if (this.flowOpen) this.flowOpen = false;
     else if (this.shownRun()) {
+      this.recap.open = false;
       this.changesOpen = false;
       this.closeTodo();
       this.files.close();
@@ -1882,6 +1885,7 @@ export class App {
   toggleChanges(): void {
     this.changesOpen = !this.changesOpen;
     if (this.changesOpen) {
+      this.recap.open = false;
       this.closeTodo();
       this.files.close();
       this.flowOpen = false;
@@ -1896,6 +1900,7 @@ export class App {
     if (this.todo.open) this.closeTodo();
     else {
       this.changesOpen = false;
+      this.recap.open = false;
       this.files.close();
       this.flowOpen = false;
       this.todo.open = true;
@@ -1903,6 +1908,43 @@ export class App {
     }
     this.nav = null;
     this.dirty();
+  }
+
+  toggleRecap(): void {
+    if (this.recap.open) this.recap.open = false;
+    else this.showRecap(this.recap.choice);
+    this.nav = null;
+    this.dirty();
+  }
+
+  showRecap(choice: RecapChoice): void {
+    this.changesOpen = false;
+    this.closeTodo();
+    this.files.close();
+    this.flowOpen = false;
+    this.recap.open = true;
+    this.recap.choice = choice;
+    this.recap.scroll = 0;
+    this.nav = null;
+    this.dirty();
+  }
+
+  scrollRecap(dy: number, max: number): boolean {
+    this.recap.scroll = Math.max(0, Math.min(max, this.recap.scroll + dy));
+    this.dirty();
+    return true;
+  }
+
+  recapGo(place: RecapPlace): void {
+    const p = this.projects.findIndex((x) => projectLabel(x) === place.project);
+    const w = this.projects[p]?.workspaces.findIndex((x) => workspaceLabel(x) === place.workspace) ?? -1;
+    if (p < 0 || w < 0) {
+      this.notify(`${place.project} › ${place.workspace} is closed`);
+      return;
+    }
+    if (this.areas().compact) this.recap.open = false;
+    this.selectProject(p);
+    this.selectWorkspace(p, w);
   }
 
   private closeTodo(): void {
@@ -1915,6 +1957,7 @@ export class App {
     this.closeTodo();
     this.changesOpen = false;
     this.flowOpen = false;
+    this.recap.open = false;
     if (this.changesFilter) this.changesFilter.focused = false;
     this.files.close();
     this.dirty();
@@ -2058,6 +2101,7 @@ export class App {
     if (this.files.open) return;
     this.changesOpen = false;
     this.flowOpen = false;
+    this.recap.open = false;
     this.closeTodo();
     this.files.open = true;
   }
@@ -3196,7 +3240,8 @@ export class App {
       const opening = !this.todo.open;
       this.toggleTodo();
       if (opening) this.addTodo();
-    } else if (a.kind === 'settings') this.openSettings();
+    } else if (a.kind === 'recap') this.toggleRecap();
+    else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
     else if (a.kind === 'processes') this.bug(PROCESSES_NEED);
     else if (a.kind === 'help') this.openHelp({ x: 2, y: 2 });
@@ -3333,6 +3378,15 @@ export class App {
         });
       }
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
+      const recap = (id: string, label: string, value: string, note: string): SettingsRow => ({ id: `recap:${id}`, section: 'Recap', label, value, note });
+      rows.push(
+        recap('agent', 'recap agent', 'auto (claude)', "writes the Recap panel's summaries: Claude Code or Codex"),
+        recap('account', 'recap account', 'default', 'yours alone, not shared'),
+        recap('model', 'recap model', 'default', "the agent's own models"),
+        recap('effort', 'recap effort', 'low', 'low keeps it quick and cheap'),
+        recap('language', 'recap language', 'auto', 'auto: the language of your prompts'),
+        recap('instructions', 'recap instructions', 'none', 'added to the prompt, such as group by client'),
+      );
       return rows;
     }
     if (page === PAGE.accounts) {

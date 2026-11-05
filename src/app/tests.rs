@@ -631,6 +631,7 @@ mod icons;
 mod keys;
 mod lock_text;
 #[cfg(unix)]
+mod machine_links;
 mod machines;
 mod merge_requests;
 mod merged_pull_requests;
@@ -703,6 +704,7 @@ mod path_links;
 mod pull_request_stacks;
 mod pull_requests;
 mod queue;
+mod recap_panel;
 mod remote_access;
 mod restarting;
 mod shared_files;
