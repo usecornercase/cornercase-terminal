@@ -12,7 +12,7 @@ fn reaches(app: &mut App, here: Option<&str>, known: &[&str]) {
 
 fn machine_button(app: &App) -> Position {
     let label = app.machine_label().expect("the button shows");
-    let r = ui::machine_button(app_areas(app).worktrees, &label).0;
+    let r = ui::machine_button(app_areas(app).machine, &label).0;
     Position::new(r.x + 1, r.y)
 }
 

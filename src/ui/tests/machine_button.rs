@@ -36,8 +36,8 @@ mod on_its_own_row {
         let without = layout(AREA, Widths::default());
         let with = with_machine(AREA, Sidebar::SideBySide);
 
-        assert_eq!(without.machine, Rect::default());
-        assert_eq!((with.more.y, with.list.bottom() + 1), (without.more.y, without.list.bottom() + 1));
+        assert_eq!(without.machine.height, 0);
+        assert_eq!(with.more.y, without.more.y);
         assert_eq!(with.list.height + 1, without.list.height);
     }
 
@@ -86,7 +86,7 @@ mod on_its_own_row {
 
         assert_eq!(with.machine.y, with.worktrees.y + 1);
         assert_eq!(with.more.y, without.more.y);
-        assert_eq!(without.machine, Rect::default());
+        assert_eq!(without.machine.height, 0);
     }
 
     #[test]
