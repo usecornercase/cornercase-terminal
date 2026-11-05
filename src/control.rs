@@ -10,6 +10,7 @@ pub(crate) mod accounts;
 mod app_state;
 pub(crate) mod arrange;
 pub(crate) mod changes;
+pub(crate) mod clone;
 pub(crate) mod closed_agents;
 pub(crate) mod config;
 pub(crate) mod context;
@@ -19,6 +20,7 @@ mod fields;
 pub(crate) mod files;
 mod flow;
 pub(crate) mod issues;
+pub(crate) mod machines;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -53,6 +55,7 @@ pub(crate) use changes::{
     Changes, ChangesBase, ChangesCount, ChangesDiscard, ChangesFile, ChangesGap, ChangesMergeCheck, ChangesMode,
     ChangesStage, ChangesViewed,
 };
+pub(crate) use clone::{CloneFile, CloneRepository, Cloned, Unwritten};
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
 pub(crate) use context::{ContextInfo, ContextRead};
@@ -68,6 +71,7 @@ pub(crate) use flow::{
     RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
+pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Machines, ShownRemote, StreamState};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
@@ -76,13 +80,13 @@ pub(crate) use recap::{RecapAsk, RecapInfo};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{
-    CheckInfo, GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, SharedInfo, StackInfo,
+    CheckInfo, GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RemoteInfo, RunStatus, SharedInfo, StackInfo,
 };
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
-pub(crate) use usage::{Plans, Usage};
+pub(crate) use usage::{Plans, Stats, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 pub(crate) use worktrees::{
@@ -246,6 +250,9 @@ pub(crate) enum Command {
     Worktrees(ListWorktrees),
     PullRequest(PullRequestRead),
     Context(ContextRead),
+    Machines(Machines),
+    Clone(CloneRepository),
+    FocusMachine(FocusMachine),
     Recap(RecapAsk),
 }
 
@@ -282,6 +289,7 @@ impl Command {
             Self::Mark(_) => 21,
             Self::Notify(_) => 13,
             Self::Focus(_) => 12,
+            Self::FocusMachine(_) => 118,
             _ => return None,
         })
     }
@@ -430,6 +438,8 @@ impl Command {
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
+            Self::Machines(_) => 116,
+            Self::Clone(_) => 117,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -441,7 +451,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 116] = [
+    pub(crate) const NAMES: [&str; 119] = [
         "status",
         "open",
         "new-workspace",
@@ -558,6 +568,9 @@ impl Command {
         "pull-request",
         "context",
         "recap",
+        "machines",
+        "clone",
+        "focus-machine",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -608,6 +621,8 @@ pub(crate) struct NewWorkspace {
     pub(crate) project: Option<u64>,
     pub(crate) worktree: bool,
     pub(crate) focus: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -651,6 +666,10 @@ pub(crate) struct Start {
     pub(crate) focus: bool,
     pub(crate) profile: Option<String>,
     pub(crate) accounts: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) placed: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -869,9 +888,6 @@ pub(crate) fn unknown_command(name: &str) -> String {
 pub(crate) fn command_name(request: &Value) -> Option<&str> {
     request.get("command").and_then(Value::as_str)
 }
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Stats {}
 
 #[cfg(test)]
 pub(crate) mod tests;

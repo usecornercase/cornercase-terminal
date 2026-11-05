@@ -13,7 +13,7 @@ fn with_bar(hover: Option<Position>) -> View<'static> {
         icons: true,
         has_project: true,
         issues: true,
-        changes_button: Some(ChangesButton { label: "Changes 3".into(), files: 3, open: false }),
+        changes_button: Some(ChangesButton { label: "Changes 3".into(), files: Some(3), open: false }),
         todo_pending: true,
         update: Some("↑ 9.0.0".into()),
         remote: Some(true),

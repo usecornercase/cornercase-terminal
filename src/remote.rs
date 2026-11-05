@@ -14,6 +14,7 @@ use self::attempts::{Ask, Attempt, Failed};
 use self::shell::RemoteShell;
 use crate::control;
 use crate::error::{Behind, Error, Result};
+use crate::os::process::{Pid, Signal, kill_process};
 use crate::os::socket::UnixStream;
 use crate::process;
 use crate::protocol::{self, ClientMessage};
@@ -45,6 +46,9 @@ const ENDED_WAIT: Duration = Duration::from_secs(2);
 const ENDED_POLL: Duration = Duration::from_millis(10);
 const TIED: &str = protocol::TIED_ENV;
 const BATCH: [&str; 2] = ["-o", "BatchMode=yes"];
+const LINK: [&str; 6] = ["-o", "BatchMode=yes", "-a", "-x", "-o", "ClearAllForwardings=yes"];
+const SECOND: Duration = Duration::from_secs(1);
+const MAX_BACKOFF: Duration = Duration::from_secs(15);
 const BANNER_WAIT: Duration = Duration::from_secs(30);
 const SILENT: &str = "cornercase did not answer within 30 s";
 
@@ -66,14 +70,20 @@ pub(crate) enum Run {
 pub(crate) enum Use {
     Window { again: bool },
     Command,
+    Link,
 }
 
 impl Use {
-    fn batch(self) -> bool {
+    fn options(self) -> &'static [&'static str] {
         match self {
-            Self::Window { again } => again,
-            Self::Command => true,
+            Self::Window { again: false } => &[],
+            Self::Window { again: true } | Self::Command => &BATCH,
+            Self::Link => &LINK,
         }
+    }
+
+    fn batch(self) -> bool {
+        !matches!(self, Self::Window { again: false })
     }
 }
 
@@ -121,7 +131,7 @@ impl Stderr {
         kept.tail.push_back(line);
     }
 
-    fn collect(self, from: ChildStderr) -> JoinHandle<()> {
+    fn collect(self, from: impl Read + Send + 'static) -> JoinHandle<()> {
         thread::spawn(move || {
             BufReader::new(from).lines().map_while(io::Result::ok).for_each(|line| self.keep(&line));
         })
@@ -129,11 +139,43 @@ impl Stderr {
 }
 
 pub(crate) struct Piped {
+    pub(crate) release: String,
     pub(crate) reader: BufReader<ChildStdout>,
     pub(crate) writer: ChildStdin,
     pub(crate) child: Child,
     pub(crate) stderr: Stderr,
     pub(crate) collector: Option<JoinHandle<()>>,
+}
+
+#[derive(Default)]
+struct Target {
+    pid: Option<Pid>,
+    killed: bool,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct Killer(Arc<Mutex<Target>>);
+
+impl Killer {
+    pub(crate) fn kill(&self) {
+        let mut target = self.0.lock();
+        target.killed = true;
+        if let Some(pid) = target.pid {
+            let _ = kill_process(pid, Signal::KILL);
+        }
+    }
+
+    pub(crate) fn arm(&self, child: &Child) {
+        let mut target = self.0.lock();
+        target.pid = i32::try_from(child.id()).ok().and_then(Pid::from_raw);
+        if let Some(pid) = target.pid.filter(|_| target.killed) {
+            let _ = kill_process(pid, Signal::KILL);
+        }
+    }
+
+    pub(crate) fn disarm(&self) {
+        self.0.lock().pid = None;
+    }
 }
 
 enum Found<T> {
@@ -144,7 +186,7 @@ enum Found<T> {
 
 struct Asked<'a> {
     remote: &'a Remote,
-    batch: bool,
+    options: &'a [&'a str],
 }
 
 impl Ask for Asked<'_> {
@@ -153,7 +195,7 @@ impl Ask for Asked<'_> {
     }
 
     fn probe(&mut self) -> Option<RemoteShell> {
-        self.remote.probe(self.batch)
+        self.remote.probe(self.options)
     }
 
     fn learn(&mut self, shell: RemoteShell) {
@@ -166,8 +208,8 @@ impl Remote {
         &self.destination
     }
 
-    fn asked(&self, batch: bool) -> Asked<'_> {
-        Asked { remote: self, batch }
+    fn asked<'a>(&'a self, options: &'a [&'a str]) -> Asked<'a> {
+        Asked { remote: self, options }
     }
 
     fn probe_first(&self) -> bool {
@@ -175,29 +217,44 @@ impl Remote {
     }
 
     pub(crate) fn connect(&self, usage: Use) -> Result<Piped> {
-        let mut asked = self.asked(usage.batch());
-        match attempts::linked(&mut asked, self.probe_first(), |shell| self.attempt(usage, shell))? {
+        self.connect_killable(usage, &Killer::default())
+    }
+
+    pub(crate) fn connect_killable(&self, usage: Use, killer: &Killer) -> Result<Piped> {
+        if usage == Use::Link {
+            return match self.attempt(usage, RemoteShell::Posix, killer)? {
+                Attempt::Linked(piped) => Ok(piped),
+                Attempt::Failed(failed) => Err(self.failure(failed.status, &failed.stderr)),
+            };
+        }
+        let mut asked = self.asked(usage.options());
+        match attempts::linked(&mut asked, self.probe_first(), |shell| self.attempt(usage, shell, killer))? {
             Ok(piped) => Ok(piped),
             Err(failed) => Err(self.failure(failed.status, &failed.stderr)),
         }
     }
 
-    fn attempt(&self, usage: Use, shell: RemoteShell) -> Result<Attempt<Piped>> {
+    fn attempt(&self, usage: Use, shell: RemoteShell, killer: &Killer) -> Result<Attempt<Piped>> {
         let line = self.command_for(shell, &["proxy"], false)?;
-        let (child, input, output, errors) = spawn_piped(self.ssh_line(usage.batch(), Run::Plain, line))?;
+        let (child, input, output, errors) = spawn_piped(self.ssh_line(usage.options(), Run::Plain, line))?;
         let stderr = Stderr::default();
         let collector = stderr.clone().collect(errors);
         let mut reader = BufReader::new(output);
         let limit = usage.batch().then_some(BANNER_WAIT);
-        let (child, found) = watched(child, limit, || read_line(&mut reader, parse_banner));
+        let (child, found) = banner_of(child, &mut reader, limit, killer);
         let Some(mut child) = child else {
             return Err(Error::Ssh { host: self.destination.clone(), reason: SILENT.into() });
         };
         match found {
             Found::Line(banner) => match self.check(&banner, usage) {
-                Ok(()) => {
-                    Ok(Attempt::Linked(Piped { reader, writer: input, child, stderr, collector: Some(collector) }))
-                }
+                Ok(()) => Ok(Attempt::Linked(Piped {
+                    release: banner.release,
+                    reader,
+                    writer: input,
+                    child,
+                    stderr,
+                    collector: Some(collector),
+                })),
                 Err(e) => {
                     process::stop(child);
                     Err(e)
@@ -216,9 +273,9 @@ impl Remote {
         }
     }
 
-    fn probe(&self, batch: bool) -> Option<RemoteShell> {
+    fn probe(&self, options: &[&str]) -> Option<RemoteShell> {
         let mut child = Command::new(SSH)
-            .args(self.ssh_line(batch, Run::Plain, shell::PROBE.to_string()))
+            .args(self.ssh_line(options, Run::Plain, shell::PROBE.to_string()))
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -235,7 +292,7 @@ impl Remote {
     }
 
     pub(crate) fn on_windows(&self) -> bool {
-        attempts::windows_there(&mut self.asked(true))
+        attempts::windows_there(&mut self.asked(&BATCH))
     }
 
     pub(crate) fn kill_server(&self) -> Result<bool> {
@@ -246,9 +303,32 @@ impl Remote {
         Ok(self.run(false, Run::Terminal, &["update"])?.success())
     }
 
+    pub(crate) fn install_update(&self) -> Result<()> {
+        let mut ssh = Command::new(SSH);
+        ssh.args(self.update_args());
+        self.installed(ssh)
+    }
+
+    fn installed(&self, mut update: Command) -> Result<()> {
+        let mut child =
+            update.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(Error::RunSsh)?;
+        let said = Stderr::default();
+        let out = child.stdout.take().map(|out| said.clone().collect(out));
+        let errors = child.stderr.take().map(|errors| said.clone().collect(errors));
+        let status = child.wait().map_err(Error::RunSsh)?;
+        for collector in [out, errors].into_iter().flatten() {
+            let _ = collector.join();
+        }
+        if status.success() { Ok(()) } else { Err(self.failure(Some(status), &said)) }
+    }
+
+    fn update_args(&self) -> Vec<String> {
+        self.ssh_line(Use::Link.options(), Run::Plain, self.remote_command(&["update"], false))
+    }
+
     pub(crate) fn run(&self, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
         let words: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
-        let mut asked = self.asked(batch);
+        let mut asked = self.asked(batched(batch));
         let ran =
             attempts::ran(&mut asked, self.probe_first(), &words, |shell| self.run_with(shell, batch, run, &words))?;
         if let Some(shell) = ran.learned {
@@ -269,7 +349,7 @@ impl Remote {
     fn run_with(&self, shell: RemoteShell, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
         let line = self.command_for(shell, args, run == Run::Tied)?;
         let mut command = Command::new(SSH);
-        command.args(self.ssh_line(batch, run, line));
+        command.args(self.ssh_line(batched(batch), run, line));
         if run != Run::Tied {
             return command.status().map_err(Error::RunSsh);
         }
@@ -280,12 +360,9 @@ impl Remote {
         status
     }
 
-    fn ssh_line(&self, batch: bool, run: Run, line: String) -> Vec<String> {
+    fn ssh_line(&self, options: &[&str], run: Run, line: String) -> Vec<String> {
         let mut ssh = vec![if run == Run::Terminal { "-t" } else { "-T" }.to_string()];
-        ssh.extend(ALIVE.iter().map(ToString::to_string));
-        if batch {
-            ssh.extend(BATCH.iter().map(ToString::to_string));
-        }
+        ssh.extend(ALIVE.iter().chain(options).map(ToString::to_string));
         ssh.extend(["--".to_string(), self.destination.clone(), line]);
         ssh
     }
@@ -317,7 +394,7 @@ impl Remote {
     fn check(&self, banner: &Banner, usage: Use) -> Result<()> {
         match usage {
             Use::Window { .. } => self.check_window(banner),
-            Use::Command => self.check_command(banner),
+            Use::Command | Use::Link => self.check_command(banner),
         }
     }
 
@@ -396,6 +473,10 @@ impl Remote {
     }
 }
 
+pub(crate) fn backoff(failures: u32) -> Duration {
+    SECOND.saturating_mul(1 << failures.saturating_sub(1).min(4)).min(MAX_BACKOFF)
+}
+
 pub(crate) fn fatal(error: &Error) -> bool {
     !matches!(error, Error::Ssh { .. })
 }
@@ -405,6 +486,10 @@ pub(crate) fn reason(error: &Error) -> String {
         Error::Ssh { reason, .. } => reason.clone(),
         error => error.to_string(),
     }
+}
+
+pub(crate) fn not_found(name: &str) -> String {
+    format!("cornercase was not found on {name}: install it there")
 }
 
 fn quote(text: &str) -> String {
@@ -450,6 +535,24 @@ fn answered(found: Found<RemoteShell>, code: Option<i32>) -> Option<RemoteShell>
         (Found::Ended, Some(code)) if code != SSH_FAILED => Some(RemoteShell::Posix),
         _ => None,
     }
+}
+
+fn batched(batch: bool) -> &'static [&'static str] {
+    if batch { &BATCH } else { &[] }
+}
+
+fn banner_of(
+    child: Child,
+    reader: &mut impl BufRead,
+    limit: Option<Duration>,
+    killer: &Killer,
+) -> (Option<Child>, Found<Banner>) {
+    killer.arm(&child);
+    watched(child, limit, || {
+        let found = read_line(reader, parse_banner);
+        killer.disarm();
+        found
+    })
 }
 
 fn watched<T>(child: Child, limit: Option<Duration>, work: impl FnOnce() -> T) -> (Option<Child>, T) {

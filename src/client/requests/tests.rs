@@ -157,6 +157,16 @@ mod features {
     }
 
     #[test]
+    fn a_server_that_cannot_start_on_a_machine_is_refused_before_the_start_is_sent() {
+        let lacks = "cannot start agents, workspaces or flows on another machine";
+        let (checked, asked) = asking(&["machine-usage"], "machine-start", lacks);
+
+        let error = checked.expect_err("refused");
+        assert!(error.to_string().contains(lacks), "{error}");
+        assert_eq!(asked.len(), 1, "{asked:?}");
+    }
+
+    #[test]
     fn a_server_that_cannot_reveal_is_refused_before_the_focus_is_sent() {
         let (checked, asked) = asking(&["views"], "focus-reveal", "cannot reveal a search match in its pane");
 
@@ -175,7 +185,10 @@ mod the_view {
     #[rstest]
     #[case::stays_out_of_the_contract(control::Command::Contract(control::Contract {}), None)]
     #[case::goes_with_a_command_that_takes_one(control::Command::Status(control::Status {}), Some(7))]
-    #[case::goes_with_one_that_takes_none_for_the_server_to_refuse(control::Command::Stats(control::Stats {}), Some(7))]
+    #[case::goes_with_one_that_takes_none_for_the_server_to_refuse(
+        control::Command::Stats(control::Stats::default()),
+        Some(7)
+    )]
     fn of_the_invocation_goes_with_every_request_but_the_contract(
         #[case] command: control::Command,
         #[case] sent: Option<u64>,

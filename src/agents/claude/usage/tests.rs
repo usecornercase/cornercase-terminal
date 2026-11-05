@@ -11,7 +11,7 @@ fn at(text: &str) -> Option<i64> {
 }
 
 pub(crate) fn report(line: &str) -> Report {
-    answer(line).expect("the usage answer").expect("a report")
+    answer(line, &mut Heard::default()).expect("the usage answer").expect("a report")
 }
 
 #[test]
@@ -47,6 +47,7 @@ fn a_recorded_answer_gives_one_window_per_limit() {
         ],
         extra: None,
         notice: None,
+        identity: None,
     };
     assert_eq!(report(RECORDED), expected);
 }
@@ -92,6 +93,7 @@ fn unknown_fields_and_kinds_are_tolerated() {
         }],
         extra: Some("extra usage: 12.34 USD of 50.00 USD".into()),
         notice: None,
+        identity: None,
     };
     assert_eq!(parse(body).expect("a report"), expected);
 }
@@ -125,14 +127,14 @@ fn the_fallback_fields_take_the_kinds_of_the_list() {
 #[case::other_message(r#"{"type":"system","subtype":"init"}"#)]
 #[case::not_json("warming up")]
 fn other_lines_are_skipped(#[case] line: &str) {
-    assert!(answer(line).is_none());
+    assert!(answer(line, &mut Heard::default()).is_none());
 }
 
 #[test]
 fn an_error_response_carries_its_message() {
     let line =
         r#"{"type":"control_response","response":{"subtype":"error","request_id":"usage","error":"not logged in"}}"#;
-    let error = answer(line).expect("the usage answer").expect_err("an error");
+    let error = answer(line, &mut Heard::default()).expect("the usage answer").expect_err("an error");
     assert_eq!(error.to_string(), "not logged in");
 }
 
@@ -153,4 +155,68 @@ fn the_probe_drops_claude_session_variables() {
     let mut expected: Vec<_> = crate::agents::claude::CLAUDE_SESSION_ENV.map(std::ffi::OsString::from).to_vec();
     expected.sort();
     assert_eq!(removed, expected);
+}
+
+mod the_identity {
+    use super::*;
+
+    const EMAIL: &str = "ana@acme.dev";
+
+    fn initialize(account: &Value) -> String {
+        json!({"type": "control_response", "response": {
+            "subtype": "success",
+            "request_id": "initialize",
+            "response": {"commands": [], "account": account, "pid": 42}
+        }})
+        .to_string()
+    }
+
+    fn signed_in() -> Value {
+        json!({"email": EMAIL, "organization": "Acme", "subscriptionType": "team", "apiProvider": "firstParty"})
+    }
+
+    fn after(lines: &[String]) -> Report {
+        let mut heard = Heard::default();
+        lines.iter().find_map(|line| answer(line, &mut heard)).expect("the usage answer").expect("a report")
+    }
+
+    #[test]
+    fn comes_from_the_account_of_the_initialize_answer() {
+        let report = after(&[initialize(&signed_in()), RECORDED.into()]);
+        assert_eq!(report.identity, Some(fingerprint(Known::Claude, &[EMAIL, "Acme"])));
+    }
+
+    #[rstest]
+    #[case::no_email("email")]
+    #[case::no_organization("organization")]
+    #[case::no_provider("apiProvider")]
+    fn needs_every_part(#[case] missing: &str) {
+        let mut account = signed_in();
+        account.as_object_mut().expect("an object").remove(missing);
+        assert_eq!(after(&[initialize(&account), RECORDED.into()]).identity, None);
+    }
+
+    #[rstest]
+    #[case::bedrock("bedrock")]
+    #[case::vertex("vertex")]
+    #[case::gateway("gateway")]
+    fn is_only_for_an_anthropic_login(#[case] provider: &str) {
+        let mut account = signed_in();
+        account["apiProvider"] = json!(provider);
+        assert_eq!(after(&[initialize(&account), RECORDED.into()]).identity, None);
+    }
+
+    #[test]
+    fn is_none_without_an_initialize_answer() {
+        assert_eq!(after(&[RECORDED.into()]), report(RECORDED));
+        assert_eq!(report(RECORDED).identity, None);
+    }
+
+    #[test]
+    fn never_shows_the_email() {
+        let report = after(&[initialize(&signed_in()), RECORDED.into()]);
+        let shown = format!("{report:?}");
+        assert!(report.identity.is_some());
+        assert!(!shown.contains(EMAIL) && !shown.contains("Acme"), "{shown}");
+    }
 }

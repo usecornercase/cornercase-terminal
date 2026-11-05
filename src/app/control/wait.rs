@@ -247,6 +247,7 @@ impl App {
             Stage::Usage(waiting) => self.usage_read(waiting, now).map(|plans| Ok(json(&plans))),
             Stage::PullRequest(workspace) => self.pull_request_reply(*workspace),
             Stage::Context { pane, answers } => self.context_reply(*pane, *answers),
+            Stage::Machines(gathering) => self.gathered(gathering, now),
             Stage::Recap { choice, answers } => self.recap_reply(*choice, *answers),
             Stage::Dossier(token) => self.dossier_reply(*token),
             Stage::Setup(workspace) if !self.workspace_setting_up(*workspace) => {

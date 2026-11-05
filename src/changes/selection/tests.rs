@@ -126,6 +126,29 @@ mod picking {
     }
 
     #[test]
+    fn says_what_a_gap_cut_short_leaves_out_when_it_goes_past_it() {
+        let file = file();
+        let gap = gap_lines(&file);
+        let read = &gap[..3];
+
+        let found = picked(&file, |h| (h == 1).then_some(read), (at(0, 3), at(1, 0)));
+
+        assert_eq!(crate::changes::gap_size(&file, 1), 6);
+        assert_eq!(text(&found), "three\n\tline 4\n\tline 5\n\tline 6\n↕ 3 more unchanged lines\nten");
+        assert_eq!((found[4].old, found[4].new), (None, None));
+    }
+
+    #[test]
+    fn says_nothing_of_a_gap_cut_short_when_it_stays_within_the_lines_read() {
+        let file = file();
+        let gap = gap_lines(&file);
+        let read = &gap[..3];
+        let (first, last) = (Spot { hunk: 1, at: At::Gap(0) }, Spot { hunk: 1, at: At::Gap(2) });
+
+        assert_eq!(picked(&file, |h| (h == 1).then_some(read), (first, last)).len(), read.len());
+    }
+
+    #[test]
     fn starts_inside_a_gap() {
         let file = file();
         let gap = gap_lines(&file);

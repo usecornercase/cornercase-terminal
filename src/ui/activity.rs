@@ -105,6 +105,7 @@ impl Item {
                 Some(
                     Overlay::Settings(_)
                         | Overlay::ShareSettings(_)
+                        | Overlay::Machine(_)
                         | Overlay::Flows(_)
                         | Overlay::Usage(_)
                         | Overlay::Remote(_)
@@ -120,8 +121,8 @@ impl Item {
             Self::Changes => view
                 .changes_button
                 .as_ref()
-                .filter(|b| b.files > 0)
-                .map(|b| Span::styled(icons::count(b.files), Style::default().fg(Color::Cyan))),
+                .and_then(|b| b.files.filter(|files| *files > 0))
+                .map(|files| Span::styled(icons::count(files), Style::default().fg(Color::Cyan))),
             Self::Todo => (view.todo_dot && view.todo_pending).then(|| Span::styled(icons::DOT, muted)),
             Self::More => {
                 view.remote.filter(|&on| on).map(|_| Span::styled(icons::DOT, Style::default().fg(Color::Green)))

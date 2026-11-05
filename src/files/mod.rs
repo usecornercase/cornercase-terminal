@@ -201,7 +201,7 @@ fn answer<T>(
     answers.insert(workspace, Answer { query: search.query, index: search.index, found: Arc::new(found) });
 }
 
-fn child(folder: &str, name: &str) -> String {
+pub(crate) fn child(folder: &str, name: &str) -> String {
     if folder.is_empty() { name.to_string() } else { format!("{folder}/{name}") }
 }
 
@@ -459,6 +459,22 @@ impl Panel {
         answer(&mut self.places, &mut self.texts, workspace, search, found);
     }
 
+    pub(crate) fn fed_names(&mut self, workspace: u64, query: &str, found: Vec<search::Name>) {
+        if let Some(search) = self.fed_search(workspace, query) {
+            answer(&mut self.places, &mut self.names, workspace, search, found);
+        }
+    }
+
+    pub(crate) fn fed_text(&mut self, workspace: u64, query: &str, found: search::Text) {
+        if let Some(search) = self.fed_search(workspace, query) {
+            answer(&mut self.places, &mut self.texts, workspace, search, found);
+        }
+    }
+
+    fn fed_search(&self, workspace: u64, query: &str) -> Option<Search> {
+        (self.searched(workspace) == Some(query)).then(|| Search { query: query.to_string(), index: Arc::default() })
+    }
+
     pub(crate) fn open_at(&mut self, workspace: u64, path: &str, lines: (u32, u32), find: Option<Find>) {
         self.open_file(workspace, path);
         if let Some(viewer) = self.viewer_mut(workspace) {
@@ -495,9 +511,8 @@ impl Panel {
         if self.listing.is_some_and(|(_, at)| now.duration_since(at) < GIVE_UP_AFTER) {
             return None;
         }
-        let place = self.places.entry(workspace).or_default();
-        let mut folders: Vec<String> = std::iter::once(String::new()).chain(place.expanded.iter().cloned()).collect();
-        folders.sort();
+        self.places.entry(workspace).or_default();
+        let folders = self.wanted_folders(workspace);
         let missing = folders.iter().any(|f| !self.listings.contains_key(&(workspace, f.clone())));
         let stale = self.listed.get(&workspace).is_none_or(|at| now.duration_since(*at) >= LIST_EVERY);
         if !missing && !stale {
@@ -509,10 +524,21 @@ impl Panel {
         Some((self.generation, List { root: root.to_path_buf(), folders }))
     }
 
+    pub(crate) fn wanted_folders(&self, workspace: u64) -> Vec<String> {
+        let expanded = self.places.get(&workspace).into_iter().flat_map(|p| p.expanded.iter().cloned());
+        let mut folders: Vec<String> = std::iter::once(String::new()).chain(expanded).collect();
+        folders.sort();
+        folders
+    }
+
     pub(crate) fn listed(&mut self, workspace: u64, generation: u64, folders: Vec<(String, Option<Vec<Entry>>)>) {
         if self.listing.is_some_and(|(g, _)| g == generation) {
             self.listing = None;
         }
+        self.fed_listing(workspace, folders);
+    }
+
+    pub(crate) fn fed_listing(&mut self, workspace: u64, folders: Vec<(String, Option<Vec<Entry>>)>) {
         for (folder, entries) in folders {
             let key = (workspace, folder);
             if self
@@ -565,8 +591,14 @@ impl Panel {
         if done {
             self.reading = None;
         }
+        if let Some(content) = content {
+            self.fed_read(workspace, path, content);
+        }
+    }
+
+    pub(crate) fn fed_read(&mut self, workspace: u64, path: &str, content: Content) {
         let viewer = self.places.get_mut(&workspace).and_then(|p| p.viewer.as_mut()).filter(|v| v.path == path);
-        if let (Some(viewer), Some(content)) = (viewer, content) {
+        if let Some(viewer) = viewer {
             let old = viewer.content.as_ref();
             if let Some(find) = viewer.find.as_mut().filter(|_| old.is_none_or(|old| old.lines() != content.lines())) {
                 find.recount(content.lines());

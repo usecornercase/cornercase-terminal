@@ -897,11 +897,15 @@ export function rightAligned(row: Rect, labels: string[], width: (l: string) => 
 
 export const buttonWidth = (label: string) => [...label].length + 2;
 
+const dialogTab = (name: string, padding: number) => buttonWidth(name) - 2 + padding;
+
 export function tabsIn(row: Rect, names: string[]): Rect[] {
+  const width = (padding: number, gap: number) => names.reduce((sum, name) => sum + dialogTab(name, padding) + gap, 0) - gap;
+  const [padding, gap] = [[2, 1], [2, 0], [0, 1]].find(([p, g]) => width(p, g) <= row.w) ?? [0, 1];
   let x = row.x;
   return names.map((name) => {
-    const r = intersect(rect(x, row.y, buttonWidth(name), 1), row);
-    x += buttonWidth(name) + 1;
+    const r = intersect(rect(x, row.y, dialogTab(name, padding), 1), row);
+    x += dialogTab(name, padding) + gap;
     return r;
   });
 }

@@ -135,8 +135,7 @@ impl App {
         if !self.files_shown() {
             return None;
         }
-        let workspace = self.project()?.workspace()?.id;
-        let viewer = self.panels.files.viewer(workspace)?;
+        let viewer = self.files_state().viewer(self.files_workspace()?)?;
         Some((viewer.path.clone(), Arc::clone(viewer.content.as_ref()?)))
     }
 

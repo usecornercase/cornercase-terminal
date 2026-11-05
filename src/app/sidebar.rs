@@ -8,6 +8,7 @@ use super::interaction::Drag;
 use super::interaction::Grab;
 use super::interaction::RowDrag;
 use super::layout::List;
+use super::machine_links;
 use super::menus::Marked;
 use super::menus::MenuAction;
 use super::menus::Target;
@@ -36,7 +37,9 @@ struct AgentAt {
 impl App {
     pub(super) fn sidebar_rows(&self) -> Vec<SidebarRow> {
         let collapsed: Vec<bool> = self.groups.iter().map(|g| g.entry.collapsed).collect();
-        ui::sidebar_rows(&crate::project::group_indices(&self.projects, &self.groups), &collapsed)
+        let rows = ui::sidebar_rows(&crate::project::group_indices(&self.projects, &self.groups), &collapsed);
+        let ours = self.projects.len();
+        ui::machine_rows(rows, ours..ours + machine_links::remote_only(&self.remote_projects()).count())
     }
 
     pub(super) fn active_row(&self, sidebar: &[SidebarRow]) -> Option<usize> {
@@ -46,8 +49,11 @@ impl App {
 
     pub(super) fn click_projects(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) {
         let rows = self.sidebar_rows();
+        if self.press_remote_project(list, pitch, &rows, (pos, area)) {
+            return;
+        }
         let rect = |row: SidebarRow| ui::entry_row(list, pitch, &rows, self.scroll.of(List::Projects), row);
-        match ui::sidebar_hit(list, pitch, &rows, self.scroll.of(List::Projects), pos) {
+        match self.sidebar_hit(list, pitch, &rows, pos) {
             Some(SidebarHit::Select(i)) => {
                 self.grab(Target::Project(self.projects[i].id), rect(SidebarRow::Project(i)), area, false);
             }
@@ -99,6 +105,7 @@ impl App {
             worktree,
             error: None,
             creating: false,
+            run_on: self.run_on_for(project.id),
         });
     }
 
@@ -246,16 +253,20 @@ impl App {
 
     pub(super) fn tab_lines(&self) -> ui::TabLines {
         let lines = |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| self.tab_details(t).lines()).collect() };
-        let lines = self.project().map(|p| p.workspaces.iter().map(lines).collect()).unwrap_or_default();
-        let folded = self.project().map(|p| p.workspaces.iter().map(|w| w.collapsed).collect()).unwrap_or_default();
-        ui::TabLines::new(lines, self.screen.drawn.tab_bar.is_empty()).folded(folded)
+        let remote = self.remote_projects();
+        let column = self.column(&remote);
+        let (ours, theirs) = (column.ours, self.remote_entries(&column));
+        let lines = ours.iter().map(lines).chain(theirs.iter().map(ui::WorkspaceEntry::tab_lines)).collect();
+        let folded = ours.iter().map(|w| w.collapsed).chain(theirs.iter().map(|w| w.collapsed)).collect();
+        let bare = ours.iter().map(|_| false).chain(theirs.iter().map(|_| true)).collect();
+        ui::TabLines::new(lines, self.screen.drawn.tab_bar.is_empty()).folded(folded).bare(bare)
     }
 
     pub(super) fn click_workspaces(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) -> Result<()> {
-        if self.project().is_none() {
+        let tabs = self.tab_lines();
+        if self.press_remote_row(list, pitch, &tabs, (pos, area)) || self.project().is_none() {
             return Ok(());
         }
-        let tabs = self.tab_lines();
         let hit = self.workspace_hit(list, pitch, &tabs, pos);
         if matches!(hit, Some(WorkspaceHit::NewTab(_))) {
             self.screen.nav = None;
@@ -329,7 +340,7 @@ impl App {
     }
 
     pub(super) fn open_project_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
-        let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.scroll.of(List::Projects), pos) {
+        let actions = match self.sidebar_hit(list, pitch, &self.sidebar_rows(), pos) {
             Some(SidebarHit::Select(i) | SidebarHit::Close(i) | SidebarHit::Menu(i)) => self.project_menu(i),
             Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g) | SidebarHit::GroupMenu(g)) => self.group_menu(g),
             _ => return,
@@ -363,6 +374,9 @@ impl App {
     }
 
     pub(super) fn open_tree_menu(&mut self, list: Rect, pos: Position) {
+        if self.remote_tree_menu(list, pos) {
+            return;
+        }
         let Some(ui::TreeHit::Fold(row) | ui::TreeHit::Select(row) | ui::TreeHit::Close(row) | ui::TreeHit::Menu(row)) =
             self.tree_hit(list, &self.tree_shape(), pos)
         else {
@@ -370,7 +384,7 @@ impl App {
         };
         let actions = match (row, self.tree_target(row)) {
             (ui::TreeRow::Group(g), _) => self.group_menu(g),
-            (ui::TreeRow::Project(p), _) => self.project_menu(p),
+            (ui::TreeRow::Project(p), Some(_)) => self.project_menu(p),
             (_, Some(target)) => self.target_menu(target),
             _ => return,
         };
@@ -378,7 +392,7 @@ impl App {
     }
 
     pub(super) fn open_workspace_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
-        if self.project().is_none() {
+        if self.remote_row_menu(list, pitch, pos) || self.project().is_none() {
             return;
         }
         let hit = self.workspace_hit(list, pitch, &self.tab_lines(), pos);
@@ -387,7 +401,15 @@ impl App {
     }
 
     fn workspace_hit(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, pos: Position) -> Option<WorkspaceHit> {
+        let ours = |w: usize| self.projects.workspace_at(self.active, w).is_some() && !self.removing(self.active, w);
+        let alone = self.remote_alone();
         ui::workspace_hit(list, pitch, tabs, self.scroll.of(List::Workspaces), pos)
-            .filter(|hit| !hit.workspace().is_some_and(|w| self.removing(self.active, w)))
+            .filter(|hit| !alone && hit.workspace().is_none_or(ours))
+    }
+
+    fn sidebar_hit(&self, list: Rect, pitch: u16, rows: &[SidebarRow], pos: Position) -> Option<SidebarHit> {
+        let hit = ui::sidebar_hit(list, pitch, rows, self.scroll.of(List::Projects), pos)?;
+        let (SidebarHit::Select(p) | SidebarHit::Close(p) | SidebarHit::Menu(p)) = hit else { return Some(hit) };
+        (p < self.projects.len()).then_some(hit)
     }
 }

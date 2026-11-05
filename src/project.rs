@@ -7,6 +7,7 @@ use crate::agents::activity::Status;
 use crate::agents::context::Context;
 use crate::config::Config;
 use crate::flows::run::RoleWorktree;
+use crate::git::remote::Repo;
 use crate::git::worktree::setup;
 use crate::term::Term;
 
@@ -340,11 +341,22 @@ pub(crate) struct Project {
     pub(crate) active: usize,
     pub(crate) closing: bool,
     pub(crate) collapsed: bool,
+    pub(crate) repo: Repo,
 }
 
 impl Project {
     pub(crate) fn new(id: u64, path: PathBuf, name: Option<String>) -> Self {
-        Self { id, path, name, group: None, workspaces: Vec::new(), active: 0, closing: false, collapsed: false }
+        Self {
+            id,
+            path,
+            name,
+            group: None,
+            workspaces: Vec::new(),
+            active: 0,
+            closing: false,
+            collapsed: false,
+            repo: Repo::default(),
+        }
     }
 
     pub(crate) fn index_of(&self, workspace: u64) -> Option<usize> {

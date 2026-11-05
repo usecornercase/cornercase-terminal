@@ -125,6 +125,14 @@ fn span(area: Rect, dir: Dir) -> (u16, u16) {
 }
 
 impl Divider {
+    pub(crate) fn seen(path: Vec<bool>, dir: Dir, area: Rect, line: Rect, min: Option<(u16, u16)>) -> Self {
+        Self { path, dir, area, line, min: min.unwrap_or((leaf_min(dir), leaf_min(dir))) }
+    }
+
+    pub(crate) fn placed(&self, area: Rect, line: Rect) -> Self {
+        Self { area, line, ..self.clone() }
+    }
+
     pub(crate) fn grab(&self) -> Rect {
         match self.dir {
             Dir::Right => Rect { width: self.line.width + PADDING, ..self.line }.intersection(self.area),
@@ -233,6 +241,15 @@ impl<T: Copy + PartialEq> Node<T> {
 
     fn sides(dir: Dir, first: &Self, second: &Self) -> (u16, u16) {
         (first.min_size(dir), second.min_size(dir))
+    }
+
+    pub(crate) fn sides_at(&self, path: &[bool]) -> Option<(u16, u16)> {
+        let Self::Split { dir, first, second, .. } = self else { return None };
+        match path.split_first() {
+            None => Some(Self::sides(*dir, first, second)),
+            Some((false, rest)) => first.sides_at(rest),
+            Some((true, rest)) => second.sides_at(rest),
+        }
     }
 
     fn min_size(&self, along: Dir) -> u16 {

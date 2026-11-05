@@ -109,6 +109,8 @@ pub(crate) enum What {
         panes: Vec<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         sound: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        machine: Option<String>,
     },
 }
 
@@ -141,7 +143,8 @@ impl Event {
 
     pub(crate) fn about(&self, panes: &[u64]) -> bool {
         match &self.what {
-            What::Notice { panes: named, .. } => named.iter().any(|pane| panes.contains(pane)),
+            What::Notice { panes: named, machine: None, .. } => named.iter().any(|pane| panes.contains(pane)),
+            What::Notice { .. } => false,
             _ => self.kind() == Some(Kind::Pane) && self.ids.pane.is_some_and(|pane| panes.contains(&pane)),
         }
     }

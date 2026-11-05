@@ -308,7 +308,7 @@ mod every_project {
         let Collapsed { owners, mut app, rx: _rx, owner, agent_pane, active, file } = collapsed_owner();
         let position = row(&app, panel::Row::Hunk(file, 0));
         let hunk = Rect::new(panel_area(&app).x, position.y, panel_area(&app).width, 1);
-        let ask = panel::actions(hunk)[1].1.as_position();
+        let ask = panel::actions(&app.panel_view().expect("panel"), hunk)[1].1.as_position();
         click(&mut app, ask);
         assert_agent_got_the_reference(&mut app, &owners, agent_pane);
         assert_eq!(app.panel_view().expect("panel").owners[file], owner);
@@ -316,7 +316,7 @@ mod every_project {
         app.projects[0].collapsed = true;
         app.projects[0].workspaces[0].collapsed = true;
         app.shells.set_editor(&owners.editor.display().to_string());
-        let open = panel::actions(hunk)[0].1.as_position();
+        let open = panel::actions(&app.panel_view().expect("panel"), hunk)[0].1.as_position();
         click(&mut app, open);
         wait_until("the editor runs in the owning workspace", || owners.second.path().join("editor-got").exists());
         assert_editor_opened_in_owner(&app, owners.second.path(), active);

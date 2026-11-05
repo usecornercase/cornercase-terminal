@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
@@ -9,8 +9,10 @@ use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
 use super::layout::Side;
+use super::machine_links::panels::Feed;
 use super::opening::Subject;
 use super::{App, AppEvent};
+use crate::changes::diff::Status;
 use crate::changes::{Checkout, Tints};
 use crate::control::contract::Refusal;
 use crate::error::Result;
@@ -68,16 +70,20 @@ fn read_and_send(tx: &Sender<AppEvent>, job: Job, workspace: u64, generation: u6
         send(None, true);
         return;
     };
+    styled_after(content, load.previous.is_none(), |content, done| send(Some(content), done));
+}
+
+pub(in crate::app) fn styled_after(content: disk::Content, first: bool, send: impl Fn(disk::Content, bool)) {
     if !matches!(content.body, disk::Body::Text { .. }) {
-        send(Some(content), true);
+        send(content, true);
         return;
     }
-    if load.previous.is_none() {
-        send(Some(content.clone()), false);
+    if first {
+        send(content.clone(), false);
     }
     let plain = content.clone();
     let styled = panics::contain(|| disk::highlighted(content)).flatten();
-    send(Some(styled.unwrap_or(plain)), true);
+    send(styled.unwrap_or(plain), true);
 }
 
 fn plural(n: usize, what: &str) -> String {
@@ -129,11 +135,11 @@ impl App {
             }
             FilesEvent::Names { workspace, generation, search, found } => {
                 self.panels.files.named(workspace, generation, search, found);
-                self.found_answered(workspace);
+                self.found_answered(workspace, false);
             }
             FilesEvent::Text { workspace, generation, search, found } => {
                 self.panels.files.grepped(workspace, generation, search, found);
-                self.found_answered(workspace);
+                self.found_answered(workspace, false);
             }
             FilesEvent::Replied { request, reply } => self.files_replied(request, reply),
             FilesEvent::Fed { stream, generation, fed } => self.file_fed(stream, generation, fed),
@@ -141,13 +147,33 @@ impl App {
         }
     }
 
+    pub(super) fn files_state(&self) -> &files::Panel {
+        if self.showing_remote() { &self.machines.panels.files.panel } else { &self.panels.files }
+    }
+
+    pub(super) fn files_state_mut(&mut self) -> &mut files::Panel {
+        if self.showing_remote() { &mut self.machines.panels.files.panel } else { &mut self.panels.files }
+    }
+
+    pub(super) fn set_file_full_screen(&mut self, on: bool) {
+        self.files_state_mut().set_full_screen(on);
+    }
+
     fn files_target(&self) -> Option<(u64, PathBuf)> {
+        if self.shown_remote().is_some() {
+            return None;
+        }
         let workspace = self.project()?.workspace()?;
         Some((workspace.id, workspace.path.clone()))
     }
 
+    pub(super) fn files_workspace(&self) -> Option<u64> {
+        let local = self.files_target().map(|(workspace, _)| workspace);
+        local.or_else(|| self.remote_aim().map(|aim| aim.workspace))
+    }
+
     pub(super) fn files_shown(&self) -> bool {
-        self.screen.side == Some(Side::Files) && self.files_target().is_some()
+        self.screen.side == Some(Side::Files) && self.files_workspace().is_some()
     }
 
     pub(super) fn toggle_files(&mut self) {
@@ -257,21 +283,26 @@ impl App {
     }
 
     pub(super) fn file_full_screen(&self) -> bool {
-        self.panels.files.full_screen()
+        self.files_state().full_screen()
             && self.files_shown()
-            && self.files_target().is_some_and(|(ws, _)| self.panels.files.viewer(ws).is_some())
+            && self.files_workspace().is_some_and(|ws| self.files_state().viewer(ws).is_some())
     }
 
-    fn folder_view(&self, workspace: u64) -> TreeView {
-        let statuses = self
-            .changes_target()
+    fn tree_marks(&self, workspace: u64) -> HashMap<String, Status> {
+        if self.showing_remote() {
+            return self.machines.panels.files.marks.clone();
+        }
+        self.changes_target()
             .filter(|t| t.workspace == workspace)
             .and_then(|t| self.marks_diff(&t))
             .map(|diff| files::statuses(diff.files.iter().map(|f| (f.path.as_str(), f.status))))
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    fn folder_view(&self, workspace: u64) -> TreeView {
+        let statuses = self.tree_marks(workspace);
         let rows = self
-            .panels
-            .files
+            .files_state()
             .rows(workspace)
             .into_iter()
             .map(|row| TreeRow {
@@ -285,17 +316,17 @@ impl App {
             .collect();
         TreeView {
             rows,
-            scroll: self.panels.files.scroll(workspace),
-            last: self.panels.files.last(workspace).map(str::to_string),
-            loading: !self.panels.files.listed_root(workspace),
+            scroll: self.files_state().scroll(workspace),
+            last: self.files_state().last(workspace).map(str::to_string),
+            loading: !self.files_state().listed_root(workspace),
         }
     }
 
     fn found(&self, workspace: u64, wanted: &str) -> (Vec<Found>, String) {
-        let searching = self.panels.files.searching(workspace);
-        match self.panels.files.mode(workspace) {
+        let searching = self.files_state().searching(workspace);
+        match self.files_state().mode(workspace) {
             Mode::Name => {
-                let (answered, names) = self.panels.files.found_names(workspace).unwrap_or_default();
+                let (answered, names) = self.files_state().found_names(workspace).unwrap_or_default();
                 let rows: Vec<Found> =
                     names.iter().map(|n| Found::Name { path: n.path.clone(), indices: n.indices.clone() }).collect();
                 let note = match rows.len() {
@@ -306,7 +337,7 @@ impl App {
                 };
                 (rows, note)
             }
-            Mode::Text => match self.panels.files.found_text(workspace) {
+            Mode::Text => match self.files_state().found_text(workspace) {
                 Some((answered, text)) => (text_rows(text), text_note(text, answered != wanted && searching)),
                 None => (Vec::new(), "searching…".into()),
             },
@@ -314,32 +345,39 @@ impl App {
     }
 
     fn found_view(&self, workspace: u64) -> Option<SearchView> {
-        let query = self.panels.files.query(workspace)?;
+        let query = self.files_state().query(workspace)?;
         let (rows, note) = self.found(workspace, query.wanted()?);
         let selected = rows.iter().enumerate().filter(|(_, r)| r.selectable()).nth(query.selected).map(|(i, _)| i);
         Some(SearchView { rows, note, selected, scroll: query.scroll })
     }
 
     fn bar(&self, workspace: u64) -> Bar {
-        let query = self.panels.files.query(workspace).cloned().unwrap_or_default();
+        let query = self.files_state().query(workspace).cloned().unwrap_or_default();
         Bar {
             query: query.text,
             focused: query.focused && self.overlay.is_none(),
-            mode: self.panels.files.mode(workspace),
+            mode: self.files_state().mode(workspace),
         }
     }
 
     pub(super) fn files_view(&self) -> Option<panel::View> {
+        if self.showing_remote() {
+            return self.remote_files_view();
+        }
         let (workspace, root) = self.files_target()?;
-        let screen = match self.panels.files.viewer(workspace) {
+        Some(self.files_view_of(workspace, crate::text::display_path(&root, self.home.as_deref()), None))
+    }
+
+    pub(super) fn files_view_of(&self, workspace: u64, root: String, remote: Option<ui::RemoteNote>) -> panel::View {
+        let screen = match self.files_state().viewer(workspace) {
             Some(viewer) => Screen::File(Box::new(self.file_view(workspace, viewer))),
             None => match self.found_view(workspace) {
                 Some(search) => Screen::Search(search),
                 None => Screen::Tree(self.folder_view(workspace)),
             },
         };
-        Some(panel::View {
-            root: crate::text::display_path(&root, self.home.as_deref()),
+        panel::View {
+            root,
             bar: self.bar(workspace),
             screen,
             light: self.themes.light(),
@@ -347,11 +385,12 @@ impl App {
             tint: Tints::of(self.themes.host()).removed,
             icons: false,
             soft: ui::soft(self.themes.host()),
-        })
+            remote,
+        }
     }
 
     pub(super) fn files_mouse(&mut self, ev: MouseEvent, pos: Position, panel_area: Rect, area: Rect) -> Result<()> {
-        let (Some((workspace, root)), Some(view)) = (self.files_target(), self.files_view()) else { return Ok(()) };
+        let (Some(workspace), Some(view)) = (self.files_workspace(), self.files_view()) else { return Ok(()) };
         if let Some(delta) = wheel(ev.kind) {
             self.files_wheel(workspace, &view, panel_area, delta);
             return Ok(());
@@ -365,40 +404,44 @@ impl App {
         }
         match panel::hit(panel_area, &view, pos) {
             Some(Hit::Close) => self.show_side(None),
-            Some(Hit::Mode) => self.panels.files.toggle_mode(workspace),
-            Some(Hit::Field) => self.panels.files.query_mut(workspace).focused = true,
+            Some(Hit::Mode) => self.files_state_mut().toggle_mode(workspace),
+            Some(Hit::Field) => self.focus_files_query(workspace),
             Some(Hit::Clear) => self.edit_query(workspace, String::clear),
             Some(Hit::Found(i)) => self.open_found(workspace, &view, i),
             Some(hit @ (Hit::Find | Hit::FindField | Hit::FindPrevious | Hit::FindNext | Hit::FindClose)) => {
                 self.find_mouse(workspace, hit, panel_area);
             }
             Some(Hit::Back) => self.back_from_file(workspace),
-            Some(Hit::FullScreen) => self.panels.files.set_full_screen(!self.panels.files.full_screen()),
+            Some(Hit::FullScreen) => self.set_file_full_screen(!self.files_state().full_screen()),
             Some(Hit::Row(i)) => self.click_file_row(workspace, &view, i),
             Some(Hit::Line(n)) => self.press_file_line(workspace, n, area),
             Some(Hit::Text(n)) => self.press_file_text(workspace, n, &view, (pos, panel_area, area)),
             Some(Hit::Fold(key)) => self.toggle_unfolded(workspace, key),
-            Some(Hit::Action(action)) => {
-                return self.file_action(&Checkout { workspace, dir: root, base: None }, action, pos, area);
-            }
+            Some(Hit::Action(Action::Copy)) => self.copy_from_viewer(workspace),
+            Some(Hit::Action(action)) => return self.local_file_action(action, pos, area),
             None => {}
         }
         Ok(())
     }
 
+    fn local_file_action(&mut self, action: Action, pos: Position, area: Rect) -> Result<()> {
+        let Some((workspace, dir)) = self.files_target() else { return Ok(()) };
+        self.file_action(&Checkout { workspace, dir, base: None }, action, pos, area)
+    }
+
     fn files_wheel(&mut self, workspace: u64, view: &panel::View, panel_area: Rect, delta: isize) {
         let max = panel::max_scroll(panel_area, view);
         let scrolled = |scroll: usize| scroll.min(max).saturating_add_signed(delta).min(max);
-        if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
+        if let Some(viewer) = self.files_state_mut().viewer_mut(workspace) {
             if let Some(top) = panel::scrolled(panel_area, view, delta) {
                 viewer.scroll_to(top);
             }
         } else if matches!(view.screen, Screen::Search(_)) {
-            let query = self.panels.files.query_mut(workspace);
+            let query = self.files_state_mut().query_mut(workspace);
             query.scroll = scrolled(query.scroll);
         } else {
-            let scroll = scrolled(self.panels.files.scroll(workspace));
-            self.panels.files.set_scroll(workspace, scroll);
+            let scroll = scrolled(self.files_state().scroll(workspace));
+            self.files_state_mut().set_scroll(workspace, scroll);
         }
     }
 
@@ -407,13 +450,17 @@ impl App {
             && let Screen::Tree(tree) = &view.screen
             && let Some(row) = tree.rows.get(i)
         {
-            self.open_row_menu(workspace, &row.path, pos);
+            if self.showing_remote() {
+                self.open_machine_row_menu(workspace, &row.path, pos);
+            } else if self.files_target().is_some() {
+                self.open_row_menu(workspace, &row.path, pos);
+            }
         }
     }
 
     fn back_from_file(&mut self, workspace: u64) {
-        let origin = self.panels.files.viewer(workspace).and_then(|viewer| viewer.origin);
-        self.panels.files.close_file(workspace);
+        let origin = self.files_state().viewer(workspace).and_then(|viewer| viewer.origin);
+        self.files_state_mut().close_file(workspace);
         if origin == Some(files::Origin::Flow) && self.has_run() {
             self.show_side(Some(Side::Flow));
         }
@@ -422,15 +469,28 @@ impl App {
     fn click_file_row(&mut self, workspace: u64, view: &panel::View, i: usize) {
         let Screen::Tree(tree) = &view.screen else { return };
         let Some(row) = tree.rows.get(i) else { return };
+        if !row.open && self.remote_cut_off(if row.dir { Feed::Listing } else { Feed::Reading }) {
+            return;
+        }
         if row.dir {
-            self.panels.files.toggle(workspace, &row.path);
+            self.files_state_mut().toggle(workspace, &row.path);
         } else {
-            self.panels.files.open_file(workspace, &row.path);
+            self.files_state_mut().open_file(workspace, &row.path);
+        }
+    }
+
+    fn remote_cut_off(&mut self, feed: Feed) -> bool {
+        self.showing_remote() && self.cut_off(feed)
+    }
+
+    fn focus_files_query(&mut self, workspace: u64) {
+        if !self.remote_cut_off(Feed::Searching) {
+            self.files_state_mut().query_mut(workspace).focused = true;
         }
     }
 
     fn toggle_unfolded(&mut self, workspace: u64, key: u32) {
-        if let Some(viewer) = self.panels.files.viewer_mut(workspace)
+        if let Some(viewer) = self.files_state_mut().viewer_mut(workspace)
             && !viewer.unfolded.remove(&key)
         {
             viewer.unfolded.insert(key);
@@ -440,11 +500,11 @@ impl App {
     pub(super) fn files_typing(&self) -> bool {
         self.overlay.is_none()
             && self.files_shown()
-            && self.files_target().is_some_and(|(ws, _)| self.panels.files.typing(ws))
+            && self.files_workspace().is_some_and(|ws| self.files_state().typing(ws))
     }
 
     fn edit_query(&mut self, workspace: u64, edit: impl FnOnce(&mut String)) {
-        let query = self.panels.files.query_mut(workspace);
+        let query = self.files_state_mut().query_mut(workspace);
         edit(&mut query.text);
         query.focused = true;
         query.selected = 0;
@@ -453,15 +513,17 @@ impl App {
     }
 
     pub(super) fn files_key(&mut self, key: KeyEvent, area: Rect) {
-        let Some((workspace, _)) = self.files_target() else { return };
-        if self.panels.files.viewer(workspace).is_some() {
+        let Some(workspace) = self.files_workspace() else { return };
+        if self.files_state().viewer(workspace).is_some() {
             self.find_key(workspace, key, self.layout(area).shown(self.screen.nav).changes);
             return;
         }
         match key.code {
-            KeyCode::Esc if self.panels.files.query(workspace).is_none_or(|q| q.text.is_empty()) => self.close_panel(),
-            KeyCode::Esc => *self.panels.files.query_mut(workspace) = Query::default(),
-            KeyCode::Enter if !self.answers_query(workspace) => self.panels.files.query_mut(workspace).enter = true,
+            KeyCode::Esc if self.files_state().query(workspace).is_none_or(|q| q.text.is_empty()) => self.close_panel(),
+            KeyCode::Esc => *self.files_state_mut().query_mut(workspace) = Query::default(),
+            KeyCode::Enter if !self.answers_query(workspace) => {
+                self.files_state_mut().query_mut(workspace).enter = true;
+            }
             KeyCode::Enter => self.open_selected(workspace),
             KeyCode::Up => self.move_found(workspace, -1, area),
             KeyCode::Down => self.move_found(workspace, 1, area),
@@ -474,7 +536,7 @@ impl App {
     }
 
     fn answers_query(&self, workspace: u64) -> bool {
-        self.panels.files.query(workspace).and_then(Query::wanted) == self.panels.files.answered(workspace)
+        self.files_state().query(workspace).and_then(Query::wanted) == self.files_state().answered(workspace)
     }
 
     fn open_selected(&mut self, workspace: u64) {
@@ -486,20 +548,20 @@ impl App {
         }
     }
 
-    pub(super) fn found_answered(&mut self, workspace: u64) {
-        let waiting = self.panels.files.query(workspace).is_some_and(|q| q.enter) && self.answers_query(workspace);
-        if !waiting {
+    pub(super) fn found_answered(&mut self, workspace: u64, remote: bool) {
+        let waiting = self.files_state().query(workspace).is_some_and(|q| q.enter) && self.answers_query(workspace);
+        if remote != self.showing_remote() || !waiting {
             return;
         }
-        self.panels.files.query_mut(workspace).enter = false;
-        if self.files_shown() && self.files_target().is_some_and(|(ws, _)| ws == workspace) {
+        self.files_state_mut().query_mut(workspace).enter = false;
+        if self.files_shown() && self.files_workspace() == Some(workspace) {
             self.open_selected(workspace);
         }
     }
 
     pub(super) fn files_paste(&mut self, text: &str, area: Rect) {
-        let Some((workspace, _)) = self.files_target() else { return };
-        if self.panels.files.viewer(workspace).is_some() {
+        let Some(workspace) = self.files_workspace() else { return };
+        if self.files_state().viewer(workspace).is_some() {
             self.find_paste(workspace, text, self.layout(area).shown(self.screen.nav).changes);
             return;
         }
@@ -507,14 +569,14 @@ impl App {
     }
 
     fn move_found(&mut self, workspace: u64, delta: isize, area: Rect) {
-        self.panels.files.query_mut(workspace).enter = false;
+        self.files_state_mut().query_mut(workspace).enter = false;
         let Some(view) = self.files_view() else { return };
         let Screen::Search(search) = &view.screen else { return };
         let selectable: Vec<usize> =
             search.rows.iter().enumerate().filter(|(_, r)| r.selectable()).map(|(i, _)| i).collect();
         let shown = panel::shown_rows(self.layout(area).shown(self.screen.nav).changes).max(1);
         let Some(last) = selectable.len().checked_sub(1) else { return };
-        let query = self.panels.files.query_mut(workspace);
+        let query = self.files_state_mut().query_mut(workspace);
         query.selected = query.selected.min(last).saturating_add_signed(delta).min(last);
         let row = selectable[query.selected];
         let header = usize::from(row > 0 && !search.rows[row - 1].selectable());
@@ -527,17 +589,20 @@ impl App {
 
     fn open_found(&mut self, workspace: u64, view: &panel::View, i: usize) {
         let Screen::Search(search) = &view.screen else { return };
+        if self.remote_cut_off(Feed::Reading) {
+            return;
+        }
         let line = search.rows.get(i..).and_then(|rows| rows.iter().find(|r| r.selectable()));
-        let query = self.panels.files.query_mut(workspace);
+        let query = self.files_state_mut().query_mut(workspace);
         let focused = query.focused;
         query.focused = false;
         query.selected = search.rows.iter().take(i).filter(|r| r.selectable()).count();
         let wanted = query.wanted().map(str::to_string);
         match line {
-            Some(Found::Name { path, .. }) => self.panels.files.open_file(workspace, path),
+            Some(Found::Name { path, .. }) => self.files_state_mut().open_file(workspace, path),
             Some(Found::Line { path, number, .. }) => {
                 let find = wanted.map(|text| Find::new(&text, *number, focused));
-                self.panels.files.open_at(workspace, path, (*number, *number), find);
+                self.files_state_mut().open_at(workspace, path, (*number, *number), find);
             }
             Some(Found::File { .. }) | None => {}
         }
@@ -545,7 +610,7 @@ impl App {
 
     fn file_action(&mut self, target: &Checkout, action: Action, pos: Position, area: Rect) -> Result<()> {
         let workspace = target.workspace;
-        let Some(viewer) = self.panels.files.viewer(workspace) else { return Ok(()) };
+        let Some(viewer) = self.files_state().viewer(workspace) else { return Ok(()) };
         let path = viewer.path.clone();
         let image = viewer.content.as_ref().is_some_and(|c| c.is_image());
         let selected = viewer.selected().filter(|_| !image);
@@ -563,13 +628,18 @@ impl App {
                 };
                 self.ask_agent(workspace, &reference);
             }
-            Action::Copy => {
-                let content = viewer.content.as_ref();
-                let cut = viewer.stretched().and_then(|stretch| content?.cut(stretch));
-                let text = cut.or_else(|| content.and_then(|c| c.text(selected))).unwrap_or(path);
-                self.copy(&text);
-            }
+            Action::Copy => self.copy_from_viewer(workspace),
         }
         Ok(())
+    }
+
+    fn copy_from_viewer(&mut self, workspace: u64) {
+        let Some(viewer) = self.files_state().viewer(workspace) else { return };
+        let image = viewer.content.as_ref().is_some_and(|c| c.is_image());
+        let selected = viewer.selected().filter(|_| !image);
+        let content = viewer.content.as_ref();
+        let cut = viewer.stretched().and_then(|stretch| content?.cut(stretch));
+        let text = cut.or_else(|| content.and_then(|c| c.text(selected))).unwrap_or_else(|| viewer.path.clone());
+        self.copy(&text);
     }
 }

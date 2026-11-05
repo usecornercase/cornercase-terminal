@@ -1,0 +1,12 @@
+---
+source: src/ui/files/tests.rs
+assertion_line: 929
+expression: render(&view)
+---
+  ‹  src/main.rs                       ⌕  ▢  ×
+  4 lines · rust                         copy
+
+   1   fn main() {
+   2 ▎     run();
+   3       done();
+   4   }

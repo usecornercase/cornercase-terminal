@@ -7,17 +7,17 @@ use clap::CommandFactory;
 use serde_json::Value;
 
 use self::args::{
-    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, SurfaceArgs, Target, WaitArgs, WhenArgs,
-    Which,
+    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, SurfaceArgs, Target, WaitArgs, WhenArgs, Which,
 };
 use self::status::run_status;
 use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, Until, What};
 use crate::error::{Error, Result};
+use crate::machines::send;
 use crate::os::console;
 use crate::os::socket::UnixStream;
 use crate::remote::{self, Remote};
-use crate::{log, server};
+use crate::{git, log, server};
 
 mod accounts;
 mod agents;
@@ -33,6 +33,7 @@ mod help;
 mod issue;
 mod line;
 mod lines;
+mod machines;
 mod plugin;
 mod ports;
 mod processes;
@@ -44,6 +45,7 @@ mod recap;
 mod requests;
 mod search;
 mod start_server;
+mod stats;
 mod status;
 mod terminal;
 mod theme;
@@ -110,7 +112,7 @@ fn run_command(command: Command) -> Result<bool> {
         Command::StartServer(start) => start_server::run(&start)?,
         Command::KillServer(kill) => return update::kill(kill.yes),
         Command::Logs(args) => return print_logs(&args),
-        Command::Stats(args) => return print_stats(&args),
+        Command::Stats(args) => return stats::run(&args),
         Command::Plugin(args) => return plugin::run(args.action),
         Command::Server => server::run()?,
         Command::Proxy => remote::proxy(proxied)?,
@@ -216,6 +218,7 @@ fn control_route(command: Control) -> ControlFlow<Result<bool>, Control> {
 fn create_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Open(open) => run_open(&open).map(|()| true),
+        Control::Clone(clone) => run_clone(&clone).map(|()| true),
         Control::NewWorkspace(new) => run_new_workspace(new).map(|()| true),
         Control::NewTab(new) => run_new_tab(new).map(|()| true),
         Control::Split(split) => run_split(&split).map(|()| true),
@@ -299,6 +302,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Context(args) => return ControlFlow::Break(context::run(&args)),
         Control::Recap(args) => return ControlFlow::Break(recap::run(&args)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
+        Control::Machines(args) => machines::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),
         Control::Away(away) => run_away(&away).map(|()| true),
@@ -320,9 +324,38 @@ fn run_open(open: &args::OpenArgs) -> Result<()> {
     say(value, open.create.print.json, |done| id(done.ids.project))
 }
 
+fn clone_parent(folder: Option<&Path>, remote: Option<&Remote>) -> Result<PathBuf> {
+    match folder {
+        Some(folder) => reach::open_path_on(folder, remote),
+        None if remote.is_some() => Ok(PathBuf::from("~")),
+        None => Ok(std::env::current_dir()?),
+    }
+}
+
+fn clone_url(url: &str, remote: Option<&Remote>) -> Result<String> {
+    let path = Path::new(url);
+    if remote.is_some() || !git::clone::is_local_path(url) || path.is_absolute() || url.starts_with('~') {
+        return Ok(url.to_string());
+    }
+    Ok(std::path::absolute(path)?.to_string_lossy().into_owned())
+}
+
+fn run_clone(clone: &args::CloneArgs) -> Result<()> {
+    let remote = client::used_remote();
+    let (url, parent) = (clone_url(&clone.url, remote)?, clone_parent(clone.folder.as_deref(), remote)?);
+    let request = control::CloneRepository { url, parent, focus: clone.create.focus, files: Vec::new() };
+    let value = ask("clone", control::Command::Clone(request))?;
+    if clone.create.print.json {
+        return print_json(&value);
+    }
+    let cloned: control::Cloned = answer(value)?;
+    println!("{}", cloned.path.display());
+    Ok(())
+}
+
 fn run_new_workspace(new: args::NewWorkspaceArgs) -> Result<()> {
     let (name, project, worktree, focus) = (new.name, new.project, new.worktree, new.create.focus);
-    let request = control::NewWorkspace { name, project, worktree, focus };
+    let request = control::NewWorkspace { name, project, worktree, focus, machine: machine(new.on)? };
     let value = ask("new-workspace", control::Command::NewWorkspace(request))?;
     say(value, new.create.print.json, |done| id(done.ids.workspace))
 }
@@ -399,6 +432,9 @@ fn run_close(close: &args::CloseArgs) -> Result<bool> {
 }
 
 fn run_focus(focus: &args::FocusArgs) -> Result<()> {
+    if let Some(machine) = &focus.machine {
+        return run_focus_machine(machine, focus);
+    }
     let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
     let reveal = focus.reveal.clone().map(|query| control::Reveal { query, line: focus.line });
     if reveal.is_some() {
@@ -412,6 +448,13 @@ fn run_focus(focus: &args::FocusArgs) -> Result<()> {
         note(&format!("warning: {warning}\n"));
     }
     Ok(())
+}
+
+fn run_focus_machine(machine: &str, focus: &args::FocusArgs) -> Result<()> {
+    let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
+    let request = control::FocusMachine { machine: machine.to_string(), item };
+    let value = ask("focus-machine", control::Command::FocusMachine(request))?;
+    if focus.print.json { print_json(&value) } else { Ok(()) }
 }
 
 fn run_go(go: args::GoArgs) -> Result<()> {
@@ -496,6 +539,9 @@ fn event_line(value: &Value) -> String {
         (Some(subject), What::Bell { count }) if *count > 1 => format!("{subject}  bell  {count} times"),
         (Some(subject), What::Bell { .. }) => format!("{subject}  bell"),
         (Some(subject), What::Notice { token, message, .. }) => format!("{subject}  notice  {message}  {token}"),
+        (None, What::Notice { token, message, machine: Some(machine), .. }) => {
+            format!("machine {machine}  notice  {message}  {token}")
+        }
         (_, What::Recap { state, range, agent, error }) => {
             let failure = error.as_ref().map(|error| format!(": {error}")).unwrap_or_default();
             format!("recap {range}  {state} ({agent}){failure}")
@@ -536,7 +582,23 @@ fn issue_features(issue: &args::issue::IssueArg) -> Result<()> {
     Ok(())
 }
 
+fn machine(on: args::machine::MachineArg) -> Result<Option<String>> {
+    if on.machine.is_some() {
+        client::use_machine_start()?;
+    }
+    Ok(on.machine)
+}
+
+fn unwaited(start: &StartArgs) -> Result<()> {
+    let waits = start.wait || start.until.is_some() || start.timeout.is_some();
+    if waits && start.on.machine.is_some() {
+        return Err(Error::WrongUsage(send::UNWAITED.into()));
+    }
+    Ok(())
+}
+
 fn run_start(start: StartArgs) -> Result<()> {
+    unwaited(&start)?;
     let prompt = read_prompt(start.prompt, start.prompt_file)?;
     let chosen = start.model.is_some() || start.mode.is_some() || start.effort.is_some();
     let name = if chosen { "start-with" } else { "start" };
@@ -561,6 +623,8 @@ fn run_start(start: StartArgs) -> Result<()> {
         focus: start.create.focus,
         profile,
         accounts,
+        machine: machine(start.on)?,
+        placed: false,
     };
     let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
     say(ask(name, command)?, start.create.print.json, |done| {
@@ -696,27 +760,6 @@ fn stdin() -> Result<String> {
     let mut text = String::new();
     line::input().read_to_string(&mut text)?;
     Ok(trimmed(&text))
-}
-
-fn print_stats(args: &StatsArgs) -> Result<bool> {
-    let now = std::time::SystemTime::now();
-    let path = crate::paths::stats(&crate::paths::session());
-    let view = match ask("stats", control::Command::Stats(control::Stats {})) {
-        Ok(value) => {
-            let mut view: crate::agents::stats::View = answer(value)?;
-            view.days = crate::time::Stamp::parse(&view.since)
-                .map_or(0, |since| now.duration_since(since).unwrap_or_default().as_secs() / 86_400);
-            view
-        }
-        Err(Error::NoServer) => crate::agents::stats::load(&path, now).view(now),
-        Err(e) => return Err(e),
-    };
-    if args.json {
-        print_json(&view)?;
-    } else {
-        print_out(&(if args.share { view.share_link() } else { view.text() } + "\n"))?;
-    }
-    Ok(true)
 }
 
 #[cfg(test)]

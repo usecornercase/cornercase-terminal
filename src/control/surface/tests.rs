@@ -334,3 +334,41 @@ fn colours_are_left_out_when_the_program_changed_none_and_shaped_when_it_did() {
         json!({"fg": [1, 2, 3], "palette": {"1": [255, 0, 0]}})
     );
 }
+
+mod a_style_read_back {
+    use super::*;
+
+    #[rstest]
+    #[case::plain(Style::default())]
+    #[case::coloured(Style { fg: Some(Colour::Index(2)), bg: Some(Colour::Rgb([1, 2, 3])), ..Style::default() })]
+    #[case::every_attribute(Style {
+        bold: true,
+        dim: true,
+        italic: true,
+        blink: true,
+        inverse: true,
+        invisible: true,
+        strikethrough: true,
+        overline: true,
+        ..Style::default()
+    })]
+    #[case::single_underline(Style { underline: true, ..Style::default() })]
+    #[case::curly_coloured_underline(Style {
+        underline: true,
+        underline_style: Some(Underline::Curly),
+        underline_colour: Some(Colour::Index(5)),
+        ..Style::default()
+    })]
+    fn is_the_style_it_came_from(#[case] style: Style) {
+        let (look, decor) = style.look();
+
+        assert_eq!(Style::of(look, decor), style);
+    }
+
+    #[test]
+    fn keeps_palette_indices_as_indices() {
+        let (look, _) = Style { fg: Some(Colour::Index(9)), ..Style::default() }.look();
+
+        assert_eq!((look.fg, look.bg), (Some(Color::Indexed(9)), Some(Color::Reset)));
+    }
+}

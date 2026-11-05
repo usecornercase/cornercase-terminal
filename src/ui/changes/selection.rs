@@ -160,7 +160,8 @@ pub(crate) fn lines_actions(area: Rect, view: &View) -> Vec<(LinesAction, Rect)>
     if view.selection.is_none() {
         return Vec::new();
     }
-    buttons(parts(area, view).footer, &LinesAction::ALL, LinesAction::label)
+    let which: &[LinesAction] = if view.acts() { &LinesAction::ALL } else { &[LinesAction::Copy] };
+    buttons(parts(area, view).footer, which, LinesAction::label)
 }
 
 fn label(lines: &[Picked]) -> Vec<String> {

@@ -22,17 +22,22 @@ fn a_tab_running_claude_shows_what_it_is_doing() {
     let _ = std::fs::remove_dir_all(&bin);
 }
 
-fn claude_working_in_a_hidden_tab(app: &mut Harness, name: &str) -> (PathBuf, PathBuf) {
-    let sessions = app.session.claude_dir().join("sessions");
+pub(super) fn claude_asking_on_cue(session: &Session, name: &str) -> (PathBuf, PathBuf) {
+    let sessions = session.claude_dir().join("sessions");
     std::fs::create_dir_all(&sessions).expect("create the sessions folder");
     let bin = temp_dir(name);
-    let claude = bin.join("claude");
     write_executable(
-        &claude,
+        &bin.join("claude"),
         "#!/bin/sh\nprintf '{\"pid\":%s,\"status\":\"busy\"}' $$ > \"$1/$$.json\"\n\
          while [ ! -e \"$1/ask\" ]; do sleep 0.05; done\n\
          printf '{\"pid\":%s,\"status\":\"waiting\"}' $$ > \"$1/$$.json\"\nread answer\n",
     );
+    (sessions, bin)
+}
+
+fn claude_working_in_a_hidden_tab(app: &mut Harness, name: &str) -> (PathBuf, PathBuf) {
+    let (sessions, bin) = claude_asking_on_cue(&app.session, name);
+    let claude = bin.join("claude");
     app.send(format!("{} {}\r", claude.display(), sessions.display()).as_bytes());
     let tab = usize::from(ui::workspace_row(workspaces_list(), 1, &tab_lines(&[1]), 0, WorkspaceRow::Tab(0, 0)).y);
     app.wait_for("the tab says claude works", |s| s.lines().nth(tab).unwrap_or_default().contains("◐"));

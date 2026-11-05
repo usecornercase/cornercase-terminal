@@ -111,6 +111,16 @@ pub(crate) struct AccountsInfo {
     pub(crate) login: Option<Ids>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) tokens: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) agents: Vec<AgentInstalled>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AgentInstalled {
+    pub(crate) agent: String,
+    pub(crate) command: String,
+    pub(crate) installed: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

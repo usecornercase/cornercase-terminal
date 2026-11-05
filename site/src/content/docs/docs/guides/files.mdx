@@ -251,6 +251,10 @@ Click **`▤`** at the right of the bar to search file **names** instead, and ag
 
 The search refreshes its file list when you change the query, take focus again, or the tree sees files added, removed or renamed in the root or an open folder. For changes inside a closed folder, give focus back to the search bar or edit the query. Leaving the search idle does not repeatedly scan the workspace; a new scan cancels the previous one.
 
+## On another machine
+
+With a [machine's workspace](../machines/#changes-and-files-of-a-machines-workspace) picked in the sidebar, the panel shows the tree of that workspace on the machine, searches there and opens its files in the viewer, highlighted here. New files there show within a couple of seconds, and an open file that changes there within about one. Find in the file, full screen, picking lines and ` copy ` work as for a file here. The panel only reads the machine: a right-click on a row offers only **copy path**, the path on the machine, and ` open `, **open in…** and **ask agent** aren't there. If the machine goes down, the panel keeps the tree and the open file and says `vps unreachable` under its header.
+
 ## Paths in your panes are links
 
 When a program prints the path of a file, hovering it underlines it, and clicking it opens the file in the files panel, opening the panel if it was closed. Claude Code's `Update(src/app.rs)`, a compiler's `src/main.rs:12:5`, `git status` and `grep -n` all work, as do files outside the workspace such as `/tmp/report.md`, `~/.claude/plans/fix.md` or a file in another project or worktree.

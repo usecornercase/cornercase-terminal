@@ -226,6 +226,7 @@ mod text {
             profile: "Work".into(),
             login: None,
             tokens: Vec::new(),
+            agents: Vec::new(),
         }
     }
 

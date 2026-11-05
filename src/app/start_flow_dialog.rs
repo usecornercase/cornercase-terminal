@@ -1,5 +1,6 @@
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
+use ratatui::style::{Color, Style};
 
 use super::App;
 use super::flow_runs::Starting;
@@ -12,24 +13,21 @@ use crate::agents::Known;
 use crate::editor::Editor;
 use crate::flows::start::{Action, Focus, Hit, Room, Start};
 use crate::git;
+use crate::issues::browser;
 use crate::list::COMBO_ROWS;
 use crate::project::Hierarchy;
 use crate::ui::{self, StartHit};
+
+mod run_on;
 
 impl App {
     pub(super) fn start_flow_in(&self, project: u64) -> Option<Start> {
         let project = &self.projects[self.projects.project_index(project)?];
         let listing = self.flow_listing(Some(&project.path));
-        let start = Start::new(project.id, self.project_label(project), git::is_repo_root(&project.path), listing);
+        let start = Start::new(project.id, self.project_label(project), git::is_repo_root(&project.path), listing)
+            .with_run_on(self.run_on_for(project.id));
         let Some(choices) = self.account_choices() else { return Some(start) };
-        let accounts = Known::ALL
-            .iter()
-            .filter_map(|kind| {
-                let agent = choices.agents.get(kind.name())?;
-                Some(AgentAccounts::new(kind.name().to_string(), &agent.names, agent.labels.clone(), &agent.active))
-            })
-            .collect();
-        Some(start.with_accounts(accounts))
+        Some(start.with_accounts(flow_accounts(&choices)))
     }
 
     pub(super) fn start_flow_here(&self) -> Option<Start> {
@@ -102,6 +100,7 @@ impl App {
         let ui::Overlay::StartFlow(view) = start_flow_view(start, area) else { return };
         let hit = match ui::start_hit(area, &view, pos) {
             Some(StartHit::Row(i)) => Hit::Row(i),
+            Some(StartHit::RunOn(at)) => Hit::RunOn(at.checked_sub(1)),
             Some(StartHit::Prompt { line, col }) => Hit::Prompt { line, col },
             Some(StartHit::Branch) => Hit::Branch,
             Some(StartHit::Workspace) => Hit::Workspace,
@@ -136,6 +135,9 @@ impl App {
     fn start_flow_act(&mut self, action: Action, area: Rect) {
         match action {
             Action::None => {}
+            Action::RunOn => self.start_flow_run_on_chosen(),
+            Action::CloneThere => self.start_flow_clone(),
+            Action::AskAgain => self.check_shown(true),
             Action::Close => {
                 if let Some(Overlay::StartFlow { back, .. }) = self.overlay.take() {
                     self.overlay = back.map(|back| *back);
@@ -144,6 +146,11 @@ impl App {
             Action::Edit(origin, name) => {
                 let project = self.start_flow().map(|start| start.project);
                 self.open_flows(project, Some((&origin, &name)));
+            }
+            Action::Start { flow, task, branch, workspace, accounts }
+                if self.start_flow().is_some_and(|start| start.machine().is_some()) =>
+            {
+                self.start_flow_there(run_on::Run { name: flow.name, task, branch, workspace, accounts });
             }
             Action::Start { flow, task, branch, workspace, accounts } => {
                 let Some(project) = self.start_flow().map(|start| start.project) else { return };
@@ -169,6 +176,7 @@ fn shape(start: &Start) -> ui::StartShape {
     ui::StartShape::new(start.flows.len(), start.warnings().len(), start.selected().is_some(), start.diagram)
         .with_accounts(start.shown_accounts().len())
         .with_workspace(start.issue.is_some())
+        .with_run_on(start.run_on.is_some())
 }
 
 fn room(start: &Start, area: Rect) -> Room {
@@ -190,10 +198,10 @@ pub(super) fn start_flow_view(start: &Start, area: Rect) -> ui::Overlay {
         workspace: start.issue.is_some().then(|| start.workspace.clone()),
         focus: start.focus,
         warnings: start.warnings(),
-        note: if start.waiting {
-            Some(ui::Note::Busy("creating the worktree and starting the team…"))
-        } else {
-            start.notice.clone().map(ui::Note::Error)
+        note: match start.starting_there() {
+            Some(starting) => Some(ui::Note::Info(starting)),
+            None if start.waiting => Some(ui::Note::Busy("creating the worktree and starting the team…")),
+            None => start.notice.clone().map(ui::Note::Error),
         },
         hint: start.hint(),
         buttons: start.buttons(room),
@@ -207,5 +215,16 @@ pub(super) fn start_flow_view(start: &Start, area: Rect) -> ui::Overlay {
             })
             .collect(),
         focused_account: shown.iter().position(|i| start.focus == Focus::Account(*i)),
+        run_on: start
+            .run_on_spans(Style::default().fg(Color::DarkGray))
+            .map(|spans| ui::RunOnRow { spans, choices: start.run_on_choices() }),
     }))
+}
+
+pub(super) fn flow_accounts(choices: &browser::Accounts) -> Vec<AgentAccounts> {
+    let agent = |kind: &Known| {
+        let agent = choices.agents.get(kind.name())?;
+        Some(AgentAccounts::new(kind.name().to_string(), &agent.names, agent.labels.clone(), &agent.active))
+    };
+    Known::ALL.iter().filter_map(agent).collect()
 }

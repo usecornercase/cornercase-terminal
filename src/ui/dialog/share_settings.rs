@@ -14,7 +14,7 @@ use crate::text::truncate_right;
 use crate::ui::View;
 use crate::ui::widgets::overlay_block;
 
-fn rows(area: Rect) -> [Rect; 4] {
+pub(super) fn rows(area: Rect) -> [Rect; 4] {
     let [intro, _, body, hint, buttons] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Length(1),

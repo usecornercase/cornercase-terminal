@@ -129,6 +129,14 @@ pub(crate) fn use_account_restart() -> Result<()> {
     require("account-restart", "cannot restart agents on another account")
 }
 
+pub(crate) fn use_machine_usage() -> Result<()> {
+    require("machine-usage", "cannot read the stats and usage of other machines")
+}
+
+pub(crate) fn use_machine_start() -> Result<()> {
+    require("machine-start", "cannot start agents, workspaces or flows on another machine")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     if shared::active() {
         return shared::require(feature, lacks);

@@ -49,6 +49,7 @@ fn loading_panel() -> changes::View {
         filter: None,
         selection: None,
         icons: false,
+        remote: None,
     }
 }
 
@@ -67,10 +68,11 @@ fn with_panel() -> View<'static> {
             removing: false,
             setting_up: false,
             closed: 0,
+            machine: None,
         }],
         active_tab: Some(0),
         changes: Some(panel),
-        changes_button: Some(ChangesButton { label: "Changes 3".into(), files: 3, open: true }),
+        changes_button: Some(ChangesButton { label: "Changes 3".into(), files: Some(3), open: true }),
         ..view(&["shop"])
     }
 }
@@ -177,7 +179,7 @@ fn a_compact_todo_panel_covers_the_screen_below_the_bar() {
 fn the_bar_has_a_changes_button_in_compact_mode() {
     let v = View {
         changes: None,
-        changes_button: Some(ChangesButton { label: "Changes".into(), files: 0, open: false }),
+        changes_button: Some(ChangesButton { label: "Changes".into(), files: Some(0), open: false }),
         ..with_panel()
     };
     let t = render_sized(&v, 80, 16);

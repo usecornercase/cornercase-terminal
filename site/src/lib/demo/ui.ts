@@ -1441,7 +1441,7 @@ export class Painter {
     tabsIn(row, names).forEach((r, i) => {
       const lit: Style = i === active ? { fg: 6, bg: this.surface, add: BOLD } : this.hovered(r) ? CYAN : { fg: 7 };
       const style: Style = dimmed[i] ? { ...lit, fg: 8, add: DIM } : lit;
-      this.span(r.x, r.y, ` ${names[i]} `, style, r.w);
+      this.span(r.x, r.y, r.w < buttonWidth(names[i]) ? names[i] : ` ${names[i]} `, style, r.w);
       this.region({ r, click: () => onClick(i), cursor: 'pointer' });
     });
   }

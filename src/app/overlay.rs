@@ -16,7 +16,7 @@ use super::pull_requests::{COPY_LINK, DONE};
 use super::settings_dialog::settings_view;
 use super::start_flow_dialog::start_flow_view;
 use super::update_dialog::UpdateStep;
-use super::worktrees::Check;
+use super::worktrees::{Check, removal_submit};
 use crate::agents::Known;
 use crate::changes::{self, BranchPicker};
 use crate::editor::Editor;
@@ -25,6 +25,7 @@ use crate::flows::dialog::Dialog;
 use crate::flows::start::Start;
 use crate::git::worktree;
 use crate::issues::browser::Browser;
+use crate::machines::run_on::RunOn;
 use crate::messenger::Via;
 use crate::project::picker::Picker;
 use crate::project::search::Finder;
@@ -61,26 +62,78 @@ const COPY_COMMAND_SUBMIT: &str = "copy command";
 
 #[derive(Debug)]
 pub(super) enum Overlay {
-    Menu { at: Position, actions: Vec<MenuAction> },
-    NewGroup { input: Editor },
-    NewMachine { input: Editor, error: Option<String> },
-    GroupStyle { group: u64 },
-    DeleteGroup { group: u64 },
-    CloseProject { project: u64 },
-    CloseWorkspace { project: u64, workspace: u64 },
-    CloseTab { project: u64, workspace: u64, tab: u64 },
-    ClosePane { pane: u64 },
-    NewWorkspace { project: u64, input: Editor, worktree: Option<bool>, error: Option<String>, creating: bool },
+    Menu {
+        at: Position,
+        actions: Vec<MenuAction>,
+    },
+    NewGroup {
+        input: Editor,
+    },
+    NewMachine {
+        input: Editor,
+        error: Option<String>,
+    },
+    GroupStyle {
+        group: u64,
+    },
+    DeleteGroup {
+        group: u64,
+    },
+    CloseProject {
+        project: u64,
+    },
+    CloseWorkspace {
+        project: u64,
+        workspace: u64,
+    },
+    CloseTab {
+        project: u64,
+        workspace: u64,
+        tab: u64,
+    },
+    ClosePane {
+        pane: u64,
+    },
+    NewWorkspace {
+        project: u64,
+        input: Editor,
+        worktree: Option<bool>,
+        error: Option<String>,
+        creating: bool,
+        run_on: Option<RunOn>,
+    },
     Settings(Box<Settings>),
     ShareSettings(Box<crate::settings::share::dialog::Dialog>),
-    RemoveAccount { kind: Known, name: String },
+    Machine(Box<crate::machines::form::Form>),
+    CloneOnMachine(Box<super::clone_on_machine::Cloning>),
+    RemoveAccount {
+        kind: Known,
+        name: String,
+    },
     DiscardChanges(changes::discard::Target),
-    Flows { dialog: Box<Dialog>, back: Option<Box<Overlay>> },
-    StartFlow { start: Box<Start>, back: Option<Box<Overlay>> },
+    Flows {
+        dialog: Box<Dialog>,
+        back: Option<Box<Overlay>>,
+    },
+    StartFlow {
+        start: Box<Start>,
+        back: Option<Box<Overlay>>,
+    },
     ProjectSettings(Box<crate::project::settings::Form>),
-    Rename { target: Target, input: Editor },
-    RemoveWorkspace { project: u64, workspace: u64, check: Check, lock: Option<worktree::Lock> },
-    Picker { picker: Picker, group: Option<u64> },
+    Rename {
+        target: Target,
+        input: Editor,
+    },
+    RemoveWorkspace {
+        project: u64,
+        workspace: u64,
+        check: Check,
+        lock: Option<worktree::Lock>,
+    },
+    Picker {
+        picker: Picker,
+        group: Option<u64>,
+    },
     Issues(Box<Browser>),
     Queue(Box<crate::queue::form::Form>),
     Search(Finder),
@@ -91,18 +144,35 @@ pub(super) enum Overlay {
     Pairing(Via),
     Forum(Via),
     Branches(BranchPicker),
-    PullRequest { workspace: u64, scroll: usize },
-    MergeCheck { workspace: u64, scroll: usize },
-    Context { pane: u64, scroll: usize },
-    FlowMessage { workspace: u64, shown: Shown, scroll: usize },
+    PullRequest {
+        workspace: u64,
+        scroll: usize,
+    },
+    MergeCheck {
+        workspace: u64,
+        scroll: usize,
+    },
+    Context {
+        pane: u64,
+        scroll: usize,
+    },
+    FlowMessage {
+        workspace: u64,
+        shown: Shown,
+        scroll: usize,
+    },
     Keys(Option<KeysGroup>),
     Worktrees(Box<crate::worktrees::Dialog>),
     Ports(Box<crate::ports::dialog::Dialog>),
     Processes(Box<crate::processes::dialog::Dialog>),
     CloseAgent(Box<CloseAgent>),
     CloseAgents(Box<CloseAgents>),
-    ForgetAgents { project: u64, workspace: u64 },
+    ForgetAgents {
+        project: u64,
+        workspace: u64,
+    },
     Popup(Box<super::plugin_popup::Popup>),
+    MachineWorkspace(Box<super::machine_links::acting::dialog::Dialog>),
     Star,
 }
 
@@ -119,8 +189,8 @@ impl Overlay {
             Self::CloseTab { .. } => "close tab",
             Self::ClosePane { .. } => "close pane",
             Self::NewWorkspace { .. } => "new workspace",
-            Self::Settings(_) => "settings",
-            Self::ShareSettings(_) => "share settings",
+            Self::Settings(_) | Self::ShareSettings(_) => self.settings_name(),
+            Self::Machine(_) | Self::CloneOnMachine(_) | Self::MachineWorkspace(_) => self.machine_name(),
             Self::RemoveAccount { .. } => "remove account",
             Self::DiscardChanges(_) => "discard changes",
             Self::Flows { .. } => "flows",
@@ -170,6 +240,21 @@ impl Overlay {
         }
     }
 
+    fn machine_name(&self) -> &'static str {
+        match self {
+            Self::MachineWorkspace(dialog) => dialog.name(),
+            Self::CloneOnMachine(_) => "clone on machine",
+            _ => "machine",
+        }
+    }
+
+    fn settings_name(&self) -> &'static str {
+        match self {
+            Self::ShareSettings(_) => "share settings",
+            _ => "settings",
+        }
+    }
+
     fn notes_name(&self) -> &'static str {
         match self {
             Self::PullRequest { .. } => "pull request",
@@ -212,6 +297,7 @@ impl Overlay {
                 | Overlay::CloseTab { .. }
                 | Overlay::ClosePane { .. }
                 | Overlay::ForgetAgents { .. }
+                | Overlay::MachineWorkspace(_)
         )
     }
 
@@ -219,9 +305,9 @@ impl Overlay {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
             Self::NewMachine { .. } => CONNECT_SUBMIT,
-            Self::RemoveWorkspace { lock: Some(_), .. } => UNLOCK_SUBMIT,
-            Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
-            Self::RemoveWorkspace { .. } | Self::RemoveAccount { .. } => REMOVE_SUBMIT,
+            Self::RemoveWorkspace { check, lock, .. } => removal_submit(*check, lock.is_some()),
+            Self::MachineWorkspace(dialog) => dialog.submit_label(),
+            Self::RemoveAccount { .. } => REMOVE_SUBMIT,
             Self::DiscardChanges(_) => DISCARD_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseAgents(_) => CLOSE_AGENTS_SUBMIT,
@@ -259,6 +345,7 @@ impl Overlay {
             | Self::Rename { input, .. }
             | Self::NewGroup { input }
             | Self::NewMachine { input, .. } => Some(input),
+            Self::MachineWorkspace(dialog) => dialog.input(),
             _ => None,
         }
     }
@@ -276,7 +363,7 @@ impl Overlay {
                 | Self::Rename { .. }
                 | Self::NewGroup { .. }
                 | Self::NewMachine { .. }
-        )
+        ) || matches!(self, Self::MachineWorkspace(dialog) if dialog.takes_input())
     }
 
     pub(super) fn lists_running(&self) -> bool {
@@ -291,6 +378,7 @@ impl Overlay {
             Self::Settings(s) => s.busy(),
             Self::Update(step) => matches!(step, UpdateStep::Updating),
             Self::StartFlow { start, .. } => start.waiting,
+            Self::CloneOnMachine(cloning) => cloning.form().cloning,
             Self::Popup(_) => true,
             _ => false,
         }
@@ -312,6 +400,8 @@ impl App {
             Some(Overlay::Star) => self.star_mouse(ev, pos, area),
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
             Some(Overlay::ShareSettings(_)) => self.share_settings_mouse(ev, pos, area),
+            Some(Overlay::Machine(_)) => self.machine_form_mouse(ev, pos, area),
+            Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_mouse(ev, pos, area),
             Some(Overlay::Flows { .. }) => self.flows_mouse(ev, pos, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_mouse(ev, pos, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
@@ -353,7 +443,7 @@ impl App {
             Overlay::StartFlow { start, .. } => start_flow_view(start, area),
             Overlay::ProjectSettings(form) => super::project_settings_dialog::project_settings_overlay(form),
             Overlay::Rename { target, input } => Self::rename_view(*target, input),
-            Overlay::RemoveWorkspace { .. } => self.remove_view(overlay)?,
+            Overlay::RemoveWorkspace { .. } | Overlay::MachineWorkspace(_) => self.workspace_view(overlay)?,
             Overlay::DeleteGroup { group } => self.delete_group_view(*group)?,
             Overlay::CloseProject { project } => self.close_project_view(*project)?,
             Overlay::CloseWorkspace { project, workspace } => self.close_workspace_view(*project, *workspace)?,
@@ -371,18 +461,41 @@ impl App {
             Overlay::Restart => self.restart_view(area),
             Overlay::Usage | Overlay::Remote => self.access_view(overlay),
             Overlay::Pairing(_) | Overlay::Forum(_) => self.messenger_view(overlay)?,
-            Overlay::Branches(picker) => Self::branches_view(picker),
             Overlay::PullRequest { .. }
             | Overlay::MergeCheck { .. }
             | Overlay::FlowMessage { .. }
             | Overlay::Context { .. } => self.notes_view(overlay, area)?,
-            Overlay::Popup(popup) => super::plugin_popup::popup_view(popup),
-            Overlay::Star => ui::Overlay::Star,
+            Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
+            Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
         })
     }
 }
 
 impl App {
+    fn own_view(overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::Popup(popup) => Some(super::plugin_popup::popup_view(popup)),
+            Overlay::Star => Some(ui::Overlay::Star),
+            Overlay::Branches(picker) => Some(Self::branches_view(picker)),
+            _ => None,
+        }
+    }
+
+    fn machine_dialog_view(overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::Machine(form) => Some(ui::Overlay::Machine(form.clone())),
+            Overlay::CloneOnMachine(cloning) => Some(ui::Overlay::CloneOnMachine(Box::new(cloning.form().clone()))),
+            _ => None,
+        }
+    }
+
+    fn workspace_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::MachineWorkspace(dialog) => self.machine_workspace_view(dialog),
+            _ => self.remove_view(overlay),
+        }
+    }
+
     fn access_view(&self, overlay: &Overlay) -> ui::Overlay {
         match overlay {
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),

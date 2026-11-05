@@ -23,6 +23,19 @@ struct Notice {
     project: u64,
     workspace: u64,
     panes: Vec<u64>,
+    machine: Option<There>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct There {
+    pub(super) link: u64,
+    pub(super) name: String,
+    pub(super) boot: String,
+}
+
+pub(in crate::app) enum Went {
+    Here(u64, Item),
+    There,
 }
 
 #[derive(Debug, Default)]
@@ -73,6 +86,15 @@ pub(super) struct Said<'a> {
     pub(super) workspace: u64,
     pub(super) panes: Vec<u64>,
     pub(super) sound: Option<sound::Kind>,
+    pub(super) machine: Option<There>,
+}
+
+pub(super) fn wording(status: Status) -> (&'static str, sound::Kind) {
+    match status {
+        Status::Waiting => ("needs you", sound::Kind::NeedsYou),
+        Status::Failed => ("failed", sound::Kind::NeedsYou),
+        _ => ("finished", sound::Kind::Finished),
+    }
 }
 
 impl App {
@@ -87,6 +109,7 @@ impl App {
             project: said.project,
             workspace: said.workspace,
             panes: said.panes,
+            machine: said.machine,
         };
         let toast = Toast {
             go: Some(token.clone()),
@@ -115,7 +138,15 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn act_on_notice(&mut self, token: &str) -> Option<Result<(u64, Item), String>> {
+    pub(super) fn sound_for(&self, kind: sound::Kind, principal: bool) -> Option<sound::Kind> {
+        (self.config.sound && (principal || self.config.sound_subagents)).then_some(kind)
+    }
+
+    pub(in crate::app) fn notice_from_a_machine(&self, token: &str) -> bool {
+        self.messages.notices.find(token).is_some_and(|notice| notice.machine.is_some())
+    }
+
+    pub(in crate::app) fn act_on_notice(&mut self, token: &str) -> Option<Result<Went, String>> {
         let notice = self.messages.notices.find(token).cloned()?;
         if self.messages.toast.as_ref().is_some_and(|toast| toast.go.as_deref() == Some(token)) {
             self.messages.toast = None;
@@ -123,30 +154,31 @@ impl App {
         for window in self.messages.notices.windows.values_mut().filter(|w| w.missed.as_deref() == Some(token)) {
             window.missed = None;
         }
+        let gone = || format!("{} in {} is gone", notice.agent, notice.place);
+        if let Some(there) = &notice.machine {
+            return Some(if self.go_there(there, notice.workspace) { Ok(Went::There) } else { Err(gone()) });
+        }
         if let Some(pane) = self.notice_pane(&notice) {
-            return Some(Ok((notice.project, Item::Pane(pane))));
+            return Some(Ok(Went::Here(notice.project, Item::Pane(pane))));
         }
         let open =
             self.projects.workspace_in(notice.project, notice.workspace).is_some_and(|at| self.workspace_open(at));
-        Some(if open {
-            Ok((notice.project, Item::Workspace(notice.workspace)))
-        } else {
-            Err(format!("{} in {} is gone", notice.agent, notice.place))
-        })
+        Some(if open { Ok(Went::Here(notice.project, Item::Workspace(notice.workspace))) } else { Err(gone()) })
     }
 
     pub(crate) fn notification_clicked(&mut self, token: &str) {
         let Some(went) = self.act_on_notice(token) else { return };
         let (pane, to) = match went {
-            Ok((_, Item::Pane(pane))) => {
+            Ok(Went::Here(_, Item::Pane(pane))) => {
                 self.jump_to_pane(pane);
                 (pane, "pane")
             }
-            Ok((project, Item::Workspace(workspace))) => {
+            Ok(Went::Here(project, Item::Workspace(workspace))) => {
                 self.goto(Goto::Place { project, workspace: Some(workspace), tab: None });
                 (0, "workspace")
             }
-            Ok(_) => return,
+            Ok(Went::There) => (0, "machine"),
+            Ok(Went::Here(..)) => return,
             Err(gone) => {
                 self.messages.toast = Some(Toast::new(gone, ui::ToastIcon::Check));
                 (0, "gone")
@@ -168,7 +200,9 @@ impl App {
             return;
         }
         let Some(token) = window.missed.take() else { return };
-        let Some(notice) = self.messages.notices.find(&token).cloned() else { return };
+        let Some(notice) = self.messages.notices.find(&token).cloned().filter(|notice| notice.machine.is_none()) else {
+            return;
+        };
         let needs = self.projects.workspace_in(notice.project, notice.workspace).is_some_and(|at| {
             let tabs = &self.projects.workspace(at).tabs;
             let terms = || tabs.iter().flat_map(|tab| &tab.panes).filter(|term| notice.panes.contains(&term.id));
@@ -200,7 +234,11 @@ fn notice_event(token: String, notice: &Notice, sound: Option<sound::Kind>) -> E
             message: notice.message.clone(),
             panes: notice.panes.clone(),
             sound: sound.map(|kind| kind.id().to_string()),
+            machine: notice.machine.as_ref().map(|there| there.name.clone()),
         },
-        ids: Ids { project: Some(notice.project), workspace: Some(notice.workspace), ..Ids::default() },
+        ids: match notice.machine {
+            Some(_) => Ids::default(),
+            None => Ids { project: Some(notice.project), workspace: Some(notice.workspace), ..Ids::default() },
+        },
     }
 }

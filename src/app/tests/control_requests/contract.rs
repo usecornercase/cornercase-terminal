@@ -95,6 +95,18 @@ mod opting_in {
     #[rstest::rstest]
     #[case::in_the_arguments(r#"{"contract":1,"command":"notify","args":{"text":"hi","bogus":1}}"#, "args.bogus")]
     #[case::in_the_envelope(r#"{"contract":1,"extra":true,"command":"notify","args":{"text":"hi"}}"#, "extra")]
+    #[case::a_null_machine_where_there_is_none(
+        r#"{"contract":1,"command":"send","args":{"pane":999,"text":"hi","machine":null}}"#,
+        "args.machine"
+    )]
+    #[case::no_files_where_there_are_none(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","files":[]}}"#,
+        "args.files"
+    )]
+    #[case::not_placed_where_nothing_starts(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","placed":false}}"#,
+        "args.placed"
+    )]
     fn an_unknown_field_is_refused_and_does_nothing(#[case] text: &str, #[case] field: &str) {
         let (mut app, _rx) = app();
 
@@ -120,6 +132,23 @@ mod opting_in {
 
         assert_eq!(answers, [r#"{"ok":{}}"#, r#"{"ok":{}}"#]);
         assert_eq!(notified(&mut app), ["one", "two"]);
+    }
+
+    #[rstest::rstest]
+    #[case::a_null_machine(
+        r#"{"contract":1,"command":"new-workspace","args":{"name":"a","project":999,"machine":null}}"#
+    )]
+    #[case::a_null_machine_to_start_with(
+        r#"{"contract":1,"command":"start-with","args":{"project":999,"machine":null}}"#
+    )]
+    #[case::no_files(r#"{"contract":1,"command":"clone","args":{"url":"","files":[]}}"#)]
+    #[case::not_placed(r#"{"contract":1,"command":"start","args":{"project":999,"placed":false}}"#)]
+    fn an_argument_left_out_by_its_empty_value_is_not_an_unknown_field(#[case] text: &str) {
+        let (mut app, _rx) = app();
+
+        let answer = raw(&mut app, text);
+
+        assert!(!answer.contains("unknown-field"), "{answer}");
     }
 
     #[test]

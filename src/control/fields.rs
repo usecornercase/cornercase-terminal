@@ -86,12 +86,8 @@ impl Command {
 
     fn stream_fields(&self, fields: &mut Fields) -> bool {
         match self {
-            Self::Status(_)
-            | Self::Stats(_)
-            | Self::Contract(_)
-            | Self::Watch(_)
-            | Self::App(_)
-            | Self::FlowRuns(_) => {}
+            Self::Status(_) | Self::Contract(_) | Self::Watch(_) | Self::App(_) | Self::FlowRuns(_) => {}
+            Self::Stats(stats) => stats.fields(fields),
             Self::Events(events) => events.fields(fields),
             Self::Surface(surface) => surface.fields(fields),
             Self::View(view) => view.fields(fields),
@@ -224,8 +220,11 @@ impl Command {
             Self::Worktrees(list) => list.fields(fields),
             Self::PullRequest(read) => read.fields(fields),
             Self::Context(read) => read.fields(fields),
+            Self::Clone(clone) => clone.fields(fields),
             Self::Recap(ask) => ask.fields(fields),
             Self::FreeBuilds(free) => free.fields(fields),
+            Self::Machines(machines) => machines.fields(fields),
+            Self::FocusMachine(focus) => focus.fields(fields),
             Self::Tour(tour) => tour.fields(fields),
             Self::PluginActions(actions) => actions.fields(fields),
             Self::PluginRun(run) => run.fields(fields),
@@ -244,7 +243,7 @@ impl Open {
 impl NewWorkspace {
     fn fields(&self, fields: &mut Fields) {
         fields.add("name", &self.name).maybe("project", self.project).add("worktree", self.worktree);
-        fields.add("focus", self.focus);
+        fields.add("focus", self.focus).maybe("machine", self.machine.as_ref());
     }
 }
 
@@ -274,6 +273,7 @@ impl Start {
         fields.add("wait", self.wait).maybe("until", self.wait.then(|| self.until.name()));
         fields.maybe("timeout", self.timeout).add("focus", self.focus);
         fields.maybe("profile", self.profile.as_ref()).maybe("accounts", chosen(&self.accounts));
+        fields.maybe("machine", self.machine.as_ref()).maybe("placed", self.placed.then_some(true));
     }
 }
 

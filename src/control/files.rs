@@ -5,13 +5,16 @@ use base64::engine::general_purpose::STANDARD;
 use serde::{Deserialize, Serialize};
 
 use super::Fields;
-use super::changes::FileStatus;
+use super::changes::{self, FileStatus};
 use crate::changes::diff::Status;
-use crate::files::disk::{self, Raw};
+use crate::files::disk::{self, Body, Raw};
 use crate::files::search;
 use crate::graphics::decode;
 use crate::highlight::syntax;
 use crate::time::Stamp;
+
+const IMAGE: &str = "image";
+const DAMAGED: &str = "the image data is damaged";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -133,6 +136,12 @@ impl EntryInfo {
     }
 }
 
+impl From<&EntryInfo> for disk::Entry {
+    fn from(entry: &EntryInfo) -> Self {
+        Self { name: entry.name.clone(), dir: entry.kind == EntryKind::Folder }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct FolderInfo {
@@ -146,6 +155,11 @@ pub(crate) struct FolderInfo {
 impl FolderInfo {
     pub(crate) fn failed(path: &str, dir: &Path, error: &str) -> Self {
         Self { path: path.into(), dir: dir.to_path_buf(), error: Some(error.into()), ..Self::default() }
+    }
+
+    pub(crate) fn listed(&self) -> (String, Option<Vec<disk::Entry>>) {
+        let entries = self.error.is_none().then(|| self.entries.iter().map(Into::into).collect());
+        (self.path.clone(), entries)
     }
 }
 
@@ -229,6 +243,27 @@ impl Read {
         }
         read
     }
+
+    pub(crate) fn content(&self) -> disk::Content {
+        let stamp = disk::Stamp::of(self.bytes, self.modified.as_deref().and_then(Stamp::parse));
+        let (language, body) = match self.kind {
+            ReadKind::Text => {
+                (self.language.as_deref().and_then(syntax::named), disk::text(self.text.clone().unwrap_or_default()))
+            }
+            ReadKind::Image => (None, self.picture()),
+            ReadKind::Binary | ReadKind::Folder => (None, Body::Binary),
+            ReadKind::TooLarge => (None, Body::TooLarge(self.bytes.unwrap_or_default())),
+            ReadKind::Missing => (None, Body::Missing),
+        };
+        disk::Content { stamp, language, body }
+    }
+
+    fn picture(&self) -> Body {
+        match self.image.as_ref().map(|image| STANDARD.decode(&image.data)) {
+            Some(Ok(bytes)) => disk::image(decode::sniff(&bytes).unwrap_or(IMAGE), &bytes),
+            _ => Body::Unreadable { format: IMAGE, bytes: self.bytes.unwrap_or_default(), reason: DAMAGED.into() },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -251,6 +286,24 @@ pub(crate) struct FoundLine {
 pub(crate) struct FoundFile {
     pub(crate) path: String,
     pub(crate) lines: Vec<FoundLine>,
+}
+
+impl NameInfo {
+    fn name(&self) -> search::Name {
+        let chars = u32::try_from(self.path.chars().count()).unwrap_or(u32::MAX);
+        search::Name { path: self.path.clone(), indices: self.indices.iter().copied().filter(|&i| i < chars).collect() }
+    }
+}
+
+impl FoundFile {
+    fn found(&self) -> search::Found {
+        let line = |line: &FoundLine| search::Line {
+            number: line.number,
+            text: line.text.clone(),
+            ranges: changes::within(&line.ranges, &line.text),
+        };
+        search::Found { path: self.path.clone(), lines: self.lines.iter().map(line).collect() }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -294,6 +347,18 @@ impl Found {
             matches: found.matches,
             capped: found.capped,
             ..Self::default()
+        }
+    }
+
+    pub(crate) fn found_names(&self) -> Vec<search::Name> {
+        self.names.iter().map(NameInfo::name).collect()
+    }
+
+    pub(crate) fn found_text(&self) -> search::Text {
+        search::Text {
+            files: self.files.iter().map(FoundFile::found).collect(),
+            matches: self.matches,
+            capped: self.capped,
         }
     }
 }

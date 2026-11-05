@@ -39,7 +39,7 @@ fn view(names: &[&str]) -> View<'static> {
     View {
         projects: names
             .iter()
-            .map(|n| ProjectEntry { name: (*n).to_string(), workspaces: 1, group: None, status: None })
+            .map(|n| ProjectEntry { name: (*n).to_string(), workspaces: 1, group: None, status: None, machine: None })
             .collect(),
         sidebar: Sidebar::SideBySide,
         muted: Color::DarkGray,
@@ -136,6 +136,7 @@ mod hover;
 mod issues;
 mod layout;
 mod machine_button;
+mod machine_rows;
 mod muted;
 mod overlay;
 mod pane_footer;
@@ -145,6 +146,8 @@ mod ports_dialog;
 mod processes_dialog;
 mod queue;
 mod recap_button;
+mod remote_card;
+mod remote_tab;
 mod reorder;
 mod resuming;
 mod row_hover;

@@ -473,3 +473,67 @@ mod marks {
         assert_eq!((lines.index_of(2), lines.index_of(6), lines.removed(6, 0)), (2, 7, Some("five")));
     }
 }
+
+mod fed_from_outside {
+    use super::*;
+
+    fn fed() -> Panel {
+        let mut panel = Panel::default();
+        panel.fed_listing(1, vec![(String::new(), Some(entries(&[("src", true), ("README.md", false)])))]);
+        panel.fed_listing(1, vec![("src".into(), Some(entries(&[("ui", true), ("main.rs", false)])))]);
+        panel
+    }
+
+    fn name(path: &str) -> search::Name {
+        search::Name { path: path.into(), indices: Vec::new() }
+    }
+
+    #[test]
+    fn asks_for_the_root_and_the_open_folders_in_order() {
+        let mut panel = fed();
+        assert_eq!(panel.wanted_folders(1), [""]);
+        panel.toggle(1, "src/ui");
+        panel.toggle(1, "src");
+        assert_eq!(panel.wanted_folders(1), ["", "src", "src/ui"]);
+    }
+
+    #[test]
+    fn a_folder_that_went_away_there_closes() {
+        let mut panel = fed();
+        panel.toggle(1, "src");
+        assert_eq!(paths(&panel.rows(1)), [("src", 0), ("src/ui", 1), ("src/main.rs", 1), ("README.md", 0)]);
+
+        panel.fed_listing(1, vec![(String::new(), Some(entries(&[("src", true)]))), ("src".into(), None)]);
+
+        assert_eq!((paths(&panel.rows(1)), panel.wanted_folders(1)), (vec![("src", 0)], vec![String::new()]));
+    }
+
+    #[test]
+    fn a_read_of_another_file_stays_out_of_the_viewer() {
+        let mut panel = fed();
+        panel.open_file(1, "src/main.rs");
+        let shown = |panel: &Panel| panel.viewer(1).and_then(|v| v.content.as_ref()).map(|c| c.lines().to_vec());
+
+        panel.fed_read(1, "README.md", content(&["readme"]));
+        assert_eq!(shown(&panel), None);
+        panel.fed_read(1, "src/main.rs", content(&["fn main() {}"]));
+        assert_eq!(shown(&panel), Some(vec!["fn main() {}".to_string()]));
+    }
+
+    #[test]
+    fn a_search_keeps_only_the_answer_to_the_current_query() {
+        let mut panel = fed();
+        panel.query_mut(1).text = "main".into();
+        panel.query_mut(1).selected = 3;
+
+        panel.fed_names(1, "mai", vec![name("src/mai.rs")]);
+        panel.fed_text(1, "mai", search::Text::default());
+        assert_eq!((panel.found_names(1), panel.found_text(1)), (None, None));
+
+        panel.fed_names(1, "main", vec![name("src/main.rs")]);
+        panel.fed_text(1, "main", search::Text { matches: 2, ..search::Text::default() });
+        assert_eq!(panel.found_names(1), Some(("main", [name("src/main.rs")].as_slice())));
+        assert_eq!(panel.found_text(1).map(|(q, t)| (q, t.matches)), Some(("main", 2)));
+        assert_eq!((panel.answered(1), panel.query(1).map(|q| q.selected)), (Some("main"), Some(0)));
+    }
+}

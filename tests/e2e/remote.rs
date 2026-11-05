@@ -2,25 +2,64 @@ use super::*;
 
 const SSH_PID: &str = "ssh.pid";
 const SSH_RUNS: &str = "ssh.runs";
+const REFUSED: &str = "*) echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255 ;;";
 
 pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
+    fake_ssh_with(dir, &format!("*) there='{prefix}' ;;"))
+}
+
+pub(super) fn fake_ssh_to(dir: &std::path::Path, machines: &[(&str, &str)]) -> String {
+    let mapped: Vec<String> =
+        machines.iter().map(|(destination, prefix)| format!("'{destination}') there='{prefix}' ;;")).collect();
+    let path = fake_ssh_with(dir, &format!("{}\n  {REFUSED}", mapped.join("\n  ")));
+    cornercase_in(&dir.join("bin"));
+    path
+}
+
+pub(super) fn cornercase_in(folder: &std::path::Path) {
+    write_executable(&folder.join("cornercase"), &format!("#!/bin/sh\nexec '{}' \"$@\"\n", bin()));
+}
+
+fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
     let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).expect("create the fake ssh's folder");
-    let pid = dir.join(SSH_PID);
+    let dir = dir.display();
     write_executable(
         &bin.join("ssh"),
         &format!(
-            "#!/bin/sh\necho $$ > '{}'\necho $$ >> '{}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    \
-             -*) shift ;;\n    *) break ;;\n  esac\ndone\nshift\nexec /bin/sh -c \"exec {prefix} $*\"\n",
-            pid.display(),
-            dir.join(SSH_RUNS).display()
+            "#!/bin/sh\necho $$ > '{dir}/{SSH_PID}'\necho $$ >> '{dir}/{SSH_RUNS}'\nwhile [ $# -gt 0 ]; do\n  \
+             case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
+             if [ -e '{dir}/ssh-'\"$1\"'.held' ]; then\n  \
+             echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255\nfi\n\
+             echo $$ > '{dir}/ssh-'\"$1\"'.pid'\necho $$ >> '{dir}/ssh-'\"$1\"'.pids'\n\
+             case \"$1\" in\n  {cases}\nesac\nshift\nexec /bin/sh -c \"exec $there $*\"\n"
         ),
     );
     format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default())
 }
 
 fn ssh_pid(session: &Session) -> String {
-    std::fs::read_to_string(session.dir.join(SSH_PID)).unwrap_or_default().trim().to_string()
+    pid_in(session, SSH_PID)
+}
+
+pub(super) fn ssh_pid_to(session: &Session, destination: &str) -> String {
+    pid_in(session, &format!("ssh-{destination}.pid"))
+}
+
+pub(super) fn ssh_pids_to(session: &Session, destination: &str) -> Vec<String> {
+    pid_in(session, &format!("ssh-{destination}.pids")).lines().map(str::to_string).collect()
+}
+
+pub(super) fn hold_ssh_to(session: &Session, destination: &str) {
+    std::fs::write(session.dir.join(format!("ssh-{destination}.held")), "").expect("hold the destination");
+}
+
+pub(super) fn let_ssh_to(session: &Session, destination: &str) {
+    std::fs::remove_file(session.dir.join(format!("ssh-{destination}.held"))).expect("let the destination go");
+}
+
+fn pid_in(session: &Session, file: &str) -> String {
+    std::fs::read_to_string(session.dir.join(file)).unwrap_or_default().trim().to_string()
 }
 
 fn ssh_runs(session: &Session) -> usize {
@@ -45,13 +84,13 @@ fn remote_says(session: &Session, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()
 }
 
-fn gone(pid: &str) -> bool {
+pub(super) fn gone(pid: &str) -> bool {
     let ps = std::process::Command::new("ps").args(["-o", "stat=", "-p", pid]).output().expect("run ps");
     let state = String::from_utf8_lossy(&ps.stdout);
     state.trim().is_empty() || state.trim().starts_with('Z')
 }
 
-fn boot_of(json: &str) -> serde_json::Value {
+pub(super) fn boot_of(json: &str) -> serde_json::Value {
     serde_json::from_str::<serde_json::Value>(json).expect("json")["boot"].clone()
 }
 
@@ -114,6 +153,22 @@ fn commands_reach_the_server_on_the_other_machine() {
     let there = remote_says(&session, &["status", "--json"]);
     assert_eq!(boot_of(&there), boot_of(&session.says(&["status", "--json"])));
     assert_eq!(session.servers(), 1);
+}
+
+#[test]
+fn clone_puts_the_repository_in_a_folder_of_the_other_machine() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let repo = repository(&session.dir, "shop");
+    let parent = session.dir.join("src");
+
+    let path = remote_says(&session, &["clone", &repo.display().to_string(), &parent.display().to_string()]);
+    let relative = remotely(&session, &["clone", &repo.display().to_string(), "src"]).output().expect("run cornercase");
+
+    let cloned = session.dir.canonicalize().expect("canonical").join("src").join("shop");
+    assert_eq!(path, cloned.display().to_string());
+    assert!(session.report().projects.iter().any(|p| p.path == cloned), "the project is open there");
+    assert!(refused(&relative, 2, "with --remote, give its absolute path on devbox"), "{relative:?}");
 }
 
 #[test]

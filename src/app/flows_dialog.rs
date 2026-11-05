@@ -528,6 +528,8 @@ pub(super) fn settings_row(text: &RowText) -> ui::SettingsRow {
         muted: text.muted,
         removable: text.removable,
         movable: text.movable,
+        mark: None,
+        tail: String::new(),
     }
 }
 

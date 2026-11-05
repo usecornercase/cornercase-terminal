@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, sort_by_updated};
 use crate::list::Search;
+use crate::machines::run_on::RunOn;
 use crate::queue::State;
 
 mod buttons;
@@ -9,6 +10,7 @@ mod input;
 mod naming;
 mod people;
 mod picker;
+mod run_on;
 mod token_form;
 mod view;
 
@@ -232,6 +234,7 @@ pub(crate) enum Pick {
     Agent,
     Place,
     Account,
+    Machine,
     Person(Source, usize),
 }
 
@@ -247,6 +250,7 @@ pub(crate) struct Picker {
     pub(crate) pick: Pick,
     pub(crate) search: Search,
     pub(super) after: After,
+    pub(crate) blank: bool,
 }
 
 pub(crate) struct Choice {
@@ -287,6 +291,27 @@ pub(crate) enum Action {
     Copy(String),
     SetDefaultAgent(String),
     LoadPeople(Vec<Source>),
+    RunOn(Option<usize>),
+    OpenLoginTab,
+    CloneThere(Issue),
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum AgentNote {
+    #[default]
+    Ready,
+    NotInstalled,
+    SignedOut,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct There {
+    pub(crate) start_hint: String,
+    pub(crate) cloned: bool,
+    pub(crate) agent: AgentNote,
+    pub(crate) command: Option<String>,
+    pub(crate) tracker: Option<String>,
+    pub(crate) checking: bool,
 }
 
 #[derive(Debug)]
@@ -313,6 +338,7 @@ pub(crate) struct Browser {
     pub(crate) gitlab_url: String,
     pub(crate) screen: Screen,
     pub(crate) starting: bool,
+    pub(crate) making: Option<(u64, String)>,
     pub(crate) scheduling: bool,
     pub(crate) error: Option<String>,
     pub(crate) notice: Option<String>,
@@ -327,6 +353,8 @@ pub(crate) struct Browser {
     pub(crate) filtering: Option<usize>,
     pub(crate) members: HashMap<Source, Result<Vec<Person>, String>>,
     pub(crate) queued: Vec<Queued>,
+    pub(crate) run_on: Option<RunOn>,
+    pub(crate) there: Option<There>,
 }
 
 impl Browser {
@@ -428,9 +456,13 @@ impl Browser {
     }
 
     pub(super) fn selected(&self) -> Option<Issue> {
+        self.selected_issue().cloned()
+    }
+
+    fn selected_issue(&self) -> Option<&Issue> {
         let shown = self.shown();
         let last = shown.len().checked_sub(1)?;
-        shown.get(self.search.selected().min(last)).map(|issue| (*issue).clone())
+        shown.get(self.search.selected().min(last)).copied()
     }
 }
 

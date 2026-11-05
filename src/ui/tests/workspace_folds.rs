@@ -15,6 +15,7 @@ fn workspace(name: &str, collapsed: bool, statuses: &[Option<Status>]) -> Worksp
         removing: false,
         setting_up: false,
         closed: 0,
+        machine: None,
     }
 }
 

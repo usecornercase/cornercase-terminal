@@ -14,7 +14,7 @@ pub(crate) const CHANGES_VERSION: u32 = 1;
 pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
 pub(crate) const FILES_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 32] = [
+pub(crate) const FEATURES: [&str; 36] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -45,6 +45,10 @@ pub(crate) const FEATURES: [&str; 32] = [
     "build-folders",
     "settings-search",
     "flow-issue-prompt",
+    "machines",
+    "machine-usage",
+    "machine-workspaces",
+    "machine-start",
     "search-settings",
     "recap",
 ];

@@ -4,6 +4,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::account_menu::AccountItem;
 use super::help_menu::HelpItem;
+use super::machine_links::acting::Aim;
 use super::machines::MachineItem;
 use super::more_menu::MoreItem;
 use super::opening::Subject;
@@ -21,6 +22,12 @@ use crate::project::split::Dir;
 use crate::settings;
 use crate::ui::{self};
 
+pub(super) const RENAME_WORKSPACE: &str = "Rename workspace";
+
+pub(super) const RENAME_WORKSPACE_HINT: &str = "leave it empty to use the branch name";
+
+pub(super) const RENAME_WORKSPACE_LABEL: &str = "rename workspace";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Target {
     Group(u64),
@@ -34,7 +41,7 @@ impl Target {
         match self {
             Self::Group(_) => "rename group",
             Self::Project(_) => "rename project",
-            Self::Workspace(..) => "rename workspace",
+            Self::Workspace(..) => RENAME_WORKSPACE_LABEL,
             Self::Tab(..) => "rename tab",
         }
     }
@@ -43,7 +50,7 @@ impl Target {
         match self {
             Self::Group(_) => "Rename group",
             Self::Project(_) => "Rename project",
-            Self::Workspace(..) => "Rename workspace",
+            Self::Workspace(..) => RENAME_WORKSPACE,
             Self::Tab(..) => "Rename tab",
         }
     }
@@ -52,7 +59,7 @@ impl Target {
         match self {
             Self::Group(_) => "leave it empty to keep the current name",
             Self::Project(_) => "leave it empty to use the folder name",
-            Self::Workspace(..) => "leave it empty to use the branch name",
+            Self::Workspace(..) => RENAME_WORKSPACE_HINT,
             Self::Tab(..) => "leave it empty to use the program name",
         }
     }
@@ -127,13 +134,18 @@ pub(super) enum MenuAction {
     Help(HelpItem),
     Tour(u8),
     More(MoreItem),
+    RemoteRename(Aim),
+    MachineNote(u64),
     Machine(MachineItem),
 }
 
 impl App {
     pub(super) fn menu_view(&self, at: Position, actions: &[MenuAction]) -> ui::Overlay {
         let blocker = self.menu_blocker(actions);
-        let disabled = actions.iter().map(|&action| Self::account_disabled(action, blocker.is_some())).collect();
+        let disabled = actions
+            .iter()
+            .map(|&action| Self::account_disabled(action, blocker.is_some()) || self.remote_disabled(action))
+            .collect();
         ui::Overlay::Menu { at, items: self.labels_of(actions, blocker.as_deref()), disabled }
     }
 
@@ -164,6 +176,7 @@ impl App {
             .or_else(|| self.more_menu_label(action))
             .or_else(|| self.machine_menu_label(action))
             .or_else(|| self.closed_agents_label(action))
+            .or_else(|| self.remote_menu_label(action))
             .or_else(|| self.context_menu_label(action))
     }
 
@@ -273,6 +286,7 @@ impl App {
         let Some(action) = self.group_action(action, at) else { return Ok(()) };
         let Some(action) = self.project_action(action, at, area) else { return Ok(()) };
         let Some(action) = self.agent_action(action) else { return Ok(()) };
+        let Some(action) = self.remote_action(action) else { return Ok(()) };
         match action {
             MenuAction::Pane(pane, action) => self.pane_action(pane, action, area),
             _ => Ok(()),

@@ -138,7 +138,9 @@ impl App {
     }
 
     pub(super) fn visible_tab(&self) -> Option<u64> {
-        self.focus().tab.filter(|_| self.screen.nav.is_none() && !self.file_full_screen())
+        self.focus()
+            .tab
+            .filter(|_| self.screen.nav.is_none() && !self.file_full_screen() && self.shown_remote().is_none())
     }
 
     pub(super) fn focus(&self) -> Focus {
@@ -163,7 +165,7 @@ impl App {
     pub(super) fn follow(&mut self, area: Rect) {
         self.set_queue_area(area);
         if self.focus() != self.scroll.followed {
-            self.panels.files.set_full_screen(false);
+            self.set_file_full_screen(false);
         }
         let areas = self.layout(area);
         let relayout =

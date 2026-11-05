@@ -14,13 +14,15 @@ impl Browser {
                 let pick = self.accounts.as_ref().and_then(|a| a.pick(&kind)).unwrap_or_default();
                 agent.keys().position(|key| key == pick)
             }),
+            Pick::Machine => self.chosen_machine(),
             Pick::Person(source, field) => {
                 let who = &self.people.of(source)[field];
                 self.person_choices(source).iter().position(|(w, _)| w == who)
             }
         };
         search.select(current.unwrap_or(0));
-        self.picker = Some(Picker { pick, search, after });
+        let blank = pick == Pick::Machine && current.is_none();
+        self.picker = Some(Picker { pick, search, after, blank });
     }
 
     pub(crate) fn choices(&self) -> Vec<Choice> {
@@ -50,6 +52,7 @@ impl Browser {
                 })
                 .collect(),
             Pick::Account => self.agent_accounts().map(|(_, agent)| Self::account_choices(agent)).unwrap_or_default(),
+            Pick::Machine => self.machine_choices(),
             Pick::Person(source, _) => self
                 .person_choices(source)
                 .into_iter()
@@ -86,12 +89,28 @@ impl Browser {
     }
 
     pub(super) fn choose(&mut self, index: Option<usize>) -> Action {
-        let Some(picker) = &self.picker else { return Action::None };
+        let Some(picker) = self.picker.as_ref().filter(|picker| index.is_some() || !picker.blank) else {
+            return Action::None;
+        };
         let (pick, after) = (picker.pick, picker.after);
         let choices = self.choices();
         let i = index.unwrap_or_else(|| picker.search.selected()).min(choices.len().saturating_sub(1));
         let Some((key, who)) = choices.get(i).map(|c| (c.key.clone(), c.who.clone())) else { return Action::None };
+        if pick == Pick::Machine {
+            return self.choose_machine(&key);
+        }
         self.picker = None;
+        self.take_choice(pick, key, who);
+        let Screen::Detail { issue, .. } = &self.screen else { return Action::None };
+        let issue = (**issue).clone();
+        match after {
+            After::Start => self.start(issue),
+            After::Flow => self.start_flow(issue),
+            After::Nothing => Action::None,
+        }
+    }
+
+    fn take_choice(&mut self, pick: Pick, key: String, who: Option<Who>) {
         match pick {
             Pick::Agent => {
                 if let Some(accounts) = &mut self.accounts
@@ -115,13 +134,7 @@ impl Browser {
                     self.set_person(source, field, who);
                 }
             }
-        }
-        let Screen::Detail { issue, .. } = &self.screen else { return Action::None };
-        let issue = (**issue).clone();
-        match after {
-            After::Start => self.start(issue),
-            After::Flow => self.start_flow(issue),
-            After::Nothing => Action::None,
+            Pick::Machine => {}
         }
     }
 
@@ -132,10 +145,12 @@ impl Browser {
         match key.code {
             KeyCode::Esc => self.picker = None,
             KeyCode::Enter => return self.choose(None),
+            KeyCode::Up | KeyCode::Down if picker.blank => picker.blank = false,
             KeyCode::Up => picker.search.move_selection(-1, count, rows),
             KeyCode::Down => picker.search.move_selection(1, count, rows),
             KeyCode::Backspace => picker.search.pop(),
             KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+                picker.blank = false;
                 picker.search.push(c);
             }
             _ => {}

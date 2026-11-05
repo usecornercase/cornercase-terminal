@@ -70,6 +70,9 @@ impl App {
 
     fn shortcut(&mut self, action: Action, area: Rect) -> Result<()> {
         log::info!("ui", "shortcut", action = format!("{action:?}"));
+        if acts_here(action) {
+            self.leave_remote();
+        }
         let Some(action) = self.go_shortcut(action, area) else { return Ok(()) };
         let Some(action) = self.panel_shortcut(action) else { return Ok(()) };
         let Some(action) = self.edit_shortcut(action) else { return Ok(()) };
@@ -221,12 +224,14 @@ impl App {
         let Some(workspace) = self.project_mut().and_then(Project::workspace_mut) else { return };
         if let Some(t) = cycle(workspace.active, workspace.tabs.len(), delta) {
             workspace.active = t;
+            self.leave_remote();
         }
     }
 
     fn go_to_tab(&mut self, t: usize) {
         if let Some(workspace) = self.project_mut().and_then(Project::workspace_mut).filter(|w| t < w.tabs.len()) {
             workspace.active = t;
+            self.leave_remote();
         }
     }
 
@@ -333,22 +338,22 @@ impl App {
     }
 
     fn find_files(&mut self, mode: Mode) {
-        let Some(workspace) = self.project().and_then(Project::workspace).map(|w| w.id) else { return };
+        let Some(workspace) = self.files_workspace() else { return };
         if self.screen.side != Some(Side::Files) {
             self.toggle_files();
         }
-        self.panels.files.search(workspace, mode);
+        self.files_state_mut().search(workspace, mode);
     }
 
     fn changes_by_key(&mut self) {
-        if self.changes_target().is_none() {
+        if self.changes_label().is_none() {
             self.messages.toast = Some(Toast::new(NOT_GIT, ui::ToastIcon::Bug));
             return;
         }
         let opening = self.screen.side != Some(Side::Changes);
         self.toggle_changes();
         if opening {
-            self.panels.changes.focus_filter();
+            self.changes_state_mut().focus_filter();
         }
     }
 
@@ -362,6 +367,21 @@ impl App {
         }
         self.open_branches(&target);
     }
+}
+
+fn acts_here(action: Action) -> bool {
+    matches!(
+        action,
+        Action::Split(_)
+            | Action::Pane(_)
+            | Action::Mark
+            | Action::ClosePane
+            | Action::RenameTab
+            | Action::RenameWorkspace
+            | Action::CloseWorkspace
+            | Action::CloseAgents
+            | Action::ReopenAgents
+    )
 }
 
 fn cycle(at: usize, len: usize, delta: isize) -> Option<usize> {

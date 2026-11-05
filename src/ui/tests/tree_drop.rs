@@ -3,14 +3,19 @@ use super::*;
 const LIST: Rect = Rect { x: 0, y: 4, width: SIDEBAR_WIDTH - 1, height: 24 };
 
 fn shape() -> TreeShape {
-    let workspace = |tabs: usize| WorkspaceShape { collapsed: false, tabs: vec![1; tabs] };
+    let workspace = |tabs: usize| WorkspaceShape { collapsed: false, machine: false, tabs: vec![1; tabs] };
     TreeShape {
         groups: vec![false],
         tab_bar: false,
         projects: vec![
-            ProjectShape { group: None, collapsed: false, workspaces: vec![workspace(1)] },
-            ProjectShape { group: Some(0), collapsed: false, workspaces: vec![workspace(2), workspace(1)] },
-            ProjectShape { group: Some(0), collapsed: true, workspaces: vec![workspace(1)] },
+            ProjectShape { group: None, collapsed: false, machine: false, workspaces: vec![workspace(1)] },
+            ProjectShape {
+                group: Some(0),
+                collapsed: false,
+                machine: false,
+                workspaces: vec![workspace(2), workspace(1)],
+            },
+            ProjectShape { group: Some(0), collapsed: true, machine: false, workspaces: vec![workspace(1)] },
         ],
     }
 }
@@ -74,4 +79,23 @@ fn a_project_dropped_above_the_list_lands_before_the_project_after_its_own_rows(
 #[test]
 fn a_group_moves_with_everything_in_it() {
     assert_eq!(drop_on(TreeRow::Group(0), TreeRow::Tab(0, 0, 0)), Some(Landing { at: 6, spot: Spot::Group(0) }));
+}
+
+#[rstest]
+#[case::onto_its_workspace(TreeRow::Workspace(0, 1))]
+#[case::onto_its_tab(TreeRow::Tab(0, 1, 0))]
+fn a_workspace_dropped_on_a_machine_s_rows_lands_after_this_computer_s_own(#[case] under: TreeRow) {
+    let workspace = |machine: bool| WorkspaceShape { collapsed: false, machine, tabs: vec![1] };
+    let project = ProjectShape {
+        group: None,
+        collapsed: false,
+        machine: false,
+        workspaces: vec![false, true].into_iter().map(workspace).collect(),
+    };
+    let shape = TreeShape { groups: Vec::new(), tab_bar: false, projects: vec![project] };
+    let r = tree_row(LIST, &shape, 0, under);
+
+    let landing = tree_drop(LIST, &shape, 0, TreeRow::Workspace(0, 0), Position::new(r.x + 8, r.y));
+
+    assert_eq!(landing, Some(Landing { at: 4, spot: Spot::Workspace(1) }));
 }

@@ -1,8 +1,10 @@
+pub(crate) mod clone_on_machine;
 pub(crate) mod context;
 pub(super) mod flows;
 pub(super) mod form;
 pub(super) mod group_style;
 pub(super) mod issues;
+pub(crate) mod machine;
 pub(super) mod menu;
 pub(super) mod picker;
 pub(super) mod popup;
@@ -10,6 +12,7 @@ pub(super) mod ports;
 pub(super) mod processes;
 pub(super) mod project_settings;
 pub(crate) mod queue;
+pub(super) mod run_on;
 pub(super) mod search;
 pub(super) mod settings;
 pub(super) mod share_settings;
@@ -32,6 +35,7 @@ use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
 use super::dialog::ports::{Ports, ports_area};
 use super::dialog::processes::{Processes, processes_area};
+use super::dialog::run_on::RunOnRow;
 use super::dialog::search::Search;
 use super::dialog::settings::{Settings, settings_area};
 use super::dialog::start_flow::StartFlow;
@@ -112,13 +116,25 @@ fn row_of(row: Rect, x: u16, width: u16) -> Rect {
     Rect::new(x, row.y, width, 1).intersection(row)
 }
 
+fn tab_width(name: &str, padding: u16) -> u16 {
+    button_width(name).saturating_sub(2).saturating_add(padding)
+}
+
+fn tab_spacing(row: Rect, names: &[&str]) -> (u16, u16) {
+    let width = |padding: u16, gap: u16| {
+        names.iter().map(|name| tab_width(name, padding) + gap).sum::<u16>().saturating_sub(gap)
+    };
+    [(2, 1), (2, 0), (0, 1)].into_iter().find(|&(padding, gap)| width(padding, gap) <= row.width).unwrap_or((0, 1))
+}
+
 pub(super) fn tabs_in(row: Rect, names: &[&str]) -> Vec<Rect> {
+    let (padding, gap) = tab_spacing(row, names);
     let mut x = row.x;
     names
         .iter()
         .map(|name| {
-            let r = row_of(row, x, button_width(name));
-            x = x.saturating_add(button_width(name) + 1);
+            let r = row_of(row, x, tab_width(name, padding));
+            x = x.saturating_add(tab_width(name, padding) + gap);
             r
         })
         .collect()
@@ -150,7 +166,10 @@ pub(crate) enum Note {
 pub(crate) enum Overlay {
     Menu { at: Position, items: Vec<String>, disabled: Vec<bool> },
     Form(Form),
+    RunOnForm(Form, RunOnRow),
     Queue(Box<crate::queue::form::Form>),
+    Machine(Box<crate::machines::form::Form>),
+    CloneOnMachine(Box<crate::machines::clone_form::CloneForm>),
     GroupStyle(GroupEntry),
     Confirm(Confirm),
     Update(Update),
@@ -181,13 +200,14 @@ impl Overlay {
     pub(crate) fn area(&self, area: Rect) -> Option<Rect> {
         match self {
             Self::Queue(form) => Some(queue::area_with_list(area, form)),
-            Self::Form(_) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
+            Self::Machine(form) => Some(machine::area_with_list(area, form)),
+            Self::Form(_) | Self::RunOnForm(..) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
             Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),
             Self::Usage(usage) => Some(usage_area(area, usage)),
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Forum(setup) => Some(super::forum::area(area, setup)),
             Self::Issues(_) => Some(issues_area(area)),
-            Self::Settings(_) | Self::ShareSettings(_) => Some(settings_area(area)),
+            Self::Settings(_) | Self::ShareSettings(_) | Self::CloneOnMachine(_) => Some(settings_area(area)),
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
@@ -302,6 +322,7 @@ fn draw_input(f: &mut Frame, muted: Color, row: Rect, label: &str, value: &str) 
 fn draw_tabs(f: &mut Frame, view: &View, rects: &[Rect], names: &[&str], active: usize) {
     for (i, (rect, name)) in rects.iter().zip(names).enumerate() {
         let style = tab_style(i == active, hovered(view, *rect), view.surface(), view.soft);
-        f.render_widget(Paragraph::new(Span::styled(format!(" {name} "), style)), *rect);
+        let label = if rect.width < button_width(name) { (*name).to_string() } else { format!(" {name} ") };
+        f.render_widget(Paragraph::new(Span::styled(label, style)), *rect);
     }
 }

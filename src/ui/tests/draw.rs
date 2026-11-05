@@ -17,7 +17,7 @@ fn shows_the_workspace_count_next_to_the_name() {
 #[test]
 fn a_long_name_is_cut_before_the_count() {
     let v = View {
-        projects: vec![ProjectEntry { name: "a".repeat(40), workspaces: 12, group: None, status: None }],
+        projects: vec![ProjectEntry { name: "a".repeat(40), workspaces: 12, group: None, status: None, machine: None }],
         ..view(&[])
     };
     let row: String =

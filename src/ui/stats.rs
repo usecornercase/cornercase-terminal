@@ -19,7 +19,12 @@ fn shade(line: Color, light: bool, level: u8) -> Color {
     Color::Indexed(ramp[usize::from(level.saturating_sub(1).min(3))])
 }
 
-pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u16) -> Vec<Line<'static>> {
+pub(super) fn lines(
+    colours: (Color, Color, bool),
+    stats: &stats::View,
+    notes: &[String],
+    width: u16,
+) -> Vec<Line<'static>> {
     let width = usize::from(width);
     let (line, muted, light) = colours;
     let colour = |level| shade(line, light, level);
@@ -27,6 +32,7 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
     if stats.empty && stats.merged.is_none() {
         let mut lines = markdown::wrap_text(stats::EMPTY, dim, width);
         lines.push(Line::default());
+        lines.extend(noted(notes, dim, width));
         return lines;
     }
     let mut lines = markdown::wrap_text(&stats.headline(true), Style::default(), width);
@@ -38,10 +44,19 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
         lines.push(Line::from(format!("{label:18}{day:>column$} {week:>column$} {total:>column$}")));
     }
     lines.push(Line::default());
+    lines.extend(noted(notes, dim, width));
     let weeks = (width / 2).min(WEEKS);
     lines.extend(heatmap(width, &stats.levels(weeks), &colour));
     lines.extend(legend(&format!("{weeks} weeks · {}", stats.counting()), width, dim, &colour));
     lines.push(Line::default());
+    lines
+}
+
+fn noted(notes: &[String], dim: Style, width: usize) -> Vec<Line<'static>> {
+    let mut lines: Vec<Line<'static>> = notes.iter().flat_map(|note| markdown::wrap_text(note, dim, width)).collect();
+    if !lines.is_empty() {
+        lines.push(Line::default());
+    }
     lines
 }
 

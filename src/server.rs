@@ -98,15 +98,11 @@ impl Step {
     }
 
     fn traced(&self) -> bool {
-        !matches!(
-            self,
-            Self::Answer
-                | Self::Flush
-                | Self::Draw
-                | Self::Surfaces
-                | Self::Save
-                | Self::Event(ServerEvent::App(AppEvent::Output(..)))
-        )
+        match self {
+            Self::Answer | Self::Flush | Self::Draw | Self::Surfaces | Self::Save => false,
+            Self::Event(ServerEvent::App(ev)) => !matches!(ev, AppEvent::Output(..)) && !ev.remote_frame(),
+            _ => true,
+        }
     }
 }
 
@@ -306,7 +302,7 @@ pub(crate) fn run() -> Result<()> {
     let (app_tx, app_rx) = mpsc::channel();
     spawn_forwarder(app_rx, tx.clone());
 
-    let mut app = App::new(shell::default(), HostTheme::default(), paths::config(), app_tx);
+    let mut app = App::new(shell::default(), HostTheme::default(), &paths::config(), app_tx);
     let session = paths::session();
     log_started(&path, &session, level);
     let todo_saver = prepare_app(&mut app, &path, &session);
@@ -669,11 +665,13 @@ impl Server {
         if log::enabled(Level::Debug) {
             describe(&ev);
         }
-        if let ServerEvent::App(AppEvent::Output(id, ..)) = &ev {
-            self.printed = self.printed || self.app.shows(*id);
-        } else {
-            self.changed = true;
-            self.app.touch_surfaces();
+        match &ev {
+            ServerEvent::App(AppEvent::Output(id, ..)) => self.printed = self.printed || self.app.shows(*id),
+            ServerEvent::App(ev) if ev.remote_frame() => self.printed = true,
+            _ => {
+                self.changed = true;
+                self.app.touch_surfaces();
+            }
         }
         self.dispatch(ev)?;
         if self.restart.is_some() {
@@ -893,7 +891,7 @@ impl Server {
         {
             log::error!("server", "failed to save the queue", error = e);
         }
-        self.app.stop_plugins();
+        self.app.stop_background();
         self.answer();
         for client in self.clients.drain(..) {
             client.leave(self.restart.clone().map_or(ServerMessage::Shutdown, ServerMessage::Restart));
@@ -915,6 +913,7 @@ fn logged_save(saved: io::Result<bool>, target: &str, (done, failed): (&str, &st
 fn describe(ev: &ServerEvent) {
     match ev {
         ServerEvent::App(AppEvent::Output(..)) => {}
+        ServerEvent::App(ev) if ev.remote_frame() => {}
         ServerEvent::App(ev) => log::debug!("server", "job answered", job = ev.name()),
         ServerEvent::Accepted(_) => log::debug!("server", "connection"),
         ServerEvent::Message(id, ClientMessage::Event(ev)) => {

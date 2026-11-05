@@ -7,6 +7,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::interaction::Drag;
 use super::layout::{List, Side};
+use super::machine_links::RemoteDrag;
 use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
@@ -20,11 +21,25 @@ pub(super) const WHEEL_ROWS: isize = 3;
 impl App {
     fn stop_dragging(&mut self) -> bool {
         match &self.screen.drag {
-            Some(Drag::Border(_) | Drag::Divider { .. } | Drag::Row(_) | Drag::Pane(_) | Drag::Footer(_)) => {
+            Some(
+                Drag::Border(_)
+                | Drag::Divider { .. }
+                | Drag::Row(_)
+                | Drag::Pane(_)
+                | Drag::Footer(_)
+                | Drag::Remote(RemoteDrag::Divider { .. }),
+            ) => {
                 self.screen.drag = None;
                 true
             }
-            Some(Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. } | Drag::Text(_)) | None => false,
+            Some(
+                Drag::Selection { .. }
+                | Drag::Link(_)
+                | Drag::Lines { .. }
+                | Drag::Text(_)
+                | Drag::Remote(RemoteDrag::Selection { .. } | RemoteDrag::Mouse { .. }),
+            )
+            | None => false,
         }
     }
 
@@ -49,21 +64,21 @@ impl App {
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
             Some(Overlay::ShareSettings(_)) => self.share_settings_key(key, area),
+            Some(Overlay::Machine(_)) => self.machine_form_key(key, area),
+            Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_key(key, area),
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
             Some(Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_)) => self.listing_key(key, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_key(key, area),
-            Some(Overlay::Usage) => {
-                self.usage_key(key);
-            }
+            Some(Overlay::Usage) => self.usage_key(key),
             Some(Overlay::Search(_)) => self.search_key(key, area),
             None if self.tour_typing() => self.tour_key(key, area),
             None if self.todo_typing() => self.todo_key(key, area),
             None if self.files_typing() => self.files_key(key, area),
             None if self.filtering() => self.filter_key(key),
-            None if key.code == KeyCode::Esc && self.file_full_screen() => self.panels.files.set_full_screen(false),
+            None if key.code == KeyCode::Esc && self.file_full_screen() => self.set_file_full_screen(false),
             None if key.code == KeyCode::Esc && self.panel_shown() => self.close_panel(),
             Some(Overlay::Menu { .. }) | None => self.forward_key(key),
             Some(_) => return self.form_key(key, area),
@@ -72,7 +87,7 @@ impl App {
     }
 
     pub(super) fn forward_key(&mut self, key: KeyEvent) {
-        if self.holds_input() {
+        if self.machine_key(key) || self.holds_input() {
             return;
         }
         let Some(term) = self.term_mut() else { return };
@@ -141,9 +156,9 @@ impl App {
     fn side_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> ControlFlow<Result<()>> {
         let in_panel = self.panel_shown() && areas.changes.contains(pos);
         if matches!(ev.kind, MouseEventKind::Down(_)) && !in_panel {
-            self.panels.changes.unfocus();
+            self.changes_state_mut().unfocus();
             self.commit_todo();
-            self.panels.files.unfocus();
+            self.files_state_mut().unfocus();
         }
         if in_panel && self.screen.side.is_some() {
             return ControlFlow::Break(self.panel_mouse(ev, pos, areas.changes, area));
@@ -276,6 +291,9 @@ impl App {
         if areas.tab_bar.contains(pos) {
             return self.tab_bar_mouse(areas, pos, ev.kind, area);
         }
+        if self.machine_mouse(ev, pos, areas.pane) {
+            return Ok(());
+        }
         if self.tab().is_none() {
             return self.empty_pane_mouse(ev.kind, pos, areas.pane, area);
         }
@@ -331,6 +349,7 @@ impl App {
             Some(Drag::Footer(pane)) => self.drag_footer(pane, ev, areas.pane),
             Some(Drag::Row(drag)) => self.drag_row(drag, ev, areas, area),
             Some(Drag::Text(field)) => self.drag_field(field, ev, area),
+            Some(Drag::Remote(drag)) => self.drag_remote(drag, ev, areas.pane),
             Some(Drag::Link(_)) | None => return false,
         }
         true
@@ -438,7 +457,7 @@ impl App {
             self.overlay_paste(text, area);
             return;
         }
-        if self.typing_paste(text, area) || self.holds_input() {
+        if self.typing_paste(text, area) || self.machine_paste(text) || self.holds_input() {
             return;
         }
         if let Some(term) = self.term_mut() {
@@ -472,6 +491,8 @@ impl App {
             Some(Overlay::Issues(b)) => b.paste(text),
             Some(Overlay::Settings(s)) => s.paste(text),
             Some(Overlay::ShareSettings(_)) => self.share_settings_paste(text, area),
+            Some(Overlay::Machine(_)) => self.machine_form_paste(text, area),
+            Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_paste(text, area),
             Some(Overlay::Flows { .. }) => self.flows_paste(text, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_paste(text, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
@@ -496,8 +517,8 @@ impl App {
             return true;
         }
         if self.filtering() {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| self.panels.changes.push_filter(c));
-            self.panels.changes.scroll_to_top();
+            text.chars().filter(|c| !c.is_control()).for_each(|c| self.changes_state_mut().push_filter(c));
+            self.changes_state_mut().scroll_to_top();
             return true;
         }
         false

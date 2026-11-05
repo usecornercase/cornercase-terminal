@@ -77,6 +77,7 @@ pub(crate) fn takes_view(command: &Command) -> bool {
         Command::Status(_)
             | Command::Focus(_)
             | Command::Open(_)
+            | Command::Clone(_)
             | Command::NewWorkspace(_)
             | Command::NewTab(_)
             | Command::Split(_)

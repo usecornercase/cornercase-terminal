@@ -36,6 +36,7 @@ fn sample(light: bool) -> View<'static> {
             removing: false,
             setting_up: false,
             closed: 0,
+            machine: None,
         }],
         active_tab: Some(0),
         light,
