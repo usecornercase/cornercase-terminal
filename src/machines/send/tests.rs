@@ -99,6 +99,11 @@ mod a_send {
     #[case::accounts(Send::AccountList, json!({"command": "account-list", "args": {"check": true}}))]
     #[case::issue_sources(Send::IssueSources(4), json!({"command": "issue-sources", "args": {"project": 4}}))]
     #[case::flows(Send::FlowList(4), json!({"command": "flow-list", "args": {"project": 4}}))]
+    #[case::collapse(
+        Send::Fold { pane: 12, collapse: true },
+        json!({"command": "collapse", "args": {"item": {"pane": 12}}}),
+    )]
+    #[case::expand(Send::Fold { pane: 12, collapse: false }, json!({"command": "expand", "args": {"item": {"pane": 12}}}))]
     fn asks_for_what_the_machine_has_there(#[case] send: Send, #[case] asked: Value) {
         assert_eq!(sent(send), asked);
     }
@@ -117,6 +122,8 @@ mod a_send {
     #[case::issue_sources(Send::IssueSources(4), "issue-sources", QUICK)]
     #[case::flows(Send::FlowList(4), "flow-list", QUICK)]
     #[case::accounts(Send::AccountList, "account-list", CHECK)]
+    #[case::collapse(Send::Fold { pane: 12, collapse: true }, "collapse", QUICK)]
+    #[case::expand(Send::Fold { pane: 12, collapse: false }, "expand", QUICK)]
     #[case::clone(Send::Clone(clone_with(Vec::new())), "clone", CLONE)]
     fn waits_as_long_as_its_work_takes(#[case] send: Send, #[case] verb: &str, #[case] timeout: Duration) {
         assert_eq!((send.verb(), send.timeout()), (verb, timeout));
@@ -133,6 +140,7 @@ mod a_send {
     #[case::accounts(Send::AccountList, false)]
     #[case::issue_sources(Send::IssueSources(4), false)]
     #[case::flows(Send::FlowList(4), false)]
+    #[case::fold(Send::Fold { pane: 12, collapse: true }, false)]
     fn says_whether_the_window_follows_it(#[case] send: Send, #[case] focus: bool) {
         assert_eq!(send.focus(), focus);
     }
@@ -145,8 +153,17 @@ mod a_send {
     #[case::flows(Send::FlowList(6), Some(6))]
     #[case::accounts(Send::AccountList, None)]
     #[case::clone(Send::Clone(clone_with(Vec::new())), None)]
+    #[case::fold(Send::Fold { pane: 12, collapse: true }, None)]
     fn names_the_project_of_the_machine_it_works_on(#[case] send: Send, #[case] project: Option<u64>) {
         assert_eq!(send.project(), project);
+    }
+
+    #[rstest]
+    #[case::start(Send::Start(start()), Some(("project", 4)))]
+    #[case::fold(Send::Fold { pane: 12, collapse: false }, Some(("pane", 12)))]
+    #[case::clone(Send::Clone(clone_with(Vec::new())), None)]
+    fn logs_what_it_works_on_there(#[case] send: Send, #[case] about: Option<(&str, u64)>) {
+        assert_eq!(send.about(), about);
     }
 }
 

@@ -1,6 +1,7 @@
 use ratatui::layout::{Position, Rect};
 
 use super::RemoteItem;
+use super::agents::PaneAim;
 use super::column::Column;
 use super::rows::{RemoteProject, unpaired};
 use crate::app::App;
@@ -13,18 +14,22 @@ pub(in crate::app) enum RemoteAt {
     Project { link: u64, id: u64 },
     Workspace { link: u64, id: u64 },
     Tab { link: u64, workspace: u64, id: u64 },
+    Agent { workspace: u64, tab: u64, aim: PaneAim },
 }
 
 impl RemoteAt {
     fn link(self) -> u64 {
         match self {
             Self::Project { link, .. } | Self::Workspace { link, .. } | Self::Tab { link, .. } => link,
+            Self::Agent { aim, .. } => aim.link,
         }
     }
 
     fn workspace(self) -> Option<u64> {
         match self {
-            Self::Workspace { id, .. } | Self::Tab { workspace: id, .. } => Some(id),
+            Self::Workspace { id, .. } | Self::Tab { workspace: id, .. } | Self::Agent { workspace: id, .. } => {
+                Some(id)
+            }
             Self::Project { .. } => None,
         }
     }
@@ -207,13 +212,20 @@ impl App {
                 RemoteItem::Workspace(project.workspaces.first()?.id)
             }
             RemoteAt::Workspace { id, .. } => RemoteItem::Workspace(id),
-            RemoteAt::Tab { id, .. } => RemoteItem::Tab(id),
+            RemoteAt::Tab { id, .. } | RemoteAt::Agent { tab: id, .. } => RemoteItem::Tab(id),
         };
         Some((held.name.clone(), item))
     }
 
     pub(in crate::app) fn fold_remote(&mut self, at: RemoteAt) {
-        let RemoteAt::Workspace { link, id } = at else { return };
+        match at {
+            RemoteAt::Workspace { link, id } => self.fold_remote_workspace(link, id),
+            RemoteAt::Agent { aim, .. } => self.send_agent_fold(aim),
+            RemoteAt::Project { .. } | RemoteAt::Tab { .. } => {}
+        }
+    }
+
+    fn fold_remote_workspace(&mut self, link: u64, id: u64) {
         let remote = self.remote_projects();
         let theirs = remote.iter().filter(|r| r.link == link);
         let mut workspaces = theirs.flat_map(|r| r.project.workspaces.iter().map(move |w| (r, w)));

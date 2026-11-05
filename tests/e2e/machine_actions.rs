@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::machines::{VPS, in_state, reach, start_listing, wait_for_machine};
+use super::machines::{VPS, in_state, reach, start_listing, status, wait_for_machine};
 use super::*;
 
 const HIGH: u16 = 40;
@@ -138,4 +138,73 @@ fn a_machine_s_workspace_is_renamed_there_from_its_menu() {
     wait_until("the machine has the new name", || names(&linked.machine).iter().any(|n| n == "docs"));
     wait_until("the row shows it here", || linked.row("docs").is_some());
     linked.until_gone("notes");
+}
+
+fn claude_with_a_child(machine: &Session) -> u64 {
+    let sessions = machine.claude_dir().join("sessions");
+    std::fs::create_dir_all(&sessions).expect("create the sessions folder");
+    let claude = temp_dir("claude-with-a-child").join("claude");
+    write_executable(
+        &claude,
+        "#!/bin/sh\nprintf '{\"pid\":%s,\"status\":\"waiting\"}' $$ > \"$1/$$.json\"\n\
+         if [ -n \"$2\" ]; then \"$2\" new-tab -- \"$0 $1\"; fi\nread answer\n",
+    );
+    let repo = repository(&machine.dir, "api").display().to_string();
+    let project: u64 = machine.says(&["open", &repo]).parse().expect("a project id");
+    let projects = status(machine)["projects"].clone();
+    let opened = projects.as_array().and_then(|list| list.iter().find(|p| p["id"] == project));
+    let workspace = opened.expect("the opened project")["workspaces"][0]["id"].to_string();
+    let command = format!("{} {} {}", claude.display(), sessions.display(), bin());
+    machine.says(&["new-tab", "--workspace", &workspace, "--", &command]);
+    let mut parent = None;
+    wait_until("claude and its child work there", || {
+        let agents = agents_of(machine);
+        parent = agents.iter().find_map(|pane| pane["parent"].as_u64());
+        agents.len() == 2 && parent.is_some()
+    });
+    parent.expect("the parent")
+}
+
+fn agents_of(machine: &Session) -> Vec<Value> {
+    let status = status(machine);
+    let workspaces = status["projects"].as_array().into_iter().flatten().filter_map(|p| p["workspaces"].as_array());
+    let panes =
+        workspaces.flatten().filter_map(|w| w["tabs"].as_array()).flatten().filter_map(|t| t["panes"].as_array());
+    panes.flatten().filter(|pane| pane["agent"] == "claude").cloned().collect()
+}
+
+fn folded(machine: &Session, pane: u64) -> Option<bool> {
+    let agents = agents_of(machine);
+    let found = agents.iter().find(|agent| agent["id"] == pane)?;
+    Some(found["collapsed"].as_bool().unwrap_or(false))
+}
+
+fn arrow(app: &Harness, fold: char) -> Option<Position> {
+    (0..HIGH).find_map(|y| {
+        let row = app.row(y);
+        let x = row.contains("☁ vps").then(|| row.chars().position(|c| c == fold)).flatten()?;
+        Some(Position::new(u16::try_from(x).ok()?, y))
+    })
+}
+
+#[test]
+fn a_machine_s_agent_is_folded_there_from_its_arrow_in_the_agents_section() {
+    let machine = Session::new();
+    assert!(machine.cold(&["start-server"]).status.success(), "the server there starts");
+    let here = Session::new();
+    start_listing(&here, &[(VPS, VPS)], &[(VPS, &reach(&machine))], json!({"agents_section": true}));
+    wait_for_machine(&here, VPS, "the machine is linked", in_state("linked"));
+    let parent = claude_with_a_child(&machine);
+    let mut app = Harness::open(Arc::clone(&here), HIGH, COLS);
+    wait_until("its row shows its arrow here", || arrow(&app, '▾').is_some());
+
+    app.click(arrow(&app, '▾').expect("the open arrow"));
+
+    wait_until("the machine folds it", || folded(&machine, parent) == Some(true));
+    wait_until("the row shows it folded here", || arrow(&app, '▸').is_some());
+    here.wait_for_file("server.log", "the relay is logged", |log| log.contains("verb=collapse"));
+    app.click(arrow(&app, '▸').expect("the folded arrow"));
+    wait_until("the machine unfolds it", || folded(&machine, parent) == Some(false));
+    wait_until("the row shows it open here", || arrow(&app, '▾').is_some());
+    assert!(!app.text().contains("could not"), "{}", app.text());
 }
