@@ -141,6 +141,10 @@ pub(crate) fn use_machine_start() -> Result<()> {
     require("machine-start", "cannot start agents, workspaces or flows on another machine")
 }
 
+pub(crate) fn use_placed_start() -> Result<()> {
+    require("machine-start", "cannot answer a start as soon as its tab is open")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     if shared::active() {
         return shared::require(feature, lacks);

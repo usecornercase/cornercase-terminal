@@ -529,6 +529,7 @@ mod focus;
 mod known_agents;
 mod on_a_machine;
 mod output;
+mod placed;
 mod terminal;
 
 mod reading_capped {

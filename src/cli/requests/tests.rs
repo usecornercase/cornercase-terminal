@@ -200,8 +200,13 @@ mod streams {
     use crate::os::socket::UnixStream;
     use crate::protocol::{self, ClientMessage, ServerMessage};
 
-    fn fake_server(mut stream: UnixStream) -> thread::JoinHandle<Vec<String>> {
-        let features = control::contract::describe("boot", &[]);
+    fn fake_server(stream: UnixStream) -> thread::JoinHandle<Vec<String>> {
+        fake_server_lacking(stream, "")
+    }
+
+    fn fake_server_lacking(mut stream: UnixStream, feature: &str) -> thread::JoinHandle<Vec<String>> {
+        let mut features = control::contract::describe("boot", &[]);
+        features.features.retain(|offered| offered != feature);
         thread::spawn(move || {
             let mut seen = Vec::new();
             while let Ok(Some(ClientMessage::Request(text))) = protocol::recv::<ClientMessage>(&mut stream) {
@@ -251,5 +256,48 @@ mod streams {
         let error = answer.error.expect("an error");
         assert!(error.contains("connection of its own"), "{error}");
         assert!(seen.iter().all(|text| text.contains("\"contract\"")), "{seen:?}");
+    }
+
+    const PLACED: &str = r#"{"args": ["start", "claude", "--placed", "--json"]}"#;
+    const PLAIN: &str = r#"{"args": ["start", "claude", "--json"]}"#;
+
+    fn answered_lacking(feature: &str, line: &str) -> (Answer, Vec<String>) {
+        let (ours, theirs) = UnixStream::pair().expect("a socket pair");
+        let server = fake_server_lacking(theirs, feature);
+        client::share_socket(ours);
+
+        let answer = answer_of(line).expect("an answer");
+
+        client::unshare();
+        (answer, server.join().expect("the fake server"))
+    }
+
+    #[test]
+    fn a_placed_start_checks_the_server_then_sends_the_field() {
+        let (answer, seen) = answered_lacking("", PLACED);
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let [asked, start] = &seen[..] else { panic!("not a check and a start: {seen:?}") };
+        assert!(asked.contains("\"contract\"") && start.contains("\"placed\":true"), "{seen:?}");
+    }
+
+    #[test]
+    fn a_placed_start_is_refused_before_it_is_sent_when_the_server_would_drop_the_field() {
+        let (answer, seen) = answered_lacking("machine-start", PLACED);
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("cannot answer a start as soon as its tab is open"), "{error}");
+        let [asked] = &seen[..] else { panic!("not only the check: {seen:?}") };
+        assert!(asked.contains("\"contract\""), "{seen:?}");
+    }
+
+    #[test]
+    fn a_plain_start_needs_no_check_and_sends_no_field() {
+        let (answer, seen) = answered_lacking("machine-start", PLAIN);
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let [start] = &seen[..] else { panic!("not only the start: {seen:?}") };
+        assert!(start.contains("\"start\"") && !start.contains("placed"), "{seen:?}");
     }
 }

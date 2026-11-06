@@ -38,10 +38,18 @@ are the machine's own. --wait, --until and --timeout are refused: follow the age
 `cornercase --remote`. --focus shows its tab in this window once the machine lists it. It needs a
 server that knows the `machine-start` feature.
 
+With --placed the command answers as soon as the tab is open, after its worktree is made or its
+issue read, with the same ids, and the launch goes on, here or on a machine, as the window's dialogs
+do: a trust question then waits in the tab, not in this command, and the prompt follows its answer.
+It is for a program that shows the new tab itself, and it can no longer say that the agent never
+showed up. --wait, --until and --timeout are refused, since nothing is waited for. It needs a server
+that knows the `machine-start` feature, which came with it.
+
 Examples:
   cornercase start claude --issue '#482'
   cornercase start codex --issue ENG-42 --project 3
   cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
   cornercase start codex --prompt-file task.md --wait --timeout 1800
   cornercase start claude --mode plan --model opus --prompt 'Plan the login rework'
-  cornercase start claude --issue '#482' --project 2 --machine vps --focus";
+  cornercase start claude --issue '#482' --project 2 --machine vps --focus
+  cornercase start claude --issue '#482' --project 2 --machine vps --placed --json";

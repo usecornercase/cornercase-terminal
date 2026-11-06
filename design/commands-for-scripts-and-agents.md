@@ -49,7 +49,7 @@ Code: `cli.rs`, `cli/`, `cli/requests.rs`, `cli/line.rs`, `client/requests.rs`, 
 
 ## Topics
 
-- [Typing, starting and waiting](commands-for-scripts-and-agents/typing-and-waiting.md): launches; A model and a mode per call; waits; `--until shell`; Turn over with a background shell; a waiting agent refuses `send`.
+- [Typing, starting and waiting](commands-for-scripts-and-agents/typing-and-waiting.md): launches; `placed` and `start --placed`; A model and a mode per call; waits; `--until shell`; Turn over with a background shell; a waiting agent refuses `send`.
 - [Dialogs, the survey and confirming a prompt was taken](commands-for-scripts-and-agents/confirming-sends.md): #128: a dialog over the input box, confirming from the agent's record; #143: Claude Code's feedback survey.
 - [`send` waits for the person typing](commands-for-scripts-and-agents/held-sends.md): #371: drafts, the hold, the gap before Enter, the bar on the pane, scripts.
 - [Gemini, Cursor and Copilot sends, and `todo send`](commands-for-scripts-and-agents/agent-sends.md): Gemini sends; Cursor sends; Copilot sends; Gemini's input box and last message; `todo send ID`.

@@ -589,6 +589,13 @@ fn machine(on: args::machine::MachineArg) -> Result<Option<String>> {
     Ok(on.machine)
 }
 
+fn placed(asked: bool) -> Result<bool> {
+    if asked {
+        client::use_placed_start()?;
+    }
+    Ok(asked)
+}
+
 fn unwaited(start: &StartArgs) -> Result<()> {
     let waits = start.wait || start.until.is_some() || start.timeout.is_some();
     if waits && start.on.machine.is_some() {
@@ -624,7 +631,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         profile,
         accounts,
         machine: machine(start.on)?,
-        placed: false,
+        placed: placed(start.placed)?,
     };
     let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
     say(ask(name, command)?, start.create.print.json, |done| {
