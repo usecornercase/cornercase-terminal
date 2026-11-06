@@ -6,8 +6,8 @@ use super::act::{self, CHECK, QUICK, REMOVE as WORKTREE};
 use super::run_on;
 use crate::control::contract::Refusal;
 use crate::control::{
-    AccountList, CloneFile, CloneRepository, Command, FlowList, FlowRun, IssueSources, NewTab, NewWorkspace, Start,
-    Until,
+    AccountList, CloneFile, CloneRepository, Command, FlowList, FlowRun, Fold, IssueSources, Item, NewTab,
+    NewWorkspace, Start, Until,
 };
 use crate::log::Job;
 
@@ -27,6 +27,11 @@ pub(crate) enum Send {
     AccountList,
     IssueSources(u64),
     FlowList(u64),
+    Fold { pane: u64, collapse: bool },
+}
+
+pub(crate) fn folding(collapse: bool) -> &'static str {
+    if collapse { "collapse" } else { "expand" }
 }
 
 impl Send {
@@ -41,6 +46,8 @@ impl Send {
             Self::AccountList => Command::AccountList(AccountList { check: true }),
             Self::IssueSources(project) => Command::IssueSources(IssueSources { project: Some(project) }),
             Self::FlowList(project) => Command::FlowList(FlowList { project: Some(project) }),
+            Self::Fold { pane, collapse: true } => Command::Collapse(Fold { item: Item::Pane(pane) }),
+            Self::Fold { pane, collapse: false } => Command::Expand(Fold { item: Item::Pane(pane) }),
         }
     }
 
@@ -62,6 +69,7 @@ impl Send {
             Self::AccountList => "account-list",
             Self::IssueSources(_) => "issue-sources",
             Self::FlowList(_) => "flow-list",
+            Self::Fold { collapse, .. } => folding(*collapse),
         }
     }
 
@@ -69,7 +77,9 @@ impl Send {
         match self {
             Self::Start(_) | Self::StartWith(_) | Self::FlowRun(_) => WORKTREE,
             Self::NewWorkspace(new) if new.worktree => WORKTREE,
-            Self::NewWorkspace(_) | Self::NewTab(_) | Self::IssueSources(_) | Self::FlowList(_) => QUICK,
+            Self::NewWorkspace(_) | Self::NewTab(_) | Self::IssueSources(_) | Self::FlowList(_) | Self::Fold { .. } => {
+                QUICK
+            }
             Self::AccountList => CHECK,
             Self::Clone(_) => CLONE,
         }
@@ -82,13 +92,13 @@ impl Send {
             Self::FlowRun(run) => run.focus,
             Self::NewTab(tab) => tab.focus,
             Self::Clone(clone) => clone.focus,
-            Self::AccountList | Self::IssueSources(_) | Self::FlowList(_) => false,
+            Self::AccountList | Self::IssueSources(_) | Self::FlowList(_) | Self::Fold { .. } => false,
         }
     }
 
     pub(crate) fn logged(&self, job: Job) -> Job {
-        let job = match self.project() {
-            Some(project) => job.with("project", project),
+        let job = match self.about() {
+            Some((key, id)) => job.with(key, id),
             None => job,
         };
         match self {
@@ -100,13 +110,20 @@ impl Send {
         }
     }
 
+    fn about(&self) -> Option<(&'static str, u64)> {
+        match self {
+            Self::Fold { pane, .. } => Some(("pane", *pane)),
+            _ => self.project().map(|project| ("project", project)),
+        }
+    }
+
     fn project(&self) -> Option<u64> {
         match self {
             Self::Start(start) | Self::StartWith(start) => start.project,
             Self::NewWorkspace(new) => new.project,
             Self::FlowRun(run) => run.project,
             Self::IssueSources(project) | Self::FlowList(project) => Some(*project),
-            Self::NewTab(_) | Self::Clone(_) | Self::AccountList => None,
+            Self::NewTab(_) | Self::Clone(_) | Self::AccountList | Self::Fold { .. } => None,
         }
     }
 }

@@ -16,6 +16,8 @@ is back, it takes no input and `cornercase send` refuses it (`resuming` in the J
 `(collapsed)` is an agent whose children are hidden in the agents section (`collapsed` in the JSON).
 `Opus 5.5 · compacted` is an agent whose conversation was just compacted: its context is empty
 until its next reply and comes back then (`compacted` in the JSON, there only while true).
+The JSON also names the conversation a pane's agent is in (`conversation`, the id `places` gives in
+`cornercase recap --json`), null until the agent has one and always for opencode.
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
@@ -44,9 +46,11 @@ With --app it prints, as JSON, what is outside the session: `todos` (as `todo li
 (the entries of `queue list --json`), `away` (one row per chat app: `platform`, `ready`, `away`),
 `update` (the release found and its notes, why there is none, whether a check or an install runs,
 and how installing works here) and `keep_awake` (null while the setting is off), with the server's
-`version` and `boot`. With --follow it keeps running and prints one such line first and again each
-time one of them changes, each with a `revision` that grows by one per line, built at most twice a
-second while someone follows; rules for ending and for slow readers are --follow's.
+`version` and `boot`. `accounts_revision` moves each time `account list` would name other accounts,
+and is left out until it first does, so a client lists them again only when it moves. With --follow
+it keeps running and prints one such line first and again each time one of them changes, each with
+a `revision` that grows by one per line, built at most twice a second while someone follows; rules
+for ending and for slow readers are --follow's.
 
 Examples:
   cornercase status

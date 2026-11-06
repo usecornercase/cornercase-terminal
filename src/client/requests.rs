@@ -137,6 +137,10 @@ pub(crate) fn use_machine_usage() -> Result<()> {
     require("machine-usage", "cannot read the stats and usage of other machines")
 }
 
+pub(crate) fn use_stats_cached() -> Result<()> {
+    require("stats-cached", "cannot read a machine's last stats without asking it")
+}
+
 pub(crate) fn use_machine_start() -> Result<()> {
     require("machine-start", "cannot start agents, workspaces or flows on another machine")
 }
