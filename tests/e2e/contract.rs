@@ -36,7 +36,7 @@ fn assert_header(contract: &Value, session: &Session) {
     assert_eq!(contract["boot"].as_str(), Some(boot(session).as_str()));
 }
 
-const OPERATIONS: [&str; 42] = [
+const OPERATIONS: &[&str] = &[
     "contract",
     "start-server",
     "surface",

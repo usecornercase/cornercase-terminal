@@ -451,7 +451,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 119] = [
+    pub(crate) const NAMES: &[&str] = &[
         "status",
         "open",
         "new-workspace",

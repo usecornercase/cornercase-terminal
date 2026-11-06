@@ -2,8 +2,10 @@ pub(crate) mod accounts;
 pub(crate) mod agents;
 pub(crate) mod arrange;
 pub(crate) mod changes;
+pub(crate) mod close;
 pub(crate) mod config;
 pub(crate) mod context;
+pub(crate) mod create;
 pub(crate) mod files;
 pub(crate) mod flow;
 pub(crate) mod issue;
@@ -16,6 +18,9 @@ pub(crate) mod pull_request;
 pub(crate) mod queue;
 pub(crate) mod recap;
 pub(crate) mod requests;
+pub(crate) mod server;
+pub(crate) mod start;
+pub(crate) mod stats;
 pub(crate) mod terminal;
 pub(crate) mod theme;
 pub(crate) mod todo;
@@ -24,20 +29,18 @@ pub(crate) mod usage;
 pub(crate) mod view;
 pub(crate) mod worktrees;
 
-use std::path::PathBuf;
-
 use clap::builder::NonEmptyStringValueParser;
-use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, COMMAND_THERE, CONFIG_HELP,
-    CONTRACT_HELP, EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE,
-    INPUT_HELP, ISSUE_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP,
-    MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, PROFILE_HELP,
-    RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_ARG, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP,
-    RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
-    START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP,
-    USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, CLOSE_HELP, COMMAND_HELP, COMMAND_THERE, CONFIG_HELP, CONTRACT_HELP,
+    EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, INPUT_HELP, ISSUE_HELP, KEY_NAMES,
+    KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP,
+    NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, PROFILE_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP,
+    REMOTE_ARG, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP,
+    SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP,
+    TOUR_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE,
+    WAIT_TAB,
 };
 use super::help::{
     AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
@@ -47,8 +50,13 @@ use super::help::{CLONE_HELP, MACHINES_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
+pub(crate) use close::{CloseArgs, RenameArgs, Renamed, Which};
+pub(crate) use create::{CloneArgs, Create, NewTabArgs, NewWorkspaceArgs, OpenArgs, SplitArgs};
 pub(crate) use flow::*;
 pub(crate) use plugin::{PluginAction, PluginArgs};
+pub(crate) use server::{KillServerArgs, LogsArgs, RemoteArgs, RestartArgs, StartServerArgs, UpdateArgs, WhenArgs};
+pub(crate) use start::StartArgs;
+pub(crate) use stats::StatsArgs;
 
 #[derive(Debug, Parser)]
 #[command(name = "cornercase", version, about = ABOUT, long_about = LONG_ABOUT, after_help = AFTER_HELP)]
@@ -376,16 +384,6 @@ pub(crate) struct StatusArgs {
 }
 
 #[derive(Debug, Args)]
-pub(crate) struct Create {
-    #[arg(long, help = "Also show it in the window, or in the view with --view, which otherwise stay as they are")]
-    pub(crate) focus: bool,
-    #[command(flatten)]
-    pub(crate) view: ViewArg,
-    #[command(flatten)]
-    pub(crate) print: Print,
-}
-
-#[derive(Debug, Args)]
 pub(crate) struct Target {
     #[arg(long, value_name = "ID", help = HERE_PANE)]
     pub(crate) pane: Option<u64>,
@@ -393,135 +391,6 @@ pub(crate) struct Target {
     pub(crate) tab: Option<u64>,
     #[command(flatten)]
     pub(crate) view: ViewArg,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct OpenArgs {
-    #[arg(value_name = "PATH", help = "The folder")]
-    pub(crate) path: PathBuf,
-    #[command(flatten)]
-    pub(crate) create: Create,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct CloneArgs {
-    #[arg(value_name = "URL", value_parser = NonEmptyStringValueParser::new(), help = "The repository, as `git clone` takes it")]
-    pub(crate) url: String,
-    #[arg(
-        value_name = "FOLDER",
-        help = "The folder the clone goes in, as a new folder named after the repository [default: the current one; \
-                with --remote, the home folder there]"
-    )]
-    pub(crate) folder: Option<PathBuf>,
-    #[command(flatten)]
-    pub(crate) create: Create,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct NewWorkspaceArgs {
-    #[arg(value_name = "NAME", help = "Its name, or its branch with --worktree")]
-    pub(crate) name: String,
-    #[arg(long, value_name = "ID", help = "The project [default: the one this runs in, else the shown one]")]
-    pub(crate) project: Option<u64>,
-    #[arg(long, help = "Check the branch out in a git worktree of its own, at a repository's root only")]
-    pub(crate) worktree: bool,
-    #[command(flatten)]
-    pub(crate) on: machine::MachineArg,
-    #[command(flatten)]
-    pub(crate) create: Create,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct NewTabArgs {
-    #[arg(long, value_name = "ID", help = HERE_WORKSPACE)]
-    pub(crate) workspace: Option<u64>,
-    #[arg(long, value_name = "BRANCH", value_parser = branch, conflicts_with = "workspace", help = BY_BRANCH)]
-    pub(crate) worktree: Option<String>,
-    #[arg(long, help = "The tab's name [default: the name of the program it runs]")]
-    pub(crate) name: Option<String>,
-    #[command(flatten)]
-    pub(crate) profile: accounts::ProfileArg,
-    #[command(flatten)]
-    pub(crate) create: Create,
-    #[arg(last = true, value_name = "COMMAND", help = "What to type into its shell")]
-    pub(crate) command: Vec<String>,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct SplitArgs {
-    #[arg(long, value_name = "ID", help = HERE_PANE)]
-    pub(crate) pane: Option<u64>,
-    #[arg(long, help = "Split it down instead of right")]
-    pub(crate) down: bool,
-    #[command(flatten)]
-    pub(crate) create: Create,
-    #[arg(last = true, value_name = "COMMAND", help = "What to type into the new shell")]
-    pub(crate) command: Vec<String>,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct StartArgs {
-    #[arg(
-        value_name = "AGENT",
-        help = "The agent, such as claude or codex [default: the one chosen in settings → agents, else the one \
-                running here]"
-    )]
-    pub(crate) agent: Option<String>,
-    #[arg(long, value_name = "MODEL", help = "The model, such as opus or gpt-5.5 [default: the agent's own]")]
-    pub(crate) model: Option<String>,
-    #[arg(
-        long,
-        value_name = "NAME",
-        help = "One of the agent's modes, as settings → agents lists them, such as plan [default: the one chosen there]"
-    )]
-    pub(crate) mode: Option<String>,
-    #[arg(
-        long,
-        value_name = "LEVEL",
-        help = "The agent's effort, such as high: Claude Code, Codex, Grok Build and GitHub Copilot CLI take one [default: the agent's own]"
-    )]
-    pub(crate) effort: Option<String>,
-    #[arg(
-        long,
-        value_name = "BRANCH",
-        conflicts_with = "workspace",
-        help = "Start it in the worktree of this branch, made when missing"
-    )]
-    pub(crate) worktree: Option<String>,
-    #[arg(long, value_name = "ID", help = HERE_WORKSPACE)]
-    pub(crate) workspace: Option<u64>,
-    #[arg(
-        long,
-        value_name = "ID",
-        conflicts_with = "workspace",
-        help = "The project: a new tab in its folder, or where --worktree or --issue makes the worktree [default: the one this runs in, else the shown one]"
-    )]
-    pub(crate) project: Option<u64>,
-    #[arg(long, help = "The tab's name [default: the agent's]")]
-    pub(crate) name: Option<String>,
-    #[arg(long, value_name = "TEXT", conflicts_with_all = ["prompt_file", "issue"], help = "What to ask it")]
-    pub(crate) prompt: Option<String>,
-    #[arg(
-        long,
-        value_name = "FILE",
-        conflicts_with = "issue",
-        help = "Read the prompt from a file, or from standard input with -"
-    )]
-    pub(crate) prompt_file: Option<PathBuf>,
-    #[arg(long, help = "Then wait until the agent stops working, and print how it ended")]
-    pub(crate) wait: bool,
-    #[arg(long, value_enum, requires = "wait", help = UNTIL_AFTER)]
-    pub(crate) until: Option<UntilArg>,
-    #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Give up after this long, with status 1")]
-    pub(crate) timeout: Option<f64>,
-    #[command(flatten)]
-    pub(crate) issue: issue::IssueArg,
-    #[command(flatten)]
-    pub(crate) profile: accounts::ProfileArg,
-    #[command(flatten)]
-    pub(crate) on: machine::MachineArg,
-    #[command(flatten)]
-    pub(crate) create: Create,
 }
 
 #[derive(Debug, Args)]
@@ -652,67 +521,6 @@ pub(crate) struct WaitArgs {
 }
 
 #[derive(Debug, Args)]
-#[group(required = true, multiple = false)]
-pub(crate) struct Which {
-    #[arg(long, value_name = "ID", help = "A pane")]
-    pub(crate) pane: Option<u64>,
-    #[arg(long, value_name = "ID", help = "A tab and its panes")]
-    pub(crate) tab: Option<u64>,
-    #[arg(long, value_name = "ID", help = "A workspace and its tabs")]
-    pub(crate) workspace: Option<u64>,
-    #[arg(long, value_name = "BRANCH", value_parser = branch, help = BY_BRANCH)]
-    pub(crate) worktree: Option<String>,
-    #[arg(long, value_name = "ID", help = "A project and its workspaces")]
-    pub(crate) project: Option<u64>,
-}
-
-#[derive(Debug, Args)]
-#[command(
-    group(ArgGroup::new("removing").multiple(false).args(["remove_worktree", "agent"])),
-    group(ArgGroup::new("printing").multiple(true).args(["check", "agent"]))
-)]
-#[expect(clippy::struct_excessive_bools, reason = "each flag is its own option of close")]
-pub(crate) struct CloseArgs {
-    #[command(flatten)]
-    pub(crate) which: Which,
-    #[arg(
-        long,
-        conflicts_with_all = ["pane", "tab", "project"],
-        help = "Also remove the workspace's git worktree from disk"
-    )]
-    pub(crate) remove_worktree: bool,
-    #[arg(
-        long,
-        conflicts_with_all = ["tab", "workspace", "worktree", "project"],
-        help = "Close the agent in --pane with what it started there, as its close agent in the window does; nothing is removed from disk"
-    )]
-    pub(crate) agent: bool,
-    #[arg(
-        long,
-        requires = "remove_worktree",
-        conflicts_with = "agent",
-        help = "Remove it even when git would lose changes"
-    )]
-    pub(crate) force: bool,
-    #[arg(
-        long,
-        requires = "remove_worktree",
-        conflicts_with = "agent",
-        help = "Unlock a locked worktree first, as the window's unlock and remove does; changes still need --force"
-    )]
-    pub(crate) unlock: bool,
-    #[arg(
-        long,
-        requires = "removing",
-        conflicts_with_all = ["force", "unlock"],
-        help = "Only say what removing it would lose, or with --agent what would close, as the window's dialog does; nothing stops"
-    )]
-    pub(crate) check: bool,
-    #[arg(long, requires = "printing", help = "Print the check, or with --agent what was closed, as JSON")]
-    pub(crate) json: bool,
-}
-
-#[derive(Debug, Args)]
 pub(crate) struct GoArgs {
     #[arg(value_name = "TOKEN", help = "The notice's token, from `cornercase events --notices`")]
     pub(crate) token: String,
@@ -751,36 +559,6 @@ pub(crate) struct FocusArgs {
     pub(crate) line: Option<usize>,
     #[command(flatten)]
     pub(crate) print: Print,
-}
-
-#[derive(Debug, Args)]
-#[group(multiple = false)]
-pub(crate) struct Renamed {
-    #[arg(long, value_name = "ID", help = "The tab [default: the one this runs in, else the shown one]")]
-    pub(crate) tab: Option<u64>,
-    #[arg(long, value_name = "ID", help = "Rename this workspace instead")]
-    pub(crate) workspace: Option<u64>,
-    #[arg(
-        long,
-        value_name = "BRANCH",
-        value_parser = branch,
-        help = "Rename the workspace on this branch instead, looked up in the project this runs in, else the shown one"
-    )]
-    pub(crate) worktree: Option<String>,
-    #[arg(long, value_name = "ID", help = "Rename this project instead")]
-    pub(crate) project: Option<u64>,
-    #[arg(long, value_name = "ID", help = "Rename this group instead")]
-    pub(crate) group: Option<u64>,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct RenameArgs {
-    #[command(flatten)]
-    pub(crate) renamed: Renamed,
-    #[command(flatten)]
-    pub(crate) view: ViewArg,
-    #[arg(value_name = "NAME", help = "The new name; an empty one goes back to the default")]
-    pub(crate) name: String,
 }
 
 #[derive(Debug, Args)]
@@ -882,76 +660,6 @@ pub(crate) struct EventsArgs {
     pub(crate) json: bool,
 }
 
-#[derive(Debug, Args)]
-pub(crate) struct RemoteArgs {
-    #[arg(value_name = "DESTINATION", help = "Where ssh connects: a host from ~/.ssh/config, or user@host")]
-    pub(crate) destination: String,
-    #[arg(long, value_name = "COMMAND", help = COMMAND_THERE)]
-    pub(crate) command: Option<String>,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct LogsArgs {
-    #[arg(short = 'n', long, value_name = "N", default_value_t = 200, help = "How many of the last lines to print")]
-    pub(crate) lines: usize,
-    #[arg(short, long, help = "Keep printing what the server writes, until interrupted")]
-    pub(crate) follow: bool,
-    #[arg(long, conflicts_with_all = ["lines", "follow"], help = "Print only where the log is")]
-    pub(crate) path: bool,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct StartServerArgs {
-    #[arg(
-        long,
-        value_name = "N",
-        help = "Columns of the terminals until a window attaches, 90 to 1000 [default: 160]"
-    )]
-    pub(crate) cols: Option<u16>,
-    #[arg(long, value_name = "N", help = "Rows of the terminals until a window attaches, 10 to 500 [default: 48]")]
-    pub(crate) rows: Option<u16>,
-    #[arg(
-        long,
-        value_name = "FILE",
-        help = "Colours programs in the terminals see: a JSON file, or - for standard input (see `cornercase theme`)"
-    )]
-    pub(crate) theme: Option<String>,
-    #[command(flatten)]
-    pub(crate) print: Print,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct KillServerArgs {
-    #[arg(short, long, help = "Stop the server without asking, even if this terminal is one of its own")]
-    pub(crate) yes: bool,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct RestartArgs {
-    #[arg(short, long, help = "Restart the server without asking")]
-    pub(crate) yes: bool,
-    #[command(flatten)]
-    pub(crate) when: WhenArgs,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct UpdateArgs {
-    #[arg(long, conflicts_with = "when_idle", help = "Only say whether a newer version is out")]
-    pub(crate) check: bool,
-    #[arg(short, long, help = "Restart the server without asking")]
-    pub(crate) yes: bool,
-    #[command(flatten)]
-    pub(crate) when: WhenArgs,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct WhenArgs {
-    #[arg(long, help = WHEN_IDLE)]
-    pub(crate) when_idle: bool,
-    #[arg(long, value_name = "SECONDS", value_parser = seconds, requires = "when_idle", help = RESTART_TIMEOUT)]
-    pub(crate) timeout: Option<f64>,
-}
-
 fn seconds(text: &str) -> Result<f64, String> {
     match text.parse::<f64>() {
         Ok(n) if n.is_finite() && n > 0.0 => Ok(n),
@@ -970,19 +678,4 @@ fn branch(text: &str) -> Result<String, String> {
 
 fn key(text: &str) -> Result<String, String> {
     keys::named(text).map(|_| text.to_string()).ok_or_else(|| format!("unknown key; use {KEY_NAMES}"))
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct StatsArgs {
-    #[arg(long, conflicts_with = "share", help = "Print every counter and the heatmap blocks as JSON")]
-    pub(super) json: bool,
-    #[arg(long, help = "Print a link to a card made locally in the browser")]
-    pub(super) share: bool,
-    #[arg(
-        long,
-        value_name = "NAME",
-        value_parser = NonEmptyStringValueParser::new(),
-        help = "Read a machine's stats through the server, or with `all` this computer's and every machine's summed"
-    )]
-    pub(super) machine: Option<String>,
 }
