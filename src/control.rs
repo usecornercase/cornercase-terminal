@@ -28,6 +28,7 @@ pub(crate) mod processes;
 pub(crate) mod pull_request;
 pub(crate) mod recap;
 mod search;
+pub(crate) mod setup;
 pub(crate) mod start_server;
 mod status;
 pub(crate) mod surface;
@@ -80,6 +81,7 @@ pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
 pub(crate) use pull_request::{PullRequestAnswer, PullRequestRead};
 pub(crate) use recap::{RecapAsk, RecapInfo};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
+pub(crate) use setup::RunSetup;
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{
     CheckInfo, GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RemoteInfo, RunStatus, SharedInfo, StackInfo,
@@ -258,6 +260,7 @@ pub(crate) enum Command {
     Recap(RecapAsk),
     ForumServer(ForumServer),
     Held(HeldRequest),
+    RunSetup(RunSetup),
 }
 
 impl Command {
@@ -295,6 +298,7 @@ impl Command {
             Self::Focus(_) => 12,
             Self::FocusMachine(_) => 118,
             Self::Held(_) => 120,
+            Self::RunSetup(_) => 121,
             _ => return None,
         })
     }
@@ -579,6 +583,7 @@ impl Command {
         "focus-machine",
         "forum-server",
         "held",
+        "run-setup",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

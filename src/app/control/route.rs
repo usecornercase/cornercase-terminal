@@ -67,6 +67,7 @@ impl App {
             Command::Clone(clone) => self.clone_request(asked, clone),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),
             Command::NewTab(new) => self.new_tab_request(asked, new),
+            Command::RunSetup(run) => self.run_setup_request(asked, &run),
             Command::Split(split) => self.split_request(asked, split),
             Command::Start(start) => self.start_request(asked, start),
             Command::StartWith(start) => self.start_with_request(asked, start),
