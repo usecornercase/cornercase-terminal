@@ -226,6 +226,7 @@ mod pairing {
     }
 }
 
+pub(super) mod agents;
 mod card;
 mod clicks;
 mod input;
