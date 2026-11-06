@@ -200,7 +200,7 @@ fn send_now_in_the_band_sends_the_first_message_over_the_draft() {
 }
 
 fn press_send_now(app: &mut App, pane: u64) -> Value {
-    let (said, _) = super::held::asked_by_another_client(app, &json!({"pane": pane, "action": "send-now"}));
+    let (said, _) = held::asked_by_another_client(app, &json!({"pane": pane, "action": "send-now"}));
     said.expect("sent")
 }
 
