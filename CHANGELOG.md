@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.8
+## 0.13.9
 
 - **Connect a phone from another program.** `cornercase config pair browsers`, `telegram.chat` or `discord.chat` does what the window's pairing dialogs do, so a program that draws cornercase itself can connect a phone without opening the window. It prints the address the QR code holds and the lines under it (`--json` for one line of JSON each, to draw the code from `url`), and again when they change, stays open while it waits, and ends with `{"paired": true}` (with the chat's name for a bot) once the phone connects. Why it cannot comes in words: remote access off, Tailscale not ready, `paste the bot's token first`. The code is dropped when the command ends, also when whoever reads its output goes, after ten minutes at most, and never reaches the log. If the window's dialog or another command holds the same key, they share one code, and closing one leaves it working for the others. It works through `--remote` too.
+
+## 0.13.8
+
+- **`cornercase close` and `rename` can say which run of the server their id is from.** Ids last one run of the server, so a script or another window that read an id, and then met a restart on its way, could close or rename whatever has that id now. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing closes or changes, the command prints why and exits with status 4 (`cornercase --remote vps close --workspace 7 --boot "$boot"`). It works in every form of the two commands, with `--worktree`, `--check` and `--agent`, on a line of `requests --follow` for that line only, and against a server too old to know `boot` it is refused before anything is sent, since that server would ignore the flag and act. Every other command prints what it printed.
 
 ## 0.13.7
 

@@ -16,7 +16,8 @@ commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no works
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
-why, in its error with --json.
+why, in its error with --json. close and rename exit with 4 when their --boot names another run of the
+server, which then did nothing.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
@@ -149,6 +150,9 @@ and the tabs of the agents it started in the same workspace, at any depth. For a
 run, its whole team closes and the run ends. Agents it started elsewhere keep running. Nothing is
 removed from disk, a worktree and its branch stay (close --workspace ID --remove-worktree removes
 a worktree). With --check it only says what would stop and keep running.
+--boot BOOT says which run of the server the id is from: `boot` in `status --json`, or in a machine's
+entry there. Ids last one run, so a server that restarted since refuses, nothing closes, and the
+command prints why and exits with 4.
 
 Examples:
   cornercase close --tab 9
@@ -157,10 +161,17 @@ Examples:
   cornercase close --worktree fix/login --remove-worktree --check
   cornercase close --worktree fix/login --remove-worktree --unlock
   cornercase close --agent --pane 12 --check
-  cornercase close --agent --pane 12";
-pub(super) const RENAME_HELP: &str = "Examples:
+  cornercase close --agent --pane 12
+  cornercase --remote vps close --workspace 7 --boot 4242-1700000000";
+pub(super) const RENAME_HELP: &str =
+    "--boot BOOT says which run of the server the id is from: `boot` in `status --json`, or in a machine's
+entry there. Ids last one run, so a server that restarted since refuses, nothing is renamed, and the
+command prints why and exits with 4.
+
+Examples:
   cornercase rename 'review #42'
-  cornercase rename --workspace 5 ''";
+  cornercase rename --workspace 5 ''
+  cornercase --remote vps rename --workspace 7 docs --boot 4242-1700000000";
 pub(super) const FOCUS_HELP: &str =
     "Shows it in the window, or with --view ID in that view only (`cornercase view`), which then
 follows it: the window and other views stay where they are.
@@ -588,14 +599,16 @@ pub(super) const HERE_WORKSPACE: &str = "The workspace [default: the one this ru
 pub(super) const SEEN_DIGEST: &str = "Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]";
 pub(super) const BY_BRANCH: &str =
     "The workspace on this branch, looked up in the project this runs in, else the shown one";
+pub(super) const BOOT_ARG: &str = "Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]";
 
 pub(super) const CONTRACT_HELP: &str =
     "Programs that drive cornercase without this command line (an editor extension, a dashboard) ask
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run. Each command is listed with whether it is available, and each stream
-with its version. A server without this command is older than the contract.
+since ids last only one run; close and rename take it as --boot, and then act only in that run. Each
+command is listed with whether it is available, and each stream with its version. A server without
+this command is older than the contract.
 
 Examples:
   cornercase contract

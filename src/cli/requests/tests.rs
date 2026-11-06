@@ -86,6 +86,7 @@ mod an_outcome {
     #[case::partial(Err(Error::Partial), 3)]
     #[case::exited(Err(Error::Exited(7)), 7)]
     #[case::wrong_usage(Err(Error::WrongUsage("no".into())), 2)]
+    #[case::stale_boot(Err(Error::StaleBoot("it restarted".into())), 4)]
     #[case::own_connection(Err(Error::OwnConnection), 2)]
     #[case::other(Err(Error::Control("bad".into())), 1)]
     fn maps_to_the_status_the_command_would_have_had(#[case] result: Result<bool>, #[case] status: u8) {
@@ -200,33 +201,85 @@ mod streams {
     use crate::os::socket::UnixStream;
     use crate::protocol::{self, ClientMessage, ServerMessage};
 
-    fn fake_server(mut stream: UnixStream) -> thread::JoinHandle<Vec<String>> {
-        let features = control::contract::describe("boot", &[]);
+    const NO_REQUEST_NAMES_THIS: &str = "no request names this";
+
+    type Seen = thread::JoinHandle<Vec<String>>;
+
+    fn fake_server(stream: UnixStream) -> Seen {
+        serving(stream, control::contract::describe("boot", &[]), NO_REQUEST_NAMES_THIS)
+    }
+
+    fn lines_on(serve: impl FnOnce(UnixStream) -> Seen, lines: &[&str]) -> (Vec<Answer>, Vec<String>) {
+        let (ours, theirs) = UnixStream::pair().expect("a socket pair");
+        let server = serve(theirs);
+        client::share_socket(ours);
+        let answers = lines.iter().map(|line| answer_of(line).expect("an answer")).collect();
+        client::unshare();
+        (answers, server.join().expect("the fake server"))
+    }
+
+    fn answer_to(text: &str, features: &control::contract::Descriptor, stale: &str) -> String {
+        if text.contains(stale) {
+            let refusal = control::contract::Refusal::new(control::contract::Code::StaleBoot, "it restarted");
+            return control::contract::render(Err(refusal), true).expect("an answer");
+        }
+        let value = serde_json::to_value(features).expect("json");
+        serde_json::to_string(&control::Response::Ok(value)).expect("json")
+    }
+
+    fn serving(mut stream: UnixStream, features: control::contract::Descriptor, stale: &'static str) -> Seen {
         thread::spawn(move || {
             let mut seen = Vec::new();
             while let Ok(Some(ClientMessage::Request(text))) = protocol::recv::<ClientMessage>(&mut stream) {
+                let answer = answer_to(&text, &features, stale);
                 seen.push(text);
-                let value = serde_json::to_value(&features).expect("json");
-                let answer = serde_json::to_string(&control::Response::Ok(value)).expect("json");
                 protocol::send(&mut stream, &ServerMessage::Response(answer)).expect("an answer");
             }
             seen
         })
     }
 
+    #[rstest]
+    #[case::close(r#"{"args": ["close", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::rename(r#"{"args": ["rename", "--tab", "4", "x", "--boot", "old"]}"#)]
+    fn a_boot_from_an_earlier_run_gives_status_4_and_the_next_line_runs_without_it(#[case] line: &str) {
+        let refusing = |theirs| serving(theirs, control::contract::describe("boot", &[]), "\"boot\":\"old\"");
+
+        let (answers, seen) = lines_on(refusing, &[line, r#"{"args": ["close", "--pane", "4"]}"#]);
+
+        let (stale, next) = (&answers[0], &answers[1]);
+        assert_eq!((stale.status, stale.error.as_deref()), (4, Some("it restarted")), "{stale:?}");
+        assert_eq!(next.status, 0, "{next:?}");
+        assert_eq!(seen.len(), 3, "the contract, then each line: {seen:?}");
+        assert!(seen[0].contains("\"contract\"") && !seen[0].contains("\"boot\""), "{seen:?}");
+        assert!(!seen[2].contains("\"boot\""), "{seen:?}");
+    }
+
     #[test]
     fn plugin_status_json_lands_in_json_not_text() {
-        let (ours, theirs) = UnixStream::pair().expect("a socket pair");
-        let server = fake_server(theirs);
-        client::share_socket(ours);
+        let (mut answers, _) = lines_on(fake_server, &[r#"{"args": ["plugin", "status", "--json"]}"#]);
 
-        let answer = answer_of(r#"{"args": ["plugin", "status", "--json"]}"#).expect("an answer");
-
-        client::unshare();
-        server.join().expect("the fake server");
+        let answer = answers.remove(0);
         assert_eq!(answer.status, 0, "{answer:?}");
         assert!(answer.json.is_some(), "{answer:?}");
         assert_eq!(answer.text, "");
+    }
+
+    #[rstest]
+    #[case::close(r#"{"args": ["close", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::rename(r#"{"args": ["rename", "--tab", "4", "x", "--boot", "old"]}"#)]
+    fn a_boot_for_a_server_that_would_ignore_it_never_sends_the_request(#[case] line: &str) {
+        let mut older = control::contract::describe("boot", &[]);
+        older.features.retain(|feature| feature != "boot");
+
+        let (mut answers, seen) = lines_on(|theirs| serving(theirs, older, NO_REQUEST_NAMES_THIS), &[line]);
+
+        let answer = answers.remove(0);
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("would ignore --boot"), "{error}");
+        assert_eq!(seen.len(), 1, "only the contract: {seen:?}");
+        assert!(seen[0].contains("\"contract\""), "{seen:?}");
     }
 
     #[rstest]
@@ -240,14 +293,9 @@ mod streams {
     #[case::requests(r#"{"args": ["requests", "--follow", "-"]}"#)]
     #[case::config_pair(r#"{"args": ["config", "pair", "browsers"]}"#)]
     fn a_stream_is_refused_before_it_sends_anything(#[case] line: &str) {
-        let (ours, theirs) = UnixStream::pair().expect("a socket pair");
-        let server = fake_server(theirs);
-        client::share_socket(ours);
+        let (mut answers, seen) = lines_on(fake_server, &[line]);
 
-        let answer = answer_of(line).expect("an answer");
-
-        client::unshare();
-        let seen = server.join().expect("the fake server");
+        let answer = answers.remove(0);
         assert_eq!(answer.status, 2, "{answer:?}");
         let error = answer.error.expect("an error");
         assert!(error.contains("connection of its own"), "{error}");
