@@ -36,6 +36,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "account-switch",
     "issue-names",
     "account-restart",
+    "accounts-revision",
     "tour",
     "close-agent-tabs",
     "queue-undo",
