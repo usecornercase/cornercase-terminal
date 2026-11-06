@@ -309,19 +309,34 @@ mod retry {
     }
 }
 
+fn app_lines(streamed: Vec<(u64, Streamed)>) -> Vec<Value> {
+    streamed
+        .into_iter()
+        .filter_map(|(_, streamed)| match streamed {
+            Streamed::Snapshot(text) => match serde_json::from_str(&text) {
+                Ok(Response::Ok(value)) => Some(value),
+                other => panic!("not a snapshot: {other:?}"),
+            },
+            Streamed::Event(_) | Streamed::End => None,
+        })
+        .collect()
+}
+
+impl Rig {
+    fn follow_the_app(&mut self) -> Vec<(u64, String)> {
+        self.app.clients.events.app.set_every(Duration::ZERO);
+        let text = json!({"command": "app", "args": {}}).to_string();
+        self.app.request(CLIENT, &text, Some(AREA), Instant::now());
+        self.app.take_answers()
+    }
+}
+
 mod the_app_stream {
     use super::*;
 
     fn machines_in(streamed: Vec<(u64, Streamed)>) -> Vec<Vec<State>> {
-        streamed
+        app_lines(streamed)
             .into_iter()
-            .filter_map(|(_, streamed)| match streamed {
-                Streamed::Snapshot(text) => match serde_json::from_str(&text) {
-                    Ok(Response::Ok(value)) => Some(value),
-                    other => panic!("not a snapshot: {other:?}"),
-                },
-                Streamed::Event(_) | Streamed::End => None,
-            })
             .map(|value| {
                 value["machines"]
                     .as_array()
@@ -336,10 +351,7 @@ mod the_app_stream {
     #[test]
     fn sends_a_new_snapshot_when_a_machine_s_state_changes() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
-        rig.app.clients.events.app.set_every(Duration::ZERO);
-        let text = json!({"command": "app", "args": {}}).to_string();
-        rig.app.request(CLIENT, &text, Some(AREA), Instant::now());
-        let first = rig.app.take_answers();
+        let first = rig.follow_the_app();
         assert!(first[0].1.contains("\"connecting\""), "{first:?}");
 
         rig.app.trace_refresh();
@@ -350,3 +362,5 @@ mod the_app_stream {
         assert_eq!(machines_in(rig.app.take_events()), [[State::Unreachable]]);
     }
 }
+
+mod retry_at;

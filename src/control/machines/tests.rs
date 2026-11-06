@@ -19,6 +19,7 @@ fn answer() -> MachineList {
                 version: Some("0.12.225".into()),
                 server_version: Some("0.12.225".into()),
                 seen: Some("2026-10-29T10:00:00.000Z".into()),
+                retry_at: None,
                 error: None,
                 updating: false,
                 problem: None,
@@ -29,6 +30,7 @@ fn answer() -> MachineList {
                 destination: "pi.lan".into(),
                 folder: "~/code".into(),
                 state: State::Unreachable,
+                retry_at: Some("2026-10-29T10:00:04.250Z".into()),
                 error: Some("ssh: connect to host pi.lan port 22: Connection refused".into()),
                 ..Info::default()
             },
@@ -165,6 +167,7 @@ mod in_status {
             icon: "☁".into(),
             state: State::Linked,
             seen: Some("2026-10-29T10:00:00.000Z".into()),
+            retry_at: None,
             boot: "4242-1760600000".into(),
             projects: vec![
                 project(1, "web-shop", Some(7), Some("github.com/acme/web-shop")),
@@ -176,6 +179,7 @@ mod in_status {
             icon: "◫".into(),
             state: State::Unreachable,
             seen: Some("2026-10-29T09:58:00.000Z".into()),
+            retry_at: Some("2026-10-29T10:00:04.250Z".into()),
             boot: "77-1760500000".into(),
             projects: Vec::new(),
         };

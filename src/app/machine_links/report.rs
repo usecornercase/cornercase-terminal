@@ -1,7 +1,15 @@
 use super::Held;
 use crate::app::App;
 use crate::control::{MachineSeen, ProjectInfo, ShownRemote};
-use crate::machines::{self, Info};
+use crate::machines::{self, Info, State};
+use crate::time::Stamp;
+
+impl Held {
+    pub(super) fn retry_at(&self) -> Option<String> {
+        let next = self.link.next_try().filter(|_| self.status.state == State::Unreachable)?;
+        Some(Stamp(next).to_string())
+    }
+}
 
 impl App {
     pub(in crate::app) fn machines_seen(&self) -> Vec<MachineSeen> {
@@ -24,6 +32,7 @@ impl App {
             icon: info.icon.clone(),
             state: info.state,
             seen: held.seen_at.and_then(machines::stamp),
+            retry_at: held.retry_at(),
             boot: seen.boot.clone(),
             projects: projects.collect(),
         })

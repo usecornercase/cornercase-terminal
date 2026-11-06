@@ -51,7 +51,7 @@ The link is one `ssh` connection from your cornercase server to the cornercase s
 | `○ unreachable · 8 s` | Down since that long, or `not seen yet` when it has never been up since your server started. Select the row and the line at the bottom shows why: what `ssh` said, `cornercase was not found on vps: install it there`, `that is this computer`, or `the same server as vps` when two destinations reach one machine. |
 | `◐ older · 0.0.1` | Its cornercase is older than yours, so it is not linked. |
 
-A link that drops is tried again after 1, 2, 4 and 8 seconds, then every 15 seconds, and every minute while something on the machine needs you: an older cornercase, a missing one, or a destination that turns out to be this computer or a machine already listed. All of them try again at once when this computer wakes up or changes network, and when you change a machine that is down. `cornercase machines retry` tries them now.
+A link that drops is tried again after 1, 2, 4 and 8 seconds, then every 15 seconds, and every minute while something on the machine needs you: an older cornercase, a missing one, or a destination that turns out to be this computer or a machine already listed. All of them try again at once when this computer wakes up or changes network, and when you change a machine that is down. `cornercase machines retry` tries them now, and `cornercase machines --json` says when each one tries next ([`retry_at`](../scripts-and-agents/#machines)).
 
 ### Update an older machine
 

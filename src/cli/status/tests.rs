@@ -86,6 +86,7 @@ mod machines {
             icon: "☁".into(),
             state,
             seen: Some(SEEN.into()),
+            retry_at: None,
             boot: "b-1".into(),
             projects,
         }

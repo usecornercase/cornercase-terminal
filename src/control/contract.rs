@@ -52,6 +52,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "search-settings",
     "recap",
     "queue-routines",
+    "machine-retry-at",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

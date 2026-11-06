@@ -238,6 +238,7 @@ impl App {
         if (woke || moved) && !self.machines.held.is_empty() {
             log::info!("machines", "retrying every link", woke = woke, network = moved);
             self.machines.held.iter().for_each(|held| held.link.poke());
+            self.clients.events.snapshots.mark_changed();
         }
         self.refresh_machines_page();
         self.follow_stream();
@@ -441,7 +442,8 @@ impl App {
             let unheld = problem.is_some();
             let held = self.machines.held.iter().find(|held| !unheld && held.destination == machine.destination);
             let error = held.and_then(|held| self.machines.reason(held));
-            Info::of(machine, held.map(|held| &held.status), problem, error)
+            let retry_at = held.and_then(Held::retry_at);
+            Info { retry_at, ..Info::of(machine, held.map(|held| &held.status), problem, error) }
         })
         .collect()
     }

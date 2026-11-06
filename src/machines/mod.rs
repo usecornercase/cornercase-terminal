@@ -251,6 +251,8 @@ pub(crate) struct Info {
     pub(crate) version: Option<String>,
     pub(crate) server_version: Option<String>,
     pub(crate) seen: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) retry_at: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) updating: bool,
     pub(crate) problem: Option<String>,
@@ -273,6 +275,7 @@ impl Info {
             version: status.and_then(|status| status.version.clone()),
             server_version: status.and_then(|status| status.server_version.clone()),
             seen: status.and_then(|status| status.seen).and_then(stamp),
+            retry_at: None,
             error,
             updating: status.is_some_and(|status| status.updating),
             problem,

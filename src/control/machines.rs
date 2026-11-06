@@ -76,6 +76,8 @@ pub(crate) struct MachineSeen {
     pub(crate) icon: String,
     pub(crate) state: State,
     pub(crate) seen: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) retry_at: Option<String>,
     pub(crate) boot: String,
     pub(crate) projects: Vec<ProjectInfo>,
 }

@@ -8,7 +8,7 @@ use crate::app::machine_links::{MachineEvent, Update};
 use crate::control;
 use crate::error::Behind;
 use crate::host::network::Route;
-use crate::machines::link::fake::{answer, line};
+use crate::machines::link::fake::{answer, line, refused};
 use crate::machines::link::{Connect, Event, Line, Report};
 use crate::machines::wake::Network;
 use crate::machines::{Machine, State, machine};
@@ -37,6 +37,7 @@ enum There {
     Older,
     Server(String),
     Watched(Ends),
+    Refusing(Arc<Mutex<Receiver<()>>>),
 }
 
 type Ends = Arc<Mutex<Vec<UnixStream>>>;
@@ -62,6 +63,10 @@ impl Connect for Fake {
                 let (line, theirs) = line(version::CURRENT, None);
                 ends.lock().push(theirs);
                 Ok(line)
+            }
+            There::Refusing(gate) => {
+                let _ = gate.lock().recv();
+                Err(refused())
             }
         }
     }
@@ -172,6 +177,17 @@ impl Rig {
     fn reason(&self, name: &str) -> Option<String> {
         let held = self.app.machines.held().iter().find(|held| held.name == name)?;
         self.app.machines.reason(held)
+    }
+
+    fn woken(&mut self) {
+        self.app.refresh_at(self.start + Duration::from_millis(500), CLOCK + 3_600);
+    }
+
+    fn routes_change_next(&mut self) {
+        let home = Route { v4: Some("192.168.1.20".parse().expect("an address")), v6: None };
+        let mut routes = VecDeque::from([Route::default(), home]);
+        self.app.machines.set_network(Network::new(Box::new(move || routes.pop_front().unwrap_or(home))));
+        self.refresh(Duration::from_secs(1));
     }
 }
 
@@ -322,7 +338,7 @@ mod pokes {
     fn a_wake_retries_every_link_at_once() {
         let mut rig = tried_once();
 
-        rig.app.refresh_at(rig.start + Duration::from_millis(500), CLOCK + 3_600);
+        rig.woken();
 
         wait_until("the link tries again", || rig.seen("connect vps.lan") == 2);
     }
@@ -330,11 +346,8 @@ mod pokes {
     #[test]
     fn a_new_network_retries_every_link_at_once() {
         let mut rig = tried_once();
-        let home = Route { v4: Some("192.168.1.20".parse().expect("an address")), v6: None };
-        let mut routes = VecDeque::from([Route::default(), home]);
-        rig.app.machines.set_network(Network::new(Box::new(move || routes.pop_front().unwrap_or(home))));
 
-        rig.refresh(Duration::from_secs(1));
+        rig.routes_change_next();
         assert_eq!(rig.seen("connect vps.lan"), 1);
         rig.refresh(Duration::from_secs(3));
 

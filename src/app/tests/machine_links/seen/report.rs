@@ -86,6 +86,36 @@ mod machines_in_status {
         let names: Vec<&str> = vps.projects.iter().map(|p| p.name.as_str()).collect();
         assert_eq!((vps.state, vps.seen.is_some(), names), (State::Unreachable, true, vec!["web-shop", "blog"]));
     }
+
+    #[test]
+    fn say_no_time_for_a_machine_still_linked_here_while_news_of_its_fall_is_on_its_way() {
+        let Seeing { rig, theirs, .. } = seeing_two();
+
+        drop(theirs);
+        wait_until("the link works out its next try", || rig.app.machines.held()[0].link.next_try().is_some());
+
+        assert_eq!(rig.state("vps"), Some(State::Linked));
+        assert_eq!(rig.app.report(None).machines[0].retry_at, None);
+        assert_eq!(rig.app.machine_list().machines[0].retry_at, None);
+    }
+
+    #[test]
+    fn say_when_a_fallen_machine_tries_next_as_the_list_does_until_it_is_back() {
+        let Seeing { mut rig, theirs, ends, .. } = seeing_two();
+        assert_eq!(rig.app.report(None).machines[0].retry_at, None);
+
+        drop(theirs);
+        rig.until("the machine falls", |app| app.machines.held()[0].status.state == State::Unreachable);
+
+        let next = rig.app.report(None).machines.remove(0).retry_at;
+        assert!(next.as_deref().and_then(Stamp::parse).is_some(), "{next:?}");
+        assert_eq!(next, rig.app.machine_list().machines.remove(0).retry_at);
+
+        let _theirs = linked(&ends);
+        rig.until("the machine is back", |app| app.machines.held()[0].status.state == State::Linked);
+        assert_eq!(rig.app.report(None).machines[0].retry_at, None);
+        assert_eq!(rig.app.machine_list().machines[0].retry_at, None);
+    }
 }
 
 mod machines_in_watch {
@@ -138,5 +168,26 @@ mod machines_in_watch {
         let last = got.last().expect("a new snapshot");
         let names: Vec<&str> = last.report.machines[0].projects.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(names, ["web-shop", "docs"]);
+    }
+
+    #[test]
+    fn a_fall_sends_when_the_machine_tries_next_and_a_wake_the_moment_it_moved_to() {
+        let Seeing { mut rig, theirs, .. } = seeing_two();
+        watch(&mut rig.app);
+        rig.app.trace();
+        snapshots(&mut rig.app);
+        let next = |snapshot: Option<&Snapshot>| snapshot.and_then(|line| line.report.machines[0].retry_at.clone());
+
+        drop(theirs);
+        rig.until("the machine falls", |app| app.machines.held()[0].status.state == State::Unreachable);
+        rig.app.trace();
+        let fell = next(snapshots(&mut rig.app).last());
+        assert!(fell.as_deref().and_then(Stamp::parse).is_some(), "{fell:?}");
+
+        rig.woken();
+        rig.app.trace_refresh();
+
+        let moved = next(snapshots(&mut rig.app).last()).expect("a line with the moved moment");
+        assert!(Stamp::parse(&moved).is_some_and(|at| at <= SystemTime::now()), "{moved}");
     }
 }

@@ -4,7 +4,7 @@ use std::process::Child;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use parking_lot::{Condvar, Mutex};
 use serde::de::DeserializeOwned;
@@ -241,6 +241,7 @@ struct Wants {
     stop: bool,
     poke: bool,
     ends: Option<Arc<dyn Ends>>,
+    next_try: Option<SystemTime>,
 }
 
 #[derive(Default)]
@@ -257,7 +258,16 @@ impl Control {
     }
 
     pub(super) fn poke(&self) {
-        self.ask(|wants| wants.poke = true);
+        self.ask(|wants| {
+            wants.poke = true;
+            wants.next_try = wants.next_try.map(|_| SystemTime::now());
+        });
+    }
+
+    fn plan(&self, wait: Option<Duration>) {
+        let mut wants = self.wants.lock();
+        let wait = wait.map(|wait| if wants.poke { Duration::ZERO } else { wait });
+        wants.next_try = wait.and_then(|wait| SystemTime::now().checked_add(wait));
     }
 
     fn ask(&self, what: impl FnOnce(&mut Wants)) {
@@ -360,6 +370,10 @@ impl Link {
     pub(crate) fn poke(&self) {
         self.control.poke();
     }
+
+    pub(crate) fn next_try(&self) -> Option<SystemTime> {
+        self.control.wants.lock().next_try
+    }
 }
 
 impl Drop for Link {
@@ -407,6 +421,7 @@ impl<E: From<Report>> Running<E> {
                 return;
             }
             self.control.drop_line();
+            self.control.plan(Some(PERSON));
             self.tell(Event::Down { down: Down::Unreachable(Error::Bug.to_string()), failed: 1 });
             if self.clock.nap(&self.control, PERSON) == Asked::Stop {
                 return;
@@ -433,6 +448,7 @@ impl<E: From<Report>> Running<E> {
                 }
             };
             let wait = down.wait(failed);
+            self.control.plan(matches!(down, Down::Unreachable(_)).then_some(wait));
             self.tell(Event::Down { down, failed });
             match self.clock.nap(&self.control, wait) {
                 Asked::Stop => return,
@@ -465,6 +481,7 @@ impl<E: From<Report>> Running<E> {
         let ended = match handshake(&mut line).and_then(|started| self.claim(started)) {
             Ok(started) => {
                 let release = clean(&line.release);
+                self.control.plan(None);
                 self.tell(Event::Linked { release, server_version: clean(&started.version) });
                 self.watch(&mut line)
             }
