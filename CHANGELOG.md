@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.3
+
+- **Import a VS Code workspace from a script or another app.** `cornercase open work.code-workspace` does what choosing that file in the folder picker does: a group named after the file (a group of that name is reused), each of its folders a project in it, a folder already open moved there, a folder's `name` kept as the project's name unless you named it, folders that are gone skipped. It prints the group's id; `--json` prints `{"group", "name", "projects", "missing", "failed"}`, what the picker's message says, and it exits with 3 when a folder didn't open or nothing was imported. `--focus` shows its first project. The file is read on the server's machine, so `cornercase --remote devbox open ~/code/work.code-workspace` imports the one on `devbox`.
+- **`cornercase open --into GROUP`** opens a folder in that group, or moves it there when it is already open, and imports a `.code-workspace` file there, as the group's **add project** does. Over the socket it is `open`'s `into`, with the feature `open-code-workspace`, for clients that draw cornercase themselves. A folder without it answers as before.
+- In the folder picker, importing a folder whose project was still closing now opens it again, instead of adding the closing project to the group, from which it then disappeared.
+
 ## 0.13.2
 
 - Nothing changes for users: the code behind the commands moved into smaller files, to make room for the next ones.
