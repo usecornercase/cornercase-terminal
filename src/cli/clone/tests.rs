@@ -44,6 +44,13 @@ mod its_arguments {
         assert_eq!(clone.from, Some(PathBuf::from("here")));
     }
 
+    #[test]
+    fn take_a_file_whose_name_starts_with_a_hyphen() {
+        let clone = parsed(&["clone", URL, "--file", "-draft.env", "--file", ".env"]);
+
+        assert_eq!(clone.files, [PathBuf::from("-draft.env"), PathBuf::from(".env")]);
+    }
+
     #[rstest]
     #[case::a_url(&["clone", "--list-ignored", URL])]
     #[case::a_file(&["clone", "--list-ignored", "--file", ".env"])]
@@ -144,6 +151,19 @@ mod the_files_to_copy {
 
             let data = STANDARD.encode("KEY=1");
             assert_eq!(files, [CloneFile { path: PathBuf::from(".env"), data, mode: 0o600 }]);
+        }
+
+        #[test]
+        fn can_be_named_as_the_list_names_them_whatever_they_start_with() {
+            let repo = git_repo(&[(".gitignore", "*.env\n")]);
+            std::fs::write(repo.path().join("-draft.env"), "KEY=1").expect("write the file");
+
+            let listing = ignored::list(repo.path()).expect("list");
+            let names: Vec<&str> = listing.files.iter().map(|file| file.path.to_str().expect("UTF-8")).collect();
+
+            let files = files_to_copy(&clone_of(repo.path(), &names)).expect("read");
+
+            assert_eq!(files.iter().map(|file| file.path.clone()).collect::<Vec<_>>(), [PathBuf::from("-draft.env")]);
         }
 
         #[test]

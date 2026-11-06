@@ -47,6 +47,7 @@ pub(crate) struct CloneArgs {
     #[arg(
         long = "file",
         value_name = "PATH",
+        allow_hyphen_values = true,
         help = "A file of the repository here to copy into the clone, such as the git-ignored .env, by its path from \
                 the repository's root; repeat it for more"
     )]
