@@ -62,7 +62,7 @@ CORNERCASE_REMOTE=devbox cornercase events --json
 cornercase --remote devbox --remote-command '~/tools/cornercase' start-server
 ```
 
-A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands that ask the server: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server` and `logs` run on that machine, as its own `cornercase` through `ssh`, and exit with its status; the plugin commands that install or change plugins refuse it with status 2. Commands accept a machine that runs the same version or a newer one. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
+A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands that ask the server: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server` and `logs` run on that machine, as its own `cornercase` through `ssh`, and exit with its status; the plugin commands that install or change plugins refuse it with status 2. Commands accept a machine that runs the same version or a newer one. Ids last one run of the server there, so `close` and `rename` take [`--boot BOOT`](../../guides/scripts-and-agents/#arrange), and a server that restarted since you read the id refuses with status 4 instead of acting on whatever has it now. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
 
 ### `cornercase update`
 
