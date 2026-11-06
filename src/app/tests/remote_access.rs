@@ -4,7 +4,7 @@ use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
 
 use super::*;
-use crate::test_util::write_executable;
+use crate::test_util::{http_get as get, write_executable};
 use crate::web;
 
 const STATUS: &str = r#"{"BackendState":"Running","CertDomains":["mac.tail1234.ts.net"],"Self":{"DNSName":"mac.tail1234.ts.net.","UserID":7},"User":{"7":{"LoginName":"ada@example.com"}}}"#;
@@ -58,14 +58,6 @@ fn ready() -> Remote {
 
 fn calls(r: &Remote) -> String {
     std::fs::read_to_string(r.dir.path().join("calls")).unwrap_or_default()
-}
-
-fn get(port: u16, path: &str) -> String {
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    write!(stream, "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n").expect("request");
-    let mut answer = String::new();
-    stream.read_to_string(&mut answer).expect("answer");
-    answer
 }
 
 fn shown(app: &App) -> Option<ui::RemoteAccess> {

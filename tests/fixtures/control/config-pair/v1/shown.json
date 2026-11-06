@@ -1,0 +1,7 @@
+{
+  "url": "https://mac.tail1234.ts.net:8443/pair?t=0123456789abcdef0123456789abcdef",
+  "lines": [
+    "scan the code with your phone's camera.",
+    "the phone needs the Tailscale app, logged in as ada@example.com."
+  ]
+}

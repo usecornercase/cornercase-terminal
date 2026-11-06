@@ -238,6 +238,7 @@ mod streams {
     #[case::changes_list(r#"{"args": ["changes", "list"]}"#)]
     #[case::flow_messages(r#"{"args": ["flow", "messages", "--follow"]}"#)]
     #[case::requests(r#"{"args": ["requests", "--follow", "-"]}"#)]
+    #[case::config_pair(r#"{"args": ["config", "pair", "browsers"]}"#)]
     fn a_stream_is_refused_before_it_sends_anything(#[case] line: &str) {
         let (ours, theirs) = UnixStream::pair().expect("a socket pair");
         let server = fake_server(theirs);

@@ -138,9 +138,10 @@ impl Web {
     }
 
     pub(crate) fn pair(&self, now: Instant) -> io::Result<String> {
-        let pairing = auth::Pairing::new(now)?;
+        let mut shared = self.context.shared.lock();
+        let pairing = auth::Pairing::shared(shared.pairing.take(), now)?;
         let token = pairing.token.clone();
-        self.context.shared.lock().pairing = Some(pairing);
+        shared.pairing = Some(pairing);
         Ok(token)
     }
 

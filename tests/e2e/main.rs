@@ -39,6 +39,7 @@ mod machine_actions;
 mod machine_panels;
 mod machines;
 mod opening;
+mod pair;
 mod panels;
 mod panes;
 mod plugins;

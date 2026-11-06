@@ -95,6 +95,7 @@ impl Command {
             Self::Search(search) => {
                 fields.add("bytes", search.query.len());
             }
+            Self::ConfigPair(pair) => pair.fields(fields),
             _ => return false,
         }
         true

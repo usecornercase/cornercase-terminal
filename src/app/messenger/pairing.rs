@@ -1,17 +1,63 @@
 use std::time::{Duration, Instant};
 
-use super::{MessengerEvent, chat};
+use super::{MessengerEvent, Phase, chat};
 use crate::app::{App, AppEvent, Overlay, Toast};
+use crate::control::contract::{Code, Refusal};
+use crate::control::pair::PairKey;
 use crate::issues::Secret;
 use crate::log::{self, Job, Level};
 use crate::messenger::{Advice, Chat, Owned, Via};
 use crate::ui;
+use crate::web::auth::Pairing;
+
+pub(super) const NO_BOT: &str = "paste the bot's token first";
 
 impl App {
+    pub(in crate::app) fn drop_chat_code(&mut self, via: Via) {
+        if !self.pairing_held(PairKey::Chat(via)) {
+            let messenger = self.messenger_mut(via);
+            messenger.pairing = None;
+            messenger.owner.closed();
+        }
+    }
+
+    pub(super) fn hold_chat_code(&mut self, via: Via, now: Instant) {
+        let held = self.pairing_held(PairKey::Chat(via));
+        let messenger = self.messenger_mut(via);
+        if !via.pairs_by_owner() {
+            match Pairing::shared(messenger.pairing.take().filter(|_| held), now) {
+                Ok(pairing) => messenger.pairing = Some(pairing),
+                Err(e) => log::error!(via.target(), "cannot make a pairing code", error = e),
+            }
+        } else if !held {
+            messenger.owner.closed();
+        }
+    }
+
+    pub(in crate::app) fn request_chat_code(&mut self, via: Via, now: Instant) -> Result<(), Refusal> {
+        if let Some(refusal) = self.chat_down(via) {
+            return Err(refusal);
+        }
+        self.hold_chat_code(via, now);
+        let shown = self.chat_shown(via);
+        if shown.url.is_some() {
+            return Ok(());
+        }
+        Err(Refusal::new(Code::Failed, shown.lines.into_iter().next().unwrap_or_default()))
+    }
+
+    pub(in crate::app) fn chat_down(&self, via: Via) -> Option<Refusal> {
+        let messenger = self.messenger(via);
+        if messenger.bot().is_none() {
+            return Some(Refusal::new(Code::Conflict, NO_BOT));
+        }
+        (messenger.phase == Phase::Rejected).then(|| Refusal::new(Code::Conflict, via.rejected()))
+    }
+
     fn owner_due(&self, via: Via) -> bool {
         let messenger = self.messenger(via);
         via.pairs_by_owner()
-            && matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via)
+            && self.pairing_held(PairKey::Chat(via))
             && messenger.token.is_some()
             && messenger.owner.idle()
     }
@@ -74,7 +120,8 @@ impl App {
 
     pub(super) fn connect(&mut self, via: Via, chat: Chat) {
         log::info!(via.target(), "paired", chat = chat.id);
-        let who = if chat.name.is_empty() { String::new() } else { format!(" with {}", chat.name) };
+        let key = PairKey::Chat(via);
+        let name = chat.name.clone();
         let messenger = self.messenger_mut(via);
         messenger.pairing = None;
         messenger.saved.chat = Some(chat);
@@ -82,7 +129,8 @@ impl App {
         if matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via) {
             self.overlay = None;
         }
-        self.messages.toast = Some(Toast::new(format!("{} connected{who}", via.name()), ui::ToastIcon::Check));
+        self.pairing_done(key, Some(&name));
+        self.messages.toast = Some(Toast::new(key.connected(Some(&name)), ui::ToastIcon::Check));
         self.refresh_messenger_note(via);
     }
 }

@@ -445,7 +445,8 @@ false for a switch, a whole number, a comma-separated list for issue_tabs, other
 
 A token is never an argument: `secret` reads it from standard input (hidden on a terminal), checks it
 with its service as the dialog does, and says which account accepted it, never the token. `remove`
-forgets a token, a bot, a paired chat or the paired browsers.
+forgets a token, a bot, a paired chat or the paired browsers. `pair` connects a phone to a chat or a
+browser: `cornercase config pair --help`.
 
 `export` writes the settings a colleague can use, as TOML, and says on standard error what it left
 out: tokens, accounts, personal keys. `import` shows what a shared file would change and asks first;
@@ -464,6 +465,7 @@ Examples:
   cornercase config set issue_tabs github,linear
   printf '%s' \"$LINEAR_API_KEY\" | cornercase config secret linear
   cornercase config remove linear
+  cornercase config pair browsers --json
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml
   cornercase config import team.toml --only agents,worktrees
@@ -673,6 +675,7 @@ mod context;
 mod files;
 mod flow;
 mod machines;
+mod pair;
 mod paste_file;
 mod plugin;
 mod ports;
@@ -693,6 +696,7 @@ pub(in crate::cli) use flow::{
     FLOW_SAVE_HELP,
 };
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
+pub(in crate::cli) use pair::CONFIG_PAIR_HELP;
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use plugin::PLUGIN_HELP;
 pub(in crate::cli) use ports::{PORTS_HELP, PORTS_STOP_ABOUT, PORTS_STOP_HELP};

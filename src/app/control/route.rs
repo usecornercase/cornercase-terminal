@@ -121,6 +121,7 @@ impl App {
             Command::View(open) => self.view_request(client, &open, area),
             Command::ViewSet(set) => self.view_set_asked(asker, &set, area),
             Command::Search(search) => self.search_request(client, &search),
+            Command::ConfigPair(pair) => self.config_pair_request(client, &pair, now),
             other => return ControlFlow::Continue(other),
         })
     }

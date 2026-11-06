@@ -31,6 +31,8 @@ The app is yours alone: cornercase talks to Discord as its bot, and only to you,
 
 There is no code to type: the link adds the app to your own Discord account, and cornercase then messages the app's owner, which is you. Once paired, the bot listens only to that direct message, and, with [forum mode](#forum-mode), to your messages in its forum's posts.
 
+A program that draws cornercase itself gets the same link with [`cornercase config pair discord.chat`](../scripts-and-agents/#pair-a-phone), once the token is set with `cornercase config secret discord`, and cornercase asks Discord for the owner while it runs.
+
 If the app is still public or **User Install** is off, the **bot** row and the dialog say what to change (`public app: Install Link to None, then Public Bot off`, `turn on User Install in the Developer Portal`). Change it in the Developer Portal and the warning goes on the next check, a few seconds later while the dialog is open; there is no need to paste the token again. It never stops you from pairing.
 
 ## Go away

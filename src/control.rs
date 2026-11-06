@@ -21,6 +21,7 @@ pub(crate) mod files;
 mod flow;
 pub(crate) mod issues;
 pub(crate) mod machines;
+pub(crate) mod pair;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -72,6 +73,7 @@ pub(crate) use flow::{
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Machines, ShownRemote, StreamState};
+pub(crate) use pair::ConfigPair;
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
@@ -254,6 +256,7 @@ pub(crate) enum Command {
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
     Recap(RecapAsk),
+    ConfigPair(ConfigPair),
 }
 
 impl Command {
@@ -329,6 +332,7 @@ impl Command {
             Self::View(_) => 33,
             Self::ViewSet(_) => 34,
             Self::Search(_) => 28,
+            Self::ConfigPair(_) => 119,
             _ => return None,
         })
     }
@@ -571,6 +575,7 @@ impl Command {
         "machines",
         "clone",
         "focus-machine",
+        "config-pair",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

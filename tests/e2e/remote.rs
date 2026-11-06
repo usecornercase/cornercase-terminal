@@ -38,7 +38,7 @@ fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
     format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default())
 }
 
-fn ssh_pid(session: &Session) -> String {
+pub(super) fn ssh_pid(session: &Session) -> String {
     pid_in(session, SSH_PID)
 }
 
