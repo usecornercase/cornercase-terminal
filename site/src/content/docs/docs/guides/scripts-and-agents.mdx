@@ -1248,14 +1248,14 @@ It prints what the dialog draws, and again each time that changes: with `--json`
 {"url": "https://mac.tail1234.ts.net:8443/pair?t=0123456789abcdef0123456789abcdef", "lines": ["scan the code with your phone's camera.", "the phone needs the Tailscale app, logged in as ada@example.com."]}
 ```
 
-`url` is `null` while there is none: while Tailscale starts, `lines` says so and the next line has the address. On Discord a new line says what to change in the Developer Portal, or a failure.
+`url` is `null` while there is none: while Tailscale starts, `lines` says so, and the next line has the address or, if Tailscale isn't ready (logged out, say), is the last line and says why. On Discord a new line says what to change in the Developer Portal, or a failure.
 
 It stays open while it waits, and its last line says how it ended:
 
 - `{"paired": true}` once a browser took the code, or `{"paired": true, "chat": "@ada"}` with the name of the chat that was paired, and status 0.
 - `{"paired": false, "error": "…"}` and status 1 once nothing can pair: Tailscale is not ready, remote access was turned off, the bot was removed or its token refused, or ten minutes went by without a phone. The error also goes to standard error.
 
-What cannot start at all prints nothing and exits with 1, with the reason on standard error: `remote access is off…`, `paste the bot's token first`, Tailscale missing, or a key that cannot be paired. Over the socket these are refusals with a code: `conflict` for what you can change, `unavailable` for what you can't from here (Tailscale, the port), `malformed` for another key.
+What cannot start at all prints nothing and exits with 1, with the reason on standard error: `remote access is off…`, `paste the bot's token first`, Tailscale not installed, the port taken, or a key that cannot be paired. Over the socket these are refusals with a code: `conflict` for what you can change, `unavailable` for what you can't from here (Tailscale not installed, the port taken), `malformed` for another key.
 
 The code is dropped when the command ends, also when whoever reads its output goes, as for every command that follows a stream. A code works once, and the address holds it, so treat the line as a secret; cornercase never writes it to its log. A command or the window's dialog that holds the same key shares that code: the same address shows in all of them, its ten minutes start again with each one that comes, a phone taking it ends them all, and it is dropped when the last one goes, so closing the dialog doesn't stop a command, nor the reverse. Once paired, the window says so as it does for its own dialog, whether or not you are looking at it.
 

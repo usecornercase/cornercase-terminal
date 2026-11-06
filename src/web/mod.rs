@@ -41,6 +41,17 @@ struct Shared {
     next: u64,
 }
 
+impl Shared {
+    fn pair_with(&mut self, token: &str, browser: &str) -> Option<io::Result<(String, String)>> {
+        self.pairing.as_ref().filter(|pairing| pairing.accepts(token, Instant::now()))?;
+        let added = self.devices.add(browser);
+        if added.is_ok() {
+            self.pairing = None;
+        }
+        Some(added)
+    }
+}
+
 #[derive(Clone)]
 struct Context {
     shared: Arc<Mutex<Shared>>,
@@ -128,7 +139,6 @@ impl Web {
     }
 
     #[cfg(test)]
-    #[cfg(unix)]
     pub(crate) fn listening(&self) -> Option<u16> {
         self.listening.as_ref().map(|l| l.port)
     }
@@ -266,16 +276,7 @@ fn paired(request: &Request, context: &Context) -> bool {
 fn pair(request: &Request, context: &Context) -> Response {
     let token = request.query("t").unwrap_or_default();
     let browser = request.header("user-agent").unwrap_or("unknown browser");
-    let added = {
-        let mut shared = context.shared.lock();
-        let valid = shared.pairing.as_ref().is_some_and(|p| p.accepts(token, Instant::now()));
-        if valid {
-            shared.pairing = None;
-            Some(shared.devices.add(browser))
-        } else {
-            None
-        }
-    };
+    let added = context.shared.lock().pair_with(token, browser);
     match added {
         Some(Ok((id, cookie))) => {
             log::info!("web", "browser paired", device = id, browser = browser);

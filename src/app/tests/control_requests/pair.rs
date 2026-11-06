@@ -5,7 +5,7 @@ use rstest::rstest;
 use super::*;
 use crate::app::events::Streamed;
 use crate::app::remote_access::Phase;
-use crate::test_util::{FakeHttp, fake_program, free_port, http_get};
+use crate::test_util::{FakeHttp, fake_program, free_port, http_get, wait_until_within};
 use crate::web::auth::PAIRING_FOR;
 
 const FIRST: u64 = 7;
@@ -14,6 +14,7 @@ const STATUS: &str = r#"{"BackendState":"Running","CertDomains":["mac.tail1234.t
 const NOT_CONNECTED: &str = "tailscale is not connected (Stopped): open it and log in";
 const TIMED_OUT: &str = "no phone paired within ten minutes: run this again";
 const NO_BOT: &str = "paste the bot's token first";
+const A_PROGRAM_RUNS: Duration = Duration::from_secs(30);
 
 fn pair_at(app: &mut App, client: u64, key: &str, now: Instant) -> std::result::Result<Value, Refused> {
     let text = json!({"contract": 1, "command": "config-pair", "args": {"key": key}}).to_string();
@@ -57,7 +58,7 @@ fn failed(client: u64, why: &str) -> Vec<(u64, Option<Value>)> {
 
 fn next_lines(app: &mut App, rx: &Receiver<AppEvent>) -> Vec<(u64, Option<Value>)> {
     let mut got = Vec::new();
-    wait_until("a new line", || {
+    wait_until_within("a new line", A_PROGRAM_RUNS, || {
         drain(app, rx);
         app.refresh(Instant::now());
         got.extend(lines(app));
@@ -88,6 +89,13 @@ mod browsers {
         pub(super) fn told(&mut self) {
             pump_until(&mut self.app, &self.rx, "the pairing is told", |app| toast(app).is_some());
         }
+
+        pub(super) fn a_phone_takes(&mut self, path: &str, client: u64) {
+            assert!(self.takes(path));
+            self.told();
+            assert_eq!(lines(&mut self.app), ended(client, &json!({"paired": true})));
+            assert_eq!(self.app.remote.paired(), 1);
+        }
     }
 
     pub(super) fn with_tailscale(status: &str) -> Remote {
@@ -105,8 +113,9 @@ mod browsers {
         let mut remote = with_tailscale(STATUS);
         remote.app.config.remote = true;
         remote.app.refresh(Instant::now());
-        pump_until(&mut remote.app, &remote.rx, "tailscale answers", |app| {
-            matches!(app.remote.phase(), Phase::Ready(_))
+        wait_until_within("tailscale answers", A_PROGRAM_RUNS, || {
+            drain(&mut remote.app, &remote.rx);
+            matches!(remote.app.remote.phase(), Phase::Ready(_))
         });
         remote
     }
@@ -205,13 +214,26 @@ mod browsers {
         let mut remote = ready();
         let path = path_of(&shown(&mut remote.app, FIRST, "browsers"));
 
-        assert!(remote.takes(&path));
-        remote.told();
+        remote.a_phone_takes(&path, FIRST);
 
-        assert_eq!(lines(&mut remote.app), ended(FIRST, &json!({"paired": true})));
-        assert_eq!(remote.app.remote.paired(), 1);
         assert_eq!(toast(&remote.app), Some("a browser connected"));
         assert!(remote.refuses(&path));
+    }
+
+    #[test]
+    fn a_browser_that_cannot_be_saved_leaves_the_code_for_another_try() {
+        let mut remote = ready();
+        let path = path_of(&shown(&mut remote.app, FIRST, "browsers"));
+        let file = remote.dir.path().join("browsers.json");
+        std::fs::create_dir(&file).expect("a folder where the file goes");
+
+        assert!(http_get(remote.port, &path).starts_with("HTTP/1.1 500"));
+        remote.app.refresh(Instant::now());
+        assert_eq!(lines(&mut remote.app), []);
+        assert_eq!(remote.app.remote.paired(), 0);
+        std::fs::remove_dir(&file).expect("the way cleared");
+
+        remote.a_phone_takes(&path, FIRST);
     }
 
     #[test]
@@ -325,10 +347,8 @@ mod a_shared_code {
 
         remote.app.forget(FIRST);
         remote.app.refresh(Instant::now());
-        assert!(remote.takes(&path));
-        remote.told();
 
-        assert_eq!(lines(&mut remote.app), ended(SECOND, &json!({"paired": true})));
+        remote.a_phone_takes(&path, SECOND);
     }
 
     #[test]
@@ -341,10 +361,8 @@ mod a_shared_code {
         remote.app.overlay = None;
         remote.app.refresh(Instant::now());
         assert_eq!(lines(&mut remote.app), []);
-        assert!(remote.takes(&path_of(&line)));
-        remote.told();
 
-        assert_eq!(lines(&mut remote.app), ended(FIRST, &json!({"paired": true})));
+        remote.a_phone_takes(&path_of(&line), FIRST);
     }
 
     #[test]
@@ -430,9 +448,7 @@ mod a_shared_code {
         remote.app.refresh(start + PAIRING_FOR);
 
         assert_eq!(lines(&mut remote.app), failed(FIRST, TIMED_OUT));
-        assert!(remote.takes(&path_of(&line)));
-        remote.told();
-        assert_eq!(lines(&mut remote.app), ended(SECOND, &json!({"paired": true})));
+        remote.a_phone_takes(&path_of(&line), SECOND);
     }
 }
 
@@ -488,6 +504,13 @@ mod telegram {
         phone.says(app, &format!("/start {}", code_of(line)));
     }
 
+    fn the_code_ends_it(app: &mut App, phone: &mut Phone, line: &Value) {
+        start(app, phone, line);
+        assert_eq!(lines(app), ended(FIRST, &json!({"paired": true, "chat": "@ada"})));
+        assert_eq!(toast(app), Some("Telegram connected with @ada"));
+        assert_eq!(phone.read(app).len(), 1);
+    }
+
     #[test]
     fn it_prints_what_the_dialog_draws() {
         let (mut app, _phone, _dir) = set_up();
@@ -508,13 +531,51 @@ mod telegram {
         let (mut app, mut phone, dir) = set_up();
         let line = shown(&mut app, FIRST, "telegram.chat");
 
-        start(&mut app, &mut phone, &line);
+        the_code_ends_it(&mut app, &mut phone, &line);
 
-        assert_eq!(lines(&mut app), ended(FIRST, &json!({"paired": true, "chat": "@ada"})));
         let saved = std::fs::read_to_string(dir.path().join("telegram.json")).expect("the paired chat is saved");
         assert!(app.messenger(Via::Telegram).paired() && app.overlay.is_none(), "{saved}");
+    }
+
+    fn already_paired() -> (App, Phone, TempDir) {
+        let dir = TempDir::new();
+        let (mut app, _rx) = new_app(dir.path().join("config.json"));
+        let phone = Phone::paired(&mut app);
+        (app, phone, dir)
+    }
+
+    #[test]
+    fn the_phone_already_paired_takes_the_code_too_and_ends_it() {
+        let (mut app, mut phone, _dir) = already_paired();
+        let line = shown(&mut app, FIRST, "telegram.chat");
+
+        the_code_ends_it(&mut app, &mut phone, &line);
+    }
+
+    #[test]
+    fn the_phone_already_paired_closes_the_dialog_with_the_code() {
+        let (mut app, mut phone, _dir) = already_paired();
+        assert_eq!(app.pair(Via::Telegram), None);
+        let url = app.pairing_view(Via::Telegram).url;
+
+        start(&mut app, &mut phone, &json!({"url": url}));
+
+        assert!(app.overlay.is_none());
         assert_eq!(toast(&app), Some("Telegram connected with @ada"));
         assert_eq!(phone.read(&mut app).len(), 1);
+    }
+
+    #[test]
+    fn a_start_without_the_code_from_the_phone_already_paired_is_only_the_command() {
+        let (mut app, mut phone, _dir) = already_paired();
+        shown(&mut app, FIRST, "telegram.chat");
+
+        phone.says(&mut app, "/start");
+        phone.says(&mut app, "/start 00000000000000000000000000000000");
+
+        assert_eq!(lines(&mut app), []);
+        assert_eq!(toast(&app), None);
+        assert_eq!(phone.read(&mut app).len(), 2);
     }
 
     #[test]

@@ -9,7 +9,7 @@ It stays open while it waits. A browser that takes the code ends it with {\"pair
 with {\"paired\": true, \"chat\": NAME}, and status 0. Once nothing can pair it ends with
 {\"paired\": false, \"error\"} and status 1: remote access turned off, Tailscale not ready, the bot's
 token removed or refused, or ten minutes gone by without a phone. Why it cannot start at all goes to
-standard error, also with status 1: remote access off, Tailscale missing, no bot yet.
+standard error, also with status 1: remote access off, Tailscale not installed, the port taken, no bot yet.
 
 The code is dropped when the command ends, also when whoever reads its output goes. While the window's
 dialog or another `config pair` holds the same key they share one code: it lives ten minutes from the
