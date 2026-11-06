@@ -205,6 +205,7 @@ impl App {
             accounts: self.config.selected_accounts().clone(),
             popup: self.popup_info(),
             machines: self.machine_infos(),
+            accounts_revision: self.accounts.logins.generation(),
         }
     }
 
