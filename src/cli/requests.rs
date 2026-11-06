@@ -161,6 +161,7 @@ fn outcome(result: Result<bool>, printed: Printed, name: &str) -> Answer {
         Err(Error::Partial) => (3, None),
         Err(Error::Exited(code)) => (code, None),
         Err(Error::WrongUsage(message)) => (2, Some(message)),
+        Err(Error::StaleBoot(message)) => (4, Some(message)),
         Err(Error::OwnConnection) => (2, Some(own_connection(name))),
         Err(e) => (1, Some(e.to_string())),
     };

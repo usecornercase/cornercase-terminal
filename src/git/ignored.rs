@@ -1,19 +1,22 @@
-use std::fs::File;
+use std::fs::{File, Metadata};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
+use serde::Serialize;
+
 use self::imp::{REFUSED, open_folder, open_within};
-use super::clone::files::MAX_FILES;
+use super::clone::files::{self, MAX_FILES};
 use super::worktree::{check, git};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::os::ffi::to_path;
 use crate::os::fs::{PermissionsExt, stat_file};
 
 pub(crate) const MAX_FILE_BYTES: u64 = 1024 * 1024;
 const PERMISSIONS: u32 = 0o777;
 const MOVED: &str = "the project folder changed since its files were listed";
+const NOT_UTF8: &str = "its name is not UTF-8, which a request cannot carry";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct IgnoredFile {
     pub(crate) path: PathBuf,
     pub(crate) size: u64,
@@ -36,6 +39,10 @@ pub(crate) struct Root {
 }
 
 impl Root {
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
     fn pinned(path: PathBuf) -> Result<Self> {
         let (dev, ino) = identity(&open_folder(&path)?)?;
         Ok(Self { path, dev, ino })
@@ -54,10 +61,15 @@ pub(crate) fn copied_here() -> bool {
     REFUSED.is_none()
 }
 
-pub(crate) fn list(root: &Path) -> Result<Listing> {
-    if let Some(why) = REFUSED {
-        return Err(io::Error::new(io::ErrorKind::Unsupported, why).into());
+fn read_here() -> Result<()> {
+    match REFUSED {
+        Some(why) => Err(io::Error::new(io::ErrorKind::Unsupported, why).into()),
+        None => Ok(()),
     }
+}
+
+pub(crate) fn list(root: &Path) -> Result<Listing> {
+    read_here()?;
     let top = toplevel(root)?;
     let pinned = Root::pinned(top.clone())?;
     let args = ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "--full-name", "-z"];
@@ -66,6 +78,68 @@ pub(crate) fn list(root: &Path) -> Result<Listing> {
     let files: Vec<IgnoredFile> =
         entries.by_ref().filter_map(|entry| regular(&top, &to_path(entry))).take(MAX_FILES).collect();
     Ok(Listing { files, left_out: entries.count(), root: pinned })
+}
+
+pub(crate) fn picked(from: &Path, paths: &[PathBuf]) -> Result<Listing> {
+    read_here()?;
+    let top = toplevel(from)?;
+    let root = Root::pinned(top.clone())?;
+    let mut asked: Vec<IgnoredFile> = Vec::new();
+    for path in paths {
+        let file = asked_for(&top, path)?;
+        if asked.iter().all(|kept| kept.path != file.path) {
+            asked.push(file);
+        }
+        if asked.len() > MAX_FILES {
+            return Err(Error::Control(files::too_many()));
+        }
+    }
+    Ok(Listing { files: asked, left_out: 0, root })
+}
+
+fn asked_for(top: &Path, given: &Path) -> Result<IgnoredFile> {
+    let cannot = |why: String| format!("cannot copy `{}`: {why}", given.display());
+    let path: PathBuf = files::parts(given).map_err(|why| Error::WrongUsage(cannot(why)))?.iter().collect();
+    on_disk(top, &path).map_err(|why| Error::Control(cannot(why)))
+}
+
+fn on_disk(top: &Path, path: &Path) -> std::result::Result<IgnoredFile, String> {
+    if path.to_str().is_none() {
+        return Err(NOT_UTF8.into());
+    }
+    let folders: Vec<&Path> = path.ancestors().skip(1).filter(|folder| !folder.as_os_str().is_empty()).collect();
+    if let Some(link) = folders.iter().rev().find(|folder| is_link(&top.join(folder))) {
+        return Err(format!("`{}` on its way is a link", link.display()));
+    }
+    let metadata = std::fs::symlink_metadata(top.join(path)).map_err(|e| not_there(&e, top))?;
+    let kind = metadata.file_type();
+    if kind.is_symlink() {
+        return Err("it is a link".into());
+    }
+    if kind.is_dir() {
+        return Err("it is a folder".into());
+    }
+    if !kind.is_file() {
+        return Err("it is not a regular file".into());
+    }
+    let file = entry(path, &metadata);
+    if file.too_big {
+        return Err(format!("it is over the {} a file can be", crate::text::size(MAX_FILE_BYTES)));
+    }
+    Ok(file)
+}
+
+fn is_link(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
+}
+
+fn not_there(error: &io::Error, top: &Path) -> String {
+    match error.kind() {
+        io::ErrorKind::NotFound | io::ErrorKind::NotADirectory => {
+            format!("it is not in `{}`, the repository's root", top.display())
+        }
+        _ => error.to_string(),
+    }
 }
 
 pub(crate) fn toplevel(root: &Path) -> Result<PathBuf> {
@@ -80,7 +154,8 @@ pub(crate) fn read(root: &Root, file: &IgnoredFile) -> Result<(Vec<u8>, u32)> {
     let Some(name) = file.path.file_name() else {
         return Err(io::Error::other(format!("{} is not a file", file.path.display())).into());
     };
-    let opened = open_within(root.open()?, file.path.parent().unwrap_or(Path::new("")), name)?;
+    let folders = file.path.parent().unwrap_or(Path::new(""));
+    let opened = open_within(root.open()?, folders, name).map_err(|error| of_file(&file.path, error))?;
     let metadata = opened.metadata()?;
     if !metadata.file_type().is_file() {
         return Err(io::Error::other(format!("{} is not a regular file", file.path.display())).into());
@@ -98,18 +173,30 @@ pub(crate) fn read(root: &Root, file: &IgnoredFile) -> Result<(Vec<u8>, u32)> {
     Ok((bytes, metadata.permissions().mode() & PERMISSIONS))
 }
 
+fn of_file(path: &Path, error: Error) -> Error {
+    match error {
+        Error::Io(e) => io::Error::new(e.kind(), format!("{}: {e}", path.display())).into(),
+        error => error,
+    }
+}
+
 fn identity(folder: &File) -> Result<(u64, u64)> {
     Ok(stat_file(folder)?.id())
 }
 
 fn regular(top: &Path, path: &Path) -> Option<IgnoredFile> {
+    path.to_str()?;
     let metadata = std::fs::symlink_metadata(top.join(path)).ok()?;
-    metadata.file_type().is_file().then(|| IgnoredFile {
+    metadata.file_type().is_file().then(|| entry(path, &metadata))
+}
+
+fn entry(path: &Path, metadata: &Metadata) -> IgnoredFile {
+    IgnoredFile {
         path: path.to_path_buf(),
         size: metadata.len(),
         mode: metadata.permissions().mode() & PERMISSIONS,
         too_big: metadata.len() > MAX_FILE_BYTES,
-    })
+    }
 }
 
 #[cfg(unix)]

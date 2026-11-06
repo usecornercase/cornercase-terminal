@@ -8,6 +8,7 @@ pub(crate) mod context;
 pub(crate) mod create;
 pub(crate) mod files;
 pub(crate) mod flow;
+pub(crate) mod held;
 pub(crate) mod issue;
 pub(crate) mod machine;
 pub(crate) mod machines;
@@ -46,7 +47,7 @@ use super::help::{
     AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
     PULL_REQUEST_HELP, RECAP_HELP, REQUESTS_HELP,
 };
-use super::help::{CLONE_HELP, MACHINES_HELP, WORKTREES_HELP};
+use super::help::{CLONE_HELP, HELD_HELP, MACHINES_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -154,6 +155,11 @@ pub(crate) enum Control {
     Send(SendArgs),
     #[command(about = "Press keys in a pane", after_help = KEYS_HELP)]
     Keys(KeysArgs),
+    #[command(
+        about = "Send now a message that `send` holds for a person typing in a pane, or say it can wait its turn",
+        after_help = HELD_HELP
+    )]
+    Held(held::HeldArgs),
     #[command(about = "Print the screen of a pane as text, or its last lines", after_help = READ_HELP)]
     Read(ReadArgs),
     #[command(
@@ -335,6 +341,7 @@ impl Control {
             Self::Start(a) => a.create.view.view,
             Self::Send(a) => a.target.view.view,
             Self::Keys(a) => a.target.view.view,
+            Self::Held(a) => a.target.view.view,
             Self::Mark(a) => a.target.view.view,
             Self::Context(a) => a.target.view.view,
             Self::Read(a) => a.view.view,
