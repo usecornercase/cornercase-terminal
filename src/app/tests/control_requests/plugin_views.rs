@@ -267,7 +267,8 @@ mod a_popup_action {
 
         let refused = p.runs(None, "board", None).expect_err("refused");
 
-        assert_eq!((refused.code.as_str(), refused.message.as_str()), ("failed", "no window is attached"));
+        assert_eq!(refused.code, "failed");
+        assert_eq!(refused.message, "no window is attached");
         assert!(p.app.popup().is_none());
     }
 
