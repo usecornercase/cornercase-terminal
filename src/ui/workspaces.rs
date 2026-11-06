@@ -25,8 +25,7 @@ use crate::text::{cells, clip_cells, truncate_cells, truncate_right};
 mod machine;
 
 pub(crate) use machine::MachineTag;
-use machine::seen_note;
-pub(super) use machine::{dim_row, machine_span, spin};
+pub(super) use machine::{dim_row, machine_span, seen_note, spin};
 
 const SHELL_ICON: &str = "›";
 
@@ -583,7 +582,7 @@ pub(super) fn draw_tab_band(
     line.push(Span::styled(name, style));
     marks.push_onto(&mut line, used, max);
     draw_band(f, band.r, Line::from(line), band.bg);
-    let note = seen_note(tab, machine);
+    let note = seen_note(tab.status, machine);
     if tab.lines(machine) > 1 {
         let buttons = row_menu_button(band.r, band.pitch).union(row_close_button(band.r, band.pitch));
         let details = if note.is_some() { &Details::default() } else { &tab.details };

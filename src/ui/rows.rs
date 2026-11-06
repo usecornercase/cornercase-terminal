@@ -244,6 +244,10 @@ impl Tags {
         self.spans.is_empty()
     }
 
+    pub(super) fn count(&self) -> usize {
+        self.spans.len().div_ceil(2)
+    }
+
     pub(super) fn place(&self, tag: usize, right: usize) -> Option<(usize, usize)> {
         let span = self.spans.get(2 * tag)?;
         let before: usize = self.spans[..2 * tag].iter().map(Span::width).sum();

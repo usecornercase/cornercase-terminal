@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
 pub(crate) const MAX_DEPTH: usize = 3;
 pub(crate) const NARROW_DEPTH: usize = 1;
@@ -13,7 +14,7 @@ pub(crate) struct Node {
     pub(crate) hidden: Vec<usize>,
 }
 
-pub(crate) fn order(rows: &[(u64, Option<u64>)], folded: &HashSet<u64>, narrow: bool) -> Vec<Node> {
+pub(crate) fn order<K: Hash + Eq + Copy>(rows: &[(K, Option<K>)], folded: &HashSet<K>, narrow: bool) -> Vec<Node> {
     let cap = if narrow { NARROW_DEPTH } else { MAX_DEPTH };
     let mut first = HashMap::new();
     for (index, (id, _)) in rows.iter().enumerate() {

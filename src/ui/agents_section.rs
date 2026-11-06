@@ -11,7 +11,8 @@ use super::rows::{MIN_MENU_ROW_WIDTH, draw_close_in};
 use super::rows::{Rows, Tags, draw_hidden, draw_rail, marker, row_close_button};
 use super::theme::status_icon;
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_separator, draw_title, middle};
-use super::workspaces::{DetailLine, Details, Guide, draw_details, draw_guide};
+use super::workspaces::{DetailLine, Details, Guide, MachineTag, draw_details, draw_guide};
+use super::workspaces::{dim_row, machine_span, seen_note, spin};
 use crate::agents::activity::Status;
 use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
@@ -26,6 +27,8 @@ const AGENT_LINES: u16 = 2;
 const MIN_WORKSPACE_WIDTH: usize = 4;
 
 const MIN_ROLE_WIDTH: usize = 4;
+
+const MIN_PLACE_WIDTH: usize = 2;
 
 const ROLE_SEPARATOR: &str = " · ";
 
@@ -72,6 +75,7 @@ pub(crate) struct AgentEntry {
     pub(crate) fold: Option<bool>,
     pub(crate) hidden: usize,
     pub(crate) attention: Option<Status>,
+    pub(crate) machine: Option<MachineTag>,
 }
 
 pub(crate) struct AgentsView {
@@ -112,37 +116,66 @@ pub(super) fn draw_agents(f: &mut Frame, view: &View, agents: &AgentsView, areas
 
 pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &AgentEntry) {
     let bg = view.row_background(r, entry.active);
+    let machine = entry.machine.as_ref();
+    let spin = spin(machine, view.spin);
     let mut line = vec![marker(entry.active), Span::raw(" ".repeat(GUIDE_STEP * entry.depth))];
     if let Some(status) = entry.status {
-        line.extend([status_icon(view.muted, status, view.spin), Span::raw(" ")]);
+        line.extend([status_icon(view.muted, status, spin), Span::raw(" ")]);
     }
     let indent = line.iter().map(Span::width).sum::<usize>();
     let close = agent_close(r, pitch);
     let room = usize::from(r.width).saturating_sub(indent + usize::from(close.width) + 1);
     let colour = if entry.active { Color::Reset } else { view.soft };
-    let tags = Tags::fit(fold_tags(entry, view), room);
+    let tags = row_tags(entry, view.muted, spin, room);
     let place = agent_place(entry, room.saturating_sub(tags.reserved()), Style::default().fg(colour), dim(view.muted));
     let used: usize = place.iter().map(Span::width).sum();
     line.extend(place);
     tags.push_onto(&mut line, used, room);
     draw_band(f, r, Line::from(line), bg);
-    draw_close_in(f, view, r, close, bg);
+    if machine.is_none() {
+        draw_close_in(f, view, r, close, bg);
+    }
     draw_fold(f, view.muted, r, entry);
-    let line = DetailLine { row: r, buttons: close, details: &entry.details, agent: Some(&entry.agent), indent };
-    draw_details(f, view.muted, line);
+    draw_second_line(f, view.muted, (r, close, indent), entry);
     draw_guides(f, view.line(), r, entry);
     if entry.active {
         draw_rail(f, r);
     }
+    dim_row(f, r, machine);
 }
 
-fn fold_tags(entry: &AgentEntry, view: &View) -> Vec<Span<'static>> {
-    if entry.fold != Some(true) {
-        return Vec::new();
+fn draw_second_line(f: &mut Frame, muted: Color, (row, buttons, indent): (Rect, Rect, usize), entry: &AgentEntry) {
+    let note = seen_note(entry.status, entry.machine.as_ref());
+    let (details, agent) = match &note {
+        Some(note) => (&Details::default(), note),
+        None => (&entry.details, &entry.agent),
+    };
+    draw_details(f, muted, DetailLine { row, buttons, details, agent: Some(agent), indent });
+}
+
+fn row_tags(entry: &AgentEntry, muted: Color, spin: Option<u8>, room: usize) -> Tags {
+    let machine = entry.machine.as_ref().map(|machine| machine_span(machine, room, muted));
+    let (attention, count) = fold_tags(entry, muted, spin);
+    let mut kept = [attention, machine, count];
+    for drop in (0..kept.len()).rev() {
+        let tags: Vec<Span<'static>> = [&kept[0], &kept[2], &kept[1]].into_iter().flatten().cloned().collect();
+        let wanted = tags.len();
+        let fitted = Tags::fit(tags, room.saturating_sub(MIN_PLACE_WIDTH));
+        if fitted.count() == wanted {
+            return fitted;
+        }
+        kept[drop] = None;
     }
-    let attention = entry.attention.map(|status| status_icon(view.muted, status, view.spin));
-    let count = (entry.hidden > 0).then(|| Span::styled(format!("+{}", entry.hidden), Style::default().fg(view.muted)));
-    attention.into_iter().chain(count).collect()
+    Tags::fit(Vec::new(), room)
+}
+
+fn fold_tags(entry: &AgentEntry, muted: Color, spin: Option<u8>) -> (Option<Span<'static>>, Option<Span<'static>>) {
+    if entry.fold != Some(true) {
+        return (None, None);
+    }
+    let attention = entry.attention.map(|status| status_icon(muted, status, spin));
+    let count = (entry.hidden > 0).then(|| Span::styled(format!("+{}", entry.hidden), Style::default().fg(muted)));
+    (attention, count)
 }
 
 fn draw_fold(f: &mut Frame, muted: Color, r: Rect, entry: &AgentEntry) {
