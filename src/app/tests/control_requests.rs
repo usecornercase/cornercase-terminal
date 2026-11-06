@@ -175,7 +175,6 @@ fn done(response: Response) -> Done {
     }
 }
 
-#[cfg(unix)]
 fn error(response: Response) -> String {
     match response {
         Response::Error(message) => message,
@@ -635,6 +634,7 @@ mod queue;
 mod recap;
 #[cfg(unix)]
 mod repos;
+mod run_setup;
 mod searching;
 mod setup;
 mod start_server;

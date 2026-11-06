@@ -80,6 +80,7 @@ pub(crate) fn takes_view(command: &Command) -> bool {
             | Command::Clone(_)
             | Command::NewWorkspace(_)
             | Command::NewTab(_)
+            | Command::RunSetup(_)
             | Command::Split(_)
             | Command::Start(_)
             | Command::StartWith(_)

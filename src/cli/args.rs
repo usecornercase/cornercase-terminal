@@ -19,6 +19,7 @@ pub(crate) mod queue;
 pub(crate) mod recap;
 pub(crate) mod requests;
 pub(crate) mod server;
+pub(crate) mod setup;
 pub(crate) mod start;
 pub(crate) mod stats;
 pub(crate) mod terminal;
@@ -46,7 +47,7 @@ use super::help::{
     AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
     PULL_REQUEST_HELP, RECAP_HELP, REQUESTS_HELP,
 };
-use super::help::{CLONE_HELP, MACHINES_HELP, WORKTREES_HELP};
+use super::help::{CLONE_HELP, MACHINES_HELP, SETUP_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -144,6 +145,11 @@ pub(crate) enum Control {
         after_help = SPLIT_HELP
     )]
     Split(SplitArgs),
+    #[command(
+        about = "Run a worktree's setup again in a new tab, as its menu's run setup does, and print its pane's id when done",
+        after_help = SETUP_HELP
+    )]
+    Setup(setup::SetupArgs),
     #[command(
         about = "Start a coding agent in a new tab, give it a prompt, and print its pane's id",
         after_help = START_HELP
@@ -331,6 +337,7 @@ impl Control {
             Self::NewWorkspace(a) => a.create.view.view,
             Self::NewTab(a) => a.create.view.view,
             Self::Split(a) => a.create.view.view,
+            Self::Setup(a) => a.create.view.view,
             Self::Start(a) => a.create.view.view,
             Self::Send(a) => a.target.view.view,
             Self::Keys(a) => a.target.view.view,

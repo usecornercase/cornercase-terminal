@@ -44,6 +44,7 @@ mod read;
 mod recap;
 mod requests;
 mod search;
+mod setup;
 mod start_server;
 mod stats;
 mod status;
@@ -222,6 +223,7 @@ fn create_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::NewWorkspace(new) => run_new_workspace(new).map(|()| true),
         Control::NewTab(new) => run_new_tab(new).map(|()| true),
         Control::Split(split) => run_split(&split).map(|()| true),
+        Control::Setup(args) => setup::run(&args).map(|()| true),
         Control::Start(start) => run_start(*start).map(|()| true),
         Control::Go(go) => run_go(go).map(|()| true),
         other => return ControlFlow::Continue(other),

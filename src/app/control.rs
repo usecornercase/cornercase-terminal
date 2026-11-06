@@ -25,6 +25,7 @@ mod recap;
 mod relay;
 mod route;
 mod search;
+mod setup;
 mod stats;
 mod status;
 mod talk;
