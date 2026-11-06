@@ -298,6 +298,18 @@ mod closed_projects {
     }
 
     #[test]
+    fn the_dialogs_frees_ending_does_not_forget_a_free_builds_request() {
+        let (mut s, at) = with_one("a");
+        let elsewhere = at.with_file_name("elsewhere");
+        s.app.git.frees.request_frees(7, at.clone());
+        s.app.git.frees.freeing(elsewhere.clone());
+
+        s.app.builds_freed(0, &elsewhere, Ok(Default::default()));
+
+        assert!(s.app.freeing_path(&at) && !s.app.freeing_path(&elsewhere));
+    }
+
+    #[test]
     fn a_folder_whose_build_folders_are_being_freed_cannot_be_ticked() {
         let (mut s, at) = with_one("a");
         s.app.git.frees.freeing(at.clone());
