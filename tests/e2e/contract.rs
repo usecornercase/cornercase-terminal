@@ -79,6 +79,7 @@ const OPERATIONS: &[&str] = &[
     "files-read",
     "files-search",
     "paste-file",
+    "config-pair",
 ];
 
 fn assert_operations(contract: &Value) {
@@ -108,7 +109,7 @@ fn assert_features_and_streams(contract: &Value) {
     {
         assert!(has_feature(contract, feature), "{feature}: {contract}");
     }
-    let streams = ["events", "app", "changes", "flow-runs", "flow-messages", "files", "view", "surface"];
+    let streams = ["events", "app", "changes", "flow-runs", "flow-messages", "files", "view", "surface", "config-pair"];
     for stream in streams {
         assert!(has_stream(contract, stream), "{stream}: {contract}");
     }

@@ -69,6 +69,7 @@ mod describing {
             Stream { name: "flow-runs".into(), version: 1 },
             Stream { name: "flow-messages".into(), version: 1 },
             Stream { name: "files".into(), version: 1 },
+            Stream { name: "config-pair".into(), version: 1 },
         ];
         assert_eq!(descriptor.streams, streams);
     }
@@ -95,7 +96,7 @@ mod describing {
         assert_eq!(keys, ["boot", "contract", "features", "operations", "streams", "version"]);
         assert_eq!(
             sent["streams"],
-            json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}, {"name": "surface", "version": 1}, {"name": "view", "version": 1}, {"name": "app", "version": 1}, {"name": "changes", "version": 1}, {"name": "flow-runs", "version": 1}, {"name": "flow-messages", "version": 1}, {"name": "files", "version": 1}])
+            json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}, {"name": "surface", "version": 1}, {"name": "view", "version": 1}, {"name": "app", "version": 1}, {"name": "changes", "version": 1}, {"name": "flow-runs", "version": 1}, {"name": "flow-messages", "version": 1}, {"name": "files", "version": 1}, {"name": "config-pair", "version": 1}])
         );
         assert_eq!(sent["operations"][0], json!({"name": "status", "available": true}));
         let search = sent["operations"].as_array().expect("a list").iter().find(|o| o["name"] == "search").cloned();

@@ -9,7 +9,7 @@ use crate::os::random;
 use crate::text::hex;
 
 pub(super) const COOKIE: &str = "cornercase";
-pub(super) const PAIRING_FOR: Duration = Duration::from_mins(10);
+pub(crate) const PAIRING_FOR: Duration = Duration::from_mins(10);
 const TOKEN_BYTES: usize = 16;
 const SECRET_BYTES: usize = 32;
 const VERSION: u32 = 1;
@@ -37,6 +37,13 @@ pub(crate) struct Pairing {
 impl Pairing {
     pub(crate) fn new(now: Instant) -> io::Result<Self> {
         Ok(Self { token: random_hex(TOKEN_BYTES)?, until: now + PAIRING_FOR })
+    }
+
+    pub(crate) fn shared(held: Option<Self>, now: Instant) -> io::Result<Self> {
+        match held.filter(|pairing| now < pairing.until) {
+            Some(pairing) => Ok(Self { until: now + PAIRING_FOR, ..pairing }),
+            None => Self::new(now),
+        }
     }
 
     pub(crate) fn accepts(&self, token: &str, now: Instant) -> bool {

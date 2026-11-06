@@ -189,6 +189,7 @@ fn newest_commands() -> Vec<Command> {
         Command::ForumServer(ForumServer { id: "8".into() }),
         Command::Held(HeldRequest { pane: None, tab: None, action: HeldAction::SendNow }),
         Command::RunSetup(RunSetup::default()),
+        Command::ConfigPair(ConfigPair { key: "browsers".into() }),
     ]
 }
 

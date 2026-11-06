@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 
+use crate::cli::help::CONFIG_PAIR_HELP;
+
 #[derive(Debug, Args)]
 pub(crate) struct ConfigArgs {
     #[command(subcommand)]
@@ -47,6 +49,11 @@ pub(crate) enum ConfigAction {
     #[command(about = "Remove a token, a bot, a paired chat or the paired browsers")]
     Remove {
         #[arg(value_name = "KEY", help = "The connection, such as linear, telegram.chat or browsers")]
+        key: String,
+    },
+    #[command(about = "Pair a phone: print the address its QR code holds, then wait for it", after_help = CONFIG_PAIR_HELP)]
+    Pair {
+        #[arg(value_name = "KEY", help = "What to pair: browsers, telegram.chat or discord.chat")]
         key: String,
     },
     #[command(about = "Pick the server of the Discord forum, once the forum's setup waits for that")]

@@ -16,6 +16,7 @@ mod idle_restart;
 mod issues;
 pub(super) mod machines;
 mod merge_check;
+mod pair;
 mod plugins;
 mod ports;
 mod processes;
@@ -91,6 +92,7 @@ pub(super) struct Clients {
     pub(super) surfaces: surfaces::Surfaces,
     pub(super) views: views::Views,
     pub(super) pasted: pasted_files::PastedFiles,
+    pub(super) pairings: pair::Pairings,
     confirm_within: Duration,
     typing_holds: Duration,
 }
@@ -105,6 +107,7 @@ impl Default for Clients {
             surfaces: surfaces::Surfaces::default(),
             views: views::Views::default(),
             pasted: pasted_files::PastedFiles::default(),
+            pairings: pair::Pairings::default(),
             confirm_within: CONFIRM_WITHIN,
             typing_holds: INPUT_HOLDS,
         }
@@ -430,6 +433,7 @@ impl App {
         self.forget_file_streams(client);
         self.forget_surfaces(client);
         self.forget_views(client);
+        self.forget_pairing(client);
         self.messages.notices.forget(client);
         self.forget_flow_reads(Some(client));
         for pending in self.clients.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {

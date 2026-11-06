@@ -6,13 +6,17 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::{App, AppEvent, Overlay, Toast};
+use crate::control::contract::{Code, Refusal};
+use crate::control::pair::{PairKey, PairShown};
 use crate::log::{self, Job, Level};
 use crate::panics;
 use crate::ui;
 use crate::web::tailscale::{self, Node, Problem};
 use crate::web::{self, Web};
 
-const CONNECTED: &str = "a browser connected";
+const REMOTE_OFF: &str =
+    "remote access is off: turn it on in Settings › Remote or with `cornercase config set remote true`";
+const NO_CODE: &str = "could not make a code, see server.log";
 const STARTING: &str = "starting…";
 const FORGOTTEN: &str = "paired browsers forgotten: each one needs a new code";
 
@@ -37,6 +41,8 @@ pub(super) struct Remote {
     on: bool,
     browsers: usize,
     token: Option<String>,
+    taken: u64,
+    dialog_since: u64,
     orders: Option<Sender<(Order, PathBuf)>>,
 }
 
@@ -46,25 +52,32 @@ impl Remote {
     }
 
     #[cfg(test)]
-    #[cfg(unix)]
     pub(super) fn phase(&self) -> &Phase {
         &self.phase
     }
 
     #[cfg(test)]
-    #[cfg(unix)]
     pub(super) fn listening(&self) -> Option<u16> {
         self.web.listening()
     }
 
     #[cfg(test)]
-    #[cfg(unix)]
     pub(super) fn set_tailscale(&mut self, program: PathBuf) {
         self.tailscale = Some(program);
     }
 
     pub(super) fn new(web: Web) -> Self {
-        Self { web, phase: Phase::Off, tailscale: None, on: false, browsers: 0, token: None, orders: None }
+        Self {
+            web,
+            phase: Phase::Off,
+            tailscale: None,
+            on: false,
+            browsers: 0,
+            token: None,
+            taken: 0,
+            dialog_since: 0,
+            orders: None,
+        }
     }
 
     pub(super) fn note(&self) -> String {
@@ -114,10 +127,14 @@ impl App {
         }
     }
 
-    pub(super) fn sync_remote(&mut self) {
-        if !matches!(self.overlay, Some(Overlay::Remote)) && self.remote.token.take().is_some() {
+    pub(in crate::app) fn drop_browser_code(&mut self) {
+        if !self.pairing_held(PairKey::Browsers) && self.remote.token.take().is_some() {
             self.remote.web.unpair();
         }
+    }
+
+    pub(super) fn sync_remote(&mut self) {
+        self.drop_browser_code();
         if self.config.remote == self.remote.on {
             return;
         }
@@ -189,11 +206,12 @@ impl App {
 
     pub(super) fn web_event(&mut self, event: web::Event) {
         match event {
-            web::Event::Paired => {
-                if matches!(self.overlay, Some(Overlay::Remote)) {
+            web::Event::Paired(taken) => {
+                if matches!(self.overlay, Some(Overlay::Remote)) && self.remote.dialog_since < taken {
                     self.overlay = None;
                 }
-                self.messages.toast = Some(Toast::new(CONNECTED, ui::ToastIcon::Check));
+                self.browser_paired(taken);
+                self.messages.toast = Some(Toast::new(PairKey::Browsers.connected(None), ui::ToastIcon::Check));
                 self.settings_changed();
             }
             web::Event::Browsers(n) => self.remote.browsers = n,
@@ -201,18 +219,54 @@ impl App {
         self.refresh_remote_note();
     }
 
-    pub(super) fn open_remote(&mut self) {
+    fn retry_remote(&mut self) {
         if self.remote.on && matches!(self.remote.phase, Phase::Failed(_)) {
             self.start_remote();
         }
-        self.remote.token = match self.remote.web.pair(Instant::now()) {
-            Ok(token) => Some(token),
+    }
+
+    fn hold_browser_code(&mut self, now: Instant) {
+        if !self.pairing_held(PairKey::Browsers) {
+            self.remote.web.unpair();
+        }
+        match self.remote.web.pair(now) {
+            Ok((token, count)) => {
+                self.remote.token = Some(token);
+                self.remote.taken = count;
+            }
             Err(e) => {
                 log::error!("web", "cannot make a pairing code", error = e);
-                None
+                self.remote.token = None;
             }
-        };
+        }
+    }
+
+    pub(super) fn open_remote(&mut self) {
+        self.retry_remote();
+        self.hold_browser_code(Instant::now());
+        self.remote.dialog_since = self.remote.taken;
         self.overlay = Some(Overlay::Remote);
+    }
+
+    pub(in crate::app) fn request_browser_code(&mut self, now: Instant) -> Result<u64, Refusal> {
+        self.retry_remote();
+        self.sync_remote();
+        if let Some(refusal) = self.browsers_down() {
+            return Err(refusal);
+        }
+        self.hold_browser_code(now);
+        if self.remote.token.is_none() {
+            return Err(Refusal::new(Code::Failed, NO_CODE));
+        }
+        Ok(self.remote.taken)
+    }
+
+    pub(in crate::app) fn browsers_down(&self) -> Option<Refusal> {
+        match &self.remote.phase {
+            Phase::Off => Some(Refusal::new(Code::Conflict, REMOTE_OFF)),
+            Phase::Failed(why) => Some(Refusal::new(Code::Unavailable, why.clone())),
+            Phase::Starting | Phase::Ready(_) => None,
+        }
     }
 
     pub(super) fn forget_browsers(&mut self) -> Result<&'static str, String> {
@@ -235,7 +289,7 @@ impl App {
         set_up.then_some(self.remote.browsers > 0 || self.away_anywhere())
     }
 
-    pub(super) fn remote_view(&self) -> ui::RemoteAccess {
+    pub(in crate::app) fn remote_shown(&self) -> PairShown {
         let (url, lines) = match (&self.remote.phase, &self.remote.token) {
             (Phase::Ready(node), Some(token)) => (
                 Some(format!("{}{}?t={token}", node.url(), web::PAIR_PATH)),
@@ -244,11 +298,16 @@ impl App {
                     format!("the phone needs the Tailscale app, logged in as {}.", node.login),
                 ],
             ),
-            (Phase::Ready(_), None) => (None, vec!["could not make a code, see server.log".into()]),
+            (Phase::Ready(_), None) => (None, vec![NO_CODE.into()]),
             (Phase::Starting, _) => (None, vec!["starting Tailscale…".into()]),
             (Phase::Off, _) => (None, vec!["turn on remote access in Settings › Remote".into()]),
             (Phase::Failed(why), _) => (None, vec![why.clone(), "fix it, then open Remote again".into()]),
         };
+        PairShown { url, lines }
+    }
+
+    pub(super) fn remote_view(&self) -> ui::RemoteAccess {
+        let PairShown { url, lines } = self.remote_shown();
         let code = url.as_deref().map(ui::remote_access::code).unwrap_or_default();
         ui::RemoteAccess { title: ui::remote_access::TITLE, url, code, lines }
     }
