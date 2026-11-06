@@ -64,6 +64,19 @@
               9
             ]
           ]
+        },
+        {
+          "kind": "context",
+          "old": 3,
+          "new": 3,
+          "text": "    done();",
+          "raw": "\tdone();",
+          "syntax": [
+            {
+              "style": 1,
+              "text": "    done();"
+            }
+          ]
         }
       ]
     }

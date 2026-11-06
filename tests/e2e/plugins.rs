@@ -42,7 +42,7 @@ fn pid_in(path: &Path) -> Option<i32> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-fn alive(pid: i32) -> bool {
+pub(super) fn alive(pid: i32) -> bool {
     std::process::Command::new("kill").args(["-0", &pid.to_string()]).status().is_ok_and(|s| s.success())
 }
 

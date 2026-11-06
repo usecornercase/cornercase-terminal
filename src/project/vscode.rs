@@ -34,7 +34,7 @@ struct Entry {
 }
 
 pub(crate) fn is_workspace(path: &Path) -> bool {
-    path.extension().is_some_and(|e| e == EXTENSION)
+    path.extension().is_some_and(|e| e == EXTENSION) && path.is_file()
 }
 
 pub(crate) fn read(file: &Path) -> Result<Workspace> {

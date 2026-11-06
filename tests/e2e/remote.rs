@@ -78,7 +78,7 @@ pub(super) fn remotely(session: &Session, args: &[&str]) -> std::process::Comman
     cmd
 }
 
-fn remote_says(session: &Session, args: &[&str]) -> String {
+pub(super) fn remote_says(session: &Session, args: &[&str]) -> String {
     let out = remotely(session, args).output().expect("run cornercase");
     assert!(out.status.success(), "cornercase --remote {args:?} failed: {out:?}");
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()
@@ -318,9 +318,15 @@ fn cornercase_remote_reaches_it_too_but_stays_out_of_its_panes() {
 }
 
 #[rstest]
-#[case::the_flag(&["--remote", "devbox", "plugin", "install", "x"], None, "plugin")]
-#[case::the_variable(&["plugin", "install", "x"], Some("devbox"), "plugin")]
-fn commands_of_this_machine_refuse_remote(#[case] args: &[&str], #[case] var: Option<&str>, #[case] name: &str) {
+#[case::the_flag(&["--remote", "devbox", "plugin", "install", "x"], None, "`plugin` acts on this machine")]
+#[case::the_variable(&["plugin", "install", "x"], Some("devbox"), "`plugin` acts on this machine")]
+#[case::window_processes(&["--remote", "devbox", "plugin", "windows"], None, "machine that shows the window")]
+#[case::window_processes_by_the_variable(
+    &["plugin", "windows", "--json"],
+    Some("devbox"),
+    "shows the window, so it takes no --remote, which CORNERCASE_REMOTE=devbox sets"
+)]
+fn commands_of_this_machine_refuse_remote(#[case] args: &[&str], #[case] var: Option<&str>, #[case] message: &str) {
     let session = Session::new();
     let mut cmd = session.cold_command();
     cmd.env("PATH", fake_ssh(&session.dir, "")).args(args);
@@ -330,7 +336,7 @@ fn commands_of_this_machine_refuse_remote(#[case] args: &[&str], #[case] var: Op
 
     let out = cmd.output().expect("run cornercase");
 
-    assert!(refused(&out, 2, &format!("`{name}` acts on this machine")), "{out:?}");
+    assert!(refused(&out, 2, message), "{out:?}");
     assert_eq!(ssh_pid(&session), "", "ssh never ran");
 }
 

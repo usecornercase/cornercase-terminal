@@ -60,6 +60,12 @@ pub(crate) struct StartArgs {
     pub(crate) until: Option<UntilArg>,
     #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Give up after this long, with status 1")]
     pub(crate) timeout: Option<f64>,
+    #[arg(
+        long,
+        conflicts_with_all = ["wait", "until", "timeout"],
+        help = "Answer as soon as the tab is open, with the same ids, while the launch goes on: for a program that shows the new tab itself"
+    )]
+    pub(crate) placed: bool,
     #[command(flatten)]
     pub(crate) issue: issue::IssueArg,
     #[command(flatten)]

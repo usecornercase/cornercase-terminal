@@ -242,7 +242,6 @@ impl App {
     }
 
     fn usage_or_setup_reply(&self, pending: &Pending, now: Instant) -> Option<Reply> {
-        let pane = pending.done.ids.pane.unwrap_or_default();
         match &pending.stage {
             Stage::Usage(waiting) => self.usage_read(waiting, now).map(|plans| Ok(json(&plans))),
             Stage::PullRequest(workspace) => self.pull_request_reply(*workspace),
@@ -251,7 +250,7 @@ impl App {
             Stage::Recap { choice, answers } => self.recap_reply(*choice, *answers),
             Stage::Dossier(token) => self.dossier_reply(*token),
             Stage::Setup(workspace) if !self.workspace_setting_up(*workspace) => {
-                Some(self.setup_failure(pane).map_or_else(|| Ok(json(&pending.done)), Err))
+                Some(self.setup_reply(*workspace, &pending.done))
             }
             _ => None,
         }

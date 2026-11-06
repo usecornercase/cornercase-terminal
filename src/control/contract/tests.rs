@@ -46,6 +46,7 @@ mod describing {
             "files",
             "machines",
             "machine-usage",
+            "stats-cached",
             "machine-workspaces",
             "machine-start",
             "machine-retry-at",

@@ -2,9 +2,76 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.3
+## 0.13.18
 
 - **Your own UI can say when a machine's link tries again.** `cornercase machines --json` and the `machines` of `cornercase status --app` and `status --json` now have `retry_at`, the UTC time a link that fell tries next, in the form of `seen`, so a card of your own can count down to it as the window's `reconnecting in 4 s` does. It stays put until that try fails, so `status --app --follow` prints a line when it moves, not every second; a time that has passed means the try is under way, and `cornercase machines retry`, this computer waking up or changing network move it to that moment. It is left out while the link is up or connecting, and while it waits on a person: `state` says why for an older cornercase, and `error` for a missing one, this computer or the same server as another machine. `cornercase contract` lists the feature `machine-retry-at`.
+
+## 0.13.16
+
+- **Import a VS Code workspace from a script or another app.** `cornercase open work.code-workspace` does what choosing that file in the folder picker does: a group named after the file (a group of that name is reused), each of its folders a project in it, a folder already open moved there, a folder's `name` kept as the project's name unless you named it, folders that are gone or on another machine skipped. It prints the group's id; `--json` prints `{"group", "name", "projects", "missing", "failed"}`, what the picker's message says, and it exits with 3 when a folder was gone or couldn't start its shell, or nothing was imported. `--focus` shows its first project. The file is read on the server's machine, so `cornercase --remote devbox open '~/code/work.code-workspace'` imports the one on `devbox`.
+- **`cornercase open --into GROUP`** opens a folder in that group, or moves it there when it is already open, and imports a `.code-workspace` file there, as the group's **add project** does. Over the socket it is `open`'s `into`, with the feature `open-code-workspace`, for clients that draw cornercase themselves. A folder without it answers as before.
+- In the folder picker, importing a folder whose project was still closing now opens it again, instead of adding the closing project to the group, from which it then disappeared.
+
+## 0.13.15
+
+- **A program that draws cornercase itself can keep the plugins' window processes running.** Run `cornercase plugin windows` for as long as your window is open, and what each plugin that is on declares as `[[window]]` runs beside it, as beside cornercase's own window: it picks up a plugin turned on or off within a second, starts again what stops, keeps what `plugin remove` waits for, and needs no server. With `--json` it prints one line per change (`running` with its pid, `stopped` with the seconds until it starts again), so your program can show it. It stops them all on a signal or `Ctrl+C`, and when the reader of its output goes away; `SIGKILL`, which is what Rust's `Child::kill` sends, can't be caught, so close the pipe or send `SIGTERM` instead. Two programs run two copies, as two windows do. It refuses `--remote`, since those processes run on the machine that shows the window. It stays the version it started as until you start it again, and what it starts after `cornercase update` gets the new binary as `CORNERCASE_BIN`. On Windows a reader that left is noticed only at the next line it can't write. Settings › Plugins and `plugin status` now name the command where they say where a window process runs.
+
+## 0.13.14
+
+- **`cornercase start --placed`: the new tab's ids as soon as it is open.** A program that shows the new tab itself no longer has to wait for the agent, or to guess which tab is the new one: `cornercase start claude --machine vps --project 2 --issue '#7' --placed --json` answers with the project, workspace, tab and pane once the tab is open, here or on a machine, even while the agent asks whether to trust the folder, and the launch goes on, as it does from the window's dialogs. It takes no `--wait`, `--until` or `--timeout`, and it needs a server of 0.13.0 or newer, which the command checks.
+
+## 0.13.13
+
+- **Run a worktree's setup again from a script or another program.** `cornercase setup --workspace ID` (or `--worktree BRANCH`; by default the workspace it runs in) does what **run setup** in the workspace's menu does: a new tab runs the project's setup with `CORNERCASE_ROOT`, `CORNERCASE_WORKTREE` and `CORNERCASE_BRANCH` set, the workspace reads `setup: running`, its failed mark goes, and agents started there wait for it. It returns once the setup is done, with the pane's id, or exits with 1 naming the exit status. It takes `--focus`, `--view` and `--json` as `new-tab` does, and says why it refuses a workspace that is not a worktree, a project with no setup or a setup already running. Other programs send the `run-setup` request. `new-workspace --worktree` no longer says that an agent did not start, since it starts none, and it now fails when the setup's tab is closed before the setup ended.
+
+## 0.13.12
+
+- **The server of the Discord forum can be picked from a script or another program.** With forum mode on and the app in several of your servers, `cornercase status --app` now lists them in Discord's `forum`, as `servers`, each with its `id` and `name`, and `cornercase config forum-server ID` picks one, as a click in the forum's dialog does: the channel is made there, the same message shows, and `forum` goes on to `ready`. An id that is not in the list, or a moment when no pick is waiting, is refused and says why. Nothing changes in the window.
+- `cornercase status --app` no longer names a step of the forum's setup once the bot or its paired chat is gone.
+
+## 0.13.11
+
+- **A program with a view of its own can run a plugin's buttons and popups.** `cornercase plugin run PLUGIN ACTION --view ID` runs a `button` action on what that view shows rather than on what cornercase's window shows: it gets `CORNERCASE_CONTEXT=button`, the view's ids and its workspace's folder. A popup action opens with it even with no window attached, sized from the view, so someone who only uses that program can open one, and it follows `view-set`. If the view goes away, the popup stays open as it does when the last window leaves. Without `--view` nothing changes. `cornercase contract` lists the feature `plugin-run-view`, and socket clients send `view` beside the command, as for `focus` and `start`.
+
+## 0.13.10
+
+- **Clone with the files git ignores, from a script.** `cornercase clone URL FOLDER --file .env --file web/.env.local` copies those files into the new clone with their permissions, as the Clone on machine dialog does with the ones you tick. With `--remote` the command reads them on your computer and the other machine writes them, so another program can offer the same form: `cornercase --remote vps clone git@github.com:acme/shop.git '~/code' --file .env --from ~/code/shop --json`. A path out of the repository, a missing file, a folder, a link or a file over 1 MB is refused by name before anything is cloned. A file the clone can't take, such as one the repository has, is named, under `unwritten` with `--json`, and the command exits 3.
+- **List what can be copied.** `cornercase clone --list-ignored --from ~/code/shop --json` prints the git-ignored files the dialog offers, each with its size and `too_big`, and `left_out` for those past the first 200. It reads your computer's folder, with or without `--remote`, and needs no server.
+- On Windows, `--file` and `--list-ignored` say they aren't supported yet, as the dialog does there.
+- The Clone on machine dialog no longer offers a file whose name isn't UTF-8, which made the whole clone fail when ticked, and a file it can't open now names itself in the toast.
+
+## 0.13.9
+
+- **A program that draws cornercase can now act on a held message.** When `cornercase send` holds a message because someone is typing in a pane, the window's bar offers ` send now ` and ` wait turn `. `cornercase held --pane 9 --send-now` does the first (the first held message goes at once, as `send --force` does, still after an earlier message's Enter) and `cornercase held --pane 9 --wait-turn` the second (it only says the person saw it). Both refuse in words when nothing is held in that pane, and print what is held now (`--json` for `held_sends`, `held_from` and `held_queued`); the `held` request does the same on the socket. Each pane in `status --json`, `status --follow` and `view` also has `held_from`, the pane that sent the first held message, and `held_queued`, true once ` wait turn ` covers the newest one, so another window's bar can read as this one's. Nothing changes in cornercase's own window.
+- `cornercase status --help` now lists every column of `--panes`, in order: it left out `held_sends`, `draft`, `account_restart`, `pid` and `memory`, so counting positions from it read the wrong column.
+
+## 0.13.8
+
+- **`cornercase close` and `rename` can say which run of the server their id is from.** Ids last one run of the server, so a script or another window that read an id, and then met a restart on its way, could close or rename whatever has that id now. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing closes or changes, the command prints why and exits with status 4 (`cornercase --remote vps close --workspace 7 --boot "$boot"`). It works in every form of the two commands, with `--worktree`, `--check` and `--agent`, on a line of `requests --follow` for that line only, and against a server too old to know `boot` it is refused before anything is sent, since that server would ignore the flag and act. Every other command prints what it printed.
+
+## 0.13.7
+
+- **Copy a changed line with its tabs from your own client.** `cornercase changes file --json` and `changes gap --json` now give a line that holds a tab a `raw` beside `text`: the line as it is in the file. `text` stays what a window draws, with tabs as four spaces, so a script or another UI that reads it sees nothing change; one that copies takes `raw` when a line has one, and a Makefile rule or a Go line pastes as it was. `cornercase changes file --help` lists every field of a line.
+- A selection copied in the Changes panel of a machine's workspace keeps its tabs now, as it does on this computer.
+
+## 0.13.6
+
+- **Another window or a script can tell when the accounts change.** `cornercase status --app` now has `accounts_revision`, a number that moves each time the accounts `cornercase account list` names change: `account add`, `account remove`, or a folder another program made or deleted, seen within a second. `cornercase status --app --follow` prints a line for each change, so a client lists the accounts again only then, rather than on a timer, and a first account added by a command typed in a pane reaches it at once. Nothing else told it before, since neither of these changes `config.json`. The number is left out until it first moves, so nothing changes on a server without accounts, and `cornercase contract` lists the feature `accounts-revision` to tell this server from an older one. Nothing changes in the window.
+
+## 0.13.5
+
+- **A machine's last stats, without waiting for it.** `cornercase stats --cached --machine vps` and `--machine all` answer at once with the numbers your server read last and ask nobody, as `usage --cached` does: each machine with when it was read and last seen, its state and any error. Under `all`, a machine with no numbers yet is left out of the sum with `not read yet`; named alone, it fails and says why. A window or a script can show those numbers first, then run `cornercase stats --machine all` and show the fresh ones when they come. It is the `cached` field of the `stats` request, with the feature `stats-cached`, so a program can check that the server has it.
+- `cornercase stats --machine vps` of a machine that is down now puts its numbers on the right days of the heatmap, as `--machine all` and the Usage dialog already did.
+
+## 0.13.4
+
+- **Machines: a machine's agents in the agents section.** With the agents section on (Settings › UI › agents section), every agent running on a linked machine gets a row there beside yours, under its project and tagged `☁ vps`, with its state, kind, model and context. A click shows that agent's tab on the machine, live, as a click on its workspace in the sidebar does. The rows fold like yours: the arrow, the `+n` and the attention of the hidden agents, and **collapse** / **expand** in the menu fold the agent on its machine. A machine that is down keeps its rows, dimmed, with `seen 2 min ago`, and pressing its arrow there says that nothing was sent. The compact mode's `Agents` menu lists them too.
+- **Not on those rows yet:** close agent, mark as pending review and view context.
+
+## 0.13.3
+
+- **`cornercase status --json`, `status --follow` and `view` name the conversation a pane's agent is in**, as `conversation` on each pane: the id `places` gives in `cornercase recap --json`, `null` until the agent has one (for most agents, until its first prompt) and always for opencode. A program driving cornercase can now follow a recap's place as the panel's links do: the pane with the place's `agent` and `conversation`, then `pane` while `boot` is the server's, so it finds a conversation that a `cornercase restart`, or `agents close` and `agents reopen`, moved to another pane. A new id sends one more line to `status --follow` and `view`.
+- **A recap's place keeps its conversation's id once the pane closed.** A conversation whose id came after it was first seen, as it does for most agents, had none in the journal, so a place written while it was closed could not find it again after `agents reopen`, in the panel or from a script.
 
 ## 0.13.2
 

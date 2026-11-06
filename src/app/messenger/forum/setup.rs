@@ -177,12 +177,13 @@ impl App {
         }
     }
 
-    fn pick_forum_server(&mut self, via: Via, i: usize) {
+    pub(super) fn pick_forum_server(&mut self, via: Via, i: usize) {
         let setup = &mut self.messenger_mut(via).forum.setup;
         let server = setup.checklist.as_ref().and_then(|checklist| checklist.servers.get(i)).map(|server| server.id);
         if server.is_some() {
             setup.chosen = server;
             setup.every.closed();
+            self.refresh_messenger_note(via);
         }
     }
 

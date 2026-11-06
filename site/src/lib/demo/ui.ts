@@ -159,6 +159,7 @@ const AGENTS_TITLE = 'Agents';
 const NO_AGENTS = 'no agents running';
 const MIN_WORKSPACE_WIDTH = 4;
 const MIN_ROLE_WIDTH = 4;
+const MIN_PLACE_WIDTH = 2;
 const ROLE_SEPARATOR = ' · ';
 const MOVE_LABEL = 'move here';
 const SWAP_LABEL = 'swap';
@@ -964,7 +965,7 @@ export class Painter {
     const indent = width(line);
     const close = r.w < MIN_MENU_ROW_WIDTH ? EMPTY : closeButton(r, pitch);
     const room = Math.max(0, r.w - indent - close.w - 1);
-    const tags = fitTags(foldTags(entry, spinAt(this.app)), room);
+    const tags = agentTags(entry, spinAt(this.app), room);
     const place = agentPlace(entry, room - tags.reserved, { fg: entry.active ? DEFAULT : 7 });
     line.push(...place);
     pushTags(line, tags, width(place), room);
@@ -1691,6 +1692,10 @@ export class Painter {
     this.span(b.x, b.y, ` ${label} `, this.hovered(b) ? PRESSED : { fg: 6, add: BOLD });
     this.region({ r: b, click: act, cursor: 'pointer' });
   }
+}
+
+export function agentTags(entry: AgentRow, now: number | null, room: number): Tags {
+  return fitTags(foldTags(entry, now), room - MIN_PLACE_WIDTH);
 }
 
 function foldTags(entry: AgentRow, now: number | null): Seg[] {

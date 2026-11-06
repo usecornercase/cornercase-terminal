@@ -7,8 +7,10 @@ use super::App;
 use super::input::WHEEL_ROWS;
 use super::overlay::Overlay;
 use super::toast::Toast;
+use crate::control::ImportedWorkspace;
 use crate::error::Result;
 use crate::log::{self};
+use crate::os::fs::canonical;
 use crate::project::Hierarchy;
 use crate::project::picker::Picker;
 use crate::project::vscode;
@@ -31,14 +33,15 @@ impl App {
     }
 
     fn open_chosen(&mut self, path: PathBuf, group: Option<u64>, area: Rect) -> Result<()> {
-        if !(vscode::is_workspace(&path) && path.is_file()) {
+        if !vscode::is_workspace(&path) {
             self.overlay = None;
-            return self.open_into(path, group, None, area);
+            return self.open_into(path, group, area);
         }
         match vscode::read(&path) {
             Ok(workspace) => {
                 self.overlay = None;
-                self.import_workspace(workspace, group, area);
+                let imported = self.import_workspace(workspace, group, area);
+                self.show_imported(&imported);
                 Ok(())
             }
             Err(e) => {
@@ -50,16 +53,10 @@ impl App {
         }
     }
 
-    fn open_into(&mut self, dir: PathBuf, group: Option<u64>, name: Option<String>, area: Rect) -> Result<()> {
+    fn open_into(&mut self, dir: PathBuf, group: Option<u64>, area: Rect) -> Result<()> {
         self.open_project(dir, area)?;
-        let Some(project) = self.projects.get_mut(self.active) else { return Ok(()) };
-        if project.name.is_none() {
-            project.name = name;
-        }
         if let Some(g) = group {
-            project.group = Some(g);
-            let closing = project.closing;
-            self.cancel_pending_group_deletion(group, closing);
+            self.join_group(self.active, g);
             if let Some(entry) = self.group_mut(g) {
                 entry.collapsed = false;
             }
@@ -67,36 +64,69 @@ impl App {
         Ok(())
     }
 
-    fn import_workspace(&mut self, workspace: vscode::Workspace, group: Option<u64>, area: Rect) {
-        let existing = group.or_else(|| self.groups.iter().find(|g| g.entry.name == workspace.name).map(|g| g.id));
-        let group = existing.unwrap_or_else(|| self.add_group(workspace.name.clone()));
-        let (mut opened, mut missing, mut failed) = (Vec::new(), 0, 0);
-        for folder in workspace.folders {
-            if !folder.path.is_dir() {
-                missing += 1;
-                continue;
-            }
-            let folder_name = folder.path.file_name().map(|n| n.to_string_lossy().into_owned());
-            let name = folder.name.filter(|n| Some(n) != folder_name.as_ref());
-            if let Err(e) = self.open_into(folder.path.clone(), Some(group), name, area) {
-                log::error!("app", "could not import a folder", folder = folder.path.display(), error = e);
-                failed += 1;
-                continue;
-            }
-            if let Some(id) = self.project().map(|p| p.id).filter(|id| !opened.contains(id)) {
-                opened.push(id);
-            }
+    pub(in crate::app) fn join_group(&mut self, p: usize, group: u64) {
+        let project = &mut self.projects[p];
+        project.group = Some(group);
+        let closing = project.closing;
+        self.cancel_pending_group_deletion(Some(group), closing);
+    }
+
+    pub(in crate::app) fn import_workspace(
+        &mut self,
+        workspace: vscode::Workspace,
+        into: Option<u64>,
+        area: Rect,
+    ) -> ImportedWorkspace {
+        let vscode::Workspace { name, folders } = workspace;
+        let existing = into.or_else(|| self.groups.iter().find(|g| g.entry.name == name).map(|g| g.id));
+        let group = existing.unwrap_or_else(|| self.add_group(name.clone()));
+        let mut imported = ImportedWorkspace { group: Some(group), ..ImportedWorkspace::default() };
+        for folder in folders {
+            self.import_folder(folder, group, area, &mut imported);
         }
-        if opened.is_empty() && existing.is_none() {
+        if imported.projects.is_empty() && existing.is_none() {
             self.delete_group(group);
+            imported.group = None;
         }
-        if let Some(i) = opened.first().and_then(|&id| self.projects.project_index(id)) {
+        imported.name = self.group(group).map_or(name, |g| g.name.clone());
+        imported
+    }
+
+    fn import_folder(&mut self, folder: vscode::Folder, group: u64, area: Rect, imported: &mut ImportedWorkspace) {
+        if !folder.path.is_dir() {
+            imported.missing += 1;
+            return;
+        }
+        let p = match self.open_folder(canonical(folder.path.clone()), Some(area)) {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("app", "could not import a folder", folder = folder.path.display(), error = e);
+                imported.failed += 1;
+                return;
+            }
+        };
+        let folder_name = folder.path.file_name().map(|n| n.to_string_lossy().into_owned());
+        let project = &mut self.projects[p];
+        if project.name.is_none() {
+            project.name = folder.name.filter(|n| Some(n) != folder_name.as_ref());
+        }
+        let id = project.id;
+        self.join_group(p, group);
+        if !imported.projects.contains(&id) {
+            imported.projects.push(id);
+        }
+    }
+
+    fn show_imported(&mut self, imported: &ImportedWorkspace) {
+        if let Some(i) = imported.projects.first().and_then(|&id| self.projects.project_index(id)) {
             self.leave_remote();
             self.active = i;
+            if let Some(entry) = imported.group.and_then(|g| self.group_mut(g)) {
+                entry.collapsed = false;
+            }
         }
-        let name = self.group(group).map_or(workspace.name, |g| g.name.clone());
-        let icon = if failed == 0 { ui::ToastIcon::Check } else { ui::ToastIcon::Bug };
-        self.messages.toast = Some(Toast::new(import_message(&name, opened.len(), missing, failed), icon));
+        let icon = if imported.failed == 0 { ui::ToastIcon::Check } else { ui::ToastIcon::Bug };
+        self.messages.toast = Some(Toast::new(imported.message(), icon));
     }
 
     fn picker_rows(area: Rect) -> usize {
@@ -186,15 +216,4 @@ impl App {
             empty: "no folders here",
         })
     }
-}
-
-fn import_message(group: &str, opened: usize, missing: usize, failed: usize) -> String {
-    let imported = match opened {
-        0 => format!("nothing imported from {group}"),
-        1 => format!("1 project imported into {group}"),
-        n => format!("{n} projects imported into {group}"),
-    };
-    let missing = (missing > 0).then(|| format!("{missing} not found"));
-    let failed = (failed > 0).then(|| format!("{failed} could not open, see server.log"));
-    [Some(imported), missing, failed].into_iter().flatten().collect::<Vec<_>>().join(", ")
 }

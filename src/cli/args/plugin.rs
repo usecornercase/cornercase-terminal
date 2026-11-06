@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand};
 
 use super::{LogsArgs, Print, Which};
+use crate::cli::help::PLUGIN_WINDOWS_HELP;
 use crate::plugins::install::is_commit;
 
 #[derive(Debug, Args)]
@@ -60,11 +61,16 @@ pub(crate) enum PluginAction {
     },
     #[command(
         about = "Run a plugin's action on a project, workspace, tab or pane as its menu entry does, or a button's on \
-                 what the window shows; asks the server"
+                 what the window or a view shows; asks the server"
     )]
     Run(RunArgs),
     #[command(about = "Close the plugin popup that is open; asks the server")]
     PopupClose,
+    #[command(
+        about = "Keep the plugins' window processes running until it ends, for a program that draws its own window",
+        after_help = PLUGIN_WINDOWS_HELP
+    )]
+    Windows(Print),
     #[command(about = "Turn a plugin on: it runs as you, with access to every terminal")]
     Enable {
         #[arg(value_name = "ID")]
@@ -93,6 +99,13 @@ pub(crate) struct RunArgs {
     pub(crate) action: String,
     #[command(flatten)]
     pub(crate) which: Which,
+    #[arg(
+        long,
+        value_name = "ID",
+        help = "Act for this view (see `cornercase view`): a button action with no target runs on what it shows, and \
+                a popup opens with no window attached, sized from it"
+    )]
+    pub(crate) view: Option<u64>,
     #[arg(
         long,
         value_name = "N",

@@ -15,6 +15,7 @@ use crate::log;
 use crate::os::fs::{Lock, OpenOptionsExt, locked, try_lock};
 use crate::os::process::{Grouped, Signal};
 use crate::panics;
+use crate::paths;
 use crate::process;
 
 const CHECK_EVERY: Duration = Duration::from_millis(250);
@@ -110,10 +111,19 @@ impl Supervisor {
         Self { kind, stop: Some(tx), thread: Some(thread), notes, steps }
     }
 
+    pub(crate) fn of_a_window() -> Self {
+        let places = Places::new(&paths::config(), &paths::session());
+        Self::start(Kind::Window, places, Vec::new())
+    }
+
     #[cfg(test)]
     #[cfg(unix)]
     fn steps(&self) -> usize {
         self.steps.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn notes(&self) -> Notes {
+        self.notes.clone()
     }
 
     pub(crate) fn seen(&self, plugin: &str) -> Vec<(String, Seen)> {

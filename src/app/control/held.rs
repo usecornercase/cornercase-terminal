@@ -3,9 +3,10 @@ use std::time::Instant;
 
 use super::idle_restart::INPUT_HOLDS;
 use super::wait::Condition;
-use super::{Pending, Stage, Waits, json};
+use super::{Asker, Handled, Pending, Stage, Waits, conflict, json};
 use crate::agents::launch::Launch;
 use crate::app::App;
+use crate::control::{HeldAction, HeldInfo, HeldRequest};
 use crate::log;
 use crate::project::Hierarchy;
 use crate::term::typing::DRAFT_FOR;
@@ -75,11 +76,40 @@ impl App {
         self.held(pane).count()
     }
 
+    pub(super) fn held_info(&self, pane: u64) -> HeldInfo {
+        let acked = self.clients.requests.queued.get(&pane).copied();
+        HeldInfo {
+            pane,
+            held_sends: u32::try_from(self.held_sends(pane)).unwrap_or(u32::MAX),
+            held_from: self.held(pane).next().and_then(|first| first.from),
+            held_queued: self.held_keys(pane).max().zip(acked).is_some_and(|(newest, acked)| acked >= newest),
+        }
+    }
+
     pub(in crate::app) fn held_label(&self, pane: u64) -> Option<(String, bool)> {
-        let first = self.held(pane).next()?;
-        let newest = self.held_keys(pane).max()?;
-        let queued = self.clients.requests.queued.get(&pane).is_some_and(|acked| *acked >= newest);
-        Some((label(self.held_sends(pane), first.from, queued), queued))
+        let count = self.held_sends(pane);
+        let HeldInfo { held_from, held_queued, .. } = self.held_info(pane);
+        (count > 0).then(|| (label(count, held_from, held_queued), held_queued))
+    }
+
+    pub(super) fn held_request(&mut self, asker: Asker, request: &HeldRequest) -> Handled {
+        let pane = self.target(asker, request.pane, request.tab)?;
+        if self.held_sends(pane) == 0 {
+            return Err(conflict(format!(
+                "no message is held in pane {pane}; `cornercase status` shows `held_sends` for each pane"
+            )));
+        }
+        match request.action {
+            HeldAction::SendNow if self.resume_holds(pane) => {
+                return Err(conflict(format!(
+                    "pane {pane} is restarting or resuming its agent, and the message would reach its shell or its \
+                     start-up instead; try again once `cornercase status` no longer shows it resuming"
+                )));
+            }
+            HeldAction::SendNow => self.send_held_now(pane),
+            HeldAction::WaitTurn => self.queue_held(pane),
+        }
+        Ok(Some(json(&self.held_info(pane))))
     }
 
     fn held_keys(&self, pane: u64) -> impl Iterator<Item = u64> {

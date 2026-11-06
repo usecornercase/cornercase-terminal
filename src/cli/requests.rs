@@ -18,6 +18,8 @@ use crate::os::console::AsFd as _;
 
 const ONLY_STANDARD_INPUT: &str =
     "--follow reads its commands from standard input, one per line: give - as the only argument";
+const KEEPS_RUNNING: &str = "`plugin windows` keeps running until it is stopped, so it cannot run on a line: run \
+                             `cornercase plugin windows` on its own, on the machine that shows the window";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -135,6 +137,7 @@ fn checked(cli: Cli, name: &str) -> std::result::Result<Command, Answer> {
         Kind::Run => Err(Answer::refused(alone(name))),
         Kind::Here(name) => Err(Answer::refused(format!("`{name}` acts on this machine, so it cannot run on a line"))),
         Kind::Apart(name) => Err(Answer::refused(format!("`{name}` cannot run on a line of `cornercase requests`"))),
+        Kind::BesideTheWindow => Err(Answer::refused(KEEPS_RUNNING)),
     }
 }
 
@@ -161,6 +164,7 @@ fn outcome(result: Result<bool>, printed: Printed, name: &str) -> Answer {
         Err(Error::Partial) => (3, None),
         Err(Error::Exited(code)) => (code, None),
         Err(Error::WrongUsage(message)) => (2, Some(message)),
+        Err(Error::StaleBoot(message)) => (4, Some(message)),
         Err(Error::OwnConnection) => (2, Some(own_connection(name))),
         Err(e) => (1, Some(e.to_string())),
     };

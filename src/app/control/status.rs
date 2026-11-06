@@ -205,6 +205,7 @@ impl App {
             accounts: self.config.selected_accounts().clone(),
             popup: self.popup_info(),
             machines: self.machine_infos(),
+            accounts_revision: self.accounts.logins.generation(),
         }
     }
 
@@ -249,7 +250,7 @@ impl App {
             let parent = Self::live_parent(term, live);
             self.seat(term.id).map(|(_, role)| role).hash(hash);
             Self::pane_refreshed(term, self.resume_holds(term.id), parent, hash);
-            (self.held_sends(term.id), term.typing.drafting()).hash(hash);
+            (self.held_info(term.id), term.typing.drafting()).hash(hash);
             self.restart_waiting(term.id).is_some().hash(hash);
         }
     }
@@ -258,6 +259,7 @@ impl App {
         let pid = term.foreground_pid();
         (term.id, pid, pid.and_then(process::name), term.cwd(), term.shell_pid()).hash(hash);
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
+        term.context.conversation().hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
         term.context.compaction().hides.hash(hash);
         term.context.subagents().hash(hash);
@@ -269,11 +271,13 @@ impl App {
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &HashSet<u64>) -> PaneInfo {
         let context = term.context.context();
+        let held = self.held_info(term.id);
         PaneInfo {
             id: term.id,
             path: term.cwd(),
             program: term.program(&self.config),
             agent: term.agent.agent().map(str::to_string),
+            conversation: term.context.conversation().map(str::to_string),
             status: term.agent.status().map(|s| s.name().to_string()),
             background_shell: term.agent.background_shell(),
             dialog: term.dialog(),
@@ -289,8 +293,10 @@ impl App {
             parent: Self::live_parent(term, live),
             subagents: u32::try_from(term.context.subagents()).unwrap_or(u32::MAX),
             role: self.seat(term.id).map(|(_, role)| role.to_string()),
-            held_sends: u32::try_from(self.held_sends(term.id)).unwrap_or(u32::MAX),
+            held_sends: held.held_sends,
             draft: term.draft(Instant::now()),
+            held_from: held.held_from,
+            held_queued: held.held_queued,
             collapsed: term.collapsed,
             account: term.account().map(str::to_string),
             accounts: term.accounts().chosen(),

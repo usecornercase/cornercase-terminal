@@ -175,7 +175,6 @@ fn done(response: Response) -> Done {
     }
 }
 
-#[cfg(unix)]
 fn error(response: Response) -> String {
     match response {
         Response::Error(message) => message,
@@ -594,6 +593,7 @@ mod changes;
 mod cloning;
 mod close_agent;
 mod closed_agents;
+mod code_workspace;
 mod compacting;
 mod config;
 mod config_share;
@@ -615,18 +615,21 @@ mod following_the_app;
 mod gemini;
 mod grok;
 mod groups;
+mod held;
 mod holding;
 mod issues;
 mod journal;
 mod merge_check;
 mod one_folder;
 mod ordering;
+mod pane_conversation;
 mod pane_moves;
 mod parents;
 #[cfg(unix)]
 mod pasting;
 #[cfg(unix)]
 mod placed;
+mod plugin_views;
 mod plugins;
 mod ports;
 mod processes;
@@ -635,9 +638,11 @@ mod queue;
 mod recap;
 #[cfg(unix)]
 mod repos;
+mod run_setup;
 mod searching;
 mod setup;
 mod start_server;
+mod stats_cached;
 mod subagents;
 mod surfaces;
 mod talking;

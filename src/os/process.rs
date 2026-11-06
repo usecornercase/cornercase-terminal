@@ -6,7 +6,7 @@ use std::process::{Child, Command};
 pub(crate) use imp::kill_process_group;
 pub(crate) use imp::{
     CommandExt, ExitStatusExt, Pid, Signal, alive, askable, kill_process, launch_folder, leave_launch_folder,
-    on_stop_signal, setsid, spawn_detached,
+    on_end_signal, on_stop_signal, setsid, spawn_detached,
 };
 
 pub(crate) struct Grouped {
@@ -49,7 +49,7 @@ mod imp {
 
     use rustix::io::Errno;
     use rustix::process::test_kill_process;
-    use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+    use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
     use signal_hook::iterator::Signals;
 
     pub(crate) use rustix::process::{Pid, Signal, kill_process, kill_process_group, setsid};
@@ -76,9 +76,21 @@ mod imp {
     }
 
     pub(crate) fn on_stop_signal(stop: impl FnOnce() + Send + 'static) -> io::Result<()> {
-        let mut signals = Signals::new([SIGTERM, SIGINT, SIGHUP])?;
+        on_signals(&[SIGTERM, SIGINT, SIGHUP], |signal| signal != SIGHUP, stop)
+    }
+
+    pub(crate) fn on_end_signal(stop: impl FnOnce() + Send + 'static) -> io::Result<()> {
+        on_signals(&[SIGTERM, SIGINT, SIGHUP, SIGQUIT], |_| true, stop)
+    }
+
+    fn on_signals(
+        signals: &[i32],
+        ends: impl FnMut(i32) -> bool + Send + 'static,
+        stop: impl FnOnce() + Send + 'static,
+    ) -> io::Result<()> {
+        let mut signals = Signals::new(signals)?;
         thread::spawn(move || {
-            if signals.forever().any(|signal| signal != SIGHUP) {
+            if signals.forever().any(ends) {
                 stop();
             }
         });

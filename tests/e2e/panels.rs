@@ -136,6 +136,33 @@ fn scripts_see_the_changes_of_a_workspace() {
 }
 
 #[test]
+fn scripts_read_a_line_with_its_tab_beside_what_a_window_draws() {
+    let (repo, app) = opened_repo("ccraw");
+    let hashes = "#\n".repeat(4);
+    let rule = |said: &str, last: &str| format!("a:\n\techo {said}\n{hashes}\tgap\n{hashes}b:\n\techo {last}\n");
+    let makefile = repo.join("Makefile");
+    std::fs::write(&makefile, rule("hi", "then")).expect("write the rule");
+    git(&repo, &["add", "Makefile"]);
+    git(&repo, &["commit", "--quiet", "-m", "m"]);
+    std::fs::write(&makefile, rule("bye", "now")).expect("edit the rule");
+    let json = |args: &[&str]| -> serde_json::Value { serde_json::from_str(&app.session.says(args)).expect("json") };
+    let of = |lines: &serde_json::Value, text: &str| {
+        lines.as_array().expect("lines").iter().find(|line| line["text"] == text).expect("the line").clone()
+    };
+
+    let file = json(&["changes", "file", "Makefile", "--json"]);
+    let gap = json(&["changes", "gap", "Makefile", "--hunk", "1", "--json"]);
+    let diff = app.session.says(&["changes", "file", "Makefile"]);
+
+    assert_eq!(of(&file["hunks"][0]["lines"], "    echo bye")["raw"], "\techo bye", "{file}");
+    assert_eq!(of(&file["hunks"][0]["lines"], "a:").get("raw"), None, "{file}");
+    assert_eq!(of(&gap["lines"], "    gap")["raw"], "\tgap", "{gap}");
+    assert_eq!(of(&gap["lines"], "#").get("raw"), None, "{gap}");
+    assert!(diff.contains("+    echo bye"), "{diff}");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
 fn scripts_discard_a_file_only_when_told_to() {
     let (repo, app) = opened_repo("ccdc");
 
@@ -208,10 +235,12 @@ fn scripts_act_only_on_the_version_they_saw() {
     let seen = listed_digest(&app);
     std::fs::write(repo.join("notes.txt"), "one\nTWO\nthree\n").expect("an agent writes again");
     let mut now = String::new();
-    wait_until("the list shows the new version", || {
-        now = listed_digest(&app);
-        !now.is_empty() && now != seen
+    wait_until("the list shows the version written", || {
+        let listed = listed_file(&app);
+        now = listed["digest"].as_str().unwrap_or_default().to_string();
+        listed["added"] == 2 && listed["removed"] == 1
     });
+    assert_ne!(now, seen);
 
     refuses_the_old_version(&app, &seen);
     app.session.says(&["changes", "viewed", "notes.txt", "--digest", &seen]);

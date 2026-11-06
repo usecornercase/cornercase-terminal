@@ -23,6 +23,7 @@ fn observed(pane: u64, key: Option<&str>, status: Option<&str>, prompts: &[u64])
     Observed {
         pane,
         key: key.map(str::to_string),
+        conversation: None,
         status: status.map(str::to_string),
         prompts: prompts.iter().map(|secs| at(*secs)).collect(),
     }
@@ -85,6 +86,32 @@ fn a_pane_that_goes_away_is_closed_with_the_place_it_had() {
     let gone = journal.observe(at(200), &[], &mut template);
     assert_eq!(kinds(&gone), [(Event::Closed, None)]);
     assert_eq!(gone[0].pane, Some(7));
+}
+
+fn without_an_id(pane: u64) -> Option<Entry> {
+    template(pane).map(|entry| Entry { conversation: None, ..entry })
+}
+
+fn with_an_id(prompts: &[u64]) -> Observed {
+    Observed { conversation: Some("c1".into()), ..observed(1, Some("k"), Some("idle"), prompts) }
+}
+
+#[test]
+fn an_id_known_only_after_the_conversation_was_seen_reaches_the_entries_after_it_without_a_line_of_its_own() {
+    let mut journal = Journal::default();
+    let first = journal.observe(at(100), &[observed(1, Some("k"), Some("idle"), &[])], &mut without_an_id);
+
+    let arrived = journal.observe(at(101), &[with_an_id(&[])], &mut without_an_id);
+    let prompted = journal.observe(at(102), &[with_an_id(&[102])], &mut without_an_id);
+    let quiet = journal.observe(at(103), &[observed(1, Some("k"), Some("idle"), &[])], &mut without_an_id);
+    let closed = journal.observe(at(104), &[], &mut without_an_id);
+
+    assert_eq!(kinds(&first), [(Event::Seen, None), (Event::Status, Some("idle"))]);
+    assert!(first.iter().all(|entry| entry.conversation.is_none()), "{first:?}");
+    assert_eq!((arrived, quiet), (Vec::new(), Vec::new()));
+    let later: Vec<(Event, Option<&str>)> =
+        prompted.iter().chain(&closed).map(|entry| (entry.event, entry.conversation.as_deref())).collect();
+    assert_eq!(later, [(Event::Prompt, Some("c1")), (Event::Closed, Some("c1"))]);
 }
 
 #[test]
