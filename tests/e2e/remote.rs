@@ -62,7 +62,7 @@ fn pid_in(session: &Session, file: &str) -> String {
     std::fs::read_to_string(session.dir.join(file)).unwrap_or_default().trim().to_string()
 }
 
-fn ssh_runs(session: &Session) -> usize {
+pub(super) fn ssh_runs(session: &Session) -> usize {
     std::fs::read_to_string(session.dir.join(SSH_RUNS)).unwrap_or_default().lines().count()
 }
 
@@ -78,7 +78,7 @@ pub(super) fn remotely(session: &Session, args: &[&str]) -> std::process::Comman
     cmd
 }
 
-fn remote_says(session: &Session, args: &[&str]) -> String {
+pub(super) fn remote_says(session: &Session, args: &[&str]) -> String {
     let out = remotely(session, args).output().expect("run cornercase");
     assert!(out.status.success(), "cornercase --remote {args:?} failed: {out:?}");
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()

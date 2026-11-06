@@ -28,6 +28,7 @@ use sha2::{Digest, Sha256};
 mod accounts;
 mod agents;
 mod arranging;
+mod boot;
 mod browser;
 mod commands;
 mod context;
