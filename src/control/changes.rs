@@ -454,6 +454,8 @@ pub(crate) struct LineInfo {
     pub(crate) old: Option<u32>,
     pub(crate) new: Option<u32>,
     pub(crate) text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) raw: Option<Box<str>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) emphasis: Vec<[usize; 2]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -509,6 +511,7 @@ impl Patch {
                         old: line.old,
                         new: line.new,
                         text: line.text.clone(),
+                        raw: line.raw.clone(),
                         emphasis: line.emphasis.iter().map(|r| [r.start, r.end]).collect(),
                         syntax: line.syntax.as_deref().map(|s| segments(s, &mut styles)),
                     })
@@ -542,7 +545,7 @@ impl LineInfo {
             old: self.old,
             new: self.new,
             text: self.text.clone(),
-            raw: None,
+            raw: self.raw.clone(),
             syntax: self.syntax.as_deref().map(|segments| looked(segments, looks)),
             emphasis: within(&self.emphasis, &self.text),
         }
@@ -572,6 +575,8 @@ pub(crate) struct GapLineInfo {
     pub(crate) new: u32,
     pub(crate) text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) raw: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) syntax: Option<Vec<Segment>>,
 }
 
@@ -594,6 +599,7 @@ impl Gap {
                 old: line.old,
                 new: line.new,
                 text: line.text.clone(),
+                raw: line.raw.clone(),
                 syntax: line.syntax.as_deref().map(|s| segments(s, &mut styles)),
             })
             .collect();
@@ -608,7 +614,7 @@ impl Gap {
                 old: line.old,
                 new: line.new,
                 text: line.text.clone(),
-                raw: None,
+                raw: line.raw.clone(),
                 syntax: line.syntax.as_deref().map(|segments| looked(segments, &looks)),
             })
             .collect()

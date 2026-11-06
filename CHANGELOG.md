@@ -5,6 +5,12 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.13.8
 
 - **`cornercase close` and `rename` can say which run of the server their id is from.** Ids last one run of the server, so a script or another window that read an id, and then met a restart on its way, could close or rename whatever has that id now. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing closes or changes, the command prints why and exits with status 4 (`cornercase --remote vps close --workspace 7 --boot "$boot"`). It works in every form of the two commands, with `--worktree`, `--check` and `--agent`, on a line of `requests --follow` for that line only, and against a server too old to know `boot` it is refused before anything is sent, since that server would ignore the flag and act. Every other command prints what it printed.
+
+## 0.13.7
+
+- **Copy a changed line with its tabs from your own client.** `cornercase changes file --json` and `changes gap --json` now give a line that holds a tab a `raw` beside `text`: the line as it is in the file. `text` stays what a window draws, with tabs as four spaces, so a script or another UI that reads it sees nothing change; one that copies takes `raw` when a line has one, and a Makefile rule or a Go line pastes as it was. `cornercase changes file --help` lists every field of a line.
+- A selection copied in the Changes panel of a machine's workspace keeps its tabs now, as it does on this computer.
+
 ## 0.13.6
 
 - **Another window or a script can tell when the accounts change.** `cornercase status --app` now has `accounts_revision`, a number that moves each time the accounts `cornercase account list` names change: `account add`, `account remove`, or a folder another program made or deleted, seen within a second. `cornercase status --app --follow` prints a line for each change, so a client lists the accounts again only then, rather than on a timer, and a first account added by a command typed in a pane reaches it at once. Nothing else told it before, since neither of these changes `config.json`. The number is left out until it first moves, so nothing changes on a server without accounts, and `cornercase contract` lists the feature `accounts-revision` to tell this server from an older one. Nothing changes in the window.
