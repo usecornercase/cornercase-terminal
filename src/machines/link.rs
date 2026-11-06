@@ -481,7 +481,6 @@ impl<E: From<Report>> Running<E> {
         let ended = match handshake(&mut line).and_then(|started| self.claim(started)) {
             Ok(started) => {
                 let release = clean(&line.release);
-                self.control.plan(None);
                 self.tell(Event::Linked { release, server_version: clean(&started.version) });
                 self.watch(&mut line)
             }

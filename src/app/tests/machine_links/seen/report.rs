@@ -112,6 +112,9 @@ mod machines_in_status {
         assert_eq!(next, rig.app.machine_list().machines.remove(0).retry_at);
 
         let _theirs = linked(&ends);
+        assert_eq!(rig.state("vps"), Some(State::Unreachable), "the app has not heard yet");
+        assert_eq!(next, rig.app.machine_list().machines.remove(0).retry_at);
+
         rig.until("the machine is back", |app| app.machines.held()[0].status.state == State::Linked);
         assert_eq!(rig.app.report(None).machines[0].retry_at, None);
         assert_eq!(rig.app.machine_list().machines[0].retry_at, None);

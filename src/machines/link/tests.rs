@@ -275,12 +275,13 @@ mod the_next_try {
     }
 
     #[test]
-    fn goes_while_the_link_is_up_and_comes_back_a_wait_after_it_drops() {
+    fn stays_put_while_the_link_comes_up_and_moves_a_wait_after_it_drops() {
         let rig = Rig::new(1, &Servers::new(HERE));
         rig.fell();
+        let fell = rig.link.next_try();
 
         let theirs = rig.linked("vps-1");
-        assert_eq!(rig.link.next_try(), None);
+        assert_eq!(rig.link.next_try(), fell);
 
         let before = SystemTime::now();
         drop(theirs);
