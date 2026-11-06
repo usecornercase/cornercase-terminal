@@ -167,19 +167,32 @@ mod the_machine_field {
     }
 
     fn stats(machine: Option<&str>) -> Command {
-        Command::Stats(Stats { machine: machine.map(Into::into) })
+        Command::Stats(Stats { machine: machine.map(Into::into), ..Stats::default() })
+    }
+
+    fn cached_stats(machine: Option<&str>) -> Command {
+        Command::Stats(Stats { cached: true, machine: machine.map(Into::into) })
     }
 
     #[rstest]
     #[case::stats(stats(None), r#"{"command":"stats","args":{}}"#)]
     #[case::usage(usage(None), r#"{"command":"usage","args":{"cached":true}}"#)]
+    #[case::cached_stats(cached_stats(None), r#"{"command":"stats","args":{"cached":true}}"#)]
     fn is_left_out_of_a_request_without_it(#[case] command: Command, #[case] sent: &str) {
+        assert_eq!(serde_json::to_string(&command).expect("json"), sent);
+    }
+
+    #[rstest]
+    #[case::stats(stats(Some("vps")), r#"{"command":"stats","args":{"machine":"vps"}}"#)]
+    #[case::cached_stats(cached_stats(Some("all")), r#"{"command":"stats","args":{"cached":true,"machine":"all"}}"#)]
+    fn goes_beside_cached_only_when_stats_asks_for_the_copy(#[case] command: Command, #[case] sent: &str) {
         assert_eq!(serde_json::to_string(&command).expect("json"), sent);
     }
 
     #[rstest]
     #[case::stats(json!({"command": "stats", "args": {"machine": "vps"}}), stats(Some("vps")))]
     #[case::usage(json!({"command": "usage", "args": {"cached": true, "machine": "all"}}), usage(Some("all")))]
+    #[case::cached_stats(json!({"command": "stats", "args": {"cached": true, "machine": "all"}}), cached_stats(Some("all")))]
     fn is_read_and_is_no_stray_field(#[case] raw: Value, #[case] command: Command) {
         let parsed: Request = serde_json::from_value(raw.clone()).expect("request");
 
@@ -191,6 +204,7 @@ mod the_machine_field {
     #[case::stats(stats(Some("vps")), &[("machine", "vps")])]
     #[case::stats_here(stats(None), &[])]
     #[case::usage(usage(Some("all")), &[("cached", "true"), ("machine", "all")])]
+    #[case::cached_stats(cached_stats(Some("all")), &[("cached", "true"), ("machine", "all")])]
     fn is_logged(#[case] command: Command, #[case] logged: &[(&str, &str)]) {
         let fields = command.fields();
 
