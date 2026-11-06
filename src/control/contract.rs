@@ -14,7 +14,7 @@ pub(crate) const CHANGES_VERSION: u32 = 1;
 pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
 pub(crate) const FILES_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 37] = [
+pub(crate) const FEATURES: &[&str] = &[
     "boot",
     "structured-errors",
     "strict-fields",

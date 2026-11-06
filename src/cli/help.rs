@@ -34,63 +34,6 @@ Examples:
   cornercase wait --pane \"$pane\" --until shell --timeout 900
   cornercase read --pane \"$pane\" --lines 40
   cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
-pub(super) const STATUS_HELP: &str =
-    "Each pane shows its program and folder, and for a coding agent what it is doing (working,
-waiting for an answer, done out of sight, failed, idle), its model and how full its context is. `(you)`
-marks the pane running the command, `(shown)` what the window shows. `working (background shell)`
-is a Claude Code agent whose turn is over while a shell it started in the background still runs:
-it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
-`working (2 subagents)` is an agent whose own turn is over while subagents it started still run
-(`subagents` in the JSON, the number): it goes on when they report back, so it stays working.
-`(dialog open)` is a Claude Code agent showing a dialog, a panel or its shell mode instead of its
-input box, which `cornercase send` refuses (`dialog` in the JSON).
-`(survey open)` is Claude Code's feedback survey above its input box, which `cornercase send`
-refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
-`(resuming)` is a pane whose agent is coming back in its conversation after a restart: until it
-is back, it takes no input and `cornercase send` refuses it (`resuming` in the JSON).
-`(role coder)` marks a flow member and the role it plays (`role` in the JSON).
-`(collapsed)` is an agent whose children are hidden in the agents section (`collapsed` in the JSON).
-`Opus 5.5 · compacted` is an agent whose conversation was just compacted: its context is empty
-until its next reply and comes back then (`compacted` in the JSON, there only while true).
-
-With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
-line naming the columns, then one row per pane, its columns separated by tabs. The columns are
-pane, tab, workspace, project (their ids), program, agent, status, background_shell, dialog,
-at_prompt, model, context, caller (the pane running the command), shown (the pane the window
-shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
-path, survey (Claude Code's feedback survey shows), resuming (the agent is coming back in its
-conversation), parent (the pane that started it), subagents (how many it still runs) and role (the
-role it plays in a flow, from its run) and compacted (true while the context is empty because the
-conversation was just compacted, the last column); new ones only ever go at the end. Values are as in the
-JSON (true or false, context as a number, full paths), with - where there is none and a space for a tab or line break in a name.
-With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
-where there is no value.
-
-With --follow it keeps running and prints the whole state as one JSON line: first as it is now,
-then again shortly after each time something in it changes, always JSON, with
---json or without. Each line is what --json prints plus `revision`, which grows with every line,
-with `caller` always null;
-`boot` names the server's run, and revisions only compare within one boot. Each line replaces the
-one before. It ends when the server stops or restarts, or once what reads it is gone; to go on, run
-it again, and its first line
-is the state then, so nothing is missed. A reader that falls behind reads at most four older
-lines, then the latest state.
-
-With --app it prints, as JSON, what is outside the session: `todos` (as `todo list --json`), `queue`
-(the entries of `queue list --json`), `away` (one row per chat app: `platform`, `ready`, `away`),
-`update` (the release found and its notes, why there is none, whether a check or an install runs,
-and how installing works here) and `keep_awake` (null while the setting is off), with the server's
-`version` and `boot`. With --follow it keeps running and prints one such line first and again each
-time one of them changes, each with a `revision` that grows by one per line, built at most twice a
-second while someone follows; rules for ending and for slow readers are --follow's.
-
-Examples:
-  cornercase status
-  cornercase status --json
-  cornercase status --panes | awk -F'\\t' '$7 == \"waiting\" { print $1 }'
-  cornercase status --panes --json | jq '.panes[] | select(.agent) | .pane'
-  cornercase status --follow | jq -c '[.revision, (.projects | length)]'
-  cornercase status --app --follow | jq -c '[.revision, (.todos | length)]'";
 pub(super) const OPEN_HELP: &str = "Examples:
   cornercase open ~/src/shop
   cornercase open . --focus";
@@ -731,12 +674,14 @@ mod files;
 mod flow;
 mod machines;
 mod paste_file;
+mod plugin;
 mod ports;
 mod processes;
 mod pull_request;
 mod recap;
 mod requests;
 mod start;
+mod status;
 mod worktrees;
 
 pub(in crate::cli) use clone::CLONE_HELP;
@@ -749,68 +694,18 @@ pub(in crate::cli) use flow::{
 };
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
+pub(in crate::cli) use plugin::PLUGIN_HELP;
 pub(in crate::cli) use ports::{PORTS_HELP, PORTS_STOP_ABOUT, PORTS_STOP_HELP};
 pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_ABOUT, PROCESSES_STOP_HELP};
 pub(in crate::cli) use pull_request::PULL_REQUEST_HELP;
 pub(in crate::cli) use recap::RECAP_HELP;
 pub(in crate::cli) use requests::REQUESTS_HELP;
 pub(in crate::cli) use start::{NEW_WORKSPACE_HELP, START_HELP};
+pub(in crate::cli) use status::STATUS_HELP;
 pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
 
 #[cfg(test)]
 mod tests;
-
-pub(super) const PLUGIN_HELP: &str =
-    "A plugin is a folder with a cornercase-plugin.toml that declares commands: actions in the \
-row menus, hooks on events, services the server keeps running and processes each local window keeps running. Its \
-commands talk back through these same commands.
-
-Install one from GitHub, any https:// git address or a git folder, pinned to a commit; a repository can hold \
-several plugins, each in its own folder (owner/repo/folder on GitHub, address//folder elsewhere): you see where it comes \
-from, what it asks for and every command it runs before anything runs, and it is installed turned off. Link a \
-folder of yours instead while you write one.
-
-`--preview` fetches a plugin, or an update of one, and prints that same preview, then exits without asking or \
-installing, also with no terminal; with `--json` (and an ID for `update`) it is one JSON object, for a program that \
-shows it and asks itself. `--commit` then installs, or updates to, exactly the commit the preview printed: it fails \
-and installs nothing once the source gives another commit, and unlike SOURCE@COMMIT, which pins the plugin there, \
-later updates still follow its branch or tag.
-
-A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown \
-before you turn it on, not enforced. A running server picks up changes within a second.
-
-`actions` lists what plugins add to the menus, for a kind of row (--context) or all of them, and `run` runs one on \
-a project, workspace, tab or pane as its menu entry does: in the workspace's folder, with the ids of what you \
-name, stopped after 5 minutes, its output in the plugin's log. Both ask the running server; `run` waits for the \
-action and exits with 1 when it fails. An action on a plugin's button runs with no target, on what the window \
-shows. A popup action waits until its popup closes, and needs a window attached; `popup-close` closes it. An action \
-listed before the plugins changed is refused (pass the --revision `actions --json` printed, or none for the current \
-one).
-
-`status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the label and the note, and \
-what each service is doing (running, restarting or still starting), and why `plugins.json` cannot be read. It asks \
-the running server. `list` still reads the files and works with no server.
-
-Examples:
-  cornercase plugin install acme/notes
-  cornercase plugin install acme/notes@v1.2.0
-  cornercase plugin install acme/notes --preview --json
-  cornercase plugin update acme.notes --preview
-  cornercase plugin install acme/tools/plugins/notes
-  cornercase plugin install https://git.example.com/acme/tools.git//plugins/notes
-  cornercase plugin link ~/code/my-plugin
-  cornercase plugin enable my-plugin
-  cornercase plugin list
-  cornercase plugin status
-  cornercase plugin status --json
-  cornercase plugin actions --context pane
-  cornercase plugin run acme.notes open --pane 5
-  cornercase plugin run acme.notes browse
-  cornercase plugin popup-close
-  cornercase plugin logs my-plugin --follow
-  cornercase plugin disable my-plugin
-  cornercase plugin update
-  cornercase plugin remove notes";
 
 pub(super) const VIEW_ARG: &str = "Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window";
 pub(super) const VIEW_HELP: &str =
