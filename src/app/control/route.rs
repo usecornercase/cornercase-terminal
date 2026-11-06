@@ -244,7 +244,7 @@ impl App {
             Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
-            Command::PluginRun(run) => self.plugin_run_request(client, &run),
+            Command::PluginRun(run) => self.plugin_run_request(client, asker.view, &run),
             Command::PluginPopupClose(_) => self.plugin_popup_close_request(),
             other => return ControlFlow::Continue(other),
         })

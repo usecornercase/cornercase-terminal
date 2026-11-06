@@ -265,12 +265,46 @@ mod streams {
         assert_eq!(answer.text, "");
     }
 
+    fn lacking(feature: &str) -> control::contract::Descriptor {
+        let mut older = control::contract::describe("boot", &[]);
+        older.features.retain(|offered| offered != feature);
+        older
+    }
+
+    fn plugin_run_in_a_view_on(features: control::contract::Descriptor) -> (Answer, Vec<String>) {
+        let line = r#"{"args": ["plugin", "run", "a", "b", "--view", "7"]}"#;
+        let (mut answers, seen) = lines_on(|theirs| serving(theirs, features, NO_REQUEST_NAMES_THIS), &[line]);
+        (answers.remove(0), seen)
+    }
+
+    #[test]
+    fn plugin_run_sends_its_view_with_the_run_and_not_with_the_lookup_of_the_revision() {
+        let (answer, seen) = plugin_run_in_a_view_on(control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let lookup = seen.iter().find(|text| text.contains("plugin-actions")).expect("the lookup");
+        assert!(!lookup.contains("\"view\""), "{lookup}");
+        let run = seen.iter().find(|text| text.contains("plugin-run")).expect("the run");
+        assert!(run.contains("\"view\":7"), "{run}");
+    }
+
+    #[rstest]
+    #[case::without_views("views", "has no views")]
+    #[case::that_takes_no_view_there("plugin-run-view", "cannot run a plugin's action in a view")]
+    fn plugin_run_in_a_view_is_refused_up_front_by_a_server(#[case] missing: &str, #[case] says: &str) {
+        let (answer, seen) = plugin_run_in_a_view_on(lacking(missing));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains(says) && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("plugin-run")), "{seen:?}");
+    }
+
     #[rstest]
     #[case::close(r#"{"args": ["close", "--pane", "4", "--boot", "old"]}"#)]
     #[case::rename(r#"{"args": ["rename", "--tab", "4", "x", "--boot", "old"]}"#)]
     fn a_boot_for_a_server_that_would_ignore_it_never_sends_the_request(#[case] line: &str) {
-        let mut older = control::contract::describe("boot", &[]);
-        older.features.retain(|feature| feature != "boot");
+        let older = lacking("boot");
 
         let (mut answers, seen) = lines_on(|theirs| serving(theirs, older, NO_REQUEST_NAMES_THIS), &[line]);
 

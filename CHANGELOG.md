@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.11
+
+- **A program with a view of its own can run a plugin's buttons and popups.** `cornercase plugin run PLUGIN ACTION --view ID` runs a `button` action on what that view shows rather than on what cornercase's window shows: it gets `CORNERCASE_CONTEXT=button`, the view's ids and its workspace's folder. A popup action opens with it even with no window attached, sized from the view, so someone who only uses that program can open one, and it follows `view-set`. If the view goes away, the popup stays open as it does when the last window leaves. Without `--view` nothing changes. `cornercase contract` lists the feature `plugin-run-view`, and socket clients send `view` beside the command, as for `focus` and `start`.
+
 ## 0.13.10
 
 - **Clone with the files git ignores, from a script.** `cornercase clone URL FOLDER --file .env --file web/.env.local` copies those files into the new clone with their permissions, as the Clone on machine dialog does with the ones you tick. With `--remote` the command reads them on your computer and the other machine writes them, so another program can offer the same form: `cornercase --remote vps clone git@github.com:acme/shop.git '~/code' --file .env --from ~/code/shop --json`. A path out of the repository, a missing file, a folder, a link or a file over 1 MB is refused by name before anything is cloned. A file the clone can't take, such as one the repository has, is named, under `unwritten` with `--json`, and the command exits 3.

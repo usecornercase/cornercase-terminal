@@ -60,7 +60,7 @@ pub(crate) enum PluginAction {
     },
     #[command(
         about = "Run a plugin's action on a project, workspace, tab or pane as its menu entry does, or a button's on \
-                 what the window shows; asks the server"
+                 what the window or a view shows; asks the server"
     )]
     Run(RunArgs),
     #[command(about = "Close the plugin popup that is open; asks the server")]
@@ -93,6 +93,13 @@ pub(crate) struct RunArgs {
     pub(crate) action: String,
     #[command(flatten)]
     pub(crate) which: Which,
+    #[arg(
+        long,
+        value_name = "ID",
+        help = "Act for this view (see `cornercase view`): a button action with no target runs on what it shows, and \
+                a popup opens with no window attached, sized from it"
+    )]
+    pub(crate) view: Option<u64>,
     #[arg(
         long,
         value_name = "N",

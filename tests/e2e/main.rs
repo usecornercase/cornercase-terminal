@@ -44,6 +44,7 @@ mod machines;
 mod opening;
 mod panels;
 mod panes;
+mod plugin_views;
 mod plugins;
 mod ports;
 mod processes;
