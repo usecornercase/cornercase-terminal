@@ -638,6 +638,7 @@ mod repos;
 mod searching;
 mod setup;
 mod start_server;
+mod stats_cached;
 mod subagents;
 mod surfaces;
 mod talking;

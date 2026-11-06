@@ -272,13 +272,15 @@ Claude Code · max plan  updated just now
   week           81% · resets in 3d 4h
 ```
 
+`cornercase stats --machine all --cached` and `cornercase usage --machine all --cached` ask nobody: they answer at once with what your server read last, each machine with when that was.
+
 Scripts and other apps send the same `machine` to the `stats` and `usage` requests: see [Stats](../scripts-and-agents/#stats) and [Plan usage](../scripts-and-agents/#plan-usage). To ask a machine you haven't listed, use `cornercase --remote vps usage`.
 
 ### How the numbers add up
 
 - **Stats under `all` are a sum**: prompts, turns, tokens and agent time add up, hour by hour, and so does the heatmap. The peak of agents working at once is the largest one machine had, since nobody knows whether two machines' peaks came at the same time. Busy time adds up too, so the hours it shows are machine-hours. Merged pull requests are never added: the row stays only when every machine reads the same accounts. The dialog's notes and the list at the end of `cornercase stats --machine all` say which machines are in the sum and which aren't, and why. A machine that is down is summed from the numbers it gave last: its heatmap moves on by the days since they were read, but its 24 h and 7 days count as they were then, so a machine down for three days still adds its last 24 hours.
 - **Limits are never added**: they are the provider's. Each machine lists the accounts logged in there, with its own labels. The dialog shows an account it can tell is the same on two machines once; `cornercase usage` lists it under each machine, with the same `identity`.
-- **Only a linked machine is asked**, and it gets 15 seconds to answer, plus the time its own probes take for plan limits. When it is down or doesn't answer, you get the numbers it gave last, with why it is down. With none, asking for that machine alone is an error, and `all` lists it with why and no numbers. `usage` exits with status 3 when a machine or an agent couldn't be read.
+- **Only a linked machine is asked**, and it gets 15 seconds to answer, plus the time its own probes take for plan limits. When it is down or doesn't answer, you get the numbers it gave last, with why it is down. With none, asking for that machine alone is an error, and `all` lists it with why and no numbers. `usage` exits with status 3 when a machine or an agent couldn't be read. `--cached` asks nobody, and follows the same rules with what your server already has.
 - **Its numbers stay in your server's memory**, and are gone when it restarts. `cornercase stats` without a server reads this computer's `stats.json` only.
 - **Each machine runs its own probes**, with the `claude` and `codex` of its own [`agent_commands`](../../reference/agents/#your-own-agents).
 

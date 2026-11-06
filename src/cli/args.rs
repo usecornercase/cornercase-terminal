@@ -98,14 +98,15 @@ pub(crate) enum Command {
     Logs(LogsArgs),
     #[command(
         about = "Show work by agents running in cornercase",
-        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. Merged pull requests need a running server and gh or glab.
+        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. With --cached it asks nothing and answers at once from the server's last copy of each machine: a machine with no copy fails when named and is left out of the sum under `all`; with no --machine, --cached changes nothing. Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats
   cornercase stats --json
   cornercase stats --share
   cornercase stats --machine vps
-  cornercase stats --machine all --json"
+  cornercase stats --machine all --json
+  cornercase stats --cached --machine all --json"
     )]
     Stats(StatsArgs),
     #[command(about = "Install, add, list, turn on and off the plugins that extend cornercase", after_help = PLUGIN_HELP)]
