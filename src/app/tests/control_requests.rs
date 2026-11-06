@@ -615,6 +615,7 @@ mod following_the_app;
 mod gemini;
 mod grok;
 mod groups;
+mod held;
 mod holding;
 mod issues;
 mod journal;
@@ -628,6 +629,7 @@ mod parents;
 mod pasting;
 #[cfg(unix)]
 mod placed;
+mod plugin_views;
 mod plugins;
 mod ports;
 mod processes;

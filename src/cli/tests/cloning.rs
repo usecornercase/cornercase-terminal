@@ -72,8 +72,8 @@ mod the_command {
         let cli = parse(&["clone", "git@github.com:acme/shop.git", "~/src", "--focus", "--json"]).expect("parse");
 
         let Some(Command::Control(Control::Clone(clone))) = cli.command else { panic!("not clone") };
-        let taken = (clone.url.as_str(), clone.folder.as_deref(), clone.create.focus, clone.create.print.json);
-        assert_eq!(taken, ("git@github.com:acme/shop.git", Some(Path::new("~/src")), true, true));
+        let taken = (clone.url.as_deref(), clone.folder.as_deref(), clone.create.focus, clone.create.print.json);
+        assert_eq!(taken, (Some("git@github.com:acme/shop.git"), Some(Path::new("~/src")), true, true));
     }
 
     #[test]

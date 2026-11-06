@@ -72,6 +72,7 @@ impl App {
             Command::StartWith(start) => self.start_with_request(asked, start),
             Command::Send(send) => self.send_request(client, asker, send, now),
             Command::Keys(keys) => self.keys_request(asker, &keys, now),
+            Command::Held(held) => self.held_request(asker, &held),
             Command::Read(read) => self.read_request(asker, &read),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::Wait(wait) => self.wait_request(client, asker, wait, now),
@@ -225,6 +226,7 @@ impl App {
             Command::RestartWhenIdle(restart) => self.restart_request(client, asker.caller, &restart, now),
             Command::StartServer(start) => self.start_server_request(client, &start),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
+            Command::ForumServer(pick) => self.forum_server_request(&pick),
             Command::Usage(usage) => self.usage_request(client, &usage, now),
             Command::Ports(ports) => self.ports_request(client, asker, &ports),
             Command::StopPort(stop) => {
@@ -243,7 +245,7 @@ impl App {
             Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
-            Command::PluginRun(run) => self.plugin_run_request(client, &run),
+            Command::PluginRun(run) => self.plugin_run_request(client, asker.view, &run),
             Command::PluginPopupClose(_) => self.plugin_popup_close_request(),
             other => return ControlFlow::Continue(other),
         })

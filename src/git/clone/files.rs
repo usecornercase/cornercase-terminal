@@ -29,6 +29,10 @@ pub(crate) struct Unwritten {
     pub(crate) why: String,
 }
 
+pub(crate) fn too_many() -> String {
+    format!("the files are over the {MAX_FILES} a clone takes")
+}
+
 pub(crate) fn write(root: &Path, files: &[File]) -> Vec<Unwritten> {
     let failed = files.iter().filter_map(|file| written(root, file).err().map(|why| (file, why)));
     failed.map(|(file, why)| Unwritten { path: file.path.clone(), why }).collect()
@@ -50,7 +54,7 @@ fn written(root: &Path, file: &File) -> Result<(), String> {
     Ok(())
 }
 
-fn parts(path: &Path) -> Result<Vec<&OsStr>, String> {
+pub(crate) fn parts(path: &Path) -> Result<Vec<&OsStr>, String> {
     let mut parts = Vec::new();
     for part in path.components() {
         match part {
