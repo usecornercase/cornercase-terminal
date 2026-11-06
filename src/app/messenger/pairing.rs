@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::{MessengerEvent, Phase, chat};
+use super::{Messenger, MessengerEvent, Phase, chat};
 use crate::app::{App, AppEvent, Overlay, Toast};
 use crate::control::contract::{Code, Refusal};
 use crate::control::pair::PairKey;
@@ -11,6 +11,19 @@ use crate::ui;
 use crate::web::auth::Pairing;
 
 pub(super) const NO_BOT: &str = "paste the bot's token first";
+const SAVE_AGAIN_IN: Duration = Duration::from_mins(1);
+
+impl Messenger {
+    fn save_chat(&mut self, chat: Chat) -> Result<(), String> {
+        let mut saved = self.saved.clone();
+        saved.chat = Some(chat);
+        saved
+            .save(&self.path)
+            .map_err(|e| format!("could not save the paired chat in {}: {e}", self.path.display()))?;
+        self.saved = saved;
+        Ok(())
+    }
+}
 
 impl App {
     pub(in crate::app) fn drop_chat_code(&mut self, via: Via) {
@@ -118,19 +131,22 @@ impl App {
         }
     }
 
-    pub(super) fn connect(&mut self, via: Via, chat: Chat) {
-        log::info!(via.target(), "paired", chat = chat.id);
-        let key = PairKey::Chat(via);
-        let name = chat.name.clone();
+    pub(super) fn connect(&mut self, via: Via, chat: Chat) -> bool {
+        let (id, name) = (chat.id, chat.name.clone());
         let messenger = self.messenger_mut(via);
+        if let Err(why) = messenger.save_chat(chat) {
+            messenger.owner.later(SAVE_AGAIN_IN);
+            messenger.owner.fail(via.target(), "cannot save the paired chat", why);
+            return false;
+        }
+        log::info!(via.target(), "paired", chat = id);
         messenger.pairing = None;
-        messenger.saved.chat = Some(chat);
-        messenger.save();
         if matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via) {
             self.overlay = None;
         }
-        self.pairing_done(key, Some(&name));
-        self.messages.toast = Some(Toast::new(key.connected(Some(&name)), ui::ToastIcon::Check));
+        self.chat_paired(via, &name);
+        self.messages.toast = Some(Toast::new(PairKey::Chat(via).connected(Some(&name)), ui::ToastIcon::Check));
         self.refresh_messenger_note(via);
+        true
     }
 }

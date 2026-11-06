@@ -1,5 +1,4 @@
 use super::*;
-use crate::messenger::Via;
 
 fn pairings(followers: &[(u64, PairKey, Instant)]) -> Pairings {
     let follower = |(client, key, until): &(u64, PairKey, Instant)| Follower {
@@ -7,6 +6,7 @@ fn pairings(followers: &[(u64, PairKey, Instant)]) -> Pairings {
         key: *key,
         until: *until,
         shown: PairShown::default(),
+        since: 0,
     };
     Pairings { followers: followers.iter().map(follower).collect() }
 }

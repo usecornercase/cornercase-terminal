@@ -56,6 +56,12 @@ fn failed(client: u64, why: &str) -> Vec<(u64, Option<Value>)> {
     ended(client, &json!({"paired": false, "error": why}))
 }
 
+fn assert_says_it_could_not_save(got: &[(u64, Option<Value>)]) {
+    let [(FIRST, Some(line))] = got else { panic!("one new line: {got:?}") };
+    let last = line["lines"].as_array().and_then(|lines| lines.last()).and_then(Value::as_str);
+    assert!(last.is_some_and(|last| last.contains("could not save the paired chat")), "{line}");
+}
+
 fn next_lines(app: &mut App, rx: &Receiver<AppEvent>) -> Vec<(u64, Option<Value>)> {
     let mut got = Vec::new();
     wait_until_within("a new line", A_PROGRAM_RUNS, || {
@@ -438,6 +444,52 @@ mod a_shared_code {
     }
 
     #[test]
+    fn a_phone_that_took_it_ends_only_those_who_came_before_it() {
+        let mut remote = ready();
+        let taken = path_of(&shown(&mut remote.app, FIRST, "browsers"));
+        assert!(remote.takes(&taken));
+
+        let newer = path_of(&shown(&mut remote.app, SECOND, "browsers"));
+        assert_ne!(newer, taken);
+        remote.told();
+
+        assert_eq!(lines(&mut remote.app), ended(FIRST, &json!({"paired": true})));
+        assert!(remote.takes(&newer));
+        assert_eq!(next_lines(&mut remote.app, &remote.rx), ended(SECOND, &json!({"paired": true})));
+    }
+
+    #[test]
+    fn a_dialog_opened_after_a_phone_took_it_stays_open_on_a_new_one() {
+        let mut remote = ready();
+        let taken = path_of(&shown(&mut remote.app, FIRST, "browsers"));
+        assert!(remote.takes(&taken));
+
+        remote.app.open_remote();
+        let url = remote.app.remote_view().url.expect("a new address");
+        remote.told();
+
+        assert_eq!(lines(&mut remote.app), ended(FIRST, &json!({"paired": true})));
+        assert!(matches!(remote.app.overlay, Some(Overlay::Remote)));
+        assert_eq!(remote.app.remote_view().url.as_deref(), Some(url.as_str()));
+        assert!(remote.takes(&path_of(&json!({"url": url}))));
+    }
+
+    #[test]
+    fn a_dialog_that_showed_it_closes_though_a_command_came_after_the_phone() {
+        let mut remote = ready();
+        remote.app.open_remote();
+        let taken = path_of(&json!({"url": remote.app.remote_view().url}));
+        assert!(remote.takes(&taken));
+
+        let newer = path_of(&shown(&mut remote.app, FIRST, "browsers"));
+        remote.told();
+
+        assert!(remote.app.overlay.is_none());
+        assert_eq!(lines(&mut remote.app), []);
+        assert!(remote.takes(&newer));
+    }
+
+    #[test]
     fn ends_each_command_after_its_own_ten_minutes_and_lives_for_the_last() {
         let mut remote = ready();
         let start = Instant::now();
@@ -579,6 +631,39 @@ mod telegram {
     }
 
     #[test]
+    fn a_chat_that_cannot_be_saved_is_not_paired_and_says_so_and_the_code_stays() {
+        let (mut app, mut phone, dir) = set_up();
+        let line = shown(&mut app, FIRST, "telegram.chat");
+        let file = dir.path().join("telegram.json");
+        std::fs::create_dir(&file).expect("a folder where the file goes");
+
+        start(&mut app, &mut phone, &line);
+        app.refresh(Instant::now());
+
+        assert_says_it_could_not_save(&lines(&mut app));
+        assert!(!app.messenger(Via::Telegram).paired());
+        assert_eq!(toast(&app), None);
+        assert_eq!(phone.read(&mut app).len(), 0);
+        std::fs::remove_dir(&file).expect("the way cleared");
+        the_code_ends_it(&mut app, &mut phone, &line);
+    }
+
+    #[test]
+    fn a_chat_that_cannot_be_saved_keeps_the_dialog_open_and_the_chat_paired_before() {
+        let (mut app, mut phone, dir) = already_paired();
+        assert_eq!(app.pair(Via::Telegram), None);
+        let url = app.pairing_view(Via::Telegram).url;
+        std::fs::create_dir(dir.path().join("telegram.json")).expect("a folder where the file goes");
+
+        phone.message(&mut app, &format!("/start {}", code_of(&json!({"url": url}))), None, (77, 78));
+
+        assert!(matches!(app.overlay, Some(Overlay::Pairing(Via::Telegram))));
+        assert_eq!(app.messenger(Via::Telegram).chat_name(), Some("@ada"));
+        let lines = app.pairing_view(Via::Telegram).lines;
+        assert!(lines.last().is_some_and(|line| line.contains("could not save the paired chat")), "{lines:?}");
+    }
+
+    #[test]
     fn nothing_opens_in_the_window() {
         let (mut app, _phone, _dir) = set_up();
 
@@ -711,7 +796,7 @@ mod discord {
         rx: Receiver<AppEvent>,
         server: FakeHttp,
         _phone: Phone,
-        _dir: TempDir,
+        dir: TempDir,
     }
 
     fn set_up(routes: Vec<(&'static str, u16, &'static str)>) -> Discord {
@@ -721,7 +806,7 @@ mod discord {
         let phone = Phone::on(&mut app, Via::Discord, None);
         wiring::set_up(&mut app, Via::Discord, TOKEN, "cornercase", None);
         wiring::point(&mut app, Via::Discord, &server.url());
-        Discord { app, rx, server, _phone: phone, _dir: dir }
+        Discord { app, rx, server, _phone: phone, dir }
     }
 
     #[test]
@@ -765,6 +850,31 @@ mod discord {
         assert_eq!(got, ended(FIRST, &json!({"paired": true, "chat": "ada"})));
         assert!(discord.app.messenger(Via::Discord).paired() && discord.app.overlay.is_none());
         assert_eq!(toast(&discord.app), Some("Discord connected with ada"));
+    }
+
+    #[test]
+    fn a_chat_that_cannot_be_saved_says_so_and_asks_again_a_minute_later() {
+        let installed = [
+            ("GET /oauth2/applications/@me", 200, OWNER),
+            ("POST /users/@me/channels", 200, CHANNEL),
+            ("POST /channels/1200/messages", 200, r#"{"id":"55"}"#),
+        ];
+        let mut discord = set_up([installed, installed].concat());
+        let file = discord.dir.path().join("discord.json");
+        std::fs::create_dir(&file).expect("a folder where the file goes");
+        shown(&mut discord.app, FIRST, "discord.chat");
+
+        assert_says_it_could_not_save(&next_lines(&mut discord.app, &discord.rx));
+        assert!(!discord.app.messenger(Via::Discord).paired());
+        let wait = discord.app.next_pairing(Instant::now()).expect("it asks again");
+        assert!(wait > Duration::from_secs(30), "{wait:?}");
+        std::fs::remove_dir(&file).expect("the way cleared");
+        discord.app.refresh(Instant::now() + wait);
+
+        let got = next_lines(&mut discord.app, &discord.rx);
+        assert_eq!(got.last(), Some(&(FIRST, None)), "{got:?}");
+        assert!(got.contains(&(FIRST, Some(json!({"paired": true, "chat": "ada"})))), "{got:?}");
+        assert!(discord.app.messenger(Via::Discord).paired());
     }
 
     #[test]

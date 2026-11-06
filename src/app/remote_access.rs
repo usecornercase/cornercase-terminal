@@ -41,6 +41,8 @@ pub(super) struct Remote {
     on: bool,
     browsers: usize,
     token: Option<String>,
+    taken: u64,
+    dialog_since: u64,
     orders: Option<Sender<(Order, PathBuf)>>,
 }
 
@@ -65,7 +67,17 @@ impl Remote {
     }
 
     pub(super) fn new(web: Web) -> Self {
-        Self { web, phase: Phase::Off, tailscale: None, on: false, browsers: 0, token: None, orders: None }
+        Self {
+            web,
+            phase: Phase::Off,
+            tailscale: None,
+            on: false,
+            browsers: 0,
+            token: None,
+            taken: 0,
+            dialog_since: 0,
+            orders: None,
+        }
     }
 
     pub(super) fn note(&self) -> String {
@@ -194,11 +206,11 @@ impl App {
 
     pub(super) fn web_event(&mut self, event: web::Event) {
         match event {
-            web::Event::Paired => {
-                if matches!(self.overlay, Some(Overlay::Remote)) {
+            web::Event::Paired(taken) => {
+                if matches!(self.overlay, Some(Overlay::Remote)) && self.remote.dialog_since < taken {
                     self.overlay = None;
                 }
-                self.pairing_done(PairKey::Browsers, None);
+                self.browser_paired(taken);
                 self.messages.toast = Some(Toast::new(PairKey::Browsers.connected(None), ui::ToastIcon::Check));
                 self.settings_changed();
             }
@@ -217,22 +229,26 @@ impl App {
         if !self.pairing_held(PairKey::Browsers) {
             self.remote.web.unpair();
         }
-        self.remote.token = match self.remote.web.pair(now) {
-            Ok(token) => Some(token),
+        match self.remote.web.pair(now) {
+            Ok((token, count)) => {
+                self.remote.token = Some(token);
+                self.remote.taken = count;
+            }
             Err(e) => {
                 log::error!("web", "cannot make a pairing code", error = e);
-                None
+                self.remote.token = None;
             }
-        };
+        }
     }
 
     pub(super) fn open_remote(&mut self) {
         self.retry_remote();
         self.hold_browser_code(Instant::now());
+        self.remote.dialog_since = self.remote.taken;
         self.overlay = Some(Overlay::Remote);
     }
 
-    pub(in crate::app) fn request_browser_code(&mut self, now: Instant) -> Result<(), Refusal> {
+    pub(in crate::app) fn request_browser_code(&mut self, now: Instant) -> Result<u64, Refusal> {
         self.retry_remote();
         self.sync_remote();
         if let Some(refusal) = self.browsers_down() {
@@ -242,7 +258,7 @@ impl App {
         if self.remote.token.is_none() {
             return Err(Refusal::new(Code::Failed, NO_CODE));
         }
-        Ok(())
+        Ok(self.remote.taken)
     }
 
     pub(in crate::app) fn browsers_down(&self) -> Option<Refusal> {

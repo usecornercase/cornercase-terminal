@@ -6,6 +6,7 @@ use crate::app::{App, Overlay};
 use crate::control::pair::{ConfigPair, PairEnded, PairKey, PairLine, PairShown};
 use crate::control::streamed_line;
 use crate::log;
+use crate::messenger::Via;
 use crate::web::auth::PAIRING_FOR;
 
 const TIMED_OUT: &str = "no phone paired within ten minutes: run this again";
@@ -15,6 +16,7 @@ struct Follower {
     key: PairKey,
     until: Instant,
     shown: PairShown,
+    since: u64,
 }
 
 #[derive(Default)]
@@ -54,13 +56,13 @@ impl App {
         if self.clients.pairings.follows(client) {
             return Err(conflict("this connection already follows a pairing; open another connection"));
         }
-        match key {
+        let since = match key {
             PairKey::Browsers => self.request_browser_code(now)?,
-            PairKey::Chat(via) => self.request_chat_code(via, now)?,
-        }
+            PairKey::Chat(via) => self.request_chat_code(via, now).map(|()| 0)?,
+        };
         let shown = self.pairing_shown(key);
         let line = json(&PairLine::Shown(shown.clone()));
-        self.clients.pairings.followers.push(Follower { client, key, until: now + PAIRING_FOR, shown });
+        self.clients.pairings.followers.push(Follower { client, key, until: now + PAIRING_FOR, shown, since });
         Ok(Some(line))
     }
 
@@ -108,10 +110,21 @@ impl App {
         self.clients.pairings.followers = followers;
     }
 
-    pub(in crate::app) fn pairing_done(&mut self, key: PairKey, chat: Option<&str>) {
+    pub(in crate::app) fn browser_paired(&mut self, taken: u64) {
+        self.pairing_done(PairKey::Browsers, None, |follower| follower.since < taken);
+    }
+
+    pub(in crate::app) fn chat_paired(&mut self, via: Via, name: &str) {
+        self.pairing_done(PairKey::Chat(via), Some(name), |_| true);
+    }
+
+    fn pairing_done(&mut self, key: PairKey, chat: Option<&str>, held_it: impl Fn(&Follower) -> bool) {
         let followers = &self.clients.pairings.followers;
-        let clients: Vec<u64> =
-            followers.iter().filter(|follower| follower.key == key).map(|follower| follower.client).collect();
+        let clients: Vec<u64> = followers
+            .iter()
+            .filter(|follower| follower.key == key && held_it(follower))
+            .map(|follower| follower.client)
+            .collect();
         for client in clients {
             self.end_pairing(client, key, PairEnded { paired: true, chat: chat.map(String::from), error: None });
         }

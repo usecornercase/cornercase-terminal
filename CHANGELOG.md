@@ -7,6 +7,7 @@ Every pull request that changes the app adds a section here for its new version.
 - **Connect a phone from another program.** `cornercase config pair browsers`, `telegram.chat` or `discord.chat` does what the window's pairing dialogs do, so a program that draws cornercase itself can connect a phone without opening the window. It prints the address the QR code holds and the lines under it (`--json` for one line of JSON each, to draw the code from `url`), and again when they change, stays open while it waits, and ends with `{"paired": true}` (with the chat's name for a bot) once the phone connects. Why it cannot comes in words: remote access off, Tailscale not ready, `paste the bot's token first`. The code is dropped when the command ends, also when whoever reads its output goes, after ten minutes at most, and never reaches the log. If the window's dialog or another command holds the same key, they share one code, and closing one leaves it working for the others. It works through `--remote` too.
 - Scanning a Telegram bot's code with the phone already paired to it closes the dialog now. Before, the bot said hello and the dialog went on waiting.
 - When a paired browser cannot be saved, its code keeps working, so scanning it again works once that is fixed.
+- When a bot's paired chat cannot be saved, the pairing dialog says so and the phone can try again. Before, it looked connected until the next restart forgot it.
 
 ## 0.13.8
 

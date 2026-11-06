@@ -1248,9 +1248,9 @@ It prints what the dialog draws, and again each time that changes: with `--json`
 {"url": "https://mac.tail1234.ts.net:8443/pair?t=0123456789abcdef0123456789abcdef", "lines": ["scan the code with your phone's camera.", "the phone needs the Tailscale app, logged in as ada@example.com."]}
 ```
 
-`url` is `null` while there is none: while Tailscale starts, `lines` says so, and the next line has the address or, if Tailscale isn't ready (logged out, say), is the last line and says why. On Discord a new line says what to change in the Developer Portal, or a failure.
+`url` is `null` while there is none: while Tailscale starts, `lines` says so, and the next line has the address or, if Tailscale isn't ready (logged out, say), is the last line and says why. On Discord a new line says what to change in the Developer Portal, or a failure. On either bot, a chat that can't be saved isn't paired: a new line says why, and the phone can try again.
 
-It stays open while it waits, and its last line says how it ended:
+It stays open while it waits, and its last line, the only one with `paired`, says how it ended:
 
 - `{"paired": true}` once a browser took the code, or `{"paired": true, "chat": "@ada"}` with the name of the chat that was paired, and status 0.
 - `{"paired": false, "error": "…"}` and status 1 once nothing can pair: Tailscale is not ready, remote access was turned off, the bot was removed or its token refused, or ten minutes went by without a phone. The error also goes to standard error.

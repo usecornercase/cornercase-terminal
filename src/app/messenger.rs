@@ -610,8 +610,9 @@ impl App {
             return false;
         }
         let paired = u64::try_from(unix_now()).unwrap_or_default();
-        self.connect(via, Chat { id: message.chat, user: message.user, name: message.name.clone(), paired });
-        self.say(via, chat::welcome(via), Delivery::default());
+        if self.connect(via, Chat { id: message.chat, user: message.user, name: message.name.clone(), paired }) {
+            self.say(via, chat::welcome(via), Delivery::default());
+        }
         true
     }
 
