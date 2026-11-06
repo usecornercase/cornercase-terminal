@@ -37,6 +37,10 @@ mod a_line {
     #[case::remote_window(r#"{"args": ["remote", "devbox"]}"#, "`remote` cannot run")]
     #[case::skill(r#"{"args": ["skill"]}"#, "`skill` cannot run")]
     #[case::plugin_here(r#"{"args": ["plugin", "link", "/x"]}"#, "acts on this machine")]
+    #[case::plugin_windows(
+        r#"{"args": ["plugin", "windows", "--json"]}"#,
+        "run `cornercase plugin windows` on its own"
+    )]
     fn that_is_wrong_or_refused_gets_status_2_and_why(#[case] line: &str, #[case] why: &str) {
         let answer = answer_of(line).expect("an answer");
 

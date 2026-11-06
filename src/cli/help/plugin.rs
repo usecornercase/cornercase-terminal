@@ -29,6 +29,9 @@ one).
 what each service is doing (running, restarting or still starting), and why `plugins.json` cannot be read. It asks \
 the running server. `list` still reads the files and works with no server.
 
+`windows` keeps the plugins' window processes running until it ends, as a window of cornercase does, for a program \
+that draws its own window. See `cornercase plugin windows --help`.
+
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
@@ -45,6 +48,7 @@ Examples:
   cornercase plugin run acme.notes open --pane 5
   cornercase plugin run acme.notes browse
   cornercase plugin popup-close
+  cornercase plugin windows --json
   cornercase plugin logs my-plugin --follow
   cornercase plugin disable my-plugin
   cornercase plugin update

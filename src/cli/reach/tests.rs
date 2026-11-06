@@ -103,6 +103,24 @@ mod reaching {
     }
 
     #[test]
+    fn keeping_window_processes_refuses_it_and_says_why() {
+        let error = chosen(&parsed(&["--remote", "devbox", "plugin", "windows"]), &nothing).expect_err("refused");
+
+        assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
+        assert_eq!(
+            error.to_string(),
+            "`plugin windows` runs on the machine that shows the window, so it takes no --remote: run it there"
+        );
+    }
+
+    #[test]
+    fn keeping_window_processes_names_the_variable_when_it_is_the_cause() {
+        let error = chosen(&parsed(&["plugin", "windows"]), &set("devbox")).expect_err("refused");
+
+        assert!(error.to_string().contains("CORNERCASE_REMOTE=devbox sets: unset it, or run it there"), "{error}");
+    }
+
+    #[test]
     fn the_variable_is_named_when_it_is_the_cause() {
         let error = chosen(&parsed(&["plugin", "install", "x"]), &set("devbox")).expect_err("refused");
 
