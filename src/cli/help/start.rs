@@ -45,6 +45,17 @@ It is for a program that shows the new tab itself, and it can no longer say that
 showed up. --wait, --until and --timeout are refused, since nothing is waited for. It needs a server
 that knows the `machine-start` feature, which came with it.
 
+`cornercase wait` and `send` only work once that launch is over, and the answer does not mean it
+is. Until the agent runs, wait says the pane runs no agent; until its prompt is typed, wait can end
+on idle; and send goes to whatever reads the pane then, the shell, or the trust question, which it
+would answer. `status --json` has no field for the launch, so read the pane there (under machines
+for one on a machine): `agent` is null until the agent runs and reports, and `at_prompt` true while
+its shell still waits for it; `agent` with the status idle only says it runs, since it may still be
+asking its question and its prompt may not be typed; and the status working says it took its prompt,
+so the launch is over. Without a prompt, or with an agent that reports no status, only its
+screen says so (`cornercase read`). To send or wait right after the command, leave --placed out: its
+answer then comes when the launch is over.
+
 Examples:
   cornercase start claude --issue '#482'
   cornercase start codex --issue ENG-42 --project 3
