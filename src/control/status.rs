@@ -424,6 +424,8 @@ pub struct PaneInfo {
     pub(crate) role: Option<String>,
     pub(crate) held_sends: u32,
     pub(crate) draft: bool,
+    pub(crate) held_from: Option<u64>,
+    pub(crate) held_queued: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) collapsed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

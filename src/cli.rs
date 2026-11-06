@@ -29,6 +29,7 @@ mod context;
 mod contract;
 mod files;
 mod flow;
+mod held;
 mod help;
 mod issue;
 mod line;
@@ -232,6 +233,7 @@ fn talk_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Send(send) => run_send(send).map(|()| true),
         Control::Keys(keys) => run_keys(keys).map(|()| true),
+        Control::Held(args) => held::run(&args).map(|()| true),
         Control::Mark(mark) => run_mark(&mark).map(|()| true),
         Control::Read(read) => read::run(&read),
         Control::Wait(wait) => run_wait(wait).map(|()| true),

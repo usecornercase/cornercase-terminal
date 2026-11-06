@@ -249,7 +249,7 @@ impl App {
             let parent = Self::live_parent(term, live);
             self.seat(term.id).map(|(_, role)| role).hash(hash);
             Self::pane_refreshed(term, self.resume_holds(term.id), parent, hash);
-            (self.held_sends(term.id), term.typing.drafting()).hash(hash);
+            (self.held_info(term.id), term.typing.drafting()).hash(hash);
             self.restart_waiting(term.id).is_some().hash(hash);
         }
     }
@@ -269,6 +269,7 @@ impl App {
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &HashSet<u64>) -> PaneInfo {
         let context = term.context.context();
+        let held = self.held_info(term.id);
         PaneInfo {
             id: term.id,
             path: term.cwd(),
@@ -289,8 +290,10 @@ impl App {
             parent: Self::live_parent(term, live),
             subagents: u32::try_from(term.context.subagents()).unwrap_or(u32::MAX),
             role: self.seat(term.id).map(|(_, role)| role.to_string()),
-            held_sends: u32::try_from(self.held_sends(term.id)).unwrap_or(u32::MAX),
+            held_sends: held.held_sends,
             draft: term.draft(Instant::now()),
+            held_from: held.held_from,
+            held_queued: held.held_queued,
             collapsed: term.collapsed,
             account: term.account().map(str::to_string),
             accounts: term.accounts().chosen(),

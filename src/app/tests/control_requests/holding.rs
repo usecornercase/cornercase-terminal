@@ -25,6 +25,14 @@ fn drafting() -> (App, Receiver<AppEvent>, u64) {
     (app, rx, id)
 }
 
+fn being_entered_over_a_draft() -> (App, Receiver<AppEvent>, u64) {
+    let (mut app, rx) = app();
+    let id = quiet_cat_pane(&mut app, &rx);
+    ask(&mut app, None, send_text(id, "one", true, false));
+    app.projects.pane_by_mut(id).expect("the pane").typed_text("mine");
+    (app, rx, id)
+}
+
 fn claude_shown() -> (Agent, u64) {
     let mut agent = Agent::new();
     let id = agent.start(None);
@@ -144,11 +152,7 @@ fn force_skips_the_hold() {
 
 #[test]
 fn force_still_waits_for_an_earlier_sends_enter_and_passes_held_ones() {
-    let (mut app, rx) = app();
-    let id = quiet_cat_pane(&mut app, &rx);
-
-    ask(&mut app, None, send_text(id, "one", true, false));
-    app.projects.pane_by_mut(id).expect("the pane").typed_text("mine");
+    let (mut app, rx, id) = being_entered_over_a_draft();
     ask(&mut app, None, send_text(id, "late", true, false));
     let forced = wire::SendText {
         pane: Some(id),
@@ -193,6 +197,40 @@ fn send_now_in_the_band_sends_the_first_message_over_the_draft() {
 
     done(answers(&mut app).remove(0));
     pump_until(&mut app, &rx, "it reaches cat", |a| pane_screen(a, id).contains("minenow"));
+}
+
+fn press_send_now(app: &mut App, pane: u64) -> Value {
+    let (said, _) = super::held::asked_by_another_client(app, &json!({"pane": pane, "action": "send-now"}));
+    said.expect("sent")
+}
+
+#[test]
+fn the_send_now_of_a_client_sends_the_first_message_over_the_draft_as_the_band_does() {
+    let (mut app, rx, id) = drafting();
+    ask(&mut app, None, send_text(id, "now", false, false));
+    held_now(&mut app);
+
+    let said = press_send_now(&mut app, id);
+
+    assert_eq!(said["held_sends"], 0);
+    pump_until(&mut app, &rx, "it reaches cat", |a| pane_screen(a, id).contains("minenow"));
+}
+
+#[test]
+fn the_send_now_of_a_client_still_waits_for_an_earlier_messages_enter() {
+    let (mut app, rx, id) = being_entered_over_a_draft();
+    ask(&mut app, None, send_text(id, "two", true, false));
+
+    let said = press_send_now(&mut app, id);
+
+    assert_eq!(said["held_sends"], 1, "it waits for the first's Enter");
+    done(answered(&mut app, &rx, "the first is entered"));
+    done(answered(&mut app, &rx, "the held one follows over the draft"));
+    assert_eq!(app.held_sends(id), 0);
+    pump_until(&mut app, &rx, "both lines echo", |a| {
+        let lines = screen_lines(a, id);
+        lines.iter().any(|l| l == "one") && lines.iter().any(|l| l == "two")
+    });
 }
 
 #[test]
