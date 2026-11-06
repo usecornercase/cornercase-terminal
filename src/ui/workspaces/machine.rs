@@ -4,6 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
 use super::{TabEntry, WorkspaceEntry};
+use crate::agents::activity::Status;
 use crate::text::{cells, truncate_cells};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -22,13 +23,13 @@ impl WorkspaceEntry {
 
 impl TabEntry {
     pub(crate) fn lines(&self, machine: Option<&MachineTag>) -> u16 {
-        if seen_note(self, machine).is_some() { 2 } else { self.details.lines() }
+        if seen_note(self.status, machine).is_some() { 2 } else { self.details.lines() }
     }
 }
 
-pub(super) fn seen_note(tab: &TabEntry, machine: Option<&MachineTag>) -> Option<String> {
+pub(in crate::ui) fn seen_note(status: Option<Status>, machine: Option<&MachineTag>) -> Option<String> {
     let machine = machine.filter(|machine| machine.dim)?;
-    let status = tab.status?.name();
+    let status = status?.name();
     Some(machine.seen.as_ref().map_or_else(|| status.to_string(), |ago| format!("{status} · seen {ago} ago")))
 }
 

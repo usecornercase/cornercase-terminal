@@ -12,13 +12,15 @@ use crate::time::Stamp;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Stats {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) cached: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) machine: Option<String>,
 }
 
 impl Stats {
     pub(super) fn fields(&self, fields: &mut Fields) {
-        fields.maybe("machine", self.machine.as_ref());
+        fields.maybe("cached", self.cached.then_some(true)).maybe("machine", self.machine.as_ref());
     }
 }
 

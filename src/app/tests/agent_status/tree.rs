@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::agent_watch::Notice;
+use crate::app::agent_watch::{Listed, Notice};
 use crate::flows::run::{Member, Run};
 use crate::flows::{Flow, ORCHESTRATOR};
 
@@ -232,8 +232,12 @@ mod folds {
     use super::*;
 
     fn shown_ids(app: &App) -> Vec<u64> {
-        let (places, nodes) = app.shown_agents(false);
-        nodes.into_iter().map(|node| app.placed(places[node.index]).id).collect()
+        let (listed, nodes) = app.shown_agents(false);
+        let id = |listed: &Listed| match listed {
+            Listed::Here(place) => app.placed(*place).id,
+            Listed::There(there) => there.pane.id,
+        };
+        nodes.into_iter().map(|node| id(&listed[node.index])).collect()
     }
 
     fn row_at(app: &App, i: usize, on_arrow: bool) -> Position {
