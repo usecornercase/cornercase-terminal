@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::os::fs::link_to;
 use crate::test_util::{TempDir, os_path};
 
 fn write(dir: &Path, name: &str, text: &str) -> PathBuf {
@@ -34,19 +35,18 @@ mod reading {
         assert_eq!(paths, [tmp.path().join("api"), tmp.path().join("../web")]);
     }
 
-    #[cfg(unix)]
     #[test]
-    fn resolves_relative_folders_from_the_real_folder_of_the_file() {
+    fn reads_relative_folders_from_the_folder_it_was_given_without_resolving_it() {
         let tmp = TempDir::new();
         let real = tmp.path().join("real");
         std::fs::create_dir(&real).expect("create folder");
         write(&real, "w.code-workspace", r#"{"folders": [{"path": "api"}]}"#);
         let link = tmp.path().join("link");
-        std::os::unix::fs::symlink(&real, &link).expect("link");
+        link_to(&real, &link).expect("a link to the folder");
 
         let folders = read(&link.join("w.code-workspace")).expect("read").folders;
 
-        assert_eq!(folders[0].path, real.join("api"));
+        assert_eq!(folders[0].path, link.join("api"));
     }
 
     #[test]

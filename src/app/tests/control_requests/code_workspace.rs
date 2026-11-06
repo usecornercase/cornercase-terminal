@@ -1,4 +1,5 @@
 use super::*;
+use crate::os::fs::link_to;
 
 const SHELL: &str = if cfg!(unix) { "/bin/sh" } else { "cmd.exe" };
 
@@ -221,18 +222,42 @@ mod a_workspace_file {
         assert_eq!(s.in_group(imported.group), [s.root.join("api")]);
     }
 
-    #[cfg(unix)]
     #[test]
     fn by_a_link_takes_the_links_name_and_folder_as_the_picker_does() {
         let mut s = Setup::new(&["links/api", "elsewhere"]);
         s.file("elsewhere/real.code-workspace", r#"{"folders": [{"path": "api"}]}"#);
         let link = s.root.join("links/team.code-workspace");
-        std::os::unix::fs::symlink(s.root.join("elsewhere/real.code-workspace"), &link).expect("link");
+        link_to(s.root.join("elsewhere/real.code-workspace"), &link).expect("a link to the file");
 
         let imported = ok(&mut s.app, "open", &json!({"path": link}));
 
         assert_eq!((&imported["name"], &imported["missing"]), (&json!("team"), &json!(0)));
         assert_eq!(s.in_group(s.group_named("team")), [s.root.join("links/api")]);
+    }
+
+    #[test]
+    fn through_a_linked_folder_finds_the_project_open_at_its_real_path() {
+        let mut s = Setup::new(&["real/api"]);
+        let api = s.opened("real/api");
+        s.file("real/team.code-workspace", r#"{"folders": [{"path": "api"}]}"#);
+        link_to(s.root.join("real"), s.root.join("link")).expect("a link to the folder");
+        let file = s.root.join("link/team.code-workspace");
+
+        let imported = ok(&mut s.app, "open", &json!({"path": file}));
+
+        assert_eq!((&imported["projects"], &imported["missing"]), (&json!([api]), &json!(0)));
+        assert_eq!(s.app.projects.len(), 1);
+    }
+
+    #[test]
+    fn leaves_a_folder_on_another_machine_out_of_what_it_counts() {
+        let mut s = Setup::new(&["api"]);
+        let text = r#"{"folders": [{"path": "api"}, {"uri": "vscode-remote://ssh-remote+devbox/srv/web"}]}"#;
+
+        let imported = s.import(text, &json!({}));
+
+        assert_eq!((imported.projects.len(), imported.missing, imported.failed), (1, 0, 0));
+        assert!(imported.whole(), "{imported:?}");
     }
 
     #[cfg(not(unix))]
