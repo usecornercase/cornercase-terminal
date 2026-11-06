@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use ratatui::layout::Rect;
@@ -17,6 +17,7 @@ use crate::git;
 use crate::machines::send::Send;
 use crate::os::fs::{canonical, canonicalize};
 use crate::project::split::Dir;
+use crate::project::vscode;
 use crate::project::{Hierarchy, WorkspaceAt};
 
 pub(super) struct Within {
@@ -54,18 +55,36 @@ const NO_AGENT: &str = "say which agent to start, such as `cornercase start clau
 
 impl App {
     pub(super) fn open_request(&mut self, asker: Asker, open: &control::Open, area: Option<Rect>) -> Handled {
+        if let Some(group) = open.into {
+            self.group_index(group).ok_or_else(|| none("group", group))?;
+        }
         let wanted = config::expand_home(&open.path.to_string_lossy(), self.home.as_deref());
+        if vscode::is_workspace(&wanted) {
+            return self.import_request(asker, open, &wanted, area);
+        }
         let path = canonicalize(&wanted).map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
         if !path.is_dir() {
             return Err(format!("`{}` is not a folder", path.display()).into());
         }
         let p = self.open_folder(path, area)?;
+        if let Some(group) = open.into {
+            self.join_group(p, group);
+        }
         let ids = self.shown_ids(p);
         let projection = self.show_if(asker.view, open.focus, Item::Project(self.projects[p].id))?;
         Ok(Some(json(&Done { ids, projection, ..Done::default() })))
     }
 
-    pub(super) fn open_folder(&mut self, path: PathBuf, area: Option<Rect>) -> Result<usize, String> {
+    fn import_request(&mut self, asker: Asker, open: &control::Open, file: &Path, area: Option<Rect>) -> Handled {
+        let workspace = vscode::read(file).map_err(|e| e.to_string())?;
+        let mut imported = self.import_workspace(workspace, open.into, sized(area)?);
+        if let Some(&first) = imported.projects.first() {
+            imported.projection = self.show_if(asker.view, open.focus, Item::Project(first))?;
+        }
+        Ok(Some(json(&imported)))
+    }
+
+    pub(in crate::app) fn open_folder(&mut self, path: PathBuf, area: Option<Rect>) -> Result<usize, String> {
         match self.projects.iter().position(|p| p.path == path && !p.closing) {
             Some(p) => Ok(p),
             None => self.add_project(path, sized(area)?).map_err(|e| e.to_string()),

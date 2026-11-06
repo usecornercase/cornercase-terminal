@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
-use crate::os::fs::reaches_network;
+use crate::os::fs::{canonical, reaches_network};
 use crate::text;
 
 pub(crate) const EXTENSION: &str = "code-workspace";
@@ -34,7 +34,7 @@ struct Entry {
 }
 
 pub(crate) fn is_workspace(path: &Path) -> bool {
-    path.extension().is_some_and(|e| e == EXTENSION)
+    path.extension().is_some_and(|e| e == EXTENSION) && path.is_file()
 }
 
 pub(crate) fn read(file: &Path) -> Result<Workspace> {
@@ -42,9 +42,9 @@ pub(crate) fn read(file: &Path) -> Result<Workspace> {
     let text = std::fs::read_to_string(file).map_err(|e| invalid(e.to_string()))?;
     let text = text.trim_start_matches('\u{feff}');
     let parsed: File = serde_json::from_str(&strip_jsonc(text)).map_err(|e| invalid(e.to_string()))?;
-    let base = file.parent().unwrap_or(Path::new("/"));
+    let base = canonical(file.parent().unwrap_or(Path::new("/")));
     let name = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let folders = parsed.folders.into_iter().filter_map(|entry| folder(base, entry)).collect();
+    let folders = parsed.folders.into_iter().filter_map(|entry| folder(&base, entry)).collect();
     Ok(Workspace { name, folders })
 }
 

@@ -12,6 +12,7 @@ pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod clone;
 pub(crate) mod closed_agents;
+mod code_workspace;
 pub(crate) mod config;
 pub(crate) mod context;
 pub(crate) mod contract;
@@ -57,6 +58,7 @@ pub(crate) use changes::{
 };
 pub(crate) use clone::{CloneFile, CloneRepository, Cloned, Unwritten};
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
+pub(crate) use code_workspace::ImportedWorkspace;
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
 pub(crate) use context::{ContextInfo, ContextRead};
 pub(crate) use contract::Contract;
@@ -612,6 +614,8 @@ pub(crate) struct Status {}
 pub(crate) struct Open {
     pub(crate) path: PathBuf,
     pub(crate) focus: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) into: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

@@ -18,8 +18,10 @@ pub(crate) struct Create {
 
 #[derive(Debug, Args)]
 pub(crate) struct OpenArgs {
-    #[arg(value_name = "PATH", help = "The folder")]
+    #[arg(value_name = "PATH", help = "The folder, or a VS Code .code-workspace file to import as a group")]
     pub(crate) path: PathBuf,
+    #[arg(long, value_name = "GROUP", help = "Put it in this group, as the group's add project does")]
+    pub(crate) into: Option<u64>,
     #[command(flatten)]
     pub(crate) create: Create,
 }

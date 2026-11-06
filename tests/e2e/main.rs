@@ -29,6 +29,7 @@ mod accounts;
 mod agents;
 mod arranging;
 mod browser;
+mod code_workspace;
 mod commands;
 mod context;
 mod contract;

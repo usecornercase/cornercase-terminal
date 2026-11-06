@@ -594,6 +594,7 @@ mod changes;
 mod cloning;
 mod close_agent;
 mod closed_agents;
+mod code_workspace;
 mod compacting;
 mod config;
 mod config_share;
