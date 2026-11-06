@@ -163,6 +163,7 @@ struct Seen {
 pub(crate) struct Observed {
     pub(crate) pane: u64,
     pub(crate) key: Option<String>,
+    pub(crate) conversation: Option<String>,
     pub(crate) status: Option<String>,
     pub(crate) prompts: Vec<SystemTime>,
 }
@@ -211,6 +212,9 @@ impl Journal {
             self.seen.insert(observed.pane, Seen { key: key.clone(), status: None, template: entry });
         }
         let Some(seen) = self.seen.get_mut(&observed.pane) else { return };
+        if observed.conversation.is_some() {
+            seen.template.conversation.clone_from(&observed.conversation);
+        }
         for prompt in &observed.prompts {
             entries.push(seen.template.at(Event::Prompt, None, *prompt));
         }

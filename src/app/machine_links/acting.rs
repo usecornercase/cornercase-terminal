@@ -15,6 +15,7 @@ use crate::control::{self, WorkspaceInfo};
 use crate::log::{self, Job, Level};
 use crate::machines::act::{Act, WARNING};
 use crate::machines::link::Down;
+use crate::machines::send::folding;
 use crate::machines::{self, State};
 use crate::ui;
 
@@ -97,8 +98,12 @@ impl App {
     }
 
     pub(in crate::app) fn remote_menu(&mut self, aim: Aim, at: Position) {
-        let note = (!self.linked(aim.link)).then_some(MenuAction::MachineNote(aim.link));
-        let actions = note.into_iter().chain([MenuAction::RemoteRename(aim)]).collect();
+        self.noted_menu(aim.link, MenuAction::RemoteRename(aim), at);
+    }
+
+    pub(super) fn noted_menu(&mut self, link: u64, action: MenuAction, at: Position) {
+        let note = (!self.linked(link)).then_some(MenuAction::MachineNote(link));
+        let actions = note.into_iter().chain([action]).collect();
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 
@@ -108,6 +113,7 @@ impl App {
             MenuAction::RemoteRename(aim) => {
                 !self.linked(aim.link) || self.machines.acting.busy(aim.link, aim.workspace)
             }
+            MenuAction::RemoteAgentFold(aim) => !self.linked(aim.link),
             _ => false,
         }
     }
@@ -118,6 +124,7 @@ impl App {
                 Some(self.held_by(link).map_or_else(|| UNLISTED.into(), |held| self.unlinked(held)))
             }
             MenuAction::RemoteRename(_) => Some(RENAME_WORKSPACE_LABEL.into()),
+            MenuAction::RemoteAgentFold(aim) => Some(folding(aim.collapse).into()),
             _ => None,
         }
     }
@@ -125,17 +132,23 @@ impl App {
     pub(in crate::app) fn remote_action(&mut self, action: MenuAction) -> Option<MenuAction> {
         match action {
             MenuAction::RemoteRename(aim) if !self.remote_disabled(action) => self.remote_rename(aim),
-            MenuAction::RemoteRename(_) | MenuAction::MachineNote(_) => {}
+            MenuAction::RemoteAgentFold(aim) if !self.remote_disabled(action) => self.send_agent_fold(aim),
+            MenuAction::RemoteRename(_) | MenuAction::RemoteAgentFold(_) | MenuAction::MachineNote(_) => {}
             other => return Some(other),
         }
         None
     }
 
-    fn aimed(&self, aim: Aim) -> Result<Target, String> {
-        let held = self.held_by(aim.link).ok_or(UNLISTED)?;
+    pub(super) fn linked_held(&self, link: u64) -> Result<&Held, String> {
+        let held = self.held_by(link).ok_or(UNLISTED)?;
         if held.status.state != State::Linked {
             return Err(self.unlinked(held));
         }
+        Ok(held)
+    }
+
+    fn aimed(&self, aim: Aim) -> Result<Target, String> {
+        let held = self.linked_held(aim.link)?;
         let (seen, workspace) = sighted(held, aim)?;
         if self.machines.acting.busy(aim.link, aim.workspace) {
             return Err(format!("{} {WAITING}", named(&workspace.name, Some(&held.name))));
@@ -192,14 +205,26 @@ impl App {
     }
 }
 
+fn seen_in(held: &Held, era: u64) -> Result<&control::Report, String> {
+    held.seen.as_deref().filter(|_| held.era == era).ok_or_else(|| format!("{} restarted", held.name))
+}
+
+fn gone(what: &str, held: &Held) -> String {
+    format!("that {what} is no longer on {}", held.name)
+}
+
 fn sighted(held: &Held, aim: Aim) -> Result<(&control::Report, &WorkspaceInfo), String> {
-    let restarted = || format!("{} restarted", held.name);
-    let seen = held.seen.as_deref().filter(|_| held.era == aim.era).ok_or_else(restarted)?;
+    let seen = seen_in(held, aim.era)?;
     let mut workspaces = seen.projects.iter().flat_map(|project| &project.workspaces);
-    let workspace = workspaces
-        .find(|workspace| workspace.id == aim.workspace)
-        .ok_or_else(|| format!("that workspace is no longer on {}", held.name))?;
+    let workspace =
+        workspaces.find(|workspace| workspace.id == aim.workspace).ok_or_else(|| gone("workspace", held))?;
     Ok((seen, workspace))
+}
+
+pub(super) fn sighted_pane(held: &Held, era: u64, pane: u64) -> Result<(), String> {
+    let workspaces = seen_in(held, era)?.projects.iter().flat_map(|project| &project.workspaces);
+    let mut panes = workspaces.flat_map(|workspace| &workspace.tabs).flat_map(|tab| &tab.panes);
+    if panes.any(|there| there.id == pane) { Ok(()) } else { Err(gone("agent", held)) }
 }
 
 fn warned(mut value: Value, hidden: impl Fn(&str) -> String) -> Value {
@@ -211,18 +236,22 @@ fn warned(mut value: Value, hidden: impl Fn(&str) -> String) -> Value {
 
 fn told(act: &Act, label: &str, machine: &str, result: &Result<Value, Refusal>) -> Option<Toast> {
     let named = named(label, Some(machine));
-    let (message, icon) = match (act, result) {
-        (_, Err(refusal)) if refusal.code == Code::StaleBoot => {
-            (format!("{machine} restarted; nothing was changed there"), ui::ToastIcon::Bug)
-        }
-        (Act::Check, Err(refusal)) => {
-            (format!("could not check {named}: {}; {NOTHING_REMOVED}", refusal.message), ui::ToastIcon::Bug)
-        }
-        (_, Err(refusal)) => (format!("could not {} {named}: {}", act.verb(), refusal.message), ui::ToastIcon::Bug),
-        (Act::Remove { .. }, Ok(value)) => {
-            return Some(worktrees::removed(label, Some(machine), value[WARNING].as_str()));
-        }
-        _ => return None,
+    match (act, result) {
+        (Act::Check, Err(refusal)) if refusal.code != Code::StaleBoot => Some(Toast::new(
+            format!("could not check {named}: {}; {NOTHING_REMOVED}", refusal.message),
+            ui::ToastIcon::Bug,
+        )),
+        (_, Err(refusal)) => Some(refused(act.verb(), &named, machine, refusal)),
+        (Act::Remove { .. }, Ok(value)) => Some(worktrees::removed(label, Some(machine), value[WARNING].as_str())),
+        _ => None,
+    }
+}
+
+pub(super) fn refused(verb: &str, named: &str, machine: &str, refusal: &Refusal) -> Toast {
+    let message = if refusal.code == Code::StaleBoot {
+        format!("{machine} restarted; nothing was changed there")
+    } else {
+        format!("could not {verb} {named}: {}", refusal.message)
     };
-    Some(Toast::new(message, icon))
+    Toast::new(message, ui::ToastIcon::Bug)
 }

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { AGENTS, MODES } from '../src/lib/demo/data';
-import { agentTree, attention, shapeTree, followAgent, tabStatus, watchPane } from '../src/lib/demo/model';
+import { agentTree, attention, shapeTree, followAgent, tabStatus, watchPane, type Status } from '../src/lib/demo/model';
 import { AGENT_KINDS } from '../src/lib/demo/programs';
 import { world } from '../src/lib/demo/world';
-import { Painter } from '../src/lib/demo/ui';
+import { Painter, agentTags } from '../src/lib/demo/ui';
 
 test('Grok is in the agent catalogue, its modes and the program list', () => {
   assert.deepEqual(AGENTS.find(([kind]) => kind === 'grok'), ['grok', 'grok']);
@@ -492,5 +492,16 @@ test('The close button keeps its column, so hovering a row does not move its tex
   app.pointerMove(list.x + 4, list.y, 0);
   app.render();
   assert.deepEqual(text(), rest);
+  app.destroy();
+});
+
+test('A folded agent row drops its tags before its place gets narrower than two cells', () => {
+  const app = agentsDemo();
+  const row = { ...app.agentRows()[0], fold: true, hiddenCount: 4 };
+  const shown = (badge: Status | null, room: number) => agentTags({ ...row, badge }, null, room).segs.map((s) => s.t).join('');
+  assert.deepEqual([shown(null, 6), shown(null, 5)], ['+4', '']);
+  const icon = shown('waiting', 7);
+  assert.equal(icon.length, 1);
+  assert.deepEqual([shown('waiting', 8), shown('waiting', 6)], [`${icon} +4`, icon]);
   app.destroy();
 });

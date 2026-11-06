@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use super::*;
 use crate::app::machine_links::acting::Aim;
 use crate::control::contract::{Code, Refusal, Structured};
-use crate::control::{ProjectInfo, WorkspaceInfo};
+use crate::control::{PaneInfo, ProjectInfo, TabInfo, WorkspaceInfo};
 use crate::machines::act::Act;
 use crate::machines::link::fake::{request, serve};
 use crate::protocol::ServerMessage;
@@ -360,6 +360,19 @@ mod the_row {
         remote.send(act);
 
         assert_eq!(remote.removing(), removing);
+    }
+
+    #[test]
+    fn takes_its_agents_out_of_the_agents_section_while_the_machine_removes_it() {
+        let agent =
+            PaneInfo { id: 3, agent: Some("claude".into()), status: Some("waiting".into()), ..PaneInfo::default() };
+        let tabs = vec![TabInfo { id: 2, panes: vec![agent], ..TabInfo::default() }];
+        let mut remote = seeing_in(Reply::Agree, holding(BOOT, WorkspaceInfo { tabs, ..workspace() }));
+        assert_eq!(remote.rig.app.agents_view().entries.len(), 1);
+
+        remote.send(REMOVE);
+
+        assert_eq!(remote.rig.app.agents_view().entries.len(), 0);
     }
 
     #[test]

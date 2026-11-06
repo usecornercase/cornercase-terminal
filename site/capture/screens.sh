@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-run-on machines-clone"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-agents machines-run-on machines-clone"
 
 pane_in() {
   cc status --json | node -e '
@@ -920,7 +920,7 @@ vps_web_shop() {
   git -C "$CC_HOME/vps/web-shop" remote add upstream git@github.com:acme/web-shop.git
   (cd "$CC_HOME/vps/web-shop" && vps start-server >/dev/null)
   vps new-workspace fix/login --worktree --project "$(vps open "$CC_HOME/vps/web-shop")" >/dev/null
-  vps send --pane "$(vps_pane fix-login)" --enter 'CC_AGENT_STATE=busy CC_AGENT_TASK=482 CC_AGENT_PERCENT=31 claude'
+  vps send --pane "$(vps_pane fix-login)" --enter "${1:-}CC_AGENT_STATE=busy CC_AGENT_TASK=482 CC_AGENT_PERCENT=31 claude"
 }
 
 screen_machines_sidebar() {
@@ -935,6 +935,20 @@ screen_machines_sidebar() {
   cc_hover 'Workspaces'
   cc_wait '▌     Opus 5.5 · 31%           │'
   cc_shot machines-sidebar
+}
+
+screen_machines_agents() {
+  agents_knobs
+  CC_CONFIG="{\"agents_section\":true,${VPS_CONFIG#\{}"
+  vps_web_shop "'$CC_BIN' new-tab -- CC_AGENT_STATE=busy CC_AGENT_TASK=tests CC_AGENT_PERCENT=12 CC_AGENT_MODEL=claude-sonnet-5-5 claude && "
+  cc_s1_at 110 44
+  vps_paired
+  cc_wait '◐ web-shop › fix/l… ☁ vps' 30
+  cc_click '▾! web-shop › feat/dark'
+  cc_wait '! +2'
+  cc_wait '· 12%' 30
+  cc_hover 'Workspaces'
+  cc_shot machines-agents
 }
 
 vps_paired() {

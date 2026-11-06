@@ -4,6 +4,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::account_menu::AccountItem;
 use super::help_menu::HelpItem;
+use super::machine_links::PaneAim;
 use super::machine_links::acting::Aim;
 use super::machines::MachineItem;
 use super::more_menu::MoreItem;
@@ -15,6 +16,7 @@ use crate::error::Result;
 use crate::git;
 use crate::host::open::Opener;
 use crate::log::{self};
+use crate::machines::send::folding;
 use crate::messenger::Via;
 use crate::project::Hierarchy;
 use crate::project::group;
@@ -135,6 +137,7 @@ pub(super) enum MenuAction {
     Tour(u8),
     More(MoreItem),
     RemoteRename(Aim),
+    RemoteAgentFold(PaneAim),
     MachineNote(u64),
     Machine(MachineItem),
 }
@@ -206,7 +209,7 @@ impl App {
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Mark(_, true) => "mark as pending review".into(),
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
-            MenuAction::AgentFold(_, collapse) => (if collapse { "collapse" } else { "expand" }).into(),
+            MenuAction::AgentFold(_, collapse) => folding(collapse).into(),
             MenuAction::CloseAgent(_) => "close agent".into(),
             MenuAction::PullRequest(workspace) => self.pull_request_label(workspace),
             MenuAction::MergeCheck(_) => "merge check".into(),
