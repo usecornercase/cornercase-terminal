@@ -48,6 +48,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "flow-issue-prompt",
     "machines",
     "machine-usage",
+    "stats-cached",
     "machine-workspaces",
     "machine-start",
     "search-settings",

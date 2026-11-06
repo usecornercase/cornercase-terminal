@@ -621,6 +621,7 @@ mod journal;
 mod merge_check;
 mod one_folder;
 mod ordering;
+mod pane_conversation;
 mod pane_moves;
 mod parents;
 #[cfg(unix)]
@@ -638,6 +639,7 @@ mod repos;
 mod searching;
 mod setup;
 mod start_server;
+mod stats_cached;
 mod subagents;
 mod surfaces;
 mod talking;

@@ -24,6 +24,7 @@ use crate::machines::{self, Info, Machine, State, Status};
 use crate::settings::Page;
 
 pub(super) mod acting;
+mod agents;
 mod card;
 pub(super) mod checks;
 mod clicks;
@@ -41,10 +42,11 @@ mod selection;
 mod stream;
 mod typing;
 
+pub(super) use agents::{PaneAim, ThereAgent};
 pub(super) use clicks::RemoteAt;
 pub(super) use drag::RemoteDrag;
 pub(super) use rows::{RemoteProject, machine_project, machine_shape, paired, remote_only, statuses};
-pub(super) use selection::RemoteItem;
+pub(super) use selection::{RemoteItem, RemoteShown};
 pub(super) use stream::Flow;
 
 pub(super) const OLDER: &str = "its cornercase is older than this one";
@@ -364,6 +366,9 @@ impl App {
         held.watching = true;
         held.seen_at = Some(now);
         self.log_seen(&self.machines.held[at]);
+        if self.config.agents_section {
+            self.clamp_agents_scroll();
+        }
         self.follow_selection();
         self.follow_remote_acts();
         self.tell_turns(at, before.as_deref());

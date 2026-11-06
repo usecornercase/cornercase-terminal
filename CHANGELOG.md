@@ -2,9 +2,24 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.3
+## 0.13.6
 
 - **Another window or a script can tell when the accounts change.** `cornercase status --app` now has `accounts_revision`, a number that moves each time the accounts `cornercase account list` names change: `account add`, `account remove`, or a folder another program made or deleted, seen within a second. `cornercase status --app --follow` prints a line for each change, so a client lists the accounts again only then, rather than on a timer, and a first account added by a command typed in a pane reaches it at once. Nothing else told it before, since neither of these changes `config.json`. The number is left out until it first moves, so nothing changes on a server without accounts, and `cornercase contract` lists the feature `accounts-revision` to tell this server from an older one. Nothing changes in the window.
+
+## 0.13.5
+
+- **A machine's last stats, without waiting for it.** `cornercase stats --cached --machine vps` and `--machine all` answer at once with the numbers your server read last and ask nobody, as `usage --cached` does: each machine with when it was read and last seen, its state and any error. Under `all`, a machine with no numbers yet is left out of the sum with `not read yet`; named alone, it fails and says why. A window or a script can show those numbers first, then run `cornercase stats --machine all` and show the fresh ones when they come. It is the `cached` field of the `stats` request, with the feature `stats-cached`, so a program can check that the server has it.
+- `cornercase stats --machine vps` of a machine that is down now puts its numbers on the right days of the heatmap, as `--machine all` and the Usage dialog already did.
+
+## 0.13.4
+
+- **Machines: a machine's agents in the agents section.** With the agents section on (Settings › UI › agents section), every agent running on a linked machine gets a row there beside yours, under its project and tagged `☁ vps`, with its state, kind, model and context. A click shows that agent's tab on the machine, live, as a click on its workspace in the sidebar does. The rows fold like yours: the arrow, the `+n` and the attention of the hidden agents, and **collapse** / **expand** in the menu fold the agent on its machine. A machine that is down keeps its rows, dimmed, with `seen 2 min ago`, and pressing its arrow there says that nothing was sent. The compact mode's `Agents` menu lists them too.
+- **Not on those rows yet:** close agent, mark as pending review and view context.
+
+## 0.13.3
+
+- **`cornercase status --json`, `status --follow` and `view` name the conversation a pane's agent is in**, as `conversation` on each pane: the id `places` gives in `cornercase recap --json`, `null` until the agent has one (for most agents, until its first prompt) and always for opencode. A program driving cornercase can now follow a recap's place as the panel's links do: the pane with the place's `agent` and `conversation`, then `pane` while `boot` is the server's, so it finds a conversation that a `cornercase restart`, or `agents close` and `agents reopen`, moved to another pane. A new id sends one more line to `status --follow` and `view`.
+- **A recap's place keeps its conversation's id once the pane closed.** A conversation whose id came after it was first seen, as it does for most agents, had none in the journal, so a place written while it was closed could not find it again after `agents reopen`, in the panel or from a script.
 
 ## 0.13.2
 
