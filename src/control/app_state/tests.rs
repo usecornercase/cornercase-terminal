@@ -81,6 +81,7 @@ fn snapshot() -> Snapshot<AppState> {
             accounts: BTreeMap::new(),
             popup: None,
             machines: Vec::new(),
+            accounts_revision: 3,
         },
     }
 }
@@ -142,6 +143,20 @@ fn the_machines_are_there_only_when_some_are_listed() {
     );
     let read: AppState = serde_json::from_value(value).expect("an app state");
     assert_eq!(read.machines, [vps]);
+}
+
+#[test]
+fn the_accounts_revision_is_there_only_once_it_moved() {
+    let moved = serde_json::to_value(AppState { accounts_revision: 1, ..AppState::default() }).expect("json");
+    let not_yet = serde_json::to_value(AppState::default()).expect("json");
+
+    assert_eq!(moved["accounts_revision"], 1);
+    assert_eq!(not_yet.get("accounts_revision"), None);
+    let read: AppState = serde_json::from_value(moved).expect("an app state");
+    assert_eq!(read.accounts_revision, 1);
+    let older: AppState = serde_json::from_value(not_yet).expect("an app state");
+    assert_eq!(older.accounts_revision, 0);
+    assert!(contract::FEATURES.contains(&"accounts-revision"));
 }
 
 mod the_forum {

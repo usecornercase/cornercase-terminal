@@ -186,3 +186,93 @@ fn the_session_feed_keeps_its_shape() {
         }
     }
 }
+
+mod accounts_revision {
+    use super::*;
+    use crate::app::worktrees::SYNC_EVERY;
+
+    fn server() -> (App, Receiver<AppEvent>, TempDir) {
+        let config = TempDir::new();
+        let (app, rx) = new_app(config.path().join("config.json"));
+        (app, rx, config)
+    }
+
+    fn folder_of_an_account(config: &TempDir) -> PathBuf {
+        config.path().join("accounts").join("gemini").join("probe")
+    }
+
+    fn add_probe(app: &mut App) {
+        ok(app, "account-add", &json!({"provider": "gemini", "name": "probe"}));
+    }
+
+    #[test]
+    fn a_server_without_accounts_leaves_it_out_after_its_first_sync_step() {
+        let (mut app, _rx, _config) = server();
+
+        app.refresh(Instant::now());
+
+        let state = serde_json::to_value(app.app_state()).expect("json");
+        assert!(state.get("accounts_revision").is_none(), "{state}");
+    }
+
+    #[test]
+    fn a_server_that_starts_with_accounts_has_it_from_its_first_sync_step() {
+        let (mut app, _rx, config) = server();
+        std::fs::create_dir_all(folder_of_an_account(&config)).expect("the account's folder");
+
+        app.refresh(Instant::now());
+
+        assert_eq!(follow(&mut app).report.accounts_revision, 1);
+    }
+
+    #[test]
+    fn the_first_account_of_a_command_sends_a_line_that_moves_it_from_nothing() {
+        let (mut app, _rx, _config) = server();
+        app.refresh(Instant::now());
+        let revision = follow(&mut app).revision;
+
+        add_probe(&mut app);
+
+        assert_eq!(next(&mut app, revision).report.accounts_revision, 1);
+    }
+
+    #[test]
+    fn removing_an_account_no_setting_names_sends_a_line_too() {
+        let (mut app, _rx, _config) = server();
+        add_probe(&mut app);
+        let config_revision = app.config_file.revision();
+        let followed = follow(&mut app);
+
+        ok(&mut app, "account-remove", &json!({"provider": "gemini", "name": "probe"}));
+
+        let line = next(&mut app, followed.revision);
+        assert_eq!((followed.report.accounts_revision, line.report.accounts_revision), (1, 2));
+        assert_eq!(app.config_file.revision(), config_revision);
+    }
+
+    #[test]
+    fn a_folder_another_program_makes_moves_it_on_the_sync_step() {
+        let (mut app, _rx, config) = server();
+        let start = Instant::now();
+        app.refresh(start);
+        let revision = follow(&mut app).revision;
+
+        std::fs::create_dir_all(folder_of_an_account(&config)).expect("the account's folder");
+        app.refresh(start + SYNC_EVERY);
+
+        assert_eq!(next(&mut app, revision).report.accounts_revision, 1);
+    }
+
+    #[test]
+    fn a_name_or_a_default_leaves_it_to_the_config_revision() {
+        let (mut app, _rx, _config) = server();
+        add_probe(&mut app);
+        let config_revision = app.config_file.revision();
+
+        ok(&mut app, "account-use", &json!({"provider": "gemini", "account": "probe"}));
+        ok(&mut app, "account-rename", &json!({"provider": "gemini", "account": "probe", "label": "Probe"}));
+
+        assert_eq!(app.app_state().accounts_revision, 1);
+        assert!(app.config_file.revision() > config_revision);
+    }
+}

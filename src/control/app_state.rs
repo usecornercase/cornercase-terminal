@@ -30,6 +30,13 @@ pub(crate) struct AppState {
     pub(crate) popup: Option<PopupInfo>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) machines: Vec<Info>,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub(crate) accounts_revision: u64,
+}
+
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if passes a reference")]
+fn is_zero(revision: &u64) -> bool {
+    *revision == 0
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
