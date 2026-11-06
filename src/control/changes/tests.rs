@@ -1,7 +1,8 @@
 use serde_json::json;
 
 use super::*;
-use crate::changes::diff::{Fold, Hunk, Kind, Line, Segments, Status};
+use crate::changes::diff::{Fold, Hunk, Kind, Line, Segments, Status, finish, parse};
+use crate::changes::gap_lines;
 use crate::test_util::fixture;
 
 fn info(path: &str, status: FileStatus, fold: FoldClass, viewed: bool) -> FileInfo {
@@ -91,6 +92,8 @@ fn file() -> File {
     let mut added = line(Kind::Added, None, Some(2), "    say(2);");
     added.emphasis = std::iter::once(8..9).collect();
     added.syntax = None;
+    let mut tabbed = line(Kind::Context, Some(3), Some(3), "    done();");
+    tabbed.raw = Some("\tdone();".into());
     File {
         path: "src/a.rs".into(),
         old_path: None,
@@ -102,7 +105,7 @@ fn file() -> File {
             old_start: 1,
             new_start: 1,
             context: "fn main() {".into(),
-            lines: vec![line(Kind::Context, Some(1), Some(1), "fn main() {"), removed, added],
+            lines: vec![line(Kind::Context, Some(1), Some(1), "fn main() {"), removed, added, tabbed],
         }],
         digest: 7,
         viewed_digest: 0x00c0_ffee_1234_5678,
@@ -112,6 +115,19 @@ fn file() -> File {
 
 fn patch() -> Patch {
     Patch::of(2, Mode::Uncommitted, &file(), false)
+}
+
+fn gap() -> Gap {
+    let plain = GapLine { old: 3, new: 4, text: "let x = 1;".into(), raw: None, syntax: None };
+    let look = Look::default().fg(ratatui::style::Color::Indexed(5));
+    let tabbed = GapLine {
+        old: 4,
+        new: 5,
+        text: "    run();".into(),
+        raw: Some("\trun();".into()),
+        syntax: Some(vec![("    run();".into(), look)]),
+    };
+    Gap::of(2, "src/a.rs", 1, &[plain, tabbed])
 }
 
 mod fixtures {
@@ -142,6 +158,14 @@ mod fixtures {
 
         assert_eq!(written, fixture!("control/changes/v1/patch.json").trim_end());
         assert_eq!(read, patch());
+    }
+
+    #[test]
+    fn a_gap_is_written_as_its_fixture_and_reads_back() {
+        let pinned = fixture!("control/changes/v1/gap.json");
+
+        assert_eq!(serde_json::to_string_pretty(&gap()).expect("json"), pinned.trim_end());
+        assert_eq!(serde_json::from_str::<Gap>(pinned).expect("a gap"), gap());
     }
 
     #[test]
@@ -295,6 +319,54 @@ mod patches {
     }
 }
 
+mod a_line_s_own_text {
+    use super::*;
+
+    const EDIT: &str = "diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -1,2 +1,3 @@\n fn main() {\n\
+                        -\tsay(1);\n+\tsay(2);\n+\tsay(3);\r\n";
+    const TWO_HUNKS: &str =
+        "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-one\n+ONE\n@@ -4 +4 @@\n-four\n+FOUR\n";
+
+    fn lines() -> Vec<LineInfo> {
+        let mut file = parse(EDIT).remove(0);
+        finish(&mut file);
+        Patch::of(2, Mode::Uncommitted, &file, false).hunks.remove(0).lines
+    }
+
+    #[test]
+    fn comes_beside_the_text_only_on_a_line_with_a_tab() {
+        let lines = lines();
+
+        assert_eq!((lines[0].text.as_str(), lines[0].raw.as_deref()), ("fn main() {", None));
+        assert_eq!((lines[1].text.as_str(), lines[1].raw.as_deref()), ("    say(1);", Some("\tsay(1);")));
+        assert_eq!((lines[2].text.as_str(), lines[2].raw.as_deref()), ("    say(2);", Some("\tsay(2);")));
+    }
+
+    #[test]
+    fn holds_no_line_ending() {
+        assert_eq!(lines()[3].raw.as_deref(), Some("\tsay(3);"));
+    }
+
+    #[test]
+    fn leaves_the_emphasis_and_the_syntax_on_the_text() {
+        let lines = lines();
+
+        let added = &lines[2];
+        let drawn: String = added.syntax.iter().flatten().map(|run| run.text.as_str()).collect();
+        assert_eq!((added.emphasis.as_slice(), drawn.as_str()), ([[8, 9]].as_slice(), added.text.as_str()));
+    }
+
+    #[test]
+    fn comes_with_the_unchanged_lines_of_a_gap_too() {
+        let side = ["ONE", "\ttwo", "three", "FOUR"].map(String::from);
+
+        let gap = Gap::of(2, "a", 1, &gap_lines(&parse(TWO_HUNKS)[0], 1, &side));
+
+        assert_eq!((gap.lines[0].text.as_str(), gap.lines[0].raw.as_deref()), ("    two", Some("\ttwo")));
+        assert_eq!((gap.lines[1].text.as_str(), gap.lines[1].raw.as_deref()), ("three", None));
+    }
+}
+
 mod read_back {
     use ratatui::style::Color;
 
@@ -386,9 +458,10 @@ mod read_back {
         let plain = GapLine { old: 3, new: 4, text: "let x = 1;".into(), raw: None, syntax: None };
         let coloured =
             GapLine { syntax: Some(vec![("let".into(), Look::default().fg(Color::Indexed(5)))]), ..plain.clone() };
+        let tabbed = GapLine { text: "    x".into(), raw: Some("\tx".into()), ..plain.clone() };
 
-        let lines = Gap::of(2, "src/a.rs", 0, &[plain.clone(), coloured.clone()]).lines();
+        let lines = Gap::of(2, "src/a.rs", 0, &[plain.clone(), coloured.clone(), tabbed.clone()]).lines();
 
-        assert_eq!(lines, [plain, GapLine { syntax: painted(coloured.syntax.clone()), ..coloured }]);
+        assert_eq!(lines, [plain, GapLine { syntax: painted(coloured.syntax.clone()), ..coloured }, tabbed]);
     }
 }

@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.7
+## 0.13.8
 
 - **Connect a phone from another program.** `cornercase config pair browsers`, `telegram.chat` or `discord.chat` does what the window's pairing dialogs do, so a program that draws cornercase itself can connect a phone without opening the window. It prints the address the QR code holds and the lines under it (`--json` for one line of JSON each, to draw the code from `url`), and again when they change, stays open while it waits, and ends with `{"paired": true}` (with the chat's name for a bot) once the phone connects. Why it cannot comes in words: remote access off, Tailscale not ready, `paste the bot's token first`. The code is dropped when the command ends, also when whoever reads its output goes, after ten minutes at most, and never reaches the log. If the window's dialog or another command holds the same key, they share one code, and closing one leaves it working for the others. It works through `--remote` too.
+
+## 0.13.7
+
+- **Copy a changed line with its tabs from your own client.** `cornercase changes file --json` and `changes gap --json` now give a line that holds a tab a `raw` beside `text`: the line as it is in the file. `text` stays what a window draws, with tabs as four spaces, so a script or another UI that reads it sees nothing change; one that copies takes `raw` when a line has one, and a Makefile rule or a Go line pastes as it was. `cornercase changes file --help` lists every field of a line.
+- A selection copied in the Changes panel of a machine's workspace keeps its tabs now, as it does on this computer.
 
 ## 0.13.6
 
