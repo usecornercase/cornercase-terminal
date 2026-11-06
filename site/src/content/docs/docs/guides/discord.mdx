@@ -63,7 +63,7 @@ Discord does not let an app make a server, so you make one (a private one, just 
 
 Then the dialog closes and `Discord forum ready in <server> › #cornercase` shows. **done** closes the dialog with the mode on, and the **forum mode** row's note names the step still left; **turn off** turns the mode off. If something is missing, the dialog says what: a permission the bot lacks shows the link again to grant it. Once the forum is ready, `Enter` on **forum mode** turns it off.
 
-The steps are also checked with the dialog closed, every 30 seconds while the mode is on, a phone is paired and the forum is not ready yet. So a script can turn the mode on with [`cornercase config`](../scripts-and-agents/#settings), follow the step left in `cornercase status --app`, and the forum is made by itself once the steps are done, as long as the app is in only one of your servers; with several, pick the server in the dialog. Pasting the token of another bot forgets the forum, so its steps start again.
+The steps are also checked with the dialog closed, every 30 seconds while the mode is on, a phone is paired and the forum is not ready yet. So a script can turn the mode on with [`cornercase config`](../scripts-and-agents/#settings), follow the step left in `cornercase status --app`, and the forum is made by itself once the steps are done, as long as the app is in only one of your servers. With several, that step waits for your pick: in the dialog, or with `cornercase config forum-server ID` and the list in `status --app` ([pick the forum's server](../scripts-and-agents/#pick-the-forums-server)). Pasting the token of another bot forgets the forum, so its steps start again.
 
 What changes:
 

@@ -50,7 +50,9 @@ mod parsing {
         let PluginAction::Run(alone) = run(&["plugin", "run", "a", "b"]) else { panic!("not run") };
         assert_eq!((alone.which.pane, alone.which.tab, alone.which.project), (None, None, None));
         let PluginAction::Run(on) = run(&["plugin", "run", "a", "b", "--pane", "4"]) else { panic!("not run") };
-        assert_eq!(on.which.pane, Some(4));
+        assert_eq!((on.which.pane, on.view), (Some(4), None));
+        let PluginAction::Run(viewed) = run(&["plugin", "run", "a", "b", "--view", "7"]) else { panic!("not run") };
+        assert_eq!((viewed.which.pane, viewed.view), (None, Some(7)));
         assert!(matches!(run(&["plugin", "popup-close"]), PluginAction::PopupClose));
         assert!(matches!(run(&["plugin", "actions", "--context", "button"]), PluginAction::Actions { .. }));
         let PluginAction::Status(print) = run(&["plugin", "status", "--json"]) else { panic!("not status") };

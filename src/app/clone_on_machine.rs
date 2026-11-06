@@ -1,7 +1,5 @@
-use std::io;
 use std::path::PathBuf;
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 use serde_json::Value;
@@ -18,13 +16,12 @@ use crate::control::contract::{Code, Refusal};
 use crate::control::{CloneFile, CloneRepository, Cloned};
 use crate::editor::Editor;
 use crate::error::{Error, Result};
-use crate::git::clone::files::MAX_TOTAL_BYTES;
-use crate::git::ignored::{self, IgnoredFile, Listing, Root};
+use crate::git::ignored::{self, IgnoredFile, Listing};
 use crate::git::remote;
 use crate::log::{Job, Level};
 use crate::machines::DEFAULT_FOLDER;
 use crate::machines::act::UNREADABLE;
-use crate::machines::clone_form::{CloneForm, Opening, Step, cloned_note, over_the_total};
+use crate::machines::clone_form::{CloneForm, Opening, Step, cloned_note, packed};
 use crate::machines::run_on::{self, Target};
 use crate::machines::send::Send;
 use crate::project::Hierarchy;
@@ -296,19 +293,6 @@ impl App {
 
 fn url_width(area: Rect) -> usize {
     usize::from(view::url_text(area).width.max(1))
-}
-
-pub(in crate::app) fn packed(root: &Root, files: &[IgnoredFile]) -> Result<Vec<CloneFile>> {
-    let mut total = 0;
-    let mut file = |file: &IgnoredFile| {
-        let (bytes, mode) = ignored::read(root, file)?;
-        total += bytes.len() as u64;
-        if total > MAX_TOTAL_BYTES {
-            return Err(io::Error::other(over_the_total()).into());
-        }
-        Ok(CloneFile { path: file.path.clone(), data: STANDARD.encode(bytes), mode })
-    };
-    files.iter().map(&mut file).collect()
 }
 
 fn quietly<T>(result: Result<T>, job: &mut Job) -> std::result::Result<T, String> {

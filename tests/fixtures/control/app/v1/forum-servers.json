@@ -1,0 +1,22 @@
+{
+  "platform": "discord",
+  "ready": true,
+  "away": false,
+  "forum": {
+    "on": true,
+    "ready": false,
+    "guild": null,
+    "channel": null,
+    "pending": "pick the server for the forum",
+    "servers": [
+      {
+        "id": "1041234567890123457",
+        "name": "home"
+      },
+      {
+        "id": "1041234567890123459",
+        "name": "work"
+      }
+    ]
+  }
+}

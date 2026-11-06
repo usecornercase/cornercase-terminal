@@ -57,7 +57,8 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 `survey` in the JSON), where a digit sent alone would answer it: dismiss it with
 `cornercase keys --pane N 0`, or pass --force. So is a pane whose agent is resuming its conversation
 after a restart (`resuming` in the JSON), where the text would reach its shell or its start-up:
-send again once it is back, or pass --force.
+send again once it is back, or pass --force. While a person is typing in the pane the text waits for them
+and goes right after their prompt (`held_sends` in the JSON); `cornercase held` acts on it from elsewhere.
 
 With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI,
 Vibe CLI or GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
@@ -458,6 +459,11 @@ A token is never an argument: `secret` reads it from standard input (hidden on a
 with its service as the dialog does, and says which account accepted it, never the token. `remove`
 forgets a token, a bot, a paired chat or the paired browsers.
 
+`forum-server` picks the server of the Discord forum, when forum mode waits for one and the app is in
+several: `status --app` lists them as `servers`, in Discord's `forum`, and this is a click on one in the
+forum's dialog. It answers once the pick is taken: the channel is made next, and `status --app --follow`
+goes on to `ready`. An id that is not listed, or a moment when no pick waits, is refused and says why.
+
 `export` writes the settings a colleague can use, as TOML, and says on standard error what it left
 out: tokens, accounts, personal keys. `import` shows what a shared file would change and asks first;
 reading standard input or without a terminal it needs --yes. --preview prints that preview and exits
@@ -475,6 +481,7 @@ Examples:
   cornercase config set issue_tabs github,linear
   printf '%s' \"$LINEAR_API_KEY\" | cornercase config secret linear
   cornercase config remove linear
+  cornercase config forum-server 1041234567890123459
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml
   cornercase config import team.toml --only agents,worktrees
@@ -686,6 +693,7 @@ mod clone;
 mod context;
 mod files;
 mod flow;
+mod held;
 mod machines;
 mod paste_file;
 mod plugin;
@@ -694,6 +702,7 @@ mod processes;
 mod pull_request;
 mod recap;
 mod requests;
+mod setup;
 mod start;
 mod status;
 mod worktrees;
@@ -707,6 +716,7 @@ pub(in crate::cli) use flow::{
     FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
     FLOW_SAVE_HELP,
 };
+pub(in crate::cli) use held::HELD_HELP;
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use plugin::PLUGIN_HELP;
@@ -715,6 +725,7 @@ pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_ABOUT, PROCESS
 pub(in crate::cli) use pull_request::PULL_REQUEST_HELP;
 pub(in crate::cli) use recap::RECAP_HELP;
 pub(in crate::cli) use requests::REQUESTS_HELP;
+pub(in crate::cli) use setup::SETUP_HELP;
 pub(in crate::cli) use start::{NEW_WORKSPACE_HELP, START_HELP};
 pub(in crate::cli) use status::STATUS_HELP;
 pub(in crate::cli) use worktrees::{
@@ -733,9 +744,9 @@ id, projection, active, cols, rows, shown (the project, workspace, tab and pane 
 controls (whether it sizes its tab's terminals now). The view lives while this command runs:
 stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
-read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `start`,
-`send`, `keys`, `read`, `wait`, `status`, `rename`, `mark`, `go` or `surface`: the view's tab is their
-default and --focus moves it.
+read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `setup`, `start`,
+`send`, `keys`, `held`, `read`, `wait`, `status`, `rename`, `mark`, `go`, `plugin run` or `surface`: the view's
+tab is their default and --focus moves it.
 
 While the view is active, has a size and is not hidden, the tab it shows counts as seen like the
 window's: an agent there gets no done mark, toast or desktop notification. --hidden starts it hidden

@@ -2,10 +2,35 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.9
+## 0.13.15
 
 - **Remove worktrees from a script, those of closed projects and their branches too.** `cornercase worktrees remove --path FOLDER…` removes what `cornercase worktrees list` shows, as the Worktrees dialog does: an open workspace, a closed project's worktree with its teardown, a prunable entry, a folder whose repository is gone. `--check` says what the dialog's confirmation would name and stops nothing. Without it, a folder at risk (uncommitted files, programs working in it, commits that would be lost, a lock) is refused until you pass `--force` or `--unlock`, `--delete-branch` also deletes the branch (never the default branch or the main checkout's), and nothing `worktrees list` does not know is ever touched. It prints one line per folder, or the answer with `--json`, and exits 3 when a folder was not removed, a branch was kept, or a teardown failed. Another window or a script gets the same with the request `worktrees-remove`.
 - **The Worktrees dialog is safer about branches and links.** With **also delete the branch**, a branch that gained a commit since the confirmation is kept and named, and a merged pull request no longer hides commits made after it: the red line says they would be lost. Removing a worktree whose folder was replaced by a symbolic link now fails with a message, where git would delete what the link leads to.
+
+## 0.13.13
+
+- **Run a worktree's setup again from a script or another program.** `cornercase setup --workspace ID` (or `--worktree BRANCH`; by default the workspace it runs in) does what **run setup** in the workspace's menu does: a new tab runs the project's setup with `CORNERCASE_ROOT`, `CORNERCASE_WORKTREE` and `CORNERCASE_BRANCH` set, the workspace reads `setup: running`, its failed mark goes, and agents started there wait for it. It returns once the setup is done, with the pane's id, or exits with 1 naming the exit status. It takes `--focus`, `--view` and `--json` as `new-tab` does, and says why it refuses a workspace that is not a worktree, a project with no setup or a setup already running. Other programs send the `run-setup` request. `new-workspace --worktree` no longer says that an agent did not start, since it starts none, and it now fails when the setup's tab is closed before the setup ended.
+
+## 0.13.12
+
+- **The server of the Discord forum can be picked from a script or another program.** With forum mode on and the app in several of your servers, `cornercase status --app` now lists them in Discord's `forum`, as `servers`, each with its `id` and `name`, and `cornercase config forum-server ID` picks one, as a click in the forum's dialog does: the channel is made there, the same message shows, and `forum` goes on to `ready`. An id that is not in the list, or a moment when no pick is waiting, is refused and says why. Nothing changes in the window.
+- `cornercase status --app` no longer names a step of the forum's setup once the bot or its paired chat is gone.
+
+## 0.13.11
+
+- **A program with a view of its own can run a plugin's buttons and popups.** `cornercase plugin run PLUGIN ACTION --view ID` runs a `button` action on what that view shows rather than on what cornercase's window shows: it gets `CORNERCASE_CONTEXT=button`, the view's ids and its workspace's folder. A popup action opens with it even with no window attached, sized from the view, so someone who only uses that program can open one, and it follows `view-set`. If the view goes away, the popup stays open as it does when the last window leaves. Without `--view` nothing changes. `cornercase contract` lists the feature `plugin-run-view`, and socket clients send `view` beside the command, as for `focus` and `start`.
+
+## 0.13.10
+
+- **Clone with the files git ignores, from a script.** `cornercase clone URL FOLDER --file .env --file web/.env.local` copies those files into the new clone with their permissions, as the Clone on machine dialog does with the ones you tick. With `--remote` the command reads them on your computer and the other machine writes them, so another program can offer the same form: `cornercase --remote vps clone git@github.com:acme/shop.git '~/code' --file .env --from ~/code/shop --json`. A path out of the repository, a missing file, a folder, a link or a file over 1 MB is refused by name before anything is cloned. A file the clone can't take, such as one the repository has, is named, under `unwritten` with `--json`, and the command exits 3.
+- **List what can be copied.** `cornercase clone --list-ignored --from ~/code/shop --json` prints the git-ignored files the dialog offers, each with its size and `too_big`, and `left_out` for those past the first 200. It reads your computer's folder, with or without `--remote`, and needs no server.
+- On Windows, `--file` and `--list-ignored` say they aren't supported yet, as the dialog does there.
+- The Clone on machine dialog no longer offers a file whose name isn't UTF-8, which made the whole clone fail when ticked, and a file it can't open now names itself in the toast.
+
+## 0.13.9
+
+- **A program that draws cornercase can now act on a held message.** When `cornercase send` holds a message because someone is typing in a pane, the window's bar offers ` send now ` and ` wait turn `. `cornercase held --pane 9 --send-now` does the first (the first held message goes at once, as `send --force` does, still after an earlier message's Enter) and `cornercase held --pane 9 --wait-turn` the second (it only says the person saw it). Both refuse in words when nothing is held in that pane, and print what is held now (`--json` for `held_sends`, `held_from` and `held_queued`); the `held` request does the same on the socket. Each pane in `status --json`, `status --follow` and `view` also has `held_from`, the pane that sent the first held message, and `held_queued`, true once ` wait turn ` covers the newest one, so another window's bar can read as this one's. Nothing changes in cornercase's own window.
+- `cornercase status --help` now lists every column of `--panes`, in order: it left out `held_sends`, `draft`, `account_restart`, `pid` and `memory`, so counting positions from it read the wrong column.
 
 ## 0.13.8
 

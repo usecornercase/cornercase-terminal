@@ -112,7 +112,6 @@ fn render_frame(app: &mut App, area: Rect, sight: &Sight) -> (Buffer, Option<Pla
     (buffer, placed)
 }
 
-#[cfg(unix)]
 fn write_config(dir: &Path, config: &Config) -> PathBuf {
     let path = dir.join("config.json");
     config::save(&path, config).expect("write config");

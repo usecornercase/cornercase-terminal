@@ -54,6 +54,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "search-settings",
     "recap",
     "queue-routines",
+    "plugin-run-view",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

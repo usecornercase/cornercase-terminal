@@ -19,6 +19,7 @@ mod events;
 mod fields;
 pub(crate) mod files;
 mod flow;
+mod held;
 pub(crate) mod issues;
 pub(crate) mod machines;
 pub(crate) mod plugins;
@@ -27,6 +28,7 @@ pub(crate) mod processes;
 pub(crate) mod pull_request;
 pub(crate) mod recap;
 mod search;
+pub(crate) mod setup;
 pub(crate) mod start_server;
 mod status;
 pub(crate) mod surface;
@@ -47,8 +49,8 @@ pub(crate) use accounts::{
     ProfileList, ProfileNew, ProfileSet, ProfileUse, RestartInfo, SkippedPane,
 };
 pub(crate) use app_state::{
-    AppState, AppWatch, AwayInfo, ForumInfo, InstallInfo, NoUpdate, Notes, PopupInfo, ReleaseInfo, UpdateCheck,
-    UpdateInfo, UpdateInstall,
+    AppState, AppWatch, AwayInfo, ForumInfo, ForumServer, ForumServerInfo, InstallInfo, NoUpdate, Notes, PopupInfo,
+    ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
 };
 pub(crate) use arrange::{CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
 pub(crate) use changes::{
@@ -70,6 +72,7 @@ pub(crate) use flow::{
     FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved, FlowSpec, Flows, Imported, MemberInfo, RoleInfo, RoleState,
     RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
 };
+pub(crate) use held::{HeldAction, HeldInfo, HeldRequest};
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Machines, ShownRemote, StreamState};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
@@ -78,6 +81,7 @@ pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
 pub(crate) use pull_request::{PullRequestAnswer, PullRequestRead};
 pub(crate) use recap::{RecapAsk, RecapInfo};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
+pub(crate) use setup::RunSetup;
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{
     CheckInfo, GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RemoteInfo, RunStatus, SharedInfo, StackInfo,
@@ -255,6 +259,9 @@ pub(crate) enum Command {
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
     Recap(RecapAsk),
+    ForumServer(ForumServer),
+    Held(HeldRequest),
+    RunSetup(RunSetup),
     WorktreesRemove(WorktreesRemove),
 }
 
@@ -292,6 +299,8 @@ impl Command {
             Self::Notify(_) => 13,
             Self::Focus(_) => 12,
             Self::FocusMachine(_) => 118,
+            Self::Held(_) => 120,
+            Self::RunSetup(_) => 121,
             _ => return None,
         })
     }
@@ -429,6 +438,7 @@ impl Command {
             Self::RestartWhenIdle(_) => 18,
             Self::StartServer(_) => 30,
             Self::Away(_) => 20,
+            Self::ForumServer(_) => 119,
             Self::Usage(_) => 67,
             Self::Ports(_) => 101,
             Self::StopPort(_) => 102,
@@ -437,7 +447,7 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
-            Self::WorktreesRemove(_) => 119,
+            Self::WorktreesRemove(_) => 122,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
@@ -574,6 +584,9 @@ impl Command {
         "machines",
         "clone",
         "focus-machine",
+        "forum-server",
+        "held",
+        "run-setup",
         "worktrees-remove",
     ];
 
