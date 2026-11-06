@@ -6,10 +6,10 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use crossterm::event::Event;
 
 use super::*;
-use crate::app::clone_on_machine::{packed, told};
+use crate::app::clone_on_machine::told;
 use crate::control::CloneFile;
 use crate::git::ignored::{self, IgnoredFile};
-use crate::machines::clone_form::{BUTTONS, CloneForm, Files};
+use crate::machines::clone_form::{BUTTONS, CloneForm, Files, packed};
 use crate::test_util::{git, git_repo, wait_until};
 
 const URL: &str = "https://github.com/acme/web-shop.git";

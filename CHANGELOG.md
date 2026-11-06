@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.10
+
+- **Clone with the files git ignores, from a script.** `cornercase clone URL FOLDER --file .env --file web/.env.local` copies those files into the new clone with their permissions, as the Clone on machine dialog does with the ones you tick. With `--remote` the command reads them on your computer and the other machine writes them, so another program can offer the same form: `cornercase --remote vps clone git@github.com:acme/shop.git '~/code' --file .env --from ~/code/shop --json`. A path out of the repository, a missing file, a folder, a link or a file over 1 MB is refused by name before anything is cloned. A file the clone can't take, such as one the repository has, is named, under `unwritten` with `--json`, and the command exits 3.
+- **List what can be copied.** `cornercase clone --list-ignored --from ~/code/shop --json` prints the git-ignored files the dialog offers, each with its size and `too_big`, and `left_out` for those past the first 200. It reads your computer's folder, with or without `--remote`, and needs no server.
+- On Windows, `--file` and `--list-ignored` say they aren't supported yet, as the dialog does there.
+- The Clone on machine dialog no longer offers a file whose name isn't UTF-8, which made the whole clone fail when ticked, and a file it can't open now names itself in the toast.
+
 ## 0.13.9
 
 - **A program that draws cornercase can now act on a held message.** When `cornercase send` holds a message because someone is typing in a pane, the window's bar offers ` send now ` and ` wait turn `. `cornercase held --pane 9 --send-now` does the first (the first held message goes at once, as `send --force` does, still after an earlier message's Enter) and `cornercase held --pane 9 --wait-turn` the second (it only says the person saw it). Both refuse in words when nothing is held in that pane, and print what is held now (`--json` for `held_sends`, `held_from` and `held_queued`); the `held` request does the same on the socket. Each pane in `status --json`, `status --follow` and `view` also has `held_from`, the pane that sent the first held message, and `held_queued`, true once ` wait turn ` covers the newest one, so another window's bar can read as this one's. Nothing changes in cornercase's own window.

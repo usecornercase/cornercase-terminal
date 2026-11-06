@@ -30,6 +30,7 @@ mod agents;
 mod arranging;
 mod boot;
 mod browser;
+mod clone_files;
 mod commands;
 mod context;
 mod contract;

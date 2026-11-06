@@ -234,7 +234,7 @@ When the project isn't on the machine, the row says `not on vps · clone…`, an
 - **into** is the machine's **folder**, with the repository's name.
 - **The list** is the files git ignores in this project's folder, such as `.env`, so the clone there can run as it does here. Every box starts unticked, and **only ticked files are copied**, with their permissions. Ignored folders, like `node_modules` or `target`, are never offered, and neither are links. At most 200 files are listed (a last line says how many more were left out), and a file over 1 MB shows its size and `too big to copy`. The ticked files can add up to 8 MB: a tick past that is refused, and says so.
 - **A click on a file ticks it.** **clone** (or `Enter`) clones it there with the ticked files, **skip files** clones without any, and **back** (or `Esc`) returns with nothing done.
-- **When this computer runs Windows**, the dialog says it cannot read the git-ignored files to copy them yet, and lists none: **clone** and **skip files** clone without them. The files are read here and only written on the machine, and a machine is never a Windows one (it needs `sh`), so any machine takes them from Linux or macOS.
+- **When this computer runs Windows**, the dialog says it cannot read the git-ignored files to copy them yet, and lists none: **clone** and **skip files** clone without them, and `cornercase clone --file` and `--list-ignored` say the same. The files are read here and only written on the machine, and a machine is never a Windows one (it needs `sh`), so any machine takes them from Linux or macOS.
 
 The machine writes the files once the clone is done, and never over a file the repository has. Then you are back in the dialog you came from, with the machine still picked and the new clone checked, and a toast says how it went: `cloned web-shop on vps`, naming any file it couldn't write, as in `· not copied: .env (it is already in the clone)`, or `the clone on vps failed:` with git's reason. **back** still works while it clones and doesn't stop it: the clone goes on with the files you ticked, whatever you do meanwhile. Until it's done, the **start** row of that project on that machine says `cloning on vps…` and **start** waits.
 
@@ -247,6 +247,13 @@ cornercase status --json | jq '.machines[] | {name, projects: [.projects[] | {id
 cornercase start claude --issue '#482' --project 2 --machine vps --focus
 cornercase new-workspace fix/login --worktree --project 2 --machine vps
 cornercase flow run Quick --prompt 'Fix the login form' --project 2 --machine vps
+```
+
+To clone the project there first, with the files you would tick in the dialog, `clone --list-ignored` lists them and `--file` copies them. Both read this computer's repository, the current folder unless `--from` says another. A file over 1 MB, a folder or a link is refused before anything is cloned, and a file the repository has isn't overwritten: the command names it, and exits with status 3.
+
+```sh
+cornercase clone --list-ignored --from ~/code/web-shop --json
+cornercase --remote vps clone git@github.com:acme/web-shop.git '~/code' --file .env --file web/.env.local --from ~/code/web-shop
 ```
 
 The ids, of `--project` and `--workspace` and the ones printed, are the machine's, as `status` lists them under the machine. `--focus` shows what started here once the machine lists it. `--wait`, `--until` and `--timeout` can't be used with `--machine`: follow the agent with [`cornercase --remote vps wait`](../remote/#commands-for-scripts-and-agents). See [Start work on a machine](../scripts-and-agents/#start-work-on-a-machine) for scripts and other apps.

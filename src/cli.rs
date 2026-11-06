@@ -24,6 +24,7 @@ mod agents;
 mod args;
 mod arrange;
 mod changes;
+mod clone;
 mod config;
 mod context;
 mod contract;
@@ -222,7 +223,7 @@ fn control_route(command: Control) -> ControlFlow<Result<bool>, Control> {
 fn create_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Open(open) => run_open(&open).map(|()| true),
-        Control::Clone(clone) => run_clone(&clone).map(|()| true),
+        Control::Clone(args) => clone::run(&args).map(|()| true),
         Control::NewWorkspace(new) => run_new_workspace(new).map(|()| true),
         Control::NewTab(new) => run_new_tab(new).map(|()| true),
         Control::Split(split) => run_split(&split).map(|()| true),
@@ -343,19 +344,6 @@ fn clone_url(url: &str, remote: Option<&Remote>) -> Result<String> {
         return Ok(url.to_string());
     }
     Ok(std::path::absolute(path)?.to_string_lossy().into_owned())
-}
-
-fn run_clone(clone: &args::CloneArgs) -> Result<()> {
-    let remote = client::used_remote();
-    let (url, parent) = (clone_url(&clone.url, remote)?, clone_parent(clone.folder.as_deref(), remote)?);
-    let request = control::CloneRepository { url, parent, focus: clone.create.focus, files: Vec::new() };
-    let value = ask("clone", control::Command::Clone(request))?;
-    if clone.create.print.json {
-        return print_json(&value);
-    }
-    let cloned: control::Cloned = answer(value)?;
-    println!("{}", cloned.path.display());
-    Ok(())
 }
 
 fn run_new_workspace(new: args::NewWorkspaceArgs) -> Result<()> {
