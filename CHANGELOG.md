@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.3
+
+- **`cornercase close` and `rename` can say which run of the server their id is from.** Ids last one run of the server, so a script or another window that read an id, and then met a restart on its way, could close or rename whatever has that id now. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing closes or changes, the command prints why and exits with status 4 (`cornercase --remote vps close --workspace 7 --boot "$boot"`). It works in every form of the two commands, with `--worktree`, `--check` and `--agent`, on a line of `requests --follow` for that line only, and against a server too old to know `boot` it is refused before anything is sent, since that server would ignore the flag and act. Every other command prints what it printed.
+
 ## 0.13.2
 
 - Nothing changes for users: the code behind the commands moved into smaller files, to make room for the next ones.
