@@ -52,7 +52,7 @@ Code: `cli.rs`, `cli/`, `cli/requests.rs`, `cli/line.rs`, `client/requests.rs`, 
 
 - [Typing, starting and waiting](commands-for-scripts-and-agents/typing-and-waiting.md): launches; A model and a mode per call; waits; `--until shell`; Turn over with a background shell; a waiting agent refuses `send`.
 - [Dialogs, the survey and confirming a prompt was taken](commands-for-scripts-and-agents/confirming-sends.md): #128: a dialog over the input box, confirming from the agent's record; #143: Claude Code's feedback survey.
-- [`send` waits for the person typing](commands-for-scripts-and-agents/held-sends.md): #371: drafts, the hold, the gap before Enter, the bar on the pane, scripts.
+- [`send` waits for the person typing](commands-for-scripts-and-agents/held-sends.md): #371: drafts, the hold, the gap before Enter, the bar on the pane, scripts; #676: a client's bar, `held`.
 - [Gemini, Cursor and Copilot sends, and `todo send`](commands-for-scripts-and-agents/agent-sends.md): Gemini sends; Cursor sends; Copilot sends; Gemini's input box and last message; `todo send ID`.
 - [Waiting on several panes](commands-for-scripts-and-agents/waiting-on-several-panes.md): #129: `--any` and `--all`, one line per pane, `wait-several`.
 - [Reading a pane and its last message](commands-for-scripts-and-agents/reading.md): `read` and `--text`; The last message; Searching; Reading several last messages; What the last message is; No input box in `read --json`.
@@ -70,5 +70,5 @@ Code: `cli.rs`, `cli/`, `cli/requests.rs`, `cli/line.rs`, `client/requests.rs`, 
 - [Pasting a file from another machine](commands-for-scripts-and-agents/pasting-files.md): #479: `paste-file`, a file of the client's machine kept on the server and its path pasted, names, cleanup, the cost on the loop.
 - [Following the changes panel](commands-for-scripts-and-agents/changes.md): #339: the `changes` stream, a file's patch, gaps, the base, viewed marks, discarding a file (#421), staging a file (#426), the version seen from the command line (#470).
 - [Worktrees: the list, sizes and build folders](commands-for-scripts-and-agents/worktrees.md): #536: `worktrees`, the dialog's rows, `safe` and `risks`, sizes by default; #485: `worktree-size` and `free-builds`, the target, the refusal without `force`, `--check`, exit 3.
-- [Cloning a repository](commands-for-scripts-and-agents/cloning.md): #541: `clone`, the parent folder, relative paths and `..`, folders made by the request and removed on failure, `busy`, no `.git` clone, errors without the URL, never prompting.
+- [Cloning a repository](commands-for-scripts-and-agents/cloning.md): #541, #678: `clone`, the parent folder, relative paths and `..`, folders made by the request and removed on failure, `busy`, no `.git` clone, errors without the URL, never prompting, the files written after the clone, `--file`, `--from` and `--list-ignored`.
 - [A versioned contract](commands-for-scripts-and-agents/contract.md): #283: discovery, `boot`, structured errors, codes, strict fields, compatibility, stream versions.

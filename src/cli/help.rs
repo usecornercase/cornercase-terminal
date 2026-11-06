@@ -57,7 +57,8 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 `survey` in the JSON), where a digit sent alone would answer it: dismiss it with
 `cornercase keys --pane N 0`, or pass --force. So is a pane whose agent is resuming its conversation
 after a restart (`resuming` in the JSON), where the text would reach its shell or its start-up:
-send again once it is back, or pass --force.
+send again once it is back, or pass --force. While a person is typing in the pane the text waits for them
+and goes right after their prompt (`held_sends` in the JSON); `cornercase held` acts on it from elsewhere.
 
 With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI,
 Vibe CLI or GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
@@ -686,6 +687,7 @@ mod clone;
 mod context;
 mod files;
 mod flow;
+mod held;
 mod machines;
 mod paste_file;
 mod plugin;
@@ -707,6 +709,7 @@ pub(in crate::cli) use flow::{
     FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
     FLOW_SAVE_HELP,
 };
+pub(in crate::cli) use held::HELD_HELP;
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use plugin::PLUGIN_HELP;
@@ -732,7 +735,7 @@ controls (whether it sizes its tab's terminals now). The view lives while this c
 stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
 read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `start`,
-`send`, `keys`, `read`, `wait`, `status`, `rename`, `mark`, `go`, `plugin run` or `surface`: the view's
+`send`, `keys`, `held`, `read`, `wait`, `status`, `rename`, `mark`, `go`, `plugin run` or `surface`: the view's
 tab is their default and --focus moves it.
 
 While the view is active, has a size and is not hidden, the tab it shows counts as seen like the
