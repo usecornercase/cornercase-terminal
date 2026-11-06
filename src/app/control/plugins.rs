@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use super::{Handled, Pending, Stage, conflict, json, malformed, no_popup, none};
 use crate::app::App;
-use crate::app::plugins::Spot;
+use crate::app::plugins::{Requested, Spot};
 use crate::control::contract::{Code, Refusal};
 use crate::control::plugins::ActionRan;
 use crate::control::{Done, Item, PluginActions, PluginRun};
@@ -14,6 +14,10 @@ use crate::project::Hierarchy;
 
 fn not_found(message: String) -> Refusal {
     Refusal::new(Code::NotFound, message)
+}
+
+fn what_is_shown(view: Option<u64>) -> String {
+    view.map_or_else(|| "what the window shows".to_string(), |view| format!("what view {view} shows"))
 }
 
 impl App {
@@ -27,7 +31,7 @@ impl App {
         json(&self.plugin_action_infos(request.context))
     }
 
-    pub(super) fn plugin_run_request(&mut self, client: u64, request: &PluginRun) -> Handled {
+    pub(super) fn plugin_run_request(&mut self, client: u64, view: Option<u64>, request: &PluginRun) -> Handled {
         self.reload_plugins();
         let now = self.plugin_revision();
         if request.revision != now {
@@ -38,13 +42,13 @@ impl App {
             )));
         }
         let (plugin, action) = self.plugin_action(&request.plugin, &request.action).map_err(not_found)?;
-        let spot = self.plugin_run_spot(request.item, &plugin, &action)?;
+        let spot = self.plugin_run_spot(request.item, view, &plugin, &action)?;
         if action.placement == Placement::Popup {
-            self.popup_allowed()?;
+            self.popup_allowed(view)?;
         }
         let key = self.clients.requests.key();
-        if !self.start_plugin_action(spot, plugin, action, Some(key)) {
-            let what = request.item.map_or_else(|| "what the window shows".to_string(), |item| item.to_string());
+        if !self.start_plugin_action(spot, plugin, action, Some(Requested { key, view })) {
+            let what = request.item.map_or_else(|| what_is_shown(view), |item| item.to_string());
             return Err(not_found(format!("{what} is gone")));
         }
         let pending =
@@ -53,8 +57,8 @@ impl App {
         Ok(None)
     }
 
-    fn popup_allowed(&self) -> Result<(), Refusal> {
-        if !self.has_window() {
+    fn popup_allowed(&self, view: Option<u64>) -> Result<(), Refusal> {
+        if view.is_none() && !self.has_window() {
             return Err("no window is attached".into());
         }
         self.popup_blocked().map_or(Ok(()), |blocked| Err(conflict(blocked)))
@@ -67,10 +71,16 @@ impl App {
         Ok(Some(json(&Done::default())))
     }
 
-    fn plugin_run_spot(&self, item: Option<Item>, plugin: &Plugin, action: &Action) -> Result<Spot, Refusal> {
+    fn plugin_run_spot(
+        &self,
+        item: Option<Item>,
+        view: Option<u64>,
+        plugin: &Plugin,
+        action: &Action,
+    ) -> Result<Spot, Refusal> {
         let spot = match item {
             Some(item) => self.plugin_spot(item)?,
-            None if action.contexts.contains(&Context::Button) => return Ok(Spot::Shown),
+            None if action.contexts.contains(&Context::Button) => return Ok(view.map_or(Spot::Shown, Spot::ShownIn)),
             None => {
                 return Err(malformed(format!(
                     "say what to run `{}` of `{}` on: a project, workspace, tab or pane; only a button action runs \
@@ -128,7 +138,7 @@ impl App {
                 let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
                 self.projects.workspace(at.workspace()).id
             }
-            Spot::Project(_) | Spot::Shown => return Ok(spot),
+            Spot::Project(_) | Spot::Shown | Spot::ShownIn(_) => return Ok(spot),
         };
         if self.projects[self.usable_workspace(workspace)?.project()].closing {
             return Err(format!("workspace {workspace} is closing").into());

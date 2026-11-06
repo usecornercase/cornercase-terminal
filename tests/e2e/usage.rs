@@ -96,3 +96,51 @@ fn a_machine_s_stats_are_read_by_its_name_and_an_unknown_one_is_not_found() {
     let refused = String::from_utf8_lossy(&nope.stderr);
     assert!(!nope.status.success() && refused.contains("no machine is called `nope`"), "{nope:?}");
 }
+
+fn asks_for_stats(session: &Session) -> usize {
+    let log = std::fs::read_to_string(session.dir.join("server.log")).unwrap_or_default();
+    log.matches("command=stats").count()
+}
+
+#[test]
+fn a_machine_s_last_stats_are_read_without_asking_it_again() {
+    let (machine, here) = linked_with_probes();
+    let read = |args: &[&str]| -> Value { serde_json::from_str(&here.says(args)).expect("json") };
+
+    let unread = here.cli(&["stats", "--cached", "--machine", VPS]);
+    let refused = String::from_utf8_lossy(&unread.stderr);
+    assert!(!unread.status.success() && refused.contains("no stats from `vps`: not read yet"), "{unread:?}");
+    let left_out = read(&["stats", "--cached", "--machine", "all", "--json"]);
+    let there = &left_out["machines"][0];
+    assert_eq!(
+        (&there["name"], &there["state"], &there["read_at"], &there["error"]),
+        (&json!(VPS), &json!("linked"), &json!(null), &json!("not read yet"))
+    );
+    assert!(there["seen"].is_string(), "{there}");
+    assert_eq!(asks_for_stats(&machine), 0);
+
+    let fresh = read(&["stats", "--machine", VPS, "--json"]);
+    let copy = read(&["stats", "--cached", "--machine", VPS, "--json"]);
+    let summed = read(&["stats", "--cached", "--machine", "all", "--json"]);
+    let text = here.says(&["stats", "--cached", "--machine", "all"]);
+
+    let read_at = &fresh["machine"]["read_at"];
+    assert!(read_at.is_string(), "{fresh}");
+    assert_eq!((&copy["machine"]["read_at"], &copy["windows"]), (read_at, &fresh["windows"]));
+    assert_eq!(&summed["machines"][0]["read_at"], read_at);
+    assert!(text.ends_with("summed from:\n▭ this computer\n● vps  read just now"), "{text}");
+    machine.wait_for_file("server.log", "the machine logs the ask", |log| log.contains("command=stats"));
+    assert_eq!(asks_for_stats(&machine), 1);
+}
+
+#[test]
+fn stats_cached_needs_a_server_only_with_a_machine() {
+    let session = Session::new();
+
+    let here: Value = serde_json::from_str(&session.says(&["stats", "--cached", "--json"])).expect("json");
+    let there = session.cli(&["stats", "--cached", "--machine", VPS]);
+
+    assert_eq!(here["blocks"].as_array().map(Vec::len), Some(182), "{here}");
+    assert!(!there.status.success(), "{there:?}");
+    assert!(!session.socket().exists());
+}

@@ -53,6 +53,10 @@ pub(crate) fn list(root: &Path) -> Vec<(Known, Vec<String>)> {
     supported().map(|kind| (kind, names(root, kind))).collect()
 }
 
+pub(crate) fn no_accounts() -> Vec<(Known, Vec<String>)> {
+    supported().map(|kind| (kind, Vec::new())).collect()
+}
+
 pub(crate) fn add(root: &Path, kind: Known, name: &str, default: Option<&Path>) -> Result<PathBuf, Error> {
     let home = check(kind, name)?;
     let parent = root.join(kind.name());

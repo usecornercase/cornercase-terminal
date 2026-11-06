@@ -42,6 +42,7 @@ impl Command {
             Self::WaitSeveral(wait) => wait.fields(fields, true),
             Self::Mark(mark) => mark.fields(fields),
             Self::RunSetup(run) => run.fields(fields),
+            Self::Held(held) => held.fields(fields),
             Self::Notify(notify) => {
                 fields.add("bytes", notify.text.len());
             }
@@ -212,6 +213,7 @@ impl Command {
             Self::Away(away) => {
                 fields.add("off", away.off);
             }
+            Self::ForumServer(pick) => pick.fields(fields),
             Self::Usage(usage) => usage.fields(fields),
             Self::Ports(ports) => ports.fields(fields),
             Self::StopPort(stop) => stop.fields(fields),

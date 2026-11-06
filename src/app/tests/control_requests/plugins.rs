@@ -344,6 +344,42 @@ command = ["./pop"]
         assert!(toast(&p.app).is_none());
     }
 
+    fn runs_in_a_view_of_the_first_project(p: &mut Plugged, action: &str) -> (String, ActionRan) {
+        let (project, workspace, tab, pane) = ids(p);
+        let window = TempDir::new();
+        p.app.open_project(window.path().to_path_buf(), AREA).expect("the project the window moves to");
+        let open = json!({"command": "view", "args": {"cols": 120, "rows": 40, "project": project}}).to_string();
+        p.app.request(CLIENT + 1, &open, Some(AREA), Instant::now());
+        let opened: Value = serde_json::from_str(&p.app.take_answers()[0].1).expect("a reply");
+        let args = bare(p, action);
+        let mut answers =
+            send_headed(&mut p.app, &p.rx, &json!({"view": opened["ok"]["view"]["id"]}), "plugin-run", &args);
+        let wanted = format!(
+            "ctx=button action={action} pane={pane} tab={tab} workspace={workspace} project={project} nested=1\n"
+        );
+        (wanted, outcome(&answers.remove(0).1))
+    }
+
+    #[test]
+    fn a_button_action_run_in_a_view_gets_what_the_view_shows_in_its_environment() {
+        let mut p = popped("exit 0");
+
+        let (wanted, ran) = runs_in_a_view_of_the_first_project(&mut p, "here");
+
+        assert_eq!((ran.context.as_str(), ran.ended.as_str()), ("button", "exited"));
+        assert_eq!(p.read("out"), wanted);
+    }
+
+    #[test]
+    fn a_popup_run_in_a_view_gets_what_the_view_shows_in_its_environment() {
+        let mut p = popped("\"$CORNERCASE_PLUGIN_ROOT/act\"");
+
+        let (wanted, ran) = runs_in_a_view_of_the_first_project(&mut p, "pop");
+
+        assert_eq!((ran.context.as_str(), ran.ended.as_str()), ("button", "exited"));
+        assert_eq!(p.read("out"), wanted);
+    }
+
     #[test]
     fn the_app_feed_shows_the_popup_until_popup_close_closes_it() {
         let mut p = popped("exec sleep 30");

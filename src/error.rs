@@ -114,6 +114,8 @@ pub enum Error {
     Partial,
     #[error("the command there exited with {0}")]
     Exited(u8),
+    #[error("{0}")]
+    StaleBoot(String),
     #[error(
         "the running cornercase server is too old for `cornercase {0}`. Restart it: run `cornercase kill-server` \
          (it closes all its terminals) and start cornercase again"

@@ -59,7 +59,7 @@ fn checked_parent(parent: PathBuf, given: &Path) -> Result<PathBuf, Refusal> {
 
 fn decoded(files: &[CloneFile]) -> Result<Vec<File>, Failure> {
     if files.len() > MAX_FILES {
-        return Err(Failure::Files(format!("the files are over the {MAX_FILES} a clone takes")));
+        return Err(Failure::Files(files::too_many()));
     }
     let mut total = 0;
     let mut decoded = Vec::with_capacity(files.len());

@@ -186,6 +186,8 @@ fn newest_commands() -> Vec<Command> {
         Command::Machines(Machines::default()),
         Command::Clone(CloneRepository::default()),
         Command::FocusMachine(FocusMachine { machine: "vps".into(), item: Item::Workspace(1) }),
+        Command::ForumServer(ForumServer { id: "8".into() }),
+        Command::Held(HeldRequest { pane: None, tab: None, action: HeldAction::SendNow }),
         Command::RunSetup(RunSetup::default()),
     ]
 }

@@ -153,14 +153,16 @@ The buttons sit in a row of their own above **`More ▴`**: under the projects c
 
 An action run from its button gets `CORNERCASE_CONTEXT=button` and the ids of what the window shows (the project, workspace, tab and pane on screen, those there are), and runs in the folder of the workspace on screen, or your home folder with no project open.
 
+A program that draws cornercase with a [view of its own](../scripts-and-agents/#a-view-of-your-own) offers the same buttons with `cornercase plugin run PLUGIN ACTION --view ID`: the action gets `CORNERCASE_CONTEXT=button` and the ids and the folder of what that view shows, so it acts on what the person using that program is looking at.
+
 ### Popups
 
 An action with `placement = "popup"` runs in a terminal inside a dialog over the window, instead of in the background: a picker built on fzf, a curses menu, a status page, anything that runs in a terminal. The dialog has the action's title and a `×`, and the rest of the window dims behind it.
 
-- **Size**: `width` columns by `height` rows, when the window has room for them; otherwise, or without them, 80 % of the window each way. It follows the window when it is resized.
+- **Size**: `width` columns by `height` rows, when the window has room for them; otherwise, or without them, 80 % of the window each way. It follows the window when it is resized. Opened with `plugin run --view ID` while no window is attached, it opens all the same, and the view's size takes the window's place.
 - **Keys**: every key goes to the program, `Esc` and your [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts) included, and so does a paste. The mouse reaches it when the program asks for it. A click outside the popup does nothing.
 - **Closing**: it closes when the program exits, when you click `×`, or with `cornercase plugin popup-close`. `×` stops the program and its children (`SIGHUP`, then `SIGKILL` after 2 seconds). A program that exits with a code other than 0 shows its exit status in the window, like a failed action.
-- It is not stopped after 5 minutes: it stays open until it closes. One popup is open at a time, and it is not part of the session: `kill-server` and a restart close it.
+- It is not stopped after 5 minutes: it stays open until it closes, also when the last window, or the view it opened for, goes away: the next window shows it again. One popup is open at a time, and it is not part of the session: `kill-server` and a restart close it.
 - The popup runs in the server, so every window attached to it, a phone's browser or a [`cornercase remote`](../remote/) window included, shows it, and you can type in it from any of them. A program that draws cornercase itself shows it and types into it with [`surface --popup` and `input --popup`](../scripts-and-agents/#a-plugins-popup).
 - **Not only for you**: what a popup shows and what it is answered with reach every program that can talk to the server, as panes do, and that includes the agents running in your panes. So don't use a popup to show a secret that only you should see (a one-time code, a vault entry, a token), or to ask for a confirmation that only you should give: an agent, or anything else of yours that talks to cornercase, can read the one and answer the other.
 

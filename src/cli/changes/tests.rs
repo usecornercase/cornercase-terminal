@@ -176,6 +176,35 @@ mod text {
     }
 }
 
+mod the_help {
+    use serde_json::Value;
+
+    use super::*;
+    use crate::test_util::fixture;
+
+    fn of(action: &str) -> String {
+        parse(&["changes", action, "--help"]).expect_err("the help").to_string()
+    }
+
+    #[rstest]
+    #[case::of_a_file("file", fixture!("control/changes/v1/patch.json"), "/hunks/0/lines")]
+    #[case::of_a_gap("gap", fixture!("control/changes/v1/gap.json"), "/lines")]
+    fn names_every_field_of_a_line(#[case] action: &str, #[case] pinned: &str, #[case] lines: &str) {
+        let pinned: Value = serde_json::from_str(pinned).expect("the answer");
+        let lines = pinned.pointer(lines).and_then(Value::as_array).expect("its lines");
+        let help = of(action);
+
+        for field in lines.iter().flat_map(|line| line.as_object().expect("a line").keys()) {
+            assert!(help.contains(&format!("\"{field}\"")), "{field} in {help}");
+        }
+    }
+
+    #[test]
+    fn of_a_file_says_what_to_copy() {
+        assert!(of("file").contains("take its raw, or its text when it has none"));
+    }
+}
+
 mod the_merge_check_text {
     use super::*;
     use crate::control::changes::{ConflictInfo, MergeChecked, MergeInfo};
