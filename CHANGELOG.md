@@ -2,10 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.3
+## 0.13.4
 
 - **A machine's last stats, without waiting for it.** `cornercase stats --cached --machine vps` and `--machine all` answer at once with the numbers your server read last and ask nobody, as `usage --cached` does: each machine with when it was read and last seen, its state and any error. Under `all`, a machine with no numbers yet is left out of the sum with `not read yet`; named alone, it fails and says why. A window or a script can show those numbers first, then run `cornercase stats --machine all` and show the fresh ones when they come. It is the `cached` field of the `stats` request, with the feature `stats-cached`, so a program can check that the server has it.
 - `cornercase stats --machine vps` of a machine that is down now puts its numbers on the right days of the heatmap, as `--machine all` and the Usage dialog already did.
+
+## 0.13.3
+
+- **`cornercase status --json`, `status --follow` and `view` name the conversation a pane's agent is in**, as `conversation` on each pane: the id `places` gives in `cornercase recap --json`, `null` until the agent has one (for most agents, until its first prompt) and always for opencode. A program driving cornercase can now follow a recap's place as the panel's links do: the pane with the place's `agent` and `conversation`, then `pane` while `boot` is the server's, so it finds a conversation that a `cornercase restart`, or `agents close` and `agents reopen`, moved to another pane. A new id sends one more line to `status --follow` and `view`.
+- **A recap's place keeps its conversation's id once the pane closed.** A conversation whose id came after it was first seen, as it does for most agents, had none in the journal, so a place written while it was closed could not find it again after `agents reopen`, in the panel or from a script.
 
 ## 0.13.2
 

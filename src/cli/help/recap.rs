@@ -20,7 +20,9 @@ With --json it prints {\"range\", \"day\", \"label\", \"from\", \"to\", \"zone\"
 \"agent\", \"title\", \"account\", \"model\", \"effort\", \"language\", \"tokens\", \"conversations\", \"text\",
 \"places\", \"dossier\", \"loading\", \"progress\", \"empty\", \"error\"}. text keeps the ids ([c3], [p1]);
 places maps each id to {kind, project, workspace, branch, tab, agent, conversation, pane, boot,
-number, url, state}. `cornercase events` reports a recap starting, finishing or failing.
+number, url, state}. The pane a conversation is in now is the one in `cornercase status --json` with
+its agent and conversation; a null conversation matches nothing, and then pane is worth trying
+while boot is the server's. `cornercase events` reports a recap starting, finishing or failing.
 
 Examples:
   cornercase recap
