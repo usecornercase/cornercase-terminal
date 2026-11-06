@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.3
+
+- **A program that draws cornercase can now act on a held message.** When `cornercase send` holds a message because someone is typing in a pane, the window's bar offers ` send now ` and ` wait turn `. `cornercase held --pane 9 --send-now` does the first (the first held message goes at once, as `send --force` does, still after an earlier message's Enter) and `cornercase held --pane 9 --wait-turn` the second (it only says the person saw it). Both refuse in words when nothing is held in that pane, and print what is held now (`--json` for `held_sends`, `held_from` and `held_queued`); the `held` request does the same on the socket. Each pane in `status --json`, `status --follow` and `view` also has `held_from`, the pane that sent the first held message, and `held_queued`, true once ` wait turn ` covers the newest one, so another window's bar can read as this one's. Nothing changes in cornercase's own window.
+- `cornercase status --help` now lists every column of `--panes`, in order: it left out `held_sends`, `draft`, `account_restart`, `pid` and `memory`, so counting positions from it read the wrong column.
+
 ## 0.13.5
 
 - **A machine's last stats, without waiting for it.** `cornercase stats --cached --machine vps` and `--machine all` answer at once with the numbers your server read last and ask nobody, as `usage --cached` does: each machine with when it was read and last seen, its state and any error. Under `all`, a machine with no numbers yet is left out of the sum with `not read yet`; named alone, it fails and says why. A window or a script can show those numbers first, then run `cornercase stats --machine all` and show the fresh ones when they come. It is the `cached` field of the `stats` request, with the feature `stats-cached`, so a program can check that the server has it.
@@ -11,11 +16,6 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **Machines: a machine's agents in the agents section.** With the agents section on (Settings › UI › agents section), every agent running on a linked machine gets a row there beside yours, under its project and tagged `☁ vps`, with its state, kind, model and context. A click shows that agent's tab on the machine, live, as a click on its workspace in the sidebar does. The rows fold like yours: the arrow, the `+n` and the attention of the hidden agents, and **collapse** / **expand** in the menu fold the agent on its machine. A machine that is down keeps its rows, dimmed, with `seen 2 min ago`, and pressing its arrow there says that nothing was sent. The compact mode's `Agents` menu lists them too.
 - **Not on those rows yet:** close agent, mark as pending review and view context.
-
-## 0.13.3
-
-- **A program that draws cornercase can now act on a held message.** When `cornercase send` holds a message because someone is typing in a pane, the window's bar offers ` send now ` and ` wait turn `. `cornercase held --pane 9 --send-now` does the first (the first held message goes at once, as `send --force` does, still after an earlier message's Enter) and `cornercase held --pane 9 --wait-turn` the second (it only says the person saw it). Both refuse in words when nothing is held in that pane, and print what is held now (`--json` for `held_sends`, `held_from` and `held_queued`); the `held` request does the same on the socket. Each pane in `status --json`, `status --follow` and `view` also has `held_from`, the pane that sent the first held message, and `held_queued`, true once ` wait turn ` covers the newest one, so another window's bar can read as this one's. Nothing changes in cornercase's own window.
-- `cornercase status --help` now lists every column of `--panes`, in order: it left out `held_sends`, `draft`, `account_restart`, `pid` and `memory`, so counting positions from it read the wrong column.
 
 ## 0.13.3
 
