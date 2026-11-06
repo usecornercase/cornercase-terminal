@@ -85,6 +85,7 @@ pub(crate) fn takes_view(command: &Command) -> bool {
             | Command::StartWith(_)
             | Command::Send(_)
             | Command::Keys(_)
+            | Command::Held(_)
             | Command::Read(_)
             | Command::LastMessage(_)
             | Command::Wait(_)
