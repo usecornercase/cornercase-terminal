@@ -16,10 +16,11 @@ impl App {
             .filter_map(|term| {
                 let kind = term.context.kind()?;
                 let record = term.context.record_for(kind).as_ref().map(|record| Pointer::of(record).path());
-                let key = key_of(kind.name(), term.context.conversation(), record);
+                let conversation = term.context.conversation().map(str::to_string);
+                let key = key_of(kind.name(), conversation.as_deref(), record);
                 let status = term.agent.status().map(|status| status.name().to_string());
                 let prompts = prompts.iter().find(|(pane, _)| *pane == term.id).map(|(_, p)| p.clone());
-                Some(Observed { pane: term.id, key, status, prompts: prompts.unwrap_or_default() })
+                Some(Observed { pane: term.id, key, conversation, status, prompts: prompts.unwrap_or_default() })
             })
             .collect();
         let mut journal = std::mem::take(&mut self.panels.recap.journal);
