@@ -153,11 +153,13 @@ fn every_form_of_close_and_rename_refuses_an_earlier_boot_and_changes_nothing() 
 fn the_boot_of_this_run_lets_close_and_rename_act() {
     let (session, _) = machine_with(&["kept", "closed"]);
     let (boot, kept, closed) = (boot(&session), id_of(&session, "kept"), id_of(&session, "closed"));
+    let before = ssh_runs(&session);
 
     let renamed = remote_says(&session, &["rename", "--workspace", &kept, "renamed", "--boot", &boot]);
     let gone = remote_says(&session, &["close", "--workspace", &closed, "--boot", &boot]);
 
     assert_eq!((renamed.as_str(), gone.as_str()), ("", ""));
+    assert_eq!(ssh_runs(&session), before + 2, "the feature check and the request share one ssh connection");
     assert_eq!(id_of(&session, "renamed"), kept);
     assert!(!lists(&session, &closed), "{closed} is gone");
 }
