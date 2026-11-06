@@ -226,6 +226,7 @@ impl App {
             Command::RestartWhenIdle(restart) => self.restart_request(client, asker.caller, &restart, now),
             Command::StartServer(start) => self.start_server_request(client, &start),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
+            Command::ForumServer(pick) => self.forum_server_request(&pick),
             Command::Usage(usage) => self.usage_request(client, &usage, now),
             Command::Ports(ports) => self.ports_request(client, asker, &ports),
             Command::StopPort(stop) => {

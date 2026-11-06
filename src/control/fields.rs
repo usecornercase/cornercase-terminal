@@ -212,6 +212,7 @@ impl Command {
             Self::Away(away) => {
                 fields.add("off", away.off);
             }
+            Self::ForumServer(pick) => pick.fields(fields),
             Self::Usage(usage) => usage.fields(fields),
             Self::Ports(ports) => ports.fields(fields),
             Self::StopPort(stop) => stop.fields(fields),

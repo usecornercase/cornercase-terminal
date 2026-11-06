@@ -22,6 +22,8 @@ cornercase --help       # list every command; cornercase COMMAND --help explains
 
 The commands for scripts and agents, `status`, `stats`, `usage`, `context`, `recap`, `ports`, `processes`, `worktrees`, `pull-request`, `open`, `clone`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `held`, `read`, `wait`, `events`, `surface`, `changes`, `files`, `view`, `view-set`, `input`, `scroll`, `selection`, `resize`, `redraw`, `ratio`, `link`, `paste-file`, `requests`, `theme`, `config`, `account`, `profile`, `machines`, `issue`, `search`, `close`, `agents`, `group`, `move`, `move-pane`, `collapse`, `expand`, `rename`, `focus`, `go`, `notify`, `todo`, `queue`, `away`, `mark`, `skill` and `contract`, have their own page: [Scripts and agents](../../guides/scripts-and-agents/). Among them, `status --follow` keeps running and prints the whole session as one JSON line each time it changes, for [another UI or a script that mirrors it](../../guides/scripts-and-agents/#follow-the-whole-state), and `status --app` prints (with `--follow`, keeps printing) the [TODO list, queue, away, update and keep awake](../../guides/scripts-and-agents/#follow-the-rest-of-the-app).
 
+`config forum-server ID` picks the server of the [Discord forum](../../guides/discord/#forum-mode) when the app is in several of yours, from the list in `status --app`, for a script or another UI that has no dialog: [pick the forum's server](../../guides/scripts-and-agents/#pick-the-forums-server).
+
 ### `cornercase`
 
 Attaches to the server, starting it first if none is running. A new server restores your [saved session](../../guides/sessions/#what-is-restored), or, when there is nothing to restore, opens the folder you ran the command from as a project.
@@ -261,6 +263,7 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | `timed out after …: the agent in pane … has not ended its turn, so the server keeps running` | `--when-idle` reached its `--timeout` before every agent stopped working. |
 | ``the running cornercase server is too old to wait for its agents …`` | The server predates `--when-idle`. Run `cornercase restart` once no agent is working. |
 | ``this is a development build; `cornercase update` only updates released builds`` | You ran `update` from a build made with `cargo run`. Pull and build again instead. |
+| ``no server is waiting to be picked: …`` | `config forum-server` when the [forum's setup](../../guides/discord/#forum-mode) is not waiting for a server; the end of the line is the step left, what failed or where the forum is. |
 | ``could not reach cornercase on `<host>`: …`` | `cornercase remote` or `--remote` couldn't connect; the end of the line is what `ssh` said. |
 | ``cornercase was not found on `<host>` …`` | The other machine has no `cornercase` where it looks; install it there, or give its path with `--command` (`--remote-command` for `--remote`). |
 | ``no cornercase server is running on `<host>` `` | A `--remote` command reached the machine, but no server runs there. |

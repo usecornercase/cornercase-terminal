@@ -35,6 +35,7 @@ mod commands;
 mod context;
 mod contract;
 mod flows;
+mod forum;
 mod held;
 mod input;
 mod issues;

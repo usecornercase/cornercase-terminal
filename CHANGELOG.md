@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.12
+
+- **The server of the Discord forum can be picked from a script or another program.** With forum mode on and the app in several of your servers, `cornercase status --app` now lists them in Discord's `forum`, as `servers`, each with its `id` and `name`, and `cornercase config forum-server ID` picks one, as a click in the forum's dialog does: the channel is made there, the same message shows, and `forum` goes on to `ready`. An id that is not in the list, or a moment when no pick is waiting, is refused and says why. Nothing changes in the window.
+- `cornercase status --app` no longer names a step of the forum's setup once the bot or its paired chat is gone.
+
 ## 0.13.11
 
 - **A program with a view of its own can run a plugin's buttons and popups.** `cornercase plugin run PLUGIN ACTION --view ID` runs a `button` action on what that view shows rather than on what cornercase's window shows: it gets `CORNERCASE_CONTEXT=button`, the view's ids and its workspace's folder. A popup action opens with it even with no window attached, sized from the view, so someone who only uses that program can open one, and it follows `view-set`. If the view goes away, the popup stays open as it does when the last window leaves. Without `--view` nothing changes. `cornercase contract` lists the feature `plugin-run-view`, and socket clients send `view` beside the command, as for `focus` and `start`.

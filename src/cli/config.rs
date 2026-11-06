@@ -17,6 +17,7 @@ use crate::error::{Error, Result};
 use crate::issues::Secret;
 use crate::remote::Remote;
 
+mod forum;
 mod share;
 
 fn request(change: Configure) -> Result<Value> {
@@ -45,15 +46,13 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
             request(Configure::Secret(SecretChange { key, value }))?
         }
         Some(ConfigAction::Remove { key }) => request(Configure::Remove(key))?,
+        Some(ConfigAction::ForumServer { id }) => return forum::pick(id, args.json),
         Some(ConfigAction::Export { to }) => return share::export(to.as_deref(), args.json),
         Some(ConfigAction::Import { source, only, yes, preview }) => {
             return share::import(&share::Import { source, only, yes, preview }, args.json);
         }
     };
-    if args.json {
-        return print_json(&value);
-    }
-    print_out(&render(&answer::<Described>(value)?, changing))
+    if args.json { print_json(&value) } else { print_out(&render(&answer::<Described>(value)?, changing)) }
 }
 
 fn search(text: &str, as_json: bool) -> Result<()> {

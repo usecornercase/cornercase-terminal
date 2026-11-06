@@ -3,7 +3,7 @@ use super::posts::{Posting, THREAD, first_post};
 use super::*;
 use crate::control::{AwayInfo, ForumInfo, WorkspaceInfo};
 
-fn discord_of(app: &mut App) -> Value {
+pub(super) fn discord_of(app: &mut App) -> Value {
     let answer = value(app, None, Command::App(wire::AppWatch::default()));
     let away = answer["away"].as_array().expect("the platforms").clone();
     away.into_iter().find(|platform| platform["platform"] == "discord").expect("discord")
