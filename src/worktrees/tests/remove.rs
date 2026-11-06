@@ -471,8 +471,8 @@ mod a_branch_at_the_commit_that_was_looked_at {
         git(repo.path(), &["worktree", "remove", "--force", &at.display().to_string()]);
         git(repo.path(), &["branch", "other"]);
 
-        assert_eq!(delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("deleted"), true);
-        assert_eq!(delete_branch_at(repo.path(), "other", None).expect("deleted"), true);
+        assert!(delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("deleted"));
+        assert!(delete_branch_at(repo.path(), "other", None).expect("deleted"));
         assert!(!branches(repo.path()).contains("feat-a") && !branches(repo.path()).contains("other"));
     }
 
@@ -483,7 +483,7 @@ mod a_branch_at_the_commit_that_was_looked_at {
         git(&at, &["commit", "--quiet", "--allow-empty", "-m", "later"]);
         git(repo.path(), &["worktree", "remove", "--force", &at.display().to_string()]);
 
-        assert_eq!(delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("kept"), false);
+        assert!(!delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("kept"));
         assert!(branches(repo.path()).contains("feat-a"));
     }
 

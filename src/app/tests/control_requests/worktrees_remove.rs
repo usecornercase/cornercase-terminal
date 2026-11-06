@@ -304,7 +304,7 @@ mod closed_projects {
         s.app.git.frees.request_frees(7, at.clone());
         s.app.git.frees.freeing(elsewhere.clone());
 
-        s.app.builds_freed(0, &elsewhere, Ok(Default::default()));
+        s.app.builds_freed(0, &elsewhere, Ok(crate::worktrees::builds::Freed::default()));
 
         assert!(s.app.freeing_path(&at) && !s.app.freeing_path(&elsewhere));
     }
