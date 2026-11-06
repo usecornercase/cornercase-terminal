@@ -178,6 +178,29 @@ mod patches {
         assert_eq!(heard.lines[0].text, format!("\t{KEPT}"));
     }
 
+    #[rstest]
+    #[case::none(None, None)]
+    #[case::the_line_with_its_tabs(Some("\tx\ty"), Some("\tx\ty"))]
+    #[case::cleaned_like_the_text(Some("\tx\u{1b}\u{200b}\ty\r"), Some("\tx\ty"))]
+    #[case::another_line(Some("\trm -rf ~"), None)]
+    #[case::the_line_without_its_tabs(Some("xy"), None)]
+    fn a_line_s_own_text_stays_only_when_it_is_what_the_panel_draws(
+        #[case] raw: Option<&str>,
+        #[case] kept: Option<&str>,
+    ) {
+        let raw: Option<Box<str>> = raw.map(Into::into);
+        let text = "    x    y".to_string();
+        let changed = LineInfo { raw: raw.clone(), ..line(&text) };
+        let sent = Patch { hunks: vec![HunkInfo { lines: vec![changed], ..HunkInfo::default() }], ..Patch::default() };
+        let unchanged = Gap { lines: vec![GapLineInfo { text, raw, ..GapLineInfo::default() }], ..Gap::default() };
+
+        let heard_patch = patch(&ok(&sent)).expect("a patch");
+        let heard_gap = gap(&ok(&unchanged)).expect("a gap");
+
+        assert_eq!(heard_patch.hunks[0].lines[0].raw.as_deref(), kept);
+        assert_eq!(heard_gap.lines[0].raw.as_deref(), kept);
+    }
+
     #[test]
     fn a_gap_keeps_no_more_lines_than_a_diff_can_hold() {
         let sent = Gap { lines: vec![GapLineInfo::default(); MAX_LINES + 1], ..Gap::default() };
