@@ -17,6 +17,7 @@ use crate::error::{Error, Result};
 use crate::issues::Secret;
 use crate::remote::Remote;
 
+mod forum;
 mod pair;
 mod share;
 
@@ -47,6 +48,7 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
         }
         Some(ConfigAction::Remove { key }) => request(Configure::Remove(key))?,
         Some(ConfigAction::Pair { key }) => return pair::run(key, args.json),
+        Some(ConfigAction::ForumServer { id }) => return forum::pick(id, args.json),
         Some(ConfigAction::Export { to }) => return share::export(to.as_deref(), args.json),
         Some(ConfigAction::Import { source, only, yes, preview }) => {
             return share::import(&share::Import { source, only, yes, preview }, args.json);

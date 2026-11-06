@@ -115,6 +115,10 @@ pub(crate) fn use_queue_routines() -> Result<()> {
     require("queue-routines", "cannot repeat queue entries, run flows from the queue, or pause and resume routines")
 }
 
+pub(crate) fn use_plugin_run_view() -> Result<()> {
+    require("plugin-run-view", "cannot run a plugin's action in a view")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }

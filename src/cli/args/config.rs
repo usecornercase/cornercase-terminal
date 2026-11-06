@@ -56,6 +56,11 @@ pub(crate) enum ConfigAction {
         #[arg(value_name = "KEY", help = "What to pair: browsers, telegram.chat or discord.chat")]
         key: String,
     },
+    #[command(about = "Pick the server of the Discord forum, once the forum's setup waits for that")]
+    ForumServer {
+        #[arg(value_name = "ID", help = "The server's id, from `forum.servers` in `cornercase status --app`")]
+        id: String,
+    },
     #[command(about = "Write the settings to share with a colleague, without tokens or personal ones")]
     Export {
         #[arg(long, value_name = "FILE", help = "Write them to FILE instead of standard output")]

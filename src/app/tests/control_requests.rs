@@ -175,7 +175,6 @@ fn done(response: Response) -> Done {
     }
 }
 
-#[cfg(unix)]
 fn error(response: Response) -> String {
     match response {
         Response::Error(message) => message,
@@ -612,6 +611,7 @@ mod following_the_app;
 mod gemini;
 mod grok;
 mod groups;
+mod held;
 mod holding;
 mod issues;
 mod journal;
@@ -626,6 +626,7 @@ mod parents;
 mod pasting;
 #[cfg(unix)]
 mod placed;
+mod plugin_views;
 mod plugins;
 mod ports;
 mod processes;
@@ -634,6 +635,7 @@ mod queue;
 mod recap;
 #[cfg(unix)]
 mod repos;
+mod run_setup;
 mod searching;
 mod setup;
 mod start_server;

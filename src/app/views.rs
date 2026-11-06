@@ -258,6 +258,7 @@ impl App {
             visible = set.visible.unwrap_or(true)
         );
         self.size_tabs(area);
+        self.size_popup(None);
         let info = self.clients.views.get(id).map(|view| self.view_info(view)).unwrap_or_default();
         Ok(Some(json(&info)))
     }
@@ -366,6 +367,7 @@ impl App {
             let area = self.clients.views.area;
             self.size_tabs(area);
         }
+        self.size_popup(None);
         self.follow_stream();
     }
 
@@ -386,7 +388,7 @@ impl App {
 
     pub(crate) fn resize(&mut self, area: Rect) {
         self.size_tabs(Some(area));
-        self.size_popup(area);
+        self.size_popup(Some(area));
         self.size_stream();
     }
 

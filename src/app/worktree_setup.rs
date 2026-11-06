@@ -118,17 +118,33 @@ impl App {
         Ok(self.insert_tab(at, name, term))
     }
 
+    pub(super) fn setup_refusal(&self, at: WorkspaceAt) -> Option<String> {
+        let target = self.projects.workspace(at);
+        if !target.worktree {
+            return Some(format!("workspace {} is not a worktree, so it has no setup to run", target.id));
+        }
+        if !target.open() {
+            return Some(format!("workspace {} is closing", target.id));
+        }
+        if let Some((pane, _)) = target.setup().filter(|(_, state)| state.running()) {
+            return Some(format!("workspace {} is already running its setup in pane {pane}", target.id));
+        }
+        let project = self.projects[at.project()].id;
+        self.setup_script(at.project()).is_none().then(|| {
+            format!(
+                "project {project} has no setup; `cornercase config project --project {project} --setup SCRIPT` sets one"
+            )
+        })
+    }
+
     pub(super) fn setup_action(&self, project: u64, workspace: u64) -> Option<super::menus::MenuAction> {
         let at = self.projects.workspace_in(project, workspace)?;
-        let target = self.projects.workspace(at);
-        let offered =
-            target.worktree && target.open() && !target.setting_up() && self.setup_script(at.project()).is_some();
-        offered.then_some(super::menus::MenuAction::RunSetup(workspace))
+        self.setup_refusal(at).is_none().then_some(super::menus::MenuAction::RunSetup(workspace))
     }
 
     pub(super) fn run_setup(&mut self, workspace: u64, area: Rect) {
         let Some(at) = self.projects.workspace_index(workspace) else { return };
-        if self.setup_script(at.project()).is_none() || self.projects.workspace(at).setting_up() {
+        if self.setup_refusal(at).is_some() {
             return;
         }
         match self.push_setup_tab(at, area, None) {

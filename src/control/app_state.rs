@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::{KeepAwake, TodoItem};
+use super::{Fields, KeepAwake, TodoItem};
 use crate::machines::Info;
 use crate::queue::Listed;
 
@@ -66,6 +66,26 @@ pub(crate) struct ForumInfo {
     pub(crate) guild: Option<String>,
     pub(crate) channel: Option<String>,
     pub(crate) pending: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) servers: Vec<ForumServerInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ForumServerInfo {
+    pub(crate) id: String,
+    pub(crate) name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ForumServer {
+    pub(crate) id: String,
+}
+
+impl ForumServer {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("id", &self.id);
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
