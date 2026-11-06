@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.3
+## 0.13.4
 
 - **Run a worktree's setup again from a script or another program.** `cornercase setup --workspace ID` (or `--worktree BRANCH`; by default the workspace it runs in) does what **run setup** in the workspace's menu does: a new tab runs the project's setup with `CORNERCASE_ROOT`, `CORNERCASE_WORKTREE` and `CORNERCASE_BRANCH` set, the workspace reads `setup: running`, its failed mark goes, and agents started there wait for it. It returns once the setup is done, with the pane's id, or exits with 1 naming the exit status. It takes `--focus`, `--view` and `--json` as `new-tab` does, and says why it refuses a workspace that is not a worktree, a project with no setup or a setup already running. Other programs send the `run-setup` request. `new-workspace --worktree` no longer says that an agent did not start, since it starts none, and it now fails when the setup's tab is closed before the setup ended.
+
+## 0.13.3
+
+- **`cornercase status --json`, `status --follow` and `view` name the conversation a pane's agent is in**, as `conversation` on each pane: the id `places` gives in `cornercase recap --json`, `null` until the agent has one (for most agents, until its first prompt) and always for opencode. A program driving cornercase can now follow a recap's place as the panel's links do: the pane with the place's `agent` and `conversation`, then `pane` while `boot` is the server's, so it finds a conversation that a `cornercase restart`, or `agents close` and `agents reopen`, moved to another pane. A new id sends one more line to `status --follow` and `view`.
+- **A recap's place keeps its conversation's id once the pane closed.** A conversation whose id came after it was first seen, as it does for most agents, had none in the journal, so a place written while it was closed could not find it again after `agents reopen`, in the panel or from a script.
 
 ## 0.13.2
 
