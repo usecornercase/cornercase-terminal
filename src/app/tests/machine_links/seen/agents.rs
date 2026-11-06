@@ -318,7 +318,7 @@ mod clicked {
     use super::*;
 
     #[test]
-    fn shows_the_machine_s_tab_and_its_card_without_sending_anything() {
+    fn shows_the_machine_s_tab_and_its_card_without_starting_another_link() {
         let Seeing { mut rig, .. } = seeing_agents(vec![pane(12, "gemini", None)], Vec::new());
         rig.app.panels.files.set_full_screen(true);
 
@@ -341,6 +341,24 @@ mod clicked {
         let down = rig.app.remote_card(Instant::now()).and_then(|card| card.down);
         assert_eq!(picked(&rig.app), Some((10, Some(11))));
         assert!(down.is_some(), "{down:?}");
+    }
+
+    #[test]
+    fn shows_nothing_once_the_machine_restarted_between_the_press_and_the_release() {
+        let mut seeing = seeing_agents(vec![pane(12, "gemini", None)], Vec::new());
+        section(&mut seeing.rig.app);
+        let r = row_at(&seeing.rig.app, TALL, 0);
+        let at = Position::new(r.x + 4, r.y);
+        mouse_in(&mut seeing.rig.app, MouseEventKind::Down(MouseButton::Left), at, TALL);
+        let restarted = control::Report { boot: "vps-2".into(), ..holding(vec![pane(12, "gemini", None)], Vec::new()) };
+        serve(&mut seeing.theirs, 3, restarted);
+        seeing.rig.until("the machine restarted", |app| {
+            app.machines.held()[0].seen.as_ref().is_some_and(|seen| seen.boot == "vps-2")
+        });
+
+        mouse_in(&mut seeing.rig.app, MouseEventKind::Up(MouseButton::Left), at, TALL);
+
+        assert_eq!((picked(&seeing.rig.app), rows(&seeing.rig.app)), (None, vec![row("gemini", Some("vps"), 0)]));
     }
 
     #[test]

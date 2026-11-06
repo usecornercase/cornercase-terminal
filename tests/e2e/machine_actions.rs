@@ -176,7 +176,7 @@ fn agents_of(machine: &Session) -> Vec<Value> {
 fn folded(machine: &Session, pane: u64) -> Option<bool> {
     let agents = agents_of(machine);
     let found = agents.iter().find(|agent| agent["id"] == pane)?;
-    Some(found["collapsed"].as_bool().unwrap_or(false))
+    found.get("collapsed").map_or(Some(false), Value::as_bool)
 }
 
 fn arrow(app: &Harness, fold: char) -> Option<Position> {

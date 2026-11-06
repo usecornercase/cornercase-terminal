@@ -59,6 +59,23 @@ fn nothing_wakes_for_the_card_while_the_machine_is_linked_or_nothing_there_is_pi
 }
 
 #[test]
+fn a_working_agent_there_spins_in_a_tab_whose_other_agent_waits() {
+    let mut seeing = seeing_two();
+    let mut sent = with_agent(worked(report(&[("web-shop", Some(SHOP)), ("blog", None)])));
+    let tab = &mut sent.projects[0].workspaces[0].tabs[0];
+    tab.status = Some("waiting".into());
+    let waiting =
+        PaneInfo { id: 13, agent: Some("codex".into()), status: Some("waiting".into()), ..PaneInfo::default() };
+    tab.panes.push(waiting);
+    serve(&mut seeing.theirs, 2, sent);
+    seeing
+        .rig
+        .until("the agents arrive", |app| app.machines.held()[0].seen.as_ref().is_some_and(|seen| seen.home.is_some()));
+
+    assert!(seeing.rig.app.agent_working());
+}
+
+#[test]
 fn a_working_agent_there_spins_only_while_its_machine_is_linked() {
     let Seeing { mut rig, theirs, .. } = seeing_claude();
     assert!(rig.app.agent_working());

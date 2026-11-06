@@ -212,7 +212,9 @@ impl App {
                 RemoteItem::Workspace(project.workspaces.first()?.id)
             }
             RemoteAt::Workspace { id, .. } => RemoteItem::Workspace(id),
-            RemoteAt::Tab { id, .. } | RemoteAt::Agent { tab: id, .. } => RemoteItem::Tab(id),
+            RemoteAt::Tab { id, .. } => RemoteItem::Tab(id),
+            RemoteAt::Agent { tab, aim, .. } if aim.era == held.era => RemoteItem::Tab(tab),
+            RemoteAt::Agent { .. } => return None,
         };
         Some((held.name.clone(), item))
     }
