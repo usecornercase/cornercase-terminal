@@ -339,6 +339,67 @@ mod a_flow_run {
         assert!(!branch_exists(s.repo.path(), "lead") && !branch_exists(s.repo.path(), "coder"));
     }
 
+    fn the_teardown_is(s: &mut Setup, script: &str) {
+        let key = s.repo.path().display().to_string();
+        s.app.config.projects.insert(key, ProjectSettings { teardown: script.into(), ..Default::default() });
+    }
+
+    fn the_teardown_writes_in(s: &mut Setup, folder: &Path) {
+        the_teardown_is(s, &format!("echo late > '{}/late.txt'", folder.display()));
+    }
+
+    #[test]
+    fn a_workspace_that_fails_after_its_role_went_names_the_role() {
+        let (mut s, lead, coder) = lead_and_coder();
+        run_lives(&mut s);
+        the_teardown_writes_in(&mut s, &lead);
+
+        let folder = s.one(&json!({"paths": [lead], "delete_branch": true}));
+
+        assert_eq!(outcome(&folder), "failed", "{folder}");
+        assert!(lead.exists() && !coder.exists() && branch_exists(s.repo.path(), "coder"));
+        let warning = folder["warnings"][0].as_str().expect("a warning");
+        assert!(warning.contains("the worktree of `coder` went before this failed"), "{folder}");
+        assert!(warning.contains(&coder.display().to_string()) && warning.contains("branch coder stays"), "{folder}");
+    }
+
+    #[test]
+    fn a_workspace_that_fails_with_its_role_still_there_warns_of_nothing() {
+        let (mut s, lead, coder) = lead_and_coder();
+        run_lives(&mut s);
+        the_teardown_is(&mut s, "echo late > late.txt");
+
+        let folder = s.one(&json!({"paths": [lead]}));
+
+        assert_eq!((outcome(&folder), &folder["warnings"]), ("failed", &json!([])), "{folder}");
+        assert!(lead.exists() && coder.exists());
+    }
+
+    #[test]
+    fn a_named_role_says_what_happened_when_its_workspace_fails() {
+        let (mut s, lead, coder) = lead_and_coder();
+        run_lives(&mut s);
+        the_teardown_is(&mut s, "echo late > late.txt");
+
+        let answer = s.asked(&json!({"paths": [coder, lead]}));
+
+        assert_eq!(outcomes(&answer), ["failed", "failed"], "{answer}");
+        let said = why(&answer["folders"][0]);
+        assert!(said.contains("still there after") && said.ends_with(" failed"), "{answer}");
+    }
+
+    #[test]
+    fn a_named_role_that_went_answers_removed_when_its_workspace_fails() {
+        let (mut s, lead, coder) = lead_and_coder();
+        run_lives(&mut s);
+        the_teardown_writes_in(&mut s, &lead);
+
+        let answer = s.asked(&json!({"paths": [coder, lead]}));
+
+        assert_eq!(outcomes(&answer), ["removed", "failed"], "{answer}");
+        assert!(!coder.exists() && lead.exists());
+    }
+
     #[test]
     fn a_runs_workspace_takes_its_roles_with_it_and_names_them() {
         let (mut s, lead, coder) = lead_and_coder();

@@ -519,6 +519,18 @@ mod branches {
     use super::*;
 
     #[test]
+    fn goes_at_a_signed_commit_whatever_the_signature_settings_say() {
+        let mut s = closed_repo();
+        crate::test_util::sign_head_and_show_signatures(s.repo.path());
+        let at = s.add("a");
+
+        let folder = s.removes(&json!({"paths": [at], "delete_branch": true}));
+
+        assert_eq!((&folder["branches"], &folder["kept"]), (&json!(["a"]), &json!([])), "{folder}");
+        assert!(!s.has_branch("a"));
+    }
+
+    #[test]
     fn the_default_branch_is_never_deleted_and_the_folder_still_goes() {
         let mut s = closed_repo();
         let at = s.main_on_side_and_a_worktree_on("main");

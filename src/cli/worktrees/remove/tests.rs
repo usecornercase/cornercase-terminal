@@ -109,6 +109,17 @@ mod one_line_per_folder {
     }
 
     #[test]
+    fn a_failure_also_says_what_already_went() {
+        let warnings = vec!["the worktree of `coder` went before this failed".to_string()];
+        let failed = FolderRemoved { why: Some("git says no".into()), warnings, ..folder("failed") };
+
+        assert_eq!(
+            removal(failed),
+            "could not remove ~/wt/shop/feat-old: git says no; the worktree of `coder` went before this failed\n"
+        );
+    }
+
+    #[test]
     fn keeps_the_order_it_was_given() {
         let second = FolderRemoved { path: "/srv/b".into(), ..folder(REMOVED) };
         let answer = WorktreesRemoved { check: false, folders: vec![folder(REMOVED), second] };

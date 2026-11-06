@@ -50,7 +50,7 @@ pub(crate) fn scan(path: &Path, base: Option<&str>) -> Result<Scan> {
 }
 
 fn last_commit(path: &Path) -> Result<(Option<SystemTime>, Option<String>)> {
-    let out = check(git(path, ["log", "-1", "--format=%ct %H", "HEAD"])?)?;
+    let out = check(git(path, ["rev-list", "-1", "--timestamp", "HEAD"])?)?;
     let out = String::from_utf8_lossy(&out);
     let (secs, head) = out.trim().split_once(' ').unzip();
     let at =

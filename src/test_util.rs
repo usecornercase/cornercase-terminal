@@ -435,6 +435,24 @@ pub(crate) fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
 }
 
+pub(crate) fn sign_head_and_show_signatures(dir: &Path) {
+    let read = |args: &[&str]| {
+        let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().expect("run git");
+        assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    let raw = read(&["cat-file", "commit", "HEAD"]);
+    let (headers, message) = raw.split_once("\n\n").expect("a commit");
+    let signature = "gpgsig -----BEGIN PGP SIGNATURE-----\n \n not really signed\n -----END PGP SIGNATURE-----";
+    let folder = TempDir::new();
+    let commit = folder.path().join("commit");
+    std::fs::write(&commit, format!("{headers}\n{signature}\n\n{message}")).expect("write the commit");
+    let signed = read(&["hash-object", "-t", "commit", "-w", &commit.display().to_string()]);
+    git(dir, &["update-ref", "HEAD", signed.trim()]);
+    git(dir, &["config", "log.showSignature", "true"]);
+    git(dir, &["config", "gpg.program", "git"]);
+}
+
 pub(crate) fn head(dir: &Path) -> String {
     let out = std::process::Command::new("git").arg("-C").arg(dir).args(["rev-parse", "HEAD"]).output().expect("git");
     String::from_utf8_lossy(&out.stdout).trim().to_string()

@@ -145,10 +145,20 @@ fn ended(answer: &mut FolderRemoved, tally: Tally) {
     answer.kept = tally.notes;
     if let Some(why) = tally.error {
         (answer.outcome, answer.why) = (FAILED.to_string(), Some(why));
+        answer.warnings = roles_gone(answer);
     } else {
         (answer.outcome, answer.warnings) = (REMOVED.to_string(), tally.failed);
         answer.warnings.extend(folder_stays(answer));
     }
+}
+
+fn roles_gone(answer: &FolderRemoved) -> Vec<String> {
+    let gone = answer.roles.iter().filter(|tree| !tree.path.is_dir());
+    gone.map(|tree| {
+        let (role, path, branch) = (&tree.role, tree.path.display(), &tree.branch);
+        format!("the worktree of `{role}` went before this failed: {path} is gone, its branch {branch} stays")
+    })
+    .collect()
 }
 
 fn folder_stays(answer: &FolderRemoved) -> Option<String> {
@@ -162,7 +172,8 @@ fn follow(answer: &mut FolderRemoved, lead: &FolderRemoved) {
     } else if lead.outcome == REFUSED {
         (answer.outcome, answer.why) = (REFUSED.to_string(), lead.why.clone());
     } else if answer.path.exists() {
-        let why = format!("it is still there after {} went", lead.path.display());
+        let lead_did = if lead.outcome == FAILED { "failed" } else { "went" };
+        let why = format!("it is still there after {} {lead_did}", lead.path.display());
         (answer.outcome, answer.why) = (FAILED.to_string(), Some(why));
     } else {
         answer.outcome = REMOVED.to_string();
