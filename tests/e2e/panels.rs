@@ -229,16 +229,25 @@ fn refuses_the_old_version(app: &Harness, seen: &str) {
     }
 }
 
+fn digest_once_listed(app: &Harness, added: u32, removed: u32) -> String {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let listed = listed_file(app);
+        if listed["added"] == added && listed["removed"] == removed {
+            return listed["digest"].as_str().expect("its digest").to_string();
+        }
+        assert!(Instant::now() < deadline, "the list never showed +{added} -{removed}: {listed}");
+        thread::sleep(POLL);
+    }
+}
+
 #[test]
 fn scripts_act_only_on_the_version_they_saw() {
     let (repo, app) = opened_repo("ccdg");
     let seen = listed_digest(&app);
     std::fs::write(repo.join("notes.txt"), "one\nTWO\nthree\n").expect("an agent writes again");
-    let mut now = String::new();
-    wait_until("the list shows the new version", || {
-        now = listed_digest(&app);
-        !now.is_empty() && now != seen
-    });
+    let now = digest_once_listed(&app, 2, 1);
+    assert_ne!(now, seen);
 
     refuses_the_old_version(&app, &seen);
     app.session.says(&["changes", "viewed", "notes.txt", "--digest", &seen]);
