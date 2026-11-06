@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.14
+
+- **`cornercase start --placed`: the new tab's ids as soon as it is open.** A program that shows the new tab itself no longer has to wait for the agent, or to guess which tab is the new one: `cornercase start claude --machine vps --project 2 --issue '#7' --placed --json` answers with the project, workspace, tab and pane once the tab is open, here or on a machine, even while the agent asks whether to trust the folder, and the launch goes on, as it does from the window's dialogs. It takes no `--wait`, `--until` or `--timeout`, and it needs a server of 0.13.0 or newer, which the command checks.
+
 ## 0.13.13
 
 - **Run a worktree's setup again from a script or another program.** `cornercase setup --workspace ID` (or `--worktree BRANCH`; by default the workspace it runs in) does what **run setup** in the workspace's menu does: a new tab runs the project's setup with `CORNERCASE_ROOT`, `CORNERCASE_WORKTREE` and `CORNERCASE_BRANCH` set, the workspace reads `setup: running`, its failed mark goes, and agents started there wait for it. It returns once the setup is done, with the pane's id, or exits with 1 naming the exit status. It takes `--focus`, `--view` and `--json` as `new-tab` does, and says why it refuses a workspace that is not a worktree, a project with no setup or a setup already running. Other programs send the `run-setup` request. `new-workspace --worktree` no longer says that an agent did not start, since it starts none, and it now fails when the setup's tab is closed before the setup ended.
