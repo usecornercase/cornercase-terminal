@@ -33,6 +33,7 @@ mod free;
 mod sizes;
 
 #[cfg(test)]
+#[cfg(unix)]
 pub(super) use cleanup::Doomed;
 pub(super) use cleanup::{BEING_REMOVED, Cleanup, Deleted, How, Tally};
 pub(super) use confirm::{UNCHECKED, stake, wrap};

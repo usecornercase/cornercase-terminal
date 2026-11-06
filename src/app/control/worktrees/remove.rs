@@ -460,3 +460,6 @@ fn stakes(rows: &[Row], row: &Row, roles: &[RoleTree], lost: &[String]) -> Stake
     stakes.force.extend_from_slice(lost);
     stakes
 }
+
+#[cfg(test)]
+mod tests;
