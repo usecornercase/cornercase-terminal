@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.7
+
+- **Connect a phone from another program.** `cornercase config pair browsers`, `telegram.chat` or `discord.chat` does what the window's pairing dialogs do, so a program that draws cornercase itself can connect a phone without opening the window. It prints the address the QR code holds and the lines under it (`--json` for one line of JSON each, to draw the code from `url`), and again when they change, stays open while it waits, and ends with `{"paired": true}` (with the chat's name for a bot) once the phone connects. Why it cannot comes in words: remote access off, Tailscale not ready, `paste the bot's token first`. The code is dropped when the command ends, also when whoever reads its output goes, after ten minutes at most, and never reaches the log. If the window's dialog or another command holds the same key, they share one code, and closing one leaves it working for the others. It works through `--remote` too.
+
 ## 0.13.6
 
 - **Another window or a script can tell when the accounts change.** `cornercase status --app` now has `accounts_revision`, a number that moves each time the accounts `cornercase account list` names change: `account add`, `account remove`, or a folder another program made or deleted, seen within a second. `cornercase status --app --follow` prints a line for each change, so a client lists the accounts again only then, rather than on a timer, and a first account added by a command typed in a pane reaches it at once. Nothing else told it before, since neither of these changes `config.json`. The number is left out until it first moves, so nothing changes on a server without accounts, and `cornercase contract` lists the feature `accounts-revision` to tell this server from an older one. Nothing changes in the window.
