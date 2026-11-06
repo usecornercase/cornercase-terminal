@@ -39,6 +39,7 @@ pub(super) enum Spot {
     Tab(u64, u64, u64),
     Pane(u64),
     Shown,
+    ShownIn(u64),
 }
 
 impl Spot {
@@ -48,12 +49,18 @@ impl Spot {
             Self::Workspace(..) => Context::Workspace,
             Self::Tab(..) => Context::Tab,
             Self::Pane(_) => Context::Pane,
-            Self::Shown => Context::Button,
+            Self::Shown | Self::ShownIn(_) => Context::Button,
         }
     }
 }
 
 type At = (control::Ids, PathBuf, Context);
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Requested {
+    pub(super) key: u64,
+    pub(super) view: Option<u64>,
+}
 
 #[derive(Debug)]
 pub(crate) enum PluginEvent {
@@ -112,6 +119,10 @@ impl Plugins {
 
 fn hooked(plugins: &[Plugin]) -> bool {
     plugins.iter().filter_map(Plugin::runs).any(|manifest| !manifest.events.is_empty())
+}
+
+fn home_folder() -> PathBuf {
+    std::env::var_os(crate::paths::HOME_VAR).map_or_else(|| PathBuf::from("/"), PathBuf::from)
 }
 
 fn server_env() -> Vec<(String, String)> {
@@ -252,6 +263,7 @@ impl App {
     pub(super) fn spot_env(&self, spot: Spot) -> Option<(control::Ids, PathBuf)> {
         let (at, tab, pane) = match spot {
             Spot::Shown => return Some(self.shown_env()),
+            Spot::ShownIn(view) => return self.view_env(view),
             Spot::Project(project) => {
                 let p = self.projects.project_index(project)?;
                 return Some((
@@ -280,12 +292,22 @@ impl App {
     }
 
     fn shown_env(&self) -> (control::Ids, PathBuf) {
-        let Some(project) = self.project() else {
-            let home = std::env::var_os(crate::paths::HOME_VAR).map_or_else(|| PathBuf::from("/"), PathBuf::from);
-            return (control::Ids::default(), home);
-        };
+        let Some(project) = self.project() else { return (control::Ids::default(), home_folder()) };
         let cwd = project.workspace().map_or(&project.path, |workspace| &workspace.path);
         (self.shown_ids(self.active), cwd.clone())
+    }
+
+    fn view_env(&self, view: u64) -> Option<(control::Ids, PathBuf)> {
+        self.clients.views.get(view)?;
+        let ids = self.view_ids(view);
+        let workspace = ids.workspace.and_then(|id| self.projects.workspace_index(id));
+        let project = ids.project.and_then(|id| self.projects.project_index(id));
+        let cwd = match (workspace, project) {
+            (Some(at), _) => self.projects.workspace(at).path.clone(),
+            (None, Some(p)) => self.projects[p].path.clone(),
+            (None, None) => home_folder(),
+        };
+        Some((ids, cwd))
     }
 
     pub(super) fn run_plugin_action(&mut self, spot: Spot, index: u16, revision: u32) {
@@ -302,25 +324,27 @@ impl App {
         spot: Spot,
         plugin: Plugin,
         action: Action,
-        request: Option<u64>,
+        requested: Option<Requested>,
     ) -> bool {
         let Some((ids, cwd)) = self.spot_env(spot) else { return false };
         let context = spot.context();
         if action.placement == Placement::Popup {
-            self.open_popup_action(plugin, action, (ids, cwd, context), request);
+            self.open_popup_action(plugin, action, (ids, cwd, context), requested);
         } else {
-            self.run_action_job(plugin, action, (ids, cwd, context), request);
+            self.run_action_job(plugin, action, (ids, cwd, context), requested.map(|asked| asked.key));
         }
         true
     }
 
-    fn open_popup_action(&mut self, plugin: Plugin, action: Action, at: At, request: Option<u64>) {
+    fn open_popup_action(&mut self, plugin: Plugin, action: Action, at: At, requested: Option<Requested>) {
+        let (request, view) = (requested.map(|asked| asked.key), requested.and_then(|asked| asked.view));
         let (ids, cwd, context) = at;
         let env = action_env(&ids, &action, context);
         let places = self.plugins.places.clone();
         let (name, title) = (plugin.name(), action.title.clone());
         let on = (ids, context);
-        let Err(reason) = self.open_plugin_popup(Opening { plugin, action, places, cwd, env, on, request }) else {
+        let Err(reason) = self.open_plugin_popup(Opening { plugin, action, places, cwd, env, on, request, view })
+        else {
             return;
         };
         let event = match request {

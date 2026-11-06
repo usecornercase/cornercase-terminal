@@ -8,6 +8,7 @@ pub(crate) mod context;
 pub(crate) mod create;
 pub(crate) mod files;
 pub(crate) mod flow;
+pub(crate) mod held;
 pub(crate) mod issue;
 pub(crate) mod machine;
 pub(crate) mod machines;
@@ -19,6 +20,7 @@ pub(crate) mod queue;
 pub(crate) mod recap;
 pub(crate) mod requests;
 pub(crate) mod server;
+pub(crate) mod setup;
 pub(crate) mod start;
 pub(crate) mod stats;
 pub(crate) mod terminal;
@@ -46,7 +48,7 @@ use super::help::{
     AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
     PULL_REQUEST_HELP, RECAP_HELP, REQUESTS_HELP,
 };
-use super::help::{CLONE_HELP, MACHINES_HELP, WORKTREES_HELP};
+use super::help::{CLONE_HELP, HELD_HELP, MACHINES_HELP, SETUP_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -98,14 +100,15 @@ pub(crate) enum Command {
     Logs(LogsArgs),
     #[command(
         about = "Show work by agents running in cornercase",
-        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. Merged pull requests need a running server and gh or glab.
+        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. With --cached it asks nothing and answers at once from the server's last copy of each machine: a machine with no copy fails when named and is left out of the sum under `all`; with no --machine, --cached changes nothing. Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats
   cornercase stats --json
   cornercase stats --share
   cornercase stats --machine vps
-  cornercase stats --machine all --json"
+  cornercase stats --machine all --json
+  cornercase stats --cached --machine all --json"
     )]
     Stats(StatsArgs),
     #[command(about = "Install, add, list, turn on and off the plugins that extend cornercase", after_help = PLUGIN_HELP)]
@@ -148,6 +151,11 @@ pub(crate) enum Control {
     )]
     Split(SplitArgs),
     #[command(
+        about = "Run a worktree's setup again in a new tab, as its menu's run setup does, and print its pane's id when done",
+        after_help = SETUP_HELP
+    )]
+    Setup(setup::SetupArgs),
+    #[command(
         about = "Start a coding agent in a new tab, give it a prompt, and print its pane's id",
         after_help = START_HELP
     )]
@@ -156,6 +164,11 @@ pub(crate) enum Control {
     Send(SendArgs),
     #[command(about = "Press keys in a pane", after_help = KEYS_HELP)]
     Keys(KeysArgs),
+    #[command(
+        about = "Send now a message that `send` holds for a person typing in a pane, or say it can wait its turn",
+        after_help = HELD_HELP
+    )]
+    Held(held::HeldArgs),
     #[command(about = "Print the screen of a pane as text, or its last lines", after_help = READ_HELP)]
     Read(ReadArgs),
     #[command(
@@ -334,9 +347,11 @@ impl Control {
             Self::NewWorkspace(a) => a.create.view.view,
             Self::NewTab(a) => a.create.view.view,
             Self::Split(a) => a.create.view.view,
+            Self::Setup(a) => a.create.view.view,
             Self::Start(a) => a.create.view.view,
             Self::Send(a) => a.target.view.view,
             Self::Keys(a) => a.target.view.view,
+            Self::Held(a) => a.target.view.view,
             Self::Mark(a) => a.target.view.view,
             Self::Context(a) => a.target.view.view,
             Self::Read(a) => a.view.view,

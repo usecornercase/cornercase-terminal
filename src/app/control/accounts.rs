@@ -62,7 +62,8 @@ impl Logins {
 
 impl AccountState {
     pub(in crate::app) fn new(config_path: &Path) -> Self {
-        Self { dir: config_path.with_file_name("accounts"), default_homes: None, logins: Logins::default() }
+        let logins = Logins { listed: accounts::no_accounts(), ..Logins::default() };
+        Self { dir: config_path.with_file_name("accounts"), default_homes: None, logins }
     }
 
     pub(in crate::app) fn dir(&self) -> &Path {

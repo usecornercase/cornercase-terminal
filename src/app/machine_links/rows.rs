@@ -12,6 +12,7 @@ const STATUSES: [Status; 6] =
 
 pub(in crate::app) struct RemoteProject<'a> {
     pub(super) link: u64,
+    pub(super) era: u64,
     pub(super) tag: ui::MachineTag,
     pub(super) project: &'a ProjectInfo,
     pub(super) paired: Option<u64>,
@@ -21,12 +22,13 @@ impl App {
     pub(in crate::app) fn remote_projects(&self) -> Vec<RemoteProject<'_>> {
         let now = SystemTime::now();
         let held = self.machines_held().into_iter();
-        let seen = held.filter_map(|(info, held)| Some((info, held.link.id(), held.seen.as_deref()?)));
-        seen.flat_map(|(info, link, seen)| {
+        let seen = held.filter_map(|(info, held)| Some((info, (held.link.id(), held.era), held.seen.as_deref()?)));
+        seen.flat_map(|(info, (link, era), seen)| {
             let tag = tag(&info, now);
             let paired = self.paired(seen);
             seen.projects.iter().zip(paired).map(move |(project, paired)| RemoteProject {
                 link,
+                era,
                 tag: tag.clone(),
                 project,
                 paired,

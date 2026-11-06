@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use super::act::UNREADABLE;
 use super::link;
-use crate::changes::diff::MAX_LINES;
+use crate::changes::diff::{MAX_LINES, expand};
 use crate::control::changes::{FileInfo, Gap, GapLineInfo, HunkInfo, LineInfo, Patch, Segment, Summary};
 use crate::control::contract::{Code, Refusal};
 use crate::control::files::{EntryInfo, FolderInfo, Found, FoundFile, Listing, NameInfo, Read};
@@ -125,13 +125,20 @@ fn clean_hunk(hunk: &mut HunkInfo) {
 
 fn clean_line(line: &mut LineInfo) {
     line.text = clean_code_line(&line.text);
+    line.raw = clean_raw(line.raw.as_deref(), &line.text);
     line.emphasis.truncate(line.text.len());
     clean_segments(line.syntax.as_mut(), line.text.len());
 }
 
 fn clean_gap_line(line: &mut GapLineInfo) {
     line.text = clean_code_line(&line.text);
+    line.raw = clean_raw(line.raw.as_deref(), &line.text);
     clean_segments(line.syntax.as_mut(), line.text.len());
+}
+
+fn clean_raw(raw: Option<&str>, text: &str) -> Option<Box<str>> {
+    let raw = clean_code_line(raw?);
+    (expand(&raw) == text).then(|| raw.into())
 }
 
 fn clean_segments(segments: Option<&mut Vec<Segment>>, length: usize) {

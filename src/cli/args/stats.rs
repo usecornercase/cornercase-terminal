@@ -14,4 +14,9 @@ pub(crate) struct StatsArgs {
         help = "Read a machine's stats through the server, or with `all` this computer's and every machine's summed"
     )]
     pub(in crate::cli) machine: Option<String>,
+    #[arg(
+        long,
+        help = "With --machine, print the server's last copy of the machines' stats, with its age, without asking them"
+    )]
+    pub(in crate::cli) cached: bool,
 }

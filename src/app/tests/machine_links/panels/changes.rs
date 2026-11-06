@@ -117,10 +117,14 @@ impl Panels {
     }
 
     fn with_hunks() -> (Self, UnixStream) {
+        Self::with_patch(&patched("a.rs", 1))
+    }
+
+    fn with_patch(file: &File) -> (Self, UnixStream) {
         let (mut panels, stream) = Self::listing(vec![info("a.rs", 1)]);
         panels.unfold("a.rs");
         let (mut asking, _) = panels.asked_patch();
-        tell(&mut asking, &Patch::of(SHOP, Mode::Uncommitted, &patched("a.rs", 1), false));
+        tell(&mut asking, &Patch::of(SHOP, Mode::Uncommitted, file, false));
         panels.rig.until("the hunks show", |app| hunks(app, "a.rs") == 2);
         (panels, stream)
     }
@@ -133,6 +137,16 @@ fn unanswered(_panels: &mut Panels, asking: UnixStream) {
 fn too_late(panels: &mut Panels, _asking: UnixStream) {
     panels.clock += 60;
     panels.sync();
+}
+
+fn copied_row(app: &mut App, row: panel::Row) -> Vec<Vec<u8>> {
+    let line = at(app, row);
+    click(app, line);
+    let view = app.panel_view().expect("the panel");
+    let buttons = panel::lines_actions(panel_area(app), &view);
+    let (_, copy) = buttons.into_iter().find(|(action, _)| *action == panel::LinesAction::Copy).expect("copy");
+    click(app, Position::new(copy.x + 1, copy.y));
+    app.take_host_writes()
 }
 
 fn patch_of(path: &str) -> Value {
@@ -420,12 +434,15 @@ mod a_remote_gap {
     use super::*;
 
     fn read(panels: &mut Panels, path: &str) -> Value {
+        read_lines(panels, path, &[GapLine { old: 3, new: 3, text: "let x = 1;".into(), raw: None, syntax: None }])
+    }
+
+    fn read_lines(panels: &mut Panels, path: &str, lines: &[GapLine]) -> Value {
         let gap = at(&panels.rig.app, panel::Row::Gap(0, 1));
         click(&mut panels.rig.app, gap);
         let mut gap = taken(&panels.ends);
         let asked = request(&mut gap);
-        let lines = [GapLine { old: 3, new: 3, text: "let x = 1;".into(), raw: None, syntax: None }];
-        tell(&mut gap, &Gap::of(SHOP, path, 1, &lines));
+        tell(&mut gap, &Gap::of(SHOP, path, 1, lines));
         panels.rig.until("the unchanged lines show", |app| {
             app.panel_view().is_some_and(|view| view.gaps.contains_key(&(0, 1)))
         });
@@ -443,6 +460,17 @@ mod a_remote_gap {
         panels.rig.until("the hunks show", |app| hunks(app, path) == 2);
 
         assert_eq!(read(&mut panels, path)["args"]["path"], path);
+    }
+
+    #[test]
+    fn copies_a_line_with_the_tabs_of_the_machine_s_file() {
+        let (mut panels, _stream) = Panels::with_hunks();
+        let tabbed = GapLine { old: 3, new: 3, text: "    x".into(), raw: Some("\tx".into()), syntax: None };
+        read_lines(&mut panels, "a.rs", &[tabbed]);
+
+        let copied = copied_row(&mut panels.rig.app, panel::Row::GapLine(0, 1, 0, 0));
+
+        assert_eq!(copied, [clipboard::osc52("\tx")]);
     }
 
     #[test]
@@ -524,6 +552,17 @@ mod the_remote_panel_by_hand {
 
         let copied = clipboard::osc52("@@ -1,1 +1,2 @@\n     use std;\n+fn shop() {}\n");
         assert_eq!((app.take_host_writes(), toast(app)), (vec![copied], Some(COPIED)));
+    }
+
+    #[test]
+    fn copies_a_selected_line_with_the_tabs_of_the_machine_s_file() {
+        let mut file = patched("a.rs", 1);
+        file.hunks[0].lines[0].raw = Some("\tuse std;".into());
+        let (mut panels, _stream) = Panels::with_patch(&file);
+
+        let copied = copied_row(&mut panels.rig.app, panel::Row::Line(0, 0, 0, 0));
+
+        assert_eq!(copied, [clipboard::osc52("\tuse std;")]);
     }
 
     #[test]

@@ -35,6 +35,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "account-switch",
     "issue-names",
     "account-restart",
+    "accounts-revision",
     "tour",
     "close-agent-tabs",
     "queue-undo",
@@ -47,11 +48,13 @@ pub(crate) const FEATURES: &[&str] = &[
     "flow-issue-prompt",
     "machines",
     "machine-usage",
+    "stats-cached",
     "machine-workspaces",
     "machine-start",
     "search-settings",
     "recap",
     "queue-routines",
+    "plugin-run-view",
     "open-code-workspace",
 ];
 

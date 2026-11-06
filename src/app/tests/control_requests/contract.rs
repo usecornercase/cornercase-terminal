@@ -111,6 +111,10 @@ mod opting_in {
         r#"{"contract":1,"command":"notify","args":{"text":"hi","into":null}}"#,
         "args.into"
     )]
+    #[case::not_cached_where_no_copy_is_read(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","cached":false}}"#,
+        "args.cached"
+    )]
     fn an_unknown_field_is_refused_and_does_nothing(#[case] text: &str, #[case] field: &str) {
         let (mut app, _rx) = app();
 
@@ -148,6 +152,7 @@ mod opting_in {
     #[case::no_files(r#"{"contract":1,"command":"clone","args":{"url":"","files":[]}}"#)]
     #[case::not_placed(r#"{"contract":1,"command":"start","args":{"project":999,"placed":false}}"#)]
     #[case::into_no_group(r#"{"contract":1,"command":"open","args":{"path":"/nonexistent","into":null}}"#)]
+    #[case::not_cached(r#"{"contract":1,"command":"stats","args":{"cached":false}}"#)]
     fn an_argument_left_out_by_its_empty_value_is_not_an_unknown_field(#[case] text: &str) {
         let (mut app, _rx) = app();
 

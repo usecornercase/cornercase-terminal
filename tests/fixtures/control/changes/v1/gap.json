@@ -1,0 +1,32 @@
+{
+  "workspace": 2,
+  "path": "src/a.rs",
+  "hunk": 1,
+  "styles": [
+    {},
+    {
+      "fg": {
+        "index": 5
+      }
+    }
+  ],
+  "lines": [
+    {
+      "old": 3,
+      "new": 4,
+      "text": "let x = 1;"
+    },
+    {
+      "old": 4,
+      "new": 5,
+      "text": "    run();",
+      "raw": "\trun();",
+      "syntax": [
+        {
+          "style": 1,
+          "text": "    run();"
+        }
+      ]
+    }
+  ]
+}

@@ -3,10 +3,11 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use parking_lot::Mutex;
+use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::control::{self, Request, Response};
+use crate::control::{self, Request};
 use crate::error::{Error, Result};
 use crate::os::console::{self, BorrowedFd};
 use crate::protocol::{self, ClientMessage, ServerMessage};
@@ -23,7 +24,10 @@ pub(crate) use shared::share_socket;
 pub(crate) use shared::{line_done, share, unshare};
 pub(crate) use watch::{input_ended, reader_gone_within, watched};
 
+const STALE_BOOT: &str = "stale-boot";
+
 static VIEW: OnceLock<u64> = OnceLock::new();
+static BOOT: OnceLock<String> = OnceLock::new();
 static REMOTE: OnceLock<Remote> = OnceLock::new();
 static CHECKED: Mutex<Option<Link>> = Mutex::new(None);
 
@@ -41,6 +45,16 @@ pub(crate) fn use_view(view: u64) -> Result<()> {
         shared::set_view(view);
     } else {
         let _ = VIEW.set(view);
+    }
+    Ok(())
+}
+
+pub(crate) fn use_boot(boot: &str) -> Result<()> {
+    require("boot", "would ignore --boot and act on whatever has that id now")?;
+    if shared::active() {
+        shared::set_boot(boot);
+    } else {
+        let _ = BOOT.set(boot.to_string());
     }
     Ok(())
 }
@@ -101,6 +115,10 @@ pub(crate) fn use_queue_routines() -> Result<()> {
     require("queue-routines", "cannot repeat queue entries, run flows from the queue, or pause and resume routines")
 }
 
+pub(crate) fn use_plugin_run_view() -> Result<()> {
+    require("plugin-run-view", "cannot run a plugin's action in a view")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }
@@ -135,6 +153,10 @@ pub(crate) fn use_account_restart() -> Result<()> {
 
 pub(crate) fn use_machine_usage() -> Result<()> {
     require("machine-usage", "cannot read the stats and usage of other machines")
+}
+
+pub(crate) fn use_stats_cached() -> Result<()> {
+    require("stats-cached", "cannot read a machine's last stats without asking it")
 }
 
 pub(crate) fn use_machine_start() -> Result<()> {
@@ -242,17 +264,17 @@ impl Link {
 }
 
 fn ask_on(link: &mut Link, name: &'static str, command: control::Command) -> Result<Value> {
-    ask_with(link, name, command, VIEW.get().copied(), &mut None)
+    ask_with(link, name, command, Envelope::of_the_invocation(), &mut None)
 }
 
 fn ask_with(
     link: &mut Link,
     name: &'static str,
     command: control::Command,
-    view: Option<u64>,
+    envelope: Envelope,
     out: &mut Option<BorrowedFd<'_>>,
 ) -> Result<Value> {
-    if let Err(e) = send_request(&mut link.writer, command, view) {
+    if let Err(e) = send_request(&mut link.writer, command, envelope) {
         return Err(lost(link, server_left(e)));
     }
     loop {
@@ -294,27 +316,56 @@ fn server_left(error: Error) -> Error {
 }
 
 pub(crate) fn request(stream: &mut impl Write, command: control::Command) -> Result<()> {
-    send_request(stream, command, VIEW.get().copied())
+    send_request(stream, command, Envelope::of_the_invocation())
 }
 
-fn send_request(stream: &mut impl Write, command: control::Command, view: Option<u64>) -> Result<()> {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct Envelope {
+    view: Option<u64>,
+    boot: Option<String>,
+}
+
+impl Envelope {
+    fn of_the_invocation() -> Self {
+        Self { view: VIEW.get().copied(), boot: BOOT.get().cloned() }
+    }
+
+    fn for_command(self, command: &control::Command) -> Self {
+        if matches!(command, control::Command::Contract(_)) { Self::default() } else { self }
+    }
+}
+
+fn send_request(stream: &mut impl Write, command: control::Command, envelope: Envelope) -> Result<()> {
     let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
     let server = std::env::var(control::SERVER_ENV).ok();
-    let view = view_for(&command, view);
-    let request = serde_json::to_string(&Request { caller, server, contract: None, boot: None, view, command })
+    let Envelope { view, boot } = envelope.for_command(&command);
+    let request = serde_json::to_string(&Request { caller, server, contract: None, boot, view, command })
         .map_err(|e| Error::Control(e.to_string()))?;
     protocol::send(stream, &ClientMessage::Request(request))?;
     Ok(())
 }
 
-fn view_for(command: &control::Command, view: Option<u64>) -> Option<u64> {
-    view.filter(|_| !matches!(command, control::Command::Contract(_)))
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Heard {
+    Ok(Value),
+    Error(Failure),
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Failure {
+    Legacy(String),
+    Structured { code: String, message: String },
 }
 
 pub(crate) fn answered(text: &str) -> Result<Value> {
     match serde_json::from_str(text) {
-        Ok(Response::Ok(value)) => Ok(value),
-        Ok(Response::Error(message)) => Err(Error::Control(message)),
+        Ok(Heard::Ok(value)) => Ok(value),
+        Ok(Heard::Error(Failure::Structured { code, message })) if code == STALE_BOOT => Err(Error::StaleBoot(message)),
+        Ok(Heard::Error(Failure::Legacy(message) | Failure::Structured { message, .. })) => {
+            Err(Error::Control(message))
+        }
         Err(e) => Err(Error::Control(format!("cannot read the server's answer: {e}"))),
     }
 }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use clap::Args;
 use clap::builder::NonEmptyStringValueParser;
+use clap::{ArgGroup, Args};
 
 use super::{Print, ViewArg, accounts, branch, machine};
 use crate::cli::help::{BY_BRANCH, HERE_PANE, HERE_WORKSPACE};
@@ -27,15 +27,48 @@ pub(crate) struct OpenArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    override_usage = "cornercase clone [OPTIONS] <URL> [FOLDER]\n       \
+                      cornercase clone --list-ignored [--from <FOLDER>] [--json]",
+    group(ArgGroup::new("read_here").args(["files", "list_ignored"]).multiple(true))
+)]
 pub(crate) struct CloneArgs {
-    #[arg(value_name = "URL", value_parser = NonEmptyStringValueParser::new(), help = "The repository, as `git clone` takes it")]
-    pub(crate) url: String,
+    #[arg(
+        value_name = "URL",
+        value_parser = NonEmptyStringValueParser::new(),
+        required_unless_present = "list_ignored",
+        help = "The repository, as `git clone` takes it"
+    )]
+    pub(crate) url: Option<String>,
     #[arg(
         value_name = "FOLDER",
         help = "The folder the clone goes in, as a new folder named after the repository [default: the current one; \
                 with --remote, the home folder there]"
     )]
     pub(crate) folder: Option<PathBuf>,
+    #[arg(
+        long = "file",
+        value_name = "PATH",
+        allow_hyphen_values = true,
+        help = "A file of the repository here to copy into the clone, such as the git-ignored .env, by its path from \
+                the repository's root; repeat it for more"
+    )]
+    pub(crate) files: Vec<PathBuf>,
+    #[arg(
+        long,
+        value_name = "FOLDER",
+        requires = "read_here",
+        help = "The repository here that --file and --list-ignored read, on this machine also with --remote \
+                [default: the current folder]"
+    )]
+    pub(crate) from: Option<PathBuf>,
+    #[arg(
+        long,
+        conflicts_with_all = ["url", "folder", "files", "focus", "view"],
+        help = "Print the git-ignored files in that folder that --file can copy, and clone nothing; it needs no \
+                server, and --remote changes nothing for it"
+    )]
+    pub(crate) list_ignored: bool,
     #[command(flatten)]
     pub(crate) create: Create,
 }

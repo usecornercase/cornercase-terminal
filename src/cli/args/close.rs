@@ -1,7 +1,24 @@
+use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Args};
 
-use super::{ViewArg, branch};
-use crate::cli::help::BY_BRANCH;
+use super::{Control, ViewArg, branch};
+use crate::cli::help::{BOOT_ARG, BY_BRANCH};
+
+#[derive(Debug, Args)]
+pub(crate) struct BootArg {
+    #[arg(long, value_name = "BOOT", value_parser = NonEmptyStringValueParser::new(), help = BOOT_ARG)]
+    pub(crate) boot: Option<String>,
+}
+
+impl Control {
+    pub(crate) fn boot(&self) -> Option<&str> {
+        match self {
+            Self::Close(a) => a.boot.boot.as_deref(),
+            Self::Rename(a) => a.boot.boot.as_deref(),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Args)]
 #[group(required = true, multiple = false)]
@@ -62,6 +79,8 @@ pub(crate) struct CloseArgs {
     pub(crate) check: bool,
     #[arg(long, requires = "printing", help = "Print the check, or with --agent what was closed, as JSON")]
     pub(crate) json: bool,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -90,6 +109,11 @@ pub(crate) struct RenameArgs {
     pub(crate) renamed: Renamed,
     #[command(flatten)]
     pub(crate) view: ViewArg,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
     #[arg(value_name = "NAME", help = "The new name; an empty one goes back to the default")]
     pub(crate) name: String,
 }
+
+#[cfg(test)]
+mod tests;

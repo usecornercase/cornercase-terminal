@@ -2,7 +2,7 @@ use clap::{Args, Subcommand, ValueEnum};
 
 use super::{Print, branch};
 use crate::changes::Mode;
-use crate::cli::help::{BY_BRANCH, HERE_WORKSPACE, SEEN_DIGEST};
+use crate::cli::help::{BY_BRANCH, CHANGES_FILE_HELP, CHANGES_GAP_HELP, HERE_WORKSPACE, SEEN_DIGEST};
 use crate::control::changes::parse_digest;
 
 #[derive(Debug, Args)]
@@ -74,7 +74,7 @@ pub(crate) enum ChangesAction {
         #[command(flatten)]
         print: Print,
     },
-    #[command(about = "Print one file's diff")]
+    #[command(about = "Print one file's diff", after_help = CHANGES_FILE_HELP)]
     File {
         #[arg(value_name = "PATH", help = "The file, relative to the workspace")]
         path: String,
@@ -85,7 +85,7 @@ pub(crate) enum ChangesAction {
         #[command(flatten)]
         print: Print,
     },
-    #[command(about = "Print the unchanged lines between a hunk of a file and the one before")]
+    #[command(about = "Print the unchanged lines between a hunk of a file and the one before", after_help = CHANGES_GAP_HELP)]
     Gap {
         #[arg(value_name = "PATH", help = "The file, relative to the workspace")]
         path: String,
