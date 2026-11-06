@@ -200,8 +200,13 @@ mod streams {
     use crate::os::socket::UnixStream;
     use crate::protocol::{self, ClientMessage, ServerMessage};
 
-    fn fake_server(mut stream: UnixStream) -> thread::JoinHandle<Vec<String>> {
-        let features = control::contract::describe("boot", &[]);
+    fn fake_server(stream: UnixStream) -> thread::JoinHandle<Vec<String>> {
+        fake_server_lacking(stream, &[])
+    }
+
+    fn fake_server_lacking(mut stream: UnixStream, lacking: &[&str]) -> thread::JoinHandle<Vec<String>> {
+        let mut features = control::contract::describe("boot", &[]);
+        features.features.retain(|feature| !lacking.contains(&feature.as_str()));
         thread::spawn(move || {
             let mut seen = Vec::new();
             while let Ok(Some(ClientMessage::Request(text))) = protocol::recv::<ClientMessage>(&mut stream) {
@@ -227,6 +232,40 @@ mod streams {
         assert_eq!(answer.status, 0, "{answer:?}");
         assert!(answer.json.is_some(), "{answer:?}");
         assert_eq!(answer.text, "");
+    }
+
+    fn plugin_run_in_a_view_on(lacking: &[&str]) -> (Answer, Vec<String>) {
+        let (ours, theirs) = UnixStream::pair().expect("a socket pair");
+        let server = fake_server_lacking(theirs, lacking);
+        client::share_socket(ours);
+
+        let answer = answer_of(r#"{"args": ["plugin", "run", "a", "b", "--view", "7"]}"#).expect("an answer");
+
+        client::unshare();
+        (answer, server.join().expect("the fake server"))
+    }
+
+    #[test]
+    fn plugin_run_sends_its_view_with_the_run_and_not_with_the_lookup_of_the_revision() {
+        let (answer, seen) = plugin_run_in_a_view_on(&[]);
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let lookup = seen.iter().find(|text| text.contains("plugin-actions")).expect("the lookup");
+        assert!(!lookup.contains("\"view\""), "{lookup}");
+        let run = seen.iter().find(|text| text.contains("plugin-run")).expect("the run");
+        assert!(run.contains("\"view\":7"), "{run}");
+    }
+
+    #[rstest]
+    #[case::without_views("views", "has no views")]
+    #[case::that_takes_no_view_there("plugin-run-view", "cannot run a plugin's action in a view")]
+    fn plugin_run_in_a_view_is_refused_up_front_by_a_server(#[case] lacking: &str, #[case] says: &str) {
+        let (answer, seen) = plugin_run_in_a_view_on(&[lacking]);
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains(says) && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("plugin-run")), "{seen:?}");
     }
 
     #[rstest]

@@ -216,6 +216,7 @@ cornercase plugin status --json           # that answer: state, note, services, 
 cornercase plugin actions --context pane  # the actions plugins add to the menus (asks the server)
 cornercase plugin run acme.notes note --pane 5 # run one as its menu entry does, wait, print how it ended
 cornercase plugin run acme.notes browse   # a button action: on what the window shows, as its button does
+cornercase plugin run acme.notes browse --view 21 # the same on what a view shows; its popup needs no window
 cornercase plugin popup-close             # close the plugin popup that is open (asks the server)
 cornercase plugin enable my-plugin        # turn it on: says what it asks for, then runs it
 cornercase plugin disable my-plugin       # turn it off: its service and window processes stop

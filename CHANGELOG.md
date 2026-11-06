@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.3
+
+- **A program with a view of its own can run a plugin's buttons and popups.** `cornercase plugin run PLUGIN ACTION --view ID` runs a `button` action on what that view shows rather than on what cornercase's window shows: it gets `CORNERCASE_CONTEXT=button`, the view's ids and its workspace's folder. A popup action opens with it even with no window attached, sized from the view, so someone who only uses that program can open one, and it follows `view-set`. If the view goes away, the popup stays open as it does when the last window leaves. Without `--view` nothing changes. `cornercase contract` lists the feature `plugin-run-view`, and socket clients send `view` beside the command, as for `focus` and `start`.
+
 ## 0.13.2
 
 - Nothing changes for users: the code behind the commands moved into smaller files, to make room for the next ones.

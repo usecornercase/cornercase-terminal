@@ -47,6 +47,9 @@ fn the_commands_that_take_a_view_are_the_ones_that_act_on_a_place() {
     assert!(takes_view(&Command::ViewSet(SetView::default())));
     assert!(takes_view(&Command::Go(crate::control::Go::default())));
     assert!(takes_view(&Command::Clone(crate::control::CloneRepository::default())));
+    let run = crate::control::PluginRun { plugin: "a".into(), action: "b".into(), revision: 0, item: None };
+    assert!(takes_view(&Command::PluginRun(run)));
+    assert!(!takes_view(&Command::PluginActions(crate::control::PluginActions::default())));
     assert!(!takes_view(&Command::Stats(crate::control::Stats::default())));
     assert!(!takes_view(&Command::View(OpenView::default())));
 }
@@ -54,6 +57,7 @@ fn the_commands_that_take_a_view_are_the_ones_that_act_on_a_place() {
 #[test]
 fn views_are_a_feature_and_a_stream_of_the_contract() {
     assert!(FEATURES.contains(&"views"));
+    assert!(FEATURES.contains(&"plugin-run-view"));
     assert_eq!(VIEW_VERSION, 1);
 }
 

@@ -94,6 +94,7 @@ pub(crate) fn takes_view(command: &Command) -> bool {
             | Command::Surface(_)
             | Command::ViewSet(_)
             | Command::Go(_)
+            | Command::PluginRun(_)
     )
 }
 

@@ -110,7 +110,7 @@ impl Popped {
         let env = vec![("CORNERCASE_CONTEXT".to_string(), "button".to_string())];
         let cwd = self.project.path().to_path_buf();
         let on = (wire::Ids::default(), Context::Button);
-        let opening = Opening { plugin, action, places: self.places.clone(), cwd, env, on, request };
+        let opening = Opening { plugin, action, places: self.places.clone(), cwd, env, on, request, view: None };
         self.app.open_plugin_popup(opening).expect("the popup opens");
     }
 
@@ -228,7 +228,8 @@ mod opening {
         let (plugin, action) = p.app.plugin_action(ID, "ok").expect("the action");
         let cwd = p.project.path().to_path_buf();
         let on = (wire::Ids::default(), Context::Button);
-        let opening = Opening { plugin, action, places: p.places.clone(), cwd, env: Vec::new(), on, request: None };
+        let opening =
+            Opening { plugin, action, places: p.places.clone(), cwd, env: Vec::new(), on, request: None, view: None };
         assert!(p.app.open_plugin_popup(opening).is_err());
         assert_eq!(p.app.popup().map(|popup| popup.action.id.as_str()), Some("watch"));
     }

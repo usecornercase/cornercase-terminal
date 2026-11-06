@@ -627,6 +627,7 @@ mod parents;
 mod pasting;
 #[cfg(unix)]
 mod placed;
+mod plugin_views;
 mod plugins;
 mod ports;
 mod processes;
