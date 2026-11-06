@@ -407,6 +407,19 @@ mod a_shared_code {
     }
 
     #[test]
+    fn that_died_gives_whoever_comes_a_new_one_which_the_dialog_then_shows() {
+        let mut remote = ready();
+        remote.app.open_remote();
+        let dead = remote.app.remote_view().url;
+
+        let line = pair_at(&mut remote.app, FIRST, "browsers", Instant::now() + PAIRING_FOR).expect("a line");
+        let url = line["url"].as_str().map(String::from);
+
+        assert_ne!(url, dead);
+        assert_eq!(remote.app.remote_view().url, url);
+    }
+
+    #[test]
     fn ends_each_command_after_its_own_ten_minutes_and_lives_for_the_last() {
         let mut remote = ready();
         let start = Instant::now();
