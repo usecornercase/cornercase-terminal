@@ -5,7 +5,7 @@ use super::args::StatsArgs;
 use super::machines::read_line;
 use super::{print_json, print_out};
 use crate::agents::stats::{self, PEAK, View};
-use crate::client::{answer, ask, use_machine_usage};
+use crate::client::{answer, ask, use_machine_usage, use_stats_cached};
 use crate::control::usage::{MachineRead, MachineStats};
 use crate::control::{Command, Stats};
 use crate::error::{Error, Result};
@@ -34,8 +34,12 @@ pub(super) fn run(args: &StatsArgs) -> Result<bool> {
 }
 
 fn machine_stats(args: &StatsArgs, machine: &str, now: SystemTime) -> Result<bool> {
-    use_machine_usage()?;
-    let value = ask("stats", Command::Stats(Stats { machine: Some(machine.into()) }))?;
+    if args.cached {
+        use_stats_cached()?;
+    } else {
+        use_machine_usage()?;
+    }
+    let value = ask("stats", Command::Stats(Stats { cached: args.cached, machine: Some(machine.into()) }))?;
     if args.json {
         print_json(&value)?;
         return Ok(true);

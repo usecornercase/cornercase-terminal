@@ -201,3 +201,62 @@ mod folds {
         assert_eq!(flags, [true, true, false, false]);
     }
 }
+
+mod keyed_rows {
+    use super::*;
+
+    type Key = (Option<u64>, u64);
+
+    fn keyed(rows: &[(Key, Option<Key>)], folded: &[Key]) -> Vec<(Key, usize, bool, Vec<Key>)> {
+        let folded: HashSet<Key> = folded.iter().copied().collect();
+        order(rows, &folded, false)
+            .into_iter()
+            .map(|node| {
+                let hidden = node.hidden.iter().map(|&i| rows[i].0).collect();
+                (rows[node.index].0, node.depth, node.has_children, hidden)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_parent_of_another_key_makes_a_root() {
+        let rows = [((None, 5), None), ((Some(1), 6), Some((Some(1), 5)))];
+        assert_eq!(keyed(&rows, &[]), [((None, 5), 0, false, vec![]), ((Some(1), 6), 0, false, vec![])]);
+    }
+
+    #[test]
+    fn a_child_goes_under_its_parent_of_the_same_key() {
+        let rows = [((None, 5), None), ((Some(1), 5), None), ((Some(1), 6), Some((Some(1), 5)))];
+        let got: Vec<_> = keyed(&rows, &[]).into_iter().map(|(key, depth, ..)| (key, depth)).collect();
+        assert_eq!(got, [((None, 5), 0), ((Some(1), 5), 0), ((Some(1), 6), 1)]);
+    }
+
+    #[test]
+    fn a_fold_hides_only_rows_of_its_own_key() {
+        let rows = [
+            ((None, 5), None),
+            ((None, 6), Some((None, 5))),
+            ((Some(1), 5), None),
+            ((Some(1), 6), Some((Some(1), 5))),
+            ((Some(2), 5), None),
+            ((Some(2), 6), Some((Some(2), 5))),
+        ];
+        let shown: Vec<_> = keyed(&rows, &[(Some(1), 5)]).into_iter().map(|(key, .., hidden)| (key, hidden)).collect();
+        assert_eq!(
+            shown,
+            [
+                ((None, 5), vec![]),
+                ((None, 6), vec![]),
+                ((Some(1), 5), vec![(Some(1), 6)]),
+                ((Some(2), 5), vec![]),
+                ((Some(2), 6), vec![]),
+            ]
+        );
+    }
+
+    #[test]
+    fn ids_that_would_make_a_cycle_across_keys_have_no_arrow() {
+        let rows = [((None, 1), Some((None, 2))), ((Some(1), 2), Some((Some(1), 1)))];
+        assert!(keyed(&rows, &[]).into_iter().all(|(_, depth, has_children, _)| depth == 0 && !has_children));
+    }
+}

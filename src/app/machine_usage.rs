@@ -50,7 +50,7 @@ pub(super) trait Asked: DeserializeOwned + Clone + Send + 'static {
     fn cached(cache: &mut Cache) -> &mut Cached<Self>;
     fn event(link: u64, result: Result<Self, String>) -> MachineEvent;
     fn read(value: Value, now: SystemTime) -> serde_json::Result<Self>;
-    fn one(self, machine: MachineRead) -> Value;
+    fn one(self, machine: MachineRead, now: SystemTime) -> Value;
 }
 
 impl Asked for View {
@@ -80,8 +80,9 @@ impl Asked for View {
         serde_json::from_value::<Self>(value).map(|view| view.settled(now))
     }
 
-    fn one(self, machine: MachineRead) -> Value {
-        json(&MachineStats { view: self, machine: Some(machine), machines: Vec::new() })
+    fn one(self, machine: MachineRead, now: SystemTime) -> Value {
+        let view = current(self, &machine, now);
+        json(&MachineStats { view, machine: Some(machine), machines: Vec::new() })
     }
 }
 
@@ -112,7 +113,7 @@ impl Asked for Plans {
         serde_json::from_value(value)
     }
 
-    fn one(self, machine: MachineRead) -> Value {
+    fn one(self, machine: MachineRead, _: SystemTime) -> Value {
         json(&Self { machine: Some(machine), ..self })
     }
 }
@@ -184,7 +185,7 @@ impl App {
         let held = self.machines.held().iter().find(|held| held.link.id() == link);
         let Some(held) = held else { return Err(Refusal::new(Code::Failed, GONE)) };
         match self.machine_read::<T>(held) {
-            (machine, Some(value)) => Ok(value.one(machine)),
+            (machine, Some(value)) => Ok(value.one(machine, SystemTime::now())),
             (machine, None) => Err(Refusal::new(Code::Failed, unread(T::WHAT, &machine))),
         }
     }
@@ -192,14 +193,14 @@ impl App {
     pub(super) fn summed_stats(&self, now: SystemTime) -> (View, Vec<MachineRead>) {
         let reads = self.machine_reads::<View>();
         let mut views = vec![self.stats_view(now)];
-        views.extend(reads.iter().filter_map(|read| current(read, now)));
+        views.extend(reads.iter().filter_map(|(machine, view)| Some(current(view.clone()?, machine, now))));
         (View::sum(&views, now), reads.into_iter().map(|(machine, _)| machine).collect())
     }
 
     pub(super) fn machine_stats(&self, name: &str, now: SystemTime) -> Option<(Option<View>, MachineRead)> {
         let held = self.machines_in_order().find(|held| held.name == name)?;
-        let read = self.machine_read::<View>(held);
-        Some((current(&read, now), read.0))
+        let (machine, view) = self.machine_read::<View>(held);
+        Some((view.map(|view| current(view, &machine, now)), machine))
     }
 
     pub(super) fn machines_in_order(&self) -> impl Iterator<Item = &Held> {
@@ -224,9 +225,11 @@ impl App {
     }
 }
 
-fn current((machine, view): &(MachineRead, Option<View>), now: SystemTime) -> Option<View> {
-    let read_at = Stamp::parse(machine.read_at.as_deref()?)?;
-    Some(view.clone()?.moved_on(read_at, now))
+fn current(view: View, machine: &MachineRead, now: SystemTime) -> View {
+    match machine.read_at.as_deref().and_then(Stamp::parse) {
+        Some(read_at) => view.moved_on(read_at, now),
+        None => view,
+    }
 }
 
 fn stamp(secs: i64) -> Option<String> {
