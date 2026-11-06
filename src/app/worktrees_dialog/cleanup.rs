@@ -73,6 +73,13 @@ impl Pending {
     }
 }
 
+#[cfg(test)]
+impl Cleanup {
+    pub(in crate::app) fn cleaning(&mut self, path: PathBuf) {
+        self.pending.insert(0, Pending::new("a test".to_string(), path.clone(), vec![path], Vec::new()));
+    }
+}
+
 impl App {
     pub(super) fn remove_worktrees(&mut self, branches: bool) {
         let Some(Overlay::Worktrees(dialog)) = &self.overlay else { return };
@@ -222,7 +229,7 @@ impl App {
         self.git.cleanup.pending.contains_key(&workspace)
     }
 
-    pub(super) fn cleaning_path(&self, path: &Path) -> bool {
+    pub(in crate::app) fn cleaning_path(&self, path: &Path) -> bool {
         self.git.cleanup.pending.values().any(|pending| pending.paths.iter().any(|p| p == path))
     }
 

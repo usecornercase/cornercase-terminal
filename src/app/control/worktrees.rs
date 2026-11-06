@@ -4,6 +4,7 @@ use super::{Asker, Handled, conflict, json, malformed, none};
 use crate::app::App;
 use crate::app::event::AppEvent;
 use crate::app::worktrees::{ListFor, Measure, WorktreeEvent};
+use crate::app::worktrees_dialog::BEING_REMOVED;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{
     BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
@@ -14,7 +15,7 @@ use crate::log::{Job, Level};
 use crate::os::fs::{canonical, canonicalize};
 use crate::process;
 use crate::process::owners::trees;
-use crate::project::{Hierarchy, WorkspaceAt};
+use crate::project::{Hierarchy, Workspace, WorkspaceAt};
 use crate::term::Term;
 use crate::worktrees::builds::{self, Size};
 use crate::worktrees::{Asks, Found, Kind, Row, discover, fill, folders_of, scan};
@@ -56,6 +57,14 @@ impl App {
         Ok(Target { path, repo })
     }
 
+    fn being_removed(&self, path: &Path) -> bool {
+        let mut removing = self.projects.iter().flat_map(|p| &p.workspaces).filter(|w| w.removing());
+        let holds = |w: &&Workspace| {
+            canonical(&w.path) == path || w.role_worktrees.iter().any(|tree| canonical(&tree.path) == path)
+        };
+        self.cleaning_path(path) || removing.any(|w| holds(&w))
+    }
+
     fn workspace_at_path(&self, path: &Path) -> Option<WorkspaceAt> {
         let found = self.projects.iter().flat_map(|p| &p.workspaces).find(|w| canonical(&w.path) == path)?;
         self.projects.workspace_index(found.id)
@@ -91,6 +100,9 @@ impl App {
 
     pub(super) fn free_builds_request(&mut self, client: u64, asker: Asker, request: &FreeBuilds) -> Handled {
         let target = self.worktree_target(asker, request.workspace, request.path.as_deref())?;
+        if !request.check && self.being_removed(&target.path) {
+            return Err(Refusal::new(Code::Busy, format!("{}: {BEING_REMOVED}", target.path.display())));
+        }
         let names = self.config.project(&target.repo, self.home.as_deref()).builds();
         let shells = self.shell_pids();
         let mut running = self.workspace_at_path(&target.path).map(|at| self.running_in(at)).unwrap_or_default();

@@ -235,7 +235,7 @@ impl App {
         removing.folders = named.into_iter().map(Folder::of).collect();
         self.refresh_places();
         for folder in removing.folders.iter_mut().filter(|folder| folder.waits()) {
-            if let Some(why) = self.holds_a_worktree(&folder.answer.path, &found) {
+            if let Some(why) = self.holds_what_would_go(&folder.answer.path, &found) {
                 folder.answer = refused(folder.answer.path.clone(), why);
             }
         }
@@ -255,12 +255,11 @@ impl App {
         self.projects.workspace(at).role_worktrees.iter().map(|tree| canonical(&tree.path)).collect()
     }
 
-    fn holds_a_worktree(&self, folder: &Path, found: &[Found]) -> Option<String> {
+    fn holds_what_would_go(&self, folder: &Path, found: &[Found]) -> Option<String> {
         let mut going = self.role_folders(folder);
         going.push(folder.to_path_buf());
-        let under = |row: &&Found| going.iter().any(|holder| row.path.starts_with(holder));
-        let held = found.iter().filter(|row| row.kind != Kind::Prunable && !going.contains(&row.path)).find(under)?;
-        Some(format!("the worktree {} is inside it and would go with it: remove that first", held.path.display()))
+        let open: Vec<PathBuf> = self.projects.iter().map(|project| project.path.clone()).collect();
+        project_inside(&open, &going).or_else(|| worktree_inside(found, &going))
     }
 
     fn rows_to_look_at(&self, found: Vec<Found>, folders: &[Folder]) -> Vec<Row> {
@@ -393,6 +392,17 @@ impl App {
         let Some(pending) = self.clients.requests.take(key) else { return };
         self.refuse_or_answer(pending.client, Ok(answer));
     }
+}
+
+fn project_inside(open: &[PathBuf], going: &[PathBuf]) -> Option<String> {
+    let held = open.iter().map(canonical).find(|project| going.iter().any(|holder| project.starts_with(holder)))?;
+    Some(format!("the project {} is open inside it and would go with it: close that first", held.display()))
+}
+
+fn worktree_inside(found: &[Found], going: &[PathBuf]) -> Option<String> {
+    let under = |row: &&Found| going.iter().any(|holder| row.path.starts_with(holder));
+    let held = found.iter().filter(|row| row.kind != Kind::Prunable && !going.contains(&row.path)).find(under)?;
+    Some(format!("the worktree {} is inside it and would go with it: remove that first", held.path.display()))
 }
 
 fn removal_step(key: u64, step: RemovalStep) -> AppEvent {

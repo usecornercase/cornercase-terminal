@@ -134,6 +134,39 @@ mod folders_that_carry_each_other {
     }
 }
 
+mod an_open_project {
+    use super::*;
+
+    #[test]
+    fn inside_a_folder_that_would_go_stops_it_and_is_named() {
+        let dir = TempDir::new();
+        let (going, project) = (dir.path().join("wt"), dir.path().join("wt").join("api"));
+        std::fs::create_dir_all(&project).expect("mkdir");
+
+        let said = project_inside(std::slice::from_ref(&project), &[going]).expect("refused");
+
+        assert!(said.contains("is open inside it") && said.contains(&project.display().to_string()), "{said}");
+    }
+
+    #[test]
+    fn at_a_role_that_would_go_stops_it() {
+        let dir = TempDir::new();
+
+        let said = project_inside(&[dir.path().to_path_buf()], &[PathBuf::from("lead"), dir.path().to_path_buf()]);
+
+        assert!(said.is_some());
+    }
+
+    #[test]
+    fn around_or_beside_a_folder_that_would_go_stops_nothing() {
+        let dir = TempDir::new();
+        let going = dir.path().join("wt");
+        let beside = dir.path().join("wt-2");
+
+        assert_eq!(project_inside(&[dir.path().to_path_buf(), beside], &[going]), None);
+    }
+}
+
 mod a_role_still_busy {
     use super::*;
 

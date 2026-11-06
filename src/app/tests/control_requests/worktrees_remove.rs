@@ -310,6 +310,19 @@ mod closed_projects {
     }
 
     #[test]
+    fn a_free_builds_request_is_refused_while_the_folder_is_being_removed_and_a_check_is_not() {
+        let (mut s, at) = with_one("a");
+        s.app.git.cleanup.cleaning(at.clone());
+
+        let busy = refused(&mut s.app, "free-builds", &json!({"path": at}));
+        call_later(&mut s.app, &s.rx, "free-builds", &json!({"path": at, "check": true})).expect("a look");
+
+        assert_eq!(busy.code, "busy", "{}", busy.message);
+        assert!(busy.message.contains("already being removed"), "{}", busy.message);
+        assert!(!s.app.freeing_path(&at));
+    }
+
+    #[test]
     fn a_folder_whose_build_folders_are_being_freed_cannot_be_ticked() {
         let (mut s, at) = with_one("a");
         s.app.git.frees.freeing(at.clone());

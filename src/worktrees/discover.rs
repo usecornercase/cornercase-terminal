@@ -141,12 +141,18 @@ pub(crate) fn branch_at(folder: &Path) -> Option<String> {
 pub(crate) fn checked_out(found: &Found) -> Option<String> {
     match found.kind {
         Kind::Linked => branch_at(&found.path),
-        Kind::Prunable => {
-            let admin = found.admin.as_deref().filter(|name| plain(name))?;
-            branch_in(&found.repo.join(".git").join("worktrees").join(admin))
-        }
+        Kind::Prunable => branch_in(&admin_dir(found)?),
         Kind::Orphan | Kind::Unknown => None,
     }
+}
+
+pub(super) fn admin_dir(found: &Found) -> Option<PathBuf> {
+    let admin = found.admin.as_deref().filter(|name| plain(name))?;
+    Some(common_dir_of(&found.repo).join("worktrees").join(admin))
+}
+
+pub(super) fn common_dir_of(repo: &Path) -> PathBuf {
+    gitdir_of(repo).unwrap_or_else(|| repo.join(".git"))
 }
 
 fn branch_in(gitdir: &Path) -> Option<String> {
@@ -184,8 +190,8 @@ fn list(repo: &Path, found: &mut Vec<Found>, seen_paths: &mut HashSet<PathBuf>) 
     }
 }
 
-fn admins(repo: &Path) -> Vec<(String, PathBuf)> {
-    let Ok(entries) = std::fs::read_dir(repo.join(".git").join("worktrees")) else { return Vec::new() };
+pub(super) fn admins(repo: &Path) -> Vec<(String, PathBuf)> {
+    let Ok(entries) = std::fs::read_dir(common_dir_of(repo).join("worktrees")) else { return Vec::new() };
     entries
         .flatten()
         .filter_map(|entry| {

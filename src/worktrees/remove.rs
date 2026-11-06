@@ -7,7 +7,7 @@ use crate::log;
 use crate::os::ffi;
 use crate::os::fs::{canonical, canonicalize};
 
-use super::discover::{Origin, plain, repo_of};
+use super::discover::{Origin, admin_dir, admins, common_dir_of, parse_porcelain, plain, repo_of};
 use super::scan::branch_tip;
 use super::{Found, Kind};
 
@@ -28,21 +28,25 @@ pub(crate) fn named(asked: &Path, open: &[PathBuf], found: &[Found]) -> Named {
     let Some(row) = found.iter().find(listed) else {
         return Named::Unknown { why: unknown_why(&place, open), path: place };
     };
-    match recorded_at_a_link(row) {
-        Some(link) => {
-            let why = format!("git records it at the symbolic link {} and would delete through it", link.display());
-            Named::Unknown { path: row.path.clone(), why }
-        }
+    match record_problem(row) {
+        Some(why) => Named::Unknown { path: row.path.clone(), why },
         None => Named::Listed(row.path.clone()),
     }
 }
 
-fn recorded_at_a_link(found: &Found) -> Option<PathBuf> {
-    let admin = found.admin.as_deref().filter(|name| plain(name))?;
-    let entry = found.repo.join(".git").join("worktrees").join(admin);
+fn record_problem(found: &Found) -> Option<String> {
+    let Some(folder) = recorded_folder(found) else {
+        let unread = "git's record of where it is cannot be read, so it may lead through a link";
+        return (found.kind == Kind::Linked).then(|| unread.to_string());
+    };
+    let is_a_link = std::fs::symlink_metadata(&folder).ok()?.file_type().is_symlink();
+    is_a_link.then(|| format!("git records it at the symbolic link {} and would delete through it", folder.display()))
+}
+
+fn recorded_folder(found: &Found) -> Option<PathBuf> {
+    let entry = admin_dir(found)?;
     let gitdir = std::fs::read_to_string(entry.join("gitdir")).ok()?;
-    let folder = ffi::join(&entry, gitdir.trim()).parent()?.to_path_buf();
-    std::fs::symlink_metadata(&folder).ok()?.file_type().is_symlink().then_some(folder)
+    Some(ffi::join(&entry, gitdir.trim()).parent()?.to_path_buf())
 }
 
 fn real_place(path: &Path) -> PathBuf {
@@ -91,6 +95,13 @@ pub(crate) fn remove(found: &Found, script: Option<&str>, options: RemoveOptions
 }
 
 pub(crate) fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
+    refuse_protected(repo, branch)?;
+    check(run(repo, ["branch", "-D", branch])?).map(drop)?;
+    log::info!("worktrees", "branch deleted", repo = repo.display(), branch = branch);
+    Ok(())
+}
+
+fn refuse_protected(repo: &Path, branch: &str) -> Result<()> {
     if branch.is_empty() || branch.starts_with('-') {
         return Err(Error::Git(format!("refusing to delete the branch {branch:?}")));
     }
@@ -99,18 +110,56 @@ pub(crate) fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     if default == Some(branch) || git::checked_out(repo).as_deref() == Some(branch) {
         return Err(Error::Git(format!("refusing to delete the branch {branch}, the main checkout's or the default")));
     }
-    check(run(repo, ["branch", "-D", branch])?).map(drop)?;
-    log::info!("worktrees", "branch deleted", repo = repo.display(), branch = branch);
     Ok(())
 }
 
 pub(crate) fn delete_branch_at(repo: &Path, branch: &str, tip: Option<&str>) -> Result<bool> {
-    let moved = tip.is_some_and(|tip| branch_tip(repo, branch).is_some_and(|now| now != tip));
-    if moved {
-        log::info!("worktrees", "branch kept: it moved since it was looked at", repo = repo.display(), branch = branch);
-        return Ok(false);
+    let Some(tip) = tip else { return delete_branch(repo, branch).map(|()| true) };
+    refuse_protected(repo, branch)?;
+    if let Some(holder) = holder_of(repo, branch)? {
+        return Err(Error::Git(format!("cannot delete branch '{branch}' used by worktree at '{}'", holder.display())));
     }
-    delete_branch(repo, branch).map(|()| true)
+    let reference = format!("refs/heads/{branch}");
+    let deleted = run(repo, ["update-ref", "--no-deref", "-d", reference.as_str(), tip])?;
+    if !deleted.status.success() {
+        if branch_tip(repo, branch).is_some_and(|now| now != tip) {
+            log::info!("worktrees", "branch kept: it moved", repo = repo.display(), branch = branch);
+            return Ok(false);
+        }
+        return check(deleted).map(|_| false);
+    }
+    forget_settings(repo, branch);
+    log::info!("worktrees", "branch deleted", repo = repo.display(), branch = branch);
+    Ok(true)
+}
+
+fn forget_settings(repo: &Path, branch: &str) {
+    let section = format!("branch.{branch}");
+    if let Err(error) = run(repo, ["config", "--remove-section", section.as_str()]).and_then(check) {
+        log::debug!("worktrees", "no branch settings removed", branch = branch, error = error);
+    }
+}
+
+fn holder_of(repo: &Path, branch: &str) -> Result<Option<PathBuf>> {
+    let listed = check(run(repo, ["worktree", "list", "--porcelain"])?)?;
+    let entries = parse_porcelain(&String::from_utf8_lossy(&listed));
+    if let Some((path, ..)) = entries.into_iter().find(|(_, on, _)| on.as_deref() == Some(branch)) {
+        return Ok(Some(path));
+    }
+    let common = common_dir_of(repo);
+    let linked = admins(repo).into_iter().map(|(name, path)| (common.join("worktrees").join(name), path));
+    let mut every = std::iter::once((common.clone(), repo.to_path_buf())).chain(linked);
+    Ok(every.find(|(gitdir, _)| in_an_operation(gitdir, branch)).map(|(_, path)| path))
+}
+
+fn in_an_operation(gitdir: &Path, branch: &str) -> bool {
+    let read = |file: &str| std::fs::read_to_string(gitdir.join(file)).unwrap_or_default();
+    let reference = format!("refs/heads/{branch}");
+    let rebasing =
+        ["rebase-merge/head-name", "rebase-apply/head-name"].iter().any(|file| read(file).trim() == reference);
+    let updating = read("rebase-merge/update-refs").lines().any(|line| line == reference);
+    let bisecting = gitdir.join("BISECT_LOG").exists() && read("BISECT_START").trim() == branch;
+    rebasing || updating || bisecting
 }
 
 fn prune(found: &Found) -> Result<()> {
@@ -118,7 +167,7 @@ fn prune(found: &Found) -> Result<()> {
         return Err(Error::Git("this entry has no folder of its own to prune".to_string()));
     };
     let out = check(run(&found.repo, ["worktree", "list", "--porcelain"])?)?;
-    let still = super::discover::parse_porcelain(&String::from_utf8_lossy(&out))
+    let still = parse_porcelain(&String::from_utf8_lossy(&out))
         .into_iter()
         .any(|(path, _, prunable)| prunable && same(&path, &found.path));
     if !still {

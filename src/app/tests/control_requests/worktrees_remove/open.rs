@@ -205,6 +205,21 @@ mod an_open_workspace {
     }
 
     #[test]
+    fn being_removed_also_refuses_a_free_builds_request() {
+        let (mut s, a) = with_a(&["a"]);
+        let hold = TempDir::new();
+        let repo = s.repo.path().to_path_buf();
+        removals_wait_in_teardown(&mut s.app, &repo, hold.path());
+        let (project, id) = (s.app.projects[0].id, workspace(&s, &a).expect("the workspace"));
+        assert!(s.app.start_removal(project, id, RemoveOptions::default(), None));
+
+        let busy = refused(&mut s.app, "free-builds", &json!({"path": a}));
+
+        let_it_end(&hold);
+        assert_eq!(busy.code, "busy", "{}", busy.message);
+    }
+
+    #[test]
     fn whose_project_is_closing_is_refused() {
         let (mut s, a) = with_a(&["a"]);
         s.app.projects[0].closing = true;
@@ -323,6 +338,21 @@ mod a_flow_run {
         assert_eq!(outcome(&refused), "refused");
         assert!(why(&refused).contains("belongs to `coder`"), "{refused}");
         assert!(left_running(&s, &coder));
+    }
+
+    #[test]
+    fn a_roles_worktree_refuses_free_builds_while_its_runs_workspace_is_being_removed() {
+        let (mut s, lead, coder) = lead_and_coder();
+        let hold = TempDir::new();
+        let repo = s.repo.path().to_path_buf();
+        removals_wait_in_teardown(&mut s.app, &repo, hold.path());
+        let (project, id) = (s.app.projects[0].id, workspace(&s, &lead).expect("the workspace"));
+        assert!(s.app.start_removal(project, id, RemoveOptions::default(), None));
+
+        let busy = refused(&mut s.app, "free-builds", &json!({"path": coder}));
+
+        let_it_end(&hold);
+        assert_eq!(busy.code, "busy", "{}", busy.message);
     }
 
     #[test]
@@ -525,6 +555,35 @@ mod a_flow_run {
 
 mod projects {
     use super::*;
+
+    #[test]
+    fn a_project_open_inside_the_folder_refuses_it_whatever_the_flags() {
+        let (mut s, a) = with_a(&["a"]);
+        let nested = a.join("packages").join("api");
+        std::fs::create_dir_all(&nested).expect("mkdir");
+        std::fs::write(nested.join("draft.txt"), "mine").expect("write");
+        s.app.open_project(nested.clone(), AREA).expect("open the nested project");
+
+        let refused = s.one(&json!({"paths": [a], "force": true, "unlock": true}));
+
+        assert_eq!(outcome(&refused), "refused");
+        assert!(why(&refused).contains("is open inside it"), "{refused}");
+        assert!(nested.join("draft.txt").exists() && left_running(&s, &a));
+    }
+
+    #[test]
+    fn a_project_open_inside_a_role_refuses_its_runs_workspace() {
+        let mut s = with_a_role();
+        let (lead, coder) = (path_of(&s, "lead"), path_of(&s, "coder"));
+        let nested = coder.join("api");
+        std::fs::create_dir_all(&nested).expect("mkdir");
+        s.app.open_project(nested.clone(), AREA).expect("open the nested project");
+
+        let refused = s.one(&json!({"paths": [lead], "force": true, "unlock": true}));
+
+        assert!(why(&refused).contains("is open inside it"), "{refused}");
+        assert!(nested.exists() && lead.exists());
+    }
 
     #[test]
     fn an_open_projects_main_checkout_is_refused_and_keeps_running() {

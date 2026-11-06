@@ -70,7 +70,8 @@ entry leaves git's list, and a folder whose repository is gone or that git no lo
 deleted. Only a folder `worktrees list` knows is touched: anything else, a repository's main
 checkout and a project's own folder included, is refused and left alone, as is a worktree git
 records at a symbolic link, which git would delete through, and a folder holding another listed
-worktree, which would go with it unseen (remove that one first). So is what the dialog cannot tick:
+worktree or an open project, which would go with it unseen (remove or close that one first). So is
+what the dialog cannot tick:
 a worktree of a role of a live flow run (it goes with the run's workspace), one being removed or
 closed, one whose build folders are being freed, and an open workspace git no longer knows (close
 it, then remove the folder).

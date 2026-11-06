@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use rstest::rstest;
+
 use crate::git::worktree::RemoveOptions;
 use crate::test_util::{TempDir, git, git_repo, link_folder};
 use crate::worktrees::discover::{checked_out, discover};
@@ -388,6 +390,14 @@ mod naming_a_folder {
     }
 
     #[test]
+    fn refuses_a_linked_worktree_whose_record_cannot_be_read() {
+        let (repo, dirs, at) = one_worktree();
+        let found = [Found { admin: None, ..only(repo.path(), dirs.path()) }];
+
+        assert!(why(&at, &[], &found).contains("cannot be read"));
+    }
+
+    #[test]
     fn refuses_a_worktree_git_records_at_a_link_since_git_would_delete_through_it() {
         let (repo, dirs, at) = one_worktree();
         let elsewhere = TempDir::new();
@@ -401,6 +411,50 @@ mod naming_a_folder {
             let said = why(asked, &[], &found);
             assert!(said.contains("git records it at the symbolic link"), "{said}");
         }
+    }
+}
+
+mod a_repository_whose_dot_git_is_a_file {
+    use super::*;
+
+    fn with_two_worktrees() -> (TempDir, PathBuf, PathBuf) {
+        let dir = TempDir::new();
+        let (repo, list) = (dir.path().join("repo"), dir.path().join("worktrees").join("repo"));
+        let inside = repo.join(".gitdir");
+        git(dir.path(), &["init", "--quiet", "--separate-git-dir", &inside.display().to_string(), "repo"]);
+        git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
+        add(&repo, "feat-a", &list.join("a"));
+        add(&repo, "feat-b", &list.join("b"));
+        (dir, list.join("a"), list.parent().expect("a parent").to_path_buf())
+    }
+
+    #[test]
+    fn has_its_record_read_so_a_worktree_at_a_link_is_refused() {
+        let (dir, at, list) = with_two_worktrees();
+        let kept = dir.path().join("kept");
+        std::fs::rename(&at, &kept).expect("move");
+        link_folder(&kept, &at);
+        let found = discover(&[], &list);
+        assert!(found.iter().all(|row| row.admin.is_some()), "{found:?}");
+
+        for asked in [&at, &kept] {
+            let said = why(asked, &[], &found);
+            assert!(said.contains("git records it at the symbolic link"), "{said}");
+        }
+    }
+
+    #[test]
+    fn has_its_worktree_found_and_a_prunable_entry_pruned() {
+        let (_dir, at, list) = with_two_worktrees();
+        assert_eq!(named(&at, &[], &discover(&[], &list)), Named::Listed(at.clone()));
+        std::fs::remove_dir_all(&at).expect("remove");
+        let found = discover(&[], &list);
+        let entry = found.iter().find(|row| row.kind == Kind::Prunable).expect("the entry");
+
+        assert_eq!(checked_out(entry).as_deref(), Some("feat-a"));
+        remove(entry, None).expect("pruned");
+
+        assert!(discover(&[], &list).iter().all(|row| row.kind != Kind::Prunable));
     }
 }
 
@@ -485,6 +539,73 @@ mod a_branch_at_the_commit_that_was_looked_at {
 
         assert!(!delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("kept"));
         assert!(branches(repo.path()).contains("feat-a"));
+    }
+
+    #[test]
+    fn takes_its_settings_with_it() {
+        let (repo, _dirs, at) = one_worktree();
+        let tip = head(&at);
+        git(repo.path(), &["config", "branch.feat-a.remote", "origin"]);
+        git(repo.path(), &["worktree", "remove", "--force", &at.display().to_string()]);
+
+        assert!(delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("deleted"));
+
+        let config = std::fs::read_to_string(repo.path().join(".git").join("config")).expect("the config");
+        assert!(!config.contains("feat-a"), "{config}");
+    }
+
+    #[test]
+    fn leaves_the_branch_a_symbolic_ref_points_to() {
+        let repo = main_repo();
+        let tip = head(repo.path());
+        git(repo.path(), &["branch", "target"]);
+        git(repo.path(), &["symbolic-ref", "refs/heads/alias", "refs/heads/target"]);
+
+        assert!(delete_branch_at(repo.path(), "alias", Some(&tip)).expect("deleted"));
+
+        assert!(branches(repo.path()).contains("target") && !branches(repo.path()).contains("alias"));
+    }
+
+    #[test]
+    fn stays_while_a_worktree_has_it_checked_out() {
+        let (repo, _dirs, at) = one_worktree();
+        let tip = head(&at);
+
+        let refused = delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect_err("refused");
+
+        assert!(refused.to_string().contains("used by worktree at"), "{refused}");
+        assert!(branches(repo.path()).contains("feat-a"));
+    }
+
+    #[rstest]
+    #[case::a_rebase("rebase-merge/head-name", "refs/heads/feat-a\n")]
+    #[case::an_older_rebase("rebase-apply/head-name", "refs/heads/feat-a\n")]
+    #[case::a_rebase_updating_it("rebase-merge/update-refs", "refs/heads/feat-a\nabc\nabc\n")]
+    #[case::a_bisect("BISECT_START", "feat-a\n")]
+    fn stays_while_a_worktree_is_busy_with_it(#[case] file: &str, #[case] says: &str) {
+        let (repo, _dirs, at) = one_worktree();
+        let tip = head(&at);
+        git(&at, &["checkout", "--quiet", "--detach"]);
+        let admin = repo.path().join(".git").join("worktrees").join("a");
+        std::fs::create_dir_all(admin.join(file).parent().expect("a parent")).expect("mkdir");
+        std::fs::write(admin.join(file), says).expect("write");
+        std::fs::write(admin.join("BISECT_LOG"), "").expect("write");
+
+        let refused = delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect_err("refused");
+
+        assert!(refused.to_string().contains("used by worktree at"), "{refused}");
+        assert!(branches(repo.path()).contains("feat-a"));
+    }
+
+    #[test]
+    fn goes_past_a_bisect_start_that_no_bisect_log_backs() {
+        let (repo, _dirs, at) = one_worktree();
+        let tip = head(&at);
+        git(&at, &["checkout", "--quiet", "--detach"]);
+        let admin = repo.path().join(".git").join("worktrees").join("a");
+        std::fs::write(admin.join("BISECT_START"), "feat-a\n").expect("write");
+
+        assert!(delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("deleted"));
     }
 
     #[test]
