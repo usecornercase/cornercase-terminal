@@ -10,6 +10,8 @@ use crate::test_util::{git_repo, wait_until_within};
 const SHELL: &str = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
 const WITHIN: Duration = Duration::from_secs(60);
 const VIEWER: u64 = 31;
+const FAILS_WITHOUT_THE_MARKER: &str =
+    "echo \"$CORNERCASE_BRANCH:$CORNERCASE_WORKTREE\" > \"$CORNERCASE_ROOT/ran\"\ntest -f \"$CORNERCASE_ROOT/ok\"";
 
 struct Retry {
     app: App,
@@ -102,25 +104,37 @@ impl Retry {
     }
 }
 
-#[test]
-fn a_failed_setup_runs_again_in_a_new_tab_and_answers_once_it_is_done() {
-    let mut retry = retry(
-        "echo \"$CORNERCASE_BRANCH:$CORNERCASE_WORKTREE\" > \"$CORNERCASE_ROOT/ran\"\ntest -f \"$CORNERCASE_ROOT/ok\"",
-    );
+fn failed_then_fixed() -> (Retry, u64) {
+    let mut retry = retry(FAILS_WITHOUT_THE_MARKER);
     let first = error(retry.new_worktree("feat/retry"));
     assert!(first.contains("exit status 1"), "{first}");
+    std::fs::write(retry.repo.path().join("ok"), "").expect("write the marker");
     let workspace = retry.worktree().id;
+    (retry, workspace)
+}
+
+#[test]
+fn a_failed_setup_is_on_the_menu_and_its_mark_goes_as_soon_as_it_runs_again() {
+    let (mut retry, workspace) = failed_then_fixed();
     let project = retry.app.projects[0].id;
     assert_eq!(retry.setup_state(workspace), "failed");
     assert_eq!(retry.app.setup_action(project, workspace), Some(MenuAction::RunSetup(workspace)));
-    std::fs::write(retry.repo.path().join("ok"), "").expect("write the marker");
 
     ask(&mut retry.app, None, run(workspace));
 
     assert_eq!(retry.setup_state(workspace), "running");
     assert!(retry.worktree().tabs[0].pane().is_some_and(|term| term.setup.is_none()), "the failed mark stayed");
     assert_eq!(answers(&mut retry.app).len(), 0, "it answered before the setup ended");
+}
+
+#[test]
+fn a_setup_run_again_answers_with_its_new_tab_once_it_is_done() {
+    let (mut retry, workspace) = failed_then_fixed();
+    let project = retry.app.projects[0].id;
+
+    ask(&mut retry.app, None, run(workspace));
     let made = done(retry.answer("the setup passes"));
+
     assert_eq!(retry.setup_state(workspace), Value::Null, "the mark came back");
     let target = retry.worktree();
     let tab = target.tabs.last().expect("a tab");

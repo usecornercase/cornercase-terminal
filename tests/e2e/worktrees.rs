@@ -87,34 +87,45 @@ fn setup_of(session: &Session, branch: &str) -> Value {
     workspace_on(session, branch)["setup"].clone()
 }
 
-#[test]
-fn a_failed_setup_runs_again_by_command_with_its_variables_and_its_mark_goes() {
-    let Opened { session, _app: _window, repo, .. } = open_worktree("setup-again", "e2e/plain");
-    let folder = repo.display().to_string();
+fn failed_setup(name: &str) -> (Opened, Value) {
+    let opened = open_worktree(name, "e2e/plain");
+    let folder = opened.repo.display().to_string();
     let script = "echo \"in [$CORNERCASE_WORKTREE]\"\ntest -f \"$CORNERCASE_ROOT/ok\"";
-    session.says(&["config", "project", &folder, "--setup", script]);
-    let project = session.says(&["open", &folder]);
-
-    let made = session.cli(&["new-workspace", "feat/x", "--worktree", "--project", &project]);
+    opened.session.says(&["config", "project", &folder, "--setup", script]);
+    let project = opened.session.says(&["open", &folder]);
+    let made = opened.session.cli(&["new-workspace", "feat/x", "--worktree", "--project", &project]);
     assert!(refused(&made, 1, "failed with exit status 1"), "{made:?}");
-    let failed = workspace_on(&session, "feat/x");
+    let failed = workspace_on(&opened.session, "feat/x");
     assert_eq!(failed["setup"], "failed", "{failed}");
-    let id = failed["id"].to_string();
+    (opened, failed)
+}
 
-    let again = session.cli(&["setup", "--workspace", &id]);
+#[test]
+fn a_setup_that_fails_again_by_command_names_its_status_and_its_pane() {
+    let (Opened { session, _app: _window, repo, .. }, failed) = failed_setup("setup-fails");
+
+    let again = session.cli(&["setup", "--workspace", &failed["id"].to_string()]);
+
     assert!(refused(&again, 1, "failed with exit status 1"), "{again:?}");
     assert!(String::from_utf8_lossy(&again.stderr).contains("cornercase read --pane"), "{again:?}");
     assert_eq!(setup_of(&session, "feat/x"), "failed");
+    let _ = std::fs::remove_dir_all(&repo);
+}
 
+#[test]
+fn a_failed_setup_runs_again_by_command_with_its_variables_and_its_mark_goes() {
+    let (Opened { session, _app: _window, repo, .. }, failed) = failed_setup("setup-again");
     std::fs::write(repo.join("ok"), "").expect("write the marker");
+
     let pane = session.says(&["setup", "--worktree", "feat/x"]);
 
     let screen = session.says(&["read", "--pane", &pane]);
     let path = failed["path"].as_str().expect("its folder");
     assert!(screen.contains(&format!("in [{path}]")) && screen.contains("setup finished"), "{screen}");
     assert_eq!(setup_of(&session, "feat/x"), Value::Null);
+    let id = failed["id"].to_string();
     let printed: Value = serde_json::from_str(&session.says(&["setup", "--workspace", &id, "--json"])).expect("json");
-    assert_eq!(printed["workspace"].to_string(), id);
+    assert_eq!(printed["workspace"], failed["id"]);
     assert!(printed["project"].is_u64() && printed["tab"].is_u64() && printed["pane"].is_u64(), "{printed}");
     let _ = std::fs::remove_dir_all(&repo);
 }
