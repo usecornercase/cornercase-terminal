@@ -108,7 +108,7 @@ fn a_person_reads_the_same_without_json() {
 
     assert!(http_get(port, &path_of(&url)).starts_with(TAKEN));
     let ended = finish_within(child, TIMEOUT);
-    let rest: Vec<String> = out.lines().map_while(std::result::Result::ok).collect();
+    let rest: Vec<String> = out.lines().map_while(Result::ok).collect();
 
     assert_eq!(ended.status.code(), Some(0), "{ended:?}");
     assert_eq!(rest.first().map(String::as_str), Some("scan the code with your phone's camera."));

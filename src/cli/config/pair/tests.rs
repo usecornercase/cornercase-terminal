@@ -6,8 +6,8 @@ fn reading(ended: Option<PairEnded>) -> Reading {
     Reading { key: Some(PairKey::Browsers), json: false, ended, reader_left: false }
 }
 
-fn ended(paired: bool, error: Option<&str>) -> Option<PairEnded> {
-    Some(PairEnded { paired, chat: None, error: error.map(String::from) })
+fn ended(paired: bool, error: Option<&str>) -> Reading {
+    reading(Some(PairEnded { paired, chat: None, error: error.map(String::from) }))
 }
 
 fn text_of(key: &str, line: &Value) -> String {
@@ -59,13 +59,13 @@ mod it_ends {
 
     #[test]
     fn well_once_paired() {
-        assert!(reading(ended(true, None)).finished(|| false).is_ok());
+        assert!(ended(true, None).finished(|| false).is_ok());
     }
 
     #[test]
     fn with_the_servers_words_once_it_failed() {
-        assert_eq!(message(reading(ended(false, Some("why"))).finished(|| false)), "why");
-        assert_eq!(message(reading(ended(false, None)).finished(|| false)), NOT_PAIRED);
+        assert_eq!(message(ended(false, Some("why")).finished(|| false)), "why");
+        assert_eq!(message(ended(false, None).finished(|| false)), NOT_PAIRED);
     }
 
     #[test]

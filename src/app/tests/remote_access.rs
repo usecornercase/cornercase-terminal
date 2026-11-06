@@ -4,7 +4,7 @@ use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
 
 use super::*;
-use crate::test_util::{http_get as get, write_executable};
+use crate::test_util::{free_port, http_get as get, write_executable};
 use crate::web;
 
 const STATUS: &str = r#"{"BackendState":"Running","CertDomains":["mac.tail1234.ts.net"],"Self":{"DNSName":"mac.tail1234.ts.net.","UserID":7},"User":{"7":{"LoginName":"ada@example.com"}}}"#;
@@ -14,17 +14,6 @@ struct Remote {
     rx: Receiver<AppEvent>,
     dir: TempDir,
     port: u16,
-}
-
-fn free_port() -> u16 {
-    static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
-    let base = 30_000 + u16::try_from(std::process::id() % 80).expect("fits") * 32;
-    loop {
-        let port = base + NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
-            return port;
-        }
-    }
 }
 
 fn with_tailscale(script: Option<&str>) -> Remote {

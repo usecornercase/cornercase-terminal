@@ -581,6 +581,17 @@ impl FakeHttp {
     }
 }
 
+pub(crate) fn free_port() -> u16 {
+    static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
+    let base = 30_000 + u16::try_from(std::process::id() % 80).expect("fits") * 32;
+    loop {
+        let port = base + NEXT.fetch_add(1, Ordering::SeqCst);
+        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+}
+
 pub(crate) fn http_get(port: u16, path: &str) -> String {
     use std::io::{Read, Write};
     let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect");

@@ -5,7 +5,7 @@ use rstest::rstest;
 use super::*;
 use crate::app::events::Streamed;
 use crate::app::remote_access::Phase;
-use crate::test_util::{FakeHttp, fake_program, http_get};
+use crate::test_util::{FakeHttp, fake_program, free_port, http_get};
 use crate::web::auth::PAIRING_FOR;
 
 const FIRST: u64 = 7;
@@ -96,8 +96,7 @@ mod browsers {
         let program = fake_program(dir.path(), "tailscale");
         std::fs::write(program.with_extension("out"), status).expect("what tailscale says");
         app.remote.set_tailscale(program);
-        let free = TcpListener::bind(("127.0.0.1", 0)).expect("a free port");
-        let port = free.local_addr().expect("its address").port();
+        let port = free_port();
         app.config.remote_port = port;
         Remote { app, rx, dir, port }
     }
@@ -260,7 +259,7 @@ mod browsers {
 
         assert_eq!(remote.app.clients.pairings.wake(start), Some(PAIRING_FOR));
         assert_eq!(remote.app.tick(start + PAIRING_FOR), Some(Duration::ZERO));
-        remote.app.refresh(start + PAIRING_FOR - Duration::from_secs(1));
+        remote.app.refresh(start + PAIRING_FOR.saturating_sub(Duration::from_secs(1)));
         assert_eq!(lines(&mut remote.app), []);
         remote.app.refresh(start + PAIRING_FOR);
 
@@ -675,7 +674,7 @@ mod discord {
         assert_eq!(discord.app.next_pairing(now), None);
         discord.app.refresh(now);
 
-        assert!(discord.server.requests().is_empty());
+        assert_eq!(discord.server.requests().len(), 0);
     }
 
     #[test]

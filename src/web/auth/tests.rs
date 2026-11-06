@@ -2,6 +2,7 @@
 use std::os::unix::fs::MetadataExt;
 
 use super::*;
+#[cfg(unix)]
 use crate::test_util::TempDir;
 
 mod pairing {
@@ -60,6 +61,7 @@ mod pairing {
     }
 }
 
+#[cfg(unix)]
 mod devices {
     use super::*;
 
