@@ -447,6 +447,11 @@ A token is never an argument: `secret` reads it from standard input (hidden on a
 with its service as the dialog does, and says which account accepted it, never the token. `remove`
 forgets a token, a bot, a paired chat or the paired browsers.
 
+`forum-server` picks the server of the Discord forum, when forum mode waits for one and the app is in
+several: `status --app` lists them as `servers`, in Discord's `forum`, and this is a click on one in the
+forum's dialog. It answers once the pick is taken: the channel is made next, and `status --app --follow`
+goes on to `ready`. An id that is not listed, or a moment when no pick waits, is refused and says why.
+
 `export` writes the settings a colleague can use, as TOML, and says on standard error what it left
 out: tokens, accounts, personal keys. `import` shows what a shared file would change and asks first;
 reading standard input or without a terminal it needs --yes. --preview prints that preview and exits
@@ -464,6 +469,7 @@ Examples:
   cornercase config set issue_tabs github,linear
   printf '%s' \"$LINEAR_API_KEY\" | cornercase config secret linear
   cornercase config remove linear
+  cornercase config forum-server 1041234567890123459
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml
   cornercase config import team.toml --only agents,worktrees

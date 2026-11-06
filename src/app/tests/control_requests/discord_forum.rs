@@ -218,6 +218,7 @@ mod background;
 mod buttons;
 mod cleanup;
 mod gone;
+mod picking;
 mod posts;
 mod replies;
 mod socket;

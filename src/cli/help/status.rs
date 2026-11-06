@@ -43,7 +43,8 @@ is the state then, so nothing is missed. A reader that falls behind reads at mos
 lines, then the latest state.
 
 With --app it prints, as JSON, what is outside the session: `todos` (as `todo list --json`), `queue`
-(the entries of `queue list --json`), `away` (one row per chat app: `platform`, `ready`, `away`),
+(the entries of `queue list --json`), `away` (one row per chat app: `platform`, `ready`, `away`, and
+on Discord `forum`, its setup, with `servers` while it waits for `config forum-server ID`),
 `update` (the release found and its notes, why there is none, whether a check or an install runs,
 and how installing works here) and `keep_awake` (null while the setting is off), with the server's
 `version` and `boot`. With --follow it keeps running and prints one such line first and again each

@@ -33,6 +33,7 @@ mod commands;
 mod context;
 mod contract;
 mod flows;
+mod forum;
 mod input;
 mod issues;
 mod machine_actions;

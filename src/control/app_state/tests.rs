@@ -143,3 +143,78 @@ fn the_machines_are_there_only_when_some_are_listed() {
     let read: AppState = serde_json::from_value(value).expect("an app state");
     assert_eq!(read.machines, [vps]);
 }
+
+mod the_forum {
+    use serde_json::json;
+
+    use super::*;
+    use crate::control::{Command, Request};
+
+    fn asked_to_pick() -> AwayInfo {
+        AwayInfo {
+            platform: "discord".into(),
+            ready: true,
+            away: false,
+            forum: Some(ForumInfo {
+                on: true,
+                pending: Some("pick the server for the forum".into()),
+                servers: vec![
+                    ForumServerInfo { id: "1041234567890123457".into(), name: "home".into() },
+                    ForumServerInfo { id: "1041234567890123459".into(), name: "work".into() },
+                ],
+                ..ForumInfo::default()
+            }),
+        }
+    }
+
+    #[test]
+    fn asked_to_pick_is_written_as_its_fixture() {
+        let written = serde_json::to_string_pretty(&asked_to_pick()).expect("json");
+
+        assert_eq!(written, fixture!("control/app/v1/forum-servers.json").trim_end());
+    }
+
+    #[test]
+    fn asked_to_pick_reads_back_from_its_fixture() {
+        let read: AwayInfo = serde_json::from_str(fixture!("control/app/v1/forum-servers.json")).expect("a row");
+
+        assert_eq!(read, asked_to_pick());
+    }
+
+    #[test]
+    fn leaves_the_servers_out_when_there_are_none() {
+        let value = serde_json::to_value(ForumInfo::default()).expect("json");
+
+        assert_eq!(value, json!({"on": false, "ready": false, "guild": null, "channel": null, "pending": null}));
+    }
+
+    #[test]
+    fn of_an_older_server_reads_without_servers() {
+        let text = r#"{"on":true,"ready":false,"guild":null,"channel":null,"pending":"pick the server for the forum"}"#;
+
+        let read: ForumInfo = serde_json::from_str(text).expect("a forum");
+
+        assert_eq!((read.pending.as_deref(), read.servers), (Some("pick the server for the forum"), Vec::new()));
+    }
+
+    #[test]
+    fn is_picked_by_an_id_given_as_text() {
+        let sent = json!({"command": "forum-server", "args": {"id": "1041234567890123459"}});
+
+        let request: Request = serde_json::from_value(sent).expect("a request");
+
+        let pick = ForumServer { id: "1041234567890123459".into() };
+        assert_eq!(request.command, Command::ForumServer(pick));
+        assert_eq!(request.command.name(), "forum-server");
+        assert_eq!(request.command.fields(), [("id", "1041234567890123459".to_string())]);
+    }
+
+    #[rstest::rstest]
+    #[case::no_id(json!({}))]
+    #[case::an_id_as_a_number(json!({"id": 8}))]
+    fn is_not_picked_by_anything_else(#[case] args: Value) {
+        let sent = json!({"command": "forum-server", "args": args});
+
+        assert!(serde_json::from_value::<Request>(sent).is_err());
+    }
+}

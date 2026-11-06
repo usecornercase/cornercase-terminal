@@ -63,7 +63,7 @@ Code: `cli.rs`, `cli/`, `cli/requests.rs`, `cli/line.rs`, `client/requests.rs`, 
 - [Streaming a tab's terminals](commands-for-scripts-and-agents/surfaces.md): #286: frames, cells and styles, What else a cell carries, sizes, pacing, Patches.
 - [Views of your own, and what a view sees](commands-for-scripts-and-agents/views.md): Views of your own; What a view shows counts as seen, and agent notices for other programs.
 - [Driving a tab's terminals](commands-for-scripts-and-agents/driving-terminals.md): #287: `input`, `scroll`, `selection`, `ratio`, `resize`; The path under a cell (`link`).
-- [Reading and changing settings](commands-for-scripts-and-agents/config.md): #336: the `config` request, secrets, the revision; #414: sharing a setup, `config-export` and `config-import`.
+- [Reading and changing settings](commands-for-scripts-and-agents/config.md): #336: the `config` request, secrets, the revision; #414: sharing a setup, `config-export` and `config-import`; #668: `forum-server`.
 - [Colours for programs](commands-for-scripts-and-agents/colours.md): #331: the `theme` request, precedence, mode 2031.
 - [Arranging the session](commands-for-scripts-and-agents/arranging.md): #335: groups, `move`, `collapse` and `expand`, `move-pane`, the removal check; #399: closing an agent.
 - [Reading a workspace's files](commands-for-scripts-and-agents/files.md): #477: `files list`, `files read` and `files search` over the socket, paths, the stream, `~/` in `open` and `home` in `status`.

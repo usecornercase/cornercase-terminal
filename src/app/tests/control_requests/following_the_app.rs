@@ -7,7 +7,7 @@ use crate::ui::todo as panel;
 
 type Fed = Snapshot<AppState>;
 
-fn follow(app: &mut App) -> Fed {
+pub(super) fn follow(app: &mut App) -> Fed {
     app.clients.events.app.set_every(Duration::ZERO);
     let answer = value(app, None, Command::App(wire::AppWatch::default()));
     serde_json::from_value(answer).expect("an app snapshot")
@@ -31,7 +31,7 @@ fn lines(app: &mut App) -> Vec<Fed> {
         .collect()
 }
 
-fn next(app: &mut App, after: u64) -> Fed {
+pub(super) fn next(app: &mut App, after: u64) -> Fed {
     let got = lines(app);
     assert_eq!(got.len(), 1, "one snapshot after revision {after}");
     assert_eq!(got[0].revision, after + 1);
