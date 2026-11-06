@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::git::worktree::RemoveOptions;
 use crate::test_util::{TempDir, git, git_repo, link_folder};
-use crate::worktrees::discover::{Listing, checked_out, discover};
+use crate::worktrees::discover::{checked_out, discover};
 use crate::worktrees::remove::{self, ALL, Named, delete_branch, named, still_listed};
 use crate::worktrees::{Found, Kind};
 
@@ -303,12 +303,8 @@ fn one_worktree() -> (TempDir, TempDir, PathBuf) {
     (repo, dirs, at)
 }
 
-fn listing(open: &[PathBuf]) -> Listing {
-    Listing { repos: Vec::new(), open: open.to_vec(), dir: PathBuf::new(), keep: None }
-}
-
 fn why(asked: &Path, open: &[PathBuf], found: &[Found]) -> String {
-    match named(asked, &listing(open), found) {
+    match named(asked, open, found) {
         Named::Unknown { why, .. } => why,
         Named::Listed(path) => panic!("{} was taken as {}", asked.display(), path.display()),
     }
@@ -322,7 +318,7 @@ mod naming_a_folder {
         let (repo, dirs, at) = one_worktree();
         let found = [only(repo.path(), dirs.path())];
 
-        assert_eq!(named(&at, &listing(&[]), &found), Named::Listed(found[0].path.clone()));
+        assert_eq!(named(&at, &[], &found), Named::Listed(found[0].path.clone()));
     }
 
     #[test]
@@ -332,7 +328,7 @@ mod naming_a_folder {
         let found = [only(repo.path(), dirs.path())];
 
         assert_eq!(found[0].kind, Kind::Prunable);
-        assert_eq!(named(&at, &listing(&[]), &found), Named::Listed(found[0].path.clone()));
+        assert_eq!(named(&at, &[], &found), Named::Listed(found[0].path.clone()));
     }
 
     #[test]
@@ -386,8 +382,8 @@ mod naming_a_folder {
         link_folder(&at, &to_listed);
         link_folder(dirs.path(), &to_other);
 
-        assert_eq!(named(&to_listed, &listing(&[]), &found), Named::Listed(found[0].path.clone()));
-        let refused = named(&to_other, &listing(&[]), &found);
+        assert_eq!(named(&to_listed, &[], &found), Named::Listed(found[0].path.clone()));
+        let refused = named(&to_other, &[], &found);
         assert!(matches!(&refused, Named::Unknown { path, .. } if path == dirs.path()), "{refused:?}");
     }
 

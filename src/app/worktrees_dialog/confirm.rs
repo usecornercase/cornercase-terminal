@@ -219,15 +219,17 @@ pub(in crate::app) fn stake(row: &Row) -> Vec<String> {
     risks
 }
 
+fn files_changed(scan: &Scan) -> Option<String> {
+    (scan.changed > 0).then(|| format!("{} changed", plural(scan.changed, "file", "files")))
+}
+
+fn commits_not_pushed(scan: &Scan) -> Option<String> {
+    (scan.unpushed > 0).then(|| format!("{} not pushed", plural(scan.unpushed, "commit", "commits")))
+}
+
 fn scan_stake(scan: &Scan) -> Vec<String> {
-    let mut risks = Vec::new();
-    if scan.changed > 0 {
-        risks.push(format!("{} changed", plural(scan.changed, "file", "files")));
-    }
-    if scan.unpushed > 0 && scan.branch.is_none() {
-        risks.push(format!("{} not pushed, on no branch", plural(scan.unpushed, "commit", "commits")));
-    }
-    risks
+    let on_no_branch = commits_not_pushed(scan).filter(|_| scan.branch.is_none());
+    files_changed(scan).into_iter().chain(on_no_branch.map(|commits| format!("{commits}, on no branch"))).collect()
 }
 
 fn kind_risks(row: &Row) -> Vec<String> {
@@ -235,11 +237,9 @@ fn kind_risks(row: &Row) -> Vec<String> {
         Kind::Prunable => {
             let mut risks = vec!["its folder is gone or unreachable; cleans up git's entry".to_string()];
             match &row.scan {
-                Some(Ok(scan)) if scan.unpushed > 0 => {
-                    risks.push(format!("{} not pushed", plural(scan.unpushed, "commit", "commits")));
-                }
+                Some(Ok(scan)) => risks.extend(commits_not_pushed(scan)),
                 Some(Err(e)) => risks.push(format!("its branch could not be checked ({e})")),
-                _ => {}
+                None => {}
             }
             risks
         }
@@ -254,13 +254,7 @@ fn kind_risks(row: &Row) -> Vec<String> {
 }
 
 fn scan_risks(scan: &Scan) -> Vec<String> {
-    let mut risks = Vec::new();
-    if scan.changed > 0 {
-        risks.push(format!("{} changed", plural(scan.changed, "file", "files")));
-    }
-    if scan.unpushed > 0 {
-        risks.push(format!("{} not pushed", plural(scan.unpushed, "commit", "commits")));
-    }
+    let mut risks: Vec<String> = files_changed(scan).into_iter().chain(commits_not_pushed(scan)).collect();
     if scan.upstream_gone {
         risks.push("upstream gone".to_string());
     }

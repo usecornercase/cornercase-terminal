@@ -173,7 +173,7 @@ impl App {
             job,
             move || {
                 let found = listing.found();
-                let named = asked.iter().map(|path| named(path, &listing, &found)).collect();
+                let named = asked.iter().map(|path| named(path, &listing.open, &found)).collect();
                 Ok((found, named))
             },
             move |listed, _| Some(removal_step(key, RemovalStep::Listed(listed))),

@@ -3,8 +3,8 @@
 use super::super::worktrees::removals_wait_in_teardown;
 use super::*;
 use crate::app::tests::worktrees_dialog::{
-    Setup, activate, alive, closed, commit_in, confirmed, dialog, opened, path_of, ready, remove, settled_text, tick,
-    view, with, with_a_role,
+    Setup, activate, alive, closed, commit_in, confirmed, dialog, opened, path_of, ready, remove, settled_text,
+    shell_of_b_in_a, tick, view, with, with_a_role,
 };
 use crate::app::worktrees::RemoveOptions;
 use crate::flows::Flow;
@@ -115,10 +115,7 @@ mod an_open_workspace {
     #[test]
     fn a_shell_of_another_workspace_inside_it_waits_for_force() {
         let (mut s, a) = with_a(&["a", "b"]);
-        let b = path_of(&s, "b");
-        activate(&mut s, &b);
-        type_line(&mut s.app, &format!("cd {}", a.display()));
-        wait_until("the shell of b is in a", || s.app.term().and_then(Term::cwd).as_deref() == Some(a.as_path()));
+        shell_of_b_in_a(&mut s);
 
         let said = s.refuses(&json!({"paths": [a]}), &["force"]);
 

@@ -7,7 +7,7 @@ use crate::log;
 use crate::os::ffi;
 use crate::os::fs::{canonical, canonicalize};
 
-use super::discover::{Listing, Origin, plain, repo_of};
+use super::discover::{Origin, plain, repo_of};
 use super::{Found, Kind};
 
 pub(crate) const ALL: RemoveOptions = RemoveOptions { force: true, unlock: true };
@@ -18,14 +18,14 @@ pub(crate) enum Named {
     Unknown { path: PathBuf, why: String },
 }
 
-pub(crate) fn named(asked: &Path, listing: &Listing, found: &[Found]) -> Named {
+pub(crate) fn named(asked: &Path, open: &[PathBuf], found: &[Found]) -> Named {
     if !asked.is_absolute() {
         return Named::Unknown { path: asked.to_path_buf(), why: "it is not an absolute path".to_string() };
     }
     let place = real_place(asked);
     let listed = |row: &&Found| ffi::same(&row.path, &place) || ffi::same(&real_place(&row.path), &place);
     let Some(row) = found.iter().find(listed) else {
-        return Named::Unknown { why: unknown_why(&place, &listing.open), path: place };
+        return Named::Unknown { why: unknown_why(&place, open), path: place };
     };
     match recorded_at_a_link(row) {
         Some(link) => {

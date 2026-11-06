@@ -475,13 +475,17 @@ fn an_orphan_only_confirmation_still_checks_outside_processes() {
     assert!(waited && text.contains("1 process outside cornercase: sleep"), "{waited} {text}");
 }
 
+pub(super) fn shell_of_b_in_a(s: &mut Setup) {
+    let (a, b) = (path_of(s, "a"), path_of(s, "b"));
+    activate(s, &b);
+    type_line(&mut s.app, &format!("cd {}", a.display()));
+    wait_until("the shell of b is in a", || s.app.term().and_then(Term::cwd).as_deref() == Some(a.as_path()));
+}
+
 #[test]
 fn a_shell_of_another_workspace_inside_the_worktree_is_named() {
     let mut s = with(&["a", "b"]);
-    let (a, b) = (path_of(&s, "a"), path_of(&s, "b"));
-    activate(&mut s, &b);
-    type_line(&mut s.app, &format!("cd {}", a.display()));
-    wait_until("the shell of b is in a", || s.app.term().and_then(Term::cwd).as_deref() == Some(a.as_path()));
+    shell_of_b_in_a(&mut s);
 
     confirmed(&mut s, 2, &["a"]);
 
