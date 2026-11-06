@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 
 use serde_json::Value;
 
-use super::{ask_with, control, offered, used_remote};
+use super::{Envelope, ask_with, control, offered, used_remote};
 use crate::client::Link;
 use crate::error::{Error, Result};
 use crate::os::console::{AsFd, OwnedFd};
@@ -15,13 +15,15 @@ thread_local! {
 struct Shared {
     link: Link,
     features: Option<Vec<String>>,
-    view: Option<u64>,
+    envelope: Envelope,
     lost: Option<Error>,
     watch: Option<OwnedFd>,
 }
 
 pub(crate) fn share(link: Link, watch: Option<OwnedFd>) {
-    SHARED.with_borrow_mut(|shared| *shared = Some(Shared { link, features: None, view: None, lost: None, watch }));
+    SHARED.with_borrow_mut(|shared| {
+        *shared = Some(Shared { link, features: None, envelope: Envelope::default(), lost: None, watch });
+    });
     ACTIVE.set(true);
 }
 
@@ -42,7 +44,7 @@ pub(super) fn active() -> bool {
 pub(crate) fn line_done() -> Option<Error> {
     SHARED.with_borrow_mut(|shared| {
         let shared = shared.as_mut()?;
-        shared.view = None;
+        shared.envelope = Envelope::default();
         shared.lost.take()
     })
 }
@@ -50,7 +52,15 @@ pub(crate) fn line_done() -> Option<Error> {
 pub(super) fn set_view(view: u64) {
     SHARED.with_borrow_mut(|shared| {
         if let Some(shared) = shared {
-            shared.view = Some(view);
+            shared.envelope.view = Some(view);
+        }
+    });
+}
+
+pub(super) fn set_boot(boot: &str) {
+    SHARED.with_borrow_mut(|shared| {
+        if let Some(shared) = shared {
+            shared.envelope.boot = Some(boot.to_string());
         }
     });
 }
@@ -64,14 +74,14 @@ fn using<T>(then: impl FnOnce(&mut Shared) -> T) -> Result<T> {
 
 pub(super) fn ask(name: &'static str, command: control::Command) -> Result<Value> {
     using(|shared| {
-        let view = shared.view;
-        asked(shared, name, command, view)
+        let envelope = shared.envelope.clone();
+        asked(shared, name, command, envelope)
     })?
 }
 
-fn asked(shared: &mut Shared, name: &'static str, command: control::Command, view: Option<u64>) -> Result<Value> {
+fn asked(shared: &mut Shared, name: &'static str, command: control::Command, envelope: Envelope) -> Result<Value> {
     let mut out = shared.watch.as_ref().map(AsFd::as_fd);
-    let answer = ask_with(&mut shared.link, name, command, view, &mut out);
+    let answer = ask_with(&mut shared.link, name, command, envelope, &mut out);
     if out.is_none() {
         shared.watch = None;
     }
@@ -83,7 +93,7 @@ fn asked(shared: &mut Shared, name: &'static str, command: control::Command, vie
 
 fn remembered(error: &Error) -> Option<Error> {
     Some(match error {
-        Error::Control(_) => return None,
+        Error::Control(_) | Error::StaleBoot(_) => return None,
         Error::ServerGone => Error::ServerGone,
         Error::ServerLost => Error::ServerLost,
         Error::ReaderGone => Error::ReaderGone,
@@ -95,7 +105,8 @@ fn remembered(error: &Error) -> Option<Error> {
 pub(super) fn require(feature: &str, lacks: &str) -> Result<()> {
     using(|shared| {
         if shared.features.is_none() {
-            let asked = asked(shared, "contract", control::Command::Contract(control::Contract {}), None);
+            let contract = control::Command::Contract(control::Contract {});
+            let asked = asked(shared, "contract", contract, Envelope::default());
             shared.features = Some(listed(asked)?);
         }
         offered(shared.features.as_deref().unwrap_or_default(), feature, lacks, used_remote())

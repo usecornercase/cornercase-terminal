@@ -1,6 +1,7 @@
 use std::thread;
 
 use super::*;
+use crate::control::Response;
 use crate::os::socket::UnixStream;
 
 fn old_server(answer: ServerMessage) -> Result<Value> {
@@ -177,23 +178,106 @@ mod features {
     }
 }
 
-mod the_view {
+mod the_envelope {
     use rstest::rstest;
 
     use super::*;
 
+    fn full() -> Envelope {
+        Envelope { view: Some(7), boot: Some("1-2".into()) }
+    }
+
     #[rstest]
-    #[case::stays_out_of_the_contract(control::Command::Contract(control::Contract {}), None)]
-    #[case::goes_with_a_command_that_takes_one(control::Command::Status(control::Status {}), Some(7))]
+    #[case::stays_out_of_the_contract(control::Command::Contract(control::Contract {}), Envelope::default())]
+    #[case::goes_with_a_command_that_takes_one(control::Command::Status(control::Status {}), full())]
     #[case::goes_with_one_that_takes_none_for_the_server_to_refuse(
         control::Command::Stats(control::Stats::default()),
-        Some(7)
+        full()
     )]
     fn of_the_invocation_goes_with_every_request_but_the_contract(
         #[case] command: control::Command,
-        #[case] sent: Option<u64>,
+        #[case] sent: Envelope,
     ) {
-        assert_eq!(view_for(&command, Some(7)), sent);
+        assert_eq!(full().for_command(&command), sent);
+    }
+}
+
+mod a_request_without_a_boot {
+    use super::*;
+
+    fn keys_sent(envelope: Envelope) -> Vec<String> {
+        let mut framed = Vec::new();
+        send_request(&mut framed, control::Command::Status(control::Status {}), envelope).expect("written");
+        let Some(ClientMessage::Request(text)) =
+            protocol::recv::<ClientMessage>(&mut framed.as_slice()).expect("a frame")
+        else {
+            panic!("not a request")
+        };
+        let sent: Value = serde_json::from_str(&text).expect("json");
+        sent.as_object().expect("an object").keys().cloned().collect()
+    }
+
+    #[test]
+    fn has_only_the_keys_a_command_always_sent() {
+        assert_eq!(keys_sent(Envelope::default()), ["args", "caller", "command", "server"]);
+    }
+
+    #[test]
+    fn differs_from_one_with_a_boot_only_by_that_key() {
+        let boot = Envelope { boot: Some("1-2".into()), ..Envelope::default() };
+
+        assert_eq!(keys_sent(boot), ["args", "boot", "caller", "command", "server"]);
+    }
+}
+
+mod an_answer {
+    use rstest::rstest;
+    use serde_json::json;
+
+    use super::*;
+    use crate::control::contract::{Code, Refusal, render};
+    use crate::test_util::fixture;
+
+    const MISSING: &str = "there is no pane 9; `cornercase status` lists them";
+
+    #[rstest]
+    #[case::legacy(fixture!("control/responses/legacy-ok.json"))]
+    #[case::structured(fixture!("control/responses/structured-ok.json"))]
+    fn that_went_well_reads_the_same_in_both_modes(#[case] text: &str) {
+        assert_eq!(answered(text).expect("an answer"), json!({"pane": 4, "tab": 3}));
+    }
+
+    #[rstest]
+    #[case::legacy(fixture!("control/responses/legacy-error.json"))]
+    #[case::structured(fixture!("control/responses/structured-error.json"))]
+    fn that_refuses_gives_its_message_in_both_modes(#[case] text: &str) {
+        let error = answered(text).expect_err("refused");
+
+        assert!(matches!(&error, Error::Control(message) if message == MISSING), "{error:?}");
+    }
+
+    #[test]
+    fn that_says_the_boot_is_stale_is_told_apart_and_keeps_its_message() {
+        let text = render(Err(Refusal::new(Code::StaleBoot, "it restarted")), true).expect("an answer");
+
+        let error = answered(&text).expect_err("refused");
+
+        assert!(matches!(error, Error::StaleBoot(_)), "{error:?}");
+        assert_eq!(error.to_string(), "it restarted");
+    }
+
+    #[test]
+    fn with_a_code_this_release_does_not_know_still_gives_its_message() {
+        let error = answered(r#"{"error":{"code":"from-later","message":"why"}}"#).expect_err("refused");
+
+        assert!(matches!(&error, Error::Control(message) if message == "why"), "{error:?}");
+    }
+
+    #[test]
+    fn that_cannot_be_read_says_so() {
+        let error = answered(r#"{"error":{"code":"failed"}}"#).expect_err("unreadable");
+
+        assert!(error.to_string().starts_with("cannot read the server's answer"), "{error}");
     }
 }
 
@@ -582,18 +666,47 @@ mod a_shared_link {
     }
 
     #[test]
-    fn a_lines_view_goes_with_that_line_only() {
-        let server = sharing(&["views"], None);
+    fn a_lines_view_and_boot_go_together() {
+        let server = sharing(&["views", "boot"], None);
 
         use_view(7).expect("views");
+        use_boot("1-2").expect("offered");
+        ask("status", status()).expect("an answer");
+
+        let seen = finish(server);
+        let last = seen.last().expect("the status");
+        assert!(last.contains("\"view\":7") && last.contains("\"boot\":\"1-2\""), "{seen:?}");
+        assert_eq!(seen.iter().filter(|text| text.contains("\"contract\"")).count(), 1, "{seen:?}");
+    }
+
+    #[test]
+    fn a_server_that_would_ignore_the_boot_is_refused_before_anything_but_the_contract_is_sent() {
+        let server = sharing(&["views"], None);
+
+        let error = use_boot("1-2").expect_err("lacking");
+
+        assert!(error.to_string().contains("would ignore --boot"), "{error}");
+        assert!(line_done().is_none());
+        let seen = finish(server);
+        assert_eq!(seen.len(), 1, "{seen:?}");
+        assert!(seen[0].contains("\"contract\""), "{seen:?}");
+    }
+
+    #[rstest::rstest]
+    #[case::view(|| use_view(7), "\"view\":7")]
+    #[case::boot(|| use_boot("1-2"), "\"boot\":\"1-2\"")]
+    fn what_a_line_asks_for_goes_with_that_line_only(#[case] use_it: fn() -> Result<()>, #[case] sent: &str) {
+        let server = sharing(&["views", "boot"], None);
+
+        use_it().expect("offered");
         ask("status", status()).expect("an answer");
         assert!(line_done().is_none());
         ask("status", status()).expect("an answer");
 
         let seen = finish(server);
-        assert!(seen[0].contains("\"contract\"") && !seen[0].contains("\"view\":7"), "{seen:?}");
-        assert!(seen[1].contains("\"view\":7"), "{seen:?}");
-        assert!(!seen[2].contains("\"view\":7"), "{seen:?}");
+        assert!(seen[0].contains("\"contract\"") && !seen[0].contains(sent), "{seen:?}");
+        assert!(seen[1].contains(sent), "{seen:?}");
+        assert!(!seen[2].contains(sent), "{seen:?}");
     }
 
     #[test]
@@ -622,20 +735,22 @@ mod a_shared_link {
         unshare();
     }
 
-    #[test]
-    fn a_command_error_does_not_lose_the_link() {
+    #[rstest::rstest]
+    #[case::refused(r#"{"error":"no such pane"}"#, "no such pane")]
+    #[case::refused_with_a_code(r#"{"error":{"code":"not-found","message":"no such pane"}}"#, "no such pane")]
+    #[case::from_an_earlier_boot(r#"{"error":{"code":"stale-boot","message":"it restarted"}}"#, "it restarted")]
+    fn a_command_error_does_not_lose_the_link(#[case] refusal: &'static str, #[case] message: &str) {
         let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
         share(Link::socket(ours).expect("a link"), None);
         let server = thread::spawn(move || {
             protocol::recv::<ClientMessage>(&mut theirs).expect("a request");
-            let refusal = serde_json::to_string(&Response::Error("no such pane".into())).expect("json");
-            protocol::send(&mut theirs, &ServerMessage::Response(refusal)).expect("an answer");
+            protocol::send(&mut theirs, &ServerMessage::Response(refusal.into())).expect("an answer");
         });
 
         let error = ask("status", status()).expect_err("refused");
 
         server.join().expect("the fake server");
-        assert!(matches!(error, Error::Control(_)), "{error:?}");
+        assert_eq!(error.to_string(), message);
         assert!(line_done().is_none());
         unshare();
     }

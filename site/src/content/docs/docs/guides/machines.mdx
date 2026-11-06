@@ -107,7 +107,7 @@ Hover over a machine's workspace (in compact mode its buttons always show) and u
 - **While the machine works on one of them**, the workspace's **rename workspace** is greyed out and its `×` says `notes on vps is still waiting for its last action` with `nothing was sent`. A row that says `removing…` takes no clicks.
 - **If the machine restarted** after you opened a dialog, the dialog closes, or, if you confirm first, nothing is changed there and a toast says so, since its workspaces may have new ids by then.
 
-A rename or a close gives up after 15 seconds, the check after a minute and a removal after 10 minutes, with `it did not answer in time`; a removal that took longer goes on on the machine. Scripts can do the same with [`--remote`](../scripts-and-agents/#machines).
+A rename or a close gives up after 15 seconds, the check after a minute and a removal after 10 minutes, with `it did not answer in time`; a removal that took longer goes on on the machine. Scripts can do the same with [`--remote`](../scripts-and-agents/#machines), and with [`--boot`](../scripts-and-agents/#arrange) the machine refuses when it restarted since they read the id, as it does for the window.
 
 ### Clicking a machine's workspace
 
