@@ -130,6 +130,7 @@ struct Raw {
     has_conflicts: Option<bool>,
     detailed_merge_status: Option<String>,
     target_branch: Option<String>,
+    sha: Option<String>,
     head_pipeline: Option<Pipeline>,
 }
 
@@ -208,6 +209,7 @@ impl Raw {
             title: self.title.unwrap_or_default(),
             url: self.web_url.unwrap_or_default(),
             base: self.target_branch.unwrap_or_default(),
+            head: self.sha,
             checks,
             provider: Provider::Gitlab,
             stack: None,

@@ -99,6 +99,7 @@ pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 pub(crate) use worktrees::{
     BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
+    WorktreesRemove, WorktreesRemoved,
 };
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
@@ -266,6 +267,7 @@ pub(crate) enum Command {
     Held(HeldRequest),
     RunSetup(RunSetup),
     ConfigPair(ConfigPair),
+    WorktreesRemove(WorktreesRemove),
 }
 
 impl Command {
@@ -451,6 +453,7 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
+            Self::WorktreesRemove(_) => 123,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
@@ -591,6 +594,7 @@ impl Command {
         "held",
         "run-setup",
         "config-pair",
+        "worktrees-remove",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

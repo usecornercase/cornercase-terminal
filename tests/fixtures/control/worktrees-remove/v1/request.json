@@ -1,0 +1,10 @@
+{
+  "command": "worktrees-remove",
+  "args": {
+    "paths": ["/wt/shop/feat-old"],
+    "check": true,
+    "force": true,
+    "unlock": true,
+    "delete_branch": true
+  }
+}

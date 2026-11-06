@@ -131,15 +131,22 @@ fn refused(app: &mut App, command: &str, args: &Value) -> Refused {
     }
 }
 
-#[cfg(unix)]
 fn call_later(
     app: &mut App,
     rx: &Receiver<AppEvent>,
     command: &str,
     args: &Value,
 ) -> std::result::Result<Value, Refused> {
+    request_json(app, command, args);
+    reply_later(app, rx)
+}
+
+fn request_json(app: &mut App, command: &str, args: &Value) {
     let text = json!({"contract": 1, "command": command, "args": args}).to_string();
     app.request(CLIENT, &text, Some(AREA), Instant::now());
+}
+
+fn reply_later(app: &mut App, rx: &Receiver<AppEvent>) -> std::result::Result<Value, Refused> {
     let mut reply = None;
     wait_until("the request is answered", || {
         drain(app, rx);
@@ -655,3 +662,4 @@ mod views;
 mod watching;
 mod worktree_list;
 mod worktrees;
+mod worktrees_remove;

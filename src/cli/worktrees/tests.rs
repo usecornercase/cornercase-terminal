@@ -7,7 +7,7 @@ use crate::control::worktrees::FailedFolder;
 use crate::text::MB;
 use crate::time::Stamp;
 
-fn parsed(args: &[&str]) -> std::result::Result<WorktreesAction, clap::Error> {
+pub(super) fn parsed(args: &[&str]) -> std::result::Result<WorktreesAction, clap::Error> {
     let mut all = vec!["cornercase", "worktrees"];
     all.extend(args);
     match Cli::try_parse_from(all)?.command {

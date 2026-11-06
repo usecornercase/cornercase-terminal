@@ -42,6 +42,7 @@ fn scan() -> Scan {
         merged: false,
         has_upstream: true,
         branch: Some("feat/x".into()),
+        head: None,
         lock: Some(Lock { reason: "ci".into(), holder: Some(Holder::Gone(7)), role: None }),
     }
 }
@@ -55,6 +56,7 @@ fn live() -> Live {
         role_of_run: false,
         run_roles: 0,
         pull_merged: false,
+        pull_head: None,
     }
 }
 

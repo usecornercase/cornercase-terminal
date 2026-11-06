@@ -190,6 +190,7 @@ fn newest_commands() -> Vec<Command> {
         Command::Held(HeldRequest { pane: None, tab: None, action: HeldAction::SendNow }),
         Command::RunSetup(RunSetup::default()),
         Command::ConfigPair(ConfigPair { key: "browsers".into() }),
+        Command::WorktreesRemove(WorktreesRemove::default()),
     ]
 }
 

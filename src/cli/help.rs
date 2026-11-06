@@ -733,7 +733,9 @@ pub(in crate::cli) use requests::REQUESTS_HELP;
 pub(in crate::cli) use setup::SETUP_HELP;
 pub(in crate::cli) use start::{NEW_WORKSPACE_HELP, START_HELP};
 pub(in crate::cli) use status::STATUS_HELP;
-pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
+pub(in crate::cli) use worktrees::{
+    WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_REMOVE_HELP, WORKTREES_SIZE_HELP,
+};
 
 #[cfg(test)]
 mod tests;

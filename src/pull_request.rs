@@ -13,7 +13,7 @@ pub(crate) mod glab;
 pub(crate) mod merged;
 pub(crate) mod stack;
 
-const FIELDS: &str = "number,title,url,state,isDraft,mergeable,baseRefName,statusCheckRollup";
+const FIELDS: &str = "number,title,url,state,isDraft,mergeable,baseRefName,headRefOid,statusCheckRollup";
 
 const NOT_FOUND: &str = "no pull requests found";
 
@@ -177,6 +177,7 @@ pub(crate) struct PullRequest {
     pub(crate) state: State,
     pub(crate) conflicting: Option<bool>,
     pub(crate) base: String,
+    pub(crate) head: Option<String>,
     pub(crate) checks: Vec<Check>,
     pub(crate) provider: Provider,
     pub(crate) stack: Option<Stack>,
@@ -315,6 +316,8 @@ struct Raw {
     #[serde(default)]
     base_ref_name: Option<String>,
     #[serde(default)]
+    head_ref_oid: Option<String>,
+    #[serde(default)]
     status_check_rollup: Vec<RawCheck>,
 }
 
@@ -432,6 +435,7 @@ impl From<Raw> for PullRequest {
             state,
             conflicting,
             base,
+            head: raw.head_ref_oid,
             checks,
             provider: Provider::Github,
             stack: None,

@@ -142,6 +142,48 @@ mod pid_in {
     }
 }
 
+mod through_a_link {
+    use super::*;
+    use crate::test_util::link_folder;
+
+    fn moved_away() -> (TempDir, TempDir, PathBuf, PathBuf) {
+        let repo = git_repo(&[("README", "hi")]);
+        let out = TempDir::new();
+        let path = out.path().join("wt");
+        git(repo.path(), &["worktree", "add", "--quiet", "-b", "feat/x", &path.display().to_string()]);
+        let kept = out.path().join("kept");
+        std::fs::rename(&path, &kept).expect("move");
+        link_folder(&kept, &path);
+        (repo, out, path, kept)
+    }
+
+    #[test]
+    fn git_is_never_asked_to_remove_a_folder_that_is_a_link() {
+        let (repo, _out, path, kept) = moved_away();
+
+        let refused = remove(repo.path(), &path, true, true).expect_err("refused");
+
+        assert!(refused.to_string().contains("is a symbolic link"), "{refused}");
+        assert!(kept.join("README").exists(), "git deleted through the link");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_put_in_its_place_during_the_teardown_stops_the_removal() {
+        let repo = git_repo(&[("README", "hi")]);
+        let out = TempDir::new();
+        let path = out.path().join("wt");
+        git(repo.path(), &["worktree", "add", "--quiet", "-b", "feat/x", &path.display().to_string()]);
+        let script = "mv \"$CORNERCASE_WORKTREE\" \"$CORNERCASE_WORKTREE.kept\" && ln -s \"$CORNERCASE_WORKTREE.kept\" \"$CORNERCASE_WORKTREE\"";
+
+        let refused = remove_with_teardown(repo.path(), &path, "feat/x", Some(script), RemoveOptions::default())
+            .expect_err("refused");
+
+        assert!(refused.to_string().contains("moved during its teardown"), "{refused}");
+        assert!(out.path().join("wt.kept/README").exists(), "git deleted through the link");
+    }
+}
+
 mod remove {
     use super::*;
     use crate::test_util::{exited_pid, this_pid};

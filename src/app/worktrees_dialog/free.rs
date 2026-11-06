@@ -28,10 +28,28 @@ struct FreeTarget {
 
 #[derive(Default)]
 pub(in crate::app) struct Frees {
-    pending: HashMap<u64, String>,
+    pending: HashMap<u64, (String, PathBuf)>,
+    requests: HashMap<u64, PathBuf>,
     bytes: u64,
     worktrees: usize,
     problems: Vec<String>,
+}
+
+impl Frees {
+    pub(in crate::app) fn request_frees(&mut self, key: u64, path: PathBuf) {
+        self.requests.insert(key, path);
+    }
+
+    pub(in crate::app) fn request_ended(&mut self, key: u64) {
+        self.requests.remove(&key);
+    }
+}
+
+#[cfg(test)]
+impl Frees {
+    pub(in crate::app) fn freeing(&mut self, path: PathBuf) {
+        self.pending.insert(0, ("a test".to_string(), path));
+    }
 }
 
 impl App {
@@ -115,7 +133,7 @@ impl App {
     fn spawn_free(&mut self, FreeTarget { path, repo, chosen, name }: FreeTarget) {
         let key = self.take_id();
         let names = self.builds_of(&repo);
-        self.git.frees.pending.insert(key, name);
+        self.git.frees.pending.insert(key, (name, path.clone()));
         let job = Job::new(Level::Info, "worktrees", "free builds").with("path", path.display());
         let at = path.clone();
         self.spawn_job(
@@ -130,8 +148,14 @@ impl App {
         );
     }
 
+    pub(in crate::app) fn freeing_path(&self, path: &Path) -> bool {
+        let frees = &self.git.frees;
+        frees.pending.values().any(|(_, freeing)| freeing == path)
+            || frees.requests.values().any(|freeing| freeing == path)
+    }
+
     pub(in crate::app) fn builds_freed(&mut self, key: u64, path: &Path, result: Result<Freed>) {
-        let Some(name) = self.git.frees.pending.remove(&key) else { return };
+        let Some((name, _)) = self.git.frees.pending.remove(&key) else { return };
         let after = match &result {
             Ok(freed) => freed.after.clone().map(Ok),
             Err(_) => None,
@@ -173,7 +197,8 @@ impl App {
         if !self.git.frees.pending.is_empty() {
             return;
         }
-        let Frees { bytes, worktrees, problems, .. } = std::mem::take(&mut self.git.frees);
+        let Frees { bytes, worktrees, problems, requests, .. } = std::mem::take(&mut self.git.frees);
+        self.git.frees.requests = requests;
         let mut text = if bytes == 0 && worktrees == 0 {
             "nothing was freed".to_string()
         } else {

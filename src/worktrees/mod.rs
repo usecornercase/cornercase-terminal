@@ -51,6 +51,7 @@ pub(crate) struct Scan {
     pub(crate) merged: bool,
     pub(crate) has_upstream: bool,
     pub(crate) branch: Option<String>,
+    pub(crate) head: Option<String>,
     pub(crate) lock: Option<git::worktree::Lock>,
 }
 
@@ -63,6 +64,7 @@ pub(crate) struct Live {
     pub(crate) role_of_run: bool,
     pub(crate) run_roles: usize,
     pub(crate) pull_merged: bool,
+    pub(crate) pull_head: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,6 +100,18 @@ impl Row {
 
     fn pull_merged(&self) -> bool {
         self.live.as_ref().is_some_and(|l| l.pull_merged)
+    }
+
+    pub(crate) fn head(&self) -> Option<&str> {
+        match &self.scan {
+            Some(Ok(scan)) => scan.head.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn merged_as_it_is(&self) -> bool {
+        let merged_at = self.live.as_ref().and_then(|l| l.pull_head.as_deref());
+        merged_at.is_some() && merged_at == self.head()
     }
 
     pub(crate) fn branch(&self) -> Option<&str> {

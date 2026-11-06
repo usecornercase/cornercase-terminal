@@ -14,9 +14,8 @@ pub(crate) fn scan(path: &Path, base: Option<&str>) -> Result<Scan> {
     if gitdir_of(path).is_none() {
         return Err(Error::Git(format!("{} is no longer a worktree", path.display())));
     }
-    let committed = check(git(path, ["log", "-1", "--format=%ct", "HEAD"])?)?;
-    let committed = String::from_utf8_lossy(&committed).trim().parse::<u64>().ok();
-    let mut last_changed = committed.map(|secs| SystemTime::UNIX_EPOCH + Duration::from_secs(secs));
+    let (committed, head) = last_commit(path)?;
+    let mut last_changed = committed;
     let status = check(git(
         path,
         [
@@ -45,8 +44,24 @@ pub(crate) fn scan(path: &Path, base: Option<&str>) -> Result<Scan> {
         merged: base.is_some_and(|base| is_ancestor(path, base)),
         has_upstream,
         branch,
+        head,
         lock: lock(path)?,
     })
+}
+
+fn last_commit(path: &Path) -> Result<(Option<SystemTime>, Option<String>)> {
+    let out = check(git(path, ["rev-list", "-1", "--timestamp", "HEAD"])?)?;
+    let out = String::from_utf8_lossy(&out);
+    let (secs, head) = out.trim().split_once(' ').unzip();
+    let at =
+        secs.and_then(|secs| secs.parse::<u64>().ok()).map(|secs| SystemTime::UNIX_EPOCH + Duration::from_secs(secs));
+    Ok((at, head.map(str::to_string)))
+}
+
+pub(crate) fn branch_tip(repo: &Path, branch: &str) -> Option<String> {
+    let spec = format!("refs/heads/{branch}^{{commit}}");
+    let out = git(repo, ["rev-parse", "--verify", "--quiet", spec.as_str()]).ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 pub(crate) fn branch_commits(repo: &Path, branch: &str, base: Option<&str>) -> Result<Scan> {
@@ -56,7 +71,8 @@ pub(crate) fn branch_commits(repo: &Path, branch: &str, base: Option<&str>) -> R
     let reference = format!("refs/heads/{branch}");
     let base = base.filter(|base| resolves(repo, base));
     let (has_upstream, upstream_gone) = upstream(repo, Some(branch))?;
-    let unpushed = if resolves(repo, &reference) { unpushed(repo, &reference, base)? } else { 0 };
+    let head = branch_tip(repo, branch);
+    let unpushed = if head.is_some() { unpushed(repo, &reference, base)? } else { 0 };
     Ok(Scan {
         last_changed: None,
         changed: 0,
@@ -65,6 +81,7 @@ pub(crate) fn branch_commits(repo: &Path, branch: &str, base: Option<&str>) -> R
         merged: false,
         has_upstream,
         branch: Some(branch.to_string()),
+        head,
         lock: None,
     })
 }

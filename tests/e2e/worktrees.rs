@@ -7,6 +7,7 @@ use super::*;
 struct Opened {
     session: Arc<Session>,
     _app: Harness,
+    project: String,
     repo: PathBuf,
     checkout: PathBuf,
 }
@@ -30,7 +31,7 @@ fn open_worktree(name: &str, branch: &str) -> Opened {
     let checkout = worktrees.join(repo.file_name().expect("repo name")).join(slug);
     std::fs::create_dir_all(checkout.join("node_modules")).expect("make node_modules");
     std::fs::write(checkout.join("node_modules/x.js"), vec![7_u8; 300_000]).expect("write a file");
-    Opened { session, _app: app, repo, checkout }
+    Opened { session, _app: app, project, repo, checkout }
 }
 
 #[test]
@@ -73,6 +74,30 @@ fn every_worktree_is_listed_with_its_reasons_and_size() {
     let _ = std::fs::remove_dir_all(&repo);
 }
 
+fn has_branch(repo: &std::path::Path, branch: &str) -> bool {
+    let reference = format!("refs/heads/{branch}");
+    let mut found = std::process::Command::new("git");
+    found.arg("-C").arg(repo).args(["show-ref", "--quiet", &reference]);
+    found.status().expect("run git").success()
+}
+
+fn row_of(session: &Session, branch: &str) -> Option<Value> {
+    let listed: Value =
+        serde_json::from_str(&session.says(&["worktrees", "list", "--no-sizes", "--json"])).expect("the list");
+    listed["worktrees"].as_array()?.iter().find(|row| row["branch"] == branch).cloned()
+}
+
+fn closed_with_a_worktree(name: &str, branch: &str) -> (Opened, String) {
+    let opened = open_worktree(name, branch);
+    let session = &opened.session;
+    session.says(&["close", "--project", &opened.project]);
+    wait_until("the project closes", || row_of(session, branch).is_some_and(|row| row["project"].is_null()));
+    let row = row_of(session, branch).expect("the row");
+    assert_eq!((&row["kind"], &row["workspace"]), (&Value::from("linked"), &Value::Null), "{row}");
+    let folder = row["path"].as_str().expect("its folder").to_string();
+    (opened, folder)
+}
+
 fn workspaces(session: &Session) -> Vec<Value> {
     let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("the status");
     let projects = status["projects"].as_array().expect("projects");
@@ -98,6 +123,86 @@ fn failed_setup(name: &str) -> (Opened, Value) {
     let failed = workspace_on(&opened.session, "feat/x");
     assert_eq!(failed["setup"], "failed", "{failed}");
     (opened, failed)
+}
+
+#[test]
+fn closing_cannot_reach_a_closed_projects_worktree_and_a_check_stops_nothing() {
+    let (Opened { session, repo, checkout, .. }, folder) = closed_with_a_worktree("worktree-reach", "feat/old");
+    let closing = session.cli(&["close", "--worktree", "feat/old", "--remove-worktree"]);
+    assert_eq!(closing.status.code(), Some(2), "{closing:?}");
+
+    let look = session.says(&["worktrees", "remove", "--path", &folder, "--check", "--delete-branch"]);
+
+    assert!(look.contains("› feat/old") && look.contains("nothing uncommitted or unpushed"), "{look}");
+    assert!(checkout.join("tracked.txt").is_file() && has_branch(&repo, "feat/old"), "the check removed something");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn a_closed_projects_worktree_and_its_branch_are_removed_from_the_command_line() {
+    let (Opened { session, repo, checkout, .. }, folder) = closed_with_a_worktree("worktree-remove", "feat/old");
+
+    let removed = session.says(&["worktrees", "remove", "--path", &folder, "--delete-branch"]);
+
+    assert!(removed.starts_with("removed ") && removed.ends_with("and the branch feat/old"), "{removed}");
+    assert!(!checkout.exists() && !has_branch(&repo, "feat/old"), "the folder or the branch is still there");
+    assert!(row_of(&session, "feat/old").is_none(), "it is still listed");
+    let again = session.cli(&["worktrees", "remove", "--path", &folder]);
+    assert_eq!(again.status.code(), Some(3), "{again:?}");
+    let said = String::from_utf8_lossy(&again.stdout);
+    assert!(said.starts_with("did not remove ") && said.contains("nothing is there"), "{said}");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+fn with_a_draft(name: &str, branch: &str) -> (Opened, String, String) {
+    let opened = open_worktree(name, branch);
+    std::fs::write(opened.checkout.join("notes.txt"), "draft").expect("write a file");
+    let (folder, main) = (opened.checkout.display().to_string(), opened.repo.display().to_string());
+    (opened, folder, main)
+}
+
+#[test]
+fn what_cannot_be_removed_is_named_line_by_line_and_exits_3() {
+    let (Opened { session, repo, checkout, .. }, folder, main) = with_a_draft("worktree-refuse", "e2e/refuse");
+
+    let refused = session.cli(&["worktrees", "remove", "--path", &folder, &main]);
+
+    assert_eq!(refused.status.code(), Some(3), "{refused:?}");
+    let said = String::from_utf8_lossy(&refused.stdout);
+    let lines: Vec<&str> = said.lines().collect();
+    assert_eq!(lines.len(), 2, "{said}");
+    assert!(lines[0].contains("1 file changed") && lines[0].contains("--force"), "{said}");
+    assert!(lines[1].contains("main checkout"), "{said}");
+    assert!(checkout.join("notes.txt").is_file() && repo.join("tracked.txt").is_file());
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn a_check_takes_a_folder_relative_to_the_command_and_says_what_removing_it_takes() {
+    let (Opened { session, repo, checkout, .. }, ..) = with_a_draft("worktree-relative", "e2e/relative");
+    let mut relative = session.command();
+    relative.current_dir(checkout.parent().expect("a parent"));
+    relative.args(["worktrees", "remove", "--path", "e2e-relative", "--check"]);
+
+    let look = relative.output().expect("run cornercase");
+
+    let said = String::from_utf8_lossy(&look.stdout);
+    assert!(said.contains("› e2e/relative") && said.contains("1 file changed"), "{look:?}");
+    assert!(said.contains("removing it takes --force"), "{said}");
+    assert!(checkout.join("notes.txt").is_file());
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn force_removes_an_open_workspace_and_keeps_its_branch() {
+    let (Opened { session, repo, checkout, .. }, folder, _) = with_a_draft("worktree-force", "e2e/force");
+
+    let forced = session.says(&["worktrees", "remove", "--path", &folder, "--force", "--json"]);
+
+    let forced: Value = serde_json::from_str(&forced).expect("the answer");
+    assert_eq!(forced["folders"][0]["outcome"], "removed", "{forced}");
+    assert!(!checkout.exists() && has_branch(&repo, "e2e/force"), "the folder is still there or the branch went");
+    let _ = std::fs::remove_dir_all(&repo);
 }
 
 #[test]

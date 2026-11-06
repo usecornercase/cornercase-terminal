@@ -8,6 +8,23 @@ use crate::os::fs::{canonical, canonicalize};
 
 use super::{Found, Kind};
 
+#[derive(Debug, Clone)]
+pub(crate) struct Listing {
+    pub(crate) repos: Vec<PathBuf>,
+    pub(crate) open: Vec<PathBuf>,
+    pub(crate) dir: PathBuf,
+    pub(crate) keep: Option<PathBuf>,
+}
+
+impl Listing {
+    pub(crate) fn found(&self) -> Vec<Found> {
+        let open: HashSet<PathBuf> = self.open.iter().map(canonical).collect();
+        let keep = self.keep.as_ref().map(|path| main_checkout(&canonical(path)));
+        let found = discover(&self.repos, &self.dir).into_iter();
+        found.filter(|f| !open.contains(&f.path) && keep.as_ref().is_none_or(|repo| &f.repo == repo)).collect()
+    }
+}
+
 pub(crate) fn discover(repos: &[PathBuf], worktrees_dir: &Path) -> Vec<Found> {
     let mut found = Vec::new();
     let mut seen_paths = HashSet::new();
@@ -124,12 +141,18 @@ pub(crate) fn branch_at(folder: &Path) -> Option<String> {
 pub(crate) fn checked_out(found: &Found) -> Option<String> {
     match found.kind {
         Kind::Linked => branch_at(&found.path),
-        Kind::Prunable => {
-            let admin = found.admin.as_deref().filter(|name| plain(name))?;
-            branch_in(&found.repo.join(".git").join("worktrees").join(admin))
-        }
+        Kind::Prunable => branch_in(&admin_dir(found)?),
         Kind::Orphan | Kind::Unknown => None,
     }
+}
+
+pub(super) fn admin_dir(found: &Found) -> Option<PathBuf> {
+    let admin = found.admin.as_deref().filter(|name| plain(name))?;
+    Some(common_dir_of(&found.repo).join("worktrees").join(admin))
+}
+
+pub(super) fn common_dir_of(repo: &Path) -> PathBuf {
+    gitdir_of(repo).unwrap_or_else(|| repo.join(".git"))
 }
 
 fn branch_in(gitdir: &Path) -> Option<String> {
@@ -167,8 +190,8 @@ fn list(repo: &Path, found: &mut Vec<Found>, seen_paths: &mut HashSet<PathBuf>) 
     }
 }
 
-fn admins(repo: &Path) -> Vec<(String, PathBuf)> {
-    let Ok(entries) = std::fs::read_dir(repo.join(".git").join("worktrees")) else { return Vec::new() };
+pub(super) fn admins(repo: &Path) -> Vec<(String, PathBuf)> {
+    let Ok(entries) = std::fs::read_dir(common_dir_of(repo).join("worktrees")) else { return Vec::new() };
     entries
         .flatten()
         .filter_map(|entry| {
