@@ -22,7 +22,7 @@ pub(super) fn http_get(port: u16, path: &str) -> String {
     answer
 }
 
-pub(super) fn pairing_token(screen: &str) -> String {
+fn pairing_token(screen: &str) -> String {
     let lines: Vec<&str> = screen.lines().collect();
     let at = lines.iter().position(|l| l.contains("pair?t=")).expect("the pairing address");
     let hex = |s: &str| {
@@ -31,6 +31,20 @@ pub(super) fn pairing_token(screen: &str) -> String {
     let first = hex(lines[at].split("pair?t=").nth(1).unwrap_or_default());
     let rest = lines.get(at + 1).and_then(|l| l.split('│').nth(1)).map(hex).unwrap_or_default();
     format!("{first}{rest}").chars().take(32).collect()
+}
+
+pub(super) fn window_on(session: &Arc<Session>, path: &str) -> Harness {
+    let mut ui = Harness::open_with(Arc::clone(session), ROWS, COLS, &[("PATH", path)]);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+    ui
+}
+
+pub(super) fn open_the_pairing_dialog(ui: &mut Harness) -> String {
+    ui.pick_in_more("remote…");
+    ui.wait_for("the remote menu opens", |s| s.contains("open in your phone's browser"));
+    ui.click(ui.position_of("open in your phone's browser"));
+    ui.wait_for("the pairing address shows", |s| s.contains("pair?t="));
+    pairing_token(&ui.text())
 }
 
 fn connect_socket(port: u16, cookie: &str) -> tungstenite::WebSocket<std::net::TcpStream> {
@@ -47,14 +61,9 @@ fn connect_socket(port: u16, cookie: &str) -> tungstenite::WebSocket<std::net::T
 fn a_paired_browser_types_into_the_shell_over_a_websocket() {
     let session = Session::new();
     let (port, path) = fake_tailscale(&session, TAILSCALE_READY);
-    let mut ui = Harness::open_with(Arc::clone(&session), ROWS, COLS, &[("PATH", &path)]);
-    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+    let mut ui = window_on(&session, &path);
 
-    ui.pick_in_more("remote…");
-    ui.wait_for("the remote menu opens", |s| s.contains("open in your phone's browser"));
-    ui.click(ui.position_of("open in your phone's browser"));
-    ui.wait_for("the pairing address shows", |s| s.contains("pair?t="));
-    let token = pairing_token(&ui.text());
+    let token = open_the_pairing_dialog(&mut ui);
     let paired = http_get(port, &format!("/pair?t={token}"));
     let cookie = paired
         .lines()

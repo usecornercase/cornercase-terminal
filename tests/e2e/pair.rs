@@ -2,7 +2,7 @@ use std::io::BufRead as _;
 
 use serde_json::{Value, json};
 
-use super::browser::{TAILSCALE_READY, fake_tailscale, http_get, pairing_token};
+use super::browser::{TAILSCALE_READY, fake_tailscale, http_get, open_the_pairing_dialog, window_on};
 use super::commands::Followed;
 use super::remote::{gone, remotely, ssh_pid};
 use super::*;
@@ -57,6 +57,13 @@ fn spawned(command: &mut std::process::Command) -> std::process::Child {
     command.stdin(null()).stdout(piped()).stderr(piped()).spawn().expect("run cornercase")
 }
 
+fn a_phone_takes_the_code(port: u16, path: &str, child: std::process::Child, followed: &mut Followed) {
+    assert!(http_get(port, path).starts_with(TAKEN));
+    assert_eq!(followed.next("the end"), json!({"paired": true}));
+    let ended = finish_within(child, TIMEOUT);
+    assert_eq!(ended.status.code(), Some(0), "{ended:?}");
+}
+
 fn the_code_goes(port: u16, path: &str) {
     wait_until("the code stops working", || http_get(port, path).starts_with(REFUSED));
 }
@@ -86,11 +93,8 @@ fn a_browser_taking_the_code_ends_it_and_the_log_never_holds_the_code() {
     let shown = followed.seen.last().expect("a line").clone();
 
     assert_eq!(shown["lines"][1], "the phone needs the Tailscale app, logged in as ada@example.com.");
-    assert!(http_get(port, &path).starts_with(TAKEN));
-    assert_eq!(followed.next("the end"), json!({"paired": true}));
-    let ended = finish_within(child, TIMEOUT);
+    a_phone_takes_the_code(port, &path, child, &mut followed);
 
-    assert_eq!(ended.status.code(), Some(0), "{ended:?}");
     assert!(http_get(port, &path).starts_with(REFUSED));
     session.wait_for_file("server.log", "the end is logged", |log| log.contains("pairing ended"));
     let log = std::fs::read_to_string(session.dir.join("server.log")).expect("the log");
@@ -178,11 +182,7 @@ fn through_ssh_the_address_is_the_servers_and_it_ends_there_too() {
     let mut followed = Followed::of(&mut child);
     let path = path_of(&address(&mut followed));
 
-    assert!(http_get(port, &path).starts_with(TAKEN));
-    assert_eq!(followed.next("the end"), json!({"paired": true}));
-    let ended = finish_within(child, TIMEOUT);
-
-    assert_eq!(ended.status.code(), Some(0), "{ended:?}");
+    a_phone_takes_the_code(port, &path, child, &mut followed);
 }
 
 #[test]
@@ -205,21 +205,15 @@ fn over_ssh_its_reader_leaving_drops_the_code_there() {
 fn the_window_stays_as_it_is_until_it_opens_its_dialog_and_closing_that_keeps_the_code() {
     let session = Session::new();
     let (port, path) = fake_tailscale(&session, TAILSCALE_READY);
-    let mut ui = Harness::open_with(Arc::clone(&session), ROWS, COLS, &[("PATH", &path)]);
-    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+    let mut ui = window_on(&session, &path);
     let (child, mut followed, code_path) = pairing(&session);
     assert!(!ui.text().contains("pair?t="), "{}", ui.text());
 
-    ui.pick_in_more("remote…");
-    ui.wait_for("the remote menu opens", |s| s.contains("open in your phone's browser"));
-    ui.click(ui.position_of("open in your phone's browser"));
-    ui.wait_for("the pairing address shows", |s| s.contains("pair?t="));
-    assert_eq!(pairing_token(&ui.text()), code_path.rsplit('=').next().expect("a code"));
+    let token = open_the_pairing_dialog(&mut ui);
+    assert_eq!(token, code_path.rsplit('=').next().expect("a code"));
     ui.click(ui.position_of("done"));
     ui.wait_for("the dialog closes", |s| !s.contains("pair?t="));
 
-    assert!(http_get(port, &code_path).starts_with(TAKEN));
-    assert_eq!(followed.next("the end"), json!({"paired": true}));
-    assert_eq!(finish_within(child, TIMEOUT).status.code(), Some(0));
+    a_phone_takes_the_code(port, &code_path, child, &mut followed);
     ui.wait_for("the window says a browser connected", |s| s.contains("a browser connected"));
 }
