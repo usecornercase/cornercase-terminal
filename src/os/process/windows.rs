@@ -341,6 +341,10 @@ pub(crate) fn on_stop_signal(stop: impl FnOnce() + Send + 'static) -> io::Result
     Ok(())
 }
 
+pub(crate) fn on_end_signal(stop: impl FnOnce() + Send + 'static) -> io::Result<()> {
+    on_stop_signal(stop)
+}
+
 mod session_end;
 
 #[cfg(test)]

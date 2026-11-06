@@ -64,7 +64,7 @@ CORNERCASE_REMOTE=devbox cornercase events --json
 cornercase --remote devbox --remote-command '~/tools/cornercase' start-server
 ```
 
-A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands that ask the server: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server` and `logs` run on that machine, as its own `cornercase` through `ssh`, and exit with its status; the plugin commands that install or change plugins refuse it with status 2. Commands accept a machine that runs the same version or a newer one. Ids last one run of the server there, so `close` and `rename` take [`--boot BOOT`](../../guides/scripts-and-agents/#arrange), and a server that restarted since you read the id refuses with status 4 instead of acting on whatever has it now. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
+A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands that ask the server: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server` and `logs` run on that machine, as its own `cornercase` through `ssh`, and exit with its status; the plugin commands that install or change plugins and `plugin windows` refuse it with status 2. Commands accept a machine that runs the same version or a newer one. Ids last one run of the server there, so `close` and `rename` take [`--boot BOOT`](../../guides/scripts-and-agents/#arrange), and a server that restarted since you read the id refuses with status 4 instead of acting on whatever has it now. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
 
 ### `cornercase update`
 
@@ -224,12 +224,15 @@ cornercase plugin run acme.notes note --pane 5 # run one as its menu entry does,
 cornercase plugin run acme.notes browse   # a button action: on what the window shows, as its button does
 cornercase plugin run acme.notes browse --view 21 # the same on what a view shows; its popup needs no window
 cornercase plugin popup-close             # close the plugin popup that is open (asks the server)
+cornercase plugin windows                 # keep window processes running until it ends, beside a window of your own
 cornercase plugin enable my-plugin        # turn it on: says what it asks for, then runs it
 cornercase plugin disable my-plugin       # turn it off: its service and window processes stop
 cornercase plugin logs my-plugin          # what its commands printed; -n, --follow and --path as for logs
 ```
 
 `install` takes `owner/repo` (GitHub), an `https://` git address or a git folder. A plugin in a folder of the repository is `owner/repo/folder` on GitHub, and `address//folder` for any other address or a folder on your machine. With no terminal to ask in, `install` and `update` need `--yes`, or `--preview`, which prints what they would run and exits without installing; `--json` prints it as one JSON object (for `update`, with an ID), and `--commit` then installs, or updates to, exactly the commit it printed, and fails once the plugin gives another. A plugin whose manifest cannot be read, or whose command leads out of its folder, is listed with the reason, and cannot be turned on. An unknown id exits with status 1.
+
+`windows` is for a program that draws cornercase itself: it runs what plugins declare as `[[window]]` for as long as it runs, as a window of cornercase does, needs no server, and prints each change (`--json` for a program). It stops them all when it gets a signal or when the reader of its output leaves. It takes no `--remote`, since those processes run on the machine that shows the window. See [Window processes beside your own window](../../guides/scripts-and-agents/#window-processes-beside-your-own-window).
 
 ### `cornercase --version`
 
@@ -269,6 +272,7 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | ``cornercase was not found on `<host>` …`` | The other machine has no `cornercase` where it looks; install it there, or give its path with `--command` (`--remote-command` for `--remote`). |
 | ``no cornercase server is running on `<host>` `` | A `--remote` command reached the machine, but no server runs there. |
 | ``` `<command>` acts on this machine, so it takes no --remote … ``` | The plugin commands that install or change plugins don't go through `ssh` (status 2). Run them there. |
+| ``` `plugin windows` runs on the machine that shows the window, so it takes no --remote … ``` | Window processes belong to the machine that shows the window (status 2). Run it there, without `--remote` or `CORNERCASE_REMOTE`. |
 | ``` `<host>` runs cornercase <version> and this machine <version>. Update it from here with … ``` | A `--remote` command found an older cornercase there; run the command the message gives to update it. |
 | ``the cornercase on `<host>` is too old to attach to from another machine …`` | The other machine's cornercase predates `cornercase remote`. Update it there. |
 | ``` `<host>` runs cornercase <version> and this machine <version> … ``` | The two machines run different versions; the message says which one to update. |

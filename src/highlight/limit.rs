@@ -64,12 +64,7 @@ fn worker_exe() -> io::Result<PathBuf> {
 }
 
 fn usable_exe(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| stripped(path))
-}
-
-fn stripped(path: &Path) -> PathBuf {
-    let text = path.to_string_lossy();
-    text.strip_suffix(" (deleted)").map_or_else(|| path.to_path_buf(), PathBuf::from)
+    path.canonicalize().unwrap_or_else(|_| process::program::replaced_by(path))
 }
 
 impl Session {

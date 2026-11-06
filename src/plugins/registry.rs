@@ -96,8 +96,11 @@ impl Plugin {
         match &self.manifest {
             Err(e) => e.clone(),
             Ok(manifest) => {
-                let windows =
-                    if manifest.window.is_empty() { "" } else { " · its window process runs in local windows" };
+                let windows = if manifest.window.is_empty() {
+                    ""
+                } else {
+                    " · its window process runs in local windows and `plugin windows`"
+                };
                 match running {
                     Some(running) if self.entry.enabled => running.to_string(),
                     _ if self.entry.enabled => format!("{}{windows}", manifest.description),

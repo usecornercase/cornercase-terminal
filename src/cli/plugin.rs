@@ -21,12 +21,15 @@ use crate::plugins::source::{Origin, folder_on_this_computer};
 use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
 
+mod windows;
+
 pub(super) fn run(action: PluginAction) -> Result<bool> {
     match action {
         PluginAction::Actions { context, print } => actions(context.as_deref(), print.json),
         PluginAction::Status(print) => status(print.json),
         PluginAction::Run(args) => run_action(&args),
         PluginAction::PopupClose => popup_close(),
+        PluginAction::Windows(print) => windows::run(print.json),
         action => run_here(action),
     }
 }
@@ -41,7 +44,11 @@ fn run_here(action: PluginAction) -> Result<bool> {
         PluginAction::Remove { id } => remove(&places, &id)?,
         PluginAction::Unlink { id } => unlink(&mut registry, &id)?,
         PluginAction::List(print) => list(&registry, &places, print.json)?,
-        PluginAction::Actions { .. } | PluginAction::Run(_) | PluginAction::PopupClose | PluginAction::Status(_) => {}
+        PluginAction::Actions { .. }
+        | PluginAction::Run(_)
+        | PluginAction::PopupClose
+        | PluginAction::Status(_)
+        | PluginAction::Windows(_) => {}
         PluginAction::Enable { id } => enable(&mut registry, &id)?,
         PluginAction::Disable { id } => disable(&mut registry, &id)?,
         PluginAction::Logs { id, logs } => {
@@ -471,8 +478,13 @@ fn list_json(plugins: &[Plugin], places: &Places) -> String {
 }
 
 fn shown_json(value: &impl Serialize) -> String {
-    let json = serde_json::to_string_pretty(value).unwrap_or_default();
-    let mut text = json.chars().fold(String::with_capacity(json.len()), |mut out, c| {
+    let mut text = escaped_json(&serde_json::to_string_pretty(value).unwrap_or_default());
+    text.push('\n');
+    text
+}
+
+fn escaped_json(json: &str) -> String {
+    json.chars().fold(String::with_capacity(json.len()), |mut out, c| {
         if c != '\n' && crate::text::hidden(c) {
             c.encode_utf16(&mut [0; 2]).iter().for_each(|unit| {
                 let _ = write!(out, "\\u{unit:04x}");
@@ -481,9 +493,7 @@ fn shown_json(value: &impl Serialize) -> String {
             out.push(c);
         }
         out
-    });
-    text.push('\n');
-    text
+    })
 }
 
 #[cfg(test)]
