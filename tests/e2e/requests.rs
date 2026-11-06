@@ -3,7 +3,7 @@ use serde_json::json;
 use super::input::Typist;
 use super::*;
 
-fn requesting(session: &Session) -> Typist {
+pub(super) fn requesting(session: &Session) -> Typist {
     let mut command = session.cold_command();
     command.args(["requests", "--follow", "-"]);
     Typist::start(command)

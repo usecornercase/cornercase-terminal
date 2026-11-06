@@ -24,6 +24,8 @@ The commands for scripts and agents, `status`, `stats`, `usage`, `context`, `rec
 
 `config forum-server ID` picks the server of the [Discord forum](../../guides/discord/#forum-mode) when the app is in several of yours, from the list in `status --app`, for a script or another UI that has no dialog: [pick the forum's server](../../guides/scripts-and-agents/#pick-the-forums-server).
 
+`open` takes a folder or a VS Code `.code-workspace` file, which it [imports as a group](../../guides/scripts-and-agents/#import-a-vs-code-workspace) and prints the group's id; `--into GROUP` puts either in that group.
+
 ### `cornercase`
 
 Attaches to the server, starting it first if none is running. A new server restores your [saved session](../../guides/sessions/#what-is-restored), or, when there is nothing to restore, opens the folder you ran the command from as a project.

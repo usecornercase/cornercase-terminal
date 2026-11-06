@@ -1,0 +1,11 @@
+{
+  "group": 5,
+  "name": "team",
+  "projects": [
+    6,
+    7
+  ],
+  "missing": 1,
+  "failed": 0,
+  "projection": 3
+}

@@ -55,6 +55,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "recap",
     "queue-routines",
     "plugin-run-view",
+    "open-code-workspace",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

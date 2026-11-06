@@ -53,7 +53,7 @@ fn a_project_being_closed_is_opened_again() {
     let (mut app, _rx, dirs) = app_with(1);
     let old = app.projects[0].id;
     app.close_project(old);
-    let open = Command::Open(wire::Open { path: dirs[0].path().to_path_buf(), focus: false });
+    let open = Command::Open(wire::Open { path: dirs[0].path().to_path_buf(), ..wire::Open::default() });
 
     let opened = done(now(&mut app, None, open));
 
@@ -65,7 +65,7 @@ fn a_project_being_closed_is_opened_again() {
 fn open_adds_a_folder_once_and_leaves_the_window_as_it_is() {
     let (mut app, _rx, _dirs) = app_with(1);
     let dir = TempDir::new();
-    let open = || Command::Open(wire::Open { path: dir.path().to_path_buf(), focus: false });
+    let open = || Command::Open(wire::Open { path: dir.path().to_path_buf(), ..wire::Open::default() });
 
     let opened = done(now(&mut app, None, open()));
     let found = done(now(&mut app, None, open()));
@@ -203,7 +203,7 @@ fn start_with_a_mode_the_agent_lacks_opens_nothing() {
 fn open_stores_a_verbatim_folder_without_the_prefix() {
     let dir = TempDir::new();
     let (mut app, _rx) = new_app_with_shell("cmd.exe", no_config());
-    let open = Command::Open(wire::Open { path: crate::test_util::verbatim(dir.path()), focus: false });
+    let open = Command::Open(wire::Open { path: crate::test_util::verbatim(dir.path()), ..wire::Open::default() });
 
     let opened = done(now(&mut app, None, open));
 

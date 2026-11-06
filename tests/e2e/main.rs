@@ -31,6 +31,7 @@ mod arranging;
 mod boot;
 mod browser;
 mod clone_files;
+mod code_workspace;
 mod commands;
 mod context;
 mod contract;

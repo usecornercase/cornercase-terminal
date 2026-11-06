@@ -35,9 +35,6 @@ Examples:
   cornercase wait --pane \"$pane\" --until shell --timeout 900
   cornercase read --pane \"$pane\" --lines 40
   cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
-pub(super) const OPEN_HELP: &str = "Examples:
-  cornercase open ~/src/shop
-  cornercase open . --focus";
 pub(super) const COMMAND_HELP: &str =
     "The words of COMMAND are joined with spaces and typed at the prompt once the shell is ready,
 as ssh does, so quote what the shell should read as one argument. The command returns once it
@@ -695,6 +692,7 @@ mod files;
 mod flow;
 mod held;
 mod machines;
+mod open;
 mod paste_file;
 mod plugin;
 mod plugin_windows;
@@ -719,6 +717,7 @@ pub(in crate::cli) use flow::{
 };
 pub(in crate::cli) use held::HELD_HELP;
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
+pub(in crate::cli) use open::OPEN_HELP;
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use plugin::PLUGIN_HELP;
 pub(in crate::cli) use plugin_windows::PLUGIN_WINDOWS_HELP;

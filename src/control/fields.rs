@@ -239,7 +239,7 @@ impl Command {
 
 impl Open {
     fn fields(&self, fields: &mut Fields) {
-        fields.add("path", self.path.display()).add("focus", self.focus);
+        fields.add("path", self.path.display()).add("focus", self.focus).maybe("into", self.into);
     }
 }
 
