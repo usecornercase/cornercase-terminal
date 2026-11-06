@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use super::commands::Followed;
 use super::*;
 
 fn env_of(session: &Session, args: &[&str], file: &std::path::Path) -> String {
@@ -74,4 +75,60 @@ fn removing_an_account_without_a_terminal_needs_yes() {
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("--yes"), "{refused:?}");
     assert!(session.says(&["account", "list"]).contains("  work  "));
+}
+
+fn accounts_revision(line: &Value) -> Option<u64> {
+    line.get("accounts_revision").and_then(Value::as_u64)
+}
+
+fn following_a_new_server(session: &Session) -> (std::process::Child, Followed) {
+    let mut start = session.cold_command();
+    start.arg("start-server").env("GEMINI_CLI_HOME", session.dir.join("gemini-home"));
+    let started = start.output().expect("run cornercase");
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    let mut following = session.spawn(&["status", "--app", "--follow"]);
+    let mut followed = Followed::of(&mut following);
+    let first = followed.next("the first line");
+    assert_eq!(accounts_revision(&first), None, "a server without accounts: {first}");
+    (following, followed)
+}
+
+fn stop_following(session: &Session, mut following: std::process::Child) {
+    session.says(&["kill-server"]);
+    let status = following.wait().expect("the command ends");
+    assert!(status.success(), "{status:?}");
+}
+
+fn config_revision(session: &Session) -> u64 {
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("the status");
+    status["config"]["revision"].as_u64().expect("the config's revision")
+}
+
+#[test]
+fn an_account_added_or_removed_by_a_command_moves_the_revision_of_the_app_stream() {
+    let session = Session::new();
+    let (following, mut followed) = following_a_new_server(&session);
+    let config = config_revision(&session);
+
+    session.says(&["account", "add", "gemini", "probe"]);
+    followed.until("the line of the first account", |line| accounts_revision(line) == Some(1));
+    let printed: Value = serde_json::from_str(&session.says(&["status", "--app"])).expect("one JSON document");
+    session.says(&["account", "remove", "gemini", "probe", "--yes"]);
+    followed.until("the line of its removal", |line| accounts_revision(line) == Some(2));
+
+    assert_eq!(accounts_revision(&printed), Some(1), "{printed}");
+    assert_eq!(config_revision(&session), config, "nothing else moved for a client to notice");
+    stop_following(&session, following);
+}
+
+#[test]
+fn the_first_folder_of_accounts_another_program_makes_moves_it_on_the_sync_step() {
+    let session = Session::new();
+    let (following, mut followed) = following_a_new_server(&session);
+
+    std::fs::create_dir_all(session.dir.join("server.accounts").join("gemini").join("probe")).expect("its folder");
+
+    followed.until("the line of the folder", |line| accounts_revision(line) == Some(1));
+    assert!(session.says(&["account", "list"]).contains("probe"));
+    stop_following(&session, following);
 }
