@@ -407,6 +407,7 @@ pub struct PaneInfo {
     pub(crate) path: Option<PathBuf>,
     pub program: Option<String>,
     pub(crate) agent: Option<String>,
+    pub(crate) conversation: Option<String>,
     pub status: Option<String>,
     pub(crate) background_shell: bool,
     pub(crate) dialog: bool,

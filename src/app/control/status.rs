@@ -258,6 +258,7 @@ impl App {
         let pid = term.foreground_pid();
         (term.id, pid, pid.and_then(process::name), term.cwd(), term.shell_pid()).hash(hash);
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
+        term.context.conversation().hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
         term.context.compaction().hides.hash(hash);
         term.context.subagents().hash(hash);
@@ -275,6 +276,7 @@ impl App {
             path: term.cwd(),
             program: term.program(&self.config),
             agent: term.agent.agent().map(str::to_string),
+            conversation: term.context.conversation().map(str::to_string),
             status: term.agent.status().map(|s| s.name().to_string()),
             background_shell: term.agent.background_shell(),
             dialog: term.dialog(),

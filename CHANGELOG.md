@@ -7,6 +7,11 @@ Every pull request that changes the app adds a section here for its new version.
 - **A program that draws cornercase can now act on a held message.** When `cornercase send` holds a message because someone is typing in a pane, the window's bar offers ` send now ` and ` wait turn `. `cornercase held --pane 9 --send-now` does the first (the first held message goes at once, as `send --force` does, still after an earlier message's Enter) and `cornercase held --pane 9 --wait-turn` the second (it only says the person saw it). Both refuse in words when nothing is held in that pane, and print what is held now (`--json` for `held_sends`, `held_from` and `held_queued`); the `held` request does the same on the socket. Each pane in `status --json`, `status --follow` and `view` also has `held_from`, the pane that sent the first held message, and `held_queued`, true once ` wait turn ` covers the newest one, so another window's bar can read as this one's. Nothing changes in cornercase's own window.
 - `cornercase status --help` now lists every column of `--panes`, in order: it left out `held_sends`, `draft`, `account_restart`, `pid` and `memory`, so counting positions from it read the wrong column.
 
+## 0.13.3
+
+- **`cornercase status --json`, `status --follow` and `view` name the conversation a pane's agent is in**, as `conversation` on each pane: the id `places` gives in `cornercase recap --json`, `null` until the agent has one (for most agents, until its first prompt) and always for opencode. A program driving cornercase can now follow a recap's place as the panel's links do: the pane with the place's `agent` and `conversation`, then `pane` while `boot` is the server's, so it finds a conversation that a `cornercase restart`, or `agents close` and `agents reopen`, moved to another pane. A new id sends one more line to `status --follow` and `view`.
+- **A recap's place keeps its conversation's id once the pane closed.** A conversation whose id came after it was first seen, as it does for most agents, had none in the journal, so a place written while it was closed could not find it again after `agents reopen`, in the panel or from a script.
+
 ## 0.13.2
 
 - Nothing changes for users: the code behind the commands moved into smaller files, to make room for the next ones.
