@@ -204,7 +204,7 @@ fn entries(dir: &Path) -> io::Result<Vec<Item>> {
         .flatten()
         .map(|entry| entry.path())
         .filter_map(|path| {
-            let workspace = vscode::is_workspace(&path) && path.is_file();
+            let workspace = vscode::is_workspace(&path);
             if !workspace && !path.is_dir() {
                 return None;
             }

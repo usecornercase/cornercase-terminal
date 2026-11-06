@@ -36,6 +36,7 @@ mod issue;
 mod line;
 mod lines;
 mod machines;
+mod open;
 mod plugin;
 mod ports;
 mod processes;
@@ -223,7 +224,7 @@ fn control_route(command: Control) -> ControlFlow<Result<bool>, Control> {
 
 fn create_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
-        Control::Open(open) => run_open(&open).map(|()| true),
+        Control::Open(args) => open::run(&args).map(|()| true),
         Control::Clone(args) => clone::run(&args).map(|()| true),
         Control::NewWorkspace(new) => run_new_workspace(new).map(|()| true),
         Control::NewTab(new) => run_new_tab(new).map(|()| true),
@@ -324,12 +325,6 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Profile(args) => accounts::profile(args.action).map(|()| true),
         other => return ControlFlow::Continue(other),
     })
-}
-
-fn run_open(open: &args::OpenArgs) -> Result<()> {
-    let path = reach::open_path(&open.path)?;
-    let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
-    say(value, open.create.print.json, |done| id(done.ids.project))
 }
 
 fn clone_parent(folder: Option<&Path>, remote: Option<&Remote>) -> Result<PathBuf> {

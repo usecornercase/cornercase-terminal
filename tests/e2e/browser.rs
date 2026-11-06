@@ -1,6 +1,20 @@
 use super::*;
 
-fn http_get(port: u16, path: &str) -> String {
+pub(super) const TAILSCALE_READY: &str = r#"{"BackendState":"Running","CertDomains":["mac.tail1234.ts.net"],"Self":{"DNSName":"mac.tail1234.ts.net.","UserID":7},"User":{"7":{"LoginName":"ada@example.com"}}}"#;
+
+pub(super) fn fake_tailscale(session: &Session, status: &str) -> (u16, String) {
+    let port = TcpListener::bind(("127.0.0.1", 0)).expect("bind").local_addr().expect("address").port();
+    let bin = session.dir.join("bin");
+    std::fs::create_dir_all(&bin).expect("bin folder");
+    let script = bin.join("tailscale");
+    write_executable(&script, &format!("#!/bin/sh\n[ \"$1\" = status ] && echo '{status}'\nexit 0\n"));
+    let config = format!(r#"{{"remote": true, "remote_port": {port}}}"#);
+    std::fs::write(session.dir.join("config.json"), config).expect("config");
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default());
+    (port, path)
+}
+
+pub(super) fn http_get(port: u16, path: &str) -> String {
     let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect to the web port");
     write!(stream, "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n").expect("send the request");
     let mut answer = String::new();
@@ -19,6 +33,20 @@ fn pairing_token(screen: &str) -> String {
     format!("{first}{rest}").chars().take(32).collect()
 }
 
+pub(super) fn window_on(session: &Arc<Session>, path: &str) -> Harness {
+    let mut ui = Harness::open_with(Arc::clone(session), ROWS, COLS, &[("PATH", path)]);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+    ui
+}
+
+pub(super) fn open_the_pairing_dialog(ui: &mut Harness) -> String {
+    ui.pick_in_more("remote…");
+    ui.wait_for("the remote menu opens", |s| s.contains("open in your phone's browser"));
+    ui.click(ui.position_of("open in your phone's browser"));
+    ui.wait_for("the pairing address shows", |s| s.contains("pair?t="));
+    pairing_token(&ui.text())
+}
+
 fn connect_socket(port: u16, cookie: &str) -> tungstenite::WebSocket<std::net::TcpStream> {
     let mut request = tungstenite::client::IntoClientRequest::into_client_request(format!("ws://127.0.0.1:{port}/ws"))
         .expect("a websocket request");
@@ -32,23 +60,10 @@ fn connect_socket(port: u16, cookie: &str) -> tungstenite::WebSocket<std::net::T
 #[test]
 fn a_paired_browser_types_into_the_shell_over_a_websocket() {
     let session = Session::new();
-    let port = TcpListener::bind(("127.0.0.1", 0)).expect("bind").local_addr().expect("address").port();
-    let bin = session.dir.join("bin");
-    std::fs::create_dir_all(&bin).expect("bin folder");
-    let status = r#"{"BackendState":"Running","CertDomains":["mac.tail1234.ts.net"],"Self":{"DNSName":"mac.tail1234.ts.net.","UserID":7},"User":{"7":{"LoginName":"ada@example.com"}}}"#;
-    let script = bin.join("tailscale");
-    write_executable(&script, &format!("#!/bin/sh\n[ \"$1\" = status ] && echo '{status}'\nexit 0\n"));
-    let config = format!(r#"{{"remote": true, "remote_port": {port}}}"#);
-    std::fs::write(session.dir.join("config.json"), config).expect("config");
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default());
-    let mut ui = Harness::open_with(Arc::clone(&session), ROWS, COLS, &[("PATH", &path)]);
-    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+    let (port, path) = fake_tailscale(&session, TAILSCALE_READY);
+    let mut ui = window_on(&session, &path);
 
-    ui.pick_in_more("remote…");
-    ui.wait_for("the remote menu opens", |s| s.contains("open in your phone's browser"));
-    ui.click(ui.position_of("open in your phone's browser"));
-    ui.wait_for("the pairing address shows", |s| s.contains("pair?t="));
-    let token = pairing_token(&ui.text());
+    let token = open_the_pairing_dialog(&mut ui);
     let paired = http_get(port, &format!("/pair?t={token}"));
     let cookie = paired
         .lines()

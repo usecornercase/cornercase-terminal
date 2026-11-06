@@ -12,6 +12,7 @@ pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod clone;
 pub(crate) mod closed_agents;
+mod code_workspace;
 pub(crate) mod config;
 pub(crate) mod context;
 pub(crate) mod contract;
@@ -22,6 +23,7 @@ mod flow;
 mod held;
 pub(crate) mod issues;
 pub(crate) mod machines;
+pub(crate) mod pair;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -59,6 +61,7 @@ pub(crate) use changes::{
 };
 pub(crate) use clone::{CloneFile, CloneRepository, Cloned, Unwritten};
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
+pub(crate) use code_workspace::ImportedWorkspace;
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
 pub(crate) use context::{ContextInfo, ContextRead};
 pub(crate) use contract::Contract;
@@ -75,6 +78,7 @@ pub(crate) use flow::{
 pub(crate) use held::{HeldAction, HeldInfo, HeldRequest};
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Machines, ShownRemote, StreamState};
+pub(crate) use pair::ConfigPair;
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
@@ -262,6 +266,7 @@ pub(crate) enum Command {
     ForumServer(ForumServer),
     Held(HeldRequest),
     RunSetup(RunSetup),
+    ConfigPair(ConfigPair),
     WorktreesRemove(WorktreesRemove),
 }
 
@@ -340,6 +345,7 @@ impl Command {
             Self::View(_) => 33,
             Self::ViewSet(_) => 34,
             Self::Search(_) => 28,
+            Self::ConfigPair(_) => 122,
             _ => return None,
         })
     }
@@ -447,7 +453,7 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
-            Self::WorktreesRemove(_) => 122,
+            Self::WorktreesRemove(_) => 123,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
@@ -587,6 +593,7 @@ impl Command {
         "forum-server",
         "held",
         "run-setup",
+        "config-pair",
         "worktrees-remove",
     ];
 
@@ -629,6 +636,8 @@ pub(crate) struct Status {}
 pub(crate) struct Open {
     pub(crate) path: PathBuf,
     pub(crate) focus: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) into: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

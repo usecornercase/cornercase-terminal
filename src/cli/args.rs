@@ -123,7 +123,10 @@ Examples:
 pub(crate) enum Control {
     #[command(about = "List the projects, workspaces, tabs and panes, with their ids", after_help = STATUS_HELP)]
     Status(StatusArgs),
-    #[command(about = "Open a folder as a project, or find the open one, and print its id", after_help = OPEN_HELP)]
+    #[command(
+        about = "Open a folder as a project, or find the open one, and print its id; import a .code-workspace file as a group",
+        after_help = OPEN_HELP
+    )]
     Open(OpenArgs),
     #[command(
         about = "Clone a git repository into a folder, open it as a project, and print its path",

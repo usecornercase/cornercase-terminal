@@ -2,10 +2,23 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.17
+## 0.13.18
 
 - **Remove worktrees from a script, those of closed projects and their branches too.** `cornercase worktrees remove --path FOLDER…` removes what `cornercase worktrees list` shows, as the Worktrees dialog does: an open workspace, a closed project's worktree with its teardown, a prunable entry, a folder whose repository is gone. `--check` says what the dialog's confirmation would name and stops nothing. Without it, a folder at risk (uncommitted files, programs working in it, commits that would be lost, a lock) is refused until you pass `--force` or `--unlock`, `--delete-branch` also deletes the branch (never the default branch or the main checkout's), and nothing `worktrees list` does not know is ever touched. It prints one line per folder, or the answer with `--json`, and exits 3 when a folder was not removed, a branch was kept, or a teardown failed. Another window or a script gets the same with the request `worktrees-remove`.
 - **The Worktrees dialog is safer about branches and links.** With **also delete the branch**, a branch that gained a commit since the confirmation is kept and named, and a merged pull request no longer hides commits made after it: the red line says they would be lost. Removing a worktree whose folder was replaced by a symbolic link now fails with a message, where git would delete what the link leads to.
+
+## 0.13.17
+
+- **Connect a phone from another program.** `cornercase config pair browsers`, `telegram.chat` or `discord.chat` does what the window's pairing dialogs do, so a program that draws cornercase itself can connect a phone without opening the window. It prints the address the QR code holds and the lines under it (`--json` for one line of JSON each, to draw the code from `url`), and again when they change, stays open while it waits, and ends with `{"paired": true}` (with the chat's name for a bot) once the phone connects. Why it cannot comes in words: remote access off, Tailscale not ready, `paste the bot's token first`. The code is dropped when the command ends, also when whoever reads its output goes, after ten minutes at most, and never reaches the log. If the window's dialog or another command holds the same key, they share one code, and closing one leaves it working for the others. It works through `--remote` too.
+- Scanning a Telegram bot's code with the phone already paired to it closes the dialog now. Before, the bot said hello and the dialog went on waiting.
+- When a paired browser cannot be saved, its code keeps working, so scanning it again works once that is fixed.
+- When a bot's paired chat cannot be saved, the pairing dialog says so and the phone can try again. Before, it looked connected until the next restart forgot it.
+
+## 0.13.16
+
+- **Import a VS Code workspace from a script or another app.** `cornercase open work.code-workspace` does what choosing that file in the folder picker does: a group named after the file (a group of that name is reused), each of its folders a project in it, a folder already open moved there, a folder's `name` kept as the project's name unless you named it, folders that are gone or on another machine skipped. It prints the group's id; `--json` prints `{"group", "name", "projects", "missing", "failed"}`, what the picker's message says, and it exits with 3 when a folder was gone or couldn't start its shell, or nothing was imported. `--focus` shows its first project. The file is read on the server's machine, so `cornercase --remote devbox open '~/code/work.code-workspace'` imports the one on `devbox`.
+- **`cornercase open --into GROUP`** opens a folder in that group, or moves it there when it is already open, and imports a `.code-workspace` file there, as the group's **add project** does. Over the socket it is `open`'s `into`, with the feature `open-code-workspace`, for clients that draw cornercase themselves. A folder without it answers as before.
+- In the folder picker, importing a folder whose project was still closing now opens it again, instead of adding the closing project to the group, from which it then disappeared.
 
 ## 0.13.15
 

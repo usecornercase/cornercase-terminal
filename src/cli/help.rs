@@ -35,9 +35,6 @@ Examples:
   cornercase wait --pane \"$pane\" --until shell --timeout 900
   cornercase read --pane \"$pane\" --lines 40
   cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
-pub(super) const OPEN_HELP: &str = "Examples:
-  cornercase open ~/src/shop
-  cornercase open . --focus";
 pub(super) const COMMAND_HELP: &str =
     "The words of COMMAND are joined with spaces and typed at the prompt once the shell is ready,
 as ssh does, so quote what the shell should read as one argument. The command returns once it
@@ -457,7 +454,8 @@ false for a switch, a whole number, a comma-separated list for issue_tabs, other
 
 A token is never an argument: `secret` reads it from standard input (hidden on a terminal), checks it
 with its service as the dialog does, and says which account accepted it, never the token. `remove`
-forgets a token, a bot, a paired chat or the paired browsers.
+forgets a token, a bot, a paired chat or the paired browsers. `pair` connects a phone to a chat or a
+browser: `cornercase config pair --help`.
 
 `forum-server` picks the server of the Discord forum, when forum mode waits for one and the app is in
 several: `status --app` lists them as `servers`, in Discord's `forum`, and this is a click on one in the
@@ -481,6 +479,7 @@ Examples:
   cornercase config set issue_tabs github,linear
   printf '%s' \"$LINEAR_API_KEY\" | cornercase config secret linear
   cornercase config remove linear
+  cornercase config pair browsers --json
   cornercase config forum-server 1041234567890123459
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml
@@ -695,6 +694,8 @@ mod files;
 mod flow;
 mod held;
 mod machines;
+mod open;
+mod pair;
 mod paste_file;
 mod plugin;
 mod plugin_windows;
@@ -719,6 +720,8 @@ pub(in crate::cli) use flow::{
 };
 pub(in crate::cli) use held::HELD_HELP;
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
+pub(in crate::cli) use open::OPEN_HELP;
+pub(in crate::cli) use pair::CONFIG_PAIR_HELP;
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use plugin::PLUGIN_HELP;
 pub(in crate::cli) use plugin_windows::PLUGIN_WINDOWS_HELP;

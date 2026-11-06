@@ -10,9 +10,9 @@ use crate::control::{self as wire, Command, Done, Response};
 #[cfg(unix)]
 use crate::control::{Item, Report};
 use crate::messenger::link::Event as LinkEvent;
-use crate::messenger::{Chat, Order, Via};
+use crate::messenger::{Chat, Message, Order, Update, Via};
 #[cfg(unix)]
-use crate::messenger::{Keyboard, Message, Press, Update};
+use crate::messenger::{Keyboard, Press};
 #[cfg(unix)]
 use crate::test_util::write_executable;
 
@@ -497,7 +497,6 @@ fn button(order: &Order, text: &str) -> String {
     key.unwrap_or_else(|| panic!("no `{text}` button in {order:?}")).data.clone()
 }
 
-#[cfg(unix)]
 fn update(app: &mut App, via: Via, update: Update) {
     let event = AppEvent::Messenger(MessengerEvent::Link(via, LinkEvent::Updates(1, vec![update])));
     app.handle_event(event, AREA).expect("the update is handled");
@@ -531,7 +530,6 @@ impl Phone {
         got
     }
 
-    #[cfg(unix)]
     fn message(&mut self, app: &mut App, text: &str, reply_to: Option<i64>, from: (i64, i64)) -> i64 {
         self.next += 1;
         let (chat, user) = from;
@@ -550,7 +548,6 @@ impl Phone {
         self.next
     }
 
-    #[cfg(unix)]
     fn says(&mut self, app: &mut App, text: &str) -> i64 {
         self.message(app, text, None, (CHAT, USER))
     }
@@ -600,6 +597,7 @@ mod changes;
 mod cloning;
 mod close_agent;
 mod closed_agents;
+mod code_workspace;
 mod compacting;
 mod config;
 mod config_share;
@@ -628,6 +626,7 @@ mod journal;
 mod merge_check;
 mod one_folder;
 mod ordering;
+mod pair;
 mod pane_conversation;
 mod pane_moves;
 mod parents;

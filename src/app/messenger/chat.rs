@@ -49,11 +49,12 @@ impl App {
     }
 
     fn chat_message(&mut self, via: Via, message: &Message, area: Rect) {
+        if self.try_pairing(via, message) {
+            return;
+        }
         let in_post = self.posted_by_owner(via, message);
         if !in_post && !self.paired_with(via, message.chat, message.user) {
-            if !self.try_pairing(via, message) {
-                log::info!(via.target(), "message from another chat ignored", chat = message.chat);
-            }
+            log::info!(via.target(), "message from another chat ignored", chat = message.chat);
             return;
         }
         let kind = command(&message.text).map_or(if message.reply_to.is_some() { "reply" } else { "text" }, |(c, _)| c);

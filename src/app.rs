@@ -411,6 +411,7 @@ impl App {
             self.flow_frame(now),
             self.next_request(now),
             self.next_pairing(now),
+            self.clients.pairings.wake(now),
             self.next_forum_setup(now),
             self.clients.events.snapshots.wake(now, !self.clients.views.is_empty()),
             self.clients.events.app.wake(now, false),
@@ -471,6 +472,7 @@ impl App {
         self.sync_machines(now, clock);
         self.sync_messengers();
         self.pair_by_owner(now);
+        self.drive_pairings(now);
         self.set_up_forums(now);
         self.watch_plugins(now);
         self.check_requests(now);
