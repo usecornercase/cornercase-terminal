@@ -153,21 +153,56 @@ fn a_lockfile_is_folded_but_has_lines_and_a_binary_file_has_none() {
     assert_eq!(binary["hunks"], json!([]));
 }
 
+fn live_patch(repo: &TempDir, path: &str) -> Value {
+    let (mut app, rx) = started(repo);
+    ok(&mut app, "changes", &json!({}));
+    summary_until(&mut app, &rx, "the files arrive", ready);
+
+    ok(&mut app, "changes-file", &json!({"path": path}))
+}
+
 #[test]
 fn a_patch_carries_emphasis_and_a_style_table() {
     let repo = git_repo(&[("a.rs", "fn main() {\n    say(1);\n}\n")]);
     std::fs::write(repo.path().join("a.rs"), "fn main() {\n    say(2);\n}\n").expect("edit");
-    let (mut app, rx) = started(&repo);
-    ok(&mut app, "changes", &json!({}));
-    summary_until(&mut app, &rx, "the files arrive", ready);
 
-    let patch = ok(&mut app, "changes-file", &json!({"path": "a.rs"}));
+    let patch = live_patch(&repo, "a.rs");
 
     assert_eq!(patch["styles"][0], json!({}));
     let lines = patch["hunks"][0]["lines"].as_array().expect("lines");
     let removed = lines.iter().find(|l| l["kind"] == "removed").expect("removed");
     assert_eq!(removed["emphasis"], json!([[8, 9]]));
     assert!(removed["syntax"].as_array().is_some_and(|s| !s.is_empty()));
+}
+
+fn makefile_edited() -> TempDir {
+    let repo = git_repo(&[("Makefile", "a:\n\techo hi\n")]);
+    std::fs::write(repo.path().join("Makefile"), "a:\n\techo bye\n").expect("edit");
+    repo
+}
+
+fn assert_only_the_tabbed_line_has_its_own_text(patch: &Value) {
+    let lines = patch["hunks"][0]["lines"].as_array().expect("lines");
+    let of = |kind: &str| lines.iter().find(|line| line["kind"] == kind).expect("the line");
+    assert_eq!((&of("added")["text"], &of("added")["raw"]), (&json!("    echo bye"), &json!("\techo bye")), "{patch}");
+    assert_eq!((&of("context")["text"], of("context").get("raw")), (&json!("a:"), None), "{patch}");
+}
+
+#[test]
+fn a_patch_read_alone_gives_a_line_with_a_tab_its_own_text() {
+    let repo = makefile_edited();
+    let (mut app, rx) = started(&repo);
+
+    let patch = call_later(&mut app, &rx, "changes-file", &json!({"path": "Makefile"})).expect("a patch");
+
+    assert_only_the_tabbed_line_has_its_own_text(&patch);
+}
+
+#[test]
+fn a_patch_from_the_live_model_gives_a_line_with_a_tab_its_own_text() {
+    let patch = live_patch(&makefile_edited(), "Makefile");
+
+    assert_only_the_tabbed_line_has_its_own_text(&patch);
 }
 
 #[test]
@@ -311,19 +346,32 @@ fn a_missing_file_and_a_gap_out_of_range_are_not_found() {
     assert!(gap.message.contains("has 1 hunk, counted from 0, and the first has none"), "{}", gap.message);
 }
 
-#[test]
-fn a_gap_has_the_unchanged_lines_between_two_hunks() {
-    let body = numbered(40);
-    let repo = git_repo(&[("a.txt", &body)]);
+fn gap_between_edits_of(body: &str) -> Value {
+    let repo = git_repo(&[("a.txt", body)]);
     std::fs::write(repo.path().join("a.txt"), body.replace("line 2\n", "LINE 2\n").replace("line 35\n", "LINE 35\n"))
         .expect("edit");
     let (mut app, rx) = started(&repo);
 
-    let gap = call_later(&mut app, &rx, "changes-gap", &json!({"path": "a.txt", "hunk": 1})).expect("a gap");
+    call_later(&mut app, &rx, "changes-gap", &json!({"path": "a.txt", "hunk": 1})).expect("a gap")
+}
+
+#[test]
+fn a_gap_has_the_unchanged_lines_between_two_hunks() {
+    let gap = gap_between_edits_of(&numbered(40));
 
     let lines = gap["lines"].as_array().expect("lines");
     assert_eq!((&lines[0]["old"], &lines[0]["new"], &lines[0]["text"]), (&json!(6), &json!(6), &json!("line 6")));
     assert_eq!(lines.last().expect("last")["new"], 31);
+}
+
+#[test]
+fn a_gap_gives_a_line_with_a_tab_its_own_text() {
+    let gap = gap_between_edits_of(&numbered(40).replace("line 20\n", "\tline 20\n"));
+
+    let lines = gap["lines"].as_array().expect("lines");
+    let tabbed = lines.iter().find(|line| line["new"] == 20).expect("line 20");
+    assert_eq!((&tabbed["text"], &tabbed["raw"]), (&json!("    line 20"), &json!("\tline 20")));
+    assert!(lines.iter().filter(|line| line["new"] != 20).all(|line| line.get("raw").is_none()), "{gap}");
 }
 
 #[test]

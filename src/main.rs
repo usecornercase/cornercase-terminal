@@ -17,6 +17,10 @@ fn main() -> Result<ExitCode> {
             eprintln!("error: {message}");
             Ok(ExitCode::from(2))
         }
+        Err(Error::StaleBoot(message)) => {
+            eprintln!("error: {message}");
+            Ok(ExitCode::from(4))
+        }
         Err(e) => Err(e.into()),
     }
 }

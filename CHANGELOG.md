@@ -2,9 +2,18 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.8
+## 0.13.10
 
 - **A program with a view of its own can run a plugin's buttons and popups.** `cornercase plugin run PLUGIN ACTION --view ID` runs a `button` action on what that view shows rather than on what cornercase's window shows: it gets `CORNERCASE_CONTEXT=button`, the view's ids and its workspace's folder. A popup action opens with it even with no window attached, sized from the view, so someone who only uses that program can open one, and it follows `view-set`. If the view goes away, the popup stays open as it does when the last window leaves. Without `--view` nothing changes. `cornercase contract` lists the feature `plugin-run-view`, and socket clients send `view` beside the command, as for `focus` and `start`.
+
+## 0.13.8
+
+- **`cornercase close` and `rename` can say which run of the server their id is from.** Ids last one run of the server, so a script or another window that read an id, and then met a restart on its way, could close or rename whatever has that id now. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing closes or changes, the command prints why and exits with status 4 (`cornercase --remote vps close --workspace 7 --boot "$boot"`). It works in every form of the two commands, with `--worktree`, `--check` and `--agent`, on a line of `requests --follow` for that line only, and against a server too old to know `boot` it is refused before anything is sent, since that server would ignore the flag and act. Every other command prints what it printed.
+
+## 0.13.7
+
+- **Copy a changed line with its tabs from your own client.** `cornercase changes file --json` and `changes gap --json` now give a line that holds a tab a `raw` beside `text`: the line as it is in the file. `text` stays what a window draws, with tabs as four spaces, so a script or another UI that reads it sees nothing change; one that copies takes `raw` when a line has one, and a Makefile rule or a Go line pastes as it was. `cornercase changes file --help` lists every field of a line.
+- A selection copied in the Changes panel of a machine's workspace keeps its tabs now, as it does on this computer.
 
 ## 0.13.6
 
