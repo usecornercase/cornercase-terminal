@@ -86,6 +86,16 @@ fn forum() -> Forum {
     Forum { guild: 7, guild_name: "home".into(), channel: 800, tags: Tags { working: 11, waiting: 12, done: 13 } }
 }
 
+fn the_channel_refused() -> Vec<(&'static str, u16, &'static str)> {
+    vec![
+        ("GET /oauth2/applications/@me", 200, GUILD_INSTALL),
+        ("GET /users/@me/guilds", 200, HOME),
+        ("GET /guilds/7", 200, OURS),
+        ("GET /guilds/7/channels", 200, "[]"),
+        ("POST /guilds/7/channels", 403, NO_PERMISSION),
+    ]
+}
+
 fn steps_of(app: &App) -> Vec<bool> {
     app.forum_view(Via::Discord).steps.iter().map(|(done, _)| *done).collect()
 }
@@ -142,13 +152,7 @@ mod setup {
 
     #[test]
     fn a_missing_permission_keeps_the_dialog_open_with_the_link() {
-        let mut s = Setup::opened(vec![
-            ("GET /oauth2/applications/@me", 200, GUILD_INSTALL),
-            ("GET /users/@me/guilds", 200, HOME),
-            ("GET /guilds/7", 200, OURS),
-            ("GET /guilds/7/channels", 200, "[]"),
-            ("POST /guilds/7/channels", 403, NO_PERMISSION),
-        ]);
+        let mut s = Setup::opened(the_channel_refused());
         s.until("the forum cannot be made", |app| app.forum_view(Via::Discord).problem.is_some());
 
         let view = s.app.forum_view(Via::Discord);

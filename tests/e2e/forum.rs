@@ -1,3 +1,4 @@
+use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 
 use serde_json::{Value, json};
@@ -11,27 +12,23 @@ const OURS: &str = r#"{"owner_id":"9"}"#;
 const MADE: &str = r#"{"id":"800","type":15,"name":"cornercase","available_tags":[
     {"id":"11","name":"working"},{"id":"12","name":"needs you"},{"id":"13","name":"done"}]}"#;
 
-fn read_request(stream: &mut TcpStream) -> String {
-    let mut data = Vec::new();
-    let mut buf = [0u8; 4096];
-    while let Ok(n @ 1..) = stream.read(&mut buf) {
-        data.extend_from_slice(&buf[..n]);
-        let text = String::from_utf8_lossy(&data);
-        let Some((head, body)) = text.split_once("\r\n\r\n") else { continue };
-        let length = head.to_lowercase().lines().find_map(|line| {
-            let length = line.strip_prefix("content-length:")?;
-            length.trim().parse::<usize>().ok()
-        });
-        if body.len() >= length.unwrap_or(0) {
-            break;
-        }
+fn route_of(stream: &TcpStream) -> String {
+    let mut reader = BufReader::new(stream);
+    let mut route = String::new();
+    let _ = reader.read_line(&mut route);
+    let mut length = 0;
+    let mut header = String::new();
+    while reader.read_line(&mut header).is_ok_and(|read| read > 2) {
+        let lower = header.to_lowercase();
+        length = lower.strip_prefix("content-length:").and_then(|n| n.trim().parse().ok()).unwrap_or(length);
+        header.clear();
     }
-    String::from_utf8_lossy(&data).into_owned()
+    let _ = reader.read_exact(&mut vec![0; length]);
+    route.rsplit_once(' ').map(|(route, _)| route.to_string()).unwrap_or_default()
 }
 
-fn answer_of(request: &str) -> (&'static str, &'static str) {
-    let line = request.lines().next().unwrap_or_default();
-    match line.rsplit_once(' ').map_or(line, |(route, _)| route) {
+fn answer_of(route: &str) -> (&'static str, &'static str) {
+    match route {
         "GET /oauth2/applications/@me" => ("200 OK", APP),
         "GET /users/@me/guilds" => ("200 OK", SERVERS),
         "GET /guilds/7" | "GET /guilds/8" => ("200 OK", OURS),
@@ -46,7 +43,7 @@ fn fake_discord() -> String {
     let url = format!("http://{}", listener.local_addr().expect("its address"));
     thread::spawn(move || {
         for mut stream in listener.incoming().flatten() {
-            let (status, body) = answer_of(&read_request(&mut stream));
+            let (status, body) = answer_of(&route_of(&stream));
             let head = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
             let _ = stream.write_all(head.as_bytes()).and_then(|()| stream.write_all(body.as_bytes()));
         }

@@ -38,13 +38,7 @@ fn asked_to_pick(then: Routes) -> Setup {
 }
 
 fn one_server_refusing_the_channel() -> Setup {
-    let mut s = with_the_mode_on(vec![
-        ("GET /oauth2/applications/@me", 200, GUILD_INSTALL),
-        ("GET /users/@me/guilds", 200, HOME),
-        ("GET /guilds/7", 200, OURS),
-        ("GET /guilds/7/channels", 200, "[]"),
-        ("POST /guilds/7/channels", 403, NO_PERMISSION),
-    ]);
+    let mut s = with_the_mode_on(the_channel_refused());
     s.until("the forum cannot be made", |app| app.forum_view(Via::Discord).problem.is_some());
     s
 }
