@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.8
+
+- **Remove worktrees from a script, those of closed projects and their branches too.** `cornercase worktrees remove --path FOLDER…` removes what `cornercase worktrees list` shows, as the Worktrees dialog does: an open workspace, a closed project's worktree with its teardown, a prunable entry, a folder whose repository is gone. `--check` says what the dialog's confirmation would name and stops nothing. Without it, a folder at risk (uncommitted files, programs working in it, commits that would be lost, a lock) is refused until you pass `--force` or `--unlock`, `--delete-branch` also deletes the branch (never the default branch or the main checkout's), and nothing `worktrees list` does not know is ever touched. It prints one line per folder, or the answer with `--json`, and exits 3 when some were not removed. Another window or a script gets the same with the request `worktrees-remove`.
+
 ## 0.13.7
 
 - **Copy a changed line with its tabs from your own client.** `cornercase changes file --json` and `changes gap --json` now give a line that holds a tab a `raw` beside `text`: the line as it is in the file. `text` stays what a window draws, with tabs as four spaces, so a script or another UI that reads it sees nothing change; one that copies takes `raw` when a line has one, and a Makefile rule or a Go line pastes as it was. `cornercase changes file --help` lists every field of a line.
