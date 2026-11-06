@@ -3,7 +3,7 @@ use std::io::{IsTerminal, stdin, stdout};
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 
-use super::args::{Cli, Command, KillServerArgs, LogsArgs, RestartArgs, UpdateArgs, WhenArgs};
+use super::args::{Cli, Command, KillServerArgs, LogsArgs, PluginAction, RestartArgs, UpdateArgs, WhenArgs};
 use crate::client;
 use crate::error::{Error, Result};
 use crate::protocol::REMOTE_ENV;
@@ -17,12 +17,14 @@ pub(super) enum Kind {
     Run,
     Here(&'static str),
     Apart(&'static str),
+    BesideTheWindow,
 }
 
 pub(super) fn kind(command: Option<&Command>) -> Kind {
     match command {
         None | Some(Command::Control(_) | Command::StartServer(_) | Command::Stats(_)) => Kind::There,
         Some(Command::Plugin(args)) if args.action.asks_the_server() => Kind::There,
+        Some(Command::Plugin(args)) if matches!(args.action, PluginAction::Windows(_)) => Kind::BesideTheWindow,
         Some(Command::Plugin(_)) => Kind::Here("plugin"),
         Some(Command::Update(_) | Command::Restart(_) | Command::KillServer(_) | Command::Logs(_)) => Kind::Run,
         Some(Command::Remote(_)) => Kind::Apart("remote"),
@@ -43,6 +45,9 @@ fn refused(kind: Kind, destination: &str, variable: bool) -> Error {
             "`{name}` acts on this machine, so it takes no --remote{cause} on {destination} through ssh as `cornercase {name}`"
         ),
         Kind::Apart(name) => format!("`{name}` takes no --remote"),
+        Kind::BesideTheWindow => {
+            format!("`plugin windows` runs on the machine that shows the window, so it takes no --remote{cause} there")
+        }
         Kind::There | Kind::Run => format!("--remote {destination} was refused"),
     })
 }

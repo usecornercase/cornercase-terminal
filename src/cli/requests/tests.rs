@@ -37,6 +37,10 @@ mod a_line {
     #[case::remote_window(r#"{"args": ["remote", "devbox"]}"#, "`remote` cannot run")]
     #[case::skill(r#"{"args": ["skill"]}"#, "`skill` cannot run")]
     #[case::plugin_here(r#"{"args": ["plugin", "link", "/x"]}"#, "acts on this machine")]
+    #[case::plugin_windows(
+        r#"{"args": ["plugin", "windows", "--json"]}"#,
+        "run `cornercase plugin windows` on its own"
+    )]
     fn that_is_wrong_or_refused_gets_status_2_and_why(#[case] line: &str, #[case] why: &str) {
         let answer = answer_of(line).expect("an answer");
 
@@ -334,5 +338,42 @@ mod streams {
         let error = answer.error.expect("an error");
         assert!(error.contains("connection of its own"), "{error}");
         assert!(seen.iter().all(|text| text.contains("\"contract\"")), "{seen:?}");
+    }
+
+    const PLACED: &str = r#"{"args": ["start", "claude", "--placed", "--json"]}"#;
+    const PLAIN: &str = r#"{"args": ["start", "claude", "--json"]}"#;
+
+    fn start_on(features: control::contract::Descriptor, line: &str) -> (Answer, Vec<String>) {
+        let (mut answers, seen) = lines_on(|theirs| serving(theirs, features, NO_REQUEST_NAMES_THIS), &[line]);
+        (answers.remove(0), seen)
+    }
+
+    #[test]
+    fn a_placed_start_checks_the_server_then_sends_the_field() {
+        let (answer, seen) = start_on(control::contract::describe("boot", &[]), PLACED);
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let [asked, start] = &seen[..] else { panic!("not a check and a start: {seen:?}") };
+        assert!(asked.contains("\"contract\"") && start.contains("\"placed\":true"), "{seen:?}");
+    }
+
+    #[test]
+    fn a_placed_start_is_refused_before_it_is_sent_when_the_server_would_drop_the_field() {
+        let (answer, seen) = start_on(lacking("machine-start"), PLACED);
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("cannot answer a start as soon as its tab is open"), "{error}");
+        let [asked] = &seen[..] else { panic!("not only the check: {seen:?}") };
+        assert!(asked.contains("\"contract\""), "{seen:?}");
+    }
+
+    #[test]
+    fn a_plain_start_needs_no_check_and_sends_no_field() {
+        let (answer, seen) = start_on(lacking("machine-start"), PLAIN);
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let [start] = &seen[..] else { panic!("not only the start: {seen:?}") };
+        assert!(start.contains("\"start\"") && !start.contains("placed"), "{seen:?}");
     }
 }

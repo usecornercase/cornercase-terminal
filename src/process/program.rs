@@ -36,6 +36,19 @@ pub(crate) fn command(program: &str) -> Command {
     Command::new(startable(program, std::env::var_os("PATH").as_deref(), &own_extensions()))
 }
 
+pub(crate) fn own_binary() -> PathBuf {
+    std::env::current_exe().map(|exe| usable_binary(&exe)).unwrap_or_default()
+}
+
+fn usable_binary(exe: &Path) -> PathBuf {
+    if exe.exists() { exe.to_path_buf() } else { replaced_by(exe) }
+}
+
+pub(crate) fn replaced_by(exe: &Path) -> PathBuf {
+    let text = exe.to_string_lossy();
+    text.strip_suffix(" (deleted)").map_or_else(|| exe.to_path_buf(), PathBuf::from)
+}
+
 pub(crate) fn is_powershell(name: &str) -> bool {
     let name = super::program_name(name);
     POWERSHELLS.iter().any(|shell| super::same_file_name(shell, name))

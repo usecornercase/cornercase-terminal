@@ -12,6 +12,7 @@ use crate::log::{self, Level};
 use crate::os::fs::{DirBuilderExt, OpenOptionsExt, set_file_mode, set_mode};
 use crate::os::process::{Grouped, Signal};
 use crate::paths;
+use crate::process::program::own_binary;
 use crate::script::Shell;
 
 pub(crate) const BIN_ENV: &str = "CORNERCASE_BIN";
@@ -92,7 +93,7 @@ impl Places {
         let (program, args) =
             super::manifest::program(root, command).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
         let mut vars: Vec<(OsString, OsString)> = vec![
-            (BIN_ENV.into(), std::env::current_exe().unwrap_or_default().into()),
+            (BIN_ENV.into(), own_binary().into()),
             (ID_ENV.into(), id.into()),
             (ROOT_ENV.into(), root.into()),
             (CONFIG_ENV.into(), config.into()),

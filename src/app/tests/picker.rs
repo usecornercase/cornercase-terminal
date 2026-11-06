@@ -86,6 +86,17 @@ fn importing_into_a_group_with_the_same_name_reuses_it() {
 }
 
 #[test]
+fn importing_into_a_folded_group_unfolds_it() {
+    let mut s = open_picker();
+    let group = s.app.add_group("work".into());
+    s.app.set_collapsed(Target::Group(group), true);
+
+    import(&mut s, "work.code-workspace", r#"{"folders": [{"path": "api"}]}"#);
+
+    assert!(s.app.group(group).is_some_and(|g| !g.collapsed));
+}
+
+#[test]
 fn a_folder_name_becomes_the_project_name() {
     let mut s = open_picker();
 

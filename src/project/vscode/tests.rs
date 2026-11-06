@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::os::fs::link_to;
 use crate::test_util::{TempDir, os_path};
 
 fn write(dir: &Path, name: &str, text: &str) -> PathBuf {
@@ -32,6 +33,20 @@ mod reading {
         let paths = folders_read(tmp.path(), r#"{"folders": [{"path": "api"}, {"path": "../web"}]}"#);
 
         assert_eq!(paths, [tmp.path().join("api"), tmp.path().join("../web")]);
+    }
+
+    #[test]
+    fn reads_relative_folders_from_the_folder_it_was_given_without_resolving_it() {
+        let tmp = TempDir::new();
+        let real = tmp.path().join("real");
+        std::fs::create_dir(&real).expect("create folder");
+        write(&real, "w.code-workspace", r#"{"folders": [{"path": "api"}]}"#);
+        let link = tmp.path().join("link");
+        link_to(&real, &link).expect("a link to the folder");
+
+        let folders = read(&link.join("w.code-workspace")).expect("read").folders;
+
+        assert_eq!(folders[0].path, link.join("api"));
     }
 
     #[test]
@@ -135,5 +150,27 @@ mod jsonc {
         let got: serde_json::Value = serde_json::from_str(&strip_jsonc(text)).expect("valid json");
         let want: serde_json::Value = serde_json::from_str(json).expect("valid json");
         assert_eq!(got, want);
+    }
+}
+
+mod is_workspace {
+    use super::*;
+
+    #[test]
+    fn takes_a_file_with_the_extension() {
+        let tmp = TempDir::new();
+
+        assert!(is_workspace(&write(tmp.path(), "w.code-workspace", "{}")));
+    }
+
+    #[test]
+    fn refuses_another_file_a_folder_and_what_is_not_there() {
+        let tmp = TempDir::new();
+        let folder = tmp.path().join("folder.code-workspace");
+        std::fs::create_dir(&folder).expect("create folder");
+
+        assert!(!is_workspace(&write(tmp.path(), "w.json", "{}")));
+        assert!(!is_workspace(&folder));
+        assert!(!is_workspace(&tmp.path().join("gone.code-workspace")));
     }
 }

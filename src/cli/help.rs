@@ -26,7 +26,7 @@ is refused, and `--remote DESTINATION update` updates it), ssh never asks for a
 password, only `start-server` starts a server there, and a command that follows a stream ends it
 there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace; `paste-file` reads its FILE here. `update`, `restart`, `kill-server`
 and `logs` run there, as that machine's own command through ssh, and exit with its status; the plugin commands that
-install or change plugins act on this machine and refuse it.
+install or change plugins act on this machine and refuse it, and so does `plugin windows`.
 
 Examples:
   cornercase status
@@ -35,9 +35,6 @@ Examples:
   cornercase wait --pane \"$pane\" --until shell --timeout 900
   cornercase read --pane \"$pane\" --lines 40
   cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
-pub(super) const OPEN_HELP: &str = "Examples:
-  cornercase open ~/src/shop
-  cornercase open . --focus";
 pub(super) const COMMAND_HELP: &str =
     "The words of COMMAND are joined with spaces and typed at the prompt once the shell is ready,
 as ssh does, so quote what the shell should read as one argument. The command returns once it
@@ -697,9 +694,11 @@ mod files;
 mod flow;
 mod held;
 mod machines;
+mod open;
 mod pair;
 mod paste_file;
 mod plugin;
+mod plugin_windows;
 mod ports;
 mod processes;
 mod pull_request;
@@ -721,9 +720,11 @@ pub(in crate::cli) use flow::{
 };
 pub(in crate::cli) use held::HELD_HELP;
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
+pub(in crate::cli) use open::OPEN_HELP;
 pub(in crate::cli) use pair::CONFIG_PAIR_HELP;
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use plugin::PLUGIN_HELP;
+pub(in crate::cli) use plugin_windows::PLUGIN_WINDOWS_HELP;
 pub(in crate::cli) use ports::{PORTS_HELP, PORTS_STOP_ABOUT, PORTS_STOP_HELP};
 pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_ABOUT, PROCESSES_STOP_HELP};
 pub(in crate::cli) use pull_request::PULL_REQUEST_HELP;

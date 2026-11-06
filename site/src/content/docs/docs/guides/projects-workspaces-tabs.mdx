@@ -64,7 +64,7 @@ When the projects column gets long, put projects in **groups**: work, personal, 
 | Change its icon or colour | Click its `⋯` or right-click its header, then **icon and colour**. |
 | Delete a group | Hover its header and click the `×` at its right end, or open its menu and choose **delete group**. cornercase asks first: **keep projects** leaves them open and ungrouped, **close projects** closes them too and stops their shells. An empty group only asks to confirm. |
 
-A new group goes at the end of the list; drag its header to move it. There is a single level: a group can't hold another group. Scripts and other apps do the same with `cornercase group`, `move`, `collapse` and `expand`; see [Scripts and agents](../scripts-and-agents/#arrange).
+A new group goes at the end of the list; drag its header to move it. There is a single level: a group can't hold another group. Scripts and other apps do the same with `cornercase group`, `open --into`, `move`, `collapse` and `expand`; see [Scripts and agents](../scripts-and-agents/#arrange).
 
 ### Import a VS Code workspace
 
@@ -74,7 +74,7 @@ Coming from VS Code with one workspace per area of work? Open its `.code-workspa
 - Each folder of the workspace opens as a project in the group. A folder with a `name` in the file gets that name, unless you already renamed that project in cornercase. Relative paths are read from where the file is, as VS Code does.
 - A folder that is already open moves into the group instead of opening twice. Folders that don't exist, and remote ones, are skipped; a message says how many projects were imported and how many folders were not found. A folder whose shell can't start (one you may not enter, for example) is skipped too and the rest still open; the message counts it, and `server.log` says which folder failed and why.
 
-The import happens once: after that the group is cornercase's, and the `.code-workspace` file is never changed. Comments and trailing commas in the file are fine.
+The import happens once: after that the group is cornercase's, and the `.code-workspace` file is never changed. Comments and trailing commas in the file are fine. Scripts and other apps do the same with `cornercase open work.code-workspace`; see [Scripts and agents](../scripts-and-agents/#import-a-vs-code-workspace).
 
 ### Icon and colour
 
