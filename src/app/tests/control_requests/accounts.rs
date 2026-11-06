@@ -788,6 +788,21 @@ mod a_pane_that_starts_agents {
     }
 
     #[test]
+    fn runs_a_worktree_s_setup_again_on_its_accounts() {
+        let repo = git_repo(&[("README", "hi")]);
+        let folder = repo.path().to_path_buf();
+        let mut c = from_in(repo, "personal");
+        c.made(&json!({}), "new-workspace", &json!({"name": "feat/x", "worktree": true}));
+        let workspace = c.s.app.projects[0].workspaces.iter().find(|w| w.worktree).expect("the worktree").id;
+        let setup = crate::config::ProjectSettings { setup: "true".into(), ..Default::default() };
+        c.s.app.change_config(|config| config.set_project(&folder, None, setup)).expect("a config change");
+
+        let made = c.made(&c.mine(), "run-setup", &json!({"workspace": workspace}));
+
+        assert_eq!(c.claude(made), (Some("personal".into()), Some("personal".into())));
+    }
+
+    #[test]
     fn names_the_accounts_it_passed_on_in_the_opened_event() {
         let mut c = from("personal");
         follow(&mut c.s.app, &[]);

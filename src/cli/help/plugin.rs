@@ -25,6 +25,11 @@ shows. A popup action waits until its popup closes, and needs a window attached;
 listed before the plugins changed is refused (pass the --revision `actions --json` printed, or none for the current \
 one).
 
+A program that draws cornercase itself passes `run` the --view ID of its `cornercase view`: a button's action then \
+runs on what that view shows, in its workspace's folder. A popup action opens with no window attached too, sized from \
+that view while none is, and following it; it stays open if the view goes, as when the last window leaves, so the \
+program that comes back shows it (`status --app`, `surface --popup`) or closes it with `popup-close`.
+
 `status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the label and the note, and \
 what each service is doing (running, restarting or still starting), and why `plugins.json` cannot be read. It asks \
 the running server. `list` still reads the files and works with no server.
@@ -47,6 +52,7 @@ Examples:
   cornercase plugin actions --context pane
   cornercase plugin run acme.notes open --pane 5
   cornercase plugin run acme.notes browse
+  cornercase plugin run acme.notes browse --view 21
   cornercase plugin popup-close
   cornercase plugin windows --json
   cornercase plugin logs my-plugin --follow

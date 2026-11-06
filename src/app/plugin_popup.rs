@@ -34,6 +34,7 @@ pub(super) struct Opening {
     pub(super) env: Vec<(String, String)>,
     pub(super) on: (Ids, Context),
     pub(super) request: Option<u64>,
+    pub(super) view: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -45,6 +46,7 @@ pub(super) struct Popup {
     pub(super) started: Instant,
     places: Places,
     on: (Ids, Context),
+    view: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,22 +153,33 @@ impl App {
         if let Some(blocked) = self.popup_blocked() {
             return Err(blocked.into());
         }
-        let Opening { plugin, action, places, cwd, env, on, request } = opening;
+        let Opening { plugin, action, places, cwd, env, on, request, view } = opening;
         let launch = places.launch(&plugin, &action.command, &env, Some(&cwd)).map_err(|e| e.to_string())?;
         let id = self.take_id();
-        let term = self.spawn_popup(id, &action, &launch).map_err(|e| e.to_string())?;
+        let term = self.spawn_popup(id, &action, &launch, view).map_err(|e| e.to_string())?;
         log::info!("plugins", "popup opened", plugin = plugin.entry.id, action = action.id, pane = id);
         places.note(&plugin.entry.id, "popup opened", &[("action", &action.id)]);
-        let popup = Popup { plugin, action, term, request, started: Instant::now(), places, on };
+        let popup = Popup { plugin, action, term, request, started: Instant::now(), places, on, view };
         self.overlay = Some(Overlay::Popup(Box::new(popup)));
         Ok(())
     }
 
-    fn spawn_popup(&self, id: u64, action: &Action, launch: &run::Launch) -> crate::error::Result<Term> {
-        let (rows, cols) =
-            self.clients.views.window().map_or((action.height.unwrap_or(ROWS), action.width.unwrap_or(COLS)), |area| {
-                ui::popup_size(area, wanted(action))
-            });
+    fn popup_bounds(&self, view: Option<u64>, window: Option<Rect>) -> Option<Rect> {
+        let Some(view) = view.filter(|_| !self.has_window()) else { return window };
+        self.clients.views.get(view)?.area()
+    }
+
+    fn spawn_popup(
+        &self,
+        id: u64,
+        action: &Action,
+        launch: &run::Launch,
+        view: Option<u64>,
+    ) -> crate::error::Result<Term> {
+        let bounds = self.popup_bounds(view, self.clients.views.window());
+        let (rows, cols) = bounds.map_or((action.height.unwrap_or(ROWS), action.width.unwrap_or(COLS)), |area| {
+            ui::popup_size(area, wanted(action))
+        });
         let env: Vec<(String, String)> = launch
             .env
             .iter()
@@ -237,7 +250,9 @@ impl App {
         view.screen = popup.term.emulator.snapshot().unwrap_or_default();
     }
 
-    pub(super) fn size_popup(&mut self, area: Rect) {
+    pub(super) fn size_popup(&mut self, window: Option<Rect>) {
+        let Some(view) = self.popup().map(|popup| popup.view) else { return };
+        let Some(area) = self.popup_bounds(view, window) else { return };
         let Some(popup) = self.popup_mut() else { return };
         let (rows, cols) = ui::popup_size(area, wanted(&popup.action));
         popup.term.resize(rows, cols);

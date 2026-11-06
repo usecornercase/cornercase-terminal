@@ -39,6 +39,17 @@ fn team(setup: &str, teardown: &str) -> Team {
     Team { app, rx, repo, _dirs: (worktrees, config), marker }
 }
 
+fn two_answers(team: &mut Team, what: &str) -> Vec<Response> {
+    let mut got = Vec::new();
+    wait_until(what, || {
+        drain(&mut team.app, &team.rx);
+        team.app.refresh(Instant::now());
+        got.extend(answers(&mut team.app));
+        got.len() >= 2
+    });
+    got
+}
+
 fn start_in_worktree(app: &mut App) {
     let start = wire::Start {
         agent: Some("claude".into()),
@@ -186,13 +197,7 @@ fn closing_the_setup_tab_drops_the_agent_and_its_status_file() {
     );
     let _ = (project, workspace);
 
-    let mut got = Vec::new();
-    wait_until("the tab closes and the start fails", || {
-        drain(&mut team.app, &team.rx);
-        team.app.refresh(Instant::now());
-        got.extend(answers(&mut team.app));
-        got.len() >= 2
-    });
+    let got = two_answers(&mut team, "the tab closes and the start fails");
     let message =
         got.into_iter().find_map(|r| if let Response::Error(m) = r { Some(m) } else { None }).expect("the start fails");
 
@@ -224,13 +229,7 @@ fn a_setup_closed_before_the_first_watch_still_drops_the_agent() {
         Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false, unlock: false }),
     );
 
-    let mut got = Vec::new();
-    wait_until("the start fails", || {
-        drain(&mut team.app, &team.rx);
-        team.app.refresh(Instant::now());
-        got.extend(answers(&mut team.app));
-        got.len() >= 2
-    });
+    let got = two_answers(&mut team, "the start fails");
 
     assert!(got.iter().any(|r| matches!(r, Response::Error(_))));
 }
@@ -255,4 +254,90 @@ fn a_later_unrelated_failure_is_not_blamed_on_a_failed_setup() {
 
 fn now_done(app: &mut App, command: Command) -> Response {
     now(app, None, command)
+}
+
+mod run_again {
+    use super::*;
+
+    fn failed_worktree(team: &mut Team, branch: &str) -> u64 {
+        new_worktree(&mut team.app, branch);
+        error(answered(&mut team.app, &team.rx, "the first setup fails"));
+        team.app.projects[0].workspaces.iter().find(|w| w.worktree).expect("worktree").id
+    }
+
+    fn run(workspace: u64) -> Command {
+        Command::RunSetup(wire::RunSetup { workspace: Some(workspace), focus: false })
+    }
+
+    fn start_in(workspace: u64) -> Command {
+        let (agent, prompt) = (Some("claude".into()), Some("go".into()));
+        Command::Start(wire::Start { agent, prompt, workspace: Some(workspace), ..wire::Start::default() })
+    }
+
+    fn close_tab(app: &mut App, tab: u64) {
+        let item = Item::Tab(tab);
+        done(now_done(app, Command::Close(wire::Close { item, remove_worktree: false, force: false, unlock: false })));
+    }
+
+    #[test]
+    fn an_agent_started_meanwhile_waits_for_it_and_reads_what_it_made() {
+        let mut team = team("test -f MARKER.ok\necho again > MARKER", "");
+        let workspace = failed_worktree(&mut team, "feat/held");
+        std::fs::write(format!("{}.ok", team.marker.display()), "").expect("write the marker");
+
+        ask(&mut team.app, None, run(workspace));
+        ask(&mut team.app, None, start_in(workspace));
+        assert_eq!(team.app.held_launch_panes().len(), 3, "the agent's launch is not held");
+        let answered = two_answers(&mut team, "both requests are answered");
+
+        assert!(answered.iter().all(|answer| matches!(answer, Response::Ok(_))), "{answered:?}");
+        let agent = std::fs::read_to_string(format!("{}.agent", team.marker.display())).expect("the agent ran");
+        assert_eq!(agent, "again\n");
+    }
+
+    #[test]
+    fn an_agent_started_meanwhile_does_not_start_when_it_fails() {
+        let mut team = team("exit 3", "");
+        let workspace = failed_worktree(&mut team, "feat/dropped");
+
+        ask(&mut team.app, None, run(workspace));
+        ask(&mut team.app, None, start_in(workspace));
+        let answered = two_answers(&mut team, "both requests are answered");
+        let messages: Vec<String> = answered.into_iter().map(error).collect();
+
+        assert!(messages.iter().any(|m| m.contains("exit status 3") && m.contains("did not start")), "{messages:?}");
+        assert!(messages.iter().any(|m| m.contains("exit status 3") && !m.contains("agent")), "{messages:?}");
+        assert!(!PathBuf::from(format!("{}.agent", team.marker.display())).exists());
+    }
+
+    #[test]
+    fn a_setup_closed_before_it_ended_says_so() {
+        let mut team = team("test -f MARKER.ok\nsleep 30", "");
+        let workspace = failed_worktree(&mut team, "feat/closed");
+        std::fs::write(format!("{}.ok", team.marker.display()), "").expect("write the marker");
+        ask(&mut team.app, None, run(workspace));
+        let target = team.app.projects[0].workspaces.iter().find(|w| w.id == workspace).expect("workspace");
+        let tab = target.tabs.last().expect("the new tab").id;
+
+        close_tab(&mut team.app, tab);
+        let message = error(answered(&mut team.app, &team.rx, "the tab closes"));
+
+        assert!(message.contains(&format!("the setup of workspace {workspace} was closed")), "{message}");
+    }
+
+    #[test]
+    fn a_new_worktree_whose_setup_closes_says_so_too() {
+        let mut team = team("sleep 30", "");
+        new_worktree(&mut team.app, "feat/gone");
+        pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
+            a.projects[0].workspaces.iter().any(Workspace::setting_up)
+        });
+        let target = team.app.projects[0].workspaces.iter().find(|w| w.worktree).expect("worktree");
+        let tab = target.tabs[0].id;
+
+        close_tab(&mut team.app, tab);
+        let message = error(answered(&mut team.app, &team.rx, "the tab closes"));
+
+        assert!(message.contains("was closed before it ended"), "{message}");
+    }
 }

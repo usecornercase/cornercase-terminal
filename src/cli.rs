@@ -24,11 +24,13 @@ mod agents;
 mod args;
 mod arrange;
 mod changes;
+mod clone;
 mod config;
 mod context;
 mod contract;
 mod files;
 mod flow;
+mod held;
 mod help;
 mod issue;
 mod line;
@@ -44,6 +46,7 @@ mod read;
 mod recap;
 mod requests;
 mod search;
+mod setup;
 mod start_server;
 mod stats;
 mod status;
@@ -198,6 +201,9 @@ fn run_control(command: Control) -> Result<bool> {
     if let Some(view) = command.view() {
         client::use_view(view)?;
     }
+    if let Some(boot) = command.boot() {
+        client::use_boot(boot)?;
+    }
     let done = match control_route(command) {
         ControlFlow::Break(done) => done,
         ControlFlow::Continue(_) => Err(Error::Control("no area runs this command".into())),
@@ -218,10 +224,11 @@ fn control_route(command: Control) -> ControlFlow<Result<bool>, Control> {
 fn create_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Open(open) => run_open(&open).map(|()| true),
-        Control::Clone(clone) => run_clone(&clone).map(|()| true),
+        Control::Clone(args) => clone::run(&args).map(|()| true),
         Control::NewWorkspace(new) => run_new_workspace(new).map(|()| true),
         Control::NewTab(new) => run_new_tab(new).map(|()| true),
         Control::Split(split) => run_split(&split).map(|()| true),
+        Control::Setup(args) => setup::run(&args).map(|()| true),
         Control::Start(start) => run_start(*start).map(|()| true),
         Control::Go(go) => run_go(go).map(|()| true),
         other => return ControlFlow::Continue(other),
@@ -232,6 +239,7 @@ fn talk_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Send(send) => run_send(send).map(|()| true),
         Control::Keys(keys) => run_keys(keys).map(|()| true),
+        Control::Held(args) => held::run(&args).map(|()| true),
         Control::Mark(mark) => run_mark(&mark).map(|()| true),
         Control::Read(read) => read::run(&read),
         Control::Wait(wait) => run_wait(wait).map(|()| true),
@@ -338,19 +346,6 @@ fn clone_url(url: &str, remote: Option<&Remote>) -> Result<String> {
         return Ok(url.to_string());
     }
     Ok(std::path::absolute(path)?.to_string_lossy().into_owned())
-}
-
-fn run_clone(clone: &args::CloneArgs) -> Result<()> {
-    let remote = client::used_remote();
-    let (url, parent) = (clone_url(&clone.url, remote)?, clone_parent(clone.folder.as_deref(), remote)?);
-    let request = control::CloneRepository { url, parent, focus: clone.create.focus, files: Vec::new() };
-    let value = ask("clone", control::Command::Clone(request))?;
-    if clone.create.print.json {
-        return print_json(&value);
-    }
-    let cloned: control::Cloned = answer(value)?;
-    println!("{}", cloned.path.display());
-    Ok(())
 }
 
 fn run_new_workspace(new: args::NewWorkspaceArgs) -> Result<()> {

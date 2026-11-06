@@ -8,7 +8,7 @@ use serde_json::json;
 use super::args::PluginAction;
 use super::args::plugin::{InstallArgs, RunArgs, UpdatePluginArgs};
 use super::print_log;
-use crate::client::{answer, ask, confirm};
+use crate::client::{answer, ask, confirm, use_plugin_run_view, use_view};
 use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::control::{Command, Item, PluginActions, PluginList, PluginPopupClose, PluginRun};
@@ -232,6 +232,10 @@ fn run_action(args: &RunArgs) -> Result<bool> {
         let info: ActionsInfo = answer(ask("plugin-actions", Command::PluginActions(PluginActions::default()))?)?;
         info.revision
     };
+    if let Some(view) = args.view {
+        use_view(view)?;
+        use_plugin_run_view()?;
+    }
     let request = PluginRun { plugin: args.plugin.clone(), action: args.action.clone(), revision, item };
     let value = ask("plugin-run", Command::PluginRun(request))?;
     let ran: ActionRan = answer(value.clone())?;
