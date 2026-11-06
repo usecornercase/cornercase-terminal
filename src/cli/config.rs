@@ -52,10 +52,7 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
             return share::import(&share::Import { source, only, yes, preview }, args.json);
         }
     };
-    if args.json {
-        return print_json(&value);
-    }
-    print_out(&render(&answer::<Described>(value)?, changing))
+    if args.json { print_json(&value) } else { print_out(&render(&answer::<Described>(value)?, changing)) }
 }
 
 fn search(text: &str, as_json: bool) -> Result<()> {
