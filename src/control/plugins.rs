@@ -94,14 +94,20 @@ impl ServiceInfo {
             .iter()
             .map(|service| {
                 let found = seen.iter().find(|(entry, _)| *entry == service.id).map(|(_, seen)| *seen);
-                let (state, pid, restart) = match found {
-                    Some(Seen::Running { pid }) => ("running", Some(pid), None),
-                    Some(Seen::Stopped { until }) => ("stopped", None, Some(restart_in(until, now))),
-                    None => ("starting", None, None),
-                };
-                Self { id: service.id.clone(), state: state.into(), pid, restart_in: restart }
+                found.map_or_else(|| Self::named(&service.id, "starting"), |seen| Self::seen(&service.id, seen, now))
             })
             .collect()
+    }
+
+    pub(crate) fn named(id: &str, state: &str) -> Self {
+        Self { id: id.into(), state: state.into(), ..Self::default() }
+    }
+
+    pub(crate) fn seen(id: &str, seen: Seen, now: Instant) -> Self {
+        match seen {
+            Seen::Running { pid } => Self { pid: Some(pid), ..Self::named(id, "running") },
+            Seen::Stopped { until } => Self { restart_in: Some(restart_in(until, now)), ..Self::named(id, "stopped") },
+        }
     }
 }
 

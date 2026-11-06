@@ -197,6 +197,8 @@ Keep a service in the foreground: don't detach it with `nohup`, `setsid` or `&` 
 
 A window process runs on the machine that shows the window, for as long as that window is open: two windows run two copies. It runs only in local windows, never in one opened with [`cornercase remote`](../remote/), which has no socket on its machine.
 
+A program that draws cornercase itself keeps them running with [`cornercase plugin windows`](../scripts-and-agents/#window-processes-beside-your-own-window), for as long as its window is open, and then counts as a local window: two such programs run two copies, and a cornercase window beside them runs its own.
+
 ## What every command gets
 
 | Variable | Holds |
@@ -210,7 +212,7 @@ A window process runs on the machine that shows the window, for as long as that 
 | `CORNERCASE_PLUGIN_ACTION`, `CORNERCASE_CONTEXT` | For actions: which action, and whether a `project`, `workspace`, `tab` or `pane` was clicked, or the plugin's `button` |
 | `CORNERCASE_PROJECT`, `CORNERCASE_WORKSPACE`, `CORNERCASE_TAB`, `CORNERCASE_PANE` | For actions: the ids of what was clicked, or, from the button, of what the window shows |
 
-Commands also inherit the server's environment (or the window's, for window processes), including `CORNERCASE_SOCKET` when it is set, so `cornercase` reaches the right server. Claude Code's session variables and the issue trackers' token variables (`SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY`) are removed.
+Commands also inherit the server's environment (or, for window processes, the window's, or that of the `plugin windows` running them), including `CORNERCASE_SOCKET` when it is set, so `cornercase` reaches the right server. Claude Code's session variables and the issue trackers' token variables (`SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY`) are removed.
 
 ## An example
 

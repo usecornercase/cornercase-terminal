@@ -13,6 +13,10 @@ struct OnVps {
 }
 
 fn on_vps() -> OnVps {
+    on_vps_accepting_trust(true)
+}
+
+fn on_vps_accepting_trust(accepts: bool) -> OnVps {
     let machine = Session::new();
     let home = machine.dir.join("home");
     std::fs::create_dir_all(&home).expect("create the machine's home");
@@ -22,7 +26,7 @@ fn on_vps() -> OnVps {
         "worktrees_dir": machine.dir.join("worktrees"),
         "gh": fake_issue_gh(&machine.dir, VIEW),
         "agent": "fake",
-        "accept_trust_prompts": true,
+        "accept_trust_prompts": accepts,
         "agent_commands": {"fake": agent, "claude": agent},
     });
     std::fs::write(machine.dir.join("config.json"), config.to_string()).expect("write the machine's config");
@@ -226,4 +230,86 @@ fn an_issue_started_on_a_machine_shows_its_tab_in_this_window() {
     vps.machine
         .wait_for_file(&got, "the agent there gets the issue", |text| text == "https://github.com/acme/shop/issues/7");
     wait_until("the window shows the machine's tab", || vps.shown_tab().is_some_and(|tab| tab.is_u64()));
+}
+
+struct Asking<'a> {
+    commands: &'a Session,
+    agents: &'a Session,
+    place: &'a [&'a str],
+    repo: &'a std::path::Path,
+}
+
+impl Asking<'_> {
+    fn start(&self, args: &[&str]) -> std::process::Child {
+        self.commands.spawn(&[&["start", "--json"], self.place, args].concat())
+    }
+
+    fn asks_trust(&self, pane: &str) -> bool {
+        self.agents.says(&["read", "--pane", pane]).contains("Do you trust")
+    }
+
+    fn first_pane_asking_trust(&self) -> String {
+        let mut asking = None;
+        wait_until("the agent of the plain start asks to trust the folder", || {
+            asking = panes(self.agents.report()).map(|pane| pane.id.to_string()).find(|pane| self.asks_trust(pane));
+            asking.is_some()
+        });
+        asking.expect("the pane that asks")
+    }
+
+    fn trust_and_see_the_prompt(&self, pane: &str, prompt: &str) {
+        self.agents.says(&["keys", "--pane", pane, "enter"]);
+        let got = self.repo.join("got").display().to_string();
+        self.agents.wait_for_file(&got, "the agent gets its prompt once it is trusted", |text| text.ends_with(prompt));
+    }
+
+    fn placed_answers_before_a_plain_start_held_on_its_question(&self) -> Value {
+        let mut plain = self.start(&["--prompt", "plain"]);
+        let held = self.first_pane_asking_trust();
+
+        let started = answered(self.start(&["--prompt", "placed", "--placed"]));
+
+        let pane = started["pane"].to_string();
+        assert_ne!(pane, held, "{started}");
+        wait_until("the agent of the placed start asks too", || self.asks_trust(&pane));
+        assert!(plain.try_wait().expect("the plain start").is_none(), "the plain start answered with a question up");
+        self.trust_and_see_the_prompt(&pane, "placed");
+        self.trust_and_see_the_prompt(&held, "plain");
+        let plain = answered(plain);
+        assert_eq!(plain["pane"].to_string(), held, "{plain}");
+        let ids = |answer: &Value| answer.as_object().map(|ids| ids.keys().cloned().collect::<Vec<_>>());
+        assert_eq!(ids(&started), ids(&plain), "the same ids");
+        started
+    }
+}
+
+fn answered(child: std::process::Child) -> Value {
+    let out = finish_within(child, TIMEOUT);
+    assert!(out.status.success(), "{out:?}");
+    serde_json::from_slice(&out.stdout).expect("a JSON answer")
+}
+
+#[test]
+fn a_placed_start_answers_while_its_agent_asks_and_a_plain_one_holds_its_answer() {
+    let vps = on_vps_accepting_trust(false);
+    let repo = shop(&vps.here.dir);
+    let project = vps.here.says(&["open", &repo.display().to_string()]);
+
+    let place = ["--project", &project];
+    let asking = Asking { commands: &vps.here, agents: &vps.here, place: &place, repo: &repo };
+    let started = asking.placed_answers_before_a_plain_start_held_on_its_question();
+
+    assert_eq!(started["machine"], Value::Null, "{started}");
+}
+
+#[test]
+fn a_placed_start_on_a_machine_answers_while_the_agent_there_asks_and_a_plain_one_holds_its_answer() {
+    let vps = on_vps_accepting_trust(false);
+    let (repo, project) = vps.shop_there();
+
+    let place = ["--machine", VPS, "--project", &project];
+    let asking = Asking { commands: &vps.here, agents: &vps.machine, place: &place, repo: &repo };
+    let started = asking.placed_answers_before_a_plain_start_held_on_its_question();
+
+    assert_eq!(started["machine"], VPS, "{started}");
 }
