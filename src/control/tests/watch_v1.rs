@@ -2,6 +2,8 @@ use super::*;
 use crate::project::split::{Dir, Node};
 use crate::test_util::fixture;
 
+const CONVERSATION: &str = "0199f1c2-7a31-7e52-9b1f-3c5d8e2a4f60";
+
 fn split() -> Layout {
     let node =
         Node::Split { dir: Dir::Right, ratio: 0.6, first: Box::new(Node::Leaf(4)), second: Box::new(Node::Leaf(5)) };
@@ -14,6 +16,7 @@ fn pane(id: u64, active: bool) -> PaneInfo {
         path: Some(PathBuf::from("/home/me/web-shop")),
         program: Some("claude".into()),
         agent: Some("claude".into()),
+        conversation: active.then(|| CONVERSATION.into()),
         status: Some("working".into()),
         model: Some("Opus 5.5".into()),
         context: Some(23),
@@ -56,6 +59,15 @@ fn a_pane_leaves_its_pid_and_memory_out_unless_it_has_them() {
     assert_eq!((&given["pid"], &given["memory"]), (&json!(321), &json!(4096)));
     let read = serde_json::from_value::<PaneInfo>(given).expect("a pane");
     assert_eq!((read.pid, read.memory), (Some(321), Some(4096)));
+}
+
+#[test]
+fn a_pane_always_has_the_key_of_its_conversation_with_null_until_it_is_known() {
+    let unknown = serde_json::to_value(pane(5, false)).expect("a pane");
+    let known = serde_json::to_value(pane(4, true)).expect("a pane");
+
+    assert_eq!(unknown.get("conversation"), Some(&Value::Null), "{unknown}");
+    assert_eq!(known.get("conversation"), Some(&json!(CONVERSATION)), "{known}");
 }
 
 #[test]
@@ -223,7 +235,7 @@ fn a_report_from_before_the_snapshot_fields_takes_their_defaults() {
     assert_eq!((workspace.custom_name.as_deref(), workspace.collapsed), (None, false));
     let tab = &workspace.tabs[0];
     assert_eq!((tab.custom_name.as_deref(), tab.layout.as_ref()), (None, None));
-    assert_eq!(tab.panes[0].title, None);
+    assert_eq!((tab.panes[0].title.as_deref(), tab.panes[0].conversation.as_deref()), (None, None));
 }
 
 #[test]

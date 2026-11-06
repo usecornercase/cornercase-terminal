@@ -622,6 +622,7 @@ mod journal;
 mod merge_check;
 mod one_folder;
 mod ordering;
+mod pane_conversation;
 mod pane_moves;
 mod parents;
 #[cfg(unix)]
