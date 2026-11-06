@@ -36,6 +36,7 @@ mod window;
 #[cfg(test)]
 pub(crate) use requests::share_socket;
 pub(crate) use requests::use_boot;
+pub(crate) use requests::use_stats_cached;
 pub(crate) use requests::{
     answer, ask, ask_starting, close_unused_link, connect, follow, follow_all, report_now, running_now,
 };

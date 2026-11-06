@@ -145,14 +145,31 @@ mod one_machine {
         assert_eq!(rig.reply(), Err(("failed".into(), GONE.into())));
     }
 
-    #[test]
-    fn a_cached_usage_request_does_not_ask_it() {
+    #[rstest]
+    #[case::stats("stats")]
+    #[case::usage("usage")]
+    fn a_cached_request_does_not_ask_it(#[case] command: &str) {
         let mut rig = linked(answer(&plans_of("remote")));
 
-        let refused = rig.asks("usage", &json!({"machine": "vps", "cached": true}));
+        let refused = rig.asks(command, &json!({"machine": "vps", "cached": true}));
 
-        assert_eq!(refused, Err(("failed".into(), format!("no usage from `vps`: {NOT_READ}"))));
+        assert_eq!(refused, Err(("failed".into(), format!("no {command} from `vps`: {NOT_READ}"))));
         assert_eq!(rig.seen("ask"), 0);
+    }
+
+    #[test]
+    fn a_cached_stats_request_does_not_wait_for_an_ask_on_its_way() {
+        let (mut rig, open) = gated(answer(&counted()));
+        rig.sends("stats", &json!({"machine": "vps"}));
+
+        let refused = rig.asks("stats", &json!({"machine": "vps", "cached": true}));
+
+        assert_eq!(refused, Err(("failed".into(), format!("no stats from `vps`: {NOT_READ}"))));
+        open.send(()).expect("let the machine answer");
+        assert_eq!(prompts(&rig.reply().expect("the fresh stats")), 5);
+        let copy = rig.asks("stats", &json!({"machine": "vps", "cached": true})).expect("the copy");
+        assert_eq!(prompts(&copy), 5);
+        assert_eq!(rig.seen("ask"), 1);
     }
 
     #[test]

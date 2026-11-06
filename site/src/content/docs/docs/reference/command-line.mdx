@@ -154,7 +154,7 @@ When the log is short since it last [moved to `server.log.1`](../files-and-envir
 
 ### `cornercase account` and `cornercase profile`
 
-Keep several logins of Claude Code, Codex or Gemini CLI and choose which ones new agents start with: `account add|list|remove` (`list --check` asks each account whether it is logged in), `account use AGENT ACCOUNT|--system` (the default, for new workspaces and scripts), `account restart AGENT [ACCOUNT|--system] [--pane ID]…` (restart the open agents on it, in the same conversation, or with `--pane` also a shell at its prompt), `account rename AGENT ACCOUNT|--system NAME|--clear` (a name for the window; the folder stays), `profile new|set|use|delete|list` (a set of accounts to switch at once, for scripts), `--account AGENT=ACCOUNT` on `start`, `new-tab`, `flow run` and `queue add|edit`, and `--profile NAME` on `start`, `new-tab` and `flow run`. See [Accounts and profiles](../../guides/accounts/).
+Keep several logins of Claude Code, Codex or Gemini CLI and choose which ones new agents start with: `account add|list|remove` (`list --check` asks each account whether it is logged in), `account use AGENT ACCOUNT|--system` (the default, for new workspaces and scripts), `account restart AGENT [ACCOUNT|--system] [--pane ID]…` (restart the open agents on it, in the same conversation, or with `--pane` also a shell at its prompt), `account rename AGENT ACCOUNT|--system NAME|--clear` (a name for the window; the folder stays), `profile new|set|use|delete|list` (a set of accounts to switch at once, for scripts), `--account AGENT=ACCOUNT` on `start`, `new-tab`, `flow run` and `queue add|edit`, and `--profile NAME` on `start`, `new-tab` and `flow run`. `accounts_revision` in `status --app` moves each time the accounts change. See [Accounts and profiles](../../guides/accounts/).
 
 ### `cornercase machines`
 
@@ -173,11 +173,12 @@ cornercase machines retry [vps]                        # try one link, or every 
 
 [`cornercase status`](../../guides/scripts-and-agents/#machines-workspaces) lists, after the projects of this computer, what each linked machine has, with `paired with project N` on a project that is a clone of the same repository as one here, and `cornercase focus --machine vps --workspace ID` picks one of its workspaces as the one shown, as a click on its row does: the window shows that workspace's tab, streamed from the machine.
 
-`stats` and `usage` read the machines too: `--machine NAME` prints that machine's stats or plan limits, and `--machine all` this computer's and every machine's, the stats summed. Your server asks each machine through `ssh`, so the command needs it running. See [Stats and usage of each machine](../../guides/machines/#stats-and-usage-of-each-machine).
+`stats` and `usage` read the machines too: `--machine NAME` prints that machine's stats or plan limits, and `--machine all` this computer's and every machine's, the stats summed. Your server asks each machine through `ssh`, so the command needs it running; with `--cached` it asks nobody and answers at once with what it read last. See [Stats and usage of each machine](../../guides/machines/#stats-and-usage-of-each-machine).
 
 ```sh
 cornercase stats --machine vps
 cornercase stats --machine all
+cornercase stats --machine all --cached --json
 cornercase usage --machine all --json
 ```
 
