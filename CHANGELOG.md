@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.6
+
+- **Another window or a script can tell when the accounts change.** `cornercase status --app` now has `accounts_revision`, a number that moves each time the accounts `cornercase account list` names change: `account add`, `account remove`, or a folder another program made or deleted, seen within a second. `cornercase status --app --follow` prints a line for each change, so a client lists the accounts again only then, rather than on a timer, and a first account added by a command typed in a pane reaches it at once. Nothing else told it before, since neither of these changes `config.json`. The number is left out until it first moves, so nothing changes on a server without accounts, and `cornercase contract` lists the feature `accounts-revision` to tell this server from an older one. Nothing changes in the window.
+
 ## 0.13.5
 
 - **A machine's last stats, without waiting for it.** `cornercase stats --cached --machine vps` and `--machine all` answer at once with the numbers your server read last and ask nobody, as `usage --cached` does: each machine with when it was read and last seen, its state and any error. Under `all`, a machine with no numbers yet is left out of the sum with `not read yet`; named alone, it fails and says why. A window or a script can show those numbers first, then run `cornercase stats --machine all` and show the fresh ones when they come. It is the `cached` field of the `stats` request, with the feature `stats-cached`, so a program can check that the server has it.
