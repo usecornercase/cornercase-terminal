@@ -1,10 +1,14 @@
+use std::io;
 use std::path::PathBuf;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::run_on;
-use crate::control::Unwritten;
+use crate::control::{CloneFile, Unwritten};
 use crate::editor::Editor;
+use crate::error;
 use crate::git::clone::files::{MAX_FILES, MAX_TOTAL_BYTES};
 use crate::git::clone::folder_name;
 use crate::git::ignored::{self, IgnoredFile, Listing, Root};
@@ -18,7 +22,7 @@ pub(crate) const BUTTONS: [&str; 3] = [BACK, SKIP_FILES, CLONE];
 const HINT: &str = "a click on a file ticks it · only ticked files are copied · enter clones · esc goes back";
 const NO_URL: &str = "the URL is required";
 const READING: &str = "reading the git-ignored files here…";
-const NONE: &str = "No git-ignored files here.";
+pub(crate) const NONE: &str = "No git-ignored files here.";
 const TOO_BIG: &str = "too big to copy";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,8 +152,7 @@ impl CloneForm {
                 let mut lines: Vec<Line> =
                     files.iter().enumerate().map(|(at, (file, ticked))| line(at, file, *ticked)).collect();
                 if self.left_out > 0 {
-                    let more = format!("… and {} more not offered ({MAX_FILES} at most)", self.left_out);
-                    lines.push(plain(&more, Tone::Muted));
+                    lines.push(plain(&not_offered(self.left_out), Tone::Muted));
                 }
                 lines
             }
@@ -236,6 +239,23 @@ pub(crate) fn over_the_total() -> String {
     format!("over the {} MiB a clone takes", MAX_TOTAL_BYTES >> 20)
 }
 
+pub(crate) fn not_offered(left_out: usize) -> String {
+    format!("… and {left_out} more not offered ({MAX_FILES} at most)")
+}
+
+pub(crate) fn packed(root: &Root, files: &[IgnoredFile]) -> error::Result<Vec<CloneFile>> {
+    let mut total = 0;
+    let mut file = |file: &IgnoredFile| {
+        let (bytes, mode) = ignored::read(root, file)?;
+        total += bytes.len() as u64;
+        if total > MAX_TOTAL_BYTES {
+            return Err(io::Error::other(over_the_total()).into());
+        }
+        Ok(CloneFile { path: file.path.clone(), data: STANDARD.encode(bytes), mode })
+    };
+    files.iter().map(&mut file).collect()
+}
+
 pub(crate) fn cloned_note(project: &str, machine: &str, unwritten: &[Unwritten]) -> String {
     let named = |file: &&Unwritten| run_on::has_text(&file.path.to_string_lossy());
     let left = unwritten.iter().filter(named).map(|file| {
@@ -248,14 +268,19 @@ pub(crate) fn cloned_note(project: &str, machine: &str, unwritten: &[Unwritten])
     }
 }
 
-fn line(at: usize, file: &IgnoredFile, ticked: bool) -> Line {
+pub(crate) fn described(file: &IgnoredFile) -> String {
     let path = file.path.display();
     let size = if file.size < 1024 { format!("{} B", file.size) } else { text::size(file.size) };
+    if file.too_big { format!("{path}  {size} · {TOO_BIG}") } else { format!("{path}  {size}") }
+}
+
+fn line(at: usize, file: &IgnoredFile, ticked: bool) -> Line {
+    let text = described(file);
     if file.too_big {
-        return Line { text: format!("    {path}  {size} · {TOO_BIG}"), tone: Tone::Muted, file: None };
+        return Line { text: format!("    {text}"), tone: Tone::Muted, file: None };
     }
     let mark = if ticked { "[x]" } else { "[ ]" };
-    Line { text: format!("{mark} {path}  {size}"), tone: Tone::Plain, file: Some(at) }
+    Line { text: format!("{mark} {text}"), tone: Tone::Plain, file: Some(at) }
 }
 
 #[cfg(test)]

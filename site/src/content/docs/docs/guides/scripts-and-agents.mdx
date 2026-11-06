@@ -67,7 +67,7 @@ group 9  personal  collapsed
 | --- | --- |
 | `status` | Lists groups, projects, workspaces, tabs and panes with their ids, or one line per pane with `--panes`; `--follow` keeps printing the whole state as it changes. |
 | `open PATH` | Opens a folder as a project, or finds the open one. Prints the project's id. A path starting with `~/` is in the server's home folder. |
-| `clone URL [FOLDER]` | Clones a git repository into a new folder inside FOLDER and opens it as a project: see [Clone a repository](#clone-a-repository). Prints the clone's path. |
+| `clone URL [FOLDER]` | Clones a git repository into a new folder inside FOLDER and opens it as a project: see [Clone a repository](#clone-a-repository). Prints the clone's path. `--file` copies files of the repository here into it. |
 | `new-workspace NAME` | Adds a workspace to a project, or a git worktree with `--worktree`. Prints its id. |
 | `new-tab` | Opens a tab, optionally typing a command into it. Prints the pane's id. |
 | `split` | Splits a pane right, or down, optionally typing a command. Prints the new pane's id. |
@@ -555,9 +555,22 @@ cornercase --remote devbox clone git@github.com:acme/orders-api.git ~/code
 - The command waits for git with no timeout, as long as the clone takes. Stopping the command does not stop the clone, and its project still opens.
 - `--json` prints `{"path": "/home/ana/code/orders-api", "project": 4, "workspace": 9, "tab": 12, "pane": 13}`. `--focus` also shows the project; when the view it should show in closed while git ran, the clone is still answered, without showing it.
 
+`--file` copies files into the new clone once git is done, such as the git-ignored `.env` a project needs to run, as the [Clone on machine dialog](../machines/#clone-the-project-there) does with the ones you tick:
+
+```sh
+cornercase clone --list-ignored --from ~/code/orders-api --json
+cornercase --remote devbox clone git@github.com:acme/orders-api.git '~/code' --file .env --file web/.env.local --from ~/code/orders-api --json
+```
+
+- `--file PATH`, repeated for more, is read by the command, on the machine it runs on also with `--remote`, and sent with its permissions. `PATH` goes from the root of the repository that `--from FOLDER` is in (the current folder by default, and always a folder of this machine).
+- These are refused before anything is cloned, naming the file at fault and never the URL: a path that is absolute, goes up with `..` or goes into `.git` (status 2), and a file that isn't there, a folder, a link, a file over 1 MiB, more than 200 files or more than 8 MiB in all (status 1).
+- A file the clone couldn't take, such as one the repository has, isn't written and doesn't undo the clone. The command names it on standard error (`not copied: README.md (it is already in the clone)`), or `--json` lists it under `unwritten`, and it exits with status 3.
+- `cornercase clone --list-ignored [--from FOLDER]` prints what the dialog offers and clones nothing: the git-ignored files in that folder, each by its path from the repository's root, without ignored folders or links, and how many more past the first 200. `--json` prints `{"root": "/home/ana/code/orders-api", "files": [{"path": ".env", "size": 42, "mode": 384, "too_big": false}], "left_out": 0}`, where `too_big` is a file `--file` refuses. It reads this machine's folder, so it needs no server, and `--remote` changes nothing for it: the files are here even when the clone goes elsewhere.
+- On Windows, `--file` and `--list-ignored` say they aren't supported yet, and nothing is cloned.
+
 It is the request `{"command": "clone", "args": {"url": "…", "parent": "~/code", "focus": false}}`; a refusal has the [code](#errors-with-a-code) `not-found` when the URL is not a repository, `conflict` when the folder is not empty, `busy` when a clone into that folder, or into one inside or around it, is already running, `malformed` for a relative folder or one with `..`, a relative path to a repository, or a URL with no usable name in it, and `failed` for the rest, access denied included. An older server answers that it has no such command. There is no button for it in the window: the one place the window clones is [on a machine](../machines/#clone-the-project-there).
 
-`files` copies files into the new clone once git is done, such as the git-ignored `.env` a project needs to run, as that dialog does with the ones you tick: each has a `path` relative to the clone, its `data` in base64, and its `mode` (`420`, that is `0o644`, when left out). A path that is absolute, goes up with `..`, goes into `.git` or names a file the clone already has is not written, and more than 200 files, or more than 8 MiB in all, refuses the request as `malformed` before git runs, as bad base64 does. A file that can't be written doesn't undo the clone: the answer lists it under `unwritten`, with its `path` and `why`. The log says how many files and bytes, never their names or content. On a server running on Windows, `files` are not written yet: each one comes back in `unwritten`, saying so, and the clone itself is made.
+`files` is what `--file` sends, for a client that reads the files itself: each has a `path` relative to the clone, its `data` in base64, and its `mode` (`420`, that is `0o644`, when left out). A path that is absolute, goes up with `..`, goes into `.git` or names a file the clone already has is not written, and more than 200 files, or more than 8 MiB in all, refuses the request as `malformed` before git runs, as bad base64 does. A file that can't be written doesn't undo the clone: the answer lists it under `unwritten`, with its `path` and `why`. The log says how many files and bytes, never their names or content. On a server running on Windows, `files` are not written yet: each one comes back in `unwritten`, saying so, and the clone itself is made.
 
 ### Start an agent
 
@@ -1436,7 +1449,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `0` | Done. |
 | `1` | An error or a timeout; the message says which. |
 | `2` | Wrong usage, such as an unknown option. |
-| `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds` and `read --last-message` with several targets printed their whole answer, but an agent, a machine, a tracker, a folder, a worktree or a pane in it failed, `input --follow` couldn't send some of its lines, or a line of `requests --follow` failed. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
+| `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds` and `read --last-message` with several targets printed their whole answer, but an agent, a machine, a tracker, a folder, a worktree or a pane in it failed, `clone --file` made the clone but couldn't write a file, `input --follow` couldn't send some of its lines, or a line of `requests --follow` failed. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
 
 A command that follows something until it ends (`events`, `status --follow`, `status --app --follow`, `changes list --follow`, `files list --follow`, `files read --follow`, `flow runs --follow`, `flow messages --follow`, `surface` and `view`) also ends with 0, without a message, soon after whatever reads its output is gone: the program it prints into exited or closed its end, or the `ssh` running it on another machine was killed or lost its connection. A terminal that closes ends it like any program, and one printing into a file or `/dev/null` runs until it ends by itself.
 
