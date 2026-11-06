@@ -14,11 +14,14 @@ use crate::text::{display_path, plural, size};
 use crate::time::{self, Stamp};
 use crate::worktrees::IDLE_AFTER;
 
+mod remove;
+
 pub(super) fn run(args: &WorktreesArgs) -> Result<()> {
     match &args.action {
         WorktreesAction::List(list) => run_list(list),
         WorktreesAction::Size(target) => run_size(target),
         WorktreesAction::FreeBuilds(free) => run_free(free),
+        WorktreesAction::Remove(remove) => remove::run(remove),
     }
 }
 
@@ -125,10 +128,14 @@ pub(crate) fn list_text(listing: &WorktreeListing, home: Option<&Path>, now: Sys
     text
 }
 
-fn info_line(info: &WorktreeInfo, home: Option<&Path>, now: SystemTime) -> String {
+fn title(info: &WorktreeInfo) -> String {
     let folder = info.path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let name = info.branch.clone().unwrap_or(folder);
-    let mut parts = vec![format!("{} › {name}", info.project_name), display_path(&info.path, home)];
+    format!("{} › {name}", info.project_name)
+}
+
+fn info_line(info: &WorktreeInfo, home: Option<&Path>, now: SystemTime) -> String {
+    let mut parts = vec![title(info), display_path(&info.path, home)];
     let age = info.last_changed.as_deref().and_then(Stamp::parse);
     parts.extend(age.map(|at| time::ago(now.duration_since(at).unwrap_or_default())));
     parts.extend(size_part(info));

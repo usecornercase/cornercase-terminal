@@ -18,6 +18,7 @@ fn pull(state: pull_request::State) -> PullRequest {
         state,
         conflicting: None,
         base: "main".into(),
+        head: None,
         checks: Vec::new(),
         provider: pull_request::Provider::Github,
         stack: None,

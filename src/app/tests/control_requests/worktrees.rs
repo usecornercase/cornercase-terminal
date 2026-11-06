@@ -92,7 +92,7 @@ fn no_tab_opens_in_a_worktree_being_removed() {
     assert!(message.contains("is being removed"), "{message}");
 }
 
-fn removals_wait_in_teardown(app: &mut App, repo: &Path, hold: &Path) {
+pub(super) fn removals_wait_in_teardown(app: &mut App, repo: &Path, hold: &Path) {
     let teardown = format!("while [ -d '{0}' ] && [ ! -e '{0}/go' ]; do sleep 0.02; done", hold.display());
     app.config.projects.insert(repo.display().to_string(), ProjectSettings { teardown, ..Default::default() });
 }

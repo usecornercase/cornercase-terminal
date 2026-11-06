@@ -16,7 +16,27 @@ use crate::worktrees::{Dialog, Kind, Live, Row, Scan, Step};
 
 pub(super) const INDENT: &str = "  ";
 
-const UNCHECKED: &str = "not checked, so it may have changes";
+pub(in crate::app) const UNCHECKED: &str = "not checked, so it may have changes";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::app) struct Said {
+    pub(in crate::app) text: String,
+    pub(in crate::app) lost: bool,
+}
+
+impl Said {
+    fn plain(text: String) -> Self {
+        Self { text, lost: false }
+    }
+
+    fn lost(text: String) -> Self {
+        Self { text, lost: true }
+    }
+
+    fn line(&self) -> Line<'static> {
+        if self.lost { red_line(&self.text) } else { Line::from(format!("{INDENT}{}", self.text)) }
+    }
+}
 
 pub(in crate::app) fn wrap(lines: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
     let width = usize::from(width).max(1);
@@ -74,29 +94,34 @@ impl App {
     }
 
     fn confirm_lines(&self, rows: &[Row], row: &Row, branches: bool) -> Vec<Line<'static>> {
-        let name = row.branch().map_or_else(|| folder_name(row), str::to_string);
         let header = Style::default().add_modifier(Modifier::BOLD);
         let header = if row.risky() { header.fg(Color::Yellow) } else { header };
-        let mut lines = vec![Line::from(Span::styled(format!("{} › {name}", row.found.project), header))];
+        let mut lines = vec![Line::from(Span::styled(title(row), header))];
+        let failed = matches!(self.git.scans.outside, Outside::Failed);
+        lines.extend(self.second_look(rows, row, branches, failed).iter().map(Said::line));
+        lines
+    }
+
+    pub(in crate::app) fn second_look(&self, rows: &[Row], row: &Row, branches: bool, failed: bool) -> Vec<Said> {
         let live = row.live.as_ref();
-        lines.extend(self.risks(row, live).into_iter().map(|risk| Line::from(format!("{INDENT}{risk}"))));
+        let mut said: Vec<Said> = or_nothing(self.risk_list(row, live, failed)).into_iter().map(Said::plain).collect();
         if branches && row.found.kind == Kind::Linked && row.branch().is_none() {
-            lines.push(Line::from(format!("{INDENT}no branch is checked out, so none is deleted")));
+            said.push(Said::plain("no branch is checked out, so none is deleted".to_string()));
         }
         let mut lost = vec![(row.branch().map(str::to_string), row)];
         let trees = live
             .and_then(|l| self.projects.workspace_in(l.project, l.workspace))
             .map_or(&[][..], |at| self.projects.workspace(at).role_worktrees.as_slice());
         for tree in trees {
-            let (more, role) = self.role_lines(rows, tree, branches);
-            lines.extend(more);
+            let (more, role) = self.role_lines(rows, tree, branches, failed);
+            said.extend(more);
             lost.extend(role);
         }
         if branches {
             let texts = lost.into_iter().filter_map(|(branch, row)| branch.and_then(|b| lost_commits(&b, row)));
-            lines.extend(texts.map(|text| red_line(&text)));
+            said.extend(texts.map(Said::lost));
         }
-        lines
+        said
     }
 
     fn role_lines<'a>(
@@ -104,28 +129,20 @@ impl App {
         rows: &'a [Row],
         tree: &RoleWorktree,
         branches: bool,
-    ) -> (Vec<Line<'static>>, Option<(Option<String>, &'a Row)>) {
+        failed: bool,
+    ) -> (Vec<Said>, Option<(Option<String>, &'a Row)>) {
         let path = canonical(&tree.path);
         let Some(role) = rows.iter().find(|r| r.found.path == path) else {
-            let mut lines = vec![Line::from(format!("{INDENT}role {}: {UNCHECKED}", tree.role))];
+            let mut lines = vec![Said::plain(format!("role {}: {UNCHECKED}", tree.role))];
             if branches {
-                lines.push(red_line(&format!("{}: its commits may be lost", tree.branch)));
+                lines.push(Said::lost(format!("{}: its commits may be lost", tree.branch)));
             }
             return (lines, None);
         };
-        let risks = self.risks(role, role.live.as_ref()).join(", ");
+        let risks = or_nothing(self.risk_list(role, role.live.as_ref(), failed)).join(", ");
         let branch = role.branch().map(str::to_string);
         let on = branch.as_deref().map(|b| format!(" on {b}")).unwrap_or_default();
-        (vec![Line::from(format!("{INDENT}role {}{on}: {risks}", tree.role))], Some((branch, role)))
-    }
-
-    fn risks(&self, row: &Row, live: Option<&Live>) -> Vec<String> {
-        let failed = matches!(self.git.scans.outside, Outside::Failed);
-        let mut risks = self.risk_list(row, live, failed);
-        if risks.is_empty() {
-            risks.push("nothing uncommitted or unpushed".to_string());
-        }
-        risks
+        (vec![Said::plain(format!("role {}{on}: {risks}", tree.role))], Some((branch, role)))
     }
 
     pub(in crate::app) fn risk_list(&self, row: &Row, live: Option<&Live>, outside_failed: bool) -> Vec<String> {
@@ -157,11 +174,14 @@ impl App {
         risks
     }
 
+    pub(in crate::app) fn teardown_runs(&self, row: &Row) -> bool {
+        row.found.kind == Kind::Linked
+            && !self.config.project(&row.found.repo, self.home.as_deref()).teardown.trim().is_empty()
+    }
+
     fn cleanup_risks(&self, row: &Row, live: Option<&Live>) -> Vec<String> {
         let mut risks = Vec::new();
-        if row.found.kind == Kind::Linked
-            && !self.config.project(&row.found.repo, self.home.as_deref()).teardown.trim().is_empty()
-        {
+        if self.teardown_runs(row) {
             risks.push("teardown runs first".to_string());
         }
         if let Some(live) = live.filter(|live| live.run_roles > 0) {
@@ -177,16 +197,49 @@ impl App {
     }
 }
 
+fn title(row: &Row) -> String {
+    let name = row.branch().map_or_else(|| folder_name(row), str::to_string);
+    format!("{} › {name}", row.found.project)
+}
+
+fn or_nothing(mut risks: Vec<String>) -> Vec<String> {
+    if risks.is_empty() {
+        risks.push("nothing uncommitted or unpushed".to_string());
+    }
+    risks
+}
+
+pub(in crate::app) fn stake(row: &Row) -> Vec<String> {
+    let mut risks = match (row.found.kind, &row.scan) {
+        (Kind::Prunable, _) => Vec::new(),
+        (Kind::Linked, Some(Ok(scan))) => scan_stake(scan),
+        _ => kind_risks(row),
+    };
+    risks.extend(App::presence_risks(row, row.live.as_ref(), false, false));
+    risks
+}
+
+fn files_changed(scan: &Scan) -> Option<String> {
+    (scan.changed > 0).then(|| format!("{} changed", plural(scan.changed, "file", "files")))
+}
+
+fn commits_not_pushed(scan: &Scan) -> Option<String> {
+    (scan.unpushed > 0).then(|| format!("{} not pushed", plural(scan.unpushed, "commit", "commits")))
+}
+
+fn scan_stake(scan: &Scan) -> Vec<String> {
+    let on_no_branch = commits_not_pushed(scan).filter(|_| scan.branch.is_none());
+    files_changed(scan).into_iter().chain(on_no_branch.map(|commits| format!("{commits}, on no branch"))).collect()
+}
+
 fn kind_risks(row: &Row) -> Vec<String> {
     match row.found.kind {
         Kind::Prunable => {
             let mut risks = vec!["its folder is gone or unreachable; cleans up git's entry".to_string()];
             match &row.scan {
-                Some(Ok(scan)) if scan.unpushed > 0 => {
-                    risks.push(format!("{} not pushed", plural(scan.unpushed, "commit", "commits")));
-                }
+                Some(Ok(scan)) => risks.extend(commits_not_pushed(scan)),
                 Some(Err(e)) => risks.push(format!("its branch could not be checked ({e})")),
-                _ => {}
+                None => {}
             }
             risks
         }
@@ -201,13 +254,7 @@ fn kind_risks(row: &Row) -> Vec<String> {
 }
 
 fn scan_risks(scan: &Scan) -> Vec<String> {
-    let mut risks = Vec::new();
-    if scan.changed > 0 {
-        risks.push(format!("{} changed", plural(scan.changed, "file", "files")));
-    }
-    if scan.unpushed > 0 {
-        risks.push(format!("{} not pushed", plural(scan.unpushed, "commit", "commits")));
-    }
+    let mut risks: Vec<String> = files_changed(scan).into_iter().chain(commits_not_pushed(scan)).collect();
     if scan.upstream_gone {
         risks.push("upstream gone".to_string());
     }
@@ -229,7 +276,9 @@ fn folder_name(row: &Row) -> String {
 
 fn lost_commits(branch: &str, row: &Row) -> Option<String> {
     match &row.scan {
-        Some(Ok(scan)) if scan.unpushed > 0 && !row.merged() => Some(format!("{branch}: its commits will be lost")),
+        Some(Ok(scan)) if scan.unpushed > 0 && !row.merged_as_it_is() => {
+            Some(format!("{branch}: its commits will be lost"))
+        }
         Some(Ok(_)) => None,
         _ if row.checked_on_confirm() => Some(format!("{branch}: its commits may be lost")),
         _ => None,

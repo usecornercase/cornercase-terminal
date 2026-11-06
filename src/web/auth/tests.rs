@@ -1,8 +1,8 @@
-#![cfg(unix)]
-
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 
 use super::*;
+#[cfg(unix)]
 use crate::test_util::TempDir;
 
 mod pairing {
@@ -27,6 +27,33 @@ mod pairing {
     }
 
     #[test]
+    fn a_held_code_stays_the_same_and_its_ten_minutes_start_again() {
+        let now = Instant::now();
+        let first = Pairing::new(now).expect("a token");
+        let later = now + PAIRING_FOR / 2;
+
+        let shared = Pairing::shared(Some(first.clone()), later).expect("the same token");
+
+        assert_eq!(shared.token, first.token);
+        assert!(!first.accepts(&first.token, now + PAIRING_FOR));
+        assert!(shared.accepts(&first.token, now + PAIRING_FOR));
+        assert!(!shared.accepts(&first.token, later + PAIRING_FOR));
+    }
+
+    #[test]
+    fn a_dead_code_or_none_gives_a_new_one() {
+        let now = Instant::now();
+        let dead = Pairing::new(now).expect("a token");
+
+        let new = Pairing::shared(Some(dead.clone()), now + PAIRING_FOR).expect("a new token");
+        let first = Pairing::shared(None, now).expect("a token");
+
+        assert_ne!(new.token, dead.token);
+        assert!(new.accepts(&new.token, now + PAIRING_FOR));
+        assert!(first.accepts(&first.token, now));
+    }
+
+    #[test]
     fn tokens_differ_each_time() {
         let now = Instant::now();
 
@@ -34,6 +61,7 @@ mod pairing {
     }
 }
 
+#[cfg(unix)]
 mod devices {
     use super::*;
 

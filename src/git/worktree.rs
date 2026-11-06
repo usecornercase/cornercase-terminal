@@ -7,6 +7,7 @@ use std::time::Duration;
 use crate::error::{Error, Result};
 use crate::log;
 use crate::os::ffi;
+use crate::os::fs::canonicalize;
 use crate::process;
 
 pub(crate) mod fresh;
@@ -81,6 +82,9 @@ pub(crate) fn create_from(repo: &Path, branch: &str, path: &Path, base: &str) ->
 }
 
 pub(crate) fn remove(repo: &Path, path: &Path, force: bool, unlock: bool) -> Result<()> {
+    if std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return Err(Error::Git(format!("{} is a symbolic link, and git would delete through it", path.display())));
+    }
     let given = ffi::plain(path);
     if unlock && !matches!(lock(path), Ok(None)) {
         check(git(repo, [OsStr::new("worktree"), "unlock".as_ref(), given.as_os_str()])?)?;
@@ -106,9 +110,13 @@ pub(crate) fn remove_with_teardown(
     script: Option<&str>,
     options: RemoveOptions,
 ) -> Result<Option<String>> {
+    let before = script.and_then(|_| canonicalize(path).ok());
     let failed = script.and_then(|script| setup::teardown(script, path, repo, branch, setup::TEARDOWN_WITHIN));
     if let Some(why) = &failed {
         log::debug!("worktree", "teardown failed", why = why);
+    }
+    if before.is_some_and(|before| canonicalize(path).is_ok_and(|after| after != before)) {
+        return Err(Error::Git(format!("{} moved during its teardown, so it is not removed", path.display())));
     }
     remove(repo, path, options.force, options.unlock).map(|()| failed)
 }

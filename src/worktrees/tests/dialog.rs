@@ -101,6 +101,7 @@ fn live() -> Live {
         role_of_run: false,
         run_roles: 0,
         pull_merged: false,
+        pull_head: None,
     }
 }
 

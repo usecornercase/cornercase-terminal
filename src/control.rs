@@ -23,6 +23,7 @@ mod flow;
 mod held;
 pub(crate) mod issues;
 pub(crate) mod machines;
+pub(crate) mod pair;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -77,6 +78,7 @@ pub(crate) use flow::{
 pub(crate) use held::{HeldAction, HeldInfo, HeldRequest};
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Machines, ShownRemote, StreamState};
+pub(crate) use pair::ConfigPair;
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
@@ -97,6 +99,7 @@ pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 pub(crate) use worktrees::{
     BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
+    WorktreesRemove, WorktreesRemoved,
 };
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
@@ -263,6 +266,8 @@ pub(crate) enum Command {
     ForumServer(ForumServer),
     Held(HeldRequest),
     RunSetup(RunSetup),
+    ConfigPair(ConfigPair),
+    WorktreesRemove(WorktreesRemove),
 }
 
 impl Command {
@@ -340,6 +345,7 @@ impl Command {
             Self::View(_) => 33,
             Self::ViewSet(_) => 34,
             Self::Search(_) => 28,
+            Self::ConfigPair(_) => 122,
             _ => return None,
         })
     }
@@ -447,6 +453,7 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
+            Self::WorktreesRemove(_) => 123,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
@@ -586,6 +593,8 @@ impl Command {
         "forum-server",
         "held",
         "run-setup",
+        "config-pair",
+        "worktrees-remove",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

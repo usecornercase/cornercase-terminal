@@ -7,6 +7,7 @@ use ratatui::layout::{Position, Rect};
 use serde_json::Value;
 
 use super::{App, AppEvent, Overlay, Toast};
+use crate::control::pair::PairShown;
 use crate::control::{AwayInfo, Command, Done, Request};
 use crate::discord::Failure;
 use crate::discord::forum::Progress;
@@ -267,11 +268,7 @@ impl App {
     }
 
     fn sync_messenger(&mut self, via: Via) {
-        if !matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via) {
-            let messenger = self.messenger_mut(via);
-            messenger.pairing = None;
-            messenger.owner.closed();
-        }
+        self.drop_chat_code(via);
         self.close_forum_setup(via);
         let messenger = self.messenger(via);
         let wanted = messenger.token.is_some() && messenger.phase != Phase::Rejected;
@@ -597,16 +594,9 @@ impl App {
 
     pub(super) fn pair(&mut self, via: Via) -> Option<&'static str> {
         if self.messenger(via).bot().is_none() {
-            return Some("paste the bot's token first");
+            return Some(pairing::NO_BOT);
         }
-        if via.pairs_by_owner() {
-            self.messenger_mut(via).owner.closed();
-        } else {
-            match Pairing::new(Instant::now()) {
-                Ok(pairing) => self.messenger_mut(via).pairing = Some(pairing),
-                Err(e) => log::error!(via.target(), "cannot make a pairing code", error = e),
-            }
-        }
+        self.hold_chat_code(via, Instant::now());
         self.overlay = Some(Overlay::Pairing(via));
         None
     }
@@ -620,12 +610,13 @@ impl App {
             return false;
         }
         let paired = u64::try_from(unix_now()).unwrap_or_default();
-        self.connect(via, Chat { id: message.chat, user: message.user, name: message.name.clone(), paired });
-        self.say(via, chat::welcome(via), Delivery::default());
+        if self.connect(via, Chat { id: message.chat, user: message.user, name: message.name.clone(), paired }) {
+            self.say(via, chat::welcome(via), Delivery::default());
+        }
         true
     }
 
-    pub(super) fn pairing_view(&self, via: Via) -> ui::RemoteAccess {
+    pub(in crate::app) fn chat_shown(&self, via: Via) -> PairShown {
         let messenger = self.messenger(via);
         let bot = messenger.bot().unwrap_or_default();
         let code = match &messenger.pairing {
@@ -641,6 +632,11 @@ impl App {
         };
         lines.extend(messenger.owner.failed.clone());
         lines.extend(messenger.advice.map(String::from));
+        PairShown { url, lines }
+    }
+
+    pub(super) fn pairing_view(&self, via: Via) -> ui::RemoteAccess {
+        let PairShown { url, lines } = self.chat_shown(via);
         let code = url.as_deref().map(ui::remote_access::code).unwrap_or_default();
         ui::RemoteAccess { title: via.name(), url, code, lines }
     }

@@ -600,7 +600,6 @@ fn with_worktrees_config() -> (TempDir, TempDir, PathBuf) {
     (worktrees, config, config_path)
 }
 
-#[cfg(unix)]
 fn branch_exists(repo: &Path, branch: &str) -> bool {
     std::process::Command::new("git")
         .arg("-C")

@@ -4,6 +4,7 @@ use super::{Asker, Handled, conflict, json, malformed, none};
 use crate::app::App;
 use crate::app::event::AppEvent;
 use crate::app::worktrees::{ListFor, Measure, WorktreeEvent};
+use crate::app::worktrees_dialog::BEING_REMOVED;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{
     BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
@@ -14,10 +15,12 @@ use crate::log::{Job, Level};
 use crate::os::fs::{canonical, canonicalize};
 use crate::process;
 use crate::process::owners::trees;
-use crate::project::{Hierarchy, WorkspaceAt};
+use crate::project::{Hierarchy, Workspace, WorkspaceAt};
 use crate::term::Term;
 use crate::worktrees::builds::{self, Size};
 use crate::worktrees::{Asks, Found, Kind, Row, discover, fill, folders_of, scan};
+
+pub(super) mod remove;
 
 struct Target {
     path: PathBuf,
@@ -52,6 +55,14 @@ impl App {
         let path = canonical(&workspace.path);
         let repo = discover::linked(&path).unwrap_or_else(|| self.projects[at.project()].path.clone());
         Ok(Target { path, repo })
+    }
+
+    fn being_removed(&self, path: &Path) -> bool {
+        let mut removing = self.projects.iter().flat_map(|p| &p.workspaces).filter(|w| w.removing());
+        let holds = |w: &&Workspace| {
+            canonical(&w.path) == path || w.role_worktrees.iter().any(|tree| canonical(&tree.path) == path)
+        };
+        self.cleaning_path(path) || removing.any(|w| holds(&w))
     }
 
     fn workspace_at_path(&self, path: &Path) -> Option<WorkspaceAt> {
@@ -89,10 +100,16 @@ impl App {
 
     pub(super) fn free_builds_request(&mut self, client: u64, asker: Asker, request: &FreeBuilds) -> Handled {
         let target = self.worktree_target(asker, request.workspace, request.path.as_deref())?;
+        if !request.check && self.being_removed(&target.path) {
+            return Err(Refusal::new(Code::Busy, format!("{}: {BEING_REMOVED}", target.path.display())));
+        }
         let names = self.config.project(&target.repo, self.home.as_deref()).builds();
         let shells = self.shell_pids();
         let mut running = self.workspace_at_path(&target.path).map(|at| self.running_in(at)).unwrap_or_default();
         let key = self.clients.requests.key();
+        if !request.check {
+            self.git.frees.request_frees(key, target.path.clone());
+        }
         let job = Job::new(Level::Info, "control", "free builds").with("path", target.path.display());
         let (path, request) = (target.path, request.clone());
         self.spawn_job(
@@ -118,6 +135,7 @@ impl App {
         key: u64,
         result: std::result::Result<BuildsFreed, Refusal>,
     ) {
+        self.git.frees.request_ended(key);
         self.answer_read(key, |_| result.map(|freed| json(&freed)));
     }
 

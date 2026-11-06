@@ -8,7 +8,7 @@ use ratatui::widgets::Paragraph;
 
 use super::*;
 use crate::app::worktrees::RemoveOptions;
-use crate::app::worktrees_dialog::wrap;
+use crate::app::worktrees_dialog::{Doomed, wrap};
 use crate::flows::Flow;
 use crate::flows::run::{RoleWorktree, Run};
 use crate::test_util::git;
@@ -98,7 +98,7 @@ fn confirm(s: &mut Setup) {
     });
 }
 
-fn confirmed(s: &mut Setup, rows: usize, ticked: &[&str]) {
+pub(super) fn confirmed(s: &mut Setup, rows: usize, ticked: &[&str]) {
     opened(s, rows);
     for branch in ticked {
         tick(s, branch);
@@ -117,7 +117,7 @@ pub(super) fn confirmation(app: &App) -> String {
     lines.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n")
 }
 
-fn remove(s: &mut Setup) {
+pub(super) fn remove(s: &mut Setup) {
     let pos = at(&s.app, ui::WorktreesHit::Remove);
     click(&mut s.app, pos);
 }
@@ -241,7 +241,7 @@ fn asked_branches_go_with_their_worktrees() {
     assert_eq!((gone, seen.last().cloned()), ((false, true), Some("removed 1 worktree and 1 branch".to_string())));
 }
 
-fn with_a_role() -> Setup {
+pub(super) fn with_a_role() -> Setup {
     let mut s = with(&["lead", "coder"]);
     let coder = path_of(&s, "coder");
     let lead = &mut s.app.projects[0].workspaces[1];
@@ -384,7 +384,7 @@ pub(super) fn settled_text(s: &mut Setup, left: usize) -> Option<String> {
     settle(s, left).last().cloned()
 }
 
-fn activate(s: &mut Setup, path: &Path) {
+pub(super) fn activate(s: &mut Setup, path: &Path) {
     let at = s.app.projects[0].workspaces.iter().position(|w| w.path == path).expect("the workspace");
     s.app.projects[0].active = at;
 }
@@ -403,6 +403,21 @@ fn a_branch_switched_after_the_confirmation_is_not_deleted() {
     let left = (branch_exists(s.repo.path(), "a"), branch_exists(s.repo.path(), "other"));
     let kept = "removed 1 worktree; kept the branch a: it changed since the confirmation";
     assert_eq!((left, text.as_deref()), ((true, true), Some(kept)));
+}
+
+#[test]
+fn a_commit_after_the_confirmation_keeps_the_branch() {
+    let mut s = with(&["a"]);
+    let a = path_of(&s, "a");
+    confirmed(&mut s, 1, &["a"]);
+    ask_branches(&mut s);
+    git(&a, &["commit", "--quiet", "--allow-empty", "-m", "later"]);
+
+    remove(&mut s);
+
+    let text = settled_text(&mut s, 1);
+    let kept = "removed 1 worktree; kept the branch a: it changed since the confirmation";
+    assert_eq!((branch_exists(s.repo.path(), "a"), text.as_deref()), (true, Some(kept)));
 }
 
 #[test]
@@ -431,7 +446,7 @@ fn an_open_workspaces_branch_goes_when_its_folder_was_deleted_by_hand() {
     assert!(s.app.remove_workspace_with_branches(
         workspace_at(&s.app, 0, 1),
         ("a".to_string(), repo),
-        vec!["a".to_string()],
+        vec![Doomed { name: "a".to_string(), tip: None }],
         (true, false)
     ));
 
@@ -475,13 +490,17 @@ fn an_orphan_only_confirmation_still_checks_outside_processes() {
     assert!(waited && text.contains("1 process outside cornercase: sleep"), "{waited} {text}");
 }
 
+pub(super) fn shell_of_b_in_a(s: &mut Setup) {
+    let (a, b) = (path_of(s, "a"), path_of(s, "b"));
+    activate(s, &b);
+    type_line(&mut s.app, &format!("cd {}", a.display()));
+    wait_until("the shell of b is in a", || s.app.term().and_then(Term::cwd).as_deref() == Some(a.as_path()));
+}
+
 #[test]
 fn a_shell_of_another_workspace_inside_the_worktree_is_named() {
     let mut s = with(&["a", "b"]);
-    let (a, b) = (path_of(&s, "a"), path_of(&s, "b"));
-    activate(&mut s, &b);
-    type_line(&mut s.app, &format!("cd {}", a.display()));
-    wait_until("the shell of b is in a", || s.app.term().and_then(Term::cwd).as_deref() == Some(a.as_path()));
+    shell_of_b_in_a(&mut s);
 
     confirmed(&mut s, 2, &["a"]);
 

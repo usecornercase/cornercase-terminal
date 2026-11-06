@@ -16,6 +16,7 @@ mod idle_restart;
 mod issues;
 pub(super) mod machines;
 mod merge_check;
+mod pair;
 mod plugins;
 mod ports;
 mod processes;
@@ -91,6 +92,7 @@ pub(super) struct Clients {
     pub(super) surfaces: surfaces::Surfaces,
     pub(super) views: views::Views,
     pub(super) pasted: pasted_files::PastedFiles,
+    pub(super) pairings: pair::Pairings,
     confirm_within: Duration,
     typing_holds: Duration,
 }
@@ -105,6 +107,7 @@ impl Default for Clients {
             surfaces: surfaces::Surfaces::default(),
             views: views::Views::default(),
             pasted: pasted_files::PastedFiles::default(),
+            pairings: pair::Pairings::default(),
             confirm_within: CONFIRM_WITHIN,
             typing_holds: INPUT_HOLDS,
         }
@@ -177,6 +180,7 @@ enum Stage {
     Worktree(Then),
     Run(u64, Box<Starting>),
     Removing { force: bool, unlock: bool },
+    RemovingFolders(Box<worktrees::remove::Removing>),
     Check,
     Held(Box<Held>),
     Launch { confirm: Option<SystemTime>, compacts: bool, wait: Option<Condition> },
@@ -211,6 +215,7 @@ impl Stage {
             Self::Machines(_) => "the machines have not answered yet".into(),
             Self::Clone(_) => "git is still cloning the repository".into(),
             Self::Relay(_) => "the machine has not answered yet".into(),
+            Self::RemovingFolders(_) => "git is still removing the worktrees".into(),
             Self::Recap { choice, .. } => format!("the agent is still writing the recap of {}", choice.name()),
             Self::Dossier(_) => "the dossier is still being built".into(),
             _ => "the ports are still being listed".into(),
@@ -231,6 +236,7 @@ impl Stage {
                 | Self::Reading
                 | Self::Restart { .. }
                 | Self::Check
+                | Self::RemovingFolders(_)
                 | Self::Issue(_)
                 | Self::Usage(_)
                 | Self::Machines(_)
@@ -430,6 +436,7 @@ impl App {
         self.forget_file_streams(client);
         self.forget_surfaces(client);
         self.forget_views(client);
+        self.forget_pairing(client);
         self.messages.notices.forget(client);
         self.forget_flow_reads(Some(client));
         for pending in self.clients.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {

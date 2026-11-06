@@ -83,6 +83,14 @@ fn edited(json: &str, change: impl FnOnce(&mut Value)) -> String {
     value.to_string()
 }
 
+#[test]
+fn a_merge_request_says_the_commit_it_is_at_when_glab_does() {
+    let at = |json: &str| raw(json).into_pull(Vec::new()).head;
+
+    assert_eq!(at(r#"{"iid":1,"sha":"abc"}"#).as_deref(), Some("abc"));
+    assert_eq!(at(r#"{"iid":1}"#), None);
+}
+
 fn raw(json: &str) -> Raw {
     serde_json::from_str(json).expect("a merge request")
 }

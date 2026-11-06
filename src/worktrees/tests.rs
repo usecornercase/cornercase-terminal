@@ -210,6 +210,19 @@ mod scan {
     }
 
     #[test]
+    fn reads_the_head_and_its_date_whatever_the_signature_settings_say() {
+        let repo = main_repo();
+        let (_dir, at) = worktree(repo.path(), "feat");
+        commit_at(&at, "2020-01-01T00:00:00Z");
+        crate::test_util::sign_head_and_show_signatures(&at);
+
+        let scanned = scan(&at, Some("main")).expect("scan");
+
+        assert_eq!(scanned.head, Some(crate::test_util::head(&at)));
+        assert_eq!(scanned.last_changed, Some(SystemTime::UNIX_EPOCH + Duration::from_hours(438_288)));
+    }
+
+    #[test]
     fn counts_changes_and_unpushed_commits_without_a_remote() {
         let repo = main_repo();
         let (_dir, at) = worktree(repo.path(), "feat");

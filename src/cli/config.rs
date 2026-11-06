@@ -18,6 +18,7 @@ use crate::issues::Secret;
 use crate::remote::Remote;
 
 mod forum;
+mod pair;
 mod share;
 
 fn request(change: Configure) -> Result<Value> {
@@ -25,34 +26,50 @@ fn request(change: Configure) -> Result<Value> {
 }
 
 pub(super) fn run(args: ConfigArgs) -> Result<()> {
-    let changing = args.action.is_some();
-    let value = match args.action {
-        Some(ConfigAction::Search { text }) => return search(&text.join(" "), args.json),
-        None => request(Configure::Get)?,
-        Some(ConfigAction::Set { pairs }) => request(Configure::Set(converted(&pairs)?))?,
-        Some(ConfigAction::Project { path, project, setup, teardown, builds }) => {
-            let path = match (&path, project) {
-                (None, None) => return Err(Error::WrongUsage("give the project's FOLDER or --project ID".into())),
-                (path, _) => path.as_deref().map(absolute).transpose()?,
-            };
-            let builds = builds.as_deref().map(builds_of).transpose()?;
-            if builds.is_some() {
-                use_build_folders()?;
-            }
-            request(Configure::Project(ProjectChange { project, path, setup, teardown, builds }))?
-        }
-        Some(ConfigAction::Secret { key }) => {
-            let value = Secret(read_secret(&key)?);
-            request(Configure::Secret(SecretChange { key, value }))?
-        }
-        Some(ConfigAction::Remove { key }) => request(Configure::Remove(key))?,
-        Some(ConfigAction::ForumServer { id }) => return forum::pick(id, args.json),
-        Some(ConfigAction::Export { to }) => return share::export(to.as_deref(), args.json),
+    let json = args.json;
+    match args.action {
+        Some(ConfigAction::Search { text }) => search(&text.join(" "), json),
+        Some(ConfigAction::Pair { key }) => pair::run(key, json),
+        Some(ConfigAction::ForumServer { id }) => forum::pick(id, json),
+        Some(ConfigAction::Export { to }) => share::export(to.as_deref(), json),
         Some(ConfigAction::Import { source, only, yes, preview }) => {
-            return share::import(&share::Import { source, only, yes, preview }, args.json);
+            share::import(&share::Import { source, only, yes, preview }, json)
         }
+        None => answered(request(Configure::Get)?, false, json),
+        Some(ConfigAction::Set { pairs }) => answered(request(Configure::Set(converted(&pairs)?))?, true, json),
+        Some(ConfigAction::Project { path, project, setup, teardown, builds }) => {
+            answered(change_project(path.as_deref(), project, setup, teardown, builds.as_deref())?, true, json)
+        }
+        Some(ConfigAction::Secret { key }) => answered(change_secret(key)?, true, json),
+        Some(ConfigAction::Remove { key }) => answered(request(Configure::Remove(key))?, true, json),
+    }
+}
+
+fn answered(value: Value, changing: bool, json: bool) -> Result<()> {
+    if json { print_json(&value) } else { print_out(&render(&answer::<Described>(value)?, changing)) }
+}
+
+fn change_project(
+    path: Option<&str>,
+    project: Option<u64>,
+    setup: Option<String>,
+    teardown: Option<String>,
+    builds: Option<&str>,
+) -> Result<Value> {
+    let path = match (path, project) {
+        (None, None) => return Err(Error::WrongUsage("give the project's FOLDER or --project ID".into())),
+        (path, _) => path.map(absolute).transpose()?,
     };
-    if args.json { print_json(&value) } else { print_out(&render(&answer::<Described>(value)?, changing)) }
+    let builds = builds.map(builds_of).transpose()?;
+    if builds.is_some() {
+        use_build_folders()?;
+    }
+    request(Configure::Project(ProjectChange { project, path, setup, teardown, builds }))
+}
+
+fn change_secret(key: String) -> Result<Value> {
+    let value = Secret(read_secret(&key)?);
+    request(Configure::Secret(SecretChange { key, value }))
 }
 
 fn search(text: &str, as_json: bool) -> Result<()> {

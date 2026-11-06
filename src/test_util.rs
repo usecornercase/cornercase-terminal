@@ -417,6 +417,13 @@ pub(crate) fn fake_glab(dir: &Path, script: &str) -> PathBuf {
     fake_tool(dir, "glab", script)
 }
 
+pub(crate) fn link_folder(target: &Path, link: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).expect("a symbolic link");
+    #[cfg(windows)]
+    crate::os::fs::make_junction(link, target).expect("a junction");
+}
+
 pub(crate) fn git(dir: &Path, args: &[&str]) {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -426,6 +433,24 @@ pub(crate) fn git(dir: &Path, args: &[&str]) {
         .output()
         .expect("run git");
     assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
+}
+
+pub(crate) fn sign_head_and_show_signatures(dir: &Path) {
+    let read = |args: &[&str]| {
+        let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().expect("run git");
+        assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    let raw = read(&["cat-file", "commit", "HEAD"]);
+    let (headers, message) = raw.split_once("\n\n").expect("a commit");
+    let signature = "gpgsig -----BEGIN PGP SIGNATURE-----\n \n not really signed\n -----END PGP SIGNATURE-----";
+    let folder = TempDir::new();
+    let commit = folder.path().join("commit");
+    std::fs::write(&commit, format!("{headers}\n{signature}\n\n{message}")).expect("write the commit");
+    let signed = read(&["hash-object", "-t", "commit", "-w", &commit.display().to_string()]);
+    git(dir, &["update-ref", "HEAD", signed.trim()]);
+    git(dir, &["config", "log.showSignature", "true"]);
+    git(dir, &["config", "gpg.program", "git"]);
 }
 
 pub(crate) fn head(dir: &Path) -> String {
@@ -579,6 +604,26 @@ impl FakeHttp {
     pub(crate) fn requests(&self) -> Vec<String> {
         self.requests.lock().clone()
     }
+}
+
+pub(crate) fn free_port() -> u16 {
+    static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
+    let base = 30_000 + u16::try_from(std::process::id() % 80).expect("fits") * 32;
+    loop {
+        let port = base + NEXT.fetch_add(1, Ordering::SeqCst);
+        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+}
+
+pub(crate) fn http_get(port: u16, path: &str) -> String {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    write!(stream, "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n").expect("request");
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer).expect("answer");
+    answer
 }
 
 pub(crate) fn redirected(route: &'static str) -> (FakeHttp, FakeHttp) {
