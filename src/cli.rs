@@ -30,6 +30,7 @@ mod context;
 mod contract;
 mod files;
 mod flow;
+mod held;
 mod help;
 mod issue;
 mod line;
@@ -199,6 +200,9 @@ fn run_control(command: Control) -> Result<bool> {
     if let Some(view) = command.view() {
         client::use_view(view)?;
     }
+    if let Some(boot) = command.boot() {
+        client::use_boot(boot)?;
+    }
     let done = match control_route(command) {
         ControlFlow::Break(done) => done,
         ControlFlow::Continue(_) => Err(Error::Control("no area runs this command".into())),
@@ -233,6 +237,7 @@ fn talk_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Send(send) => run_send(send).map(|()| true),
         Control::Keys(keys) => run_keys(keys).map(|()| true),
+        Control::Held(args) => held::run(&args).map(|()| true),
         Control::Mark(mark) => run_mark(&mark).map(|()| true),
         Control::Read(read) => read::run(&read),
         Control::Wait(wait) => run_wait(wait).map(|()| true),

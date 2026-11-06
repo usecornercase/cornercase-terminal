@@ -72,6 +72,7 @@ impl App {
             Command::StartWith(start) => self.start_with_request(asked, start),
             Command::Send(send) => self.send_request(client, asker, send, now),
             Command::Keys(keys) => self.keys_request(asker, &keys, now),
+            Command::Held(held) => self.held_request(asker, &held),
             Command::Read(read) => self.read_request(asker, &read),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::Wait(wait) => self.wait_request(client, asker, wait, now),
