@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.4
+
+- **Machines: a machine's agents in the agents section.** With the agents section on (Settings › UI › agents section), every agent running on a linked machine gets a row there beside yours, under its project and tagged `☁ vps`, with its state, kind, model and context. A click shows that agent's tab on the machine, live, as a click on its workspace in the sidebar does. The rows fold like yours: the arrow, the `+n` and the attention of the hidden agents, and **collapse** / **expand** in the menu fold the agent on its machine. A machine that is down keeps its rows, dimmed, with `seen 2 min ago`, and pressing its arrow there says that nothing was sent. The compact mode's `Agents` menu lists them too.
+- **Not on those rows yet:** close agent, mark as pending review and view context.
+
 ## 0.13.3
 
 - **`cornercase status --json`, `status --follow` and `view` name the conversation a pane's agent is in**, as `conversation` on each pane: the id `places` gives in `cornercase recap --json`, `null` until the agent has one (for most agents, until its first prompt) and always for opencode. A program driving cornercase can now follow a recap's place as the panel's links do: the pane with the place's `agent` and `conversation`, then `pane` while `boot` is the server's, so it finds a conversation that a `cornercase restart`, or `agents close` and `agents reopen`, moved to another pane. A new id sends one more line to `status --follow` and `view`.

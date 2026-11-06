@@ -6,6 +6,7 @@ use super::App;
 use super::account_restart::Restarts;
 use super::closed_agents::ClosedAgents;
 use super::launches::Launches;
+use super::machine_links::ThereAgent;
 use super::menus::{Marked, MenuAction};
 use super::notifications::{self, Said};
 use super::overlay::Overlay;
@@ -27,7 +28,41 @@ use crate::term::Term;
 
 pub(super) type AgentPlace = (TabAt, usize);
 
-type Listed = (Vec<AgentPlace>, Vec<(u64, Option<u64>)>, HashSet<u64>);
+pub(super) type AgentKey = (Option<u64>, u64);
+
+pub(super) enum Listed<'a> {
+    Here(AgentPlace),
+    There(ThereAgent<'a>),
+}
+
+struct Listing<T> {
+    items: Vec<T>,
+    rows: Vec<(AgentKey, Option<AgentKey>)>,
+    folded: HashSet<AgentKey>,
+}
+
+impl<T> Listing<T> {
+    fn new() -> Self {
+        Self { items: Vec::new(), rows: Vec::new(), folded: HashSet::new() }
+    }
+
+    fn push(&mut self, item: T, (key, parent): (AgentKey, Option<AgentKey>), collapsed: bool) {
+        self.items.push(item);
+        self.rows.push((key, parent));
+        if collapsed {
+            self.folded.insert(key);
+        }
+    }
+}
+
+impl<'a> Listing<Listed<'a>> {
+    fn there(&mut self, agents: Vec<ThereAgent<'a>>) {
+        for agent in agents {
+            let (row, collapsed) = (agent.row(), agent.pane.collapsed);
+            self.push(Listed::There(agent), row, collapsed);
+        }
+    }
+}
 
 pub(super) struct AgentRuntime {
     pub(super) launches: Launches,
@@ -221,34 +256,48 @@ impl App {
     }
 
     pub(super) fn agent_tree(&self, narrow: bool) -> Vec<(AgentPlace, tree::Node)> {
-        let (places, rows, _) = self.listed_agents();
-        tree::order(&rows, &HashSet::new(), narrow).into_iter().map(|node| (places[node.index], node)).collect()
-    }
-
-    pub(super) fn shown_agents(&self, narrow: bool) -> (Vec<AgentPlace>, Vec<tree::Node>) {
-        let (places, rows, folded) = self.listed_agents();
-        (places, tree::order(&rows, &folded, narrow))
-    }
-
-    fn listed_agents(&self) -> Listed {
-        let mut places = Vec::new();
-        let mut rows = Vec::new();
-        let mut folded = HashSet::new();
+        let mut listing = Listing::new();
         let live = self.pane_ids();
         for (place, term) in self.agent_terms() {
-            places.push(place);
-            rows.push((term.id, Self::live_parent(term, &live)));
-            if term.collapsed {
-                folded.insert(term.id);
-            }
+            listing.push(place, Self::local_key(term, &live), false);
         }
-        (places, rows, folded)
+        let nodes = tree::order(&listing.rows, &listing.folded, narrow);
+        nodes.into_iter().map(|node| (listing.items[node.index], node)).collect()
+    }
+
+    pub(super) fn shown_agents(&self, narrow: bool) -> (Vec<Listed<'_>>, Vec<tree::Node>) {
+        let remote = self.remote_projects();
+        let mut listing = Listing::new();
+        let live = self.pane_ids();
+        for p in crate::project::sidebar_order(&self.projects, &self.groups) {
+            for (place, term) in self.project_agents(p) {
+                listing.push(Listed::Here(place), Self::local_key(term, &live), term.collapsed);
+            }
+            listing.there(self.machine_agents(&remote, self.projects[p].id));
+        }
+        listing.there(self.alone_agents(&remote));
+        let nodes = tree::order(&listing.rows, &listing.folded, narrow);
+        (listing.items, nodes)
+    }
+
+    pub(super) fn listed_status(&self, listed: &Listed) -> Option<activity::Status> {
+        match listed {
+            Listed::Here(place) => self.placed(*place).agent.status(),
+            Listed::There(there) => Some(there.status),
+        }
+    }
+
+    fn local_key(term: &Term, live: &HashSet<u64>) -> (AgentKey, Option<AgentKey>) {
+        ((None, term.id), Self::live_parent(term, live).map(|parent| (None, parent)))
     }
 
     fn agent_terms(&self) -> impl Iterator<Item = (AgentPlace, &Term)> {
         let order = crate::project::sidebar_order(&self.projects, &self.groups);
-        let tabs = order.into_iter().flat_map(|p| self.projects.project_tabs(p));
-        tabs.flat_map(|(at, tab)| {
+        order.into_iter().flat_map(|p| self.project_agents(p))
+    }
+
+    fn project_agents(&self, p: usize) -> impl Iterator<Item = (AgentPlace, &Term)> {
+        self.projects.project_tabs(p).flat_map(|(at, tab)| {
             let live = tab.panes.iter().enumerate().filter(|(_, term)| term.agent.status().is_some());
             live.map(move |(i, term)| ((at, i), term))
         })
