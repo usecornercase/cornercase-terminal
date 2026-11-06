@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.5
+## 0.13.6
 
 - **A program with a view of its own can run a plugin's buttons and popups.** `cornercase plugin run PLUGIN ACTION --view ID` runs a `button` action on what that view shows rather than on what cornercase's window shows: it gets `CORNERCASE_CONTEXT=button`, the view's ids and its workspace's folder. A popup action opens with it even with no window attached, sized from the view, so someone who only uses that program can open one, and it follows `view-set`. If the view goes away, the popup stays open as it does when the last window leaves. Without `--view` nothing changes. `cornercase contract` lists the feature `plugin-run-view`, and socket clients send `view` beside the command, as for `focus` and `start`.
+
+## 0.13.5
+
+- **A machine's last stats, without waiting for it.** `cornercase stats --cached --machine vps` and `--machine all` answer at once with the numbers your server read last and ask nobody, as `usage --cached` does: each machine with when it was read and last seen, its state and any error. Under `all`, a machine with no numbers yet is left out of the sum with `not read yet`; named alone, it fails and says why. A window or a script can show those numbers first, then run `cornercase stats --machine all` and show the fresh ones when they come. It is the `cached` field of the `stats` request, with the feature `stats-cached`, so a program can check that the server has it.
+- `cornercase stats --machine vps` of a machine that is down now puts its numbers on the right days of the heatmap, as `--machine all` and the Usage dialog already did.
 
 ## 0.13.4
 

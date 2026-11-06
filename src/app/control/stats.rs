@@ -34,16 +34,22 @@ impl App {
     pub(super) fn stats_request(&mut self, client: u64, request: &Stats, now: Instant) -> Handled {
         match request.machine.as_deref() {
             None => Ok(Some(json(&self.stats_view(SystemTime::now())))),
-            Some(machine) if every(machine) => {
-                let links = self.ask_every_machine::<View>();
-                self.gather(client, Gathering { of: Of::Stats, one: None, links, local: Vec::new() }, now)
-            }
+            Some(machine) if every(machine) => self.stats_everywhere(client, request.cached, now),
+            Some(name) if request.cached => self.machine_answer::<View>(self.machine_link(name)?).map(Some),
             Some(name) => self.ask_one_machine::<View>(client, name, Of::Stats, now),
         }
     }
 
+    fn stats_everywhere(&mut self, client: u64, cached: bool, now: Instant) -> Handled {
+        if cached {
+            return Ok(Some(self.every_stats(SystemTime::now())));
+        }
+        let links = self.ask_every_machine::<View>();
+        self.gather(client, Gathering { of: Of::Stats, one: None, links, local: Vec::new() }, now)
+    }
+
     pub(super) fn machine_link(&self, name: &str) -> Result<u64, Refusal> {
-        let held = self.machines.held().iter().find(|held| held.name.eq_ignore_ascii_case(name));
+        let held = self.machines_in_order().find(|held| held.name.eq_ignore_ascii_case(name));
         held.map(|held| held.link.id()).ok_or_else(|| unknown(name))
     }
 
