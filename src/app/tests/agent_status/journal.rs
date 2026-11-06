@@ -49,6 +49,48 @@ fn the_journal_follows_every_agent_from_its_first_conversation_to_its_close(
     assert_eq!(found.last().map(|entry| entry.event), Some(Event::Closed), "{:?}", kinds(&found));
 }
 
+fn named(app: &App) -> Option<String> {
+    app.report(None).projects[0].workspaces[0].tabs[0].panes[0].conversation.clone()
+}
+
+#[rstest]
+#[case::codex(agents::Known::Codex, Some("019a1234-5678-7000-8000-000000000001"))]
+#[case::gemini(agents::Known::Gemini, Some(agents::gemini::fake::ID))]
+#[case::opencode(agents::Known::Opencode, None)]
+#[case::grok(agents::Known::Grok, Some(FakeGrok::ID))]
+#[case::cursor(agents::Known::Cursor, Some(agents::cursor::fake::ID))]
+#[case::copilot(agents::Known::Copilot, Some(agents::copilot::fake::ID))]
+fn a_pane_names_the_id_the_journal_keeps_for_its_conversation(#[case] agent: agents::Known, #[case] id: Option<&str>) {
+    let state = TempDir::new();
+    let mut w = Watched::start(agent, false);
+    set_places(&mut w, &state);
+    if let Fake::Gemini(gemini, _) = &w.agents[0] {
+        gemini.append(crate::test_util::fixture!("gemini/0.63.0/prompt.jsonl"));
+    }
+    w.report("busy", 3);
+    w.report("idle", 3);
+    watch_until(&mut w.app, &w.rx, "the status names the conversation", |a| named(a).as_deref() == id);
+
+    w.app.close_tab(tab_at(&w.app, 0, 0, 0));
+    tick(&mut w.app);
+
+    let found = entries(&journal(&w));
+    let last = found.last().expect("the journal has entries");
+    assert_eq!((last.event, last.conversation.as_deref()), (Event::Closed, id));
+}
+
+#[test]
+fn a_pane_stops_naming_a_conversation_once_its_agent_quits() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let claude = FakeClaude::running(FakeClaude::ANSWERING);
+    claude.start(&mut app);
+    watch_until(&mut app, &rx, "the status names the conversation", |a| named(a).as_deref() == Some("s1"));
+
+    claude.signal("quit");
+
+    watch_until(&mut app, &rx, "the status names none", |a| named(a).is_none());
+}
+
 #[test]
 fn a_conversation_is_recorded_with_the_place_it_had_and_keeps_it_when_its_folder_is_gone() {
     let state = TempDir::new();

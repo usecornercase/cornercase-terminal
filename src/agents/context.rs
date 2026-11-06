@@ -321,6 +321,29 @@ impl Pane {
     pub(in crate::agents) fn watching(pid: i32, kind: Known, since: SystemTime) -> Self {
         Self { agent: Some((pid, since)), kind: Some(kind), ..Self::default() }
     }
+
+    pub(crate) fn claude_in(home: &Path, conversation: &str) -> Self {
+        let transcript = claude::transcript::transcript_path(home, home, conversation).expect("a transcript's path");
+        std::fs::create_dir_all(transcript.parent().expect("its folder")).expect("create its folder");
+        std::fs::write(&transcript, "{}\n").expect("write the transcript");
+        std::fs::create_dir_all(home.join("sessions")).expect("create the sessions folder");
+        let session = serde_json::json!({"pid": 1, "sessionId": conversation, "cwd": home}).to_string();
+        std::fs::write(home.join("sessions").join("1.json"), session).expect("write the session");
+        let mut pane = Self::default();
+        pane.update(
+            Some(Known::Claude),
+            &Look {
+                pid: 1,
+                args: Vec::new(),
+                title: String::new(),
+                screen: &String::new,
+                claude_dir: Some(home),
+                vibe_dir: None,
+                account_dir: None,
+            },
+        );
+        pane
+    }
 }
 
 pub(in crate::agents) fn percent(tokens: u64, window: u64) -> u16 {
