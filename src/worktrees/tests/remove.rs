@@ -1,9 +1,14 @@
 use std::path::{Path, PathBuf};
 
-use crate::test_util::{TempDir, git, git_repo};
-use crate::worktrees::discover::{checked_out, discover};
-use crate::worktrees::remove::{delete_branch, remove};
+use crate::git::worktree::RemoveOptions;
+use crate::test_util::{TempDir, git, git_repo, link_folder};
+use crate::worktrees::discover::{Listing, checked_out, discover};
+use crate::worktrees::remove::{self, ALL, Named, delete_branch, named, still_listed};
 use crate::worktrees::{Found, Kind};
+
+fn remove(found: &Found, script: Option<&str>) -> crate::error::Result<Option<String>> {
+    remove::remove(found, script, ALL)
+}
 
 fn main_repo() -> TempDir {
     let repo = git_repo(&[("a.txt", "a\n")]);
@@ -288,4 +293,204 @@ fn reads_the_branch_checked_out_now_without_looking_above_the_folder() {
     assert_eq!((prunable.kind, checked_out(&prunable).as_deref()), (Kind::Prunable, Some("feat-a")));
     let inside = Found { path: repo.path().join("missing"), ..found };
     assert_eq!(checked_out(&inside), None);
+}
+
+fn one_worktree() -> (TempDir, TempDir, PathBuf) {
+    let repo = main_repo();
+    let dirs = TempDir::new();
+    let at = dirs.path().join("a");
+    add(repo.path(), "feat-a", &at);
+    (repo, dirs, at)
+}
+
+fn listing(open: &[PathBuf]) -> Listing {
+    Listing { repos: Vec::new(), open: open.to_vec(), dir: PathBuf::new(), keep: None }
+}
+
+fn why(asked: &Path, open: &[PathBuf], found: &[Found]) -> String {
+    match named(asked, &listing(open), found) {
+        Named::Unknown { why, .. } => why,
+        Named::Listed(path) => panic!("{} was taken as {}", asked.display(), path.display()),
+    }
+}
+
+mod naming_a_folder {
+    use super::*;
+
+    #[test]
+    fn finds_a_listed_worktree_by_its_folder() {
+        let (repo, dirs, at) = one_worktree();
+        let found = [only(repo.path(), dirs.path())];
+
+        assert_eq!(named(&at, &listing(&[]), &found), Named::Listed(found[0].path.clone()));
+    }
+
+    #[test]
+    fn finds_a_prunable_entry_whose_folder_is_gone() {
+        let (repo, dirs, at) = one_worktree();
+        std::fs::remove_dir_all(&at).expect("remove");
+        let found = [only(repo.path(), dirs.path())];
+
+        assert_eq!(found[0].kind, Kind::Prunable);
+        assert_eq!(named(&at, &listing(&[]), &found), Named::Listed(found[0].path.clone()));
+    }
+
+    #[test]
+    fn refuses_a_relative_path_whatever_the_servers_folder_is() {
+        let (repo, dirs, _at) = one_worktree();
+        let found = [only(repo.path(), dirs.path())];
+
+        assert_eq!(why(Path::new("."), &[], &found), "it is not an absolute path");
+        assert_eq!(why(Path::new("a"), &[], &found), "it is not an absolute path");
+    }
+
+    #[test]
+    fn calls_a_main_checkout_a_main_checkout_even_when_it_is_open() {
+        let repo = main_repo();
+        let open = [repo.path().to_path_buf()];
+
+        let said = why(repo.path(), &open, &[]);
+
+        assert!(said.contains("main checkout") && said.contains("never removed"), "{said}");
+    }
+
+    #[test]
+    fn says_a_project_folder_is_a_projects_own() {
+        let (_repo, _dirs, at) = one_worktree();
+
+        assert_eq!(why(&at, std::slice::from_ref(&at), &[]), "it is a project's own folder");
+    }
+
+    #[test]
+    fn says_a_plain_folder_a_folder_inside_a_worktree_and_nothing_at_all_are_not_worktrees() {
+        let (repo, dirs, at) = one_worktree();
+        let found = [only(repo.path(), dirs.path())];
+        let inside = at.join("src");
+        std::fs::create_dir(&inside).expect("mkdir");
+        let unknown = "it is not a worktree that `cornercase worktrees list` knows";
+
+        assert_eq!(why(dirs.path(), &[], &found), unknown);
+        assert_eq!(why(&inside, &[], &found), unknown);
+        assert_eq!(
+            why(&dirs.path().join("nothing"), &[], &found),
+            "nothing is there, and no repository lists a worktree there"
+        );
+    }
+
+    #[test]
+    fn takes_a_link_to_a_listed_folder_as_that_folder_and_refuses_a_link_to_any_other() {
+        let (repo, dirs, at) = one_worktree();
+        let found = [only(repo.path(), dirs.path())];
+        let elsewhere = TempDir::new();
+        let (to_listed, to_other) = (elsewhere.path().join("to-listed"), elsewhere.path().join("to-other"));
+        link_folder(&at, &to_listed);
+        link_folder(dirs.path(), &to_other);
+
+        assert_eq!(named(&to_listed, &listing(&[]), &found), Named::Listed(found[0].path.clone()));
+        let refused = named(&to_other, &listing(&[]), &found);
+        assert!(matches!(&refused, Named::Unknown { path, .. } if path == dirs.path()), "{refused:?}");
+    }
+
+    #[test]
+    fn refuses_a_worktree_git_records_at_a_link_since_git_would_delete_through_it() {
+        let (repo, dirs, at) = one_worktree();
+        let elsewhere = TempDir::new();
+        let kept = elsewhere.path().join("kept");
+        std::fs::rename(&at, &kept).expect("move");
+        link_folder(&kept, &at);
+        let found = discover(&[repo.path().to_path_buf()], dirs.path());
+        assert_eq!((found.len(), found[0].path.as_path(), found[0].kind), (1, kept.as_path(), Kind::Linked));
+
+        for asked in [&at, &kept] {
+            let said = why(asked, &[], &found);
+            assert!(said.contains("git records it at the symbolic link"), "{said}");
+        }
+    }
+}
+
+mod a_folder_swapped_after_the_listing {
+    use super::*;
+
+    #[test]
+    fn a_folder_as_it_was_and_a_folder_already_gone_are_still_listed() {
+        let dir = TempDir::new();
+        let folder = dir.path().join("w");
+        std::fs::create_dir(&folder).expect("mkdir");
+
+        still_listed(&folder).expect("the folder is as it was");
+        still_listed(&dir.path().join("gone")).expect("nothing is there to follow");
+    }
+
+    #[test]
+    fn a_linked_worktree_turned_into_a_link_is_not_removed_nor_torn_down_nor_is_its_target_touched() {
+        let (repo, dirs, at) = one_worktree();
+        let found = only(repo.path(), dirs.path());
+        let kept = dirs.path().join("kept");
+        std::fs::rename(&at, &kept).expect("move");
+        link_folder(&kept, &at);
+
+        let refused = remove::remove(&found, Some("echo ran > ../marker"), ALL).expect_err("refused");
+
+        assert!(refused.to_string().contains("changed since it was listed"), "{refused}");
+        assert!(kept.join("a.txt").exists() && !dirs.path().join("marker").exists());
+    }
+
+    #[test]
+    fn an_orphan_under_a_folder_turned_into_a_link_is_not_deleted() {
+        let dir = TempDir::new();
+        std::fs::create_dir_all(dir.path().join("real/w")).expect("mkdir");
+        std::fs::write(dir.path().join("real/w/.git"), "gitdir: /nowhere/.git/worktrees/w\n").expect("write");
+        link_folder(&dir.path().join("real"), &dir.path().join("link"));
+        let through_a_link = Found { path: dir.path().join("link").join("w"), ..orphan_at(dir.path()) };
+
+        let refused = remove::remove(&through_a_link, None, ALL).expect_err("refused");
+
+        assert!(refused.to_string().contains("changed since it was listed"), "{refused}");
+        assert!(dir.path().join("real/w/.git").exists());
+    }
+
+    #[test]
+    fn an_orphan_turned_into_a_link_is_not_deleted() {
+        let dir = TempDir::new();
+        std::fs::create_dir(dir.path().join("real")).expect("mkdir");
+        std::fs::write(dir.path().join("real/.git"), "gitdir: /nowhere/.git/worktrees/w\n").expect("write");
+        link_folder(&dir.path().join("real"), &dir.path().join("w"));
+
+        let refused = remove::remove(&orphan_at(dir.path()), None, ALL).expect_err("refused");
+
+        assert!(refused.to_string().contains("changed since it was listed"), "{refused}");
+        assert!(dir.path().join("real/.git").exists());
+    }
+}
+
+mod options {
+    use super::*;
+
+    const NONE: RemoveOptions = RemoveOptions { force: false, unlock: false };
+
+    #[test]
+    fn git_still_refuses_files_that_appeared_after_the_check_when_force_was_not_given() {
+        let (repo, dirs, at) = one_worktree();
+        std::fs::write(at.join("dirty.txt"), "x").expect("write");
+        let found = only(repo.path(), dirs.path());
+
+        assert!(remove::remove(&found, None, NONE).is_err());
+        assert!(at.join("dirty.txt").exists());
+
+        remove::remove(&found, None, RemoveOptions { force: true, unlock: false }).expect("force removes it");
+        assert!(!at.exists());
+    }
+
+    #[test]
+    fn git_still_refuses_a_lock_that_appeared_after_the_check_when_unlock_was_not_given() {
+        let (repo, dirs, at) = one_worktree();
+        git(repo.path(), &["worktree", "lock", "--reason", "x", &at.display().to_string()]);
+        let found = only(repo.path(), dirs.path());
+
+        assert!(remove::remove(&found, None, RemoveOptions { force: true, unlock: false }).is_err());
+        assert!(at.join("a.txt").exists());
+
+        remove::remove(&found, None, RemoveOptions { force: false, unlock: true }).expect("unlock removes it");
+        assert!(!at.exists());
+    }
 }

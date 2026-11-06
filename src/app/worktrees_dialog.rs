@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 
@@ -22,9 +22,9 @@ use crate::project::{Hierarchy, WorkspaceAt};
 use crate::pull_request::State;
 use crate::time;
 use crate::ui;
+use crate::worktrees::discover::Listing;
 use crate::worktrees::{
-    Action, Dialog, Found, Hit, Kind, List, Live, Row, SCAN_GIVE_UP, SCANS_AT_ONCE, Scan, Step, discover, folders_of,
-    scan,
+    Action, Dialog, Found, Hit, Kind, List, Live, Row, SCAN_GIVE_UP, SCANS_AT_ONCE, Scan, Step, folders_of, scan,
 };
 
 mod cleanup;
@@ -32,8 +32,8 @@ mod confirm;
 mod free;
 mod sizes;
 
-pub(super) use cleanup::{Cleanup, Deleted};
-pub(super) use confirm::wrap;
+pub(super) use cleanup::{BEING_REMOVED, Cleanup, Deleted, How, Tally};
+pub(super) use confirm::{UNCHECKED, stake, wrap};
 pub(super) use free::Frees;
 
 pub(super) type Place = (PathBuf, u64, u64);
@@ -115,25 +115,22 @@ impl App {
         generation
     }
 
-    pub(super) fn spawn_worktree_listing(&mut self, to: ListFor, keep: Option<PathBuf>) {
+    pub(super) fn worktree_folders(&self, keep: Option<PathBuf>) -> Listing {
         let repos: Vec<PathBuf> = match &keep {
             Some(path) => vec![path.clone()],
             None => self.projects.iter().filter(|p| git::is_repo_root(&p.path)).map(|p| p.path.clone()).collect(),
         };
         let open: Vec<PathBuf> = self.projects.iter().map(|p| p.path.clone()).collect();
-        let dir = self.config.worktrees_dir(self.home.as_deref());
-        let job = Job::new(Level::Info, "worktrees", "list").with("repos", repos.len()).with("dir", dir.display());
+        Listing { repos, open, dir: self.config.worktrees_dir(self.home.as_deref()), keep }
+    }
+
+    pub(super) fn spawn_worktree_listing(&mut self, to: ListFor, keep: Option<PathBuf>) {
+        let listing = self.worktree_folders(keep);
+        let job = Job::new(Level::Info, "worktrees", "list").with("repos", listing.repos.len());
+        let job = job.with("dir", listing.dir.display());
         self.spawn_job(
             job,
-            move || {
-                let open: HashSet<PathBuf> = open.iter().map(canonical).collect();
-                let keep = keep.map(|path| discover::main_checkout(&canonical(&path)));
-                let found = discover::discover(&repos, &dir);
-                Ok(found
-                    .into_iter()
-                    .filter(|f| !open.contains(&f.path) && keep.as_ref().is_none_or(|repo| &f.repo == repo))
-                    .collect::<Vec<Found>>())
-            },
+            move || Ok(listing.found()),
             move |found, job| {
                 if let Ok(found) = &found {
                     job.note("found", found.len());

@@ -223,6 +223,7 @@ impl Command {
             Self::Clone(clone) => clone.fields(fields),
             Self::Recap(ask) => ask.fields(fields),
             Self::FreeBuilds(free) => free.fields(fields),
+            Self::WorktreesRemove(remove) => remove.fields(fields),
             Self::Machines(machines) => machines.fields(fields),
             Self::FocusMachine(focus) => focus.fields(fields),
             Self::Tour(tour) => tour.fields(fields),

@@ -91,6 +91,7 @@ pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 pub(crate) use worktrees::{
     BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
+    WorktreesRemove, WorktreesRemoved,
 };
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
@@ -254,6 +255,7 @@ pub(crate) enum Command {
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
     Recap(RecapAsk),
+    WorktreesRemove(WorktreesRemove),
 }
 
 impl Command {
@@ -435,6 +437,7 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
+            Self::WorktreesRemove(_) => 119,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
@@ -571,6 +574,7 @@ impl Command {
         "machines",
         "clone",
         "focus-machine",
+        "worktrees-remove",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

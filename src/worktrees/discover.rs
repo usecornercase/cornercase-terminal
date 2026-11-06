@@ -8,6 +8,23 @@ use crate::os::fs::{canonical, canonicalize};
 
 use super::{Found, Kind};
 
+#[derive(Debug, Clone)]
+pub(crate) struct Listing {
+    pub(crate) repos: Vec<PathBuf>,
+    pub(crate) open: Vec<PathBuf>,
+    pub(crate) dir: PathBuf,
+    pub(crate) keep: Option<PathBuf>,
+}
+
+impl Listing {
+    pub(crate) fn found(&self) -> Vec<Found> {
+        let open: HashSet<PathBuf> = self.open.iter().map(canonical).collect();
+        let keep = self.keep.as_ref().map(|path| main_checkout(&canonical(path)));
+        let found = discover(&self.repos, &self.dir).into_iter();
+        found.filter(|f| !open.contains(&f.path) && keep.as_ref().is_none_or(|repo| &f.repo == repo)).collect()
+    }
+}
+
 pub(crate) fn discover(repos: &[PathBuf], worktrees_dir: &Path) -> Vec<Found> {
     let mut found = Vec::new();
     let mut seen_paths = HashSet::new();

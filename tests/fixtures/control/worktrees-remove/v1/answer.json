@@ -1,0 +1,105 @@
+{
+  "check": false,
+  "folders": [
+    {
+      "path": "/wt/shop/feat-old",
+      "outcome": "refused",
+      "why": "1 file changed; add --force to remove it anyway",
+      "needs": [
+        "force",
+        "unlock"
+      ],
+      "removed_with": null,
+      "branches": [],
+      "kept": [],
+      "warnings": [],
+      "lines": [
+        "1 file changed",
+        "2 commits not pushed",
+        "teardown runs first"
+      ],
+      "lost": [
+        "feat/old: its commits will be lost"
+      ],
+      "teardown": true,
+      "roles": [
+        {
+          "role": "coder",
+          "path": "/wt/shop/coder",
+          "branch": "coder"
+        }
+      ],
+      "worktree": {
+        "path": "/wt/shop/feat-old",
+        "kind": "linked",
+        "project_name": "shop",
+        "repository": "/code/shop",
+        "branch": "feat/old",
+        "project": null,
+        "workspace": null,
+        "last_changed": null,
+        "changed": 1,
+        "unpushed": 2,
+        "merged": false,
+        "no_commits": false,
+        "upstream_gone": false,
+        "lock": {
+          "reason": "ci",
+          "path": "/wt/shop/feat-old",
+          "role": null,
+          "pid": null,
+          "running": null
+        },
+        "running": [],
+        "outside": [],
+        "other_tabs": [],
+        "removing": false,
+        "run_role": false,
+        "safe": false,
+        "risks": [
+          "1 file changed",
+          "2 commits not pushed"
+        ],
+        "error": null,
+        "size": null,
+        "size_error": null
+      }
+    },
+    {
+      "path": "/wt/shop/lead",
+      "outcome": "removed",
+      "why": null,
+      "needs": [],
+      "removed_with": "/wt/shop/run",
+      "branches": [
+        "lead"
+      ],
+      "kept": [
+        "kept the branch x: it changed since the confirmation"
+      ],
+      "warnings": [
+        "lead: the teardown failed"
+      ],
+      "lines": [],
+      "lost": [],
+      "teardown": false,
+      "roles": [],
+      "worktree": null
+    },
+    {
+      "path": "/wt/shop/stuck",
+      "outcome": "failed",
+      "why": "contains modified or untracked files, use --force to delete it",
+      "needs": [],
+      "removed_with": null,
+      "branches": [],
+      "kept": [],
+      "warnings": [],
+      "lines": [],
+      "lost": [],
+      "teardown": false,
+      "roles": [],
+      "worktree": null
+    }
+  ]
+}

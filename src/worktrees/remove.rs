@@ -1,21 +1,87 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 use crate::git;
-use crate::git::worktree::{check, git as run};
+use crate::git::worktree::{RemoveOptions, check, git as run};
 use crate::log;
 use crate::os::ffi;
+use crate::os::fs::{canonical, canonicalize};
 
-use super::discover::{Origin, plain, repo_of};
+use super::discover::{Listing, Origin, plain, repo_of};
 use super::{Found, Kind};
 
-const ALL: git::worktree::RemoveOptions = git::worktree::RemoveOptions { force: true, unlock: true };
+pub(crate) const ALL: RemoveOptions = RemoveOptions { force: true, unlock: true };
 
-pub(crate) fn remove(found: &Found, script: Option<&str>) -> Result<Option<String>> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Named {
+    Listed(PathBuf),
+    Unknown { path: PathBuf, why: String },
+}
+
+pub(crate) fn named(asked: &Path, listing: &Listing, found: &[Found]) -> Named {
+    if !asked.is_absolute() {
+        return Named::Unknown { path: asked.to_path_buf(), why: "it is not an absolute path".to_string() };
+    }
+    let place = real_place(asked);
+    let listed = |row: &&Found| ffi::same(&row.path, &place) || ffi::same(&real_place(&row.path), &place);
+    let Some(row) = found.iter().find(listed) else {
+        return Named::Unknown { why: unknown_why(&place, &listing.open), path: place };
+    };
+    match recorded_at_a_link(row) {
+        Some(link) => {
+            let why = format!("git records it at the symbolic link {} and would delete through it", link.display());
+            Named::Unknown { path: row.path.clone(), why }
+        }
+        None => Named::Listed(row.path.clone()),
+    }
+}
+
+fn recorded_at_a_link(found: &Found) -> Option<PathBuf> {
+    let admin = found.admin.as_deref().filter(|name| plain(name))?;
+    let entry = found.repo.join(".git").join("worktrees").join(admin);
+    let gitdir = std::fs::read_to_string(entry.join("gitdir")).ok()?;
+    let folder = ffi::join(&entry, gitdir.trim()).parent()?.to_path_buf();
+    std::fs::symlink_metadata(&folder).ok()?.file_type().is_symlink().then_some(folder)
+}
+
+fn real_place(path: &Path) -> PathBuf {
+    if let Ok(real) = canonicalize(path) {
+        return real;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => real_place(parent).join(name),
+        _ => canonical(path),
+    }
+}
+
+fn unknown_why(place: &Path, open: &[PathBuf]) -> String {
+    if std::fs::symlink_metadata(place.join(".git")).is_ok_and(|dot_git| dot_git.is_dir()) {
+        return "it is a repository's main checkout, which is never removed".to_string();
+    }
+    if open.iter().any(|folder| ffi::same(&canonical(folder), place)) {
+        return "it is a project's own folder".to_string();
+    }
+    if std::fs::symlink_metadata(place).is_err() {
+        return "nothing is there, and no repository lists a worktree there".to_string();
+    }
+    "it is not a worktree that `cornercase worktrees list` knows".to_string()
+}
+
+pub(crate) fn still_listed(path: &Path) -> Result<()> {
+    let changed = || Error::Git(format!("{} changed since it was listed", path.display()));
+    match (std::fs::symlink_metadata(path), canonicalize(path)) {
+        (Ok(meta), _) if meta.file_type().is_symlink() => Err(changed()),
+        (Ok(_), Ok(real)) if !ffi::same(&real, path) => Err(changed()),
+        _ => Ok(()),
+    }
+}
+
+pub(crate) fn remove(found: &Found, script: Option<&str>, options: RemoveOptions) -> Result<Option<String>> {
+    still_listed(&found.path)?;
     match found.kind {
         Kind::Linked => {
             let branch = found.branch.as_deref().unwrap_or("");
-            git::worktree::remove_with_teardown(&found.repo, &found.path, branch, script, ALL)
+            git::worktree::remove_with_teardown(&found.repo, &found.path, branch, script, options)
         }
         Kind::Prunable => prune(found).map(|()| None),
         Kind::Orphan => orphan(&found.path).map(|()| None),

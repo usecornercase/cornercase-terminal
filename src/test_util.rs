@@ -417,6 +417,13 @@ pub(crate) fn fake_glab(dir: &Path, script: &str) -> PathBuf {
     fake_tool(dir, "glab", script)
 }
 
+pub(crate) fn link_folder(target: &Path, link: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).expect("a symbolic link");
+    #[cfg(windows)]
+    crate::os::fs::make_junction(link, target).expect("a junction");
+}
+
 pub(crate) fn git(dir: &Path, args: &[&str]) {
     let out = std::process::Command::new("git")
         .arg("-C")

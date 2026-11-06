@@ -8,6 +8,10 @@ use crate::time::Stamp;
 use crate::worktrees::builds::{Folder, Freed, Size};
 use crate::worktrees::{Kind, Row};
 
+pub(crate) mod remove;
+
+pub(crate) use remove::{WorktreesRemove, WorktreesRemoved};
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct WorktreeSize {

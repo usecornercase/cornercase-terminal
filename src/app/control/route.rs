@@ -239,6 +239,7 @@ impl App {
             Command::WorktreeSize(size) => self.worktree_size_request(client, asker, &size),
             Command::FreeBuilds(free) => self.free_builds_request(client, asker, &free),
             Command::Worktrees(list) => self.worktrees_request(client, &list),
+            Command::WorktreesRemove(remove) => self.worktrees_remove_request(client, &remove),
             Command::Machines(machines) => self.machines_request(client, machines),
             Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),

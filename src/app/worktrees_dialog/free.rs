@@ -28,10 +28,17 @@ struct FreeTarget {
 
 #[derive(Default)]
 pub(in crate::app) struct Frees {
-    pending: HashMap<u64, String>,
+    pending: HashMap<u64, (String, PathBuf)>,
     bytes: u64,
     worktrees: usize,
     problems: Vec<String>,
+}
+
+#[cfg(test)]
+impl Frees {
+    pub(in crate::app) fn freeing(&mut self, path: PathBuf) {
+        self.pending.insert(0, ("a test".to_string(), path));
+    }
 }
 
 impl App {
@@ -115,7 +122,7 @@ impl App {
     fn spawn_free(&mut self, FreeTarget { path, repo, chosen, name }: FreeTarget) {
         let key = self.take_id();
         let names = self.builds_of(&repo);
-        self.git.frees.pending.insert(key, name);
+        self.git.frees.pending.insert(key, (name, path.clone()));
         let job = Job::new(Level::Info, "worktrees", "free builds").with("path", path.display());
         let at = path.clone();
         self.spawn_job(
@@ -130,8 +137,12 @@ impl App {
         );
     }
 
+    pub(in crate::app) fn freeing_path(&self, path: &Path) -> bool {
+        self.git.frees.pending.values().any(|(_, freeing)| freeing == path)
+    }
+
     pub(in crate::app) fn builds_freed(&mut self, key: u64, path: &Path, result: Result<Freed>) {
-        let Some(name) = self.git.frees.pending.remove(&key) else { return };
+        let Some((name, _)) = self.git.frees.pending.remove(&key) else { return };
         let after = match &result {
             Ok(freed) => freed.after.clone().map(Ok),
             Err(_) => None,

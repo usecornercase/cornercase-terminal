@@ -98,7 +98,7 @@ fn confirm(s: &mut Setup) {
     });
 }
 
-fn confirmed(s: &mut Setup, rows: usize, ticked: &[&str]) {
+pub(super) fn confirmed(s: &mut Setup, rows: usize, ticked: &[&str]) {
     opened(s, rows);
     for branch in ticked {
         tick(s, branch);
@@ -117,7 +117,7 @@ pub(super) fn confirmation(app: &App) -> String {
     lines.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n")
 }
 
-fn remove(s: &mut Setup) {
+pub(super) fn remove(s: &mut Setup) {
     let pos = at(&s.app, ui::WorktreesHit::Remove);
     click(&mut s.app, pos);
 }
@@ -241,7 +241,7 @@ fn asked_branches_go_with_their_worktrees() {
     assert_eq!((gone, seen.last().cloned()), ((false, true), Some("removed 1 worktree and 1 branch".to_string())));
 }
 
-fn with_a_role() -> Setup {
+pub(super) fn with_a_role() -> Setup {
     let mut s = with(&["lead", "coder"]);
     let coder = path_of(&s, "coder");
     let lead = &mut s.app.projects[0].workspaces[1];
@@ -384,7 +384,7 @@ pub(super) fn settled_text(s: &mut Setup, left: usize) -> Option<String> {
     settle(s, left).last().cloned()
 }
 
-fn activate(s: &mut Setup, path: &Path) {
+pub(super) fn activate(s: &mut Setup, path: &Path) {
     let at = s.app.projects[0].workspaces.iter().position(|w| w.path == path).expect("the workspace");
     s.app.projects[0].active = at;
 }

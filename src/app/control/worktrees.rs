@@ -19,6 +19,8 @@ use crate::term::Term;
 use crate::worktrees::builds::{self, Size};
 use crate::worktrees::{Asks, Found, Kind, Row, discover, fill, folders_of, scan};
 
+pub(super) mod remove;
+
 struct Target {
     path: PathBuf,
     repo: PathBuf,

@@ -176,6 +176,7 @@ enum Stage {
     Worktree(Then),
     Run(u64, Box<Starting>),
     Removing { force: bool, unlock: bool },
+    RemovingFolders(Box<worktrees::remove::Removing>),
     Check,
     Held(Box<Held>),
     Launch { confirm: Option<SystemTime>, compacts: bool, wait: Option<Condition> },
@@ -210,6 +211,7 @@ impl Stage {
             Self::Machines(_) => "the machines have not answered yet".into(),
             Self::Clone(_) => "git is still cloning the repository".into(),
             Self::Relay(_) => "the machine has not answered yet".into(),
+            Self::RemovingFolders(_) => "git is still removing the worktrees".into(),
             Self::Recap { choice, .. } => format!("the agent is still writing the recap of {}", choice.name()),
             Self::Dossier(_) => "the dossier is still being built".into(),
             _ => "the ports are still being listed".into(),
@@ -230,6 +232,7 @@ impl Stage {
                 | Self::Reading
                 | Self::Restart { .. }
                 | Self::Check
+                | Self::RemovingFolders(_)
                 | Self::Issue(_)
                 | Self::Usage(_)
                 | Self::Machines(_)
