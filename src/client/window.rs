@@ -24,7 +24,7 @@ use crate::host::open::{Browse, Failed, Open, Openers};
 use crate::host::sound::{self, Cue, Player};
 use crate::host::theme::HostTheme;
 use crate::paths;
-use crate::plugins::{Kind, Places, Supervisor};
+use crate::plugins::Supervisor;
 use crate::protocol::{self, ClientMessage, Hello, MachineOrder, ServerMessage};
 use crate::remote::{self, Stderr};
 use crate::ui::remote::{self as notice, Notice, Shown};
@@ -477,8 +477,7 @@ impl Window<'_> {
         if !local {
             self.plugins = None;
         } else if self.plugins.is_none() {
-            let places = Places::new(&paths::config(), &paths::session());
-            self.plugins = Some(Supervisor::start(Kind::Window, places, Vec::new()));
+            self.plugins = Some(Supervisor::of_a_window());
         }
     }
 }

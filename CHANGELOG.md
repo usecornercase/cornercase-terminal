@@ -2,11 +2,19 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.15
+## 0.13.16
 
 - **Import a VS Code workspace from a script or another app.** `cornercase open work.code-workspace` does what choosing that file in the folder picker does: a group named after the file (a group of that name is reused), each of its folders a project in it, a folder already open moved there, a folder's `name` kept as the project's name unless you named it, folders that are gone or on another machine skipped. It prints the group's id; `--json` prints `{"group", "name", "projects", "missing", "failed"}`, what the picker's message says, and it exits with 3 when a folder was gone or couldn't start its shell, or nothing was imported. `--focus` shows its first project. The file is read on the server's machine, so `cornercase --remote devbox open '~/code/work.code-workspace'` imports the one on `devbox`.
 - **`cornercase open --into GROUP`** opens a folder in that group, or moves it there when it is already open, and imports a `.code-workspace` file there, as the group's **add project** does. Over the socket it is `open`'s `into`, with the feature `open-code-workspace`, for clients that draw cornercase themselves. A folder without it answers as before.
 - In the folder picker, importing a folder whose project was still closing now opens it again, instead of adding the closing project to the group, from which it then disappeared.
+
+## 0.13.15
+
+- **A program that draws cornercase itself can keep the plugins' window processes running.** Run `cornercase plugin windows` for as long as your window is open, and what each plugin that is on declares as `[[window]]` runs beside it, as beside cornercase's own window: it picks up a plugin turned on or off within a second, starts again what stops, keeps what `plugin remove` waits for, and needs no server. With `--json` it prints one line per change (`running` with its pid, `stopped` with the seconds until it starts again), so your program can show it. It stops them all on a signal or `Ctrl+C`, and when the reader of its output goes away; `SIGKILL`, which is what Rust's `Child::kill` sends, can't be caught, so close the pipe or send `SIGTERM` instead. Two programs run two copies, as two windows do. It refuses `--remote`, since those processes run on the machine that shows the window. It stays the version it started as until you start it again, and what it starts after `cornercase update` gets the new binary as `CORNERCASE_BIN`. On Windows a reader that left is noticed only at the next line it can't write. Settings › Plugins and `plugin status` now name the command where they say where a window process runs.
+
+## 0.13.14
+
+- **`cornercase start --placed`: the new tab's ids as soon as it is open.** A program that shows the new tab itself no longer has to wait for the agent, or to guess which tab is the new one: `cornercase start claude --machine vps --project 2 --issue '#7' --placed --json` answers with the project, workspace, tab and pane once the tab is open, here or on a machine, even while the agent asks whether to trust the folder, and the launch goes on, as it does from the window's dialogs. It takes no `--wait`, `--until` or `--timeout`, and it needs a server of 0.13.0 or newer, which the command checks.
 
 ## 0.13.13
 

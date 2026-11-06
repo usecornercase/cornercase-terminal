@@ -3,6 +3,42 @@ use rstest::rstest;
 use super::*;
 use crate::test_util::TempDir;
 
+mod the_running_binary {
+    use super::*;
+
+    #[test]
+    fn a_replaced_one_is_named_by_the_file_that_replaced_it() {
+        let dir = TempDir::new();
+
+        assert_eq!(usable_binary(&dir.path().join("cornercase (deleted)")), dir.path().join("cornercase"));
+    }
+
+    #[test]
+    fn one_that_is_there_keeps_its_name_whatever_it_is() {
+        let dir = TempDir::new();
+        let named = dir.path().join("cornercase (deleted)");
+        std::fs::write(&named, "").expect("a file");
+
+        assert_eq!(usable_binary(&named), named);
+    }
+
+    #[test]
+    fn this_one_is_found() {
+        assert_eq!(own_binary(), std::env::current_exe().expect("the test binary"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_stays_a_link_so_that_a_path_of_homebrew_outlives_an_upgrade() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("elsewhere"), "").expect("what it names");
+        let link = dir.path().join("cornercase");
+        std::os::unix::fs::symlink("elsewhere", &link).expect("a link");
+
+        assert_eq!(usable_binary(&link), link);
+    }
+}
+
 #[cfg(unix)]
 mod on_unix {
     use super::*;

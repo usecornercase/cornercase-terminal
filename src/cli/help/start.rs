@@ -38,10 +38,29 @@ are the machine's own. --wait, --until and --timeout are refused: follow the age
 `cornercase --remote`. --focus shows its tab in this window once the machine lists it. It needs a
 server that knows the `machine-start` feature.
 
+With --placed the command answers as soon as the tab is open, after its worktree is made or its
+issue read, with the same ids, and the launch goes on, here or on a machine, as the window's dialogs
+do: a trust question then waits in the tab, not in this command, and the prompt follows its answer.
+It is for a program that shows the new tab itself, and it can no longer say that the agent never
+showed up. --wait, --until and --timeout are refused, since nothing is waited for. It needs a server
+that knows the `machine-start` feature, which came with it.
+
+`cornercase wait` and `send` only work once that launch is over, and the answer does not mean it
+is. Until the agent runs, wait says the pane runs no agent; until its prompt is typed, wait can end
+on idle; and send goes to whatever reads the pane then, the shell, or the trust question, which it
+would answer. `status --json` has no field for the launch, so read the pane there (under machines
+for one on a machine): `agent` is null until the agent runs and reports, and `at_prompt` true while
+its shell still waits for it; `agent` with the status idle only says it runs, since it may still be
+asking its question and its prompt may not be typed; and the status working says it took its prompt,
+so the launch is over. Without a prompt, or with an agent that reports no status, only its
+screen says so (`cornercase read`). To send or wait right after the command, leave --placed out: its
+answer then comes when the launch is over.
+
 Examples:
   cornercase start claude --issue '#482'
   cornercase start codex --issue ENG-42 --project 3
   cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
   cornercase start codex --prompt-file task.md --wait --timeout 1800
   cornercase start claude --mode plan --model opus --prompt 'Plan the login rework'
-  cornercase start claude --issue '#482' --project 2 --machine vps --focus";
+  cornercase start claude --issue '#482' --project 2 --machine vps --focus
+  cornercase start claude --issue '#482' --project 2 --machine vps --placed --json";

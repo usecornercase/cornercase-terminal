@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand};
 
 use super::{LogsArgs, Print, Which};
+use crate::cli::help::PLUGIN_WINDOWS_HELP;
 use crate::plugins::install::is_commit;
 
 #[derive(Debug, Args)]
@@ -65,6 +66,11 @@ pub(crate) enum PluginAction {
     Run(RunArgs),
     #[command(about = "Close the plugin popup that is open; asks the server")]
     PopupClose,
+    #[command(
+        about = "Keep the plugins' window processes running until it ends, for a program that draws its own window",
+        after_help = PLUGIN_WINDOWS_HELP
+    )]
+    Windows(Print),
     #[command(about = "Turn a plugin on: it runs as you, with access to every terminal")]
     Enable {
         #[arg(value_name = "ID")]
