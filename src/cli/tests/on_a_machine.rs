@@ -19,7 +19,7 @@ fn machine_of(args: &[&str]) -> Option<String> {
     on.machine
 }
 
-fn start(args: &[&str]) -> StartArgs {
+pub(super) fn start(args: &[&str]) -> StartArgs {
     let Some(Command::Control(Control::Start(start))) = parse(args).expect("parse").command else {
         panic!("not a start")
     };
