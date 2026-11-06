@@ -7,7 +7,7 @@ use crate::agents::stats::View;
 use crate::app::machine_links::Held;
 use crate::app::machine_usage::NOT_READ;
 use crate::machines::link::Down;
-use crate::machines::{State, machine};
+use crate::machines::{Machine, State, machine};
 
 const VPS: &str = "vps";
 const SEEN: i64 = 1_793_000_000;
@@ -37,7 +37,8 @@ fn prompts(answer: &Value) -> &Value {
 }
 
 fn asked_nothing(app: &mut App) -> bool {
-    !held(app).cache.stats.asking
+    let cache = &held(app).cache;
+    !cache.stats.asking && !cache.usage.asking
 }
 
 mod one_machine {
@@ -146,6 +147,38 @@ fn a_copy_read_days_ago_lands_on_its_days_in_the_heatmap(#[case] machine: &str) 
         (&answer["blocks"][0]["agent_seconds"], &answer["blocks"][3]["agent_seconds"]),
         (&json!(0.0), &json!(60.0))
     );
+}
+
+mod a_machine_no_longer_accepted {
+    use super::*;
+
+    #[rstest]
+    fn is_not_found_by_its_name_and_not_asked_before_its_link_goes(
+        #[values(Vec::new(), vec![machine(VPS, "")])] listed: Vec<Machine>,
+        #[values("stats", "usage")] command: &str,
+        #[values(true, false)] cached: bool,
+    ) {
+        let (mut app, _rx) = linked();
+        keep_a_copy(&mut app, Duration::from_mins(4));
+        app.config.machines = listed;
+
+        let refused = refused(&mut app, command, &json!({"machine": VPS, "cached": cached}));
+
+        assert_eq!(refused.code, "not-found", "{}", refused.message);
+        assert!(asked_nothing(&mut app));
+    }
+
+    #[test]
+    fn is_left_out_of_every_machine() {
+        let (mut app, _rx) = linked();
+        keep_a_copy(&mut app, Duration::from_mins(4));
+        app.config.machines.clear();
+
+        let all = ok(&mut app, "stats", &json!({"machine": "all", "cached": true}));
+
+        assert_eq!(prompts(&all), 0);
+        assert!(all.get("machines").is_none(), "{all}");
+    }
 }
 
 mod without_a_machine {

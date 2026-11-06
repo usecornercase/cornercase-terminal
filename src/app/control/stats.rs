@@ -49,7 +49,7 @@ impl App {
     }
 
     pub(super) fn machine_link(&self, name: &str) -> Result<u64, Refusal> {
-        let held = self.machines.held().iter().find(|held| held.name.eq_ignore_ascii_case(name));
+        let held = self.machines_in_order().find(|held| held.name.eq_ignore_ascii_case(name));
         held.map(|held| held.link.id()).ok_or_else(|| unknown(name))
     }
 
