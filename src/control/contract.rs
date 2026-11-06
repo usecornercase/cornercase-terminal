@@ -57,6 +57,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "queue-routines",
     "plugin-run-view",
     "open-code-workspace",
+    "machine-retry-at",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

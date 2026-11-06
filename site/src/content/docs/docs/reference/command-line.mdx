@@ -173,7 +173,7 @@ cornercase machines update mini                        # install your release on
 cornercase machines retry [vps]                        # try one link, or every link, now
 ```
 
-`--icon` takes the glyph or its name (`server`, `laptop`, `desktop`, `mini`, `home server`, `other`), `--folder` is `~/code` unless you give one, and `edit` changes only what you give. `add` refuses a name already listed and `edit` one that isn't. Every subcommand prints the list, or with `--json` the `machines` answer. A value the rules refuse, or an update that failed on the machine, exits with status 1 and says why. See [Machines](../../guides/machines/).
+`--icon` takes the glyph or its name (`server`, `laptop`, `desktop`, `mini`, `home server`, `other`), `--folder` is `~/code` unless you give one, and `edit` changes only what you give. `add` refuses a name already listed and `edit` one that isn't. Every subcommand prints the list, or with `--json` the [`machines` answer](../../guides/scripts-and-agents/#machines), whose `retry_at` says when a link that fell tries next. A value the rules refuse, or an update that failed on the machine, exits with status 1 and says why. See [Machines](../../guides/machines/).
 
 [`cornercase --remote vps clone URL '~/code' --file .env`](../../guides/scripts-and-agents/#clone-a-repository) clones a repository on a machine with the git-ignored files of the repository here, read by the command, as the [Clone on machine dialog](../../guides/machines/#clone-the-project-there) does with the ones you tick; `cornercase clone --list-ignored --json` lists them, and needs no server.
 

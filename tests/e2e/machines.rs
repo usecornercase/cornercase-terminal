@@ -3,7 +3,9 @@ use serde_json::{Value, json};
 
 use super::agents::claude_asking_on_cue;
 use super::commands::Followed;
-use super::remote::{boot_of, cornercase_in, fake_ssh_to, gone, hold_ssh_to, let_ssh_to, ssh_pid_to, ssh_pids_to};
+use super::remote::{
+    boot_of, cornercase_in, fake_ssh_to, gone, hold_ssh_to, let_ssh_to, ssh_pid_to, ssh_pids_to, ssh_runs,
+};
 use super::views::size_of;
 use super::*;
 
@@ -131,12 +133,53 @@ fn a_machine_without_cornercase_says_so_and_links_on_retry_once_it_is_there() {
     let here = here_with(&[VPS], &[(VPS, &prefix)]);
     let missing = wait_for_machine(&here, VPS, "cornercase is not found there", in_state("unreachable"));
     assert_eq!(missing["error"], "cornercase was not found on vps: install it there");
+    assert!(missing.get("retry_at").is_none(), "{missing}");
 
     cornercase_in(&there);
     here.says(&["machines", "retry", VPS]);
 
     wait_for_machine(&here, VPS, "the machine is linked well before its next try", in_state("linked"));
     assert_eq!(machine.servers(), 1);
+}
+
+#[test]
+fn a_machine_says_when_it_tries_next_only_while_its_link_is_down() {
+    let (_machine, here) = linked_to_one();
+    wait_until("the machine sends what it has", || status(&here)["machines"][0]["boot"].is_string());
+    let row = status(&here)["machines"][0].clone();
+    assert!(row.get("retry_at").is_none() && machines(&here)[0].get("retry_at").is_none(), "{row}");
+
+    hold_ssh_to(&here, VPS);
+    killed(&[ssh_pid_to(&here, VPS)]);
+    let down = wait_for_machine(&here, VPS, "the machine falls", in_state("unreachable"));
+
+    let (seen, next) = (down["seen"].as_str().expect("a time"), down["retry_at"].as_str().expect("a time"));
+    assert!(seen.len() == next.len() && seen < next, "{down}");
+    assert!(status(&here)["machines"][0]["retry_at"].is_string());
+    let retried: Value = serde_json::from_str(&here.says(&["machines", "retry", VPS, "--json"])).expect("the list");
+    assert_ne!(retried["machines"][0]["retry_at"], down["retry_at"]);
+
+    let_ssh_to(&here, VPS);
+    let back = wait_for_machine(&here, VPS, "the machine is back", in_state("linked"));
+    assert!(back.get("retry_at").is_none(), "{back}");
+}
+
+#[test]
+fn a_fallen_machine_sends_a_line_of_the_app_stream_per_failed_try_and_none_between_them() {
+    let here = here_with(&[VPS], &[]);
+    let mut following = here.spawn(&["status", "--app", "--follow"]);
+    let mut followed = Followed::of(&mut following);
+
+    let mut moments: Vec<String> = Vec::new();
+    while moments.len() < 3 {
+        let line = followed.next("the next failed try");
+        let next = line["machines"][0]["retry_at"].as_str().map(str::to_string);
+        moments.extend(next.filter(|next| moments.last() != Some(next)));
+        assert!(moments.len() <= ssh_runs(&here), "{moments:?} with only {} tries", ssh_runs(&here));
+    }
+
+    assert!(moments.is_sorted(), "{moments:?}");
+    assert!(machines(&here)[0]["retry_at"].as_str() >= moments.last().map(String::as_str));
 }
 
 #[test]

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
+use std::time::SystemTime;
 
 use rstest::rstest;
 use serde_json::{Value, json};
@@ -114,6 +115,11 @@ impl Rig {
         theirs
     }
 
+    fn fell(&self) {
+        self.fail(refused());
+        assert!(matches!(self.event(), Event::Down { .. }));
+    }
+
     fn linked(&self, boot: &str) -> UnixStream {
         let mut theirs = self.reach(VERSION, None);
         answer(&mut theirs, boot, VERSION);
@@ -137,6 +143,18 @@ fn down(down: Down, failed: u32) -> Event {
 
 fn behind() -> Error {
     Error::RemoteBehind(Box::new(Behind { host: "vps".into(), there: "0.0.1".into(), update: String::new() }))
+}
+
+#[track_caller]
+fn due_after(next: Option<SystemTime>, before: SystemTime, wait: Duration) {
+    let next = next.expect("a next try");
+    assert!(next >= before + wait && next <= SystemTime::now() + wait, "{next:?} is not {wait:?} after {before:?}");
+}
+
+#[track_caller]
+fn due_by_now(next: Option<SystemTime>) {
+    let next = next.expect("a next try");
+    assert!(next <= SystemTime::now(), "{next:?} is still to come");
 }
 
 fn shop(boot: &str) -> control::Report {
@@ -197,6 +215,7 @@ mod waits {
             rig.fail(error());
             assert_eq!(rig.event(), down(expected.clone(), failed));
             assert_eq!(rig.waited(), PERSON);
+            assert_eq!(rig.link.next_try(), None);
         }
     }
 
@@ -220,8 +239,79 @@ mod waits {
     }
 }
 
+mod the_next_try {
+    use super::*;
+
+    #[test]
+    fn is_unknown_until_a_try_fails() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        rig.tried(1);
+        assert_eq!(rig.link.next_try(), None);
+    }
+
+    #[test]
+    fn is_the_end_of_each_wait_and_stays_put_until_the_try_after_it_fails() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        let mut last = None;
+        for failed in 1..=3 {
+            rig.tried(1);
+            assert_eq!(rig.link.next_try(), last);
+            let before = SystemTime::now();
+            rig.fail(refused());
+            assert_eq!(rig.event(), down(Down::Unreachable(REFUSED.into()), failed));
+            last = rig.link.next_try();
+            due_after(last, before, rig.waited());
+        }
+    }
+
+    #[test]
+    fn goes_once_the_link_waits_on_a_person() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        rig.fell();
+        assert!(rig.link.next_try().is_some());
+        rig.fail(Error::RemoteTooOld("vps".into()));
+        assert_eq!(rig.event(), down(Down::Older(None), 2));
+        assert_eq!(rig.link.next_try(), None);
+    }
+
+    #[test]
+    fn stays_put_while_the_link_comes_up_and_moves_a_wait_after_it_drops() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        rig.fell();
+        let fell = rig.link.next_try();
+
+        let theirs = rig.linked("vps-1");
+        assert_eq!(rig.link.next_try(), fell);
+
+        let before = SystemTime::now();
+        drop(theirs);
+        assert_eq!(rig.event(), down(Down::Unreachable(LOST.into()), 1));
+        due_after(rig.link.next_try(), before, Duration::from_secs(1));
+    }
+}
+
 mod pokes {
     use super::*;
+
+    #[test]
+    fn move_the_next_try_of_a_link_that_waits_to_that_moment() {
+        let rig = Rig::held(1, &Servers::new(HERE));
+        rig.fell();
+        rig.link.poke();
+        due_by_now(rig.link.next_try());
+        rig.tried(2);
+    }
+
+    #[test]
+    fn while_it_connects_leave_no_wait_to_tell_when_that_try_fails() {
+        let rig = Rig::held(1, &Servers::new(HERE));
+        rig.tried(1);
+        rig.link.poke();
+        rig.fail(refused());
+        assert_eq!(rig.event(), down(Down::Unreachable(REFUSED.into()), 1));
+        due_by_now(rig.link.next_try());
+        rig.tried(1);
+    }
 
     #[test]
     fn end_the_wait_of_a_link_that_is_down_and_reset_it() {
@@ -230,6 +320,7 @@ mod pokes {
         assert_eq!(rig.event(), down(Down::Older(None), 1));
         assert_eq!(rig.waited(), PERSON);
         rig.link.poke();
+        assert_eq!(rig.link.next_try(), None);
         rig.fail(refused());
         assert_eq!(rig.event(), down(Down::Unreachable(REFUSED.into()), 1));
     }
@@ -385,6 +476,7 @@ mod handshake {
         answer(&mut theirs, HERE, VERSION);
         assert_eq!(rig.event(), down(Down::ThisComputer, 1));
         assert_eq!(rig.waited(), PERSON);
+        assert_eq!(rig.link.next_try(), None);
         assert!(ended(&mut theirs));
     }
 
@@ -397,6 +489,7 @@ mod handshake {
         answer(&mut second, "shared-1", VERSION);
         assert_eq!(pi.event(), down(Down::SameServer(1), 1));
         assert_eq!(pi.waited(), PERSON);
+        assert_eq!(pi.link.next_try(), None);
         assert!(ended(&mut second));
         let Rig { link, reports, .. } = vps;
         drop(link);
@@ -622,5 +715,19 @@ mod bugs {
         assert_eq!(waits.recv_timeout(WAIT), Ok(PERSON));
         assert_eq!(told(), Report { link: 3, event: down(Down::Unreachable(REFUSED.into()), 1) });
         drop(link);
+    }
+
+    #[test]
+    fn a_link_that_hits_one_says_its_next_try_is_a_minute_away() {
+        let (tx, reports) = mpsc::channel::<Report>();
+        let (sender, _waits) = mpsc::channel();
+        let ticks = Box::new(Ticks { waits: sender, held: true });
+        let before = SystemTime::now();
+        let link = Link::spawn(3, Box::new(Broken(AtomicBool::new(false))), &Servers::new(HERE), &tx, ticks);
+
+        let report = reports.recv_timeout(WAIT).expect("a report");
+
+        assert_eq!(report.event, down(Down::Unreachable(Error::Bug.to_string()), 1));
+        due_after(link.next_try(), before, PERSON);
     }
 }

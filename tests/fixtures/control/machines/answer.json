@@ -26,6 +26,7 @@
       "version": null,
       "server_version": null,
       "seen": null,
+      "retry_at": "2026-10-29T10:00:04.250Z",
       "error": "ssh: connect to host pi.lan port 22: Connection refused",
       "updating": false,
       "problem": null

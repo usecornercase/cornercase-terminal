@@ -11,10 +11,12 @@ forwards nothing, so connect once by hand to accept the host key.
 
 The states are connecting, linked (with the version there), unreachable (since when, and why) and
 older. With --json it prints {\"here\": {\"icon\", \"version\"}, \"machines\": [{\"name\", \"icon\",
-\"destination\", \"folder\", \"state\", \"version\", \"server_version\", \"seen\", \"error\", \"updating\",
-\"problem\"}]}: version is the cornercase installed there and server_version the one its server
-runs, seen when the link was last up (UTC), error why it is down, and problem what is wrong with an
-entry of config.json, which then gets no link. Every subcommand prints the list the same way.
+\"destination\", \"folder\", \"state\", \"version\", \"server_version\", \"seen\", \"retry_at\", \"error\",
+\"updating\", \"problem\"}]}: version is the cornercase installed there and server_version the one
+its server runs, seen when the link was last up (UTC), retry_at when a link that fell tries next
+(UTC; a time that has passed means that try is under way; left out while the link is up or
+connecting, and while a person has to act there), error why it is down, and problem what is wrong
+with an entry of config.json, which then gets no link. Every subcommand prints the list the same way.
 
 Examples:
   cornercase machines
