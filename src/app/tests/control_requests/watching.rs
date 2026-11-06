@@ -375,6 +375,90 @@ fn a_title_the_program_sets_reaches_status_and_the_next_snapshot() {
     assert_eq!(titles, [Some("watched-title".to_string())]);
 }
 
+mod a_pane_s_conversation {
+    use rstest::rstest;
+
+    use super::*;
+    use crate::agents::Known;
+    use crate::agents::context::Record;
+    use crate::control::OpenView;
+
+    const FIRST_LINE: &str = r#"{"type":"user","uuid":"p1","origin":{"kind":"human"}}"#;
+
+    fn looked_again(agent: &mut Agent) -> Vec<Snapshot> {
+        let since = Instant::now();
+        agent.refreshing("another look at the agents", |a| a.agents.watched().is_some_and(|at| at > since));
+        agent.app.trace_refresh();
+        published(&mut agent.app)
+    }
+
+    fn settled_agent(stream: Command) -> (Agent, u64, Snapshot) {
+        let mut agent = Agent::new();
+        let id = agent.start(None);
+        agent.app.clients.events.snapshots.set_every(Duration::ZERO);
+        let first = serde_json::from_value(value(&mut agent.app, None, stream)).expect("a snapshot");
+        wait_until("the session stops changing", || looked_again(&mut agent).is_empty());
+        (agent, id, first)
+    }
+
+    fn named(snapshots: &[Snapshot], id: u64) -> Vec<Option<String>> {
+        let of = |snapshot: &Snapshot| {
+            let tabs = snapshot.report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
+            let mut panes = tabs.flat_map(|t| &t.panes);
+            panes.find(|pane| pane.id == id).expect("the agent's pane").conversation.clone()
+        };
+        snapshots.iter().map(of).collect()
+    }
+
+    fn pid_of(agent: &Agent, id: u64) -> i32 {
+        pane(&agent.app, id).foreground_pid().expect("the agent's pid")
+    }
+
+    fn resumes_another(agent: &Agent, id: u64, to: &str) {
+        let Some(Record::Claude(path)) = pane(&agent.app, id).context.record_for(Known::Claude) else {
+            panic!("not a transcript")
+        };
+        std::fs::write(path.with_file_name(format!("{to}.jsonl")), format!("{FIRST_LINE}\n")).expect("the transcript");
+        let pid = pid_of(agent, id);
+        let session = agent.fake.dir().join("sessions").join(format!("{pid}.json"));
+        let text = std::fs::read_to_string(&session).expect("the session").replace(&format!("s{pid}"), to);
+        let next = session.with_extension("next");
+        std::fs::write(&next, text).expect("write the session");
+        std::fs::rename(next, session).expect("put the session in place");
+    }
+
+    #[rstest]
+    #[case::watch(Command::Watch(wire::Watch::default()))]
+    #[case::view(Command::View(OpenView::default()))]
+    fn known_later_sends_one_line_with_the_id_and_no_more(#[case] stream: Command) {
+        let (mut agent, id, first) = settled_agent(stream);
+
+        agent.transcript(id, &[FIRST_LINE]);
+        let arrived = looked_again(&mut agent);
+        let after = looked_again(&mut agent);
+
+        assert_eq!(named(&[first], id), [None]);
+        assert_eq!(named(&arrived, id), [Some(format!("s{}", pid_of(&agent, id)))]);
+        assert_eq!(after, []);
+    }
+
+    #[rstest]
+    #[case::watch(Command::Watch(wire::Watch::default()))]
+    #[case::view(Command::View(OpenView::default()))]
+    fn changed_in_one_look_with_nothing_else_sends_one_line_with_the_new_id(#[case] stream: Command) {
+        let (mut agent, id, _) = settled_agent(stream);
+        agent.transcript(id, &[FIRST_LINE]);
+        looked_again(&mut agent);
+
+        resumes_another(&agent, id, "other");
+        let moved = looked_again(&mut agent);
+        let after = looked_again(&mut agent);
+
+        assert_eq!(named(&moved, id), [Some("other".to_string())]);
+        assert_eq!(after, []);
+    }
+}
+
 #[test]
 fn a_theme_change_sends_the_whole_session_with_the_next_revision() {
     let (mut app, _rx, _dirs) = app_with(1);

@@ -2,6 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
+use super::commands::{Followed, new_tab};
 use super::*;
 
 fn stamp(secs: u64) -> String {
@@ -89,4 +90,55 @@ fn the_contract_lists_the_recap_operation_and_feature() {
     let operations = contract["operations"].as_array().expect("operations");
     assert!(operations.iter().any(|op| op["name"] == "recap" && op["available"] == true), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "recap"), "{contract}");
+}
+
+fn conversation_in(status: &Value, pane: &str) -> Value {
+    let list = |value: &Value, key: &str| value[key].as_array().cloned().unwrap_or_default();
+    let tabs = list(status, "projects").into_iter().flat_map(|p| list(&p, "workspaces")).flat_map(|w| list(&w, "tabs"));
+    let found = tabs.flat_map(|t| list(&t, "panes")).find(|p| p["id"].as_u64() == pane.parse().ok());
+    found.expect("the pane")["conversation"].clone()
+}
+
+fn status_json(session: &Session) -> Value {
+    serde_json::from_str(&session.says(&["status", "--json"])).expect("json")
+}
+
+const WRITES_ON_CUE: &str = r#"#!/bin/sh
+d="$1"; t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"
+mkdir -p "$t" "$d/sessions"
+printf '{"pid":%s,"sessionId":"c9f1","cwd":"%s","status":"idle"}' $$ "$PWD" > "$d/sessions/$$.json"
+while [ -d "$d" ] && [ ! -e "$d/write" ]; do sleep 0.05; done
+printf '{"type":"user","uuid":"p1","origin":{"kind":"human"}}\n' > "$t/c9f1.jsonl"
+while [ -d "$d" ] && [ ! -e "$d/quit" ]; do sleep 0.05; done
+"#;
+
+#[test]
+fn status_and_its_streams_name_the_conversation_the_places_of_a_recap_carry() {
+    let app = Harness::start();
+    let (pane, _) = new_tab(&app);
+    let (mut follow, mut view) = (app.session.spawn(&["status", "--follow"]), app.session.spawn(&["view"]));
+    let (mut followed, mut viewed) = (Followed::of(&mut follow), Followed::of(&mut view));
+    let bin = temp_dir("claude-conversation");
+    write_executable(&bin.join("claude"), WRITES_ON_CUE);
+    let dir = app.session.claude_dir();
+    let line = format!("{} {}", bin.join("claude").display(), dir.display());
+    app.session.says(&["send", "--pane", &pane, "--enter", &line]);
+    let running = |report: Report| panes(report).any(|p| p.id.to_string() == pane && p.status.is_some());
+    app.session.wait_for_report("the agent runs", running);
+    let unnamed = conversation_in(&status_json(&app.session), &pane);
+
+    std::fs::write(dir.join("write"), "").expect("the cue");
+    followed.until("status --follow names it", |line| conversation_in(line, &pane) == "c9f1");
+    viewed.until("the view names it", |line| conversation_in(line, &pane) == "c9f1");
+    let named = conversation_in(&status_json(&app.session), &pane);
+    let dossier = app.session.says(&["recap", "now", "--dossier", "--json"]);
+    let place = &serde_json::from_str::<Value>(&dossier).expect("json")["places"]["c1"];
+
+    let _ = (follow.kill(), view.kill());
+    let _ = (follow.wait(), view.wait());
+    let _ = std::fs::remove_dir_all(&bin);
+    assert_eq!((unnamed, named), (Value::Null, Value::from("c9f1")));
+    assert_eq!((&place["agent"], &place["conversation"]), (&Value::from("claude"), &Value::from("c9f1")));
+    assert_eq!(place["pane"].to_string(), pane);
+    assert_eq!(place["boot"], status_json(&app.session)["boot"]);
 }
