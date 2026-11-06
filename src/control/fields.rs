@@ -41,6 +41,7 @@ impl Command {
             Self::Wait(wait) => wait.fields(fields, false),
             Self::WaitSeveral(wait) => wait.fields(fields, true),
             Self::Mark(mark) => mark.fields(fields),
+            Self::RunSetup(run) => run.fields(fields),
             Self::Held(held) => held.fields(fields),
             Self::Notify(notify) => {
                 fields.add("bytes", notify.text.len());

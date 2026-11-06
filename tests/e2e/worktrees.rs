@@ -72,3 +72,108 @@ fn every_worktree_is_listed_with_its_reasons_and_size() {
     assert_eq!(bare["worktrees"][0]["size"], Value::Null, "{bare}");
     let _ = std::fs::remove_dir_all(&repo);
 }
+
+fn workspaces(session: &Session) -> Vec<Value> {
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("the status");
+    let projects = status["projects"].as_array().expect("projects");
+    projects.iter().flat_map(|project| project["workspaces"].as_array().expect("workspaces").clone()).collect()
+}
+
+fn workspace_on(session: &Session, branch: &str) -> Value {
+    workspaces(session).into_iter().find(|w| w["branch"] == branch).expect("a workspace on the branch")
+}
+
+fn setup_of(session: &Session, branch: &str) -> Value {
+    workspace_on(session, branch)["setup"].clone()
+}
+
+fn failed_setup(name: &str) -> (Opened, Value) {
+    let opened = open_worktree(name, "e2e/plain");
+    let folder = opened.repo.display().to_string();
+    let script = "echo \"in [$CORNERCASE_WORKTREE]\"\ntest -f \"$CORNERCASE_ROOT/ok\"";
+    opened.session.says(&["config", "project", &folder, "--setup", script]);
+    let project = opened.session.says(&["open", &folder]);
+    let made = opened.session.cli(&["new-workspace", "feat/x", "--worktree", "--project", &project]);
+    assert!(refused(&made, 1, "failed with exit status 1"), "{made:?}");
+    let failed = workspace_on(&opened.session, "feat/x");
+    assert_eq!(failed["setup"], "failed", "{failed}");
+    (opened, failed)
+}
+
+#[test]
+fn a_setup_that_fails_again_by_command_names_its_status_and_its_pane() {
+    let (Opened { session, _app: _window, repo, .. }, failed) = failed_setup("setup-fails");
+
+    let again = session.cli(&["setup", "--workspace", &failed["id"].to_string()]);
+
+    assert!(refused(&again, 1, "failed with exit status 1"), "{again:?}");
+    assert!(String::from_utf8_lossy(&again.stderr).contains("cornercase read --pane"), "{again:?}");
+    assert_eq!(setup_of(&session, "feat/x"), "failed");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn a_failed_setup_runs_again_by_command_with_its_variables_and_its_mark_goes() {
+    let (Opened { session, _app: _window, repo, .. }, failed) = failed_setup("setup-again");
+    std::fs::write(repo.join("ok"), "").expect("write the marker");
+
+    let pane = session.says(&["setup", "--worktree", "feat/x"]);
+
+    let screen = session.says(&["read", "--pane", &pane]);
+    let path = failed["path"].as_str().expect("its folder");
+    assert!(screen.contains(&format!("in [{path}]")) && screen.contains("setup finished"), "{screen}");
+    assert_eq!(setup_of(&session, "feat/x"), Value::Null);
+    let id = failed["id"].to_string();
+    let printed: Value = serde_json::from_str(&session.says(&["setup", "--workspace", &id, "--json"])).expect("json");
+    assert_eq!(printed["workspace"], failed["id"]);
+    assert!(printed["project"].is_u64() && printed["tab"].is_u64() && printed["pane"].is_u64(), "{printed}");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn a_running_setup_is_not_started_twice_and_goes_on_without_the_command_that_asked() {
+    let Opened { session, _app: _window, repo, .. } = open_worktree("setup-held", "e2e/held");
+    let script = "while [ -e \"$CORNERCASE_ROOT/hold\" ]; do sleep 0.02; done";
+    session.says(&["config", "project", &repo.display().to_string(), "--setup", script]);
+    let hold = repo.join("hold");
+    std::fs::write(&hold, "").expect("hold the setup");
+
+    let mut left = session.spawn(&["setup", "--worktree", "e2e/held"]);
+    wait_until("the setup runs", || setup_of(&session, "e2e/held") == "running");
+    let twice = session.cli(&["setup", "--worktree", "e2e/held"]);
+    assert!(refused(&twice, 1, "already running its setup"), "{twice:?}");
+    assert!(left.try_wait().expect("look at the command").is_none(), "it answered before the setup ended");
+    left.kill().expect("stop the command");
+    left.wait().expect("wait for the command");
+    assert_eq!(setup_of(&session, "e2e/held"), "running", "stopping the command stopped the setup");
+    std::fs::remove_file(&hold).expect("let the setup end");
+    wait_until("the setup ends", || setup_of(&session, "e2e/held") == Value::Null);
+
+    std::fs::write(&hold, "").expect("hold the setup");
+    let answering = session.spawn(&["setup", "--worktree", "e2e/held"]);
+    wait_until("the setup runs again", || setup_of(&session, "e2e/held") == "running");
+    std::fs::remove_file(&hold).expect("let the setup end");
+    let pane = Session::output(answering);
+    assert!(pane.parse::<u64>().is_ok(), "{pane}");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn what_the_menu_does_not_offer_is_refused_in_words() {
+    let Opened { session, _app: _window, repo, .. } = open_worktree("setup-refused", "e2e/refused");
+    let none = session.cli(&["setup", "--worktree", "e2e/refused"]);
+    assert!(refused(&none, 1, "has no setup"), "{none:?}");
+    session.says(&["config", "project", &repo.display().to_string(), "--setup", "true"]);
+    let folder = repo.display().to_string();
+    let all = workspaces(&session);
+    let plain = all.iter().find(|w| w["path"] == folder.as_str()).expect("the project's own workspace");
+
+    let refused_plain = session.cli(&["setup", "--workspace", &plain["id"].to_string()]);
+
+    assert!(refused(&refused_plain, 1, "is not a worktree"), "{refused_plain:?}");
+    let missing = session.cli(&["setup", "--workspace", "999"]);
+    assert!(refused(&missing, 1, "there is no workspace 999"), "{missing:?}");
+    let unknown = session.cli(&["setup", "--worktree", "no/such"]);
+    assert!(refused(&unknown, 2, "no workspace"), "{unknown:?}");
+    let _ = std::fs::remove_dir_all(&repo);
+}

@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.13
+
+- **Run a worktree's setup again from a script or another program.** `cornercase setup --workspace ID` (or `--worktree BRANCH`; by default the workspace it runs in) does what **run setup** in the workspace's menu does: a new tab runs the project's setup with `CORNERCASE_ROOT`, `CORNERCASE_WORKTREE` and `CORNERCASE_BRANCH` set, the workspace reads `setup: running`, its failed mark goes, and agents started there wait for it. It returns once the setup is done, with the pane's id, or exits with 1 naming the exit status. It takes `--focus`, `--view` and `--json` as `new-tab` does, and says why it refuses a workspace that is not a worktree, a project with no setup or a setup already running. Other programs send the `run-setup` request. `new-workspace --worktree` no longer says that an agent did not start, since it starts none, and it now fails when the setup's tab is closed before the setup ended.
+
 ## 0.13.12
 
 - **The server of the Discord forum can be picked from a script or another program.** With forum mode on and the app in several of your servers, `cornercase status --app` now lists them in Discord's `forum`, as `servers`, each with its `id` and `name`, and `cornercase config forum-server ID` picks one, as a click in the forum's dialog does: the channel is made there, the same message shows, and `forum` goes on to `ready`. An id that is not in the list, or a moment when no pick is waiting, is refused and says why. Nothing changes in the window.

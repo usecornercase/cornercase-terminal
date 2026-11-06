@@ -702,6 +702,7 @@ mod processes;
 mod pull_request;
 mod recap;
 mod requests;
+mod setup;
 mod start;
 mod status;
 mod worktrees;
@@ -724,6 +725,7 @@ pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_ABOUT, PROCESS
 pub(in crate::cli) use pull_request::PULL_REQUEST_HELP;
 pub(in crate::cli) use recap::RECAP_HELP;
 pub(in crate::cli) use requests::REQUESTS_HELP;
+pub(in crate::cli) use setup::SETUP_HELP;
 pub(in crate::cli) use start::{NEW_WORKSPACE_HELP, START_HELP};
 pub(in crate::cli) use status::STATUS_HELP;
 pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
@@ -740,7 +742,7 @@ id, projection, active, cols, rows, shown (the project, workspace, tab and pane 
 controls (whether it sizes its tab's terminals now). The view lives while this command runs:
 stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
-read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `start`,
+read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `setup`, `start`,
 `send`, `keys`, `held`, `read`, `wait`, `status`, `rename`, `mark`, `go`, `plugin run` or `surface`: the view's
 tab is their default and --focus moves it.
 
