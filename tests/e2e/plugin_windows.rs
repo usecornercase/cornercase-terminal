@@ -1,5 +1,6 @@
 use std::io::{BufRead, BufReader};
-use std::process::{Child, Stdio};
+use std::path::Path;
+use std::process::{Child, Command, Stdio};
 
 use rustix::fs::{OFlags, fcntl_setfl};
 use serde_json::json;
@@ -27,7 +28,8 @@ impl Panel {
     fn folder(test: &str) -> PathBuf {
         let folder = temp_dir_named(&format!("ccwindows-{test}-{}", std::process::id()));
         std::fs::write(folder.join("cornercase-plugin.toml"), MANIFEST).expect("manifest");
-        let script = "#!/bin/sh\necho $$ >> \"$CORNERCASE_PLUGIN_STATE/pids\"\nexec sleep 60\n";
+        let script = "#!/bin/sh\necho \"$CORNERCASE_BIN\" >> \"$CORNERCASE_PLUGIN_STATE/bins\"\n\
+                      echo $$ >> \"$CORNERCASE_PLUGIN_STATE/pids\"\nexec sleep 60\n";
         write_executable(&folder.join("panel"), script);
         folder
     }
@@ -79,7 +81,7 @@ impl Drop for Panel {
 }
 
 fn signal(pid: &impl ToString, name: &str) {
-    let sent = std::process::Command::new("kill").args([name, &pid.to_string()]).status().expect("run kill");
+    let sent = Command::new("kill").args([name, &pid.to_string()]).status().expect("run kill");
     assert!(sent.success(), "kill {name} failed");
 }
 
@@ -238,6 +240,37 @@ fn two_clients_run_two_copies() {
     signal(&two.id(), "-TERM");
     ended_well(two);
     assert_stopped(&panel, second);
+}
+
+fn put_this_build_at(bin: &Path) {
+    let new = bin.with_extension("new");
+    let copied = Command::new("cp").arg(env!("CARGO_BIN_EXE_cornercase")).arg(&new).status().expect("run cp");
+    assert!(copied.success(), "copy this build");
+    std::fs::rename(&new, bin).expect("over what runs there, as an update does");
+}
+
+#[test]
+fn what_starts_after_an_update_gets_a_binary_that_runs() {
+    let panel = Panel::on("update");
+    let bin = panel.folder.join("cornercase");
+    put_this_build_at(&bin);
+    let mut command = panel.session.command_of(&bin);
+    command.args(["plugin", "windows", "--json"]).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut keeper = command.spawn().expect("run the copy");
+    let mut lines = Followed::of(&mut keeper);
+    let pid = panel.runs(&mut lines, "the process appears");
+
+    put_this_build_at(&bin);
+    signal(&pid, "-KILL");
+    let again = starts_again(&panel, &mut lines, pid);
+
+    let told = std::fs::read_to_string(panel.state().join("bins")).expect("the paths it got");
+    let got = told.lines().last().expect("the last path");
+    assert_eq!(got, bin.display().to_string());
+    assert!(Command::new(got).arg("--version").status().is_ok_and(|ran| ran.success()), "{got}");
+    signal(&keeper.id(), "-TERM");
+    ended_well(keeper);
+    assert_stopped(&panel, again);
 }
 
 #[test]

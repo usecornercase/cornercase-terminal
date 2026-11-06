@@ -4,7 +4,8 @@ open, and what each plugin that is on declares as [[window]] runs beside it, as 
 cornercase: it starts what is wanted, reloads within a second when plugins change, starts again what
 stops (after 1, 2, 4… up to 60 s) and keeps the files `plugin remove` reads. Two programs run two
 copies, as two windows do. It reads the plugins of this machine, not a server: with no server, or no
-plugin that has a window process, it keeps running and waits for one.
+plugin that has a window process, it keeps running and waits for one. An update does not restart it:
+it stays the old version until you start it again.
 
 It stops them all and exits with 0 on SIGTERM, SIGINT, SIGHUP or SIGQUIT (on Windows Ctrl+C, taskkill
 without /f or its console closing), and when the reader of its standard output leaves: read it

@@ -1349,6 +1349,17 @@ A program that installs or updates a plugin for the user shows the preview itsel
 
 Actions are named by plugin id and action id, and listed with a `revision` that goes up each time the plugins change (counted from the server's start, so send `boot` too). `plugin run` refuses a revision the plugins moved past, `conflict`, as a menu opened before the change does nothing, so an action whose command or contexts changed since you listed it never runs by surprise. Left out, `--revision` is the current one, which `plugin actions --json` also prints.
 
+The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `{"command": "plugin-actions", "args": {"context": "pane"}}` answers `revision` and `actions` (`plugin`, `name`, `action`, `title`, `contexts`, `placement`, `job` or `popup`, and for a popup `width` and `height` when the manifest gives them; `context` may be `button`). `{"command": "plugin-run", "args": {"plugin": "acme.notes", "action": "note", "revision": 3, "item": {"pane": 5}}}` takes every field, the `item` as `close` and `focus` do (left out for a `button` action, to run it on what the window shows), and answers when the action ends (for a popup, when it closes):
+
+```json
+{"plugin": "acme.notes", "action": "note", "context": "pane", "project": 1, "workspace": 2, "tab": 3, "pane": 5,
+ "ended": "exited", "code": 0, "signal": null, "error": null, "ms": 41, "log": "/…/plugins/state/acme.notes/plugin.log"}
+```
+
+`ended` is `exited` (with `code`), `signal` (with `signal`), `timeout` or `error` (it could not start), and for a popup `closed` (its `×` or `plugin popup-close` closed it first); a popup's program ended by a signal has `signal` `null` and the signal's name in `error`. `error` is `null` exactly when it exited with 0, so `plugin run` exits with 1 for a popup closed by hand. An action that ran and failed is an answer, not a refusal. A group, or an action run on a kind of row it isn't offered for, is `malformed`; a plugin that is unknown, off or cannot run, an action it lacks, or an id that names nothing is `not-found`. A client that leaves before the action ends gets no answer, and the action runs to its end.
+
+`plugin status --json` prints this answer with those same escapes. `plugin-list` answers what Settings › Plugins shows: `revision`, `problem` (why `plugins.json` cannot be read, or `null`) and `plugins`, one row per plugin with `id`, `enabled`, `state` (`on`, `off` or `cannot-run`), `error`, Settings' `label` and `note`, `source`, `log`, `manifest`, `services` and `button`, there only for a plugin with a button (`title`, `icon` and `actions`, the ids of its `button` actions in order). A service is `running` (with its `pid`), `stopped` (with `restart_in`, the seconds until it starts again) or `starting`. Processes a plugin keeps running in each local window belong to those windows, so the server can't tell; a program that keeps them running itself reads their state from [`plugin windows`](#window-processes-beside-your-own-window). Turning plugins on and off, installing and updating stay with `cornercase plugin`, which works on the files; a program shows an install or an update with `plugin install SOURCE --preview --json` instead (below). `{"command": "plugin-popup-close", "args": {}}` closes the popup as its `×` does. An older server refuses each of these requests by name, and a `plugin-run` without `item` as `malformed`.
+
 #### Window processes beside your own window
 
 A program that draws cornercase itself runs this for as long as its window is open:
@@ -1359,7 +1370,7 @@ cornercase plugin windows --json
 
 What each plugin that is on declares as [`[[window]]`](../plugins/#window-processes) then runs beside your window, as it does beside cornercase's own: it starts what is wanted, picks up within a second a plugin turned on or off or a changed manifest, starts again what stops (after 1, 2, 4… up to 60 seconds) and keeps the files [`plugin remove`](../plugins/) reads to wait for them. Two programs run two copies, as two windows do, and each process inherits this command's environment.
 
-It reads the plugins of this machine and sends no request, so it needs no server and works with any server. With no server, with no plugin that has a window process, or with a `plugins.json` it cannot read, it keeps running and waits.
+It reads the plugins of this machine and sends no request, so it needs no server and works with any server. With no server, with no plugin that has a window process, or with a `plugins.json` it cannot read, it keeps running and waits. A restart of the server doesn't touch it, and neither does an update: it stays the old version until you start it again, and what it starts meanwhile gets the new binary as `CORNERCASE_BIN`.
 
 Each change is one line. With `--json` it is an object with `plugin`, `id`, `state` (`running` or `stopped`), `pid` and `restart_in`, the seconds until it starts again, `null` once it won't because the plugin was turned off or lost that entry:
 
@@ -1376,17 +1387,6 @@ It stops them all and exits with status 0 when it gets `SIGTERM`, `SIGINT`, `SIG
 `SIGKILL` can't be caught, and it is what Rust's `Child::kill` sends: on Linux and macOS what the command runs then keeps running, and nothing restarts it, as when a window is killed that way. Close the pipe or send `SIGTERM` instead. On Windows a process killed that way takes what it runs along, but a reader that left is noticed only at the next line it can't write, so end the command yourself, or start it in a Job object that kills it with your program.
 
 Window processes run on the machine that shows the window, so `--remote` is refused with status 2, and so is a line of [`requests`](#many-commands-through-one-process).
-
-The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `{"command": "plugin-actions", "args": {"context": "pane"}}` answers `revision` and `actions` (`plugin`, `name`, `action`, `title`, `contexts`, `placement`, `job` or `popup`, and for a popup `width` and `height` when the manifest gives them; `context` may be `button`). `{"command": "plugin-run", "args": {"plugin": "acme.notes", "action": "note", "revision": 3, "item": {"pane": 5}}}` takes every field, the `item` as `close` and `focus` do (left out for a `button` action, to run it on what the window shows), and answers when the action ends (for a popup, when it closes):
-
-```json
-{"plugin": "acme.notes", "action": "note", "context": "pane", "project": 1, "workspace": 2, "tab": 3, "pane": 5,
- "ended": "exited", "code": 0, "signal": null, "error": null, "ms": 41, "log": "/…/plugins/state/acme.notes/plugin.log"}
-```
-
-`ended` is `exited` (with `code`), `signal` (with `signal`), `timeout` or `error` (it could not start), and for a popup `closed` (its `×` or `plugin popup-close` closed it first); a popup's program ended by a signal has `signal` `null` and the signal's name in `error`. `error` is `null` exactly when it exited with 0, so `plugin run` exits with 1 for a popup closed by hand. An action that ran and failed is an answer, not a refusal. A group, or an action run on a kind of row it isn't offered for, is `malformed`; a plugin that is unknown, off or cannot run, an action it lacks, or an id that names nothing is `not-found`. A client that leaves before the action ends gets no answer, and the action runs to its end.
-
-`plugin status --json` prints this answer with those same escapes. `plugin-list` answers what Settings › Plugins shows: `revision`, `problem` (why `plugins.json` cannot be read, or `null`) and `plugins`, one row per plugin with `id`, `enabled`, `state` (`on`, `off` or `cannot-run`), `error`, Settings' `label` and `note`, `source`, `log`, `manifest`, `services` and `button`, there only for a plugin with a button (`title`, `icon` and `actions`, the ids of its `button` actions in order). A service is `running` (with its `pid`), `stopped` (with `restart_in`, the seconds until it starts again) or `starting`. Processes a plugin keeps running in each local window belong to those windows, so the server can't tell; a program that keeps them running itself reads their state from [`plugin windows`](#window-processes-beside-your-own-window). Turning plugins on and off, installing and updating stay with `cornercase plugin`, which works on the files; a program shows an install or an update with `plugin install SOURCE --preview --json` instead (below). `{"command": "plugin-popup-close", "args": {}}` closes the popup as its `×` does. An older server refuses each of these requests by name, and a `plugin-run` without `item` as `malformed`.
 
 ## JSON
 
