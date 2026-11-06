@@ -51,6 +51,7 @@ pub(crate) struct FolderRemoved {
     pub(crate) warnings: Vec<String>,
     pub(crate) lines: Vec<String>,
     pub(crate) lost: Vec<String>,
+    pub(crate) unchecked: Vec<String>,
     pub(crate) teardown: bool,
     pub(crate) roles: Vec<RoleTree>,
     pub(crate) worktree: Option<WorktreeInfo>,

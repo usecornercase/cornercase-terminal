@@ -21,6 +21,7 @@
       "lost": [
         "feat/old: its commits will be lost"
       ],
+      "unchecked": [],
       "teardown": true,
       "roles": [
         {
@@ -82,6 +83,7 @@
       ],
       "lines": [],
       "lost": [],
+      "unchecked": [],
       "teardown": false,
       "roles": [],
       "worktree": null
@@ -97,6 +99,7 @@
       "warnings": [],
       "lines": [],
       "lost": [],
+      "unchecked": [],
       "teardown": false,
       "roles": [],
       "worktree": null

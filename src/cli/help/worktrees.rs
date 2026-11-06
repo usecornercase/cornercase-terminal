@@ -69,9 +69,11 @@ its project's teardown and goes, a closed project's worktree runs that teardown 
 entry leaves git's list, and a folder whose repository is gone or that git no longer knows is
 deleted. Only a folder `worktrees list` knows is touched: anything else, a repository's main
 checkout and a project's own folder included, is refused and left alone, as is a worktree git
-records at a symbolic link, which git would delete through. So is what the dialog cannot tick: a
-worktree of a role of a live flow run (it goes with the run's workspace), one being removed or
-closed, one whose build folders are being freed.
+records at a symbolic link, which git would delete through, and a folder holding another listed
+worktree, which would go with it unseen (remove that one first). So is what the dialog cannot tick:
+a worktree of a role of a live flow run (it goes with the run's workspace), one being removed or
+closed, one whose build folders are being freed, and an open workspace git no longer knows (close
+it, then remove the folder).
 
 --check prints what the dialog's confirmation names for each folder (files changed, commits not
 pushed, a lock, the programs that stop, processes outside cornercase and in other tabs, the
@@ -82,16 +84,19 @@ programs work in it, when its files are all that is left (repository gone, unkno
 it holds commits on no branch, or when --delete-branch would lose commits; --unlock is needed for a
 locked one and does not imply --force. --delete-branch deletes the branch checked out there after
 the worktree is gone, and a run's workspace its roles' branches too, never the default branch or
-the main checkout's, and only the branch still checked out when the removal starts.
+the main checkout's, and only the branch still checked out when the removal starts, at the commit
+the check saw.
 
 It waits until every removal has ended and prints one line per folder: removed, could not remove
-or did not remove, and why. It exits 3 when some folder was not removed, or its branch or teardown
-failed (with --check, when some folder cannot be removed or checked), after printing the rest. A
+or did not remove, and why. It exits 3 when some folder was not removed, its branch was kept or
+could not be deleted, its teardown failed, or only git's entry went and its folder stays (with
+--check, when some folder or role cannot be removed or checked), after printing the rest. A
 command that goes away before the removals start leaves everything as it was; one that goes away
 later leaves them running. With --json it prints {\"check\", \"folders\": [...]}, one per --path in
 order, each with \"path\", \"outcome\" (removed, failed, refused; removable with --check), \"why\",
 \"needs\" (force, unlock), \"removed_with\", \"branches\" (deleted), \"kept\" (branches kept and why),
-\"warnings\", \"lines\", \"lost\", \"teardown\", \"roles\" and \"worktree\" (the row `worktrees list` prints).
+\"warnings\", \"lines\", \"lost\", \"unchecked\", \"teardown\", \"roles\" and \"worktree\" (the row `worktrees
+list` prints).
 
 Examples:
   cornercase worktrees remove --path ~/.cornercase/worktrees/shop/feat-old --check

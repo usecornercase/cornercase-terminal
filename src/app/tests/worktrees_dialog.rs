@@ -8,7 +8,7 @@ use ratatui::widgets::Paragraph;
 
 use super::*;
 use crate::app::worktrees::RemoveOptions;
-use crate::app::worktrees_dialog::wrap;
+use crate::app::worktrees_dialog::{Doomed, wrap};
 use crate::flows::Flow;
 use crate::flows::run::{RoleWorktree, Run};
 use crate::test_util::git;
@@ -406,6 +406,21 @@ fn a_branch_switched_after_the_confirmation_is_not_deleted() {
 }
 
 #[test]
+fn a_commit_after_the_confirmation_keeps_the_branch() {
+    let mut s = with(&["a"]);
+    let a = path_of(&s, "a");
+    confirmed(&mut s, 1, &["a"]);
+    ask_branches(&mut s);
+    git(&a, &["commit", "--quiet", "--allow-empty", "-m", "later"]);
+
+    remove(&mut s);
+
+    let text = settled_text(&mut s, 1);
+    let kept = "removed 1 worktree; kept the branch a: it changed since the confirmation";
+    assert_eq!((branch_exists(s.repo.path(), "a"), text.as_deref()), (true, Some(kept)));
+}
+
+#[test]
 fn a_detached_worktree_deletes_no_branch() {
     let mut s = with(&["a"]);
     let a = path_of(&s, "a");
@@ -431,7 +446,7 @@ fn an_open_workspaces_branch_goes_when_its_folder_was_deleted_by_hand() {
     assert!(s.app.remove_workspace_with_branches(
         workspace_at(&s.app, 0, 1),
         ("a".to_string(), repo),
-        vec!["a".to_string()],
+        vec![Doomed { name: "a".to_string(), tip: None }],
         (true, false)
     ));
 

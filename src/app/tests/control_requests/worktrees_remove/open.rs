@@ -8,7 +8,7 @@ use crate::app::tests::worktrees_dialog::{
 };
 use crate::app::worktrees::RemoveOptions;
 use crate::flows::Flow;
-use crate::flows::run::{Member, Run};
+use crate::flows::run::{Member, RoleWorktree, Run};
 
 impl Asks for Setup {
     fn parts(&mut self) -> (&mut App, &Receiver<AppEvent>) {
@@ -151,6 +151,45 @@ mod an_open_workspace {
     }
 
     #[test]
+    fn a_commit_during_its_teardown_keeps_the_branch_and_its_commit() {
+        let (mut s, a) = with_a(&["a"]);
+        let (hold, _) = waiting_in_its_teardown(&mut s, &a, &json!({"paths": [a], "delete_branch": true}));
+        git(&a, &["commit", "--quiet", "--allow-empty", "-m", "during the teardown"]);
+
+        let_it_end(&hold);
+        let answer = reply_later(&mut s.app, &s.rx).expect("an answer");
+
+        assert_eq!(answer["folders"][0]["kept"], json!(["kept the branch a: it changed since the confirmation"]));
+        assert!(!a.exists() && branch_exists(s.repo.path(), "a"));
+    }
+
+    #[test]
+    fn a_link_put_in_its_place_during_its_teardown_comes_back_and_its_target_stays() {
+        let (mut s, a) = with_a(&["a"]);
+        let script = "mv \"$CORNERCASE_WORKTREE\" \"$CORNERCASE_WORKTREE.kept\" && ln -s \"$CORNERCASE_WORKTREE.kept\" \"$CORNERCASE_WORKTREE\"";
+        let key = s.repo.path().display().to_string();
+        s.app.config.projects.insert(key, ProjectSettings { teardown: script.into(), ..Default::default() });
+
+        let folder = s.one(&json!({"paths": [a]}));
+
+        assert_eq!(outcome(&folder), "failed");
+        assert!(why(&folder).contains("moved during its teardown"), "{folder}");
+        assert!(a.with_extension("kept").join("README").exists());
+    }
+
+    #[test]
+    fn whose_folder_git_no_longer_knows_stops_nothing_and_says_how() {
+        let (mut s, a) = with_a(&["a"]);
+        std::fs::remove_dir_all(s.repo.path().join(".git/worktrees").join("a")).expect("forget it in git");
+
+        let refused = s.one(&json!({"paths": [a], "force": true, "unlock": true}));
+
+        assert_eq!(outcome(&refused), "refused");
+        assert!(why(&refused).contains("its workspace is open"), "{refused}");
+        assert!(left_running(&s, &a));
+    }
+
+    #[test]
     fn being_removed_is_refused() {
         let (mut s, a) = with_a(&["a"]);
         let hold = TempDir::new();
@@ -190,6 +229,71 @@ mod an_open_workspace {
         assert!(why(&answer["folders"][0]).contains("use --force"), "{answer}");
         assert!(a.join("notes.txt").exists());
         assert!(s.app.projects.workspace_by(id).is_some_and(Workspace::open));
+    }
+}
+
+mod a_merged_pull_request {
+    use super::*;
+    use crate::app::tests::pull_requests::{Repo, repo_with};
+    use crate::test_util::head;
+
+    impl Asks for Repo {
+        fn parts(&mut self) -> (&mut App, &Receiver<AppEvent>) {
+            (&mut self.app, &self.rx)
+        }
+    }
+
+    fn with_a_commit_gh_says_was_merged(head_field: impl FnOnce(&str) -> String) -> (Repo, PathBuf) {
+        let mut repo = repo_with("cat \"$0.json\"", |_| {});
+        let at = repo.app.projects[0].workspaces[1].path.clone();
+        commit_in(&at);
+        let json = format!(r#"{{"number":482,"title":"x","url":"u","state":"MERGED"{}}}"#, head_field(&head(&at)));
+        std::fs::write(repo.tmp.path().join("gh.json"), json).expect("the answer");
+        repo.ask("gh answers");
+        (repo, at)
+    }
+
+    fn at_its_head(head: &str) -> String {
+        format!(r#","headRefOid":"{head}""#)
+    }
+
+    #[test]
+    fn a_worktree_at_the_commit_it_ended_at_loses_nothing() {
+        let (mut repo, at) = with_a_commit_gh_says_was_merged(at_its_head);
+
+        let look = repo.one(&json!({"paths": [at], "delete_branch": true, "check": true}));
+        assert_eq!(
+            (&look["lost"], &look["needs"], &look["worktree"]["merged"]),
+            (&json!([]), &json!([]), &json!(true))
+        );
+
+        let folder = repo.removes(&json!({"paths": [at], "delete_branch": true}));
+
+        assert_eq!(folder["branches"], json!(["feat/x"]));
+    }
+
+    #[test]
+    fn a_commit_after_it_waits_for_force_and_keeps_the_branch() {
+        let (mut repo, at) = with_a_commit_gh_says_was_merged(at_its_head);
+        git(&at, &["commit", "--quiet", "--allow-empty", "-m", "after the merge"]);
+
+        let said = repo.refuses(&json!({"paths": [at], "delete_branch": true}), &["force"]);
+
+        assert!(said.contains("feat/x: its commits will be lost"), "{said}");
+        assert!(at.exists() && left_on_branch(&repo, "feat/x"));
+    }
+
+    #[test]
+    fn gh_not_saying_where_it_ended_counts_as_a_commit_after_it() {
+        let (mut repo, at) = with_a_commit_gh_says_was_merged(|_| String::new());
+
+        let said = repo.refuses(&json!({"paths": [at], "delete_branch": true}), &["force"]);
+
+        assert!(said.contains("feat/x: its commits will be lost"), "{said}");
+    }
+
+    fn left_on_branch(repo: &Repo, branch: &str) -> bool {
+        branch_exists(&repo.app.projects[0].path, branch)
     }
 }
 
@@ -276,6 +380,63 @@ mod a_flow_run {
 
         assert!(said.contains("coder: its commits will be lost"), "{said}");
         assert!(left_running(&s, &lead));
+    }
+
+    #[test]
+    fn a_roles_build_folders_being_freed_stop_its_runs_workspace() {
+        let (mut s, lead, coder) = lead_and_coder();
+        s.app.git.frees.freeing(coder.clone());
+
+        let refused = s.one(&json!({"paths": [lead], "force": true, "unlock": true}));
+
+        assert_eq!((outcome(&refused), why(&refused)), ("refused", "the build folders of `coder` are being freed"));
+        assert!(left_running(&s, &lead) && left_running(&s, &coder));
+    }
+
+    #[test]
+    fn a_role_that_could_not_be_checked_is_named_as_unchecked() {
+        let (mut s, lead, coder) = lead_and_coder();
+        git(&coder, &["checkout", "--quiet", "--orphan", "unborn"]);
+
+        let look = s.one(&json!({"paths": [lead], "check": true}));
+
+        assert!(look["unchecked"].to_string().contains("role coder:"), "{look}");
+        assert_eq!(look["needs"], json!(["force"]));
+    }
+
+    #[test]
+    fn a_role_of_a_role_named_with_them_still_gets_its_answer() {
+        let (mut s, a, b, c) = three_in_a_chain(false);
+
+        let answer = s.asked(&json!({"paths": [a, b, c]}));
+
+        assert_eq!(outcomes(&answer), ["removed", "removed", "removed"]);
+        assert_eq!(answer["folders"][1]["removed_with"], json!(a));
+        assert_eq!(answer["folders"][2]["removed_with"], Value::Null);
+        assert!(!a.exists() && !b.exists() && !c.exists());
+    }
+
+    #[test]
+    fn workspaces_that_name_each_other_as_roles_still_get_their_answers() {
+        let (mut s, a, b, _c) = three_in_a_chain(true);
+
+        let answer = s.asked(&json!({"paths": [a, b], "force": true}));
+
+        assert_eq!(answer["folders"].as_array().map(Vec::len), Some(2), "{answer}");
+    }
+
+    fn three_in_a_chain(closed_in_a_circle: bool) -> (Setup, PathBuf, PathBuf, PathBuf) {
+        let mut s = with(&["a", "b", "c"]);
+        let (a, b, c) = (path_of(&s, "a"), path_of(&s, "b"), path_of(&s, "c"));
+        let role =
+            |name: &str, path: &Path| RoleWorktree { role: name.into(), path: path.to_path_buf(), branch: name.into() };
+        s.app.projects[0].workspaces[1].role_worktrees.push(role("b", &b));
+        s.app.projects[0].workspaces[2].role_worktrees.push(if closed_in_a_circle {
+            role("a", &a)
+        } else {
+            role("c", &c)
+        });
+        (s, a, b, c)
     }
 
     #[test]

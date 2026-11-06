@@ -32,6 +32,8 @@ mod confirm;
 mod free;
 mod sizes;
 
+#[cfg(test)]
+pub(super) use cleanup::Doomed;
 pub(super) use cleanup::{BEING_REMOVED, Cleanup, Deleted, How, Tally};
 pub(super) use confirm::{UNCHECKED, stake, wrap};
 pub(super) use free::Frees;
@@ -232,6 +234,7 @@ impl App {
         let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let running =
             workspace.terms().filter(|t| !t.shell_in_foreground()).filter_map(|t| t.program(&self.config)).collect();
+        let merged = self.pull_request(workspace.id).filter(|pull| pull.state == State::Merged);
         let live = Live {
             project: project.id,
             workspace: workspace.id,
@@ -239,7 +242,8 @@ impl App {
             removing: !workspace.open() || project.closing,
             role_of_run: self.role_owner(at).is_some(),
             run_roles: workspace.role_worktrees.len(),
-            pull_merged: self.pull_request(workspace.id).is_some_and(|pull| pull.state == State::Merged),
+            pull_merged: merged.is_some(),
+            pull_head: merged.and_then(|pull| pull.head.clone()),
         };
         Some((at, live))
     }

@@ -177,7 +177,7 @@ pub(crate) struct WorktreeInfo {
     pub(crate) size_error: Option<String>,
 }
 
-fn kind_name(kind: Kind) -> &'static str {
+pub(crate) fn kind_name(kind: Kind) -> &'static str {
     match kind {
         Kind::Linked => "linked",
         Kind::Prunable => "prunable",

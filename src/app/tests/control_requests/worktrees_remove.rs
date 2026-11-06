@@ -1,6 +1,8 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use super::*;
+use crate::app::worktrees::WorktreeEvent;
 use crate::config::ProjectSettings;
 use crate::test_util::{git, git_repo};
 
@@ -253,10 +255,46 @@ mod closed_projects {
         let (mut s, at) = with_one("a");
         git(&at, &["checkout", "--quiet", "--orphan", "unborn"]);
 
+        let look = s.one(&json!({"paths": [at], "check": true}));
+        assert!(look["unchecked"].as_array().is_some_and(|unread| unread.len() == 1), "{look}");
+
         let said = s.refuses(&json!({"paths": [at]}), &["force"]);
 
         assert!(said.contains("so it may have changes"), "{said}");
         force_takes_it(&mut s, &at, "README");
+    }
+
+    #[test]
+    fn a_free_builds_request_still_running_keeps_the_folder_from_going() {
+        let (mut s, at) = with_one("a");
+        let freeing = json!({"contract": 1, "command": "free-builds", "args": {"path": at}}).to_string();
+        s.app.request(CLIENT + 1, &freeing, Some(AREA), Instant::now());
+
+        let answer = removal_while_the_rest_waits(&mut s, &json!({"paths": [at], "force": true}));
+
+        assert_eq!(why(&answer["folders"][0]), "its build folders are being freed");
+        assert!(at.join("README").exists());
+    }
+
+    #[test]
+    fn a_free_builds_request_that_ended_lets_the_folder_go() {
+        let (mut s, at) = with_one("a");
+        call_later(&mut s.app, &s.rx, "free-builds", &json!({"path": at})).expect("freed");
+
+        s.removes(&json!({"paths": [at]}));
+
+        assert!(!at.exists());
+    }
+
+    #[test]
+    fn a_free_builds_check_deletes_nothing_so_it_keeps_nothing_from_going() {
+        let (mut s, at) = with_one("a");
+        let looking = json!({"contract": 1, "command": "free-builds", "args": {"path": at, "check": true}}).to_string();
+        s.app.request(CLIENT + 1, &looking, Some(AREA), Instant::now());
+
+        let answer = removal_while_the_rest_waits(&mut s, &json!({"paths": [at]}));
+
+        assert_eq!(outcomes(&answer), ["removed"]);
     }
 
     #[test]
@@ -268,6 +306,21 @@ mod closed_projects {
 
         assert_eq!((outcome(&refused), why(&refused)), ("refused", "its build folders are being freed"));
         assert!(at.exists());
+    }
+}
+
+fn removal_while_the_rest_waits(s: &mut Closed, args: &Value) -> Value {
+    let text = json!({"contract": 1, "command": COMMAND, "args": args}).to_string();
+    s.app.request(CLIENT, &text, Some(AREA), Instant::now());
+    loop {
+        let event = s.rx.recv_timeout(Duration::from_secs(30)).expect("an event");
+        if matches!(&event, AppEvent::Worktree(WorktreeEvent::Removal { .. } | WorktreeEvent::Cleaned { .. })) {
+            s.app.handle_event(event, AREA).expect("handle event");
+        }
+        let answers = s.app.take_answers();
+        if let Some((_, text)) = answers.iter().find(|(client, _)| *client == CLIENT) {
+            return reply_of(text).expect("an answer");
+        }
     }
 }
 
@@ -309,6 +362,19 @@ mod leftovers {
         let forced = s.removes(&json!({"paths": [at], "delete_branch": true, "force": true}));
         assert_eq!(forced["branches"], json!(["lost"]));
         assert!(!s.has_branch("lost"));
+    }
+
+    #[test]
+    fn a_prunable_entry_whose_folder_survives_says_so() {
+        let (mut s, at) = with_one("a");
+        s.add("stays");
+        std::fs::remove_file(at.join(".git")).expect("remove");
+        assert_eq!(s.one(&json!({"paths": [at], "check": true}))["worktree"]["kind"], "prunable");
+
+        let folder = s.removes(&json!({"paths": [at]}));
+
+        assert!(folder["warnings"].to_string().contains("still there"), "{folder}");
+        assert!(at.join("README").exists());
     }
 
     #[test]
@@ -384,6 +450,25 @@ mod refusals {
 
         assert_eq!(outcomes(&answer), ["refused", "refused"]);
         assert!(inside.is_dir() && at.join("README").exists());
+    }
+
+    #[test]
+    fn a_worktree_inside_a_named_folder_refuses_it_whatever_the_flags() {
+        let (mut s, at) = with_one("a");
+        std::fs::write(s.repo.path().join(".git/info/exclude"), ".wt/\n").expect("write");
+        let inside = at.join(".wt").join("b");
+        git(s.repo.path(), &["worktree", "add", "--quiet", "-b", "b", &inside.display().to_string()]);
+        write_notes(&inside);
+
+        let refused = s.one(&json!({"paths": [at], "force": true, "unlock": true}));
+
+        assert_eq!(outcome(&refused), "refused");
+        assert!(why(&refused).contains("is inside it"), "{refused}");
+        assert!(inside.join("notes.txt").exists());
+
+        s.removes(&json!({"paths": [inside], "force": true}));
+        s.removes(&json!({"paths": [at]}));
+        assert!(!at.exists());
     }
 
     #[test]

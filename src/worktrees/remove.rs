@@ -8,6 +8,7 @@ use crate::os::ffi;
 use crate::os::fs::{canonical, canonicalize};
 
 use super::discover::{Origin, plain, repo_of};
+use super::scan::branch_tip;
 use super::{Found, Kind};
 
 pub(crate) const ALL: RemoveOptions = RemoveOptions { force: true, unlock: true };
@@ -101,6 +102,15 @@ pub(crate) fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     check(run(repo, ["branch", "-D", branch])?).map(drop)?;
     log::info!("worktrees", "branch deleted", repo = repo.display(), branch = branch);
     Ok(())
+}
+
+pub(crate) fn delete_branch_at(repo: &Path, branch: &str, tip: Option<&str>) -> Result<bool> {
+    let moved = tip.is_some_and(|tip| branch_tip(repo, branch).is_some_and(|now| now != tip));
+    if moved {
+        log::info!("worktrees", "branch kept: it moved since it was looked at", repo = repo.display(), branch = branch);
+        return Ok(false);
+    }
+    delete_branch(repo, branch).map(|()| true)
 }
 
 fn prune(found: &Found) -> Result<()> {

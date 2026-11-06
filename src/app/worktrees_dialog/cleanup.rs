@@ -49,20 +49,26 @@ pub(in crate::app) struct How {
     pub(in crate::app) request: Option<(u64, usize)>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::app) struct Doomed {
+    pub(in crate::app) name: String,
+    pub(in crate::app) tip: Option<String>,
+}
+
 pub(in crate::app) struct Pending {
     name: String,
     repo: PathBuf,
     paths: Vec<PathBuf>,
-    branches: Vec<String>,
+    branches: Vec<Doomed>,
     removed: bool,
     request: Option<(u64, usize)>,
     tally: Tally,
 }
 
-pub(in crate::app) type Deleted = Vec<(String, Result<()>)>;
+pub(in crate::app) type Deleted = Vec<(String, Result<bool>)>;
 
 impl Pending {
-    fn new(name: String, repo: PathBuf, paths: Vec<PathBuf>, branches: Vec<String>) -> Self {
+    fn new(name: String, repo: PathBuf, paths: Vec<PathBuf>, branches: Vec<Doomed>) -> Self {
         Self { name, repo, paths, branches, removed: false, request: None, tally: Tally::default() }
     }
 }
@@ -169,7 +175,7 @@ impl App {
         &mut self,
         at: WorkspaceAt,
         (name, repo): (String, PathBuf),
-        branches: Vec<String>,
+        branches: Vec<Doomed>,
         (force, unlock): (bool, bool),
     ) -> bool {
         let paths = self.removal_paths(at);
@@ -185,12 +191,12 @@ impl App {
         let found = &row.found;
         let key = self.take_id();
         let mut notes = Vec::new();
-        let names: Vec<String> =
+        let names: Vec<Doomed> =
             if how.branches { deletable(row, &mut notes).into_iter().collect() } else { Vec::new() };
         let script = self.config.project(&found.repo, self.home.as_deref()).teardown;
         let script = (!script.trim().is_empty()).then_some(script);
         let job = Job::new(Level::Info, "worktrees", "remove").with("path", found.path.display());
-        let job = job.with("kind", format!("{:?}", found.kind)).with("branches", names.join(","));
+        let job = job.with("kind", format!("{:?}", found.kind)).with("branches", joined(&names));
         let (target, repo, deleting) = (found.clone(), found.repo.clone(), names.clone());
         self.spawn_job(
             job,
@@ -230,7 +236,7 @@ impl App {
             return;
         }
         let (repo, names) = (pending.repo.clone(), pending.branches.clone());
-        let job = Job::new(Level::Info, "worktrees", "delete branches").with("branches", names.join(","));
+        let job = Job::new(Level::Info, "worktrees", "delete branches").with("branches", joined(&names));
         self.spawn_job(
             job,
             move || Ok(delete(&repo, &names)),
@@ -267,7 +273,8 @@ impl App {
         }
         for (branch, deleted) in branch {
             match deleted {
-                Ok(()) => tally.deleted.push(branch),
+                Ok(true) => tally.deleted.push(branch),
+                Ok(false) => tally.notes.push(kept_note(&branch)),
                 Err(e) => tally.failed.push(format!("could not delete the branch {branch}: {e}")),
             }
         }
@@ -340,39 +347,53 @@ impl App {
     }
 }
 
-fn deletable(row: &Row, notes: &mut Vec<String>) -> Option<String> {
-    keep_or_delete(row.branch().map(str::to_string), discover::checked_out(&row.found).as_deref(), notes)
+fn doomed(row: &Row) -> Option<Doomed> {
+    Some(Doomed { name: row.branch()?.to_string(), tip: row.head().map(str::to_string) })
 }
 
-fn role_branches(rows: &[Row], roles: &[RoleWorktree], notes: &mut Vec<String>) -> Vec<String> {
+fn deletable(row: &Row, notes: &mut Vec<String>) -> Option<Doomed> {
+    keep_or_delete(doomed(row), discover::checked_out(&row.found).as_deref(), notes)
+}
+
+fn role_branches(rows: &[Row], roles: &[RoleWorktree], notes: &mut Vec<String>) -> Vec<Doomed> {
     let mut names = Vec::new();
     for tree in roles {
         let path = canonical(&tree.path);
         let (shown, now) = match rows.iter().find(|r| r.found.path == path) {
-            Some(role) => (role.branch().map(str::to_string), discover::checked_out(&role.found)),
-            None => (Some(tree.branch.clone()), branch_now(&path, &tree.branch)),
+            Some(role) => (doomed(role), discover::checked_out(&role.found)),
+            None => (Some(Doomed { name: tree.branch.clone(), tip: None }), branch_now(&path, &tree.branch)),
         };
         names.extend(keep_or_delete(shown, now.as_deref(), notes));
     }
     names
 }
 
-fn keep_or_delete(shown: Option<String>, now: Option<&str>, notes: &mut Vec<String>) -> Option<String> {
+fn kept_note(branch: &str) -> String {
+    format!("kept the branch {branch}: it changed since the confirmation")
+}
+
+fn keep_or_delete(shown: Option<Doomed>, now: Option<&str>, notes: &mut Vec<String>) -> Option<Doomed> {
     let shown = shown?;
-    if now == Some(shown.as_str()) {
+    if now == Some(shown.name.as_str()) {
         return Some(shown);
     }
-    log::info!("worktrees", "branch kept: it changed since the confirmation", branch = shown);
-    notes.push(format!("kept the branch {shown}: it changed since the confirmation"));
+    log::info!("worktrees", "branch kept: it changed since the confirmation", branch = shown.name);
+    notes.push(kept_note(&shown.name));
     None
+}
+
+fn joined(branches: &[Doomed]) -> String {
+    branches.iter().map(|branch| branch.name.as_str()).collect::<Vec<_>>().join(",")
 }
 
 fn branch_now(path: &Path, shown: &str) -> Option<String> {
     if path.exists() { discover::branch_at(path) } else { Some(shown.to_string()) }
 }
 
-fn delete(repo: &Path, branches: &[String]) -> Deleted {
-    branches.iter().map(|branch| (branch.clone(), remove::delete_branch(repo, branch))).collect()
+fn delete(repo: &Path, branches: &[Doomed]) -> Deleted {
+    let each = branches.iter();
+    each.map(|branch| (branch.name.clone(), remove::delete_branch_at(repo, &branch.name, branch.tip.as_deref())))
+        .collect()
 }
 
 fn row_name(row: &Row) -> String {

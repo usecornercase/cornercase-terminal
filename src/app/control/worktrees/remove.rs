@@ -8,15 +8,21 @@ use crate::app::worktrees::{RemovalStep, RemoveOptions, WorktreeEvent};
 use crate::app::worktrees_dialog::{BEING_REMOVED, How, Tally, UNCHECKED, stake};
 use crate::control::arrange::RoleTree;
 use crate::control::contract::{Code, Refusal};
+use crate::control::worktrees::kind_name;
 use crate::control::worktrees::remove::{FAILED, FORCE, FolderRemoved, REFUSED, REMOVABLE, REMOVED, UNLOCK};
 use crate::control::{Done, WorktreeInfo, WorktreesRemove, WorktreesRemoved};
 use crate::log::{Job, Level};
 use crate::os::fs::canonical;
 use crate::project::Hierarchy;
 use crate::worktrees::remove::{Named, named, still_listed};
-use crate::worktrees::{Found, Row, fill};
+use crate::worktrees::{Found, Kind, Row, fill};
 
 const NO_LONGER_LISTED: &str = "it is no longer listed";
+
+const FOLDER_STAYS: &str = "its folder is still there with its files: only git's entry went, so delete it yourself";
+
+const OPEN_LEFTOVER: &str = "git no longer knows this folder, so it could not remove it, and its workspace is open: \
+    close its project or the workspace, then remove the folder";
 
 pub(in crate::app::control) struct Removing {
     request: WorktreesRemove,
@@ -45,6 +51,14 @@ impl Folder {
     fn waits(&self) -> bool {
         self.answer.outcome.is_empty()
     }
+
+    fn goes(&self) -> bool {
+        self.waits() || self.answer.outcome == REMOVABLE
+    }
+
+    fn carries(&self, path: &Path) -> bool {
+        self.answer.roles.iter().any(|tree| canonical(&tree.path) == path)
+    }
 }
 
 impl Removing {
@@ -58,17 +72,27 @@ impl Removing {
     }
 
     fn link_followers(&mut self) {
+        let going: Vec<bool> = self.folders.iter().map(Folder::goes).collect();
+        let carriers = |folders: &[Folder], at: usize| -> Vec<usize> {
+            let carries = |i: &usize| *i != at && going[*i] && folders[*i].carries(&folders[at].answer.path);
+            (0..folders.len()).filter(carries).collect()
+        };
+        let carried: Vec<bool> = (0..self.folders.len()).map(|at| !carriers(&self.folders, at).is_empty()).collect();
         for at in 0..self.folders.len() {
-            let Some(lead) = lead_of(&self.folders, at) else {
-                self.follow_the_first(at);
-                continue;
-            };
-            let path = self.folders[lead].answer.path.clone();
-            let outcome = if self.request.check { REMOVABLE } else { "" };
-            let answer = &mut self.folders[at].answer;
-            (answer.outcome, answer.why, answer.removed_with) = (outcome.to_string(), None, Some(path));
-            self.folders[at].follows = Some(lead);
+            let lead = carriers(&self.folders, at).into_iter().find(|lead| !carried[*lead]);
+            match lead.filter(|_| self.folders[at].answer.worktree.is_some()) {
+                Some(lead) => self.follow_its_lead(at, lead),
+                None => self.follow_the_first(at),
+            }
         }
+    }
+
+    fn follow_its_lead(&mut self, at: usize, lead: usize) {
+        let path = self.folders[lead].answer.path.clone();
+        let outcome = if self.request.check { REMOVABLE } else { "" };
+        let answer = &mut self.folders[at].answer;
+        (answer.outcome, answer.why, answer.removed_with) = (outcome.to_string(), None, Some(path));
+        self.folders[at].follows = Some(lead);
     }
 
     fn follow_the_first(&mut self, at: usize) {
@@ -116,14 +140,6 @@ fn refused(path: PathBuf, why: impl Into<String>) -> FolderRemoved {
     FolderRemoved { path, outcome: REFUSED.to_string(), why: Some(why.into()), ..FolderRemoved::default() }
 }
 
-fn lead_of(folders: &[Folder], at: usize) -> Option<usize> {
-    let path = &folders[at].answer.path;
-    let goes = |lead: &Folder| lead.waits() || lead.answer.outcome == REMOVABLE;
-    let carries = |lead: &Folder| lead.answer.roles.iter().any(|tree| canonical(&tree.path) == *path);
-    let listed = folders[at].answer.worktree.is_some();
-    folders.iter().position(|lead| listed && goes(lead) && carries(lead))
-}
-
 fn ended(answer: &mut FolderRemoved, tally: Tally) {
     answer.branches = tally.deleted;
     answer.kept = tally.notes;
@@ -131,7 +147,13 @@ fn ended(answer: &mut FolderRemoved, tally: Tally) {
         (answer.outcome, answer.why) = (FAILED.to_string(), Some(why));
     } else {
         (answer.outcome, answer.warnings) = (REMOVED.to_string(), tally.failed);
+        answer.warnings.extend(folder_stays(answer));
     }
+}
+
+fn folder_stays(answer: &FolderRemoved) -> Option<String> {
+    let prunable = answer.worktree.as_ref().is_some_and(|row| row.kind == kind_name(Kind::Prunable));
+    (prunable && answer.path.exists()).then(|| FOLDER_STAYS.to_string())
 }
 
 fn follow(answer: &mut FolderRemoved, lead: &FolderRemoved) {
@@ -201,6 +223,11 @@ impl App {
         let Stage::RemovingFolders(removing) = &mut pending.stage else { return };
         removing.folders = named.into_iter().map(Folder::of).collect();
         self.refresh_places();
+        for folder in removing.folders.iter_mut().filter(|folder| folder.waits()) {
+            if let Some(why) = self.holds_a_worktree(&folder.answer.path, &found) {
+                folder.answer = refused(folder.answer.path.clone(), why);
+            }
+        }
         let rows = self.rows_to_look_at(found, &removing.folders);
         let asks = self.row_asks(&rows, false);
         let job = Job::new(Level::Debug, "control", "worktrees remove: look").with("rows", rows.len());
@@ -212,14 +239,23 @@ impl App {
         self.clients.requests.pending.push(pending);
     }
 
+    fn role_folders(&self, folder: &Path) -> Vec<PathBuf> {
+        let Some((at, _)) = self.live(folder) else { return Vec::new() };
+        self.projects.workspace(at).role_worktrees.iter().map(|tree| canonical(&tree.path)).collect()
+    }
+
+    fn holds_a_worktree(&self, folder: &Path, found: &[Found]) -> Option<String> {
+        let mut going = self.role_folders(folder);
+        going.push(folder.to_path_buf());
+        let under = |row: &&Found| going.iter().any(|holder| row.path.starts_with(holder));
+        let held = found.iter().filter(|row| row.kind != Kind::Prunable && !going.contains(&row.path)).find(under)?;
+        Some(format!("the worktree {} is inside it and would go with it: remove that first", held.path.display()))
+    }
+
     fn rows_to_look_at(&self, found: Vec<Found>, folders: &[Folder]) -> Vec<Row> {
         let mut wanted: Vec<PathBuf> =
             folders.iter().filter(|folder| folder.waits()).map(|folder| folder.answer.path.clone()).collect();
-        let roles: Vec<PathBuf> = wanted
-            .iter()
-            .filter_map(|path| self.live(path))
-            .flat_map(|(at, _)| self.projects.workspace(at).role_worktrees.iter().map(|tree| canonical(&tree.path)))
-            .collect();
+        let roles: Vec<PathBuf> = wanted.iter().flat_map(|path| self.role_folders(path)).collect();
         wanted.extend(roles);
         let mut rows = self.fresh_rows(found);
         rows.retain(|row| wanted.contains(&row.found.path));
@@ -267,7 +303,8 @@ impl App {
             .collect();
         let roles = self.roles_of(row);
         let stakes = stakes(rows, row, &roles, if request.delete_branch { &lost } else { &[] });
-        let (outcome, why) = self.folder_verdict(row, request, &stakes);
+        let cannot = self.cannot_go(row).or_else(|| busy_role(rows, &roles));
+        let (outcome, why) = folder_verdict(cannot, request, &stakes);
         FolderRemoved {
             path: row.found.path.clone(),
             outcome,
@@ -275,6 +312,7 @@ impl App {
             needs: stakes.needs(),
             lines: said.into_iter().filter(|said| !said.lost).map(|said| said.text).collect(),
             lost,
+            unchecked: unchecked(rows, row, &roles),
             teardown: self.teardown_runs(row),
             roles,
             worktree: Some(WorktreeInfo::of(row, self.risk_list(row, row.live.as_ref(), false))),
@@ -291,22 +329,10 @@ impl App {
             .collect()
     }
 
-    fn folder_verdict(&self, row: &Row, request: &WorktreesRemove, stakes: &Stakes) -> (String, Option<String>) {
-        if let Some(why) = self.cannot_tick(row) {
-            return (REFUSED.to_string(), Some(why));
-        }
-        if request.check {
-            return (REMOVABLE.to_string(), None);
-        }
-        match stakes.refusal(request) {
-            Some(why) => (REFUSED.to_string(), Some(why)),
-            None => (String::new(), None),
-        }
-    }
-
-    fn cannot_tick(&self, row: &Row) -> Option<String> {
+    fn cannot_go(&self, row: &Row) -> Option<String> {
         if row.tickable() {
-            return None;
+            let open_leftover = row.live.is_some() && matches!(row.found.kind, Kind::Orphan | Kind::Unknown);
+            return open_leftover.then(|| OPEN_LEFTOVER.to_string());
         }
         if row.freeing {
             return Some("its build folders are being freed".to_string());
@@ -362,12 +388,58 @@ fn removal_step(key: u64, step: RemovalStep) -> AppEvent {
     AppEvent::Worktree(WorktreeEvent::Removal { key, step: Box::new(step) })
 }
 
+fn folder_verdict(cannot: Option<String>, request: &WorktreesRemove, stakes: &Stakes) -> (String, Option<String>) {
+    if let Some(why) = cannot {
+        return (REFUSED.to_string(), Some(why));
+    }
+    if request.check {
+        return (REMOVABLE.to_string(), None);
+    }
+    match stakes.refusal(request) {
+        Some(why) => (REFUSED.to_string(), Some(why)),
+        None => (String::new(), None),
+    }
+}
+
+fn role_row<'a>(rows: &'a [Row], tree: &RoleTree) -> Option<&'a Row> {
+    let path = canonical(&tree.path);
+    rows.iter().find(|row| row.found.path == path)
+}
+
+fn busy_role(rows: &[Row], roles: &[RoleTree]) -> Option<String> {
+    roles.iter().find_map(|tree| {
+        let role = role_row(rows, tree)?;
+        if role.freeing {
+            return Some(format!("the build folders of `{}` are being freed", tree.role));
+        }
+        let removing = role.removing || role.live.as_ref().is_some_and(|live| live.removing);
+        removing.then(|| format!("the worktree of `{}` is already being removed or closed", tree.role))
+    })
+}
+
+fn scan_error(row: &Row) -> Option<&str> {
+    match &row.scan {
+        Some(Err(error)) => Some(error),
+        _ => None,
+    }
+}
+
+fn unchecked(rows: &[Row], row: &Row, roles: &[RoleTree]) -> Vec<String> {
+    let mut unread: Vec<String> = scan_error(row).map(str::to_string).into_iter().collect();
+    for tree in roles {
+        match role_row(rows, tree) {
+            Some(role) => unread.extend(scan_error(role).map(|error| format!("role {}: {error}", tree.role))),
+            None => unread.push(format!("role {}: {UNCHECKED}", tree.role)),
+        }
+    }
+    unread
+}
+
 fn stakes(rows: &[Row], row: &Row, roles: &[RoleTree], lost: &[String]) -> Stakes {
     let mut stakes = Stakes { force: stake(row), locks: Vec::new() };
     stakes.locks.extend(locked(row, None));
     for tree in roles {
-        let path = canonical(&tree.path);
-        let Some(role) = rows.iter().find(|row| row.found.path == path) else {
+        let Some(role) = role_row(rows, tree) else {
             stakes.force.push(format!("role {}: {UNCHECKED}", tree.role));
             continue;
         };

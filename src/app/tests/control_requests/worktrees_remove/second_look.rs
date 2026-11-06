@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use super::*;
-use crate::app::worktrees::{RemovalStep, WorktreeEvent};
+use crate::app::worktrees::RemovalStep;
 
 fn next_step(s: &mut Closed, listed: bool) -> AppEvent {
     loop {
@@ -47,6 +47,20 @@ fn a_branch_switched_after_the_look_is_kept_and_named() {
     assert_eq!((outcome(&folder), &folder["branches"]), ("removed", &json!([])));
     assert_eq!(folder["kept"], json!(["kept the branch a: it changed since the confirmation"]));
     assert!(s.has_branch("a") && s.has_branch("other"));
+}
+
+#[test]
+fn a_commit_landing_after_the_look_keeps_the_branch_and_its_commit() {
+    let (mut s, at) = with_one("a");
+    let checkout = at.clone();
+
+    let folder = after_the_look(&mut s, &json!({"paths": [at], "delete_branch": true}), move || {
+        git(&checkout, &["commit", "--quiet", "--allow-empty", "-m", "later"]);
+    });
+
+    assert_eq!((outcome(&folder), &folder["branches"]), ("removed", &json!([])));
+    assert_eq!(folder["kept"], json!(["kept the branch a: it changed since the confirmation"]));
+    assert!(!at.exists() && s.has_branch("a"));
 }
 
 #[test]

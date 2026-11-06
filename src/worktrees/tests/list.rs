@@ -39,6 +39,7 @@ pub(super) fn scan_of(age: Option<Duration>, merged: bool) -> Scan {
         merged,
         has_upstream: true,
         branch: None,
+        head: None,
         lock: None,
     }
 }
@@ -52,6 +53,7 @@ fn live() -> Live {
         role_of_run: false,
         run_roles: 0,
         pull_merged: false,
+        pull_head: None,
     }
 }
 
@@ -279,4 +281,19 @@ fn only_a_linked_row_with_builds_that_is_tickable_can_free() {
     r.freeing = false;
     r.found.kind = Kind::Orphan;
     assert!(!r.can_free());
+}
+
+#[test]
+fn a_merged_pull_request_covers_a_row_only_at_the_commit_it_ended_at() {
+    let at = |head: Option<&str>, pull_head: Option<&str>| {
+        let mut r = row("shop", "a", Kind::Linked);
+        r.scan = Some(Ok(Scan { head: head.map(str::to_string), ..scan_of(None, false) }));
+        r.live = Some(Live { pull_merged: true, pull_head: pull_head.map(str::to_string), ..live() });
+        r.merged_as_it_is()
+    };
+
+    assert!(at(Some("abc"), Some("abc")));
+    assert!(!at(Some("def"), Some("abc")), "a commit came after it");
+    assert!(!at(Some("abc"), None), "it does not say where it ended");
+    assert!(!at(None, None), "nothing was read");
 }

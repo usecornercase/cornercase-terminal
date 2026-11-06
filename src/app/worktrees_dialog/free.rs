@@ -29,9 +29,20 @@ struct FreeTarget {
 #[derive(Default)]
 pub(in crate::app) struct Frees {
     pending: HashMap<u64, (String, PathBuf)>,
+    requests: HashMap<u64, PathBuf>,
     bytes: u64,
     worktrees: usize,
     problems: Vec<String>,
+}
+
+impl Frees {
+    pub(in crate::app) fn request_frees(&mut self, key: u64, path: PathBuf) {
+        self.requests.insert(key, path);
+    }
+
+    pub(in crate::app) fn request_ended(&mut self, key: u64) {
+        self.requests.remove(&key);
+    }
 }
 
 #[cfg(test)]
@@ -138,7 +149,9 @@ impl App {
     }
 
     pub(in crate::app) fn freeing_path(&self, path: &Path) -> bool {
-        self.git.frees.pending.values().any(|(_, freeing)| freeing == path)
+        let frees = &self.git.frees;
+        frees.pending.values().any(|(_, freeing)| freeing == path)
+            || frees.requests.values().any(|freeing| freeing == path)
     }
 
     pub(in crate::app) fn builds_freed(&mut self, key: u64, path: &Path, result: Result<Freed>) {
@@ -184,7 +197,8 @@ impl App {
         if !self.git.frees.pending.is_empty() {
             return;
         }
-        let Frees { bytes, worktrees, problems, .. } = std::mem::take(&mut self.git.frees);
+        let Frees { bytes, worktrees, problems, requests, .. } = std::mem::take(&mut self.git.frees);
+        self.git.frees.requests = requests;
         let mut text = if bytes == 0 && worktrees == 0 {
             "nothing was freed".to_string()
         } else {

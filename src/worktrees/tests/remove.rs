@@ -459,6 +459,45 @@ mod a_folder_swapped_after_the_listing {
     }
 }
 
+mod a_branch_at_the_commit_that_was_looked_at {
+    use super::*;
+    use crate::test_util::head;
+    use crate::worktrees::remove::delete_branch_at;
+
+    #[test]
+    fn goes_when_it_has_not_moved_or_when_nobody_looked() {
+        let (repo, _dirs, at) = one_worktree();
+        let tip = head(&at);
+        git(repo.path(), &["worktree", "remove", "--force", &at.display().to_string()]);
+        git(repo.path(), &["branch", "other"]);
+
+        assert_eq!(delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("deleted"), true);
+        assert_eq!(delete_branch_at(repo.path(), "other", None).expect("deleted"), true);
+        assert!(!branches(repo.path()).contains("feat-a") && !branches(repo.path()).contains("other"));
+    }
+
+    #[test]
+    fn stays_when_it_moved_since() {
+        let (repo, _dirs, at) = one_worktree();
+        let tip = head(&at);
+        git(&at, &["commit", "--quiet", "--allow-empty", "-m", "later"]);
+        git(repo.path(), &["worktree", "remove", "--force", &at.display().to_string()]);
+
+        assert_eq!(delete_branch_at(repo.path(), "feat-a", Some(&tip)).expect("kept"), false);
+        assert!(branches(repo.path()).contains("feat-a"));
+    }
+
+    #[test]
+    fn says_what_git_says_when_it_is_already_gone() {
+        let (repo, _dirs, at) = one_worktree();
+        let tip = head(&at);
+        git(repo.path(), &["worktree", "remove", "--force", &at.display().to_string()]);
+        git(repo.path(), &["branch", "-D", "feat-a"]);
+
+        assert!(delete_branch_at(repo.path(), "feat-a", Some(&tip)).is_err());
+    }
+}
+
 mod options {
     use super::*;
 

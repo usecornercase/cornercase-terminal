@@ -276,7 +276,9 @@ fn folder_name(row: &Row) -> String {
 
 fn lost_commits(branch: &str, row: &Row) -> Option<String> {
     match &row.scan {
-        Some(Ok(scan)) if scan.unpushed > 0 && !row.merged() => Some(format!("{branch}: its commits will be lost")),
+        Some(Ok(scan)) if scan.unpushed > 0 && !row.merged_as_it_is() => {
+            Some(format!("{branch}: its commits will be lost"))
+        }
         Some(Ok(_)) => None,
         _ if row.checked_on_confirm() => Some(format!("{branch}: its commits may be lost")),
         _ => None,

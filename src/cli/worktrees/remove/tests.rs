@@ -189,10 +189,10 @@ mod the_exit_status {
     #[test]
     fn of_a_check_says_only_what_could_not_be_read_or_removed() {
         let needs_force = FolderRemoved { needs: vec![FORCE_FLAG.into()], ..folder("removable") };
-        let unread = WorktreeInfo { error: Some("gave up".into()), ..row(None) };
+        let unread = FolderRemoved { unchecked: vec!["role coder: gave up".into()], ..folder("removable") };
 
         assert!(went_well(&needs_force, true));
         assert!(!went_well(&folder(REFUSED), true));
-        assert!(!went_well(&FolderRemoved { worktree: Some(unread), ..folder("removable") }, true));
+        assert!(!went_well(&unread, true));
     }
 }

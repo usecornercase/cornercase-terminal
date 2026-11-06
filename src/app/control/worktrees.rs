@@ -95,6 +95,9 @@ impl App {
         let shells = self.shell_pids();
         let mut running = self.workspace_at_path(&target.path).map(|at| self.running_in(at)).unwrap_or_default();
         let key = self.clients.requests.key();
+        if !request.check {
+            self.git.frees.request_frees(key, target.path.clone());
+        }
         let job = Job::new(Level::Info, "control", "free builds").with("path", target.path.display());
         let (path, request) = (target.path, request.clone());
         self.spawn_job(
@@ -120,6 +123,7 @@ impl App {
         key: u64,
         result: std::result::Result<BuildsFreed, Refusal>,
     ) {
+        self.git.frees.request_ended(key);
         self.answer_read(key, |_| result.map(|freed| json(&freed)));
     }
 

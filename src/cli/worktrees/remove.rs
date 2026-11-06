@@ -32,8 +32,7 @@ pub(super) fn run(args: &RemoveArgs) -> Result<()> {
 
 fn went_well(folder: &FolderRemoved, check: bool) -> bool {
     if check {
-        let scanned = folder.worktree.as_ref().is_none_or(|row| row.error.is_none());
-        return folder.outcome != REFUSED && scanned;
+        return folder.outcome != REFUSED && folder.unchecked.is_empty();
     }
     folder.outcome == REMOVED && folder.kept.is_empty() && folder.warnings.is_empty()
 }

@@ -30,6 +30,7 @@ fn pull(state: State, checks: Vec<Check>) -> PullRequest {
         state,
         conflicting: None,
         base: String::new(),
+        head: None,
         checks,
         provider: Provider::Github,
         stack: None,
@@ -121,6 +122,12 @@ mod checks {
 
         assert_eq!(ubuntu.len(), 1);
         assert_eq!(ubuntu[0].url, "https://github.com/acme/web-shop/actions/runs/1001/job/2001");
+    }
+
+    #[test]
+    fn says_the_commit_it_is_at_when_gh_does() {
+        assert_eq!(parsed(r#"{"number":1,"headRefOid":"abc"}"#).head.as_deref(), Some("abc"));
+        assert_eq!(parsed(r#"{"number":1}"#).head, None);
     }
 
     #[test]
