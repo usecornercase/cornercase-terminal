@@ -198,9 +198,10 @@ fn a_long_prompt_is_cut_and_a_paste_is_folded() {
 fn past_the_total_cap_later_conversations_keep_only_their_header() {
     let dir = TempDir::new();
     let mut entries = Vec::new();
+    let four_bytes_each = "🦀".repeat(490);
     for n in 0..40 {
         let prompts: Vec<(&str, String, String)> = (0..8)
-            .map(|i| ("prompt", format!("2026-11-03T09:{i:02}:00.000Z"), format!("{n}-{i} {}", "y".repeat(480))))
+            .map(|i| ("prompt", format!("2026-11-03T09:{i:02}:00.000Z"), format!("{n}-{i} {four_bytes_each}")))
             .collect();
         let borrowed: Vec<(&str, &str, &str)> = prompts.iter().map(|(r, a, t)| (*r, a.as_str(), t.as_str())).collect();
         let path = transcript(dir.path(), &format!("c{n}"), &borrowed);
@@ -210,6 +211,9 @@ fn past_the_total_cap_later_conversations_keep_only_their_header() {
     let text = build(&range, &entries, &Live::default()).expect("a dossier").text;
     assert!(text.len() < 61 * 1024, "{}", text.len());
     assert!(text.contains("conversations were shortened"), "{}", &text[..300]);
+    assert!(text.contains("\"2-0 "), "the third conversation is whole: {}", &text[..300]);
+    assert!(text.contains("## [c4] "), "the fourth keeps its header: {}", &text[..300]);
+    assert!(!text.contains("\"3-0 "), "the fourth loses its prompts: {}", &text[..300]);
 }
 
 #[test]
