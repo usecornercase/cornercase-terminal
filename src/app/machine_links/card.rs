@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::drag::RemoteDrag;
-use super::rows::{status, statuses};
+use super::rows::status;
 use super::{Flow, Held, OLDER};
 use crate::agents::activity::Status;
 use crate::app::App;
@@ -58,8 +58,9 @@ impl App {
 
     pub(in crate::app) fn remote_working(&self) -> bool {
         let linked = self.machines.held.iter().filter(|held| held.status.state == State::Linked);
-        let workspaces = linked.filter_map(|held| held.seen.as_deref()).flat_map(|seen| &seen.projects);
-        statuses(workspaces.flat_map(|p| &p.workspaces)).any(|status| status == Some(Status::Working))
+        let projects = linked.filter_map(|held| held.seen.as_deref()).flat_map(|seen| &seen.projects);
+        let panes = projects.flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).flat_map(|tab| &tab.panes);
+        panes.map(|pane| status(pane.status.as_deref())).any(|status| status == Some(Status::Working))
     }
 
     pub(super) fn retry(&self, held: &Held, now: Instant) -> ui::Retry {

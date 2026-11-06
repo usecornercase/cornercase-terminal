@@ -67,6 +67,7 @@ pub(in crate::app) enum Then {
     Check(Checking),
     Dialog(u64),
     Clone(u64),
+    Fold { collapse: bool },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,6 +159,7 @@ impl App {
             Then::Check(checking) => self.check_heard(checking, result),
             Then::Dialog(key) => self.dialog_answered(&sent, key, result),
             Then::Clone(key) => self.clone_relayed(key, result),
+            Then::Fold { collapse } => self.fold_relayed(&sent, collapse, result),
         }
     }
 }

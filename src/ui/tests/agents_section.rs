@@ -22,6 +22,7 @@ fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, de
         fold: None,
         hidden: 0,
         attention: None,
+        machine: None,
     }
 }
 
@@ -620,4 +621,132 @@ fn tags_fit_in_what_the_close_button_leaves() {
     let line = row_text(&t, Rect { height: 1, ..r });
     let end = line.contains("+3").then(|| line.split("+3").next().map_or(0, |before| before.chars().count()) + 2);
     assert!(end.is_some_and(|end| end < usize::from(close.x)), "{line:?} {close:?}");
+}
+
+fn vps(dim: bool, seen: Option<&str>) -> MachineTag {
+    MachineTag { icon: "☁".into(), name: "vps".into(), dim, seen: seen.map(String::from) }
+}
+
+fn there(entry: AgentEntry, machine: MachineTag) -> AgentEntry {
+    AgentEntry { machine: Some(machine), ..entry }
+}
+
+fn machine_family(machine: &MachineTag) -> Vec<AgentEntry> {
+    let local = agent(Status::Idle, "claude", "cornercase", Some("main"), details("Opus 5.5", Some(12)));
+    let parent = agent(Status::Waiting, "claude", "web-shop", Some("fix/empty-address"), details("Opus 5.5", Some(23)));
+    let kid = child(agent(Status::Working, "codex", "web-shop", None, details("gpt-5.5", Some(41))), 1, true, &[]);
+    vec![local, there(folding(parent, false, 0, None), machine.clone()), there(kid, machine.clone())]
+}
+
+fn spinning(v: View<'static>) -> View<'static> {
+    View { spin: Some(3), ..v }
+}
+
+#[test]
+fn renders_a_linked_machine_s_agents() {
+    let v = spinning(roomy(Widths::default().projects, machine_family(&vps(false, Some("2 min")))));
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_fallen_machine_s_agents() {
+    let v = spinning(roomy(Widths::default().projects, machine_family(&vps(true, Some("2 min")))));
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_machine_s_agents_in_a_narrow_column() {
+    let v = roomy(MIN_COLUMN_WIDTH + 2, machine_family(&vps(false, None)));
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_collapsed_machine_row() {
+    let parent = agent(Status::Idle, "claude", "web-shop", Some("fix/empty-address"), Details::default());
+    let rows = vec![there(folding(parent, true, 3, Some(Status::Waiting)), vps(false, None))];
+    insta::assert_snapshot!(render_sized(&roomy(Widths::default().projects, rows), W, ROOMY).backend());
+}
+
+fn second_line(width: u16, entry: &AgentEntry) -> String {
+    row_text(&drawn(entry, width), Rect::new(0, 1, width, 1)).trim().to_string()
+}
+
+#[rstest]
+#[case::linked(vps(false, Some("2 min")), "claude · Opus 5.5 · 23%")]
+#[case::seen(vps(true, Some("2 min")), "waiting · seen 2 min ago")]
+#[case::never_seen(vps(true, None), "waiting")]
+fn a_fallen_machine_s_row_says_when_it_was_seen(#[case] machine: MachineTag, #[case] expected: &str) {
+    let entry = agent(Status::Waiting, "claude", "web-shop", None, details("Opus 5.5", Some(23)));
+    assert_eq!(second_line(40, &there(entry, machine)), expected);
+}
+
+#[rstest]
+#[case::local(None, false)]
+#[case::linked(Some(vps(false, None)), false)]
+#[case::fallen(Some(vps(true, None)), true)]
+fn only_a_fallen_machine_s_row_is_dimmed(#[case] machine: Option<MachineTag>, #[case] dimmed: bool) {
+    let entry = AgentEntry { machine, ..agent(Status::Working, "claude", "api", None, Details::default()) };
+    let t = drawn(&entry, 40);
+    let cells = [(2, 0), (20, 1)].map(|at| t.backend().buffer()[at].modifier.contains(Modifier::DIM));
+    assert_eq!(cells, [dimmed; 2]);
+}
+
+#[rstest]
+#[case::linked(false, "⠸")]
+#[case::fallen(true, "⠋")]
+fn a_fallen_machine_s_spinner_stands_still(#[case] dim: bool, #[case] glyph: &str) {
+    let entry = there(agent(Status::Working, "claude", "api", None, Details::default()), vps(dim, None));
+    let r = Rect::new(0, 0, 40, 2);
+    let mut t = Terminal::new(TestBackend::new(r.width, 2)).expect("test backend");
+    let v = spinning(shown(Sidebar::ProjectsOnTop, Vec::new()));
+    t.draw(|f| draw_agent(f, &v, r, 1, &entry)).expect("draw");
+    assert_eq!(t.backend().buffer()[(2, 0)].symbol(), glyph);
+}
+
+#[rstest]
+#[case::whole(40, "◐ web-shop › fix/empty-address  ☁ vps")]
+#[case::workspace_dropped(22, "◐ web-shop    ☁ vps")]
+#[case::place_cut(17, "◐ web-s… ☁ vps")]
+#[case::label_cut(14, "◐ web… ☁ v…")]
+fn a_narrow_machine_row_cuts_its_place_before_its_label(#[case] width: u16, #[case] expected: &str) {
+    let entry = agent(Status::Working, "claude", "web-shop", Some("fix/empty-address"), Details::default());
+    assert_eq!(first_line(width, &there(entry, vps(false, None))), expected);
+}
+
+#[rstest]
+#[case::whole(36, "▸○ web-shop › fix/empt… ! +4 ☁ vps")]
+#[case::count_dropped(17, "▸○ web… ! ☁ vps")]
+#[case::label_dropped(12, "▸○ web-… !")]
+fn a_collapsed_machine_row_drops_its_count_then_its_label(#[case] width: u16, #[case] expected: &str) {
+    let parent = agent(Status::Idle, "claude", "web-shop", Some("fix/empty-address"), Details::default());
+    let entry = there(folding(parent, true, 4, Some(Status::Waiting)), vps(false, None));
+    assert_eq!(first_line(width, &entry), expected);
+}
+
+fn machine_rows() -> Vec<AgentEntry> {
+    entries().into_iter().map(|entry| there(entry, vps(false, None))).collect()
+}
+
+#[test]
+fn a_hovered_machine_row_has_no_close_button() {
+    let a = with_agents(Sidebar::ProjectsOnTop);
+    let row = agent_row(a.agents_list, a.pitch, 3, 0, 0);
+    let close = agent_close(row, a.pitch);
+    let on = View { hover: Some(close.as_position()), ..shown(Sidebar::ProjectsOnTop, machine_rows()) };
+    let t = render_sized(&on, W, TALL.height);
+    assert_eq!((close.is_empty(), close_symbol(&t, close).0), (false, " ".to_string()));
+}
+
+#[test]
+fn a_machine_row_has_no_close_button_in_compact_mode() {
+    let small = full_layout(
+        SMALL,
+        Widths::default(),
+        Screen { sidebar: Sidebar::ProjectsOnTop, agents: true, ..Screen::default() },
+    );
+    let a = small.shown(Some(Nav::Agents));
+    let row = agent_row(a.agents_list, a.pitch, 3, 0, 0);
+    let v = View { nav: Some(Nav::Agents), ..shown(Sidebar::ProjectsOnTop, machine_rows()) };
+    let t = render_sized(&v, SMALL.width, SMALL.height);
+    assert_eq!(close_symbol(&t, agent_close(row, a.pitch)).0, " ");
 }
