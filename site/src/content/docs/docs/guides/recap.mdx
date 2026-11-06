@@ -63,7 +63,7 @@ They are the [`recap_*` keys](../../reference/configuration/#recap_agent) of `co
 
 ## From a script
 
-`cornercase recap now|yesterday|week` prints the recap, waiting for the agent when it is not cached, and `--json` gives the text with the place each id stands for. See [Scripts and agents](../scripts-and-agents/#recap).
+`cornercase recap now|yesterday|week` prints the recap, waiting for the agent when it is not cached, and `--json` gives the text with the place each id stands for. `cornercase status --json` names the conversation each pane's agent is in, so a program can follow those places as the panel does. See [Scripts and agents](../scripts-and-agents/#recap).
 
 <Aside>
 Each cornercase server has its own journal. A recap does not span other machines you reach with `cornercase remote`.
