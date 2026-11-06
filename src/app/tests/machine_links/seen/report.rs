@@ -174,6 +174,28 @@ mod machines_in_watch {
     }
 
     #[test]
+    fn an_edit_sends_the_new_name_and_the_moved_moment_once_the_links_follow_the_list() {
+        let mut rig = seeing_fall();
+        watch(&mut rig.app);
+        rig.refresh(Duration::from_secs(1));
+        rig.app.trace_refresh();
+        let entry = serde_json::json!({"name": "vps", "new_name": "box"});
+        let edit = serde_json::json!({"command": "machines", "args": {"action": "set", "entry": entry}});
+        rig.app.request(CLIENT, &edit.to_string(), None, Instant::now());
+        rig.app.trace();
+        snapshots(&mut rig.app);
+
+        rig.refresh(Duration::from_secs(2));
+        rig.app.trace_refresh();
+
+        let got = snapshots(&mut rig.app);
+        let line = &got.last().expect("a line once the links follow the list").report.machines[0];
+        let moved = line.retry_at.as_deref().and_then(Stamp::parse).expect("a next try");
+        assert_eq!(line.name, "box");
+        assert!(moved <= SystemTime::now(), "{moved:?}");
+    }
+
+    #[test]
     fn a_fall_sends_when_the_machine_tries_next_and_a_wake_the_moment_it_moved_to() {
         let Seeing { mut rig, theirs, .. } = seeing_two();
         watch(&mut rig.app);
