@@ -163,6 +163,7 @@ impl App {
         if self.shells.refused.as_ref() != Some(&key) {
             log::warning!("app", "the shell cannot start, the default starts instead", program = program, why = why);
             self.shells.refused = Some(key);
+            self.refresh_shells();
         }
     }
 
@@ -170,16 +171,16 @@ impl App {
         let chosen = self.chosen_shell();
         let first = self.spawn_chosen(pane, &chosen, generation, accounts.clone());
         let Err(crate::error::Error::SpawnShell { cause, .. }) = &first else {
-            if first.is_ok() && chosen.own {
-                self.shells.refused = None;
+            if first.is_ok() && chosen.own && self.shells.refused.take().is_some() {
+                self.refresh_shells();
             }
             return first;
         };
-        if !chosen.own {
+        if !chosen.own && chosen.args.is_empty() {
             return first;
         }
         let why = cause.to_string();
-        let program = self.config.shell.chosen().unwrap_or_default().to_string();
+        let program = self.config.shell.chosen().unwrap_or("the default shell with its arguments").to_string();
         self.shell_refused(&program, &why);
         let default = Chosen { program: self.shells.default.clone(), args: Vec::new(), own: false };
         self.spawn_chosen(pane, &default, generation, accounts)

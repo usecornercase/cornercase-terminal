@@ -112,7 +112,8 @@ impl Settings {
     }
 
     fn save_shell(&mut self, program: String) -> Action {
-        let args = if program == self.config.shell.program { self.config.shell.args.clone() } else { Vec::new() };
+        let keeps = !program.is_empty() && program == self.config.shell.program;
+        let args = if keeps { self.config.shell.args.clone() } else { Vec::new() };
         let notice = if program.is_empty() {
             format!("new panes start your default shell, {}", self.default_shell_name())
         } else {

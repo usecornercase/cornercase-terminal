@@ -53,7 +53,7 @@ pub(crate) const STOP_PARSING: &str = "--%";
 const CMD_NAME_ENDS: [char; 3] = ['=', ',', ';'];
 const CMD: &str = "cmd";
 const POSIX_SHELLS: [&str; 9] = ["sh", "bash", "zsh", "dash", "ksh", "mksh", "oksh", "loksh", "yash"];
-const PLAIN_WORD: &str = r"-_./\:+=,@";
+const PLAIN_WORD: &str = "-_./:+=,@";
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
     ("droid", "droid"),

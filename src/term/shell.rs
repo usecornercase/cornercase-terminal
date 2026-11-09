@@ -200,13 +200,29 @@ mod imp {
         path.extension().is_some_and(|ext| PROGRAMS.iter().any(|program| ext.eq_ignore_ascii_case(program)))
     }
 
+    fn lexical(path: &Path) -> PathBuf {
+        let mut kept = PathBuf::new();
+        for part in path.components() {
+            match part {
+                std::path::Component::ParentDir => {
+                    kept.pop();
+                }
+                std::path::Component::CurDir => {}
+                other => kept.push(other),
+            }
+        }
+        kept
+    }
+
     fn is_wsl(found: &Path, system: Option<&Path>) -> bool {
+        let found = lexical(found);
+        let found = found.as_path();
         let stem = found.file_stem().map(|stem| stem.to_string_lossy().to_lowercase());
         match stem.as_deref() {
             Some("wsl") => true,
             Some("bash") => {
                 let own = found.parent().map(|dir| dir.to_string_lossy().to_lowercase());
-                let wsl = system.map(|system| system.join("System32").to_string_lossy().to_lowercase());
+                let wsl = system.map(|system| lexical(&system.join("System32")).to_string_lossy().to_lowercase());
                 own.is_some() && own == wsl
             }
             _ => false,
@@ -236,7 +252,9 @@ mod imp {
     }
 
     fn on_path(name: &str, path: Option<&OsStr>) -> Option<PathBuf> {
-        std::env::split_paths(path?).filter(|dir| dir.is_absolute()).find_map(|dir| program(&dir.join(name)))
+        std::env::split_paths(path?)
+            .filter(|dir| dir.is_absolute() && !reaches_network(&dir.to_string_lossy()))
+            .find_map(|dir| program(&dir.join(name)))
     }
 
     fn program(path: &Path) -> Option<PathBuf> {

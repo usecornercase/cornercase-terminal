@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifi
 use super::*;
 use crate::config::Config;
 use crate::settings::{Action, Page};
+#[cfg(unix)]
 use crate::test_util::{TempDir, write_executable};
 
 fn settings() -> Settings {
@@ -39,6 +40,7 @@ fn saved(action: Action) -> Config {
     }
 }
 
+#[cfg(unix)]
 fn program(dir: &TempDir, name: &str) -> String {
     let path = dir.path().join(name);
     write_executable(&path, "#!/bin/sh\n");

@@ -5,7 +5,7 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.13.21
 
 - **Choose the shell new panes start.** **Settings › UI › shell** lists the shells found on this computer (on Windows PowerShell 7, Windows PowerShell, cmd and Git Bash; on Linux and macOS the ones in `/etc/shells`) and takes any other program: a full path, one starting with `~/` or a name on the `PATH`. **shell arguments** adds options such as `-NoLogo` or `--login`. The next tab, split or workspace starts it, with no restart; panes already open keep theirs. In `config.json` it is `"shell": "pwsh"` or `{"program": "…", "args": ["…"]}`, and `cornercase config set shell … shell.args …` changes it from a script. A shell that cannot start falls back to the default with a warning, so a pane always opens.
-- On Windows, choosing cmd or Git Bash gets around two limits of PowerShell panes: a pane's folder is followed, and the agent arguments Windows PowerShell 5.1 would split are accepted.
+- On Windows, choosing cmd or Git Bash makes a pane's folder be followed, and choosing Git Bash accepts the agent arguments Windows PowerShell 5.1 would split (cmd refuses words with spaces or quotes too).
 - On Windows, in a pane whose shell is not PowerShell, cmd or a bash (nu, for instance), an agent starts only when no word of its line needs quotes.
 
 ## 0.13.20

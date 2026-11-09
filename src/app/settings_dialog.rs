@@ -124,6 +124,13 @@ impl App {
         settings
     }
 
+    pub(super) fn refresh_shells(&mut self) {
+        let shells = self.shells_here();
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.shells = shells;
+        }
+    }
+
     pub(super) fn refresh_open_settings(&mut self) {
         let tokens = self.token_statuses();
         let browsers = self.remote.paired();

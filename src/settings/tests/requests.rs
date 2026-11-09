@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use super::*;
+#[cfg(unix)]
 use crate::config::ShellChoice;
 use crate::control::config::{Kind, State};
 

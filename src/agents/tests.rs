@@ -464,14 +464,15 @@ mod arguments {
 
     #[test]
     fn a_pane_of_another_shell_gets_plain_words_typed() {
-        let line = powershell_line(strings(&["claude", "--model", "opus", r"C:\bin\x.exe"]));
+        let line = powershell_line(strings(&["claude", "--model", "opus", r"C:/bin/x.exe"]));
         let typed = typed_on_windows(&line, PaneShell::Plain, |_| Some(PathBuf::from(r"C:\bin\claude.exe")));
-        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(r"claude --model opus C:\bin\x.exe".into()));
+        assert_eq!(typed.map_err(|refusal| refusal.reason), Ok(r"claude --model opus C:/bin/x.exe".into()));
     }
 
     #[rstest]
     #[case::json(r#"{"a":1}"#)]
     #[case::an_ampersand(r"C:\R&D")]
+    #[case::a_backslash_fish_reads_as_an_escape(r"C:\temp\repo")]
     #[case::a_space("a b")]
     fn a_pane_of_another_shell_refuses_a_word_it_cannot_quote_for(#[case] word: &str) {
         let line = powershell_line(strings(&["claude", "--add-dir", word]));
