@@ -38,6 +38,7 @@ mod names {
     #[rstest::rstest]
     #[case::word("work")]
     #[case::symbols("me.personal_2-b")]
+    #[case::an_older_lock_name("team.lock")]
     #[case::longest("abcdefghijabcdefghijabcdefghijab")]
     fn are_accepted(#[case] name: &str) {
         assert!(valid(name));
@@ -53,6 +54,25 @@ mod names {
     #[case::too_long("abcdefghijabcdefghijabcdefghijabc")]
     fn are_refused(#[case] name: &str) {
         assert!(!valid(name));
+    }
+
+    #[rstest::rstest]
+    #[case::word("work", true)]
+    #[case::lock_inside("lock.d.locked", true)]
+    #[case::a_login_lock("personal.lock", false)]
+    #[case::a_login_lock_in_capitals("personal.LOCK", false)]
+    #[case::invalid("my work", false)]
+    fn a_new_one_never_ends_in_lock(#[case] name: &str, #[case] ok: bool) {
+        assert_eq!(valid_new(name), ok);
+    }
+
+    #[test]
+    fn adding_one_that_ends_in_lock_is_refused() {
+        let dir = TempDir::new();
+        let root = dir.path().join("accounts");
+        let error = add(&root, Known::Claude, "personal.lock", None).expect_err("refused");
+        assert!(error.to_string().contains("not ending in `.lock`"), "{error}");
+        assert!(!root.exists());
     }
 
     #[test]
@@ -173,10 +193,30 @@ mod listing {
             ]
         );
     }
+
+    #[test]
+    fn leaves_out_the_lock_an_agent_holds_beside_an_account_but_not_an_older_account_named_so() {
+        let dir = TempDir::new();
+        let root = dir.path().join("accounts");
+        add(&root, Known::Claude, "personal", None).expect("add");
+        for name in ["personal.lock", "team.lock"] {
+            fs::create_dir_all(root.join("claude").join(name)).expect("create");
+        }
+        assert_eq!(names(&root, Known::Claude), vec!["personal".to_string(), "team.lock".to_string()]);
+    }
 }
 
 mod removing {
     use super::*;
+
+    #[test]
+    fn an_older_account_whose_name_ends_in_lock_can_still_be_removed() {
+        let dir = TempDir::new();
+        let account = dir.path().join("claude").join("team.lock");
+        fs::create_dir_all(&account).expect("create");
+        remove(dir.path(), Known::Claude, "team.lock").expect("remove");
+        assert!(!account.exists());
+    }
 
     #[test]
     fn deletes_the_folder_but_not_what_its_links_point_to() {

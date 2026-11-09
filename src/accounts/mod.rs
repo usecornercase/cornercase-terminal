@@ -25,6 +25,14 @@ pub(crate) fn valid(name: &str) -> bool {
         && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
+pub(crate) fn valid_new(name: &str) -> bool {
+    valid(name) && !name.rsplit_once('.').is_some_and(|(_, end)| end.eq_ignore_ascii_case("lock"))
+}
+
+pub(crate) fn rule() -> String {
+    format!("use letters, digits, `.`, `_` and `-`, at most {NAME_MAX} characters, not ending in `.lock`")
+}
+
 pub(crate) fn supported() -> impl Iterator<Item = Known> {
     Known::ALL.into_iter().filter(|kind| kind.account().is_some())
 }
@@ -46,6 +54,8 @@ pub(crate) fn names(root: &Path, kind: Known) -> Vec<String> {
         .filter(|name| valid(name))
         .collect();
     names.sort();
+    let listed = names.clone();
+    names.retain(|name| !name.strip_suffix(".lock").is_some_and(|stem| listed.iter().any(|other| other == stem)));
     names
 }
 
@@ -58,7 +68,7 @@ pub(crate) fn no_accounts() -> Vec<(Known, Vec<String>)> {
 }
 
 pub(crate) fn add(root: &Path, kind: Known, name: &str, default: Option<&Path>) -> Result<PathBuf, Error> {
-    let home = check(kind, name)?;
+    let home = check(kind, name, valid_new)?;
     let parent = root.join(kind.name());
     private_folder(root).and_then(|()| private_folder(&parent)).map_err(|e| failed("create", &parent, &e))?;
     let dir = parent.join(name);
@@ -87,7 +97,7 @@ pub(crate) fn add(root: &Path, kind: Known, name: &str, default: Option<&Path>) 
 }
 
 pub(crate) fn remove(root: &Path, kind: Known, name: &str) -> Result<(), Error> {
-    check(kind, name)?;
+    check(kind, name, valid)?;
     let dir = path(root, kind, name);
     match fs::symlink_metadata(&dir) {
         Ok(meta) if meta.is_dir() => fs::remove_dir_all(&dir).map_err(|e| failed("remove", &dir, &e)),
@@ -95,12 +105,10 @@ pub(crate) fn remove(root: &Path, kind: Known, name: &str) -> Result<(), Error> 
     }
 }
 
-fn check(kind: Known, name: &str) -> Result<crate::agents::AccountHome, Error> {
+fn check(kind: Known, name: &str, fits: fn(&str) -> bool) -> Result<crate::agents::AccountHome, Error> {
     let home = kind.account().ok_or_else(|| Error::Account(format!("{} has no accounts", kind.title())))?;
-    if !valid(name) {
-        return Err(Error::Account(format!(
-            "`{name}` is not a valid account name: use letters, digits, `.`, `_` and `-`, at most {NAME_MAX}"
-        )));
+    if !fits(name) {
+        return Err(Error::Account(format!("`{name}` is not a valid account name: {}", rule())));
     }
     Ok(home)
 }

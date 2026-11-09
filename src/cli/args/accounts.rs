@@ -105,7 +105,10 @@ pub(crate) struct AccountListArgs {
 pub(crate) struct AccountAddArgs {
     #[arg(value_name = "AGENT", help = "The agent: claude, codex or gemini")]
     pub(crate) provider: String,
-    #[arg(value_name = "NAME", help = "The account's name: letters, digits, `.`, `_` and `-`")]
+    #[arg(
+        value_name = "NAME",
+        help = "The account's name: letters, digits, `.`, `_` and `-`, at most 32, not ending in `.lock`"
+    )]
     pub(crate) name: String,
     #[arg(long, help = "Then open a tab that runs the agent's login with this account")]
     pub(crate) login: bool,

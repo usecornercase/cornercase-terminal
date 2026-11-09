@@ -369,11 +369,8 @@ impl App {
     }
 
     fn check_new_account(&self, kind: Known, name: &str) -> Result<(), Refusal> {
-        if !accounts::valid(name) {
-            return Err(malformed(format!(
-                "`{name}` is not a valid account name: use letters, digits, `.`, `_` and `-`, at most {}",
-                accounts::NAME_MAX
-            )));
+        if !accounts::valid_new(name) {
+            return Err(malformed(format!("`{name}` is not a valid account name: {}", accounts::rule())));
         }
         let names = accounts::names(&self.accounts.dir, kind);
         if names.iter().any(|known| known == name) {

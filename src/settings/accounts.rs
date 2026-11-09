@@ -144,11 +144,8 @@ impl Settings {
                     edit.error = Some("type a name first".into());
                     return Action::None;
                 }
-                if !accounts::valid(&input) {
-                    edit.error = Some(format!(
-                        "use letters, digits, `.`, `_` and `-`, at most {} characters",
-                        accounts::NAME_MAX
-                    ));
+                if !accounts::valid_new(&input) {
+                    edit.error = Some(accounts::rule());
                     return Action::None;
                 }
                 let names: Vec<String> = self.accounts.names(kind).iter().map(|account| account.name.clone()).collect();
