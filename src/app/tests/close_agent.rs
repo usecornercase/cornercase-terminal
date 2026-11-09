@@ -21,13 +21,13 @@ pub(super) fn agent(app: &mut App, w: usize, t: usize) -> u64 {
 
 fn child(app: &mut App, (w, t): (usize, usize), parent: u64) -> u64 {
     let id = agent(app, w, t);
-    app.projects.pane_by_mut(id).expect("the child").parent = Some(parent);
+    app.projects.pane_by_mut(id).expect("the child").parent = Some(Parent::pane(parent));
     id
 }
 
 fn shell_child(app: &mut App, (w, t): (usize, usize), parent: u64) -> u64 {
     let term = app.projects[0].workspaces[w].tabs[t].pane_mut().expect("a pane");
-    term.parent = Some(parent);
+    term.parent = Some(Parent::pane(parent));
     term.id
 }
 
@@ -158,6 +158,29 @@ fn an_agent_in_the_main_checkout_closes_its_tab_and_its_childrens_tabs() {
 
     closed(&mut app, &rx, 0, 1);
     assert_eq!(tab_panes(&app, 0), [other]);
+}
+
+#[test]
+fn closing_a_new_agent_leaves_the_children_of_the_one_before() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    tabs(&mut app, 0, 1);
+    let parent = agent(&mut app, 0, 0);
+    let kid = agent(&mut app, 0, 1);
+    let kid_tab = app.projects[0].workspaces[0].tabs[1].id;
+    let by = By::Conversation(Conversation { kind: "claude".into(), id: "c1".into() });
+    app.projects.pane_by_mut(kid).expect("the child").parent = Some(Parent { pane: parent, by });
+    converse(&mut app, parent, Some("c1"));
+
+    let before = app.agent_close_plan(parent).expect("a plan").closing;
+    converse(&mut app, parent, Some("c2"));
+    let after = app.agent_close_plan(parent).expect("a plan").closing;
+
+    assert_eq!(
+        (before.tabs.contains(&kid_tab), before.inside.contains(&kid)),
+        (true, true),
+        "the same conversation closes its children"
+    );
+    assert_eq!((after.tabs.contains(&kid_tab), after.inside.contains(&kid)), (false, false));
 }
 
 #[test]

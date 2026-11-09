@@ -642,7 +642,7 @@ The file played when an agent finishes, the same way as [`sound_waiting`](#sound
 
 #### `sound_subagents`
 
-Whether the sound also plays for agents started by another agent (with `cornercase start`, `new-tab` or `split` run in its pane) or by a [flow](../../guides/flows/), the ones the [agents section](../../guides/projects-workspaces-tabs/#the-agents-section) hangs under another. `false` by default: only the agents you started make a sound, and the others still get their toast and notification. An agent whose parent closed counts as one you started.
+Whether the sound also plays for agents started by another agent (with `cornercase start`, `new-tab` or `split` run in its pane) or by a [flow](../../guides/flows/), the ones the [agents section](../../guides/projects-workspaces-tabs/#the-agents-section) hangs under another. `false` by default: only the agents you started make a sound, and the others still get their toast and notification. An agent whose parent closed, or whose parent's agent is gone, counts as one you started.
 
 #### `check_updates`
 

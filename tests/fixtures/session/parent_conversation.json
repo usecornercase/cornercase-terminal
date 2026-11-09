@@ -1,0 +1,45 @@
+{
+  "version": 5,
+  "projects": [
+    {
+      "path": "projects/team",
+      "workspaces": [
+        {
+          "path": "projects/team",
+          "worktree": false,
+          "tabs": [
+            {
+              "panes": [
+                {
+                  "cwd": "projects/team",
+                  "agent": {
+                    "kind": "claude",
+                    "conversation": "c1"
+                  },
+                  "id": 4
+                }
+              ],
+              "active": 0
+            },
+            {
+              "panes": [
+                {
+                  "cwd": "projects/team",
+                  "parent": 4,
+                  "parent_conversation": {
+                    "kind": "claude",
+                    "id": "s1"
+                  }
+                }
+              ],
+              "active": 0
+            }
+          ],
+          "active": 0
+        }
+      ],
+      "active": 0
+    }
+  ],
+  "active": 0
+}

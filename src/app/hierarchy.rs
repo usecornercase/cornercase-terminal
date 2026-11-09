@@ -1,15 +1,18 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use super::App;
 use super::menus::Target;
 use super::overlay::Overlay;
+use crate::agents::parent::{Conversation, Running};
 use crate::log::{self};
 use crate::project::search::Goto;
 use crate::project::{
     Group, Hierarchy, Phase, Project, Tab, TabAt, Workspace, WorkspaceAt, group, move_before, shift_active,
 };
 use crate::term::Term;
+
+pub(super) type RunningPanes<'a> = HashMap<u64, Running<'a>>;
 
 impl App {
     pub(super) fn take_id(&mut self) -> u64 {
@@ -46,8 +49,30 @@ impl App {
         self.projects.terms().map(|term| term.id).collect()
     }
 
-    pub(super) fn live_parent(term: &Term, live: &HashSet<u64>) -> Option<u64> {
-        term.parent.filter(|id| live.contains(id))
+    pub(super) fn running_panes(&self) -> RunningPanes<'_> {
+        self.projects.terms().map(|term| (term.id, term.running())).collect()
+    }
+
+    pub(super) fn live_parent(term: &Term, live: &RunningPanes<'_>) -> Option<u64> {
+        let parent = term.parent.as_ref()?;
+        live.get(&parent.pane).is_some_and(|now| parent.by.holds(*now)).then_some(parent.pane)
+    }
+
+    pub(super) fn learn_parent_conversations(&mut self) {
+        let known: HashMap<u64, (i32, Conversation)> = self
+            .projects
+            .terms()
+            .filter_map(|term| {
+                let running = term.running();
+                Some((term.id, (running.read?, Conversation::of(running.conversation?))))
+            })
+            .collect();
+        for term in self.projects.terms_mut() {
+            let found = term.parent.as_ref().and_then(|parent| known.get(&parent.pane));
+            if let Some((parent, (pid, conversation))) = term.parent.as_mut().zip(found) {
+                parent.learn((*pid, conversation));
+            }
+        }
     }
 
     pub(super) fn group_index(&self, id: u64) -> Option<usize> {

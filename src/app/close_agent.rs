@@ -68,8 +68,14 @@ impl App {
 
     fn closing_panes(&self) -> Vec<Pane> {
         let tabs = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| w.tabs.iter().map(move |t| (w.id, t)));
-        tabs.flat_map(|(workspace, tab)| {
-            tab.panes.iter().map(move |term| Pane { id: term.id, parent: term.parent, workspace, tab: tab.id })
+        let live = &self.running_panes();
+        tabs.flat_map(move |(workspace, tab)| {
+            tab.panes.iter().map(move |term| Pane {
+                id: term.id,
+                parent: Self::live_parent(term, live),
+                workspace,
+                tab: tab.id,
+            })
         })
         .collect()
     }

@@ -8,6 +8,7 @@ use super::{Asked, Asker, Handled, NO_PROJECT, Pending, Stage, Waits, deadline, 
 use crate::accounts::Accounts;
 use crate::agents;
 use crate::agents::launch::{self, Launch};
+use crate::agents::parent::Parent;
 use crate::app::App;
 use crate::config;
 use crate::control::contract::Refusal;
@@ -42,7 +43,7 @@ pub(super) struct Then {
     wait: Option<Condition>,
     focus: bool,
     view: Option<u64>,
-    parent: Option<u64>,
+    parent: Option<Parent>,
     named: Option<String>,
     accounts: Accounts,
     placed: bool,
@@ -208,7 +209,8 @@ impl App {
         let at = match self.start_place(asker, start, named.as_deref())? {
             Place::Open(at) => at,
             Place::Create(p, branch) => {
-                let (focus, view, parent, placed) = (start.focus, asker.view, asker.caller, start.placed);
+                let (focus, view, parent, placed) =
+                    (start.focus, asker.view, self.caller_link(asker.caller), start.placed);
                 let then = Then { start: Some((spec, name)), wait, focus, view, parent, named, accounts, placed };
                 self.create_worktree(client, Worktree { project: p, branch: &branch }, then, timeout)?;
                 return Ok(None);
@@ -275,8 +277,19 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn adopt(&mut self, pane: u64, parent: Option<u64>) {
-        let parent = parent.filter(|&id| id != pane && self.projects.pane_by(id).is_some());
+    pub(in crate::app) fn adopt(&mut self, pane: u64, caller: Option<u64>) {
+        let link = self.caller_link(caller);
+        self.link(pane, link);
+    }
+
+    pub(in crate::app) fn caller_link(&mut self, caller: Option<u64>) -> Option<Parent> {
+        let term = self.projects.pane_by_mut(caller?)?;
+        term.see_agent(&self.config);
+        Some(Parent { pane: term.id, by: term.running().by()? })
+    }
+
+    pub(in crate::app) fn link(&mut self, pane: u64, parent: Option<Parent>) {
+        let parent = parent.filter(|parent| parent.pane != pane && self.projects.pane_by(parent.pane).is_some());
         if let Some(term) = self.projects.pane_by_mut(pane) {
             term.parent = parent;
         }
@@ -375,7 +388,7 @@ impl App {
         pending.done.ids = self.ids(at.project(), Some(at), tab);
         let pane = pending.done.ids.pane.unwrap_or_default();
         if launch.is_some() {
-            self.adopt(pane, then.parent);
+            self.link(pane, then.parent);
         }
         if then.focus {
             pending.done.projection = self.focus_in_view(then.view, pane)?;

@@ -501,6 +501,7 @@ fn restore_brings_back_the_layout_and_the_right_clicks() {
 fn tab_without_layout() -> TabState {
     let pane_state = PaneState {
         cwd: None,
+        parent_conversation: None,
         right_clicks: false,
         agent: None,
         done: false,

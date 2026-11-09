@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::agents::AgentState;
+use crate::agents::parent::Conversation;
 use crate::changes::{Mode, Scope};
 use crate::flows::run::{RoleWorktree, Run};
 use crate::flows::{Flow, folder};
@@ -218,6 +219,8 @@ pub(crate) struct PaneState {
     pub(crate) id: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) parent: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) parent_conversation: Option<Conversation>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) collapsed: bool,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -261,6 +264,7 @@ impl PaneState {
             pending: false,
             id: None,
             parent: None,
+            parent_conversation: None,
             collapsed: false,
             accounts: BTreeMap::new(),
             closed: None,
@@ -271,7 +275,12 @@ impl PaneState {
 pub(crate) fn named_parents<'a>(projects: &[Project], closed: impl Iterator<Item = &'a TabState>) -> HashSet<u64> {
     let ids: HashSet<u64> = projects.terms().map(|term| term.id).collect();
     let kept = closed.flat_map(|tab| &tab.panes).filter_map(|pane| pane.parent);
-    projects.terms().filter_map(|term| term.parent).chain(kept).filter(|parent| ids.contains(parent)).collect()
+    projects
+        .terms()
+        .filter_map(|term| term.parent.as_ref().filter(|parent| parent.by.lasts()).map(|parent| parent.pane))
+        .chain(kept)
+        .filter(|parent| ids.contains(parent))
+        .collect()
 }
 
 impl ProjectState {
@@ -349,17 +358,21 @@ impl TabState {
             panes: tab
                 .panes
                 .iter()
-                .map(|term| PaneState {
-                    cwd: term.cwd(),
-                    right_clicks: tab.right_clicks_to_pane(term.id),
-                    agent: term.resume.clone(),
-                    done: term.resume.is_some() && term.agent.unseen(),
-                    pending: term.resume.is_some() && term.agent.pending(),
-                    id: parents.contains(&term.id).then_some(term.id),
-                    parent: term.parent.filter(|parent| parents.contains(parent)),
-                    collapsed: term.collapsed,
-                    accounts: term.accounts().chosen(),
-                    closed: None,
+                .map(|term| {
+                    let saved = term.parent.as_ref().filter(|p| p.by.lasts() && parents.contains(&p.pane));
+                    PaneState {
+                        cwd: term.cwd(),
+                        right_clicks: tab.right_clicks_to_pane(term.id),
+                        agent: term.resume.clone(),
+                        done: term.resume.is_some() && term.agent.unseen(),
+                        pending: term.resume.is_some() && term.agent.pending(),
+                        id: parents.contains(&term.id).then_some(term.id),
+                        parent: saved.map(|p| p.pane),
+                        parent_conversation: saved.and_then(|p| p.by.conversation()).cloned(),
+                        collapsed: term.collapsed,
+                        accounts: term.accounts().chosen(),
+                        closed: None,
+                    }
                 })
                 .collect(),
             active: tab.active,

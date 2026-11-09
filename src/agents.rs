@@ -12,6 +12,7 @@ pub(crate) mod grok;
 mod known;
 pub(crate) mod launch;
 pub(crate) mod opencode;
+pub(crate) mod parent;
 pub(crate) mod probe;
 pub(crate) mod recap;
 pub mod stats;

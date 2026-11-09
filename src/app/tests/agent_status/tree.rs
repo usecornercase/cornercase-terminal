@@ -27,7 +27,7 @@ fn family(activity: Activity) -> Family {
         ids.push(term.id);
     }
     let (parent, other, child) = (ids[0], ids[1], ids[2]);
-    app.projects[0].workspaces[0].tabs[2].pane_mut().expect("the child").parent = Some(parent);
+    app.projects[0].workspaces[0].tabs[2].pane_mut().expect("the child").parent = Some(Parent::pane(parent));
     render(&mut app, TALL);
     Family { app, rx, _dirs: dirs, parent, other, child }
 }
@@ -95,7 +95,7 @@ fn closing_the_parent_puts_the_child_back_in_its_place() {
         drain(&mut f.app, &f.rx);
         f.app.projects[0].workspaces[0].tabs.len() == 2
     });
-    let kept = f.app.projects.pane_by(f.child).and_then(|term| term.parent);
+    let kept = f.app.projects.pane_by(f.child).and_then(|term| term.parent.as_ref().map(|p| p.pane));
 
     assert_eq!(
         (listed(&f.app), shape(&f.app), kept),
@@ -116,6 +116,43 @@ fn the_key_for_the_next_agent_follows_the_tree() {
     }
 
     assert_eq!(visited, [f.child, f.other, f.parent]);
+}
+
+fn depths(app: &App) -> Vec<usize> {
+    shape(app).iter().map(|row| row.0).collect()
+}
+
+fn by_conversation(pane: u64, id: &str) -> Parent {
+    Parent { pane, by: By::Conversation(Conversation { kind: "claude".into(), id: id.into() }) }
+}
+
+#[test]
+fn a_new_conversation_in_the_parent_pane_gives_back_its_children() {
+    let mut f = family(Activity::Idle);
+    f.app.projects.pane_by_mut(f.child).expect("the child").parent = Some(by_conversation(f.parent, "c1"));
+    converse(&mut f.app, f.parent, Some("c1"));
+    let together = (listed(&f.app), depths(&f.app));
+
+    converse(&mut f.app, f.parent, Some("c2"));
+    let apart = (listed(&f.app), depths(&f.app));
+
+    assert_eq!(together, (vec![f.parent, f.child, f.other], vec![0, 1, 0]));
+    assert_eq!(apart, (vec![f.parent, f.other, f.child], vec![0, 0, 0]));
+}
+
+#[test]
+fn a_run_started_by_an_agent_that_ended_stays_out_of_the_next_one() {
+    let mut f = family(Activity::Idle);
+    in_a_run(&mut f);
+    f.app.projects.pane_by_mut(f.parent).expect("the orchestrator").parent = Some(by_conversation(f.other, "c1"));
+    converse(&mut f.app, f.other, Some("c1"));
+    let before = (listed(&f.app), depths(&f.app));
+
+    converse(&mut f.app, f.other, Some("c2"));
+
+    assert_eq!(before, (vec![f.other, f.parent, f.child], vec![0, 1, 2]));
+    assert_eq!((listed(&f.app), depths(&f.app)), (vec![f.parent, f.child, f.other], vec![0, 1, 0]));
+    assert_eq!(labels(&f.app), [named(ORCHESTRATOR, true), named("coder", false), (None, true)]);
 }
 
 fn in_a_run(f: &mut Family) {
@@ -181,7 +218,7 @@ fn an_agent_a_member_starts_keeps_its_line() {
     let term = f.app.projects[0].workspaces[0].tabs[3].pane_mut().expect("a pane");
     term.agent.follow(Some(agents::Known::Claude.name()));
     term.agent.update(Some(Activity::Idle), true, Instant::now());
-    term.parent = Some(f.child);
+    term.parent = Some(Parent::pane(f.child));
 
     let view = f.app.agents_view().entries;
 
@@ -257,7 +294,7 @@ mod folds {
         let term = f.app.projects[0].workspaces[0].tabs.last_mut().and_then(Tab::pane_mut).expect("a pane");
         term.agent.follow(Some(agents::Known::Claude.name()));
         term.agent.update(Some(activity), activity != Activity::Waiting, Instant::now());
-        term.parent = Some(parent);
+        term.parent = Some(Parent::pane(parent));
         term.id
     }
 

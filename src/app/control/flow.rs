@@ -134,7 +134,7 @@ impl App {
         let (flow, note) = pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
         let branch = run.worktree.unwrap_or_default();
         let accounts = self.requested_accounts(run.profile.as_deref(), &run.accounts)?;
-        let (task, focus, view, parent) = (run.prompt, run.focus, asker.view, asker.caller);
+        let (task, focus, view, parent) = (run.prompt, run.focus, asker.view, self.caller_link(asker.caller));
         if run.workspace_name.is_some() {
             return Err(super::malformed("--workspace-name needs --issue"));
         }

@@ -1,7 +1,8 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::{Instant, SystemTime};
 
+use super::hierarchy::RunningPanes;
 use super::layout::Side;
 use super::{App, Toast};
 use crate::control::{self, Ids, What};
@@ -304,7 +305,7 @@ impl App {
     }
 
     fn traced_places(&self) -> Vec<(Place, Option<PaneNow<'_>>)> {
-        let live = self.pane_ids();
+        let live = self.running_panes();
         let mut places: Vec<(Place, Option<PaneNow>)> =
             self.groups.iter().map(|g| (place_of(Kind::Group, g.id, None, OPEN, Ids::default()), None)).collect();
         for project in &self.projects {
@@ -454,7 +455,7 @@ fn place_of(kind: Kind, id: u64, parent: Option<u64>, phase: &'static str, ids: 
 fn workspace_places<'a>(
     workspace: &'a Workspace,
     (project, ids): (u64, Ids),
-    live: &HashSet<u64>,
+    live: &RunningPanes<'_>,
     places: &mut Placed<'a>,
 ) {
     let found = place_of(Kind::Workspace, workspace.id, Some(project), phase(&workspace.phase), ids);

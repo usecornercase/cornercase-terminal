@@ -45,6 +45,7 @@ mod file {
     fn bare_pane() -> PaneState {
         PaneState {
             cwd: None,
+            parent_conversation: None,
             right_clicks: false,
             agent: None,
             done: false,
@@ -195,6 +196,24 @@ mod file {
             .map(|pane| TabState { name: None, panes: vec![pane], active: 0, layout: None })
             .collect();
         let fixture = crate::test_util::fixture!("session/parents.json");
+        round_trip(fixture, &saved);
+    }
+
+    #[test]
+    fn a_parent_saved_with_its_conversation_round_trips_through_its_own_fixture() {
+        let mut saved = state(&["projects/team"]);
+        let agent = AgentState { kind: "claude".into(), conversation: "c1".into(), mode: None, account: None };
+        let parent = PaneState { id: Some(4), agent: Some(agent), ..PaneState::at(Some("projects/team".into())) };
+        let child = PaneState {
+            parent: Some(4),
+            parent_conversation: Some(Conversation { kind: "claude".into(), id: "s1".into() }),
+            ..PaneState::at(Some("projects/team".into()))
+        };
+        saved.projects[0].workspaces[0].tabs = [parent, child]
+            .into_iter()
+            .map(|pane| TabState { name: None, panes: vec![pane], active: 0, layout: None })
+            .collect();
+        let fixture = crate::test_util::fixture!("session/parent_conversation.json");
         round_trip(fixture, &saved);
     }
 
@@ -552,6 +571,7 @@ mod mapping {
     fn saved_tab(panes: usize, active: usize) -> TabState {
         let pane = PaneState {
             cwd: None,
+            parent_conversation: None,
             right_clicks: false,
             agent: None,
             done: false,

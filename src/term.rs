@@ -23,6 +23,7 @@ use self::typing::Typing;
 use crate::accounts::{self, Accounts};
 use crate::agents::activity;
 use crate::agents::context;
+use crate::agents::parent::{Parent, Running};
 use crate::agents::{self, AgentState, Known};
 use crate::config::Config;
 use crate::error::{Error, Result};
@@ -66,7 +67,8 @@ pub(crate) struct Term {
     pub(crate) input_seen: Option<i32>,
     pub(crate) job: Option<Job>,
     pub(crate) setup: Option<setup::Pane>,
-    pub(crate) parent: Option<u64>,
+    pub(crate) parent: Option<Parent>,
+    pub(crate) agent_pid: Option<i32>,
     pub(crate) collapsed: bool,
     generation: u32,
     accounts: Accounts,
@@ -133,6 +135,7 @@ impl From<Wired> for Term {
             job: None,
             setup: None,
             parent: None,
+            agent_pid: None,
             collapsed: false,
             generation,
             accounts: Accounts::default(),
@@ -291,6 +294,19 @@ impl Term {
         imp::group_leader(&self.master, self.shell_pid())
             .filter(|pid| process::alive(*pid))
             .or_else(|| self.shell_pid())
+    }
+
+    pub(crate) fn running(&self) -> Running<'_> {
+        Running {
+            conversation: self.resume.as_ref(),
+            read: self.context.agent().map(|(pid, _)| pid),
+            agent: self.agent_pid,
+            shell: self.shell_pid(),
+        }
+    }
+
+    pub(crate) fn see_agent(&mut self, config: &Config) {
+        self.agent_pid = self.foreground_pid().filter(|pid| agents::detect(config, &process::args(*pid)).is_some());
     }
 
     pub(crate) fn shell_pid(&self) -> Option<i32> {
