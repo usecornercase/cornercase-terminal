@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.26
 
-- **A change made with a command reaches your own UI at once.** On a server where nothing changed in the last half second, a fold, a rename, a move or any other change made with a command now reaches `cornercase view` and `status --follow` as soon as the command answers, instead of half a second later, and so does a change to what `status --app --follow` and `flow runs --follow` show. Changes close together still come at most one line every half second.
+- **A change made with a command reaches your own UI at once.** On a server where nothing changed in the last half second, a fold, a rename, a move or any other change made with a command (not the ones that come at a pointer's pace, such as `input` and `scroll`) now reaches `cornercase view` and `status --follow` as soon as the command answers, instead of half a second later, and so does a change to what `status --app --follow` and `flow runs --follow` show. Changes close together still come at most one line every half second to `status --follow`, and a view's own changes (`view-set`) can come sooner in its lines.
 
 ## 0.13.25
 
