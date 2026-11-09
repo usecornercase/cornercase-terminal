@@ -19,7 +19,7 @@ test('the arrow beside a workspace hides its tabs, and the row shows its agents'
   const project = app.project()!;
   const tabs = project.workspaces[0].tabs.length;
   assert.ok(tabs > 0);
-  const name = app.textAt(`▾ ${workspaceLabel(project.workspaces[0])}`);
+  const name = app.textAt(`▾ ${workspaceLabel(project.workspaces[0]).slice(0, 6)}`);
   assert.ok(name);
   const before = app.render().grid.cells.filter((c) => c.ch === '├').length;
   app.pointerDown(name.x, name.y, 0);
@@ -28,7 +28,7 @@ test('the arrow beside a workspace hides its tabs, and the row shows its agents'
   const after = app.render().grid.cells.filter((c) => c.ch === '├').length;
   assert.ok(after < before);
   assert.equal(project.workspaces[0].tabs.length, tabs);
-  assert.ok(app.textAt(`▸ ${workspaceLabel(project.workspaces[0])}`));
+  assert.ok(app.textAt(`▸ ${workspaceLabel(project.workspaces[0]).slice(0, 6)}`));
   app.destroy();
 });
 
@@ -37,7 +37,7 @@ test('the arrow expands a collapsed workspace again', () => {
   const project = app.project()!;
   project.workspaces[0].collapsed = true;
   app.render();
-  const arrow = app.textAt(`▸ ${workspaceLabel(project.workspaces[0])}`);
+  const arrow = app.textAt(`▸ ${workspaceLabel(project.workspaces[0]).slice(0, 6)}`);
   assert.ok(arrow);
   app.pointerDown(arrow.x, arrow.y, 0);
   app.pointerUp();
@@ -153,5 +153,16 @@ test('a long workspace name shows the wrapped line with the cursor, and the arro
   app.key({ key: 'e', ctrl: true } as Key);
   app.render();
   assert.ok(row().includes('finish'));
+  app.destroy();
+});
+
+test('a workspace with changes shows its count against its base at the end of its row', () => {
+  const app = demo();
+  const project = app.project()!;
+  const changed = project.workspaces.map((w) => ({ w, count: app.againstBase(project, w) })).find((c) => c.count);
+  assert.ok(changed?.count);
+  const text = app.render().grid.cells.map((c) => c.ch).join('');
+  assert.ok(text.includes(`+${changed.count.added}`), `+${changed.count.added}`);
+  assert.ok(text.includes(`−${changed.count.removed}`));
   app.destroy();
 });

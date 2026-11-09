@@ -777,7 +777,8 @@ export class Painter {
     const closed = app.closedCount(ws.id);
     const reopen = closed > 0 ? [seg(REOPEN_ICON, { fg: 6 })] : [];
     const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [statusIcon(status, spinAt(app))] : []), ...reopen, ...behind];
-    const marks = fitTags(tags, room);
+    const changed = ws.removing ? null : app.againstBase(project, ws);
+    const marks = fitRowTags(tags, changed, workspaceLabel(ws), room);
     const name = truncateRight(workspaceLabel(ws), room - marks.reserved);
     const line = [...b.lead, seg(name, style)];
     const at = status ? 2 : 0;
@@ -1763,6 +1764,19 @@ function fitTags(tags: Seg[], room: number): Tags {
     width = next;
   }
   return { segs, width, reserved: segs.length ? width + 1 : 0 };
+}
+
+const MIN_NAME_WIDTH = 8;
+
+function fitRowTags(tags: Seg[], changed: { added: number; removed: number } | null, name: string, room: number): Tags {
+  const without = fitTags(tags, room);
+  if (!changed || without.segs.filter((s) => s.t !== ' ').length !== tags.length) return without;
+  const counts = [seg(`+${changed.added}`, { fg: 2 }), seg(`\u2212${changed.removed}`, { fg: 1 })];
+  const wanted = tags.length + 2;
+  const withCount = fitTags([...tags, ...counts], room);
+  const fits = withCount.segs.filter((s) => s.t !== ' ').length === wanted;
+  const keeps = room - withCount.reserved >= Math.min([...name].length, MIN_NAME_WIDTH);
+  return fits && keeps ? withCount : without;
 }
 
 function pushTags(line: Line, tags: Tags, used: number, room: number): void {
