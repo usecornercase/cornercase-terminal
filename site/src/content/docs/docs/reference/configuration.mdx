@@ -106,7 +106,7 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 
 <Screen
   name="settings-ui"
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; icons auto; agents section hidden; working icon moon; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; sound on, with the built-in sounds for needing you and finishing, and none for subagents; check for updates every hour; star prompt once; and prefix key off"
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; icons auto; agents section hidden; working icon moon; counts shown; inactive panes dimmed; shell default (bash) and shell arguments none; model and context shown under an agent's tab; memory hidden; desktop notifications auto; sound on, with the built-in sounds for needing you and finishing, and none for subagents; check for updates every hour; star prompt once; and prefix key off"
   crop={[2, 1, 106, 23]}
 />
 
@@ -121,6 +121,8 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 | **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a collapsed group holds. On by default. |
 | **TODO dot** | Show a grey `●` next to the [TODO](../../guides/todo/) button while items are left to do. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
+| **shell** | The program every new pane starts. The pick lists *default* (your `SHELL`, or `/bin/sh`; on Windows PowerShell 7, Windows PowerShell or cmd), the shells found on this computer (the ones in `/etc/shells` on Linux and macOS; PowerShell 7, Windows PowerShell, cmd and Git Bash on Windows) and *another program…*, which takes a full path, one starting with `~/` or a name on the `PATH`, and says why when it can't start it. It applies to the next tab, split or workspace; panes already open keep theirs. See [`shell`](#shell). |
+| **shell arguments** | Options given to that shell when a pane starts it, such as `-NoLogo` or `--login`. Changing the shell drops them. |
 | **model** | Show the model of a Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
 | **memory** | Show how much memory every tab uses, at the end of an agent's line or on a second line in a shell tab, such as `1.2 GB`. Off by default. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses). |
@@ -286,6 +288,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "counts": true,
   "todo_dot": true,
   "dim_inactive_panes": true,
+  "shell": "",
   "prefix_key": "",
   "model": true,
   "context": true,
@@ -359,6 +362,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`counts`](#counts) | boolean | `true` |
 | [`todo_dot`](#todo_dot) | boolean | `true` |
 | [`dim_inactive_panes`](#dim_inactive_panes) | boolean | `true` |
+| [`shell`](#shell) | string or object | `""` |
 | [`prefix_key`](#prefix_key) | string | `""` |
 | [`model`](#model) | boolean | `true` |
 | [`context`](#context) | boolean | `true` |
@@ -574,6 +578,23 @@ Whether the **`TODO`** button shows a grey `●` while at least one item is left
 #### `dim_inactive_panes`
 
 Whether panes you aren't typing in are dimmed, in tabs split into several panes.
+
+#### `shell`
+
+The shell a new pane starts, as a program or as an object with its arguments:
+
+```json
+"shell": "pwsh"
+"shell": { "program": "C:\\Program Files\\Git\\bin\\bash.exe", "args": ["--login", "-i"] }
+```
+
+The program is a full path, a path starting with `~/` or a name found on the `PATH`. Empty, the default, is your `SHELL` when the server started, else `/bin/sh` (on Windows: `SHELL` when Windows can start it, else `pwsh`, `powershell`, then `cmd`). With only `args`, the default shell starts with them.
+
+- It is read for each new pane, so a change applies to the next tab, split, workspace or restored pane with no restart; panes already open keep their shell. It also ends [a worktree's setup](../../guides/worktrees/) (except on Windows without Git for Windows, where the tab stays in the PowerShell that ran the setup).
+- A shell that can't start (not found, not executable, or failing to start) never leaves you without a pane: the pane starts the default shell, a toast says why, and the Settings row turns red. A shell that starts and exits at once, because of a wrong argument, ends its pane as `exit` would.
+- On Windows the pick offers `pwsh`, `powershell`, `cmd` and Git Bash (by its full path, without `--login`: add it in `args` to read your `.bash_profile`). WSL (`wsl.exe`, and `bash.exe` in `System32`) and programs on a network share are refused. Only an `.exe` or `.com` can start, not a `.cmd` or a `.ps1`.
+- It is not shared by **share**: a program path belongs to one computer.
+- From a script: `cornercase config set shell /usr/bin/fish shell.args -l`.
 
 #### `prefix_key`
 

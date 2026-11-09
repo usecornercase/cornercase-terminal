@@ -80,6 +80,11 @@ impl Settings {
                 self.go_to(row);
                 self.flip_forum();
             }
+            (Target::Row(Row::Shell), _) => {
+                self.go_to(&Row::Shell);
+                self.edit_shell();
+                self.submit_text(typed)?;
+            }
             (Target::Row(row), kind) => {
                 self.go_to(row);
                 self.activate();

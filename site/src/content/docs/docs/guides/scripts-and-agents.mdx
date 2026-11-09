@@ -1279,6 +1279,7 @@ cornercase config search def ag
 cornercase config set sidebar tree
 cornercase config set fetch_minutes 10 counts false
 cornercase config set issue_tabs github,linear
+cornercase config set shell /usr/bin/fish shell.args -l
 printf '%s' "$LINEAR_API_KEY" | cornercase config secret linear
 cornercase config remove linear
 cornercase config project ~/code/web-shop --setup 'npm ci' --teardown 'rm -rf node_modules'
@@ -1305,7 +1306,7 @@ Over the socket, every other answer has the same shape and the request is `{"com
 {"command": "config", "args": {"action": "remove", "entry": "linear"}}
 ```
 
-- `settings`: for each one, `key`, `page` and `section` (where the dialog shows it), `label`, `type` (`switch`, `number`, `text`, `choice`, `list` or `key`), `value` and `default` (as JSON), `shown` (what the dialog shows as its value), `note`, `choices` (for a `choice` and the `list`: `value`, `note`, `dangerous`), `field` (the label of its edit field), `question` (the title of its pick), `dangerous` and `restart`. `restart` says the change only applies after a restart; none of today's settings does. `set` takes strict JSON types: `true`, a number, a string, a list of strings.
+- `settings`: for each one, `key`, `page` and `section` (where the dialog shows it), `label`, `type` (`switch`, `number`, `text`, `choice`, `list` or `key`), `value` and `default` (as JSON), `shown` (what the dialog shows as its value), `note`, `choices` (for a `choice` and the `list`: `value`, `note`, `dangerous`; for `shell`, a `text`, the shells found, offered as suggestions while any program is taken), `field` (the label of its edit field), `question` (the title of its pick), `dangerous` and `restart`. `restart` says the change only applies after a restart; none of today's settings does. `set` takes strict JSON types: `true`, a number, a string, a list of strings.
 - `connections`: `key` (`shortcut`, `linear`, `jira`, `plane`, `gitlab`, `asana`, `browsers`, `telegram`, `telegram.chat`, `discord`, `discord.chat`), `kind`, `label`, `note`, `state` (`missing`, `connected` or `refused`), `account` (who it is connected as), `from` (`saved` or `env`) and `env` for a token from the environment, `count` for the paired browsers, `field` (what to paste) and `removable`. A token or a bot is set with `secret`, never through `set`.
 - `projects`: `folder`, `key` (as written in `config.json`), `project` (the id of the open project in that folder), `repository`, `setup` and `teardown`.
 - `revision`, `path` (the `config.json` file), `problem` (why it cannot be read, when it cannot) and `notices`: what the dialog would have said for each change made.

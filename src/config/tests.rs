@@ -472,6 +472,62 @@ mod read {
     }
 }
 
+mod shell {
+    use super::*;
+
+    fn parsed(text: &str) -> serde_json::Result<Config> {
+        serde_json::from_str(text)
+    }
+
+    #[rstest]
+    #[case::string(r#"{"shell": "pwsh"}"#, "pwsh", &[])]
+    #[case::object(r#"{"shell": {"program": "bash", "args": ["--login", "-i"]}}"#, "bash", &["--login", "-i"])]
+    #[case::without_args(r#"{"shell": {"program": "zsh"}}"#, "zsh", &[])]
+    #[case::only_args(r#"{"shell": {"args": ["-l"]}}"#, "", &["-l"])]
+    #[case::empty(r#"{"shell": ""}"#, "", &[])]
+    #[case::missing("{}", "", &[])]
+    fn is_read_in_both_shapes(#[case] text: &str, #[case] program: &str, #[case] args: &[&str]) {
+        let config = parsed(text).expect("a valid shell");
+        assert_eq!(config.shell.program, program);
+        assert_eq!(config.shell.args, args);
+    }
+
+    #[test]
+    fn writes_back_as_a_string_or_an_object() {
+        let plain = Config { shell: ShellChoice { program: "pwsh".into(), args: Vec::new() }, ..Config::default() };
+        let full =
+            Config { shell: ShellChoice { program: "bash".into(), args: vec!["-l".into()] }, ..Config::default() };
+        let value = |config: &Config| serde_json::to_value(config).expect("serialize")["shell"].clone();
+        assert_eq!(value(&plain), serde_json::json!("pwsh"));
+        assert_eq!(value(&full), serde_json::json!({"program": "bash", "args": ["-l"]}));
+        assert_eq!(value(&Config::default()), serde_json::json!(""));
+    }
+
+    #[rstest]
+    #[case("7")]
+    #[case("[\"a\"]")]
+    #[case("null")]
+    fn a_wrong_type_is_refused_with_what_it_takes(#[case] value: &str) {
+        let error = parsed(&format!("{{\"shell\": {value}}}")).expect_err("a wrong type").to_string();
+        assert!(error.contains("the shell's program, or an object"), "{error}");
+    }
+
+    #[test]
+    fn chosen_is_none_for_the_default() {
+        assert_eq!(ShellChoice::default().chosen(), None);
+        let spaces = ShellChoice { program: "  ".into(), args: Vec::new() };
+        assert_eq!(spaces.chosen(), None);
+        let fish = ShellChoice { program: " fish ".into(), args: Vec::new() };
+        assert_eq!(fish.chosen(), Some("fish"));
+    }
+
+    #[test]
+    fn changing_it_touches_only_its_key() {
+        let new = Config { shell: ShellChoice { program: "fish".into(), args: Vec::new() }, ..Config::default() };
+        assert_eq!(Changes::between(&Config::default(), &new).keys(), ["shell"]);
+    }
+}
+
 mod changes {
     use super::*;
 

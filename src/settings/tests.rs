@@ -495,7 +495,7 @@ mod agent_tabs {
         let mut s = settings();
         s.config.context = false;
         s.open_page(Page::Ui);
-        let texts: Vec<RowText> = s.rows()[9..12].iter().map(|row| s.row_text(row)).collect();
+        let texts: Vec<RowText> = s.rows()[11..14].iter().map(|row| s.row_text(row)).collect();
         let rows: Vec<(&str, &str)> = texts.iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
         assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
     }
@@ -512,6 +512,8 @@ pub(crate) fn ui_rows() -> Vec<Row> {
         Row::Counts,
         Row::TodoDot,
         Row::DimPanes,
+        Row::Shell,
+        Row::ShellArgs,
         Row::Detail(Detail::Model),
         Row::Detail(Detail::Context),
         Row::Detail(Detail::Memory),

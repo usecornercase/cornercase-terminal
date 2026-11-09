@@ -135,6 +135,7 @@ impl Settings {
             Row::SoundWaiting => self.start_edit(row, self.config.sound_waiting.clone()),
             Row::SoundDone => self.start_edit(row, self.config.sound_done.clone()),
             Row::Prefix => self.start_capture(),
+            Row::Shell | Row::ShellArgs => self.activate_shell(row),
             row => self.flip_look(&row),
         }
     }
@@ -319,6 +320,7 @@ impl Settings {
                     .unwrap_or_else(|| "default".into()),
             ),
             Row::Recap(recap) => Some(self.recap_current(*recap)),
+            Row::Shell => Some(self.shell_current()),
             _ => None,
         };
         let mut search = Search::default();

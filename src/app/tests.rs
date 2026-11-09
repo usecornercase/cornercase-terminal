@@ -656,6 +656,7 @@ mod search_settings;
 mod select_text;
 mod settings;
 mod share_settings;
+mod shell_setting;
 mod shortcuts;
 mod shows;
 mod sidebar_clicks;

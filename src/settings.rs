@@ -9,6 +9,7 @@ use crate::machines::{Info, State};
 use crate::messenger::Via;
 
 pub(crate) use recap::RecapRow;
+pub(crate) use shell::ShellsHere;
 
 pub(crate) use self::accounts::{Listed, Order};
 pub(crate) use self::search::{Finder, Hit};
@@ -51,6 +52,8 @@ pub(crate) enum Row {
     Counts,
     TodoDot,
     DimPanes,
+    Shell,
+    ShellArgs,
     Detail(Detail),
     Notifications,
     Sound,
@@ -242,7 +245,7 @@ impl Detail {
     }
 }
 
-const LOOK_ROWS: [Row; 27] = [
+const LOOK_ROWS: [Row; 29] = [
     Row::AddAgent,
     Row::Sidebar,
     Row::Tabs,
@@ -253,6 +256,8 @@ const LOOK_ROWS: [Row; 27] = [
     Row::Counts,
     Row::TodoDot,
     Row::DimPanes,
+    Row::Shell,
+    Row::ShellArgs,
     Row::Detail(Detail::Model),
     Row::Detail(Detail::Context),
     Row::Detail(Detail::Memory),
@@ -428,6 +433,7 @@ pub(crate) struct Settings {
     pub(crate) plugins: Vec<PluginRow>,
     pub(crate) accounts: Listed,
     pub(crate) machines: Vec<Info>,
+    pub(crate) shells: ShellsHere,
     pub(crate) now: SystemTime,
     pub(crate) find: Finder,
 }
@@ -455,6 +461,7 @@ impl Settings {
             plugins: Vec::new(),
             accounts: Listed::default(),
             machines: Vec::new(),
+            shells: ShellsHere::default(),
             now: UNIX_EPOCH,
             find: Finder::default(),
         }
@@ -635,6 +642,7 @@ mod machines;
 mod recap;
 mod search;
 pub(crate) mod share;
+mod shell;
 mod submit;
 mod trackers;
 mod view;

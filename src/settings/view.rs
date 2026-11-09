@@ -163,6 +163,7 @@ impl Settings {
                 let value = if config.dim_inactive_panes { "[x] dimmed" } else { "[ ] as bright as the active one" };
                 ("inactive panes".into(), value.into(), "in a split tab".into(), false)
             }
+            Row::Shell | Row::ShellArgs => self.shell_row(row),
             Row::Detail(detail) => {
                 let value = if detail.on(config) { "[x] shown" } else { "[ ] hidden" };
                 (detail.label().into(), value.into(), detail.note().into(), false)
@@ -304,6 +305,8 @@ impl Settings {
             Row::SoundDone => format!("sound when it finishes ({SOUND_FILE_NOTE})"),
             Row::Kind(kind) => format!("{kind} extra arguments"),
             Row::Recap(row) => row.field().to_string(),
+            Row::Shell => super::shell::PROGRAM_FIELD.to_string(),
+            Row::ShellArgs => super::shell::ARGS_FIELD.to_string(),
             Row::Bot(via) => via.token_field().to_string(),
             Row::AddAccount(kind) => format!("name of the new {} account, such as work", kind.name()),
             Row::RenameAccount(kind, name) if name.is_empty() => {
@@ -339,6 +342,7 @@ impl Settings {
             Row::ForumClose(_) => "What happens to a workspace's post when you close it?".to_string(),
             Row::Kind(kind) => format!("How should {kind} start?"),
             Row::Recap(row) => row.question().to_string(),
+            Row::Shell => super::shell::QUESTION.to_string(),
             _ => "Which agent do you want to set up?".to_string(),
         }
     }
