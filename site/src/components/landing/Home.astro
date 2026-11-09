@@ -6,19 +6,26 @@ import Footer from './Footer.astro';
 import Hero from './Hero.astro';
 import More from './More.astro';
 import Nav from './Nav.astro';
+import Play from './Play.astro';
+import Stage from './Stage.astro';
 import Stats from './Stats.astro';
 import Why from './Why.astro';
 ---
 
 <Landing>
   <Nav />
+  <Stage />
   <main id="main">
     <Hero />
     <Features />
     <Why />
+    <Play />
     <Flows />
     <More />
     <Stats />
   </main>
   <Footer />
+  <script>
+    import '../../lib/show/main';
+  </script>
 </Landing>

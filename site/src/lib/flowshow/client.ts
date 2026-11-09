@@ -92,14 +92,12 @@ function view(svg: SVGSVGElement, layout: Layout): View {
   };
 }
 
-export function mount(root: HTMLElement): void {
-  const motion = matchMedia('(prefers-reduced-motion: reduce)');
-  const narrow = matchMedia('(max-width: 999px)');
+function shower(root: HTMLElement): (f: Frame) => void {
   const views = [...root.querySelectorAll<SVGSVGElement>('svg[data-layout]')].map((svg) => view(svg, LAYOUTS[svg.dataset.layout as 'wide' | 'tall']));
   const says = [...root.querySelectorAll<HTMLElement>('[data-say]')];
   let mood = '';
   let said = '';
-  const show = (f: Frame): void => {
+  return (f) => {
     for (const v of views) v.apply(f);
     if (mood !== f.mood) root.dataset.mood = mood = f.mood;
     if (said !== f.caption) {
@@ -107,6 +105,27 @@ export function mount(root: HTMLElement): void {
       for (const s of says) s.classList.toggle('on', s.dataset.say === f.caption);
     }
   };
+}
+
+export function scrub(root: HTMLElement): (elapsed: number | null) => void {
+  const show = shower(root);
+  let live = false;
+  root.dataset.ready = '';
+  root.dataset.scrubbed = '';
+  return (elapsed) => {
+    if ((elapsed !== null) !== live) {
+      live = elapsed !== null;
+      root.toggleAttribute('data-live', live);
+    }
+    if (elapsed !== null) show(frameAt(elapsed));
+  };
+}
+
+export function mount(root: HTMLElement): void {
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  const narrow = matchMedia('(max-width: 999px)');
+  const show = shower(root);
+  delete root.dataset.scrubbed;
   const toggle = root.querySelector<HTMLButtonElement>('[data-toggle]');
   let elapsed = 0;
   let last = 0;

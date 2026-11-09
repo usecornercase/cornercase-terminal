@@ -31,6 +31,7 @@ export interface Host {
   exit(): void;
   place(): Place;
   pace(): number;
+  random(): number;
 }
 
 export interface Program {
@@ -209,7 +210,7 @@ export class Shell implements Program {
         this.input += command[i];
         i += 1;
         this.host.dirty();
-        this.typing = this.host.after(18 + Math.random() * 30, step);
+        this.typing = this.host.after(18 + this.host.random() * 30, step);
       } else {
         this.typing = this.host.after(160, () => {
           this.typing = null;
@@ -432,8 +433,8 @@ export class Shell implements Program {
           [head('Running'), seg(' `target/debug/web-shop`')],
           [seg('listening on 0.0.0.0:3000')],
         ],
-        () => request(['/returns', '/checkout', '/orders/1042']),
-        () => 1400 + Math.random() * 2600,
+        () => request(['/returns', '/checkout', '/orders/1042'], this.host.random),
+        () => 1400 + this.host.random() * 2600,
       );
       return;
     }
@@ -470,8 +471,8 @@ export class Shell implements Program {
     this.forever(
       'node',
       [plain(`> ${place.project}@2.1.0 dev`), plain('> node src/server.ts'), [], [seg(`${place.project} listening on `), seg(':8080', CYAN)]],
-      () => request(['/v1/orders?page=2', '/v1/returns', '/v1/orders/9f2c', '/v1/health', '/v1/customers/88/orders']),
-      () => 900 + Math.random() * 2400,
+      () => request(['/v1/orders?page=2', '/v1/returns', '/v1/orders/9f2c', '/v1/health', '/v1/customers/88/orders'], this.host.random),
+      () => 900 + this.host.random() * 2400,
     );
   }
 
@@ -484,13 +485,13 @@ export class Shell implements Program {
   }
 }
 
-function request(paths: string[]): Line {
-  const post = Math.random() < 0.3;
-  const path = paths[Math.floor(Math.random() * paths.length)];
-  const roll = Math.random();
+function request(paths: string[], random: () => number): Line {
+  const post = random() < 0.3;
+  const path = paths[Math.floor(random() * paths.length)];
+  const roll = random();
   const status = post ? (roll < 0.9 ? 201 : 422) : roll < 0.85 ? 200 : roll < 0.95 ? 404 : 500;
   const color = status < 300 ? GREEN : status < 500 ? YELLOW : RED;
-  const ms = Math.round(2 + Math.random() * (post ? 60 : 30));
+  const ms = Math.round(2 + random() * (post ? 60 : 30));
   const clock = new Date().toTimeString().slice(0, 5);
   return [seg(`${clock} `, DIMMED), seg(pad(post ? 'POST' : 'GET', 5), post ? MAGENTA : CYAN), seg(pad(path, 24)), seg(String(status), color), seg(`${String(ms).padStart(4)}ms`, DIMMED)];
 }
@@ -1236,7 +1237,7 @@ export class Agent implements Program {
     if (!run) return;
     const { task } = run;
     if (run.next < task.tools.length) {
-      this.step = this.host.after(run.pace + Math.random() * 700, () => {
+      this.step = this.host.after(run.pace + this.host.random() * 700, () => {
         const i = run.next++;
         const t = task.tools[i];
         this.call(t.name, t.arg, t.note);
@@ -1288,7 +1289,7 @@ export class Top implements Program {
   }
 
   private tick(): void {
-    this.cpus = this.cpus.map((c) => Math.max(2, Math.min(98, c + (Math.random() - 0.5) * 30)));
+    this.cpus = this.cpus.map((c) => Math.max(2, Math.min(98, c + (this.host.random() - 0.5) * 30)));
     this.host.dirty();
     this.timer = this.host.after(900, () => this.tick());
   }

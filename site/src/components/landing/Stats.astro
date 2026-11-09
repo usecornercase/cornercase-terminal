@@ -23,7 +23,7 @@ const times: Measure[] = t.stats.times.map((m, i) => ({ ...m, values: timed[i] }
 const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] }));
 ---
 
-<section class="section stats" id="speed" aria-labelledby="speed-title">
+<section class="section stats backed" id="speed" aria-labelledby="speed-title">
   <div class="wrap">
     <div class="head reveal">
       <h2 class="h2" id="speed-title">{t.stats.title}</h2>
@@ -41,6 +41,10 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
   .section.stats {
     padding-top: 0;
     padding-bottom: clamp(48px, 6vw, 80px);
+  }
+
+  :global(.motion) .section.stats {
+    padding-bottom: clamp(120px, 14vw, 200px);
   }
 
   .head {
