@@ -67,7 +67,7 @@ const columns: [string, [string, string, string?][]][] = [
             <a class="btn btn-ghost" href={discord}>{t.footer.discord}</a>
           </div>
         </div>
-        <div class="poster reveal" style="--i: 2" aria-hidden="true">
+        <div class="poster reveal" style="--i: 2" aria-hidden="true" data-finale-mark>
           <Mark size={480} />
         </div>
       </div>
@@ -155,6 +155,51 @@ const columns: [string, [string, string, string?][]][] = [
   .poster :global(.mark) {
     width: 100%;
     height: auto;
+  }
+
+  :global(.motion) .poster :global(.mark) {
+    visibility: hidden;
+  }
+
+  :global(.motion) .footer {
+    background: none;
+  }
+
+  :global(.motion) .cta h2 {
+    font-size: clamp(40px, 5.7vw, 104px);
+    font-stretch: 118%;
+    line-height: 0.95;
+  }
+
+  :global(.motion) .say {
+    position: relative;
+  }
+
+  :global(.motion) .say::before {
+    content: '';
+    position: absolute;
+    inset: -90px -140px;
+    z-index: -1;
+    background: radial-gradient(closest-side, rgb(9 10 13 / 0.88) 50%, transparent);
+    pointer-events: none;
+  }
+
+  :global(.motion) .poster {
+    width: min(100%, 400px);
+  }
+
+  :global(.motion) .grid,
+  :global(.motion) .legal {
+    position: relative;
+  }
+
+  :global(.motion) .grid::before {
+    content: '';
+    position: absolute;
+    inset: -2px -100vw -400px;
+    z-index: -1;
+    background: rgb(9 10 13 / 0.88);
+    pointer-events: none;
   }
 
   .grid {

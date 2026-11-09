@@ -38,6 +38,9 @@ export const page: Page = {
     play: 'Experimente o cornercase ao vivo',
     hint: 'Uma simulação de verdade, não um vídeo: clique por aí, digite num shell, inicie um agente.',
   },
+  play: {
+    title: 'Sua vez.',
+  },
   install: {
     label: 'Como instalar',
     script: 'Script de instalação',

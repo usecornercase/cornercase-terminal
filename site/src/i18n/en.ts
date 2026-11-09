@@ -36,6 +36,9 @@ export const page = {
     play: 'Try cornercase live',
     hint: 'A real simulation, not a video: click around, type in a shell, start an agent.',
   },
+  play: {
+    title: 'Your turn.',
+  },
   install: {
     label: 'How to install',
     script: 'Install script',

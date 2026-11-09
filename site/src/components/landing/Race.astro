@@ -285,6 +285,11 @@ const t = words(Astro.url);
     }
   }
 
+  :global([data-theme='dark']) .race {
+    --bar: #50555e;
+    --bar-wait: #3a3e45;
+  }
+
   .tasks {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));

@@ -560,6 +560,7 @@ export class App {
   }
 
   virtual = false;
+  random: () => number = Math.random;
   light = false;
   theme: Theme = defaultTheme;
   private clockNow = 0;
@@ -734,6 +735,7 @@ export class App {
       exit: () => this.exitPane(paneId()),
       place: () => this.place(p, w),
       pace: () => this.agentPace,
+      random: () => this.random(),
     };
   }
 
