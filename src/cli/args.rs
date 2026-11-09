@@ -361,6 +361,7 @@ impl Control {
             Self::Rename(a) => a.view.view,
             Self::Surface(a) => a.view,
             Self::ViewSet(a) => Some(a.view),
+            Self::Flow(FlowArgs { action: FlowAction::Run(run) }) => run.create.view.view,
             _ => None,
         }
     }

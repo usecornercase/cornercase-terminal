@@ -189,6 +189,7 @@ mod its_focus {
     #[rstest]
     #[case::start("start", start())]
     #[case::new_workspace("new-workspace", new_workspace())]
+    #[case::flow_run("flow-run", flow_run())]
     fn takes_no_view(#[case] command: &str, #[case] args: Value) {
         let mut remote = seeing(Reply::Made(made));
 

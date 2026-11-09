@@ -275,15 +275,17 @@ mod streams {
         older
     }
 
-    fn plugin_run_in_a_view_on(features: control::contract::Descriptor) -> (Answer, Vec<String>) {
-        let line = r#"{"args": ["plugin", "run", "a", "b", "--view", "7"]}"#;
+    const PLUGIN_RUN: &str = r#"{"args": ["plugin", "run", "a", "b", "--view", "7"]}"#;
+    const FLOW_RUN: &str = r#"{"args": ["flow", "run", "Pair", "--prompt", "x", "--focus", "--view", "7", "--json"]}"#;
+
+    fn in_a_view_on(line: &str, features: control::contract::Descriptor) -> (Answer, Vec<String>) {
         let (mut answers, seen) = lines_on(|theirs| serving(theirs, features, NO_REQUEST_NAMES_THIS), &[line]);
         (answers.remove(0), seen)
     }
 
     #[test]
     fn plugin_run_sends_its_view_with_the_run_and_not_with_the_lookup_of_the_revision() {
-        let (answer, seen) = plugin_run_in_a_view_on(control::contract::describe("boot", &[]));
+        let (answer, seen) = in_a_view_on(PLUGIN_RUN, control::contract::describe("boot", &[]));
 
         assert_eq!(answer.status, 0, "{answer:?}");
         let lookup = seen.iter().find(|text| text.contains("plugin-actions")).expect("the lookup");
@@ -292,16 +294,39 @@ mod streams {
         assert!(run.contains("\"view\":7"), "{run}");
     }
 
+    #[test]
+    fn flow_run_sends_its_view_with_the_run() {
+        let (answer, seen) = in_a_view_on(FLOW_RUN, control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let run = seen.iter().find(|text| text.contains("flow-run")).expect("the run");
+        assert!(run.contains("\"view\":7"), "{run}");
+        let others: Vec<_> = seen.iter().filter(|text| !text.contains("flow-run")).collect();
+        assert!(others.iter().all(|text| !text.contains("\"view\"")), "{others:?}");
+    }
+
     #[rstest]
-    #[case::without_views("views", "has no views")]
-    #[case::that_takes_no_view_there("plugin-run-view", "cannot run a plugin's action in a view")]
-    fn plugin_run_in_a_view_is_refused_up_front_by_a_server(#[case] missing: &str, #[case] says: &str) {
-        let (answer, seen) = plugin_run_in_a_view_on(lacking(missing));
+    #[case::plugin_run_without_views(PLUGIN_RUN, "plugin-run", "views", "has no views")]
+    #[case::plugin_run_that_takes_no_view_there(
+        PLUGIN_RUN,
+        "plugin-run",
+        "plugin-run-view",
+        "cannot run a plugin's action in a view"
+    )]
+    #[case::flow_run_without_views(FLOW_RUN, "flow-run", "views", "has no views")]
+    #[case::flow_run_that_takes_no_view_there(FLOW_RUN, "flow-run", "flow-run-view", "cannot start a flow in a view")]
+    fn a_run_in_a_view_is_refused_up_front_by_a_server_that_would_drop_or_refuse_the_view(
+        #[case] line: &str,
+        #[case] request: &str,
+        #[case] missing: &str,
+        #[case] says: &str,
+    ) {
+        let (answer, seen) = in_a_view_on(line, lacking(missing));
 
         assert_eq!(answer.status, 1, "{answer:?}");
         let error = answer.error.expect("an error");
         assert!(error.contains(says) && error.contains("update cornercase"), "{error}");
-        assert!(!seen.iter().any(|text| text.contains("plugin-run")), "{seen:?}");
+        assert!(!seen.iter().any(|text| text.contains(request)), "{seen:?}");
     }
 
     #[rstest]

@@ -175,11 +175,11 @@ impl App {
     }
 
     fn flow_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
-        let Asked { client, asker, area, .. } = asked;
+        let Asked { client, asker, .. } = asked;
         let caller = asker.caller;
         ControlFlow::Break(match command {
             Command::FlowList(list) => self.flow_list_request(caller, &list),
-            Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
+            Command::FlowRun(run) => self.flow_run_request(asked, run),
             Command::FlowExport(export) => self.flow_export_request(caller, &export),
             Command::FlowImport(import) => self.flow_import_request(caller, &import),
             Command::FlowSave(save) => self.flow_save_request(caller, &save),

@@ -751,9 +751,9 @@ id, projection, active, cols, rows, shown (the project, workspace, tab and pane 
 controls (whether it sizes its tab's terminals now). The view lives while this command runs:
 stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
-read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `setup`, `start`,
-`send`, `keys`, `held`, `read`, `wait`, `status`, `rename`, `mark`, `go`, `plugin run` or `surface`: the view's
-tab is their default and --focus moves it.
+read the id from the first line, and pass it as --view ID to `focus`, `open`, `clone`, `new-workspace`,
+`new-tab`, `split`, `setup`, `start`, `flow run`, `send`, `keys`, `held`, `read`, `wait`, `status`, `rename`,
+`mark`, `go`, `plugin run` or `surface`: the view's tab is their default and --focus moves it.
 
 While the view is active, has a size and is not hidden, the tab it shows counts as seen like the
 window's: an agent there gets no done mark, toast or desktop notification. --hidden starts it hidden

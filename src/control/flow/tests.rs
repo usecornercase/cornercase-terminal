@@ -268,3 +268,13 @@ fn they_log_the_flow_and_a_count() {
     assert_eq!(order.fields(), [("count", "2".to_string())]);
     assert_eq!(Command::FlowDefault(FlowDefault::default()).fields(), []);
 }
+
+#[test]
+fn a_run_answer_has_a_projection_only_when_a_view_moved() {
+    let none = serde_json::to_string(&RunInfo::default()).expect("json");
+    assert!(!none.contains("projection"), "{none}");
+    let moved = serde_json::to_string(&RunInfo { projection: Some(2), ..RunInfo::default() }).expect("json");
+    assert!(moved.contains("\"projection\":2"), "{moved}");
+    let older: RunInfo = serde_json::from_str(r#"{"run": 1}"#).expect("an older answer");
+    assert_eq!(older.projection, None);
+}

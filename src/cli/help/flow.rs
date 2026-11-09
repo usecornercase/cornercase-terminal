@@ -24,7 +24,8 @@ pub(in crate::cli) const FLOW_RUN_HELP: &str =
 tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
 answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
 its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
-pass --focus.
+pass --focus, which shows the orchestrator's tab and opens the Flow panel; with --view ID it shows
+that tab in the view instead, and the window and its Flow panel stay as they are.
 
 With --issue KEY, the task, the branch and the workspace's name are the issue's: the same prompt template
 and branch the Issues dialog's start a flow uses. --prompt or --prompt-file give a task of your own instead,
@@ -47,7 +48,8 @@ and keeps its name: a project's flow named like it does not run either.
 With --machine NAME the flow runs on that machine of `cornercase machines`, by its server: the flow,
 its agents and accounts are the machine's, --project and the ids printed are that machine's, as
 `status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
-window once the machine lists it. It needs a server that knows the `machine-start` feature.
+window once the machine lists it, and takes no --view there. It needs a server that knows the
+`machine-start` feature.
 
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'

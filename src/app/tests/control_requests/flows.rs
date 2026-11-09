@@ -558,6 +558,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         task: "Fix it".into(),
         branch: "main".into(),
         focus: false,
+        view: None,
         note: None,
         trees: Vec::new(),
         parent: None,
@@ -899,4 +900,5 @@ fn a_flow_on_an_issue_of_a_remote_tracker_asks_which_project() {
     assert!(team.app.runs.all().is_empty());
 }
 mod order;
+mod views;
 mod wake;
