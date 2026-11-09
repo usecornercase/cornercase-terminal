@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.22
+
+- **`cornercase flow run --focus --view` shows the run in that view.** A program that draws cornercase itself, such as an editor extension or a GUI, now lands on the orchestrator's tab of a flow it starts, as `start --focus --view` does for an agent, and the window stays where it was, with no Flow panel opening in it. Before, the view stayed put and the window moved to the run. Without `--project` the flow runs in the project the view shows, `--json` adds the view's `projection`, and `cornercase contract` lists the feature `flow-run-view`. With `--machine`, `--focus` takes no `--view`, as for `start`.
+- `cornercase view --help` names every command that takes `--view`: `flow run`, and `open`, `clone` and `new-workspace`, which already took it.
+
 ## 0.13.21
 
 - **Choose the shell new panes start.** **Settings › UI › shell** lists the shells found on this computer (on Windows PowerShell 7, Windows PowerShell, cmd and Git Bash; on Linux and macOS the ones in `/etc/shells`) and takes any other program: a full path, one starting with `~/` or a name on the `PATH`. **shell arguments** adds options such as `-NoLogo` or `--login`. The next tab, split or workspace starts it, with no restart; panes already open keep theirs. In `config.json` it is `"shell": "pwsh"` or `{"program": "…", "args": ["…"]}`, and `cornercase config set shell … shell.args …` changes it from a script. A shell that cannot start falls back to the default with a warning, so a pane always opens.
