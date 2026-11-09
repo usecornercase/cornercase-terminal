@@ -121,7 +121,11 @@ export function scrub(root: HTMLElement): (elapsed: number | null) => void {
   };
 }
 
+const mounted = new WeakSet<HTMLElement>();
+
 export function mount(root: HTMLElement): void {
+  if (mounted.has(root)) return;
+  mounted.add(root);
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const narrow = matchMedia('(max-width: 999px)');
   const show = shower(root);

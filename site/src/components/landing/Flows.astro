@@ -61,9 +61,11 @@ const t = words(Astro.url).flows;
 <script>
   import { mount } from '../../lib/flowshow/client';
 
-  if (!document.documentElement.classList.contains('motion')) {
+  const plain = () => {
     for (const root of document.querySelectorAll<HTMLElement>('[data-flowshow]')) mount(root);
-  }
+  };
+  if (document.documentElement.classList.contains('motion')) addEventListener('cornercase:plain', plain, { once: true });
+  else plain();
 </script>
 
 <style>

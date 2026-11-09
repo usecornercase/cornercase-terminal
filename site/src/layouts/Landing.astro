@@ -53,7 +53,9 @@ const canonical = new URL(Astro.url.pathname, Astro.site).toString();
         if (still || !window.WebGL2RenderingContext || window.innerHeight < 420) return;
         root.classList.add('motion', 'intro');
         setTimeout(function () {
-          if (!window.cornercaseShow) root.classList.remove('motion', 'intro');
+          if (window.cornercaseShow) return;
+          root.classList.remove('motion', 'intro');
+          window.dispatchEvent(new Event('cornercase:plain'));
         }, 4000);
       })();
     </script>

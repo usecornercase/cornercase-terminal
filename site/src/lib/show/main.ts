@@ -1,4 +1,3 @@
-import { mount } from '../flowshow/client';
 import { COBALT, Field } from './field/field';
 import { Life } from './field/life';
 import { Hero } from './hero';
@@ -173,7 +172,7 @@ function bootstrap(field: Field): void {
 
   size();
   addEventListener('resize', guard(size));
-  void Promise.all([document.fonts.load('16px "JetBrains Mono Variable"'), document.fonts.load('700 16px "JetBrains Mono Variable"'), document.fonts.load('400 16px "cornercase symbols"', ''), document.fonts.ready]).finally(
+  void Promise.all([document.fonts.load('16px "JetBrains Mono Variable"'), document.fonts.load('700 16px "JetBrains Mono Variable"'), document.fonts.load('400 16px "cornercase symbols"', '\ue5ff'), document.fonts.ready]).finally(
     guard(() => {
       if (!contextLost) field.refreshGlyphs();
       size();
@@ -306,7 +305,7 @@ function fallback(): void {
   stopped = true;
   document.documentElement.classList.remove('motion', 'intro', 'lite');
   wipe();
-  for (const root of all('[data-flowshow]')) mount(root);
+  dispatchEvent(new Event('cornercase:plain'));
 }
 
 (window as unknown as { cornercaseShow: boolean }).cornercaseShow = true;

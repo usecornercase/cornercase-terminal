@@ -67,6 +67,11 @@ test('the show keeps the plain page under it', () => {
   const layout = readFileSync('src/layouts/Landing.astro', 'utf8');
   assert.ok(layout.includes("matchMedia('(prefers-reduced-motion: reduce)')") && layout.includes('WebGL2RenderingContext'));
   assert.ok(layout.includes("classList.remove('motion', 'intro')"), 'the page gives the show up when its script never runs');
+  const plain = "dispatchEvent(new Event('cornercase:plain'))";
+  assert.ok(layout.includes(plain), 'the timeout does not say the page went plain');
+  assert.ok(readFileSync('src/lib/show/main.ts', 'utf8').includes(plain), 'the show does not say it gave up');
+  assert.ok(readFileSync(`${dir}/Flows.astro`, 'utf8').includes("addEventListener('cornercase:plain', plain, { once: true })"), 'the flow diagram never starts on a page that went plain late');
+  assert.ok(/const mounted = new WeakSet[^]+if \(mounted\.has\(root\)\) return;/.test(readFileSync('src/lib/flowshow/client.ts', 'utf8')), 'a flow diagram can be mounted twice');
   for (const file of ['Hero.astro', 'Features.astro', 'Why.astro', 'Flows.astro', 'Stage.astro']) {
     const text = readFileSync(`${dir}/${file}`, 'utf8');
     assert.ok(text.includes(':global(.motion)'), `${file} has no rules of its own for the show`);
