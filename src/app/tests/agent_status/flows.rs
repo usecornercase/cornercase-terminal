@@ -1,3 +1,4 @@
+use super::subagents::with_a_subagent;
 use super::*;
 use crate::flows::run::{Member, Run};
 use crate::flows::{Flow, ORCHESTRATOR};
@@ -28,9 +29,10 @@ fn in_a_flow_a_member_finishing_a_turn_tells_no_one_and_leaves_no_mark(
     assert_eq!(tab_term(&w.app, 0, 0).agent.status(), Some(shown));
 }
 
-#[test]
-fn a_run_that_ends_marked_for_review_says_it_finished() {
+#[rstest]
+fn a_run_that_ends_marked_for_review_says_it_finished(#[values(true, false)] notify_subagents: bool) {
     let mut w = Watched::start(agents::Known::Claude, true);
+    w.app.config.notify_subagents = notify_subagents;
     let pane = tab_term(&w.app, 0, 0).id;
     let mut run = Run::new(w.app.projects[0].workspaces[0].id, Flow::default(), "fix it".into());
     run.members.push(Member { role: ORCHESTRATOR.into(), pane });
@@ -43,4 +45,23 @@ fn a_run_that_ends_marked_for_review_says_it_finished() {
     let text = format!("claude finished in {}", w.place());
     let token = w.token();
     assert_eq!(w.told().1, [Notification { text, channel: None, token }]);
+}
+
+#[rstest]
+fn a_member_the_orchestrator_started_tells_you_it_needs_you_only_while_subagents_notify(
+    #[values("blocked", "error")] state: &str,
+    #[values(true, false)] notify_subagents: bool,
+) {
+    let mut w = with_a_subagent();
+    w.app.config.notify_subagents = notify_subagents;
+    let (orchestrator, coder) = (tab_term(&w.app, 0, 0).id, tab_term(&w.app, 0, 1).id);
+    let mut run = Run::new(w.app.projects[0].workspaces[0].id, Flow::default(), "fix it".into());
+    run.members.push(Member { role: ORCHESTRATOR.into(), pane: orchestrator });
+    run.members.push(Member { role: "coder".into(), pane: coder });
+    w.app.runs.push(run);
+
+    program_reports(&mut w, &[1], state);
+
+    let (toast, notifications) = w.told();
+    assert_eq!((toast.is_some(), notifications.len()), (notify_subagents, usize::from(notify_subagents)));
 }

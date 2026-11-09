@@ -36,7 +36,8 @@ impl App {
 
     fn tell_turn(&mut self, turn: Turn, there: There) {
         let (what, kind) = notifications::wording(turn.status);
-        let sound = self.sound_for(kind, turn.principal);
+        let sent = self.tells(turn.principal);
+        let sound = self.sound_for(kind, turn.principal).filter(|_| sent);
         let message = notify::clean(&format!("{} on {} {what} in {}", turn.agent, there.name, turn.place));
         log::info!(
             "activity",
@@ -46,9 +47,14 @@ impl App {
             machine = there.name,
             workspace = turn.workspace,
             panes = turn.panes.len(),
-            sound = sound.map_or("none", sound::Kind::id)
+            sound = sound.map_or("none", sound::Kind::id),
+            subagent = !turn.principal,
+            sent = sent
         );
-        let Turn { agent, status, project, workspace, place, panes, .. } = turn;
+        if !sent {
+            return;
+        }
+        let Turn { agent, status, project, workspace, place, panes, principal } = turn;
         self.tell(Said {
             agent: &agent,
             status,
@@ -59,6 +65,7 @@ impl App {
             panes,
             sound,
             machine: Some(there),
+            subagent: !principal,
         });
     }
 

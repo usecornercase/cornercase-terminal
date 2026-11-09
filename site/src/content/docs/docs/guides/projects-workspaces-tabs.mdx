@@ -252,6 +252,8 @@ An agent on one of your [machines](../machines/#notices-from-a-machine) tells yo
 
 cornercase waits a second before telling you, so a question answered at once stays quiet, and it tells you once each time. The tab on screen doesn't notify you, even while cornercase's window is in the background, and neither does one that a program that draws cornercase shows ([A view of your own](../scripts-and-agents/#a-view-of-your-own)).
 
+Agents started by another agent or by a [flow](../flows/), the ones the [agents section](#the-agents-section) hangs under another, tell you too. If their notices are too many, turn off **settings → UI → notices for subagents**: then only the agents you started tell you, with the toast, the desktop notification, the sound and the [Telegram](../telegram/) or [Discord](../discord/) message, and the one that started them still does. Their tabs keep their `!` and `✓`, so you still see which one waits for you or has finished; one waiting for a permission tells no one, so look for its `!`. An agent started from a shell, or whose parent closed, counts as one you started. See [`notify_subagents`](../../reference/configuration/#notify_subagents).
+
 The desktop notification is an escape sequence that cornercase writes to your terminal, the way it [copies to your clipboard](../panes-and-splits/#copy-text), so it also arrives when cornercase runs on another machine over SSH. When cornercase starts, it asks your terminal for its name and looks at variables such as `TERM_PROGRAM`, then picks what that terminal understands:
 
 | Terminal | Notification |
@@ -277,7 +279,7 @@ When you quit, restart or stop the server, cornercase closes the notifications i
 
 cornercase also plays a sound at those moments, one for an agent that needs you (or failed) and another for one that finished, so you can tell them apart without looking. It is played on the computer the window is on, not through the terminal, so you hear it while Ghostty on macOS is focused, when it hides the notification, and inside tmux, screen or Zellij. With [`cornercase remote`](../remote/) it plays on your laptop. A window opened in a plain SSH session (`ssh -t host cornercase`) plays none: that cornercase runs on the other computer.
 
-**sound when it needs you** and **sound when it finishes** take a file of your own; empty plays the built-in one. By default only the agents you started make a sound: those started by another agent or by a [flow](../flows/) stay quiet, with their toast and notification, unless you turn on **sound for subagents**. To stop it, turn off **settings → UI → sound**. See [`sound`](../../reference/configuration/#sound) for the players it uses and the formats they read.
+**sound when it needs you** and **sound when it finishes** take a file of your own; empty plays the built-in one. By default only the agents you started make a sound: those started by another agent or by a [flow](../flows/) stay quiet, with their toast and notification, unless you turn on **sound for subagents**. With **notices for subagents** off they make no sound either way. To stop it, turn off **settings → UI → sound**. See [`sound`](../../reference/configuration/#sound) for the players it uses and the formats they read.
 
 ### Usage and stats
 

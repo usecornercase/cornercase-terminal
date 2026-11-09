@@ -174,6 +174,7 @@ When an agent on a linked machine that was working needs you, fails or finishes,
 
 - The machine's workspace you have picked never tells you, like the tab on your screen.
 - Nothing is told for what changed while the link was down, nor for a shell an agent left running in the background.
+- With **settings → UI → notices for subagents** off, an agent that has a parent on the machine never tells you, even when that parent is a shell there.
 - A notice you missed while the window was in the background doesn't show again when you come back, unlike one about an agent here.
 
 Scripts get them from [`cornercase events --notices`](../scripts-and-agents/#follow-events), with the machine's name.

@@ -3513,6 +3513,7 @@ export class App {
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       ...ACCOUNT_SWITCHES.map(([id, label, note]) => ({ id, section: '', label, value: '[x] shown', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
+      { id: 'notifySubagents', section: '', label: 'notices for subagents', value: c.notifySubagents ? '[x] on' : '[ ] off', note: 'off: only the agents you started notify you' },
       { id: 'sound', section: '', label: 'sound', value: '[x] on', note: "also while you look at cornercase, on the window's computer" },
       { id: 'soundWaiting', section: '', label: 'sound when it needs you', value: 'built-in', note: "an absolute or ~/ path on the window's computer; empty: built-in" },
       { id: 'soundDone', section: '', label: 'sound when it finishes', value: 'built-in', note: "an absolute or ~/ path on the window's computer; empty: built-in" },
@@ -3586,6 +3587,9 @@ export class App {
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';
     } else if (row.id === 'prefix') {
       o.capturing = true;
+    } else if (row.id === 'notifySubagents') {
+      c.notifySubagents = !c.notifySubagents;
+      o.notice = c.notifySubagents ? 'agents started by other agents notify you too' : 'only the agents you started notify you';
     } else if (row.id === 'starPrompt') {
       c.starPrompt = !c.starPrompt;
       o.notice = c.starPrompt ? 'cornercase may ask for a star on GitHub' : 'cornercase never asks for a star';

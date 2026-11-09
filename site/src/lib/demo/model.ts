@@ -295,6 +295,7 @@ export interface Config {
   context: boolean;
   memory: boolean;
   notify: string;
+  notifySubagents: boolean;
   updates: boolean;
   starPrompt: boolean;
   prefix: string;
@@ -333,6 +334,7 @@ export const defaultConfig = (): Config => ({
   context: true,
   memory: false,
   notify: 'auto',
+  notifySubagents: true,
   updates: true,
   starPrompt: true,
   prefix: '',

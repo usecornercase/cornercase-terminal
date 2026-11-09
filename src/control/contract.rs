@@ -60,6 +60,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "machine-retry-at",
     "flow-run-view",
     "against-base",
+    "notice-subagent",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

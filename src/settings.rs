@@ -56,6 +56,7 @@ pub(crate) enum Row {
     ShellArgs,
     Detail(Detail),
     Notifications,
+    NotifySubagents,
     Sound,
     SoundWaiting,
     SoundDone,
@@ -245,7 +246,7 @@ impl Detail {
     }
 }
 
-const LOOK_ROWS: [Row; 29] = [
+const LOOK_ROWS: [Row; 30] = [
     Row::AddAgent,
     Row::Sidebar,
     Row::Tabs,
@@ -265,6 +266,7 @@ const LOOK_ROWS: [Row; 29] = [
     Row::Detail(Detail::AccountSwitcher),
     Row::Detail(Detail::AccountPicker),
     Row::Notifications,
+    Row::NotifySubagents,
     Row::Sound,
     Row::SoundWaiting,
     Row::SoundDone,

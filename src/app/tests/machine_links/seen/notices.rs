@@ -97,6 +97,24 @@ fn the_sound_follows_the_settings(#[case] sound: bool, #[case] subagents: bool, 
     assert_eq!(heard(&mut seeing), (Some(NEEDS_YOU.to_string()), played.into_iter().collect()));
 }
 
+#[rstest]
+#[case::from_a_subagent(Some(1), None)]
+#[case::from_a_main_agent(None, Some(NEEDS_YOU.to_string()))]
+fn with_subagents_turned_off_only_a_main_agent_is_told(#[case] parent: Option<u64>, #[case] message: Option<String>) {
+    let mut seeing = seeing_claude();
+    loud(&mut seeing);
+    seeing.rig.app.config.notify_subagents = false;
+    seeing.rig.app.clients.events.subscribe(9, Vec::new(), false, true);
+
+    claude_is(&mut seeing, 3, "waiting", |pane| pane.parent = parent);
+
+    let sounds = message.iter().map(|_| Kind::NeedsYou).collect();
+    assert_eq!(heard(&mut seeing), (message.clone(), sounds));
+    let streamed: Vec<_> = seeing.rig.app.take_events().into_iter().map(|(_, streamed)| streamed).collect();
+    let notices = told(&streamed).into_iter().filter(|(what, _)| matches!(what, What::Notice { .. })).count();
+    assert_eq!(notices, usize::from(message.is_some()));
+}
+
 #[test]
 fn the_notice_event_names_the_machine_and_no_local_ids() {
     let mut seeing = seeing_claude();
@@ -111,6 +129,21 @@ fn the_notice_event_names_the_machine_and_no_local_ids() {
         (machine.as_deref(), message.as_str(), panes, ids),
         (Some("vps"), NEEDS_YOU, &vec![12], &Ids::default())
     );
+}
+
+#[rstest]
+#[case::from_a_subagent(Some(1), true)]
+#[case::from_a_main_agent(None, false)]
+fn the_notice_event_says_whether_a_subagent_sent_it(#[case] parent: Option<u64>, #[case] expected: bool) {
+    let mut seeing = seeing_claude();
+    seeing.rig.app.clients.events.subscribe(9, Vec::new(), false, true);
+
+    claude_is(&mut seeing, 3, "waiting", |pane| pane.parent = parent);
+
+    let streamed: Vec<_> = seeing.rig.app.take_events().into_iter().map(|(_, streamed)| streamed).collect();
+    let events = told(&streamed);
+    let [(What::Notice { subagent, .. }, _)] = &events[..] else { panic!("one notice: {events:?}") };
+    assert_eq!(*subagent, expected);
 }
 
 #[test]

@@ -616,6 +616,7 @@ mod events_v1 {
             panes: vec![4],
             sound: sound.map(str::to_string),
             machine: machine.map(str::to_string),
+            subagent: false,
         }
     }
 
@@ -699,8 +700,16 @@ mod events_v1 {
         )]
     }
 
+    fn subagents() -> Vec<(Event, &'static str)> {
+        let mut what = notice(6, "waiting", "claude needs you in shop › default", None, None);
+        if let What::Notice { subagent, .. } = &mut what {
+            *subagent = true;
+        }
+        vec![(event(what, Ids { pane: None, tab: None, ..pane() }), fixture!("control/events/v1/notice-subagent.json"))]
+    }
+
     fn samples() -> Vec<(Event, &'static str)> {
-        [plain_samples(), rich_samples(), sound_and_accounts(), machines()].concat()
+        [plain_samples(), rich_samples(), sound_and_accounts(), machines(), subagents()].concat()
     }
 
     #[test]
@@ -721,6 +730,7 @@ mod events_v1 {
     #[case::notice_with_a_sound(9)]
     #[case::opened_with_accounts(10)]
     #[case::notice_from_a_machine(11)]
+    #[case::notice_from_a_subagent(15)]
     fn an_event_is_written_as_its_fixture(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 
@@ -740,6 +750,7 @@ mod events_v1 {
     #[case::notice_with_a_sound(9)]
     #[case::opened_with_accounts(10)]
     #[case::notice_from_a_machine(11)]
+    #[case::notice_from_a_subagent(15)]
     fn a_fixture_reads_back_as_its_event(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 
