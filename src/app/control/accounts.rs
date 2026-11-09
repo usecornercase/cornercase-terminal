@@ -369,15 +369,15 @@ impl App {
     }
 
     fn check_new_account(&self, kind: Known, name: &str) -> Result<(), Refusal> {
-        if !accounts::valid(name) {
-            return Err(malformed(format!(
-                "`{name}` is not a valid account name: use letters, digits, `.`, `_` and `-`, at most {}",
-                accounts::NAME_MAX
-            )));
+        if !accounts::valid_new(name) {
+            return Err(malformed(format!("`{name}` is not a valid account name: {}", accounts::rule())));
         }
         let names = accounts::names(&self.accounts.dir, kind);
         if names.iter().any(|known| known == name) {
             return Err(conflict(self.config.account_taken(kind.name(), name)));
+        }
+        if let Some(taken) = accounts::lock_taken(&self.accounts.dir, kind, name) {
+            return Err(conflict(taken));
         }
         match self.config.label_taken(kind.name(), name, &names, name) {
             Some(taken) => Err(conflict(taken)),

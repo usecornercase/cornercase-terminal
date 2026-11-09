@@ -38,7 +38,7 @@ cornercase account add claude personal --login
 
 This makes the folder and opens a tab named `personal login` that runs `claude auth login` with it. Without `--login`, [switch a shell to the account](#change-a-panes-account) and log in there as you would anywhere.
 
-An account's folder name is letters, digits, `.`, `_` and `-`, at most 32. `cornercase account list` shows each agent's own login and accounts, with their folders and names, marks the default, and `--check` asks each one whether it is logged in first.
+An account's folder name is letters, digits, `.`, `_` and `-`, at most 32, and a new one never ends in `.lock`, in any case, nor is the name of one whose `<name>.lock` folder is already there: while Claude Code renews an account's login it keeps a folder such as `personal.lock` beside it, and cornercase never lists that as an account. `cornercase account list` shows each agent's own login and accounts, with their folders and names, marks the default, and `--check` asks each one whether it is logged in first.
 
 ## Name an account
 
