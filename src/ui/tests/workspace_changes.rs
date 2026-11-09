@@ -97,3 +97,19 @@ fn the_pull_badge_stays_where_it_is_drawn() {
     let seen: String = text.chars().skip(start).take(usize::from(target.width)).collect();
     assert_eq!(seen, "#482✗", "{text}");
 }
+
+#[test]
+fn a_tree_row_shows_the_count() {
+    let mut v = tree_drawing::with_tree();
+    v.tree.as_mut().expect("a tree").workspaces[1][0].changed = Some(changed(4, 1));
+    let text = format!("{}", render_sized(&v, W, 30).backend());
+    assert!(text.contains("+4 \u{2212}1"), "{text}");
+}
+
+#[test]
+fn a_compact_band_shows_the_count() {
+    let mut v = compact::in_a_project(Some(Nav::Workspaces));
+    v.workspaces[0].changed = Some(changed(6, 9));
+    let text = format!("{}", render_sized(&v, 80, 30).backend());
+    assert!(text.contains("+6 \u{2212}9"), "{text}");
+}

@@ -10,7 +10,7 @@ fn render_small(view: &View) -> Terminal<TestBackend> {
     t
 }
 
-fn in_a_project(nav: Option<Nav>) -> View<'static> {
+pub(super) fn in_a_project(nav: Option<Nav>) -> View<'static> {
     View {
         has_project: true,
         workspaces: vec![

@@ -5,6 +5,7 @@ use crate::control::{self as wire, Command};
 use crate::control::{OpenView, Report, SetView, ViewInfo};
 use crate::project::Hierarchy;
 use crate::test_util::git;
+use std::time::Duration;
 
 fn topic_repo() -> TempDir {
     let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
@@ -131,4 +132,26 @@ fn closing_a_workspace_forgets_its_count() {
     refreshing(&mut app, &rx, "the count arrives", |a| against(a, shown).is_some());
     app.panels.changes.forget(shown);
     assert!(app.panels.changes.tally(shown, None).is_none());
+}
+
+#[test]
+fn a_count_that_lands_pushes_a_new_watch_line() {
+    let (mut app, rx, _dirs) = two_projects();
+    app.clients.events.snapshots.set_every(Duration::ZERO);
+    call(&mut app, 72, None, Command::Watch(wire::Watch::default()));
+    app.window_attached();
+    let shown = workspace_ids(&app)[app.active];
+    let mut pushed = false;
+    wait_until("a pushed line carries the count", || {
+        drain(&mut app, &rx);
+        app.refresh(Instant::now());
+        app.trace();
+        for (_, streamed) in app.take_events() {
+            if let Streamed::Snapshot(text) = streamed {
+                pushed |= text.contains("against_base");
+            }
+        }
+        pushed
+    });
+    assert!(against(&app, shown).is_some());
 }

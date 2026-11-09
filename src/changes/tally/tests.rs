@@ -231,3 +231,31 @@ mod reading {
         assert!(read(repo.path(), Some(first.digest)).diff.is_none());
     }
 }
+
+mod default_branch {
+    use super::*;
+    use crate::test_util::clone_of;
+
+    #[test]
+    fn counts_the_uncommitted_files_and_the_commits_not_pushed() {
+        let remote = git_repo(&[("a.txt", "one\n")]);
+        git(remote.path(), &["branch", "-M", "main"]);
+        let (_dir, checkout) = clone_of(remote.path());
+        std::fs::write(checkout.join("b.txt"), "x\ny\n").expect("write");
+        git(&checkout, &["add", "."]);
+        git(&checkout, &["commit", "--quiet", "-m", "unpushed"]);
+        std::fs::write(checkout.join("a.txt"), "one\ntwo\n").expect("edit");
+        let request = git::Request {
+            dir: checkout,
+            mode: Mode::All,
+            base: None,
+            last: None,
+            previous: Vec::new(),
+            expanded: Some(Vec::new()),
+        };
+        let loaded = git::load(&request).expect("load");
+        let diff = loaded.diff.expect("diff");
+        assert_eq!(loaded.base.as_deref(), Some("origin/main"));
+        assert_eq!((diff.files.len(), diff.added(), diff.removed()), (2, 3, 0));
+    }
+}

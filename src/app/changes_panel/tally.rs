@@ -14,8 +14,8 @@ use crate::project::Workspace;
 use crate::ui;
 
 fn working(workspace: &Workspace) -> bool {
-    let panes = workspace.tabs.iter().flat_map(|tab| tab.panes.iter());
-    panes.into_iter().any(|term| term.agent.status() == Some(Status::Working))
+    let mut panes = workspace.tabs.iter().flat_map(|tab| tab.panes.iter());
+    panes.any(|term| term.agent.status() == Some(Status::Working))
 }
 
 impl App {
