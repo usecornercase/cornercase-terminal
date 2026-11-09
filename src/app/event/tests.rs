@@ -1,12 +1,11 @@
 use super::*;
-use crate::machines::follow::{self, Followed};
 use crate::machines::stream::{StreamEvent, StreamReport};
 
 #[test]
 fn a_machine_tab_s_answer_and_a_machine_panel_s_line_echo_a_flood() {
     let answer =
         AppEvent::Machine(MachineEvent::Stream(StreamReport { stream: 1, event: StreamEvent::Down("x".into()) }));
-    let line = AppEvent::Machine(MachineEvent::Followed(Followed { id: 1, event: follow::Event::Line("x".into()) }));
+    let line = AppEvent::a_machine_panel_line();
 
     assert!(answer.echoes_a_flood() && line.echoes_a_flood());
 }
