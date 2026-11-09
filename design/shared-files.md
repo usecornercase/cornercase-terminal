@@ -23,7 +23,7 @@ Two workspaces of one project are two git worktrees of one repository, and nothi
 
 ## The row, the panel and the menu
 
-- **`⇄n`**: U+21C4, one cell wide (East Asian Width Neutral), in yellow (caution; orange 208 stays for real conflicts and waiting agents). Rejected: `⚠` (emoji width), `∩` (ambiguous width), a word (too wide). Order of a row's tags: attention badge, `▶`, `setting up…`, pull tag, stack, **`⇄n`**, `↓n`, so `Tags::fit` drops `↓n` first, then `⇄n`, then the stack and the pull tag. Hidden while the row is being removed.
+- **`⇄n`**: U+21C4, one cell wide (East Asian Width Neutral), in yellow (caution; orange 208 stays for real conflicts and waiting agents). Rejected: `⚠` (emoji width), `∩` (ambiguous width), a word (too wide). Order of a row's tags: attention badge, `▶`, `setting up…`, pull tag, stack, **`⇄n`**, `↓n`, the changes count (#716), so `Tags::fit` drops the count first, then `↓n`, then `⇄n`, then the stack and the pull tag. Hidden while the row is being removed.
 - Pressing it opens the Merge check dialog for that workspace without selecting it, and closes the compact menu (like the other tags). A right-click on it still opens the row menu. Hover underlines it.
 - The row menu offers **merge check** for every open git workspace, after the pull request entry, even with nothing shared, since the base check is useful on its own.
 - In the changes panel a shared file's row has a yellow `⇄` as its first right-hand tag, muted like the counts when the row is muted. It has no click target. A rename counts when its new or old path is shared.
