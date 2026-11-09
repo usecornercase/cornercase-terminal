@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use super::rows::status;
 use super::selection::RemoteItem;
 use crate::agents::activity::Status;
+use crate::agents::tree;
 use crate::app::App;
 use crate::app::notifications::{self, Said, There};
 use crate::control::{self, PaneRow};
@@ -88,25 +89,37 @@ fn turns(before: &control::Report, after: &control::Report) -> Vec<Turn> {
         .filter(|row| watched(row) == Some(Status::Working))
         .map(|row| (row.pane, row.agent))
         .collect();
+    let nested = subagents(after);
     let mut turns = Vec::new();
     for row in after.panes().into_iter().filter(|row| working.contains(&(row.pane, row.agent.clone()))) {
         if let Some(status) =
             watched(&row).filter(|status| matches!(status, Status::Waiting | Status::Failed | Status::Done))
         {
-            add(&mut turns, row, status);
+            let principal = !nested.contains(&row.pane);
+            add(&mut turns, row, status, principal);
         }
     }
     turns
+}
+
+fn subagents(report: &control::Report) -> HashSet<u64> {
+    let rows: Vec<(u64, Option<u64>)> = report
+        .panes()
+        .into_iter()
+        .filter(|row| status(row.status.as_deref()).is_some())
+        .map(|row| (row.pane, row.parent))
+        .collect();
+    let nodes = tree::order(&rows, &HashSet::new(), false);
+    nodes.into_iter().filter(|node| node.depth > 0).map(|node| rows[node.index].0).collect()
 }
 
 fn watched(row: &PaneRow) -> Option<Status> {
     status(row.status.as_deref()).filter(|_| row.agent.is_some() && !row.background_shell)
 }
 
-fn add(turns: &mut Vec<Turn>, row: PaneRow, status: Status) {
+fn add(turns: &mut Vec<Turn>, row: PaneRow, status: Status, principal: bool) {
     let place = format!("{} › {}", row.project_name, row.workspace_name);
     let agent = row.agent.unwrap_or_default();
-    let principal = row.parent.is_none();
     let same = |turn: &&mut Turn| turn.agent == agent && turn.status == status && turn.workspace == row.workspace;
     if let Some(turn) = turns.iter_mut().find(same) {
         turn.panes.push(row.pane);
