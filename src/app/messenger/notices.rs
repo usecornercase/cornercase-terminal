@@ -38,6 +38,14 @@ enum Notice {
     Finished(u64, bool),
 }
 
+impl Notice {
+    fn pane(&self) -> u64 {
+        match *self {
+            Notice::Waiting(pane) | Notice::Finished(pane, _) => pane,
+        }
+    }
+}
+
 pub(super) struct Agent {
     pub(super) kind: String,
     pub(super) place: String,
@@ -137,12 +145,20 @@ impl App {
         if !self.messenger(via).away {
             return;
         }
-        for notice in notices {
+        for notice in self.without_quiet_subagents(notices) {
             match notice {
                 Notice::Waiting(pane) => self.notice_waiting(via, pane, None),
                 Notice::Finished(pane, shell) => self.notice_finished(via, pane, shell),
             }
         }
+    }
+
+    fn without_quiet_subagents(&self, mut notices: Vec<Notice>) -> Vec<Notice> {
+        if !self.config.notify_subagents && !notices.is_empty() {
+            let subagents = self.subagent_panes();
+            notices.retain(|notice| !subagents.contains(&notice.pane()));
+        }
+        notices
     }
 
     pub(super) fn notice_waiting(&mut self, via: Via, pane: u64, to: Option<i64>) {

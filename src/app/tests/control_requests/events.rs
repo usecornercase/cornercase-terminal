@@ -279,24 +279,31 @@ fn notices_reach_only_the_readers_that_asked_and_a_pane_reader_gets_those_naming
     assert!(tokens[0].1.contains("\"panes\":[") && tokens[0].1.contains(&format!("{pane}")), "{tokens:?}");
 }
 
+fn reading_notices() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+    let (mut app, rx, dirs) = app_with(1);
+    app.clients.events.subscribe(CLIENT, Vec::new(), false, true);
+    let _ = app.take_events();
+    (app, rx, dirs)
+}
+
+fn notify_first(app: &mut App, status: activity::Status, principal: bool) {
+    let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
+    let pane = term(app, 0).id;
+    app.notify(Notice { agent: "claude", status, at: (project, workspace), panes: vec![pane], principal });
+}
+
+fn notices(app: &mut App) -> Vec<(wire::What, wire::Ids)> {
+    told(&streamed(app)).into_iter().filter(|(what, _)| matches!(what, wire::What::Notice { .. })).collect()
+}
+
 #[rstest::rstest]
 #[case::when_it_plays(true)]
 #[case::left_out_when_it_does_not(false)]
 fn a_notice_says_whether_it_plays_a_sound(#[case] sound: bool) {
-    let (mut app, _rx, _dirs) = app_with(1);
+    let (mut app, _rx, _dirs) = reading_notices();
     app.config.sound = sound;
-    let pane = term(&app, 0).id;
-    app.clients.events.subscribe(CLIENT, Vec::new(), false, true);
-    let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
-    let _ = app.take_events();
 
-    app.notify(Notice {
-        agent: "claude",
-        status: activity::Status::Waiting,
-        at: (project, workspace),
-        panes: vec![pane],
-        principal: true,
-    });
+    notify_first(&mut app, activity::Status::Waiting, true);
 
     let notice = app
         .take_events()
@@ -312,27 +319,39 @@ fn a_notice_says_whether_it_plays_a_sound(#[case] sound: bool) {
 
 #[test]
 fn a_subagents_notice_plays_no_sound_unless_asked() {
-    let (mut app, _rx, _dirs) = app_with(1);
+    let (mut app, _rx, _dirs) = reading_notices();
     app.config.sound = true;
-    let pane = term(&app, 0).id;
-    let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
 
-    app.notify(Notice {
-        agent: "claude",
-        status: activity::Status::Waiting,
-        at: (project, workspace),
-        panes: vec![pane],
-        principal: false,
-    });
+    notify_first(&mut app, activity::Status::Waiting, false);
     app.config.sound_subagents = true;
-    app.notify(Notice {
-        agent: "claude",
-        status: activity::Status::Failed,
-        at: (project, workspace),
-        panes: vec![pane],
-        principal: false,
-    });
+    notify_first(&mut app, activity::Status::Failed, false);
 
     let kinds: Vec<_> = app.take_sounds().into_iter().map(|cue| cue.kind).collect();
     assert_eq!(kinds, [crate::host::sound::Kind::NeedsYou]);
+}
+
+#[rstest::rstest]
+#[case::from_a_subagent(false, true)]
+#[case::from_a_main_agent(true, false)]
+fn a_notice_says_whether_a_subagent_sent_it(#[case] principal: bool, #[case] subagent: bool) {
+    let (mut app, _rx, _dirs) = reading_notices();
+
+    notify_first(&mut app, activity::Status::Done, principal);
+
+    let events = notices(&mut app);
+    assert!(matches!(&events[..], [(wire::What::Notice { subagent: said, .. }, _)] if *said == subagent), "{events:?}");
+}
+
+#[test]
+fn turned_off_a_subagents_notice_is_not_sent_at_all() {
+    let (mut app, _rx, _dirs) = reading_notices();
+    app.config.notify_subagents = false;
+    app.config.sound = true;
+    app.config.sound_subagents = true;
+
+    notify_first(&mut app, activity::Status::Waiting, false);
+
+    assert_eq!(toast(&app), None);
+    assert_eq!((app.take_notifications(), app.take_sounds()), (Vec::new(), Vec::new()));
+    assert_eq!(notices(&mut app), []);
 }

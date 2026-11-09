@@ -36,6 +36,7 @@ fn switch(row: &Row) -> Option<&'static str> {
         Row::Detail(Detail::Account) => "account_mark",
         Row::Detail(Detail::AccountSwitcher) => "account_switcher",
         Row::Detail(Detail::AccountPicker) => "account_picker",
+        Row::NotifySubagents => "notify_subagents",
         Row::Sound => "sound",
         Row::SoundSubagents => "sound_subagents",
         Row::Updates => "check_updates",

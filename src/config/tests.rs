@@ -59,6 +59,7 @@ mod file {
             account_switcher: false,
             account_picker: false,
             desktop_notifications: "off".into(),
+            notify_subagents: false,
             sound: true,
             sound_waiting: "~/sounds/ping.wav".into(),
             sound_done: "/usr/share/sounds/done.oga".into(),
@@ -242,6 +243,15 @@ mod file {
             (c.sound, c.sound_waiting.as_str(), c.sound_done.as_str(), c.sound_subagents),
             (true, "", "", false)
         );
+    }
+
+    #[test]
+    fn a_config_from_before_the_setting_lets_subagents_notify() {
+        let tmp = TempDir::new();
+        let path = tmp.path().join("config.json");
+        std::fs::write(&path, r#"{"sound_subagents": true}"#).expect("write");
+
+        assert!(load(&path).notify_subagents);
     }
 
     #[test]

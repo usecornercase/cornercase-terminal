@@ -56,7 +56,7 @@ test('the UI tab lists the sound rows after desktop notifications, which need a 
   app.settingsPage(5);
   const ids = app.settingsRows(5).map((row) => row.id);
   const at = ids.indexOf('notify');
-  assert.deepEqual(ids.slice(at, at + 5), ['notify', 'sound', 'soundWaiting', 'soundDone', 'soundSubagents']);
+  assert.deepEqual(ids.slice(at, at + 6), ['notify', 'notifySubagents', 'sound', 'soundWaiting', 'soundDone', 'soundSubagents']);
   const value = (id: string) => app.settingsRows(5).find((row) => row.id === id)?.value;
   assert.equal(value('sound'), '[x] on');
   assert.equal(value('soundSubagents'), '[ ] off');
@@ -80,6 +80,26 @@ test('the UI tab lists shell and shell arguments after inactive panes, which nee
     app.render();
     assert.ok(app.textAt('the demo runs no real shells'));
   }
+  app.destroy();
+});
+
+test('notices for subagents is a switch on the UI tab, on until turned off', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  app.settingsPage(5);
+  const index = app.settingsRows(5).findIndex((row) => row.id === 'notifySubagents');
+  const row = () => app.settingsRows(5)[index];
+  assert.deepEqual([row().label, row().value, row().note], ['notices for subagents', '[x] on', 'off: only the agents you started notify you']);
+  app.settingsClick(index);
+  app.render();
+  assert.equal(app.config.notifySubagents, false);
+  const notice = () => app.overlay?.kind === 'settings' && app.overlay.notice;
+  assert.deepEqual([row().value, notice()], ['[ ] off', 'only the agents you started notify you']);
+  app.settingsClick(index);
+  app.render();
+  assert.equal(app.config.notifySubagents, true);
+  assert.deepEqual([row().value, notice()], ['[x] on', 'agents started by other agents notify you too']);
+  assert.ok(app.textAt('agents started by other agents notify you too'));
   app.destroy();
 });
 

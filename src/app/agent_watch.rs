@@ -171,11 +171,7 @@ impl App {
     }
 
     fn send_notices(&mut self, notices: Vec<(NoticeKey, Vec<u64>)>) {
-        let subagents = if !notices.is_empty() && self.config.sound && !self.config.sound_subagents {
-            self.subagent_panes()
-        } else {
-            HashSet::new()
-        };
+        let subagents = if notices.is_empty() { HashSet::new() } else { self.subagent_panes() };
         for ((agent, status, project, workspace), panes) in notices {
             let principal = panes.iter().any(|pane| !subagents.contains(pane));
             self.notify(Notice { agent: &agent, status, at: (project, workspace), panes, principal });
@@ -192,7 +188,7 @@ impl App {
         }
     }
 
-    fn subagent_panes(&self) -> HashSet<u64> {
+    pub(in crate::app) fn subagent_panes(&self) -> HashSet<u64> {
         self.agent_tree(false)
             .into_iter()
             .filter(|(_, node)| node.depth > 0)
@@ -204,7 +200,8 @@ impl App {
         let Notice { agent, status, at: (project, workspace), panes, principal } = notice;
         let Some(at) = self.projects.workspace_in(project, workspace) else { return };
         let (what, kind) = notifications::wording(status);
-        let sound = self.sound_for(kind, principal);
+        let sent = self.tells(principal);
+        let sound = self.sound_for(kind, principal).filter(|_| sent);
         let place = self.place_name(at);
         let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let message = notify::clean(&format!("{agent} {what} in {place}"));
@@ -216,10 +213,26 @@ impl App {
             project = project.id,
             workspace = workspace.id,
             panes = panes.len(),
-            sound = sound.map_or("none", sound::Kind::id)
+            sound = sound.map_or("none", sound::Kind::id),
+            subagent = !principal,
+            sent = sent
         );
+        if !sent {
+            return;
+        }
         let (project, workspace) = (project.id, workspace.id);
-        self.tell(Said { agent, status, place, message, project, workspace, panes, sound, machine: None });
+        self.tell(Said {
+            agent,
+            status,
+            place,
+            message,
+            project,
+            workspace,
+            panes,
+            sound,
+            machine: None,
+            subagent: !principal,
+        });
     }
 
     fn marked_panes(&self, marked: Marked) -> Vec<&Term> {

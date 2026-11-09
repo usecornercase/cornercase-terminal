@@ -87,6 +87,7 @@ pub(super) struct Said<'a> {
     pub(super) panes: Vec<u64>,
     pub(super) sound: Option<sound::Kind>,
     pub(super) machine: Option<There>,
+    pub(super) subagent: bool,
 }
 
 pub(super) fn wording(status: Status) -> (&'static str, sound::Kind) {
@@ -123,7 +124,7 @@ impl App {
             };
             self.outbox.play(Cue { kind, path: path.clone() });
         }
-        let event = notice_event(token, &notice, said.sound);
+        let event = notice_event(token, &notice, said.sound, said.subagent);
         self.messages.notices.sent.push_back(notice);
         self.messages.toast = Some(toast);
         self.clients.events.publish(&[event]);
@@ -136,6 +137,10 @@ impl App {
                 window.missed = Some(token.to_string());
             }
         }
+    }
+
+    pub(super) fn tells(&self, principal: bool) -> bool {
+        principal || self.config.notify_subagents
     }
 
     pub(super) fn sound_for(&self, kind: sound::Kind, principal: bool) -> Option<sound::Kind> {
@@ -223,7 +228,7 @@ impl App {
     }
 }
 
-fn notice_event(token: String, notice: &Notice, sound: Option<sound::Kind>) -> Event {
+fn notice_event(token: String, notice: &Notice, sound: Option<sound::Kind>, subagent: bool) -> Event {
     Event {
         time: crate::time::Stamp(std::time::SystemTime::now()).to_string(),
         what: What::Notice {
@@ -235,6 +240,7 @@ fn notice_event(token: String, notice: &Notice, sound: Option<sound::Kind>) -> E
             panes: notice.panes.clone(),
             sound: sound.map(|kind| kind.id().to_string()),
             machine: notice.machine.as_ref().map(|there| there.name.clone()),
+            subagent,
         },
         ids: match notice.machine {
             Some(_) => Ids::default(),

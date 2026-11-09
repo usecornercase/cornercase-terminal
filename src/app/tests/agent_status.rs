@@ -22,6 +22,7 @@ mod notifications;
 mod osc;
 mod resuming;
 mod sound;
+mod subagents;
 mod tree;
 mod vibe;
 mod views;
@@ -557,6 +558,17 @@ impl Watched {
 
     fn told(&mut self) -> (Option<String>, Vec<Notification>) {
         (toast(&self.app).map(str::to_owned), self.app.take_notifications())
+    }
+}
+
+fn program_reports(w: &mut Watched, tabs: &[usize], state: &str) {
+    for &tab in tabs {
+        let pane = tab_term(&w.app, 0, tab).id;
+        let osc = format!("\x1b]7501;state={state}\x1b\\");
+        w.app.projects.pane_by_mut(pane).expect("the agent pane").feed(osc.as_bytes());
+    }
+    for _ in 0..6 {
+        tick(&mut w.app);
     }
 }
 

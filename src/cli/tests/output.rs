@@ -366,6 +366,7 @@ const TAB: Ids = Ids { pane: None, ..PANE };
         panes: vec![4],
         sound: None,
         machine: Some("vps".into()),
+        subagent: false,
     },
     Ids::default(),
     "machine vps  notice  claude on vps needs you in shop › main  cc-1-2"

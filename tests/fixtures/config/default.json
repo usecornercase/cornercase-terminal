@@ -63,6 +63,7 @@
   "account_switcher": true,
   "account_picker": true,
   "desktop_notifications": "auto",
+  "notify_subagents": true,
   "sound": true,
   "sound_waiting": "",
   "sound_done": "",

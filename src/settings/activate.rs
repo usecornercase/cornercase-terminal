@@ -164,6 +164,10 @@ impl Settings {
 
     fn flip_notices(&mut self, row: &Row) -> Action {
         match row {
+            Row::NotifySubagents => self.flip(
+                |c| &mut c.notify_subagents,
+                ["agents started by other agents notify you too", "only the agents you started notify you"],
+            ),
             Row::Sound => self.flip(
                 |c| &mut c.sound,
                 ["a sound plays when an agent needs you or finishes", "agents no longer play a sound"],

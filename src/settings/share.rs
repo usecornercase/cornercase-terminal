@@ -63,7 +63,7 @@ const ISSUES: [&str; 10] = [
 ];
 const WORKTREES: [&str; 7] =
     ["worktrees_dir", "fetch_minutes", "pull_requests", "merged_pull_requests", "shared_files", "gh", "glab"];
-const INTERFACE: [&str; 24] = [
+const INTERFACE: [&str; 25] = [
     "sidebar",
     "tabs",
     "icon_bar",
@@ -81,6 +81,7 @@ const INTERFACE: [&str; 24] = [
     "account_switcher",
     "account_picker",
     "desktop_notifications",
+    "notify_subagents",
     "sound",
     "sound_waiting",
     "sound_done",

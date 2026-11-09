@@ -49,6 +49,8 @@ An OSC 7501 `idle` report cancels work without a finished message; `done` report
 
 A message is sent once per change, after the agent held it for a second, and only while you are away. This works with every recognised agent that reports OSC 7501, and otherwise with Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI and GitHub Copilot CLI (without reports, opencode never says that it waits for you, see [Agents](../../reference/agents/)).
 
+With **settings → UI → notices for subagents** off, agents started by another agent or by a [flow](../flows/) send no message, and the agent that started them still does; turning it back on doesn't send what they did meanwhile. See [`notify_subagents`](../../reference/configuration/#notify_subagents).
+
 ## Answer
 
 **Reply** to one of the bot's messages (swipe it, or long-press and **Reply**) and what you write goes to that agent, with `Enter`. A 👍 on your message says the agent took it; otherwise the bot answers why not.

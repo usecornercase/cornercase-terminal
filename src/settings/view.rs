@@ -182,7 +182,9 @@ impl Settings {
                 "when an agent in another tab needs you or finishes".into(),
                 false,
             ),
-            Row::Sound | Row::SoundWaiting | Row::SoundDone | Row::SoundSubagents => sound_row(config, row),
+            Row::NotifySubagents | Row::Sound | Row::SoundWaiting | Row::SoundDone | Row::SoundSubagents => {
+                notice_row(config, row)
+            }
             Row::Updates => {
                 let value = if config.check_updates { "[x] every hour" } else { "[ ] never" };
                 ("check for updates".into(), value.into(), "asks GitHub for the latest release".into(), false)
@@ -404,10 +406,13 @@ fn tour_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     (label.into(), value.into(), note.into(), false)
 }
 
-fn sound_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+fn notice_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     let switch = |on: bool| if on { "[x] on" } else { "[ ] off" }.to_string();
     let file = |path: &str| if path.is_empty() { "built-in".to_string() } else { path.to_string() };
     let (label, value, note) = match row {
+        Row::NotifySubagents => {
+            ("notices for subagents", switch(config.notify_subagents), "off: only the agents you started notify you")
+        }
         Row::Sound => ("sound", switch(config.sound), "also while you look at cornercase, on the window's computer"),
         Row::SoundWaiting => ("sound when it needs you", file(&config.sound_waiting), SOUND_FILE_NOTE),
         Row::SoundDone => ("sound when it finishes", file(&config.sound_done), SOUND_FILE_NOTE),

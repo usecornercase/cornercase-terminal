@@ -181,6 +181,7 @@ fn changed_everywhere(s: &mut Setup) {
         .change_config(|config| {
             config.sidebar = "tree".into();
             config.counts = false;
+            config.notify_subagents = false;
             config.sound_subagents = true;
             config.prompt = "Work on {url}\nand open a pull request".into();
             config.agent_args.insert("claude".into(), vec!["--model".into(), "opus".into()]);

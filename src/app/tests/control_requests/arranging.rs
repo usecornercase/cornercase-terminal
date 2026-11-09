@@ -56,9 +56,10 @@ fn a_group_keeps_a_name() {
     assert_eq!((message.as_str(), app.groups[0].entry.name.as_str()), ("a group needs a name", "work"));
 }
 
-#[test]
-fn notify_shows_a_toast_and_asks_for_a_desktop_notification() {
+#[rstest::rstest]
+fn notify_shows_a_toast_and_asks_for_a_desktop_notification(#[values(true, false)] notify_subagents: bool) {
     let (mut app, _rx) = app();
+    app.config.notify_subagents = notify_subagents;
 
     done(now(&mut app, None, Command::Notify(wire::Notify { text: "the build\u{7} is ready".into() })));
 
