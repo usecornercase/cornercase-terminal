@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.23
+
+- **Another app can tell that a machine's cornercase is older, and offer to update it.** A command sent with `--remote` to a machine whose cornercase is older than yours now exits with status 5 instead of 1, which a machine that couldn't be reached or has no cornercase also gave. With `--json` it also prints one line of JSON on standard output, `{"error": {"code": "older", "message": "…", "destination": "vps", "there": "0.13.19", "here": "0.13.22", "update": ["cornercase", "--remote", "vps", "update"]}}`: that machine's version (`null` when its cornercase is too old to say), yours, and the command that updates it from here as a list of words, with `--remote-command` when you gave one, so a program never builds it or reads the message. `cornercase remote` exits with 5 too when the other machine is the older one. `update`, `restart`, `kill-server` and `logs` run there without checking its version, so they don't give 5 and their success says nothing about it.
+
 ## 0.13.22
 
 - **Each workspace's row says what its branch changed.** A git workspace's row now ends with `+640 −9`, in green and red: the lines it adds and removes since it parted from its base branch, committed or not, new files included, what the Changes panel's **All** tab counts. On a project's own checkout, that is its uncommitted changes and the commits not pushed yet. Only the rows on screen are read, one workspace at a time and each at most every few seconds, those with a working agent first. In a narrow column the count makes room for the name.

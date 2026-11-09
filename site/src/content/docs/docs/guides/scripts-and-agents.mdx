@@ -33,7 +33,7 @@ cornercase --remote devbox status --json
 cornercase --remote devbox events --notices --host --json
 ```
 
-Arguments and standard input arrive as they are, a stream ends there when the command ends here, and only `start-server` starts a server. See [Commands for scripts and agents](../remote/#commands-for-scripts-and-agents) for what it needs and which commands refuse it.
+Arguments and standard input arrive as they are, a stream ends there when the command ends here, and only `start-server` starts a server. See [Commands for scripts and agents](../remote/#commands-for-scripts-and-agents) for what it needs and which commands refuse it. When that machine's cornercase is older than yours, every command that sends a request refuses with [status 5](#exit-status) (`update`, `restart`, `kill-server` and `logs` run there without checking) and says how to update it from here; with `--json` it also prints that as JSON.
 
 ## Ids and where commands act
 
@@ -421,7 +421,7 @@ printf '%s\n' '{"args": ["status", "--json"]}' | cornercase requests --follow -
 - Each line gets one answer line, in order: `status` (the exit status the command would have had: 0, 1, 2, 3 or 4), `json` (what it printed with `--json`), `text` (what else it printed, such as the id `new-tab` prints), `stderr` (its warnings) and `error` (its message). Only `status` is always there: empty `json`, `text`, `stderr` and `error` are left out, and a status 1 or 3 may have no `error` (its reason is in `stderr` or in its `json`). New fields may be added; read what you know. A line that isn't JSON, is refused or fails does not stop the next ones.
 - It runs the commands that send requests. The streams (`events`, `surface`, `view`, `changes list`, `config pair`, every `--follow`), `update`, `restart`, `kill-server` and `logs` need a process of their own and are refused with status 2, as are `start-server` (it needs no connection, and `requests` needs a running server: run it first), `--remote` on a line and the commands that act on this machine (`remote`, `skill`, `plugin link`, `plugin windows` and so on).
 - Lines run one at a time, each after the answer to the one before. A line that waits (`wait`, `send --wait`, `start --wait`) holds the lines after it; to put a key before a focus, send both through `requests`. Lines aren't ordered with other connections.
-- It ends when standard input ends, after the last answer: with 0 if every line had status 0, with 3 if some didn't, with 1 once the server stops or the connection drops (it never reconnects, because ids change with a restart: start it again and look at `status`), and with 0 when what reads its answers is gone, even while a line waits. Between lines it waits for the next one without watching the server or the reader, so it notices that either is gone at the next line.
+- It ends when standard input ends, after the last answer (with 5, before the first line, when `--remote` reaches an older cornercase): with 0 if every line had status 0, with 3 if some didn't, with 1 once the server stops or the connection drops (it never reconnects, because ids change with a restart: start it again and look at `status`), and with 0 when what reads its answers is gone, even while a line waits. Between lines it waits for the next one without watching the server or the reader, so it notices that either is gone at the next line.
 
 #### A plugin's popup
 
@@ -1622,6 +1622,15 @@ Window processes run on the machine that shows the window, so `--remote` is refu
 | `2` | Wrong usage, such as an unknown option. |
 | `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds`, `worktrees remove` and `read --last-message` with several targets printed their whole answer, but an agent, a machine, a tracker, a folder, a worktree or a pane in it failed, `clone --file` made the clone but couldn't write a file, `input --follow` couldn't send some of its lines, a line of `requests --follow` failed, or a folder of the `.code-workspace` file given to `open` was gone or couldn't start its shell. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
 | `4` | `close` or `rename` with [`--boot`](#arrange) named another run of the server: it restarted since, so its ids may name other items now. Nothing was done; read `status` again. |
+| `5` | The cornercase on the machine [`--remote`](#on-another-machine) reached is older than this one, or too old to say its version, so nothing was sent. Update it from here with `cornercase --remote DESTINATION update` (add `--remote-command PATH` if you gave one): the message gives the command for an older release, and the `update` of the JSON line below gives it for both. A `--remote-command` wrapper that exits with 5 passes it through too. `cornercase remote` exits with 5 too when the other machine is the older one. |
+
+With `--json`, status 5 also prints one line of JSON on standard output, and the message goes to standard error as `error: …`:
+
+```json
+{"error":{"code":"older","message":"`vps` runs cornercase 0.13.19 and this machine 0.13.22. Update it from here with `cornercase --remote vps update`","destination":"vps","there":"0.13.19","here":"0.13.22","update":["cornercase","--remote","vps","update"]}}
+```
+
+`destination` is what `--remote` was given, `there` the other machine's release (`null` when its cornercase is too old to say), `here` yours, and `update` the command that updates that machine from here, as words to run without a shell (with `--remote-command` when you gave one; replace `cornercase` with your own path if you run another). `view`, `surface` and `requests --follow` take no `--json` and print nothing on standard output; `contract --json` gives the facts.
 
 A command that follows something until it ends (`events`, `status --follow`, `status --app --follow`, `changes list --follow`, `files list --follow`, `files read --follow`, `flow runs --follow`, `flow messages --follow`, `surface`, `view` and `config pair`) also ends with 0, without a message, soon after whatever reads its output is gone: the program it prints into exited or closed its end, or the `ssh` running it on another machine was killed or lost its connection. A terminal that closes ends it like any program, and one printing into a file or `/dev/null` runs until it ends by itself.
 
@@ -1631,6 +1640,7 @@ Some messages you may meet:
 
 | Message | Meaning |
 | --- | --- |
+| ``` `<host>` runs cornercase <version> and this machine <version>. Update it from here with … ``` | `--remote` reached an older cornercase (status 5). Run the command it gives. |
 | `no cornercase server is running` | Start cornercase first, or [`cornercase start-server`](#start-without-a-window) without a window; the other commands never start one. |
 | `this request is for the cornercase server started as …` | `close` or `rename` with [`--boot`](#arrange) named another run of the server, which restarted since (status 4). Nothing was done; read `status` again, since its ids may name other items now. |
 | `… would ignore --boot and act on whatever has that id now …` | The server comes from a release without `boot`, so nothing was sent. Restart it so it runs the version you installed; the message says how. |

@@ -736,3 +736,26 @@ mod a_killer {
         assert_eq!(ended_by(child), Some(Signal::KILL.as_raw()));
     }
 }
+
+mod update_command {
+    use super::*;
+
+    #[test]
+    fn names_the_destination_and_the_command_given() {
+        assert_eq!(devbox().update_words(), ["cornercase", "--remote", "me@devbox", "update"]);
+        let remote = Remote { command: Some("~/bin/cornercase dev".into()), ..devbox() };
+        assert_eq!(
+            remote.update_words(),
+            ["cornercase", "--remote", "me@devbox", "--remote-command", "~/bin/cornercase dev", "update"]
+        );
+    }
+
+    #[test]
+    fn the_line_quotes_what_sh_would_split() {
+        let remote = Remote { command: Some("~/bin/cornercase dev".into()), ..devbox() };
+        assert_eq!(
+            remote.update_line(),
+            "cornercase --remote me@devbox --remote-command '~/bin/cornercase dev' update"
+        );
+    }
+}

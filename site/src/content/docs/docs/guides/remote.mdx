@@ -105,13 +105,15 @@ For the window, both machines must run the same version of cornercase. When they
 `devbox` runs cornercase 0.11.9 and this machine 0.11.12. Run `cornercase update` there
 ```
 
-When the other machine is the older one, it offers to run `cornercase update` there for you, through `ssh`, and attaches once that is done. When yours is older, run `cornercase update` on it.
+When the other machine is the older one, it offers to run `cornercase update` there for you, through `ssh`, and attaches once that is done. When there is no terminal to ask in, or you decline, it exits with status 5. When yours is older, run `cornercase update` on it.
 
 The [commands for scripts and agents](#commands-for-scripts-and-agents) are more relaxed: the other machine may run the same version or a newer one, so a script on your laptop keeps working when only `devbox` updates. When the other machine is the older one they refuse, since its server could ignore what a newer command asks for, and say how to update it from here:
 
 ```text
 `devbox` runs cornercase 0.11.9 and this machine 0.11.12. Update it from here with `cornercase --remote devbox update`
 ```
+
+They exit with status 5, so a program can tell this from a machine it couldn't reach (a `--remote-command` wrapper that exits with 5 during `update`, `restart`, `kill-server` or `logs` passes it through too), and with `--json` they also print both versions (`there` is `null` when that cornercase is too old to say) and the command to update it as one line of JSON (see [Exit status](../scripts-and-agents/#exit-status)).
 
 When the binary on the other machine was updated but its old server still runs, cornercase asks before restarting it, as it does [on your own machine](../../reference/command-line/#a-server-from-another-build), and then runs `cornercase kill-server` there. After an update from the window's own [update dialog](../../installation/#update), which updates the other machine, the window reconnects to the new server by itself, and tells you if your laptop now needs the same update.
 
@@ -132,7 +134,7 @@ cornercase --remote devbox start-server
 `CORNERCASE_REMOTE=devbox` does the same without the flag, and the flag wins. Set it for one program, never in a shell's rc file: it also applies in your panes, and the commands it sends away would stop acting on this machine. `--remote-command` is `--command` for these commands.
 
 - **Arguments and standard input arrive as they are**, whatever the login shell there is: they travel inside cornercase's own messages, not through a shell.
-- **The other machine may be newer** than this one, but not older: the window needs the same version on both, the commands accept a newer one there and refuse an older one, saying how to update it with `cornercase --remote devbox update`.
+- **The other machine may be newer** than this one, but not older: the window needs the same version on both, the commands accept a newer one there and refuse an older one with status 5, saying how to update it with `cornercase --remote devbox update`.
 - **It never asks** for a password, a passphrase or an unknown host key, since a script cannot answer: use a key in your SSH agent, and connect once by hand to accept the host key.
 - **Only `start-server` starts a server there.** The other commands say `no cornercase server is running on devbox`, as they do on your machine.
 - **A stream ends there when the command ends here**, even when it is killed, so `events` or `status --follow` never leaves a command running on `devbox`.

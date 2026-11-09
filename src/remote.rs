@@ -409,9 +409,24 @@ impl Remote {
         })))
     }
 
+    fn reaching(&self) -> Vec<String> {
+        let mut words = vec!["cornercase".to_string(), "--remote".to_string(), self.destination.clone()];
+        if let Some(command) = &self.command {
+            words.push("--remote-command".to_string());
+            words.push(command.clone());
+        }
+        words
+    }
+
+    pub(crate) fn update_words(&self) -> Vec<String> {
+        let mut words = self.reaching();
+        words.push("update".to_string());
+        words
+    }
+
     pub(crate) fn line(&self, action: &str) -> String {
-        let command = self.command.as_ref().map(|command| format!(" --remote-command {}", quote_word(command)));
-        format!("cornercase --remote {}{} {action}", quote_word(&self.destination), command.unwrap_or_default())
+        let words: Vec<String> = self.reaching().iter().map(|word| quote_word(word)).collect();
+        format!("{} {action}", words.join(" "))
     }
 
     pub(crate) fn update_line(&self) -> String {

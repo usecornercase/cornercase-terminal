@@ -36,6 +36,7 @@ mod issue;
 mod line;
 mod lines;
 mod machines;
+mod older;
 mod open;
 mod plugin;
 mod ports;
@@ -61,6 +62,7 @@ mod view;
 mod worktrees;
 
 pub use args::Cli;
+pub use older::{older, parse, print_older};
 #[cfg(test)]
 pub(crate) use status::{pane_table, render};
 
