@@ -17,8 +17,9 @@ included, or one several are on (both list the workspaces to pick from), and 3 w
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json. close and rename exit with 4 when their --boot names another run of the
-server, which then did nothing, and every command exits with 5 when the cornercase --remote reaches is older
-than this one, printing with --json both versions and the command that updates it as one JSON line.
+server, which then did nothing, and every command that sends a request exits with 5 when the cornercase --remote reaches is older
+than this one (update, restart, kill-server and logs run there without checking), printing with --json both
+versions (there is null when it is too old to say) and the command that updates it as one JSON line.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and

@@ -113,7 +113,7 @@ The [commands for scripts and agents](#commands-for-scripts-and-agents) are more
 `devbox` runs cornercase 0.11.9 and this machine 0.11.12. Update it from here with `cornercase --remote devbox update`
 ```
 
-They exit with status 5, which nothing else gives, so a program can tell this from a machine it couldn't reach, and with `--json` they also print both versions and that command as one line of JSON (see [Exit status](../scripts-and-agents/#exit-status)).
+They exit with status 5, so a program can tell this from a machine it couldn't reach (a `--remote-command` wrapper that exits with 5 during `update`, `restart`, `kill-server` or `logs` passes it through too), and with `--json` they also print both versions (`there` is `null` when that cornercase is too old to say) and the command to update it as one line of JSON (see [Exit status](../scripts-and-agents/#exit-status)).
 
 When the binary on the other machine was updated but its old server still runs, cornercase asks before restarting it, as it does [on your own machine](../../reference/command-line/#a-server-from-another-build), and then runs `cornercase kill-server` there. After an update from the window's own [update dialog](../../installation/#update), which updates the other machine, the window reconnects to the new server by itself, and tells you if your laptop now needs the same update.
 

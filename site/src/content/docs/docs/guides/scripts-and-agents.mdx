@@ -33,7 +33,7 @@ cornercase --remote devbox status --json
 cornercase --remote devbox events --notices --host --json
 ```
 
-Arguments and standard input arrive as they are, a stream ends there when the command ends here, and only `start-server` starts a server. See [Commands for scripts and agents](../remote/#commands-for-scripts-and-agents) for what it needs and which commands refuse it. When that machine's cornercase is older than yours, every command refuses with [status 5](#exit-status) and says how to update it from here; with `--json` it also prints that as JSON.
+Arguments and standard input arrive as they are, a stream ends there when the command ends here, and only `start-server` starts a server. See [Commands for scripts and agents](../remote/#commands-for-scripts-and-agents) for what it needs and which commands refuse it. When that machine's cornercase is older than yours, every command that sends a request refuses with [status 5](#exit-status) (`update`, `restart`, `kill-server` and `logs` run there without checking) and says how to update it from here; with `--json` it also prints that as JSON.
 
 ## Ids and where commands act
 
@@ -1622,7 +1622,7 @@ Window processes run on the machine that shows the window, so `--remote` is refu
 | `2` | Wrong usage, such as an unknown option. |
 | `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds`, `worktrees remove` and `read --last-message` with several targets printed their whole answer, but an agent, a machine, a tracker, a folder, a worktree or a pane in it failed, `clone --file` made the clone but couldn't write a file, `input --follow` couldn't send some of its lines, a line of `requests --follow` failed, or a folder of the `.code-workspace` file given to `open` was gone or couldn't start its shell. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
 | `4` | `close` or `rename` with [`--boot`](#arrange) named another run of the server: it restarted since, so its ids may name other items now. Nothing was done; read `status` again. |
-| `5` | The cornercase on the machine [`--remote`](#on-another-machine) reached is older than this one, or too old to say its version, so nothing was sent. Update it from here with the command the message gives (`cornercase --remote DESTINATION update`). `cornercase remote` exits with 5 too when the other machine is the older one. |
+| `5` | The cornercase on the machine [`--remote`](#on-another-machine) reached is older than this one, or too old to say its version, so nothing was sent. Update it from here with `cornercase --remote DESTINATION update` (add `--remote-command PATH` if you gave one): the message gives the command for an older release, and the `update` of the JSON line below gives it for both. A `--remote-command` wrapper that exits with 5 passes it through too. `cornercase remote` exits with 5 too when the other machine is the older one. |
 
 With `--json`, status 5 also prints one line of JSON on standard output, and the message goes to standard error as `error: …`:
 
