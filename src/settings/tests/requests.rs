@@ -163,6 +163,19 @@ mod applying {
     }
 
     #[test]
+    fn subagent_notices_are_a_ui_switch_that_turns_off() {
+        let setting =
+            full().describe().into_iter().find(|setting| setting.key == "notify_subagents").expect("a setting");
+        assert_eq!((setting.page.as_str(), setting.kind, setting.value), ("UI", Kind::Switch, json!(true)));
+        let (s, result) = apply("notify_subagents", &json!(false));
+        assert_eq!(
+            (result, value_of(&s, "notify_subagents")),
+            (Ok(Some("only the agents you started notify you".into())), json!(false))
+        );
+        assert!(matches!(apply("notify_subagents", &json!("no")).1, Err(Refused::Invalid(_))));
+    }
+
+    #[test]
     fn the_same_value_changes_nothing() {
         let (s, result) = apply("counts", &json!(true));
         assert_eq!((result, s.config), (Ok(None), Config::default()));

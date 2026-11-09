@@ -521,6 +521,7 @@ pub(crate) fn ui_rows() -> Vec<Row> {
         Row::Detail(Detail::AccountSwitcher),
         Row::Detail(Detail::AccountPicker),
         Row::Notifications,
+        Row::NotifySubagents,
         Row::Sound,
         Row::SoundWaiting,
         Row::SoundDone,
@@ -598,6 +599,15 @@ mod notifications {
         press(&mut s, KeyCode::Enter);
         type_text(&mut s, "off");
         assert_eq!(saved(press(&mut s, KeyCode::Enter)).desktop_notifications, "off");
+    }
+
+    #[test]
+    fn from_subagents_start_on_and_turn_off_with_a_notice() {
+        let mut s = settings();
+        go_to(&mut s, &Row::NotifySubagents);
+        assert_eq!(s.row_text(&Row::NotifySubagents).value, "[x] on");
+        assert!(!saved(press(&mut s, KeyCode::Enter)).notify_subagents);
+        assert_eq!(s.notice.as_deref(), Some("only the agents you started notify you"));
     }
 
     #[test]

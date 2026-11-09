@@ -38,8 +38,8 @@ export class CanvasView {
     this.theme = t;
   }
 
-  measure(cssWidth: number, cols: number, rows: number): Size {
-    this.dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  measure(cssWidth: number, cols: number, rows: number, density = Math.max(1, Math.min(3, window.devicePixelRatio || 1))): Size {
+    this.dpr = density;
     this.cols = cols;
     this.rows = rows;
     this.cwD = Math.max(4, (cssWidth / cols) * this.dpr);
@@ -64,14 +64,21 @@ export class CanvasView {
     return { left: x * w, top: y * h, width: w, height: h };
   }
 
-  draw(grid: Grid, cursor: Cursor | null, focused: boolean, blinkOn: boolean): void {
+  draw(grid: Grid, cursor: Cursor | null, focused: boolean, blinkOn: boolean, span: [number, number] = [0, grid.rows - 1]): void {
     const { ctx, cwD, chD } = this;
     const t = this.theme;
+    const [from, to] = span;
+    const top = Math.round(from * chD);
+    const bottom = to >= grid.rows - 1 ? this.canvas.height : Math.round((to + 1) * chD);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, top, this.canvas.width, bottom - top);
+    ctx.clip();
     ctx.globalAlpha = 1;
     ctx.fillStyle = t.background;
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.fillRect(0, top, this.canvas.width, bottom - top);
     const lw = Math.max(1, Math.round(this.dpr));
-    const ops = paint(grid, { cw: cwD, ch: chD, lw, snap: Math.round, theme: t });
+    const ops = paint(grid, { cw: cwD, ch: chD, lw, snap: Math.round, theme: t }, from, to);
     const size = cwD / 0.6;
     let font = '';
     for (const op of ops) {
@@ -113,6 +120,7 @@ export class CanvasView {
     ctx.globalAlpha = 1;
     this.drawImages(grid);
     if (cursor && (blinkOn || !focused)) this.drawCursor(grid, cursor, focused, size);
+    ctx.restore();
   }
 
   private picture(src: string): HTMLImageElement | null {

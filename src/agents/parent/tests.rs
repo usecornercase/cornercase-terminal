@@ -7,7 +7,7 @@ fn state(kind: &str, id: &str) -> AgentState {
 }
 
 fn conversation(id: &str) -> Conversation {
-    Conversation { kind: "claude".into(), id: id.into() }
+    Conversation { kind: "claude".into(), conversation: id.into() }
 }
 
 mod made {

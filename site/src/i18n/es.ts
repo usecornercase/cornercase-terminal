@@ -38,6 +38,9 @@ export const page: Page = {
     play: 'Prueba cornercase en vivo',
     hint: 'Una simulación de verdad, no un vídeo: haz clic, escribe en una shell, lanza un agente.',
   },
+  play: {
+    title: 'Te toca.',
+  },
   install: {
     label: 'Cómo instalarlo',
     script: 'Script de instalación',

@@ -155,6 +155,7 @@ Over SSH, it's your local terminal that needs to allow it.
 ### No desktop notification shows up
 
 - Only a tab you aren't looking at notifies you, and only when Claude Code runs in it; see [Notifications](../../guides/projects-workspaces-tabs/#notifications).
+- An agent started by another agent or by a flow tells you only while **settings → UI → notices for subagents** is on; its tab still shows `!` or `✓`.
 - Check that **settings → UI → desktop notifications** isn't *off*. With *auto*, cornercase picks from your terminal's name; if it picks wrong, for example over SSH with a terminal that doesn't say its name, choose the one your terminal understands.
 - Your system must let your terminal show notifications: on macOS, in **System Settings → Notifications**.
 - **iTerm2** shows them only with *Notification Center Alerts* on, in **Settings → Profiles → Terminal**.
@@ -165,7 +166,7 @@ Over SSH, it's your local terminal that needs to allow it.
 ### No sound plays
 
 - Check that **settings → UI → sound** is on. Only a tab you aren't looking at plays one, a second after the agent needs you or finishes.
-- Agents started by another agent or by a flow play none unless **sound for subagents** is on.
+- Agents started by another agent or by a flow play none unless **sound for subagents** is on, and none at all while **notices for subagents** is off.
 - It plays on the computer the window is on, with `afplay` on macOS and the first of `pw-play`, `paplay` and `aplay` on Linux; with none of them installed, nothing plays. A window opened in a plain SSH session plays none: use [`cornercase remote`](../../guides/remote/).
 - A tmux session started over SSH keeps `SSH_CONNECTION` when you reattach to it on the computer itself, so a window opened in it still counts as remote and plays none. Open cornercase outside that session, or run `tmux set-environment -gu SSH_CONNECTION` and `tmux set-environment -gu SSH_TTY`, then open a new pane.
 - A file of your own that is missing or can't be read plays the built-in sound, and so does a path that is neither absolute nor starts with `~/`; `aplay` reads only WAV.

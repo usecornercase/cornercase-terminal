@@ -1,0 +1,43 @@
+---
+import { words } from '../../i18n';
+import Demo from './Demo.astro';
+
+const t = words(Astro.url);
+---
+
+<section class="section play" id="demo" data-section="play" aria-labelledby="play-title">
+  <div class="wrap head reveal">
+    <h2 class="h2" id="play-title">{t.play.title}</h2>
+  </div>
+  <div class="stage reveal">
+    <Demo />
+  </div>
+</section>
+
+<style>
+  .section.play {
+    padding-bottom: 0;
+  }
+
+  .stage {
+    --g: clamp(16px, 4vw, 40px);
+    position: relative;
+    width: 100%;
+    max-width: calc(1480px + var(--g) * 2);
+    margin: clamp(36px, 4vw, 56px) auto 0;
+    padding-inline: var(--g);
+  }
+
+  :global(.motion) .section.play {
+    padding-top: clamp(96px, 16vh, 200px);
+  }
+
+  :global(.motion) .h2 {
+    font-size: clamp(44px, 7vw, 120px);
+    text-shadow: 0 2px 40px rgb(5 6 9 / 0.9);
+  }
+
+  :global(.motion) .stage {
+    margin-top: clamp(28px, 4vh, 48px);
+  }
+</style>

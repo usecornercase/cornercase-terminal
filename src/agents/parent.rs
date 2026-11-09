@@ -19,7 +19,7 @@ pub(crate) enum By {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Conversation {
     pub(crate) kind: String,
-    pub(crate) id: String,
+    pub(crate) conversation: String,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -32,11 +32,11 @@ pub(crate) struct Running<'a> {
 
 impl Conversation {
     pub(crate) fn of(state: &AgentState) -> Self {
-        Self { kind: state.kind.clone(), id: state.conversation.clone() }
+        Self { kind: state.kind.clone(), conversation: state.conversation.clone() }
     }
 
     pub(crate) fn is(&self, state: &AgentState) -> bool {
-        self.kind == state.kind && self.id == state.conversation
+        self.kind == state.kind && self.conversation == state.conversation
     }
 }
 

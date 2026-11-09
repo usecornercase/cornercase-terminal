@@ -42,11 +42,13 @@ use super::worktrees::lock_note;
 #[cfg(unix)]
 use super::worktrees::{COUNT_BEHIND_EVERY, Check, UNCOMMITTED};
 use super::*;
+#[cfg(unix)]
 use crate::agents::AgentState;
 #[cfg(unix)]
 use crate::agents::context::{self};
+use crate::agents::parent::Conversation;
 #[cfg(unix)]
-use crate::agents::parent::{By, Conversation, Parent};
+use crate::agents::parent::{By, Parent};
 #[cfg(unix)]
 use crate::changes::Checkout;
 use crate::config;
@@ -339,6 +341,12 @@ fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(
     });
 }
 
+#[cfg(unix)]
+pub(super) fn by_conversation(pane: u64, id: &str) -> Parent {
+    Parent { pane, by: By::Conversation(Conversation { kind: "claude".into(), conversation: id.into() }) }
+}
+
+#[cfg(unix)]
 pub(super) fn converse(app: &mut App, id: u64, conversation: Option<&str>) {
     let term = app.projects.pane_by_mut(id).expect("the pane");
     term.resume =

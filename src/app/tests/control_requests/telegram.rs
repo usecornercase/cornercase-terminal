@@ -174,6 +174,14 @@ mod agents {
         (agent, phone, id)
     }
 
+    fn two_seen() -> (Agent, Phone, u64, u64) {
+        let mut agent = Agent::new();
+        let phone = Phone::paired(&mut agent.app);
+        let (first, second) = (agent.start(None), agent.start(None));
+        agent.refreshing("both are seen", |a| [first, second].iter().all(|&id| pane(a, id).agent.status().is_some()));
+        (agent, phone, first, second)
+    }
+
     fn away(agent: &mut Agent, phone: &mut Phone) {
         agent.app.go_away(Via::Telegram, By::Command).expect("away");
         phone.read(&mut agent.app);
@@ -213,6 +221,10 @@ mod agents {
             run.members.push(Member { role: "coder".into(), pane: id });
             agent.app.runs.push(run);
         }
+        assert_eq!(reports(&mut agent, &mut phone, id, state), sent);
+    }
+
+    fn reports(agent: &mut Agent, phone: &mut Phone, id: u64, state: &str) -> bool {
         let term = agent.app.projects.pane_by_mut(id).expect("agent's pane");
         term.feed(format!("\x1b]7501;state={state}\x07").as_bytes());
         let now = Instant::now();
@@ -223,8 +235,33 @@ mod agents {
         }
         let answered = Instant::now() + Duration::from_millis(1_500);
         agent.until("the last message is read", |_| Instant::now() >= answered);
-        let orders = phone.read(&mut agent.app);
-        assert_eq!(orders.iter().any(|(_, order)| matches!(order, Order::Send { .. })), sent, "{orders:?}");
+        sends(phone, agent)
+    }
+
+    fn sends(phone: &mut Phone, agent: &mut Agent) -> bool {
+        phone.read(&mut agent.app).iter().any(|(_, order)| matches!(order, Order::Send { .. }))
+    }
+
+    #[rstest::rstest]
+    #[case::a_subagent_that_needs_you(false, "blocked", false)]
+    #[case::a_subagent_that_finishes(false, "done", false)]
+    #[case::the_agent_that_started_it_needing_you(true, "blocked", true)]
+    #[case::the_agent_that_started_it_finishing(true, "done", true)]
+    fn with_subagents_turned_off_only_the_agent_that_started_them_messages(
+        #[case] parent: bool,
+        #[case] state: &str,
+        #[case] sent: bool,
+    ) {
+        let (mut agent, mut phone, first, second) = two_seen();
+        agent.app.projects.pane_by_mut(second).expect("the subagent").parent = Some(Parent::pane(first));
+        agent.app.config.notify_subagents = false;
+        away(&mut agent, &mut phone);
+
+        let told = reports(&mut agent, &mut phone, if parent { first } else { second }, state);
+        agent.app.config.notify_subagents = true;
+        agent.app.watch_messengers(Instant::now() + Duration::from_secs(5));
+
+        assert_eq!((told, sends(&mut phone, &mut agent)), (sent, false));
     }
 
     #[test]
@@ -387,10 +424,7 @@ mod agents {
 
     #[test]
     fn with_several_agents_a_text_asks_which_one_and_goes_to_the_one_tapped() {
-        let mut agent = Agent::new();
-        let mut phone = Phone::paired(&mut agent.app);
-        let (first, second) = (agent.start(None), agent.start(None));
-        agent.refreshing("both are seen", |a| [first, second].iter().all(|&id| pane(a, id).agent.status().is_some()));
+        let (mut agent, mut phone, _, second) = two_seen();
 
         let asked = phone.says(&mut agent.app, "hello");
         let (which, order) = phone.says_in_html(&mut agent, "the question", "Which agent is this for?");

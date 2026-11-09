@@ -306,7 +306,15 @@ impl Term {
     }
 
     pub(crate) fn see_agent(&mut self, config: &Config) {
-        self.agent_pid = self.foreground_pid().filter(|pid| agents::detect(config, &process::args(*pid)).is_some());
+        self.foreground_agent(config);
+    }
+
+    pub(crate) fn foreground_agent(&mut self, config: &Config) -> (Option<i32>, Vec<String>, Option<String>) {
+        let pid = self.foreground_pid();
+        let args = pid.map(process::args).unwrap_or_default();
+        let name = agents::detect(config, &args);
+        self.agent_pid = pid.filter(|_| name.is_some());
+        (pid, args, name)
     }
 
     pub(crate) fn shell_pid(&self) -> Option<i32> {

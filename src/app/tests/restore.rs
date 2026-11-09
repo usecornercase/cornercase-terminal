@@ -428,16 +428,12 @@ mod parents {
     use super::*;
 
     fn conversation(id: &str) -> Conversation {
-        Conversation { kind: "claude".into(), id: id.into() }
+        Conversation { kind: "claude".into(), conversation: id.into() }
     }
 
     fn pane(id: Option<u64>, parent: Option<u64>) -> PaneState {
         let parent_conversation = parent.map(|_| conversation("s1"));
         PaneState { id, parent, parent_conversation, ..PaneState::at(None) }
-    }
-
-    fn by_conversation(pane: u64) -> Parent {
-        Parent { pane, by: By::Conversation(conversation("s1")) }
     }
 
     fn workspace(dir: &Path, panes: Vec<PaneState>) -> WorkspaceState {
@@ -517,8 +513,8 @@ mod parents {
         click_row(&mut app, WorkspaceRow::NewTab(0));
         let ids: Vec<u64> = (0..3).map(|t| tab_term(&app, 0, t).id).collect();
         let tabs = &mut app.projects[0].workspaces[0].tabs;
-        tabs[1].panes[0].parent = Some(by_conversation(ids[0]));
-        tabs[2].panes[0].parent = Some(by_conversation(ids[1]));
+        tabs[1].panes[0].parent = Some(by_conversation(ids[0], "s1"));
+        tabs[2].panes[0].parent = Some(by_conversation(ids[1], "s1"));
 
         let state = app.state();
         assert_eq!(saved_parents(&state), [(Some(ids[0]), None), (Some(ids[1]), Some(ids[0])), (None, Some(ids[1]))]);
@@ -584,7 +580,7 @@ mod parents {
         let ids: Vec<u64> = (0..5).map(|t| tab_term(&app, 0, t).id).collect();
         let shell = tab_term(&app, 0, 0).shell_pid().expect("a shell");
         let tabs = &mut app.projects[0].workspaces[0].tabs;
-        tabs[1].panes[0].parent = Some(by_conversation(ids[0]));
+        tabs[1].panes[0].parent = Some(by_conversation(ids[0], "s1"));
         tabs[2].panes[0].parent = Some(Parent { pane: ids[0], by: By::Agent(shell) });
         tabs[3].panes[0].parent = Some(Parent { pane: ids[0], by: By::Shell(shell) });
         tabs[4].panes[0].parent = Some(Parent::pane(ids[0]));

@@ -9,87 +9,84 @@ const docs = (path: string) => `${base}/docs/${path}`;
 const docsLang = localeOf(Astro.url) === 'en' ? undefined : 'en';
 const procs = ['claude', 'codex', 'claude', 'npm run dev'];
 const t = words(Astro.url).why;
-const [start, parallel, review, leave] = t.steps;
+const [start, glance, review, leave] = t.steps;
+const steps = [
+  { id: 'start', side: 'left', step: start, path: 'guides/issues-and-agents/', scene: 'issue' },
+  { id: 'glance', side: 'right', step: glance, path: 'reference/agents/', scene: 'status' },
+  { id: 'review', side: 'left', step: review, path: 'guides/changes/', scene: 'changes' },
+  { id: 'leave', side: 'left', step: leave, path: 'guides/sessions/', scene: null },
+];
+const session: { kind: 'run' | 'out' | 'done'; text: string }[] = [
+  { kind: 'run', text: 'cornercase start codex --worktree feat/gift-cards \\' },
+  { kind: 'run', text: "    --prompt 'Add gift cards to the checkout'" },
+  { kind: 'out', text: '12' },
+  { kind: 'run', text: 'cornercase wait --pane 12 --timeout 900' },
+  { kind: 'out', text: 'idle' },
+  { kind: 'run', text: 'cornercase read --pane 12 --last-message' },
+  { kind: 'done', text: 'Done. Gift cards work in the checkout: a GiftCard with a' },
+  { kind: 'out', text: 'balance is applied after coupons and before tax.' },
+];
 ---
 
 <section class="section why" id="why" aria-labelledby="why-title">
-  <div class="wrap">
-    <div class="head reveal">
-      <h2 class="h2" id="why-title">{t.title}</h2>
-      <p class="lead">{t.lead}</p>
+  <div class="head" data-section="why">
+    <div class="pin">
+      <div class="say" data-statement>
+        <h2 class="h2" id="why-title" data-title>{t.title}</h2>
+        <p class="lead">{t.lead}</p>
+      </div>
     </div>
+  </div>
 
-    <ol class="steps">
-      <li class="step reveal">
-        <div class="text">
-          <h3>{start.title}</h3>
-          <p><Rich text={start.text} /></p>
-          <a class="more" href={docs('guides/issues-and-agents/')} hreflang={docsLang}>{start.more}</a>
-        </div>
-        <Snapshot scene="issue" label={start.label} class="shot" />
-      </li>
-
-      <li class="step reveal flip">
-        <div class="text">
-          <h3>{parallel.title}</h3>
-          <p><Rich text={parallel.text} /></p>
-          <a class="more" href={docs('reference/agents/')} hreflang={docsLang}>{parallel.more}</a>
-        </div>
-        <Snapshot scene="status" label={parallel.label} class="shot" />
-      </li>
-
-      <li class="step reveal half">
-        <div class="text">
-          <h3>{review.title}</h3>
-          <p><Rich text={review.text} /></p>
-          <a class="more" href={docs('guides/changes/')} hreflang={docsLang}>{review.more}</a>
-        </div>
-        <Snapshot scene="changes" label={review.label} class="shot" />
-      </li>
-
-      <li class="step reveal half" style="--i: 1">
-        <div class="text">
-          <h3>{leave.title}</h3>
-          <p><Rich text={leave.text} /></p>
-          <a class="more" href={docs('guides/sessions/')} hreflang={docsLang}>{leave.more}</a>
-        </div>
-        <figure class="diagram" aria-labelledby="diagram-caption">
-          <div class="client">
-            <span class="title">{t.diagram.terminal}</span>
-            <span class="state on">{t.diagram.attached}</span>
-            <span class="state off">{t.diagram.closed}</span>
+  <ol class="steps">
+    {
+      steps.map(({ id, side, step, path, scene }) => (
+        <li class:list={['step', `step-${id}`, `side-${side}`]} id={id} data-section={id} data-chapter data-side={side}>
+          <div class="pin">
+            <div class="cap" data-cap>
+              <h3 data-title>{step.title}</h3>
+              <p><Rich text={step.text} /></p>
+              <a class="more" href={docs(path)} hreflang={docsLang}>{step.more}</a>
+            </div>
+            {
+              !scene && (
+                <figure class="diagram" aria-labelledby="diagram-caption" data-diagram data-link="attached">
+                  <div class="client">
+                    <span class="title">{t.diagram.terminal}</span>
+                    <span class="state on">{t.diagram.attached}</span>
+                    <span class="state off">{t.diagram.closed}<b data-away-clock></b></span>
+                  </div>
+                  <svg class="wire" viewBox="0 0 20 48" preserveAspectRatio="none" aria-hidden="true"><path d="M10 0V48"></path></svg>
+                  <div class="server">
+                    <span class="title">
+                      <Mark size={12} />
+                      {t.diagram.server}
+                    </span>
+                    <ul>
+                      {procs.map((p) => <li data-proc><i />{p}</li>)}
+                    </ul>
+                  </div>
+                  <figcaption id="diagram-caption" class="sr-only">{t.diagram.caption}</figcaption>
+                </figure>
+              )
+            }
           </div>
-          <svg class="wire" viewBox="0 0 20 48" preserveAspectRatio="none" aria-hidden="true"><path d="M10 0V48"></path></svg>
-          <div class="server">
-            <span class="title">
-              <Mark size={12} />
-              {t.diagram.server}
-            </span>
-            <ul>
-              {procs.map((p) => <li><i />{p}</li>)}
-            </ul>
-          </div>
-          <figcaption id="diagram-caption" class="sr-only">{t.diagram.caption}</figcaption>
-        </figure>
-      </li>
-    </ol>
+          {scene && <Snapshot scene={scene} label={step.label} class="shot" />}
+        </li>
+      ))
+    }
+  </ol>
 
-    <div class="band reveal">
-      <div class="text">
-        <h3>{t.band.title}</h3>
+  <div class="band" data-section="hand">
+    <div class="pin">
+      <div class="text" data-hand-text>
+        <h3 data-title>{t.band.title}</h3>
         <p><Rich text={t.band.text} /></p>
         <a class="more" href={docs('guides/scripts-and-agents/')} hreflang={docsLang}>{t.band.more}</a>
       </div>
-      <figure class="transcript">
+      <figure class="transcript" data-transcript>
         <figcaption>{t.band.session}</figcaption>
-        <pre><span class="d">$</span> cornercase start codex --worktree feat/gift-cards \
-    --prompt 'Add gift cards to the checkout'
-<span class="d">12</span>
-<span class="d">$</span> cornercase wait --pane 12 --timeout 900
-<span class="d">idle</span>
-<span class="d">$</span> cornercase read --pane 12 --last-message
-<span class="g">Done.</span> Gift cards work in the checkout: a GiftCard with a
-balance is applied after coupons and before tax.</pre>
+        <pre>{session.map(({ kind, text }) => <span class:list={['tl', kind]} data-line={kind} data-chars={[...text].length + (kind === 'run' && !text.startsWith(' ') ? 2 : 0)}>{kind === 'run' && !text.startsWith(' ') && <span class="d">$ </span>}{kind === 'done' ? <><span class="g">Done.</span>{text.slice(5)}</> : text}{'\n'}</span>)}</pre>
       </figure>
     </div>
   </div>
@@ -100,47 +97,48 @@ balance is applied after coupons and before tax.</pre>
     padding-top: clamp(80px, 9vw, 136px);
   }
 
-  .head {
+  .head,
+  .steps,
+  .band {
+    width: 100%;
+    max-width: calc(var(--wrap) + var(--gutter) * 2);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  .say {
     max-width: 920px;
   }
 
   .steps {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: clamp(72px, 9vw, 136px) clamp(28px, 4.5vw, 72px);
-    margin: clamp(48px, 6vw, 88px) 0 0;
-    padding: 0;
+    gap: clamp(72px, 9vw, 136px);
+    margin-top: clamp(48px, 6vw, 88px);
+    margin-bottom: 0;
     list-style: none;
   }
 
   .step,
-  .band {
+  .band .pin {
     display: grid;
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     gap: clamp(28px, 4.5vw, 72px);
     align-items: center;
   }
 
-  .step:not(.half) {
-    grid-column: 1 / -1;
-  }
-
-  .step.flip {
+  .step.side-right {
     grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
   }
 
-  .step.flip .text {
+  .step.side-right .pin {
     order: 1;
   }
 
-  .step.half {
-    grid-row: span 2;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: subgrid;
-    align-items: start;
-    gap: clamp(24px, 3vw, 36px);
+  :global(html:not(.motion)) .step-leave .pin {
+    display: contents;
   }
 
+  .cap,
   .text {
     display: flex;
     flex-direction: column;
@@ -158,6 +156,7 @@ balance is applied after coupons and before tax.</pre>
     text-wrap: balance;
   }
 
+  .cap p,
   .text p {
     margin: 0;
     max-width: 50ch;
@@ -184,6 +183,7 @@ balance is applied after coupons and before tax.</pre>
     justify-items: center;
     margin: 0;
     padding: clamp(24px, 3vw, 40px) clamp(16px, 2vw, 28px);
+    border: 1px solid #262838;
     background: var(--term);
     color: #e4e7f2;
   }
@@ -233,6 +233,12 @@ balance is applied after coupons and before tax.</pre>
     color: #f5d76e;
     opacity: 0;
     animation: hide 8s infinite;
+  }
+
+  .state b {
+    color: #fff;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
   }
 
   .wire {
@@ -375,6 +381,7 @@ balance is applied after coupons and before tax.</pre>
 
   .transcript {
     margin: 0;
+    border: 1px solid #262838;
     background: var(--term);
     color: #e4e7f2;
     overflow: hidden;
@@ -398,32 +405,356 @@ balance is applied after coupons and before tax.</pre>
     overflow-wrap: anywhere;
   }
 
-  .transcript .d {
+  .transcript .d,
+  .tl.out {
     color: #8088a6;
+  }
+
+  .tl.done {
+    color: #e4e7f2;
   }
 
   .transcript .g {
     color: #58e6a0;
   }
 
-  @media (max-width: 860px) {
-    .steps {
-      grid-template-columns: minmax(0, 1fr);
-    }
+  :global(.motion) .section.why {
+    padding: 0;
+    scroll-margin-top: -46lvh;
+  }
 
+  :global(.motion) .head,
+  :global(.motion) .steps,
+  :global(.motion) .band {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  :global(.motion) .head {
+    height: 190lvh;
+  }
+
+  :global(.motion) .pin {
+    position: sticky;
+    top: 0;
+    display: block;
+    height: 100svh;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  :global(.motion) .say {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(calc(1180px * var(--big)), calc(100vw - 2 * var(--gutter)));
+    max-width: none;
+    text-align: center;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  :global(.motion) .say::before {
+    content: '';
+    position: absolute;
+    inset: -22% -10%;
+    z-index: -1;
+    background: radial-gradient(closest-side, rgb(9 10 13 / 0.9) 44%, rgb(9 10 13 / 0.55) 74%, transparent);
+    pointer-events: none;
+  }
+
+  :global(.motion) .say .h2 {
+    font-size: clamp(38px, 5.6vw, calc(96px * var(--big)));
+    line-height: 0.98;
+    text-shadow: 0 2px 40px rgb(5 6 9 / 0.9);
+  }
+
+  :global(.motion) .say .lead {
+    max-width: 62ch;
+    margin: clamp(18px, 2.6vh, 30px) auto 0;
+    font-size: clamp(17px, 1.5vw, calc(22px * var(--big)));
+    text-shadow:
+      0 0 18px rgb(5 6 9),
+      0 0 6px rgb(5 6 9);
+  }
+
+  :global(.motion) .steps {
+    display: block;
+  }
+
+  :global(.motion) .step {
+    display: block;
+    height: var(--len, 300lvh);
+    scroll-margin-top: -40lvh;
+  }
+
+  :global(.motion) .step-start {
+    --len: 340lvh;
+  }
+
+  :global(.motion) .step-glance {
+    --len: 320lvh;
+  }
+
+  :global(.motion) .step-review {
+    --len: 340lvh;
+  }
+
+  :global(.motion) .step-leave {
+    --len: 380lvh;
+  }
+
+  :global(.motion) .step .pin::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: calc(var(--cap) + 56px);
+    opacity: var(--scrim, 0);
+    pointer-events: none;
+  }
+
+  :global(.motion) .side-left .pin::before {
+    left: 0;
+    background: linear-gradient(90deg, rgb(9 10 13 / 0.97) 78%, rgb(9 10 13 / 0.7) 90%, transparent);
+  }
+
+  :global(.motion) .side-right .pin::before {
+    right: 0;
+    background: linear-gradient(270deg, rgb(9 10 13 / 0.97) 78%, rgb(9 10 13 / 0.7) 90%, transparent);
+  }
+
+  :global(.motion) .cap {
+    position: absolute;
+    top: 50%;
+    width: clamp(330px, 31vw, calc(540px * var(--big)));
+    opacity: 0;
+    pointer-events: auto;
+  }
+
+  :global(.motion) .side-left .cap {
+    left: var(--gutter);
+  }
+
+  :global(.motion) .side-right .cap {
+    right: var(--gutter);
+  }
+
+  :global(.motion) .cap h3 {
+    font-size: clamp(32px, 3.5vw, calc(62px * var(--big)));
+    line-height: 1;
+    text-wrap: balance;
+  }
+
+  :global(.motion) .cap p,
+  :global(.motion) .band .text p {
+    max-width: none;
+    font-size: clamp(16px, 1.25vw, calc(19px * var(--big)));
+    line-height: 1.5;
+  }
+
+  :global(.motion) .more {
+    font-size: clamp(16px, 1.05vw, calc(16px * var(--big)));
+  }
+
+  :global(.motion) .shot {
+    display: none;
+  }
+
+  :global(.motion) .diagram {
+    position: absolute;
+    left: calc(var(--cap) + (100vw - var(--cap)) / 2);
+    top: 66%;
+    width: min(520px, calc((100vw - var(--cap) - 64px) / var(--big)));
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 30px 90px -30px rgb(0 70 220 / 0.5);
+  }
+
+  :global(.motion) .client,
+  :global(.motion) .state,
+  :global(.motion) .wire path {
+    animation: none;
+  }
+
+  :global(.motion) .client {
+    transition: opacity 0.3s;
+  }
+
+  :global(.motion) .state {
+    transition: opacity 0.25s;
+  }
+
+  :global(.motion) .wire path {
+    animation: flow 1.2s linear infinite;
+    transition: opacity 0.3s;
+  }
+
+  :global(.motion) [data-link='attached'] .state.on,
+  :global(.motion) [data-link='closed'] .state.off {
+    opacity: 1;
+  }
+
+  :global(.motion) [data-link='attached'] .state.off,
+  :global(.motion) [data-link='closed'] .state.on {
+    opacity: 0;
+  }
+
+  :global(.motion) [data-link='closed'] .client {
+    opacity: 0.45;
+  }
+
+  :global(.motion) [data-link='closed'] .wire path {
+    opacity: 0.1;
+  }
+
+  :global(.motion) .server li {
+    transition:
+      border-color 0.3s,
+      color 0.3s;
+  }
+
+  :global(.motion) .server li:global(.is-done) {
+    border-color: rgb(88 230 160 / 0.55);
+  }
+
+  :global(.motion) .server li:global(.is-done) i {
+    animation: none;
+  }
+
+  :global(.motion) .band {
+    height: 260lvh;
+    scroll-margin-top: -30lvh;
+  }
+
+  :global(.motion) .band .pin {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(28px, 4.5vw, 72px);
+    align-items: center;
+    padding: 72px var(--gutter) 24px;
+  }
+
+  :global(.motion) .band .text,
+  :global(.motion) .band .transcript {
+    opacity: 0;
+    pointer-events: auto;
+  }
+
+  :global(.motion) .band .text {
+    position: relative;
+  }
+
+  :global(.motion) .band .text::before {
+    content: '';
+    position: absolute;
+    inset: -56px -72px;
+    z-index: -1;
+    background: radial-gradient(closest-side, rgb(9 10 13 / 0.9) 58%, rgb(9 10 13 / 0.5) 82%, transparent);
+    pointer-events: none;
+  }
+
+  :global(.motion) .band h3 {
+    font-size: clamp(32px, 3.5vw, calc(62px * var(--big)));
+    line-height: 1;
+  }
+
+  :global(.motion) .transcript {
+    box-shadow: 0 30px 90px -30px rgb(0 70 220 / 0.5);
+  }
+
+  :global(.motion) .transcript pre {
+    min-height: 15em;
+    font-size: clamp(12px, 1.05vw, calc(16px * var(--big)));
+    white-space: pre;
+    overflow: hidden;
+  }
+
+  :global(.motion) .tl {
+    display: block;
+    max-width: calc(var(--typed, 0) * 1ch);
+    overflow: hidden;
+    white-space: pre;
+  }
+
+  @media (max-width: 979px) {
     .step,
-    .step.flip,
-    .band {
+    .step.side-right,
+    .band .pin {
       grid-template-columns: minmax(0, 1fr);
       gap: 20px;
     }
 
-    .step.flip .text {
+    .step.side-right .pin {
       order: 0;
     }
 
+    .cap p,
     .text p {
       max-width: none;
+    }
+
+    :global(.motion) .step .pin::before {
+      display: none;
+    }
+
+    :global(.motion) .cap {
+      left: 10px;
+      right: 10px;
+      top: auto;
+      bottom: 10px;
+      width: auto;
+      gap: 9px;
+      padding: 16px 16px 14px;
+      border: 1px solid var(--line-2);
+      background: rgb(12 14 19 / 0.94);
+    }
+
+    :global(.motion) .cap h3 {
+      font-size: clamp(22px, 5.6vw, 34px);
+    }
+
+    :global(.motion) .cap p {
+      display: -webkit-box;
+      overflow: hidden;
+      font-size: 14.5px;
+      line-height: 1.4;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 4;
+      line-clamp: 4;
+    }
+
+    :global(.motion) .cap .more {
+      font-size: 14.5px;
+    }
+
+    :global(.motion) .diagram {
+      left: 50%;
+      top: 34%;
+      width: min(420px, calc(100vw - 32px));
+      padding: 14px 12px;
+    }
+
+    :global(.motion) .band .pin {
+      grid-template-columns: minmax(0, 1fr);
+      align-content: center;
+      gap: 18px;
+      padding-top: 84px;
+    }
+
+    :global(.motion) .band h3 {
+      font-size: clamp(26px, 6.6vw, 40px);
+    }
+
+    :global(.motion) .band .text p {
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    :global(.motion) .transcript pre {
+      padding: 12px;
+      font-size: min(12px, 2.6vw);
     }
   }
 </style>

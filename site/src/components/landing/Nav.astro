@@ -22,10 +22,10 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
       <span>cornercase</span>
     </a>
     <nav class="links" aria-label={t.nav.label}>
-      <a href={anchor('demo')}>{t.nav.demo}</a>
-      <a href={anchor('features')}>{t.nav.features}</a>
-      <a href={anchor('why')}>{t.nav.why}</a>
-      <a href={anchor('flows')}>{t.nav.flows}</a>
+      <a href={anchor('demo')} data-nav="demo">{t.nav.demo}</a>
+      <a href={anchor('features')} data-nav="features">{t.nav.features}</a>
+      <a href={anchor('why')} data-nav="why">{t.nav.why}</a>
+      <a href={anchor('flows')} data-nav="flows">{t.nav.flows}</a>
       <a href={`${base}/plugins/`} hreflang={locale === 'en' ? undefined : 'en'}>{t.nav.plugins}</a>
       <a href={`${base}/docs/`} hreflang={locale === 'en' ? undefined : 'en'}>{t.nav.docs}</a>
     </nav>
@@ -95,6 +95,22 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
     border-bottom: 1px solid var(--line);
   }
 
+  :global(.motion) .nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    border-bottom-color: rgb(255 255 255 / 0.09);
+    background: rgb(11 12 14 / 0.93);
+    transition:
+      opacity 0.7s var(--expo) 0.1s,
+      transform 0.9s var(--expo) 0.1s;
+  }
+
+  :global(.intro) .nav {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+
   .inner {
     display: flex;
     align-items: center;
@@ -145,11 +161,13 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
     transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 
-  .links a:hover {
+  .links a:hover,
+  .links a:global(.is-here) {
     color: var(--text);
   }
 
-  .links a:hover::after {
+  .links a:hover::after,
+  .links a:global(.is-here)::after {
     transform: none;
   }
 

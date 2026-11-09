@@ -202,11 +202,11 @@ mod file {
     #[test]
     fn a_parent_saved_with_its_conversation_round_trips_through_its_own_fixture() {
         let mut saved = state(&["projects/team"]);
-        let agent = AgentState { kind: "claude".into(), conversation: "c1".into(), mode: None, account: None };
+        let agent = AgentState { kind: "claude".into(), conversation: "s1".into(), mode: None, account: None };
         let parent = PaneState { id: Some(4), agent: Some(agent), ..PaneState::at(Some("projects/team".into())) };
         let child = PaneState {
             parent: Some(4),
-            parent_conversation: Some(Conversation { kind: "claude".into(), id: "s1".into() }),
+            parent_conversation: Some(Conversation { kind: "claude".into(), conversation: "s1".into() }),
             ..PaneState::at(Some("projects/team".into()))
         };
         saved.projects[0].workspaces[0].tabs = [parent, child]

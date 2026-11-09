@@ -167,8 +167,7 @@ fn closing_a_new_agent_leaves_the_children_of_the_one_before() {
     let parent = agent(&mut app, 0, 0);
     let kid = agent(&mut app, 0, 1);
     let kid_tab = app.projects[0].workspaces[0].tabs[1].id;
-    let by = By::Conversation(Conversation { kind: "claude".into(), id: "c1".into() });
-    app.projects.pane_by_mut(kid).expect("the child").parent = Some(Parent { pane: parent, by });
+    app.projects.pane_by_mut(kid).expect("the child").parent = Some(by_conversation(parent, "c1"));
     converse(&mut app, parent, Some("c1"));
 
     let before = app.agent_close_plan(parent).expect("a plan").closing;

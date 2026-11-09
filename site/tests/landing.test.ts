@@ -3,12 +3,13 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 
 import * as en from '../src/i18n/en';
+import { CHAPTERS } from '../src/lib/show/script';
 
 const dir = 'src/components/landing';
 
 test('the landing sections come in the planned order', () => {
   const home = readFileSync(`${dir}/Home.astro`, 'utf8');
-  const order = ['<Hero />', '<Features />', '<Why />', '<Flows />', '<More />', '<Stats />'].map((s) => home.indexOf(s));
+  const order = ['<Stage />', '<Hero />', '<Features />', '<Why />', '<Play />', '<Flows />', '<More />', '<Stats />'].map((s) => home.indexOf(s));
   assert.ok(order.every((i) => i >= 0));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
@@ -43,6 +44,41 @@ test('every docs link on the landing leads to a page', () => {
     const ok = p === '' ? existsSync('src/content/docs/docs/index.mdx') : existsSync(`${base}.mdx`) || existsSync(`${base}/index.mdx`);
     assert.ok(ok, `no docs page for ${p}`);
   }
+});
+
+test('every section the show reads is a section of the page', () => {
+  const read = (name: string) => readFileSync(name, 'utf8');
+  const show = readdirSync('src/lib/show').filter((f) => f.endsWith('.ts')).map((f) => read(`src/lib/show/${f}`)).join('\n');
+  const asked = new Set([...show.matchAll(/(?:progress|raw|seen|at|key)\('([a-z]+)'/g)].map((m) => m[1]));
+  for (const name of CHAPTERS) asked.add(name);
+  const places = show.split('const PLACES')[1].split('];')[0];
+  for (const m of places.matchAll(/\['[a-z]+', '([a-z]+)', '([a-z]+)'\]/g)) asked.add(m[1]).add(m[2]);
+  const pages = readdirSync(dir).filter((f) => f.endsWith('.astro')).map((f) => read(`${dir}/${f}`)).join('\n');
+  const sections = new Set([...pages.matchAll(/data-section="([a-z]+)"/g)].map((m) => m[1]));
+  for (const m of read(`${dir}/Why.astro`).matchAll(/\{ id: '([a-z]+)'/g)) sections.add(m[1]);
+  assert.ok(asked.size >= 10, `only ${[...asked]} found`);
+  for (const id of asked) assert.ok(sections.has(id), `no section ${id}`);
+  for (const anchor of ['features', 'why', 'demo', 'flows', 'more', 'speed', 'install']) {
+    assert.ok(new RegExp(`id=\\{?["']?${anchor}["'}]`).test(pages), `no #${anchor} for the nav and the footer`);
+  }
+});
+
+test('the show keeps the plain page under it', () => {
+  const layout = readFileSync('src/layouts/Landing.astro', 'utf8');
+  assert.ok(layout.includes("matchMedia('(prefers-reduced-motion: reduce)')") && layout.includes('WebGL2RenderingContext'));
+  assert.ok(layout.includes("classList.remove('motion', 'intro')"), 'the page gives the show up when its script never runs');
+  const plain = "dispatchEvent(new Event('cornercase:plain'))";
+  assert.ok(layout.includes(plain), 'the timeout does not say the page went plain');
+  assert.ok(readFileSync('src/lib/show/main.ts', 'utf8').includes(plain), 'the show does not say it gave up');
+  assert.ok(readFileSync(`${dir}/Flows.astro`, 'utf8').includes("addEventListener('cornercase:plain', plain, { once: true })"), 'the flow diagram never starts on a page that went plain late');
+  assert.ok(/const mounted = new WeakSet[^]+if \(mounted\.has\(root\)\) return;/.test(readFileSync('src/lib/flowshow/client.ts', 'utf8')), 'a flow diagram can be mounted twice');
+  for (const file of ['Hero.astro', 'Features.astro', 'Why.astro', 'Flows.astro', 'Stage.astro']) {
+    const text = readFileSync(`${dir}/${file}`, 'utf8');
+    assert.ok(text.includes(':global(.motion)'), `${file} has no rules of its own for the show`);
+  }
+  const stage = readFileSync(`${dir}/Stage.astro`, 'utf8');
+  assert.ok(/\.scene \{\s+display: none;/.test(stage), 'the stage shows without the show');
+  assert.ok(stage.includes('aria-hidden="true"'));
 });
 
 test('the README picture and og.png take the hero text from the landing', () => {

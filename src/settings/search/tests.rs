@@ -46,6 +46,8 @@ mod matching {
     #[case::a_section_name("telegram", "Remote › Telegram › bot")]
     #[case::a_value("per tracker", "Worktrees › issue branches")]
     #[case::a_note("ram", "UI › memory")]
+    #[case::subagent_notices_by_their_label("subagent notices", "UI › notices for subagents")]
+    #[case::subagent_notices_by_their_note("notif subagent", "UI › notices for subagents")]
     fn finds(#[case] query: &str, #[case] title: &str) {
         let s = settings();
         assert!(titles(&s, query).iter().any(|found| found == title), "{:?}", titles(&s, query));

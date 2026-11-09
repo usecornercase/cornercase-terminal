@@ -1,3 +1,4 @@
+use super::subagents;
 use super::*;
 use crate::host::sound::{Cue, Kind};
 
@@ -11,17 +12,10 @@ fn kinds(w: &mut Watched) -> Vec<Kind> {
     w.app.take_sounds().into_iter().map(|cue| cue.kind).collect()
 }
 
-fn with_a_subagent(subagents: bool) -> Watched {
-    let mut w = Watched::start(agents::Known::Claude, false);
+fn with_a_subagent(sound_subagents: bool) -> Watched {
+    let mut w = subagents::with_a_subagent();
     loud(&mut w);
-    w.app.config.sound_subagents = subagents;
-    let parent = tab_term(&w.app, 0, 0).id;
-    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("a tab for cursor");
-    w.run(agents::Known::Cursor);
-    w.report("busy", 1);
-    let cursor = tab_term(&w.app, 0, 1).id;
-    w.app.projects.pane_by_mut(cursor).expect("the cursor pane").parent = Some(Parent::pane(parent));
-    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("hide both agents");
+    w.app.config.sound_subagents = sound_subagents;
     w
 }
 
@@ -127,26 +121,12 @@ fn agents_that_name_each_other_as_parent_still_play_for_the_first_one() {
 
 #[test]
 fn an_agent_whose_parent_is_a_shell_is_a_main_agent() {
-    let mut w = Watched::start(agents::Known::Claude, true);
+    let mut w = subagents::with_a_shell_parent();
     loud(&mut w);
-    let shell = tab_term(&w.app, 0, 1).id;
-    let claude = tab_term(&w.app, 0, 0).id;
-    w.app.projects.pane_by_mut(claude).expect("the claude pane").parent = Some(Parent::pane(shell));
 
     w.report("waiting", 6);
 
     assert_eq!(kinds(&mut w), [Kind::NeedsYou]);
-}
-
-fn program_reports(w: &mut Watched, tabs: &[usize], state: &str) {
-    for &tab in tabs {
-        let pane = tab_term(&w.app, 0, tab).id;
-        let osc = format!("\x1b]7501;state={state}\x1b\\");
-        w.app.projects.pane_by_mut(pane).expect("the agent pane").feed(osc.as_bytes());
-    }
-    for _ in 0..6 {
-        tick(&mut w.app);
-    }
 }
 
 #[test]

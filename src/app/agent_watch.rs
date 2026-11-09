@@ -18,6 +18,7 @@ use crate::agents::Known;
 use crate::agents::activity;
 use crate::agents::awake::{self, Awake};
 use crate::agents::context::Look;
+use crate::agents::parent::Conversation;
 use crate::agents::tree;
 use crate::config::Config;
 use crate::host::{notify, sound};
@@ -182,11 +183,7 @@ impl App {
     }
 
     fn send_notices(&mut self, notices: Vec<(NoticeKey, Vec<u64>)>) {
-        let subagents = if !notices.is_empty() && self.config.sound && !self.config.sound_subagents {
-            self.subagent_panes()
-        } else {
-            HashSet::new()
-        };
+        let subagents = if notices.is_empty() { HashSet::new() } else { self.subagent_panes() };
         for ((agent, status, project, workspace), panes) in notices {
             let principal = panes.iter().any(|pane| !subagents.contains(pane));
             self.notify(Notice { agent: &agent, status, at: (project, workspace), panes, principal });
@@ -203,7 +200,7 @@ impl App {
         }
     }
 
-    fn subagent_panes(&self) -> HashSet<u64> {
+    pub(in crate::app) fn subagent_panes(&self) -> HashSet<u64> {
         self.agent_tree(false)
             .into_iter()
             .filter(|(_, node)| node.depth > 0)
@@ -215,7 +212,8 @@ impl App {
         let Notice { agent, status, at: (project, workspace), panes, principal } = notice;
         let Some(at) = self.projects.workspace_in(project, workspace) else { return };
         let (what, kind) = notifications::wording(status);
-        let sound = self.sound_for(kind, principal);
+        let sent = self.tells(principal);
+        let sound = self.sound_for(kind, principal).filter(|_| sent);
         let place = self.place_name(at);
         let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let message = notify::clean(&format!("{agent} {what} in {place}"));
@@ -227,10 +225,26 @@ impl App {
             project = project.id,
             workspace = workspace.id,
             panes = panes.len(),
-            sound = sound.map_or("none", sound::Kind::id)
+            sound = sound.map_or("none", sound::Kind::id),
+            subagent = !principal,
+            sent = sent
         );
+        if !sent {
+            return;
+        }
         let (project, workspace) = (project.id, workspace.id);
-        self.tell(Said { agent, status, place, message, project, workspace, panes, sound, machine: None });
+        self.tell(Said {
+            agent,
+            status,
+            place,
+            message,
+            project,
+            workspace,
+            panes,
+            sound,
+            machine: None,
+            subagent: !principal,
+        });
     }
 
     fn marked_panes(&self, marked: Marked) -> Vec<&Term> {
@@ -466,11 +480,8 @@ fn agent_in(
     term: &mut Term,
     now: Instant,
 ) -> Option<(String, activity::Activity)> {
-    let pid = term.foreground_pid();
+    let (pid, args, name) = term.foreground_agent(config);
     term.emulator.status_process(pid);
-    let args = pid.map(process::args).unwrap_or_default();
-    let name = agents::detect(config, &args);
-    term.agent_pid = pid.filter(|_| name.is_some());
     if let Some((pid, name)) = pid.zip(name.as_ref()) {
         term.status_agent = Some((pid, name.clone()));
     }
@@ -514,7 +525,11 @@ fn calibrate(term: &mut Term, pid: Option<i32>, agent: Option<Known>) {
     }
 }
 
-fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, now: Instant) {
+fn left_conversation(old: Option<&AgentState>, new: Option<&AgentState>) -> bool {
+    old.is_some_and(|old| new.is_none_or(|new| !Conversation::of(old).is(new)))
+}
+
+pub(super) fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, now: Instant) {
     let found = agent.zip(term.context.conversation()).map(|((agent, args), conversation)| AgentState {
         kind: agent.to_string(),
         conversation: conversation.to_string(),
@@ -525,6 +540,7 @@ fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, 
         term.resuming = None;
     }
     if found.is_some() || term.resuming.is_none_or(|until| now >= until) {
+        term.collapsed &= !left_conversation(term.resume.as_ref(), found.as_ref());
         term.resume = found;
     }
 }

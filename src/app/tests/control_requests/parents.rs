@@ -16,10 +16,6 @@ fn reported_parent(app: &App, id: u64) -> Option<u64> {
     panes.find(|pane| pane.id == id).and_then(|pane| pane.parent)
 }
 
-fn conversation_link(pane: u64, id: &str) -> Parent {
-    Parent { pane, by: By::Conversation(Conversation { kind: "claude".into(), id: id.into() }) }
-}
-
 fn made_pane(response: Response) -> u64 {
     done(response).ids.pane.expect("the new pane")
 }
@@ -261,7 +257,7 @@ mod holding {
     #[test]
     fn another_conversation_in_the_parent_pane_leaves_the_child_without_one() {
         let (mut app, _rx, caller, made) = caller_and_child();
-        app.link(made, Some(conversation_link(caller, "c1")));
+        app.link(made, Some(by_conversation(caller, "c1")));
 
         let steps = [Some("c1"), Some("c2"), None, Some("c1")];
         let seen: Vec<(Option<u64>, Option<u64>)> = steps
@@ -280,12 +276,13 @@ mod holding {
     fn an_agent_restarted_on_another_account_keeps_its_children() {
         let (mut app, _rx, caller, made) = caller_and_child();
         let (kept, lost) = (made_pane(now(&mut app, Some(caller), new_tab(None))), made);
-        app.link(kept, Some(conversation_link(caller, "c1")));
+        app.link(kept, Some(by_conversation(caller, "c1")));
+        assert_eq!(lives(&app, lost), Some(caller));
         converse(&mut app, caller, Some("c1"));
         let cwd = pane(&app, caller).cwd().expect("a folder");
 
         assert!(app.respawn_in(caller, cwd, crate::accounts::Accounts::default()).expect("respawned"));
-        assert_eq!(lives(&app, kept), None);
+        assert_eq!((lives(&app, kept), lives(&app, lost)), (None, None));
         converse(&mut app, caller, Some("c1"));
 
         assert_eq!((lives(&app, kept), lives(&app, lost)), (Some(caller), None));
@@ -301,7 +298,7 @@ mod holding {
 
         app.learn_parent_conversations();
 
-        assert_eq!(link(&app, made), Some(conversation_link(caller, "c1")));
+        assert_eq!(link(&app, made), Some(by_conversation(caller, "c1")));
     }
 }
 
@@ -322,7 +319,7 @@ mod an_agent_asking {
         let made = made_pane(now(&mut app, Some(caller), new_tab(None)));
 
         let by = link(&app, made).map(|link| link.by);
-        assert_eq!(by, Some(By::Conversation(Conversation { kind: "claude".into(), id: "s1".into() })));
+        assert_eq!(by, Some(By::Conversation(Conversation { kind: "claude".into(), conversation: "s1".into() })));
         fake.signal("quit");
         refreshing(&mut app, &rx, "the shell is back", |a| pane(a, caller).resume.is_none());
         assert_eq!(App::live_parent(pane(&app, made), &app.running_panes()), None);

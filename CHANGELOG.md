@@ -2,11 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.25
+## 0.13.26
 
 - **An agent's children stay with the agent that started them, not with its pane.** Agents started by another agent (with `cornercase start`, `new-tab`, `split` or `setup`, or a `flow run`'s orchestrator) used to hang under whatever agent ran in that pane later: when the agent that started them ended and you started a new conversation in the same pane, a whole flow's team showed up under it in the agents section, and closing the new agent closed those in its workspace. Now they become rows of their own once the agent that started them exits or another conversation runs in its pane, and `cornercase status`, `status --follow`, `view` and the `opened` event give `parent: null`, as when the pane closes. An agent that resumes its conversation, after a restart or on another account, keeps its children, and a flow's members stay under their orchestrator.
 - A pane started from a plain shell keeps that shell as its `parent` only while no agent runs in it, and until the server restarts.
+- A fold you made on an agent's row ends when that agent leaves its pane or starts another conversation, so it no longer hides the team of the next agent there.
 - After this update, agents an older cornercase saved under a parent come back as rows of their own, since that session does not say which agent started them.
+
+## 0.13.25
+
+- **Stop subagents from notifying you.** The new setting **notices for subagents** in **Settings › UI** (`notify_subagents` in `config.json`, on by default) decides whether the agents that other agents start also notify you. Turn it off and only the agents you started yourself make a toast, a desktop notification, a sound, or a Telegram or Discord message. A subagent still shows its `!` or `✓` in the sidebar until you look at its tab, and a subagent whose parent has closed notifies again as a main agent.
+- **Scripts can tell a subagent's notice apart.** With the setting on, the `notice` event of `cornercase events` carries `subagent: true` for an agent started by another agent, and `cornercase config` reads and writes `notify_subagents`. The feature is `notice-subagent` in `cornercase contract`.
 
 ## 0.13.24
 

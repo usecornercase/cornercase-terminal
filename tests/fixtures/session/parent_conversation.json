@@ -14,7 +14,7 @@
                   "cwd": "projects/team",
                   "agent": {
                     "kind": "claude",
-                    "conversation": "c1"
+                    "conversation": "s1"
                   },
                   "id": 4
                 }
@@ -28,7 +28,7 @@
                   "parent": 4,
                   "parent_conversation": {
                     "kind": "claude",
-                    "id": "s1"
+                    "conversation": "s1"
                   }
                 }
               ],

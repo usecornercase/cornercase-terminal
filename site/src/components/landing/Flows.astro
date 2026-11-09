@@ -11,13 +11,14 @@ const t = words(Astro.url).flows;
 ---
 
 <section class="section flows" id="flows" aria-labelledby="flows-title">
-  <div class="wrap">
-    <div class="head reveal">
-      <h2 class="h2" id="flows-title"><span class="line">{t.title[0]}</span>{' '}<span class="line">{t.title[1]}</span></h2>
+  <div class="reel" data-section="flows">
+   <div class="pin wrap">
+    <div class="head" data-flows-head>
+      <h2 class="h2" id="flows-title" data-title><span class="line">{t.title[0]}</span>{' '}<span class="line">{t.title[1]}</span></h2>
       <p class="lead"><Rich text={t.lead} /></p>
     </div>
 
-    <figure class="show reveal" data-flowshow data-mood={FINAL.mood}>
+    <figure class="show" data-flowshow data-mood={FINAL.mood}>
       <div class="window">
         <div class="window-bar">
           <span class="window-title">Flow · web-shop › issue-482-returns-page-crashes</span>
@@ -36,7 +37,10 @@ const t = words(Astro.url).flows;
       </div>
       <figcaption class="sr-only">{t.label}</figcaption>
     </figure>
+   </div>
+  </div>
 
+  <div class="wrap rest backed">
     <ul class="points">
       {
         t.points.map(([title, text], i) => (
@@ -57,7 +61,11 @@ const t = words(Astro.url).flows;
 <script>
   import { mount } from '../../lib/flowshow/client';
 
-  for (const root of document.querySelectorAll<HTMLElement>('[data-flowshow]')) mount(root);
+  const plain = () => {
+    for (const root of document.querySelectorAll<HTMLElement>('[data-flowshow]')) mount(root);
+  };
+  if (document.documentElement.classList.contains('motion')) addEventListener('cornercase:plain', plain, { once: true });
+  else plain();
 </script>
 
 <style>
@@ -232,6 +240,101 @@ const t = words(Astro.url).flows;
   .more:hover {
     text-decoration: underline;
     text-underline-offset: 4px;
+  }
+
+  :global(.motion) .section.flows {
+    padding-top: clamp(40px, 8vh, 96px);
+    padding-bottom: 0;
+    scroll-margin-top: -34lvh;
+  }
+
+  :global(.motion) .rest {
+    position: relative;
+    max-width: none;
+    padding-top: 1px;
+    padding-bottom: clamp(80px, 10vw, 144px);
+  }
+
+  :global(.motion) .rest > * {
+    max-width: var(--wrap);
+    margin-inline: auto;
+  }
+
+  :global(.motion) .reel {
+    height: 400lvh;
+    scroll-margin-top: -24lvh;
+  }
+
+  :global(.motion) .pin {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100svh;
+    max-width: calc(var(--wrap) * var(--big) + var(--gutter) * 2);
+    padding-top: 76px;
+    padding-bottom: 20px;
+    overflow: hidden;
+  }
+
+  :global(.motion) .head {
+    max-width: none;
+    opacity: 0;
+  }
+
+  :global(.motion) .head .h2 {
+    font-size: clamp(30px, 3.6vw, calc(60px * var(--big)));
+  }
+
+  :global(.motion) .head .line {
+    display: inline;
+  }
+
+  :global(.motion) .head .lead {
+    max-width: 92ch;
+    margin-top: clamp(10px, 1.6vh, 18px);
+    font-size: clamp(15px, 1.2vw, calc(18px * var(--big)));
+    line-height: 1.45;
+    text-shadow:
+      0 0 18px rgb(5 6 9),
+      0 0 6px rgb(5 6 9);
+  }
+
+  :global(.motion) .show {
+    width: min(100%, calc((100svh - 400px) * 2.44));
+    min-width: min(100%, 720px);
+    margin: clamp(16px, 2.6vh, 32px) auto 0;
+    opacity: 0;
+    box-shadow: 0 40px 110px -30px rgb(0 70 220 / 0.55);
+  }
+
+  :global(.motion) .toggle {
+    display: none;
+  }
+
+  @media (max-width: 999px) {
+    :global(.motion) .head .lead {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+    }
+
+    :global(.motion) .show {
+      width: min(100%, calc((100svh - 330px) * 0.56));
+      min-width: 0;
+    }
+
+    :global(.motion) .stage {
+      padding: 6px;
+    }
+
+    :global(.motion) .strip {
+      padding: 8px 10px;
+      font-size: 13px;
+    }
   }
 
   @media (max-width: 720px) {

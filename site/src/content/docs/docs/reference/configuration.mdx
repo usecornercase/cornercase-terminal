@@ -106,7 +106,7 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 
 <Screen
   name="settings-ui"
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; icons auto; agents section hidden; working icon moon; counts shown; inactive panes dimmed; shell default (bash) and shell arguments none; model and context shown under an agent's tab; memory hidden; desktop notifications auto; sound on, with the built-in sounds for needing you and finishing, and none for subagents; check for updates every hour; star prompt once; and prefix key off"
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; icons auto; agents section hidden; working icon moon; counts shown; inactive panes dimmed; shell default (bash) and shell arguments none; model and context shown under an agent's tab; memory hidden; desktop notifications auto; notices for subagents on; sound on, with the built-in sounds for needing you and finishing, and none for subagents; check for updates every hour; star prompt once; and prefix key off"
   crop={[2, 1, 106, 23]}
 />
 
@@ -130,10 +130,11 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 | **account switcher** | Show a row under each pane with its accounts, such as ` claude: work ▾ `, to change that pane's account. On by default; shown only once you have an account. |
 | **account picker** | Offer an account list when you start an issue or a flow, or schedule one. On by default; shown only once you have an account. |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
+| **notices for subagents** | Also tell you when an agent started by another agent or by a flow needs you or finishes: the toast, the desktop notification, the sound and the Telegram or Discord message. On by default; off, only the agents you started tell you. See [`notify_subagents`](#notify_subagents). |
 | **sound** | Also play a sound when an agent in another tab needs you or finishes, on the computer the window is on, even while your terminal is focused and inside tmux. On by default. See [A sound](../../guides/projects-workspaces-tabs/#a-sound). |
 | **sound when it needs you** | The file played when an agent waits for you or fails: an absolute path or one starting with `~/`, read on the window's computer. Empty plays the built-in one. |
 | **sound when it finishes** | The file played when an agent finishes. Empty plays the built-in one. |
-| **sound for subagents** | Also play it for agents started by another agent or by a flow. Off by default, so only the agents you started make a sound. |
+| **sound for subagents** | Also play it for agents started by another agent or by a flow. Off by default, so only the agents you started make a sound. With **notices for subagents** off, they play none either way. |
 | **check for updates** | *Every hour*: ask GitHub for the latest release when the server starts and then hourly, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
 | **guided tour** | *On a new install*: the [guided tour](../../first-steps/#the-guided-tour-and-help) shows once by itself, the first time cornercase runs. *Only from Help*: it never shows by itself. See [`tour`](#tour). |
 | **start the tour** | Opens the guided tour. |
@@ -297,6 +298,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "account_switcher": true,
   "account_picker": true,
   "desktop_notifications": "auto",
+  "notify_subagents": true,
   "sound": true,
   "sound_waiting": "",
   "sound_done": "",
@@ -371,6 +373,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`account_switcher`](#account_switcher) | boolean | `true` |
 | [`account_picker`](#account_picker) | boolean | `true` |
 | [`desktop_notifications`](#desktop_notifications) | string | `"auto"` |
+| [`notify_subagents`](#notify_subagents) | boolean | `true` |
 | [`sound`](#sound) | boolean | `true` |
 | [`sound_waiting`](#sound_waiting) | string | `""` |
 | [`sound_done`](#sound_done) | string | `""` |
@@ -628,6 +631,10 @@ Whether the dialogs that start an issue or a flow, and the schedule form, offer 
 
 How cornercase asks your terminal for a desktop notification when an agent in another tab needs you or finishes: `"auto"` picks it from each terminal, `"osc777"`, `"osc9"`, `"osc99"` or `"bell"` forces one, and `"off"` sends none. An unknown value counts as `"auto"`. The toast inside cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications).
 
+#### `notify_subagents`
+
+Whether agents started by another agent (with `cornercase start`, `new-tab` or `split` run in its pane) or by a [flow](../../guides/flows/), the ones the [agents section](../../guides/projects-workspaces-tabs/#the-agents-section) hangs under another, tell you when they need you, fail or finish. `true` by default. With `false`, only the agents you started do: the others make no toast, desktop notification, sound, [`notice` event](../../guides/scripts-and-agents/#follow-events) or Telegram and Discord message while you are away, and the agent that started them still does. Their tabs keep their `!` and `✓`, in the agents section too, so you can still see which one waits for you or has finished; one waiting for a permission tells no one, so look for its `!`. An agent whose parent closed, whose parent's agent is gone, or started from a shell, counts as one you started. A change counts from the next notice, and what was left quiet is not sent once you turn it back on. An agent on one of your [machines](../../guides/machines/#notices-from-a-machine) counts as started by another when it has a parent there. [`cornercase notify`](../../guides/scripts-and-agents/), the queue's and a failed setup's notices are not agents' and always show.
+
 #### `sound`
 
 Whether cornercase also plays a sound when an agent in another tab needs you or finishes: at the same moments as the toast, once the state has held for a second, never for the tab you are looking at. It plays on the computer the window is on, whatever your terminal does with notifications, so it is heard while Ghostty is focused and inside tmux, screen or Zellij; with [`cornercase remote`](../../guides/remote/) it plays on your laptop. A window opened in a plain SSH session (`ssh -t host cornercase`) plays none, since it would play on the other computer. It does not depend on [`desktop_notifications`](#desktop_notifications), which can be `"off"`. On macOS it uses `afplay`; on Linux the first of `pw-play`, `paplay` and `aplay` found. On by default. See [A sound](../../guides/projects-workspaces-tabs/#a-sound).
@@ -642,7 +649,7 @@ The file played when an agent finishes, the same way as [`sound_waiting`](#sound
 
 #### `sound_subagents`
 
-Whether the sound also plays for agents started by another agent (with `cornercase start`, `new-tab` or `split` run in its pane) or by a [flow](../../guides/flows/), the ones the [agents section](../../guides/projects-workspaces-tabs/#the-agents-section) hangs under another. `false` by default: only the agents you started make a sound, and the others still get their toast and notification. An agent whose parent closed, or whose parent's agent is gone, counts as one you started.
+Whether the sound also plays for agents started by another agent (with `cornercase start`, `new-tab` or `split` run in its pane) or by a [flow](../../guides/flows/), the ones the [agents section](../../guides/projects-workspaces-tabs/#the-agents-section) hangs under another. `false` by default: only the agents you started make a sound, and the others still get their toast and notification. An agent whose parent closed, or whose parent's agent is gone, counts as one you started. With [`notify_subagents`](#notify_subagents) `false` the others make no notice at all, so this setting has nothing to play.
 
 #### `check_updates`
 
