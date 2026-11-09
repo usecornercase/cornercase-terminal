@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.26
+
+- **A change made with a command reaches your own UI at once.** On a server where nothing changed in the last half second, a fold, a rename, a move or any other change made with a command now reaches `cornercase view` and `status --follow` as soon as the command answers, instead of half a second later, and so does a change to what `status --app --follow` and `flow runs --follow` show. Changes close together still come at most one line every half second.
+
 ## 0.13.25
 
 - **Stop subagents from notifying you.** The new setting **notices for subagents** in **Settings › UI** (`notify_subagents` in `config.json`, on by default) decides whether the agents that other agents start also notify you. Turn it off and only the agents you started yourself make a toast, a desktop notification, a sound, or a Telegram or Discord message. A subagent still shows its `!` or `✓` in the sidebar until you look at its tab, and a subagent whose parent has closed notifies again as a main agent.
