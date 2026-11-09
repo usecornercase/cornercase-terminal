@@ -17,12 +17,13 @@ included, or one several are on (both list the workspaces to pick from), and 3 w
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json. close and rename exit with 4 when their --boot names another run of the
-server, which then did nothing.
+server, which then did nothing, and every command exits with 5 when the cornercase --remote reaches is older
+than this one, printing with --json both versions and the command that updates it as one JSON line.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
 standard input arrive as they are. The other machine may run this version or a newer one (an older one
-is refused, and `--remote DESTINATION update` updates it), ssh never asks for a
+is refused with exit status 5, and `--remote DESTINATION update` updates it), ssh never asks for a
 password, only `start-server` starts a server there, and a command that follows a stream ends it
 there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace; `paste-file` reads its FILE here. `update`, `restart`, `kill-server`
 and `logs` run there, as that machine's own command through ssh, and exit with its status; the plugin commands that

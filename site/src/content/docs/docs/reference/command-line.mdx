@@ -48,7 +48,7 @@ The list comes from the old server itself, so you see what it is running before 
 
 ### `cornercase remote`
 
-Opens the window on the server of another machine, through your own `ssh`:
+Opens the window on the server of another machine, through your own `ssh` (declined, or without a terminal, when the other machine is older, it exits with status 5):
 
 ```sh
 cornercase remote devbox                                  # a host from ~/.ssh/config, or user@host
@@ -66,7 +66,7 @@ CORNERCASE_REMOTE=devbox cornercase events --json
 cornercase --remote devbox --remote-command '~/tools/cornercase' start-server
 ```
 
-A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands that ask the server: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server` and `logs` run on that machine, as its own `cornercase` through `ssh`, and exit with its status; the plugin commands that install or change plugins and `plugin windows` refuse it with status 2. Commands accept a machine that runs the same version or a newer one. Ids last one run of the server there, so `close` and `rename` take [`--boot BOOT`](../../guides/scripts-and-agents/#arrange), and a server that restarted since you read the id refuses with status 4 instead of acting on whatever has it now. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
+A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands that ask the server: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server` and `logs` run on that machine, as its own `cornercase` through `ssh`, and exit with its status; the plugin commands that install or change plugins and `plugin windows` refuse it with status 2. Commands accept a machine that runs the same version or a newer one, and exit with status 5 on an older one (with `--json`, its version and the update command as JSON). Ids last one run of the server there, so `close` and `rename` take [`--boot BOOT`](../../guides/scripts-and-agents/#arrange), and a server that restarted since you read the id refuses with status 4 instead of acting on whatever has it now. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
 
 ### `cornercase update`
 
@@ -275,10 +275,10 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | ``no cornercase server is running on `<host>` `` | A `--remote` command reached the machine, but no server runs there. |
 | ``` `<command>` acts on this machine, so it takes no --remote … ``` | The plugin commands that install or change plugins don't go through `ssh` (status 2). Run them there. |
 | ``` `plugin windows` runs on the machine that shows the window, so it takes no --remote … ``` | Window processes belong to the machine that shows the window (status 2). Run it there, without `--remote` or `CORNERCASE_REMOTE`. |
-| ``` `<host>` runs cornercase <version> and this machine <version>. Update it from here with … ``` | A `--remote` command found an older cornercase there; run the command the message gives to update it. |
-| ``the cornercase on `<host>` is too old to attach to from another machine …`` | The other machine's cornercase predates `cornercase remote`. Update it there. |
-| ``` `<host>` runs cornercase <version> and this machine <version> … ``` | The two machines run different versions; the message says which one to update. |
+| ``` `<host>` runs cornercase <version> and this machine <version>. Update it from here with … ``` | A `--remote` command found an older cornercase there; run the command the message gives to update it (status 5). |
+| ``the cornercase on `<host>` is too old to attach to from another machine …`` | The other machine's cornercase predates `cornercase remote`. Update it there (status 5). |
+| ``` `<host>` runs cornercase <version> and this machine <version> … ``` | The two machines run different versions; the message says which one to update (status 5 when the other machine is the older one). |
 | `error: unrecognized subcommand '…'` | There is no such command; `cornercase --help` lists them. |
 | `error: unexpected argument '…' found` | The command has no such option; `cornercase COMMAND --help` lists its options. |
 
-On any of these, `cornercase` exits with a non-zero status: 2 for the last two, which are mistakes in how it was called, and 1 for the others.
+On any of these, `cornercase` exits with a non-zero status: 2 for the last two, which are mistakes in how it was called, 5 for the ones that say the other machine's cornercase is older, and 1 for the others.

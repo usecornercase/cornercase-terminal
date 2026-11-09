@@ -121,15 +121,62 @@ fn a_remote_window_comes_back_after_the_connection_drops() {
 #[case::window("window", &["remote", "devbox", "--command"], "Run `cornercase update` there")]
 #[case::commands("commands", &["--remote", "devbox", "status", "--remote-command"], "Update it from here with `cornercase --remote devbox")]
 fn an_older_remote_says_how_to_update_it(#[case] name: &str, #[case] args: &[&str], #[case] hint: &str) {
+    let out = older_there(name, "echo 'cornercase-proxy 1 0.0.1'\ncat > /dev/null", args).0;
+
+    assert!(refused(&out, 5, "`devbox` runs cornercase 0.0.1"), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains(hint), "{out:?}");
+}
+
+fn older_there(name: &str, body: &str, args: &[&str]) -> (std::process::Output, String) {
     let dir = temp_dir(&format!("old-remote-{name}"));
     let old = dir.join("cornercase");
-    write_executable(&old, "#!/bin/sh\necho 'cornercase-proxy 1 0.0.1'\ncat > /dev/null\n");
-
-    let out = remote_refusal(args, &old.display().to_string());
-
+    write_executable(&old, &format!("#!/bin/sh\n{body}\n"));
+    let path = old.display().to_string();
+    let out = remote_refusal(args, &path);
     let _ = std::fs::remove_dir_all(&dir);
-    assert!(refused(&out, 1, "`devbox` runs cornercase 0.0.1"), "{out:?}");
-    assert!(String::from_utf8_lossy(&out.stderr).contains(hint), "{out:?}");
+    (out, path)
+}
+
+fn one_line_of_json(out: &std::process::Output) -> serde_json::Value {
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(stdout.trim_end().lines().count(), 1, "{out:?}");
+    serde_json::from_str(&stdout).expect("a line of JSON")
+}
+
+#[rstest]
+#[case::json(&["--remote", "devbox", "status", "--json", "--remote-command"], true)]
+#[case::text(&["--remote", "devbox", "status", "--remote-command"], false)]
+#[case::requests(&["--remote", "devbox", "requests", "--follow", "-", "--remote-command"], false)]
+fn a_program_reads_why_an_older_remote_refused(#[case] args: &[&str], #[case] json: bool) {
+    let (out, path) = older_there("program", "echo 'cornercase-proxy 1 0.0.1'\ncat > /dev/null", args);
+
+    assert!(refused(&out, 5, "error: `devbox` runs cornercase 0.0.1"), "{out:?}");
+    if !json {
+        assert!(out.stdout.is_empty(), "{out:?}");
+        return;
+    }
+    let error = &one_line_of_json(&out)["error"];
+    assert_eq!(error["code"], "older");
+    assert_eq!(error["destination"], "devbox");
+    assert_eq!(error["there"], "0.0.1");
+    assert_eq!(error["here"], env!("CARGO_PKG_VERSION"));
+    let update = serde_json::json!(["cornercase", "--remote", "devbox", "--remote-command", path, "update"]);
+    assert_eq!(error["update"], update);
+    let message = error["message"].as_str().expect("a message");
+    assert!(message.contains("Update it from here with `cornercase --remote devbox --remote-command "), "{message}");
+}
+
+#[test]
+fn a_cornercase_from_before_the_proxy_is_older_too() {
+    let body = "echo \"error: unrecognized subcommand 'proxy'\" >&2\nexit 2";
+    let args = ["--remote", "devbox", "contract", "--json", "--remote-command"];
+
+    let (out, _) = older_there("before-proxy", body, &args);
+
+    assert!(refused(&out, 5, "too old"), "{out:?}");
+    let error = &one_line_of_json(&out)["error"];
+    assert_eq!(error["code"], "older");
+    assert!(error["there"].is_null(), "{error}");
 }
 
 #[rstest]

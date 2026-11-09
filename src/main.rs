@@ -1,15 +1,15 @@
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::Parser;
-use cornercase::cli::{self, Cli};
+use cornercase::cli;
 use cornercase::error::Error;
 
 fn main() -> Result<ExitCode> {
     if std::env::var_os("CORNERCASE_HIGHLIGHT_WORKER").is_some() {
         std::process::exit(cornercase::highlight_worker());
     }
-    match cli::run(Cli::parse()) {
+    let (parsed, json) = cli::parse();
+    match cli::run(parsed) {
         Ok(done) => Ok(if done { ExitCode::SUCCESS } else { ExitCode::FAILURE }),
         Err(Error::Partial) => Ok(ExitCode::from(3)),
         Err(Error::Exited(code)) => Ok(ExitCode::from(code)),
@@ -20,6 +20,10 @@ fn main() -> Result<ExitCode> {
         Err(Error::StaleBoot(message)) => {
             eprintln!("error: {message}");
             Ok(ExitCode::from(4))
+        }
+        Err(error) if cli::older(&error) => {
+            cli::print_older(&error, json);
+            Ok(ExitCode::from(5))
         }
         Err(e) => Err(e.into()),
     }
