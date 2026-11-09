@@ -285,21 +285,6 @@ mod folds {
         app.projects.pane_by(pane).is_some_and(|term| term.collapsed)
     }
 
-    #[rstest]
-    #[case::the_agent_left_the_pane(7200, false)]
-    #[case::the_agent_is_still_coming_back(0, true)]
-    fn a_fold_ends_with_the_agent_that_was_folded(#[case] after: u64, #[case] kept: bool) {
-        let mut f = family(Activity::Idle);
-        let config = f.app.config.clone();
-        converse(&mut f.app, f.parent, Some("c1"));
-        f.app.projects.pane_by_mut(f.parent).expect("the parent").collapsed = true;
-
-        let term = f.app.projects.pane_by_mut(f.parent).expect("the parent");
-        agent_watch::remember(&config, term, None, Instant::now() + Duration::from_secs(after));
-
-        assert_eq!(collapsed(&f.app, f.parent), kept);
-    }
-
     fn fourth(f: &mut Family, parent: u64, activity: Activity) -> u64 {
         f.app.push_tab(workspace_at(&f.app, 0, 0), TALL, None).expect("a fourth tab");
         let term = f.app.projects[0].workspaces[0].tabs.last_mut().and_then(Tab::pane_mut).expect("a pane");

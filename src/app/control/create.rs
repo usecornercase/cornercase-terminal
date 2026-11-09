@@ -284,7 +284,7 @@ impl App {
 
     pub(in crate::app) fn caller_link(&mut self, caller: Option<u64>) -> Option<Parent> {
         let term = self.projects.pane_by_mut(caller?)?;
-        term.see_agent(&self.config);
+        let _ = term.see_agent(&self.config);
         Some(Parent { pane: term.id, by: term.running().by()? })
     }
 

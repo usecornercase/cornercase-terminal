@@ -6,7 +6,6 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **An agent's children stay with the agent that started them, not with its pane.** Agents started by another agent (with `cornercase start`, `new-tab`, `split` or `setup`, or a `flow run`'s orchestrator) used to hang under whatever agent ran in that pane later: when the agent that started them ended and you started a new conversation in the same pane, a whole flow's team showed up under it in the agents section, and closing the new agent closed those in its workspace. Now they become rows of their own once the agent that started them exits or another conversation runs in its pane, and `cornercase status`, `status --follow`, `view` and the `opened` event give `parent: null`, as when the pane closes. An agent that resumes its conversation, after a restart or on another account, keeps its children, and a flow's members stay under their orchestrator.
 - A pane started from a plain shell keeps that shell as its `parent` only while no agent runs in it, and until the server restarts.
-- A fold you made on an agent's row ends when that agent leaves its pane or starts another conversation, so it no longer hides the team of the next agent there.
 - After this update, agents an older cornercase saved under a parent come back as rows of their own, since that session does not say which agent started them.
 
 ## 0.13.25

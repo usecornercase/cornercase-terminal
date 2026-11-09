@@ -305,11 +305,7 @@ impl Term {
         }
     }
 
-    pub(crate) fn see_agent(&mut self, config: &Config) {
-        self.foreground_agent(config);
-    }
-
-    pub(crate) fn foreground_agent(&mut self, config: &Config) -> (Option<i32>, Vec<String>, Option<String>) {
+    pub(crate) fn see_agent(&mut self, config: &Config) -> (Option<i32>, Vec<String>, Option<String>) {
         let pid = self.foreground_pid();
         let args = pid.map(process::args).unwrap_or_default();
         let name = agents::detect(config, &args);

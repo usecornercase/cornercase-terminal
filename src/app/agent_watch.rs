@@ -18,7 +18,6 @@ use crate::agents::Known;
 use crate::agents::activity;
 use crate::agents::awake::{self, Awake};
 use crate::agents::context::Look;
-use crate::agents::parent::Conversation;
 use crate::agents::tree;
 use crate::config::Config;
 use crate::host::{notify, sound};
@@ -480,7 +479,7 @@ fn agent_in(
     term: &mut Term,
     now: Instant,
 ) -> Option<(String, activity::Activity)> {
-    let (pid, args, name) = term.foreground_agent(config);
+    let (pid, args, name) = term.see_agent(config);
     term.emulator.status_process(pid);
     if let Some((pid, name)) = pid.zip(name.as_ref()) {
         term.status_agent = Some((pid, name.clone()));
@@ -525,11 +524,7 @@ fn calibrate(term: &mut Term, pid: Option<i32>, agent: Option<Known>) {
     }
 }
 
-fn left_conversation(old: Option<&AgentState>, new: Option<&AgentState>) -> bool {
-    old.is_some_and(|old| new.is_none_or(|new| !Conversation::of(old).is(new)))
-}
-
-pub(super) fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, now: Instant) {
+fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, now: Instant) {
     let found = agent.zip(term.context.conversation()).map(|((agent, args), conversation)| AgentState {
         kind: agent.to_string(),
         conversation: conversation.to_string(),
@@ -540,7 +535,6 @@ pub(super) fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[
         term.resuming = None;
     }
     if found.is_some() || term.resuming.is_none_or(|until| now >= until) {
-        term.collapsed &= !left_conversation(term.resume.as_ref(), found.as_ref());
         term.resume = found;
     }
 }
