@@ -124,6 +124,9 @@ impl Settings {
         if let Row::Recap(recap) = row {
             return Some(self.recap_setting(row, *recap));
         }
+        if matches!(row, Row::Shell | Row::ShellArgs) {
+            return Some(self.shell_setting(row));
+        }
         self.plain_setting_of(row)
     }
 

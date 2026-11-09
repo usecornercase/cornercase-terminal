@@ -13,7 +13,7 @@ pub(crate) const HEADER: &str =
 pub(crate) const NEVER_SHARED: [&str; 4] =
     ["tokens, bots, paired chats and browsers", "jira_email", "accounts and profiles", "remote access and keep awake"];
 #[cfg(test)]
-pub(crate) const LEFT_OUT: [&str; 16] = [
+pub(crate) const LEFT_OUT: [&str; 17] = [
     "jira_email",
     "discord_forum",
     "discord_forum_close",
@@ -30,6 +30,7 @@ pub(crate) const LEFT_OUT: [&str; 16] = [
     "default_flow",
     "flow_order",
     "machines",
+    "shell",
 ];
 
 const AGENTS: [&str; 14] = [

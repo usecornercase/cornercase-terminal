@@ -6,13 +6,18 @@ fn fake_shell(dir: &Path) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
     let path = dir.join("shell");
-    std::fs::write(&path, "#!/bin/sh\necho \"shell:$CORNERCASE_BRANCH:$CORNERCASE_ROOT\"\n").expect("write");
+    std::fs::write(&path, "#!/bin/sh\necho \"shell:$CORNERCASE_BRANCH:$CORNERCASE_ROOT\"\nprintf 'args:'; for a in \"$@\"; do printf '%s|' \"$a\"; done; echo\n").expect("write");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     path
 }
 
 #[cfg(unix)]
 fn run(script: &str) -> (String, Option<i32>) {
+    run_with(script, &[])
+}
+
+#[cfg(unix)]
+fn run_with(script: &str, shell_args: &[String]) -> (String, Option<i32>) {
     let dir = TempDir::new();
     let shell = fake_shell(dir.path()).display().to_string();
     let status = dir.path().join("status");
@@ -20,6 +25,7 @@ fn run(script: &str) -> (String, Option<i32>) {
         script,
         status: &status,
         shell: &shell,
+        shell_args,
         root: Path::new("/repo"),
         branch: "feat/x",
         worktree: dir.path(),
@@ -44,6 +50,15 @@ mod wrapper {
         assert_eq!(status, Some(0));
         assert!(out.contains("hi") && out.contains("✓ setup finished"), "{out}");
         assert!(out.contains("shell:inherited:"), "{out}");
+    }
+
+    #[test]
+    fn the_shell_starts_with_the_arguments_that_were_chosen() {
+        let args = ["-l".to_string(), "two words".to_string()];
+        let (out, status) = run_with("echo hi", &args);
+        assert_eq!(status, Some(0));
+        assert!(out.contains("args:-l|two words|"), "{out}");
+        assert!(run("echo hi").0.contains("args:\n"), "no arguments are given by default");
     }
 
     #[test]
@@ -168,6 +183,7 @@ mod on_windows {
             script,
             status: &status,
             shell: CMD,
+            shell_args: &[],
             root: root.path(),
             branch: "feat/it's",
             worktree: dir.path(),

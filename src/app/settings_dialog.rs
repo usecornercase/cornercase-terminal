@@ -29,9 +29,14 @@ impl App {
         }
         self.forget_changed_issues(&config);
         let forum = config.discord_forum != self.config.discord_forum;
+        let shell = config.shell != self.config.shell;
         self.config = config;
+        let shells = shell.then(|| self.shells_here());
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.take_config(self.config.clone());
+            if let Some(shells) = shells {
+                s.shells = shells;
+            }
         }
         if forum {
             self.forum_switched();
@@ -114,8 +119,16 @@ impl App {
         settings.plugins = self.plugin_rows();
         settings.accounts = self.accounts_listed();
         settings.machines = self.machine_infos();
+        settings.shells = self.shells_here();
         settings.now = SystemTime::now();
         settings
+    }
+
+    pub(super) fn refresh_shells(&mut self) {
+        let shells = self.shells_here();
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.shells = shells;
+        }
     }
 
     pub(super) fn refresh_open_settings(&mut self) {

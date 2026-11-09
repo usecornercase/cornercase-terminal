@@ -260,6 +260,50 @@ fn normal_builds(builds: Option<Vec<String>>) -> Option<Vec<String>> {
     (!defaults).then_some(names)
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "ShellForm", into = "ShellForm")]
+pub(crate) struct ShellChoice {
+    pub(crate) program: String,
+    pub(crate) args: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(untagged, expecting = "the shell's program, or an object with `program` and `args`")]
+enum ShellForm {
+    Program(String),
+    Full {
+        #[serde(default)]
+        program: String,
+        #[serde(default)]
+        args: Vec<String>,
+    },
+}
+
+impl From<ShellForm> for ShellChoice {
+    fn from(form: ShellForm) -> Self {
+        match form {
+            ShellForm::Program(program) => Self { program, args: Vec::new() },
+            ShellForm::Full { program, args } => Self { program, args },
+        }
+    }
+}
+
+impl From<ShellChoice> for ShellForm {
+    fn from(choice: ShellChoice) -> Self {
+        if choice.args.is_empty() {
+            Self::Program(choice.program)
+        } else {
+            Self::Full { program: choice.program, args: choice.args }
+        }
+    }
+}
+
+impl ShellChoice {
+    pub(crate) fn chosen(&self) -> Option<&str> {
+        Some(self.program.trim()).filter(|program| !program.is_empty())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 #[expect(clippy::struct_excessive_bools, reason = "each switch is its own key in config.json")]
@@ -310,6 +354,7 @@ pub(crate) struct Config {
     pub(crate) counts: bool,
     pub(crate) todo_dot: bool,
     pub(crate) dim_inactive_panes: bool,
+    pub(crate) shell: ShellChoice,
     pub(crate) prefix_key: String,
     pub(crate) model: bool,
     pub(crate) context: bool,
@@ -390,6 +435,7 @@ impl Config {
         counts: false,
         todo_dot: false,
         dim_inactive_panes: false,
+        shell: ShellChoice { program: String::new(), args: Vec::new() },
         prefix_key: String::new(),
         model: false,
         context: false,

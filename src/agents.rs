@@ -52,6 +52,8 @@ const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
 pub(crate) const STOP_PARSING: &str = "--%";
 const CMD_NAME_ENDS: [char; 3] = ['=', ',', ';'];
 const CMD: &str = "cmd";
+const POSIX_SHELLS: [&str; 9] = ["sh", "bash", "zsh", "dash", "ksh", "mksh", "oksh", "loksh", "yash"];
+const PLAIN_WORD: &str = "-_./:+=,@";
 const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
     ("droid", "droid"),
@@ -70,7 +72,8 @@ pub(crate) type Mode = (String, Vec<String>);
 pub(crate) enum PaneShell {
     PowerShell,
     Cmd,
-    Other,
+    Posix,
+    Plain,
 }
 
 pub(crate) fn kinds(config: &Config) -> Vec<String> {
@@ -365,7 +368,12 @@ impl PaneShell {
             None => Self::PowerShell,
             Some(name) if process::program::is_powershell(name) => Self::PowerShell,
             Some(name) if process::same_file_name(process::program_name(name), CMD) => Self::Cmd,
-            Some(_) => Self::Other,
+            Some(name)
+                if POSIX_SHELLS.iter().any(|shell| process::same_file_name(shell, process::program_name(name))) =>
+            {
+                Self::Posix
+            }
+            Some(_) => Self::Plain,
         }
     }
 }
@@ -379,15 +387,16 @@ pub(crate) fn typed_on_windows(
     let refusal = match shell {
         PaneShell::PowerShell => split_word(&words),
         PaneShell::Cmd => cmd_word(&words),
-        PaneShell::Other => None,
+        PaneShell::Posix => None,
+        PaneShell::Plain => plain_word(&words),
     };
     if let Some(refusal) = refusal {
         return Err(refusal);
     }
     let typed = match shell {
         PaneShell::PowerShell => line.to_string(),
-        PaneShell::Cmd => words.join(" "),
-        PaneShell::Other => join_args(&words),
+        PaneShell::Cmd | PaneShell::Plain => words.join(" "),
+        PaneShell::Posix => join_args(&words),
     };
     without_cmd(typed, words, shell == PaneShell::PowerShell, runs)
 }
@@ -417,6 +426,19 @@ fn split_word(words: &[String]) -> Option<Refusal> {
 
 pub(crate) fn splits(word: &str) -> bool {
     word.contains('"') || (word.ends_with('\\') && word.contains(char::is_whitespace))
+}
+
+fn plain_word(words: &[String]) -> Option<Refusal> {
+    let word = words
+        .iter()
+        .find(|word| word.is_empty() || !word.chars().all(|c| c.is_ascii_alphanumeric() || PLAIN_WORD.contains(c)))?;
+    Some(refusal(
+        "a word this shell may read its own way",
+        &format!(
+            "the pane's shell is not PowerShell, cmd or a POSIX shell, so cornercase cannot quote `{word}` for it; \
+             start the agent in a PowerShell, cmd or Git Bash pane"
+        ),
+    ))
 }
 
 fn cmd_word(words: &[String]) -> Option<Refusal> {

@@ -1,3 +1,105 @@
+#[cfg(unix)]
+mod on_unix {
+    use std::ffi::OsString;
+    use std::path::Path;
+
+    use super::super::imp::{listed, resolve_on};
+    use super::super::{Found, resolve};
+    use crate::test_util::{TempDir, write_executable};
+
+    fn tool(dir: &Path, name: &str) -> String {
+        let path = dir.join(name);
+        write_executable(&path, "#!/bin/sh\n");
+        path.to_string_lossy().into_owned()
+    }
+
+    fn data(dir: &Path, name: &str) -> String {
+        let path = dir.join(name);
+        std::fs::write(&path, "").expect("write a plain file");
+        path.to_string_lossy().into_owned()
+    }
+
+    fn path_of(dir: &Path) -> OsString {
+        dir.as_os_str().to_owned()
+    }
+
+    #[test]
+    fn the_listed_shells_skip_what_cannot_be_offered() {
+        let dir = TempDir::new();
+        let (zsh, fish) = (tool(dir.path(), "zsh"), tool(dir.path(), "fish"));
+        let text = format!(
+            "# a comment\n\n{zsh}\n{fish}\n{}\n{}\n{}\nrelative/bash\n{}/missing-bash\n",
+            tool(dir.path(), "tmux"),
+            tool(dir.path(), "rbash"),
+            data(dir.path(), "bash"),
+            dir.path().display()
+        );
+
+        let shells = listed(&text);
+
+        let expected = [Found { value: zsh, note: "zsh".into() }, Found { value: fish, note: "fish".into() }];
+        assert_eq!(shells, expected);
+    }
+
+    #[test]
+    fn two_paths_to_one_file_are_listed_once() {
+        let dir = TempDir::new();
+        let bash = tool(dir.path(), "bash");
+        let linked = dir.path().join("link");
+        std::fs::create_dir(&linked).expect("make a folder");
+        std::os::unix::fs::symlink(&bash, linked.join("bash")).expect("link the shell");
+
+        let shells = listed(&format!("{bash}\n{}\n", linked.join("bash").display()));
+
+        assert_eq!(shells, [Found { value: bash, note: "bash".into() }]);
+    }
+
+    #[test]
+    fn an_absolute_executable_is_taken_as_it_is() {
+        let dir = TempDir::new();
+        let bash = tool(dir.path(), "bash");
+
+        assert_eq!(resolve(&bash, None), Ok(bash.clone()));
+        assert_eq!(resolve(&format!(" \"{bash}\" "), None), Ok(bash));
+    }
+
+    #[test]
+    fn a_path_starting_with_a_tilde_follows_the_home() {
+        let home = TempDir::new();
+        let fish = tool(home.path(), "fish");
+
+        assert_eq!(resolve("~/fish", Some(home.path())), Ok(fish));
+    }
+
+    #[test]
+    fn a_name_is_found_on_the_given_path() {
+        let (empty, tools) = (TempDir::new(), TempDir::new());
+        let nu = tool(tools.path(), "nu");
+        let path = std::env::join_paths([empty.path(), tools.path()]).expect("join the folders");
+
+        assert_eq!(resolve_on("nu", Some(&path)), Ok(nu));
+        assert_eq!(resolve_on("nu", Some(&path_of(empty.path()))), Err("it was not found on the PATH".into()));
+    }
+
+    #[test]
+    fn what_cannot_start_says_why() {
+        let dir = TempDir::new();
+        let plain = data(dir.path(), "plain");
+
+        assert_eq!(
+            resolve("bin/bash", None),
+            Err("use a full path, one starting with ~/, or a name on the PATH".into())
+        );
+        assert_eq!(resolve(&plain, None), Err("there is no program there".into()));
+        assert_eq!(
+            resolve(&format!("{}/missing", dir.path().display()), None),
+            Err("there is no program there".into())
+        );
+        assert_eq!(resolve("", None), Err("no program was given".into()));
+        assert!(resolve("ba\u{7}sh", None).is_err());
+    }
+}
+
 #[cfg(windows)]
 mod on_windows {
     use std::ffi::OsString;
@@ -5,7 +107,7 @@ mod on_windows {
 
     use rstest::rstest;
 
-    use super::super::imp::{fallback, startable};
+    use super::super::imp::{Env, fallback, found_in, resolve_on, startable};
     use crate::test_util::TempDir;
 
     fn program(dir: &Path, name: &str) -> String {
@@ -95,5 +197,56 @@ mod on_windows {
         let dir = TempDir::new();
 
         assert_eq!(fallback(Some(&folders(&[dir.path()])), comspec), expected);
+    }
+
+    #[test]
+    fn found_lists_the_shells_of_this_computer_and_leaves_out_what_is_missing() {
+        let (system, git, programs) = (TempDir::new(), TempDir::new(), TempDir::new());
+        std::fs::create_dir_all(git.path().join("cmd")).expect("make cmd");
+        std::fs::create_dir_all(git.path().join("bin")).expect("make bin");
+        let _ = program(&git.path().join("cmd"), "git.exe");
+        let bash = program(&git.path().join("bin"), "bash.exe");
+        let pwsh = program(programs.path(), "pwsh.exe");
+        let cmd = program(system.path(), "cmd.exe");
+        let path = folders(&[programs.path(), system.path(), &git.path().join("cmd")]);
+
+        let shells = found_in(&Env { path: Some(&path), comspec: None, program_files: None, local_app_data: None });
+
+        let values: Vec<&str> = shells.iter().map(|shell| shell.value.as_str()).collect();
+        assert_eq!(values, ["pwsh", "cmd", bash.as_str()]);
+        assert!(shells[0].note.contains(&pwsh) && shells[1].note.contains(&cmd), "{shells:?}");
+    }
+
+    #[test]
+    fn git_bash_is_found_in_the_usual_folder_without_git_on_the_path() {
+        let files = TempDir::new();
+        let root = files.path().join("Git");
+        std::fs::create_dir_all(root.join("cmd")).expect("make cmd");
+        std::fs::create_dir_all(root.join("bin")).expect("make bin");
+        let _ = program(&root.join("cmd"), "git.exe");
+        let bash = program(&root.join("bin"), "bash.exe");
+        let program_files = files.path().as_os_str().to_owned();
+
+        let shells =
+            found_in(&Env { path: None, comspec: None, program_files: Some(&program_files), local_app_data: None });
+
+        assert_eq!(shells.len(), 1);
+        assert_eq!((shells[0].value.as_str(), shells[0].note.as_str()), (bash.as_str(), "Git Bash"));
+    }
+
+    #[test]
+    fn a_batch_file_a_network_path_and_wsl_are_refused_with_their_reasons() {
+        let (dir, system) = (TempDir::new(), TempDir::new());
+        let batch = program(dir.path(), "bash.cmd");
+        let wsl = program(dir.path(), "wsl.exe");
+        std::fs::create_dir_all(system.path().join("System32")).expect("make System32");
+        let system_bash = program(&system.path().join("System32"), "bash.exe");
+        let own = program(dir.path(), "bash.exe");
+
+        assert_eq!(resolve_on(&batch, None, None), Err("Windows starts only an .exe or a .com".into()));
+        assert!(resolve_on(r"\\host\share\x.exe", None, None).is_err_and(|why| why.contains("network")));
+        assert!(resolve_on(&wsl, None, None).is_err_and(|why| why.contains("WSL")));
+        assert!(resolve_on(&system_bash, None, Some(system.path())).is_err_and(|why| why.contains("WSL")));
+        assert_eq!(resolve_on(&own, None, Some(system.path())), Ok(own));
     }
 }

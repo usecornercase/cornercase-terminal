@@ -37,6 +37,7 @@ impl Settings {
             }),
             Row::Kind(kind) => self.chosen_mode(&kind, &value),
             Row::Recap(recap) => self.recap_chosen(recap, &value),
+            Row::Shell => self.shell_chosen(&value),
             Row::AddAgent => {
                 self.added.push(value.clone());
                 if let Some(i) = self.rows().iter().position(|r| *r == Row::Kind(value.clone())) {
@@ -150,6 +151,8 @@ impl Settings {
             Row::Bot(via) => self.submit_bot(via),
             Row::Kind(kind) => self.submit_kind(&kind),
             Row::Recap(recap) => self.recap_submitted(recap, &edit.input.clone()),
+            Row::Shell => self.submit_shell(),
+            Row::ShellArgs => self.submit_shell_args(),
             row => self.submit_field(&row),
         }
     }

@@ -18,8 +18,12 @@ const GIT_RUN: &str =
 
 const GIT_SHELL: &str = r#"unset PWD SHLVL
 [ -n "$7" ] || unset HOME
-"$3"
+cornercase_shell=$3
+shift 7
+"$cornercase_shell" "$@"
 "#;
+
+const SH_SHELL: &str = "cornercase_shell=$3\nshift 5\nexec \"$cornercase_shell\" \"$@\"\n";
 
 const REPORT: &str = r#"if [ "$s" = 0 ]; then
   printf '\n\033[32m✓ setup finished\033[0m\n'
@@ -54,6 +58,7 @@ pub(crate) struct Wrapper<'a> {
     pub(crate) script: &'a str,
     pub(crate) status: &'a Path,
     pub(crate) shell: &'a str,
+    pub(crate) shell_args: &'a [String],
     pub(crate) root: &'a Path,
     pub(crate) branch: &'a str,
     pub(crate) worktree: &'a Path,
@@ -93,9 +98,11 @@ fn through_sh(sh: &Sh, wrapper: &Wrapper) -> Line {
         wrapper.branch.into(),
     ];
     if !sh.git {
-        return sh.line("-c", &format!("trap : INT\n{RUN}\ns=$?\ntrap - INT\n{REPORT}exec \"$3\"\n"), &args);
+        args.extend(wrapper.shell_args.iter().cloned());
+        return sh.line("-c", &format!("trap : INT\n{RUN}\ns=$?\ntrap - INT\n{REPORT}{SH_SHELL}"), &args);
     }
     args.extend([wrapper.worktree.display().to_string(), if wrapper.home { "1" } else { "" }.into()]);
+    args.extend(wrapper.shell_args.iter().cloned());
     sh.line("-c", &format!("trap : INT\n{GIT_RUN}\ns=$?\n{REPORT}{GIT_SHELL}"), &args)
 }
 

@@ -68,6 +68,7 @@
   "counts": false,
   "todo_dot": false,
   "dim_inactive_panes": false,
+  "shell": "",
   "prefix_key": "ctrl+]",
   "model": false,
   "context": false,

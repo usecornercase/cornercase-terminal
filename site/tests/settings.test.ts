@@ -68,6 +68,21 @@ test('the UI tab lists the sound rows after desktop notifications, which need a 
   app.destroy();
 });
 
+test('the UI tab lists shell and shell arguments after inactive panes, which need a real cornercase', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  app.settingsPage(5);
+  const ids = app.settingsRows(5).map((row) => row.id);
+  const at = ids.indexOf('dim');
+  assert.deepEqual(ids.slice(at, at + 3), ['dim', 'shell', 'shellArgs']);
+  for (const id of ['shell', 'shellArgs']) {
+    app.settingsClick(ids.indexOf(id));
+    app.render();
+    assert.ok(app.textAt('the demo runs no real shells'));
+  }
+  app.destroy();
+});
+
 test('the star prompt is a switch on the UI tab', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();

@@ -1,6 +1,8 @@
 use serde_json::{Value, json};
 
 use super::*;
+#[cfg(unix)]
+use crate::config::ShellChoice;
 use crate::control::config::{Kind, State};
 
 fn full() -> Settings {
@@ -86,6 +88,19 @@ mod describing {
         let offered: Vec<&str> = setting.choices.iter().map(|c| c.value.as_str()).collect();
         assert_eq!(offered, ["side_by_side", "projects_on_top", "workspaces_on_top", "tree"]);
         assert!(setting.question.is_some());
+    }
+
+    #[test]
+    fn the_shell_is_text_that_suggests_the_shells_found() {
+        let mut s = full();
+        s.shells.found = vec![crate::term::shell::Found { value: "/bin/zsh".into(), note: "zsh".into() }];
+        let all = s.describe();
+        let shell = all.iter().find(|s| s.key == "shell").expect("shell");
+        assert_eq!(shell.kind, Kind::Text);
+        assert_eq!((shell.value.clone(), shell.default.clone()), (json!(""), json!("")));
+        assert_eq!(shell.choices.iter().map(|c| c.value.as_str()).collect::<Vec<_>>(), ["/bin/zsh"]);
+        assert!(shell.field.is_some() && shell.question.is_some());
+        assert!(all.iter().any(|s| s.key == "shell.args" && s.kind == Kind::Text));
     }
 
     #[test]
@@ -269,6 +284,31 @@ mod applying {
         let (s, result) = apply("agents.codex.extra", &json!("--search"));
         assert!(result.is_ok());
         assert_eq!(value_of(&s, "agents.codex.extra"), json!("--search"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_shell_not_listed_is_taken_and_one_that_cannot_start_is_refused() {
+        let (s, result) = apply("shell", &json!("/bin/sh"));
+        assert!(result.expect("applied").is_some_and(|notice| notice.starts_with("new panes start /bin/sh")));
+        assert_eq!(s.config.shell.program, "/bin/sh");
+
+        let (s, result) = apply("shell", &json!("bin/sh"));
+        assert!(matches!(result, Err(Refused::Invalid(why)) if why.starts_with("`bin/sh`: ")));
+        assert_eq!(s.config.shell.program, "");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_shell_and_its_arguments_are_set_together_or_apart() {
+        let mut s = full();
+        s.config.shell = ShellChoice { program: "/bin/sh".into(), args: vec!["-x".into()] };
+        s.apply("shell", &json!("/bin/bash")).expect("the program");
+        assert_eq!(s.config.shell, ShellChoice { program: "/bin/bash".into(), args: Vec::new() });
+        s.apply("shell.args", &json!("-l")).expect("the arguments");
+        assert_eq!(s.config.shell.args, ["-l"]);
+        s.apply("shell", &json!("default")).expect("the default");
+        assert_eq!(s.config.shell, ShellChoice::default());
     }
 
     #[test]

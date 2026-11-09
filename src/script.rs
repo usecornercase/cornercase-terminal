@@ -14,7 +14,7 @@ use crate::process::{self, program};
 
 const SH: &str = "/bin/sh";
 const GIT_SHELLS: [&str; 2] = [r"usr\bin\sh.exe", r"bin\sh.exe"];
-const GIT_MARK: &str = r"cmd\git.exe";
+pub(crate) const GIT_MARK: &str = r"cmd\git.exe";
 const EXEC_PATH_WITHIN: Duration = Duration::from_secs(5);
 const NO_PATH_CONVERSION: &str = "MSYS2_ARG_CONV_EXCL";
 const SCRIPT_ENV: &str = "CORNERCASE_SCRIPT";
@@ -185,7 +185,7 @@ fn exec_path_root(dir: &Path) -> Option<PathBuf> {
     platform.join("bin").join("git.exe").is_file().then(|| root.to_path_buf())
 }
 
-fn git_root(git: &Path) -> Option<PathBuf> {
+pub(crate) fn git_root(git: &Path) -> Option<PathBuf> {
     let folder = git.parent()?;
     let above = folder.parent()?;
     let in_platform = above.join("libexec").join("git-core").is_dir();

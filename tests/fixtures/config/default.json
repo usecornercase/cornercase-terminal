@@ -54,6 +54,7 @@
   "counts": true,
   "todo_dot": true,
   "dim_inactive_panes": true,
+  "shell": "",
   "prefix_key": "",
   "model": true,
   "context": true,

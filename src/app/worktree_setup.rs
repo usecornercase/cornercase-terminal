@@ -77,11 +77,13 @@ impl App {
         let status = setup::status_file(&self.setups.dir, id);
         let _ = std::fs::remove_file(&status);
         let branch = git::branch(&path).unwrap_or_default();
+        let chosen = self.chosen_shell();
         let root = &self.projects[project].path;
         let wrapper = setup::Wrapper {
             script,
             status: &status,
-            shell: self.shells.shell(),
+            shell: &chosen.program,
+            shell_args: &chosen.args,
             root,
             branch: &branch,
             worktree: &path,

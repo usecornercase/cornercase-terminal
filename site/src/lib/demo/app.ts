@@ -121,6 +121,7 @@ const ICONS_CHOICES: [string, string][] = [
   ['off', 'plain symbols in every window'],
 ];
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal';
+const SHELL_NEEDS = 'this needs cornercase on your computer: the demo runs no real shells';
 
 const MERGED_NEED = 'this needs cornercase on your computer: the demo has no GitHub or GitLab';
 const SOUND_NEEDS = 'this needs cornercase on your computer: the demo plays no sound';
@@ -3495,6 +3496,8 @@ export class App {
       { id: 'counts', section: '', label: 'counts', value: c.counts ? '[x] shown' : '[ ] hidden', note: 'what a project or collapsed group holds, such as (3)' },
       { id: 'todoDot', section: '', label: 'TODO dot', value: c.todoDot ? '[x] shown' : '[ ] hidden', note: 'while items are pending' },
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
+      { id: 'shell', section: '', label: 'shell', value: 'default (zsh)', note: 'the program a new pane starts; open panes keep theirs' },
+      { id: 'shellArgs', section: '', label: 'shell arguments', value: 'none', note: 'given to the shell when a pane starts, such as -NoLogo or --login' },
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       ...ACCOUNT_SWITCHES.map(([id, label, note]) => ({ id, section: '', label, value: '[x] shown', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
@@ -3615,6 +3618,8 @@ export class App {
       o.notice = REMOTE_NEEDS;
     } else if (row.id === 'iconBar') {
       o.notice = ICON_BAR_NEEDS;
+    } else if (row.id === 'shell' || row.id === 'shellArgs') {
+      o.notice = SHELL_NEEDS;
     } else if (row.id.startsWith('account')) {
       o.notice = ACCOUNTS_NEED;
     } else if (row.id.startsWith('sound')) {
