@@ -376,6 +376,9 @@ impl App {
         if names.iter().any(|known| known == name) {
             return Err(conflict(self.config.account_taken(kind.name(), name)));
         }
+        if let Some(taken) = accounts::lock_taken(&self.accounts.dir, kind, name) {
+            return Err(conflict(taken));
+        }
         match self.config.label_taken(kind.name(), name, &names, name) {
             Some(taken) => Err(conflict(taken)),
             None => Ok(()),

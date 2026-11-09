@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.20
 
-- **A login lock is no longer taken for an account.** While Claude Code renews an account's login it keeps a folder such as `personal.lock` beside it, and for those seconds Usage ran a probe in it and `cornercase account list`, Settings › Accounts and the account menus listed it as one more account. Such a folder beside its account is no longer listed, and `cornercase account add` refuses a new name ending in `.lock`. An account you already have with such a name keeps working.
+- **A login lock is no longer taken for an account.** While Claude Code renews an account's login it keeps a folder such as `personal.lock` beside it, and for those seconds Usage ran a probe in it and `cornercase account list`, Settings › Accounts and the account menus listed it as one more account. Such a folder beside its account is no longer listed, and `cornercase account add` refuses a new name ending in `.lock`, or one whose `.lock` folder is already there. An account you already have with such a name keeps working.
 
 ## 0.13.19
 

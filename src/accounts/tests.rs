@@ -76,6 +76,17 @@ mod names {
     }
 
     #[test]
+    fn adding_one_whose_lock_folder_is_taken_is_refused() {
+        let dir = TempDir::new();
+        let root = dir.path().join("accounts");
+        fs::create_dir_all(root.join("claude").join("personal.lock")).expect("create");
+        let error = add(&root, Known::Claude, "personal", None).expect_err("refused");
+        assert!(error.to_string().contains("`personal.lock` is already"), "{error}");
+        assert!(!root.join("claude").join("personal").exists());
+        assert_eq!(names(&root, Known::Claude), vec!["personal.lock".to_string()]);
+    }
+
+    #[test]
     fn a_refused_name_creates_nothing() {
         let dir = TempDir::new();
         let root = dir.path().join("accounts");

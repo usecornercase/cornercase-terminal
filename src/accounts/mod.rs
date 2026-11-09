@@ -55,7 +55,9 @@ pub(crate) fn names(root: &Path, kind: Known) -> Vec<String> {
         .collect();
     names.sort();
     let listed = names.clone();
-    names.retain(|name| !name.strip_suffix(".lock").is_some_and(|stem| listed.iter().any(|other| other == stem)));
+    names.retain(|name| {
+        name.strip_suffix(".lock").is_none_or(|stem| listed.binary_search_by(|other| other.as_str().cmp(stem)).is_err())
+    });
     names
 }
 
@@ -69,6 +71,9 @@ pub(crate) fn no_accounts() -> Vec<(Known, Vec<String>)> {
 
 pub(crate) fn add(root: &Path, kind: Known, name: &str, default: Option<&Path>) -> Result<PathBuf, Error> {
     let home = check(kind, name, valid_new)?;
+    if let Some(taken) = lock_taken(root, kind, name) {
+        return Err(Error::Account(taken));
+    }
     let parent = root.join(kind.name());
     private_folder(root).and_then(|()| private_folder(&parent)).map_err(|e| failed("create", &parent, &e))?;
     let dir = parent.join(name);
@@ -94,6 +99,13 @@ pub(crate) fn add(root: &Path, kind: Known, name: &str, default: Option<&Path>) 
         return Err(failed("link the settings into", &dir, &e));
     }
     Ok(dir)
+}
+
+pub(crate) fn lock_taken(root: &Path, kind: Known, name: &str) -> Option<String> {
+    let lock = format!("{name}.lock");
+    fs::symlink_metadata(path(root, kind, &lock)).is_ok().then(|| {
+        format!("`{lock}` is already in the {} accounts folder, where the agent keeps the lock of `{name}`: pick another name", kind.name())
+    })
 }
 
 pub(crate) fn remove(root: &Path, kind: Known, name: &str) -> Result<(), Error> {
