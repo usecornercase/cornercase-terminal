@@ -144,11 +144,11 @@ fn one_line_of_json(out: &std::process::Output) -> serde_json::Value {
 }
 
 #[rstest]
-#[case::json(&["--remote", "devbox", "status", "--json", "--remote-command"], true)]
-#[case::text(&["--remote", "devbox", "status", "--remote-command"], false)]
-#[case::requests(&["--remote", "devbox", "requests", "--follow", "-", "--remote-command"], false)]
-fn a_program_reads_why_an_older_remote_refused(#[case] args: &[&str], #[case] json: bool) {
-    let (out, path) = older_there("program", "echo 'cornercase-proxy 1 0.0.1'\ncat > /dev/null", args);
+#[case::json("program-json", &["--remote", "devbox", "status", "--json", "--remote-command"], true)]
+#[case::text("program-text", &["--remote", "devbox", "status", "--remote-command"], false)]
+#[case::requests("program-requests", &["--remote", "devbox", "requests", "--follow", "-", "--remote-command"], false)]
+fn a_program_reads_why_an_older_remote_refused(#[case] name: &str, #[case] args: &[&str], #[case] json: bool) {
+    let (out, path) = older_there(name, "echo 'cornercase-proxy 1 0.0.1'\ncat > /dev/null", args);
 
     assert!(refused(&out, 5, "error: `devbox` runs cornercase 0.0.1"), "{out:?}");
     if !json {
