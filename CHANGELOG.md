@@ -2,10 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.23
+## 0.13.24
 
 - **`cornercase flow run --focus --view` shows the run in that view.** A program that draws cornercase itself, such as an editor extension or a GUI, now lands on the orchestrator's tab of a flow it starts, as `start --focus --view` does for an agent, and the window stays where it was, with no Flow panel opening in it. Before, the view stayed put and the window moved to the run. Without `--project` the flow runs in the project the view shows, `--json` adds the view's `projection`, and `cornercase contract` lists the feature `flow-run-view`. With `--machine`, `--focus` takes no `--view`, as for `start`.
 - `cornercase view --help` names every command that takes `--view`: `flow run`, and `open`, `clone` and `new-workspace`, which already took it.
+
+## 0.13.23
+
+- **Another app can tell that a machine's cornercase is older, and offer to update it.** A command sent with `--remote` to a machine whose cornercase is older than yours now exits with status 5 instead of 1, which a machine that couldn't be reached or has no cornercase also gave. With `--json` it also prints one line of JSON on standard output, `{"error": {"code": "older", "message": "…", "destination": "vps", "there": "0.13.19", "here": "0.13.22", "update": ["cornercase", "--remote", "vps", "update"]}}`: that machine's version (`null` when its cornercase is too old to say), yours, and the command that updates it from here as a list of words, with `--remote-command` when you gave one, so a program never builds it or reads the message. `cornercase remote` exits with 5 too when the other machine is the older one. `update`, `restart`, `kill-server` and `logs` run there without checking its version, so they don't give 5 and their success says nothing about it.
 
 ## 0.13.22
 
