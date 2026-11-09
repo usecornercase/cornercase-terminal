@@ -148,6 +148,7 @@ pub(super) struct Starting {
     pub(super) task: String,
     pub(super) branch: String,
     pub(super) focus: bool,
+    pub(super) view: Option<u64>,
     pub(super) note: Option<String>,
     pub(super) trees: Vec<(RoleWorktree, bool)>,
     pub(super) parent: Option<u64>,
@@ -157,7 +158,18 @@ pub(super) struct Starting {
 
 impl Starting {
     pub(super) fn new(flow: Flow, task: String, branch: String, accounts: Accounts) -> Self {
-        Self { flow, task, branch, focus: true, note: None, trees: Vec::new(), parent: None, accounts, name: None }
+        Self {
+            flow,
+            task,
+            branch,
+            focus: true,
+            view: None,
+            note: None,
+            trees: Vec::new(),
+            parent: None,
+            accounts,
+            name: None,
+        }
     }
 }
 
@@ -443,13 +455,12 @@ impl App {
         setup: bool,
     ) -> Result<RunInfo, String> {
         let id = self.open_check(place)?;
-        let Starting { flow, task, branch, focus, note, trees, parent, accounts, name } = starting;
+        let Starting { flow, task, branch, focus, view, note, trees, parent, accounts, name } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
         let project = self.projects[place.project()].id;
-        let mut info =
-            RunInfo { run: run.id, project, workspace: id, branch, members: Vec::new(), note, run_dir: None };
+        let mut info = RunInfo { run: run.id, project, workspace: id, branch, note, ..RunInfo::default() };
         let path = self.projects.workspace(place).path.clone();
         let dir = folder::make(&self.runs.dir, &path, time::now() * 1000)
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
@@ -466,11 +477,24 @@ impl App {
         self.adopt_members(&run, parent);
         self.launch_run(&run, &roles, &seats, &info.branch);
         self.runs.list.push(run);
-        if focus && let Some(first) = info.members.first() {
-            self.goto(Goto::Place { project: info.project, workspace: Some(id), tab: Some(first.tab) });
-            self.show_flow();
+        if focus {
+            info.projection = self.focus_run(&info, view);
         }
         Ok(info)
+    }
+
+    fn focus_run(&mut self, info: &RunInfo, view: Option<u64>) -> Option<u64> {
+        let first = info.members.first()?;
+        if view.is_none() {
+            let place = Goto::Place { project: info.project, workspace: Some(info.workspace), tab: Some(first.tab) };
+            self.goto(place);
+            self.show_flow();
+            return None;
+        }
+        self.focus_in_view(view, first.pane).unwrap_or_else(|refusal| {
+            log::warning!("flow", "the run was not shown in its view", error = refusal.message);
+            None
+        })
     }
 
     fn name_flow_workspace(&mut self, at: WorkspaceAt, name: Option<String>) {

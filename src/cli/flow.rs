@@ -64,6 +64,9 @@ fn flow_issue_features(run: &args::FlowRunArgs) -> Result<()> {
 
 fn flow_run(run: args::FlowRunArgs) -> Result<()> {
     flow_issue_features(&run)?;
+    if run.create.view.view.is_some() {
+        client::use_flow_run_view()?;
+    }
     let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
     let request = control::FlowRun {
         name: run.name,

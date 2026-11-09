@@ -219,6 +219,8 @@ pub(crate) struct RunInfo {
     pub(crate) note: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) run_dir: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) projection: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

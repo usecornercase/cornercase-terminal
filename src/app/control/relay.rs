@@ -74,6 +74,7 @@ pub(super) fn viewless(command: &Command) -> Result<(), Refusal> {
     let (machine, focus) = match command {
         Command::Start(start) | Command::StartWith(start) => (&start.machine, start.focus),
         Command::NewWorkspace(new) => (&new.machine, new.focus),
+        Command::FlowRun(run) => (&run.machine, run.focus),
         _ => return Ok(()),
     };
     match machine {

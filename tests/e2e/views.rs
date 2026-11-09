@@ -1,3 +1,5 @@
+use serde_json::{Value, json};
+
 use super::commands::{Followed, new_tab};
 use super::*;
 
@@ -67,7 +69,7 @@ fn commands_with_a_view_pass_the_feature_checks_they_need() {
     app.session.says(&["send", "--pane", &pane, "--enter", "echo patch-\"\"ok"]);
     frames.until("a patch", |frame| frame.get("base").is_some());
     let profiled = app.session.says(&["new-tab", "--view", &id, "--profile", ""]);
-    let revealed: serde_json::Value = serde_json::from_str(
+    let revealed: Value = serde_json::from_str(
         &app.session.says(&["focus", "--view", &id, "--pane", &pane, "--reveal", "patch-ok", "--json"]),
     )
     .expect("json");
@@ -92,4 +94,35 @@ fn go_with_a_token_nobody_gave_fails_and_says_so() {
 
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("there is no notice"), "{out:?}");
+}
+
+#[test]
+fn a_flow_run_focused_in_a_view_moves_the_view_and_not_the_window() {
+    let session = Session::new();
+    let config = json!({
+        "worktrees_dir": session.dir.join("worktrees"),
+        "agent_commands": {"claude": fake_trusting_agent(&session.dir)},
+    });
+    std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");
+    let started = session.cold(&["start-server"]);
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    let repo = repository(&session.dir, "shop");
+    let project = session.says(&["open", &repo.display().to_string()]);
+    let mut opened = session.spawn(&["view", "--cols", "120", "--rows", "40"]);
+    let mut followed = Followed::of(&mut opened);
+    followed.until("the view's first line", |line| line["revision"] == 1);
+    let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
+    let window = session.report().shown;
+
+    let args = ["flow", "run", "Quick", "--prompt", "add dark mode", "--project", &project, "--focus"];
+    let run = session.says(&[&args[..], &["--view", &id, "--json"]].concat());
+    let run: Value = serde_json::from_str(&run).expect("the run");
+    let inside = session.says(&["status", "--view", &id, "--json"]);
+    let inside: Value = serde_json::from_str(&inside).expect("the status");
+    let _ = opened.kill();
+    let _ = opened.wait();
+
+    assert_eq!(inside["view"]["shown"]["tab"], run["members"][0]["tab"], "{inside}");
+    assert_eq!(inside["view"]["projection"], run["projection"], "{inside}");
+    assert_eq!(session.report().shown, window, "the window kept showing what it showed");
 }

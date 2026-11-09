@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use ratatui::layout::Rect;
 
-use super::{Handled, NO_PROJECT, Pending, Stage, json, none, sized};
+use super::{Asked, Handled, NO_PROJECT, Pending, Stage, json, none, sized};
 use crate::app::App;
 use crate::app::flow_runs::{Made, RunTrees, Starting, closed_run_refusal};
 use crate::control::contract::Refusal;
@@ -115,35 +115,30 @@ impl App {
         Ok(p.map(|p| self.projects[p].path.clone()))
     }
 
-    pub(super) fn flow_run_request(
-        &mut self,
-        client: u64,
-        caller: Option<u64>,
-        run: control::FlowRun,
-        area: Option<Rect>,
-    ) -> Handled {
+    pub(super) fn flow_run_request(&mut self, asked: Asked, run: control::FlowRun) -> Handled {
+        let Asked { client, asker, area, .. } = asked;
         if let Some(machine) = run.machine.clone() {
             return self.relay_request(client, &machine, Send::FlowRun(run));
         }
         let area = sized(area)?;
         if run.issue.is_some() {
-            return self.flow_issue_request(client, caller, run);
+            return self.flow_issue_request(client, asker, run);
         }
         if run.source.is_some() {
             return Err(super::malformed("--source needs --issue"));
         }
         let p = match run.project {
             Some(id) => self.projects.project_index(id).ok_or_else(|| none("project", id))?,
-            None => self.here(caller).project.ok_or(NO_PROJECT)?,
+            None => self.here(asker).project.ok_or(NO_PROJECT)?,
         };
         let (flow, note) = pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
         let branch = run.worktree.unwrap_or_default();
         let accounts = self.requested_accounts(run.profile.as_deref(), &run.accounts)?;
-        let (task, focus, trees) = (run.prompt, run.focus, Vec::new());
+        let (task, focus, view, parent) = (run.prompt, run.focus, asker.view, asker.caller);
         if run.workspace_name.is_some() {
             return Err(super::malformed("--workspace-name needs --issue"));
         }
-        let starting = Starting { flow, task, branch, focus, note, trees, parent: caller, accounts, name: None };
+        let starting = Starting { focus, view, note, parent, ..Starting::new(flow, task, branch, accounts) };
         self.run_flow(Some(client), self.projects[p].id, starting, area)
     }
 

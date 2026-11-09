@@ -500,8 +500,7 @@ impl App {
         Ok(None)
     }
 
-    pub(super) fn flow_issue_request(&mut self, client: u64, caller: Option<u64>, run: control::FlowRun) -> Handled {
-        let asker = Asker::from(caller);
+    pub(super) fn flow_issue_request(&mut self, client: u64, asker: Asker, run: control::FlowRun) -> Handled {
         let (_, scope) = self.issue_project(asker, run.project)?;
         let text = run.issue.clone().unwrap_or_default();
         let (api, locator) = self.locate_issue(scope, &text, run.source.as_deref())?;
@@ -519,9 +518,10 @@ impl App {
             task: "issue".into(),
             branch: run.worktree.unwrap_or_default(),
             focus: run.focus,
+            view: asker.view,
             note,
             trees: Vec::new(),
-            parent: caller,
+            parent: asker.caller,
             accounts,
             name: run.workspace_name.clone(),
         };

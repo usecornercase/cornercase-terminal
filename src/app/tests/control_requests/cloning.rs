@@ -31,16 +31,8 @@ fn start_clone(app: &mut App, client: u64, view: Option<u64>, args: &Value) {
     app.request(client, &text.to_string(), Some(AREA), Instant::now());
 }
 
-fn open_view(app: &mut App, client: u64) -> u64 {
-    let text = json!({"contract": 1, "command": "view", "args": {}}).to_string();
-    app.request(client, &text, Some(AREA), Instant::now());
-    let answers = app.take_answers();
-    let opened = reply_of(&answers.first().expect("an answer").1).expect("a view");
-    opened["view"]["id"].as_u64().expect("its id")
-}
-
 fn start_focused_clone_in_a_view(app: &mut App, repo: &Path, parent: &Path) {
-    let view = open_view(app, CLIENT + 2);
+    let view = open_view(app, CLIENT + 2, &json!({}));
     let args = json!({"url": repo.display().to_string(), "parent": parent, "focus": true});
     start_clone(app, CLIENT, Some(view), &args);
 }

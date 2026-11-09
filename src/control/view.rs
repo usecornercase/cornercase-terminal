@@ -84,6 +84,7 @@ pub(crate) fn takes_view(command: &Command) -> bool {
             | Command::Split(_)
             | Command::Start(_)
             | Command::StartWith(_)
+            | Command::FlowRun(_)
             | Command::Send(_)
             | Command::Keys(_)
             | Command::Held(_)

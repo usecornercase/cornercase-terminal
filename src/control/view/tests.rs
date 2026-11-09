@@ -55,9 +55,16 @@ fn the_commands_that_take_a_view_are_the_ones_that_act_on_a_place() {
 }
 
 #[test]
+fn a_flow_run_takes_a_view_and_the_other_flow_requests_do_not() {
+    assert!(takes_view(&Command::FlowRun(crate::control::FlowRun::default())));
+    assert!(!takes_view(&Command::FlowList(crate::control::FlowList::default())));
+}
+
+#[test]
 fn views_are_a_feature_and_a_stream_of_the_contract() {
     assert!(FEATURES.contains(&"views"));
     assert!(FEATURES.contains(&"plugin-run-view"));
+    assert!(FEATURES.contains(&"flow-run-view"));
     assert_eq!(VIEW_VERSION, 1);
 }
 

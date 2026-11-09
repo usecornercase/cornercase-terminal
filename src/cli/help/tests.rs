@@ -25,3 +25,10 @@ fn the_status_help_lists_the_columns_of_panes_in_their_order() {
 
     assert_eq!(named, PaneRow::COLUMNS);
 }
+
+#[test]
+fn the_view_help_names_the_commands_that_take_a_view() {
+    for command in ["flow run", "open", "clone", "new-workspace"] {
+        assert!(super::VIEW_HELP.contains(&format!("`{command}`")), "missing {command}");
+    }
+}

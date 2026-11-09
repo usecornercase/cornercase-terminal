@@ -12,7 +12,7 @@ Code: `flows/`, `app/flow_runs.rs`, `app/flow_panel.rs`, `app/flows_dialog.rs`, 
 
 - [Roles and their agents](flows/roles.md): Several roles on one agent; Cursor CLI in flows; GitHub Copilot CLI in flows; Effort per role.
 - [Built-in flows](flows/built-in-flows.md): the flows that ship, editing one, deleting and restoring them.
-- [Agents never ask, and starting a run](flows/starting-a-run.md): Agents never ask: unattended modes, Claude Code's consent, a project's `env` and `args`; Starting a run.
+- [Agents never ask, and starting a run](flows/starting-a-run.md): Agents never ask: unattended modes, Claude Code's consent, a project's `env` and `args`; Starting a run; Shown with `--focus`, in the window or a view.
 - [A worktree of its own](flows/own-worktrees.md): #313: file version 2, branches and folders, one job, setup, integration, removal, the tag.
 - [The run's folder](flows/run-folder.md): #312: where, `CORNERCASE_RUN_DIR`, answers as files, `--add-dir`, lifecycle, the panel.
 - [The brief, the team and the session](flows/brief-and-team.md): The brief; Members' notifications and marks; Waking the orchestrator; The team hangs under its orchestrator; The session.

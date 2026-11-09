@@ -119,6 +119,10 @@ pub(crate) fn use_plugin_run_view() -> Result<()> {
     require("plugin-run-view", "cannot run a plugin's action in a view")
 }
 
+pub(crate) fn use_flow_run_view() -> Result<()> {
+    require("flow-run-view", "cannot start a flow in a view")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }

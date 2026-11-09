@@ -146,6 +146,15 @@ fn request_json(app: &mut App, command: &str, args: &Value) {
     app.request(CLIENT, &text, Some(AREA), Instant::now());
 }
 
+fn open_view(app: &mut App, client: u64, args: &Value) -> u64 {
+    let text = json!({"command": "view", "args": args}).to_string();
+    app.request(client, &text, Some(AREA), Instant::now());
+    let answers = app.take_answers();
+    let (_, reply) = answers.into_iter().find(|(who, _)| *who == client).expect("an answer");
+    let opened: Value = serde_json::from_str(&reply).expect("a reply");
+    opened["ok"]["view"]["id"].as_u64().expect("a view")
+}
+
 fn reply_later(app: &mut App, rx: &Receiver<AppEvent>) -> std::result::Result<Value, Refused> {
     let mut reply = None;
     wait_until("the request is answered", || {
@@ -612,6 +621,7 @@ mod driving;
 mod events;
 #[cfg(unix)]
 mod files;
+mod flow_in_a_view;
 mod flow_sharing;
 #[cfg(unix)]
 mod flows;
