@@ -1,6 +1,8 @@
 use super::*;
+use crate::agents::Known;
 use crate::app::flow_runs::Starting;
 use crate::control::RunInfo;
+use crate::flows::builtin;
 
 const SHELL: &str = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
 const VIEWER: u64 = 31;
@@ -27,8 +29,7 @@ impl Apart {
     }
 
     fn runs(&mut self, view: Option<u64>) -> RunInfo {
-        let flow =
-            crate::flows::builtin::flows(&crate::agents::Known::ALL, Some(crate::agents::Known::Claude)).remove(0);
+        let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
         let starting = Starting {
             view,
             ..Starting::new(flow, "Fix the login form".into(), "main".into(), self.app.active_accounts())
