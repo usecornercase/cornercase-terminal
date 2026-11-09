@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.25
+
+- **Stop subagents from notifying you.** The new setting **notices for subagents** in **Settings › UI** (`notify_subagents` in `config.json`, on by default) decides whether the agents that other agents start also notify you. Turn it off and only the agents you started yourself make a toast, a desktop notification, a sound, or a Telegram or Discord message. A subagent still shows its `!` or `✓` in the sidebar until you look at its tab, and a subagent whose parent has closed notifies again as a main agent.
+- **Scripts can tell a subagent's notice apart.** With the setting on, the `notice` event of `cornercase events` carries `subagent: true` for an agent started by another agent, and `cornercase config` reads and writes `notify_subagents`. The feature is `notice-subagent` in `cornercase contract`.
+
 ## 0.13.24
 
 - **`cornercase flow run --focus --view` shows the run in that view.** A program that draws cornercase itself, such as an editor extension or a GUI, now lands on the orchestrator's tab of a flow it starts, as `start --focus --view` does for an agent, and the window stays where it was, with no Flow panel opening in it. Before, the view stayed put and the window moved to the run. Without `--project` the flow runs in the project the view shows, `--json` adds the view's `projection`, and `cornercase contract` lists the feature `flow-run-view`. With `--machine`, `--focus` takes no `--view`, as for `start`.
