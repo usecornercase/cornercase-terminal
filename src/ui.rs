@@ -161,11 +161,11 @@ pub(crate) use tree::{tree_arrow, tree_close};
 pub use widths::SIDEBAR_WIDTH;
 #[cfg(test)]
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
-pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
 pub(crate) use workspaces::{
-    ICON_WIDTH, MachineTag, REOPEN_ICON, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout,
-    workspace_rows, workspace_tag,
+    Changed, ICON_WIDTH, MachineTag, REOPEN_ICON, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit,
+    workspace_layout, workspace_rows, workspace_tag,
 };
+pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
 
 use crate::agents::activity::Status;
 use crate::config::Sidebar;

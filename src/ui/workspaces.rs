@@ -218,7 +218,34 @@ pub(crate) struct WorkspaceEntry {
     pub(crate) removing: bool,
     pub(crate) setting_up: bool,
     pub(crate) closed: usize,
+    pub(crate) changed: Option<Changed>,
     pub(crate) machine: Option<MachineTag>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Changed {
+    pub(crate) added: usize,
+    pub(crate) removed: usize,
+}
+
+const MIN_NAME_WIDTH: usize = 8;
+
+fn count_spans(changed: Changed) -> [Span<'static>; 2] {
+    [
+        Span::styled(format!("+{}", changed.added), Style::default().fg(Color::Green)),
+        Span::styled(format!("\u{2212}{}", changed.removed), Style::default().fg(Color::Red)),
+    ]
+}
+
+fn fit_marks(entry: &WorkspaceEntry, spans: Vec<Span<'static>>, room: usize) -> Tags {
+    let without = Tags::fit(spans.clone(), room);
+    let Some(changed) = entry.changed.filter(|_| !entry.removing && without.count() == spans.len()) else {
+        return without;
+    };
+    let wanted = spans.len() + 2;
+    let with = Tags::fit(spans.into_iter().chain(count_spans(changed)).collect(), room);
+    let keeps = room.saturating_sub(with.reserved()) >= cells(&entry.name).min(MIN_NAME_WIDTH);
+    if with.count() == wanted && keeps { with } else { without }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -494,7 +521,7 @@ pub(super) fn tag_badge(
 ) -> Option<Rect> {
     let room = room(row, pitch, lead);
     let (spans, places) = marks(entry, badge, Color::Reset, None);
-    let (x, width) = Tags::fit(spans, room).place(places.of(tag)?, lead + room)?;
+    let (x, width) = fit_marks(entry, spans, room).place(places.of(tag)?, lead + room)?;
     let x = u16::try_from(usize::from(row.x) + x).ok()?;
     let rect = Rect::new(x, row.y, u16::try_from(width).ok()?, pitch.min(row.height)).intersection(row);
     (!rect.is_empty()).then_some(rect)
@@ -531,7 +558,7 @@ pub(super) fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, line: 
     let machine = entry.machine.as_ref();
     let (mut spans, places) = marks(entry, badge, view.muted, spin(machine, view.spin));
     spans.extend(machine.map(|machine| machine_span(machine, room, view.muted)));
-    let mut marks = Tags::fit(spans, room);
+    let mut marks = fit_marks(entry, spans, room);
     for (tag, add) in [
         (Tag::Pull, Modifier::UNDERLINED),
         (Tag::Stack, Modifier::UNDERLINED),

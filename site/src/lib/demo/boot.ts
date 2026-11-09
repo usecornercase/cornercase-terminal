@@ -117,7 +117,7 @@ export const chapters = (say: Demo['tour']): Step[][] => [
     open('projects'),
     { click: 'web-shop (' },
     open('workspaces'),
-    { click: 'feat/dark-mode' },
+    { click: 'feat/d' },
     close,
     { wait: 1000 },
   ],

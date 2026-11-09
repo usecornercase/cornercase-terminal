@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.22
+
+- **Each workspace's row says what its branch changed.** A git workspace's row now ends with `+640 −9`, in green and red: the lines it adds and removes since it parted from its base branch, committed or not, new files included, what the Changes panel's **All** tab counts. On a project's own checkout, that is its uncommitted changes and the commits not pushed yet. Only the rows on screen are read, one workspace at a time and each at most every few seconds, those with a working agent first. In a narrow column the count makes room for the name.
+- **Your own UI can show it too.** `cornercase status --json`, `status --follow` and `view` give each workspace `against_base` (`base`, `files`, `added`, `removed`) while a window or a view draws its row, and `cornercase status` prints it as `16 files +640 −9 vs origin/main`. A view's lines now also count the workspace that view shows in `changes`. `cornercase contract` lists the feature `against-base`.
+
 ## 0.13.21
 
 - **Choose the shell new panes start.** **Settings › UI › shell** lists the shells found on this computer (on Windows PowerShell 7, Windows PowerShell, cmd and Git Bash; on Linux and macOS the ones in `/etc/shells`) and takes any other program: a full path, one starting with `~/` or a name on the `PATH`. **shell arguments** adds options such as `-NoLogo` or `--login`. The next tab, split or workspace starts it, with no restart; panes already open keep theirs. In `config.json` it is `"shell": "pwsh"` or `{"program": "…", "args": ["…"]}`, and `cornercase config set shell … shell.args …` changes it from a script. A shell that cannot start falls back to the default with a warning, so a pane always opens.

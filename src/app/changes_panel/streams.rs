@@ -8,7 +8,7 @@ use crate::control::changes::{Content, Following, State, Summary, WorkspaceChang
 use crate::control::contract::{Code, Refusal};
 use crate::control::{self, ChangesCount};
 use crate::log;
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, Workspace};
 
 pub(in crate::app) const FEED_EVERY: Duration = Duration::from_millis(100);
 
@@ -274,51 +274,69 @@ impl App {
         self.clients.change_streams.open = list;
     }
 
-    pub(in crate::app) fn changes_count(
-        &self,
-        workspace: u64,
-        target: Option<u64>,
-        sweeping: bool,
-    ) -> Option<ChangesCount> {
-        let counted = |diff: &changes::diff::Diff, mode| ChangesCount {
-            files: diff.files.len() as u64,
-            added: diff.added() as u64,
-            removed: diff.removed() as u64,
-            mode,
-        };
+    pub(in crate::app) fn counted(&self) -> Counted {
+        Counted {
+            target: self.changes_target().map(|t| t.workspace),
+            sweeping: self.clients.change_streams.wants_every(),
+            viewed: self.clients.views.viewed_workspaces(),
+        }
+    }
+
+    pub(in crate::app) fn changes_count(&self, workspace: u64, counted: &Counted) -> Option<ChangesCount> {
         let w = self.projects.workspace_by(workspace)?;
-        if target == Some(workspace) {
-            let every = self.every_shown();
-            let model = if every || !self.changes_shown() {
-                self.panels
-                    .changes
-                    .summary(workspace)
-                    .or_else(|| self.panels.changes.model(workspace, w.base.as_deref()))
-            } else {
-                self.panels.changes.model(workspace, w.base.as_deref())
-            };
-            let mode = if every { Mode::Uncommitted } else { self.panels.changes.mode() };
-            return model.and_then(changes::Model::diff).map(|d| counted(d, mode));
+        if counted.target == Some(workspace) {
+            return self.target_count(w);
         }
-        let open = &self.clients.change_streams.open;
-        let mut modes: Vec<Mode> = open.iter().filter(|s| s.workspace == Some(workspace)).map(|s| s.mode).collect();
-        modes.sort_by_key(|m| *m != Mode::Uncommitted);
-        if let Some(mode) = modes.first() {
-            return self
-                .panels
-                .changes
-                .model_in(workspace, *mode, w.base.as_deref())
-                .and_then(changes::Model::diff)
-                .map(|d| counted(d, *mode));
+        if let Some(mode) = self.followed_mode(w) {
+            let model = self.panels.changes.model_in(workspace, mode, w.base.as_deref());
+            return model.and_then(changes::Model::diff).map(|d| count_of(d, mode));
         }
-        if sweeping {
-            return self
-                .panels
-                .changes
-                .summary(workspace)
-                .and_then(changes::Model::diff)
-                .map(|d| counted(d, Mode::Uncommitted));
+        if counted.sweeping || counted.viewed.contains(&workspace) {
+            let summary = self.panels.changes.summary(workspace).filter(|m| m.mode == Mode::Uncommitted);
+            return summary.and_then(changes::Model::diff).map(|d| count_of(d, Mode::Uncommitted));
         }
         None
     }
+
+    fn target_count(&self, w: &Workspace) -> Option<ChangesCount> {
+        let every = self.every_shown();
+        let base = w.base.as_deref();
+        let model = if every || !self.changes_shown() {
+            self.panels.changes.summary(w.id).or_else(|| self.panels.changes.model(w.id, base))
+        } else {
+            self.panels.changes.model(w.id, base)
+        };
+        let mode = if every { Mode::Uncommitted } else { self.panels.changes.mode() };
+        model.and_then(changes::Model::diff).map(|d| count_of(d, mode))
+    }
+
+    fn followed_mode(&self, w: &Workspace) -> Option<Mode> {
+        let open = &self.clients.change_streams.open;
+        let followed = open.iter().filter(|s| s.workspace == Some(w.id)).map(|s| s.mode);
+        followed.min_by_key(|m| *m != Mode::Uncommitted)
+    }
+
+    pub(in crate::app) fn viewed_request(&mut self, now: Instant) -> Option<(u64, u64, changes::git::Request)> {
+        let target = self.changes_target().map(|t| t.workspace);
+        let followed: HashSet<u64> = self.clients.change_streams.open.iter().filter_map(|s| s.workspace).collect();
+        let viewed = self.clients.views.viewed_workspaces();
+        let order = crate::project::sidebar_order(&self.projects, &self.groups);
+        let workspaces = order.into_iter().flat_map(|p| self.projects[p].workspaces.iter());
+        let targets: Vec<(Checkout, bool)> = workspaces
+            .filter(|w| viewed.contains(&w.id) && Some(w.id) != target && !followed.contains(&w.id) && w.open())
+            .filter(|w| crate::git::branch(&w.path).is_some())
+            .map(|w| (Checkout { workspace: w.id, dir: w.path.clone(), base: None }, false))
+            .collect();
+        self.panels.changes.request_sweep(&targets, now, false)
+    }
+}
+
+pub(in crate::app) struct Counted {
+    target: Option<u64>,
+    sweeping: bool,
+    viewed: HashSet<u64>,
+}
+
+fn count_of(diff: &changes::diff::Diff, mode: Mode) -> ChangesCount {
+    ChangesCount { files: diff.files.len() as u64, added: diff.added() as u64, removed: diff.removed() as u64, mode }
 }

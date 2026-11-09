@@ -63,6 +63,8 @@ cc_s1_at() {
   cc_wait_status "claude  $want  Opus 5.5 · $CC_DARK_PERCENT%"
   cc_wait_status 'claude  waiting  Opus 5.5 · 7%'
   cc_wait_status '2 behind'
+  cc_wait_status ' vs '
+  sleep 4
   toasts_gone "$notices"
   sleep 1
 }
@@ -75,8 +77,10 @@ screen_first_run() {
   cc_config '{}'
   git -C "$CC_HOME/code/web-shop" worktree remove "$CC_HOME/.cornercase/worktrees/web-shop/feat-gift-cards"
   cc_start 110 38 "$CC_HOME/code/web-shop"
-  cc_wait 'feat/dark-mode'
+  cc_wait 'feat/d'
   cc_wait '↓2'
+  cc_wait_status ' vs '
+  sleep 4
   cc_shot first-run
 }
 
@@ -85,7 +89,7 @@ screen_tour() {
   rm -f "$CC_RUN/tour.json" "$CC_RUN/star.json"
   cc_start 110 38 "$CC_HOME/code/web-shop"
   cc_wait 'Get started'
-  cc_wait 'feat/dark-mode'
+  cc_wait 'feat/d'
   cc_shot tour
 }
 
@@ -96,8 +100,8 @@ screen_sidebar_stacked() {
 
 screen_workspace_folded() {
   cc_s1
-  cc_click '▾ feat/dark-mode'
-  cc_wait '▸ feat/dark-mode'
+  cc_click '▾ feat/d'
+  cc_wait '▸ feat/d'
   cc_shot workspace-folded
 }
 
@@ -177,7 +181,7 @@ screen_tab_bar() {
   CC_CONFIG='{"tabs":"top"}'
   cc_s1
   cc new-tab --workspace "$(ws_in feat-dark-mode)" >/dev/null
-  cc_click 'feat/dark-mode'
+  cc_click 'feat/d'
   cc_hover 'Workspaces'
   cc_wait 'Opus 5.5 · 7%'
   cc_shot tab-bar
@@ -187,7 +191,7 @@ screen_sidebar_agents() {
   agents_knobs
   cc_s1_at 110 44
   cc_wait 'Sonnet 5.5'
-  cc_wheel 'feat/dark-mode' down 1
+  cc_wheel 'feat/d' down 1
   cc_wait '│   gpt-5.4 · 20%'
   cc_shot sidebar-agents
 }
@@ -196,7 +200,7 @@ screen_close_agent() {
   agents_knobs
   cc_s1_at 110 44
   cc_wait 'Sonnet 5.5'
-  cc_wheel 'feat/dark-mode' down 1
+  cc_wheel 'feat/d' down 1
   cc_wait '│   gpt-5.4 · 20%'
   cc_hover 'web-shop › feat/dark'
   cc_wait '×'
@@ -208,7 +212,7 @@ screen_close_agent() {
 
 screen_close_agents() {
   cc_s1
-  cc_rclick 'feat/dark-mode'
+  cc_rclick 'feat/d'
   cc_click 'close agents'
   cc_wait 'Close agents'
   cc_wait ' close agents '
@@ -217,7 +221,7 @@ screen_close_agents() {
 
 screen_agents_closed() {
   cc_s1
-  cc_rclick 'feat/dark-mode'
+  cc_rclick 'feat/d'
   cc_click 'close agents'
   cc_wait ' close agents '
   cc_click ' close agents '
@@ -355,7 +359,7 @@ screen_rename_form() {
 
 screen_remove_workspace() {
   cc_s1
-  cc_hover 'feat/dark-mode'
+  cc_hover 'feat/d'
   cc_wait '×'
   cc_click '×'
   cc_wait 'remove anyway'
@@ -517,10 +521,10 @@ screen_issue_started() {
   cc_keys Enter
   cc_wait '> https://github.com/acme/web-shop/issues/482' 40
   cc_wait_status 'claude  idle  Opus 5.5 · 7%'
-  cc_wheel 'feat/dark-mode' down 3
+  cc_wheel 'feat/d' down 3
   cc_hover 'Workspaces'
   cc_wait '▌ │   Opus 5.5 · 7%'
-  cc_wait '  ▾ feat/dark-mode             │'
+  cc_wait '  ▾ feat/dark-mode  +4 −0      │'
   cc_wait '    blog (1)                   │'
   cc_shot issue-started
 }
@@ -928,7 +932,7 @@ screen_machines_sidebar() {
   vps_web_shop
   cc_s1
   vps_paired
-  cc_wheel 'feat/dark-mode' down 4
+  cc_wheel 'feat/d' down 4
   cc_wait '☁ vps'
   cc_click 'fix/login'
   cc_wait 'running cargo test' 30
@@ -1140,7 +1144,7 @@ screen_tab_account() {
   cc_s1
   accounts_add
   cc new-tab --workspace "$(ws_in feat-dark-mode)" --account claude=personal -- CC_AGENT_STATE=busy CC_AGENT_TASK=dark CC_AGENT_PERCENT=12 claude >/dev/null
-  cc_click 'feat/dark-mode'
+  cc_click 'feat/d'
   cc_wait '· personal · 12%'
   cc_hover 'Workspaces'
   cc_shot tab-account
@@ -1204,7 +1208,7 @@ flow_settled() {
   flow_482
   cc_wait 'findings 1/3' 60
   cc_wait 'waiting for reviewer…' 30
-  cc_wheel 'feat/dark-mode' down 3
+  cc_wheel 'feat/d' down 3
   cc_hover 'Workspaces'
   cc_wait '├ ○ tester'
   i=0
