@@ -597,6 +597,18 @@ impl Command {
         "worktrees-remove",
     ];
 
+    pub(crate) fn unreported_request(text: &str) -> bool {
+        #[derive(Deserialize)]
+        struct Named {
+            command: String,
+        }
+        serde_json::from_str::<Named>(text).is_ok_and(|named| Self::unreported(&named.command))
+    }
+
+    fn unreported(name: &str) -> bool {
+        Self::chatty(name) && name != "ratio"
+    }
+
     pub(crate) fn chatty(name: &str) -> bool {
         matches!(
             name,

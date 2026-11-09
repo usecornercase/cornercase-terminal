@@ -445,7 +445,8 @@ impl App {
         self.pane_footer() && !self.clients.views.sized(self.focus().tab).contains_key(&tab)
     }
 
-    pub(super) fn publish_views(&mut self, report: &Report) {
+    pub(super) fn publish_views(&mut self, report: &Report) -> bool {
+        let mut sent = false;
         self.clients.views.changed = false;
         for at in 0..self.clients.views.list.len() {
             let view = &self.clients.views.list[at];
@@ -461,7 +462,9 @@ impl App {
             let client = view.client;
             if let Some(text) = snapshot.streamed() {
                 self.clients.events.push(client, Streamed::Snapshot(text));
+                sent = true;
             }
         }
+        sent
     }
 }
