@@ -92,6 +92,7 @@ fn with_lists(sidebar: Sidebar) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                changed: None,
                 machine: None,
             },
             WorkspaceEntry {
@@ -104,6 +105,7 @@ fn with_lists(sidebar: Sidebar) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                changed: None,
                 machine: None,
             },
         ],

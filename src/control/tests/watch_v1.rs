@@ -271,3 +271,16 @@ fn a_snapshot_without_a_revision_reads_as_revision_zero() {
 
     assert_eq!((snapshot.revision, snapshot.report.boot.as_str()), (0, "1-2"));
 }
+
+#[test]
+fn a_workspace_leaves_against_base_out_unless_it_is_counted() {
+    let plain = serde_json::to_value(WorkspaceInfo::default()).expect("a workspace");
+    assert!(plain.get("against_base").is_none(), "{plain}");
+    let counted = WorkspaceInfo {
+        against_base: Some(AgainstBase { base: "origin/main".into(), files: 16, added: 640, removed: 9 }),
+        ..WorkspaceInfo::default()
+    };
+    let value = serde_json::to_value(&counted).expect("a workspace");
+    assert_eq!(value["against_base"], json!({"base": "origin/main", "files": 16, "added": 640, "removed": 9}));
+    assert_eq!(serde_json::from_value::<WorkspaceInfo>(value).expect("read back"), counted);
+}

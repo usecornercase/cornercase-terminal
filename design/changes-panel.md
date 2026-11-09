@@ -53,3 +53,7 @@ Code: `changes/`, `ui/changes.rs`, `app/changes_panel.rs`
   - **The button**: ` Changes n ` shows when the machine's `WorkspaceInfo` has a `branch`. `n` comes from the open stream, else from the snapshot's `changes` when its mode is the panel's, else there is no number, never a 0 nobody counted. A machine counts only the workspace it shows and those its clients follow, so the number usually appears once the panel opens.
   - **A machine that goes down** leaves the list as it was with `vps unreachable` and `seen … ago` or `reconnecting in N s` under the header; a click that needs the machine (unfolding, a gap) sends nothing and says so in a toast. When the link is back the stream reopens and the list stays.
   - **Not on the socket**: the panels are the window's; a client reads a machine's diff with `cornercase --remote DESTINATION changes`.
+
+## Topics
+
+- [Against base](changes-panel/against-base.md) (#716): each workspace's count on its row and in `status`, `watch` and `view`.

@@ -47,6 +47,7 @@ fn tree_workspaces() -> Vec<Vec<WorkspaceEntry>> {
         removing: false,
         setting_up: false,
         closed: 0,
+        changed: None,
         machine: None,
     };
     vec![
@@ -56,7 +57,7 @@ fn tree_workspaces() -> Vec<Vec<WorkspaceEntry>> {
     ]
 }
 
-fn with_tree() -> View<'static> {
+pub(super) fn with_tree() -> View<'static> {
     View {
         has_project: true,
         issues: true,

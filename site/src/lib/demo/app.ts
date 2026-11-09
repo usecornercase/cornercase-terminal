@@ -1421,6 +1421,18 @@ export class App {
     this.notify(o.untracked || o.status === 'A' ? `deleted ${o.path}` : `discarded the changes to ${o.path}`, 'done');
   }
 
+  private againstBases = new Map<string, { files: number; added: number; removed: number } | null>();
+
+  againstBase(p: Project, w: Workspace): { files: number; added: number; removed: number } | null {
+    const key = `${w.id}:${this.discarded.size}`;
+    const known = this.againstBases.get(key);
+    if (known !== undefined) return known;
+    const files = this.kept(p, w, 'all');
+    const found = files.length ? { files: files.length, added: files.reduce((n, f) => n + f.added, 0), removed: files.reduce((n, f) => n + f.removed, 0) } : null;
+    this.againstBases.set(key, found);
+    return found;
+  }
+
   private kept(p: Project, w: Workspace, mode: ChangesMode): FileDiff[] {
     return workspaceDiff(p, w, mode).filter((f) => !this.discarded.has(`${w.id}:${f.change.path}`));
   }

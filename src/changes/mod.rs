@@ -10,6 +10,7 @@ mod porcelain;
 pub(crate) mod selection;
 pub(crate) mod stage;
 mod summary;
+pub(crate) mod tally;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -150,6 +151,7 @@ pub(crate) struct Panel {
     superseded: HashMap<u64, u64>,
     requested: HashMap<(u64, Mode), Instant>,
     selection: Option<selection::Selection>,
+    tallies: tally::Tallies,
 }
 
 pub(crate) struct Checkout {
@@ -494,6 +496,26 @@ impl Panel {
         None
     }
 
+    pub(crate) fn tallying(&self) -> bool {
+        self.tallies.busy()
+    }
+
+    pub(crate) fn request_tally(
+        &mut self,
+        targets: &[tally::Target],
+        now: Instant,
+    ) -> Option<(u64, u64, git::Request)> {
+        self.tallies.request(targets, now)
+    }
+
+    pub(crate) fn tallied(&mut self, generation: u64, result: Result<git::Loaded>, now: Instant) {
+        self.tallies.loaded(generation, result, now);
+    }
+
+    pub(crate) fn tally(&self, workspace: u64, base: Option<&str>) -> Option<&tally::Tally> {
+        self.tallies.get(workspace, base)
+    }
+
     pub(crate) fn invalidate_summary(&mut self, workspace: u64) {
         self.summary_requested.remove(&workspace);
     }
@@ -517,6 +539,7 @@ impl Panel {
             self.counts_for = None;
         }
         self.selection.take_if(|s| s.workspace == workspace);
+        self.tallies.forget(workspace);
         if self.workspace == Some(workspace) {
             self.workspace = None;
         }
@@ -571,6 +594,7 @@ impl Panel {
     }
 
     pub(crate) fn rescan(&mut self, workspace: u64) {
+        self.tallies.rescan(workspace);
         self.invalidate_summary(workspace);
         self.requested.retain(|(w, _), _| *w != workspace);
         self.superseded.insert(workspace, self.generation);

@@ -115,6 +115,8 @@ A workspace on one of your [machines](../machines/#in-your-sidebar) shows after 
 
 When a workspace's branch is behind its upstream, its row ends with the number of commits to pull, such as `↓3`. See [Commits to pull](../worktrees/#commits-to-pull). When the branch has a pull request on GitHub (or a merge request on GitLab), the row shows its number, coloured by its checks, such as `#485✗` when one failed, or `#486!` in orange when it has merge conflicts; click it to see its checks. See [Pull requests and their checks](../worktrees/#pull-requests-and-their-checks).
 
+A git workspace's row also ends with what its branch changed, such as `+640 −9` (added in green, removed in red): the lines it adds and removes since it parted from its base branch, committed or not, new files included, which is what the [Changes panel](../changes/)'s **All** tab counts. On a project's own checkout it counts the uncommitted changes and the commits not pushed yet. cornercase reads it in the background for the rows on screen only, one workspace at a time, those with a working agent first. In a narrow column the count gives way to the name.
+
 ## Tabs
 
 Each workspace lists its tabs under its name. Click **`▾`** beside a workspace's name to collapse it and **`▸`** to expand it again: its tabs leave the list, but their shells and agents keep running, and a collapsed workspace shows one icon at the end of its row, the most urgent status of its agents (working and idle included). A click on the rest of the row opens the workspace and expands it. With [tabs above the pane](../../reference/configuration/#ui) there is nothing to collapse.
