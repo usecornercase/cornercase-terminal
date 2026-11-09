@@ -2,11 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.20
+## 0.13.21
 
 - **Choose the shell new panes start.** **Settings › UI › shell** lists the shells found on this computer (on Windows PowerShell 7, Windows PowerShell, cmd and Git Bash; on Linux and macOS the ones in `/etc/shells`) and takes any other program: a full path, one starting with `~/` or a name on the `PATH`. **shell arguments** adds options such as `-NoLogo` or `--login`. The next tab, split or workspace starts it, with no restart; panes already open keep theirs. In `config.json` it is `"shell": "pwsh"` or `{"program": "…", "args": ["…"]}`, and `cornercase config set shell … shell.args …` changes it from a script. A shell that cannot start falls back to the default with a warning, so a pane always opens.
 - On Windows, choosing cmd or Git Bash gets around two limits of PowerShell panes: a pane's folder is followed, and the agent arguments Windows PowerShell 5.1 would split are accepted.
 - On Windows, in a pane whose shell is not PowerShell, cmd or a bash (nu, for instance), an agent starts only when no word of its line needs quotes.
+
+## 0.13.20
+
+- **A login lock is no longer taken for an account.** While Claude Code renews an account's login it keeps a folder such as `personal.lock` beside it, and for those seconds Usage ran a probe in it and `cornercase account list`, Settings › Accounts and the account menus listed it as one more account. Such a folder beside its account is no longer listed, and `cornercase account add` refuses a new name ending in `.lock`, or one whose `.lock` folder is already there. An account you already have with such a name keeps working.
 
 ## 0.13.19
 

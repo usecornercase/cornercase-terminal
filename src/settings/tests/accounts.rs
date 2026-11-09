@@ -225,7 +225,11 @@ mod actions {
 
     #[rstest::rstest]
     #[case::taken("work", "the claude account `work` already exists")]
-    #[case::invalid("my work", "use letters, digits, `.`, `_` and `-`, at most 32 characters")]
+    #[case::invalid("my work", "use letters, digits, `.`, `_` and `-`, at most 32 characters, not ending in `.lock`")]
+    #[case::a_lock(
+        "personal.lock",
+        "use letters, digits, `.`, `_` and `-`, at most 32 characters, not ending in `.lock`"
+    )]
     #[case::empty("", "type a name first")]
     fn a_bad_account_name_stays_in_the_field(#[case] name: &str, #[case] error: &str) {
         let mut s = with_accounts();
