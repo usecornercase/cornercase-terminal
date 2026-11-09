@@ -1,11 +1,12 @@
 #![cfg(unix)]
 
+use std::time::Duration;
+
 use super::*;
 use crate::control::{self as wire, Command};
 use crate::control::{OpenView, Report, SetView, ViewInfo};
 use crate::project::Hierarchy;
 use crate::test_util::git;
-use std::time::Duration;
 
 fn topic_repo() -> TempDir {
     let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
