@@ -1,4 +1,5 @@
 use super::*;
+use crate::control::AgainstBase;
 
 fn pane(id: u64, program: &str, active: bool) -> PaneInfo {
     PaneInfo {
@@ -47,6 +48,7 @@ fn workspace() -> WorkspaceInfo {
         custom_name: None,
         collapsed: false,
         changes: None,
+        against_base: None,
         closed_agents: None,
         post: None,
         shared: Vec::new(),
@@ -440,4 +442,20 @@ fn several_panes_end_one_line_each_with_the_id_they_were_given() {
     };
 
     assert_eq!(endings(&done), ["4 idle", "9 ok", "7 closed"]);
+}
+
+#[test]
+fn a_workspace_says_what_it_changed_against_its_base() {
+    let mut report = report();
+    let against = |files| AgainstBase { base: "origin/main".into(), files, added: 640, removed: 9 };
+    report.projects[0].workspaces[0].against_base = Some(against(16));
+    let many = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
+    report.projects[0].workspaces[0].against_base = Some(against(1));
+    let one = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
+    report.projects[0].workspaces[0].against_base = Some(against(0));
+    let clean = render(&report, Some(Path::new("/home/ana")), UNIX_EPOCH);
+
+    assert!(many.contains("2 behind  16 files +640 \u{2212}9 vs origin/main  (shown)\n"), "{many}");
+    assert!(one.contains("1 file +640 \u{2212}9 vs origin/main"), "{one}");
+    assert!(!clean.contains(" vs "), "{clean}");
 }

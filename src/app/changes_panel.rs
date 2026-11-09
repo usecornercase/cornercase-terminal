@@ -25,6 +25,7 @@ mod actions;
 mod branches;
 mod selection;
 pub(super) mod streams;
+mod tally;
 
 pub(super) use actions::Seen;
 pub(super) use streams::Streams;
@@ -81,6 +82,10 @@ pub(crate) enum ChangesEvent {
         workspace: u64,
         checked: changes::merge::Checked,
     },
+    Tallied {
+        generation: u64,
+        result: Result<changes::git::Loaded>,
+    },
     Acted {
         request: Option<u64>,
         workspace: u64,
@@ -101,6 +106,7 @@ impl ChangesEvent {
             Self::Base { .. } => "changes base",
             Self::Overlaps { .. } => "overlaps",
             Self::MergeChecked { .. } => "merge check",
+            Self::Tallied { .. } => "against base",
             Self::Acted { action, .. } => match action {
                 changes::act::FileAction::Discard => "changes discard",
                 changes::act::FileAction::Stage => "changes stage",
@@ -118,6 +124,9 @@ impl App {
                 if self.every_shown() || !self.clients.change_streams.is_empty() {
                     self.refresh_changes(Instant::now());
                 }
+            }
+            ChangesEvent::Tallied { generation, result } => {
+                self.panels.changes.tallied(generation, result, Instant::now());
             }
             ChangesEvent::Branches { workspace, branches, default } => {
                 self.branches_listed(workspace, branches, default);
@@ -180,11 +189,16 @@ impl App {
         let request =
             if tui_every { self.panels.changes.request_every(&targets, now) } else { self.project_request(now) };
         let request = request.or_else(|| self.feed_request(now)).or_else(|| {
-            if every && !tui_every { self.panels.changes.request_sweep(&targets, now, false) } else { None }
+            if every && !tui_every {
+                self.panels.changes.request_sweep(&targets, now, false)
+            } else {
+                self.viewed_request(now)
+            }
         });
         if let Some((workspace, generation, request)) = request {
             self.spawn_changes(workspace, generation, request);
         }
+        self.refresh_tallies(now);
         self.publish_change_streams(&targets, now);
     }
 

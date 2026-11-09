@@ -9,8 +9,8 @@ use super::{print_json, print_out};
 use crate::agents::activity;
 use crate::client::{answer, ask};
 use crate::control::{
-    self, MachineSeen, PaneInfo, PaneRow, PaneRows, ProjectInfo, PullRequestInfo, Report, SharedInfo, ShownRemote,
-    WorkspaceInfo,
+    self, AgainstBase, MachineSeen, PaneInfo, PaneRow, PaneRows, ProjectInfo, PullRequestInfo, Report, SharedInfo,
+    ShownRemote, WorkspaceInfo,
 };
 use crate::error::{Error, Result};
 use crate::machines::{self, State};
@@ -166,6 +166,7 @@ fn workspace_parts(workspace: &WorkspaceInfo, home: Option<&Path>) -> Vec<String
         let noun = if c.files == 1 { "file" } else { "files" };
         format!("{} {noun} changed", c.files)
     }));
+    parts.extend(workspace.against_base.as_ref().filter(|a| a.files > 0).map(against_base_part));
     parts.extend(workspace.pull_request.as_ref().map(pull_request_part));
     parts.extend(shared_part(&workspace.shared));
     parts.extend(workspace.closed_agents.filter(|count| *count > 0).map(|count| {
@@ -173,6 +174,11 @@ fn workspace_parts(workspace: &WorkspaceInfo, home: Option<&Path>) -> Vec<String
         format!("{count} {noun} closed")
     }));
     parts
+}
+
+fn against_base_part(against: &AgainstBase) -> String {
+    let noun = if against.files == 1 { "file" } else { "files" };
+    format!("{} {noun} +{} \u{2212}{} vs {}", against.files, against.added, against.removed, against.base)
 }
 
 fn shared_part(shared: &[SharedInfo]) -> Option<String> {

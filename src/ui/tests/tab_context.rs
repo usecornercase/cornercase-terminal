@@ -25,6 +25,7 @@ fn with_details(details: Details) -> View<'static> {
             removing: false,
             setting_up: false,
             closed: 0,
+            changed: None,
             machine: None,
         }],
         active_tab: Some(0),

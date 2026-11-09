@@ -18,7 +18,7 @@ fn with_agents() -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
-                machine: None,
+                ..WorkspaceEntry::default()
             },
             WorkspaceEntry {
                 shared: 0,
@@ -30,7 +30,7 @@ fn with_agents() -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
-                machine: None,
+                ..WorkspaceEntry::default()
             },
         ],
         active_tab: Some(0),

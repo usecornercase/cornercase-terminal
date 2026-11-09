@@ -58,6 +58,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "plugin-run-view",
     "open-code-workspace",
     "machine-retry-at",
+    "against-base",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

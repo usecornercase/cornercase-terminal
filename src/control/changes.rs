@@ -676,5 +676,14 @@ pub(crate) struct ChangesCount {
     pub(crate) mode: Mode,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AgainstBase {
+    pub(crate) base: String,
+    pub(crate) files: u64,
+    pub(crate) added: u64,
+    pub(crate) removed: u64,
+}
+
 #[cfg(test)]
 mod tests;

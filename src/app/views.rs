@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use ratatui::layout::Rect;
 
@@ -102,6 +102,14 @@ impl Views {
 
     pub(super) fn is_empty(&self) -> bool {
         self.list.is_empty()
+    }
+
+    pub(super) fn draws(&self) -> bool {
+        self.list.iter().any(|view| view.visible)
+    }
+
+    pub(super) fn viewed_workspaces(&self) -> HashSet<u64> {
+        self.list.iter().filter(|view| view.visible).filter_map(|view| view.shown.workspace).collect()
     }
 
     pub(super) fn changed(&self) -> bool {

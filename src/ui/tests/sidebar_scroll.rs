@@ -91,6 +91,7 @@ fn hidden_workspace_rows_count_workspaces_and_tabs_only() {
             removing: false,
             setting_up: false,
             closed: 0,
+            changed: None,
             machine: None,
         }],
         active_tab: Some(0),

@@ -615,6 +615,7 @@ mod account_pills;
 mod account_restart;
 mod accounts;
 mod accounts_page;
+mod against_base;
 mod agent_status;
 mod click_outside;
 mod close_agent;

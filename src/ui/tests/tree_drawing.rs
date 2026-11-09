@@ -47,6 +47,7 @@ fn tree_workspaces() -> Vec<Vec<WorkspaceEntry>> {
         removing: false,
         setting_up: false,
         closed: 0,
+        changed: None,
         machine: None,
     };
     vec![

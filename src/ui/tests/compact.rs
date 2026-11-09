@@ -24,6 +24,7 @@ fn in_a_project(nav: Option<Nav>) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                changed: None,
                 machine: None,
             },
             WorkspaceEntry {
@@ -36,6 +37,7 @@ fn in_a_project(nav: Option<Nav>) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                changed: None,
                 machine: None,
             },
         ],

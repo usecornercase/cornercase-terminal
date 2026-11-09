@@ -109,6 +109,7 @@ impl App {
             removing: w.removing(),
             setting_up: w.setting_up(),
             closed: self.agents.closed.count(w.id),
+            changed: self.row_changes(w),
             machine: None,
         }
     }
@@ -152,6 +153,7 @@ impl App {
             collapsed: workspace.collapsed,
             setting_up: workspace.setting_up(),
             closed: self.agents.closed.count(workspace.id),
+            changed: self.row_changes(workspace),
             machine: None,
         }
     }

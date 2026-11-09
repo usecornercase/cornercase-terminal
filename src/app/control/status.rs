@@ -6,6 +6,7 @@ use super::{Handled, json, none};
 use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
+use crate::app::changes_panel::streams::Counted;
 use crate::control::{
     self, AppState, CheckInfo, ConfigInfo, Done, GroupInfo, KeepAwake, LayerInfo, PaneInfo, ProjectInfo,
     PullRequestInfo, RemoteInfo, Report, RunStatus, StackInfo, TabInfo, WorkspaceInfo,
@@ -22,8 +23,8 @@ use crate::version;
 struct Seen {
     caller: Option<u64>,
     live: HashSet<u64>,
-    counted: Option<u64>,
-    sweeping: bool,
+    counted: Counted,
+    drawn: HashSet<u64>,
 }
 
 fn remote_infos(remotes: &[(String, String)]) -> Vec<RemoteInfo> {
@@ -95,8 +96,8 @@ impl App {
         let seen = Seen {
             caller: caller.filter(|id| self.projects.tab_of_pane(*id).is_some()),
             live: self.pane_ids(),
-            counted: self.changes_target().map(|t| t.workspace),
-            sweeping: self.clients.change_streams.wants_every(),
+            counted: self.counted(),
+            drawn: self.drawn_workspaces(),
         };
         Report {
             version: version::CURRENT.to_string(),
@@ -165,7 +166,8 @@ impl App {
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| self.tab_info(tab, t == ws.active, seen)).collect(),
             custom_name: ws.name.clone(),
             collapsed: ws.collapsed,
-            changes: self.changes_count(ws.id, seen.counted, seen.sweeping),
+            changes: self.changes_count(ws.id, &seen.counted),
+            against_base: self.against_base_info(ws, &seen.drawn),
             closed_agents: Some(self.agents.closed.count(ws.id)).filter(|count| *count > 0),
             post: self.post_info(ws.id),
             shared: self.shared_info(ws.id),
