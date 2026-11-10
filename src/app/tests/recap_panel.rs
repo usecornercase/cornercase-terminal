@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 use super::*;
 use crate::app::recap_panel::Overrides;
 use crate::recap::journal::{Entry, Event, Pointer, WorkspacePlace, files};
-use crate::recap::{Choice, Named, store};
+use crate::recap::{Choice, Named, Place, RECAP_VERSION, Recap, store};
 use crate::test_util::{fake_program, fixture};
 use crate::time::Stamp;
 
@@ -174,10 +174,10 @@ fn a_place_that_is_open_is_gone_to_and_a_closed_one_is_said_to_be_closed() {
     let mut r = recaps(Duration::from_secs(600));
     r.app.toggle_recap();
     r.settle(Choice::Now);
-    r.app.panels.recap.run_mut(Choice::Now).last = Some(crate::recap::Recap {
+    r.app.panels.recap.run_mut(Choice::Now).last = Some(Recap {
         text: "- [c1] asked\n- [c2] asked".into(),
         places: [("c1".to_string(), place_of(&r.app, true)), ("c2".to_string(), place_of(&r.app, false))].into(),
-        ..crate::recap::Recap::default()
+        ..Recap::default()
     });
     r.app.recap_go("c1");
     assert_eq!(toast(&r.app), None);
@@ -185,22 +185,22 @@ fn a_place_that_is_open_is_gone_to_and_a_closed_one_is_said_to_be_closed() {
     assert_eq!(toast(&r.app), Some("gone › old is closed"));
 }
 
-fn place_of(app: &App, open: bool) -> crate::recap::Place {
+fn place_of(app: &App, open: bool) -> Place {
     let project = &app.projects[0];
     let named = |label: &str, path: String| Some(Named { label: label.into(), path });
     if open {
-        crate::recap::Place {
+        Place {
             kind: "conversation".into(),
             project: named("api", project.path.display().to_string()),
             workspace: named("default", project.workspaces[0].path.display().to_string()),
-            ..crate::recap::Place::default()
+            ..Place::default()
         }
     } else {
-        crate::recap::Place {
+        Place {
             kind: "conversation".into(),
             project: named("gone", "/nonexistent/project".into()),
             workspace: named("old", "/nonexistent/project".into()),
-            ..crate::recap::Place::default()
+            ..Place::default()
         }
     }
 }
@@ -215,4 +215,49 @@ fn the_footer_button_the_icon_and_the_key_open_the_panel() {
     assert_eq!(app.screen.side, Some(Side::Recap));
     click(&mut app, button.as_position());
     assert_eq!(app.screen.side, None);
+}
+
+pub(super) fn waiting_place(status: Option<&str>) -> Place {
+    Place {
+        kind: "conversation".into(),
+        agent: Some("claude".into()),
+        conversation: Some("gone".into()),
+        status: status.map(str::to_string),
+        ..Place::default()
+    }
+}
+
+pub(super) fn cached_now(places: std::collections::BTreeMap<String, Place>) -> Recap {
+    Recap {
+        v: RECAP_VERSION,
+        range: "now".into(),
+        written_at: crate::time::now(),
+        text: "## Needs you\n- [c1] asks which cache".into(),
+        places,
+        ..Recap::default()
+    }
+}
+
+#[test]
+fn a_cached_now_that_names_a_closed_conversation_is_written_again_when_shown() {
+    let mut r = recaps(Duration::from_secs(600));
+    r.app.panels.recap.run_mut(Choice::Now).last =
+        Some(cached_now([("c1".to_string(), waiting_place(Some("waiting")))].into()));
+    assert_eq!(r.app.recap_outdated(Choice::Now).ids, ["c1".to_string()].into());
+    let view = r.app.recap_view(AREA);
+    assert!(view.changed.contains("c1") && view.outdated);
+    r.app.show_recap(Choice::Now);
+    r.settle(Choice::Now);
+    assert_eq!(r.runs(), 1);
+    assert_eq!(r.text(Choice::Now).as_deref(), Some("hello"));
+    assert!(!r.app.recap_outdated(Choice::Now).any());
+}
+
+#[test]
+fn a_cached_now_that_still_matches_is_shown_without_a_run() {
+    let mut r = recaps(Duration::from_secs(600));
+    r.app.panels.recap.run_mut(Choice::Now).last = Some(cached_now([("c1".to_string(), waiting_place(None))].into()));
+    r.app.show_recap(Choice::Now);
+    r.settle(Choice::Now);
+    assert_eq!(r.runs(), 0);
 }

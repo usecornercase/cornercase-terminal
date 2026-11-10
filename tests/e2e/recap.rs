@@ -78,6 +78,8 @@ fn a_recap_is_written_by_the_agent_and_names_its_places() {
     let again = session.says(&["recap", "yesterday", "--json"]);
     let json: Value = serde_json::from_str(&again).expect("json");
     assert_eq!(json["agent"], "claude");
+    assert_eq!(json["outdated"], false);
+    assert_eq!(json["changed"], serde_json::json!([]));
     assert_eq!(std::fs::read_to_string(session.dir.join("claude-recap.runs")).expect("runs").lines().count(), 1);
     assert!(session.dir.join("server.recap").join("yesterday").join("recap.md").exists());
 }

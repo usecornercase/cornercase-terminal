@@ -12,6 +12,7 @@ use crate::error::Result;
 use crate::log::{Job, Level};
 use crate::recap::dossier::Dossier;
 use crate::recap::journal::Journal;
+use crate::recap::outdated::{self, Outdated};
 use crate::recap::run::{self, Input, Outcome};
 use crate::recap::{Choice, Options, RECAP_TIMEOUT, Recap, store};
 use crate::time::Stamp;
@@ -245,7 +246,14 @@ impl App {
         let zone = if queued.is_empty() { crate::queue::clock::local_zone() } else { queued.to_string() };
         let today = crate::recap::range::today_of(crate::time::now(), &zone).unwrap_or_default();
         let moment = store::Moment { now: crate::time::now(), today: &today, last_day: None };
-        store::due(choice, run.last.as_ref(), moment)
+        store::due(choice, run.last.as_ref(), moment) || self.recap_outdated(choice).any()
+    }
+
+    pub(super) fn recap_outdated(&self, choice: Choice) -> Outdated {
+        match &self.panels.recap.run(choice).last {
+            Some(recap) if choice == Choice::Now => outdated::check(recap, &self.recap_present()),
+            _ => Outdated::default(),
+        }
     }
 
     pub(super) fn show_recap(&mut self, choice: Choice) {
@@ -253,7 +261,8 @@ impl App {
         self.panels.recap.choice = choice;
         self.panels.recap.scroll = 0;
         if self.recap_due(choice) {
-            self.ask_recap(choice, false, &Overrides::default(), None);
+            let fresh = self.recap_outdated(choice).any();
+            self.ask_recap(choice, fresh, &Overrides::default(), None);
         }
     }
 

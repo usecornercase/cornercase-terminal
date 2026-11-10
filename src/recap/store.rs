@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::{Choice, NOW_FRESH, Recap};
+use super::{Choice, NOW_FRESH, RECAP_VERSION, Recap};
 use crate::persist;
 
 pub(crate) fn load(folder: &Path, choice: Choice) -> Option<Recap> {
@@ -36,6 +36,9 @@ pub(crate) struct Moment<'a> {
 
 pub(crate) fn due(choice: Choice, cached: Option<&Recap>, at: Moment<'_>) -> bool {
     let Some(cached) = cached else { return true };
+    if cached.v < RECAP_VERSION {
+        return true;
+    }
     match choice {
         Choice::Now => at.now - cached.written_at >= i64::try_from(NOW_FRESH.as_secs()).unwrap_or(i64::MAX),
         Choice::Yesterday => at.last_day != cached.day.as_deref(),

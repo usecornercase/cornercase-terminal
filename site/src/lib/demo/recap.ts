@@ -42,50 +42,52 @@ const blog: Place = { project: 'blog', workspace: 'default', tab: 'claude' };
 const name = (p: Place): string => `${p.project} › ${p.workspace} › ${p.tab}`;
 const link = (place: Place): Seg => ({ text: name(place), link: place, bold: false });
 const text = (t: string): Seg => ({ text: t });
-const quote = (t: string): Seg => ({ text: `"${t}"`, quote: true });
 const heading = (t: string): Block => ({ kind: 'heading', segs: [{ text: t, bold: true }] });
 const bullet = (...segs: Seg[]): Block => ({ kind: 'bullet', segs });
 const blank: Block = { kind: 'blank', segs: [] };
 
 export const RECAPS: Record<Choice, { line: string; blocks: Block[] }> = {
   now: {
-    line: 'tue 4 nov 09:48 · Claude Code · 4 conversations · 38k tokens · 2 min ago',
+    line: 'tue 4 nov 09:48 · Claude Code · 4 conversations · 31k tokens · 2 min ago',
     blocks: [
-      heading('On you'),
-      bullet(link(dark), text(': asked '), quote('Where does the checkout pick its colours?'), text(' (since 09:31)')),
-      bullet(link(pagination), text(': waiting for src/orders.ts, the cursor column')),
+      heading('Needs you'),
+      bullet(link(dark), text(': asks where the checkout picks its colours')),
+      bullet(link(pagination), text(': needs the column the cursor sorts by')),
       blank,
       heading('In progress'),
-      bullet(link(gifts), text(': working 12m. You asked '), quote('Add gift cards to the checkout')),
+      bullet(link(gifts), text(': gift cards in the checkout, tests next')),
       blank,
-      heading('Done'),
-      bullet(link(blog), text(': fixed the typos in the post on worktrees')),
+      heading('Done today'),
+      bullet(link(blog), text(': typos fixed in the post on worktrees')),
     ],
   },
   yesterday: {
-    line: 'yesterday · mon 3 nov · Claude Code · 3 conversations · 52k tokens · 1 day ago',
+    line: 'yesterday · mon 3 nov · Claude Code · 3 conversations · 44k tokens · 1 day ago',
     blocks: [
       heading('Done'),
-      bullet(link(blog), text(': you asked '), quote('Fix the typos in the post on worktrees'), text('; the post is ready')),
+      bullet(link(blog), text(': the post on worktrees is ready')),
       blank,
       heading('In progress'),
-      bullet(link(dark), text(': you asked '), quote('Use Theme everywhere. Keep the brand purple.'), text('; two screens are left')),
+      bullet(link(dark), text(': Theme everywhere, two screens left')),
       blank,
       heading('On you'),
-      bullet(link(pagination), text(': you asked '), quote('Paginate GET /orders with a cursor'), text('; it needs the column to sort by')),
+      bullet(link(pagination), text(': pick the column the cursor sorts by')),
     ],
   },
   week: {
-    line: '7 days · Claude Code · 6 conversations · 190k tokens · 3 h ago',
+    line: '7 days · Claude Code · 6 conversations · 160k tokens · 3 h ago',
     blocks: [
       heading('web-shop'),
-      bullet(text('Dark mode and gift cards moved forward; '), link(dark), text(' still has two screens to go.')),
+      bullet(text('Dark mode with Theme everywhere, two screens to go in '), link(dark)),
+      bullet(text('Gift cards started in '), link(gifts)),
       blank,
       heading('orders-api'),
-      bullet(text('Pagination is designed; '), link(pagination), text(' waits for the sort column. #212 is merged.')),
+      bullet(text('Cursor pagination for GET /orders, designed')),
+      bullet(text('Merged: #212')),
+      bullet(text('Open: '), link(pagination), text(' waits for the sort column')),
       blank,
       heading('blog'),
-      bullet(text('The post on worktrees is corrected in '), link(blog), text(', nothing open.')),
+      bullet(text('The post on worktrees, corrected in '), link(blog)),
     ],
   },
 };

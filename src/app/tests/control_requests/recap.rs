@@ -3,10 +3,17 @@
 use std::time::Duration;
 
 use super::*;
-use crate::app::tests::recap_panel::{Recaps, recaps};
+use crate::app::tests::recap_panel::{Recaps, cached_now, recaps, waiting_place};
 use crate::recap::Choice;
 
 const PROMPTED: Duration = Duration::from_secs(600);
+
+fn the_new_keys_are_empty(first: &Value) {
+    assert_eq!(first["outdated"], false);
+    assert_eq!(first["changed"], json!([]));
+    assert!(first["places"]["c1"]["status"].is_null(), "{first}");
+    assert!(first["places"]["c1"]["checks"].is_null(), "{first}");
+}
 
 #[test]
 fn a_recap_is_written_for_the_first_ask_and_answered_from_the_cache_after() {
@@ -19,6 +26,7 @@ fn a_recap_is_written_for_the_first_ask_and_answered_from_the_cache_after() {
     assert_eq!(first["loading"], false);
     assert!(first["places"]["c1"]["project"]["label"].is_string(), "{first}");
     assert_eq!(first["tokens"]["output"], 73);
+    the_new_keys_are_empty(&first);
     let again = asked(&mut r.app, &r.rx, "recap", &json!({"range": "now"})).expect("a recap");
     assert_eq!(again["text"], "hello");
     assert_eq!(r.runs(), 1);
@@ -105,4 +113,19 @@ fn a_run_tells_its_start_and_its_end_to_the_ones_following() {
         })
         .collect();
     assert_eq!(states, ["started", "finished"]);
+}
+
+#[test]
+fn a_cached_now_that_names_a_closed_conversation_is_asked_again_and_says_what_changed_when_that_fails() {
+    let mut r = recaps(PROMPTED);
+    let cached = cached_now([("c1".to_string(), waiting_place(Some("waiting")))].into());
+    r.app.panels.recap.run_mut(Choice::Now).last = Some(cached.clone());
+    let failed = crate::test_util::fixture!("claude/2.1.318/recap-failed.jsonl");
+    std::fs::write(r.claude.with_extension("out"), failed).expect("a failing agent");
+    let answer = asked(&mut r.app, &r.rx, "recap", &json!({"range": "now"})).expect("an answer");
+    assert_eq!(r.runs(), 1);
+    assert_eq!(answer["error"], "Not logged in · Please run /login");
+    assert_eq!(answer["outdated"], true);
+    assert_eq!(answer["changed"], json!(["c1"]));
+    assert_eq!(answer["text"], cached.text);
 }

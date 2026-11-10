@@ -4,7 +4,13 @@ use super::*;
 use crate::test_util::TempDir;
 
 fn cached(day: Option<&str>, written_at: i64) -> Recap {
-    Recap { day: day.map(str::to_string), written_at, text: "## Done\n- [c1] x".into(), ..Recap::default() }
+    Recap {
+        v: RECAP_VERSION,
+        day: day.map(str::to_string),
+        written_at,
+        text: "## Done\n- [c1] x".into(),
+        ..Recap::default()
+    }
 }
 
 fn at(now: i64, today: &'static str, last_day: Option<&'static str>) -> Moment<'static> {
@@ -28,6 +34,13 @@ fn at(now: i64, today: &'static str, last_day: Option<&'static str>) -> Moment<'
     true
 )]
 #[case::week_same_day(Choice::Week, Some(cached(Some("2026-11-04"), 0)), at(5000, "2026-11-04", None), false)]
+#[case::older_version(Choice::Now, Some(Recap { v: 1, ..cached(None, 900) }), at(1000, "2026-11-04", None), true)]
+#[case::older_week(
+    Choice::Week,
+    Some(Recap { v: 1, ..cached(Some("2026-11-04"), 0) }),
+    at(5000, "2026-11-04", None),
+    true
+)]
 #[case::week_next_day(Choice::Week, Some(cached(Some("2026-11-04"), 0)), at(5000, "2026-11-05", None), true)]
 fn the_caching_rules_decide_when_a_choice_is_written_again(
     #[case] choice: Choice,

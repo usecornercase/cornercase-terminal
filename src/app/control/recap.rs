@@ -32,7 +32,7 @@ impl App {
         if ask.dossier {
             return Ok(self.dossier_request(client, choice, ask));
         }
-        let fresh = ask.fresh || ask.overridden();
+        let fresh = ask.fresh || ask.overridden() || self.recap_outdated(choice).any();
         let running = self.panels.recap.run(choice).running;
         if running && self.recap_options(&overrides) != self.panels.recap.run(choice).options {
             return Err(Refusal::new(
@@ -86,6 +86,9 @@ impl App {
         };
         if let Some(recap) = &run.last {
             fill(&mut info, recap);
+            let found = self.recap_outdated(choice);
+            info.outdated = found.any();
+            info.changed = found.ids.into_iter().collect();
         } else if run.empty.is_none() && !run.running && run.error.is_none() {
             info.empty = Some(empty_text(choice).to_string());
         }

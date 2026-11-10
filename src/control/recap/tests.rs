@@ -37,6 +37,8 @@ fn the_answer_always_carries_every_key() {
         "progress",
         "empty",
         "error",
+        "outdated",
+        "changed",
     ] {
         assert!(value.get(key).is_some(), "{key}");
     }

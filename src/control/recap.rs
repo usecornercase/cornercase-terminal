@@ -58,6 +58,8 @@ pub(crate) struct RecapInfo {
     pub(crate) progress: Option<usize>,
     pub(crate) empty: Option<String>,
     pub(crate) error: Option<String>,
+    pub(crate) outdated: bool,
+    pub(crate) changed: Vec<String>,
 }
 
 #[cfg(test)]

@@ -54,3 +54,9 @@ fn a_failure_follows_the_last_good_text() {
     let info = RecapInfo { error: Some("Not logged in".into()), ..info() };
     assert!(text(&info).ends_with("recap unavailable: Not logged in\n"));
 }
+
+#[test]
+fn an_outdated_recap_says_so_in_its_heading() {
+    let text = text(&RecapInfo { outdated: true, ..info() });
+    assert!(text.lines().next().is_some_and(|line| line.ends_with(" · outdated")), "{text}");
+}

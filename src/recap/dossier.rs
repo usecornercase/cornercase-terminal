@@ -10,6 +10,8 @@ use crate::time::Stamp;
 mod noise;
 mod render;
 
+pub(crate) const NEEDS_HEADING: &str = "## Needs you now";
+
 const MAX_MESSAGES: usize = 4000;
 
 pub(crate) struct Caps {
@@ -25,28 +27,28 @@ impl Caps {
     pub(crate) const fn of(choice: Choice) -> Self {
         match choice {
             Choice::Now => Self {
-                prompts: 6,
-                prompt_chars: 500,
-                reply_chars: 800,
-                screen: true,
-                conversations: 60,
-                total: 40 * 1024,
-            },
-            Choice::Yesterday => Self {
-                prompts: 8,
-                prompt_chars: 500,
-                reply_chars: 800,
-                screen: false,
-                conversations: 60,
-                total: 60 * 1024,
-            },
-            Choice::Week => Self {
                 prompts: 4,
                 prompt_chars: 300,
-                reply_chars: 300,
+                reply_chars: 400,
+                screen: true,
+                conversations: 60,
+                total: 32 * 1024,
+            },
+            Choice::Yesterday => Self {
+                prompts: 5,
+                prompt_chars: 300,
+                reply_chars: 400,
+                screen: false,
+                conversations: 60,
+                total: 48 * 1024,
+            },
+            Choice::Week => Self {
+                prompts: 3,
+                prompt_chars: 200,
+                reply_chars: 200,
                 screen: false,
                 conversations: 120,
-                total: 100 * 1024,
+                total: 80 * 1024,
             },
         }
     }
@@ -207,21 +209,28 @@ fn talk(record: &Record, range: &Range, caps: &Caps, prompted: bool) -> Talk {
     Talk { prompts, reply }
 }
 
-fn pull_of(group: &Group, live: &Live) -> Option<(PullPlace, Option<String>)> {
+pub(super) struct Pulled {
+    pub(super) pull: PullPlace,
+    pub(super) title: Option<String>,
+    pub(super) live: bool,
+}
+
+fn pull_of(group: &Group, live: &Live) -> Option<Pulled> {
     let workspace = group.template.workspace.as_ref()?;
     let pulled = group.template.pull_request.clone();
     let current = live.pulls.iter().find(|pull| pull.workspace == workspace.path);
     match (current, pulled) {
-        (Some(pull), _) => Some((
-            PullPlace {
+        (Some(pull), _) => Some(Pulled {
+            pull: PullPlace {
                 number: pull.number,
                 url: pull.url.clone(),
                 state: pull.state.clone(),
                 ci: pull.checks.clone(),
             },
-            pull.title.clone(),
-        )),
-        (None, Some(pulled)) => Some((pulled, None)),
+            title: pull.title.clone(),
+            live: true,
+        }),
+        (None, Some(pull)) => Some(Pulled { pull, title: None, live: false }),
         (None, None) => None,
     }
 }
