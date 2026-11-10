@@ -96,6 +96,7 @@ const TERMINAL_ENV: [&str; 17] = [
     "INSIDE_EMACS",
     "XTERM_VERSION",
 ];
+const KNOWN_AGENTS: [&str; 8] = ["claude", "codex", "gemini", "opencode", "grok", "cursor", "copilot", "vibe"];
 
 struct Session {
     dir: PathBuf,
@@ -685,6 +686,17 @@ fn fake_agent_writing(dir: &std::path::Path, redirect: &str) -> PathBuf {
     );
     write_executable(&agent, &agent_script);
     agent
+}
+
+fn agent_commands(fakes: &[(&str, &std::path::Path)]) -> serde_json::Value {
+    let mut map: serde_json::Map<String, serde_json::Value> = KNOWN_AGENTS
+        .iter()
+        .map(|name| ((*name).to_string(), serde_json::Value::String(format!("/nonexistent/{name}"))))
+        .collect();
+    for (name, fake) in fakes {
+        map.insert((*name).to_string(), serde_json::Value::String(fake.display().to_string()));
+    }
+    serde_json::Value::Object(map)
 }
 
 fn fake_issue_tracker(session: &Session, view: &str, trust: &str, repo: &std::path::Path) -> (PathBuf, String) {
