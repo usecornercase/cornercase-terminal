@@ -65,6 +65,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo test --locked
 cargo-machete              # unused dependencies: cargo install cargo-machete
 npx -y jscpd@4.3.0         # copy-paste detector
+.github/version.test.sh    # tests of the release script, .github/version.sh
 ```
 
 - **Clippy** runs with `all` denied and `pedantic` warned, configured in `Cargo.toml`. Silence a lint only locally, with `#[expect(clippy::…, reason = "…")]`.
@@ -118,7 +119,7 @@ Every pull request that changes the app (`src/`, `Cargo.toml`, `Cargo.lock`, the
 - bump `version` in `Cargo.toml` above the last release;
 - add a `## <version>` section to `CHANGELOG.md` saying what changed, written for users: it becomes the release notes on GitHub and in the app's update dialog.
 
-Merging it to `main` publishes the release automatically: CI tags the version, builds the binaries for Linux, macOS and Windows, and publishes the GitHub Release, the installers behind the install script and the PowerShell line, and the Homebrew formula. Running cornercase then offers the update within the hour. If a release fails, CI opens an issue saying so, and the next push to `main`, or running the Version workflow, releases that version again. A release that follows a version that never got one also carries that version's notes.
+Merging it to `main` publishes the release automatically: CI tags the version, builds the binaries for Linux, macOS and Windows, and publishes the GitHub Release, the installers behind the install script and the PowerShell line, and the Homebrew formula. Running cornercase then offers the update within the hour. If a release fails, CI opens an issue saying so. The next push to `main` that keeps the version, or running the Version workflow, releases that version again. If a newer version is released first, its release notes carry the failed version's notes.
 
 ## This website
 

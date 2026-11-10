@@ -89,14 +89,16 @@ expect_no_call() {
 }
 
 run_script() {
-    sh "$script" "$@" >"$FAKE/out" 2>&1 || true
+    if ! sh "$script" "$@" >"$FAKE/out" 2>&1; then fail_case "the script exited with an error"; fi
+}
+
+run_script_failing() {
+    if sh "$script" "$@" >"$FAKE/out" 2>&1; then fail_case "the script should have failed"; fi
 }
 
 tag_released() {
     git tag v0.3.0
 }
-
-printf 'v0.3.0\nv0.1.0\n' >/dev/null
 
 new_case "check, docs only"
 echo docs >README.md
@@ -110,7 +112,7 @@ git tag v0.3.0
 echo more >>src/main.rs
 git add -A
 git commit -q -m change
-run_script check v0.3.0
+run_script_failing check v0.3.0
 expect_output "needs a new version"
 
 new_case "a new version is tagged and released"
@@ -137,6 +139,7 @@ tag_released
 printf 'v0.2.0\nv0.1.0\n' >"$FAKE/releases"
 echo 1 >"$FAKE/pending"
 run_script release
+expect_output "has not ended"
 expect_no_call "workflow run"
 
 new_case "an older tag without a release is not released again"
@@ -185,6 +188,7 @@ tag_released
 printf 'v0.3.0\nv0.2.0\n' >"$FAKE/releases"
 run_script notes v0.3.0
 expect_no_call "release edit"
+expect_output "already hold every version"
 
 new_case "notes of a tag without a release are left alone"
 tag_released

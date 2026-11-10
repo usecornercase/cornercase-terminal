@@ -37,7 +37,7 @@ release() {
     tag="v$version"
     if is_tag "$tag"; then
         changed=$(app_changes "$tag" HEAD)
-        [ -z "$changed" ] || fail "$tag is already released, but the app changed since; bump the version in a new pull request"
+        [ -z "$changed" ] || fail "$tag is already tagged, but the app changed since; bump the version in a new pull request"
         released=$(releases)
         if listed "$tag" "$released"; then
             echo "$tag is already released"
@@ -98,7 +98,7 @@ notes() {
         echo "the notes of $tag already hold every version since the last release"
         return
     fi
-    body=$(gh release view "$tag" --json body --jq .body)
+    body=$(gh release view "$tag" --json body --jq .body | tr -d '\r')
     sections=$(git show "$tag:CHANGELOG.md" | awk -v versions="$versions" '
         BEGIN { n = split(versions, list, " "); for (i = 1; i <= n; i++) wanted["## " list[i]] = 1 }
         /^## / { keep = ($0 in wanted); if (keep) $0 = "#" $0 }
@@ -126,7 +126,7 @@ failed() {
     if listed "$tag" "$released"; then
         body="The [Release run]($url) for \`$tag\` failed after its GitHub Release was published. Re-run its failed jobs: \`gh run rerun $id --failed\`."
     else
-        body="The [Release run]($url) for \`$tag\` failed, so \`$tag\` has no GitHub Release. Re-run its failed jobs (\`gh run rerun $id --failed\`), or run the Version workflow (\`gh workflow run version.yml\`), which releases \`$tag\` again while it is the version on \`main\`; the next push to \`main\` does the same. If a later version is released first, \`$tag\` gets no release of its own and the later release's notes carry its section."
+        body="The [Release run]($url) for \`$tag\` failed, so \`$tag\` has no GitHub Release. While \`$tag\` is the newest version, re-run its failed jobs (\`gh run rerun $id --failed\`) or run the Version workflow (\`gh workflow run version.yml\`); the next push to \`main\` does the same. Once a later version is released, leave it: re-running \`$tag\` then would make it the Latest release, and the later release's notes already carry its section."
     fi
     open=$(gh issue list --state open --search "\"$title\" in:title" --json number,title --jq "map(select(.title == \"$title\")) | .[0].number // empty")
     if [ -n "$open" ]; then

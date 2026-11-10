@@ -138,7 +138,7 @@ jobs:
           "version": "0.15.2"
       - name: "ghostty"
         run: |
-          if [ "$TARGET" = x86_64-pc-windows-msvc ]; then export RUSTFLAGS=-Ctarget-feature=+crt-static; fi
+          case "$TARGET" in *-windows-msvc) export RUSTFLAGS=-Ctarget-feature=+crt-static ;; esac
           for attempt in 1 2 3; do
             cargo build --locked --profile dist --target "$TARGET" -p libghostty-vt-sys && exit 0
             echo "::warning::building Ghostty failed (attempt $attempt of 3)"
