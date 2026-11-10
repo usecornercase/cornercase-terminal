@@ -619,6 +619,10 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn ids_of_workspace(&self, at: WorkspaceAt) -> Ids {
+        self.ids(at.project(), Some(at), None)
+    }
+
     pub(in crate::app) fn ids_of_tab(&self, at: TabAt) -> Ids {
         self.ids(at.project(), Some(at.workspace()), Some(at))
     }

@@ -6,7 +6,7 @@ use crate::agents::claude::fake::FakeClaude;
 use crate::app::agent_watch::WATCH_AGENTS_EVERY;
 use crate::app::control::Asker;
 use crate::app::machine_links::RemoteItem;
-use crate::app::tests::control_requests::told;
+use crate::app::tests::told;
 use crate::control::contract::Code;
 use crate::control::{Go, Ids, PaneInfo, What};
 use crate::host::sound::Kind;

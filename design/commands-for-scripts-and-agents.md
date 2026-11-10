@@ -71,7 +71,7 @@ Code: `cli.rs`, `cli/`, `cli/requests.rs`, `cli/line.rs`, `client/requests.rs`, 
 - [Following events](commands-for-scripts-and-agents/events.md): Following events; Where events come from; Programs ending; The stream; Slow readers never block the server; What programs ask of the host terminal.
 - [Watching the session and the rest of the app](commands-for-scripts-and-agents/watching.md): Watching the session (`watch`, `status --follow`); Following the rest of the app (`app`), Discord's forum.
 - [Streaming a tab's terminals](commands-for-scripts-and-agents/surfaces.md): #286: frames, cells and styles, What else a cell carries, sizes, pacing, Patches.
-- [Views of your own, and what a view sees](commands-for-scripts-and-agents/views.md): Views of your own; What a view shows counts as seen, and agent notices for other programs; notices without a token.
+- [Views of your own, and what a view sees](commands-for-scripts-and-agents/views.md): Views of your own; What a view shows counts as seen, and agent notices for other programs; Notices without a token.
 - [Driving a tab's terminals](commands-for-scripts-and-agents/driving-terminals.md): #287: `input`, `scroll`, `selection`, `ratio`, `resize`; The path under a cell (`link`).
 - [Reading and changing settings](commands-for-scripts-and-agents/config.md): #336: the `config` request, secrets, the revision; #414: sharing a setup, `config-export` and `config-import`; #668: `forum-server`; #669, #670: pairing a phone, `config-pair`, two pairings at once.
 - [Colours for programs](commands-for-scripts-and-agents/colours.md): #331: the `theme` request, precedence, mode 2031.

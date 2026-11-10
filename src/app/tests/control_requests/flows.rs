@@ -234,7 +234,7 @@ fn every_agent_starts_without_asking_its_trust_is_answered_and_the_orchestrator_
     );
 }
 
-fn consent_told(app: &mut App) -> Vec<Told> {
+fn consent_told(app: &mut App) -> Vec<Heard> {
     let mut said = messages(&app.take_events(), CLIENT);
     said.retain(|(kind, ..)| kind == "flow-consent");
     said

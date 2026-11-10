@@ -146,34 +146,22 @@ mod starts {
     #[test]
     fn reports_a_missing_agent_and_does_not_retry_it_every_tick() {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
-        let at = time::now() + 3600;
-        let mut task = task(&app, at, None);
-        task.program = "/nonexistent/queued-agent".into();
-        let id = app.panels.queued.schedule(None, task).expect("add");
-        app.refresh_at(Instant::now(), at);
-        assert!(
-            matches!(&app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Failed { reason } if reason.contains("not installed"))
-        );
-        app.refresh_at(Instant::now(), at + 1);
-        assert!(app.agents.launches.list().is_empty());
-    }
-
-    #[test]
-    fn an_entry_that_cannot_start_is_told_as_failed() {
-        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
         app.clients.events.subscribe(9, Vec::new(), false, true);
         let at = time::now() + 3600;
         let mut task = task(&app, at, None);
         task.program = "/nonexistent/queued-agent".into();
         let id = app.panels.queued.schedule(None, task).expect("add");
-
         app.refresh_at(Instant::now(), at);
-
         let told = messages(&app.take_events(), 9);
         assert_eq!(told.len(), 1, "{told:?}");
         let (kind, message, panes, ids) = &told[0];
         assert_eq!((kind.as_str(), panes, ids), ("queue-failed", &Vec::new(), &crate::control::Ids::default()));
         assert!(message.starts_with(&format!("queued agent {id} failed")), "{message}");
+        assert!(
+            matches!(&app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Failed { reason } if reason.contains("not installed"))
+        );
+        app.refresh_at(Instant::now(), at + 1);
+        assert!(app.agents.launches.list().is_empty());
     }
 
     #[test]

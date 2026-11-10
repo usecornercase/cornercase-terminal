@@ -220,22 +220,32 @@ fn new_app_with_shell(shell: &str, config_path: impl AsRef<Path>) -> (App, Recei
     (app, rx)
 }
 
-type Told = (String, String, Vec<u64>, crate::control::Ids);
+type Heard = (String, String, Vec<u64>, crate::control::Ids);
 
-fn messages(events: &[(u64, Streamed)], reader: u64) -> Vec<Told> {
-    use crate::control::{Event, Response, What};
-    events
-        .iter()
-        .filter(|(client, _)| *client == reader)
-        .filter_map(|(_, streamed)| match streamed {
-            Streamed::Event(text) => match serde_json::from_str(text) {
-                Ok(Response::Ok(value)) => serde_json::from_value::<Event>(value).ok(),
-                other => panic!("not an event: {other:?}"),
-            },
+fn told<'a>(streamed: impl IntoIterator<Item = &'a Streamed>) -> Vec<(crate::control::What, crate::control::Ids)> {
+    use crate::control::{Event, Response};
+    streamed
+        .into_iter()
+        .filter_map(|streamed| match streamed {
+            Streamed::Event(text) => {
+                let event: Event = serde_json::from_value(match serde_json::from_str(text) {
+                    Ok(Response::Ok(value)) => value,
+                    other => panic!("not an event: {other:?}"),
+                })
+                .expect("an event");
+                Some((event.what, event.ids))
+            }
             Streamed::Snapshot(_) | Streamed::End => None,
         })
-        .filter_map(|event| match event.what {
-            What::Message { kind, message, panes } => Some((kind, message, panes, event.ids)),
+        .collect()
+}
+
+fn messages(events: &[(u64, Streamed)], reader: u64) -> Vec<Heard> {
+    let own = events.iter().filter(|(client, _)| *client == reader).map(|(_, streamed)| streamed);
+    told(own)
+        .into_iter()
+        .filter_map(|(what, ids)| match what {
+            crate::control::What::Message { kind, message, panes } => Some((kind, message, panes, ids)),
             _ => None,
         })
         .collect()

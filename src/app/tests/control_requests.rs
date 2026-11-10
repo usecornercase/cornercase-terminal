@@ -419,24 +419,6 @@ fn lines(app: &mut App) -> Vec<Value> {
 }
 
 #[cfg(unix)]
-pub(super) fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
-    streamed
-        .iter()
-        .filter_map(|streamed| match streamed {
-            Streamed::Event(text) => {
-                let event: wire::Event = serde_json::from_value(match serde_json::from_str(text) {
-                    Ok(Response::Ok(value)) => value,
-                    other => panic!("not an event: {other:?}"),
-                })
-                .expect("an event");
-                Some((event.what, event.ids))
-            }
-            Streamed::Snapshot(_) | Streamed::End => None,
-        })
-        .collect()
-}
-
-#[cfg(unix)]
 fn until_told(
     app: &mut App,
     rx: &Receiver<AppEvent>,
