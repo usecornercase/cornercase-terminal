@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.27
+
+- **`cornercase start --mode default` starts an agent with no mode arguments.** `default` comes first among an agent's modes in **Settings › Agents** and in `cornercase config --json`, but `start --mode` refused it, so with another mode chosen there no command could start an agent without it, on this computer or on a machine with `--machine`. It now starts the agent with only its extra arguments, and a mode the agent lacks is refused with its modes, `default` first. `cornercase contract` lists the feature `mode-default`.
+- **`default` in the schedule form and in `queue add --mode` means no mode arguments too.** It used to mean the mode chosen in Settings, so an agent could not be scheduled without that mode. The form's **Mode** list now opens on the mode chosen in Settings, and `queue add` without `--mode` still takes it, so an entry you don't change is scheduled as before.
+- A mode named `default` in `agent_modes` is ignored: that name always means no mode arguments.
+
 ## 0.13.26
 
 - **A change made with a command reaches your own UI at once.** On a server where nothing changed in the last half second, a fold, a rename, a move or any other change made with a command (not the ones that come at a pointer's pace, such as `input` and `scroll`) now reaches `cornercase view` and `status --follow` as soon as the command answers, instead of half a second later, and so does a change to what `status --app --follow` and `flow runs --follow` show. Changes close together still come at most one line every half second to `status --follow`, and a view's own changes (`view-set`) can come sooner in its lines.
