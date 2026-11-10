@@ -2,6 +2,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 
 use serde_json::{Value, json};
 
+use super::held::pane_of;
 use super::input::Typist;
 use super::machines::{VPS, in_state, reach, start_listing, wait_for_machine};
 use super::remote::{boot_of, fake_ssh_to, remote_says, remotely, ssh_runs};
@@ -161,20 +162,6 @@ struct Panes {
     split: String,
 }
 
-fn pane_in(session: &Session, id: &str) -> Value {
-    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("a status report");
-    let mut panes = Vec::new();
-    walk(&status, &mut |row| panes.extend(row["panes"].as_array().cloned().unwrap_or_default()));
-    panes.into_iter().find(|pane| pane["id"].as_u64().is_some_and(|n| n.to_string() == id)).unwrap_or(Value::Null)
-}
-
-fn walk(row: &Value, visit: &mut dyn FnMut(&Value)) {
-    visit(row);
-    for key in ["projects", "workspaces", "tabs"] {
-        row[key].as_array().into_iter().flatten().for_each(|item| walk(item, visit));
-    }
-}
-
 fn a_machine_with_an_agent_and_a_split_tab() -> Panes {
     let session = agent_session();
     remote_says(&session, &["start-server"]);
@@ -183,7 +170,7 @@ fn a_machine_with_an_agent_and_a_split_tab() -> Panes {
     let started: Value = serde_json::from_str(&remote_says(&session, &["start", "claude", "--json"])).expect("start");
     let (agent, agent_tab) = (started["pane"].to_string(), started["tab"].to_string());
     session.says(&["account", "add", "claude", "work"]);
-    wait_until("the agent is seen", || pane_in(&session, &agent)["agent"] == "claude");
+    wait_until("the agent is seen", || pane_of(&session, &agent)["agent"] == "claude");
     Panes { session, agent, agent_tab, shell, split }
 }
 
@@ -262,7 +249,7 @@ fn the_boot_of_this_run_lets_mark_move_pane_account_restart_and_context_act() {
         remote_says(&session, &at(&["account", "restart", "claude", "work", "--pane", &split, "--json"], &boot));
 
     assert_eq!(marked, "");
-    assert_eq!(pane_in(&session, &agent)["status"], "pending");
+    assert_eq!(pane_of(&session, &agent)["status"], "pending");
     let context: Value = serde_json::from_str(&context).expect("the context");
     assert_eq!(context["pane"].to_string(), agent, "{context}");
     let moved: Value = serde_json::from_str(&moved).expect("the layout");

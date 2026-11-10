@@ -16,8 +16,9 @@ commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no works
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
-why, in its error with --json. A command given --boot (close, rename, mark, move-pane, account restart,
-context) exits with 4 when it names another run of the server, which then did nothing, and every command that sends a request exits with 5 when the cornercase --remote reaches is older
+why, in its error with --json. A command given --boot (close, rename, mark, move-pane, account
+restart, context) exits with 4 when it names another run of the server, which then did nothing, and
+every command that sends a request exits with 5 when the cornercase --remote reaches is older
 than this one (update, restart, kill-server and logs run there without checking), printing with --json both
 versions (there is null when it is too old to say) and the command that updates it as one JSON line.
 
@@ -245,9 +246,9 @@ group rows, until it is marked as reviewed or its agent starts working again on 
 answer to its question. Looking at the tab does not take it off, unlike the ✓ of an agent that finished while you looked elsewhere.
 Both marks are saved with the session, so they come back after a restart with the conversation.
 
---boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in a machine's
-entry there. Ids last one run, so a server that restarted since refuses, nothing is marked, and the command
-prints why and exits with 4.
+--boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
+a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is
+marked, and the command prints why and exits with 4.
 
 Examples:
   cornercase mark
@@ -617,7 +618,8 @@ pub(super) const CONTRACT_HELP: &str =
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; close, rename, mark, move-pane, account restart and context take it as --boot, and then act only in that run. Each
+since ids last only one run; close, rename, mark, move-pane, account restart and context take it as
+--boot, and then act only in that run. Each
 command is listed with whether it is available, and each stream with its version. A server without
 this command is older than the contract.
 
@@ -644,9 +646,9 @@ a pane with the right button does. Both keep running. It is refused when the tab
 for every pane at the size it has. The moved pane becomes the tab's active one. With --json it prints
 the tab's new layout.
 
---boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in a machine's
-entry there. Ids last one run, so a server that restarted since refuses, nothing moves, and the command
-prints why and exits with 4.
+--boot BOOT says which run of the server the pane ids are from: `boot` in `status --json`, or in a
+machine's entry there. Ids last one run, so a server that restarted since refuses, nothing moves,
+and the command prints why and exits with 4.
 
 Examples:
   cornercase move-pane --pane 4 --target 7 --place swap

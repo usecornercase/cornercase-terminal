@@ -1,29 +1,7 @@
-use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Args};
 
-use super::accounts::{AccountAction, AccountArgs};
-use super::{Control, ViewArg, branch};
-use crate::cli::help::{BOOT_ARG, BY_BRANCH};
-
-#[derive(Debug, Args)]
-pub(crate) struct BootArg {
-    #[arg(long, value_name = "BOOT", value_parser = NonEmptyStringValueParser::new(), help = BOOT_ARG)]
-    pub(crate) boot: Option<String>,
-}
-
-impl Control {
-    pub(crate) fn boot(&self) -> Option<&str> {
-        match self {
-            Self::Close(a) => a.boot.boot.as_deref(),
-            Self::Rename(a) => a.boot.boot.as_deref(),
-            Self::Mark(a) => a.boot.boot.as_deref(),
-            Self::MovePane(a) => a.boot.boot.as_deref(),
-            Self::Context(a) => a.boot.boot.as_deref(),
-            Self::Account(AccountArgs { action: AccountAction::Restart(a) }) => a.boot.boot.as_deref(),
-            _ => None,
-        }
-    }
-}
+use super::{BootArg, ViewArg, branch};
+use crate::cli::help::BY_BRANCH;
 
 #[derive(Debug, Args)]
 #[group(required = true, multiple = false)]

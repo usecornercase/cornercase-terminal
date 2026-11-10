@@ -35,14 +35,14 @@ use clap::builder::NonEmptyStringValueParser;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, CLOSE_HELP, COMMAND_HELP, COMMAND_THERE, CONFIG_HELP, CONTRACT_HELP,
-    EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, INPUT_HELP, ISSUE_HELP, KEY_NAMES,
-    KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP,
-    NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, PROFILE_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP,
-    REMOTE_ARG, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP,
-    SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP,
-    TOUR_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE,
-    WAIT_TAB,
+    ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, BOOT_ARG, CLOSE_HELP, COMMAND_HELP, COMMAND_THERE, CONFIG_HELP,
+    CONTRACT_HELP, EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, INPUT_HELP,
+    ISSUE_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, MOVE_HELP,
+    MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, PROFILE_HELP, RATIO_HELP,
+    READ_HELP, REDRAW_HELP, REMOTE_ARG, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, SCROLL_HELP, SEARCH_HELP,
+    SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP,
+    THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP,
+    WAIT_HELP, WAIT_PANE, WAIT_TAB,
 };
 use super::help::{
     AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
@@ -52,7 +52,8 @@ use super::help::{CLONE_HELP, HELD_HELP, MACHINES_HELP, SETUP_HELP, WORKTREES_HE
 use crate::control::Until;
 use crate::term::keys;
 
-pub(crate) use close::{BootArg, CloseArgs, RenameArgs, Renamed, Which};
+pub(crate) use accounts::{AccountAction, AccountArgs};
+pub(crate) use close::{CloseArgs, RenameArgs, Renamed, Which};
 pub(crate) use create::{CloneArgs, Create, NewTabArgs, NewWorkspaceArgs, OpenArgs, SplitArgs};
 pub(crate) use flow::*;
 pub(crate) use plugin::{PluginAction, PluginArgs};
@@ -333,7 +334,7 @@ pub(crate) enum Control {
     )]
     Agents(agents::AgentsArgs),
     #[command(about = "Add, list and remove the accounts agents log in with", after_help = ACCOUNT_HELP)]
-    Account(accounts::AccountArgs),
+    Account(AccountArgs),
     #[command(about = "Make, change and switch profiles: which account each agent uses", after_help = PROFILE_HELP)]
     Profile(accounts::ProfileArgs),
 }
@@ -365,6 +366,26 @@ impl Control {
             _ => None,
         }
     }
+}
+
+impl Control {
+    pub(crate) fn boot(&self) -> Option<&str> {
+        match self {
+            Self::Close(a) => a.boot.boot.as_deref(),
+            Self::Rename(a) => a.boot.boot.as_deref(),
+            Self::Mark(a) => a.boot.boot.as_deref(),
+            Self::MovePane(a) => a.boot.boot.as_deref(),
+            Self::Context(a) => a.boot.boot.as_deref(),
+            Self::Account(AccountArgs { action: AccountAction::Restart(a) }) => a.boot.boot.as_deref(),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct BootArg {
+    #[arg(long, value_name = "BOOT", value_parser = NonEmptyStringValueParser::new(), help = BOOT_ARG)]
+    pub(crate) boot: Option<String>,
 }
 
 #[derive(Debug, Args)]
