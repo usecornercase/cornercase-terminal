@@ -75,7 +75,7 @@ pub(crate) use flow::{
     FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved, FlowSpec, Flows, Imported, MemberInfo, RoleInfo, RoleState,
     RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
 };
-pub(crate) use held::{HeldAction, HeldInfo, HeldRequest};
+pub(crate) use held::{HeldAction, HeldAnswer, HeldInfo, HeldRequest};
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Machines, ShownRemote, StreamState};
 pub(crate) use pair::ConfigPair;

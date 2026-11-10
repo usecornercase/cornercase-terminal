@@ -66,8 +66,7 @@ pub(super) struct Restoring<'a> {
     pub(super) reopen: bool,
 }
 
-const PASTED: &str =
-    "the message is in this pane after your draft, not sent: press Enter to send both, or edit them first";
+const PASTED: &str = "not sent: press Enter to send it with your draft";
 
 const SENDING: &str = "a message from `cornercase send` is going into this pane; wait a moment, so the two do not join";
 
@@ -312,6 +311,9 @@ impl App {
 
     fn press_send_now(&mut self, pane: u64) {
         if self.send_held_now(pane) {
+            if let Some(tab) = self.tab_mut() {
+                tab.focus(pane);
+            }
             self.messages.toast = Some(Toast::new(PASTED, ui::ToastIcon::Agent(Status::Waiting)));
         }
     }

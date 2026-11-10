@@ -2,7 +2,7 @@ use super::args::Target;
 use super::args::held::HeldArgs;
 use super::{print_json, print_out};
 use crate::client::{answer, ask};
-use crate::control::{Command, HeldAction, HeldInfo, HeldRequest};
+use crate::control::{Command, HeldAction, HeldAnswer, HeldInfo, HeldRequest};
 use crate::error::Result;
 
 pub(super) fn run(args: &HeldArgs) -> Result<()> {
@@ -15,8 +15,8 @@ pub(super) fn run(args: &HeldArgs) -> Result<()> {
     print_out(&text(&answer(value)?))
 }
 
-fn text(held: &HeldInfo) -> String {
-    let HeldInfo { pane, held_sends, held_queued, after_draft, .. } = *held;
+fn text(answer: &HeldAnswer) -> String {
+    let HeldAnswer { held: HeldInfo { pane, held_sends, held_queued, .. }, after_draft } = *answer;
     let pasted = if after_draft {
         format!("the message is in pane {pane} after the person's draft, not sent: their Enter sends both\n")
     } else {

@@ -222,7 +222,7 @@ fn press_send_now(app: &mut App, pane: u64) -> Value {
 fn click_send_now(app: &mut App, _pane: u64) -> (bool, String) {
     let (send, _) = notice(app);
     click(app, send);
-    let toast = app.messages.toast.as_ref().is_some_and(|toast| toast.message.contains("after your draft"));
+    let toast = app.messages.toast.as_ref().is_some_and(|toast| toast.message.contains("press Enter"));
     (toast, error(answers(app).remove(0)))
 }
 
@@ -250,6 +250,22 @@ fn send_now_leaves_the_enter_to_the_person_who_has_a_draft(#[case] press: fn(&mu
     send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     pump_until(&mut app, &rx, "cat reads both as one line", |a| screen_lines(a, id).iter().any(|l| l == "minenow"));
     assert!(!pane(&app, id).draft(Instant::now()));
+}
+
+#[test]
+fn send_now_on_a_pane_that_is_not_active_makes_it_the_one_that_takes_the_enter() {
+    let (mut app, rx) = app();
+    let id = quiet_cat_pane(&mut app, &rx);
+    type_text(&mut app, "mine");
+    ask(&mut app, None, send_text(id, "now", true, false));
+    held_now(&mut app);
+    let other = app.split_pane(id, Dir::Right, AREA, false).expect("split").expect("a new pane");
+    app.tab_mut().expect("a tab").focus(other);
+    assert_eq!(app.term().map(|term| term.id), Some(other), "the other pane is active");
+
+    assert!(click_send_now(&mut app, id).0, "it says the Enter was left to the person");
+
+    assert_eq!(app.term().map(|term| term.id), Some(id), "the pane that holds the draft takes the Enter");
 }
 
 #[test]

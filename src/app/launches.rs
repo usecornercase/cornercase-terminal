@@ -214,8 +214,7 @@ fn apply_step(step: Step, launch: &Launch, term: &mut Term, now: Instant) -> Opt
         Step::Done(bytes) if !written(term, &bytes) => Some(false),
         Step::Done(_) => {
             if launch.submits() {
-                term.submitted = Some(now);
-                term.typing.clear();
+                term.entered(now);
             }
             Some(true)
         }

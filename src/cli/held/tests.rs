@@ -59,7 +59,8 @@ fn the_text_says_what_is_held_now(
     #[case] after_draft: bool,
     #[case] expected: &str,
 ) {
-    let held = HeldInfo { pane: 9, held_sends, held_from: Some(40), held_queued, after_draft };
+    let held = HeldInfo { pane: 9, held_sends, held_from: Some(40), held_queued };
+    let held = HeldAnswer { held, after_draft };
 
     assert_eq!(text(&held), expected);
 }

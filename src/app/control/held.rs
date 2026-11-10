@@ -6,7 +6,7 @@ use super::wait::Condition;
 use super::{Asker, Handled, Pending, Stage, Waits, conflict, json};
 use crate::agents::launch::Launch;
 use crate::app::App;
-use crate::control::{HeldAction, HeldInfo, HeldRequest};
+use crate::control::{HeldAction, HeldAnswer, HeldInfo, HeldRequest};
 use crate::log;
 use crate::project::Hierarchy;
 use crate::term::typing::DRAFT_FOR;
@@ -96,7 +96,6 @@ impl App {
             held_sends: u32::try_from(self.held_sends(pane)).unwrap_or(u32::MAX),
             held_from: self.held(pane).next().and_then(|first| first.from),
             held_queued: self.held_keys(pane).max().zip(acked).is_some_and(|(newest, acked)| acked >= newest),
-            after_draft: false,
         }
     }
 
@@ -126,7 +125,7 @@ impl App {
                 false
             }
         };
-        Ok(Some(json(&HeldInfo { after_draft, ..self.held_info(pane) })))
+        Ok(Some(json(&HeldAnswer { held: self.held_info(pane), after_draft })))
     }
 
     fn held_keys(&self, pane: u64) -> impl Iterator<Item = u64> {
@@ -237,15 +236,17 @@ impl App {
             self.refuse_or_answer(pending.client, Err(refusal));
             return None;
         }
-        let (had_text, asked_enter) = (held.text.is_some(), held.enter);
+        let (text, asked_enter) = (held.text.clone(), held.enter);
         if over_draft {
-            over.push(pane);
-            self.leave_enter(pane, &mut held);
+            held.wait = None;
+            held.enter = false;
         }
         match self.put_through(pane, held, now) {
             Err(refusal) => self.refuse_or_answer(pending.client, Err(refusal)),
-            Ok(None) if over_draft && asked_enter => {
-                self.answer(pending.client, Err(pasted(pane, had_text)));
+            Ok(None) if over_draft => {
+                over.push(pane);
+                let reply = self.left_to_person(pane, text.as_deref(), asked_enter).map(|()| json(&pending.done));
+                self.answer(pending.client, reply);
             }
             Ok(None) => self.answer(pending.client, Ok(json(&pending.done))),
             Ok(Some((mut launch, stage))) => {
@@ -258,14 +259,13 @@ impl App {
         None
     }
 
-    fn leave_enter(&mut self, pane: u64, held: &mut Held) {
-        if let Some(text) = &held.text
+    fn left_to_person(&mut self, pane: u64, text: Option<&str>, asked_enter: bool) -> Result<(), String> {
+        if let Some(text) = text
             && let Some(term) = self.projects.pane_by_mut(pane)
         {
             term.typed_text(text);
         }
-        held.wait = None;
-        held.enter = false;
+        if asked_enter { Err(pasted(pane, text.is_some())) } else { Ok(()) }
     }
 
     pub(in crate::app) fn send_held_now(&mut self, pane: u64) -> bool {

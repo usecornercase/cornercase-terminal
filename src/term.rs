@@ -377,6 +377,11 @@ impl Term {
         self.typing.drafting() && self.typing.draft(self.foreground_pid(), now)
     }
 
+    pub(crate) fn entered(&mut self, now: Instant) {
+        self.submitted = Some(now);
+        self.typing.clear();
+    }
+
     pub(crate) fn settle_draft(&mut self, now: Instant) {
         if !self.typing.drafting() {
             return;

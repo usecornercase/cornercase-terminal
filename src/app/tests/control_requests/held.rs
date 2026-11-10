@@ -91,6 +91,7 @@ fn send_now_sends_the_first_message_and_says_what_is_left() {
         json!({"pane": bar.pane, "held_sends": 1, "held_from": 42, "held_queued": false, "after_draft": true})
     );
     assert_eq!(bar.answered.len(), 1, "the first message's sender has its answer");
+    assert!(reply_of(&bar.answered[0]).is_ok(), "a send without Enter gets its usual answer: {:?}", bar.answered);
     assert_eq!(bar.fields(), (1, Some(42), false));
 }
 

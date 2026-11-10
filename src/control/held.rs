@@ -40,6 +40,13 @@ pub(crate) struct HeldInfo {
     pub(crate) held_sends: u32,
     pub(crate) held_from: Option<u64>,
     pub(crate) held_queued: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct HeldAnswer {
+    #[serde(flatten)]
+    pub(crate) held: HeldInfo,
     pub(crate) after_draft: bool,
 }
 
