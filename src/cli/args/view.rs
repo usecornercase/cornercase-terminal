@@ -43,7 +43,7 @@ pub(crate) struct ViewSetArgs {
     #[arg(
         long,
         conflicts_with = "hidden",
-        help = "Its window is on screen again: agents in the tab it shows count as seen"
+        help = "Its window is back: agents in the tab it shows count as seen, and open pull requests are read again"
     )]
     pub(crate) visible: bool,
     #[arg(long, help = "Its window is hidden or minimised: agents in the tab it shows notify again")]

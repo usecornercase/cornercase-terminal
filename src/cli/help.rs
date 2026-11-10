@@ -794,7 +794,8 @@ pub(super) const VIEW_SET_HELP: &str =
 size nothing and stream no terminals (its tabs go to whoever claimed them before, else the window),
 --active turns it back on and claims its tab, and --claim takes its tab back from the window or
 another view. --hidden says its window is hidden or minimised, so agents in its tab notify again, and
---visible says it is back. It prints the view as it is now.
+--visible says it is back, which also reads the open pull requests again (not those read in the last
+10 seconds). It prints the view as it is now.
 
 Examples:
   cornercase view-set --view 41 --cols 100 --rows 30

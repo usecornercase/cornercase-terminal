@@ -20,13 +20,17 @@ use crate::project::{Hierarchy, Workspace};
 use crate::pull_request::{Mark, Provider, PullRequest};
 use crate::ui::{self};
 
-const RUNNING_EVERY: Duration = Duration::from_secs(20);
+pub(super) const RUNNING_EVERY: Duration = Duration::from_secs(20);
 
-const OPEN_EVERY: Duration = Duration::from_secs(60);
+pub(super) const OPEN_EVERY: Duration = Duration::from_secs(60);
 
 const SETTLED_EVERY: Duration = Duration::from_secs(300);
 
 const FAILED_EVERY: Duration = Duration::from_secs(300);
+
+const AFTER_CHECKS: Duration = Duration::from_secs(300);
+
+pub(super) const FRESH: Duration = Duration::from_secs(10);
 
 const SLOW: Duration = Duration::from_secs(30);
 
@@ -65,6 +69,7 @@ pub(super) struct Found {
     branch: String,
     at: Option<Instant>,
     stack_at: Option<Instant>,
+    ran_at: Option<Instant>,
     pull: Option<PullRequest>,
 }
 
@@ -75,23 +80,29 @@ pub(super) struct Answered {
 }
 
 impl Found {
-    fn every(&self) -> Duration {
+    fn every(&self, now: Instant) -> Duration {
         match &self.pull {
             Some(pull) if pull.running() => RUNNING_EVERY,
             Some(pull) if pull.state.settled() => SETTLED_EVERY,
+            Some(_) if self.ran_at.is_some_and(|at| now.saturating_duration_since(at) < AFTER_CHECKS) => RUNNING_EVERY,
             _ => OPEN_EVERY,
         }
     }
 
     fn due(&self, now: Instant) -> bool {
-        self.at.is_none_or(|at| now.saturating_duration_since(at) >= self.every())
+        self.at.is_none_or(|at| now.saturating_duration_since(at) >= self.every(now))
+    }
+
+    fn read_again_on_return(&self, now: Instant) -> bool {
+        self.pull.as_ref().is_some_and(|pull| !pull.state.settled())
+            && self.at.is_some_and(|at| now.saturating_duration_since(at) >= FRESH)
     }
 
     fn stack_due(&self, now: Instant) -> bool {
         let Some(at) = self.stack_at else { return true };
         let every = match &self.pull {
             Some(pull) if pull.state.settled() => return false,
-            Some(pull) if pull.stack.is_some() => self.every(),
+            Some(pull) if pull.stack.is_some() => self.every(now),
             _ => SETTLED_EVERY,
         };
         now.saturating_duration_since(at) >= every
@@ -105,6 +116,15 @@ impl PullRequests {
                 .answered
                 .get(&project)
                 .is_some_and(|a| a.error.is_some() && now.saturating_duration_since(a.at) < FAILED_EVERY)
+    }
+
+    fn due_on_return(&mut self, now: Instant) -> bool {
+        let mut any = false;
+        for found in self.found.values_mut().filter(|f| f.read_again_on_return(now)) {
+            found.at = None;
+            any = true;
+        }
+        any
     }
 }
 
@@ -125,6 +145,12 @@ impl App {
                 answers.next().and_then(|first| first.error.clone()).filter(|_| answers.all(|a| a.error.is_some()))
             })
             .unwrap_or_else(|| NOTE.into())
+    }
+
+    pub(in crate::app) fn ask_pull_requests_on_return(&mut self, now: Instant) {
+        if self.git.pulls.due_on_return(now) {
+            self.ask_pull_requests(now);
+        }
     }
 
     pub(super) fn ask_pull_requests(&mut self, now: Instant) {
@@ -233,8 +259,10 @@ impl App {
             return;
         }
         let kept = self.git.pulls.found.get(&workspace);
-        let stack_at = kept.filter(|f| f.pull.as_ref().map(|p| p.number) == pull.as_ref().map(|p| p.number));
-        let stack_at = stack_at.and_then(|f| f.stack_at);
+        let same = kept.filter(|f| f.pull.as_ref().map(|p| p.number) == pull.as_ref().map(|p| p.number));
+        let stack_at = same.and_then(|f| f.stack_at);
+        let ran_at =
+            if pull.as_ref().is_some_and(PullRequest::running) { Some(now) } else { same.and_then(|f| f.ran_at) };
         let before = kept.and_then(|f| f.pull.as_ref());
         if let (Some(pull), Some(before)) = (pull.as_mut(), before) {
             pull.keep_known(before);
@@ -244,7 +272,7 @@ impl App {
         if shown != mark {
             log_pull_request(workspace, mark, provider);
         }
-        self.git.pulls.found.insert(workspace, Found { branch, at: Some(now), stack_at, pull });
+        self.git.pulls.found.insert(workspace, Found { branch, at: Some(now), stack_at, ran_at, pull });
     }
 
     fn close_gone_pull_request(&mut self) {
@@ -583,3 +611,6 @@ fn log_pull_request(workspace: u64, mark: Option<Mark>, provider: Provider) {
         stack = stack
     );
 }
+
+#[cfg(test)]
+mod tests;

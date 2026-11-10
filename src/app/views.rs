@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 use ratatui::layout::Rect;
 
@@ -66,13 +67,24 @@ impl View {
     }
 
     pub(super) fn why_not(&self) -> &'static str {
-        if !self.active {
-            "it is inactive"
-        } else if self.size.is_none() {
-            "it has no size"
-        } else {
-            "it shows no tab"
-        }
+        cannot_size(self.active, self.size)
+    }
+
+    fn set_visible(&mut self, visible: Option<bool>) -> bool {
+        let Some(visible) = visible else { return false };
+        let back = visible && !self.visible;
+        self.visible = visible;
+        back
+    }
+}
+
+fn cannot_size(active: bool, size: Option<(u16, u16)>) -> &'static str {
+    if !active {
+        "it is inactive"
+    } else if size.is_none() {
+        "it has no size"
+    } else {
+        "it shows no tab"
     }
 }
 
@@ -230,29 +242,27 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn view_set_request(&mut self, id: u64, set: &SetView, area: Option<Rect>) -> Handled {
+    pub(in crate::app) fn view_set_request(
+        &mut self,
+        id: u64,
+        set: &SetView,
+        area: Option<Rect>,
+        now: Instant,
+    ) -> Handled {
         let size = control::view::size(set.cols, set.rows).map_err(|message| Refusal::new(Code::Malformed, message))?;
         let Some(view) = self.clients.views.get_mut(id) else { return Err(none("view", id)) };
         let was = view.eligible().is_some();
         let (new_size, new_active) = (size.or(view.size), set.active.unwrap_or(view.active));
         let eligible = view.shown.tab.is_some() && new_active && new_size.is_some();
         if set.claim && !eligible {
-            let why = if !new_active {
-                "it is inactive"
-            } else if new_size.is_none() {
-                "it has no size"
-            } else {
-                "it shows no tab"
-            };
+            let why = cannot_size(new_active, new_size);
             return Err(Refusal::from(format!("view {id} cannot size a tab now: {why}")));
         }
         if (new_size, new_active) != (view.size, view.active) {
             view.projection += 1;
         }
         (view.size, view.active) = (new_size, new_active);
-        if let Some(visible) = set.visible {
-            view.visible = visible;
-        }
+        let back = view.set_visible(set.visible);
         if eligible && (!was || set.claim) {
             self.clients.views.claim(id);
         }
@@ -267,6 +277,9 @@ impl App {
         );
         self.size_tabs(area);
         self.size_popup(None);
+        if back {
+            self.ask_pull_requests_on_return(now);
+        }
         let info = self.clients.views.get(id).map(|view| self.view_info(view)).unwrap_or_default();
         Ok(Some(json(&info)))
     }

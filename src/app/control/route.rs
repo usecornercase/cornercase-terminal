@@ -121,7 +121,7 @@ impl App {
             Command::FlowRuns(_) => Ok(Some(json(&self.flow_runs_snapshots(client, now)))),
             Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),
             Command::View(open) => self.view_request(client, &open, area),
-            Command::ViewSet(set) => self.view_set_asked(asker, &set, area),
+            Command::ViewSet(set) => self.view_set_asked(asker, &set, area, now),
             Command::Search(search) => self.search_request(client, &search),
             Command::ConfigPair(pair) => self.config_pair_request(client, &pair, now),
             other => return ControlFlow::Continue(other),
@@ -261,9 +261,9 @@ impl App {
         }
     }
 
-    fn view_set_asked(&mut self, asker: Asker, set: &control::SetView, area: Option<Rect>) -> Handled {
+    fn view_set_asked(&mut self, asker: Asker, set: &control::SetView, area: Option<Rect>, now: Instant) -> Handled {
         match asker.view {
-            Some(view) => self.view_set_request(view, set, area),
+            Some(view) => self.view_set_request(view, set, area, now),
             None => Err(malformed("`view-set` needs the view to change: pass --view")),
         }
     }
