@@ -95,6 +95,10 @@ jobs:
         if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
         run: .github/version.sh check "origin/${{ github.base_ref }}"
 
+      - name: version.sh tests
+        if: ${{ !cancelled() }}
+        run: .github/version.test.sh
+
       - name: toolchain
         run: rustup toolchain install
 

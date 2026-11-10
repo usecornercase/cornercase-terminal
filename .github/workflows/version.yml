@@ -3,6 +3,7 @@ name: Version
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: version
@@ -14,6 +15,7 @@ permissions:
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     name: tag and release a new version
     runs-on: ubuntu-24.04
     timeout-minutes: 5

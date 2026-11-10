@@ -118,7 +118,7 @@ Every pull request that changes the app (`src/`, `Cargo.toml`, `Cargo.lock`, the
 - bump `version` in `Cargo.toml` above the last release;
 - add a `## <version>` section to `CHANGELOG.md` saying what changed, written for users: it becomes the release notes on GitHub and in the app's update dialog.
 
-Merging it to `main` publishes the release automatically: CI tags the version, builds the binaries for Linux, macOS and Windows, and publishes the GitHub Release, the installers behind the install script and the PowerShell line, and the Homebrew formula. Running cornercase then offers the update within a day.
+Merging it to `main` publishes the release automatically: CI tags the version, builds the binaries for Linux, macOS and Windows, and publishes the GitHub Release, the installers behind the install script and the PowerShell line, and the Homebrew formula. Running cornercase then offers the update within the hour. If a release fails, CI opens an issue saying so, and the next push to `main`, or running the Version workflow, releases that version again. A release that follows a version that never got one also carries that version's notes.
 
 ## This website
 
