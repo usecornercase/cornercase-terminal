@@ -277,6 +277,7 @@ export const isModal = (o: Overlay): boolean => o.kind !== 'menu' && o.kind !== 
 
 export interface Config {
   worktreesDir: string;
+  freshBranches: boolean;
   fetchMinutes: number;
   agent: string;
   submit: boolean;
@@ -316,6 +317,7 @@ export interface Config {
 
 export const defaultConfig = (): Config => ({
   worktreesDir: '~/.cornercase/worktrees',
+  freshBranches: false,
   fetchMinutes: 5,
   agent: 'claude',
   submit: false,

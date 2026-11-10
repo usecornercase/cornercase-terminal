@@ -21,7 +21,14 @@ fn start() -> Start {
 
 fn new_workspace() -> Send {
     let machine = Some("vps".into());
-    Send::NewWorkspace(NewWorkspace { name: "web".into(), project: Some(4), worktree: true, focus: true, machine })
+    Send::NewWorkspace(NewWorkspace {
+        name: "web".into(),
+        project: Some(4),
+        worktree: true,
+        focus: true,
+        machine,
+        fresh: None,
+    })
 }
 
 fn flow_run() -> Send {

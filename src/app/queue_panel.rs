@@ -62,10 +62,6 @@ impl QueueRuntime {
         self.running.contains_key(&client)
     }
 
-    pub(super) fn fresh(&self, client: u64) -> bool {
-        self.running.get(&client).and_then(|id| self.queue.entry(*id)).is_some_and(queue::Entry::is_run)
-    }
-
     pub(super) fn schedule(&mut self, edit: Option<u64>, task: Task) -> Result<u64, String> {
         match edit {
             Some(id) => self.queue.edit(id, task).map(|()| id),
@@ -206,10 +202,6 @@ impl App {
 
     pub(crate) fn set_queue_area(&mut self, area: Rect) {
         self.panels.queued.area = Some(area);
-    }
-
-    pub(super) fn fresh_run(&self, client: Option<u64>) -> bool {
-        client.is_some_and(|client| self.panels.queued.fresh(client))
     }
 
     pub(super) fn drive_queue(&mut self, clock: i64, now: Instant) {

@@ -67,6 +67,7 @@ impl App {
             submit: add.submit.unwrap_or_else(|| old.is_none_or(|entry| entry.task.submit)),
             place,
             accounts: merged_accounts(add, old),
+            fresh: add.fresh.or_else(|| old.and_then(|entry| entry.task.fresh)),
             ..Task::default()
         })
     }

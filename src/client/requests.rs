@@ -131,6 +131,10 @@ pub(crate) fn use_flow_close_when_merged() -> Result<()> {
     require("flow-close-when-merged", "cannot close a flow's agents once its pull request merges")
 }
 
+pub(crate) fn use_fresh_branches() -> Result<()> {
+    require("fresh-branches", "cannot make a new branch from the up-to-date default branch")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }

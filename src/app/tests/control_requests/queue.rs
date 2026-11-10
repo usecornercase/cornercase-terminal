@@ -145,4 +145,5 @@ fn removing_an_entry_while_it_starts_leaves_it_and_creates_no_undo() {
     assert!(app.panels.queued.take_removed(1).is_none());
 }
 
+mod fresh;
 mod routines;

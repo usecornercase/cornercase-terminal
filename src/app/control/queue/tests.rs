@@ -64,3 +64,13 @@ fn the_default_mode_is_none_and_no_mode_given_is_the_one_chosen_in_settings() {
     assert_eq!(prepare::queue_mode(&config, "claude", &add(None), Some(&entry(None))), None);
     assert_eq!(prepare::queue_mode(&config, "claude", &add(Some("default")), Some(&entry(Some("auto")))), None);
 }
+
+#[test]
+fn a_started_entry_carries_the_choice_it_kept_for_its_branch() {
+    let entry =
+        |fresh| queue::Entry { id: 1, task: queue::Task { fresh, ..queue::Task::default() }, state: State::Pending };
+
+    let starts = |fresh| queued_start(&entry(fresh), (1, None), Some("feat/x".into())).fresh;
+
+    assert_eq!([starts(Some(true)), starts(Some(false)), starts(None)], [Some(true), Some(false), None]);
+}

@@ -139,9 +139,16 @@ impl App {
         if run.workspace_name.is_some() {
             return Err(super::malformed("--workspace-name needs --issue"));
         }
-        let close_when_merged = run.close_when_merged;
-        let starting =
-            Starting { focus, view, note, parent, close_when_merged, ..Starting::new(flow, task, branch, accounts) };
+        let (close_when_merged, fresh) = (run.close_when_merged, run.fresh);
+        let starting = Starting {
+            focus,
+            view,
+            note,
+            parent,
+            close_when_merged,
+            fresh,
+            ..Starting::new(flow, task, branch, accounts)
+        };
         self.run_flow(Some(client), self.projects[p].id, starting, area)
     }
 
@@ -165,13 +172,7 @@ impl App {
         if let Some(id) = existing.filter(|id| self.agents.closed.has_run(*id)) {
             return Err(closed_run_refusal(id).into());
         }
-        let roles: Vec<(String, String)> = starting
-            .flow
-            .roles
-            .iter()
-            .filter(|role| role.own_worktree())
-            .map(|role| (role.name.clone(), flows::role_branch(&branch, &role.name)))
-            .collect();
+        let roles = own_roles(&starting.flow, &branch);
         if let Some(id) = existing {
             let at = self.usable_workspace(id)?;
             if !self.projects.workspace(at).worktree {
@@ -186,7 +187,11 @@ impl App {
         let made = existing
             .is_none()
             .then(|| worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &path, &branch));
-        self.spawn_run_worktrees(p, RunTrees { run: made, branch, roles, fresh: self.fresh_run(client) }, key);
+        self.spawn_run_worktrees(
+            p,
+            RunTrees { run: made, branch, roles, fresh: self.fresh_within(starting.fresh, client.is_none()) },
+            key,
+        );
         let stage = Stage::Run(project, Box::new(starting));
         self.clients.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
         Ok(None)
@@ -424,4 +429,9 @@ fn suffix(task: &str, n: u16) -> u16 {
     let mut hasher = DefaultHasher::new();
     (task, n).hash(&mut hasher);
     u16::try_from(hasher.finish() & 0xffff).unwrap_or_default()
+}
+
+fn own_roles(flow: &Flow, branch: &str) -> Vec<(String, String)> {
+    let apart = flow.roles.iter().filter(|role| role.own_worktree());
+    apart.map(|role| (role.name.clone(), flows::role_branch(branch, &role.name))).collect()
 }

@@ -347,7 +347,8 @@ fn clone_url(url: &str, remote: Option<&Remote>) -> Result<String> {
 
 fn run_new_workspace(new: args::NewWorkspaceArgs) -> Result<()> {
     let (name, project, worktree, focus) = (new.name, new.project, new.worktree, new.create.focus);
-    let request = control::NewWorkspace { name, project, worktree, focus, machine: machine(new.on)? };
+    let fresh = fresh(&new.fresh)?;
+    let request = control::NewWorkspace { name, project, worktree, focus, machine: machine(new.on)?, fresh };
     let value = ask("new-workspace", control::Command::NewWorkspace(request))?;
     say(value, new.create.print.json, |done| id(done.ids.workspace))
 }
@@ -588,6 +589,14 @@ fn placed(asked: bool) -> Result<bool> {
     Ok(asked)
 }
 
+fn fresh(arg: &args::FreshArg) -> Result<Option<bool>> {
+    let asked = arg.asked();
+    if asked == Some(true) {
+        client::use_fresh_branches()?;
+    }
+    Ok(asked)
+}
+
 fn unwaited(start: &StartArgs) -> Result<()> {
     let waits = start.wait || start.until.is_some() || start.timeout.is_some();
     if waits && start.on.machine.is_some() {
@@ -624,6 +633,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         accounts,
         machine: machine(start.on)?,
         placed: placed(start.placed)?,
+        fresh: fresh(&start.fresh)?,
     };
     let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
     say(ask(name, command)?, start.create.print.json, |done| {

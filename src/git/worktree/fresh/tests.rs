@@ -10,7 +10,7 @@ fn starts_from_the_newest_commit_of_the_remote() {
     git(origin.path(), &["commit", "--quiet", "-m", "second"]);
     let target = TempDir::new();
     let path = target.path().join("run");
-    create(&clone, "routine/x", &path).expect("create");
+    create(&clone, "routine/x", &path, FETCH_WITHIN).expect("create");
     assert_eq!(head(&path), head(origin.path()));
     assert_ne!(head(&clone), head(&path));
 }
@@ -20,7 +20,7 @@ fn uses_the_local_default_branch_without_a_remote() {
     let repo = git_repo(&[("a", "1")]);
     let target = TempDir::new();
     let path = target.path().join("run");
-    create(repo.path(), "routine/x", &path).expect("create");
+    create(repo.path(), "routine/x", &path, FETCH_WITHIN).expect("create");
     assert_eq!(head(&path), head(repo.path()));
 }
 
@@ -30,7 +30,7 @@ fn fails_with_the_reason_when_the_fetch_fails() {
     let (_keep, clone) = clone_of(origin.path());
     git(&clone, &["remote", "set-url", "origin", "/nonexistent/folder"]);
     let target = TempDir::new();
-    let error = create(&clone, "routine/x", &target.path().join("run")).expect_err("fetch");
+    let error = create(&clone, "routine/x", &target.path().join("run"), FETCH_WITHIN).expect_err("fetch");
     assert!(error.to_string().contains("could not fetch origin"), "{error}");
 }
 
@@ -41,7 +41,7 @@ fn falls_back_to_origin_main_without_a_remote_head() {
     git(&clone, &["remote", "set-head", "origin", "--delete"]);
     let target = TempDir::new();
     let path = target.path().join("run");
-    create(&clone, "routine/x", &path).expect("create");
+    create(&clone, "routine/x", &path, FETCH_WITHIN).expect("create");
     assert_eq!(head(&path), head(origin.path()));
 }
 
@@ -55,7 +55,7 @@ fn follows_the_branch_the_remote_now_calls_its_default() {
     git(origin.path(), &["commit", "--quiet", "-m", "on trunk"]);
     let target = TempDir::new();
     let path = target.path().join("run");
-    create(&clone, "routine/x", &path).expect("create");
+    create(&clone, "routine/x", &path, FETCH_WITHIN).expect("create");
     assert_eq!(head(&path), head(origin.path()));
 }
 
@@ -69,6 +69,19 @@ fn takes_the_local_default_branch_while_a_feature_branch_is_checked_out() {
     git(repo.path(), &["commit", "--quiet", "-m", "feature work"]);
     let target = TempDir::new();
     let path = target.path().join("run");
-    create(repo.path(), "routine/x", &path).expect("create");
+    create(repo.path(), "routine/x", &path, FETCH_WITHIN).expect("create");
     assert_eq!(head(&path), main);
+}
+
+#[test]
+fn an_existing_branch_is_checked_out_without_fetching() {
+    let origin = git_repo(&[("a", "1")]);
+    let (_keep, clone) = clone_of(origin.path());
+    git(&clone, &["branch", "feat/x"]);
+    let known = head(&clone);
+    git(&clone, &["remote", "set-url", "origin", "/nonexistent/folder"]);
+    let target = TempDir::new();
+    let path = target.path().join("run");
+    create(&clone, "feat/x", &path, FETCH_WITHIN).expect("an existing branch needs no fetch");
+    assert_eq!(head(&path), known);
 }

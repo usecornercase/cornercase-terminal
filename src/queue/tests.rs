@@ -139,6 +139,31 @@ mod accounts {
     }
 }
 
+mod fresh {
+    use super::*;
+
+    #[test]
+    fn an_entry_without_a_choice_is_written_as_before() {
+        let text = serde_json::to_string(&task(100)).expect("json");
+        assert!(!text.contains("fresh"), "{text}");
+    }
+
+    #[test]
+    fn a_choice_round_trips_and_leaves_the_version_alone() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        let mut queue = Queue::default();
+        queue.add(Task { fresh: Some(true), ..task(100) }).expect("chosen");
+        queue.add(Task { fresh: Some(false), ..task(200) }).expect("head");
+        queue.add(task(300)).expect("left to the setting");
+        assert_eq!(queue.saved().version, 1);
+        persist::save(&path, &queue.saved()).expect("save");
+        let read = load(&path, 0);
+        let chosen: Vec<_> = read.entries.iter().map(|entry| entry.task.fresh).collect();
+        assert_eq!(chosen, [Some(true), Some(false), None]);
+    }
+}
+
 mod routines {
     use super::*;
     use crate::queue::repeat::Repeat;

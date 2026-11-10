@@ -32,6 +32,8 @@ pub(crate) struct FlowRun {
     pub(crate) machine: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) close_when_merged: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) fresh: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -432,6 +434,7 @@ impl FlowRun {
         fields.add("issue", self.issue.is_some()).maybe("source", self.source.as_ref());
         fields.maybe("profile", self.profile.as_ref()).maybe("accounts", super::chosen(&self.accounts));
         fields.maybe("machine", self.machine.as_ref()).add("close_when_merged", self.close_when_merged);
+        fields.maybe("fresh", self.fresh);
     }
 }
 

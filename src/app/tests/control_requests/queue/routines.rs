@@ -1,14 +1,14 @@
 use super::*;
 use crate::config::Config;
 
-struct Shop {
-    app: App,
+pub(super) struct Shop {
+    pub(super) app: App,
     _rx: Receiver<AppEvent>,
     repo: TempDir,
     _config: TempDir,
 }
 
-fn shop() -> Shop {
+pub(super) fn shop() -> Shop {
     let repo = git_repo(&[("README", "hello")]);
     let config = TempDir::new();
     let settings = Config {
@@ -24,7 +24,7 @@ fn shop() -> Shop {
     Shop { app, _rx: rx, repo, _config: config }
 }
 
-fn entry(extra: &Value) -> Value {
+pub(super) fn entry(extra: &Value) -> Value {
     let mut entry =
         json!({"zone": "UTC", "prompt": "review the open pull requests", "agent": "claude", "repeat": "2h"});
     if let (Some(base), Some(more)) = (entry.as_object_mut(), extra.as_object()) {
@@ -37,7 +37,7 @@ fn add(app: &mut App, extra: &Value) -> Value {
     ok(app, "queue", &json!({"action": "add", "entry": entry(extra)}))
 }
 
-fn listed(app: &mut App, id: u64) -> Value {
+pub(super) fn listed(app: &mut App, id: u64) -> Value {
     let list = ok(app, "queue", &json!({"action": "list"}));
     list["entries"]
         .as_array()

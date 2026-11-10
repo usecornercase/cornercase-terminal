@@ -1,6 +1,7 @@
-use clap::{Args, Subcommand};
+use clap::{ArgGroup, Args, Subcommand};
 
-use super::Print;
+use super::{FreshArg, Print};
+use crate::cli::help::QUEUE_FRESH_HELP;
 
 #[derive(Debug, Args)]
 pub(crate) struct QueueArgs {
@@ -42,6 +43,10 @@ pub(crate) enum QueueAction {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).conflicts_with_all(["every", "workspace"])),
+    mut_arg("fresh", |arg| arg.help(QUEUE_FRESH_HELP))
+)]
 pub(crate) struct QueueAdd {
     #[arg(
         long,
@@ -81,6 +86,8 @@ pub(crate) struct QueueAdd {
     pub(crate) workspace: Option<u64>,
     #[arg(long, help = "Branch for a worktree, made when missing")]
     pub(crate) worktree: Option<String>,
+    #[command(flatten)]
+    pub(crate) fresh: FreshArg,
     #[arg(long, help = "Entry and tab name")]
     pub(crate) name: Option<String>,
     #[arg(

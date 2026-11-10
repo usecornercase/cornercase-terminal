@@ -5,6 +5,7 @@
   "merged_pull_requests": true,
   "shared_files": false,
   "issue_branch": "",
+  "fresh_branches": false,
   "issue_tabs": [
     "all",
     "github",

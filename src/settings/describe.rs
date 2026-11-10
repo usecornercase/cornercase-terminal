@@ -18,6 +18,7 @@ pub(super) enum Target {
 
 fn switch(row: &Row) -> Option<&'static str> {
     Some(match row {
+        Row::FreshBranches => "fresh_branches",
         Row::PullRequests => "pull_requests",
         Row::MergedPullRequests => "merged_pull_requests",
         Row::SharedFiles => "shared_files",

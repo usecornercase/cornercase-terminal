@@ -39,6 +39,7 @@ pub(crate) enum Refused {
 pub(crate) enum Row {
     Folder,
     IssueBranch,
+    FreshBranches,
     Fetch,
     PullRequests,
     MergedPullRequests,
@@ -135,6 +136,7 @@ impl Row {
         match self {
             Self::Folder
             | Self::IssueBranch
+            | Self::FreshBranches
             | Self::Fetch
             | Self::PullRequests
             | Self::MergedPullRequests
@@ -520,6 +522,7 @@ impl Settings {
         let mut rows = vec![
             Row::Folder,
             Row::IssueBranch,
+            Row::FreshBranches,
             Row::Fetch,
             Row::PullRequests,
             Row::MergedPullRequests,

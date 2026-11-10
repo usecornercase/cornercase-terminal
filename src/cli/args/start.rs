@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 
-use clap::Args;
+use clap::{ArgGroup, Args};
 
-use super::{Create, UntilArg, accounts, issue, machine, seconds};
+use super::{Create, FreshArg, UntilArg, accounts, issue, machine, seconds};
 use crate::cli::help::{HERE_WORKSPACE, UNTIL_AFTER};
 
 #[derive(Debug, Args)]
+#[command(group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).conflicts_with("workspace")))]
 pub(crate) struct StartArgs {
     #[arg(
         value_name = "AGENT",
@@ -67,6 +68,8 @@ pub(crate) struct StartArgs {
         help = "Answer as soon as the tab is open, with the same ids, while the launch goes on: for a program that shows the new tab itself"
     )]
     pub(crate) placed: bool,
+    #[command(flatten)]
+    pub(crate) fresh: FreshArg,
     #[command(flatten)]
     pub(crate) issue: issue::IssueArg,
     #[command(flatten)]

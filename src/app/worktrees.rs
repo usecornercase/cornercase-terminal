@@ -23,6 +23,7 @@ use crate::git;
 use crate::git::upstream;
 use crate::git::worktree;
 pub(super) use crate::git::worktree::RemoveOptions;
+use crate::git::worktree::fresh::{FETCH_WITHIN, WINDOW_WITHIN};
 use crate::log::{self, Job, Level};
 use crate::os::fs::canonical;
 use crate::project::{Hierarchy, Phase, Workspace, WorkspaceAt};
@@ -31,6 +32,11 @@ use crate::ui::{self};
 use crate::worktrees::builds::{Freed, Size};
 use crate::worktrees::remove::Named;
 use crate::worktrees::{Found, Row, Scan};
+
+pub(super) struct NewBranch {
+    pub(super) name: String,
+    pub(super) fresh: Option<Duration>,
+}
 
 #[derive(Default)]
 pub(super) struct Upstream {
@@ -274,42 +280,26 @@ impl App {
         dirs
     }
 
-    pub(super) fn spawn_worktree(&self, p: usize, branch: String, start: Option<Start>, request: Option<u64>) {
+    pub(super) fn fresh_within(&self, asked: Option<bool>, window: bool) -> Option<Duration> {
+        let within = if window { WINDOW_WITHIN } else { FETCH_WITHIN };
+        asked.unwrap_or(self.config.fresh_branches).then_some(within)
+    }
+
+    pub(super) fn spawn_worktree(&self, p: usize, branch: NewBranch, start: Option<Start>, request: Option<u64>) {
+        let NewBranch { name: branch, fresh } = branch;
         let project = &self.projects[p];
         let (id, repo) = (project.id, project.path.clone());
         let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
         let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
-        let job = job.with("path", path.display()).with("issue", start.is_some());
+        let job = job.with("path", path.display()).with("issue", start.is_some()).with("fresh", fresh.is_some());
         let made = branch.clone();
         self.spawn_job(
             job,
-            move || worktree::create(&repo, &branch, &path).map(|()| path),
+            move || worktree::make(&repo, &branch, &path, fresh).map(|()| path),
             move |result, _| {
                 let start = start.map(Box::new);
                 let created = WorktreeEvent::Created { project: id, branch: made, result, start, request };
                 Some(AppEvent::Worktree(created))
-            },
-        );
-    }
-
-    pub(super) fn spawn_fresh_worktree(&self, p: usize, branch: String, request: u64) {
-        let project = &self.projects[p];
-        let (id, repo) = (project.id, project.path.clone());
-        let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
-        let job = Job::new(Level::Info, "worktree", "add from the default branch").with("project", id);
-        let job = job.with("branch", &branch).with("path", path.display());
-        let made = branch.clone();
-        self.spawn_job(
-            job,
-            move || worktree::fresh::create(&repo, &branch, &path).map(|()| path),
-            move |result, _| {
-                Some(AppEvent::Worktree(WorktreeEvent::Created {
-                    project: id,
-                    branch: made,
-                    result,
-                    start: None,
-                    request: Some(request),
-                }))
             },
         );
     }
@@ -328,7 +318,8 @@ impl App {
             return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false, run_on: None }));
         }
         if worktree == Some(true) {
-            self.spawn_worktree(p, name, None, None);
+            let fresh = self.fresh_within(None, true);
+            self.spawn_worktree(p, NewBranch { name, fresh }, None, None);
             return Ok(Some(Overlay::NewWorkspace {
                 project,
                 input,

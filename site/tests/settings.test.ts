@@ -26,13 +26,27 @@ test('the UI tab lists the icons choice and the icon bar, which needs a real cor
 test('the Worktrees tab lists pull requests, which need a real cornercase', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
-  assert.deepEqual(app.settingsRows(0).map((row) => row.id), ['folder', 'branches', 'fetch', 'pulls', 'merged']);
-  app.settingsClick(3);
-  app.render();
-  assert.ok(app.textAt('the demo has no GitHub'));
+  assert.deepEqual(app.settingsRows(0).map((row) => row.id), ['folder', 'branches', 'fresh', 'fetch', 'pulls', 'merged']);
   app.settingsClick(4);
   app.render();
+  assert.ok(app.textAt('the demo has no GitHub'));
+  app.settingsClick(5);
+  app.render();
   assert.ok(app.textAt('the demo has no GitHub or GitLab'));
+  app.destroy();
+});
+
+test('the Worktrees tab flips where new branches start', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  app.settingsClick(2);
+  app.render();
+  assert.ok(app.textAt('[x] from the default branch, fetched'));
+  assert.ok(app.textAt('new branches start from the default branch, fetched first'));
+  app.settingsClick(2);
+  app.render();
+  assert.ok(app.textAt("[ ] from the project's HEAD"));
+  assert.ok(app.textAt("new branches start from the project's HEAD"));
   app.destroy();
 });
 

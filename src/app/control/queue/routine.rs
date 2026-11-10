@@ -34,6 +34,10 @@ fn refuse_mix(add: &QueueAdd, old: Option<&Entry>) -> Result<(), String> {
         (add.worktree.is_some(), "a routine names its own worktrees: it takes no branch"),
         (add.flow.is_some() && (add.agent.is_some() || add.mode.is_some()), "a flow chooses its own agents and modes"),
         (add.submit == Some(false), "a routine always submits its prompt: it cannot keep a draft"),
+        (
+            add.fresh == Some(false),
+            "a routine's runs always start from the up-to-date default branch: it takes no --no-fresh",
+        ),
     ];
     refused.iter().find(|(wrong, _)| *wrong).map_or(Ok(()), |(_, why)| Err((*why).into()))
 }
@@ -125,6 +129,7 @@ impl App {
             prompt,
             place,
             routine: None,
+            fresh: None,
         };
         self.requested_accounts(None, &task.accounts)?;
         let id = self.panels.queued.schedule(edit, task)?;

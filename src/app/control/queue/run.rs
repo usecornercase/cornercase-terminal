@@ -4,6 +4,7 @@ use super::super::flow::pick;
 use crate::agents;
 use crate::app::App;
 use crate::app::flow_runs::Starting;
+use crate::control;
 use crate::git;
 use crate::git::worktree;
 use crate::queue::{self, Entry, State};
@@ -58,7 +59,10 @@ impl App {
         if !agents::installed(&entry.task.program) {
             return Err(format!("{} is not installed", entry.task.agent));
         }
-        let start = super::queued_start(entry, (self.projects[p].id, None), Some(branch));
+        let start = control::Start {
+            fresh: Some(true),
+            ..super::queued_start(entry, (self.projects[p].id, None), Some(branch))
+        };
         self.launch_start(entry.id, now, start)
     }
 
@@ -69,6 +73,7 @@ impl App {
         let area = super::super::sized(self.panels.queued.area())?;
         let mut starting = Starting::new(flow, entry.task.prompt.clone(), branch, accounts);
         starting.focus = false;
+        starting.fresh = Some(true);
         starting.note = note;
         let client = self.mark_starting(entry.id, Instant::now())?;
         let answer = self.run_flow(Some(client), project, starting, area);

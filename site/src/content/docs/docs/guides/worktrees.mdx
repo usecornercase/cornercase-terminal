@@ -32,7 +32,7 @@ Worktrees are offered when the **project folder is the root of a git repository*
 
 cornercase then, in the background:
 
-- checks out the branch if it already exists, or creates it from the project's current `HEAD` if it doesn't;
+- checks out the branch if it already exists, or creates it from the project's current `HEAD` if it doesn't, or, with **settings → Worktrees → new branches** on, from the project's default branch, fetched from its remote first (if the fetch fails, the dialog shows why and nothing is made);
 - runs `git worktree add` into `<worktrees folder>/<repository>/<branch>`;
 - copies the files listed in [`.worktreeinclude`](#bring-your-ignored-files-along);
 - opens the new workspace with a shell in the checkout, which first runs the project's [setup](#set-up-each-new-worktree) if it has one.
@@ -280,4 +280,4 @@ Removing a worktree only deletes its folder. The branch and its commits stay in 
 
 ## Worktrees from issues
 
-Starting an issue from the [issue browser](../issues-and-agents/) in a repository creates a worktree too, on a branch named after the issue, such as `issue-482-returns-page-crashes-on-empty-address`, which you can change before it is made, or set once for every issue in **settings → Worktrees → issue branches** (see [Your team's branch names](../issues-and-agents/#your-teams-branch-names)). Everything on this page applies to it.
+Starting an issue from the [issue browser](../issues-and-agents/) in a repository creates a worktree too, on a branch named after the issue, such as `issue-482-returns-page-crashes-on-empty-address`, which you can change before it is made, or set once for every issue in **settings → Worktrees → issue branches** (see [Your team's branch names](../issues-and-agents/#your-teams-branch-names)). Everything on this page applies to it, **new branches** included: with it on, the issue's branch starts from the project's default branch, fetched first, rather than from the commit your own folder is on.

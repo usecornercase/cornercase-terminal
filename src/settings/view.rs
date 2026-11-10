@@ -50,6 +50,14 @@ impl Settings {
                 let (note, warns) = naming::note(&config.issue_branch);
                 ("issue branches".into(), value.to_string(), note, warns)
             }
+            Row::FreshBranches => {
+                let (value, note) = if config.fresh_branches {
+                    ("[x] from the default branch, fetched", "a failed fetch stops the start")
+                } else {
+                    ("[ ] from the project's HEAD", "on: the default branch, fetched first")
+                };
+                ("new branches".into(), value.into(), note.into(), false)
+            }
             Row::Fetch => {
                 let value =
                     if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
