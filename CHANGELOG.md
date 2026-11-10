@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.31
+
+- **A merged pull request shows as merged sooner.** For 5 minutes after a pull request's checks finish, when most get merged, cornercase keeps reading it every 20 seconds, as while they run, instead of once a minute. And coming back to cornercase's window reads every open pull request again at once, unless it was read in the last 10 seconds: one you just merged in the browser turns purple a few seconds after you switch back, on its row, in `cornercase status` and in every program that draws cornercase with `view`. Your terminal has to tell cornercase about focus, as most do. GitLab merge requests work the same way.
+- **A program that draws cornercase gets the same with `view-set --visible`**: when its view comes back from `--hidden`, the open pull requests are read again, with the same 10 seconds. A project whose last read failed still waits its 5 minutes, and opening the dialog or `cornercase pull-request` still asks at once.
+
 ## 0.13.30
 
 - **`cornercase mark`, `move-pane`, `account restart` and `context` can say which run of the server their pane id is from.** Ids last one run of the server, so a program that draws another machine's tab, or a script that read a pane's id there, could mark another agent, move someone else's pane, restart another agent's conversation on an account nobody picked for it (or replace a shell someone was about to type in), or start a second `claude` on another agent's conversation, when that server restarted on the way. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing is marked, moved, restarted or read, the command prints why and exits with status 4 (`cornercase --remote vps mark --pane 9 --boot "$boot"`), as `close` and `rename` already do. It works in every form of the four commands, `--tab` included, on a line of `requests --follow` for that line only, and a server too old to know `boot` is refused before anything is sent. Every other command prints what it printed.
