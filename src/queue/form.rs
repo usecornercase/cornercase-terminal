@@ -161,7 +161,7 @@ impl Form {
             cleanup: false,
             cleanup_off: None,
             account: None,
-            mode: Combo::new(vec!["default".into()], Some(0)),
+            mode: Combo::new(vec![crate::agents::DEFAULT_MODE.into()], Some(0)),
             focus: Control::Prompt,
             zone,
             busy: false,

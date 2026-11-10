@@ -191,10 +191,10 @@ impl Settings {
         };
         let mut found = Vec::new();
         if !modes.is_empty() {
-            let name = mode.clone().unwrap_or_else(|| "default".into());
+            let name = mode.clone().unwrap_or_else(|| agents::DEFAULT_MODE.into());
             let mut setting = base(format!("agents.{kind}.mode"), format!("{kind} mode"), Kind::Choice);
             setting.value = Value::String(name.clone());
-            setting.default = Value::String("default".into());
+            setting.default = Value::String(agents::DEFAULT_MODE.into());
             setting.shown.clone_from(&name);
             setting.dangerous = agents::is_dangerous(&name);
             setting.choices = self

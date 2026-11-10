@@ -115,7 +115,7 @@ Each agent starts with its command followed by its arguments, `agent_args` in `c
   alt="How should gemini start? default, auto edit, plan, yolo (dangerous), extra arguments"
 />
 
-Every agent also has a **default** mode, which adds no arguments. Modes whose name contains *dangerous* are shown in red, in settings and in the issue browser, so you never pick one by accident.
+Every agent also has a **default** mode, which adds no mode arguments, only the extra arguments below. `cornercase start --mode default` and **default** in the [schedule form](../../guides/queue/) start an agent in it, whatever is chosen here. Modes whose name contains *dangerous* are shown in red, in settings and in the issue browser, so you never pick one by accident.
 
 Whatever is in `agent_args` beyond the mode's arguments is the agent's **extra arguments**, set with **extra arguments…** in the same list. When you pick another mode, cornercase swaps the mode's arguments and keeps your extras. For example:
 
@@ -129,7 +129,7 @@ starts `claude --permission-mode plan --add-dir ../shared`: mode *plan*, extra a
 
 ### Your own modes
 
-`agent_modes` adds modes, replaces built-in ones with the same name, or hides them with an empty list:
+`agent_modes` adds modes, replaces built-in ones with the same name, or hides them with an empty list. A mode named `default` is ignored: that name always means no mode arguments.
 
 ```json
 "agent_modes": {

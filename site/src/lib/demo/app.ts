@@ -4082,6 +4082,14 @@ export class App {
     return name && name in AGENT_KINDS ? AGENT_KINDS[name] : null;
   }
 
+  private agentCommandWithoutMode(kind: string): string {
+    const bin = AGENTS.find(([k]) => k === kind)?.[1] ?? kind;
+    const found = this.modeOf(kind);
+    const run = (MODES[kind] ?? []).find(([name]) => name === found)?.[1];
+    const args = (this.config.agentArgs[kind] ?? []).join(' ');
+    return [bin, run ? args.replace(run, '').replace(/\s+/g, ' ').trim() : args].filter(Boolean).join(' ');
+  }
+
   private agentCommand(kind: string): string {
     const bin = AGENTS.find(([k]) => k === kind)?.[1] ?? kind;
     return [bin, ...(this.config.agentArgs[kind] ?? [])].join(' ');
@@ -4602,10 +4610,11 @@ export class App {
     this.queueBack = this.overlay?.kind === 'issues' ? this.overlay : null;
     this.overlay = o;
     this.queueModes(o);
-    if (entry?.mode) {
+    if (entry) {
+      const kept = entry.mode || 'default';
       const modes = [...o.mode.options];
-      if (!modes.includes(entry.mode)) modes.push(entry.mode);
-      o.mode = combo(modes, modes.indexOf(entry.mode));
+      if (!modes.includes(kept)) modes.push(kept);
+      o.mode = combo(modes, modes.indexOf(kept));
     }
     this.dirty();
   }
@@ -4639,7 +4648,8 @@ export class App {
   private queueModes(o: QueueForm): void {
     const picked = comboLabel(o.agent);
     const kind = picked && picked !== 'auto' ? picked : this.config.agent === 'auto' ? 'claude' : this.config.agent;
-    o.mode = combo(['default', ...(MODES[kind] ?? []).map(([name]) => name)], 0);
+    const options = ['default', ...(MODES[kind] ?? []).map(([name]) => name)];
+    o.mode = combo(options, Math.max(0, options.indexOf(this.modeOf(kind) ?? 'default')));
     this.queueCleanup(o);
   }
 
@@ -4694,7 +4704,7 @@ export class App {
     const workspaceName = ws && (ws.name || (ws.root !== project?.root ? ws.root.split('/').pop() : undefined));
     const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? o.prompt, project: place.project, folder: project?.folder ?? '', workspace: place.workspace, workspaceName, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending', ...(routine ? { repeat: parsed && typeof parsed !== 'string' ? repeat : '', cleanup: o.cleanup && !o.cleanupOff } : {}) };
     const mode = (MODES[entry.agent] ?? []).find(([name]) => name === entry.mode)?.[1];
-    entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : this.agentCommand(entry.agent);
+    entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : entry.mode ? this.agentCommand(entry.agent) : this.agentCommandWithoutMode(entry.agent);
     this.queued = [...this.queued.filter((item) => item.id !== entry.id), entry].sort((a, b) => a.at - b.at || a.id - b.id);
     if (old) this.disarmQueued(old);
     if (old?.paused) entry.paused = true;

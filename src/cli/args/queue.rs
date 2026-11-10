@@ -63,7 +63,11 @@ pub(crate) struct QueueAdd {
     pub(crate) no_cleanup: bool,
     #[arg(long, help = "Agent name, or auto to use the current default or running agent")]
     pub(crate) agent: Option<String>,
-    #[arg(long, help = "One of the agent's configured modes")]
+    #[arg(
+        long,
+        help = "One of the agent's modes, as settings → agents lists them, or default for no mode arguments \
+                [default: the one chosen there; edit keeps the entry's]"
+    )]
     pub(crate) mode: Option<String>,
     #[arg(long, conflicts_with = "issue", help = "Prompt to submit when the entry starts")]
     pub(crate) prompt: Option<String>,

@@ -75,6 +75,9 @@ pub(super) fn run(action: QueueAction) -> Result<()> {
     if needs_routines(&command) {
         crate::client::use_queue_routines()?;
     }
+    if needs_mode_default(&command) {
+        crate::client::use_mode_default()?;
+    }
     let value = ask("queue", control::Command::Queue(command))?;
     if json {
         return print_json(&value);
@@ -94,6 +97,15 @@ fn needs_routines(command: &control::Queue) -> bool {
         control::Queue::Pause(_) | control::Queue::Resume(_) => true,
         control::Queue::Add(add) | control::Queue::Edit { add, .. } => {
             add.repeat.is_some() || add.flow.is_some() || add.cleanup.is_some()
+        }
+        _ => false,
+    }
+}
+
+fn needs_mode_default(command: &control::Queue) -> bool {
+    match command {
+        control::Queue::Add(add) | control::Queue::Edit { add, .. } => {
+            add.mode.as_deref() == Some(crate::agents::DEFAULT_MODE)
         }
         _ => false,
     }

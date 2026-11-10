@@ -42,3 +42,25 @@ fn queue_removal_requests_keep_their_wire_shape_and_have_no_unknown_fields() {
         assert_eq!(serde_json::to_value(request).expect("written request")["args"], args);
     }
 }
+
+#[test]
+fn the_default_mode_is_none_and_no_mode_given_is_the_one_chosen_in_settings() {
+    use crate::config::Config;
+    use crate::queue::{Entry, Task};
+
+    let config = Config {
+        agent_args: [("claude".to_string(), vec!["--permission-mode".to_string(), "plan".to_string()])].into(),
+        ..Config::default()
+    };
+    let entry = |mode: Option<&str>| Entry {
+        id: 1,
+        task: Task { agent: "claude".into(), mode: mode.map(str::to_string), ..Task::default() },
+        state: State::Pending,
+    };
+    let add = |mode: Option<&str>| QueueAdd { mode: mode.map(str::to_string), ..QueueAdd::default() };
+
+    assert_eq!(prepare::queue_mode(&config, "claude", &add(Some("default")), None), None);
+    assert_eq!(prepare::queue_mode(&config, "claude", &add(None), None).as_deref(), Some("plan"));
+    assert_eq!(prepare::queue_mode(&config, "claude", &add(None), Some(&entry(None))), None);
+    assert_eq!(prepare::queue_mode(&config, "claude", &add(Some("default")), Some(&entry(Some("auto")))), None);
+}

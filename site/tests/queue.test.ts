@@ -351,6 +351,23 @@ test('the place, agent and mode lists open and choose with a click', () => {
   app.destroy();
 });
 
+test('the mode list opens on the mode settings chose, and default schedules none', () => {
+  const app = appAt(140);
+  app.openQueueForm();
+  const o = form(app);
+  assert.equal(comboLabel(o.mode), 'plan');
+  o.prompt = 'Fix the login';
+  app.render();
+  clickControl(app, 'mode');
+  clickOption(app, 'mode', 'default');
+  inputKey(app, key('Enter'));
+  assert.equal(app.queued[0].mode, '');
+  assert.ok(!app.queued[0].command.includes('--permission-mode'), app.queued[0].command);
+  app.openQueueForm(app.queued[0]);
+  assert.equal(comboLabel(form(app).mode), 'default');
+  app.destroy();
+});
+
 test('entries due together start separate agents without starting early or moving focus', () => {
   const app = appAt(140);
   app.config.trust = false;

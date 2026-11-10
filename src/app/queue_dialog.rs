@@ -47,9 +47,9 @@ impl App {
         self.queue_modes();
         self.queue_accounts(entry.as_ref().map(|entry| &entry.task.accounts));
         if let Some(Overlay::Queue(form)) = &mut self.overlay
-            && let Some(mode) = entry.as_ref().and_then(|entry| entry.task.mode.as_ref())
+            && let Some(entry) = &entry
         {
-            keep_mode(form, mode);
+            keep_mode(form, entry.task.mode.as_deref().unwrap_or(agents::DEFAULT_MODE));
         }
         self.queue_cleanup_off();
     }
@@ -201,11 +201,13 @@ impl App {
 
     fn queue_modes(&mut self) {
         let kind = self.queue_kind();
+        let table = agents::modes(&self.config, &kind);
+        let chosen = agents::mode_of(&kind, &agents::args(&self.config, &kind), &table);
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
-        let modes = std::iter::once("default".into())
-            .chain(agents::modes(&self.config, &kind).into_iter().map(|(name, _)| name))
-            .collect();
-        form.mode = Combo::new(modes, Some(0));
+        let modes: Vec<String> =
+            std::iter::once(agents::DEFAULT_MODE.into()).chain(table.into_iter().map(|(name, _)| name)).collect();
+        let at = chosen.and_then(|chosen| modes.iter().position(|name| *name == chosen)).unwrap_or(0);
+        form.mode = Combo::new(modes, Some(at));
     }
 
     pub(super) fn queue_key(&mut self, key: KeyEvent, area: Rect) {
@@ -374,8 +376,8 @@ impl App {
     }
 
     fn chosen_mode(&self, form: &Form, agent: Option<&String>) -> Option<String> {
-        let mode = form.mode.label().unwrap_or("default").to_string();
-        let captured_default = mode == "default"
+        let mode = form.mode.label().unwrap_or(agents::DEFAULT_MODE).to_string();
+        let captured_default = mode == agents::DEFAULT_MODE
             && form
                 .id
                 .and_then(|id| self.panels.queued.queue().entry(id))
@@ -534,10 +536,10 @@ fn fill_from_entry(form: &mut Form, entry: &queue::Entry, id: Option<u64>, clock
     form.branch = Editor::new(entry.task.place.branch.as_deref().unwrap_or_default());
 }
 
-fn keep_mode(form: &mut Form, mode: &String) {
+fn keep_mode(form: &mut Form, mode: &str) {
     let mut modes = form.mode.options().to_vec();
     let chosen = modes.iter().position(|name| name == mode).unwrap_or_else(|| {
-        modes.push(mode.clone());
+        modes.push(mode.to_string());
         modes.len() - 1
     });
     form.mode = Combo::new(modes, Some(chosen));
