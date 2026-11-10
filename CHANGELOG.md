@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.35
+
+- **`cornercase flow save --check` tells a flow's own problems from a name conflict.** With `--json`, its answer has `own_problems`: how many of `problems`, from the first, are the flow's own (a role in no stage, an agent a flow doesn't take…), which stop a save. What comes after them is a name conflict (another flow of that name runs instead), which a save keeps, as Settings › Flows does, so a program with a flow editor of its own can keep its Save available when only a conflict is listed. A save answers `0`. Without `--json`, `--check` now says a flow whose only problem is a name conflict can be saved.
+
 ## 0.13.34
 
 - **` send now ` no longer sends your half-written line with the message.** When `cornercase send` holds a message because you are typing in a pane, the bar's ` send now ` pasted it after what you had typed and pressed Enter, so the agent got your unfinished sentence glued to it. Now, while you have a draft in that pane, ` send now ` pastes the message after your draft and leaves the Enter to you: you see both, send them with Enter or edit them first, and a toast says so. Without a draft it sends the message at once, as before.

@@ -89,6 +89,7 @@ fn a_draft_is_checked_without_being_written() {
     assert!(!checked.saved);
     assert_eq!(checked.path, None);
     assert!(checked.problems.is_empty(), "{:?}", checked.problems);
+    assert_eq!(checked.own_problems, Some(0));
     assert_eq!(files(&yours(&team)), before);
 }
 
@@ -103,6 +104,33 @@ fn a_checked_draft_names_its_problems_and_a_conflict() {
     assert!(checked.problems.iter().any(|p| p.contains("no stages")), "{:?}", checked.problems);
     let clash = saved(&mut team, &named("Pair"), &json!({"place": "project", "check": true}));
     assert!(clash.problems.iter().any(|p| p.contains("runs instead")), "{:?}", clash.problems);
+    assert_eq!(checked.own_problems, Some(checked.problems.len()));
+    assert_eq!((clash.own_problems, clash.problems.len()), (Some(0), 1));
+}
+
+#[test]
+fn a_check_counts_the_flows_own_problems_before_its_clash() {
+    let mut team = Team::new();
+    let mut draft = named("Pair");
+    draft.stages.clear();
+
+    let checked = saved(&mut team, &draft, &json!({"place": "project", "check": true}));
+
+    let own = checked.own_problems.expect("a count");
+    assert!(own > 0 && checked.problems.len() == own + 1, "{:?}", checked.problems);
+    assert!(checked.problems[..own].iter().all(|p| !p.contains("runs instead")), "{:?}", checked.problems);
+    assert!(checked.problems[own].contains("runs instead"), "{:?}", checked.problems);
+}
+
+#[test]
+fn a_save_with_a_clash_counts_no_problem_of_its_own() {
+    let mut team = Team::new();
+
+    let done = saved(&mut team, &named("Pair"), &json!({"place": "project"}));
+
+    assert!(done.saved);
+    assert_eq!(done.own_problems, Some(0));
+    assert!(done.problems.iter().any(|p| p.contains("runs instead")), "{:?}", done.problems);
 }
 
 #[test]
