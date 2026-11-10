@@ -98,7 +98,7 @@ notes() {
         echo "the notes of $tag already hold every version since the last release"
         return
     fi
-    body=$(gh release view "$tag" --json body --jq .body | tr -d '\r')
+    body=$(gh release view "$tag" --json body --jq '.body | gsub("\r"; "")')
     sections=$(git show "$tag:CHANGELOG.md" | awk -v versions="$versions" '
         BEGIN { n = split(versions, list, " "); for (i = 1; i <= n; i++) wanted["## " list[i]] = 1 }
         /^## / { keep = ($0 in wanted); if (keep) $0 = "#" $0 }

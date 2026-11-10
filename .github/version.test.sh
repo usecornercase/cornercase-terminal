@@ -33,7 +33,7 @@ new_case() {
 echo "gh $*" >>"$FAKE/calls"
 case "$1 $2" in
     "release list") cat "$FAKE/releases" ;;
-    "release view") cat "$FAKE/body" ;;
+    "release view") if [ -e "$FAKE/view_fails" ]; then exit 1; fi; cat "$FAKE/body" ;;
     "release edit")
         while [ $# -gt 0 ]; do
             if [ "$1" = --notes-file ]; then cp "$2" "$FAKE/body"; fi
@@ -183,6 +183,13 @@ cp "$FAKE/body" "$FAKE/first"
 run_script notes v0.3.0
 cmp -s "$FAKE/first" "$FAKE/body" || fail_case "a second run changed the body"
 
+new_case "notes stop when the release body cannot be read"
+tag_released
+printf 'v0.3.0\nv0.1.0\n' >"$FAKE/releases"
+touch "$FAKE/view_fails"
+run_script_failing notes v0.3.0
+expect_no_call "release edit"
+
 new_case "notes after a published previous version are left alone"
 tag_released
 printf 'v0.3.0\nv0.2.0\n' >"$FAKE/releases"
@@ -215,7 +222,7 @@ expect_no_call "workflow run"
 expect_output "dry run: gh workflow run"
 
 if [ "$failures" -ne 0 ]; then
-    echo "$failures of $cases cases failed"
+    echo "$failures checks failed in $cases cases"
     exit 1
 fi
 echo "version.sh: $cases cases passed"
