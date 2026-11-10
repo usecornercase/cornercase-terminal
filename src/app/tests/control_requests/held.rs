@@ -39,6 +39,16 @@ impl Bar {
 
     fn hold(&mut self, from: Option<u64>, text: &str) {
         let send = wire::SendText { pane: Some(self.pane), text: Some(text.into()), ..wire::SendText::default() };
+        self.hold_send(from, send);
+    }
+
+    fn hold_entered(&mut self, from: Option<u64>, text: &str) {
+        let send =
+            wire::SendText { pane: Some(self.pane), text: Some(text.into()), enter: true, ..wire::SendText::default() };
+        self.hold_send(from, send);
+    }
+
+    fn hold_send(&mut self, from: Option<u64>, send: wire::SendText) {
         ask(&mut self.app, from, Command::Send(send));
         assert_eq!(self.app.take_answers(), Vec::new(), "the send is held");
     }
@@ -59,6 +69,10 @@ impl Bar {
         (pane.held_sends, pane.held_from, pane.held_queued)
     }
 
+    fn draft(&self) -> bool {
+        self.app.report(None).panes()[0].draft
+    }
+
     fn words(&self) -> Option<String> {
         self.app.held_label(self.pane).map(|(words, _)| words)
     }
@@ -72,8 +86,12 @@ fn send_now_sends_the_first_message_and_says_what_is_left() {
 
     let said = bar.press("send-now").expect("sent");
 
-    assert_eq!(said, json!({"pane": bar.pane, "held_sends": 1, "held_from": 42, "held_queued": false}));
+    assert_eq!(
+        said,
+        json!({"pane": bar.pane, "held_sends": 1, "held_from": 42, "held_queued": false, "after_draft": true})
+    );
     assert_eq!(bar.answered.len(), 1, "the first message's sender has its answer");
+    assert!(reply_of(&bar.answered[0]).is_ok(), "a send without Enter gets its usual answer: {:?}", bar.answered);
     assert_eq!(bar.fields(), (1, Some(42), false));
 }
 
@@ -84,9 +102,69 @@ fn send_now_of_the_last_message_leaves_nothing_held() {
 
     let said = bar.press("send-now").expect("sent");
 
-    assert_eq!(said, json!({"pane": bar.pane, "held_sends": 0, "held_from": null, "held_queued": false}));
+    assert_eq!(
+        said,
+        json!({"pane": bar.pane, "held_sends": 0, "held_from": null, "held_queued": false, "after_draft": true})
+    );
     assert_eq!(bar.fields(), (0, None, false));
     assert_eq!(bar.words(), None);
+}
+
+#[test]
+fn send_now_over_a_draft_pastes_the_message_and_leaves_its_enter_to_the_person() {
+    let mut bar = Bar::new();
+    bar.hold_entered(Some(41), "theirs");
+    bar.hold_entered(Some(42), "later");
+    let before = bar.app.projects.pane_by(bar.pane).expect("the pane").typing.at.expect("typed");
+    wait_until("time moves on", || Instant::now() > before);
+
+    let said = bar.press("send-now").expect("pasted");
+
+    let expected =
+        json!({"pane": bar.pane, "held_sends": 1, "held_from": 42, "held_queued": false, "after_draft": true});
+    assert_eq!(said, expected);
+    assert_eq!(bar.answered.len(), 1);
+    let told = &bar.answered[0];
+    assert!(told.contains(&format!("the person in pane {} had a draft", bar.pane)), "{told}");
+    assert!(!bar.app.sending(bar.pane), "no Enter is queued");
+    assert!(bar.draft(), "the draft holds");
+    let after = bar.app.projects.pane_by(bar.pane).expect("the pane").typing.at.expect("typed");
+    assert!(after > before, "the paste counts as the person's input");
+    assert_eq!(bar.fields().0, 1);
+}
+
+#[test]
+fn send_now_without_a_draft_still_presses_enter() {
+    let mut bar = Bar::new();
+    bar.hold_entered(None, "theirs");
+    let ctrl_u = KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL);
+    bar.app.projects.pane_by_mut(bar.pane).expect("the pane").typed_key(ctrl_u);
+
+    let said = bar.press("send-now").expect("sent");
+
+    assert_eq!(said["after_draft"], json!(false));
+    assert!(bar.app.sending(bar.pane), "its Enter is queued");
+}
+
+#[test]
+fn the_enter_of_a_send_ends_the_draft_it_took_with_it() {
+    let mut bar = Bar::new();
+    let send = wire::SendText {
+        pane: Some(bar.pane),
+        text: Some("now".into()),
+        enter: true,
+        force: true,
+        ..wire::SendText::default()
+    };
+    ask(&mut bar.app, None, Command::Send(send));
+    assert!(bar.draft());
+
+    bar.app.refresh(Instant::now() + Duration::from_secs(4));
+
+    let answers = bar.app.take_answers();
+    assert_eq!(answers.len(), 1, "{answers:?}");
+    assert!(reply_of(&answers[0].1).is_ok(), "{answers:?}");
+    assert!(!bar.draft(), "the Enter took the line");
 }
 
 #[test]
@@ -97,7 +175,10 @@ fn wait_turn_only_says_the_person_saw_it() {
     let said = bar.press("wait-turn").expect("acknowledged");
     let again = bar.press("wait-turn").expect("acknowledged again");
 
-    assert_eq!(said, json!({"pane": bar.pane, "held_sends": 1, "held_from": null, "held_queued": true}));
+    assert_eq!(
+        said,
+        json!({"pane": bar.pane, "held_sends": 1, "held_from": null, "held_queued": true, "after_draft": false})
+    );
     assert_eq!(again, said);
     assert!(bar.answered.is_empty(), "nothing went out: {:?}", bar.answered);
     assert_eq!(bar.fields(), (1, None, true));
@@ -144,7 +225,10 @@ fn a_tab_stands_for_its_pane() {
 
     let said = bar.held(&json!({"tab": tab, "action": "wait-turn"})).expect("acknowledged");
 
-    assert_eq!(said, json!({"pane": bar.pane, "held_sends": 1, "held_from": null, "held_queued": true}));
+    assert_eq!(
+        said,
+        json!({"pane": bar.pane, "held_sends": 1, "held_from": null, "held_queued": true, "after_draft": false})
+    );
 }
 
 #[rstest]

@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.34
+
+- **` send now ` no longer sends your half-written line with the message.** When `cornercase send` holds a message because you are typing in a pane, the bar's ` send now ` pasted it after what you had typed and pressed Enter, so the agent got your unfinished sentence glued to it. Now, while you have a draft in that pane, ` send now ` pastes the message after your draft and leaves the Enter to you: you see both, send them with Enter or edit them first, and a toast says so. Without a draft it sends the message at once, as before.
+- **`cornercase held --send-now` does the same**, for programs that draw that bar themselves: it prints that the message waits for the person's Enter (`after_draft` with `--json`), and `cornercase contract` lists the feature `held-after-draft`. The program or agent that sent the message gets an error saying it is in the person's input, so it does not send it again.
+- **A message's Enter now ends the draft it sends.** After `cornercase send --force --enter` pressed Enter over what someone had typed, the pane kept saying `draft` for up to a minute and held the next messages for a line that was already gone.
+
 ## 0.13.33
 
 - **A flow run can close its agents once its pull request merges.** Start it with `cornercase flow run NAME … --close-when-merged`, or turn it on for a run already going with `cornercase flow close-when-merged` (`--off` turns it off). Once the run's pull request or merge request has merged and none of its agents has been working, waiting, starting or typed into for 3 minutes, its agents close as **close agents** does, so finished runs stop piling up idle agents. They are kept: the workspace's `▶` or `cornercase agents reopen` brings each back in its own conversation (opencode and custom agents start over), and nothing is removed from disk. A shell you opened in one of the team's tabs keeps them open. `cornercase flow runs --json` and `status --json` give `close_when_merged` on such a run, and `cornercase contract` lists the feature `flow-close-when-merged`.
