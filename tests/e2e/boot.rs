@@ -67,7 +67,8 @@ fn rows_under(row: &Value) -> Vec<String> {
     let mut rows = Vec::new();
     for key in ["projects", "workspaces", "tabs", "panes"] {
         for item in row[key].as_array().into_iter().flatten() {
-            rows.push(format!("{} {}", item["id"], item["custom_name"]));
+            let (status, pid, layout) = (&item["status"], &item["pid"], &item["layout"]);
+            rows.push(format!("{} {} {status} {pid} {layout}", item["id"], item["custom_name"]));
             rows.extend(rows_under(item));
         }
     }
@@ -123,7 +124,6 @@ fn every_form_of_close_and_rename_refuses_an_earlier_boot_and_changes_nothing() 
     let pane = panes(session.report()).next().expect("a pane").id.to_string();
     let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("a status report");
     let tab = status["projects"][0]["workspaces"][0]["tabs"][0]["id"].to_string();
-    let before = rows_under(&status);
     let forms: [&[&str]; 15] = [
         &["close", "--pane", &pane],
         &["close", "--tab", &tab],
@@ -142,11 +142,49 @@ fn every_form_of_close_and_rename_refuses_an_earlier_boot_and_changes_nothing() 
         &["rename", "x"],
     ];
 
-    for form in forms {
-        assert_stale(&there(&session, &at(form, EARLIER)), EARLIER);
-    }
+    refuses_every_form_and_changes_nothing(&session, &forms);
+}
 
-    assert_eq!(rows(&session), before);
+fn refuses_every_form_and_changes_nothing(session: &Session, forms: &[&[&str]]) {
+    let before = rows(session);
+    for form in forms {
+        assert_stale(&there(session, &at(form, EARLIER)), EARLIER);
+    }
+    assert_eq!(rows(session), before);
+}
+
+struct Panes {
+    session: Arc<Session>,
+    agent: String,
+    agent_tab: String,
+    shell: String,
+    split: String,
+}
+
+fn pane_in(session: &Session, id: &str) -> Value {
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("a status report");
+    let mut panes = Vec::new();
+    walk(&status, &mut |row| panes.extend(row["panes"].as_array().cloned().unwrap_or_default()));
+    panes.into_iter().find(|pane| pane["id"].as_u64().is_some_and(|n| n.to_string() == id)).unwrap_or(Value::Null)
+}
+
+fn walk(row: &Value, visit: &mut dyn FnMut(&Value)) {
+    visit(row);
+    for key in ["projects", "workspaces", "tabs"] {
+        row[key].as_array().into_iter().flatten().for_each(|item| walk(item, visit));
+    }
+}
+
+fn a_machine_with_an_agent_and_a_split_tab() -> Panes {
+    let session = agent_session();
+    remote_says(&session, &["start-server"]);
+    let shell = session.report().projects[0].workspaces[0].tabs[0].panes[0].id.to_string();
+    let split = remote_says(&session, &["split", "--pane", &shell]);
+    let started: Value = serde_json::from_str(&remote_says(&session, &["start", "claude", "--json"])).expect("start");
+    let (agent, agent_tab) = (started["pane"].to_string(), started["tab"].to_string());
+    session.says(&["account", "add", "claude", "work"]);
+    wait_until("the agent is seen", || pane_in(&session, &agent)["agent"] == "claude");
+    Panes { session, agent, agent_tab, shell, split }
 }
 
 #[test]
@@ -181,11 +219,68 @@ fn a_worktree_is_checked_and_removed_with_the_boot_of_this_run() {
     wait_until("the worktree leaves the disk", || !std::path::Path::new(&path).exists());
 }
 
+#[test]
+fn every_form_of_mark_move_pane_account_restart_and_context_refuses_an_earlier_boot_and_changes_nothing() {
+    let Panes { session, agent, agent_tab, shell, split } = a_machine_with_an_agent_and_a_split_tab();
+    let forms: [&[&str]; 13] = [
+        &["mark"],
+        &["mark", "--pane", &agent],
+        &["mark", "--tab", &agent_tab],
+        &["mark", "--pane", &agent, "--reviewed"],
+        &["move-pane", "--pane", &split, "--target", &shell, "--place", "left"],
+        &["move-pane", "--pane", &split, "--target", &shell, "--place", "swap", "--json"],
+        &["account", "restart", "claude", "work"],
+        &["account", "restart", "claude", "work", "--pane", &agent, "--json"],
+        &["account", "restart", "claude", "work", "--pane", &shell, "--pane", &split],
+        &["context"],
+        &["context", "--pane", &agent],
+        &["context", "--tab", &agent_tab, "--json"],
+        &["context", "--pane", &agent, "--cached"],
+    ];
+
+    refuses_every_form_and_changes_nothing(&session, &forms);
+
+    let cached = remote_says(&session, &["context", "--pane", &agent, "--cached", "--json"]);
+    let cached: Value = serde_json::from_str(&cached).expect("the context");
+    assert_eq!((&cached["loading"], &cached["read_at"]), (&json!(false), &Value::Null), "{cached}");
+}
+
+#[test]
+fn the_boot_of_this_run_lets_mark_move_pane_account_restart_and_context_act() {
+    let Panes { session, agent, shell, split, .. } = a_machine_with_an_agent_and_a_split_tab();
+    std::fs::create_dir_all(session.claude_dir()).expect("the default account's folder");
+    let boot = boot(&session);
+    let before = ssh_runs(&session);
+
+    let marked = remote_says(&session, &at(&["mark", "--pane", &agent], &boot));
+    let context = remote_says(&session, &at(&["context", "--pane", &agent, "--cached", "--json"], &boot));
+    let moved = remote_says(
+        &session,
+        &at(&["move-pane", "--pane", &split, "--target", &shell, "--place", "left", "--json"], &boot),
+    );
+    let restarted =
+        remote_says(&session, &at(&["account", "restart", "claude", "work", "--pane", &split, "--json"], &boot));
+
+    assert_eq!(marked, "");
+    assert_eq!(pane_in(&session, &agent)["status"], "pending");
+    let context: Value = serde_json::from_str(&context).expect("the context");
+    assert_eq!(context["pane"].to_string(), agent, "{context}");
+    let moved: Value = serde_json::from_str(&moved).expect("the layout");
+    assert!(moved["layout"].is_object(), "{moved}");
+    let restarted: Value = serde_json::from_str(&restarted).expect("the restart");
+    assert_eq!(restarted["restarted"], json!([split.parse::<u64>().expect("an id")]), "{restarted}");
+    assert_eq!(ssh_runs(&session), before + 4, "each command's checks and request share one ssh connection");
+}
+
 #[rstest]
 #[case::close(&["close", "--workspace", "99999"], "there is no workspace 99999")]
 #[case::check(&["close", "--workspace", "99999", "--remove-worktree", "--check"], "there is no workspace 99999")]
 #[case::agent(&["close", "--agent", "--pane", "99999"], "there is no pane 99999")]
 #[case::rename(&["rename", "--workspace", "99999", "x"], "there is no workspace 99999")]
+#[case::mark(&["mark", "--pane", "99999"], "there is no pane 99999")]
+#[case::move_pane(&["move-pane", "--pane", "99999", "--target", "99998", "--place", "swap"], "there is no pane 99999")]
+#[case::account_restart(&["account", "restart", "claude", "--pane", "99999"], "there is no pane 99999")]
+#[case::context(&["context", "--pane", "99999"], "there is no pane 99999")]
 fn any_other_refusal_keeps_its_message_and_status(#[case] args: &[&str], #[case] message: &str) {
     let (session, _) = machine_with(&[]);
     let boot = boot(&session);
@@ -292,6 +387,16 @@ mod a_server_that_knows_no_boot {
     #[case::close_without_the_feature(WITHOUT_THE_FEATURE, &["close", "--workspace", "7", "--boot", "1-1"])]
     #[case::rename_without_the_feature(WITHOUT_THE_FEATURE, &["rename", "--workspace", "7", "x", "--boot", "1-1"])]
     #[case::close_without_a_contract(WITHOUT_A_CONTRACT, &["close", "--workspace", "7", "--boot", "1-1"])]
+    #[case::mark_without_the_feature(WITHOUT_THE_FEATURE, &["mark", "--pane", "7", "--boot", "1-1"])]
+    #[case::move_pane_without_the_feature(
+        WITHOUT_THE_FEATURE,
+        &["move-pane", "--pane", "7", "--target", "8", "--place", "swap", "--boot", "1-1"]
+    )]
+    #[case::account_restart_without_the_feature(
+        WITHOUT_THE_FEATURE,
+        &["account", "restart", "claude", "--pane", "7", "--boot", "1-1"]
+    )]
+    #[case::context_without_a_contract(WITHOUT_A_CONTRACT, &["context", "--pane", "7", "--boot", "1-1"])]
     fn is_refused_by_name_and_never_gets_the_request(#[case] answer: &'static str, #[case] args: &[&str]) {
         let (here, far) = (Session::new(), Session::new());
         let (near, away) = (answering(&here, answer), answering(&far, answer));

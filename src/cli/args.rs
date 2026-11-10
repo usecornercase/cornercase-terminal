@@ -52,7 +52,7 @@ use super::help::{CLONE_HELP, HELD_HELP, MACHINES_HELP, SETUP_HELP, WORKTREES_HE
 use crate::control::Until;
 use crate::term::keys;
 
-pub(crate) use close::{CloseArgs, RenameArgs, Renamed, Which};
+pub(crate) use close::{BootArg, CloseArgs, RenameArgs, Renamed, Which};
 pub(crate) use create::{CloneArgs, Create, NewTabArgs, NewWorkspaceArgs, OpenArgs, SplitArgs};
 pub(crate) use flow::*;
 pub(crate) use plugin::{PluginAction, PluginArgs};
@@ -586,6 +586,8 @@ pub(crate) struct MarkArgs {
     pub(crate) target: Target,
     #[arg(long, help = "Take the mark off: the agent's work has been reviewed")]
     pub(crate) reviewed: bool,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]

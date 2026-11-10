@@ -1,6 +1,6 @@
 use clap::Args;
 
-use super::{Print, Target};
+use super::{BootArg, Print, Target};
 
 #[derive(Debug, Args)]
 pub(crate) struct ContextArgs {
@@ -10,4 +10,6 @@ pub(crate) struct ContextArgs {
     pub(crate) cached: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }

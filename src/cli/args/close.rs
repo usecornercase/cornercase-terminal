@@ -1,6 +1,7 @@
 use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Args};
 
+use super::accounts::{AccountAction, AccountArgs};
 use super::{Control, ViewArg, branch};
 use crate::cli::help::{BOOT_ARG, BY_BRANCH};
 
@@ -15,6 +16,10 @@ impl Control {
         match self {
             Self::Close(a) => a.boot.boot.as_deref(),
             Self::Rename(a) => a.boot.boot.as_deref(),
+            Self::Mark(a) => a.boot.boot.as_deref(),
+            Self::MovePane(a) => a.boot.boot.as_deref(),
+            Self::Context(a) => a.boot.boot.as_deref(),
+            Self::Account(AccountArgs { action: AccountAction::Restart(a) }) => a.boot.boot.as_deref(),
             _ => None,
         }
     }
