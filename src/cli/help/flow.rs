@@ -196,7 +196,8 @@ not have is refused with its place, so a typo never drops a setting.
 
 A flow with problems of its own (a role in no stage, a loop that goes forward, an unknown agent...) is refused. One
 whose name another flow runs under instead is saved, and the clash is printed, as the list shows it in red. --check
-prints the problems, and what a project's flow runs unattended, and saves nothing.
+says whether the flow can be saved, prints the problems, and what a project's flow runs unattended, and saves
+nothing; with --json, own_problems counts the problems of its own, which come first.
 
 Without --path it saves a new flow, into yours or, with --to project, the project's: saving it again needs the
 --path it printed, or it makes a second flow of that name. --path names the file of the flow being edited, as

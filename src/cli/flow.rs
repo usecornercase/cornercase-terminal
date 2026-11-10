@@ -222,8 +222,8 @@ fn saved_text(saved: &FlowSaved) -> String {
     let place = into_place(&saved.origin);
     let mut out = match &saved.path {
         Some(path) if saved.saved => format!("saved {name} into {place}: {}\n", path.display()),
-        _ if saved.problems.is_empty() => format!("{name} can be saved into {place}; nothing was written\n"),
-        _ => format!("{name} has problems; nothing was written\n"),
+        _ if refuses(saved) => format!("{name} has problems; nothing was written\n"),
+        _ => format!("{name} can be saved into {place}; nothing was written\n"),
     };
     for problem in &saved.problems {
         let _ = writeln!(out, "  cannot run: {problem}");
@@ -232,6 +232,10 @@ fn saved_text(saved: &FlowSaved) -> String {
         let _ = writeln!(out, "  {check}");
     }
     out
+}
+
+fn refuses(saved: &FlowSaved) -> bool {
+    saved.own_problems.map_or(!saved.problems.is_empty(), |own| own > 0)
 }
 
 fn delete_flow(args: FlowDeleteArgs) -> Result<()> {

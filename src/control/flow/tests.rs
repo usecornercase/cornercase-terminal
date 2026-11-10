@@ -15,6 +15,21 @@ fn an_import_answer_from_an_older_server_has_no_roles_or_risks() {
     assert_eq!((imported.name.as_str(), imported.roles, imported.check, imported.note), ("Mine", vec![], None, None));
 }
 
+#[test]
+fn a_save_answer_counts_its_own_problems_even_when_there_are_none() {
+    let value = serde_json::to_value(FlowSaved { own_problems: Some(0), ..FlowSaved::default() }).expect("json");
+    assert_eq!(value["own_problems"], 0);
+}
+
+#[test]
+fn a_save_answer_from_an_older_server_has_no_count() {
+    let saved: FlowSaved = serde_json::from_str(
+        r#"{"name":"Mine","origin":"user","path":null,"saved":false,"problems":["x"],"check":null,"future":true}"#,
+    )
+    .expect("an older answer with an unknown field");
+    assert_eq!((saved.problems, saved.own_problems), (vec!["x".to_string()], None));
+}
+
 fn member(name: &str, prompt: &str) -> Role {
     let mut role = Role { name: name.into(), agent: "claude".into(), ..Role::default() };
     role.prompt = prompt.into();
