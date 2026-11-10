@@ -200,6 +200,9 @@ fn reopening_after_the_merge_keeps_the_team_open() {
     repo.app.close_agents(&plan);
     pump_until(&mut repo.app, &repo.rx, "the tabs go", |a| a.projects[0].workspaces[1].tabs.is_empty());
     pull(&mut repo, "\"MERGED\"");
+    for kind in agents::kinds(&repo.app.config) {
+        repo.app.config.agent_commands.insert(kind, "/bin/sh".into());
+    }
 
     repo.app.reopen_agents(id, AREA).expect("reopened");
 
