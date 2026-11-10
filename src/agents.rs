@@ -560,7 +560,8 @@ fn line(config: &Config, kind: &str, args: Vec<String>) -> String {
 }
 
 pub(crate) fn fresh_line(config: &Config, kind: &str, mode: Option<&str>) -> String {
-    start_line(config, kind, mode, None, None).unwrap_or_else(|_| command_line(config, kind))
+    start_line(config, kind, Some(mode.unwrap_or(DEFAULT_MODE)), None, None)
+        .unwrap_or_else(|_| command_line(config, kind))
 }
 
 pub(crate) fn start_line(

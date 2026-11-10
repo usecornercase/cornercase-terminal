@@ -724,6 +724,18 @@ mod modes {
     }
 
     #[test]
+    fn editing_an_entry_to_the_default_mode_recaptures_its_command_without_the_mode() {
+        let (mut app, _rx, _repo, _config, _worktrees) = careful_app();
+        app.add_queue_request(None, None, None, &add(None)).expect("queued");
+        let id = app.panels.queued.queue().entries[0].id;
+        assert_eq!(only_entry(&app).mode.as_deref(), Some("careful"));
+        app.add_queue_request(None, None, Some(id), &add(Some("default"))).expect("edited");
+        let task = only_entry(&app);
+        assert_eq!(task.mode, None);
+        assert!(task.command.ends_with(" -v") && !task.command.contains("--careful"), "{}", task.command);
+    }
+
+    #[test]
     fn queue_add_without_a_mode_captures_the_one_chosen_in_settings() {
         let (mut app, _rx, _repo, _config, _worktrees) = careful_app();
         app.add_queue_request(None, None, None, &add(None)).expect("queued");

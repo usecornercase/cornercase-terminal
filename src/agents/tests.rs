@@ -484,6 +484,14 @@ mod arguments {
     }
 
     #[test]
+    fn a_fresh_restart_keeps_an_agent_started_without_a_mode_without_one() {
+        let mut c = config();
+        c.agent_args.insert("claude".into(), strings(&["--permission-mode", "plan", "--model", "haiku"]));
+        assert_eq!(fresh_line(&c, "claude", None), "claude --model haiku");
+        assert_eq!(fresh_line(&c, "claude", Some("auto")), "claude --permission-mode auto --model haiku");
+    }
+
+    #[test]
     fn a_start_with_a_mode_or_model_it_does_not_know_names_what_it_knows() {
         let c = config();
         assert_eq!(
