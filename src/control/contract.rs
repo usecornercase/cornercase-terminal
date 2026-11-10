@@ -63,6 +63,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "notice-subagent",
     "mode-default",
     "held-after-draft",
+    "flow-close-when-merged",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -89,8 +89,12 @@ pub(super) fn draw_toast(f: &mut Frame, view: &View, toast: Toast) {
     let border = Style::default().fg(icon.style.fg.unwrap_or(Color::Green));
     f.render_widget(Clear, r);
     f.render_widget(Block::bordered().border_type(BorderType::Rounded).border_style(border), r);
-    f.render_widget(Paragraph::new(Line::from(vec![icon, Span::raw(toast.message)])), r.inner(Margin::new(1, 1)));
     let button = toast_button(f.area(), toast);
+    let inner = r.inner(Margin::new(1, 1));
+    let taken = icon.width() + if button.is_empty() { 0 } else { usize::from(button.width) + 1 };
+    let room = usize::from(inner.width).saturating_sub(taken);
+    let message = crate::text::truncate_right(toast.message, room);
+    f.render_widget(Paragraph::new(Line::from(vec![icon, Span::raw(message)])), inner);
     if let Some(label) = toast.button.map(ToastButton::label).filter(|_| !button.is_empty()) {
         let lit = view.hover.is_some_and(|p| button.contains(p));
         let style = if lit {

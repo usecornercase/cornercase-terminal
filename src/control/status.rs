@@ -337,6 +337,8 @@ pub(crate) struct PostInfo {
 pub(crate) struct RunStatus {
     pub(crate) end: String,
     pub(crate) reached: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) close_when_merged: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

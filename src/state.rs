@@ -148,6 +148,8 @@ pub(crate) struct RunState {
     pub(crate) dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) ended: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) close_when_merged: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -183,6 +185,7 @@ impl RunState {
             rounds: run.progress.all_rounds().to_vec(),
             dir: run.dir.as_deref().and_then(folder_name),
             ended: run.ended.clone(),
+            close_when_merged: run.close_when_merged,
         }
     }
 

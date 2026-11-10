@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +10,7 @@ use crate::agents::activity::Status;
 use crate::pull_request::{self, PullRequest};
 
 pub(crate) const MAX_MESSAGES: usize = 256;
+pub(crate) const MERGED_GRACE: Duration = Duration::from_secs(180);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
@@ -85,6 +86,8 @@ pub(crate) struct Run {
     pub(crate) recorded: u64,
     pub(crate) ended: Option<String>,
     pub(crate) sent: Vec<Sent>,
+    pub(crate) close_when_merged: bool,
+    pub(crate) merged_since: Option<Instant>,
 }
 
 impl Run {
@@ -101,6 +104,8 @@ impl Run {
             recorded: 0,
             ended: None,
             sent: Vec::new(),
+            close_when_merged: false,
+            merged_since: None,
         }
     }
 
@@ -180,6 +185,19 @@ impl Run {
 
     pub(crate) fn reached(&self, pull: Option<&PullRequest>) -> bool {
         self.ended.is_some() || self.pull(pull).is_some_and(|pull| pull.state != pull_request::State::Closed)
+    }
+
+    pub(crate) fn merged(&self, pull: Option<&PullRequest>) -> bool {
+        self.pull(pull).is_some_and(|pull| pull.state == pull_request::State::Merged)
+    }
+
+    pub(crate) fn close_due(&mut self, ready: bool, now: Instant) -> bool {
+        if !(ready && self.close_when_merged) {
+            self.merged_since = None;
+            return false;
+        }
+        let since = *self.merged_since.get_or_insert(now);
+        now.saturating_duration_since(since) >= MERGED_GRACE
     }
 
     pub(crate) fn latch(&mut self, marked: bool, branch: impl FnOnce() -> Option<String>) -> bool {

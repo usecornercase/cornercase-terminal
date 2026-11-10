@@ -80,6 +80,12 @@ impl App {
         }
     }
 
+    pub(super) fn cleaning_up(&self, workspace: u64) -> bool {
+        let cleanups = &self.panels.queued.cleanups;
+        let mine = |id: &u64| self.run_workspace(*id) == Some(workspace);
+        cleanups.countdowns.keys().any(mine) || cleanups.cleaning.contains_key(&workspace)
+    }
+
     fn run_workspace(&self, id: u64) -> Option<u64> {
         self.panels.queued.queue().entry(id)?.task.place.workspace_id
     }

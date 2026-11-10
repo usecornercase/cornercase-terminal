@@ -54,6 +54,7 @@ fn left_out(command: &str, key: &str, value: &Value) -> bool {
         "placed" => value == &Value::Bool(false) && matches!(command, "start" | "start-with"),
         "into" => value.is_null() && command == "open",
         "cached" => value == &Value::Bool(false) && command == "stats",
+        "close_when_merged" => value == &Value::Bool(false) && command == "flow-run",
         _ => false,
     }
 }

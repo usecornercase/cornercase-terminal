@@ -211,6 +211,32 @@ mod runs {
     }
 
     #[test]
+    fn a_run_that_closes_when_merged_says_so_and_others_do_not() {
+        let line = "  closes its agents once its pull request merges\n";
+        assert!(!runs_text(&FlowRuns { runs: vec![run()], ..FlowRuns::default() }).contains(line));
+        let opted = RunState { close_when_merged: true, ..run() };
+        assert!(runs_text(&FlowRuns { runs: vec![opted], ..FlowRuns::default() }).ends_with(line));
+    }
+
+    #[rstest::rstest]
+    #[case::on(true, true, "the agents of workspace 7 close once its pull request merges and none of them works\n")]
+    #[case::on_again(true, false, "the agents of workspace 7 already close once its pull request merges\n")]
+    #[case::off(false, true, "the agents of workspace 7 stay open after its pull request merges\n")]
+    #[case::off_again(false, false, "the agents of workspace 7 already stay open after its pull request merges\n")]
+    fn the_toggle_says_what_it_did(#[case] on: bool, #[case] changed: bool, #[case] says: &str) {
+        let set = CloseWhenMergedSet { run: 9, project: 2, workspace: 7, close_when_merged: on, changed };
+        assert_eq!(closes_line(&set), says);
+    }
+
+    #[test]
+    fn the_note_of_a_run_that_closes_when_merged_names_its_workspace() {
+        let info = RunInfo { workspace: 8, close_when_merged: true, ..RunInfo::default() };
+        assert!(closing_note(&info, false).contains("agents reopen --workspace 8"));
+        let there = closing_note(&info, true);
+        assert!(!there.contains("agents reopen") && there.contains('▶'), "{there}");
+    }
+
+    #[test]
     fn a_run_that_has_not_started_says_so_and_nothing_running_says_that() {
         let fresh = RunState { stage: None, rounds: Vec::new(), last: None, outside: None, ended: false, ..run() };
 
