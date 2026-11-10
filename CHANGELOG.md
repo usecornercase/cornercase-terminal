@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.35
+
+- **The Recap reads at a glance.** `now` starts with **Needs you**, then **In progress**, then **Done today**, one short line per item and the empty sections left out. `yesterday` is a stand-up of at most a dozen lines, one per line of work rather than per conversation, and `7 days` gives two or three themes per project, its merged pull requests and what is still open. Prompts are no longer quoted in full: the recap says what was asked in a few words, and quotes one only when a few words say it best.
+- **Needs you lists only what is open.** cornercase picks its items from what is live when the recap is written: an agent waiting on a question, one that failed or that you marked for review, and an open pull request whose checks fail. The agent only words them. A workspace you closed never shows there; work closed while an agent was still on it gets one line at the end, and a conversation whose pane went away when the server stopped reads as closed, not as still working.
+- **A `now` that no longer matches is written again.** Within its 30 minutes, opening the panel, clicking `now` or `cornercase recap now` writes it again when something it says needs you no longer does, a conversation it names has closed, or something needs you that it doesn't name. Until the new one is in, the places that changed are struck through, and while it is not being written the line under the header starts with `outdated`. While the panel stays open it only marks them, since every run spends tokens: click `now` or `↻`. A recap written by an older version is written again the first time you open it.
+- **For scripts**: `cornercase recap --json` has `outdated` and `changed` (the ids of the places that changed), and each place carries the `status` its conversation had, or the `checks` its pull request had, when the recap was written.
+
 ## 0.13.34
 
 - **` send now ` no longer sends your half-written line with the message.** When `cornercase send` holds a message because you are typing in a pane, the bar's ` send now ` pasted it after what you had typed and pressed Enter, so the agent got your unfinished sentence glued to it. Now, while you have a draft in that pane, ` send now ` pastes the message after your draft and leaves the Enter to you: you see both, send them with Enter or edit them first, and a toast says so. Without a draft it sends the message at once, as before.
