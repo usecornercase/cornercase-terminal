@@ -169,11 +169,15 @@ fn with_a_view_open_the_windows_tab_counts_only_while_a_window_is_attached() {
 fn a_view_set_hidden_notifies_again_and_visible_sees_again() {
     let mut w = Watched::start(agents::Known::Claude, true);
     let view = open(&mut w, 0, &sized());
-    w.app.view_set_request(view, &SetView { visible: Some(false), ..SetView::default() }, Some(AREA)).expect("set");
+    w.app
+        .view_set_request(view, &SetView { visible: Some(false), ..SetView::default() }, Some(AREA), Instant::now())
+        .expect("set");
     w.report("waiting", 6);
     assert!(w.token().is_some());
 
-    w.app.view_set_request(view, &SetView { visible: Some(true), ..SetView::default() }, Some(AREA)).expect("set");
+    w.app
+        .view_set_request(view, &SetView { visible: Some(true), ..SetView::default() }, Some(AREA), Instant::now())
+        .expect("set");
     w.app.messages.toast = None;
     w.report("busy", 1);
     w.report("waiting", 6);
