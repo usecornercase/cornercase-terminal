@@ -6,7 +6,9 @@ use super::*;
 use crate::recap::Named;
 
 fn recap_with(places: Vec<(&str, Place)>) -> Recap {
+    let text = places.iter().map(|(id, _)| format!("- [{id}]")).collect::<Vec<_>>().join("\n");
     Recap {
+        text,
         places: places.into_iter().map(|(id, place)| (id.to_string(), place)).collect::<BTreeMap<_, _>>(),
         ..Recap::default()
     }
@@ -122,6 +124,13 @@ fn a_pull_request(
 ) {
     let outdated = check(&recap_with(places), &present(vec![], vec![now], "b"));
     assert_eq!(outdated, Outdated { ids: ids(changed), new });
+}
+
+#[test]
+fn a_closed_place_the_text_does_not_name_is_not_a_change() {
+    let mut recap = recap_with(vec![("c1", place(Some("done"), Some("a"), 1, "b"))]);
+    recap.text = "## In progress\n- [c2]: working".into();
+    assert!(!check(&recap, &present(vec![], vec![], "b")).any());
 }
 
 #[test]

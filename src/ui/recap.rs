@@ -340,9 +340,25 @@ fn draw_line(buf: &mut Buffer, line: &Line, (x, y, end): (u16, u16, u16), hover:
     if line.bullet {
         put(buf, (x, y), BULLET, Style::default().fg(view.muted), end);
     }
+    let mut before: Option<(&Run, u16)> = None;
     for run in &line.runs {
         let rect = Rect::new(x + run.x, y, width_of(&run.text), 1);
+        fill_between(buf, (y, end), before, (run, rect.x), view);
         put(buf, (rect.x, y), &run.text, run_style(run, hovered(hover, rect), view), end);
+        before = Some((run, rect.right()));
+    }
+}
+
+fn fill_between(
+    buf: &mut Buffer,
+    (y, end): (u16, u16),
+    before: Option<(&Run, u16)>,
+    (run, x): (&Run, u16),
+    view: &View,
+) {
+    let Some((prev, stop)) = before else { return };
+    if prev.link.is_some() && prev.link == run.link && stop < x {
+        put(buf, (stop, y), &" ".repeat(usize::from(x - stop)), run_style(run, false, view), end);
     }
 }
 

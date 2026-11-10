@@ -1,6 +1,7 @@
+use std::fmt::Write as _;
+
 use super::dossier::NEEDS_HEADING;
 use super::{Choice, Options};
-use std::fmt::Write as _;
 
 const COMMON: &str = "Read dossier.md in this folder. It lists a developer's conversations with coding agents, each under an id such as [c3], with its place, its state, its latest prompts, the agent's last reply, what it waits on and its pull request (ids such as [p1]). Read a transcript, or run `cornercase search`, only when the dossier is not enough. Change no file. The recap is read at a glance in a narrow side panel, so keep it short. Start a bullet about a conversation or a pull request with its id in square brackets: the panel shows it as the place's name, so do not repeat the project or the workspace. Never name anything by a path. Say what was asked in a few words of your own; quote a prompt only when it is a few words long and is the clearest way to say it. Answer with the recap only, in Markdown with `##` headings and `-` bullets, without a preamble or a closing line.";
 

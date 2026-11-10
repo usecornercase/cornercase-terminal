@@ -99,7 +99,12 @@ fn new_failure(recap: &Recap, present: &Present) -> bool {
 
 pub(crate) fn check(recap: &Recap, present: &Present) -> Outdated {
     Outdated {
-        ids: recap.places.iter().filter(|(_, place)| changed(place, present)).map(|(id, _)| id.clone()).collect(),
+        ids: recap
+            .places
+            .iter()
+            .filter(|(id, place)| recap.text.contains(&format!("[{id}]")) && changed(place, present))
+            .map(|(id, _)| id.clone())
+            .collect(),
         new: new_question(recap, present) || new_failure(recap, present),
     }
 }

@@ -13,7 +13,8 @@ pub(crate) mod store;
 pub(crate) mod text;
 
 pub(crate) const RECAP_VERSION: u8 = 2;
-pub(crate) const NEEDS_YOU: [&str; 3] = ["waiting", "failed", "pending"];
+pub(crate) const NEEDS_YOU: [(&str, &str); 3] =
+    [("waiting", "waits for an answer"), ("failed", "failed"), ("pending", "marked for review")];
 pub(crate) const KEPT_DAYS: i64 = 30;
 pub(crate) const NOW_FRESH: Duration = Duration::from_mins(30);
 pub(crate) const RECAP_TIMEOUT: Duration = Duration::from_mins(10);
@@ -91,7 +92,7 @@ pub(crate) struct Place {
 }
 
 pub(crate) fn needs_you(status: Option<&str>) -> bool {
-    status.is_some_and(|status| NEEDS_YOU.contains(&status))
+    status.is_some_and(|status| NEEDS_YOU.iter().any(|(name, _)| *name == status))
 }
 
 pub(crate) fn failing(state: Option<&str>, checks: Option<&str>) -> bool {

@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use super::noise::{fold_paste, trim_to};
 use super::{Caps, Dossier, Group, Live, NEEDS_HEADING, Pulled, Talk, project_of, pull_of};
 use crate::recap::range::{Range, stamp};
-use crate::recap::{Choice, Place, failing, needs_you};
+use crate::recap::{Choice, NEEDS_YOU, Place, failing, needs_you};
 
 type Order = (u8, String, String, i64);
 
@@ -228,11 +228,8 @@ fn number(id: &str) -> (char, usize) {
 
 fn need_line(id: &str, place: &Place) -> Option<String> {
     if place.kind == "conversation" && needs_you(place.status.as_deref()) {
-        let what = match place.status.as_deref() {
-            Some("waiting") => "waits for an answer",
-            Some("failed") => "failed",
-            _ => "marked for review",
-        };
+        let what =
+            NEEDS_YOU.iter().find(|(name, _)| Some(*name) == place.status.as_deref()).map_or("", |(_, what)| what);
         return Some(format!("- [{id}] {what}\n"));
     }
     if place.kind == "pull" && failing(place.state.as_deref(), place.checks.as_deref()) {

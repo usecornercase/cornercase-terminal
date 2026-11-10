@@ -148,6 +148,7 @@ fn a_link_that_changed_is_struck_through_and_muted() {
     let cell = &terminal.backend().buffer()[(5, 4)];
     assert!(cell.modifier.contains(Modifier::CROSSED_OUT));
     assert_eq!(cell.fg, Color::DarkGray);
+    assert!(terminal.backend().buffer()[(6, 4)].modifier.contains(Modifier::CROSSED_OUT));
     let hovered = drawn(&changed, Some(Position::new(5, 4)));
     assert!(hovered.backend().buffer()[(5, 4)].modifier.contains(Modifier::UNDERLINED));
     let plain = drawn(&view(State::Idle), None);
