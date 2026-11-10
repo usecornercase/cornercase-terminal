@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.33
+
+- **` send now ` no longer sends your half-written line with the message.** When `cornercase send` holds a message because you are typing in a pane, the bar's ` send now ` pasted it after what you had typed and pressed Enter, so the agent got your unfinished sentence glued to it. Now, while you have a draft in that pane, ` send now ` pastes the message after your draft and leaves the Enter to you: you see both, send them with Enter or edit them first, and a toast says so. Without a draft it sends the message at once, as before.
+- **`cornercase held --send-now` does the same**, for programs that draw that bar themselves: it prints that the message waits for the person's Enter (`after_draft` with `--json`), and `cornercase contract` lists the feature `held-after-draft`. The program or agent that sent the message gets an error saying it is in the person's input, so it does not send it again.
+- **A message's Enter now ends the draft it sends.** After `cornercase send --force --enter` pressed Enter over what someone had typed, the pane kept saying `draft` for up to a minute and held the next messages for a line that was already gone.
+
 ## 0.13.32
 
 - **`cornercase collapse` and `expand` can say which run of the server their id is from.** Ids last one run of the server, so a program that draws another machine's agents, or a script that read an id there, could fold or unfold another agent's team (or another group, project or workspace) when that server restarted on the way, which the window already guarded against for its own folds. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing is folded or unfolded, the command prints why and exits with status 4 (`cornercase --remote vps collapse --pane 9 --boot "$boot"`), as `close`, `rename`, `mark`, `move-pane`, `account restart` and `context` already do. It works in every form (`--group`, `--project`, `--workspace`, `--worktree` and `--pane`), on a line of `requests --follow` for that line only, and a server too old to know `boot` is refused before anything is sent.
