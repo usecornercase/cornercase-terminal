@@ -136,6 +136,18 @@ jobs:
         with:
           "use-cache": false
           "version": "0.15.2"
+      - name: "ghostty"
+        run: |
+          case "$TARGET" in *-windows-msvc) export RUSTFLAGS=-Ctarget-feature=+crt-static ;; esac
+          for attempt in 1 2 3; do
+            cargo build --locked --profile dist --target "$TARGET" -p libghostty-vt-sys && exit 0
+            echo "::warning::building Ghostty failed (attempt $attempt of 3)"
+            if [ "$attempt" -lt 3 ]; then sleep 60; fi
+          done
+          exit 1
+        shell: "bash"
+        env:
+          "TARGET": "${{ matrix.targets[0] }}"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
