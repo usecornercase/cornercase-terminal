@@ -44,12 +44,6 @@ impl Parent {
     pub(crate) fn pane(pane: u64) -> Self {
         Self { pane, by: By::Pane }
     }
-
-    pub(crate) fn learn(&mut self, (pid, conversation): (i32, &Conversation)) {
-        if self.by == By::Agent(pid) {
-            self.by = By::Conversation(conversation.clone());
-        }
-    }
 }
 
 impl Running<'_> {
@@ -68,6 +62,16 @@ impl By {
             Self::Shell(pid) => now.shell == Some(*pid) && now.agent.is_none() && now.conversation.is_none(),
             Self::Pane => true,
         }
+    }
+
+    pub(crate) fn learn(&mut self, (pid, conversation): (i32, &Conversation)) {
+        if *self == Self::Agent(pid) {
+            *self = Self::Conversation(conversation.clone());
+        }
+    }
+
+    pub(crate) fn kept(&self, now: Running<'_>) -> bool {
+        self.conversation().is_some() && self.holds(now)
     }
 
     pub(crate) fn lasts(&self) -> bool {

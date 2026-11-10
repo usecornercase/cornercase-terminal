@@ -266,7 +266,7 @@ impl App {
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
         term.context.compaction().hides.hash(hash);
         term.context.subagents().hash(hash);
-        (term.dialog(), term.survey(), term.resume.is_some(), resuming, parent).hash(hash);
+        (term.dialog(), term.survey(), term.resume.is_some(), resuming, parent, term.collapsed()).hash(hash);
         term.emulator.title().hash(hash);
         term.account().hash(hash);
         term.accounts().chosen().hash(hash);
@@ -300,7 +300,7 @@ impl App {
             draft: term.draft(Instant::now()),
             held_from: held.held_from,
             held_queued: held.held_queued,
-            collapsed: term.collapsed,
+            collapsed: term.collapsed(),
             account: term.account().map(str::to_string),
             accounts: term.accounts().chosen(),
             account_restart: self.restart_waiting(term.id).map(|_| "waiting".to_string()),

@@ -282,7 +282,7 @@ mod folds {
     }
 
     fn collapsed(app: &App, pane: u64) -> bool {
-        app.projects.pane_by(pane).is_some_and(|term| term.collapsed)
+        app.projects.pane_by(pane).is_some_and(Term::collapsed)
     }
 
     fn fourth(f: &mut Family, parent: u64, activity: Activity) -> u64 {
@@ -489,6 +489,108 @@ mod folds {
         assert!(high > 0);
         assert_eq!(f.app.scroll.of(List::Agents), f.app.agent_layout(&f.app.screen.drawn).scrolled(0));
         assert!(f.app.scroll.of(List::Agents) < high);
+    }
+
+    fn fold_of(f: &Family) -> Option<By> {
+        f.app.projects.pane_by(f.parent).and_then(|term| term.fold.clone())
+    }
+
+    fn folded_c1(f: &mut Family) {
+        agent_in_front(&mut f.app, f.parent, Some(4242), Some("c1"));
+        f.app.projects.pane_by_mut(f.child).expect("the child").parent = Some(by_conversation(f.parent, "c1"));
+        f.app.set_agent_fold(f.parent, true);
+    }
+
+    #[test]
+    fn a_new_conversation_in_the_folded_pane_shows_its_own_team() {
+        let mut f = family(Activity::Idle);
+        folded_c1(&mut f);
+        assert_eq!((shown_ids(&f.app), collapsed(&f.app, f.parent)), (vec![f.parent, f.other], true));
+
+        agent_in_front(&mut f.app, f.parent, Some(4343), Some("c2"));
+        let under = f.parent;
+        let new = fourth(&mut f, under, Activity::Idle);
+        f.app.projects.pane_by_mut(new).expect("the new pane").parent = Some(by_conversation(f.parent, "c2"));
+        let entry = f.app.agents_view().entries.remove(0);
+
+        assert_eq!(shown_ids(&f.app), vec![f.parent, new, f.other, f.child]);
+        assert_eq!((entry.fold, collapsed(&f.app, f.parent)), (Some(false), false));
+        assert!(f.app.report(None).projects.iter().all(|p| {
+            p.workspaces.iter().all(|w| w.tabs.iter().all(|t| t.panes.iter().all(|pane| !pane.collapsed)))
+        }));
+    }
+
+    #[test]
+    fn a_fold_comes_back_with_its_conversation() {
+        let mut f = family(Activity::Idle);
+        folded_c1(&mut f);
+
+        let seen: Vec<(bool, Vec<u64>)> = [(Some(4343), Some("c2")), (None, None), (Some(4444), Some("c1"))]
+            .into_iter()
+            .map(|(pid, id)| {
+                agent_in_front(&mut f.app, f.parent, pid, id);
+                (collapsed(&f.app, f.parent), shown_ids(&f.app))
+            })
+            .collect();
+
+        assert_eq!(seen.iter().map(|(held, _)| *held).collect::<Vec<_>>(), [false, false, true]);
+        assert_eq!(seen[2].1, vec![f.parent, f.other]);
+    }
+
+    #[rstest]
+    #[case::another_process(Some(4343))]
+    #[case::the_agent_exits(None)]
+    fn an_agent_whose_conversation_is_not_read_keeps_its_fold_while_its_process_runs(#[case] later: Option<i32>) {
+        let mut f = family(Activity::Idle);
+        agent_in_front(&mut f.app, f.parent, Some(4242), None);
+
+        f.app.set_agent_fold(f.parent, true);
+        assert_eq!((fold_of(&f), collapsed(&f.app, f.parent)), (Some(By::Agent(4242)), true));
+        agent_in_front(&mut f.app, f.parent, later, None);
+
+        assert!(!collapsed(&f.app, f.parent));
+    }
+
+    #[test]
+    fn a_fold_made_at_the_shell_ends_when_an_agent_starts_there() {
+        let mut f = family(Activity::Idle);
+        f.app.set_agent_fold(f.parent, true);
+        assert!(matches!(fold_of(&f), Some(By::Shell(_))));
+
+        agent_in_front(&mut f.app, f.parent, Some(4242), None);
+
+        assert_eq!((collapsed(&f.app, f.parent), shown_ids(&f.app)), (false, vec![f.parent, f.child, f.other]));
+    }
+
+    #[test]
+    fn a_fold_by_process_takes_the_conversation_once_read() {
+        let mut f = family(Activity::Idle);
+        agent_in_front(&mut f.app, f.parent, Some(4242), None);
+        f.app.set_agent_fold(f.parent, true);
+
+        converse(&mut f.app, f.parent, Some("c1"));
+        f.app.learn_conversations();
+
+        let c1 = Conversation { kind: "claude".into(), conversation: "c1".into() };
+        assert_eq!(fold_of(&f), Some(By::Conversation(c1)));
+    }
+
+    #[rstest]
+    #[case::resumed("c1", true)]
+    #[case::started_over("c2", false)]
+    fn an_agent_restarted_on_another_account_keeps_its_fold_when_it_resumes(
+        #[case] conversation: &str,
+        #[case] holds: bool,
+    ) {
+        let mut f = family(Activity::Idle);
+        folded_c1(&mut f);
+        let cwd = f.app.projects.pane_by(f.parent).and_then(Term::cwd).expect("a folder");
+
+        assert!(f.app.respawn_in(f.parent, cwd, crate::accounts::Accounts::default()).expect("respawned"));
+        assert!(!collapsed(&f.app, f.parent));
+        converse(&mut f.app, f.parent, Some(conversation));
+
+        assert_eq!(collapsed(&f.app, f.parent), holds);
     }
 
     #[test]

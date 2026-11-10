@@ -369,7 +369,7 @@ impl TabState {
                         id: parents.contains(&term.id).then_some(term.id),
                         parent: saved.map(|p| p.pane),
                         parent_conversation: saved.and_then(|p| p.by.conversation()).cloned(),
-                        collapsed: term.collapsed,
+                        collapsed: term.kept_fold(),
                         accounts: term.accounts().chosen(),
                         closed: None,
                     }

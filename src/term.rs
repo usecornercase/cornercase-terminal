@@ -23,7 +23,7 @@ use self::typing::Typing;
 use crate::accounts::{self, Accounts};
 use crate::agents::activity;
 use crate::agents::context;
-use crate::agents::parent::{Parent, Running};
+use crate::agents::parent::{By, Parent, Running};
 use crate::agents::{self, AgentState, Known};
 use crate::config::Config;
 use crate::error::{Error, Result};
@@ -69,7 +69,7 @@ pub(crate) struct Term {
     pub(crate) setup: Option<setup::Pane>,
     pub(crate) parent: Option<Parent>,
     pub(crate) agent_pid: Option<i32>,
-    pub(crate) collapsed: bool,
+    pub(crate) fold: Option<By>,
     generation: u32,
     accounts: Accounts,
     account: accounts::Seen,
@@ -136,7 +136,7 @@ impl From<Wired> for Term {
             setup: None,
             parent: None,
             agent_pid: None,
-            collapsed: false,
+            fold: None,
             generation,
             accounts: Accounts::default(),
             account: accounts::Seen::default(),
@@ -303,6 +303,18 @@ impl Term {
             agent: self.agent_pid,
             shell: self.shell_pid(),
         }
+    }
+
+    pub(crate) fn collapsed(&self) -> bool {
+        self.fold.as_ref().is_some_and(|by| by.holds(self.running()))
+    }
+
+    pub(crate) fn set_collapsed(&mut self, collapsed: bool) {
+        self.fold = collapsed.then(|| self.running().by()).flatten();
+    }
+
+    pub(crate) fn kept_fold(&self) -> bool {
+        self.fold.as_ref().is_some_and(|by| by.kept(self.running()))
     }
 
     pub(crate) fn see_agent(&mut self, config: &Config) -> (Option<i32>, Vec<String>, Option<String>) {

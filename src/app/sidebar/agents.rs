@@ -115,7 +115,7 @@ impl App {
                 compacted: self.shows_compaction(term.context.compaction().hides),
                 ..self.details(term.context.context(), None, term.context.subagents(), self.pane_account(term))
             },
-            collapsed: term.collapsed,
+            collapsed: term.collapsed(),
             active: marks.shown.is_none()
                 && ((marks.tab == Some(tab.id) && tab.active == i) || hidden.any(|id| Some(id) == marks.focused)),
             machine: None,
@@ -157,7 +157,7 @@ impl App {
         let (grab, collapsed, closes) = match &listed[node.index] {
             Listed::Here(place) => {
                 let term = self.placed(*place);
-                (Grab::Agent(term.id), term.collapsed, true)
+                (Grab::Agent(term.id), term.collapsed(), true)
             }
             Listed::There(there) => (Grab::Remote(there.at()), there.pane.collapsed, false),
         };
@@ -211,7 +211,7 @@ impl App {
 
     pub(in crate::app) fn set_agent_fold(&mut self, pane: u64, collapsed: bool) -> bool {
         let Some(term) = self.projects.pane_by_mut(pane) else { return false };
-        term.collapsed = collapsed;
+        term.set_collapsed(collapsed);
         self.clamp_agents_scroll();
         true
     }
@@ -222,7 +222,7 @@ impl App {
 
     pub(super) fn toggle_agent_fold(&mut self, pane: u64) {
         if let Some(term) = self.projects.pane_by(pane) {
-            self.set_agent_fold(pane, !term.collapsed);
+            self.set_agent_fold(pane, !term.collapsed());
         }
     }
 
@@ -250,7 +250,8 @@ impl App {
         let mut changed = false;
         for ancestor in self.listed_ancestors(pane) {
             if let Some(term) = self.projects.pane_by_mut(ancestor) {
-                changed |= std::mem::take(&mut term.collapsed);
+                changed |= term.collapsed();
+                term.set_collapsed(false);
             }
         }
         changed

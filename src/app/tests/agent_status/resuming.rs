@@ -183,7 +183,12 @@ mod input_while_resuming {
     const STAYS: &str = "#!/bin/sh\necho \"resumed: $*\"\nexec sleep 30\n";
 
     fn resuming(script: &str) -> (App, Receiver<AppEvent>, TempDir, u64) {
-        let (_app, _rx, _dirs, claude, saved) = remembered_claude();
+        resuming_folded(script, false)
+    }
+
+    fn resuming_folded(script: &str, folded: bool) -> (App, Receiver<AppEvent>, TempDir, u64) {
+        let (_app, _rx, _dirs, claude, mut saved) = remembered_claude();
+        saved.projects[0].workspaces[0].tabs[0].panes[0].collapsed = folded;
         claude.signal("quit");
         let (back, rx, bin) = restored_running(&saved, agents::Known::Claude.name(), true, script);
         let id = back.term().expect("the restored pane").id;
@@ -266,13 +271,28 @@ mod input_while_resuming {
         assert_eq!((held, back.resume_holds(id), back.agents.launches.list().len()), (true, false, 1));
     }
 
+    fn cancel_the_resume(app: &mut App) {
+        let pane = app.tab().and_then(|t| t.shown(app.layout(AREA).pane).first().map(|(_, r)| *r)).expect("a pane");
+        let (_, button) = ui::resume_notice(pane, "resuming claude").expect("the notice fits");
+        click(app, button.as_position());
+    }
+
+    #[test]
+    fn a_cancelled_resume_ends_its_fold() {
+        let (mut back, _rx, _bin, _id) = resuming_folded(STAYS, true);
+        assert!(back.term().is_some_and(Term::collapsed), "the restored pane is folded while it resumes");
+
+        cancel_the_resume(&mut back);
+
+        let written = back.state().projects[0].workspaces[0].tabs[0].panes[0].collapsed;
+        assert_eq!((back.term().is_some_and(Term::collapsed), written), (false, false));
+    }
+
     #[test]
     fn cancel_before_the_line_is_typed_leaves_a_shell_that_takes_keys() {
         let (mut back, rx, _bin, id) = resuming(STAYS);
-        let pane = back.tab().and_then(|t| t.shown(back.layout(AREA).pane).first().map(|(_, r)| *r)).expect("a pane");
-        let (_, button) = ui::resume_notice(pane, "resuming claude").expect("the notice fits");
 
-        click(&mut back, button.as_position());
+        cancel_the_resume(&mut back);
         type_text(&mut back, "echo ok-$((1+1))");
         back.forward_key(KeyEvent::from(KeyCode::Enter));
 

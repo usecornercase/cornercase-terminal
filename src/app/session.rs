@@ -147,7 +147,8 @@ impl App {
             let run = role.and(run);
             let (accounts, gone) = self.saved_accounts(pane);
             let mut term = self.spawn_in(area, cwd, run, accounts)?;
-            term.collapsed = pane.collapsed;
+            term.fold =
+                pane.agent.as_ref().filter(|_| pane.collapsed).map(|agent| By::Conversation(Conversation::of(agent)));
             let lost = self.account_gone(term.id, pane.agent.as_ref(), &gone);
             if apart {
                 log::warning!("server", "a role's worktree is gone, so its agent does not resume", pane = term.id);

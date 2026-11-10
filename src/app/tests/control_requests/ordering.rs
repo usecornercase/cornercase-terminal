@@ -183,7 +183,7 @@ fn collapse_and_expand_set_the_fold_whatever_it_was() {
             app.groups[0].entry.collapsed,
             app.projects[0].collapsed,
             app.projects[0].workspaces[0].collapsed,
-            app.projects[0].workspaces[0].tabs[0].panes[0].collapsed,
+            app.projects[0].workspaces[0].tabs[0].panes[0].collapsed(),
         )
     };
     let items =
@@ -209,7 +209,7 @@ fn a_pane_without_an_agent_has_no_fold() {
     let refused = refused(&mut app, "collapse", &json!({"item": {"pane": pane}}));
 
     assert_eq!(refused.code, "conflict", "{}", refused.message);
-    assert!(!app.projects[0].workspaces[0].tabs[0].panes[0].collapsed);
+    assert!(!app.projects[0].workspaces[0].tabs[0].panes[0].collapsed());
 }
 
 #[test]

@@ -347,11 +347,25 @@ pub(super) fn by_conversation(pane: u64, id: &str) -> Parent {
 }
 
 #[cfg(unix)]
+pub(super) fn resume_state(conversation: &str) -> AgentState {
+    AgentState { kind: "claude".into(), conversation: conversation.into(), mode: None, account: None }
+}
+
+#[cfg(unix)]
 pub(super) fn converse(app: &mut App, id: u64, conversation: Option<&str>) {
     let term = app.projects.pane_by_mut(id).expect("the pane");
-    term.resume =
-        conversation.map(|id| AgentState { kind: "claude".into(), conversation: id.into(), mode: None, account: None });
+    term.resume = conversation.map(resume_state);
     term.resuming = conversation.map(|_| Instant::now() + Duration::from_secs(3600));
+}
+
+#[cfg(unix)]
+pub(super) fn agent_in_front(app: &mut App, id: u64, pid: Option<i32>, conversation: Option<&str>) {
+    let term = app.projects.pane_by_mut(id).expect("the pane");
+    term.agent_pid = pid;
+    term.context = pid.map_or_else(context::Pane::default, |pid| {
+        context::Pane::watching(pid, agents::Known::Claude, SystemTime::now())
+    });
+    converse(app, id, conversation);
 }
 
 fn pump_until(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {

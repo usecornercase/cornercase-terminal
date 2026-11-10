@@ -86,7 +86,7 @@ fn desktop_notifications_off_keep_the_sound_and_the_toast() {
 fn a_collapsed_parent_hides_no_subagent_from_the_sound_rule() {
     let mut w = with_a_subagent(false);
     let parent = tab_term(&w.app, 0, 0).id;
-    w.app.projects.pane_by_mut(parent).expect("the parent").collapsed = true;
+    w.app.projects.pane_by_mut(parent).expect("the parent").set_collapsed(true);
 
     w.report("waiting", 6);
 

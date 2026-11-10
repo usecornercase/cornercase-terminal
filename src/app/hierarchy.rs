@@ -58,7 +58,7 @@ impl App {
         live.get(&parent.pane).is_some_and(|now| parent.by.holds(*now)).then_some(parent.pane)
     }
 
-    pub(super) fn learn_parent_conversations(&mut self) {
+    pub(super) fn learn_conversations(&mut self) {
         let known: HashMap<u64, (i32, Conversation)> = self
             .projects
             .terms()
@@ -70,7 +70,10 @@ impl App {
         for term in self.projects.terms_mut() {
             let found = term.parent.as_ref().and_then(|parent| known.get(&parent.pane));
             if let Some((parent, (pid, conversation))) = term.parent.as_mut().zip(found) {
-                parent.learn((*pid, conversation));
+                parent.by.learn((*pid, conversation));
+            }
+            if let Some((fold, (pid, conversation))) = term.fold.as_mut().zip(known.get(&term.id)) {
+                fold.learn((*pid, conversation));
             }
         }
     }
