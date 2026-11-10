@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use super::machines::{VPS, in_state, reach, start_listing, wait_for_machine};
+use super::remote::on_ssh_path;
 use super::*;
 
 const URL: &str = "https://github.com/acme/shop.git";
@@ -27,14 +28,15 @@ fn on_vps_accepting_trust(accepts: bool) -> OnVps {
         "gh": fake_issue_gh(&machine.dir, VIEW),
         "agent": "fake",
         "accept_trust_prompts": accepts,
-        "agent_commands": {"fake": agent, "claude": agent},
+        "agent_commands": agent_commands(&[("fake", &agent), ("claude", &agent)]),
     });
     std::fs::write(machine.dir.join("config.json"), config.to_string()).expect("write the machine's config");
     let here = Session::new();
+    let trusting = fake_trusting_agent(&here.dir);
     let config = json!({
         "gh": fake_issue_gh(&here.dir, VIEW),
         "agent": "fake",
-        "agent_commands": {"fake": fake_trusting_agent(&here.dir)},
+        "agent_commands": agent_commands(&[("fake", &trusting)]),
     });
     let reached = format!("{} HOME={}", reach(&machine), home.display());
     start_listing(&here, &[(VPS, VPS)], &[(VPS, &reached)], config);
@@ -62,6 +64,10 @@ fn answer(text: &str) -> Value {
 }
 
 impl OnVps {
+    fn put_codex_on_the_path(&self) {
+        on_ssh_path(&self.here.dir, "codex", "#!/bin/sh\nexit 1\n");
+    }
+
     fn shop_there(&self) -> (PathBuf, String) {
         let repo = shop(&self.machine.dir);
         let project = self.machine.says(&["open", &repo.display().to_string()]);
@@ -146,6 +152,7 @@ fn a_workspace_made_on_a_machine_is_listed_under_it_here() {
 fn a_flow_run_on_a_machine_starts_its_team_in_a_worktree_there() {
     let vps = on_vps();
     let (_, project) = vps.shop_there();
+    vps.put_codex_on_the_path();
 
     let args = ["flow", "run", "Quick", "--machine", VPS, "--project", &project, "--prompt", "add dark mode"];
     let run = answer(&vps.here.says(&[&args[..], &["--worktree", "dark-mode", "--json"]].concat()));
@@ -155,6 +162,8 @@ fn a_flow_run_on_a_machine_starts_its_team_in_a_worktree_there() {
     let mut roles: Vec<&str> = members.iter().filter_map(|member| member["role"].as_str()).collect();
     roles.sort_unstable();
     assert_eq!(roles, ["coder", "orchestrator", "reviewer"], "{run}");
+    let agents: Vec<&str> = members.iter().filter_map(|member| member["agent"].as_str()).collect();
+    assert_eq!(agents, ["claude"; 3], "a role there runs an agent this test does not fake: {run}");
     let orchestrator = members.iter().find(|member| member["role"] == "orchestrator").expect("the orchestrator");
     let pane = orchestrator["pane"].to_string();
     let got = vps.machine.dir.join("worktrees").join("shop").join("dark-mode").join("got");
