@@ -506,6 +506,7 @@ impl App {
         self.forget_gone_closed();
         self.clean_gone_posts();
         self.forget_moved_run_ends();
+        self.close_merged_runs(now);
         self.forget_files();
         self.forget_pasted();
         self.count_behind(now);

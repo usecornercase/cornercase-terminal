@@ -71,6 +71,14 @@ mod parsing {
     }
 
     #[test]
+    fn a_flow_closes_its_agents_when_merged_from_its_start_or_later() {
+        assert!(parse(&["flow", "run", "Quick", "--prompt", "p", "--close-when-merged"]).is_ok());
+        assert!(parse(&["flow", "close-when-merged", "--worktree", "b", "--off", "--json"]).is_ok());
+        assert!(parse(&["flow", "close-when-merged"]).is_ok());
+        assert!(parse(&["flow", "close-when-merged", "--workspace", "3", "--worktree", "b"]).is_err());
+    }
+
+    #[test]
     fn the_issue_filters_have_the_dialogs_names_as_aliases() {
         let cli = parse(&["issue", "list", "--owner", "me", "--reporter", "@bo", "--source", "jira"]).expect("parse");
         let Some(Command::Control(Control::Issue(args))) = cli.command else { panic!("not an issue command") };

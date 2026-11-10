@@ -187,6 +187,7 @@ impl App {
             Command::FlowHide(hide) => self.flow_hide_request(&hide),
             Command::FlowRestore(restore) => self.flow_restore_request(&restore),
             Command::FlowDefault(req) => self.flow_default_request(caller, &req),
+            Command::FlowCloseWhenMerged(req) => self.flow_close_when_merged_request(caller, &req),
             Command::FlowOrder(req) => self.flow_order_request(caller, &req),
             Command::FlowMessages(messages) => self.flow_messages_request(client, caller, &messages),
             Command::FlowFiles(files) => self.flow_files_request(client, caller, &files),

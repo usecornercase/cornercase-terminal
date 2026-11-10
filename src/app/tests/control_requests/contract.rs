@@ -115,6 +115,10 @@ mod opting_in {
         r#"{"contract":1,"command":"notify","args":{"text":"hi","cached":false}}"#,
         "args.cached"
     )]
+    #[case::not_closing_when_merged_where_no_flow_runs(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","close_when_merged":false}}"#,
+        "args.close_when_merged"
+    )]
     fn an_unknown_field_is_refused_and_does_nothing(#[case] text: &str, #[case] field: &str) {
         let (mut app, _rx) = app();
 
@@ -153,6 +157,9 @@ mod opting_in {
     #[case::not_placed(r#"{"contract":1,"command":"start","args":{"project":999,"placed":false}}"#)]
     #[case::into_no_group(r#"{"contract":1,"command":"open","args":{"path":"/nonexistent","into":null}}"#)]
     #[case::not_cached(r#"{"contract":1,"command":"stats","args":{"cached":false}}"#)]
+    #[case::not_closing_when_merged(
+        r#"{"contract":1,"command":"flow-run","args":{"name":"Quick","prompt":"x","project":999,"close_when_merged":false}}"#
+    )]
     fn an_argument_left_out_by_its_empty_value_is_not_an_unknown_field(#[case] text: &str) {
         let (mut app, _rx) = app();
 

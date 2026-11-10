@@ -246,6 +246,7 @@ mod file {
                 rounds: vec![1],
                 dir: Some("2026-10-21-fix".into()),
                 ended: None,
+                close_when_merged: false,
             }),
         });
         saved
@@ -255,6 +256,27 @@ mod file {
     fn closed_agents_round_trip_through_their_own_fixture() {
         let fixture = crate::test_util::fixture!("session/closed.json");
         round_trip(fixture, &closed_state());
+    }
+
+    #[test]
+    fn a_run_that_closes_when_merged_round_trips_and_others_write_no_key() {
+        let mut saved = closed_state();
+        let text = serde_json::to_string(&saved).expect("json");
+        assert!(!text.contains("close_when_merged"));
+        if let Some(run) = saved.projects[0].workspaces[0].closed.as_mut().and_then(|closed| closed.run.as_mut()) {
+            run.close_when_merged = true;
+        }
+        let text = serde_json::to_string(&saved).expect("json");
+        assert!(text.contains("\"close_when_merged\":true"));
+        assert_eq!(serde_json::from_str::<State>(&text).expect("a session"), saved);
+    }
+
+    #[test]
+    fn a_saved_run_copies_the_opt_in_from_its_run() {
+        let mut run = Run::new(1, Flow::default(), "fix".into());
+        assert!(!RunState::seated(&run, Vec::new()).close_when_merged);
+        run.close_when_merged = true;
+        assert!(RunState::seated(&run, Vec::new()).close_when_merged);
     }
 
     #[test]

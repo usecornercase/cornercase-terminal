@@ -564,6 +564,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         parent: None,
         accounts: crate::accounts::Accounts::default(),
         name: None,
+        close_when_merged: false,
     };
 
     let refused = team.app.open_run(workspace_at(&team.app, 0, 0), starting, AREA, false).expect_err("refused");
@@ -673,6 +674,7 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
 }
 
 mod accounts;
+mod close_when_merged;
 mod feed;
 mod manage;
 mod own_worktrees;

@@ -224,8 +224,12 @@ impl App {
     }
 
     pub(in crate::app) fn close_agents_with_toast(&mut self, plan: &Plan) {
+        self.close_agents_saying(plan, closed_message(plan.agents.len()));
+    }
+
+    pub(in crate::app) fn close_agents_saying(&mut self, plan: &Plan, message: String) {
         self.close_agents(plan);
-        let mut toast = Toast::new(closed_message(plan.agents.len()), ui::ToastIcon::Check);
+        let mut toast = Toast::new(message, ui::ToastIcon::Check);
         toast.undo = Some(Undo::Agents(plan.place.1));
         self.messages.toast = Some(toast);
     }

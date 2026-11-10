@@ -279,6 +279,9 @@ impl App {
 
     fn reseat_run(&mut self, kept: KeptRun, tabs: &Tabs, place: &Place, info: &mut Reopened) {
         let KeptRun { mut run, seats } = kept;
+        if run.merged(self.pull_request(run.workspace)) {
+            run.close_when_merged = false;
+        }
         run.members.clear();
         for seat in &seats {
             let found = tabs.opened.get(seat.tab).and_then(|tab| tab.panes.get(seat.pane));

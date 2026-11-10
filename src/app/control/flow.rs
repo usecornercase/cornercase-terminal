@@ -1,5 +1,6 @@
 mod feed;
 mod manage;
+mod merged;
 mod wake;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -138,7 +139,9 @@ impl App {
         if run.workspace_name.is_some() {
             return Err(super::malformed("--workspace-name needs --issue"));
         }
-        let starting = Starting { focus, view, note, parent, ..Starting::new(flow, task, branch, accounts) };
+        let close_when_merged = run.close_when_merged;
+        let starting =
+            Starting { focus, view, note, parent, close_when_merged, ..Starting::new(flow, task, branch, accounts) };
         self.run_flow(Some(client), self.projects[p].id, starting, area)
     }
 

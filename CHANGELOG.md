@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.33
+
+- **A flow run can close its agents once its pull request merges.** Start it with `cornercase flow run NAME … --close-when-merged`, or turn it on for a run already going with `cornercase flow close-when-merged` (`--off` turns it off). Once the run's pull request or merge request has merged and none of its agents has been working, waiting, starting or typed into for 3 minutes, its agents close as **close agents** does, so finished runs stop piling up idle agents. They are kept: the workspace's `▶` or `cornercase agents reopen` brings each back in its own conversation (opencode and custom agents start over), and nothing is removed from disk. A shell you opened in one of the team's tabs keeps them open. `cornercase flow runs --json` and `status --json` give `close_when_merged` on such a run, and `cornercase contract` lists the feature `flow-close-when-merged`.
+
 ## 0.13.32
 
 - **`cornercase collapse` and `expand` can say which run of the server their id is from.** Ids last one run of the server, so a program that draws another machine's agents, or a script that read an id there, could fold or unfold another agent's team (or another group, project or workspace) when that server restarted on the way, which the window already guarded against for its own folds. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing is folded or unfolded, the command prints why and exits with status 4 (`cornercase --remote vps collapse --pane 9 --boot "$boot"`), as `close`, `rename`, `mark`, `move-pane`, `account restart` and `context` already do. It works in every form (`--group`, `--project`, `--workspace`, `--worktree` and `--pane`), on a line of `requests --follow` for that line only, and a server too old to know `boot` is refused before anything is sent.

@@ -1,0 +1,7 @@
+{
+  "command": "flow-close-when-merged",
+  "args": {
+    "workspace": 7,
+    "off": false
+  }
+}

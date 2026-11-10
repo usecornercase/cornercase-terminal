@@ -70,10 +70,10 @@ pub(crate) use files::{FilesList, FilesRead, FilesSearch};
 #[cfg(test)]
 pub(crate) use flow::{BackSpec, RoleSpec, StageSpec};
 pub(crate) use flow::{
-    BrokenFlow, Exported, FlowBacklog, FlowDefault, FlowDefaultSet, FlowDelete, FlowExport, FlowFiles, FlowHide,
-    FlowImport, FlowInfo, FlowList, FlowMessage, FlowMessages, FlowOrder, FlowOrdered, FlowRemoved, FlowRestore,
-    FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved, FlowSpec, Flows, Imported, MemberInfo, RoleInfo, RoleState,
-    RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
+    BrokenFlow, CloseWhenMergedSet, Exported, FlowBacklog, FlowCloseWhenMerged, FlowDefault, FlowDefaultSet,
+    FlowDelete, FlowExport, FlowFiles, FlowHide, FlowImport, FlowInfo, FlowList, FlowMessage, FlowMessages, FlowOrder,
+    FlowOrdered, FlowRemoved, FlowRestore, FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved, FlowSpec, Flows,
+    Imported, MemberInfo, RoleInfo, RoleState, RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
 };
 pub(crate) use held::{HeldAction, HeldInfo, HeldRequest};
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
@@ -223,6 +223,7 @@ pub(crate) enum Command {
     FlowHide(FlowHide),
     FlowRestore(FlowRestore),
     FlowDefault(FlowDefault),
+    FlowCloseWhenMerged(FlowCloseWhenMerged),
     FlowOrder(FlowOrder),
     FlowRuns(FlowRunsWatch),
     FlowMessages(FlowMessages),
@@ -410,6 +411,7 @@ impl Command {
             Self::FlowHide(_) => 73,
             Self::FlowRestore(_) => 74,
             Self::FlowDefault(_) => 98,
+            Self::FlowCloseWhenMerged(_) => 124,
             Self::FlowOrder(_) => 99,
             Self::FlowMessages(_) => 76,
             Self::FlowFiles(_) => 77,
@@ -595,6 +597,7 @@ impl Command {
         "run-setup",
         "config-pair",
         "worktrees-remove",
+        "flow-close-when-merged",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {
