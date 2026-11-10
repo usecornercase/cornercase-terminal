@@ -33,7 +33,7 @@ fn pane_in(state: &Value, pane: &str) -> Value {
     panes.find(|found| found["id"].as_u64() == Some(id(pane))).cloned().unwrap_or_default()
 }
 
-fn pane_of(session: &Session, pane: &str) -> Value {
+pub(super) fn pane_of(session: &Session, pane: &str) -> Value {
     pane_in(&parsed(&session.says(&["status", "--json"])), pane)
 }
 

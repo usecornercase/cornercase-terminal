@@ -32,7 +32,17 @@ mod boot {
     #[case::rename_a_project(&["rename", "--project", "4", "x"])]
     #[case::rename_a_group(&["rename", "--group", "4", "x"])]
     #[case::rename_what_runs_here(&["rename", "x"])]
-    fn goes_with_every_form_of_close_and_rename(#[case] args: &[&str]) {
+    #[case::mark_what_runs_here(&["mark"])]
+    #[case::mark_a_pane(&["mark", "--pane", "4"])]
+    #[case::mark_a_tab_reviewed(&["mark", "--tab", "4", "--reviewed"])]
+    #[case::move_a_pane(&["move-pane", "--pane", "4", "--target", "5", "--place", "left", "--json"])]
+    #[case::restart_every_pane(&["account", "restart", "claude"])]
+    #[case::restart_a_pane_on_an_account(&["account", "restart", "claude", "work", "--pane", "4", "--json"])]
+    #[case::restart_a_pane_on_its_own_login(&["account", "restart", "claude", "--system", "--pane", "4"])]
+    #[case::read_the_context_here(&["context"])]
+    #[case::read_a_panes_context(&["context", "--pane", "4", "--json"])]
+    #[case::read_a_tabs_cached_context(&["context", "--tab", "4", "--cached"])]
+    fn goes_with_every_form_of_the_commands_that_take_it(#[case] args: &[&str]) {
         assert_eq!(boot_of(&[args, &["--boot", "1-2"]].concat()).as_deref(), Some("1-2"));
         assert_eq!(boot_of(args), None);
     }
@@ -40,6 +50,10 @@ mod boot {
     #[rstest]
     #[case::close(&["close", "--pane", "4", "--boot", ""])]
     #[case::rename(&["rename", "x", "--boot", ""])]
+    #[case::mark(&["mark", "--pane", "4", "--boot", ""])]
+    #[case::move_pane(&["move-pane", "--pane", "4", "--target", "5", "--place", "left", "--boot", ""])]
+    #[case::account_restart(&["account", "restart", "claude", "--boot", ""])]
+    #[case::context(&["context", "--boot", ""])]
     fn cannot_be_empty_so_an_unset_variable_never_reaches_the_server(#[case] args: &[&str]) {
         assert!(parsed(args).is_err());
     }

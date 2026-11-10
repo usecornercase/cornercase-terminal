@@ -14,6 +14,10 @@ their model and how full the window is, with a notice that they do not say what 
 
 --cached prints the last answer with its age and starts nothing, so a script can read it cheaply.
 
+--boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
+a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is read
+and no second `claude` starts, and the command prints why and exits with 4.
+
 A read that fails says why on the line `context unavailable:` (with --json, in `error`, beside the
 numbers of the last good read) and the command exits with 3.
 
@@ -29,4 +33,5 @@ and attachment kind.
 Examples:
   cornercase context
   cornercase context --pane 4 --json
-  cornercase context --tab 3 --cached";
+  cornercase context --tab 3 --cached
+  cornercase --remote vps context --pane 9 --json --boot 4242-1700000000";

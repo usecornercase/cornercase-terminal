@@ -1,6 +1,6 @@
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 
-use super::{Print, branch};
+use super::{BootArg, Print, branch};
 use crate::cli::help::BY_BRANCH;
 use crate::control::arrange::Place;
 
@@ -89,6 +89,8 @@ pub(crate) struct MovePaneArgs {
     pub(crate) place: PlaceArg,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]

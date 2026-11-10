@@ -49,7 +49,9 @@ fn account_use(chosen: AccountUseArgs) -> Result<()> {
     switched(ask("account-use", Command::AccountUse(request))?, chosen.print.json)
 }
 
-fn account_restart(AccountRestartArgs { provider, account, system, panes, print }: AccountRestartArgs) -> Result<()> {
+fn account_restart(
+    AccountRestartArgs { provider, account, system, panes, print, boot: _ }: AccountRestartArgs,
+) -> Result<()> {
     client::use_account_restart()?;
     let account = if system { Some(String::new()) } else { account };
     let value = restart(provider, account, panes)?;

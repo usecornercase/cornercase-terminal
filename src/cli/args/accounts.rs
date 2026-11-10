@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand};
 
-use super::Print;
+use super::{BootArg, Print};
 
 #[derive(Debug, Args)]
 pub(crate) struct ProfileArg {
@@ -91,6 +91,8 @@ pub(crate) struct AccountRestartArgs {
     pub(crate) panes: Vec<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
