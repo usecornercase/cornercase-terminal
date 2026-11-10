@@ -99,9 +99,10 @@ fn go_with_a_token_nobody_gave_fails_and_says_so() {
 #[test]
 fn a_flow_run_focused_in_a_view_moves_the_view_and_not_the_window() {
     let session = Session::new();
+    let trusting = fake_trusting_agent(&session.dir);
     let config = json!({
         "worktrees_dir": session.dir.join("worktrees"),
-        "agent_commands": {"claude": fake_trusting_agent(&session.dir)},
+        "agent_commands": agent_commands(&[("claude", &trusting)]),
     });
     std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");
     let started = session.cold(&["start-server"]);

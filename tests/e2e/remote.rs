@@ -20,6 +20,10 @@ pub(super) fn cornercase_in(folder: &std::path::Path) {
     write_executable(&folder.join("cornercase"), &format!("#!/bin/sh\nexec '{}' \"$@\"\n", bin()));
 }
 
+pub(super) fn on_ssh_path(dir: &std::path::Path, name: &str, script: &str) {
+    write_executable(&dir.join("bin").join(name), script);
+}
+
 fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
     let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).expect("create the fake ssh's folder");
