@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.30
+
+- **`cornercase mark`, `move-pane`, `account restart` and `context` can say which run of the server their pane id is from.** Ids last one run of the server, so a program that draws another machine's tab, or a script that read a pane's id there, could mark another agent, move someone else's pane, restart another agent's conversation on an account nobody picked for it (or replace a shell someone was about to type in), or start a second `claude` on another agent's conversation, when that server restarted on the way. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses: nothing is marked, moved, restarted or read, the command prints why and exits with status 4 (`cornercase --remote vps mark --pane 9 --boot "$boot"`), as `close` and `rename` already do. It works in every form of the four commands, `--tab` included, on a line of `requests --follow` for that line only, and a server too old to know `boot` is refused before anything is sent. Every other command prints what it printed.
+
 ## 0.13.29
 
 - **Collapsing an agent's team now folds that agent, not its pane.** The fold in the agents section stayed on the pane: once the agent you collapsed ended and you started another one in the same tab, the new agent's own team was born hidden under `▸ +n`, and `cornercase status` still said `(collapsed)`. Now a fold lasts while the agent you collapsed runs there. It ends when that agent exits or another conversation starts in its pane, after a restart that doesn't resume it, and when you cancel its resume. It comes back with that conversation: after a restart, a restart on another account, or `--resume` by hand. opencode and custom agents keep their fold while their process runs, and not across a restart. `status`, `status --follow` and `view` give `collapsed` only while the fold holds.
