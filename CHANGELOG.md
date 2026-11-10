@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.29
+
+- **Collapsing an agent's team now folds that agent, not its pane.** The fold in the agents section stayed on the pane: once the agent you collapsed ended and you started another one in the same tab, the new agent's own team was born hidden under `▸ +n`, and `cornercase status` still said `(collapsed)`. Now a fold lasts while the agent you collapsed runs there. It ends when that agent exits or another conversation starts in its pane, after a restart that doesn't resume it, and when you cancel its resume. It comes back with that conversation: after a restart, a restart on another account, or `--resume` by hand. opencode and custom agents keep their fold while their process runs, and not across a restart. `status`, `status --follow` and `view` give `collapsed` only while the fold holds.
+
 ## 0.13.28
 
 - **`cornercase start --mode default` starts an agent with no mode arguments.** `default` comes first among an agent's modes in **Settings › Agents** and in `cornercase config --json`, but `start --mode` refused it, so with another mode chosen there no command could start an agent without it, on this computer or on a machine with `--machine`. It now starts the agent with only its extra arguments, and a mode the agent lacks is refused with its modes, `default` first. `cornercase contract` lists the feature `mode-default`.
