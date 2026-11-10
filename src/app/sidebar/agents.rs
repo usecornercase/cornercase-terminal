@@ -70,7 +70,11 @@ impl App {
         let Some((run, role)) = self.seat(term.id) else { return (None, true) };
         let under = depth > 0
             && role != flows::ORCHESTRATOR
-            && term.parent.and_then(|parent| self.seat(parent)).is_some_and(|(theirs, _)| theirs.id == run.id);
+            && term
+                .parent
+                .as_ref()
+                .and_then(|parent| self.seat(parent.pane))
+                .is_some_and(|(theirs, _)| theirs.id == run.id);
         (Some(role.to_string()), !under)
     }
 
@@ -222,25 +226,32 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn reveal_agent(&mut self, pane: u64) -> bool {
-        let live = self.pane_ids();
+    fn listed_ancestors(&self, pane: u64) -> Vec<u64> {
+        let live = self.running_panes();
         let mut seen = HashSet::from([pane]);
+        let mut found = Vec::new();
         let mut at = pane;
-        let mut changed = false;
         while let Some(term) = self.projects.pane_by(at) {
             if term.agent.status().is_none() {
                 break;
             }
             let Some(parent) = Self::live_parent(term, &live) else { break };
-            if !seen.insert(parent) {
+            let listed = self.projects.pane_by(parent).is_some_and(|ancestor| ancestor.agent.status().is_some());
+            if !seen.insert(parent) || !listed {
                 break;
             }
-            let Some(ancestor) = self.projects.pane_by_mut(parent) else { break };
-            if ancestor.agent.status().is_none() {
-                break;
-            }
-            changed |= std::mem::take(&mut ancestor.collapsed);
+            found.push(parent);
             at = parent;
+        }
+        found
+    }
+
+    pub(in crate::app) fn reveal_agent(&mut self, pane: u64) -> bool {
+        let mut changed = false;
+        for ancestor in self.listed_ancestors(pane) {
+            if let Some(term) = self.projects.pane_by_mut(ancestor) {
+                changed |= std::mem::take(&mut term.collapsed);
+            }
         }
         changed
     }

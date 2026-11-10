@@ -46,6 +46,9 @@ use super::*;
 use crate::agents::AgentState;
 #[cfg(unix)]
 use crate::agents::context::{self};
+use crate::agents::parent::Conversation;
+#[cfg(unix)]
+use crate::agents::parent::{By, Parent};
 #[cfg(unix)]
 use crate::changes::Checkout;
 use crate::config;
@@ -336,6 +339,19 @@ fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(
         app.refresh(Instant::now());
         cond(app)
     });
+}
+
+#[cfg(unix)]
+pub(super) fn by_conversation(pane: u64, id: &str) -> Parent {
+    Parent { pane, by: By::Conversation(Conversation { kind: "claude".into(), conversation: id.into() }) }
+}
+
+#[cfg(unix)]
+pub(super) fn converse(app: &mut App, id: u64, conversation: Option<&str>) {
+    let term = app.projects.pane_by_mut(id).expect("the pane");
+    term.resume =
+        conversation.map(|id| AgentState { kind: "claude".into(), conversation: id.into(), mode: None, account: None });
+    term.resuming = conversation.map(|_| Instant::now() + Duration::from_secs(3600));
 }
 
 fn pump_until(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {

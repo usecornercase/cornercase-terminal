@@ -9,6 +9,7 @@ use super::toast::Toast;
 use crate::accounts::Accounts;
 use crate::agents::activity::Status;
 use crate::agents::launch::Launch;
+use crate::agents::parent::{By, Conversation, Parent};
 use crate::agents::{AgentState, Known};
 use crate::error::Result;
 use crate::flows::{Role, folder};
@@ -24,11 +25,34 @@ pub(super) const RESUME_GRACE: Duration = Duration::from_secs(30);
 #[derive(Default)]
 pub(super) struct Parents {
     ids: HashMap<u64, u64>,
-    wanted: Vec<(u64, Option<u64>, u64)>,
+    wanted: Vec<Wanted>,
     pub(super) outside: Vec<(u64, (usize, usize), u64)>,
 }
 
+struct Wanted {
+    child: u64,
+    old: Option<u64>,
+    parent: u64,
+    by: Conversation,
+}
+
 impl Parents {
+    fn want(&mut self, child: u64, pane: &PaneState, member: bool) {
+        let Some(parent) = pane.parent else { return };
+        match &pane.parent_conversation {
+            Some(by) => self.wanted.push(Wanted { child, old: pane.id, parent, by: by.clone() }),
+            None if !member => {
+                log::debug!(
+                    "agents",
+                    "a saved parent names no agent, so it was dropped",
+                    pane = child,
+                    parent = parent
+                );
+            }
+            None => {}
+        }
+    }
+
     pub(super) fn new_id(&self, old: u64) -> Option<u64> {
         self.ids.get(&old).copied()
     }
@@ -136,9 +160,7 @@ impl App {
             if let Some(old) = pane.id {
                 parents.ids.insert(old, term.id);
             }
-            if let Some(parent) = pane.parent {
-                parents.wanted.push((term.id, pane.id, parent));
-            }
+            parents.want(term.id, pane, role.is_some());
             panes.push(term);
         }
         Ok(saved.restore(self.take_id(), panes))
@@ -174,22 +196,22 @@ impl App {
     }
 
     pub(super) fn adopt_reopened(&mut self, parents: Parents) {
-        for (child, _, parent) in parents.wanted {
+        for Wanted { child, parent, by, .. } in parents.wanted {
             let found = parents.ids.get(&parent).copied().unwrap_or(parent);
             let live = found != child && self.projects.pane_by(found).is_some();
             match (live, self.projects.pane_by_mut(child)) {
-                (true, Some(term)) => term.parent = Some(found),
+                (true, Some(term)) => term.parent = Some(Parent { pane: found, by: By::Conversation(by) }),
                 _ => log::debug!("agents", "a closed pane's parent is gone", pane = child, parent = parent),
             }
         }
     }
 
     pub(super) fn adopt_saved(&mut self, parents: Parents) {
-        for (child, old, parent) in parents.wanted {
+        for Wanted { child, old, parent, by } in parents.wanted {
             let found = parents.ids.get(&parent).copied().filter(|_| old.is_none_or(|old| parent < old));
             let found = found.filter(|&new| new != child && self.projects.pane_by(new).is_some());
             match (found, self.projects.pane_by_mut(child)) {
-                (Some(new), Some(term)) => term.parent = Some(new),
+                (Some(new), Some(term)) => term.parent = Some(Parent { pane: new, by: By::Conversation(by) }),
                 _ => log::debug!("server", "a saved parent was dropped", pane = child, parent = parent),
             }
         }

@@ -206,7 +206,7 @@ impl App {
     pub(super) fn respawn_in(&mut self, pane: u64, cwd: PathBuf, accounts: Accounts) -> Result<bool> {
         let Some(old) = self.projects.pane_by(pane) else { return Ok(false) };
         let (generation, size, parent, collapsed) =
-            (old.generation().wrapping_add(1), old.size(), old.parent, old.collapsed);
+            (old.generation().wrapping_add(1), old.size(), old.parent.clone(), old.collapsed);
         let mut term = self.spawn_pane(&NewPane { id: pane, size, cwd, run: None }, generation, accounts)?;
         term.parent = parent;
         term.collapsed = collapsed;

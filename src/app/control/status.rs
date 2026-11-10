@@ -7,6 +7,7 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::app::changes_panel::streams::Counted;
+use crate::app::hierarchy::RunningPanes;
 use crate::control::{
     self, AppState, CheckInfo, ConfigInfo, Done, GroupInfo, KeepAwake, LayerInfo, PaneInfo, ProjectInfo,
     PullRequestInfo, RemoteInfo, Report, RunStatus, StackInfo, TabInfo, WorkspaceInfo,
@@ -20,9 +21,9 @@ use crate::pull_request::{Check, Ci, PullRequest};
 use crate::term::Term;
 use crate::version;
 
-struct Seen {
+struct Seen<'a> {
     caller: Option<u64>,
-    live: HashSet<u64>,
+    live: RunningPanes<'a>,
     counted: Counted,
     drawn: HashSet<u64>,
 }
@@ -95,7 +96,7 @@ impl App {
     pub(in crate::app) fn report(&self, caller: Option<u64>) -> Report {
         let seen = Seen {
             caller: caller.filter(|id| self.projects.tab_of_pane(*id).is_some()),
-            live: self.pane_ids(),
+            live: self.running_panes(),
             counted: self.counted(),
             drawn: self.drawn_workspaces(),
         };
@@ -218,7 +219,7 @@ impl App {
 
     pub(in crate::app) fn refreshed(&self) -> u64 {
         let mut hash = DefaultHasher::new();
-        let live = self.pane_ids();
+        let live = self.running_panes();
         for project in self.projects.iter().filter(|p| !p.closing) {
             project.id.hash(&mut hash);
             for workspace in project.workspaces.iter().filter(|w| !w.closing()) {
@@ -231,7 +232,7 @@ impl App {
         hash.finish()
     }
 
-    fn workspace_refreshed(&self, workspace: &Workspace, live: &HashSet<u64>, hash: &mut DefaultHasher) {
+    fn workspace_refreshed(&self, workspace: &Workspace, live: &RunningPanes<'_>, hash: &mut DefaultHasher) {
         (workspace.id, workspace.behind, git::branch(&workspace.path)).hash(hash);
         workspace.setup().map(|(_, state)| state.running()).hash(hash);
         if let Some(pull) = self.pull_request(workspace.id) {
@@ -246,7 +247,7 @@ impl App {
         }
     }
 
-    fn tab_refreshed(&self, tab: &Tab, live: &HashSet<u64>, hash: &mut DefaultHasher) {
+    fn tab_refreshed(&self, tab: &Tab, live: &RunningPanes<'_>, hash: &mut DefaultHasher) {
         (tab.id, tab.status().map(Status::name)).hash(hash);
         for term in &tab.panes {
             let parent = Self::live_parent(term, live);
@@ -271,7 +272,7 @@ impl App {
         term.accounts().chosen().hash(hash);
     }
 
-    fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &HashSet<u64>) -> PaneInfo {
+    fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &RunningPanes<'_>) -> PaneInfo {
         let context = term.context.context();
         let held = self.held_info(term.id);
         PaneInfo {

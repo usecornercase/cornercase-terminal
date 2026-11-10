@@ -10,6 +10,7 @@ use super::super::toast::Toast;
 use super::kept::Kept;
 use super::kept::KeptRun;
 use crate::agents::launch::Launch;
+use crate::agents::parent::Parent;
 use crate::agents::{self};
 use crate::control::contract::{Code, Refusal};
 use crate::flows::run::{Member, RoleWorktree, Run};
@@ -315,7 +316,7 @@ impl App {
         let members: Vec<u64> = run.members.iter().map(|member| member.pane).filter(|pane| *pane != own).collect();
         for pane in members {
             if let Some(term) = self.projects.pane_by_mut(pane).filter(|term| term.parent.is_none()) {
-                term.parent = Some(own);
+                term.parent = Some(Parent::pane(own));
             }
         }
     }

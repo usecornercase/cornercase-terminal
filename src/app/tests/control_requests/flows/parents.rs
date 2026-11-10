@@ -10,7 +10,7 @@ fn run_from(team: &mut Team, caller: Option<u64>) -> RunInfo {
 }
 
 fn parents(app: &App, run: &RunInfo) -> Vec<(String, Option<u64>)> {
-    run.members.iter().map(|m| (m.role.clone(), pane(app, m.pane).parent)).collect()
+    run.members.iter().map(|m| (m.role.clone(), pane(app, m.pane).parent.as_ref().map(|p| p.pane))).collect()
 }
 
 #[test]
@@ -51,8 +51,11 @@ fn restored_members_hang_from_the_restored_orchestrator() {
     assert!(again.restore(&saved, AREA));
 
     let own = again.runs.all()[0].pane_of(ORCHESTRATOR).expect("the orchestrator");
-    let members: Vec<(String, Option<u64>)> =
-        again.runs.all()[0].members.iter().map(|m| (m.role.clone(), pane(&again, m.pane).parent)).collect();
+    let members: Vec<(String, Option<u64>)> = again.runs.all()[0]
+        .members
+        .iter()
+        .map(|m| (m.role.clone(), pane(&again, m.pane).parent.as_ref().map(|p| p.pane)))
+        .collect();
     let expected =
         [(ORCHESTRATOR.to_string(), None), ("coder".to_string(), Some(own)), ("reviewer".to_string(), Some(own))];
     assert_eq!(members, expected);

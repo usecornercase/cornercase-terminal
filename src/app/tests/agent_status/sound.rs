@@ -111,7 +111,7 @@ fn agents_that_name_each_other_as_parent_still_play_for_the_first_one() {
     let mut w = with_a_subagent(false);
     let claude = tab_term(&w.app, 0, 0).id;
     let cursor = tab_term(&w.app, 0, 1).id;
-    w.app.projects.pane_by_mut(claude).expect("the claude pane").parent = Some(cursor);
+    w.app.projects.pane_by_mut(claude).expect("the claude pane").parent = Some(Parent::pane(cursor));
 
     w.report("waiting", 6);
 
@@ -148,7 +148,7 @@ fn an_agent_and_its_subagent_needing_you_together_play_one_sound() {
     w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("a tab for the subagent");
     w.run(agents::Known::Claude);
     let child = tab_term(&w.app, 0, 1).id;
-    w.app.projects.pane_by_mut(child).expect("the subagent pane").parent = Some(parent);
+    w.app.projects.pane_by_mut(child).expect("the subagent pane").parent = Some(Parent::pane(parent));
     w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("hide both agents");
 
     program_reports(&mut w, &[0, 1], "blocked");

@@ -253,7 +253,7 @@ mod agents {
         #[case] sent: bool,
     ) {
         let (mut agent, mut phone, first, second) = two_seen();
-        agent.app.projects.pane_by_mut(second).expect("the subagent").parent = Some(first);
+        agent.app.projects.pane_by_mut(second).expect("the subagent").parent = Some(Parent::pane(first));
         agent.app.config.notify_subagents = false;
         away(&mut agent, &mut phone);
 
