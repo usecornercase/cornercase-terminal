@@ -29,8 +29,13 @@ impl App {
         let origin = if to == To::Yours { Origin::User(target) } else { Origin::Project(target) };
         let (problems, own) = save_problems(&flow, &listing, &origin, previous.as_deref());
         let check = (to == To::Project).then(|| project_risks(&flow)).flatten();
-        let mut saved =
-            FlowSaved { name: flow.name.clone(), origin: origin_name(&origin).into(), check, ..FlowSaved::default() };
+        let mut saved = FlowSaved {
+            name: flow.name.clone(),
+            origin: origin_name(&origin).into(),
+            own_problems: Some(own),
+            check,
+            ..FlowSaved::default()
+        };
         if save.check {
             saved.problems = visible_all(&problems);
             return Ok(Some(json(&saved)));
@@ -323,3 +328,6 @@ pub(super) fn info_listing(listing: &Listing) -> (Vec<control::FlowInfo>, Vec<co
     let hidden = listing.hidden.iter().map(|flow| super::flow_info(flow, &Origin::BuiltIn)).collect();
     (shown, hidden)
 }
+
+#[cfg(test)]
+mod tests;

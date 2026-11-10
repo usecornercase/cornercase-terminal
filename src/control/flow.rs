@@ -367,6 +367,7 @@ pub(crate) struct FlowSaved {
     pub(crate) path: Option<PathBuf>,
     pub(crate) saved: bool,
     pub(crate) problems: Vec<String>,
+    pub(crate) own_problems: Option<usize>,
     pub(crate) check: Option<String>,
 }
 

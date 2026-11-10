@@ -343,6 +343,7 @@ mod saving {
             saved: path.is_some(),
             path: path.map(Into::into),
             problems: problems.iter().map(ToString::to_string).collect(),
+            own_problems: Some(0),
             check: None,
         }
     }
@@ -368,8 +369,27 @@ mod saving {
     fn a_check_says_nothing_was_written_and_lists_the_problems() {
         assert_eq!(saved_text(&saved(None, "user", &[])), "Mine can be saved into yours; nothing was written\n");
         assert_eq!(
-            saved_text(&saved(None, "user", &["the flow has no stages"])),
+            saved_text(&FlowSaved { own_problems: Some(1), ..saved(None, "user", &["the flow has no stages"]) }),
             "Mine has problems; nothing was written\n  cannot run: the flow has no stages\n"
+        );
+    }
+
+    #[test]
+    fn a_check_with_only_a_clash_says_the_flow_can_be_saved() {
+        let clash = "yours is also named `Mine` and runs instead";
+        assert_eq!(
+            saved_text(&saved(None, "project", &[clash])),
+            "Mine can be saved into this project; nothing was written\n  cannot run: yours is also named `Mine` and runs instead\n"
+        );
+    }
+
+    #[test]
+    fn an_older_servers_check_says_problems_whatever_they_are() {
+        let clash = "yours is also named `Mine` and runs instead";
+        let older = FlowSaved { own_problems: None, ..saved(None, "project", &[clash]) };
+        assert_eq!(
+            saved_text(&older),
+            "Mine has problems; nothing was written\n  cannot run: yours is also named `Mine` and runs instead\n"
         );
     }
 

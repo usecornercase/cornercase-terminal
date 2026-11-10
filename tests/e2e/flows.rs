@@ -237,6 +237,7 @@ fn a_listed_flow_is_saved_back_from_its_json_and_renamed_by_its_file() {
     let app = Harness::start();
     let first = answered(&saving(&app.session, &["--json"], DRAFT));
     assert_eq!((first["saved"].as_bool(), first["origin"].as_str()), (Some(true), Some("user")), "{first}");
+    assert_eq!(first["own_problems"], 0, "{first}");
     let old = first["path"].as_str().expect("a path").to_string();
 
     let list = json(&app.session, &["flow", "list", "--json"]);
@@ -250,6 +251,7 @@ fn a_listed_flow_is_saved_back_from_its_json_and_renamed_by_its_file() {
         (Some(false), Some(0)),
         "{check}"
     );
+    assert_eq!(check["own_problems"], 0, "{check}");
     assert!(check["path"].is_null(), "{check}");
     let done = answered(&saving(&app.session, &["--path", &old, "--json"], &draft));
 
