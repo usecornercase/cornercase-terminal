@@ -19,14 +19,14 @@ export interface Metrics {
 
 const ascii = (ch: string) => ch.length === 1 && ch.charCodeAt(0) < 0x7f;
 
-export function paint(grid: Grid, m: Metrics): Op[] {
+export function paint(grid: Grid, m: Metrics, from = 0, to = grid.rows - 1): Op[] {
   const t = m.theme ?? defaultTheme;
   const snap = m.snap ?? ((v: number) => v);
   const dimAlpha = m.dim ?? 0.5;
   const backgrounds: Op[] = [];
   const shapes: Op[] = [];
   const texts: Op[] = [];
-  for (let row = 0; row < grid.rows; row++) {
+  for (let row = from; row <= to; row++) {
     const y = row * m.ch;
     let run: { x: number; text: string; fill: string; bold: boolean; italic: boolean; alpha: number; cells: number } | null = null;
     let bgRun: { x: number; w: number; fill: string } | null = null;

@@ -31,7 +31,7 @@ const groups = t.groups.map(({ name, items }, i) => ({
 }));
 ---
 
-<section class="section more" id="more" aria-labelledby="more-title">
+<section class="section more backed" id="more" aria-labelledby="more-title">
   <div class="wrap">
     <h2 class="h2 reveal" id="more-title">{t.title}</h2>
     <div class="lists">
@@ -59,6 +59,10 @@ const groups = t.groups.map(({ name, items }, i) => ({
 <style>
   .section.more {
     padding-top: 0;
+  }
+
+  :global(.motion) .section.more {
+    padding-top: clamp(96px, 12vw, 176px);
   }
 
   .lists {
@@ -97,10 +101,32 @@ const groups = t.groups.map(({ name, items }, i) => ({
   }
 
   a {
+    position: relative;
     display: grid;
     gap: 6px;
     text-decoration: none;
     color: var(--text);
+  }
+
+  a::before {
+    content: '';
+    position: absolute;
+    left: -16px;
+    top: 2px;
+    bottom: 2px;
+    width: 4px;
+    background: var(--brand);
+    opacity: 0;
+    transform: scaleY(0.4);
+    transition:
+      opacity 0.15s ease,
+      transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  a:hover::before,
+  a:focus-visible::before {
+    opacity: 1;
+    transform: none;
   }
 
   b {
