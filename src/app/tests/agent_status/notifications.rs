@@ -109,12 +109,12 @@ fn a_token_from_another_server_run_does_nothing() {
 #[test]
 fn a_window_coming_back_shows_the_toast_of_what_it_missed() {
     let mut w = Watched::start(agents::Known::Claude, true);
-    w.app.window_focus(WINDOW, false);
+    w.app.window_focus(WINDOW, false, Instant::now());
     w.report("waiting", 6);
     let text = toast(&w.app).map(str::to_owned);
     w.app.messages.toast = None;
 
-    w.app.window_focus(WINDOW, true);
+    w.app.window_focus(WINDOW, true, Instant::now());
 
     assert_eq!(toast(&w.app).map(str::to_owned), text);
     assert_eq!(w.app.messages.toast.as_ref().map(|t| t.view().button), Some(Some(ui::ToastButton::Go)));
@@ -123,12 +123,12 @@ fn a_window_coming_back_shows_the_toast_of_what_it_missed() {
 #[test]
 fn a_window_coming_back_shows_nothing_once_the_agent_no_longer_needs_you() {
     let mut w = Watched::start(agents::Known::Claude, true);
-    w.app.window_focus(WINDOW, false);
+    w.app.window_focus(WINDOW, false, Instant::now());
     w.report("waiting", 6);
     w.app.messages.toast = None;
     w.report("busy", 6);
 
-    w.app.window_focus(WINDOW, true);
+    w.app.window_focus(WINDOW, true, Instant::now());
 
     assert_eq!(w.app.messages.toast, None);
 }
@@ -136,12 +136,12 @@ fn a_window_coming_back_shows_nothing_once_the_agent_no_longer_needs_you() {
 #[test]
 fn a_window_coming_back_shows_nothing_for_a_notification_that_came_while_it_was_focused() {
     let mut w = Watched::start(agents::Known::Claude, true);
-    w.app.window_focus(WINDOW, true);
+    w.app.window_focus(WINDOW, true, Instant::now());
     w.report("waiting", 6);
     w.app.messages.toast = None;
 
-    w.app.window_focus(WINDOW, false);
-    w.app.window_focus(WINDOW, true);
+    w.app.window_focus(WINDOW, false, Instant::now());
+    w.app.window_focus(WINDOW, true, Instant::now());
 
     assert_eq!(w.app.messages.toast, None);
 }

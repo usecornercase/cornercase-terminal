@@ -1,7 +1,8 @@
 #![cfg(unix)]
 
 use super::*;
-use crate::app::pull_requests::{ASK_AGENT, COPY_LINK, DONE};
+use crate::app::pull_requests::{ASK_AGENT, COPY_LINK, DONE, FRESH, OPEN_EVERY, RUNNING_EVERY};
+use crate::control::{OpenView, SetView};
 use crate::pull_request::State;
 use crate::state;
 use crate::test_util::{clone_of, fake_gh, fixture, git};
@@ -9,6 +10,8 @@ use crate::test_util::{clone_of, fake_gh, fixture, git};
 pub(super) const VIEW: &str = fixture!("gh/2.101.0/pr-view.json");
 
 const CONFLICTING: &str = fixture!("gh/2.101.0/pr-view-conflicting.json");
+
+const WINDOW: u64 = 1;
 
 const URL: &str = "https://github.com/acme/web-shop/pull/482";
 
@@ -584,5 +587,156 @@ mod by_key {
 
         assert!(repo.app.overlay.is_none());
         assert_eq!(toast(&repo.app), Some("no pull request for main"));
+    }
+}
+
+fn checks(state: &str) -> String {
+    CONFLICTING.replace("CONFLICTING", "MERGEABLE").replace("SUCCESS", state)
+}
+
+fn merged() -> String {
+    checks("SUCCESS").replace("\"OPEN\"", "\"MERGED\"")
+}
+
+fn changing() -> (Repo, PathBuf) {
+    let repo = repo_with("cat \"$0.json\"", |_| {});
+    let json = repo.tmp.path().join("gh.json");
+    (repo, json)
+}
+
+fn ask_at(repo: &mut Repo, after: Duration) {
+    repo.app.ask_pull_requests(Instant::now() + after);
+    settle(repo);
+}
+
+fn settle(repo: &mut Repo) {
+    pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.git.pulls.asking.is_empty());
+}
+
+mod after_checks {
+    use super::*;
+
+    #[test]
+    fn a_pull_request_whose_checks_just_finished_is_read_again_20_s_later() {
+        let (mut repo, json) = changing();
+        std::fs::write(&json, checks("PENDING")).expect("json");
+        repo.ask("first answer");
+        std::fs::write(&json, checks("SUCCESS")).expect("json");
+
+        ask_at(&mut repo, RUNNING_EVERY);
+        assert_eq!(repo.calls().len(), 2);
+        ask_at(&mut repo, RUNNING_EVERY);
+
+        assert_eq!(repo.calls().len(), 3);
+    }
+
+    #[test]
+    fn one_found_with_its_checks_already_done_keeps_the_minute() {
+        let (mut repo, json) = changing();
+        std::fs::write(&json, checks("SUCCESS")).expect("json");
+        repo.ask("first answer");
+
+        ask_at(&mut repo, RUNNING_EVERY);
+
+        assert_eq!(repo.calls().len(), 1);
+    }
+}
+
+mod coming_back {
+    use super::*;
+
+    fn leave_and_return(repo: &mut Repo, at: Instant) {
+        repo.app.window_focus(WINDOW, false, at);
+        repo.app.window_focus(WINDOW, true, at);
+        settle(repo);
+    }
+
+    #[test]
+    fn a_window_coming_back_reads_an_open_one_again() {
+        let mut repo = found();
+
+        leave_and_return(&mut repo, Instant::now() + FRESH);
+
+        assert_eq!(repo.calls().len(), 2);
+    }
+
+    #[test]
+    fn a_window_coming_back_right_after_a_read_asks_nothing() {
+        let mut repo = found();
+
+        leave_and_return(&mut repo, Instant::now());
+
+        assert_eq!(repo.calls().len(), 1);
+    }
+
+    #[test]
+    fn a_window_that_never_lost_focus_asks_nothing() {
+        let mut repo = found();
+
+        repo.app.window_focus(WINDOW, true, Instant::now() + FRESH);
+        settle(&mut repo);
+
+        assert_eq!(repo.calls().len(), 1);
+    }
+
+    #[test]
+    fn a_merged_one_is_not_read_again() {
+        let mut repo = repo_with(&printing_json(&merged()), |_| {});
+        repo.ask("first answer");
+
+        leave_and_return(&mut repo, Instant::now() + FRESH);
+
+        assert_eq!(repo.calls().len(), 1);
+    }
+
+    #[test]
+    fn a_project_whose_read_failed_keeps_waiting() {
+        let script =
+            "if [ -f \"$0.offline\" ]; then echo 'error connecting to api.github.com' >&2; exit 1; fi\ncat \"$0.json\"";
+        let mut repo = repo_with(script, |_| {});
+        std::fs::write(repo.tmp.path().join("gh.json"), checks("SUCCESS")).expect("json");
+        repo.ask("first answer");
+        std::fs::write(repo.tmp.path().join("gh.offline"), "").expect("offline");
+        ask_at(&mut repo, OPEN_EVERY);
+        assert_eq!(repo.calls().len(), 2);
+        assert!(repo.app.pull_requests_note().contains("api.github.com"));
+
+        leave_and_return(&mut repo, Instant::now() + FRESH);
+
+        assert_eq!(repo.calls().len(), 2);
+    }
+
+    fn view_of(repo: &mut Repo) -> u64 {
+        let open = OpenView { cols: Some(100), rows: Some(30), ..OpenView::default() };
+        let opened = repo.app.view_request(41, &open, Some(AREA)).expect("open a view").expect("a snapshot");
+        opened["view"]["id"].as_u64().expect("a view id")
+    }
+
+    fn set_visible(repo: &mut Repo, view: u64, visible: bool, at: Instant) {
+        let set = SetView { visible: Some(visible), ..SetView::default() };
+        repo.app.view_set_request(view, &set, Some(AREA), at).expect("set");
+        settle(repo);
+    }
+
+    #[test]
+    fn a_view_shown_again_reads_an_open_one_again() {
+        let mut repo = found();
+        let view = view_of(&mut repo);
+        let later = Instant::now() + FRESH;
+
+        set_visible(&mut repo, view, false, later);
+        set_visible(&mut repo, view, true, later);
+
+        assert_eq!(repo.calls().len(), 2);
+    }
+
+    #[test]
+    fn a_view_set_visible_while_shown_asks_nothing() {
+        let mut repo = found();
+        let view = view_of(&mut repo);
+
+        set_visible(&mut repo, view, true, Instant::now() + FRESH);
+
+        assert_eq!(repo.calls().len(), 1);
     }
 }

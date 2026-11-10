@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use super::held::pane_of;
 use super::input::Typist;
-use super::machines::{VPS, in_state, reach, start_listing, wait_for_machine};
+use super::machines::{VPS, in_state, reach, start_listing, status, wait_for_machine};
 use super::remote::{boot_of, fake_ssh_to, remote_says, remotely, ssh_runs};
 use super::*;
 
@@ -66,10 +66,11 @@ fn rows(session: &Session) -> Vec<String> {
 
 fn rows_under(row: &Value) -> Vec<String> {
     let mut rows = Vec::new();
-    for key in ["projects", "workspaces", "tabs", "panes"] {
+    for key in ["groups", "projects", "workspaces", "tabs", "panes"] {
         for item in row[key].as_array().into_iter().flatten() {
             let (status, pid, layout) = (&item["status"], &item["pid"], &item["layout"]);
-            rows.push(format!("{} {} {status} {pid} {layout}", item["id"], item["custom_name"]));
+            let collapsed = &item["collapsed"];
+            rows.push(format!("{} {} {status} {pid} {layout} {collapsed}", item["id"], item["custom_name"]));
             rows.extend(rows_under(item));
         }
     }
@@ -146,10 +147,10 @@ fn every_form_of_close_and_rename_refuses_an_earlier_boot_and_changes_nothing() 
     refuses_every_form_and_changes_nothing(&session, &forms);
 }
 
-fn refuses_every_form_and_changes_nothing(session: &Session, forms: &[&[&str]]) {
+fn refuses_every_form_and_changes_nothing<'a>(session: &Session, forms: &[impl AsRef<[&'a str]>]) {
     let before = rows(session);
     for form in forms {
-        assert_stale(&there(session, &at(form, EARLIER)), EARLIER);
+        assert_stale(&there(session, &at(form.as_ref(), EARLIER)), EARLIER);
     }
     assert_eq!(rows(session), before);
 }
@@ -162,12 +163,74 @@ struct Panes {
     split: String,
 }
 
+struct Rows {
+    session: Arc<Session>,
+    group: String,
+    project: String,
+    workspace: String,
+    branch: String,
+    agent: String,
+}
+
+fn claude_started(session: &Session, args: &[&str]) -> Value {
+    let started = remote_says(session, &[&["start", "claude", "--json"], args].concat());
+    let started: Value = serde_json::from_str(&started).expect("start");
+    let pane = started["pane"].to_string();
+    wait_until("the agent is listed", || pane_of(session, &pane)["status"].is_string());
+    started
+}
+
+fn a_machine_with_rows_to_fold() -> Rows {
+    let session = agent_session();
+    remote_says(&session, &["start-server"]);
+    let repo = repository(&session.dir, "api").display().to_string();
+    let project = session.says(&["open", &repo]);
+    session.says(&["focus", "--project", &project]);
+    let group = session.says(&["group", "new", "work"]);
+    session.says(&["move", "--project", &project, "--into", &group]);
+    let status = status(&session);
+    let shown = status["projects"].as_array().into_iter().flatten().find(|p| p["id"].to_string().as_str() == project);
+    let workspace = &shown.expect("the project")["workspaces"][0];
+    let (branch, workspace) =
+        (workspace["branch"].as_str().expect("a branch").to_string(), workspace["id"].to_string());
+    let agent = claude_started(&session, &["--workspace", &workspace])["pane"].to_string();
+    Rows { session, group, project, workspace, branch, agent }
+}
+
+fn fold_forms<'a>(verb: &'a str, rows: &'a Rows) -> Vec<Vec<&'a str>> {
+    vec![
+        vec![verb, "--group", &rows.group],
+        vec![verb, "--project", &rows.project],
+        vec![verb, "--workspace", &rows.workspace],
+        vec![verb, "--worktree", &rows.branch],
+        vec![verb, "--pane", &rows.agent],
+    ]
+}
+
+fn folded(rows: &[Value], id: &str) -> bool {
+    rows.iter().find(|item| item["id"].to_string().as_str() == id).is_some_and(|item| item["collapsed"] == true)
+}
+
+fn folds(rows: &Rows) -> [bool; 4] {
+    let status = status(&rows.session);
+    let list = |value: &Value| value.as_array().cloned().unwrap_or_default();
+    let projects = list(&status["projects"]);
+    let workspaces: Vec<Value> = projects.iter().flat_map(|project| list(&project["workspaces"])).collect();
+    let agent = pane_of(&rows.session, &rows.agent)["collapsed"] == true;
+    [
+        folded(&list(&status["groups"]), &rows.group),
+        folded(&projects, &rows.project),
+        folded(&workspaces, &rows.workspace),
+        agent,
+    ]
+}
+
 fn a_machine_with_an_agent_and_a_split_tab() -> Panes {
     let session = agent_session();
     remote_says(&session, &["start-server"]);
     let shell = session.report().projects[0].workspaces[0].tabs[0].panes[0].id.to_string();
     let split = remote_says(&session, &["split", "--pane", &shell]);
-    let started: Value = serde_json::from_str(&remote_says(&session, &["start", "claude", "--json"])).expect("start");
+    let started = claude_started(&session, &[]);
     let (agent, agent_tab) = (started["pane"].to_string(), started["tab"].to_string());
     session.says(&["account", "add", "claude", "work"]);
     wait_until("the agent is seen", || pane_of(&session, &agent)["agent"] == "claude");
@@ -233,6 +296,38 @@ fn every_form_of_mark_move_pane_account_restart_and_context_refuses_an_earlier_b
 }
 
 #[test]
+fn every_form_of_collapse_and_expand_refuses_an_earlier_boot_and_folds_nothing() {
+    let rows = a_machine_with_rows_to_fold();
+    assert_eq!(folds(&rows), [false; 4], "everything starts unfolded");
+
+    refuses_every_form_and_changes_nothing(&rows.session, &fold_forms("collapse", &rows));
+
+    for form in fold_forms("collapse", &rows) {
+        rows.session.says(&form);
+    }
+    assert_eq!(folds(&rows), [true; 4], "the same commands without a boot fold everything");
+    refuses_every_form_and_changes_nothing(&rows.session, &fold_forms("expand", &rows));
+}
+
+#[test]
+fn the_boot_of_this_run_lets_collapse_and_expand_act() {
+    let rows = a_machine_with_rows_to_fold();
+    let boot = boot(&rows.session);
+    let before = ssh_runs(&rows.session);
+
+    for form in fold_forms("collapse", &rows).iter().filter(|form| form[1] != "--worktree") {
+        assert_eq!(remote_says(&rows.session, &at(form, &boot)), "");
+    }
+
+    assert_eq!(ssh_runs(&rows.session), before + 4, "each command's checks and request share one ssh connection");
+    assert_eq!(folds(&rows), [true; 4]);
+    for form in fold_forms("expand", &rows).iter().filter(|form| form[1] != "--workspace") {
+        remote_says(&rows.session, &at(form, &boot));
+    }
+    assert_eq!(folds(&rows), [false; 4]);
+}
+
+#[test]
 fn the_boot_of_this_run_lets_mark_move_pane_account_restart_and_context_act() {
     let Panes { session, agent, shell, split, .. } = a_machine_with_an_agent_and_a_split_tab();
     std::fs::create_dir_all(session.claude_dir()).expect("the default account's folder");
@@ -268,6 +363,8 @@ fn the_boot_of_this_run_lets_mark_move_pane_account_restart_and_context_act() {
 #[case::move_pane(&["move-pane", "--pane", "99999", "--target", "99998", "--place", "swap"], "there is no pane 99999")]
 #[case::account_restart(&["account", "restart", "claude", "--pane", "99999"], "there is no pane 99999")]
 #[case::context(&["context", "--pane", "99999"], "there is no pane 99999")]
+#[case::collapse(&["collapse", "--pane", "99999"], "there is no pane 99999")]
+#[case::expand(&["expand", "--group", "99999"], "there is no group 99999")]
 fn any_other_refusal_keeps_its_message_and_status(#[case] args: &[&str], #[case] message: &str) {
     let (session, _) = machine_with(&[]);
     let boot = boot(&session);
@@ -384,6 +481,8 @@ mod a_server_that_knows_no_boot {
         &["account", "restart", "claude", "--pane", "7", "--boot", "1-1"]
     )]
     #[case::context_without_a_contract(WITHOUT_A_CONTRACT, &["context", "--pane", "7", "--boot", "1-1"])]
+    #[case::collapse_without_the_feature(WITHOUT_THE_FEATURE, &["collapse", "--pane", "7", "--boot", "1-1"])]
+    #[case::expand_without_a_contract(WITHOUT_A_CONTRACT, &["expand", "--worktree", "fix/login", "--boot", "1-1"])]
     fn is_refused_by_name_and_never_gets_the_request(#[case] answer: &'static str, #[case] args: &[&str]) {
         let (here, far) = (Session::new(), Session::new());
         let (near, away) = (answering(&here, answer), answering(&far, answer));

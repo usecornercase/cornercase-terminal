@@ -198,13 +198,18 @@ impl App {
         kept.iter().find(|term| term.agent.status().is_some_and(Status::needs_you)).or(kept.first()).map(|term| term.id)
     }
 
-    pub(crate) fn window_focus(&mut self, client: u64, focused: bool) {
+    pub(crate) fn window_focus(&mut self, client: u64, focused: bool, now: Instant) {
         let window = self.messages.notices.windows.entry(client).or_default();
+        let back = focused && window.unfocused;
         window.unfocused = !focused;
         if !focused {
             return;
         }
-        let Some(token) = window.missed.take() else { return };
+        let missed = window.missed.take();
+        if back {
+            self.ask_pull_requests_on_return(now);
+        }
+        let Some(token) = missed else { return };
         let Some(notice) = self.messages.notices.find(&token).cloned().filter(|notice| notice.machine.is_none()) else {
             return;
         };

@@ -16,11 +16,12 @@ commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no works
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
-why, in its error with --json. A command given --boot (close, rename, mark, move-pane, account
-restart, context) exits with 4 when it names another run of the server, which then did nothing, and
-every command that sends a request exits with 5 when the cornercase --remote reaches is older
-than this one (update, restart, kill-server and logs run there without checking), printing with --json both
-versions (there is null when it is too old to say) and the command that updates it as one JSON line.
+why, in its error with --json. A command given --boot (close, rename, mark, move-pane, collapse,
+expand, account restart, context) exits with 4 when it names another run of the server, which
+then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
+reaches is older than this one (update, restart, kill-server and logs run there without checking),
+printing with --json both versions (there is null when it is too old to say) and the command that
+updates it as one JSON line.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
@@ -618,10 +619,10 @@ pub(super) const CONTRACT_HELP: &str =
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; close, rename, mark, move-pane, account restart and context take it as
---boot, and then act only in that run. Each
-command is listed with whether it is available, and each stream with its version. A server without
-this command is older than the contract.
+since ids last only one run; close, rename, mark, move-pane, collapse, expand, account restart and
+context take it as --boot, and then act only in that run. Each command is listed with whether it is
+available, and each stream with its version. A server without this command is older than the
+contract.
 
 Examples:
   cornercase contract
@@ -660,10 +661,15 @@ workspace its tabs; an agent's pane (--pane) hides the agents it started in the 
 for as long as the agent running there now keeps running (another conversation there starts expanded).
 Its shells keep running.
 
+--boot BOOT says which run of the server the id is from: `boot` in `status --json`, or in a machine's
+entry there. Ids last one run, so a server that restarted since refuses, nothing is folded or
+unfolded, and the command prints why and exits with 4.
+
 Examples:
   cornercase collapse --group 12
   cornercase collapse --pane 12
-  cornercase expand --worktree fix/login";
+  cornercase expand --worktree fix/login
+  cornercase --remote vps collapse --pane 9 --boot 4242-1700000000";
 pub(super) const GROUP_HELP: &str =
     "`new` takes the next icon and colour, as + New › new group does, and prints the group's id. `style`
 without --icon and --colour prints the group's style and the icons and colours to choose from.
@@ -788,7 +794,8 @@ pub(super) const VIEW_SET_HELP: &str =
 size nothing and stream no terminals (its tabs go to whoever claimed them before, else the window),
 --active turns it back on and claims its tab, and --claim takes its tab back from the window or
 another view. --hidden says its window is hidden or minimised, so agents in its tab notify again, and
---visible says it is back. It prints the view as it is now.
+--visible says it is back, which also reads the open pull requests again (not those read in the last
+10 seconds). It prints the view as it is now.
 
 Examples:
   cornercase view-set --view 41 --cols 100 --rows 30
