@@ -375,6 +375,65 @@ fn a_title_the_program_sets_reaches_status_and_the_next_snapshot() {
     assert_eq!(titles, [Some("watched-title".to_string())]);
 }
 
+mod an_idle_server {
+    use rstest::rstest;
+
+    use super::*;
+    use crate::control::OpenView;
+
+    fn folded(snapshots: &[Snapshot]) -> Vec<bool> {
+        snapshots.iter().map(|snapshot| snapshot.report.projects[0].collapsed).collect()
+    }
+
+    #[rstest]
+    #[case::watch(Command::Watch(wire::Watch::default()))]
+    #[case::view(Command::View(OpenView::default()))]
+    fn a_command_s_change_goes_out_at_once_and_the_next_one_waits(#[case] stream: Command) {
+        let (mut app, rx, _dirs) = app_with(1);
+        app.clients.events.snapshots.set_every(Duration::ZERO);
+        let first: Snapshot = serde_json::from_value(value(&mut app, None, stream)).expect("a snapshot");
+        let revision = settled(&mut app, &rx, first.revision);
+        app.clients.events.snapshots.idle(Duration::from_secs(60));
+        let project = json!({"item": {"project": app.projects[0].id}});
+
+        app.trace();
+        let quiet = published(&mut app);
+        ok(&mut app, "collapse", &project);
+        app.trace();
+        let collapsed = published(&mut app);
+        ok(&mut app, "expand", &project);
+        app.trace();
+        let held = published(&mut app);
+
+        assert_eq!(quiet, []);
+        assert_eq!(folded(&collapsed), [true]);
+        assert_eq!(collapsed[0].revision, revision + 1);
+        assert_eq!(held, []);
+    }
+
+    #[test]
+    fn a_change_from_the_window_still_waits_after_the_pointer_built_the_session() {
+        let (mut app, rx, _dirs) = app_with(1);
+        let first = watching(&mut app);
+        settled(&mut app, &rx, first.revision);
+        app.clients.events.snapshots.idle(Duration::from_secs(60));
+
+        app.trace_flood();
+        let moved = published(&mut app);
+        app.projects[0].collapsed = true;
+        app.trace_flood();
+        let clicked = published(&mut app);
+        let wake = app.clients.events.snapshots.wake(Instant::now(), false);
+        app.clients.events.snapshots.idle(Duration::from_secs(60));
+        app.trace_refresh();
+        let later = published(&mut app);
+
+        assert_eq!((moved, clicked), (vec![], vec![]));
+        assert!(wake.is_some_and(|wake| wake <= Duration::from_secs(60)), "{wake:?}");
+        assert_eq!(folded(&later), [true]);
+    }
+}
+
 mod a_pane_s_conversation {
     use rstest::rstest;
 

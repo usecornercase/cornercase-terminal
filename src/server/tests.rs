@@ -9,6 +9,7 @@ use crate::test_util::TempDir;
 use crate::version;
 
 mod output;
+mod traced;
 
 mod lock {
     use super::*;

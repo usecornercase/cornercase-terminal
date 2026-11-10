@@ -153,7 +153,36 @@ fn a_change_inside_the_pace_comes_when_it_ends() {
     let wait = app.tick_at(Instant::now(), 0);
     assert!(wait.is_some_and(|wait| wait <= Duration::from_secs(60)), "{wait:?}");
 
-    app.clients.events.app.set_built(Instant::now().checked_sub(Duration::from_secs(61)).expect("a past instant"));
+    app.clients.events.app.idle(Duration::from_secs(60));
+    assert_eq!(next(&mut app, revision).revision, revision + 1);
+}
+
+#[test]
+fn a_command_after_a_step_that_changed_nothing_is_sent_at_once() {
+    let (mut app, _rx) = empty_app();
+    let revision = follow(&mut app).revision;
+    app.clients.events.app.idle(Duration::from_secs(60));
+
+    let quiet = lines(&mut app);
+    add(&mut app, "now");
+    let added = next(&mut app, revision);
+
+    assert_eq!(quiet, []);
+    assert_eq!(added.report.todos.len(), 1);
+}
+
+#[test]
+fn a_change_from_the_window_waits_after_a_build_that_sent_nothing() {
+    let (mut app, _rx) = empty_app();
+    let revision = follow(&mut app).revision;
+    app.clients.events.app.idle(Duration::from_secs(60));
+
+    app.trace_flood();
+    add(&mut app, "later");
+    app.trace_flood();
+
+    assert_eq!(app.take_events(), []);
+    app.clients.events.app.idle(Duration::from_secs(60));
     assert_eq!(next(&mut app, revision).revision, revision + 1);
 }
 

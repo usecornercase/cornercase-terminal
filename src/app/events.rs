@@ -29,11 +29,18 @@ pub(super) struct Events {
     flow_messages: Vec<(u64, u64)>,
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum Pace {
+    Lines,
+    Builds,
+}
+
 pub(super) struct Snapshots<T = Report> {
     watchers: Vec<u64>,
     last: Option<T>,
     revision: u64,
     built: Option<Instant>,
+    sent: Option<Instant>,
     due: bool,
     changed: bool,
     read: Option<Instant>,
@@ -48,6 +55,7 @@ impl<T> Default for Snapshots<T> {
             last: None,
             revision: 0,
             built: None,
+            sent: None,
             due: false,
             changed: false,
             read: None,
@@ -78,17 +86,25 @@ impl<T: Clone + PartialEq + Serialize + Default> Snapshots<T> {
     }
 
     #[cfg(test)]
-    pub(super) fn set_built(&mut self, built: Instant) {
-        self.built = Some(built);
+    pub(super) fn idle(&mut self, every: Duration) {
+        let long_ago = Instant::now().checked_sub(every + Duration::from_secs(1)).expect("a past instant");
+        self.every = every;
+        self.built = Some(long_ago);
+        self.sent = Some(long_ago);
     }
 
-    fn take(&mut self, report: T, now: Instant) -> Option<Snapshot<T>> {
+    fn mark_built(&mut self, now: Instant) {
         self.built = Some(now);
         self.due = false;
         self.changed = false;
+    }
+
+    fn take(&mut self, report: T, now: Instant) -> Option<Snapshot<T>> {
+        self.mark_built(now);
         if self.last.as_ref() == Some(&report) {
             return None;
         }
+        self.sent = Some(now);
         self.revision += 1;
         self.last = Some(report.clone());
         Some(Snapshot { revision: self.revision, report })
@@ -117,15 +133,19 @@ impl<T: Clone + PartialEq + Serialize + Default> Snapshots<T> {
         self.last.clone().map(|report| Snapshot { revision: self.revision, report })
     }
 
-    fn waits(&self, now: Instant) -> bool {
-        self.built.is_some_and(|at| now.saturating_duration_since(at) < self.every)
+    fn waits(&self, now: Instant, pace: Pace) -> bool {
+        let stamp = match pace {
+            Pace::Lines => self.sent,
+            Pace::Builds => self.built,
+        };
+        stamp.is_some_and(|at| now.saturating_duration_since(at) < self.every)
     }
 
-    fn ready(&mut self, now: Instant) -> bool {
+    fn ready(&mut self, now: Instant, pace: Pace) -> bool {
         if self.watchers.is_empty() {
             return false;
         }
-        if self.waits(now) {
+        if self.waits(now, pace) {
             self.due = true;
             return false;
         }
@@ -334,8 +354,8 @@ impl App {
         snapshot
     }
 
-    pub(super) fn publish_app(&mut self, now: Instant) {
-        if self.clients.events.app.ready(now) {
+    pub(super) fn publish_app(&mut self, now: Instant, pace: Pace) {
+        if self.clients.events.app.ready(now, pace) {
             let state = self.app_state();
             let Events { app, out, .. } = &mut self.clients.events;
             app.offer(state, now, out, "app");
@@ -351,30 +371,23 @@ impl App {
         snapshot
     }
 
-    pub(super) fn publish_flow_runs(&mut self, now: Instant) {
-        if self.clients.events.runs.ready(now) {
+    pub(super) fn publish_flow_runs(&mut self, now: Instant, pace: Pace) {
+        if self.clients.events.runs.ready(now, pace) {
             let state = self.flow_runs_state();
             let Events { runs, out, .. } = &mut self.clients.events;
             runs.offer(state, now, out, "flow-runs");
         }
     }
 
-    pub(super) fn publish_snapshot(&mut self, now: Instant) {
+    pub(super) fn publish_snapshot(&mut self, now: Instant, pace: Pace) {
         let watching = !self.clients.events.snapshots.watchers.is_empty();
         if !watching && self.clients.views.is_empty() {
             return;
         }
-        if self.clients.events.snapshots.read != self.agents.watched() {
-            self.clients.events.snapshots.read = self.agents.watched();
-            let refreshed = Some(self.refreshed());
-            if self.clients.events.snapshots.refreshed != refreshed {
-                self.clients.events.snapshots.refreshed = refreshed;
-                self.clients.events.snapshots.changed = true;
-            }
-        }
+        self.note_refresh();
         let own = self.clients.views.changed();
         let snapshots = &mut self.clients.events.snapshots;
-        let paced = snapshots.waits(now);
+        let paced = snapshots.waits(now, pace);
         if !snapshots.changed && !own {
             return;
         }
@@ -388,16 +401,30 @@ impl App {
             self.publish_views(&report);
             return;
         }
+        self.send_snapshot(&report, now, watching);
+    }
+
+    fn note_refresh(&mut self) {
+        if self.clients.events.snapshots.read != self.agents.watched() {
+            self.clients.events.snapshots.read = self.agents.watched();
+            let refreshed = Some(self.refreshed());
+            if self.clients.events.snapshots.refreshed != refreshed {
+                self.clients.events.snapshots.refreshed = refreshed;
+                self.clients.events.snapshots.changed = true;
+            }
+        }
+    }
+
+    fn send_snapshot(&mut self, report: &Report, now: Instant, watching: bool) {
+        let Events { snapshots, out, .. } = &mut self.clients.events;
         if watching {
-            let Events { snapshots, out, .. } = &mut self.clients.events;
             snapshots.offer(report.clone(), now, out, "session");
         } else {
-            let snapshots = &mut self.clients.events.snapshots;
-            snapshots.built = Some(now);
-            snapshots.due = false;
-            snapshots.changed = false;
+            snapshots.mark_built(now);
         }
-        self.publish_views(&report);
+        if self.publish_views(report) {
+            self.clients.events.snapshots.sent = Some(now);
+        }
     }
 }
 
