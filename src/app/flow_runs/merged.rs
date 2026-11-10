@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crate::app::App;
 use crate::app::closed_agents::{Plan, closed_message};
+use crate::app::notifications::{Message, MessageKind};
 use crate::log;
 use crate::project::Hierarchy;
 
@@ -53,6 +54,13 @@ impl App {
             fresh = plan.fresh.len()
         );
         let said = format!("{noun} merged in {place}: {}", closed_message(plan.agents.len()));
-        self.close_agents_saying(plan, said);
+        self.close_agents_saying(plan, said.clone());
+        let panes = plan.agents.clone();
+        self.publish_message(Message {
+            kind: MessageKind::FlowMerged,
+            text: said,
+            workspace: Some(plan.place.1),
+            panes,
+        });
     }
 }

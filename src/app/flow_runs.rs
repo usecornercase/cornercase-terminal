@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 
 use super::App;
 use super::event::AppEvent;
+use super::notifications::{Message, MessageKind};
 use super::toast::Toast;
 use super::worktree_setup::SetupRun;
 use super::worktrees::WorktreeEvent;
@@ -610,7 +611,13 @@ impl App {
         ));
         log::info!("flow", "a member waits for you", workspace = workspace, role = role);
         self.outbox.notify(Notification::new(&message, &self.config.desktop_notifications));
-        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(activity::Status::Waiting)));
+        self.messages.toast = Some(Toast::new(message.clone(), ui::ToastIcon::Agent(activity::Status::Waiting)));
+        self.publish_message(Message {
+            kind: MessageKind::FlowConsent,
+            text: message,
+            workspace: Some(workspace),
+            panes: vec![pane],
+        });
     }
 
     pub(super) fn run_failed(&mut self, message: &str) {

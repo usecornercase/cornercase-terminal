@@ -4,7 +4,7 @@ use ratatui::layout::Rect;
 
 use super::{Asker, Handled, conflict, json, malformed, name_of, none, pane_ids, sized};
 use crate::app::menus::{Marked, Target};
-use crate::app::notifications::Went;
+use crate::app::notifications::{Message, MessageKind, Went};
 use crate::app::{App, Toast};
 use crate::control::arrange::{GroupDelete, GroupNew, GroupStyle, Move, MovePane, Styled};
 use crate::control::contract::{Code, Refusal};
@@ -79,13 +79,15 @@ impl App {
         Ok(Some(json(&Done::default())))
     }
 
-    pub(super) fn notify_request(&mut self, text: &str) -> Handled {
+    pub(super) fn notify_request(&mut self, caller: Option<u64>, text: &str) -> Handled {
         let message = notify::clean(text).trim().to_string();
         if message.is_empty() {
             return Err("the notification needs a text".into());
         }
         self.outbox.notify(Notification::new(&message, &self.config.desktop_notifications));
-        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+        self.messages.toast = Some(Toast::new(message.clone(), ui::ToastIcon::Check));
+        let panes = caller.filter(|pane| self.projects.pane_by(*pane).is_some()).into_iter().collect();
+        self.publish_message(Message { kind: MessageKind::Notify, text: message, workspace: None, panes });
         Ok(Some(json(&Done::default())))
     }
 

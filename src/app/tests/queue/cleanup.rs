@@ -125,12 +125,17 @@ fn a_run_that_is_not_done_never_removes_its_workspace(#[case] state: &str) {
 #[test]
 fn an_uncommitted_file_keeps_the_workspace_and_says_so() {
     let mut run = started(true);
+    run.world.app.clients.events.subscribe(9, Vec::new(), false, true);
     std::fs::write(run.path.join("notes.txt"), "work in progress").expect("write");
     run.done_at(2);
     run.at(2 + 181);
     run.wait_for("the run is kept", |state| matches!(state, QueueState::Kept { .. }));
-    let QueueState::Kept { reason, .. } = run.state() else { panic!("kept") };
+    let QueueState::Kept { reason, pane, .. } = run.state() else { panic!("kept") };
     assert!(reason.contains("1 uncommitted"), "{reason}");
+    let kept: Vec<_> =
+        messages(&run.world.app.take_events(), 9).into_iter().filter(|(kind, ..)| kind == "queue-kept").collect();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert_eq!((&kept[0].2, kept[0].3.workspace), (&vec![pane], Some(run.workspace)));
     assert!(run.path.exists());
     let toast = run.world.app.messages.toast.as_ref().expect("notice");
     assert!(toast.message.starts_with("routine fix the login left changes in "), "{}", toast.message);

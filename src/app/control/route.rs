@@ -79,7 +79,7 @@ impl App {
             Command::Wait(wait) => self.wait_request(client, asker, wait, now),
             Command::WaitSeveral(wait) => self.wait_several_request(client, asker, wait, now),
             Command::Mark(mark) => self.mark_request(asker, &mark),
-            Command::Notify(notify) => self.notify_request(&notify.text),
+            Command::Notify(notify) => self.notify_request(asker.caller, &notify.text),
             Command::Focus(focus) => self.focus_request(asker, &focus),
             Command::FocusMachine(focus) => self.focus_machine_request(&focus),
             other => return ControlFlow::Continue(other),

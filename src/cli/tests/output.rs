@@ -371,6 +371,20 @@ const TAB: Ids = Ids { pane: None, ..PANE };
     Ids::default(),
     "machine vps  notice  claude on vps needs you in shop › main  cc-1-2"
 )]
+#[case::a_message(
+    What::Message { kind: "notify".into(), message: "the release build is ready".into(), panes: vec![] },
+    Ids::default(),
+    "notify  the release build is ready"
+)]
+#[case::a_message_about_a_workspace(
+    What::Message {
+        kind: "flow-merged".into(),
+        message: "pull request merged in fix-login: 2 agents closed · ▶ on the workspace reopens them".into(),
+        panes: vec![4, 5],
+    },
+    Ids { project: Some(1), workspace: Some(2), ..Ids::default() },
+    "workspace 2  flow-merged  pull request merged in fix-login: 2 agents closed · ▶ on the workspace reopens them"
+)]
 fn an_event_reads_as_one_line(#[case] what: What, #[case] ids: Ids, #[case] expected: &str) {
     assert_eq!(event_line(&event(what, ids)), expected);
 }

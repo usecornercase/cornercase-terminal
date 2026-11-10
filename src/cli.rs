@@ -534,6 +534,7 @@ fn event_line(value: &Value) -> String {
         (None, What::Notice { token, message, machine: Some(machine), .. }) => {
             format!("machine {machine}  notice  {message}  {token}")
         }
+        (subject, What::Message { kind, message, .. }) => message_line(subject, kind, message),
         (_, What::Recap { state, range, agent, error }) => {
             let failure = error.as_ref().map(|error| format!(": {error}")).unwrap_or_default();
             format!("recap {range}  {state} ({agent}){failure}")
@@ -543,6 +544,13 @@ fn event_line(value: &Value) -> String {
             if *count == 1 { "" } else { "s" }
         ),
         (None, _) => value.to_string(),
+    }
+}
+
+fn message_line(subject: Option<String>, kind: &str, message: &str) -> String {
+    match subject {
+        Some(subject) => format!("{subject}  {kind}  {message}"),
+        None => format!("{kind}  {message}"),
     }
 }
 

@@ -5,6 +5,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use super::App;
+use super::notifications::{Message, MessageKind};
 use super::tabs::Spawning;
 use super::toast::Toast;
 use crate::accounts::Accounts;
@@ -265,6 +266,13 @@ impl App {
         if unseen {
             self.outbox
                 .notify(Notification::new(&crate::host::notify::clean(&message), &self.config.desktop_notifications));
+            let said = Message {
+                kind: MessageKind::SetupFailed,
+                text: message.clone(),
+                workspace: Some(workspace),
+                panes: vec![pane],
+            };
+            self.publish_message(said);
         }
         self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Failed)));
     }

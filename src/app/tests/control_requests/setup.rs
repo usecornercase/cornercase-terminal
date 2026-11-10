@@ -87,6 +87,45 @@ fn a_failed_setup_does_not_start_the_agent_and_says_why() {
     assert_eq!(workspace.tabs[0].status(), Some(activity::Status::Failed));
 }
 
+#[rstest::rstest]
+#[case::unseen(false)]
+#[case::seen(true)]
+fn a_failed_setup_is_a_message_only_while_nobody_looks_at_its_tab(#[case] seen: bool) {
+    let mut team = team("while [ ! -f MARKER.go ]; do sleep 0.1; done\nexit 3", "");
+    team.app.clients.events.subscribe(CLIENT, Vec::new(), false, true);
+    start_in_worktree(&mut team.app);
+    let mut setup = None;
+    wait_until("the setup runs", || {
+        drain(&mut team.app, &team.rx);
+        team.app.refresh(Instant::now());
+        setup = team.app.projects[0].workspaces.iter().find_map(|w| w.setup().map(|(pane, _)| (w.id, pane)));
+        setup.is_some()
+    });
+    let (workspace, pane) = setup.expect("a setup");
+    if seen {
+        done(now(&mut team.app, None, Command::Focus(wire::Focus { item: Item::Pane(pane), reveal: None })));
+    }
+    let _ = team.app.take_events();
+    let _ = team.app.take_notifications();
+    std::fs::write(format!("{}.go", team.marker.display()), "").expect("let the setup fail");
+
+    error(answered(&mut team.app, &team.rx, "the request fails"));
+
+    let told = messages(&team.app.take_events(), CLIENT);
+    let notified = team.app.take_notifications();
+    assert!(toast(&team.app).is_some_and(|text| text.starts_with("setup failed in")), "{:?}", toast(&team.app));
+    if seen {
+        assert!(told.is_empty() && notified.is_empty(), "{told:?} {notified:?}");
+        return;
+    }
+    let ids = wire::Ids { project: Some(team.app.projects[0].id), workspace: Some(workspace), ..wire::Ids::default() };
+    assert_eq!(notified.len(), 1);
+    assert_eq!(told.len(), 1, "{told:?}");
+    let (kind, message, panes, told_ids) = &told[0];
+    assert_eq!((kind.as_str(), panes, told_ids), ("setup-failed", &vec![pane], &ids));
+    assert!(message.starts_with("setup failed in") && message.ends_with("its agent did not start"), "{message}");
+}
+
 #[test]
 fn a_workspace_without_setup_starts_its_agent_at_once() {
     let mut team = team("", "");

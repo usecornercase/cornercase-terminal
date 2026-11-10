@@ -114,6 +114,11 @@ pub(crate) enum What {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         subagent: bool,
     },
+    Message {
+        kind: String,
+        message: String,
+        panes: Vec<u64>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,7 +135,7 @@ impl Event {
         match &self.what {
             What::Opened { kind, .. } | What::Closed { kind } => Some(*kind),
             What::Status { .. } | What::Exited { .. } | What::Clipboard { .. } | What::Bell { .. } => Some(Kind::Pane),
-            What::Notice { .. } => Some(Kind::Workspace),
+            What::Notice { .. } | What::Message { .. } => Some(Kind::Workspace),
             What::Dropped { .. } | What::Recap { .. } => None,
         }
     }
@@ -140,13 +145,14 @@ impl Event {
     }
 
     pub(crate) fn notice(&self) -> bool {
-        matches!(self.what, What::Notice { .. })
+        matches!(self.what, What::Notice { .. } | What::Message { .. })
     }
 
     pub(crate) fn about(&self, panes: &[u64]) -> bool {
         match &self.what {
             What::Notice { panes: named, machine: None, .. } => named.iter().any(|pane| panes.contains(pane)),
             What::Notice { .. } => false,
+            What::Message { panes: named, .. } => named.iter().any(|pane| panes.contains(pane)),
             _ => self.kind() == Some(Kind::Pane) && self.ids.pane.is_some_and(|pane| panes.contains(&pane)),
         }
     }

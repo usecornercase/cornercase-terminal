@@ -11,6 +11,7 @@ use ratatui::buffer::Buffer;
 use super::actions::NO_AGENT;
 #[cfg(unix)]
 use super::dialogs::{CLOSE_PROJECTS_SUBMIT, KEEP_PROJECTS_SUBMIT};
+use super::events::Streamed;
 #[cfg(unix)]
 use super::input::WHEEL_ROWS;
 #[cfg(unix)]
@@ -217,6 +218,27 @@ fn new_app_with_shell(shell: &str, config_path: impl AsRef<Path>) -> (App, Recei
         .set_updater(std::sync::Arc::new(|_| Err(Error::Ssh { host: "a machine".into(), reason: NO_SSH.into() })));
     app.machines.repos.set_resolver(std::sync::Arc::new(|_| None));
     (app, rx)
+}
+
+type Told = (String, String, Vec<u64>, crate::control::Ids);
+
+fn messages(events: &[(u64, Streamed)], reader: u64) -> Vec<Told> {
+    use crate::control::{Event, Response, What};
+    events
+        .iter()
+        .filter(|(client, _)| *client == reader)
+        .filter_map(|(_, streamed)| match streamed {
+            Streamed::Event(text) => match serde_json::from_str(text) {
+                Ok(Response::Ok(value)) => serde_json::from_value::<Event>(value).ok(),
+                other => panic!("not an event: {other:?}"),
+            },
+            Streamed::Snapshot(_) | Streamed::End => None,
+        })
+        .filter_map(|event| match event.what {
+            What::Message { kind, message, panes } => Some((kind, message, panes, event.ids)),
+            _ => None,
+        })
+        .collect()
 }
 
 fn empty_app() -> (App, Receiver<AppEvent>) {

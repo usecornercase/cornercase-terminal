@@ -234,9 +234,16 @@ fn every_agent_starts_without_asking_its_trust_is_answered_and_the_orchestrator_
     );
 }
 
+fn consent_told(app: &mut App) -> Vec<Told> {
+    let mut said = messages(&app.take_events(), CLIENT);
+    said.retain(|(kind, ..)| kind == "flow-consent");
+    said
+}
+
 #[test]
 fn a_member_asked_to_accept_bypass_permissions_waits_for_you_and_holds_the_orchestrator_back() {
     let mut team = Team::with(CONSENTING);
+    team.app.clients.events.subscribe(CLIENT, Vec::new(), false, true);
     team.started();
     let mut told = None;
 
@@ -258,12 +265,19 @@ fn a_member_asked_to_accept_bypass_permissions_waits_for_you_and_holds_the_orche
             .iter()
             .all(|role| sent.iter().any(|text| text.starts_with(&format!("{role} waits for you"))))
     });
-    let coder = team.app.runs.all()[0].pane_of("coder").expect("the coder's pane");
+    let (coder, workspace) =
+        (team.app.runs.all()[0].pane_of("coder").expect("the coder's pane"), team.app.runs.all()[0].workspace);
+    let asked = consent_told(&mut team.app);
+    assert_eq!(asked.len(), 2, "{asked:?}");
+    assert!(asked.iter().all(|(_, text, _, ids)| text.contains("waits for you") && ids.workspace == Some(workspace)));
+    assert!(asked.iter().any(|(_, _, panes, _)| *panes == [coder]), "{asked:?}");
     team.app.projects.pane_by_mut(coder).expect("its pane").write(b"j");
     let later = Instant::now() + Duration::from_secs(2);
     refreshing(&mut team.app, &team.rx, "a while passes", |_| Instant::now() >= later);
     let again = team.app.take_notifications();
     assert!(!again.iter().any(|sent| sent.text.contains("waits for you")), "told again on a key: {again:?}");
+    let repeated = consent_told(&mut team.app);
+    assert!(repeated.is_empty(), "told again on a key: {repeated:?}");
     let order = team.order();
     assert!(order.iter().all(|line| !line.starts_with("got")), "something was typed: {order:?}");
     assert_eq!(order.iter().filter(|line| line.starts_with("start")).count(), 2, "{order:?}");

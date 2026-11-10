@@ -108,9 +108,12 @@ mod missing_and_pausing {
     fn several_missed_occurrences_record_one_missed_run_and_say_so() {
         let mut world = routines();
         world.app.set_queue_area(AREA);
+        world.app.clients.events.subscribe(9, Vec::new(), false, true);
         let start = time::now() - 7 * 86_400 - 1000;
         let id = world.app.panels.queued.schedule(None, routine(&world.app, start, "2h")).expect("routine");
         world.app.refresh_at(Instant::now(), time::now());
+        let told = messages(&world.app.take_events(), 9);
+        assert_eq!(told.iter().filter(|(kind, ..)| kind == "queue-missed").count(), 1, "{told:?}");
         let found = runs(&world.app, id);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].state, QueueState::Missed);

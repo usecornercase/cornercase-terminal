@@ -634,6 +634,7 @@ mod holding;
 mod issues;
 mod journal;
 mod merge_check;
+mod messages;
 mod one_folder;
 mod ordering;
 mod pair;
