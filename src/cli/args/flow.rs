@@ -6,8 +6,9 @@ use super::changes::Where;
 use super::{Create, Print, branch};
 use super::{accounts, issue, machine};
 use crate::cli::help::{
-    FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP,
-    FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP, FLOW_SAVE_HELP,
+    FLOW_CLOSE_WHEN_MERGED_HELP, FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP,
+    FLOW_HIDE_HELP, FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP,
+    FLOW_RUNS_HELP, FLOW_SAVE_HELP,
 };
 
 #[derive(Debug, Args)]
@@ -73,6 +74,12 @@ pub(crate) enum FlowAction {
     )]
     Default(FlowDefaultArgs),
     #[command(
+        name = "close-when-merged",
+        about = "Close a run's agents once its pull request merges, as flow run --close-when-merged does, or keep them open with --off",
+        after_help = FLOW_CLOSE_WHEN_MERGED_HELP
+    )]
+    CloseWhenMerged(FlowCloseWhenMergedArgs),
+    #[command(
         about = "Put the flows in your order, as dragging them in Settings › Flows does",
         after_help = FLOW_ORDER_HELP
     )]
@@ -92,6 +99,16 @@ pub(crate) struct FlowDefaultArgs {
     pub(crate) clear: bool,
     #[arg(long, value_name = "ID", help = "The project whose flows to look in [default: the one this runs in]")]
     pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowCloseWhenMergedArgs {
+    #[command(flatten)]
+    pub(crate) place: Where,
+    #[arg(long, help = "Keep the run's agents open after its pull request merges")]
+    pub(crate) off: bool,
     #[command(flatten)]
     pub(crate) print: Print,
 }
@@ -301,6 +318,11 @@ pub(crate) struct FlowRunArgs {
     pub(crate) profile: accounts::ProfileArg,
     #[command(flatten)]
     pub(crate) on: machine::MachineArg,
+    #[arg(
+        long,
+        help = "Close the team's agents, as agents close does, once the run's pull request has merged and none of them has worked for 3 minutes; the workspace's ▶ or agents reopen brings them back"
+    )]
+    pub(crate) close_when_merged: bool,
     #[command(flatten)]
     pub(crate) create: Create,
 }

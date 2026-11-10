@@ -3,14 +3,14 @@ use std::io::IsTerminal as _;
 use std::path::{Component, Path, PathBuf};
 
 use super::args::{
-    self, FlowAction, FlowDefaultArgs, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowOrderArgs,
-    FlowRunsArgs, FlowSaveArgs, ImportTo,
+    self, FlowAction, FlowCloseWhenMergedArgs, FlowDefaultArgs, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs,
+    FlowMessagesArgs, FlowOrderArgs, FlowRunsArgs, FlowSaveArgs, ImportTo,
 };
 use super::{note, print_json, print_out, quietly, read_limited, read_prompt, stream_json, workspace};
 use crate::client::{self, answer, ask, confirm};
 use crate::control::{
-    self, Exported, FlowBacklog, FlowDefaultSet, FlowInfo, FlowMessage, FlowOrdered, FlowRemoved, FlowRuns, FlowSaved,
-    FlowSpec, Flows, Imported, RoleInfo, RunEdge, RunFiles, RunInfo, RunState, contract,
+    self, CloseWhenMergedSet, Exported, FlowBacklog, FlowDefaultSet, FlowInfo, FlowMessage, FlowOrdered, FlowRemoved,
+    FlowRuns, FlowSaved, FlowSpec, Flows, Imported, RoleInfo, RunEdge, RunFiles, RunInfo, RunState, contract,
 };
 use crate::error::{Error, Result};
 use crate::flows::registry::{self, Source};
@@ -39,6 +39,7 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
         }
         FlowAction::Default(default) => set_default(default),
         FlowAction::Order(order) => set_order(order),
+        FlowAction::CloseWhenMerged(args) => close_when_merged(&args),
     }
 }
 
@@ -67,6 +68,9 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
     if run.create.view.view.is_some() {
         client::use_flow_run_view()?;
     }
+    if run.close_when_merged {
+        client::use_flow_close_when_merged()?;
+    }
     let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
     let request = control::FlowRun {
         name: run.name,
@@ -80,6 +84,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         profile,
         accounts,
         machine: super::machine(run.on)?,
+        close_when_merged: run.close_when_merged,
     };
     let value = ask("flow run", control::Command::FlowRun(request))?;
     if run.create.print.json {
@@ -91,6 +96,9 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
     }
     if let Some(text) = folder_note(&run) {
         note(&format!("{text}\n"));
+    }
+    if run.close_when_merged {
+        note(&format!("{}\n", closing_note(&run)));
     }
     print_out(&started(&run))
 }
@@ -266,6 +274,26 @@ pub(super) fn default_line(set: &FlowDefaultSet) -> String {
         (None, true) => "no default flow: the start dialog opens on the first built-in flow that can start\n".into(),
         (None, false) => "there was no default flow\n".into(),
     }
+}
+
+fn close_when_merged(args: &FlowCloseWhenMergedArgs) -> Result<()> {
+    let workspace = workspace("flow close-when-merged", args.place.workspace, args.place.worktree.as_deref())?;
+    let request = control::FlowCloseWhenMerged { workspace, off: args.off };
+    let command = control::Command::FlowCloseWhenMerged(request);
+    answered("flow close-when-merged", command, args.print.json, closes_line)
+}
+
+pub(super) fn closes_line(set: &CloseWhenMergedSet) -> String {
+    let (id, already) = (set.workspace, if set.changed { "" } else { "already " });
+    if set.close_when_merged {
+        let tail = if set.changed {
+            "close once its pull request merges and none of them works"
+        } else {
+            "close once its pull request merges"
+        };
+        return format!("the agents of workspace {id} {already}{tail}\n");
+    }
+    format!("the agents of workspace {id} {already}stay open after its pull request merges\n")
 }
 
 pub(super) fn ordered_line(ordered: &FlowOrdered) -> String {
@@ -496,6 +524,13 @@ pub(super) fn folder_note(run: &RunInfo) -> Option<String> {
     run.run_dir.as_ref().map(|dir| format!("the run keeps its files in {}", dir.display()))
 }
 
+pub(super) fn closing_note(run: &RunInfo) -> String {
+    format!(
+        "its agents close once its pull request merges and none of them works; cornercase agents reopen --workspace {} brings them back",
+        run.workspace
+    )
+}
+
 pub(super) fn started(run: &RunInfo) -> String {
     let mut out = format!("{}\n", run.workspace);
     for member in &run.members {
@@ -559,6 +594,9 @@ fn run_block(run: &RunState) -> String {
     }
     if run.ended {
         out.push_str("  ended: the orchestrator marked its pane for review\n");
+    }
+    if run.close_when_merged {
+        out.push_str("  closes its agents once its pull request merges\n");
     }
     out
 }

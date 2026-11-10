@@ -243,6 +243,27 @@ mod streams {
         })
     }
 
+    const FLOW_CLOSING: &str = r#"{"args": ["flow", "run", "Pair", "--prompt", "x", "--close-when-merged", "--json"]}"#;
+
+    #[test]
+    fn a_flow_that_closes_when_merged_is_refused_up_front_by_a_server_that_would_drop_it() {
+        let (answer, seen) = in_a_view_on(FLOW_CLOSING, lacking("flow-close-when-merged"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("cannot close a flow's agents") && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("flow-run")), "{seen:?}");
+    }
+
+    #[test]
+    fn a_flow_that_closes_when_merged_sends_the_field() {
+        let (answer, seen) = in_a_view_on(FLOW_CLOSING, control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let run = seen.iter().find(|text| text.contains("flow-run")).expect("the run");
+        assert!(run.contains("\"close_when_merged\":true"), "{run}");
+    }
+
     #[rstest]
     #[case::close(r#"{"args": ["close", "--pane", "4", "--boot", "old"]}"#)]
     #[case::rename(r#"{"args": ["rename", "--tab", "4", "x", "--boot", "old"]}"#)]

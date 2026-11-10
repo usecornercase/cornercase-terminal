@@ -138,6 +138,12 @@ The workspace's **`▶`** brings the whole team back: each role in its own conve
 
 The `×` of a member's row in the agents section (**close agent**) is different: it closes the whole team for good and ends the run, removing nothing.
 
+### Close them once the pull request merges
+
+Start a run with `cornercase flow run … --close-when-merged`, or turn it on for a run that is already going with `cornercase flow close-when-merged` (`--off` turns it off again), and the team closes by itself once the run's pull request or merge request has merged and none of its agents has been working, waiting or starting for 3 minutes. It closes as **close agents** does, so finished runs stop piling up idle agents: the workspace's **`▶`** (or `cornercase agents reopen`) brings each role back in its own conversation, and opencode and custom agents start over. Nothing is removed: the workspace, its worktrees, its branches and the run's folder stay. A reopen keeps the team open, since the choice is spent.
+
+A shell you opened in one of the team's tabs keeps the team open, since closing it could lose what you were doing there. A flow that leaves the commits has no pull request, so it cannot use it. It needs pull requests on in settings and `gh` (or `glab` on GitLab) signed in, the same as the Flow panel's end. A window toast says what closed and offers ` reopen `.
+
 ## The run's folder
 
 Every run gets a folder for its files, so long reports don't pile up in the orchestrator's context and the run leaves a record of what each role produced. It is outside the worktree, so nothing in it is ever committed, and every pane of the team has its path in **`$CORNERCASE_RUN_DIR`**.
@@ -289,6 +295,7 @@ at_most = 2
 ```sh
 cornercase flow list
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login
+cornercase flow run 'Full issue' --issue '#482' --close-when-merged
 cornercase flow export Quick > quick.toml
 cornercase flow import quick.toml
 cornercase flow save draft.json --check
@@ -297,7 +304,7 @@ cornercase flow hide Quick
 
 `flow export` and `flow import` [share a flow](#share-a-flow). `flow save`, `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with `flow save` (the `flow-save` request). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
 
-`cornercase status --json` gives each workspace that runs a flow a `run` with its `end` and whether it was `reached`.
+`cornercase status --json` gives each workspace that runs a flow a `run` with its `end`, whether it was `reached` and, when the run closes its agents once merged, `close_when_merged`.
 
 ## What is not covered
 

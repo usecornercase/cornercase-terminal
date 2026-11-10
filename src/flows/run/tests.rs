@@ -232,3 +232,63 @@ mod sent {
         assert_eq!(run.sent.len(), 0);
     }
 }
+
+mod merged {
+    use pull_request::State;
+
+    use super::*;
+
+    #[rstest]
+    #[case::open(End::PullRequest, Some(State::Open), false)]
+    #[case::draft(End::PullRequest, Some(State::Draft), false)]
+    #[case::closed(End::PullRequest, Some(State::Closed), false)]
+    #[case::merged(End::PullRequest, Some(State::Merged), true)]
+    #[case::none(End::PullRequest, None, false)]
+    #[case::commits_flow(End::Commits, Some(State::Merged), false)]
+    fn only_a_merged_pull_request_of_a_pull_request_flow_counts(
+        #[case] end: End,
+        #[case] state: Option<State>,
+        #[case] expected: bool,
+    ) {
+        let found = state.map(pull);
+        assert_eq!(run(end).merged(found.as_ref()), expected);
+    }
+}
+
+mod close_due {
+    use super::*;
+
+    fn opted_in() -> Run {
+        let mut run = run(End::PullRequest);
+        run.close_when_merged = true;
+        run
+    }
+
+    #[test]
+    fn the_countdown_starts_on_the_first_ready_step() {
+        let (mut run, t0) = (opted_in(), Instant::now());
+        assert!(!run.close_due(true, t0));
+        assert!(!run.close_due(true, t0 + MERGED_GRACE - Duration::from_secs(1)));
+        assert!(run.close_due(true, t0 + MERGED_GRACE));
+    }
+
+    #[test]
+    fn a_step_that_is_not_ready_starts_it_over() {
+        let (mut run, t0) = (opted_in(), Instant::now());
+        let at = |seconds| t0 + Duration::from_secs(seconds);
+        assert!(!run.close_due(true, t0));
+        assert!(!run.close_due(false, at(100)));
+        assert!(!run.close_due(true, at(120)));
+        assert!(!run.close_due(true, at(299)));
+        assert!(run.close_due(true, at(300)));
+    }
+
+    #[test]
+    fn without_the_opt_in_it_never_closes_and_forgets_the_countdown() {
+        let (mut run, t0) = (opted_in(), Instant::now());
+        assert!(!run.close_due(true, t0));
+        run.close_when_merged = false;
+        assert!(!run.close_due(true, t0 + MERGED_GRACE));
+        assert!(run.merged_since.is_none());
+    }
+}

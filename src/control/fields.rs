@@ -169,6 +169,7 @@ impl Command {
             Self::FlowHide(hide) => hide.fields(fields),
             Self::FlowRestore(restore) => restore.fields(fields),
             Self::FlowDefault(default) => default.fields(fields),
+            Self::FlowCloseWhenMerged(req) => req.fields(fields),
             Self::FlowOrder(order) => order.fields(fields),
             Self::FlowMessages(messages) => messages.fields(fields),
             Self::FlowFiles(files) => files.fields(fields),

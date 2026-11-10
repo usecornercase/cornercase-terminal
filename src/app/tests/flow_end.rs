@@ -11,6 +11,8 @@ use crate::flows::{End, Flow, ORCHESTRATOR, builtin};
 use crate::pull_request::{Ci, State};
 use crate::test_util::{fixture, git};
 
+mod close_when_merged;
+
 fn flow(end: End) -> Flow {
     let mut flow = builtin::flows(&agents::Known::ALL, Some(agents::Known::Claude)).remove(0);
     flow.end = end;

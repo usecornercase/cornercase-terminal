@@ -28,6 +28,8 @@ use crate::project::{Hierarchy, Phase, Project, Tab, Workspace, WorkspaceAt};
 use crate::state::RunState;
 use crate::term::Term;
 use crate::time;
+
+mod merged;
 use crate::ui;
 
 pub(super) struct Runs {
@@ -72,6 +74,14 @@ impl Runs {
         self.list.iter().find(|run| run.workspace == workspace)
     }
 
+    pub(super) fn of_workspace_mut(&mut self, workspace: u64) -> Option<&mut Run> {
+        self.list.iter_mut().find(|run| run.workspace == workspace)
+    }
+
+    pub(super) fn get(&self, id: u64) -> Option<&Run> {
+        self.list.iter().find(|run| run.id == id)
+    }
+
     pub(super) fn has(&self, id: u64) -> bool {
         self.list.iter().any(|run| run.id == id)
     }
@@ -84,6 +94,7 @@ impl Runs {
         let i = self.list.iter().position(|run| run.workspace == workspace)?;
         let mut run = self.list.remove(i);
         run.sent.clear();
+        run.merged_since = None;
         Some(run)
     }
 
@@ -155,6 +166,7 @@ pub(super) struct Starting {
     pub(super) parent: Option<Parent>,
     pub(super) accounts: Accounts,
     pub(super) name: Option<String>,
+    pub(super) close_when_merged: bool,
 }
 
 impl Starting {
@@ -170,6 +182,7 @@ impl Starting {
             parent: None,
             accounts,
             name: None,
+            close_when_merged: false,
         }
     }
 }
@@ -366,6 +379,12 @@ impl App {
         if starting.task.trim().is_empty() {
             return Err("the flow needs a task: say what the team should do".into());
         }
+        if starting.close_when_merged && flow.end != flows::End::PullRequest {
+            return Err(format!(
+                "flow {} leaves the commits, so it opens no pull request to close its agents on",
+                flow.name
+            ));
+        }
         let project = &self.projects[p];
         if project.closing {
             return Err(format!("project {} is closing", project.id));
@@ -456,12 +475,15 @@ impl App {
         setup: bool,
     ) -> Result<RunInfo, String> {
         let id = self.open_check(place)?;
-        let Starting { flow, task, branch, focus, view, note, trees, parent, accounts, name } = starting;
+        let Starting { flow, task, branch, focus, view, note, trees, parent, accounts, name, close_when_merged } =
+            starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
+        run.close_when_merged = close_when_merged;
         let project = self.projects[place.project()].id;
-        let mut info = RunInfo { run: run.id, project, workspace: id, branch, note, ..RunInfo::default() };
+        let mut info =
+            RunInfo { run: run.id, project, workspace: id, branch, note, close_when_merged, ..RunInfo::default() };
         let path = self.projects.workspace(place).path.clone();
         let dir = folder::make(&self.runs.dir, &path, time::now() * 1000)
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
@@ -663,6 +685,7 @@ impl App {
         let mut run = Run::new(workspace, saved.flow.clone(), saved.task.clone());
         run.dir = dir.map(Path::to_path_buf);
         run.ended.clone_from(&saved.ended);
+        run.close_when_merged = saved.close_when_merged;
         run.id = self.take_id();
         run.progress = Progress::resumed(&run.flow, saved.stage, &saved.rounds);
         for seat in &saved.members {

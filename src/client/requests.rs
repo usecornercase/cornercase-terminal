@@ -127,6 +127,10 @@ pub(crate) fn use_flow_run_view() -> Result<()> {
     require("flow-run-view", "cannot start a flow in a view")
 }
 
+pub(crate) fn use_flow_close_when_merged() -> Result<()> {
+    require("flow-close-when-merged", "cannot close a flow's agents once its pull request merges")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }

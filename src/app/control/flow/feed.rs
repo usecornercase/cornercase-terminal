@@ -17,6 +17,10 @@ use crate::state::SeatState;
 use crate::time::Stamp;
 use crate::version;
 
+pub(super) fn no_run(workspace: u64) -> Refusal {
+    conflict(format!("workspace {workspace} runs no flow; `cornercase flow runs` lists the runs"))
+}
+
 impl App {
     pub(in crate::app) fn workspace_run_dir(&self, workspace: &Workspace) -> Option<std::path::PathBuf> {
         let run = self.runs.of_workspace(workspace.id);
@@ -55,6 +59,7 @@ impl App {
             ended,
             messages: run.recorded,
             state: None,
+            close_when_merged: run.close_when_merged,
         })
     }
 
@@ -91,6 +96,7 @@ impl App {
             ended,
             messages: run.recorded,
             state: Some("closed".to_string()),
+            close_when_merged: run.close_when_merged,
         })
     }
 
@@ -119,7 +125,11 @@ impl App {
         state
     }
 
-    fn flow_workspace(&self, caller: Option<u64>, workspace: Option<u64>) -> std::result::Result<u64, Refusal> {
+    pub(super) fn flow_workspace(
+        &self,
+        caller: Option<u64>,
+        workspace: Option<u64>,
+    ) -> std::result::Result<u64, Refusal> {
         if let Some(id) = workspace {
             return self.projects.workspace_index(id).map(|_| id).ok_or_else(|| none("workspace", id));
         }
@@ -137,7 +147,7 @@ impl App {
     ) -> Handled {
         let workspace = self.flow_workspace(caller, messages.workspace)?;
         let Some(run) = self.run_of(workspace) else {
-            return Err(conflict(format!("workspace {workspace} runs no flow; `cornercase flow runs` lists the runs")));
+            return Err(no_run(workspace));
         };
         if self.clients.events.follows_flow_messages(client) {
             return Err(conflict("this connection already follows a run's messages; open another connection"));

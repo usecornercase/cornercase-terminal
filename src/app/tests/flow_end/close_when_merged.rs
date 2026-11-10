@@ -1,0 +1,145 @@
+use rstest::rstest;
+
+use super::*;
+use crate::agents::launch::Launch;
+use crate::flows::run::MERGED_GRACE;
+use crate::project::split::Dir;
+
+fn opted(end: End) -> Repo {
+    let mut repo = with_run(end);
+    repo.app.runs.first_mut().close_when_merged = true;
+    repo
+}
+
+fn pull(repo: &mut Repo, state: &str) {
+    answer(repo, &VIEW.replace("\"OPEN\"", state), 1);
+}
+
+fn workspace_id(app: &App) -> u64 {
+    app.runs.all()[0].workspace
+}
+
+fn closes_at(repo: &mut Repo, t0: Instant) -> bool {
+    repo.app.close_merged_runs(t0);
+    repo.app.close_merged_runs(t0 + MERGED_GRACE);
+    repo.app.runs.all().is_empty()
+}
+
+#[test]
+fn a_merged_run_with_nothing_at_work_closes_its_agents_after_three_minutes() {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+    let (id, t0) = (workspace_id(&repo.app), Instant::now());
+    let run = repo.app.runs.all()[0].id;
+    let path = repo.app.projects[0].workspaces[1].path.clone();
+
+    repo.app.close_merged_runs(t0);
+    assert_eq!(repo.app.runs.all().len(), 1);
+    repo.app.close_merged_runs(t0 + MERGED_GRACE);
+
+    assert!(repo.app.runs.all().is_empty() && repo.app.agents.closed.has_run(id));
+    let runs = repo.app.flow_runs_state().runs;
+    assert_eq!((runs.len(), runs[0].run, runs[0].state.as_deref()), (1, run, Some("closed")));
+    assert!(!runs[0].close_when_merged);
+    let toast = repo.app.messages.toast.as_ref().expect("a toast");
+    assert!(toast.message.contains("merged in") && toast.message.contains("agents closed"), "{}", toast.message);
+    assert_eq!(toast.view().button, Some(ui::ToastButton::Reopen));
+    pump_until(&mut repo.app, &repo.rx, "the tabs go", |a| a.projects[0].workspaces[1].tabs.is_empty());
+    assert!(path.is_dir());
+}
+
+#[test]
+fn without_the_opt_in_a_merged_run_stays_open() {
+    let mut repo = with_run(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+
+    assert!(!closes_at(&mut repo, Instant::now()));
+}
+
+#[rstest]
+#[case::open("\"OPEN\"")]
+#[case::closed("\"CLOSED\"")]
+fn a_pull_request_that_is_open_or_closed_never_closes_it(#[case] state: &str) {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, state);
+
+    assert!(!closes_at(&mut repo, Instant::now()));
+}
+
+#[test]
+fn an_agent_at_work_during_the_three_minutes_starts_them_over() {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+    let t0 = Instant::now();
+    let later = |seconds: u64| t0 + Duration::from_secs(seconds);
+
+    repo.app.close_merged_runs(t0);
+    orchestrator(&mut repo.app).agent.update(Some(Activity::Working), true, later(100));
+    repo.app.close_merged_runs(later(100));
+    repo.app.close_merged_runs(later(180));
+    assert_eq!(repo.app.runs.all().len(), 1);
+
+    orchestrator(&mut repo.app).agent.update(Some(Activity::Idle), true, later(200));
+    repo.app.close_merged_runs(later(200));
+    repo.app.close_merged_runs(later(379));
+    assert_eq!(repo.app.runs.all().len(), 1);
+    repo.app.close_merged_runs(later(380));
+    assert!(repo.app.runs.all().is_empty());
+}
+
+#[test]
+fn a_shell_in_one_of_the_teams_tabs_keeps_them_open() {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+    let member = repo.app.runs.all()[0].members[1].pane;
+    repo.app.split_pane(member, Dir::Right, AREA, false).expect("a split");
+
+    assert!(!closes_at(&mut repo, Instant::now()));
+}
+
+#[test]
+fn a_launch_in_flight_keeps_them_open() {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+    let member = repo.app.runs.all()[0].members[1].pane;
+    let now = Instant::now();
+    repo.app.agents.launches.add(Launch::resume(member, "sh".into(), true, now, now + Duration::from_secs(600)));
+
+    assert!(!closes_at(&mut repo, now));
+}
+
+#[test]
+fn a_flow_that_leaves_the_commits_never_closes() {
+    let mut repo = opted(End::Commits);
+    pull(&mut repo, "\"MERGED\"");
+
+    assert!(!closes_at(&mut repo, Instant::now()));
+}
+
+#[test]
+fn a_manual_close_keeps_the_opt_in_and_drops_the_countdown() {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+    let id = workspace_id(&repo.app);
+    repo.app.close_merged_runs(Instant::now());
+    assert!(repo.app.runs.all()[0].merged_since.is_some());
+
+    let plan = repo.app.agents_close_plan(id).expect("a plan");
+    repo.app.close_agents(&plan);
+
+    let kept = &repo.app.agents.closed.of(id).and_then(|kept| kept.run.as_ref()).expect("a kept run").run;
+    assert_eq!((kept.close_when_merged, kept.merged_since), (true, None));
+}
+
+#[test]
+fn status_and_the_feed_say_the_run_closes_when_merged() {
+    let mut repo = with_run(End::PullRequest);
+    let before = repo.app.refreshed();
+    repo.app.runs.first_mut().close_when_merged = true;
+
+    assert_ne!(repo.app.refreshed(), before);
+    assert!(repo.app.flow_runs_state().runs[0].close_when_merged);
+    let report = repo.app.report(None);
+    let run = report.projects[0].workspaces[1].run.as_ref().expect("a run");
+    assert!(run.close_when_merged);
+}

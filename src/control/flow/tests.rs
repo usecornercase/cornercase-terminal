@@ -154,6 +154,7 @@ fn example_run() -> RunState {
         ended: true,
         messages: 4,
         state: None,
+        close_when_merged: false,
     }
 }
 
@@ -277,4 +278,66 @@ fn a_run_answer_has_a_projection_only_when_a_view_moved() {
     assert!(moved.contains("\"projection\":2"), "{moved}");
     let older: RunInfo = serde_json::from_str(r#"{"run": 1}"#).expect("an older answer");
     assert_eq!(older.projection, None);
+}
+
+mod close_when_merged {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_run_that_closes_when_merged_says_so_and_others_have_no_key() {
+        let plain = serde_json::to_value(example_run()).expect("json");
+        assert!(plain.get("close_when_merged").is_none());
+        let opted = RunState { close_when_merged: true, ..example_run() };
+        assert_eq!(serde_json::to_value(opted).expect("json")["close_when_merged"], json!(true));
+    }
+
+    #[test]
+    fn a_flow_run_request_writes_the_key_only_when_set() {
+        let plain = serde_json::to_value(FlowRun::default()).expect("json");
+        assert!(plain.get("close_when_merged").is_none());
+        let opted = FlowRun { close_when_merged: true, ..FlowRun::default() };
+        assert_eq!(serde_json::to_value(&opted).expect("json")["close_when_merged"], json!(true));
+        assert!(Command::FlowRun(opted).fields().contains(&("close_when_merged", "true".into())));
+    }
+
+    #[test]
+    fn the_run_answer_has_the_key_only_when_set() {
+        assert!(serde_json::to_value(RunInfo::default()).expect("json").get("close_when_merged").is_none());
+        let opted = RunInfo { close_when_merged: true, ..RunInfo::default() };
+        assert_eq!(serde_json::to_value(opted).expect("json")["close_when_merged"], json!(true));
+    }
+
+    fn asked() -> Command {
+        Command::FlowCloseWhenMerged(FlowCloseWhenMerged { workspace: Some(7), off: false })
+    }
+
+    fn answered() -> CloseWhenMergedSet {
+        CloseWhenMergedSet { run: 9, project: 2, workspace: 7, close_when_merged: true, changed: true }
+    }
+
+    #[test]
+    fn the_request_writes_every_field_as_its_fixture() {
+        let written = serde_json::to_string_pretty(&asked()).expect("json");
+        assert_eq!(written, fixture!("control/flow-close-when-merged/v1/request.json").trim_end());
+        let raw: Value =
+            serde_json::from_str(fixture!("control/flow-close-when-merged/v1/request.json")).expect("json");
+        let parsed: Request = serde_json::from_value(raw.clone()).expect("a request");
+        assert_eq!(unknown_fields(&raw, &parsed), None);
+        assert_eq!(parsed.command, asked());
+    }
+
+    #[test]
+    fn the_answer_is_its_fixture_and_reads_leniently() {
+        let written = serde_json::to_string_pretty(&answered()).expect("json");
+        assert_eq!(written, fixture!("control/flow-close-when-merged/v1/answer.json").trim_end());
+        let read: CloseWhenMergedSet =
+            serde_json::from_str(fixture!("control/flow-close-when-merged/v1/answer.json")).expect("answer");
+        assert_eq!(read, answered());
+        let later: CloseWhenMergedSet = serde_json::from_value(
+            json!({"run": 9, "project": 2, "workspace": 7, "close_when_merged": true, "changed": true, "later": 1}),
+        )
+        .expect("a later answer");
+        assert_eq!(later, answered());
+    }
 }
