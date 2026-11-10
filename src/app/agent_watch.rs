@@ -178,7 +178,7 @@ impl App {
         self.journal_agents(clock, prompt_times);
         self.agents.stats.sample(clock, elapsed, samples);
         self.agents.stats.prune(clock);
-        self.learn_parent_conversations();
+        self.learn_conversations();
     }
 
     fn send_notices(&mut self, notices: Vec<(NoticeKey, Vec<u64>)>) {
@@ -295,7 +295,7 @@ impl App {
         let live = self.running_panes();
         for p in crate::project::sidebar_order(&self.projects, &self.groups) {
             for (place, term) in self.project_agents(p) {
-                listing.push(Listed::Here(place), Self::local_key(term, &live), term.collapsed);
+                listing.push(Listed::Here(place), Self::local_key(term, &live), term.collapsed());
             }
             listing.there(self.machine_agents(&remote, self.projects[p].id));
         }

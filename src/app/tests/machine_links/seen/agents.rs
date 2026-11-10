@@ -193,7 +193,7 @@ mod listed {
     fn whose_ids_clash_with_local_ones_neither_hang_nor_fold_under_them() {
         let mut seeing = seeing_two();
         let ours = agent(&mut seeing.rig.app, 0, 0);
-        seeing.rig.app.projects.pane_by_mut(ours).expect("our agent").collapsed = true;
+        seeing.rig.app.projects.pane_by_mut(ours).expect("our agent").set_collapsed(true);
         let folded = PaneInfo { collapsed: true, ..pane(ours, "gemini", None) };
         sending(&mut seeing, vec![folded, pane(ours + 50, "codex", Some(ours))], Vec::new());
 

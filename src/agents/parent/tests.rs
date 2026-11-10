@@ -93,11 +93,11 @@ mod learn {
 
     #[test]
     fn an_agent_takes_the_conversation_read_from_its_process() {
-        let mut parent = Parent { pane: 1, by: By::Agent(4) };
+        let mut by = By::Agent(4);
 
-        parent.learn((4, &conversation("s1")));
+        by.learn((4, &conversation("s1")));
 
-        assert_eq!(parent.by, By::Conversation(conversation("s1")));
+        assert_eq!(by, By::Conversation(conversation("s1")));
     }
 
     #[rstest]
@@ -106,10 +106,26 @@ mod learn {
     #[case::a_conversation(By::Conversation(conversation("s0")), 4)]
     #[case::a_pane(By::Pane, 4)]
     fn nothing_else_changes(#[case] by: By, #[case] pid: i32) {
-        let mut parent = Parent { pane: 1, by: by.clone() };
+        let mut learned = by.clone();
 
-        parent.learn((pid, &conversation("s1")));
+        learned.learn((pid, &conversation("s1")));
 
-        assert_eq!(parent.by, by);
+        assert_eq!(learned, by);
+    }
+}
+
+mod kept {
+    use super::*;
+
+    #[rstest]
+    #[case::the_conversation_that_holds(By::Conversation(conversation("s1")), true)]
+    #[case::a_conversation_that_no_longer_runs(By::Conversation(conversation("s0")), false)]
+    #[case::an_agent(By::Agent(4), false)]
+    #[case::a_shell(By::Shell(1), false)]
+    fn only_a_conversation_that_holds(#[case] by: By, #[case] kept: bool) {
+        let resume = state("claude", "s1");
+        let now = Running { conversation: Some(&resume), read: None, agent: Some(4), shell: Some(1) };
+
+        assert_eq!(by.kept(now), kept);
     }
 }

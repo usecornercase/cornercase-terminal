@@ -644,7 +644,8 @@ Examples:
   cornercase move-pane --pane 4 --target 7 --place below --json";
 pub(super) const FOLD_HELP: &str =
     "Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
-workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section.
+workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section
+for as long as the agent running there now keeps running (another conversation there starts expanded).
 Its shells keep running.
 
 Examples:

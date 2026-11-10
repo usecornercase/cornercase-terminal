@@ -195,7 +195,8 @@ mod respawning_a_pane {
         let pane = setup.pane(0).id;
         let split = setup.app.split_pane(pane, Dir::Right, AREA, false).expect("split").expect("a new pane");
         let term = setup.app.projects.pane_by_mut(pane).expect("the pane");
-        (term.parent, term.collapsed) = (Some(Parent::pane(split)), true);
+        let fold = by_conversation(split, "c1").by;
+        (term.parent, term.fold) = (Some(Parent::pane(split)), Some(fold.clone()));
         let (old_pid, layout) = (setup.pane(0).shell_pid(), tab(&setup).layout.clone());
         told_about_panes(&mut setup.app);
         let accounts = Accounts::of(
@@ -211,7 +212,10 @@ mod respawning_a_pane {
         let tab = tab(&setup);
         let term = tab.pane_by(pane).expect("the same pane id");
         assert_eq!((tab.panes[0].id, &tab.layout), (pane, &layout));
-        assert_eq!((term.parent.as_ref().map(|p| p.pane), term.collapsed, term.generation()), (Some(split), true, 1));
+        assert_eq!(
+            (term.parent.as_ref().map(|p| p.pane), term.fold.clone(), term.generation()),
+            (Some(split), Some(fold), 1)
+        );
         assert_ne!(term.shell_pid(), old_pid);
         assert_eq!(term.accounts().name(Known::Claude), Some("personal"));
         assert_eq!(told_about_panes(&mut setup.app), Vec::<String>::new());

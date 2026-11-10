@@ -296,7 +296,7 @@ mod holding {
         term.context = context::Pane::watching(4242, crate::agents::Known::Claude, SystemTime::now());
         converse(&mut app, caller, Some("c1"));
 
-        app.learn_parent_conversations();
+        app.learn_conversations();
 
         assert_eq!(link(&app, made), Some(by_conversation(caller, "c1")));
     }

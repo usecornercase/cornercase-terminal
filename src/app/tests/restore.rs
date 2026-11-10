@@ -477,26 +477,71 @@ mod parents {
     }
 
     #[cfg(unix)]
-    #[test]
-    fn a_fold_comes_back_with_its_pane() {
+    fn fake_claude(app: &mut App, resume: bool) -> TempDir {
+        let bin = TempDir::new();
+        let fake = bin.path().join("claude");
+        crate::test_util::write_executable(&fake, "#!/bin/sh\nsleep 30\n");
+        app.config.agent_commands.insert("claude".into(), fake.display().to_string());
+        app.config.resume_agents = resume;
+        bin
+    }
+
+    #[cfg(unix)]
+    fn written_folds(app: &App) -> Vec<bool> {
+        let workspaces = app.state().projects.into_iter().flat_map(|p| p.workspaces);
+        workspaces.flat_map(|w| w.tabs).flat_map(|t| t.panes).map(|pane| pane.collapsed).collect()
+    }
+
+    #[cfg(unix)]
+    #[rstest::rstest]
+    #[case::resuming(true)]
+    #[case::without_resume(false)]
+    fn a_fold_comes_back_with_its_conversation(#[case] resume: bool) {
         let dir = TempDir::new();
         let (mut app, _rx) = empty_app();
-        let parent = PaneState { collapsed: true, ..pane(Some(40), None) };
+        let _bin = fake_claude(&mut app, resume);
+        let parent = PaneState { collapsed: true, agent: Some(resume_state("s1")), ..pane(Some(40), None) };
         let ws = workspace(dir.path(), vec![parent, pane(None, Some(40))]);
 
         assert!(app.restore(&saved(vec![project(dir.path(), vec![ws])], 0), AREA), "every tab comes back");
 
-        let folds: Vec<bool> = app.projects.terms().map(|term| term.collapsed).collect();
-        assert_eq!(folds, [true, false]);
-        let written: Vec<bool> = app
-            .state()
-            .projects
-            .iter()
-            .flat_map(|p| &p.workspaces)
-            .flat_map(|w| &w.tabs)
-            .flat_map(|t| t.panes.iter().map(|pane| pane.collapsed))
-            .collect();
-        assert_eq!(written, [true, false]);
+        let first = app.projects.terms().next().expect("the folded pane");
+        assert_eq!(first.fold, Some(By::Conversation(Conversation::of(&resume_state("s1")))));
+        let folds: Vec<bool> = app.projects.terms().map(Term::collapsed).collect();
+        assert_eq!(folds, [resume, false]);
+        assert_eq!(written_folds(&app), [resume, false]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_fold_saved_without_a_conversation_is_dropped() {
+        let dir = TempDir::new();
+        let (mut app, _rx) = empty_app();
+        let ws = workspace(dir.path(), vec![PaneState { collapsed: true, ..pane(Some(40), None) }]);
+
+        assert!(app.restore(&saved(vec![project(dir.path(), vec![ws])], 0), AREA));
+
+        let first = app.projects.terms().next().expect("the pane");
+        assert_eq!((first.fold.clone(), written_folds(&app)), (None, vec![false]));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_saved_session_writes_only_folds_that_hold_with_their_conversation() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        for _ in 0..3 {
+            click_row(&mut app, WorkspaceRow::NewTab(0));
+        }
+        let ids: Vec<u64> = (0..4).map(|t| tab_term(&app, 0, t).id).collect();
+        agent_in_front(&mut app, ids[0], Some(4242), Some("c1"));
+        agent_in_front(&mut app, ids[1], Some(4243), Some("c1"));
+        agent_in_front(&mut app, ids[2], Some(4244), None);
+        for id in &ids {
+            assert!(app.set_agent_fold(*id, true));
+        }
+        converse(&mut app, ids[1], Some("c2"));
+
+        assert_eq!(written_folds(&app), [true, false, false, false]);
     }
 
     #[cfg(unix)]
@@ -601,13 +646,8 @@ mod parents {
     fn a_child_comes_back_under_its_parent_when_that_conversation_resumes() {
         let dir = TempDir::new();
         let (mut app, _rx) = empty_app();
-        let bin = TempDir::new();
-        let fake = bin.path().join("claude");
-        crate::test_util::write_executable(&fake, "#!/bin/sh\nsleep 30\n");
-        app.config.agent_commands.insert("claude".into(), fake.display().to_string());
-        app.config.resume_agents = true;
-        let agent = AgentState { kind: "claude".into(), conversation: "s1".into(), mode: None, account: None };
-        let parent = PaneState { agent: Some(agent), ..pane(Some(40), None) };
+        let _bin = fake_claude(&mut app, true);
+        let parent = PaneState { agent: Some(resume_state("s1")), ..pane(Some(40), None) };
         let (mine, other) =
             (pane(None, Some(40)), PaneState { parent_conversation: Some(conversation("s0")), ..pane(None, Some(40)) });
         let ws = workspace(dir.path(), vec![parent, mine, other]);

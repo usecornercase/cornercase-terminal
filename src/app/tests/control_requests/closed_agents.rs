@@ -2,16 +2,11 @@
 
 use super::super::close_agent::{agent, tabs};
 use super::*;
-use crate::agents::AgentState;
 use crate::agents::activity::Activity;
 use crate::control::closed_agents::{AgentsClosed, AgentsForgot, AgentsReopened};
 use crate::project::Project;
 
 mod flows;
-
-fn resume_state(conversation: &str) -> AgentState {
-    AgentState { kind: "claude".into(), conversation: conversation.into(), mode: None, account: None }
-}
 
 fn setup(resumable: bool) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(1);

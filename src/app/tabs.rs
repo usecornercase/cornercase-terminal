@@ -205,11 +205,11 @@ impl App {
 
     pub(super) fn respawn_in(&mut self, pane: u64, cwd: PathBuf, accounts: Accounts) -> Result<bool> {
         let Some(old) = self.projects.pane_by(pane) else { return Ok(false) };
-        let (generation, size, parent, collapsed) =
-            (old.generation().wrapping_add(1), old.size(), old.parent.clone(), old.collapsed);
+        let (generation, size, parent, fold) =
+            (old.generation().wrapping_add(1), old.size(), old.parent.clone(), old.fold.clone());
         let mut term = self.spawn_pane(&NewPane { id: pane, size, cwd, run: None }, generation, accounts)?;
         term.parent = parent;
-        term.collapsed = collapsed;
+        term.fold = fold;
         let Some(slot) = self.projects.pane_by_mut(pane) else { return Ok(false) };
         let old = std::mem::replace(slot, term);
         log::info!("app", "pane respawned", pane = pane, generation = generation);
