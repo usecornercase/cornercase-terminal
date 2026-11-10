@@ -27,3 +27,13 @@ fn a_timeout_says_what_held_the_message() {
     assert!(waiting(4, Some(Why::Typing)).contains("typed in the last 2s"));
     assert!(waiting(4, None).starts_with("an earlier message to pane 4"));
 }
+
+#[test]
+fn a_message_left_to_the_persons_enter_says_where_it_is() {
+    let with_text = pasted(4, true);
+
+    assert!(with_text.starts_with("the person in pane 4 had a draft in its input when they chose send now"));
+    assert!(with_text.contains("do not send it again"));
+    assert!(with_text.contains("cornercase read --pane 4"));
+    assert!(pasted(4, false).contains("the Enter was left to them"));
+}

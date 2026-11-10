@@ -42,5 +42,13 @@ pub(crate) struct HeldInfo {
     pub(crate) held_queued: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct HeldAnswer {
+    #[serde(flatten)]
+    pub(crate) held: HeldInfo,
+    pub(crate) after_draft: bool,
+}
+
 #[cfg(test)]
 mod tests;

@@ -62,6 +62,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "against-base",
     "notice-subagent",
     "mode-default",
+    "held-after-draft",
     "flow-close-when-merged",
 ];
 

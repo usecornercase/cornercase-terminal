@@ -43,12 +43,24 @@ fn it_acts_in_a_view() {
 }
 
 #[rstest]
-#[case::nothing_left(0, false, "nothing is held in pane 9 now\n")]
-#[case::one(1, false, "1 message held in pane 9\n")]
-#[case::several(3, false, "3 messages held in pane 9\n")]
-#[case::queued(2, true, "2 messages held in pane 9, queued to go right after the person's\n")]
-fn the_text_says_what_is_held_now(#[case] held_sends: u32, #[case] held_queued: bool, #[case] expected: &str) {
+#[case::nothing_left(0, false, false, "nothing is held in pane 9 now\n")]
+#[case::one(1, false, false, "1 message held in pane 9\n")]
+#[case::several(3, false, false, "3 messages held in pane 9\n")]
+#[case::queued(2, true, false, "2 messages held in pane 9, queued to go right after the person's\n")]
+#[case::pasted_after_the_draft(
+    0,
+    false,
+    true,
+    "the message is in pane 9 after the person's draft, not sent: their Enter sends both\nnothing is held in pane 9 now\n"
+)]
+fn the_text_says_what_is_held_now(
+    #[case] held_sends: u32,
+    #[case] held_queued: bool,
+    #[case] after_draft: bool,
+    #[case] expected: &str,
+) {
     let held = HeldInfo { pane: 9, held_sends, held_from: Some(40), held_queued };
+    let held = HeldAnswer { held, after_draft };
 
     assert_eq!(text(&held), expected);
 }

@@ -60,6 +60,8 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 after a restart (`resuming` in the JSON), where the text would reach its shell or its start-up:
 send again once it is back, or pass --force. While a person is typing in the pane the text waits for them
 and goes right after their prompt (`held_sends` in the JSON); `cornercase held` acts on it from elsewhere.
+If they choose send now while they have a draft, the text is pasted after it without its Enter, and the
+command fails saying it is in their input.
 
 With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI,
 Vibe CLI or GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
