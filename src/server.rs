@@ -820,7 +820,7 @@ impl Server {
             if let (Event::FocusGained, Some(area)) = (&ev, shown) {
                 client.reset_screen(area);
             }
-            self.app.window_focus(id, ev == Event::FocusGained);
+            self.app.window_focus(id, ev == Event::FocusGained, Instant::now());
             return;
         }
         let used = is_use(&ev);
