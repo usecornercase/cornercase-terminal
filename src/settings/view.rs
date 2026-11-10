@@ -441,7 +441,7 @@ fn kind_row(config: &Config, kind: &str) -> (String, String, String, bool) {
     let modes = agents::modes(config, kind);
     let mode = agents::mode_of(kind, &args, &modes);
     let extra = agents::extra_args(kind, &args, &modes);
-    let mut value = mode.clone().unwrap_or_else(|| "default".into());
+    let mut value = mode.clone().unwrap_or_else(|| agents::DEFAULT_MODE.into());
     if !extra.is_empty() {
         value = format!("{value} + {}", agents::join_args(&extra));
     }

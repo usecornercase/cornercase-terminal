@@ -115,6 +115,10 @@ pub(crate) fn use_queue_routines() -> Result<()> {
     require("queue-routines", "cannot repeat queue entries, run flows from the queue, or pause and resume routines")
 }
 
+pub(crate) fn use_mode_default() -> Result<()> {
+    require("mode-default", "cannot queue an agent with no mode arguments")
+}
+
 pub(crate) fn use_plugin_run_view() -> Result<()> {
     require("plugin-run-view", "cannot run a plugin's action in a view")
 }

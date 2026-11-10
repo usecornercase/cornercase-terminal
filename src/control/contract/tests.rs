@@ -52,6 +52,7 @@ mod describing {
             "machine-retry-at",
             "against-base",
             "notice-subagent",
+            "mode-default",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();

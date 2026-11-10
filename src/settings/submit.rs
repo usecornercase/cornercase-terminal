@@ -61,7 +61,7 @@ impl Settings {
             return Action::None;
         }
         let modes = agents::modes(&self.config, kind);
-        let mode = (value != "default").then_some(value);
+        let mode = (value != agents::DEFAULT_MODE).then_some(value);
         let args = agents::with_mode(kind, &agents::args(&self.config, kind), &modes, mode);
         let notice = starts_with(kind, &args);
         self.save(with_args(&self.config, kind, args), notice)

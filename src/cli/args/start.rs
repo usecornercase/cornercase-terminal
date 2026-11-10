@@ -18,7 +18,8 @@ pub(crate) struct StartArgs {
     #[arg(
         long,
         value_name = "NAME",
-        help = "One of the agent's modes, as settings → agents lists them, such as plan [default: the one chosen there]"
+        help = "One of the agent's modes, as settings → agents lists them, such as plan, or default for no mode \
+                arguments [default: the one chosen there]"
     )]
     pub(crate) mode: Option<String>,
     #[arg(

@@ -28,19 +28,22 @@ impl App {
             || self.agent_kind(caller, add.agent.clone().filter(|agent| agent != agents::AUTO)),
             |entry| Ok(entry.task.agent.clone()),
         )?;
-        let mut config = self.config.clone();
-        let mode = queue_mode(&config, &agent, add, old);
+        let mode = queue_mode(&self.config, &agent, add, old);
         let preserve = old.filter(|entry| {
             entry.task.agent == agent && entry.task.mode == mode && add.agent.as_deref() != Some(agents::AUTO)
         });
-        if preserve.is_none()
-            && let Some(mode) = &mode
-        {
-            apply_mode(&mut config, &agent, mode)?;
-        }
-        let command =
-            preserve.map_or_else(|| agents::command_line(&config, &agent), |entry| entry.task.command.clone());
-        let program = preserve.map_or_else(|| agents::command(&config, &agent), |entry| entry.task.program.clone());
+        let command = match preserve {
+            Some(entry) => entry.task.command.clone(),
+            None => agents::start_line(
+                &self.config,
+                &agent,
+                Some(mode.as_deref().unwrap_or(agents::DEFAULT_MODE)),
+                None,
+                None,
+            )?,
+        };
+        let program =
+            preserve.map_or_else(|| agents::command(&self.config, &agent), |entry| entry.task.program.clone());
         Ok(Chosen { agent, command, program, mode })
     }
 
@@ -128,22 +131,12 @@ pub(super) struct Chosen {
 }
 
 pub(super) fn queue_mode(config: &Config, agent: &str, add: &QueueAdd, old: Option<&Entry>) -> Option<String> {
-    let default = || agents::mode_of(agent, &agents::args(config, agent), &agents::modes(config, agent));
+    let chosen = || agents::mode_of(agent, &agents::args(config, agent), &agents::modes(config, agent));
     match add.mode.as_deref() {
-        Some("default") => default(),
+        Some(agents::DEFAULT_MODE) => None,
         Some(mode) => Some(mode.to_string()),
-        None => old.filter(|entry| entry.task.agent == agent).map_or_else(default, |entry| entry.task.mode.clone()),
+        None => old.filter(|entry| entry.task.agent == agent).map_or_else(chosen, |entry| entry.task.mode.clone()),
     }
-}
-
-fn apply_mode(config: &mut Config, agent: &str, mode: &str) -> Result<(), String> {
-    let modes = agents::modes(config, agent);
-    if !modes.iter().any(|(name, _)| name == mode) {
-        return Err(format!("unknown {agent} mode {mode}"));
-    }
-    let args = agents::args(config, agent);
-    config.agent_args.insert(agent.to_string(), agents::with_mode(agent, &args, &modes, Some(mode)));
-    Ok(())
 }
 
 pub(super) fn queue_label(add: &QueueAdd, prompt: &str, old: Option<&Entry>) -> String {

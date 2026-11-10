@@ -15,10 +15,10 @@ Examples:
   cornercase new-workspace fix/login --worktree --project 2 --machine vps --focus";
 pub(in crate::cli) const START_HELP: &str =
     "The agent starts with its command and arguments from settings → agents. --mode replaces the mode
-chosen there by another of the agent's modes, --model adds the agent's own model flag and --effort its
-effort (Claude Code, Codex, Grok Build and GitHub Copilot CLI take one; an older server refuses all three rather than
-start the agent without them). If it asks whether
-you trust the folder, the question waits for your answer unless settings → agents accept it for
+chosen there by another of the agent's modes, or drops it with --mode default,
+--model adds the agent's own model flag and --effort its effort (Claude Code, Codex, Grok Build and GitHub
+Copilot CLI take one; an older server refuses all three rather than start the agent without them). If it asks
+whether you trust the folder, the question waits for your answer unless settings → agents accept it for
 you. Once it is ready, the prompt is pasted and
 submitted, and the command prints the pane's id; it fails if the agent never shows up. With
 --wait, a second line says how the wait ended: idle, done (it finished out of sight) or waiting

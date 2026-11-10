@@ -61,6 +61,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "flow-run-view",
     "against-base",
     "notice-subagent",
+    "mode-default",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

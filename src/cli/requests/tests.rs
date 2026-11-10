@@ -393,6 +393,38 @@ mod streams {
         assert!(asked.contains("\"contract\""), "{seen:?}");
     }
 
+    const QUEUE_DEFAULT: &str =
+        r#"{"args": ["queue", "add", "--at", "in 2h", "--prompt", "x", "--mode", "default", "--json"]}"#;
+    const QUEUE_PLAN: &str =
+        r#"{"args": ["queue", "add", "--at", "in 2h", "--prompt", "x", "--mode", "plan", "--json"]}"#;
+
+    #[test]
+    fn a_queued_default_mode_checks_the_server_then_sends_it() {
+        let (answer, seen) = start_on(control::contract::describe("boot", &[]), QUEUE_DEFAULT);
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let [asked, queued] = &seen[..] else { panic!("not a check and a request: {seen:?}") };
+        assert!(asked.contains("\"contract\"") && queued.contains("\"mode\":\"default\""), "{seen:?}");
+    }
+
+    #[rstest]
+    #[case::refused(QUEUE_DEFAULT, 1)]
+    #[case::other_mode(QUEUE_PLAN, 0)]
+    fn a_server_without_mode_default_is_asked_only_for_the_default_mode(#[case] line: &str, #[case] status: u8) {
+        let (answer, seen) = start_on(lacking("mode-default"), line);
+
+        assert_eq!(answer.status, status, "{answer:?}");
+        if status == 0 {
+            let [queued] = &seen[..] else { panic!("not only the request: {seen:?}") };
+            assert!(queued.contains("\"queue\""), "{seen:?}");
+            return;
+        }
+        let error = answer.error.expect("an error");
+        assert!(error.contains("cannot queue an agent with no mode arguments") && error.contains("update cornercase"));
+        let [asked] = &seen[..] else { panic!("not only the check: {seen:?}") };
+        assert!(asked.contains("\"contract\""), "{seen:?}");
+    }
+
     #[test]
     fn a_plain_start_needs_no_check_and_sends_no_field() {
         let (answer, seen) = start_on(lacking("machine-start"), PLAIN);

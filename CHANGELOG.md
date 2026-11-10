@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.28
+
+- **`cornercase start --mode default` starts an agent with no mode arguments.** `default` comes first among an agent's modes in **Settings › Agents** and in `cornercase config --json`, but `start --mode` refused it, so with another mode chosen there no command could start an agent without it, on this computer or on a machine with `--machine`. It now starts the agent with only its extra arguments, and a mode the agent lacks is refused with its modes, `default` first. `cornercase contract` lists the feature `mode-default`.
+- **`default` in the schedule form and in `queue add --mode` means no mode arguments too.** It used to mean the mode chosen in Settings, so an agent could not be scheduled without that mode. The form's **Mode** list now opens on the mode chosen in Settings, and `queue add` without `--mode` still takes it, so an entry you don't change is scheduled as before.
+- A mode named `default` in `agent_modes` is ignored: that name always means no mode arguments.
+
 ## 0.13.27
 
 - **An agent's children stay with the agent that started them, not with its pane.** Agents started by another agent (with `cornercase start`, `new-tab`, `split` or `setup`, or a `flow run`'s orchestrator) used to hang under whatever agent ran in that pane later: when the agent that started them ended and you started a new conversation in the same pane, a whole flow's team showed up under it in the agents section, and closing the new agent closed those in its workspace. Now they become rows of their own once the agent that started them exits or another conversation runs in its pane, and `cornercase status`, `status --follow`, `view` and the `opened` event give `parent: null`, as when the pane closes. An agent that resumes its conversation, after a restart or on another account, keeps its children, and a flow's members stay under their orchestrator.

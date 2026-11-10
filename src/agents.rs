@@ -42,6 +42,7 @@ pub(crate) struct AgentState {
 }
 
 pub(crate) const AUTO: &str = "auto";
+pub(crate) const DEFAULT_MODE: &str = "default";
 pub(crate) const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
@@ -117,7 +118,7 @@ pub(crate) fn modes(config: &Config, kind: &str) -> Vec<Mode> {
             None => modes.push((name.clone(), args.clone())),
         }
     }
-    modes.retain(|(_, args)| !args.is_empty());
+    modes.retain(|(name, args)| !args.is_empty() && name != DEFAULT_MODE);
     modes
 }
 
@@ -560,7 +561,8 @@ fn line(config: &Config, kind: &str, args: Vec<String>) -> String {
 }
 
 pub(crate) fn fresh_line(config: &Config, kind: &str, mode: Option<&str>) -> String {
-    start_line(config, kind, mode, None, None).unwrap_or_else(|_| command_line(config, kind))
+    start_line(config, kind, Some(mode.unwrap_or(DEFAULT_MODE)), None, None)
+        .unwrap_or_else(|_| command_line(config, kind))
 }
 
 pub(crate) fn start_line(
@@ -573,15 +575,10 @@ pub(crate) fn start_line(
     let mut chosen = args(config, kind);
     if let Some(name) = mode {
         let table = modes(config, kind);
-        if table.iter().all(|(known, _)| known != name) {
-            let names: Vec<&str> = table.iter().map(|(known, _)| known.as_str()).collect();
-            return Err(if names.is_empty() {
-                format!("{kind} has no modes in cornercase; add some with agent_modes in config.json")
-            } else {
-                format!("{kind} has no mode `{name}`; its modes are `{}`", names.join("`, `"))
-            });
+        if let Some(refusal) = mode_refusal(kind, name, &table) {
+            return Err(refusal);
         }
-        chosen = with_mode(kind, &chosen, &table, Some(name));
+        chosen = with_mode(kind, &chosen, &table, (name != DEFAULT_MODE).then_some(name));
     }
     if model.is_some_and(|m| !m.trim().is_empty()) && Known::of(kind).is_none() {
         let known: Vec<&str> = Known::ALL.into_iter().filter(|k| k.model_flag().is_some()).map(Known::name).collect();
@@ -596,6 +593,21 @@ pub(crate) fn start_line(
         return Err(refusal);
     }
     Ok(line(config, kind, with_effort(kind, with_model(kind, chosen, model), effort)))
+}
+
+fn mode_refusal(kind: &str, name: &str, table: &[Mode]) -> Option<String> {
+    if name == DEFAULT_MODE || table.iter().any(|(known, _)| known == name) {
+        return None;
+    }
+    Some(if table.is_empty() {
+        format!(
+            "{kind} has no mode `{name}`; its only mode is `{DEFAULT_MODE}` \
+             (add others with agent_modes in config.json)"
+        )
+    } else {
+        let names: Vec<&str> = table.iter().map(|(known, _)| known.as_str()).collect();
+        format!("{kind} has no mode `{name}`; its modes are `{DEFAULT_MODE}`, `{}`", names.join("`, `"))
+    })
 }
 
 pub(crate) fn model_refusal(kind: &str, model: Option<&str>) -> Option<String> {

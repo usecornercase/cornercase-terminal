@@ -268,7 +268,8 @@ impl Settings {
 
     pub(super) fn mode_items(&self, kind: &str) -> Vec<PickItem> {
         let modes = agents::modes(&self.config, kind);
-        let mut items = vec![PickItem { value: "default".into(), note: "no mode arguments".into(), dangerous: false }];
+        let mut items =
+            vec![PickItem { value: agents::DEFAULT_MODE.into(), note: "no mode arguments".into(), dangerous: false }];
         items.extend(modes.iter().map(|(name, args)| PickItem {
             value: name.clone(),
             note: agents::join_args(args),
@@ -321,7 +322,7 @@ impl Settings {
             Row::ForumClose(_) => Some(ForumClose::from_setting(&self.config.discord_forum_close).id().to_string()),
             Row::Kind(kind) => Some(
                 agents::mode_of(kind, &agents::args(&self.config, kind), &agents::modes(&self.config, kind))
-                    .unwrap_or_else(|| "default".into()),
+                    .unwrap_or_else(|| agents::DEFAULT_MODE.into()),
             ),
             Row::Recap(recap) => Some(self.recap_current(*recap)),
             Row::Shell => Some(self.shell_current()),

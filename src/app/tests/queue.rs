@@ -687,6 +687,105 @@ mod lists {
     }
 }
 
+mod modes {
+    use super::*;
+
+    fn careful_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
+        let (mut app, rx, repo, config, worktrees) = queued_app();
+        app.config.agent_modes.insert("fake".into(), [("careful".into(), vec!["--careful".into()])].into());
+        app.config.agent_args.insert("fake".into(), vec!["--careful".into(), "-v".into()]);
+        (app, rx, repo, config, worktrees)
+    }
+
+    fn add(mode: Option<&str>) -> crate::control::QueueAdd {
+        crate::control::QueueAdd {
+            at: "in 2h".into(),
+            zone: "UTC".into(),
+            agent: Some("fake".into()),
+            mode: mode.map(str::to_string),
+            prompt: Some("fix".into()),
+            ..crate::control::QueueAdd::default()
+        }
+    }
+
+    fn only_entry(app: &App) -> Task {
+        let entries = &app.panels.queued.queue().entries;
+        assert_eq!(entries.len(), 1, "{entries:?}");
+        entries[0].task.clone()
+    }
+
+    #[test]
+    fn queue_add_in_the_default_mode_captures_no_mode_arguments() {
+        let (mut app, _rx, _repo, _config, _worktrees) = careful_app();
+        app.add_queue_request(None, None, None, &add(Some("default"))).expect("queued");
+        let task = only_entry(&app);
+        assert_eq!(task.mode, None);
+        assert!(task.command.ends_with(" -v") && !task.command.contains("--careful"), "{}", task.command);
+    }
+
+    #[test]
+    fn editing_an_entry_to_the_default_mode_recaptures_its_command_without_the_mode() {
+        let (mut app, _rx, _repo, _config, _worktrees) = careful_app();
+        app.add_queue_request(None, None, None, &add(None)).expect("queued");
+        let id = app.panels.queued.queue().entries[0].id;
+        assert_eq!(only_entry(&app).mode.as_deref(), Some("careful"));
+        app.add_queue_request(None, None, Some(id), &add(Some("default"))).expect("edited");
+        let task = only_entry(&app);
+        assert_eq!(task.mode, None);
+        assert!(task.command.ends_with(" -v") && !task.command.contains("--careful"), "{}", task.command);
+    }
+
+    #[test]
+    fn queue_add_without_a_mode_captures_the_one_chosen_in_settings() {
+        let (mut app, _rx, _repo, _config, _worktrees) = careful_app();
+        app.add_queue_request(None, None, None, &add(None)).expect("queued");
+        let task = only_entry(&app);
+        assert_eq!(task.mode.as_deref(), Some("careful"));
+        assert!(task.command.contains("--careful"), "{}", task.command);
+    }
+
+    #[test]
+    fn an_unknown_queue_mode_is_refused_like_start_with_default_first() {
+        let (mut app, _rx, _repo, _config, _worktrees) = careful_app();
+        let refused = app.add_queue_request(None, None, None, &add(Some("yolo"))).expect_err("refused");
+        assert_eq!(refused.message, "fake has no mode `yolo`; its modes are `default`, `careful`");
+        assert_eq!(app.panels.queued.queue().entries, []);
+    }
+
+    #[test]
+    fn the_form_opens_on_the_mode_chosen_in_settings() {
+        let (mut app, _rx, _repo, _config, _worktrees) = careful_app();
+        app.new_queue_form(None);
+        let Some(Overlay::Queue(form)) = &app.overlay else { panic!("form") };
+        assert_eq!(form.mode.label(), Some("careful"));
+        assert_eq!(form.mode.options(), ["default", "careful"]);
+    }
+
+    #[test]
+    fn choosing_default_in_the_form_queues_no_mode_arguments() {
+        let (mut app, _rx, _repo, _config, _worktrees) = careful_app();
+        app.new_queue_form(None);
+        let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
+        form.prompt = Editor::new("fix login");
+        form.mode.choose(0);
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        let task = only_entry(&app);
+        assert_eq!(task.mode, None);
+        assert!(!task.command.contains("--careful"), "{}", task.command);
+    }
+
+    #[test]
+    fn an_entry_without_a_mode_reopens_on_default() {
+        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        let id = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
+        app.config.agent_modes.insert("fake".into(), [("careful".into(), vec!["--careful".into()])].into());
+        app.config.agent_args.insert("fake".into(), vec!["--careful".into()]);
+        app.new_queue_form(Some(id));
+        let Some(Overlay::Queue(form)) = &app.overlay else { panic!("form") };
+        assert_eq!(form.mode.label(), Some("default"));
+    }
+}
+
 mod accounts;
 mod cleanup;
 mod routine_panel;

@@ -186,6 +186,20 @@ fn start_with_a_mode_and_a_model_types_them_in_place_of_the_settings() {
 
 #[cfg(unix)]
 #[test]
+fn start_with_the_default_mode_types_the_settings_arguments_without_their_mode() {
+    let dir = TempDir::new();
+    let (mut app, rx, log) = logging_claude(dir.path(), &["--permission-mode", "plan", "--model", "haiku"]);
+    let start = wire::Start { agent: Some("claude".into()), mode: Some("default".into()), ..wire::Start::default() };
+
+    ask(&mut app, None, Command::StartWith(start));
+
+    refreshing(&mut app, &rx, "the agent starts", |_| log.exists());
+    let typed = std::fs::read_to_string(&log).expect("the arguments");
+    assert_eq!(typed.trim(), "--model haiku");
+}
+
+#[cfg(unix)]
+#[test]
 fn start_with_a_mode_the_agent_lacks_opens_nothing() {
     let dir = TempDir::new();
     let (mut app, _rx, _log) = logging_claude(dir.path(), &[]);
@@ -194,7 +208,7 @@ fn start_with_a_mode_the_agent_lacks_opens_nothing() {
 
     let refused = error(now(&mut app, None, Command::StartWith(start)));
 
-    assert!(refused.starts_with("claude has no mode `yolo`; its modes are `accept edits`"), "{refused}");
+    assert!(refused.starts_with("claude has no mode `yolo`; its modes are `default`, `accept edits`"), "{refused}");
     assert_eq!(app.projects[0].workspaces[0].tabs.len(), tabs);
 }
 
