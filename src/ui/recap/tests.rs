@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -32,6 +32,8 @@ fn view(state: State) -> View {
         scroll: 0,
         muted: Color::DarkGray,
         busy: false,
+        changed: BTreeSet::new(),
+        outdated: false,
     }
 }
 
@@ -136,4 +138,27 @@ fn a_status_line_longer_than_the_panel_is_cut_with_an_ellipsis_and_retry_stays_w
     let failed = drawn(&view(State::Failed(long)), None);
     let line = row(&failed, 1);
     assert!(line.contains('…') && line.ends_with("retry"), "{line}");
+}
+
+#[test]
+fn a_link_that_changed_is_struck_through_and_muted() {
+    let mut changed = view(State::Idle);
+    changed.changed = BTreeSet::from(["c1".to_string()]);
+    let terminal = drawn(&changed, None);
+    let cell = &terminal.backend().buffer()[(5, 4)];
+    assert!(cell.modifier.contains(Modifier::CROSSED_OUT));
+    assert_eq!(cell.fg, Color::DarkGray);
+    let hovered = drawn(&changed, Some(Position::new(5, 4)));
+    assert!(hovered.backend().buffer()[(5, 4)].modifier.contains(Modifier::UNDERLINED));
+    let plain = drawn(&view(State::Idle), None);
+    assert_eq!(plain.backend().buffer()[(5, 4)].fg, Color::Cyan);
+}
+
+#[test]
+fn an_outdated_recap_says_so_first_on_its_status_line() {
+    let mut outdated = view(State::Idle);
+    outdated.outdated = true;
+    let terminal = drawn(&outdated, None);
+    assert!(row(&terminal, 1).starts_with(" outdated · yesterday"), "{}", row(&terminal, 1));
+    assert_eq!(terminal.backend().buffer()[(1, 1)].fg, Color::Yellow);
 }

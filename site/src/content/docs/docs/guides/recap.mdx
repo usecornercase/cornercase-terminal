@@ -10,8 +10,8 @@ At the daily you have to remember what you did yesterday across every project, w
 
 <Screen
   name="recap"
-  alt="cornercase with the Recap panel on the right: now, yesterday and 7 days at the top with now lit, a line with the date, Claude Code and four conversations, then On you with two places and what they wait for, In progress with one place working, and Done"
-  caption="The Recap panel on now: what waits on you comes first."
+  alt="cornercase with the Recap panel on the right: now, yesterday and 7 days at the top with now lit, a line with the date, Claude Code and the conversations, then Needs you with the place that waits for an answer, and In progress with the places working"
+  caption="The Recap panel on now: what needs you comes first."
 />
 
 It covers **agent conversations only**, in every project of this server. Work you did by hand in a shell, and git activity no agent was part of, is not in it.
@@ -28,9 +28,11 @@ It is a side panel in the column the [changes](../changes/), [files](../files/),
 
 Click the choice in the header; the panel keeps the last one you used.
 
-- **`now`**: where things stand. For each open line of work, what you asked (quoted literally), where it is and what is on you. What waits on you comes first: a question an agent asked, failing checks, something closed halfway.
-- **`yesterday`**: **Done**, **In progress** and **On you**. "Yesterday" is the last day with agent activity, with its real date (`yesterday · fri 31 oct`), so on Monday it gives Friday, and after a holiday it still works.
-- **`7 days`**: per project, the big themes, what was closed (merged pull requests) and what is still open, with less detail per conversation.
+- **`now`**: where things stand, in three short sections. **Needs you** holds what is open and waits on you: an agent waiting on a question, one that failed or that you marked for review, and an open pull request whose checks fail. cornercase picks those items from what is open, and the agent words them. **In progress** has one line per workspace, and **Done today** one line per workspace or pull request. A workspace you closed never shows in Needs you; work closed while an agent was still on it gets one line at the end, `Closed halfway`. An empty section is left out.
+- **`yesterday`**: a stand-up of a dozen lines at most, one per workspace: **Done**, **In progress** and **On you**. "Yesterday" is the last day with agent activity, with its real date (`yesterday · fri 31 oct`), so on Monday it gives Friday, and after a holiday it still works.
+- **`7 days`**: per project, two or three themes, its merged pull requests and what is still open.
+
+The recap says what you asked in a few words of its own, and quotes a prompt only when a few words say it best.
 
 Every place the text names, `project › workspace › tab`, is a link: it takes you to the conversation's pane if it is still open, else to its workspace, else to its project. A closed one says so in a message. A pull request, `#212`, opens the workspace's pull request dialog.
 
@@ -39,12 +41,14 @@ The line under the header says the date, the agent, the number of conversations,
 ## What it is made of
 
 - **A journal of conversations**, kept 30 days next to `session.json` (the `journal/` folder, see [Files and environment](../../reference/files-and-environment/)). cornercase adds an entry when a conversation is first seen in a pane, when you send a prompt, when its status changes (working, waiting, done) and when its pane closes. An entry holds pointers, not content: the time, agent, account, conversation, the path of the agent's own transcript, and the project, workspace (name, branch, folder) and tab as they were then, with the workspace's pull request and its checks. Transcripts stay on disk after a pane closes; what the journal keeps is which workspace they belonged to, which is lost once a worktree is gone. All eight [agents](../issues-and-agents/) are journaled. Conversations from before you updated are not in it.
-- **A dossier**, built without a model: per conversation, its place, branch, agent, first and last activity, its status now (or when it closed), the pull request and its checks, your prompts in the range (trimmed, without `yes`, `go on`, slash commands or huge pastes), its last reply and, while it waits, the question it asked. It has caps per conversation and in total, so `7 days` fits a model's context. `cornercase recap --dossier` prints it.
+- **A dossier**, built without a model: for `now`, it starts with the list of what needs you, taken from what is open; then per conversation, its place, branch, agent, first and last activity, its status now (or when it closed), the pull request and its checks, your prompts in the range (the newest few, trimmed short, without `yes`, `go on`, slash commands or huge pastes), its last reply and, while it waits, the question it asked. It has caps per conversation and in total, so `7 days` fits a model's context. `cornercase recap --dossier` prints it.
 - **An agent**, Claude Code or Codex, started in the background without a pane, in a folder of its own (`recap/`) and never in a project. It reads the dossier and, when that is not enough, the transcripts and `cornercase search`; its tools are read-only, and cornercase writes the result. It is not counted in [Stats](../projects-workspaces-tabs/#usage-and-stats).
 
 ## Caching
 
-Each choice keeps its last result, shown with its age. `yesterday` is written once, since that day does not change. `7 days` is written again when the day changes, and `now` when it is more than 30 minutes old when you open it. **`↻`** writes any of them again. A second click while one runs only shows the progress. With nothing to sum up, no agent runs, and the panel says why.
+Each choice keeps its last result, shown with its age. `yesterday` is written once, since that day does not change. `7 days` is written again when the day changes, and `now` when it is more than 30 minutes old when you open it. **`↻`** writes any of them again.
+
+`now` is also written again sooner when it no longer matches what is open: something it says needs you no longer does (you answered it, or its workspace closed), a conversation it names has closed, or something needs you that it does not name. Until the new one is in, the links that changed are struck through and the line under the header starts with `outdated`. While the panel stays open it only marks them, since every run spends tokens: click `now` or **`↻`**. A recap written by an older version is written again the first time you open it. A second click while one runs only shows the progress. With nothing to sum up, no agent runs, and the panel says why.
 
 ## Settings
 

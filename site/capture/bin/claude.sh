@@ -14,9 +14,15 @@ mkdir -p "$dir/projects/$slug"
 if [ "${1:-}" = -p ] && ! printf '%s' "$*" | grep -q -- '--input-format'; then
   printf '{"type":"system","subtype":"init","model":"claude-opus-5-5"}\n'
   text=$(awk '
-    /^## \[c[0-9]+\]/ { id = $2; gsub(/[\[\]]/, "", id) }
-    /^- .* · now: / && id != "" { state = $0; sub(/^.* · now: /, "", state); bullets = bullets "\\n- [" id "]: " state }
-    END { printf "## On you%s", (bullets == "" ? "\\nNothing needs you." : bullets) }
+    /^## Needs you now/ { listing = 1; next }
+    /^## \[c[0-9]+\]/ { listing = 0; id = $2; gsub(/[\[\]]/, "", id) }
+    listing && /^- \[/ { rest = $0; sub(/^- \[[a-z0-9]+\] /, "", rest); need = need "\\n- " $2 ": " rest }
+    /^- .* · now: working/ && id != "" { state = $0; sub(/^.* · now: /, "", state); busy = busy "\\n- [" id "]: " state }
+    END {
+      if (need != "") out = "## Needs you" need
+      if (busy != "") out = out (out == "" ? "" : "\\n\\n") "## In progress" busy
+      printf "%s", (out == "" ? "Nothing needs you." : out)
+    }
   ' dossier.md)
   printf '{"type":"result","subtype":"success","is_error":false,"result":"%s","usage":{"input_tokens":2100,"cache_creation_input_tokens":9000,"cache_read_input_tokens":30000,"output_tokens":650}}\n' "$text"
   exit 0

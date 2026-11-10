@@ -18,6 +18,7 @@ impl App {
     pub(in crate::app) fn recap_view(&self, area: Rect) -> View {
         let choice = self.panels.recap.choice;
         let run = self.panels.recap.run(choice);
+        let found = self.recap_outdated(choice);
         let blocks: Vec<Block> =
             run.last.as_ref().map(|recap| text::parse(&recap.text, &recap.places)).unwrap_or_default();
         let line = run.last.as_ref().map(header_line).unwrap_or_default();
@@ -39,6 +40,8 @@ impl App {
             scroll: 0,
             muted: self.muted_color(),
             busy: run.running,
+            changed: found.ids.clone(),
+            outdated: found.any(),
         };
         let total = recap::total(panel, &view);
         let room = usize::from(recap::body(panel).height);

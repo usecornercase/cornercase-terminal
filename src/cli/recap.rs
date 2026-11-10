@@ -60,6 +60,9 @@ fn heading(info: &RecapInfo) -> String {
     if let Some(age) = info.age {
         parts.push(time::ago(std::time::Duration::from_secs(age)));
     }
+    if info.outdated {
+        parts.push("outdated".to_string());
+    }
     format!("{}\n\n", parts.join(" · "))
 }
 

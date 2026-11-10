@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { App } from '../src/lib/demo/app';
+import { CHOICES, recapRows } from '../src/lib/demo/recap';
 import { layout, recapButton, worktreesButton } from '../src/lib/demo/layout';
 import { projectLabel } from '../src/lib/demo/model';
 import { world } from '../src/lib/demo/world';
@@ -57,15 +58,22 @@ test('a row too narrow for both buttons keeps only Worktrees', () => {
 test('the three choices show their own recap and keep one panel open', () => {
   const app = demo(140);
   press(app, ' Recap ');
-  assert.ok(app.textAt('On you'));
+  assert.ok(app.textAt('Needs you') && app.textAt('Done today'));
   assert.ok(app.textAt('Paginate') === null && app.textAt('In progress'));
   press(app, 'yesterday');
   assert.equal(app.recap.choice, 'yesterday');
-  assert.ok(app.textAt('stand') === null && app.textAt('yesterday · mon 3 nov'));
+  assert.ok(app.textAt('On you') && app.textAt('yesterday · mon 3 nov'));
   press(app, '7 days');
   assert.equal(app.recap.choice, 'week');
-  assert.ok(app.textAt('blog'));
+  assert.ok(app.textAt('blog') && app.textAt('Merged: #212'));
   app.destroy();
+});
+
+test('each canned recap fits the panel at 140 by 38', () => {
+  const a = layout(140, 38, widths, null, true, 'projects_on_top');
+  for (const [choice] of CHOICES) {
+    assert.ok(recapRows(a.changes.w - 2, choice).length <= a.changes.h - 3, choice);
+  }
 });
 
 test('a place in the recap goes to its workspace', () => {

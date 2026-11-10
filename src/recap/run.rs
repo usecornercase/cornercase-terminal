@@ -81,7 +81,7 @@ pub(crate) fn run(input: &Input) -> Result<Outcome> {
     let call = Call { agent: kind, program: &input.program, home: input.home.as_deref(), timeout: input.timeout };
     let ran = agents::recap::run(&call, &ask, &input.progress)?;
     let recap = Recap {
-        v: 1,
+        v: super::RECAP_VERSION,
         range: input.choice.name().to_string(),
         day: range.day,
         label: range.label,

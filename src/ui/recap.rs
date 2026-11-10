@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
@@ -10,6 +12,7 @@ const TITLE: &str = "Recap";
 const CHOICES: [&str; 3] = ["now", "yesterday", "7 days"];
 const SEPARATOR: &str = " · ";
 const REFRESH: &str = "↻";
+const OUTDATED: &str = "outdated";
 const RETRY: &str = " retry ";
 const BUTTON_WIDTH: u16 = 3;
 const BODY_FROM: u16 = 3;
@@ -32,6 +35,8 @@ pub(crate) struct View {
     pub(crate) scroll: usize,
     pub(crate) muted: Color,
     pub(crate) busy: bool,
+    pub(crate) changed: BTreeSet<String>,
+    pub(crate) outdated: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,7 +259,6 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position
 
 fn draw_status(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) {
     let row = Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 1).intersection(area);
-    let muted = Style::default().fg(view.muted);
     match &view.state {
         State::Failed(reason) => {
             let reason = &fitted(reason, row.width.saturating_sub(width_of(RETRY) + 1));
@@ -270,21 +274,36 @@ fn draw_status(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position
         State::Running(text) => {
             put(buf, (row.x, row.y), &fitted(text, row.width), Style::default().fg(Color::Cyan), row.right());
         }
-        State::Empty(_) | State::Idle => {
-            put(buf, (row.x, row.y), &fitted(&view.line, row.width), muted, row.right());
-        }
+        State::Empty(_) | State::Idle => draw_line_text(buf, row, view),
     }
 }
 
-fn run_style(run: &Run, hovering: bool, muted: Color) -> Style {
+fn draw_line_text(buf: &mut Buffer, row: Rect, view: &View) {
+    let muted = Style::default().fg(view.muted);
+    if !view.outdated {
+        put(buf, (row.x, row.y), &fitted(&view.line, row.width), muted, row.right());
+        return;
+    }
+    put(buf, (row.x, row.y), OUTDATED, Style::default().fg(Color::Yellow), row.right());
+    let lead = width_of(OUTDATED);
+    put(buf, (row.x + lead, row.y), SEPARATOR, muted, row.right());
+    let used = lead + width_of(SEPARATOR);
+    put(buf, (row.x + used, row.y), &fitted(&view.line, row.width.saturating_sub(used)), muted, row.right());
+}
+
+fn run_style(run: &Run, hovering: bool, view: &View) -> Style {
     let mut style = Style::default();
-    if run.link.is_some() {
-        style = style.fg(Color::Cyan);
+    if let Some(id) = &run.link {
+        style = if view.changed.contains(id) {
+            style.fg(view.muted).add_modifier(Modifier::CROSSED_OUT)
+        } else {
+            style.fg(Color::Cyan)
+        };
         if hovering {
             style = style.add_modifier(Modifier::UNDERLINED);
         }
     } else if run.quote {
-        style = style.fg(muted);
+        style = style.fg(view.muted);
     }
     if run.bold || run.heading {
         style = style.add_modifier(Modifier::BOLD);
@@ -302,7 +321,7 @@ fn draw_body(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>)
     let shown = all.iter().skip(view.scroll).take(usize::from(rect.height));
     for (offset, line) in shown.enumerate() {
         let y = rect.y + u16::try_from(offset).unwrap_or(0);
-        draw_line(buf, line, (rect.x, y, rect.right()), hover, view.muted);
+        draw_line(buf, line, (rect.x, y, rect.right()), hover, view);
     }
     let below = all.len().saturating_sub(view.scroll + usize::from(rect.height));
     if below > 0 && rect.height > 0 {
@@ -317,13 +336,13 @@ fn draw_body(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>)
     }
 }
 
-fn draw_line(buf: &mut Buffer, line: &Line, (x, y, end): (u16, u16, u16), hover: Option<Position>, muted: Color) {
+fn draw_line(buf: &mut Buffer, line: &Line, (x, y, end): (u16, u16, u16), hover: Option<Position>, view: &View) {
     if line.bullet {
-        put(buf, (x, y), BULLET, Style::default().fg(muted), end);
+        put(buf, (x, y), BULLET, Style::default().fg(view.muted), end);
     }
     for run in &line.runs {
         let rect = Rect::new(x + run.x, y, width_of(&run.text), 1);
-        put(buf, (rect.x, y), &run.text, run_style(run, hovered(hover, rect), muted), end);
+        put(buf, (rect.x, y), &run.text, run_style(run, hovered(hover, rect), view), end);
     }
 }
 

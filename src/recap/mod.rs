@@ -5,12 +5,15 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) mod dossier;
 pub(crate) mod journal;
+pub(crate) mod outdated;
 pub(crate) mod prompt;
 pub(crate) mod range;
 pub(crate) mod run;
 pub(crate) mod store;
 pub(crate) mod text;
 
+pub(crate) const RECAP_VERSION: u8 = 2;
+pub(crate) const NEEDS_YOU: [&str; 3] = ["waiting", "failed", "pending"];
 pub(crate) const KEPT_DAYS: i64 = 30;
 pub(crate) const NOW_FRESH: Duration = Duration::from_mins(30);
 pub(crate) const RECAP_TIMEOUT: Duration = Duration::from_mins(10);
@@ -81,6 +84,18 @@ pub(crate) struct Place {
     pub(crate) url: Option<String>,
     #[serde(default)]
     pub(crate) state: Option<String>,
+    #[serde(default)]
+    pub(crate) status: Option<String>,
+    #[serde(default)]
+    pub(crate) checks: Option<String>,
+}
+
+pub(crate) fn needs_you(status: Option<&str>) -> bool {
+    status.is_some_and(|status| NEEDS_YOU.contains(&status))
+}
+
+pub(crate) fn failing(state: Option<&str>, checks: Option<&str>) -> bool {
+    matches!(state, Some("open" | "draft")) && checks == Some("failing")
 }
 
 impl Place {
