@@ -97,13 +97,31 @@ impl Step {
         }
     }
 
-    fn traced(&self) -> bool {
+    fn traced(&self) -> Option<Trace> {
         match self {
-            Self::Answer | Self::Flush | Self::Draw | Self::Surfaces | Self::Save => false,
-            Self::Event(ServerEvent::App(ev)) => !matches!(ev, AppEvent::Output(..)) && !ev.remote_frame(),
-            _ => true,
+            Self::Refresh => Some(Trace::Refresh),
+            Self::Answer | Self::Flush | Self::Draw | Self::Surfaces | Self::Save => None,
+            Self::Event(ServerEvent::App(ev)) if matches!(ev, AppEvent::Output(..)) || ev.remote_frame() => None,
+            Self::Event(ServerEvent::App(ev)) if ev.echoes_a_flood() => Some(Trace::Flood),
+            Self::Event(ServerEvent::Message(_, ClientMessage::Request(text)))
+                if control::Command::unreported_request(text) =>
+            {
+                Some(Trace::Flood)
+            }
+            Self::Event(ServerEvent::Message(_, ClientMessage::Event(_))) => Some(Trace::Flood),
+            Self::Event(ServerEvent::Accepted(_) | ServerEvent::Incompatible(_) | ServerEvent::Gone(_)) => {
+                Some(Trace::Flood)
+            }
+            Self::Event(_) => Some(Trace::Step),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Trace {
+    Refresh,
+    Flood,
+    Step,
 }
 
 #[derive(Clone)]
@@ -496,12 +514,13 @@ impl Server {
     }
 
     fn step(&mut self, step: Step) -> ControlFlow<()> {
-        let (traced, refresh) = (step.traced(), matches!(step, Step::Refresh));
+        let traced = step.traced();
         let flow = self.run_step(step);
-        if refresh {
-            self.app.trace_refresh();
-        } else if traced {
-            self.app.trace();
+        match traced {
+            Some(Trace::Refresh) => self.app.trace_refresh(),
+            Some(Trace::Flood) => self.app.trace_flood(),
+            Some(Trace::Step) => self.app.trace(),
+            None => {}
         }
         if self.restart.is_none()
             && let Some(exe) = self.app.take_restart()

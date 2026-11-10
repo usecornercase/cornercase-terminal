@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::{Instant, SystemTime};
 
+use super::events::Pace;
 use super::hierarchy::RunningPanes;
 use super::layout::Side;
 use super::{App, Toast};
@@ -259,21 +260,34 @@ fn changes(before: Place, now: Place) -> Vec<Change> {
 
 impl App {
     pub(crate) fn trace(&mut self) {
-        self.clients.events.snapshots.mark_changed();
-        self.clients.change_streams.mark_changed();
-        self.trace_refresh();
+        self.mark_traced();
+        self.publish_traced(Pace::Lines);
+    }
+
+    pub(crate) fn trace_flood(&mut self) {
+        self.mark_traced();
+        self.publish_traced(Pace::Builds);
     }
 
     pub(crate) fn trace_refresh(&mut self) {
+        self.publish_traced(Pace::Builds);
+    }
+
+    fn mark_traced(&mut self) {
+        self.clients.events.snapshots.mark_changed();
+        self.clients.change_streams.mark_changed();
+    }
+
+    fn publish_traced(&mut self, pace: Pace) {
         let logged = log::enabled(Level::Info);
         if logged || self.following() {
             self.publish(logged);
         }
         self.settle_views();
         let now = Instant::now();
-        self.publish_snapshot(now);
-        self.publish_app(now);
-        self.publish_flow_runs(now);
+        self.publish_snapshot(now, pace);
+        self.publish_app(now, pace);
+        self.publish_flow_runs(now, pace);
     }
 
     pub(super) fn publish(&mut self, logged: bool) {

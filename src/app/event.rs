@@ -57,6 +57,16 @@ impl AppEvent {
         matches!(self, Self::Machine(MachineEvent::Stream(report)) if matches!(report.event, StreamEvent::Frame(_)))
     }
 
+    pub(crate) fn echoes_a_flood(&self) -> bool {
+        matches!(self, Self::Machine(MachineEvent::Stream(_) | MachineEvent::Followed(_)))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn a_machine_panel_line() -> Self {
+        use crate::machines::follow::{self, Followed};
+        Self::Machine(MachineEvent::Followed(Followed { id: 1, event: follow::Event::Line("x".into()) }))
+    }
+
     pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Input(_) => "input",
@@ -116,3 +126,6 @@ pub(crate) struct Start {
     pub(super) spec: launch::Spec,
     pub(super) accounts: Option<crate::accounts::Accounts>,
 }
+
+#[cfg(test)]
+mod tests;
