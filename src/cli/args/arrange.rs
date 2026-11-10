@@ -56,6 +56,8 @@ pub(crate) struct FoldArgs {
     pub(crate) worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "An agent's pane and the agents it started, in the agents section")]
     pub(crate) pane: Option<u64>,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

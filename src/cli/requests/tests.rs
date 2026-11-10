@@ -250,6 +250,8 @@ mod streams {
     #[case::move_pane(r#"{"args": ["move-pane", "--pane", "4", "--target", "5", "--place", "left", "--boot", "old"]}"#)]
     #[case::account_restart(r#"{"args": ["account", "restart", "claude", "--pane", "4", "--boot", "old"]}"#)]
     #[case::context(r#"{"args": ["context", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::collapse(r#"{"args": ["collapse", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::expand(r#"{"args": ["expand", "--worktree", "fix/login", "--boot", "old"]}"#)]
     fn a_boot_from_an_earlier_run_gives_status_4_and_the_next_line_runs_without_it(#[case] line: &str) {
         let refusing = |theirs| serving(theirs, control::contract::describe("boot", &[]), "\"boot\":\"old\"");
 
@@ -342,6 +344,8 @@ mod streams {
         r#"{"args": ["account", "restart", "claude", "work", "--pane", "4", "--json", "--boot", "old"]}"#
     )]
     #[case::context(r#"{"args": ["context", "--tab", "4", "--cached", "--boot", "old"]}"#)]
+    #[case::collapse(r#"{"args": ["collapse", "--group", "4", "--boot", "old"]}"#)]
+    #[case::expand(r#"{"args": ["expand", "--pane", "4", "--boot", "old"]}"#)]
     fn a_boot_for_a_server_that_would_ignore_it_never_sends_the_request(#[case] line: &str) {
         let older = lacking("boot");
 
