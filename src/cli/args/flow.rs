@@ -74,7 +74,6 @@ pub(crate) enum FlowAction {
     )]
     Default(FlowDefaultArgs),
     #[command(
-        name = "close-when-merged",
         about = "Close a run's agents once its pull request merges, as flow run --close-when-merged does, or keep them open with --off",
         after_help = FLOW_CLOSE_WHEN_MERGED_HELP
     )]

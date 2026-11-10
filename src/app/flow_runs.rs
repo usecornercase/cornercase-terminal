@@ -28,9 +28,9 @@ use crate::project::{Hierarchy, Phase, Project, Tab, Workspace, WorkspaceAt};
 use crate::state::RunState;
 use crate::term::Term;
 use crate::time;
+use crate::ui;
 
 mod merged;
-use crate::ui;
 
 pub(super) struct Runs {
     list: Vec<Run>,
@@ -245,7 +245,11 @@ fn make_trees(repo: &Path, dir: &Path, trees: RunTrees) -> crate::error::Result<
 }
 
 pub(super) fn closed_run_refusal(workspace: u64) -> String {
-    format!("workspace {workspace} has a flow's agents closed: reopen or forget them")
+    closed_run_says(workspace, "reopen or forget them")
+}
+
+pub(super) fn closed_run_says(workspace: u64, then: &str) -> String {
+    format!("workspace {workspace} has a flow's agents closed: {then}")
 }
 
 fn folder_removed(result: &crate::error::Result<(usize, u64)>, job: &mut Job) -> Option<AppEvent> {

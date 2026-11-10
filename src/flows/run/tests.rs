@@ -268,7 +268,7 @@ mod close_due {
     fn the_countdown_starts_on_the_first_ready_step() {
         let (mut run, t0) = (opted_in(), Instant::now());
         assert!(!run.close_due(true, t0));
-        assert!(!run.close_due(true, t0 + MERGED_GRACE - Duration::from_secs(1)));
+        assert!(!run.close_due(true, t0 + Duration::from_secs(179)));
         assert!(run.close_due(true, t0 + MERGED_GRACE));
     }
 

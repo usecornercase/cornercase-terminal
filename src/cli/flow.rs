@@ -72,6 +72,8 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         client::use_flow_close_when_merged()?;
     }
     let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
+    let machine = super::machine(run.on)?;
+    let on_machine = machine.is_some();
     let request = control::FlowRun {
         name: run.name,
         prompt: read_prompt(run.prompt, run.prompt_file)?.unwrap_or_default(),
@@ -83,7 +85,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         focus: run.create.focus,
         profile,
         accounts,
-        machine: super::machine(run.on)?,
+        machine,
         close_when_merged: run.close_when_merged,
     };
     let value = ask("flow run", control::Command::FlowRun(request))?;
@@ -98,7 +100,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         note(&format!("{text}\n"));
     }
     if run.close_when_merged {
-        note(&format!("{}\n", closing_note(&run)));
+        note(&format!("{}\n", closing_note(&run, on_machine)));
     }
     print_out(&started(&run))
 }
@@ -524,11 +526,13 @@ pub(super) fn folder_note(run: &RunInfo) -> Option<String> {
     run.run_dir.as_ref().map(|dir| format!("the run keeps its files in {}", dir.display()))
 }
 
-pub(super) fn closing_note(run: &RunInfo) -> String {
-    format!(
-        "its agents close once its pull request merges and none of them works; cornercase agents reopen --workspace {} brings them back",
-        run.workspace
-    )
+pub(super) fn closing_note(run: &RunInfo, on_machine: bool) -> String {
+    let back = if on_machine {
+        "the workspace's ▶ brings them back".to_string()
+    } else {
+        format!("cornercase agents reopen --workspace {} brings them back", run.workspace)
+    };
+    format!("its agents close once its pull request merges and none of them works; {back}")
 }
 
 pub(super) fn started(run: &RunInfo) -> String {

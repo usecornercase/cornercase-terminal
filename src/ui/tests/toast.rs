@@ -59,3 +59,15 @@ fn its_icon_and_border_say_what_it_is_about(#[case] icon: ToastIcon, #[case] gly
     let (icon, border) = (&t.backend().buffer()[(r.x + 2, r.y + 1)], &t.backend().buffer()[(r.x, r.y)]);
     assert_eq!((icon.symbol(), icon.fg, border.fg), (glyph, colour, colour));
 }
+
+#[test]
+fn a_message_wider_than_the_screen_is_cut_before_its_button() {
+    let message = "pull request merged in a very long workspace name that never ends: 5 agents closed · ▶ reopens them";
+    let toast = Toast { message: &message.repeat(3), icon: ToastIcon::Check, button: Some(ToastButton::Reopen) };
+    let (r, at) = (toast_area(AREA, toast), toast_button(AREA, toast));
+    let t = render(&View { toast: Some(toast), ..view(&["~"]) });
+    let row: String = (r.x..r.right()).map(|x| t.backend().buffer()[(x, at.y)].symbol()).collect();
+
+    assert_eq!(row.matches("reopen").count(), 1, "{row}");
+    assert!(row.contains('…') && row.contains("… reopen "), "{row}");
+}

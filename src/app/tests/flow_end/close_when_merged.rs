@@ -2,7 +2,7 @@ use rstest::rstest;
 
 use super::*;
 use crate::agents::launch::Launch;
-use crate::flows::run::MERGED_GRACE;
+use crate::flows::run::{MERGED_GRACE, Sent};
 use crate::project::split::Dir;
 
 fn opted(end: End) -> Repo {
@@ -142,4 +142,66 @@ fn status_and_the_feed_say_the_run_closes_when_merged() {
     let report = repo.app.report(None);
     let run = report.projects[0].workspaces[1].run.as_ref().expect("a run");
     assert!(run.close_when_merged);
+}
+
+#[test]
+fn typing_in_an_agent_during_the_countdown_starts_it_over() {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+    let (t0, member) = (Instant::now(), repo.app.runs.all()[0].members[1].pane);
+    let later = |seconds: u64| t0 + Duration::from_secs(seconds);
+
+    repo.app.close_merged_runs(t0);
+    let term = repo.app.projects.pane_by_mut(member).expect("the pane");
+    let pid = term.foreground_pid();
+    term.typing.text("one more thing", pid, later(170));
+    repo.app.close_merged_runs(later(170));
+    repo.app.close_merged_runs(later(180));
+    repo.app.close_merged_runs(later(229));
+    repo.app.close_merged_runs(later(230));
+    repo.app.close_merged_runs(later(409));
+    assert_eq!(repo.app.runs.all().len(), 1);
+    repo.app.close_merged_runs(later(410));
+    assert!(repo.app.runs.all().is_empty());
+}
+
+#[test]
+fn a_wake_of_the_orchestrator_that_is_due_keeps_them_open() {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+    let member = repo.app.runs.all()[0].members[1].pane;
+    let t0 = Instant::now();
+    repo.app.runs.first_mut().sent.push(Sent { pane: member, at: t0, finished: true });
+
+    assert!(!closes_at(&mut repo, t0));
+}
+
+#[test]
+fn an_agent_of_another_kind_opened_in_the_workspace_that_cannot_resume_keeps_them_open() {
+    let mut repo = opted(End::PullRequest);
+    pull(&mut repo, "\"MERGED\"");
+    let id = workspace_id(&repo.app);
+    let at = workspace_at(&repo.app, 0, 1);
+    let tab = repo.app.push_tab(at, AREA, None).expect("a tab").index();
+    let pane = repo.app.projects[0].workspaces[1].tabs[tab].panes[0].id;
+    let term = repo.app.projects.pane_by_mut(pane).expect("the pane");
+    term.agent.follow(Some("opencode"));
+    term.agent.update(Some(Activity::Idle), true, Instant::now());
+    assert!(repo.app.agents_close_plan(id).expect("a plan").fresh.contains(&pane));
+
+    assert!(!closes_at(&mut repo, Instant::now()));
+}
+
+#[test]
+fn reopening_after_the_merge_keeps_the_team_open() {
+    let mut repo = opted(End::PullRequest);
+    let id = workspace_id(&repo.app);
+    let plan = repo.app.agents_close_plan(id).expect("a plan");
+    repo.app.close_agents(&plan);
+    pump_until(&mut repo.app, &repo.rx, "the tabs go", |a| a.projects[0].workspaces[1].tabs.is_empty());
+    pull(&mut repo, "\"MERGED\"");
+
+    repo.app.reopen_agents(id, AREA).expect("reopened");
+
+    assert!(!repo.app.runs.all()[0].close_when_merged);
 }

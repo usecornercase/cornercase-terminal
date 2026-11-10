@@ -231,7 +231,9 @@ mod runs {
     #[test]
     fn the_note_of_a_run_that_closes_when_merged_names_its_workspace() {
         let info = RunInfo { workspace: 8, close_when_merged: true, ..RunInfo::default() };
-        assert!(closing_note(&info).contains("agents reopen --workspace 8"));
+        assert!(closing_note(&info, false).contains("agents reopen --workspace 8"));
+        let there = closing_note(&info, true);
+        assert!(!there.contains("agents reopen") && there.contains('▶'), "{there}");
     }
 
     #[test]

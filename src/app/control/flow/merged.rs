@@ -1,6 +1,7 @@
 use super::feed::no_run;
 use crate::app::App;
 use crate::app::control::{Handled, conflict, json};
+use crate::app::flow_runs::closed_run_says;
 use crate::control::{CloseWhenMergedSet, FlowCloseWhenMerged};
 use crate::flows::End;
 use crate::log;
@@ -14,7 +15,7 @@ impl App {
     ) -> Handled {
         let workspace = self.flow_workspace(caller, ask.workspace)?;
         if self.agents.closed.has_run(workspace) {
-            return Err(conflict(format!("workspace {workspace} has a flow's agents closed: reopen them first")));
+            return Err(conflict(closed_run_says(workspace, "reopen them first")));
         }
         let on = !ask.off;
         let at = self.projects.workspace_index(workspace).ok_or_else(|| no_run(workspace))?;

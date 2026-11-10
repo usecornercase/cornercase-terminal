@@ -86,6 +86,14 @@ fn done_for_the_grace_removes_the_workspace_its_folder_and_its_branch() {
 }
 
 #[test]
+fn a_routine_run_with_cleanup_on_is_cleaning_up_from_its_start() {
+    let run = started(true);
+    assert!(run.world.app.cleaning_up(run.workspace));
+    assert!(!run.world.app.cleaning_up(run.workspace + 1000));
+    assert!(!started(false).world.app.cleaning_up(run.workspace));
+}
+
+#[test]
 fn working_again_during_the_grace_starts_the_countdown_over() {
     let mut run = started(true);
     run.done_at(2);

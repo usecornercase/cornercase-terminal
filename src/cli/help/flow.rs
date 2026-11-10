@@ -46,7 +46,7 @@ command says so on stderr when it happens. A built-in flow deleted in Settings �
 and keeps its name: a project's flow named like it does not run either.
 
 With --close-when-merged the run's agents close, as `agents close` does, once the run's pull request has merged
-and nothing in the workspace has worked, waited or started for 3 minutes. Nothing is removed: the workspace's ▶ or
+and nothing in the workspace has worked, waited, started or been typed into for 3 minutes. Nothing is removed: the workspace's ▶ or
 `agents reopen` brings each agent back in its own conversation (opencode and custom agents start over), and a reopen
 keeps them open. A flow that leaves the commits has no pull request, so it is refused. It needs a server that knows the
 `flow-close-when-merged` feature; `flow close-when-merged` turns it on or off for a run that is already going.
@@ -157,7 +157,7 @@ Examples:
   cornercase flow runs --follow";
 pub(in crate::cli) const FLOW_CLOSE_WHEN_MERGED_HELP: &str =
     "It turns on, or with --off turns off, closing a run's agents once its pull request has merged and nothing in
-its workspace has worked, waited or started for 3 minutes, as `flow run --close-when-merged` does from the start.
+its workspace has worked, waited, started or been typed into for 3 minutes, as `flow run --close-when-merged` does from the start.
 The agents are kept, as `agents close` keeps them: the workspace's ▶ or `agents reopen` brings them back. A flow
 that leaves the commits has no pull request, so it cannot be turned on; --off is always accepted. Without --workspace
 or --worktree it is the workspace this runs in, else the shown one. It sets the choice, never toggles it, so
