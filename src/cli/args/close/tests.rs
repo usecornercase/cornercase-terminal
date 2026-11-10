@@ -42,6 +42,16 @@ mod boot {
     #[case::read_the_context_here(&["context"])]
     #[case::read_a_panes_context(&["context", "--pane", "4", "--json"])]
     #[case::read_a_tabs_cached_context(&["context", "--tab", "4", "--cached"])]
+    #[case::collapse_a_group(&["collapse", "--group", "4"])]
+    #[case::collapse_a_project(&["collapse", "--project", "4"])]
+    #[case::collapse_a_workspace(&["collapse", "--workspace", "4"])]
+    #[case::collapse_a_branch(&["collapse", "--worktree", "fix/login"])]
+    #[case::collapse_an_agent(&["collapse", "--pane", "4"])]
+    #[case::expand_a_group(&["expand", "--group", "4"])]
+    #[case::expand_a_project(&["expand", "--project", "4"])]
+    #[case::expand_a_workspace(&["expand", "--workspace", "4"])]
+    #[case::expand_a_branch(&["expand", "--worktree", "fix/login"])]
+    #[case::expand_an_agent(&["expand", "--pane", "4"])]
     fn goes_with_every_form_of_the_commands_that_take_it(#[case] args: &[&str]) {
         assert_eq!(boot_of(&[args, &["--boot", "1-2"]].concat()).as_deref(), Some("1-2"));
         assert_eq!(boot_of(args), None);
@@ -54,6 +64,8 @@ mod boot {
     #[case::move_pane(&["move-pane", "--pane", "4", "--target", "5", "--place", "left", "--boot", ""])]
     #[case::account_restart(&["account", "restart", "claude", "--boot", ""])]
     #[case::context(&["context", "--boot", ""])]
+    #[case::collapse(&["collapse", "--pane", "4", "--boot", ""])]
+    #[case::expand(&["expand", "--group", "4", "--boot", ""])]
     fn cannot_be_empty_so_an_unset_variable_never_reaches_the_server(#[case] args: &[&str]) {
         assert!(parsed(args).is_err());
     }

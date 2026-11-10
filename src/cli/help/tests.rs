@@ -1,7 +1,9 @@
+use clap::CommandFactory as _;
 use rstest::rstest;
 
-use super::{READ_HELP, SEND_HELP, STATUS_HELP, WAIT_HELP};
+use super::{AFTER_HELP, CONTRACT_HELP, READ_HELP, SEND_HELP, STATUS_HELP, WAIT_HELP};
 use crate::agents::Known;
+use crate::cli::Cli;
 use crate::control::PaneRow;
 
 #[rstest]
@@ -31,4 +33,33 @@ fn the_view_help_names_the_commands_that_take_a_view() {
     for command in ["flow run", "open", "clone", "new-workspace"] {
         assert!(super::VIEW_HELP.contains(&format!("`{command}`")), "missing {command}");
     }
+}
+
+fn taking_a_boot(command: &clap::Command, prefix: &str, found: &mut Vec<String>) {
+    for sub in command.get_subcommands() {
+        let name = format!("{prefix}{}", sub.get_name());
+        if sub.get_arguments().any(|arg| arg.get_id() == "boot") {
+            found.push(name.clone());
+        }
+        taking_a_boot(sub, &format!("{name} "), found);
+    }
+}
+
+fn named_between(text: &str, from: &str, to: &str) -> Vec<String> {
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let (_, rest) = text.split_once(from).expect("the start of the list");
+    let (list, _) = rest.split_once(to).expect("the end of the list");
+    let mut names: Vec<String> = list.split(", ").flat_map(|part| part.split(" and ")).map(str::to_string).collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn the_help_names_every_command_that_takes_a_boot() {
+    let mut taking = Vec::new();
+    taking_a_boot(&Cli::command(), "", &mut taking);
+    taking.sort();
+
+    assert_eq!(named_between(AFTER_HELP, "A command given --boot (", ")"), taking);
+    assert_eq!(named_between(CONTRACT_HELP, "since ids last only one run; ", " take it as"), taking);
 }
