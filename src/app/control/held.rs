@@ -17,6 +17,7 @@ pub(in crate::app) struct Held {
     pub(super) wait: Option<Condition>,
     pub(super) from: Option<u64>,
     pub(super) force: bool,
+    pub(super) pressed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +49,18 @@ pub(super) fn waiting(pane: u64, why: Option<Why>) -> String {
         Some(Why::Earlier) | None => {
             format!("an earlier message to pane {pane} has not gone out yet, so nothing was sent")
         }
+    }
+}
+
+pub(super) fn pasted(pane: u64, text: bool) -> String {
+    let head = format!("the person in pane {pane} had a draft in its input when they chose send now, so");
+    if text {
+        format!(
+            "{head} the message was pasted after their draft without its Enter: it goes out when they send their \
+             line; do not send it again, `cornercase read --pane {pane}` shows it"
+        )
+    } else {
+        format!("{head} the Enter was left to them and nothing was pressed")
     }
 }
 
@@ -83,6 +96,7 @@ impl App {
             held_sends: u32::try_from(self.held_sends(pane)).unwrap_or(u32::MAX),
             held_from: self.held(pane).next().and_then(|first| first.from),
             held_queued: self.held_keys(pane).max().zip(acked).is_some_and(|(newest, acked)| acked >= newest),
+            after_draft: false,
         }
     }
 
@@ -99,7 +113,7 @@ impl App {
                 "no message is held in pane {pane}; `cornercase status` shows `held_sends` for each pane"
             )));
         }
-        match request.action {
+        let after_draft = match request.action {
             HeldAction::SendNow if self.resume_holds(pane) => {
                 return Err(conflict(format!(
                     "pane {pane} is restarting or resuming its agent, and the message would reach its shell or its \
@@ -107,9 +121,12 @@ impl App {
                 )));
             }
             HeldAction::SendNow => self.send_held_now(pane),
-            HeldAction::WaitTurn => self.queue_held(pane),
-        }
-        Ok(Some(json(&self.held_info(pane))))
+            HeldAction::WaitTurn => {
+                self.queue_held(pane);
+                false
+            }
+        };
+        Ok(Some(json(&HeldInfo { after_draft, ..self.held_info(pane) })))
     }
 
     fn held_keys(&self, pane: u64) -> impl Iterator<Item = u64> {
@@ -172,7 +189,7 @@ impl App {
         }
     }
 
-    pub(super) fn release_held(&mut self, now: Instant) {
+    pub(super) fn release_held(&mut self, now: Instant) -> Vec<u64> {
         let held: HashSet<u64> = self
             .clients
             .requests
@@ -183,6 +200,7 @@ impl App {
             .collect();
         self.clients.requests.queued.retain(|pane, _| held.contains(pane));
         let mut seen = HashSet::new();
+        let mut over = Vec::new();
         let mut i = 0;
         while let Some(pending) = self.clients.requests.pending.get(i) {
             let Stage::Held(held) = &pending.stage else {
@@ -197,24 +215,38 @@ impl App {
                 continue;
             }
             let pending = self.clients.requests.pending.remove(i);
-            if let Some(kept) = self.release(pending, gone, now) {
+            if let Some(kept) = self.release(pending, gone, now, &mut over) {
                 self.clients.requests.pending.insert(i, kept);
                 i += 1;
             }
         }
+        over
     }
 
-    fn release(&mut self, mut pending: Pending, gone: bool, now: Instant) -> Option<Pending> {
+    fn release(&mut self, mut pending: Pending, gone: bool, now: Instant, over: &mut Vec<u64>) -> Option<Pending> {
         let pane = pending.done.ids.pane.unwrap_or_default();
         if gone {
             self.answer(pending.client, Err(format!("pane {pane} closed before the message went out")));
             return None;
         }
         let Stage::Held(held) = std::mem::replace(&mut pending.stage, Stage::Reading) else { return Some(pending) };
-        log::info!("control", "send released", pane = pane, forced = held.force);
-        let delivered = self.refuse_send(pane, held.force).and_then(|()| self.put_through(pane, *held, now));
-        match delivered {
+        let mut held = *held;
+        let over_draft = held.pressed && self.projects.pane_by(pane).is_some_and(|term| term.draft(now));
+        log::info!("control", "send released", pane = pane, forced = held.force, after_draft = over_draft);
+        if let Err(refusal) = self.refuse_send(pane, held.force) {
+            self.refuse_or_answer(pending.client, Err(refusal));
+            return None;
+        }
+        let (had_text, asked_enter) = (held.text.is_some(), held.enter);
+        if over_draft {
+            over.push(pane);
+            self.leave_enter(pane, &mut held);
+        }
+        match self.put_through(pane, held, now) {
             Err(refusal) => self.refuse_or_answer(pending.client, Err(refusal)),
+            Ok(None) if over_draft && asked_enter => {
+                self.answer(pending.client, Err(pasted(pane, had_text)));
+            }
             Ok(None) => self.answer(pending.client, Ok(json(&pending.done))),
             Ok(Some((mut launch, stage))) => {
                 launch.key = Some(pending.key);
@@ -226,7 +258,21 @@ impl App {
         None
     }
 
-    pub(in crate::app) fn send_held_now(&mut self, pane: u64) {
+    fn leave_enter(&mut self, pane: u64, held: &mut Held) {
+        if let Some(text) = &held.text
+            && let Some(term) = self.projects.pane_by_mut(pane)
+        {
+            term.typed_text(text);
+        }
+        held.wait = None;
+        held.enter = false;
+    }
+
+    pub(in crate::app) fn send_held_now(&mut self, pane: u64) -> bool {
+        let now = Instant::now();
+        if let Some(term) = self.projects.pane_by_mut(pane) {
+            term.settle_draft(now);
+        }
         let first =
             self.clients.requests.pending.iter_mut().filter(|p| p.done.ids.pane == Some(pane)).find_map(
                 |p| match &mut p.stage {
@@ -234,10 +280,10 @@ impl App {
                     _ => None,
                 },
             );
-        if let Some(held) = first {
-            held.force = true;
-            self.release_held(Instant::now());
-        }
+        let Some(held) = first else { return false };
+        held.force = true;
+        held.pressed = true;
+        self.release_held(now).contains(&pane)
     }
 
     pub(super) fn held_due(&self, pane: u64) -> Vec<Instant> {

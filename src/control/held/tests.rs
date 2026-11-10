@@ -49,14 +49,17 @@ fn it_takes_a_view_as_send_does() {
 }
 
 #[test]
-fn an_answer_always_has_its_four_keys() {
+fn an_answer_always_has_its_five_keys() {
     let nothing = serde_json::to_value(HeldInfo { pane: 9, ..HeldInfo::default() }).expect("json");
-    let from = HeldInfo { pane: 9, held_sends: 2, held_from: Some(40), held_queued: true };
+    let from = HeldInfo { pane: 9, held_sends: 2, held_from: Some(40), held_queued: true, after_draft: true };
 
-    assert_eq!(nothing, json!({"pane": 9, "held_sends": 0, "held_from": null, "held_queued": false}));
+    assert_eq!(
+        nothing,
+        json!({"pane": 9, "held_sends": 0, "held_from": null, "held_queued": false, "after_draft": false})
+    );
     assert_eq!(
         serde_json::to_value(from).expect("json"),
-        json!({"pane": 9, "held_sends": 2, "held_from": 40, "held_queued": true})
+        json!({"pane": 9, "held_sends": 2, "held_from": 40, "held_queued": true, "after_draft": true})
     );
 }
 
@@ -65,4 +68,5 @@ fn an_answer_with_fields_this_command_does_not_know_still_reads() {
     let read: HeldInfo = serde_json::from_value(json!({"pane": 9, "held_sends": 1, "later": true})).expect("an answer");
 
     assert_eq!(read, HeldInfo { pane: 9, held_sends: 1, ..HeldInfo::default() });
+    assert!(!read.after_draft);
 }

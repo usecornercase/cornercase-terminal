@@ -215,6 +215,7 @@ fn apply_step(step: Step, launch: &Launch, term: &mut Term, now: Instant) -> Opt
         Step::Done(_) => {
             if launch.submits() {
                 term.submitted = Some(now);
+                term.typing.clear();
             }
             Some(true)
         }

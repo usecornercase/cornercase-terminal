@@ -66,6 +66,9 @@ pub(super) struct Restoring<'a> {
     pub(super) reopen: bool,
 }
 
+const PASTED: &str =
+    "the message is in this pane after your draft, not sent: press Enter to send both, or edit them first";
+
 const SENDING: &str = "a message from `cornercase send` is going into this pane; wait a moment, so the two do not join";
 
 impl App {
@@ -300,11 +303,17 @@ impl App {
             }
         });
         match pressed {
-            Some((pane, true)) => self.send_held_now(pane),
+            Some((pane, true)) => self.press_send_now(pane),
             Some((pane, false)) => self.queue_held(pane),
             None => return false,
         }
         true
+    }
+
+    fn press_send_now(&mut self, pane: u64) {
+        if self.send_held_now(pane) {
+            self.messages.toast = Some(Toast::new(PASTED, ui::ToastIcon::Agent(Status::Waiting)));
+        }
     }
 
     pub(super) fn press_resume_notice(&mut self, area: Rect, pos: Position) -> bool {

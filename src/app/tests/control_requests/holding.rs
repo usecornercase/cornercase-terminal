@@ -1,5 +1,7 @@
 #![cfg(unix)]
 
+use rstest::rstest;
+
 use super::*;
 
 fn cat_pane(app: &mut App, rx: &Receiver<AppEvent>) -> u64 {
@@ -153,6 +155,7 @@ fn force_skips_the_hold() {
 #[test]
 fn force_still_waits_for_an_earlier_sends_enter_and_passes_held_ones() {
     let (mut app, rx, id) = being_entered_over_a_draft();
+    app.clients.set_typing_holds(Duration::from_secs(600));
     ask(&mut app, None, send_text(id, "late", true, false));
     let forced = wire::SendText {
         pane: Some(id),
@@ -174,6 +177,27 @@ fn force_still_waits_for_an_earlier_sends_enter_and_passes_held_ones() {
 }
 
 #[test]
+fn a_forced_sends_enter_ends_the_draft_it_sent() {
+    let (mut app, rx, id) = drafting();
+    let forced = wire::SendText {
+        pane: Some(id),
+        text: Some("now".into()),
+        enter: true,
+        force: true,
+        ..wire::SendText::default()
+    };
+
+    ask(&mut app, None, Command::Send(forced));
+    done(answered(&mut app, &rx, "the forced send is entered"));
+
+    pump_until(&mut app, &rx, "cat reads the joined line", |a| screen_lines(a, id).iter().any(|l| l == "minenow"));
+    assert!(!pane(&app, id).draft(Instant::now()), "the Enter took the line");
+    ask(&mut app, None, send_text(id, "next", true, false));
+    assert_eq!(app.held_sends(id), 0, "a send after the line has gone is not held");
+    done(answered(&mut app, &rx, "the next goes out"));
+}
+
+#[test]
 fn a_timeout_says_the_person_has_a_draft_and_nothing_was_sent() {
     let (mut app, rx, id) = drafting();
 
@@ -186,34 +210,46 @@ fn a_timeout_says_the_person_has_a_draft_and_nothing_was_sent() {
     assert_eq!(app.held_sends(id), 0);
 }
 
-#[test]
-fn send_now_in_the_band_sends_the_first_message_over_the_draft() {
-    let (mut app, rx, id) = drafting();
-    ask(&mut app, None, send_text(id, "now", false, false));
-    held_now(&mut app);
-
-    let (send, _) = notice(&app);
-    click(&mut app, send);
-
-    done(answers(&mut app).remove(0));
-    pump_until(&mut app, &rx, "it reaches cat", |a| pane_screen(a, id).contains("minenow"));
+fn press_send_now_telling(app: &mut App, pane: u64) -> (Value, Vec<String>) {
+    let (said, told) = held::asked_by_another_client(app, &json!({"pane": pane, "action": "send-now"}));
+    (said.expect("sent"), told)
 }
 
 fn press_send_now(app: &mut App, pane: u64) -> Value {
-    let (said, _) = held::asked_by_another_client(app, &json!({"pane": pane, "action": "send-now"}));
-    said.expect("sent")
+    press_send_now_telling(app, pane).0
 }
 
-#[test]
-fn the_send_now_of_a_client_sends_the_first_message_over_the_draft_as_the_band_does() {
-    let (mut app, rx, id) = drafting();
-    ask(&mut app, None, send_text(id, "now", false, false));
+fn click_send_now(app: &mut App, _pane: u64) -> (bool, String) {
+    let (send, _) = notice(app);
+    click(app, send);
+    let toast = app.messages.toast.as_ref().is_some_and(|toast| toast.message.contains("after your draft"));
+    (toast, error(answers(app).remove(0)))
+}
+
+fn command_send_now(app: &mut App, pane: u64) -> (bool, String) {
+    let (said, mut told) = press_send_now_telling(app, pane);
+    (said["after_draft"] == json!(true), told.remove(0))
+}
+
+#[rstest]
+#[case::from_the_bar(click_send_now)]
+#[case::from_a_client(command_send_now)]
+fn send_now_leaves_the_enter_to_the_person_who_has_a_draft(#[case] press: fn(&mut App, u64) -> (bool, String)) {
+    let (mut app, rx) = app();
+    let id = quiet_cat_pane(&mut app, &rx);
+    type_text(&mut app, "mine");
+    ask(&mut app, None, send_text(id, "now", true, false));
     held_now(&mut app);
 
-    let said = press_send_now(&mut app, id);
+    let (said, message) = press(&mut app, id);
 
-    assert_eq!(said["held_sends"], 0);
-    pump_until(&mut app, &rx, "it reaches cat", |a| pane_screen(a, id).contains("minenow"));
+    assert!(said, "it says the Enter was left to the person");
+    assert!(message.contains("had a draft"), "{message}");
+    assert!(!app.sending(id));
+    assert!(pane(&app, id).draft(Instant::now()));
+    send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    pump_until(&mut app, &rx, "cat reads both as one line", |a| screen_lines(a, id).iter().any(|l| l == "minenow"));
+    assert!(!pane(&app, id).draft(Instant::now()));
 }
 
 #[test]
@@ -225,6 +261,7 @@ fn the_send_now_of_a_client_still_waits_for_an_earlier_messages_enter() {
 
     assert_eq!(said["held_sends"], 1, "it waits for the first's Enter");
     done(answered(&mut app, &rx, "the first is entered"));
+    assert!(!pane(&app, id).draft(Instant::now()), "the first's Enter took the draft");
     done(answered(&mut app, &rx, "the held one follows over the draft"));
     assert_eq!(app.held_sends(id), 0);
     pump_until(&mut app, &rx, "both lines echo", |a| {

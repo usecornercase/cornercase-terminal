@@ -53,6 +53,7 @@ mod describing {
             "against-base",
             "notice-subagent",
             "mode-default",
+            "held-after-draft",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();

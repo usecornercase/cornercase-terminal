@@ -53,7 +53,7 @@ impl App {
         if text.is_none() && !send.enter {
             return Err("nothing to send: give a text, - to read it from stdin, or --enter".into());
         }
-        let held = Held { text, enter: send.enter, wait, from: asker.caller, force: send.force };
+        let held = Held { text, enter: send.enter, wait, from: asker.caller, force: send.force, pressed: false };
         if (!send.force && self.holding_back(pane, now).is_some()) || (send.force && self.sending(pane)) {
             let waits = Waits { done: pane_ids(pane), stage: Stage::Held(Box::new(held)), timeout };
             return Ok(self.hold(client, pane, waits, now));

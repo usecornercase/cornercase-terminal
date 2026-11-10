@@ -57,7 +57,7 @@ fn column(table: &str, pane: &str, name: &str) -> String {
 }
 
 #[test]
-fn send_now_sends_the_message_after_the_persons_half_written_line() {
+fn send_now_pastes_the_message_after_the_persons_half_written_line_and_leaves_the_enter() {
     let session = Session::new();
     let pane = shell_pane(&session);
     let send = typed_and_held(&session, &pane);
@@ -71,12 +71,21 @@ fn send_now_sends_the_message_after_the_persons_half_written_line() {
         (&waiting["draft"], &waiting["held_from"], &waiting["held_queued"]),
         (&json!(true), &json!(null), &json!(false))
     );
-    assert_eq!(said, json!({"pane": id(&pane), "held_sends": 0, "held_from": null, "held_queued": false}));
-    Session::output(send);
-    wait_until("the shell reads both as one line", || {
-        session.says(&["read", "--pane", &pane]).contains("half writtenfrom a script")
+    let expected =
+        json!({"pane": id(&pane), "held_sends": 0, "held_from": null, "held_queued": false, "after_draft": true});
+    assert_eq!(said, expected);
+    let outcome = send.wait_with_output().expect("the sender ends");
+    assert!(refused(&outcome, 1, "had a draft"), "{outcome:?}");
+    wait_until("the shell holds both on its line", || {
+        session.says(&["read", "--pane", &pane]).contains("$ half writtenfrom a script")
+            && pane_of(&session, &pane)["draft"] == true
+    });
+    session.says(&["input", "--pane", &pane, r#"{"key": {"code": "enter"}}"#]);
+    wait_until("the shell runs the joined line only now", || {
+        pane_of(&session, &pane)["draft"] == false && session.says(&["read", "--pane", &pane]).contains("not found")
     });
     let contract = parsed(&session.says(&["contract", "--json"]));
+    assert!(items(&contract, "features").any(|feature| feature == "held-after-draft"), "{contract}");
     assert!(items(&contract, "operations").any(|operation| operation["name"] == "held"), "{contract}");
 }
 

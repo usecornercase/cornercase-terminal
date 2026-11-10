@@ -40,6 +40,7 @@ pub(crate) struct HeldInfo {
     pub(crate) held_sends: u32,
     pub(crate) held_from: Option<u64>,
     pub(crate) held_queued: bool,
+    pub(crate) after_draft: bool,
 }
 
 #[cfg(test)]
