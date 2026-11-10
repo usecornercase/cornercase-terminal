@@ -318,7 +318,7 @@ impl Pane {
 
 #[cfg(test)]
 impl Pane {
-    pub(in crate::agents) fn watching(pid: i32, kind: Known, since: SystemTime) -> Self {
+    pub(crate) fn watching(pid: i32, kind: Known, since: SystemTime) -> Self {
         Self { agent: Some((pid, since)), kind: Some(kind), ..Self::default() }
     }
 

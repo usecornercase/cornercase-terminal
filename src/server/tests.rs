@@ -69,6 +69,7 @@ pub(super) mod a_bug {
             name: None,
             panes: vec![PaneState {
                 cwd: Some(dir.to_path_buf()),
+                parent_conversation: None,
                 right_clicks: false,
                 agent: None,
                 done: false,

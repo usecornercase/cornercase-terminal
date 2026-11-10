@@ -79,6 +79,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
         panes: vec![
             PaneState {
                 cwd: Some(paths[2].clone()),
+                parent_conversation: None,
                 right_clicks: false,
                 agent: None,
                 done: false,
@@ -91,6 +92,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
             },
             PaneState {
                 cwd: Some(paths[3].clone()),
+                parent_conversation: None,
                 right_clicks: true,
                 agent: None,
                 done: false,
@@ -136,6 +138,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                                     name: Some("build".into()),
                                     panes: vec![PaneState {
                                         cwd: Some(paths[2].clone()),
+                                        parent_conversation: None,
                                         right_clicks: false,
                                         agent: None,
                                         done: false,
@@ -261,6 +264,7 @@ fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
     let mut ws = WorkspaceState::plain(dir.to_path_buf(), vec![None, None], 0);
     ws.tabs[0].panes.push(PaneState {
         cwd: Some(locked.path().to_path_buf()),
+        parent_conversation: None,
         right_clicks: false,
         agent: None,
         done: false,
@@ -423,8 +427,13 @@ fn a_window_that_comes_later_gives_its_colours_to_the_panes_already_open() {
 mod parents {
     use super::*;
 
+    fn conversation(id: &str) -> Conversation {
+        Conversation { kind: "claude".into(), conversation: id.into() }
+    }
+
     fn pane(id: Option<u64>, parent: Option<u64>) -> PaneState {
-        PaneState { id, parent, ..PaneState::at(None) }
+        let parent_conversation = parent.map(|_| conversation("s1"));
+        PaneState { id, parent, parent_conversation, ..PaneState::at(None) }
     }
 
     fn workspace(dir: &Path, panes: Vec<PaneState>) -> WorkspaceState {
@@ -436,7 +445,7 @@ mod parents {
     }
 
     fn parents(app: &App) -> Vec<(u64, Option<u64>)> {
-        app.projects.terms().map(|term| (term.id, term.parent)).collect()
+        app.projects.terms().map(|term| (term.id, term.parent.as_ref().map(|p| p.pane))).collect()
     }
 
     #[cfg(unix)]
@@ -504,8 +513,8 @@ mod parents {
         click_row(&mut app, WorkspaceRow::NewTab(0));
         let ids: Vec<u64> = (0..3).map(|t| tab_term(&app, 0, t).id).collect();
         let tabs = &mut app.projects[0].workspaces[0].tabs;
-        tabs[1].panes[0].parent = Some(ids[0]);
-        tabs[2].panes[0].parent = Some(ids[1]);
+        tabs[1].panes[0].parent = Some(by_conversation(ids[0], "s1"));
+        tabs[2].panes[0].parent = Some(by_conversation(ids[1], "s1"));
 
         let state = app.state();
         assert_eq!(saved_parents(&state), [(Some(ids[0]), None), (Some(ids[1]), Some(ids[0])), (None, Some(ids[1]))]);
@@ -546,5 +555,68 @@ mod parents {
 
         let found = parents(&app);
         assert_eq!(found.iter().map(|(_, parent)| *parent).collect::<Vec<_>>(), [None, Some(found[0].0), None]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_parent_saved_without_its_conversation_is_dropped() {
+        let dir = TempDir::new();
+        let (mut app, _rx) = empty_app();
+        let older = PaneState { parent: Some(40), ..pane(None, None) };
+        let panes = vec![pane(Some(40), None), older];
+
+        assert!(app.restore(&saved(vec![project(dir.path(), vec![workspace(dir.path(), panes)])], 0), AREA));
+
+        assert!(parents(&app).iter().all(|(_, parent)| parent.is_none()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_saved_session_writes_only_parents_that_outlive_the_server() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        for _ in 0..4 {
+            click_row(&mut app, WorkspaceRow::NewTab(0));
+        }
+        let ids: Vec<u64> = (0..5).map(|t| tab_term(&app, 0, t).id).collect();
+        let shell = tab_term(&app, 0, 0).shell_pid().expect("a shell");
+        let tabs = &mut app.projects[0].workspaces[0].tabs;
+        tabs[1].panes[0].parent = Some(by_conversation(ids[0], "s1"));
+        tabs[2].panes[0].parent = Some(Parent { pane: ids[0], by: By::Agent(shell) });
+        tabs[3].panes[0].parent = Some(Parent { pane: ids[0], by: By::Shell(shell) });
+        tabs[4].panes[0].parent = Some(Parent::pane(ids[0]));
+
+        let state = app.state();
+
+        let panes: Vec<&PaneState> =
+            state.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).flat_map(|t| &t.panes).collect();
+        let written: Vec<(Option<u64>, bool)> =
+            panes.iter().map(|pane| (pane.parent, pane.parent_conversation.is_some())).collect();
+        let first = Some(ids[0]);
+        assert_eq!(written, [(None, false), (first, true), (None, false), (None, false), (first, false)]);
+        assert_eq!(panes[0].id, first);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_child_comes_back_under_its_parent_when_that_conversation_resumes() {
+        let dir = TempDir::new();
+        let (mut app, _rx) = empty_app();
+        let bin = TempDir::new();
+        let fake = bin.path().join("claude");
+        crate::test_util::write_executable(&fake, "#!/bin/sh\nsleep 30\n");
+        app.config.agent_commands.insert("claude".into(), fake.display().to_string());
+        app.config.resume_agents = true;
+        let agent = AgentState { kind: "claude".into(), conversation: "s1".into(), mode: None, account: None };
+        let parent = PaneState { agent: Some(agent), ..pane(Some(40), None) };
+        let (mine, other) =
+            (pane(None, Some(40)), PaneState { parent_conversation: Some(conversation("s0")), ..pane(None, Some(40)) });
+        let ws = workspace(dir.path(), vec![parent, mine, other]);
+
+        assert!(app.restore(&saved(vec![project(dir.path(), vec![ws])], 0), AREA));
+
+        let live = app.running_panes();
+        let found: Vec<Option<u64>> = app.projects.terms().map(|term| App::live_parent(term, &live)).collect();
+        let root = app.projects.terms().next().expect("the parent").id;
+        assert_eq!(found, [None, Some(root), None]);
     }
 }

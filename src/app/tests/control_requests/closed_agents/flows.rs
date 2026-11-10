@@ -56,12 +56,9 @@ fn reopening_brings_the_whole_team_back_with_the_same_run() {
     let own = run.pane_of(ORCHESTRATOR).expect("the orchestrator");
     let launch = app.agents.launches.of_pane(own).next().expect("the orchestrator is briefed");
     assert_eq!(launch.after.len(), 4);
-    assert!(
-        run.members
-            .iter()
-            .filter(|member| member.pane != own)
-            .all(|member| { app.projects.pane_by(member.pane).and_then(|term| term.parent) == Some(own) })
-    );
+    assert!(run.members.iter().filter(|member| member.pane != own).all(|member| {
+        app.projects.pane_by(member.pane).and_then(|term| term.parent.as_ref().map(|p| p.pane)) == Some(own)
+    }));
     assert!(resuming(&app).contains(&"c-coder".to_string()));
 }
 

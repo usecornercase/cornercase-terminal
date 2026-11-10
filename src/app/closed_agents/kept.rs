@@ -106,6 +106,7 @@ impl ClosedAgents {
         let kept = self.kept.iter_mut().find(|kept| kept.workspace == workspace);
         if let Some(pane) = kept.and_then(|kept| kept.tabs.get_mut(tab)).and_then(|tab| tab.panes.get_mut(pane)) {
             pane.parent = parent;
+            pane.parent_conversation = pane.parent_conversation.take().filter(|_| parent.is_some());
         }
     }
 

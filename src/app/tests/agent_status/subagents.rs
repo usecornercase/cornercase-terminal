@@ -8,7 +8,7 @@ pub(super) fn with_a_subagent() -> Watched {
     w.run(agents::Known::Cursor);
     w.report("busy", 1);
     let cursor = tab_term(&w.app, 0, 1).id;
-    w.app.projects.pane_by_mut(cursor).expect("the cursor pane").parent = Some(parent);
+    w.app.projects.pane_by_mut(cursor).expect("the cursor pane").parent = Some(Parent::pane(parent));
     w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("hide both agents");
     w
 }
@@ -17,7 +17,7 @@ pub(super) fn with_a_shell_parent() -> Watched {
     let mut w = Watched::start(agents::Known::Claude, true);
     let shell = tab_term(&w.app, 0, 1).id;
     let claude = tab_term(&w.app, 0, 0).id;
-    w.app.projects.pane_by_mut(claude).expect("the claude pane").parent = Some(shell);
+    w.app.projects.pane_by_mut(claude).expect("the claude pane").parent = Some(Parent::pane(shell));
     w
 }
 

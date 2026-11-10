@@ -5,6 +5,7 @@ use std::time::{Duration, Instant, SystemTime};
 use super::App;
 use super::account_restart::Restarts;
 use super::closed_agents::ClosedAgents;
+use super::hierarchy::RunningPanes;
 use super::launches::Launches;
 use super::machine_links::ThereAgent;
 use super::menus::{Marked, MenuAction};
@@ -161,13 +162,23 @@ impl App {
         }
         let Round { samples, notices, prompts, prompt_times, .. } = round;
         if read {
-            self.journal_agents(clock, &prompt_times);
-            self.agents.stats.sample(clock, elapsed, &samples);
-            self.agents.stats.prune(clock);
+            self.after_read(clock, elapsed, (&prompt_times, &samples));
         }
         self.count_star_prompts(prompts);
         self.send_notices(notices);
         self.retag_posts(now);
+    }
+
+    fn after_read(
+        &mut self,
+        clock: SystemTime,
+        elapsed: Duration,
+        (prompt_times, samples): (&[(u64, Vec<SystemTime>)], &[agents::stats::Sample]),
+    ) {
+        self.journal_agents(clock, prompt_times);
+        self.agents.stats.sample(clock, elapsed, samples);
+        self.agents.stats.prune(clock);
+        self.learn_parent_conversations();
     }
 
     fn send_notices(&mut self, notices: Vec<(NoticeKey, Vec<u64>)>) {
@@ -270,7 +281,7 @@ impl App {
 
     pub(super) fn agent_tree(&self, narrow: bool) -> Vec<(AgentPlace, tree::Node)> {
         let mut listing = Listing::new();
-        let live = self.pane_ids();
+        let live = self.running_panes();
         for (place, term) in self.agent_terms() {
             listing.push(place, Self::local_key(term, &live), false);
         }
@@ -281,7 +292,7 @@ impl App {
     pub(super) fn shown_agents(&self, narrow: bool) -> (Vec<Listed<'_>>, Vec<tree::Node>) {
         let remote = self.remote_projects();
         let mut listing = Listing::new();
-        let live = self.pane_ids();
+        let live = self.running_panes();
         for p in crate::project::sidebar_order(&self.projects, &self.groups) {
             for (place, term) in self.project_agents(p) {
                 listing.push(Listed::Here(place), Self::local_key(term, &live), term.collapsed);
@@ -300,7 +311,7 @@ impl App {
         }
     }
 
-    fn local_key(term: &Term, live: &HashSet<u64>) -> (AgentKey, Option<AgentKey>) {
+    fn local_key(term: &Term, live: &RunningPanes<'_>) -> (AgentKey, Option<AgentKey>) {
         ((None, term.id), Self::live_parent(term, live).map(|parent| (None, parent)))
     }
 
@@ -468,10 +479,8 @@ fn agent_in(
     term: &mut Term,
     now: Instant,
 ) -> Option<(String, activity::Activity)> {
-    let pid = term.foreground_pid();
+    let (pid, args, name) = term.see_agent(config);
     term.emulator.status_process(pid);
-    let args = pid.map(process::args).unwrap_or_default();
-    let name = agents::detect(config, &args);
     if let Some((pid, name)) = pid.zip(name.as_ref()) {
         term.status_agent = Some((pid, name.clone()));
     }

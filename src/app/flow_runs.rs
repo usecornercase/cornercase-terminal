@@ -12,6 +12,7 @@ use crate::accounts::Accounts;
 use crate::agents;
 use crate::agents::activity;
 use crate::agents::launch::{self, Launch};
+use crate::agents::parent::Parent;
 use crate::control::{MemberInfo, RunInfo};
 use crate::flows::progress::Progress;
 use crate::flows::run::{Member, RoleWorktree, Run};
@@ -151,7 +152,7 @@ pub(super) struct Starting {
     pub(super) view: Option<u64>,
     pub(super) note: Option<String>,
     pub(super) trees: Vec<(RoleWorktree, bool)>,
-    pub(super) parent: Option<u64>,
+    pub(super) parent: Option<Parent>,
     pub(super) accounts: Accounts,
     pub(super) name: Option<String>,
 }
@@ -540,11 +541,11 @@ impl App {
         }
     }
 
-    fn adopt_members(&mut self, run: &Run, parent: Option<u64>) {
+    fn adopt_members(&mut self, run: &Run, parent: Option<Parent>) {
         let own = run.members[0].pane;
-        self.adopt(own, parent);
+        self.link(own, parent);
         for member in &run.members[1..] {
-            self.adopt(member.pane, Some(own));
+            self.link(member.pane, Some(Parent::pane(own)));
         }
     }
 
@@ -675,7 +676,7 @@ impl App {
         if let Some(own) = own {
             let members = tabs.iter_mut().flat_map(|(_, tab)| &mut tab.panes);
             for term in members.filter(|term| term.id != own && run.role_of(term.id).is_some()) {
-                term.parent = Some(own);
+                term.parent = Some(Parent::pane(own));
             }
         }
         if let Some(term) = tabs.iter().flat_map(|(_, tab)| &tab.panes).find(|term| Some(term.id) == own) {

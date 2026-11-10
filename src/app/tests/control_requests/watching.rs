@@ -548,7 +548,7 @@ fn a_fold_of_an_agents_children_reaches_watchers() {
         term.agent.follow(Some("claude"));
         term.agent.update(Some(activity::Activity::Idle), true, Instant::now());
     }
-    app.projects[0].workspaces[0].tabs[1].pane_mut().expect("the child").parent = Some(ids[0]);
+    app.projects[0].workspaces[0].tabs[1].pane_mut().expect("the child").parent = Some(Parent::pane(ids[0]));
     render(&mut app, AREA);
     app.jump_to_pane(ids[0]);
     render(&mut app, AREA);

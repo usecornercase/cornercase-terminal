@@ -521,7 +521,7 @@ impl App {
             view: asker.view,
             note,
             trees: Vec::new(),
-            parent: asker.caller,
+            parent: self.caller_link(asker.caller),
             accounts,
             name: run.workspace_name.clone(),
         };

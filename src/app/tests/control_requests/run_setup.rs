@@ -246,7 +246,7 @@ fn from_a_pane_it_runs_in_that_workspace_and_the_pane_is_its_parent() {
 
     assert_eq!(made.ids.workspace, Some(workspace));
     let pane = made.ids.pane.and_then(|pane| retry.app.projects.pane_by(pane)).expect("the new pane");
-    assert_eq!(pane.parent, Some(caller));
+    assert_eq!(pane.parent.as_ref().map(|p| p.pane), Some(caller));
 }
 
 mod what_the_menu_does_not_offer {
