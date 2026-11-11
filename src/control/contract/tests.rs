@@ -58,6 +58,7 @@ mod describing {
             "fresh-branches",
             "notice-messages",
             "surface-wrapped",
+            "account-login-tab",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();

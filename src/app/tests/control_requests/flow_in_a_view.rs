@@ -4,30 +4,7 @@ use crate::app::flow_runs::Starting;
 use crate::control::RunInfo;
 use crate::flows::builtin;
 
-const SHELL: &str = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
-const VIEWER: u64 = 31;
-
-struct Apart {
-    app: App,
-    _rx: Receiver<AppEvent>,
-    _folders: [TempDir; 3],
-}
-
-fn apart() -> Apart {
-    let folders = [TempDir::new(), TempDir::new(), TempDir::new()];
-    let [config, viewed, windowed] = &folders;
-    let (mut app, rx) = new_app_with_shell(SHELL, config.path().join("config.json"));
-    app.open_project(viewed.path().to_path_buf(), AREA).expect("the project a view shows");
-    app.open_project(windowed.path().to_path_buf(), AREA).expect("the project the window shows");
-    Apart { app, _rx: rx, _folders: folders }
-}
-
 impl Apart {
-    fn views_the_first_project(&mut self) -> u64 {
-        let project = self.app.projects[0].id;
-        open_view(&mut self.app, VIEWER, &json!({"cols": 100, "rows": 30, "project": project}))
-    }
-
     fn runs(&mut self, view: Option<u64>) -> RunInfo {
         let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
         let starting = Starting {

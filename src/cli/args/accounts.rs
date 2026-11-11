@@ -1,6 +1,7 @@
 use clap::{Args, Subcommand};
 
-use super::{BootArg, Print};
+use super::{BootArg, Print, ViewArg};
+use crate::cli::help::VIEW_ARG;
 
 #[derive(Debug, Args)]
 pub(crate) struct ProfileArg {
@@ -33,6 +34,8 @@ pub(crate) enum AccountAction {
     List(AccountListArgs),
     #[command(about = "Add an account: a folder of its own the agent keeps its login in")]
     Add(AccountAddArgs),
+    #[command(about = "Open a tab that logs an account in again, or the agent's own login")]
+    Login(AccountLoginArgs),
     #[command(about = "Remove an account and its folder; an agent that used it goes back to its own login")]
     Remove(AccountRemoveArgs),
     #[command(about = "Give an account a name the window shows; its folder keeps its name")]
@@ -116,8 +119,28 @@ pub(crate) struct AccountAddArgs {
     pub(crate) login: bool,
     #[arg(long, value_name = "ID", requires = "login", help = "The workspace of the login tab [default: here]")]
     pub(crate) workspace: Option<u64>,
-    #[arg(long, requires = "login", help = "Also show the login tab in the window")]
+    #[arg(long, requires = "login", help = "Also show the login tab in the window, or in the view with --view")]
     pub(crate) focus: bool,
+    #[arg(long, value_name = "ID", requires = "login", help = VIEW_ARG)]
+    pub(crate) view: Option<u64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AccountLoginArgs {
+    #[arg(value_name = "AGENT", help = "The agent: claude or codex; Gemini CLI has no login command")]
+    pub(crate) provider: String,
+    #[arg(value_name = "ACCOUNT", required_unless_present = "system", help = "The account's folder name")]
+    pub(crate) account: Option<String>,
+    #[arg(long, conflicts_with = "account", help = "Log in with the agent's own login, outside any account")]
+    pub(crate) system: bool,
+    #[arg(long, value_name = "ID", help = "The workspace of the login tab [default: here]")]
+    pub(crate) workspace: Option<u64>,
+    #[arg(long, help = "Also show the login tab in the window, or in the view with --view")]
+    pub(crate) focus: bool,
+    #[command(flatten)]
+    pub(crate) view: ViewArg,
     #[command(flatten)]
     pub(crate) print: Print,
 }

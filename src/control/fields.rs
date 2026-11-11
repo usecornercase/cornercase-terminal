@@ -182,6 +182,7 @@ impl Command {
         match self {
             Self::AccountList(list) => list.fields(fields),
             Self::AccountAdd(add) => add.fields(fields),
+            Self::AccountLoginTab(login) => login.fields(fields),
             Self::AccountRemove(remove) => remove.fields(fields),
             Self::AccountRename(rename) => rename.fields(fields),
             Self::AccountUse(chosen) => chosen.fields(fields),

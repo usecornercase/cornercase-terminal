@@ -43,6 +43,7 @@ fn answer() -> AccountsInfo {
         login: Some(Ids { project: Some(1), workspace: Some(2), tab: Some(7), pane: Some(8) }),
         tokens: Vec::new(),
         agents: Vec::new(),
+        projection: None,
     }
 }
 
@@ -243,4 +244,36 @@ fn a_restart_request_logs_its_agent_and_panes_and_is_in_the_contract() {
 
     assert_eq!(restart.fields(), vec![("provider", "claude".into()), ("panes", "4,7".into())]);
     assert!(FEATURES.contains(&"account-restart") && Command::NAMES.contains(&"account-restart"));
+}
+
+#[test]
+fn a_login_request_reads_with_no_stray_field_logs_what_it_names_and_is_in_the_contract() {
+    let raw = json!({"command": "account-login-tab", "args": {"provider": "claude", "account": "work", "workspace": null, "focus": false}});
+    let parsed: Request = serde_json::from_value(raw.clone()).expect("a request");
+
+    assert_eq!(unknown_fields(&raw, &parsed), None);
+    let fields = parsed.command.fields();
+    assert!(fields.contains(&("provider", "claude".into())) && fields.contains(&("account", "work".into())));
+    assert!(FEATURES.contains(&"account-login-tab"));
+    assert!(Command::NAMES.contains(&"account-login-tab"));
+}
+
+fn in_a_view() -> AccountsInfo {
+    AccountsInfo { projection: Some(2), ..answer() }
+}
+
+#[test]
+fn an_answer_with_a_login_tab_in_a_view_is_written_as_its_fixture_and_reads_back() {
+    let written = serde_json::to_string_pretty(&in_a_view()).expect("json");
+    let read: AccountsInfo = serde_json::from_str(fixture!("control/accounts/v1/answer-view.json")).expect("answer");
+
+    assert_eq!(written, fixture!("control/accounts/v1/answer-view.json").trim_end());
+    assert_eq!(read, in_a_view());
+}
+
+#[test]
+fn an_answer_without_a_view_has_no_projection_key() {
+    let written = serde_json::to_value(answer()).expect("json");
+
+    assert!(written.get("projection").is_none());
 }
