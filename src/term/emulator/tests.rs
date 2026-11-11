@@ -22,6 +22,12 @@ fn snapshot_of(output: &[u8]) -> Snapshot {
     emu.snapshot().expect("snapshot")
 }
 
+fn after(rows: u16, cols: u16, output: &[u8]) -> Emulator {
+    let mut emu = Emulator::new(rows, cols, 100, &HostTheme::default(), Box::new(|_| {})).expect("emulator");
+    emu.feed(output);
+    emu
+}
+
 fn replies_to(output: &[u8]) -> String {
     let (mut emu, replies) = emulator();
     emu.feed(output);
@@ -346,12 +352,6 @@ mod selection {
 mod text {
     use super::*;
 
-    fn after(rows: u16, cols: u16, output: &[u8]) -> Emulator {
-        let mut emu = Emulator::new(rows, cols, 100, &HostTheme::default(), Box::new(|_| {})).expect("emulator");
-        emu.feed(output);
-        emu
-    }
-
     #[test]
     fn the_screen_joins_lines_the_terminal_wrapped() {
         let emu = after(4, 10, b"0123456789abcde\r\nnext");
@@ -467,6 +467,8 @@ mod modes {
 mod scrollback;
 
 mod reveal;
+
+mod wraps;
 
 mod driven_selection {
     use super::*;

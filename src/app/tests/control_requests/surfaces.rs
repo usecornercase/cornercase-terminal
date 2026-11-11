@@ -400,12 +400,16 @@ mod cells {
 
     const CLEAR: &str = "\x1b[2J\x1b[H";
 
-    fn frame_after(bytes: &str) -> Frame {
+    fn frame_with(bytes: impl FnOnce(usize) -> String) -> Frame {
         let (mut app, _rx, _dirs) = app_with(1);
         let (pane, tab, t0) = (term(&app, 0).id, tab_of(&app, 0), Instant::now());
-        subscribe(&mut app, t0, tab);
-        output(&mut app, pane, &format!("{CLEAR}{bytes}"));
+        let cols = usize::from(subscribe(&mut app, t0, tab).content.panes[0].size.cols);
+        output(&mut app, pane, &format!("{CLEAR}{}", bytes(cols)));
         ready(&mut app, t0 + FRAME_EVERY).remove(0)
+    }
+
+    fn frame_after(bytes: &str) -> Frame {
+        frame_with(|_| bytes.to_string())
     }
 
     #[test]
@@ -420,18 +424,30 @@ mod cells {
 
     #[test]
     fn a_hyperlink_that_wraps_is_one_entry_on_both_rows() {
-        let (mut app, _rx, _dirs) = app_with(1);
-        let (pane, tab, t0) = (term(&app, 0).id, tab_of(&app, 0), Instant::now());
-        let cols = usize::from(subscribe(&mut app, t0, tab).content.panes[0].size.cols);
-        let linked = "x".repeat(cols + 5);
-
-        output(&mut app, pane, &format!("{CLEAR}\x1b]8;;https://example.com/long\x1b\\{linked}\x1b]8;;\x1b\\"));
-        let got = ready(&mut app, t0 + FRAME_EVERY).remove(0);
+        let got = frame_with(|cols| {
+            let linked = "x".repeat(cols + 5);
+            format!("\x1b]8;;https://example.com/long\x1b\\{linked}\x1b]8;;\x1b\\")
+        });
 
         assert_eq!(got.content.hyperlinks.len(), 1);
         let lines = &got.content.panes[0].lines;
         assert_eq!((lines[0][0].hyperlink, lines[1][0].hyperlink), (Some(0), Some(0)));
         assert_eq!(lines[1][0].cells.len(), 5);
+    }
+
+    #[test]
+    fn a_line_that_wraps_names_the_rows_that_go_on() {
+        let address = std::cell::RefCell::new(String::new());
+        let got = frame_with(|cols| {
+            *address.borrow_mut() = format!("https://example.com/{}", "0".repeat(2 * cols));
+            format!("{}\r\n{}\r\n{}\r\n", "1".repeat(cols), "2".repeat(cols), address.borrow())
+        });
+
+        let pane = &got.content.panes[0];
+        assert_eq!(pane.wrapped, [2, 3]);
+        let joined: String =
+            (2..=4).flat_map(|y| pane.lines[y].iter().flat_map(|run| run.cells.iter().map(String::as_str))).collect();
+        assert_eq!(joined, *address.borrow());
     }
 
     #[test]

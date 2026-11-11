@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.40
+
+- **Programs that draw cornercase can open a long address that wraps.** Each pane of `cornercase surface` now carries `wrapped`, the rows whose line goes on in the next row because the terminal wrapped it there, so a program that draws the terminals can join them and open a long web address an agent printed (a pull request, a login, a preview) whole instead of cut at the row's end. It is left out when no row wraps, comes whole in a patch when it changes, and `cornercase contract` lists the feature `surface-wrapped`.
+
 ## 0.13.39
 
 - **Programs that draw cornercase now hear every notice, not only the agents'.** `cornercase events --notices` also prints the server's notices that have no token, as a `message` event with a `kind`: `cornercase notify`'s text (`notify`, naming the pane it ran in), a queued agent or routine run that started, failed or kept its workspace, or a routine's run that missed its time (`queue-started`, `queue-failed`, `queue-missed`, `queue-kept`), a failed setup nobody was looking at (`setup-failed`) and a flow member waiting for you to accept Claude Code's bypass permissions mode (`flow-consent`). With `--json` each has the toast's text, `panes` and, when it is about one, the `project` and `workspace` ids; a `--pane` reader gets those naming its panes. So `cornercase notify` in a script now reaches a program that shows notices, with no cornercase window open. `cornercase contract` lists the feature `notice-messages`.

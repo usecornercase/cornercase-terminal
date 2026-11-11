@@ -92,6 +92,8 @@ pub(crate) struct Pane {
     pub(crate) scroll: Scroll,
     #[serde(skip_serializing_if = "Colours::is_empty")]
     pub(crate) colours: Colours,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) wrapped: Vec<u16>,
     pub(crate) lines: Vec<Vec<Run>>,
 }
 

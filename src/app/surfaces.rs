@@ -148,6 +148,7 @@ fn pane_of(term: &mut Term, id: u64, rect: Rect, active: bool, tables: &mut Tabl
         modes,
         scroll,
         colours: emulator.program_colours().into(),
+        wrapped: snapshot.wrapped,
         lines: lines(snapshot.rows, &snapshot.links, tables),
     }
 }

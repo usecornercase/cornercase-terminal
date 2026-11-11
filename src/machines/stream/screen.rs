@@ -106,6 +106,7 @@ fn snapshot(held: &Held, rect: Rect) -> Snapshot {
         scroll,
         below: scroll.below(),
         links: Vec::new(),
+        wrapped: Vec::new(),
     }
 }
 

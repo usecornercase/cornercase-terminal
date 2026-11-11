@@ -191,6 +191,8 @@ fn the_fixture_reads_back_as_its_frame() {
     assert_eq!(frame.content.hyperlinks.len(), 2);
     assert_eq!(frame.content.panes[0].colours.palette["200"], [16, 32, 48]);
     assert_eq!(frame.content.panes[1].colours, Colours::default());
+    assert_eq!(frame.content.panes[0].wrapped, [2]);
+    assert_eq!(frame.content.panes[1].wrapped, Vec::<u16>::new());
     assert_eq!(frame.content.styles[3].underline_style, Some(Underline::Curly));
 }
 
@@ -208,7 +210,10 @@ fn without(value: &mut Value, keys: &[&str]) {
 #[test]
 fn a_frame_without_the_new_keys_reads_and_writes_back_unchanged() {
     let mut fixture: Value = serde_json::from_str(fixture!("control/surface/v1/frame.json")).expect("fixture");
-    without(&mut fixture, &["hyperlinks", "hyperlink", "colours", "underline_style", "underline_colour", "overline"]);
+    without(
+        &mut fixture,
+        &["hyperlinks", "hyperlink", "colours", "wrapped", "underline_style", "underline_colour", "overline"],
+    );
 
     let frame: Frame = serde_json::from_value(fixture.clone()).expect("a frame");
 
@@ -333,6 +338,14 @@ fn colours_are_left_out_when_the_program_changed_none_and_shaped_when_it_did() {
         serde_json::to_value(&pane).expect("json")["colours"],
         json!({"fg": [1, 2, 3], "palette": {"1": [255, 0, 0]}})
     );
+}
+
+#[test]
+fn wrapped_is_left_out_when_no_row_goes_on() {
+    let pane = Pane::default();
+    assert!(serde_json::to_value(&pane).expect("json").get("wrapped").is_none());
+    let pane = Pane { wrapped: vec![2, 3], ..Pane::default() };
+    assert_eq!(serde_json::to_value(&pane).expect("json")["wrapped"], json!([2, 3]));
 }
 
 mod a_style_read_back {

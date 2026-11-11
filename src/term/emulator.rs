@@ -95,6 +95,7 @@ pub(crate) struct Snapshot {
     pub(crate) scroll: Scrollbar,
     pub(crate) below: usize,
     pub(crate) links: Vec<String>,
+    pub(crate) wrapped: Vec<u16>,
 }
 
 impl Snapshot {
@@ -474,7 +475,7 @@ impl Emulator {
         }
     }
 
-    fn capture(&mut self, links: bool) -> Result<Snapshot> {
+    fn capture(&mut self, surface: bool) -> Result<Snapshot> {
         if self.below() > 0 && self.mouse_mode() != MouseMode::None {
             self.scroll_to_bottom();
         }
@@ -483,8 +484,14 @@ impl Emulator {
             if snap.cursor_visible()? { snap.cursor_viewport()?.map(|vp| Position::new(vp.x, vp.y)) } else { None };
         let shape = shape_of(snap.cursor_visual_style());
         let blinking = snap.cursor_blinking().unwrap_or(false);
-        let mut capture =
-            RowCapture { vt: &self.vt, links, text: String::new(), uri: vec![0u8; 2048], found: Vec::new() };
+        let mut capture = RowCapture {
+            vt: &self.vt,
+            surface,
+            text: String::new(),
+            uri: vec![0u8; 2048],
+            found: Vec::new(),
+            wrapped: Vec::new(),
+        };
         let mut rows = Vec::new();
         let mut row_it = self.rows.update(&snap)?;
         let mut y = 0u32;
@@ -492,9 +499,9 @@ impl Emulator {
             rows.push(capture.row(&mut self.cells, row, y)?);
             y += 1;
         }
-        let links = capture.found;
+        let (links, wrapped) = (capture.found, capture.wrapped);
         let scroll = self.scrollbar();
-        Ok(Snapshot { rows, cursor, shape, blinking, scroll, below: scroll.below(), links })
+        Ok(Snapshot { rows, cursor, shape, blinking, scroll, below: scroll.below(), links, wrapped })
     }
 }
 
@@ -517,15 +524,19 @@ fn shape_of(style: Result<CursorVisualStyle>) -> CursorShape {
 
 struct RowCapture<'a> {
     vt: &'a Terminal<'static, 'static>,
-    links: bool,
+    surface: bool,
     text: String,
     uri: Vec<u8>,
     found: Vec<String>,
+    wrapped: Vec<u16>,
 }
 
 impl RowCapture<'_> {
     fn row(&mut self, cells: &mut CellIterator<'static>, row: &RowIteration<'static, '_>, y: u32) -> Result<Vec<Cell>> {
-        let linked = self.links && row.raw_row()?.has_hyperlink()?;
+        if self.surface && wraps(self.vt, y) {
+            self.wrapped.push(u16::try_from(y).unwrap_or(u16::MAX));
+        }
+        let linked = self.surface && row.raw_row()?.has_hyperlink()?;
         let mut captured = Vec::new();
         let mut spacer = false;
         let mut cell_it = cells.update(row)?;
@@ -560,6 +571,13 @@ impl RowCapture<'_> {
         };
         Ok((Cell { symbol, style, spacer: tail, decor, link }, wide))
     }
+}
+
+fn wraps(vt: &Terminal<'static, 'static>, y: u32) -> bool {
+    vt.grid_ref(Point::Viewport(PointCoordinate { x: 0, y }))
+        .and_then(|at| at.row())
+        .and_then(libghostty_vt::screen::Row::is_wrapped)
+        .unwrap_or(false)
 }
 
 fn link_at(

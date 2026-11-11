@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::*;
 use crate::control::surface::mirror::Mirror;
@@ -193,6 +193,26 @@ fn redraw_needs_a_live_surface(#[case] surface: Option<u64>, #[case] code: Code)
 }
 
 #[test]
+fn wrapped_rows_come_whole_when_they_change() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let (pane, tab, t0) = (term(&app, 0).id, tab_of(&app, 0), Instant::now());
+    let first = lines_of(&subscribe_patching(&mut app, CLIENT, t0, tab));
+    let cols = usize::try_from(first["panes"][0]["size"]["cols"].as_u64().expect("cols")).expect("a width");
+
+    output(&mut app, pane, &format!("\x1b[2J\x1b[H{}", "w".repeat(cols + 3)));
+    let got = next(&mut app, CLIENT, t0 + FRAME_EVERY);
+    assert_eq!(got[0]["panes"][0]["wrapped"], json!([0]));
+
+    output(&mut app, pane, "x");
+    let got = next(&mut app, CLIENT, t0 + FRAME_EVERY * 2);
+    assert!(got[0]["panes"][0].get("wrapped").is_none(), "{}", got[0]["panes"][0]);
+
+    output(&mut app, pane, "\x1b[2J\x1b[H");
+    let got = next(&mut app, CLIENT, t0 + FRAME_EVERY * 3);
+    assert_eq!(got[0]["panes"][0]["wrapped"], json!([]));
+}
+
+#[test]
 fn patches_rebuild_what_a_complete_stream_shows() {
     let (mut app, rx, _dirs) = app_with(1);
     let (pane, tab, t0) = (term(&app, 0).id, tab_of(&app, 0), Instant::now());
@@ -206,6 +226,7 @@ fn patches_rebuild_what_a_complete_stream_shows() {
         rows,
         "\x1b]8;;https://example.com\x1b\\site\x1b]8;;\x1b\\".to_string(),
         "\x1b[3;5H\x1b[6 q".to_string(),
+        "z".repeat(200),
         "\x1b[2J\x1b[H".to_string(),
         "\x1b[4:3mundercurl\x1b[0m\r\nnext".to_string(),
     ];

@@ -56,6 +56,7 @@ mod a_hostile_line {
     #[case::row_65535(patch(&json!([{"pane": 1, "lines": {"65535": row("x")}}])).to_string())]
     #[case::a_row_past_u16(patch(&json!([{"pane": 1, "lines": {"65536": row("x")}}])).to_string())]
     #[case::a_row_that_is_not_a_number(patch(&json!([{"pane": 1, "lines": {"top": row("x")}}])).to_string())]
+    #[case::a_wrapped_row_past_the_end(patch(&json!([{"pane": 1, "wrapped": [3]}])).to_string())]
     #[case::an_unknown_pane(patch(&json!([{"pane": 9, "lines": {"0": row("x")}}])).to_string())]
     #[case::an_old_base(json!({"ok": {"revision": 9, "base": 0, "panes": []}}).to_string())]
     fn is_refused_and_leaves_the_screen_as_it_was(#[case] line: String) {
@@ -138,6 +139,24 @@ mod a_hostile_line {
 
 mod a_good_line {
     use super::*;
+
+    #[test]
+    fn a_patch_sets_keeps_and_clears_the_wrapped_rows() {
+        let mut first = complete(1);
+        first["ok"]["panes"][0]["wrapped"] = json!([0]);
+        let mut mirror = Mirror::default();
+        mirror.apply(&first.to_string()).expect("a complete frame");
+        assert_eq!(mirror.shown.panes[0].wrapped, [0]);
+
+        mirror.apply(&patch(&json!([{"pane": 1, "lines": {"2": row("x")}}])).to_string()).expect("a patch");
+        assert_eq!(mirror.shown.panes[0].wrapped, [0]);
+
+        let mut next = patch(&json!([{"pane": 1, "wrapped": []}]));
+        next["ok"]["revision"] = json!(3);
+        next["ok"]["base"] = json!(2);
+        mirror.apply(&next.to_string()).expect("a patch");
+        assert_eq!(mirror.shown.panes[0].wrapped, Vec::<u16>::new());
+    }
 
     #[test]
     fn a_patch_copies_rows_and_writes_lines() {
