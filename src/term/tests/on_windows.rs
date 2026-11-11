@@ -204,9 +204,7 @@ mod console_sequences {
         typed(&mut term, &rx, &format!("prompt cc-{}$G", "w".repeat(100)), "ww>");
 
         let snap = term.emulator.surface_snapshot().expect("snapshot");
-        let text =
-            |row: &Vec<crate::term::emulator::Cell>| row.iter().map(|cell| cell.symbol.as_str()).collect::<String>();
-        let first = snap.rows.iter().rposition(|row| text(row).starts_with("cc-w")).expect("the prompt's first row");
+        let first = snap.contents().lines().rposition(|line| line.starts_with("cc-w")).expect("the prompt's first row");
         assert!(snap.wrapped.contains(&u16::try_from(first).expect("a row")), "{first} in {:?}", snap.wrapped);
     }
 
