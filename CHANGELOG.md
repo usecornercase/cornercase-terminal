@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.38
+
+- **A program can list the machines your window reached.** `cornercase remote --known` prints the machines a window on this computer reached, with `cornercase remote` or the machine button at the bottom of the sidebar, in the order its menu lists them, each with the `--command` it was reached with, and `--json` prints them as `{"machines": [{"destination": "devbox", "command": null}]}`. Another interface that offers to move to another server can offer them too, and a `me@10.0.0.5` you reached from the window needn't be typed again. It reads this computer's list, with no server and no `ssh`, and `CORNERCASE_REMOTE` changes nothing for it.
+
 ## 0.13.37
 
 - **New branches can start from the up-to-date default branch.** A worktree's new branch started from the commit your project's own folder was on, which is often behind when you work only in worktrees, so an agent or a flow started on an issue could work on old code without a word. Turn on **settings → Worktrees → new branches** and every new branch (the New workspace dialog, an issue's start, a flow, a queued start) starts from the project's default branch, fetched from its remote first, as a routine's runs already do. If the fetch fails (offline, a login), the start fails and says why, and nothing is made. A branch that already exists is checked out as before, without fetching.
