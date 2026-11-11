@@ -192,6 +192,7 @@ fn newest_commands() -> Vec<Command> {
         Command::ConfigPair(ConfigPair { key: "browsers".into() }),
         Command::WorktreesRemove(WorktreesRemove::default()),
         Command::FlowCloseWhenMerged(FlowCloseWhenMerged::default()),
+        Command::AccountLogin(AccountLogin::default()),
     ]
 }
 

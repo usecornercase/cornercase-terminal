@@ -94,3 +94,15 @@ fn a_view_read_without_visible_is_visible() {
     assert!(older.visible);
     assert!(!hidden.visible);
 }
+
+#[test]
+fn account_add_and_account_login_take_a_view_and_the_other_account_requests_do_not() {
+    use crate::control::{AccountAdd, AccountList, AccountLogin, AccountRestart, AccountUse};
+
+    assert!(takes_view(&Command::AccountAdd(AccountAdd::default())));
+    assert!(takes_view(&Command::AccountLogin(AccountLogin::default())));
+    assert!(!takes_view(&Command::AccountList(AccountList::default())));
+    assert!(!takes_view(&Command::AccountUse(AccountUse::default())));
+    assert!(!takes_view(&Command::AccountRestart(AccountRestart::default())));
+    assert!(FEATURES.contains(&"account-login-tab"));
+}

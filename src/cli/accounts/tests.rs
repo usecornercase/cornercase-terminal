@@ -85,6 +85,9 @@ mod parsing {
     #[case::set_with_nothing_to_change(&["profile", "set", "Work"])]
     #[case::set_an_account_without_its_agent(&["profile", "set", "Work", "--account", "me", "--rename", "W"])]
     #[case::a_login_workspace_without_login(&["account", "add", "claude", "work", "--workspace", "3"])]
+    #[case::a_login_of_nothing(&["account", "login", "claude"])]
+    #[case::a_login_of_an_account_and_the_system(&["account", "login", "claude", "work", "--system"])]
+    #[case::a_view_without_login(&["account", "add", "claude", "work", "--view", "3"])]
     fn wrong_usage_is_refused(#[case] args: &[&str]) {
         assert!(parse(args).is_err(), "{args:?} parsed");
     }
@@ -113,6 +116,42 @@ mod parsing {
     #[case::nothing(&["account", "rename", "claude"])]
     fn a_rename_without_a_clear_target_is_wrong_usage(#[case] args: &[&str]) {
         assert!(matches!(rename(args), Err(Error::WrongUsage(_))), "{args:?}");
+    }
+
+    fn login(args: &[&str]) -> AccountLoginArgs {
+        let Control::Account(parsed) = control(args) else { panic!("account") };
+        let AccountAction::Login(login) = parsed.action else { panic!("login") };
+        login
+    }
+
+    #[rstest::rstest]
+    #[case::an_account(&["account", "login", "claude", "work"], Some("work"), false)]
+    #[case::the_system(&["account", "login", "codex", "--system"], None, true)]
+    fn login_takes_an_account_or_the_system(
+        #[case] args: &[&str],
+        #[case] account: Option<&str>,
+        #[case] system: bool,
+    ) {
+        let login = login(args);
+
+        assert_eq!((login.account.as_deref(), login.system), (account, system));
+    }
+
+    #[test]
+    fn login_takes_a_workspace_a_focus_a_view_and_json() {
+        let login =
+            login(&["account", "login", "claude", "work", "--workspace", "3", "--focus", "--view", "9", "--json"]);
+
+        assert_eq!((login.workspace, login.focus, login.view.view, login.print.json), (Some(3), true, Some(9), true));
+    }
+
+    #[test]
+    fn a_login_and_an_add_with_login_name_their_view_for_the_feature_check() {
+        let view = |args: &[&str]| control(args).view();
+
+        assert_eq!(view(&["account", "login", "claude", "work", "--view", "9"]), Some(9));
+        assert_eq!(view(&["account", "add", "claude", "home", "--login", "--focus", "--view", "9"]), Some(9));
+        assert_eq!(view(&["account", "list"]), None);
     }
 
     #[test]
@@ -161,7 +200,7 @@ mod parsing {
 }
 
 mod text {
-    use crate::control::{RestartInfo, SkippedPane};
+    use crate::control::{Ids, RestartInfo, SkippedPane};
 
     #[test]
     fn a_restart_names_what_restarted_what_waits_and_what_was_skipped() {
@@ -227,6 +266,7 @@ mod text {
             login: None,
             tokens: Vec::new(),
             agents: Vec::new(),
+            projection: None,
         }
     }
 
@@ -288,5 +328,14 @@ mod text {
         let info = AccountsInfo { profile: String::new(), profiles: Vec::new(), ..info() };
 
         assert_eq!(profiles_text(&info), "* system  each agent's own login\n");
+    }
+
+    #[test]
+    fn a_login_names_the_pane_it_runs_in() {
+        let ids = Ids { pane: Some(12), ..Ids::default() };
+        let info = AccountsInfo { login: Some(ids), ..AccountsInfo::default() };
+
+        assert_eq!(login_text("claude", "work", &info), "the login of the claude account work runs in pane 12\n");
+        assert_eq!(login_text("claude", "", &info), "the login of claude outside any account runs in pane 12\n");
     }
 }

@@ -47,8 +47,8 @@ use fields::{Fields, chosen};
 pub(crate) use todo::{Todo, TodoSend};
 
 pub(crate) use accounts::{
-    AccountAdd, AccountList, AccountRemove, AccountRename, AccountRestart, AccountUse, AccountsInfo, ProfileDelete,
-    ProfileList, ProfileNew, ProfileSet, ProfileUse, RestartInfo, SkippedPane,
+    AccountAdd, AccountList, AccountLogin, AccountRemove, AccountRename, AccountRestart, AccountUse, AccountsInfo,
+    ProfileDelete, ProfileList, ProfileNew, ProfileSet, ProfileUse, RestartInfo, SkippedPane,
 };
 pub(crate) use app_state::{
     AppState, AppWatch, AwayInfo, ForumInfo, ForumServer, ForumServerInfo, InstallInfo, NoUpdate, Notes, PopupInfo,
@@ -240,6 +240,7 @@ pub(crate) enum Command {
     AccountUse(AccountUse),
     CloseAgent(CloseAgent),
     AccountRestart(AccountRestart),
+    AccountLogin(AccountLogin),
     AgentsClose(AgentsClose),
     AgentsReopen(AgentsReopen),
     AgentsForget(AgentsForget),
@@ -432,6 +433,7 @@ impl Command {
             Self::ProfileUse(_) => 84,
             Self::ProfileDelete(_) => 85,
             Self::AccountRestart(_) => 89,
+            Self::AccountLogin(_) => 125,
             _ => return None,
         })
     }
@@ -598,6 +600,7 @@ impl Command {
         "config-pair",
         "worktrees-remove",
         "flow-close-when-merged",
+        "account-login",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::commands::Followed;
 use super::*;
@@ -131,4 +131,42 @@ fn the_first_folder_of_accounts_another_program_makes_moves_it_on_the_sync_step(
     followed.until("the line of the folder", |line| accounts_revision(line) == Some(1));
     assert!(session.says(&["account", "list"]).contains("probe"));
     stop_following(&session, following);
+}
+
+pub(super) fn fake_login(session: &Session) -> PathBuf {
+    let out = session.dir.join("login-out");
+    let fake = session.dir.join("claude");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s|%s\\n' \"$*\" \"${{CLAUDE_CONFIG_DIR:-system}}\" > {0}.tmp && mv {0}.tmp {0}\n",
+        out.display()
+    );
+    write_executable(&fake, &script);
+    let config = json!({"agent_commands": agent_commands(&[("claude", &fake)])});
+    std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");
+    out
+}
+
+#[test]
+fn an_account_logs_in_again_through_remote_and_one_that_cannot_is_refused() {
+    let session = Session::new();
+    let out = fake_login(&session);
+    remote::remote_says(&session, &["start-server"]);
+    let folder = temp_dir("login-again");
+    remote::remote_says(&session, &["open", &folder.display().to_string()]);
+    remote::remote_says(&session, &["account", "add", "claude", "work"]);
+    let listed = remote::remote_says(&session, &["account", "list", "--json"]);
+    let listed: Value = serde_json::from_str(&listed).expect("the accounts");
+    let path = listed["providers"][0]["accounts"][0]["path"].as_str().expect("its folder").to_string();
+
+    let answer = remote::remote_says(&session, &["account", "login", "claude", "work", "--json"]);
+    let answer: Value = serde_json::from_str(&answer).expect("the answer");
+    let unknown = remote::remotely(&session, &["account", "login", "claude", "nope"]).output().expect("run");
+    let gemini = remote::remotely(&session, &["account", "login", "gemini", "--system"]).output().expect("run");
+
+    assert!(answer["login"]["pane"].is_number() && answer["login"]["tab"].is_number(), "{answer}");
+    wait_until("the login runs", || out.exists());
+    assert_eq!(std::fs::read_to_string(&out).expect("the log").trim_end(), format!("auth login|{path}"));
+    assert!(refused(&unknown, 1, "there is no claude account `nope`"), "{unknown:?}");
+    assert!(refused(&gemini, 1, "no login command"), "{gemini:?}");
+    let _ = std::fs::remove_dir_all(folder);
 }

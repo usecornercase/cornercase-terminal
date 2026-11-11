@@ -95,6 +95,8 @@ pub(crate) fn takes_view(command: &Command) -> bool {
             | Command::Mark(_)
             | Command::Rename(_)
             | Command::Surface(_)
+            | Command::AccountAdd(_)
+            | Command::AccountLogin(_)
             | Command::ViewSet(_)
             | Command::Go(_)
             | Command::PluginRun(_)

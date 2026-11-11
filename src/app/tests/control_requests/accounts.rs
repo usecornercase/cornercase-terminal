@@ -124,14 +124,28 @@ fn a_bad_account_is_refused_before_anything_is_made(#[case] args: Value, #[case]
     assert!(!s.root().exists());
 }
 
-#[test]
-fn adding_with_login_opens_a_tab_of_that_account_running_the_agent_s_login() {
-    let mut s = setup();
-    let bin = TempDir::new();
+fn fake_login(s: &mut Setup, bin: &TempDir) -> PathBuf {
     let out = bin.path().join("out");
     let fake = bin.path().join("claude");
     write_executable(&fake, &LOGIN.replace("OUT", &out.display().to_string()));
     s.app.config.agent_commands.insert("claude".into(), fake.display().to_string());
+    out
+}
+
+fn wait_for_login(s: &mut Setup, out: &Path) -> String {
+    wait_until("the login command runs", || {
+        drain(&mut s.app, &s.rx);
+        s.app.refresh(Instant::now());
+        out.exists()
+    });
+    std::fs::read_to_string(out).expect("the log").trim_end().to_string()
+}
+
+#[test]
+fn adding_with_login_opens_a_tab_of_that_account_running_the_agent_s_login() {
+    let mut s = setup();
+    let bin = TempDir::new();
+    let out = fake_login(&mut s, &bin);
     let before = s.app.focus();
 
     let added = s.info("account-add", &json!({"provider": "claude", "name": "work", "login": true}));
@@ -140,13 +154,24 @@ fn adding_with_login_opens_a_tab_of_that_account_running_the_agent_s_login() {
     let id = login.pane.expect("its pane");
     assert_eq!(pane(&s.app, id).accounts().name(Known::Claude), Some("work"));
     assert_eq!(s.app.focus(), before, "the window stays where it was");
-    wait_until("the login command runs", || {
-        drain(&mut s.app, &s.rx);
-        s.app.refresh(Instant::now());
-        out.exists()
-    });
     let work = s.root().join("claude").join("work").canonicalize().expect("the account");
-    assert_eq!(std::fs::read_to_string(&out).expect("the log").trim_end(), format!("auth login|{}", work.display()));
+    assert_eq!(wait_for_login(&mut s, &out), format!("auth login|{}", work.display()));
+}
+
+#[test]
+fn logging_in_again_types_the_agent_s_login_with_that_account_or_its_own() {
+    let mut s = setup();
+    let bin = TempDir::new();
+    let out = fake_login(&mut s, &bin);
+    s.add("claude", "work");
+
+    s.info("account-login", &json!({"provider": "claude", "account": "work"}));
+
+    let work = s.root().join("claude").join("work").canonicalize().expect("the account");
+    assert_eq!(wait_for_login(&mut s, &out), format!("auth login|{}", work.display()));
+    std::fs::remove_file(&out).expect("the log goes");
+    s.info("account-login", &json!({"provider": "claude", "account": ""}));
+    assert_eq!(wait_for_login(&mut s, &out), "auth login|system");
 }
 
 #[test]

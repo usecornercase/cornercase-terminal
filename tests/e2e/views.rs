@@ -181,3 +181,31 @@ fn notify_names_the_pane_it_ran_in_and_reaches_that_panes_reader() {
     silent.until("the pane closes", |line| told(line, "closed", "kind", "pane", &pane));
     assert!(silent.seen.iter().all(|line| !is_message(line)), "{:?}", silent.seen);
 }
+
+#[test]
+fn an_account_login_focused_in_a_view_moves_the_view_and_not_the_window() {
+    let session = Session::new();
+    accounts::fake_login(&session);
+    let started = session.cold(&["start-server"]);
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    let repo = repository(&session.dir, "shop");
+    session.says(&["open", &repo.display().to_string()]);
+    session.says(&["account", "add", "claude", "work"]);
+    let mut opened = session.spawn(&["view", "--cols", "100", "--rows", "30"]);
+    let mut followed = Followed::of(&mut opened);
+    followed.until("the view's first line", |line| line["revision"] == 1);
+    let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
+    let window = session.report().shown;
+
+    let again = ["account", "login", "claude", "work", "--focus", "--view", &id, "--json"];
+    let again: Value = serde_json::from_str(&session.says(&again)).expect("the login");
+    let adding = ["account", "add", "claude", "home", "--login", "--focus", "--view", &id, "--json"];
+    let added: Value = serde_json::from_str(&session.says(&adding)).expect("the added account");
+    let inside: Value = serde_json::from_str(&session.says(&["status", "--view", &id, "--json"])).expect("the status");
+    let _ = opened.kill();
+    let _ = opened.wait();
+
+    assert!(again.get("projection").is_some() && added.get("projection").is_some(), "{again} {added}");
+    assert_eq!(inside["view"]["shown"]["tab"], added["login"]["tab"], "{inside}");
+    assert_eq!(session.report().shown, window, "the window kept showing what it showed");
+}

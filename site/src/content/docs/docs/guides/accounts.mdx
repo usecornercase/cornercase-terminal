@@ -36,9 +36,20 @@ From the command line:
 cornercase account add claude personal --login
 ```
 
-This makes the folder and opens a tab named `personal login` that runs `claude auth login` with it. Without `--login`, [switch a shell to the account](#change-a-panes-account) and log in there as you would anywhere.
+This makes the folder and opens a tab named `personal login` that runs `claude auth login` with it. Without `--login`, [switch a shell to the account](#change-a-panes-account) and log in there as you would anywhere, or later [log in again](#log-in-again).
 
 An account's folder name is letters, digits, `.`, `_` and `-`, at most 32, and a new one never ends in `.lock`, in any case, nor is the name of one whose `<name>.lock` folder is already there: while Claude Code renews an account's login it keeps a folder such as `personal.lock` beside it, and cornercase never lists that as an account. `cornercase account list` shows each agent's own login and accounts, with their folders and names, marks the default, and `--check` asks each one whether it is logged in first.
+
+## Log in again
+
+Logins expire. When Settings › Accounts or `cornercase account list --check` says `signed out`:
+
+```sh
+cornercase account login claude personal
+cornercase account login codex --system     # the agent's own login
+```
+
+It opens the same tab as `--login` when you add an account, `personal login` running `claude auth login` with that account (`claude login` for the agent's own login). `--focus` shows it, and `--workspace ID` puts it in another workspace. An account that does not exist is refused. Gemini CLI has no login command, so it is refused too: start `gemini` in a tab of that account (`cornercase new-tab --account gemini=personal -- gemini`) and sign in from its first screen.
 
 ## Name an account
 
@@ -193,4 +204,4 @@ On macOS, Claude Code and Codex keep the login in the system keychain, under a n
 - **Tokens in the environment win.** `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_API_KEY`, `OPENAI_API_KEY` and the like override the folder's login. cornercase leaves them as they are, and Settings › Accounts and `account list` name the ones set (never their values); unset them in the environment the server starts from if you want the accounts to decide.
 - **Gemini CLI with encrypted storage shares one login.** With `GEMINI_FORCE_ENCRYPTED_FILE_STORAGE=true`, Gemini CLI keeps its login in one keychain item for every folder, so its accounts cannot be told apart. Leave it unset to use accounts.
 - **Which agents.** Claude Code, Codex and Gemini CLI. GitHub Copilot CLI, Cursor CLI, Grok Build and Vibe CLI may keep their login in a place that does not depend on the folder, so they are left out until that is checked; opencode uses providers of its own.
-- **From a program**: the requests are `account-list`, `account-add`, `account-remove`, `account-rename`, `account-use`, `profile-list`, `profile-new`, `profile-set`, `profile-use`, `profile-delete` and `account-restart`; `start`, `new-tab` and `flow-run` take `profile` and `accounts`, and the queue's entries `accounts`; `cornercase contract` lists the features `accounts`, `account-login` (`account-list` with `check`), `account-switch` (`account-rename`, `account-use` and the `accounts` field), `account-restart` and `accounts-revision`. `accounts_revision` in [`status --app`](../scripts-and-agents/#follow-the-rest-of-the-app) moves each time the accounts change, so another window or a script knows when to list them again, also for an account a command typed in a pane added. See [Scripts and agents](../scripts-and-agents/#accounts-and-profiles).
+- **From a program**: the requests are `account-list`, `account-add`, `account-login`, `account-remove`, `account-rename`, `account-use`, `profile-list`, `profile-new`, `profile-set`, `profile-use`, `profile-delete` and `account-restart`; `start`, `new-tab` and `flow-run` take `profile` and `accounts`, and the queue's entries `accounts`; `cornercase contract` lists the features `accounts`, `account-login` (`account-list` with `check`), `account-switch` (`account-rename`, `account-use` and the `accounts` field), `account-restart`, `accounts-revision` and `account-login-tab` (`account-login`, and a view with `account-add` and `account-login`). `accounts_revision` in [`status --app`](../scripts-and-agents/#follow-the-rest-of-the-app) moves each time the accounts change, so another window or a script knows when to list them again, also for an account a command typed in a pane added. See [Scripts and agents](../scripts-and-agents/#accounts-and-profiles).

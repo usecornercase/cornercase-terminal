@@ -24,6 +24,15 @@ pub(crate) struct AccountAdd {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+pub(crate) struct AccountLogin {
+    pub(crate) provider: String,
+    pub(crate) account: String,
+    pub(crate) workspace: Option<u64>,
+    pub(crate) focus: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct AccountRemove {
     pub(crate) provider: String,
     pub(crate) name: String,
@@ -113,6 +122,8 @@ pub(crate) struct AccountsInfo {
     pub(crate) tokens: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) agents: Vec<AgentInstalled>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) projection: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,6 +192,13 @@ pub(crate) struct ProfileInfo {
 impl AccountAdd {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("provider", &self.provider).add("name", &self.name).add("login", self.login);
+        fields.maybe("workspace", self.workspace).add("focus", self.focus);
+    }
+}
+
+impl AccountLogin {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("provider", &self.provider).add("account", &self.account);
         fields.maybe("workspace", self.workspace).add("focus", self.focus);
     }
 }

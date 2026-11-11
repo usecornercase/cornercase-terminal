@@ -212,7 +212,6 @@ fn value(app: &mut App, caller: Option<u64>, command: Command) -> Value {
     }
 }
 
-#[cfg(unix)]
 fn pane(app: &App, id: u64) -> &Term {
     app.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms).find(|t| t.id == id).expect("the pane")
 }
@@ -579,6 +578,7 @@ fn reacted(message: i64) -> impl Fn(&Order) -> bool {
 
 #[cfg(unix)]
 mod account_home;
+mod account_login;
 mod accounts;
 mod agents;
 mod arranging;
