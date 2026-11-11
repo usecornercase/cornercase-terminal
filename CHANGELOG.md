@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.41
+
+- **Manage another machine's plugins from here.** `cornercase --remote devbox plugin link`, `unlink`, `install`, `update`, `remove`, `enable`, `disable`, `list` and `logs` now run on that machine, as its own `cornercase plugin` through `ssh`, with the same arguments, output and exit status, instead of refusing `--remote`; `CORNERCASE_REMOTE` sends them there too. A folder you give `plugin link` or `plugin install` is that machine's: absolute, or `~/…` in quotes for its home folder; a relative one is refused. At a terminal, `install` and `update` show their preview and ask there; a program shows it with `--preview --json` and confirms with `--commit SHA --yes`, so another interface can now turn a machine's plugins on and off, install, update and remove them, and read their logs. `plugin windows` still refuses `--remote`, since window processes run on the machine that shows the window.
+- **`plugin link '~/code/my-plugin'` finds the folder in your home folder** even when no shell expanded the `~`, as `open` does.
+
 ## 0.13.40
 
 - **Programs that draw cornercase can open a long address that wraps.** Each pane of `cornercase surface` now carries `wrapped`, the rows whose line goes on in the next row because the terminal wrapped it there, so a program that draws the terminals can join them and open a long web address an agent printed (a pull request, a login, a preview) whole instead of cut at the row's end. It is left out when no row wraps, comes whole in a patch when it changes, and `cornercase contract` lists the feature `surface-wrapped`.
