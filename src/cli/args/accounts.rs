@@ -133,7 +133,7 @@ pub(crate) struct AccountLoginArgs {
     pub(crate) provider: String,
     #[arg(value_name = "ACCOUNT", required_unless_present = "system", help = "The account's folder name")]
     pub(crate) account: Option<String>,
-    #[arg(long, conflicts_with = "account", help = "Log in the agent's own login, outside any account")]
+    #[arg(long, conflicts_with = "account", help = "Log in with the agent's own login, outside any account")]
     pub(crate) system: bool,
     #[arg(long, value_name = "ID", help = "The workspace of the login tab [default: here]")]
     pub(crate) workspace: Option<u64>,

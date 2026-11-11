@@ -98,13 +98,14 @@ fn known_login(listed: &[(Known, Vec<String>)], (kind, name): &Key) -> bool {
     listed.iter().any(|(k, names)| k == kind && (names.contains(name) || name.is_empty() && !names.is_empty()))
 }
 
-fn logs_in(kind: Known) -> Result<(), Refusal> {
+fn logs_in(kind: Known, account: &str) -> Result<(), Refusal> {
     if kind.account().is_some_and(|home| !home.login.is_empty()) {
         return Ok(());
     }
+    let tab = if account.is_empty() { "with its own login" } else { "of that account" };
     Err(malformed(format!(
-        "{} has no login command: start it in a tab of that account and sign in from its first screen \
-         (`cornercase new-tab --account {}=ACCOUNT -- {}`)",
+        "{} has no login command: start it in a tab {tab} and sign in from its first screen (`cornercase new-tab \
+         --account {}={account} -- {}`)",
         kind.title(),
         kind.name(),
         kind.name()
@@ -397,7 +398,7 @@ impl App {
         now: Instant,
     ) -> Handled {
         let kind = provider(&login.provider)?;
-        logs_in(kind)?;
+        logs_in(kind, &login.account)?;
         self.known_account(kind, &login.account)?;
         let place = self.login_place(asker, login.workspace, area)?;
         let (ids, projection) = self.open_login_tab(asker, login, place, now)?;

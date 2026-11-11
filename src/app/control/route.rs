@@ -200,7 +200,7 @@ impl App {
         ControlFlow::Break(match command {
             Command::AccountList(list) => Ok(self.account_list_request(client, &list)),
             Command::AccountAdd(add) => self.account_add_request(asker, &add, area, now),
-            Command::AccountLogin(login) => self.account_login_request(asker, &login, area, now),
+            Command::AccountLoginTab(login) => self.account_login_request(asker, &login, area, now),
             Command::AccountRemove(remove) => self.account_remove_request(&remove),
             Command::AccountRename(rename) => self.account_rename_request(&rename),
             Command::AccountUse(chosen) => self.account_use_request(&chosen),

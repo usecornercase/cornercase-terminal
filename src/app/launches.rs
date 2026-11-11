@@ -66,7 +66,6 @@ impl Launches {
     }
 
     #[cfg(test)]
-    #[cfg(unix)]
     pub(super) fn list(&self) -> &[Launch] {
         &self.list
     }

@@ -165,12 +165,12 @@ fn logging_in_again_types_the_agent_s_login_with_that_account_or_its_own() {
     let out = fake_login(&mut s, &bin);
     s.add("claude", "work");
 
-    s.info("account-login", &json!({"provider": "claude", "account": "work"}));
+    s.info("account-login-tab", &json!({"provider": "claude", "account": "work"}));
 
     let work = s.root().join("claude").join("work").canonicalize().expect("the account");
     assert_eq!(wait_for_login(&mut s, &out), format!("auth login|{}", work.display()));
     std::fs::remove_file(&out).expect("the log goes");
-    s.info("account-login", &json!({"provider": "claude", "account": ""}));
+    s.info("account-login-tab", &json!({"provider": "claude", "account": ""}));
     assert_eq!(wait_for_login(&mut s, &out), "auth login|system");
 }
 

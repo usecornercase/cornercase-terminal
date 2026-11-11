@@ -13,6 +13,7 @@ use crate::messenger::link::Event as LinkEvent;
 use crate::messenger::{Chat, Message, Order, Update, Via};
 #[cfg(unix)]
 use crate::messenger::{Keyboard, Press};
+use crate::project::Hierarchy;
 #[cfg(unix)]
 use crate::test_util::write_executable;
 
@@ -49,11 +50,46 @@ fn call(app: &mut App, command: &str, args: &Value) -> std::result::Result<Value
 }
 
 fn call_as(app: &mut App, command: &str, args: &Value, boot: Option<&str>) -> std::result::Result<Value, Refused> {
-    let text = json!({"contract": 1, "boot": boot, "command": command, "args": args}).to_string();
+    call_headed(app, &json!({"boot": boot}), command, args)
+}
+
+fn call_in_view(app: &mut App, view: u64, command: &str, args: &Value) -> std::result::Result<Value, Refused> {
+    call_headed(app, &json!({"view": view}), command, args)
+}
+
+fn call_headed(app: &mut App, head: &Value, command: &str, args: &Value) -> std::result::Result<Value, Refused> {
+    let mut envelope = json!({"contract": 1, "command": command, "args": args});
+    envelope.as_object_mut().expect("an envelope").extend(head.as_object().expect("a head").clone());
+    let text = envelope.to_string();
     app.request(CLIENT, &text, Some(AREA), Instant::now());
     let mut answers = app.take_answers();
     assert_eq!(answers.len(), 1, "an answer at once");
     reply_of(&answers.remove(0).1)
+}
+
+const VIEWER: u64 = 31;
+
+struct Apart {
+    app: App,
+    _rx: Receiver<AppEvent>,
+    folders: [TempDir; 3],
+}
+
+fn apart() -> Apart {
+    let shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
+    let folders = [TempDir::new(), TempDir::new(), TempDir::new()];
+    let [config, viewed, windowed] = &folders;
+    let (mut app, rx) = new_app_with_shell(shell, config.path().join("config.json"));
+    app.open_project(viewed.path().to_path_buf(), AREA).expect("the project a view shows");
+    app.open_project(windowed.path().to_path_buf(), AREA).expect("the project the window shows");
+    Apart { app, _rx: rx, folders }
+}
+
+impl Apart {
+    fn views_the_first_project(&mut self) -> u64 {
+        let project = self.app.projects[0].id;
+        open_view(&mut self.app, VIEWER, &json!({"cols": 100, "rows": 30, "project": project}))
+    }
 }
 
 fn reply_of(text: &str) -> std::result::Result<Value, Refused> {
@@ -213,7 +249,7 @@ fn value(app: &mut App, caller: Option<u64>, command: Command) -> Value {
 }
 
 fn pane(app: &App, id: u64) -> &Term {
-    app.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms).find(|t| t.id == id).expect("the pane")
+    app.projects.pane_by(id).expect("the pane")
 }
 
 #[cfg(unix)]

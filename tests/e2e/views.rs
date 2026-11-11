@@ -48,7 +48,11 @@ fn a_view_sizes_its_tab_and_moves_without_the_window_and_gives_both_back_when_it
 }
 
 pub(super) fn opened(session: &Session, tab: &str) -> (std::process::Child, Followed, String) {
-    let mut opened = session.spawn(&["view", "--cols", "80", "--rows", "24", "--tab", tab]);
+    opened_with(session, &["--cols", "80", "--rows", "24", "--tab", tab])
+}
+
+fn opened_with(session: &Session, args: &[&str]) -> (std::process::Child, Followed, String) {
+    let mut opened = session.spawn(&[&["view"], args].concat());
     let mut followed = Followed::of(&mut opened);
     followed.until("the view's first line", |line| line["revision"] == 1);
     let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
@@ -109,10 +113,7 @@ fn a_flow_run_focused_in_a_view_moves_the_view_and_not_the_window() {
     assert!(started.status.success(), "start-server failed: {started:?}");
     let repo = repository(&session.dir, "shop");
     let project = session.says(&["open", &repo.display().to_string()]);
-    let mut opened = session.spawn(&["view", "--cols", "120", "--rows", "40"]);
-    let mut followed = Followed::of(&mut opened);
-    followed.until("the view's first line", |line| line["revision"] == 1);
-    let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
+    let (mut opened, _followed, id) = opened_with(&session, &["--cols", "120", "--rows", "40"]);
     let window = session.report().shown;
 
     let args = ["flow", "run", "Quick", "--prompt", "add dark mode", "--project", &project, "--focus"];
@@ -191,10 +192,7 @@ fn an_account_login_focused_in_a_view_moves_the_view_and_not_the_window() {
     let repo = repository(&session.dir, "shop");
     session.says(&["open", &repo.display().to_string()]);
     session.says(&["account", "add", "claude", "work"]);
-    let mut opened = session.spawn(&["view", "--cols", "100", "--rows", "30"]);
-    let mut followed = Followed::of(&mut opened);
-    followed.until("the view's first line", |line| line["revision"] == 1);
-    let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
+    let (mut opened, _followed, id) = opened_with(&session, &["--cols", "120", "--rows", "40"]);
     let window = session.report().shown;
 
     let again = ["account", "login", "claude", "work", "--focus", "--view", &id, "--json"];

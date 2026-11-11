@@ -100,7 +100,7 @@ fn account_add_and_account_login_take_a_view_and_the_other_account_requests_do_n
     use crate::control::{AccountAdd, AccountList, AccountLogin, AccountRestart, AccountUse};
 
     assert!(takes_view(&Command::AccountAdd(AccountAdd::default())));
-    assert!(takes_view(&Command::AccountLogin(AccountLogin::default())));
+    assert!(takes_view(&Command::AccountLoginTab(AccountLogin::default())));
     assert!(!takes_view(&Command::AccountList(AccountList::default())));
     assert!(!takes_view(&Command::AccountUse(AccountUse::default())));
     assert!(!takes_view(&Command::AccountRestart(AccountRestart::default())));

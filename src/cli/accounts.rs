@@ -82,7 +82,7 @@ fn account_login(args: AccountLoginArgs) -> Result<()> {
         workspace: args.workspace,
         focus: args.focus,
     };
-    let value = ask("account-login", Command::AccountLogin(request))?;
+    let value = ask("account-login-tab", Command::AccountLoginTab(request))?;
     if args.print.json {
         return print_json(&value);
     }
@@ -90,15 +90,15 @@ fn account_login(args: AccountLoginArgs) -> Result<()> {
 }
 
 pub(crate) fn login_text(provider: &str, account: &str, info: &AccountsInfo) -> String {
-    let what = if account.is_empty() {
-        format!("{provider} outside any account")
-    } else {
-        format!("the {provider} account {account}")
-    };
+    let who = account_phrase(provider, account, format!("{provider}'s own login"));
     match info.login.as_ref().and_then(|ids| ids.pane) {
-        Some(pane) => format!("the login of {what} runs in pane {pane}\n"),
-        None => format!("the login of {what} opened\n"),
+        Some(pane) => format!("pane {pane} logs in {who}\n"),
+        None => format!("opened the login of {who}\n"),
     }
+}
+
+fn account_phrase(provider: &str, account: &str, own: String) -> String {
+    if account.is_empty() { own } else { format!("the {provider} account {account}") }
 }
 
 fn account_add(add: &AccountAddArgs) -> Result<()> {
@@ -168,11 +168,7 @@ fn restart(provider: String, account: Option<String>, panes: Vec<u64>) -> Result
 }
 
 pub(crate) fn restart_text(info: &RestartInfo) -> String {
-    let on = if info.account.is_empty() {
-        format!("its own {} login", info.provider)
-    } else {
-        format!("the {} account {}", info.provider, info.account)
-    };
+    let on = account_phrase(&info.provider, &info.account, format!("its own {} login", info.provider));
     let listed = |panes: &[u64]| panes.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
     let panes = |panes: &[u64]| if panes.len() == 1 { "pane" } else { "panes" };
     let mut text = String::new();

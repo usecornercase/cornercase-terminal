@@ -335,7 +335,7 @@ mod text {
         let ids = Ids { pane: Some(12), ..Ids::default() };
         let info = AccountsInfo { login: Some(ids), ..AccountsInfo::default() };
 
-        assert_eq!(login_text("claude", "work", &info), "the login of the claude account work runs in pane 12\n");
-        assert_eq!(login_text("claude", "", &info), "the login of claude outside any account runs in pane 12\n");
+        assert_eq!(login_text("claude", "work", &info), "pane 12 logs in the claude account work\n");
+        assert_eq!(login_text("claude", "", &info), "pane 12 logs in claude's own login\n");
     }
 }

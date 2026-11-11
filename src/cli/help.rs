@@ -796,7 +796,8 @@ stopping it closes the view and gives its tabs back. The first line is the state
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
 read the id from the first line, and pass it as --view ID to `focus`, `open`, `clone`, `new-workspace`,
 `new-tab`, `split`, `setup`, `start`, `flow run`, `send`, `keys`, `held`, `read`, `wait`, `status`, `rename`,
-`mark`, `go`, `plugin run`, `surface`, `account add --login` or `account login`: the view's tab is their default and --focus moves it.
+`mark`, `go`, `plugin run`, `surface`, `account add --login` or `account login`: the view's tab is
+their default and --focus moves it.
 
 While the view is active, has a size and is not hidden, the tab it shows counts as seen like the
 window's: an agent there gets no done mark, toast or desktop notification. --hidden starts it hidden
@@ -877,7 +878,7 @@ folder. `start`, `new-tab`, `flow run` and `queue` take --account AGENT=ACCOUNT 
 with another. A new account links the settings it shares from the agent's own folder (settings,
 instructions, skills); `account list` names the ones that stopped being links. `account add
 --login` opens a tab that logs the new account in; when a login expires (`account list --check`
-says signed-out), `account login AGENT ACCOUNT`, or --system for the agent's own login, opens that
+says signed out), `account login AGENT ACCOUNT`, or --system for the agent's own login, opens that
 tab again. Gemini CLI has no login command: start it in a tab of that account and sign in from its
 first screen. Removing an account deletes its folder, never the system's keychain, and an agent
 that used it goes back to its own login.

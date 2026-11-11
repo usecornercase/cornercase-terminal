@@ -240,7 +240,7 @@ pub(crate) enum Command {
     AccountUse(AccountUse),
     CloseAgent(CloseAgent),
     AccountRestart(AccountRestart),
-    AccountLogin(AccountLogin),
+    AccountLoginTab(AccountLogin),
     AgentsClose(AgentsClose),
     AgentsReopen(AgentsReopen),
     AgentsForget(AgentsForget),
@@ -433,7 +433,7 @@ impl Command {
             Self::ProfileUse(_) => 84,
             Self::ProfileDelete(_) => 85,
             Self::AccountRestart(_) => 89,
-            Self::AccountLogin(_) => 125,
+            Self::AccountLoginTab(_) => 125,
             _ => return None,
         })
     }
@@ -600,7 +600,7 @@ impl Command {
         "config-pair",
         "worktrees-remove",
         "flow-close-when-merged",
-        "account-login",
+        "account-login-tab",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

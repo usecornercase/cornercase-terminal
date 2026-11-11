@@ -167,6 +167,9 @@ fn an_account_logs_in_again_through_remote_and_one_that_cannot_is_refused() {
     wait_until("the login runs", || out.exists());
     assert_eq!(std::fs::read_to_string(&out).expect("the log").trim_end(), format!("auth login|{path}"));
     assert!(refused(&unknown, 1, "there is no claude account `nope`"), "{unknown:?}");
-    assert!(refused(&gemini, 1, "no login command"), "{gemini:?}");
+    assert!(
+        refused(&gemini, 1, "no login command") && refused(&gemini, 1, "--account gemini= -- gemini"),
+        "{gemini:?}"
+    );
     let _ = std::fs::remove_dir_all(folder);
 }

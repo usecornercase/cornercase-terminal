@@ -248,14 +248,14 @@ fn a_restart_request_logs_its_agent_and_panes_and_is_in_the_contract() {
 
 #[test]
 fn a_login_request_reads_with_no_stray_field_logs_what_it_names_and_is_in_the_contract() {
-    let raw = json!({"command": "account-login", "args": {"provider": "claude", "account": "work", "workspace": null, "focus": false}});
+    let raw = json!({"command": "account-login-tab", "args": {"provider": "claude", "account": "work", "workspace": null, "focus": false}});
     let parsed: Request = serde_json::from_value(raw.clone()).expect("a request");
 
     assert_eq!(unknown_fields(&raw, &parsed), None);
     let fields = parsed.command.fields();
     assert!(fields.contains(&("provider", "claude".into())) && fields.contains(&("account", "work".into())));
     assert!(FEATURES.contains(&"account-login-tab"));
-    assert!(Command::NAMES.contains(&"account-login"));
+    assert!(Command::NAMES.contains(&"account-login-tab"));
 }
 
 fn in_a_view() -> AccountsInfo {
