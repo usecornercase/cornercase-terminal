@@ -161,7 +161,7 @@ fn agent_text(role: &Role, agents: &Agents) -> RowText {
         Some(_) => "not installed".to_string(),
         None => "not an agent a flow can start".to_string(),
     };
-    RowText { red: Known::of(&role.agent).is_none(), ..role_text("agent", role.agent.clone(), note) }
+    RowText { red: !crate::flows::takes(&role.agent), ..role_text("agent", role.agent.clone(), note) }
 }
 
 fn or_none(value: String) -> String {

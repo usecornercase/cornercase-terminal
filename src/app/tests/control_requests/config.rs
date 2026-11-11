@@ -66,6 +66,8 @@ fn get_lists_the_settings_with_their_values_defaults_and_notes() {
     assert_eq!((fetch.value.clone(), fetch.default.clone()), (json!(5), json!(5)));
     assert_eq!(setting(&got, "sidebar").choices.len(), 4);
     assert!(got.connections.iter().any(|c| c.key == "shortcut"));
+    let listed = got.agents.iter().any(|agent| agent.name == "claude" && agent.reads_status && agent.flows);
+    assert!(listed, "{:?}", got.agents);
     assert_eq!(got.revision, s.app.report(None).config.expect("a revision").revision);
 }
 

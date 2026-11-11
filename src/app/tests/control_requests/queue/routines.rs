@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::Config;
+use crate::queue::{Place, Task};
 
 pub(super) struct Shop {
     pub(super) app: App,
@@ -77,6 +78,53 @@ fn what_cannot_be_a_routine_is_refused_with_its_reason() {
         assert!(error.message.contains(why), "{extra}: {}", error.message);
     }
     assert_eq!(shop.app.panels.queued.queue().entries, []);
+}
+
+fn cleanup_refused_by_the_request(shop: &mut Shop, name: &str) -> bool {
+    let args = json!({"action": "add", "entry": entry(&json!({"cleanup": true, "agent": name}))});
+    call(&mut shop.app, "queue", &args).err().is_some_and(|error| error.message.contains("cannot tell when"))
+}
+
+fn cleanup_greyed_by_the_form(shop: &mut Shop, name: &str) -> bool {
+    let place = Place { project: shop.repo.path().to_path_buf(), ..Place::default() };
+    let task = Task {
+        at: crate::time::now() + 3600,
+        zone: "UTC".into(),
+        agent: name.into(),
+        prompt: "x".into(),
+        place,
+        ..Task::default()
+    };
+    let id = shop.app.panels.queued.schedule(None, task).expect("a one-off");
+    shop.app.new_queue_form(Some(id));
+    let greyed = matches!(&shop.app.overlay, Some(Overlay::Queue(form)) if form.cleanup_off.is_some());
+    shop.app.overlay = None;
+    greyed
+}
+
+fn flow_refused_by_the_check(shop: &mut Shop, name: &str) -> bool {
+    let flow = json!({"name": "x", "roles": [{"name": "a", "agent": name}]});
+    let args = json!({"flow": flow, "place": "yours", "path": null, "check": true});
+    let saved = ok(&mut shop.app, "flow-save", &args);
+    let prefix = format!("`a` runs `{name}`");
+    saved["problems"].as_array().is_some_and(|problems| {
+        problems.iter().any(|problem| problem.as_str().is_some_and(|text| text.starts_with(&prefix)))
+    })
+}
+
+#[test]
+fn every_agent_config_lists_is_refused_a_cleanup_and_a_flow_exactly_when_its_entry_says_so() {
+    let mut shop = shop();
+    let described = ok(&mut shop.app, "config", &json!({"action": "get"}));
+    let listed = described["agents"].as_array().expect("the agents").clone();
+    assert!(listed.iter().any(|agent| agent["name"] == "mine"), "{listed:?}");
+    for agent in &listed {
+        let name = agent["name"].as_str().expect("a name");
+        let unread = agent["reads_status"] == json!(false);
+        assert_eq!(cleanup_refused_by_the_request(&mut shop, name), unread, "request: {name}");
+        assert_eq!(cleanup_greyed_by_the_form(&mut shop, name), unread, "form: {name}");
+        assert_eq!(flow_refused_by_the_check(&mut shop, name), agent["flows"] == json!(false), "flow: {name}");
+    }
 }
 
 #[test]

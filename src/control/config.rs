@@ -235,6 +235,18 @@ pub(crate) struct ProjectEntry {
     pub(crate) builds: Vec<String>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AgentEntry {
+    pub(crate) name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) title: Option<String>,
+    pub(crate) reads_status: bool,
+    pub(crate) flows: bool,
+    pub(crate) models: Vec<String>,
+    pub(crate) efforts: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Described {
@@ -245,6 +257,7 @@ pub(crate) struct Described {
     pub(crate) settings: Vec<Setting>,
     pub(crate) connections: Vec<Connection>,
     pub(crate) projects: Vec<ProjectEntry>,
+    pub(crate) agents: Vec<AgentEntry>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) notices: Vec<String>,
 }

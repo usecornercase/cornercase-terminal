@@ -95,6 +95,7 @@ impl App {
             settings: model.describe(),
             connections: model.connections(),
             projects: self.project_settings_entries(),
+            agents: model.agents(),
             notices,
         }
     }

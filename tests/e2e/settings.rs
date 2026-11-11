@@ -163,3 +163,28 @@ fn search_with_settings_prints_them_after_the_matches() {
 
     assert!(said.contains("place\tkey\tvalue\tnote\nUI › prefix key"), "{said}");
 }
+
+#[test]
+fn config_json_lists_each_agent_with_what_it_can_do() {
+    let session = Session::new();
+    std::fs::write(session.dir.join("config.json"), r#"{"agent_commands": {"mine": "/bin/true"}}"#).expect("config");
+    let started = session.cold(&["start-server"]);
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    let described: Value = serde_json::from_str(&session.says(&["config", "--json"])).expect("a description");
+    let agents = described["agents"].as_array().expect("agents");
+    let entry = |name: &str| agents.iter().find(|agent| agent["name"] == name).expect("listed").clone();
+    let bare = |name: &str| serde_json::json!({"name": name, "reads_status": false, "flows": false, "models": [], "efforts": []});
+    assert_eq!(
+        entry("claude"),
+        serde_json::json!({
+            "name": "claude", "title": "Claude Code", "reads_status": true, "flows": true,
+            "models": ["opus", "sonnet", "haiku"], "efforts": ["low", "medium", "high", "xhigh", "max"],
+        })
+    );
+    assert_eq!((entry("amp"), entry("mine")), (bare("amp"), bare("mine")));
+    let names: Vec<&Value> = agents.iter().map(|agent| &agent["name"]).collect();
+    let agent = described["settings"].as_array().expect("settings").iter().find(|s| s["key"] == "agent");
+    let choices = agent.expect("the agent setting")["choices"].as_array().expect("choices");
+    let wanted: Vec<&Value> = choices.iter().map(|choice| &choice["value"]).filter(|value| *value != "auto").collect();
+    assert_eq!(names, wanted);
+}

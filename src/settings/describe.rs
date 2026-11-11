@@ -2,7 +2,8 @@ use serde_json::Value;
 
 use crate::agents;
 use crate::config::{Config, ForumClose, Icons, Sidebar, Tabs, WorkingIcon};
-use crate::control::config::{Choice, Connection, ConnectionKind, Kind, Setting, State};
+use crate::control::config::{AgentEntry, Choice, Connection, ConnectionKind, Kind, Setting, State};
+use crate::flows;
 use crate::host::notify;
 use crate::messenger::Via;
 
@@ -266,6 +267,10 @@ impl Settings {
         self.entries().into_iter().map(|(setting, _)| setting).collect()
     }
 
+    pub(crate) fn agents(&self) -> Vec<AgentEntry> {
+        agents::kinds(&self.config).into_iter().map(agent_entry).collect()
+    }
+
     pub(crate) fn connections(&self) -> Vec<Connection> {
         let mut found = self.tracker_connections();
         found.push(self.browsers_connection());
@@ -362,6 +367,19 @@ impl Settings {
             ..Connection::default()
         };
         [bot_connection, chat_connection]
+    }
+}
+
+fn agent_entry(name: String) -> AgentEntry {
+    let owned = |list: &[&str]| list.iter().map(|item| (*item).to_string()).collect();
+    let known = agents::Known::of(&name);
+    AgentEntry {
+        title: known.map(|kind| kind.title().to_string()),
+        reads_status: agents::reads_status(&name),
+        flows: flows::takes(&name),
+        models: known.map(|kind| owned(kind.models())).unwrap_or_default(),
+        efforts: agents::effort_levels(&name).map(owned).unwrap_or_default(),
+        name,
     }
 }
 

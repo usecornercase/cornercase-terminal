@@ -43,7 +43,7 @@ fn refuse_mix(add: &QueueAdd, old: Option<&Entry>) -> Result<(), String> {
 }
 
 fn refuse_cleanup(cleanup: bool, flow: Option<&str>, agent: &str) -> Result<(), String> {
-    if cleanup && flow.is_none() && agents::Known::of(agent).is_none() {
+    if cleanup && flow.is_none() && !agents::reads_status(agent) {
         return Err(format!("cornercase cannot tell when {agent} finishes, so it cannot remove its workspace"));
     }
     Ok(())
