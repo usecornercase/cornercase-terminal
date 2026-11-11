@@ -1,10 +1,9 @@
 use std::path::PathBuf;
 
+use super::*;
 use crate::config::Config;
 use crate::control::config::AgentEntry;
 use crate::flows::{Flow, Role};
-
-use super::*;
 
 fn listed() -> Settings {
     Settings::new(

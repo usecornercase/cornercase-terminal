@@ -1,7 +1,7 @@
 use super::edit::{Choice, DEFAULT_MODEL, Editing, Row, Tab};
 use super::{Agents, RowText};
 use crate::agents::{self, Known};
-use crate::flows::Role;
+use crate::flows::{Role, takes};
 use crate::text::one_line;
 
 const TEXT_MARK: &str = "✎";
@@ -156,12 +156,13 @@ fn role_text(label: &str, value: String, note: String) -> RowText {
 }
 
 fn agent_text(role: &Role, agents: &Agents) -> RowText {
+    let taken = takes(&role.agent);
     let note = match Known::of(&role.agent) {
-        Some(kind) if agents.installed.contains(&kind) => kind.title().to_string(),
-        Some(_) => "not installed".to_string(),
-        None => "not an agent a flow can start".to_string(),
+        Some(kind) if taken && agents.installed.contains(&kind) => kind.title().to_string(),
+        Some(_) if taken => "not installed".to_string(),
+        _ => "not an agent a flow can start".to_string(),
     };
-    RowText { red: !crate::flows::takes(&role.agent), ..role_text("agent", role.agent.clone(), note) }
+    RowText { red: !taken, ..role_text("agent", role.agent.clone(), note) }
 }
 
 fn or_none(value: String) -> String {
