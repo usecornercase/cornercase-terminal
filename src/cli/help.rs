@@ -303,9 +303,10 @@ An agent on a linked machine tells its notices too, with the machine's name and 
 `cornercase go TOKEN` then does what a click on that notification does.
 The server's other notices come with --notices too, as the window's toast says them, with a kind and
 no token: notify (`cornercase notify`, naming the pane it ran in), queue-started, queue-failed,
-queue-missed and queue-kept (a queued agent or routine run), setup-failed (only while nobody looks at
-its tab), flow-consent (a flow's member waits for your consent) and flow-merged (a run's agents closed
-once its pull request merged). With --json they have kind, message, panes and the workspace's ids:
+queue-missed and queue-kept (a queued agent or routine run; a one-off entry that missed its time sends
+none), setup-failed (only while nobody looks at its tab), flow-consent (a flow's member waits for your
+consent) and flow-merged (a run's agents closed once its pull request merged). With --json they have
+kind, message, panes and the workspace's ids, which queue-failed and queue-missed leave out:
   notify  the release build is ready
   workspace 2  flow-merged  pull request merged in fix-login: 3 agents closed · ▶ on the workspace reopens them
 With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
