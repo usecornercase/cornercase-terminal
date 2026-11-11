@@ -37,7 +37,7 @@ mod a_line {
     #[case::remote_window(r#"{"args": ["remote", "devbox"]}"#, "`remote` cannot run")]
     #[case::known_machines(r#"{"args": ["remote", "--known", "--json"]}"#, "`remote` cannot run")]
     #[case::skill(r#"{"args": ["skill"]}"#, "`skill` cannot run")]
-    #[case::plugin_here(r#"{"args": ["plugin", "link", "/x"]}"#, "acts on this machine")]
+    #[case::plugin_link(r#"{"args": ["plugin", "link", "/x"]}"#, "run `cornercase plugin link /x` on its own")]
     #[case::plugin_windows(
         r#"{"args": ["plugin", "windows", "--json"]}"#,
         "run `cornercase plugin windows` on its own"

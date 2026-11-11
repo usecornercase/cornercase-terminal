@@ -19,7 +19,7 @@ answer but some of them failed, input --follow could not send some lines, or a l
 why, in its error with --json. A command given --boot (close, rename, mark, move-pane, collapse,
 expand, account restart, context) exits with 4 when it names another run of the server, which
 then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
-reaches is older than this one (update, restart, kill-server and logs run there without checking),
+reaches is older than this one (update, restart, kill-server, logs and the plugin commands that work on its files run there without checking),
 printing with --json both versions (there is null when it is too old to say) and the command that
 updates it as one JSON line.
 
@@ -28,9 +28,9 @@ to the server of another machine through ssh, found as `cornercase remote` finds
 standard input arrive as they are. The other machine may run this version or a newer one (an older one
 is refused with exit status 5, and `--remote DESTINATION update` updates it), ssh never asks for a
 password, only `start-server` starts a server there, and a command that follows a stream ends it
-there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace; `paste-file` reads its FILE here. `update`, `restart`, `kill-server`
-and `logs` run there, as that machine's own command through ssh, and exit with its status; the plugin commands that
-install or change plugins act on this machine and refuse it, and so does `plugin windows`.
+there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace; `paste-file` reads its FILE here. `update`, `restart`, `kill-server`,
+`logs` and the plugin commands that work on its files (`plugin link`, `install`, `enable`, `list`, `logs`…) run there, as that
+machine's own command through ssh, and exit with its status; `plugin windows` refuses it.
 
 Examples:
   cornercase status

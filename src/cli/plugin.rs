@@ -62,7 +62,7 @@ fn run_here(action: PluginAction) -> Result<bool> {
 }
 
 fn link(registry: &mut Registry, folder: &Path) -> Result<()> {
-    let (manifest, enabled) = registry.link(folder).map_err(Error::Plugin)?;
+    let (manifest, enabled) = registry.link(&in_home(folder, home().as_deref())).map_err(Error::Plugin)?;
     registry.save()?;
     if enabled {
         println!("linked {} {} ({}), still on", manifest.name, manifest.version, manifest.id);
@@ -316,26 +316,34 @@ fn same_commit(found: &str, wanted: Option<&str>, what: &str, kept: &str) -> Res
     }
 }
 
+fn home() -> Option<PathBuf> {
+    std::env::var_os(paths::HOME_VAR).map(PathBuf::from)
+}
+
 fn folder_spec(spec: &str) -> Result<String> {
-    let home = std::env::var_os(paths::HOME_VAR).map(PathBuf::from);
-    folder_spec_from(spec, home.as_deref())
+    folder_spec_from(spec, home().as_deref())
+}
+
+pub(super) fn folder_part(spec: &str) -> (&str, &str) {
+    let place = spec.split_once('@').map_or(spec, |(place, _)| place);
+    spec.split_at(place.find("//").unwrap_or(place.len()))
 }
 
 fn folder_spec_from(spec: &str, home: Option<&Path>) -> Result<String> {
     if !names_a_folder(spec) || reaches_network(spec) {
         return Ok(spec.to_string());
     }
-    let (place, at) = match spec.split_once('@') {
-        Some((place, at)) => (place, format!("@{at}")),
-        None => (spec, String::new()),
-    };
-    let (folder, subdir) = match place.split_once("//") {
-        Some((folder, subdir)) => (folder, format!("//{subdir}")),
-        None => (place, String::new()),
-    };
+    let (folder, rest) = folder_part(spec);
     let folder = absolute(config::expand_home(&home_with_a_slash(folder), home));
     folder_on_this_computer(&folder).map_err(Error::Plugin)?;
-    Ok(format!("{}{subdir}{at}", canonical(folder).display()))
+    Ok(format!("{}{rest}", canonical(folder).display()))
+}
+
+fn in_home(folder: &Path, home: Option<&Path>) -> PathBuf {
+    match folder.to_str() {
+        Some(text) => config::expand_home(&home_with_a_slash(text), home),
+        None => folder.to_path_buf(),
+    }
 }
 
 fn absolute(folder: PathBuf) -> PathBuf {

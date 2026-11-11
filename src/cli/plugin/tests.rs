@@ -209,6 +209,8 @@ mod previewing {
 }
 
 mod folders {
+    use rstest::rstest;
+
     use super::*;
     use crate::test_util::TempDir;
 
@@ -287,5 +289,35 @@ mod folders {
         let refused = folder_spec_from(r"~\shared\tools.git", Some(home.path())).expect_err("refused").to_string();
 
         assert!(refused.contains("cornercase.invalid") && refused.contains("on the network"), "{refused}");
+    }
+
+    #[rstest]
+    #[case::the_folder_alone("~/tools", "~/tools", "")]
+    #[case::with_a_subfolder_and_a_ref("~/tools//plugins/x@v1", "~/tools", "//plugins/x@v1")]
+    #[case::with_a_ref("/srv/t@main", "/srv/t", "@main")]
+    #[case::a_ref_is_split_first("/srv/a@b//c", "/srv/a", "@b//c")]
+    #[case::a_drive_path(r"C:\code\tools//plugins/x", r"C:\code\tools", "//plugins/x")]
+    fn the_folder_part_of_a_source(#[case] spec: &str, #[case] folder: &str, #[case] rest: &str) {
+        assert_eq!(folder_part(spec), (folder, rest));
+    }
+
+    #[test]
+    fn a_linked_folder_in_the_home_folder_is_expanded() {
+        let home = TempDir::new();
+        let home = home.path();
+
+        assert_eq!(in_home(Path::new("~"), Some(home)), home);
+        assert_eq!(in_home(Path::new("~/tools"), Some(home)), home.join("tools"));
+        for kept in ["~user/x", "/abs", "./~/x"] {
+            assert_eq!(in_home(Path::new(kept), Some(home)), Path::new(kept));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_linked_folder_in_the_home_folder_with_backslashes_is_expanded() {
+        let home = TempDir::new();
+
+        assert_eq!(in_home(Path::new(r"~\tools"), Some(home.path())), home.path().join("tools"));
     }
 }

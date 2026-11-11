@@ -70,7 +70,7 @@ CORNERCASE_REMOTE=devbox cornercase events --json
 cornercase --remote devbox --remote-command '~/tools/cornercase' start-server
 ```
 
-A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands that ask the server: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server` and `logs` run on that machine, as its own `cornercase` through `ssh`, and exit with its status; the plugin commands that install or change plugins and `plugin windows` refuse it with status 2. Commands accept a machine that runs the same version or a newer one, and exit with status 5 on an older one (with `--json`, its version and the update command as JSON). Ids last one run of the server there, so `close`, `rename`, `mark`, `move-pane`, `collapse`, `expand`, `account restart` and `context` take [`--boot BOOT`](../../guides/scripts-and-agents/#arrange), and a server that restarted since you read the id refuses with status 4 instead of acting on whatever has it now. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
+A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server`, `logs` and the plugin commands that work on its files run on that machine, as its own `cornercase` through `ssh`, and exit with its status; `plugin windows` refuses it with status 2. Commands accept a machine that runs the same version or a newer one, and exit with status 5 on an older one (with `--json`, its version and the update command as JSON). Ids last one run of the server there, so `close`, `rename`, `mark`, `move-pane`, `collapse`, `expand`, `account restart` and `context` take [`--boot BOOT`](../../guides/scripts-and-agents/#arrange), and a server that restarted since you read the id refuses with status 4 instead of acting on whatever has it now. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
 
 ### `cornercase update`
 
@@ -210,7 +210,7 @@ Prints what the running server supports: its version, the version of the contrac
 
 ### `cornercase plugin`
 
-Installs, adds, lists and turns on and off [plugins](../../guides/plugins/). It reads and writes `plugins.json` directly, so it works with no server running, except `status`, `actions`, `run` and `popup-close`, which ask the running server; a running server picks up the change within a second.
+Installs, adds, lists and turns on and off [plugins](../../guides/plugins/). It reads and writes `plugins.json` directly, so it works with no server running, except `status`, `actions`, `run` and `popup-close`, which ask the running server; a running server picks up the change within a second. With [`--remote`](#remote) every `plugin` command but `windows` acts on that machine's plugins, and the folders of `link` and `install` are that machine's.
 
 ```sh
 cornercase plugin install acme/notes      # fetch it, show what it runs, ask, install it turned off
@@ -277,7 +277,6 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | ``could not reach cornercase on `<host>`: …`` | `cornercase remote` or `--remote` couldn't connect; the end of the line is what `ssh` said. |
 | ``cornercase was not found on `<host>` …`` | The other machine has no `cornercase` where it looks; install it there, or give its path with `--command` (`--remote-command` for `--remote`). |
 | ``no cornercase server is running on `<host>` `` | A `--remote` command reached the machine, but no server runs there. |
-| ``` `<command>` acts on this machine, so it takes no --remote … ``` | The plugin commands that install or change plugins don't go through `ssh` (status 2). Run them there. |
 | ``` `plugin windows` runs on the machine that shows the window, so it takes no --remote … ``` | Window processes belong to the machine that shows the window (status 2). Run it there, without `--remote` or `CORNERCASE_REMOTE`. |
 | ``` `<host>` runs cornercase <version> and this machine <version>. Update it from here with … ``` | A `--remote` command found an older cornercase there; run the command the message gives to update it (status 5). |
 | ``the cornercase on `<host>` is too old to attach to from another machine …`` | The other machine's cornercase predates `cornercase remote`. Update it there (status 5). |

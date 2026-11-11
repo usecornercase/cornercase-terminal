@@ -4,7 +4,7 @@ use super::shell::RemoteShell;
 use super::{CANNOT_EXECUTE, NO_SH, NO_SUCH_FILE, NOT_FOUND, OLD_CLI, SSH_FAILED, Stderr};
 use crate::error::Result;
 
-const READ_ONLY: [&str; 1] = ["logs"];
+const READ_ONLY: [&[&str]; 3] = [&["logs"], &["plugin", "list"], &["plugin", "logs"]];
 
 pub(super) enum Attempt<L> {
     Linked(L),
@@ -107,7 +107,7 @@ pub(super) fn ran(
         return Ok(done);
     }
     let Some(shell) = other(ask, tried) else { return Ok(done) };
-    if !args.first().is_some_and(|name| READ_ONLY.contains(name)) {
+    if !READ_ONLY.iter().any(|words| args.starts_with(words)) {
         return Ok(Ran { learned: Some(shell), ..done });
     }
     Ok(Ran { status: run(shell)?, learned: Some(shell), again: true })

@@ -200,21 +200,28 @@ mod running {
         assert!(ran.status.success() && ran.learned.is_none() && far.probes == 0);
     }
 
-    #[test]
-    fn a_command_that_may_have_changed_something_is_not_run_again() {
+    #[rstest]
+    #[case::restart(&["restart", "--when-idle"])]
+    #[case::plugin_enable(&["plugin", "enable", "--", "acme.notes"])]
+    #[case::plugin_install(&["plugin", "install", "--yes", "--", "acme/notes"])]
+    #[case::a_preview_that_fetches(&["plugin", "install", "--preview", "--json", "--", "acme/notes"])]
+    fn a_command_that_may_have_changed_something_is_not_run_again(#[case] args: &[&str]) {
         let (mut far, there) = (Far::default().answering(&[Some(Cmd)]), There::linking(&[Cmd], 1));
 
-        let ran = run(&mut far, &there, &["restart", "--when-idle"]);
+        let ran = run(&mut far, &there, args);
 
         assert_eq!((ran.status.code(), ran.learned, ran.again), (Some(1), Some(Cmd), false));
         assert_eq!((there.tried(), far.learned), (vec![Posix], vec![Cmd]));
     }
 
-    #[test]
-    fn reading_the_log_is_run_again_through_the_right_shell() {
+    #[rstest]
+    #[case::logs(&["logs", "--path"])]
+    #[case::plugin_list(&["plugin", "list", "--json"])]
+    #[case::plugin_logs(&["plugin", "logs", "--lines", "200", "--", "acme.notes"])]
+    fn reading_is_run_again_through_the_right_shell(#[case] args: &[&str]) {
         let (mut far, there) = (Far::default().answering(&[Some(Cmd)]), There::linking(&[Cmd], 1));
 
-        let ran = run(&mut far, &there, &["logs", "--path"]);
+        let ran = run(&mut far, &there, args);
 
         assert!(ran.status.success() && ran.again);
         assert_eq!(there.tried(), vec![Posix, Cmd]);

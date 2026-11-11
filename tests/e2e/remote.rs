@@ -378,8 +378,6 @@ fn ran(session: &Session, args: &[&str], variable: Option<&str>) -> std::process
 }
 
 #[rstest]
-#[case::the_flag(&["--remote", "devbox", "plugin", "install", "x"], None, "`plugin` acts on this machine")]
-#[case::the_variable(&["plugin", "install", "x"], Some("devbox"), "`plugin` acts on this machine")]
 #[case::the_machines_a_window_reached(&["--remote", "devbox", "remote", "--known"], None, "`remote` takes no --remote")]
 #[case::window_processes(&["--remote", "devbox", "plugin", "windows"], None, "machine that shows the window")]
 #[case::window_processes_by_the_variable(
