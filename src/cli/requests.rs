@@ -135,7 +135,6 @@ fn checked(cli: Cli, name: &str) -> std::result::Result<Command, Answer> {
     match reach::kind(Some(&command)) {
         Kind::There => Ok(command),
         Kind::Run => Err(Answer::refused(alone(name))),
-        Kind::Here(name) => Err(Answer::refused(format!("`{name}` acts on this machine, so it cannot run on a line"))),
         Kind::Apart(name) => Err(Answer::refused(format!("`{name}` cannot run on a line of `cornercase requests`"))),
         Kind::BesideTheWindow => Err(Answer::refused(KEEPS_RUNNING)),
     }

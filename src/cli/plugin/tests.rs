@@ -209,6 +209,9 @@ mod previewing {
 }
 
 mod folders {
+    use rstest::rstest;
+
+    use super::reach::path_on;
     use super::*;
     use crate::test_util::TempDir;
 
@@ -287,5 +290,80 @@ mod folders {
         let refused = folder_spec_from(r"~\shared\tools.git", Some(home.path())).expect_err("refused").to_string();
 
         assert!(refused.contains("cornercase.invalid") && refused.contains("on the network"), "{refused}");
+    }
+
+    #[rstest]
+    #[case::the_folder_alone("~/tools", "~/tools", "")]
+    #[case::with_a_subfolder_and_a_ref("~/tools//plugins/x@v1", "~/tools", "//plugins/x@v1")]
+    #[case::with_a_ref("/srv/t@main", "/srv/t", "@main")]
+    #[case::a_ref_is_split_first("/srv/a@b//c", "/srv/a", "@b//c")]
+    #[case::a_drive_path(r"C:\code\tools//plugins/x", r"C:\code\tools", "//plugins/x")]
+    fn the_folder_part_of_a_source(#[case] spec: &str, #[case] folder: &str, #[case] rest: &str) {
+        assert_eq!(folder_part(spec), (folder, rest));
+    }
+
+    #[test]
+    fn a_linked_folder_in_the_home_folder_is_expanded() {
+        let home = TempDir::new();
+        let home = home.path();
+
+        assert_eq!(in_home(Path::new("~"), Some(home)), home);
+        assert_eq!(in_home(Path::new("~/tools"), Some(home)), home.join("tools"));
+        for kept in ["~user/x", "/abs", "./~/x"] {
+            assert_eq!(in_home(Path::new(kept), Some(home)), Path::new(kept));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_linked_folder_in_the_home_folder_with_backslashes_is_expanded() {
+        let home = TempDir::new();
+
+        assert_eq!(in_home(Path::new(r"~\tools"), Some(home.path())), home.path().join("tools"));
+    }
+
+    fn devbox() -> Remote {
+        Remote { destination: "devbox".into(), command: None, option: "--command" }
+    }
+
+    fn unreachable_folder(_: &Path) -> Result<PathBuf> {
+        unreachable!("the source names no folder")
+    }
+
+    #[rstest]
+    #[case::a_repository("acme/notes")]
+    #[case::a_pinned_folder_of_one("acme/tools/plugins/notes@v1")]
+    #[case::an_address("https://git.example.com/acme/tools.git//plugins/notes@v2")]
+    #[case::a_share("//server/share/tools")]
+    fn a_source_that_is_no_folder_goes_as_it_is(#[case] spec: &str) {
+        assert_eq!(source_on(spec, &unreachable_folder).expect("kept"), spec);
+    }
+
+    #[rstest]
+    #[case::from_unix("/srv/tools//plugins/x@v1", false, false, "/srv/tools//plugins/x@v1")]
+    #[case::backslashes_from_windows(r"/srv\tools//plugins/x", true, false, "/srv/tools//plugins/x")]
+    #[case::a_windows_machine(r"C:\code\tools//plugins/x@v1", false, true, r"C:\code\tools//plugins/x@v1")]
+    #[case::slashes_for_a_windows_machine("C:/code/tools//plugins/x", true, true, r"C:\code\tools//plugins/x")]
+    fn a_folder_keeps_its_subfolder_and_its_ref(
+        #[case] spec: &str,
+        #[case] windows: bool,
+        #[case] far: bool,
+        #[case] sent: &str,
+    ) {
+        let remote = devbox();
+
+        let said = source_on(spec, &|folder| path_on(folder, Some(&remote), windows, &|| far));
+
+        assert_eq!(said.expect("kept"), sent);
+    }
+
+    #[test]
+    fn a_windows_folder_for_a_unix_machine_is_refused() {
+        let remote = devbox();
+
+        let error = source_on(r"C:\code\tools", &|folder| path_on(folder, Some(&remote), true, &|| false))
+            .expect_err("refused");
+
+        assert!(error.to_string().contains("MSYS_NO_PATHCONV=1"), "{error}");
     }
 }
