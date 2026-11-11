@@ -204,7 +204,9 @@ mod console_sequences {
         typed(&mut term, &rx, &format!("prompt cc-{}$G", "w".repeat(100)), "ww>");
 
         let snap = term.emulator.surface_snapshot().expect("snapshot");
-        let first = snap.contents().lines().rposition(|line| line.starts_with("cc-w")).expect("the prompt's first row");
+        let contents = snap.contents();
+        let lines: Vec<&str> = contents.lines().collect();
+        let first = lines.iter().rposition(|line| line.starts_with("cc-w")).expect("the prompt's first row");
         assert!(snap.wrapped.contains(&u16::try_from(first).expect("a row")), "{first} in {:?}", snap.wrapped);
     }
 
