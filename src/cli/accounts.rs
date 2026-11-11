@@ -3,8 +3,8 @@ use std::fmt::Write as _;
 use std::io::{self, IsTerminal as _};
 
 use super::args::accounts::{
-    AccountAction, AccountAddArgs, AccountListArgs, AccountRemoveArgs, AccountRenameArgs, AccountRestartArgs,
-    AccountUseArgs, ProfileAction, ProfileArg,
+    AccountAction, AccountAddArgs, AccountListArgs, AccountLoginArgs, AccountRemoveArgs, AccountRenameArgs,
+    AccountRestartArgs, AccountUseArgs, ProfileAction, ProfileArg,
 };
 use super::{print_json, print_out};
 use crate::client::{self, answer, ask, confirm};
@@ -35,6 +35,7 @@ pub(super) fn account(action: AccountAction) -> Result<()> {
     match action {
         AccountAction::List(list) => account_list(&list),
         AccountAction::Add(add) => account_add(&add),
+        AccountAction::Login(login) => account_login(login),
         AccountAction::Remove(remove) => account_remove(&remove),
         AccountAction::Rename(rename) => account_rename(rename),
         AccountAction::Use(chosen) => account_use(chosen),
@@ -72,7 +73,38 @@ fn account_list(list: &AccountListArgs) -> Result<()> {
     print_out(&accounts_text(&answer(value)?))
 }
 
+fn account_login(args: AccountLoginArgs) -> Result<()> {
+    client::use_account_login_tab()?;
+    let account = if args.system { String::new() } else { args.account.unwrap_or_default() };
+    let request = control::AccountLogin {
+        provider: args.provider.clone(),
+        account: account.clone(),
+        workspace: args.workspace,
+        focus: args.focus,
+    };
+    let value = ask("account-login-tab", Command::AccountLoginTab(request))?;
+    if args.print.json {
+        return print_json(&value);
+    }
+    print_out(&login_text(&args.provider, &account, &answer(value)?))
+}
+
+pub(crate) fn login_text(provider: &str, account: &str, info: &AccountsInfo) -> String {
+    let who = account_phrase(provider, account, format!("{provider}'s own login"));
+    match info.login.as_ref().and_then(|ids| ids.pane) {
+        Some(pane) => format!("pane {pane} logs in {who}\n"),
+        None => format!("opened the login of {who}\n"),
+    }
+}
+
+fn account_phrase(provider: &str, account: &str, own: String) -> String {
+    if account.is_empty() { own } else { format!("the {provider} account {account}") }
+}
+
 fn account_add(add: &AccountAddArgs) -> Result<()> {
+    if add.view.is_some() {
+        client::use_account_login_tab()?;
+    }
     let request = control::AccountAdd {
         provider: add.provider.clone(),
         name: add.name.clone(),
@@ -136,11 +168,7 @@ fn restart(provider: String, account: Option<String>, panes: Vec<u64>) -> Result
 }
 
 pub(crate) fn restart_text(info: &RestartInfo) -> String {
-    let on = if info.account.is_empty() {
-        format!("its own {} login", info.provider)
-    } else {
-        format!("the {} account {}", info.provider, info.account)
-    };
+    let on = account_phrase(&info.provider, &info.account, format!("its own {} login", info.provider));
     let listed = |panes: &[u64]| panes.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
     let panes = |panes: &[u64]| if panes.len() == 1 { "pane" } else { "panes" };
     let mut text = String::new();

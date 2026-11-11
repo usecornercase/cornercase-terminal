@@ -78,8 +78,9 @@ use crate::state;
 #[cfg(unix)]
 use crate::state::TabState;
 use crate::state::{PaneState, WorkspaceState};
+use crate::term::Term;
 #[cfg(unix)]
-use crate::term::{Term, mouse};
+use crate::term::mouse;
 #[cfg(unix)]
 use crate::test_util::{Locked, git_repo, is_sh, wait_until_within};
 use crate::test_util::{TempDir, wait_until};

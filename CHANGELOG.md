@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.41
+
+- **Log an account in again from the command line.** Logins expire, and `cornercase account list --check` said `signed out` with no way back but typing the login yourself in a tab of that account. `cornercase account login claude work` opens the tab that `account add --login` opens, `work login`, running `claude auth login` with that account (`codex login` for Codex), and `--system` does it for the agent's own login. It takes `--workspace`, `--focus` and `--json`, refuses an account that does not exist, and refuses Gemini CLI, which has no login command, saying how to sign in instead. Through `--remote` it opens the tab on that machine.
+- **Programs that draw cornercase** can do it with the `account-login-tab` request and show the tab in their own view with `--focus --view ID`, which `account add --login --focus` now takes too. `cornercase contract` lists the feature `account-login-tab`.
+
 ## 0.13.40
 
 - **Programs that draw cornercase can open a long address that wraps.** Each pane of `cornercase surface` now carries `wrapped`, the rows whose line goes on in the next row because the terminal wrapped it there, so a program that draws the terminals can join them and open a long web address an agent printed (a pull request, a login, a preview) whole instead of cut at the row's end. It is left out when no row wraps, comes whole in a patch when it changes, and `cornercase contract` lists the feature `surface-wrapped`.

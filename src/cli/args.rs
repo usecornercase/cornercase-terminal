@@ -363,6 +363,8 @@ impl Control {
             Self::Surface(a) => a.view,
             Self::ViewSet(a) => Some(a.view),
             Self::Flow(FlowArgs { action: FlowAction::Run(run) }) => run.create.view.view,
+            Self::Account(AccountArgs { action: AccountAction::Add(a) }) => a.view,
+            Self::Account(AccountArgs { action: AccountAction::Login(a) }) => a.view.view,
             _ => None,
         }
     }

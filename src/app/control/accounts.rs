@@ -15,8 +15,8 @@ use crate::app::event::AppEvent;
 use crate::control::accounts::{AccountInfo, AgentInstalled, LoginInfo, ProfileInfo, ProviderInfo};
 use crate::control::contract::{Code, Refusal};
 use crate::control::{
-    AccountAdd, AccountList, AccountRemove, AccountRename, AccountUse, AccountsInfo, Ids, Item, ProfileDelete,
-    ProfileNew, ProfileSet, ProfileUse,
+    AccountAdd, AccountList, AccountLogin, AccountRemove, AccountRename, AccountUse, AccountsInfo, Ids, Item,
+    ProfileDelete, ProfileNew, ProfileSet, ProfileUse,
 };
 use crate::log::{self, Job, Level};
 use crate::os::fs::canonical;
@@ -96,6 +96,20 @@ const SYSTEM: &str = "system";
 
 fn known_login(listed: &[(Known, Vec<String>)], (kind, name): &Key) -> bool {
     listed.iter().any(|(k, names)| k == kind && (names.contains(name) || name.is_empty() && !names.is_empty()))
+}
+
+fn logs_in(kind: Known, account: &str) -> Result<(), Refusal> {
+    if kind.account().is_some_and(|home| !home.login.is_empty()) {
+        return Ok(());
+    }
+    let tab = if account.is_empty() { "with its own login" } else { "of that account" };
+    Err(malformed(format!(
+        "{} has no login command: start it in a tab {tab} and sign in from its first screen (`cornercase new-tab \
+         --account {}={account} -- {}`)",
+        kind.title(),
+        kind.name(),
+        kind.name()
+    )))
 }
 
 pub(super) fn provider(name: &str) -> Result<Known, Refusal> {
@@ -184,7 +198,7 @@ impl App {
             .collect();
         let tokens = login::tokens(|name| std::env::var_os(name));
         let profile = active.unwrap_or_default().to_string();
-        AccountsInfo { providers, profiles, profile, login, tokens, agents: Vec::new() }
+        AccountsInfo { providers, profiles, profile, login, tokens, agents: Vec::new(), projection: None }
     }
 
     fn checked_accounts_info(&self) -> AccountsInfo {
@@ -358,14 +372,39 @@ impl App {
     ) -> Handled {
         let kind = provider(&add.provider)?;
         self.check_new_account(kind, &add.name)?;
-        let place = if add.login { Some(self.login_place(asker, add, area)?) } else { None };
+        let place = if add.login { Some(self.login_place(asker, add.workspace, area)?) } else { None };
         let default = self.accounts.default_home(kind);
         let dir = accounts::add(&self.accounts.dir, kind, &add.name, default.as_deref()).map_err(|e| e.to_string())?;
         log::info!("accounts", "account added", provider = kind.name(), account = add.name, path = dir.display());
         self.relist_accounts();
         let Some(place) = place else { return Ok(Some(json(&self.accounts_info(None)))) };
-        let ids = self.open_login_tab(asker, add, place, now)?;
-        Ok(Some(json(&self.accounts_info(Some(ids)))))
+        let login = AccountLogin {
+            provider: add.provider.clone(),
+            account: add.name.clone(),
+            workspace: add.workspace,
+            focus: add.focus,
+        };
+        let (ids, projection) = self.open_login_tab(asker, &login, place, now).map_err(|refusal| {
+            Refusal::new(refusal.code, format!("the account `{}` was added, but {}", add.name, refusal.message))
+        })?;
+        Ok(Some(json(&AccountsInfo { projection, ..self.accounts_info(Some(ids)) })))
+    }
+
+    pub(in crate::app) fn account_login_request(
+        &mut self,
+        asker: Asker,
+        login: &AccountLogin,
+        area: Option<Rect>,
+        now: Instant,
+    ) -> Handled {
+        let kind = provider(&login.provider)?;
+        logs_in(kind, &login.account)?;
+        self.known_account(kind, &login.account)?;
+        let place = self.login_place(asker, login.workspace, area)?;
+        let (ids, projection) = self.open_login_tab(asker, login, place, now)?;
+        let pane = ids.pane.unwrap_or_default();
+        log::info!("accounts", "login tab opened", provider = kind.name(), account = login.account, pane = pane);
+        Ok(Some(json(&AccountsInfo { projection, ..self.accounts_info(Some(ids)) })))
     }
 
     fn check_new_account(&self, kind: Known, name: &str) -> Result<(), Refusal> {
@@ -388,42 +427,47 @@ impl App {
     fn login_place(
         &mut self,
         asker: Asker,
-        add: &AccountAdd,
+        workspace: Option<u64>,
         area: Option<Rect>,
     ) -> Result<(Rect, WorkspaceAt), Refusal> {
         let area = sized(area)?;
-        let at = match add.workspace {
+        let at = match workspace {
             Some(id) => self.usable_workspace(id)?,
             None => self.here_workspace(asker)?,
         };
         Ok((area, at))
     }
 
+    fn login_line(&self, kind: Known) -> String {
+        std::iter::once(agents::command(&self.config, kind.name()))
+            .chain(kind.account().into_iter().flat_map(|home| home.login.iter().map(ToString::to_string)))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     fn open_login_tab(
         &mut self,
         asker: Asker,
-        add: &AccountAdd,
+        login: &AccountLogin,
         (area, at): (Rect, WorkspaceAt),
         now: Instant,
-    ) -> Result<Ids, Refusal> {
-        let kind = provider(&add.provider)?;
-        let chosen = BTreeMap::from([(kind.name().to_string(), add.name.clone())]);
+    ) -> Result<(Ids, Option<u64>), Refusal> {
+        let kind = provider(&login.provider)?;
+        let (chosen, name) = if login.account.is_empty() {
+            (BTreeMap::new(), kind.name())
+        } else {
+            (BTreeMap::from([(kind.name().to_string(), login.account.clone())]), login.account.as_str())
+        };
         let given = Accounts::of(&self.accounts.dir, &chosen);
         let tab = self
-            .push_tab_in(at, area, Some(format!("{} login", add.name)), given)
-            .map_err(|e| format!("the account `{}` was added, but its login tab could not open: {e}", add.name))?;
+            .push_tab_in(at, area, Some(format!("{name} login")), given)
+            .map_err(|e| format!("its login tab could not open: {e}"))?;
         let ids = self.ids_of_tab(tab);
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
-        if add.focus {
-            self.show(Item::Pane(pane))?;
-        }
-        let line = std::iter::once(agents::command(&self.config, kind.name()))
-            .chain(kind.account().into_iter().flat_map(|home| home.login.iter().map(ToString::to_string)))
-            .collect::<Vec<_>>()
-            .join(" ");
-        self.agents.launches.add(Launch::command(pane, line, now));
-        Ok(ids)
+        let projection = self.show_if(asker.view, login.focus, Item::Pane(pane))?;
+        self.agents.launches.add(Launch::command(pane, self.login_line(kind), now));
+        Ok((ids, projection))
     }
 
     pub(in crate::app) fn account_remove_request(&mut self, remove: &AccountRemove) -> Handled {

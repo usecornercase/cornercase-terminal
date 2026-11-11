@@ -30,7 +30,7 @@ fn the_status_help_lists_the_columns_of_panes_in_their_order() {
 
 #[test]
 fn the_view_help_names_the_commands_that_take_a_view() {
-    for command in ["flow run", "open", "clone", "new-workspace"] {
+    for command in ["flow run", "open", "clone", "new-workspace", "account login"] {
         assert!(super::VIEW_HELP.contains(&format!("`{command}`")), "missing {command}");
     }
 }

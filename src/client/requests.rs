@@ -159,6 +159,10 @@ pub(crate) fn use_account_login() -> Result<()> {
     require("account-login", "cannot check the accounts' logins")
 }
 
+pub(crate) fn use_account_login_tab() -> Result<()> {
+    require("account-login-tab", "cannot open a login tab for an account that exists, or show one in a view")
+}
+
 pub(crate) fn use_account_switch() -> Result<()> {
     require("account-switch", "cannot rename or switch accounts")
 }
