@@ -89,6 +89,41 @@ mod reading {
     use super::*;
 
     #[test]
+    fn a_missing_file_knows_no_machine() {
+        let dir = TempDir::new();
+
+        assert_eq!(read(&kept_in(&dir)), []);
+        assert!(!kept_in(&dir).exists());
+    }
+
+    #[test]
+    fn entries_are_read_in_their_order_with_or_without_a_command() {
+        let dir = TempDir::new();
+        let written = r#"[{"destination":"gpu-box","command":"/opt/cc"},{"destination":"devbox"},
+            {"destination":"me@10.0.0.5","command":"~/bin/cornercase","added":"by a newer release"}]"#;
+        std::fs::write(kept_in(&dir), written).expect("an edited file");
+
+        assert_eq!(
+            read(&kept_in(&dir)),
+            [
+                machine("gpu-box", Some("/opt/cc")),
+                machine("devbox", None),
+                machine("me@10.0.0.5", Some("~/bin/cornercase"))
+            ]
+        );
+    }
+
+    #[test]
+    fn a_broken_entry_is_skipped_when_read() {
+        let dir = TempDir::new();
+        let written =
+            r#"[42,{"destination":"devbox"},{"destination":["x"]},{"command":"/opt/cc"},{"destination":"dev box"}]"#;
+        std::fs::write(kept_in(&dir), written).expect("an edited file");
+
+        assert_eq!(read(&kept_in(&dir)), [machine("devbox", None)]);
+    }
+
+    #[test]
     fn an_unreadable_file_knows_no_machine() {
         let dir = TempDir::new();
         std::fs::write(kept_in(&dir), "[").expect("a broken file");

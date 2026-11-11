@@ -538,10 +538,18 @@ key or an agent. To send the commands for scripts and agents there, give them --
 The other machine may run Windows: the first time, cornercase finds out whether its sshd runs
 commands with cmd.exe or PowerShell, and remembers it.
 
+--known prints the machines a window on this machine reached, with `cornercase remote` or its machine
+button, in the order its menu lists them, each with the --command it was reached with, and opens no
+window. With --json: {\"machines\": [{\"destination\", \"command\"}]}, command being null without one. It
+reads this machine's list, so it needs no server and no ssh, and CORNERCASE_REMOTE changes nothing
+for it: a program that offers to move to another server reads it this way rather than the file,
+whose shape can change.
+
 Examples:
   cornercase remote devbox
   cornercase remote me@10.0.0.5 --command '~/bin/cornercase'
-  cornercase remote me@winbox --command 'C:\\tools\\cornercase.exe'";
+  cornercase remote me@winbox --command 'C:\\tools\\cornercase.exe'
+  cornercase remote --known --json";
 pub(super) const LOGS_HELP: &str =
     "The server writes one line per event: the time in UTC, the level, where it happened and what,
 then key=value details. It says which windows attached, which commands ran and how they were

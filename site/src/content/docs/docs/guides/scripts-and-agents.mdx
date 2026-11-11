@@ -1439,6 +1439,14 @@ cornercase machines update mini --json
 - `update` takes the name of an `older` machine and answers once `cornercase update` ended there: the list, or `failed` with what it printed last. It is a `conflict` while one runs for that machine, and for a machine that isn't `older`.
 - Unknown names are `not-found`. [`cornercase contract`](#contract-and-compatibility) lists the operation `machines` and the feature `machines`, and the `app` stream carries the same rows as [`machines`](#follow-the-rest-of-the-app).
 
+#### The machines a window reached
+
+```sh
+cornercase remote --known --json
+```
+
+`machines` is your server's list. The machines a window on this computer reached with [`cornercase remote`](../remote/#switch-machines-from-the-window), which its machine button offers, are another list: `remote --known` prints them, `{"machines": [{"destination": "devbox", "command": null}]}` with `--json`, in the menu's order, each with the `--command` it was reached with. It reads this computer's list with no server and no `ssh`, so `CORNERCASE_REMOTE` changes nothing for it and `--remote` is refused. Pass a machine on as `cornercase remote DESTINATION --command COMMAND`, or `--remote DESTINATION --remote-command COMMAND` for a command, leaving out the command flag when `command` is `null`.
+
 #### Machines' workspaces
 
 ```sh

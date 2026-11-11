@@ -7,7 +7,8 @@ use clap::CommandFactory;
 use serde_json::Value;
 
 use self::args::{
-    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, SurfaceArgs, Target, WaitArgs, WhenArgs, Which,
+    Command, Control, EventsArgs, LogsArgs, RemoteArgs, Renamed, StartArgs, SurfaceArgs, Target, WaitArgs, WhenArgs,
+    Which,
 };
 use self::status::run_status;
 use crate::client::{self, answer, ask};
@@ -33,6 +34,7 @@ mod flow;
 mod held;
 mod help;
 mod issue;
+mod known;
 mod line;
 mod lines;
 mod machines;
@@ -106,12 +108,18 @@ pub fn run(cli: Cli) -> Result<bool> {
     Ok(true)
 }
 
+fn run_remote(args: RemoteArgs) -> Result<()> {
+    if args.known {
+        return known::run(args.json);
+    }
+    let destination = args.destination.ok_or_else(|| Error::WrongUsage("say which machine to reach".into()))?;
+    client::remote(&Remote { destination, command: args.command, option: "--command" })
+}
+
 fn run_command(command: Command) -> Result<bool> {
     match command {
         Command::Control(control) => return run_control(control),
-        Command::Remote(args) => {
-            client::remote(&Remote { destination: args.destination, command: args.command, option: "--command" })?;
-        }
+        Command::Remote(args) => run_remote(args)?,
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return update::update(update.check, update.yes, update.when.when()),
         Command::Restart(restart) => update::restart(restart.yes, restart.when.when())?,

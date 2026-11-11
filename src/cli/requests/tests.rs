@@ -35,6 +35,7 @@ mod a_line {
     #[case::logs(r#"{"args": ["logs"]}"#, "run `cornercase logs` on its own")]
     #[case::start_server(r#"{"args": ["start-server"]}"#, "run `cornercase start-server` first")]
     #[case::remote_window(r#"{"args": ["remote", "devbox"]}"#, "`remote` cannot run")]
+    #[case::known_machines(r#"{"args": ["remote", "--known", "--json"]}"#, "`remote` cannot run")]
     #[case::skill(r#"{"args": ["skill"]}"#, "`skill` cannot run")]
     #[case::plugin_here(r#"{"args": ["plugin", "link", "/x"]}"#, "acts on this machine")]
     #[case::plugin_windows(

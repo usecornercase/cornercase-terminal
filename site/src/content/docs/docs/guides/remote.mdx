@@ -97,6 +97,19 @@ Like reconnecting, switching never asks for a password, a passphrase or an unkno
 
 The list is kept on your laptop, in `machines.json` in cornercase's state folder (`~/.local/state/cornercase/`, or `%LOCALAPPDATA%\cornercase\` on Windows), beside `remote-shells.json`. The button shows only once a window has reached another machine, so it stays out of the way if you never use one. With the [icon bar](../projects-workspaces-tabs/#the-icon-bar) it's an icon above **`Help`**, and on a [small screen](../small-terminals/) it shares the **`Worktrees`** band of the projects menu.
 
+A program on your laptop, such as another interface that offers to move to another server, reads the same list with `cornercase remote --known`, one machine per line, or as JSON:
+
+```sh
+cornercase remote --known --json
+```
+
+```json
+{"machines": [{"destination": "devbox", "command": null},
+              {"destination": "me@10.0.0.5", "command": "~/bin/cornercase"}]}
+```
+
+The machines come in the menu's order, each with the `--command` it was reached with (`null` without one), and an entry the menu leaves out, such as one broken by hand, is left out here too. It reads the list on this computer, so it needs no server and no `ssh`, and `CORNERCASE_REMOTE` changes nothing for it (`--remote` is refused). Read the list this way rather than the file itself, whose shape can change with any release.
+
 ## Versions
 
 For the window, both machines must run the same version of cornercase. When they don't, it says which one to update before opening the window:
