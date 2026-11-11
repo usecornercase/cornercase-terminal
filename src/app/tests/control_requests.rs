@@ -608,6 +608,7 @@ mod flow_sharing;
 #[cfg(unix)]
 mod flows;
 mod following_the_app;
+mod fresh_branches;
 mod gemini;
 mod grok;
 mod groups;

@@ -458,6 +458,13 @@ pub(crate) fn head(dir: &Path) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
+pub(crate) fn commit(dir: &Path, file: &str, text: &str) -> String {
+    std::fs::write(dir.join(file), text).expect("write file");
+    git(dir, &["add", "--all"]);
+    git(dir, &["commit", "--quiet", "-m", file]);
+    head(dir)
+}
+
 pub(crate) fn git_repo(files: &[(&str, &str)]) -> TempDir {
     let repo = TempDir::new();
     git(repo.path(), &["init", "--quiet"]);

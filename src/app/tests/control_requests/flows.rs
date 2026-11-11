@@ -579,6 +579,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         accounts: crate::accounts::Accounts::default(),
         name: None,
         close_when_merged: false,
+        fresh: None,
     };
 
     let refused = team.app.open_run(workspace_at(&team.app, 0, 0), starting, AREA, false).expect_err("refused");
@@ -915,6 +916,7 @@ fn a_flow_on_an_issue_of_a_remote_tracker_asks_which_project() {
     assert!(refused.contains("say which project the team works in with --project ID"), "{refused}");
     assert!(team.app.runs.all().is_empty());
 }
+mod fresh;
 mod order;
 mod views;
 mod wake;

@@ -64,6 +64,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "mode-default",
     "held-after-draft",
     "flow-close-when-merged",
+    "fresh-branches",
     "notice-messages",
 ];
 

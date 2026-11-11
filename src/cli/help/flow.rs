@@ -7,6 +7,7 @@ flows/ next to config.json, and a project's in .cornercase/flows/ in its reposit
 Examples:
   cornercase flow list
   cornercase flow run Quick --prompt 'Fix the login form'
+  cornercase flow run 'Full issue' --issue '#482' --fresh
   cornercase flow run 'Full issue' --issue ENG-42 --project 3
   cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
   cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
@@ -37,6 +38,12 @@ project's default or the one its own folder is on is refused: a flow works on a 
 
 A role set to work in a worktree of its own (worktree = own) gets one on the branch <branch>--<role>, made from the
 run's branch, with the project's setup; the other roles work in the run's worktree.
+
+The run's branch, when it does not exist yet, starts from the project's HEAD, or, with --fresh or
+settings → worktrees → new branches, from the project's default branch fetched from the remote first
+(origin, else the first one), as a routine's run does; a fetch that fails stops the run before any tab
+opens, and --no-fresh asks for HEAD whatever the setting says. Role branches start from the run's branch
+either way. --fresh needs a server that knows the `fresh-branches` feature.
 
 It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
 by a tab. The run's folder for files, where every role writes its answers, is printed on stderr

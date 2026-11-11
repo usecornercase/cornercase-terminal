@@ -10,6 +10,7 @@ use crate::agents;
 use crate::agents::launch::{self, Launch};
 use crate::agents::parent::Parent;
 use crate::app::App;
+use crate::app::worktrees::NewBranch;
 use crate::config;
 use crate::control::contract::Refusal;
 use crate::control::{self, Done, Ids, Item};
@@ -36,6 +37,7 @@ enum Place {
 struct Worktree<'a> {
     project: usize,
     branch: &'a str,
+    fresh: Option<bool>,
 }
 
 pub(super) struct Then {
@@ -120,7 +122,7 @@ impl App {
             let (focus, view) = (new.focus, asker.view);
             let then =
                 Then { start: None, wait: None, focus, view, parent: None, named: None, accounts, placed: false };
-            self.create_worktree(client, Worktree { project: p, branch: &name }, then, None)?;
+            self.create_worktree(client, Worktree { project: p, branch: &name, fresh: new.fresh }, then, None)?;
             return Ok(None);
         }
         let path = self.projects[p].path.clone();
@@ -212,7 +214,12 @@ impl App {
                 let (focus, view, parent, placed) =
                     (start.focus, asker.view, self.caller_link(asker.caller), start.placed);
                 let then = Then { start: Some((spec, name)), wait, focus, view, parent, named, accounts, placed };
-                self.create_worktree(client, Worktree { project: p, branch: &branch }, then, timeout)?;
+                self.create_worktree(
+                    client,
+                    Worktree { project: p, branch: &branch, fresh: start.fresh },
+                    then,
+                    timeout,
+                )?;
                 return Ok(None);
             }
         };
@@ -320,17 +327,14 @@ impl App {
         then: Then,
         timeout: Option<(Instant, f64)>,
     ) -> Result<(), String> {
-        let Worktree { project: p, branch } = at;
+        let Worktree { project: p, branch, fresh } = at;
         let project = &self.projects[p];
         if !git::is_repo_root(&project.path) {
             return Err(format!("project {} is not the root of a git repository, so it has no worktrees", project.id));
         }
         let key = self.clients.requests.key();
-        if self.panels.queued.fresh(client) {
-            self.spawn_fresh_worktree(p, branch.to_string(), key);
-        } else {
-            self.spawn_worktree(p, branch.to_string(), None, Some(key));
-        }
+        let fresh = self.fresh_within(fresh, false);
+        self.spawn_worktree(p, NewBranch { name: branch.to_string(), fresh }, None, Some(key));
         let waits = Waits { done: Done::default(), stage: Stage::Worktree(then), timeout };
         self.clients.requests.push(client, key, waits);
         Ok(())

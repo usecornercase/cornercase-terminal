@@ -273,6 +273,7 @@ pub(super) fn queued_start(
         worktree,
         name: Some(entry.task.label.clone()),
         accounts: entry.task.accounts.clone(),
+        fresh: entry.task.fresh,
         ..control::Start::default()
     }
 }

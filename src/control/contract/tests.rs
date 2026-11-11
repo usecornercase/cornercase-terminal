@@ -55,6 +55,7 @@ mod describing {
             "mode-default",
             "held-after-draft",
             "flow-close-when-merged",
+            "fresh-branches",
             "notice-messages",
         ];
         let missing: Vec<&str> =

@@ -5,10 +5,12 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 
-use super::{check, create_from, git, git_within};
+use super::{branch_exists, check, create_from, git, git_within};
 use crate::error::{Error, Result};
 
 pub(crate) const FETCH_WITHIN: Duration = Duration::from_secs(120);
+pub(crate) const WINDOW_WITHIN: Duration = Duration::from_secs(20);
+const LOOKUP_WITHIN: Duration = Duration::from_secs(15);
 
 const FETCH_TRIES: u32 = 5;
 const RETRY_AFTER: Duration = Duration::from_millis(300);
@@ -24,8 +26,9 @@ fn remote_name(repo: &Path) -> Option<String> {
     remotes.iter().find(|(name, _)| name == "origin").or_else(|| remotes.first()).map(|(name, _)| name.clone())
 }
 
-fn advertised_default(repo: &Path, remote: &str) -> Option<String> {
-    let out = git_within(repo, ["ls-remote", "--symref", remote, "HEAD"], FETCH_WITHIN).ok()??;
+fn advertised_default(repo: &Path, remote: &str, within: Duration) -> Option<String> {
+    let lookup = within.min(LOOKUP_WITHIN);
+    let out = git_within(repo, ["ls-remote", "--symref", remote, "HEAD"], lookup).ok()??;
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
     let line = text.lines().find_map(|line| line.strip_prefix("ref: refs/heads/"))?;
     out.status
@@ -34,11 +37,11 @@ fn advertised_default(repo: &Path, remote: &str) -> Option<String> {
         .filter(|name| !name.is_empty())
 }
 
-fn fetch_once(repo: &Path, remote: &str, branch: Option<&str>) -> Result<()> {
+fn fetch_once(repo: &Path, remote: &str, branch: Option<&str>, within: Duration) -> Result<()> {
     let spec = branch.map(|branch| format!("+refs/heads/{branch}:refs/remotes/{remote}/{branch}"));
     let args = ["fetch", "--quiet", remote].into_iter().chain(spec.as_deref());
-    let out = git_within(repo, args, FETCH_WITHIN)?
-        .ok_or_else(|| Error::Git(format!("could not fetch {remote}: it took longer than {FETCH_WITHIN:?}")))?;
+    let out = git_within(repo, args, within)?
+        .ok_or_else(|| Error::Git(format!("could not fetch {remote}: it took longer than {within:?}")))?;
     check(out).map(|_| ()).map_err(|error| Error::Git(format!("could not fetch {remote}: {error}")))
 }
 
@@ -47,10 +50,10 @@ fn collided(error: &Error) -> bool {
     ["incorrect old value", "cannot lock ref", "Unable to create"].iter().any(|clash| text.contains(clash))
 }
 
-fn fetched(repo: &Path, remote: &str, branch: Option<&str>) -> Result<()> {
+fn fetched(repo: &Path, remote: &str, branch: Option<&str>, within: Duration) -> Result<()> {
     let mut tries = 1;
     loop {
-        match fetch_once(repo, remote, branch) {
+        match fetch_once(repo, remote, branch, within) {
             Err(error) if collided(&error) && tries < FETCH_TRIES => {
                 std::thread::sleep(RETRY_AFTER * tries);
                 tries += 1;
@@ -92,11 +95,11 @@ fn local_default(repo: &Path) -> Result<String> {
     Ok("HEAD".into())
 }
 
-fn resolved(repo: &Path) -> Result<String> {
+fn resolved(repo: &Path, within: Duration) -> Result<String> {
     match remote_name(repo) {
         Some(remote) => {
-            let advertised = advertised_default(repo, &remote);
-            fetched(repo, &remote, advertised.as_deref())?;
+            let advertised = advertised_default(repo, &remote, within);
+            fetched(repo, &remote, advertised.as_deref(), within)?;
             match advertised {
                 Some(branch) => Ok(format!("refs/remotes/{remote}/{branch}")),
                 None => remote_default(repo, &remote),
@@ -106,10 +109,13 @@ fn resolved(repo: &Path) -> Result<String> {
     }
 }
 
-pub(crate) fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
+pub(crate) fn create(repo: &Path, branch: &str, path: &Path, within: Duration) -> Result<()> {
+    if branch_exists(repo, branch)? {
+        return create_from(repo, branch, path, "HEAD");
+    }
     let turn = one_at_a_time(repo);
     let _held = turn.lock();
-    create_from(repo, branch, path, &resolved(repo)?)
+    create_from(repo, branch, path, &resolved(repo, within)?)
 }
 
 #[cfg(test)]

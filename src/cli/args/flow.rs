@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand, ValueEnum};
 
 use super::changes::Where;
-use super::{Create, Print, branch};
+use super::{Create, FreshArg, Print, branch};
 use super::{accounts, issue, machine};
 use crate::cli::help::{
     FLOW_CLOSE_WHEN_MERGED_HELP, FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP,
@@ -322,6 +322,8 @@ pub(crate) struct FlowRunArgs {
         help = "Close the team's agents, as agents close does, once the run's pull request has merged and none of them has worked for 3 minutes; the workspace's ▶ or agents reopen brings them back"
     )]
     pub(crate) close_when_merged: bool,
+    #[command(flatten)]
+    pub(crate) fresh: FreshArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }

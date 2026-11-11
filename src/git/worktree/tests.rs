@@ -410,3 +410,27 @@ mod on_windows {
         assert!(!path.exists());
     }
 }
+
+mod make {
+    use super::*;
+    use crate::test_util::{clone_of, commit, head};
+
+    #[rstest]
+    #[case::from_head(false)]
+    #[case::from_the_fetched_default_branch(true)]
+    fn starts_a_missing_branch(#[case] fresh: bool) {
+        let origin = git_repo(&[("a", "1")]);
+        let (_keep, clone) = clone_of(origin.path());
+        let behind = head(&clone);
+        let ahead = commit(origin.path(), "b", "2");
+        let target = TempDir::new();
+        let path = target.path().join("run");
+
+        make(&clone, "feat/x", &path, fresh.then_some(Duration::from_secs(30))).expect("make");
+
+        assert_eq!(head(&path), if fresh { ahead } else { behind.clone() });
+        assert_eq!(head(&clone), behind);
+        let merge = Command::new("git").arg("-C").arg(&clone).args(["config", "--get", "branch.feat/x.merge"]).output();
+        assert_eq!(merge.expect("git").stdout, b"");
+    }
+}

@@ -2,10 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.37
+## 0.13.38
 
 - **Programs that draw cornercase now hear every notice, not only the agents'.** `cornercase events --notices` also prints the server's notices that have no token, as a `message` event with a `kind`: `cornercase notify`'s text (`notify`, naming the pane it ran in), a queued agent or routine run that started, failed, missed its time or kept its workspace (`queue-started`, `queue-failed`, `queue-missed`, `queue-kept`), a failed setup nobody was looking at (`setup-failed`) and a flow member waiting for you to accept Claude Code's bypass permissions mode (`flow-consent`). With `--json` each has the toast's text, `panes` and, when it is about one, the `project` and `workspace` ids; a `--pane` reader gets those naming its panes. So `cornercase notify` in a script now reaches a program that shows notices, with no cornercase window open. `cornercase contract` lists the feature `notice-messages`.
 - **A flow run that closes its agents after its pull request merges now says so to those programs too**, as a `flow-merged` message with the window toast's text and the workspace, sent before the team's panes close, so a team's tabs no longer vanish from them without a word. Closing agents yourself sends none.
+
+## 0.13.37
+
+- **New branches can start from the up-to-date default branch.** A worktree's new branch started from the commit your project's own folder was on, which is often behind when you work only in worktrees, so an agent or a flow started on an issue could work on old code without a word. Turn on **settings → Worktrees → new branches** and every new branch (the New workspace dialog, an issue's start, a flow, a queued start) starts from the project's default branch, fetched from its remote first, as a routine's runs already do. If the fetch fails (offline, a login), the start fails and says why, and nothing is made. A branch that already exists is checked out as before, without fetching.
+- **`--fresh` and `--no-fresh`** on `cornercase start`, `new-workspace`, `flow run` and `queue add`/`edit` choose it for one start, whatever the setting says (`fresh` over the socket, `fresh_branches` in `cornercase config`), and `cornercase contract` lists the feature `fresh-branches`. `flow run --help` now says what a run's branch starts from.
 
 ## 0.13.36
 

@@ -622,6 +622,10 @@ pub(super) const HERE_WORKSPACE: &str = "The workspace [default: the one this ru
 pub(super) const SEEN_DIGEST: &str = "Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]";
 pub(super) const BY_BRANCH: &str =
     "The workspace on this branch, looked up in the project this runs in, else the shown one";
+pub(super) const FRESH_HELP: &str = "Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches]";
+pub(super) const NO_FRESH_HELP: &str =
+    "Make a missing branch from the project's HEAD, whatever settings → worktrees → new branches says";
+pub(super) const QUEUE_FRESH_HELP: &str = "Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches when the entry runs; edit keeps the entry's]";
 pub(super) const BOOT_ARG: &str = "Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]";
 
 pub(super) const CONTRACT_HELP: &str =

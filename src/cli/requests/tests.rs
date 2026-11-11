@@ -264,6 +264,37 @@ mod streams {
         assert!(run.contains("\"close_when_merged\":true"), "{run}");
     }
 
+    const FRESH_START: &str = r#"{"args": ["new-workspace", "b", "--worktree", "--fresh", "--json"]}"#;
+    const HEAD_START: &str = r#"{"args": ["new-workspace", "b", "--worktree", "--no-fresh", "--json"]}"#;
+
+    #[test]
+    fn a_fresh_branch_is_refused_up_front_by_a_server_that_would_drop_it() {
+        let (answer, seen) = in_a_view_on(FRESH_START, lacking("fresh-branches"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("up-to-date default branch") && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("new-workspace")), "{seen:?}");
+    }
+
+    #[test]
+    fn a_fresh_branch_sends_the_field() {
+        let (answer, seen) = in_a_view_on(FRESH_START, control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let new = seen.iter().find(|text| text.contains("new-workspace")).expect("the request");
+        assert!(new.contains("\"fresh\":true"), "{new}");
+    }
+
+    #[test]
+    fn a_branch_from_head_needs_no_feature() {
+        let (answer, seen) = in_a_view_on(HEAD_START, lacking("fresh-branches"));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let new = seen.iter().find(|text| text.contains("new-workspace")).expect("the request");
+        assert!(new.contains("\"fresh\":false"), "{new}");
+    }
+
     #[rstest]
     #[case::close(r#"{"args": ["close", "--pane", "4", "--boot", "old"]}"#)]
     #[case::rename(r#"{"args": ["rename", "--tab", "4", "x", "--boot", "old"]}"#)]

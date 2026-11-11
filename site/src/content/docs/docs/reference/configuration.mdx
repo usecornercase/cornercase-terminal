@@ -18,13 +18,14 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 
 <Screen
   name="settings-worktrees"
-  alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown, each workspace's pull request and its checks, from gh or glab; merged PRs in stats shown; shared files hidden, ⇄n when two workspaces change the same files"
-  crop={[2, 1, 106, 9]}
+  alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; new branches from the project's HEAD, on: the default branch, fetched first; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown, each workspace's pull request and its checks, from gh or glab; merged PRs in stats shown; shared files hidden, ⇄n when two workspaces change the same files"
+  crop={[2, 1, 106, 10]}
 />
 
 | Row | What it sets |
 | --- | --- |
 | **worktrees folder** | Where new [worktrees](../../guides/worktrees/) are checked out: `<folder>/<repository>/<branch>`. Must be an absolute path or start with `~/`. |
+| **new branches** | Off (the default): a branch that does not exist yet starts from the project's `HEAD`. On: it starts from the project's default branch, fetched from its remote first (`origin`, else the first one), as a [routine](../../guides/queue/)'s runs do, and a fetch that fails stops that start and says why; a project without a remote starts from its local `main` or `master`. It covers the New workspace dialog, an issue's start, a flow and the queue; `--fresh` and `--no-fresh` choose for one start of a command. A branch that exists is checked out as it is. See [Worktrees from issues](../../guides/worktrees/#worktrees-from-issues). |
 | **fetch branches every** | How often, in minutes, the remotes are fetched to show the [commits to pull](../../guides/worktrees/#commits-to-pull) as `↓n` on each workspace. `0` turns it off. |
 | **merged PRs in stats** | On (the default): Usage → Stats counts your merged pull requests and merge requests, read with `gh` and `glab`. Off: nothing is asked. The note names the accounts read, or why none were. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats). |
 | **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub, or a merge request on GitLab, shows its number, the state of its checks (its pipeline's jobs on GitLab) and whether it has merge conflicts, and on GitHub its layer in a stack, read with `gh` or `glab`. Off: nothing is asked. The note says why none show when every project read with one of them fails, because it is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
@@ -217,7 +218,7 @@ The text holds five sections, each of which the other person can leave out:
 | --- | --- |
 | `agents` | [`agent`](#agent), [`agent_args`](#agent_args), [`agent_modes`](#agent_modes), [`agent_commands`](#agent_commands), [`prompt`](#prompt), [`submit`](#submit), [`accept_trust_prompts`](#accept_trust_prompts), [`resume_agents`](#resume_agents), [`trust_prompt_pattern`](#trust_prompt_pattern), [`recap_agent`](#recap_agent), [`recap_model`](#recap_model), [`recap_effort`](#recap_effort), [`recap_language`](#recap_language), [`recap_instructions`](#recap_instructions) |
 | `issues` | [`issue_branch`](#issue_branch), [`issue_tabs`](#issue_tabs), [`gitlab_url`](#gitlab_url), [`jira_site`](#jira_site), [`jira_jql`](#jira_jql), [`plane_url`](#plane_url), [`plane_workspace`](#plane_workspace), [`plane_filter`](#plane_filter), [`asana_workspace`](#asana_workspace), [`asana_projects`](#asana_projects) |
-| `worktrees` | [`worktrees_dir`](#worktrees_dir), [`fetch_minutes`](#fetch_minutes), [`pull_requests`](#pull_requests), [`merged_pull_requests`](#merged_pull_requests), [`shared_files`](#shared_files), [`gh`](#gh), [`glab`](#glab) |
+| `worktrees` | [`worktrees_dir`](#worktrees_dir), [`fresh_branches`](#fresh_branches), [`fetch_minutes`](#fetch_minutes), [`pull_requests`](#pull_requests), [`merged_pull_requests`](#merged_pull_requests), [`shared_files`](#shared_files), [`gh`](#gh), [`glab`](#glab) |
 | `interface` | Every switch of the UI tab, from [`sidebar`](#sidebar) to [`tour`](#tour), with the sounds and the [prefix key](#prefix_key) |
 | `repositories` | Each project's [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree), found by the project's git remotes (such as `github.com/acme/web-shop`) rather than its folder, so it reaches the same repository wherever your colleague cloned it |
 
@@ -253,6 +254,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "merged_pull_requests": true,
   "shared_files": false,
   "issue_branch": "",
+  "fresh_branches": false,
   "issue_tabs": ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"],
   "gitlab_url": "",
   "jira_site": "",
@@ -324,6 +326,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`merged_pull_requests`](#merged_pull_requests) | boolean | `true` |
 | [`shared_files`](#shared_files) | boolean | `false` |
 | [`issue_branch`](#issue_branch) | string | `""` |
+| [`fresh_branches`](#fresh_branches) | boolean | `false` |
 | [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"]` |
 | [`gitlab_url`](#gitlab_url) | string | `""` |
 | [`jira_site`](#jira_site) | string | `""` |
@@ -415,6 +418,10 @@ Whether workspaces of a project look for the files they both change: the `⇄n` 
 #### `issue_branch`
 
 The branch an issue's worktree is made on, as a template such as `"feat/{key}-{slug}"` or `"{user}/{key}"`, with the placeholders `{key}`, `{number}`, `{slug}`, `{source}` and `{user}` (your git `user.name`). It must hold `{key}` or `{number}`; the result is cleaned into a name git takes. Empty keeps each tracker's own name (`issue-482-…`, `482-…` on GitLab, `sc-48-…`, `ENG-123-…`). Start in the issue browser shows it filled in and lets you change it for that issue. See [Your team's branch names](../../guides/issues-and-agents/#your-teams-branch-names).
+
+#### `fresh_branches`
+
+Where a branch that does not exist yet starts when cornercase makes a worktree for it. Off (the default): from the project's own folder's `HEAD`. On: from the project's default branch, fetched from its remote first (`origin`, else the first one), as a [routine](../../guides/queue/#routines)'s runs do. If the fetch fails (offline, a login, the 120 s limit), the start fails with git's reason and nothing is made; it never falls back to `HEAD`. A project without a remote starts them from its local `main` or `master` (else `HEAD`), with no fetch. It covers the New workspace dialog, the issue browser's start and start a flow, the queue and the commands for scripts, where `--fresh` and `--no-fresh` choose for one start. A branch that already exists is checked out as it is, with no fetch. See [Worktrees from issues](../../guides/worktrees/#worktrees-from-issues).
 
 #### `issue_tabs`
 

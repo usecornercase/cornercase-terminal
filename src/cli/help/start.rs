@@ -1,8 +1,12 @@
 pub(in crate::cli) const NEW_WORKSPACE_HELP: &str =
     "The workspace gets one tab. A worktree goes in the worktrees folder from settings, on a new
-branch from HEAD when the branch does not exist yet; the command returns once git made it. The
-project's setup (settings → project settings) then runs in the new tab, which `start --worktree`
-waits for before it types the agent.
+branch when the branch does not exist yet; the command returns once git made it. A new branch
+starts from the project's HEAD, or, with --fresh or settings → worktrees → new branches, from its
+default branch fetched from the remote first, as a routine's run does: a fetch that fails fails the
+command with git's reason and nothing is made. A branch that exists is checked out as it is. --fresh
+needs a server that knows the `fresh-branches` feature. The project's setup (settings →
+project settings) then runs in the new tab, which `start --worktree` waits for before it types the
+agent.
 
 With --machine NAME the workspace is made on that machine of `cornercase machines`, by its server:
 --project is that machine's id, as `status --json` lists it under machines, and so is the id printed.
@@ -12,6 +16,7 @@ With --machine NAME the workspace is made on that machine of `cornercase machine
 Examples:
   cornercase new-workspace experiments
   cornercase new-workspace fix/login --worktree --project 3
+  cornercase new-workspace fix/login --worktree --fresh
   cornercase new-workspace fix/login --worktree --project 2 --machine vps --focus";
 pub(in crate::cli) const START_HELP: &str =
     "The agent starts with its command and arguments from settings → agents. --mode replaces the mode
@@ -30,6 +35,12 @@ the project's own repository; the prompt comes from settings' prompt template an
 Shortcut, Linear, Jira, Plane and Asana issues aren't tied to a repository: when several places are open the
 command lists them and asks for --project (a new worktree) or --workspace (a new tab). A workspace already
 on the branch gets a new tab. It needs a server that knows the `issues` feature.
+
+A branch that --worktree or --issue makes, when it does not exist yet, starts from the project's HEAD, or,
+with --fresh or settings → worktrees → new branches, from its default branch fetched from the remote first
+(origin, else the first one), as a routine's run does; a fetch that fails fails the command with git's
+reason and nothing is made, and --no-fresh asks for HEAD whatever the setting says. A branch that exists
+is checked out as it is, with no fetch. --fresh needs a server that knows the `fresh-branches` feature.
 
 With --machine NAME the agent starts on that machine of `cornercase machines`, by its server, as if
 the command ran there: --project, --workspace and the pane's id printed are that machine's ids, as
@@ -58,6 +69,7 @@ answer then comes when the launch is over.
 
 Examples:
   cornercase start claude --issue '#482'
+  cornercase start claude --issue '#482' --fresh
   cornercase start codex --issue ENG-42 --project 3
   cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
   cornercase start codex --prompt-file task.md --wait --timeout 1800

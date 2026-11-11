@@ -8,6 +8,7 @@ use super::event::AppEvent;
 use super::event::Start;
 use super::overlay::Overlay;
 use super::trackers::{IssueReply, Ticket};
+use super::worktrees::NewBranch;
 use crate::accounts::Accounts;
 use crate::agents;
 use crate::agents::launch::{self};
@@ -644,7 +645,8 @@ impl App {
             return self.open_workspace(at, Some(start), area, false);
         }
         let making = (self.projects[p].id, branch.clone());
-        self.spawn_worktree(p, branch, Some(start), None);
+        let fresh = self.fresh_within(None, true);
+        self.spawn_worktree(p, NewBranch { name: branch, fresh }, Some(start), None);
         if let Some(Overlay::Issues(b)) = &mut self.overlay {
             b.starting = true;
             b.making = Some(making);

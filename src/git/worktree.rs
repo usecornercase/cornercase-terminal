@@ -48,6 +48,13 @@ pub(crate) fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
     create_from(repo, branch, path, "HEAD")
 }
 
+pub(crate) fn make(repo: &Path, branch: &str, path: &Path, fresh: Option<Duration>) -> Result<()> {
+    match fresh {
+        Some(within) => fresh::create(repo, branch, path, within),
+        None => create(repo, branch, path),
+    }
+}
+
 pub(crate) fn create_from(repo: &Path, branch: &str, path: &Path, base: &str) -> Result<()> {
     if path.exists() {
         return Err(Error::PathExists(path.to_path_buf()));

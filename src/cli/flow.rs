@@ -87,6 +87,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         accounts,
         machine,
         close_when_merged: run.close_when_merged,
+        fresh: super::fresh(&run.fresh)?,
     };
     let value = ask("flow run", control::Command::FlowRun(request))?;
     if run.create.print.json {

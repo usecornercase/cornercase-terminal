@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
 
@@ -168,6 +168,7 @@ pub(super) struct Starting {
     pub(super) accounts: Accounts,
     pub(super) name: Option<String>,
     pub(super) close_when_merged: bool,
+    pub(super) fresh: Option<bool>,
 }
 
 impl Starting {
@@ -184,6 +185,7 @@ impl Starting {
             accounts,
             name: None,
             close_when_merged: false,
+            fresh: None,
         }
     }
 }
@@ -192,7 +194,7 @@ pub(super) struct RunTrees {
     pub(super) run: Option<PathBuf>,
     pub(super) branch: String,
     pub(super) roles: Vec<(String, String)>,
-    pub(super) fresh: bool,
+    pub(super) fresh: Option<Duration>,
 }
 
 struct RunPanes<'a> {
@@ -216,11 +218,7 @@ fn make_trees(repo: &Path, dir: &Path, trees: RunTrees) -> crate::error::Result<
     let built = || -> crate::error::Result<Vec<(RoleWorktree, bool)>> {
         if let Some(path) = &run {
             made_paths.push(path.clone());
-            if fresh {
-                worktree::fresh::create(repo, branch, path)?;
-            } else {
-                worktree::create(repo, branch, path)?;
-            }
+            worktree::make(repo, branch, path, fresh)?;
         }
         let mut trees = Vec::with_capacity(roles.len());
         for (role, role_branch) in roles {
@@ -342,7 +340,7 @@ impl App {
         let (id, repo) = (project.id, project.path.clone());
         let dir = self.config.worktrees_dir(self.home.as_deref());
         let job = Job::new(Level::Info, "worktree", "add for a flow").with("project", id).with("branch", &branch);
-        let job = job.with("roles", roles).with("run", run).with("fresh", trees.fresh);
+        let job = job.with("roles", roles).with("run", run).with("fresh", trees.fresh.is_some());
         self.spawn_job(
             job,
             move || make_trees(&repo, &dir, trees),
@@ -480,8 +478,9 @@ impl App {
         setup: bool,
     ) -> Result<RunInfo, String> {
         let id = self.open_check(place)?;
-        let Starting { flow, task, branch, focus, view, note, trees, parent, accounts, name, close_when_merged } =
-            starting;
+        let Starting {
+            flow, task, branch, focus, view, note, trees, parent, accounts, name, close_when_merged, ..
+        } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();

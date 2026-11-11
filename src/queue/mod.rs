@@ -52,6 +52,8 @@ pub(crate) struct Task {
     pub(crate) paused: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) routine: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) fresh: Option<bool>,
 }
 
 #[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if passes a reference")]

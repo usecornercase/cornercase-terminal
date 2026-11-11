@@ -67,7 +67,15 @@ mod pages {
     fn the_first_one_is_worktrees() {
         assert_eq!(
             settings().rows(),
-            [Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests, Row::SharedFiles]
+            [
+                Row::Folder,
+                Row::IssueBranch,
+                Row::FreshBranches,
+                Row::Fetch,
+                Row::PullRequests,
+                Row::MergedPullRequests,
+                Row::SharedFiles
+            ]
         );
     }
 
@@ -406,6 +414,42 @@ mod merged_pull_requests {
 
         assert_eq!((text.label.as_str(), text.value.as_str()), ("merged PRs in stats", "[x] shown"));
         assert_eq!(text.note, "from 1 GitHub account");
+    }
+}
+
+mod fresh_branches {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[test]
+    fn is_a_switch_that_starts_off() {
+        let mut s = settings();
+        let before = s.config.fresh_branches;
+        go_to(&mut s, &Row::FreshBranches);
+        assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).fresh_branches), (false, true));
+    }
+
+    #[rstest]
+    #[case::off(false, "[ ] from the project's HEAD", "on: the default branch, fetched first")]
+    #[case::on(true, "[x] from the default branch, fetched", "a failed fetch stops the start")]
+    fn says_where_new_branches_start(#[case] on: bool, #[case] value: &str, #[case] note: &str) {
+        let mut s = settings();
+        s.config.fresh_branches = on;
+
+        let text = s.row_text(&Row::FreshBranches);
+
+        assert_eq!((text.label.as_str(), text.value.as_str(), text.note.as_str()), ("new branches", value, note));
+    }
+
+    #[test]
+    fn tells_what_each_state_does() {
+        let mut s = settings();
+        go_to(&mut s, &Row::FreshBranches);
+        saved(press(&mut s, KeyCode::Enter));
+        assert_eq!(s.notice.as_deref(), Some("new branches start from the default branch, fetched first"));
+        saved(press(&mut s, KeyCode::Enter));
+        assert_eq!(s.notice.as_deref(), Some("new branches start from the project's HEAD"));
     }
 }
 

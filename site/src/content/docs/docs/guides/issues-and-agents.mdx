@@ -241,7 +241,7 @@ Before the worktree is made, cornercase shows both names, filled in, so you can 
 
 Edit either, `Tab` moves between them, and `Enter` or **start** goes on; `Enter` straight away keeps the names as they are, `Esc` or **back** goes back to the issue. A name git would refuse (a space, `..`, a `:`…) is pointed out before anything is made. An empty workspace name keeps the issue's.
 
-If the branch already exists, the worktree checks it out; if a workspace on that branch is already open, cornercase takes you there instead of creating another one, and only starts the agent if the workspace has no tab open. Outside a repository, the agent starts in a new tab of the chosen workspace, the tab is named after the issue, and nothing is asked.
+With **settings → Worktrees → new branches** on, a new branch starts from the project's default branch, fetched from its remote first, instead of the commit the project's own folder is on; if the fetch fails, the dialog shows why and nothing is made. If the branch already exists, the worktree checks it out; if a workspace on that branch is already open, cornercase takes you there instead of creating another one, and only starts the agent if the workspace has no tab open. Outside a repository, the agent starts in a new tab of the chosen workspace, the tab is named after the issue, and nothing is asked.
 
 #### Your team's branch names
 

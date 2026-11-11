@@ -54,7 +54,7 @@ use crate::term::keys;
 
 pub(crate) use accounts::{AccountAction, AccountArgs};
 pub(crate) use close::{CloseArgs, RenameArgs, Renamed, Which};
-pub(crate) use create::{CloneArgs, Create, NewTabArgs, NewWorkspaceArgs, OpenArgs, SplitArgs};
+pub(crate) use create::{CloneArgs, Create, FreshArg, NewTabArgs, NewWorkspaceArgs, OpenArgs, SplitArgs};
 pub(crate) use flow::*;
 pub(crate) use plugin::{PluginAction, PluginArgs};
 pub(crate) use server::{KillServerArgs, LogsArgs, RemoteArgs, RestartArgs, StartServerArgs, UpdateArgs, WhenArgs};
