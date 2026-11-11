@@ -119,18 +119,13 @@ fn after_dashes(mut args: Vec<String>, positional: Option<&str>) -> Vec<String> 
     args
 }
 
-fn fetch_words(action: &str, flags: [(&str, bool); 3], commit: Option<&str>) -> Vec<String> {
-    let mut args = words("plugin", &[]);
-    args.push(action.to_string());
-    args.extend(flags.iter().filter(|(_, on)| *on).map(|(flag, _)| (*flag).to_string()));
-    if let Some(commit) = commit {
-        args.extend(["--commit".to_string(), commit.to_string()]);
-    }
-    args
+fn commit_words(commit: Option<&str>) -> Vec<String> {
+    commit.map(|commit| ["--commit".to_string(), commit.to_string()]).into_iter().flatten().collect()
 }
 
-fn plugin_words(action: &str, flags: Vec<String>, positional: Option<&str>) -> Vec<String> {
-    after_dashes([vec!["plugin".to_string(), action.to_string()], flags].concat(), positional)
+fn plugin_words(action: &str, flags: &[(&str, bool)], extra: Vec<String>, positional: Option<&str>) -> Vec<String> {
+    let args = [vec!["plugin".to_string()], words(action, flags), extra].concat();
+    after_dashes(args, positional)
 }
 
 fn plugin_there(action: &PluginAction, remote: &Remote) -> Option<Result<Vec<String>>> {
@@ -141,39 +136,23 @@ fn plugin_there(action: &PluginAction, remote: &Remote) -> Option<Result<Vec<Str
         | PluginAction::PopupClose
         | PluginAction::Windows(_) => return None,
         PluginAction::Link { folder } => open_path_on(folder, Some(remote))
-            .map(|folder| plugin_words("link", vec![], Some(&folder.to_string_lossy()))),
+            .map(|folder| plugin_words("link", &[], vec![], Some(&folder.to_string_lossy()))),
         PluginAction::Install(InstallArgs { source, yes, preview, json, commit }) => {
-            source_there(source, remote).map(|source| {
-                let flags = [("--yes", *yes), ("--preview", *preview), ("--json", *json)];
-                after_dashes(fetch_words("install", flags, commit.as_deref()), Some(&source))
-            })
+            let flags = [("--yes", *yes), ("--preview", *preview), ("--json", *json)];
+            super::plugin::source_there(source, remote)
+                .map(|source| plugin_words("install", &flags, commit_words(commit.as_deref()), Some(&source)))
         }
         PluginAction::Update(UpdatePluginArgs { id, yes, preview, json, commit }) => {
             let flags = [("--yes", *yes), ("--preview", *preview), ("--json", *json)];
-            Ok(after_dashes(fetch_words("update", flags, commit.as_deref()), id.as_deref()))
+            Ok(plugin_words("update", &flags, commit_words(commit.as_deref()), id.as_deref()))
         }
-        PluginAction::Remove { id } => Ok(plugin_words("remove", vec![], Some(id))),
-        PluginAction::Unlink { id } => Ok(plugin_words("unlink", vec![], Some(id))),
-        PluginAction::Enable { id } => Ok(plugin_words("enable", vec![], Some(id))),
-        PluginAction::Disable { id } => Ok(plugin_words("disable", vec![], Some(id))),
-        PluginAction::List(Print { json }) => {
-            Ok(plugin_words("list", json.then(|| "--json".to_string()).into_iter().collect(), None))
-        }
-        PluginAction::Logs { id, logs } => Ok(plugin_words("logs", logs_flags(logs), Some(id))),
+        PluginAction::Remove { id } => Ok(plugin_words("remove", &[], vec![], Some(id))),
+        PluginAction::Unlink { id } => Ok(plugin_words("unlink", &[], vec![], Some(id))),
+        PluginAction::Enable { id } => Ok(plugin_words("enable", &[], vec![], Some(id))),
+        PluginAction::Disable { id } => Ok(plugin_words("disable", &[], vec![], Some(id))),
+        PluginAction::List(Print { json }) => Ok(plugin_words("list", &[("--json", *json)], vec![], None)),
+        PluginAction::Logs { id, logs } => Ok(plugin_words("logs", &[], logs_flags(logs), Some(id))),
     })
-}
-
-fn source_there(spec: &str, remote: &Remote) -> Result<String> {
-    source_on(spec, &|folder| open_path_on(folder, Some(remote)))
-}
-
-fn source_on(spec: &str, folder_there: &dyn Fn(&Path) -> Result<PathBuf>) -> Result<String> {
-    let a_folder = spec.starts_with(['.', '~', '/']) || windows_path(spec);
-    if !a_folder || spec.starts_with("//") {
-        return Ok(spec.to_string());
-    }
-    let (folder, rest) = super::plugin::folder_part(spec);
-    Ok(format!("{}{rest}", folder_there(Path::new(folder))?.to_string_lossy()))
 }
 
 pub(super) fn run_there(remote: &Remote, args: &[String]) -> Result<bool> {
@@ -272,7 +251,7 @@ fn path_there(path: &Path, remote: &Remote, windows: bool) -> Result<PathBuf> {
     Ok(if windows { PathBuf::from(text.replace('\\', "/")) } else { path.to_path_buf() })
 }
 
-fn windows_path(text: &str) -> bool {
+pub(super) fn windows_path(text: &str) -> bool {
     let mut chars = text.chars();
     let drive = chars.next().is_some_and(|c| c.is_ascii_alphabetic()) && chars.next() == Some(':');
     drive || text.starts_with('\\')

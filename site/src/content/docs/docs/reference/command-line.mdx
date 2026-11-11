@@ -210,7 +210,7 @@ Prints what the running server supports: its version, the version of the contrac
 
 ### `cornercase plugin`
 
-Installs, adds, lists and turns on and off [plugins](../../guides/plugins/). It reads and writes `plugins.json` directly, so it works with no server running, except `status`, `actions`, `run` and `popup-close`, which ask the running server; a running server picks up the change within a second. With [`--remote`](#remote) every `plugin` command but `windows` acts on that machine's plugins, and the folders of `link` and `install` are that machine's.
+Installs, adds, lists and turns on and off [plugins](../../guides/plugins/). It reads and writes `plugins.json` directly, so it works with no server running, except `status`, `actions`, `run` and `popup-close`, which ask the running server; a running server picks up the change within a second. With [`--remote`](#--remote) every `plugin` command but `windows` acts on that machine's plugins, and the folders of `link` and `install` are that machine's.
 
 ```sh
 cornercase plugin install acme/notes      # fetch it, show what it runs, ask, install it turned off

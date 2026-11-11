@@ -7,7 +7,7 @@ use serde_json::json;
 
 use super::args::PluginAction;
 use super::args::plugin::{InstallArgs, RunArgs, UpdatePluginArgs};
-use super::print_log;
+use super::{home, print_log, reach};
 use crate::client::{answer, ask, confirm, use_plugin_run_view, use_view};
 use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
@@ -20,6 +20,7 @@ use crate::plugins::registry::{missing, short};
 use crate::plugins::source::{Origin, folder_on_this_computer};
 use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
+use crate::remote::Remote;
 
 mod windows;
 
@@ -316,15 +317,11 @@ fn same_commit(found: &str, wanted: Option<&str>, what: &str, kept: &str) -> Res
     }
 }
 
-fn home() -> Option<PathBuf> {
-    std::env::var_os(paths::HOME_VAR).map(PathBuf::from)
-}
-
 fn folder_spec(spec: &str) -> Result<String> {
     folder_spec_from(spec, home().as_deref())
 }
 
-pub(super) fn folder_part(spec: &str) -> (&str, &str) {
+fn folder_part(spec: &str) -> (&str, &str) {
     let place = spec.split_once('@').map_or(spec, |(place, _)| place);
     spec.split_at(place.find("//").unwrap_or(place.len()))
 }
@@ -337,6 +334,19 @@ fn folder_spec_from(spec: &str, home: Option<&Path>) -> Result<String> {
     let folder = absolute(config::expand_home(&home_with_a_slash(folder), home));
     folder_on_this_computer(&folder).map_err(Error::Plugin)?;
     Ok(format!("{}{rest}", canonical(folder).display()))
+}
+
+pub(super) fn source_there(spec: &str, remote: &Remote) -> Result<String> {
+    source_on(spec, &|folder| reach::open_path_on(folder, Some(remote)))
+}
+
+fn source_on(spec: &str, folder_there: &dyn Fn(&Path) -> Result<PathBuf>) -> Result<String> {
+    let a_folder = spec.starts_with(['.', '~', '/']) || reach::windows_path(spec);
+    if !a_folder || spec.starts_with("//") {
+        return Ok(spec.to_string());
+    }
+    let (folder, rest) = folder_part(spec);
+    Ok(format!("{}{rest}", folder_there(Path::new(folder))?.to_string_lossy()))
 }
 
 fn in_home(folder: &Path, home: Option<&Path>) -> PathBuf {

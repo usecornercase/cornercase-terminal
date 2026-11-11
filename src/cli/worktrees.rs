@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::args::worktrees::{FreeArgs, ListArgs, TargetArgs, WorktreesAction, WorktreesArgs};
-use super::{print_json, print_out, workspace};
+use super::{home, print_json, print_out, workspace};
 use crate::client::{answer, ask};
 use crate::control::worktrees::BuildFolder;
 use crate::control::{
@@ -64,10 +64,6 @@ fn run_free(args: &FreeArgs) -> Result<()> {
         print_out(&free_text(&freed, home().as_deref()))?;
     }
     if freed.failed.is_empty() && freed.kept.is_empty() { Ok(()) } else { Err(Error::Partial) }
-}
-
-fn home() -> Option<PathBuf> {
-    std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from)
 }
 
 fn folders(folders: &[BuildFolder]) -> String {

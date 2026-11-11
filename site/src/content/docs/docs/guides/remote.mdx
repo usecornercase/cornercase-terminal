@@ -37,7 +37,7 @@ The other machine can run Windows, with [cornercase installed there](../../insta
 
 The answer is kept in `remote-shells.json`, in cornercase's state folder on the machine you connect from (`~/.local/state/cornercase/`, or `%LOCALAPPDATA%\cornercase\` on Windows). When the remembered shell stops working, for instance because the name now reaches another machine, cornercase asks again by itself; deleting the file, or that host's entry in it, makes it forget.
 
-The first time, `cornercase --remote winbox kill-server`, `restart`, `update` and the plugin commands that change plugins fail there and tell you to run them again, since cornercase doesn't repeat a command that may already have done something; `logs`, `plugin list` and `plugin logs` are run again through the right shell by itself.
+The first time, `cornercase --remote winbox kill-server`, `restart`, `update` and the other plugin commands (a `--preview` too, since it fetches) fail there and tell you to run them again, since cornercase doesn't repeat a command that may already have done something; `logs`, `plugin list` and `plugin logs` are run again through the right shell by themselves.
 
 There, cornercase is looked for on the `PATH`, then in `%USERPROFILE%\.local\bin`, where the PowerShell installer puts it, and `%USERPROFILE%\.cargo\bin`. `--command` takes the path of `cornercase.exe`, the same for cmd and PowerShell, with `~\` for your profile folder:
 

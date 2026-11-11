@@ -253,10 +253,6 @@ mod forwarding {
 mod plugin_folders {
     use super::*;
 
-    fn unreachable_folder(_: &Path) -> Result<PathBuf> {
-        unreachable!("the source names no folder")
-    }
-
     #[rstest]
     #[case::link_a_name(&["plugin", "link", "my-plugin"])]
     #[case::link_from_here(&["plugin", "link", "./my-plugin"])]
@@ -269,43 +265,6 @@ mod plugin_folders {
 
         assert!(matches!(&refused, Error::WrongUsage(_)), "{refused:?}");
         assert!(refused.to_string().contains("absolute path on devbox"), "{refused}");
-    }
-
-    #[rstest]
-    #[case::a_repository("acme/notes")]
-    #[case::a_pinned_folder_of_one("acme/tools/plugins/notes@v1")]
-    #[case::an_address("https://git.example.com/acme/tools.git//plugins/notes@v2")]
-    #[case::a_share("//server/share/tools")]
-    fn a_source_that_is_no_folder_goes_as_it_is(#[case] spec: &str) {
-        assert_eq!(source_on(spec, &unreachable_folder).expect("kept"), spec);
-    }
-
-    #[rstest]
-    #[case::from_unix("/srv/tools//plugins/x@v1", false, false, "/srv/tools//plugins/x@v1")]
-    #[case::backslashes_from_windows(r"/srv\tools//plugins/x", true, false, "/srv/tools//plugins/x")]
-    #[case::a_windows_machine(r"C:\code\tools//plugins/x@v1", false, true, r"C:\code\tools//plugins/x@v1")]
-    #[case::slashes_for_a_windows_machine("C:/code/tools//plugins/x", true, true, r"C:\code\tools//plugins/x")]
-    fn a_folder_keeps_its_subfolder_and_its_ref(
-        #[case] spec: &str,
-        #[case] windows: bool,
-        #[case] far: bool,
-        #[case] sent: &str,
-    ) {
-        let remote = devbox();
-
-        let said = source_on(spec, &|folder| path_on(folder, Some(&remote), windows, &|| far));
-
-        assert_eq!(said.expect("kept"), sent);
-    }
-
-    #[test]
-    fn a_windows_folder_for_a_unix_machine_is_refused() {
-        let remote = devbox();
-
-        let error = source_on(r"C:\code\tools", &|folder| path_on(folder, Some(&remote), true, &|| false))
-            .expect_err("refused");
-
-        assert!(error.to_string().contains("MSYS_NO_PATHCONV=1"), "{error}");
     }
 }
 

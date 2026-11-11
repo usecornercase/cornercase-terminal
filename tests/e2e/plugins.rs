@@ -1,6 +1,8 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
+use super::machines::{VPS, reach};
+use super::remote::{fake_ssh_to, ssh_runs};
 use super::*;
 
 const MANIFEST: &str = r#"id = "acme.e2e"
@@ -410,7 +412,6 @@ fn stopping_the_server_answers_a_run_waiting_on_its_popup() {
 }
 
 mod on_another_machine {
-    use super::super::{machines, remote};
     use super::*;
 
     fn on_vps(here: &Session, machine: &Session, args: &[&str]) -> std::process::Output {
@@ -419,13 +420,13 @@ mod on_another_machine {
 
     fn vps_command(here: &Session, machine: &Session, flag: bool) -> std::process::Command {
         let home = machine.dir.join("home");
-        let there = format!("env -u CORNERCASE_REMOTE {} HOME={}", machines::reach(machine), home.display());
+        let there = format!("env -u {REMOTE_ENV} {} HOME={}", reach(machine), home.display());
         let mut cmd = here.cold_command();
-        cmd.env("PATH", remote::fake_ssh_to(&here.dir, &[(machines::VPS, &there)]));
+        cmd.env("PATH", fake_ssh_to(&here.dir, &[(VPS, &there)]));
         if flag {
-            cmd.args(["--remote", machines::VPS]);
+            cmd.args(["--remote", VPS]);
         } else {
-            cmd.env("CORNERCASE_REMOTE", machines::VPS);
+            cmd.env(REMOTE_ENV, VPS);
         }
         cmd
     }
@@ -466,10 +467,10 @@ mod on_another_machine {
         said(&on_vps(&here, &machine, &["plugin", "disable", "acme.e2e"]));
         said(&on_vps(&here, &machine, &["plugin", "unlink", "acme.e2e"]));
         assert!(machine.says(&["plugin", "list"]).starts_with("no plugins"));
-        let runs = remote::ssh_runs(&here);
+        let runs = ssh_runs(&here);
         let relative = on_vps(&here, &machine, &["plugin", "link", "my-plugin"]);
         assert!(refused(&relative, 2, "with --remote, give its absolute path on vps"), "{relative:?}");
-        assert_eq!(remote::ssh_runs(&here), runs, "ssh never ran");
+        assert_eq!(ssh_runs(&here), runs, "ssh never ran");
     }
 
     #[test]

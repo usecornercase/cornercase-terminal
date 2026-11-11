@@ -729,6 +729,10 @@ fn say(value: Value, json: bool, lines: impl Fn(&Done) -> Vec<String>) -> Result
     Ok(())
 }
 
+pub(super) fn home() -> Option<PathBuf> {
+    std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from)
+}
+
 pub(super) fn note(text: &str) {
     if !line::stderr(text) {
         eprint!("{text}");
