@@ -4,11 +4,25 @@ use super::{Print, seconds};
 use crate::cli::help::{COMMAND_THERE, RESTART_TIMEOUT, WHEN_IDLE};
 
 #[derive(Debug, Args)]
+#[command(override_usage = "cornercase remote [OPTIONS] <DESTINATION>\n       cornercase remote --known [--json]")]
 pub(crate) struct RemoteArgs {
-    #[arg(value_name = "DESTINATION", help = "Where ssh connects: a host from ~/.ssh/config, or user@host")]
-    pub(crate) destination: String,
+    #[arg(
+        value_name = "DESTINATION",
+        required_unless_present = "known",
+        help = "Where ssh connects: a host from ~/.ssh/config, or user@host"
+    )]
+    pub(crate) destination: Option<String>,
     #[arg(long, value_name = "COMMAND", help = COMMAND_THERE)]
     pub(crate) command: Option<String>,
+    #[arg(
+        long,
+        conflicts_with_all = ["destination", "command"],
+        help = "Print the machines a window on this machine reached, as its machine button lists them, and open no \
+                window; it reads this machine's list, so it needs no server or ssh"
+    )]
+    pub(crate) known: bool,
+    #[arg(long, conflicts_with_all = ["destination", "command"], help = "With --known, print JSON instead of text")]
+    pub(crate) json: bool,
 }
 
 #[derive(Debug, Args)]

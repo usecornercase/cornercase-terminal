@@ -129,6 +129,7 @@ mod reaching {
 
     #[rstest]
     #[case::remote(&["remote", "otherbox"])]
+    #[case::the_known_machines(&["remote", "--known"])]
     #[case::proxy(&["proxy"])]
     #[case::server(&["server"])]
     #[case::skill(&["skill"])]
@@ -136,11 +137,14 @@ mod reaching {
         assert_eq!(chosen(&parsed(args), &set("devbox")).expect("allowed"), None);
     }
 
-    #[test]
-    fn the_window_command_refuses_the_flag() {
-        let error = chosen(&parsed(&["--remote", "x", "remote", "y"]), &nothing).expect_err("refused");
+    #[rstest]
+    #[case::a_window(&["--remote", "x", "remote", "y"])]
+    #[case::the_known_machines(&["--remote", "x", "remote", "--known"])]
+    fn the_window_command_refuses_the_flag(#[case] args: &[&str]) {
+        let error = chosen(&parsed(args), &nothing).expect_err("refused");
 
         assert!(matches!(error, Error::WrongUsage(_)), "{error:?}");
+        assert!(error.to_string().contains("`remote` takes no --remote"), "{error}");
     }
 
     #[test]

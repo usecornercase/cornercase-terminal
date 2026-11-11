@@ -2,10 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.38
+## 0.13.39
 
 - **Programs that draw cornercase now hear every notice, not only the agents'.** `cornercase events --notices` also prints the server's notices that have no token, as a `message` event with a `kind`: `cornercase notify`'s text (`notify`, naming the pane it ran in), a queued agent or routine run that started, failed or kept its workspace, or a routine's run that missed its time (`queue-started`, `queue-failed`, `queue-missed`, `queue-kept`), a failed setup nobody was looking at (`setup-failed`) and a flow member waiting for you to accept Claude Code's bypass permissions mode (`flow-consent`). With `--json` each has the toast's text, `panes` and, when it is about one, the `project` and `workspace` ids; a `--pane` reader gets those naming its panes. So `cornercase notify` in a script now reaches a program that shows notices, with no cornercase window open. `cornercase contract` lists the feature `notice-messages`.
 - **A flow run that closes its agents after its pull request merges now says so to those programs too**, as a `flow-merged` message with the window toast's text and the workspace, sent before the team's panes close, so a team's tabs no longer vanish from them without a word. Closing agents yourself sends none.
+
+## 0.13.38
+
+- **A program can list the machines your window reached.** `cornercase remote --known` prints the machines a window on this computer reached, with `cornercase remote` or the machine button at the bottom of the sidebar, in the order its menu lists them, each with the `--command` it was reached with, and `--json` prints them as `{"machines": [{"destination": "devbox", "command": null}]}`. Another interface that offers to move to another server can offer them too, and a `me@10.0.0.5` you reached from the window needn't be typed again. It reads this computer's list, with no server and no `ssh`, and `CORNERCASE_REMOTE` changes nothing for it.
 
 ## 0.13.37
 
