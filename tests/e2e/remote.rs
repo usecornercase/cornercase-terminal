@@ -368,9 +368,19 @@ fn cornercase_remote_reaches_it_too_but_stays_out_of_its_panes() {
     assert!(session.says(&["read", "--pane", &pane]).contains("remote-2-unset"));
 }
 
+fn ran(session: &Session, args: &[&str], variable: Option<&str>) -> std::process::Output {
+    let mut cmd = session.cold_command();
+    cmd.env("PATH", fake_ssh(&session.dir, "")).args(args);
+    if let Some(variable) = variable {
+        cmd.env(REMOTE_ENV, variable);
+    }
+    cmd.output().expect("run cornercase")
+}
+
 #[rstest]
 #[case::the_flag(&["--remote", "devbox", "plugin", "install", "x"], None, "`plugin` acts on this machine")]
 #[case::the_variable(&["plugin", "install", "x"], Some("devbox"), "`plugin` acts on this machine")]
+#[case::the_machines_a_window_reached(&["--remote", "devbox", "remote", "--known"], None, "`remote` takes no --remote")]
 #[case::window_processes(&["--remote", "devbox", "plugin", "windows"], None, "machine that shows the window")]
 #[case::window_processes_by_the_variable(
     &["plugin", "windows", "--json"],
@@ -379,16 +389,63 @@ fn cornercase_remote_reaches_it_too_but_stays_out_of_its_panes() {
 )]
 fn commands_of_this_machine_refuse_remote(#[case] args: &[&str], #[case] var: Option<&str>, #[case] message: &str) {
     let session = Session::new();
-    let mut cmd = session.cold_command();
-    cmd.env("PATH", fake_ssh(&session.dir, "")).args(args);
-    if let Some(var) = var {
-        cmd.env(REMOTE_ENV, var);
-    }
 
-    let out = cmd.output().expect("run cornercase");
+    let out = ran(&session, args, var);
 
     assert!(refused(&out, 2, message), "{out:?}");
     assert_eq!(ssh_pid(&session), "", "ssh never ran");
+}
+
+#[test]
+fn a_program_lists_the_machine_a_window_reached_with_its_command() {
+    let session = Session::new();
+    let _app = remote_window(&session);
+
+    let listed: serde_json::Value =
+        serde_json::from_str(&session.says(&["remote", "--known", "--json"])).expect("the machines");
+
+    assert_eq!(listed, serde_json::json!({"machines": [{"destination": "devbox", "command": bin()}]}));
+}
+
+#[test]
+fn the_machines_a_window_reached_are_read_here_without_a_server_or_ssh() {
+    let session = Session::new();
+    let listed = |variable: Option<&str>| {
+        let out = ran(&session, &["remote", "--known", "--json"], variable);
+        assert!(out.status.success(), "{out:?}");
+        out.stdout
+    };
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&listed(None)).expect("json"),
+        serde_json::json!({"machines": []})
+    );
+    let written = r#"[{"destination":"devbox"},{"destination":"-oProxyCommand=sh"},{"destination":null},
+        {"destination":"me@10.0.0.5","command":"~/bin/cornercase"}]"#;
+    std::fs::write(session.dir.join("machines.json"), written).expect("a list written by hand");
+
+    let (here, told) = (listed(None), listed(Some("devbox")));
+
+    assert_eq!(here, told, "CORNERCASE_REMOTE changes nothing");
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&here).expect("json"),
+        serde_json::json!({"machines": [
+            {"destination": "devbox", "command": null},
+            {"destination": "me@10.0.0.5", "command": "~/bin/cornercase"},
+        ]})
+    );
+    assert_eq!((session.servers(), ssh_runs(&session)), (0, 0));
+}
+
+#[test]
+fn the_machines_a_window_reached_read_as_text() {
+    let session = Session::new();
+    let written = r#"[{"destination":"devbox"},{"destination":"me@10.0.0.5","command":"~/bin/cornercase"}]"#;
+    std::fs::write(session.dir.join("machines.json"), written).expect("a list written by hand");
+
+    let out = ran(&session, &["remote", "--known"], Some("devbox"));
+
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "devbox\nme@10.0.0.5  --command ~/bin/cornercase\n");
 }
 
 #[test]

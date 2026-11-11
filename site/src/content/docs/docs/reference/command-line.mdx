@@ -10,6 +10,7 @@ description: The cornercase command, its subcommands and the messages it can sto
 ```sh
 cornercase              # open the UI, starting the server if needed
 cornercase remote HOST  # open the UI on the server of another machine, over ssh
+cornercase remote --known  # list the machines a window here reached, for a program
 cornercase --remote HOST status  # a command for scripts, on the server of another machine
 cornercase update       # install the latest release and restart the server
 cornercase restart      # restart the server; the session comes back with new shells, agents resume
@@ -54,9 +55,12 @@ Opens the window on the server of another machine, through your own `ssh` (when 
 cornercase remote devbox                                  # a host from ~/.ssh/config, or user@host
 cornercase remote devbox --command '~/tools/cornercase'   # where cornercase is on that machine
 cornercase remote winbox --command 'C:\tools\cornercase.exe'   # on a Windows machine, its path
+cornercase remote --known --json                          # the machines a window here reached
 ```
 
 It runs `ssh devbox cornercase proxy`, which starts the server there if none is running. On a Windows machine it runs it through cmd or PowerShell, whichever that machine's OpenSSH Server uses, after finding out which on the first connection ([A Windows machine at the other end](../../guides/remote/#a-windows-machine-at-the-other-end)). If the connection drops, the window stays, says `reconnecting to devbox…` and tries again by itself; `Esc` or its ` quit ` gives up. Both machines need the same version: when they differ it says which one to update, and offers to update the other machine through `ssh` when that one is older. [Remote machines](../../guides/remote/) explains it all.
+
+`--known` opens no window: it prints the machines a window on this computer reached, as the [machine button](../../guides/remote/#switch-machines-from-the-window) lists them, with no server or `ssh`.
 
 ### `--remote`
 
