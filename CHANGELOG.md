@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.42
+
+- **Programs that draw cornercase can offer only what each agent can do.** `cornercase config --json` (and the `config` request) now lists `agents`: every agent the default agent setting can name, with its title, whether cornercase reads its status (`reads_status`: a routine can remove its workspace when it finishes only for those), whether a flow can run it (`flows`), and the models and efforts the flow editor offers for it. A form can grey the routine's cleanup box and offer a flow role's agents, models and efforts as the window does, instead of learning from a refusal. `cornercase contract` lists the feature `config-agents`.
+
 ## 0.13.41
 
 - **Log an account in again from the command line.** Logins expire, and `cornercase account list --check` said `signed out` with no way back but typing the login yourself in a tab of that account. `cornercase account login claude work` opens the tab that `account add --login` opens, `work login`, running `claude auth login` with that account (`codex login` for Codex), and `--system` does it for the agent's own login. It takes `--workspace`, `--focus` and `--json`, refuses an account that does not exist, and refuses Gemini CLI, which has no login command, saying how to sign in instead. Through `--remote` it opens the tab on that machine.
