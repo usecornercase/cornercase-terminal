@@ -726,6 +726,7 @@ mod flow_end;
 mod flow_panel;
 mod flow_runs;
 mod flows_dialog;
+mod fresh_dialogs;
 mod issue_account;
 mod issue_asana;
 mod issue_list;

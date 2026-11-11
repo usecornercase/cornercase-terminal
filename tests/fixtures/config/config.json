@@ -5,6 +5,7 @@
   "merged_pull_requests": false,
   "shared_files": true,
   "issue_branch": "feat/{key}-{slug}",
+  "fresh_branches": true,
   "issue_tabs": [
     "shortcut",
     "github",

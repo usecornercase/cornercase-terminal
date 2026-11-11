@@ -159,6 +159,7 @@ fn queue_add(add: QueueAdd, new: bool) -> Result<control::QueueAdd> {
         repeat: add.every,
         flow: add.flow,
         cleanup,
+        fresh: super::fresh(&add.fresh)?,
     })
 }
 

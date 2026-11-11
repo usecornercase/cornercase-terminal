@@ -4,7 +4,7 @@ use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Args};
 
 use super::{Print, ViewArg, accounts, branch, machine};
-use crate::cli::help::{BY_BRANCH, HERE_PANE, HERE_WORKSPACE};
+use crate::cli::help::{BY_BRANCH, FRESH_HELP, HERE_PANE, HERE_WORKSPACE, NO_FRESH_HELP};
 
 #[derive(Debug, Args)]
 pub(crate) struct Create {
@@ -14,6 +14,24 @@ pub(crate) struct Create {
     pub(crate) view: ViewArg,
     #[command(flatten)]
     pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FreshArg {
+    #[arg(long, help = FRESH_HELP)]
+    pub(crate) fresh: bool,
+    #[arg(long, conflicts_with = "fresh", help = NO_FRESH_HELP)]
+    pub(crate) no_fresh: bool,
+}
+
+impl FreshArg {
+    pub(crate) fn asked(&self) -> Option<bool> {
+        match (self.fresh, self.no_fresh) {
+            (true, _) => Some(true),
+            (_, true) => Some(false),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Args)]
@@ -74,6 +92,7 @@ pub(crate) struct CloneArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).requires("worktree")))]
 pub(crate) struct NewWorkspaceArgs {
     #[arg(value_name = "NAME", help = "Its name, or its branch with --worktree")]
     pub(crate) name: String,
@@ -81,6 +100,8 @@ pub(crate) struct NewWorkspaceArgs {
     pub(crate) project: Option<u64>,
     #[arg(long, help = "Check the branch out in a git worktree of its own, at a repository's root only")]
     pub(crate) worktree: bool,
+    #[command(flatten)]
+    pub(crate) fresh: FreshArg,
     #[command(flatten)]
     pub(crate) on: machine::MachineArg,
     #[command(flatten)]

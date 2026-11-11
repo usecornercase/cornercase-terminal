@@ -3410,6 +3410,7 @@ export class App {
       return [
         { id: 'folder', section: '', label: 'worktrees folder', value: c.worktreesDir, note: 'new worktrees go in <folder>/<repo>/<branch>' },
         { id: 'branches', section: '', label: 'issue branches', value: 'per tracker', note: 'empty: issue-482-…, 482-… on GitLab, sc-482-…, ENG-482-…' },
+        { id: 'fresh', section: '', label: 'new branches', value: c.freshBranches ? '[x] from the default branch, fetched' : "[ ] from the project's HEAD", note: c.freshBranches ? 'a failed fetch stops the start' : 'on: the default branch, fetched first' },
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
         { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh or glab" },
         { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
@@ -3560,7 +3561,10 @@ export class App {
     o.notice = undefined;
     if (row.id === 'folder') o.edit = { row: row.id, label: 'worktrees folder', input: c.worktreesDir, token: false };
     else if (row.id === 'fetch') o.edit = { row: row.id, label: 'fetch branches every (minutes, 0 turns it off)', input: String(c.fetchMinutes), token: false };
-    else if (row.id === 'submit') {
+    else if (row.id === 'fresh') {
+      c.freshBranches = !c.freshBranches;
+      o.notice = c.freshBranches ? 'new branches start from the default branch, fetched first' : "new branches start from the project's HEAD";
+    } else if (row.id === 'submit') {
       c.submit = !c.submit;
       o.notice = c.submit ? 'the prompt is sent for you' : 'the prompt is typed; you press Enter';
     } else if (row.id === 'trust') {

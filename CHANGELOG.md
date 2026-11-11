@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.37
+
+- **New branches can start from the up-to-date default branch.** A worktree's new branch started from the commit your project's own folder was on, which is often behind when you work only in worktrees, so an agent or a flow started on an issue could work on old code without a word. Turn on **settings → Worktrees → new branches** and every new branch (the New workspace dialog, an issue's start, a flow, a queued start) starts from the project's default branch, fetched from its remote first, as a routine's runs already do. If the fetch fails (offline, a login), the start fails and says why, and nothing is made. A branch that already exists is checked out as before, without fetching.
+- **`--fresh` and `--no-fresh`** on `cornercase start`, `new-workspace`, `flow run` and `queue add`/`edit` choose it for one start, whatever the setting says (`fresh` over the socket, `fresh_branches` in `cornercase config`), and `cornercase contract` lists the feature `fresh-branches`. `flow run --help` now says what a run's branch starts from.
+
 ## 0.13.36
 
 - **The Recap reads at a glance.** `now` starts with **Needs you**, then **In progress**, then **Done today**, one short line per item and the empty sections left out. `yesterday` is a stand-up of at most a dozen lines, one per line of work rather than per conversation, and `7 days` gives two or three themes per project, its merged pull requests and what is still open. Prompts are no longer quoted in full: the recap says what was asked in a few words, and quotes one only when a few words say it best.
