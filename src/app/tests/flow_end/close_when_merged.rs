@@ -33,10 +33,24 @@ fn a_merged_run_with_nothing_at_work_closes_its_agents_after_three_minutes() {
     let run = repo.app.runs.all()[0].id;
     let path = repo.app.projects[0].workspaces[1].path.clone();
 
+    let plan = repo.app.agents_close_plan(id).expect("a plan");
+    let orchestrator = repo.app.runs.all()[0].pane_of(ORCHESTRATOR).expect("the orchestrator");
+    repo.app.clients.events.subscribe(1, Vec::new(), false, true);
+    repo.app.clients.events.subscribe(2, vec![orchestrator], false, true);
+    repo.app.clients.events.subscribe(3, Vec::new(), false, false);
+    let _ = repo.app.take_events();
+
     repo.app.close_merged_runs(t0);
     assert_eq!(repo.app.runs.all().len(), 1);
     repo.app.close_merged_runs(t0 + MERGED_GRACE);
 
+    let said = repo.app.messages.toast.as_ref().expect("a toast").message.clone();
+    let events = repo.app.take_events();
+    let ids = crate::control::Ids { project: Some(repo.app.projects[0].id), workspace: Some(id), ..Default::default() };
+    let told = vec![("flow-merged".to_string(), said, plan.agents.clone(), ids)];
+    assert_eq!((messages(&events, 1), messages(&events, 2)), (told.clone(), told));
+    let silent = messages(&events, 3);
+    assert!(silent.is_empty(), "{silent:?}");
     assert!(repo.app.runs.all().is_empty() && repo.app.agents.closed.has_run(id));
     let runs = repo.app.flow_runs_state().runs;
     assert_eq!((runs.len(), runs[0].run, runs[0].state.as_deref()), (1, run, Some("closed")));
@@ -46,6 +60,20 @@ fn a_merged_run_with_nothing_at_work_closes_its_agents_after_three_minutes() {
     assert_eq!(toast.view().button, Some(ui::ToastButton::Reopen));
     pump_until(&mut repo.app, &repo.rx, "the tabs go", |a| a.projects[0].workspaces[1].tabs.is_empty());
     assert!(path.is_dir());
+}
+
+#[test]
+fn closing_a_run_by_hand_tells_programs_nothing() {
+    let mut repo = opted(End::PullRequest);
+    repo.app.clients.events.subscribe(1, Vec::new(), false, true);
+    let plan = repo.app.agents_close_plan(workspace_id(&repo.app)).expect("a plan");
+    let _ = repo.app.take_events();
+
+    repo.app.close_agents_with_toast(&plan);
+
+    let told = messages(&repo.app.take_events(), 1);
+    assert!(told.is_empty(), "{told:?}");
+    assert!(repo.app.messages.toast.is_some());
 }
 
 #[test]

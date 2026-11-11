@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::commands::{Followed, new_tab};
+use super::commands::{Followed, new_tab, told};
 use super::*;
 
 pub(super) fn size_of(session: &Session, pane: &str, when: &str) -> String {
@@ -126,4 +126,58 @@ fn a_flow_run_focused_in_a_view_moves_the_view_and_not_the_window() {
     assert_eq!(inside["view"]["shown"]["tab"], run["members"][0]["tab"], "{inside}");
     assert_eq!(inside["view"]["projection"], run["projection"], "{inside}");
     assert_eq!(session.report().shown, window, "the window kept showing what it showed");
+}
+
+fn is_message(line: &Value) -> bool {
+    line["event"] == "message"
+}
+
+#[test]
+fn notify_reaches_a_program_with_no_window() {
+    let session = Session::new();
+    let started = session.cold(&["start-server"]);
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    let mut all = session.spawn(&["events", "--notices", "--json"]);
+    session.wait_for_file("server.log", "it follows", |log| log.matches("command=events").count() == 1);
+    let mut heard = Followed::of(&mut all);
+
+    session.says(&["notify", "the", "release", "build", "is", "ready"]);
+
+    heard.until("the message", is_message);
+    let message = heard.seen.iter().find(|line| is_message(line)).expect("a message");
+    assert_eq!(
+        (&message["kind"], &message["message"], &message["panes"]),
+        (&json!("notify"), &json!("the release build is ready"), &json!([]))
+    );
+    assert!(message.get("project").is_none() && message.get("workspace").is_none(), "{message}");
+    session.says(&["notify", "again"]);
+    heard.until("the second message", |line| is_message(line) && line["message"] == "again");
+}
+
+#[test]
+fn notify_names_the_pane_it_ran_in_and_reaches_that_panes_reader() {
+    let app = Harness::start();
+    let pane = panes(app.session.report()).next().expect("a pane").id.to_string();
+    let mut all = app.session.spawn(&["events", "--notices", "--json"]);
+    let mut one = app.session.spawn(&["events", "--pane", &pane, "--notices", "--json"]);
+    let mut plain = app.session.spawn(&["events", "--json"]);
+    app.session.wait_for_file("server.log", "all follow", |log| log.matches("command=events").count() == 3);
+    let (mut heard, mut pane_told, mut silent) =
+        (Followed::of(&mut all), Followed::of(&mut one), Followed::of(&mut plain));
+
+    app.session.says(&["notify", "from", "nowhere"]);
+    heard.until("the message from outside", |line| is_message(line) && line["message"] == "from nowhere");
+    let command = format!("{} notify from-the-pane", bin());
+    app.session.says(&["send", "--pane", &pane, "--enter", &command]);
+
+    pane_told.until("the pane's message", is_message);
+    heard.until("the pane's message", |line| is_message(line) && line["message"] == "from-the-pane");
+    let heard = heard.seen.iter().rfind(|line| is_message(line)).expect("a message");
+    assert_eq!(heard["panes"], json!([pane.parse::<u64>().expect("a pane id")]));
+    assert!(heard.get("workspace").is_some() && heard.get("pane").is_none(), "{heard}");
+    let own: Vec<_> = pane_told.seen.iter().filter(|line| is_message(line)).collect();
+    assert_eq!(own.len(), 1, "{own:?}");
+    app.session.says(&["close", "--pane", &pane]);
+    silent.until("the pane closes", |line| told(line, "closed", "kind", "pane", &pane));
+    assert!(silent.seen.iter().all(|line| !is_message(line)), "{:?}", silent.seen);
 }

@@ -188,7 +188,7 @@ fn forward_lines(out: std::process::ChildStdout, tx: &std::sync::mpsc::Sender<St
     }
 }
 
-fn told(event: &serde_json::Value, what: &str, key: &str, value: &str, pane: &str) -> bool {
+pub(super) fn told(event: &serde_json::Value, what: &str, key: &str, value: &str, pane: &str) -> bool {
     event["event"] == what && event[key] == value && event["pane"].as_u64() == pane.parse().ok()
 }
 

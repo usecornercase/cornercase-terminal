@@ -65,6 +65,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "held-after-draft",
     "flow-close-when-merged",
     "fresh-branches",
+    "notice-messages",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

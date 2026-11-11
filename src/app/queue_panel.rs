@@ -7,6 +7,7 @@ use ratatui::style::Color;
 use serde_json::Value;
 
 use super::App;
+use super::notifications::{Message, MessageKind};
 use super::overlay::Overlay;
 use super::toast::{Toast, Undo};
 use crate::agents::launch;
@@ -232,11 +233,14 @@ impl App {
         let Some(id) = self.panels.queued.finish(client) else { return false };
         match reply {
             Ok(value) => {
-                let pane = value.get("pane").or_else(|| value.pointer("/members/0/pane"));
-                self.panels.queued.started(id, pane.and_then(Value::as_u64).unwrap_or_default());
+                let pane = value.get("pane").or_else(|| value.pointer("/members/0/pane")).and_then(Value::as_u64);
+                self.panels.queued.started(id, pane.unwrap_or_default());
                 self.record_run_workspace(id, value);
-                let name = self.queued_name(id);
-                self.queue_notice(&format!("started {name}"), ui::ToastIcon::Check);
+                let text = format!("started {}", self.queued_name(id));
+                let workspace = value.get("workspace").and_then(Value::as_u64);
+                let said =
+                    Message { kind: MessageKind::QueueStarted, text, workspace, panes: pane.into_iter().collect() };
+                self.queue_notice(said, ui::ToastIcon::Check);
             }
             Err(reason) => self.fail_queued(id, reason),
         }
@@ -249,7 +253,8 @@ impl App {
             Some(entry) => format!("routine {} failed: {reason}", entry.task.label),
             None => format!("queued agent {id} failed: {reason}"),
         };
-        self.queue_notice(&text, ui::ToastIcon::Bug);
+        let said = Message { kind: MessageKind::QueueFailed, text, workspace: None, panes: Vec::new() };
+        self.queue_notice(said, ui::ToastIcon::Bug);
     }
 
     fn queued_name(&self, id: u64) -> String {
@@ -278,7 +283,8 @@ impl App {
             queue::clock::display(run.task.at, zone),
             queue::clock::display(routine.task.at, zone)
         );
-        self.queue_notice(&text, ui::ToastIcon::Bug);
+        let said = Message { kind: MessageKind::QueueMissed, text, workspace: None, panes: Vec::new() };
+        self.queue_notice(said, ui::ToastIcon::Bug);
     }
 
     fn queue_removed(&mut self, message: String, removed: Vec<queue::Entry>) {
@@ -288,10 +294,11 @@ impl App {
         }
     }
 
-    fn queue_notice(&mut self, message: &str, icon: ui::ToastIcon) {
-        self.messages.toast = Some(Toast::new(message, icon));
-        self.outbox.notify(Notification::new(message, &self.config.desktop_notifications));
-        self.announce(message);
+    pub(super) fn queue_notice(&mut self, said: Message, icon: ui::ToastIcon) {
+        self.messages.toast = Some(Toast::new(&said.text, icon));
+        self.outbox.notify(Notification::new(&said.text, &self.config.desktop_notifications));
+        self.announce(&said.text);
+        self.publish_message(said);
     }
 
     pub(super) fn queue_prepared(&mut self, event: QueueEvent) {

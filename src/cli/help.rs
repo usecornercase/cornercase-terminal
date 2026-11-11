@@ -216,7 +216,8 @@ Examples:
   cornercase go cc-3f2a9c-4 --view 41";
 pub(super) const NOTIFY_HELP: &str =
     "The desktop notification goes through the terminal of every open window, like the one for an
-agent that needs you.
+agent that needs you. A program that follows `cornercase events --notices` gets it too, as a message
+of kind notify that names the pane the command ran in.
 
 Examples:
   cornercase notify the release build is ready";
@@ -300,6 +301,14 @@ in a view), and with --json its token, agent, status, place, message and panes:
 An agent on a linked machine tells its notices too, with the machine's name and without ids here:
   machine vps  notice  claude on vps needs you in shop › main  cc-3f2a9c-5
 `cornercase go TOKEN` then does what a click on that notification does.
+The server's other notices come with --notices too, as the window's toast says them, with a kind and
+no token: notify (`cornercase notify`, naming the pane it ran in), queue-started, queue-failed,
+queue-missed and queue-kept (a queued agent or routine run; a one-off entry that missed its time sends
+none), setup-failed (only while nobody looks at its tab), flow-consent (a flow's member waits for your
+consent) and flow-merged (a run's agents closed once its pull request merged). With --json they have
+kind, message, panes and the workspace's ids, which queue-failed and queue-missed leave out:
+  notify  the release build is ready
+  workspace 2  flow-merged  pull request merged in fix-login: 3 agents closed · ▶ on the workspace reopens them
 With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
   pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json
   pane 7  bell  3 times               it rang the bell: one line a second per pane, with how many rang

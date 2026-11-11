@@ -548,6 +548,7 @@ fn hook_name(event: &control::Event) -> Option<&'static str> {
         | control::What::Clipboard { .. }
         | control::What::Bell { .. }
         | control::What::Notice { .. }
+        | control::What::Message { .. }
         | control::What::Recap { .. } => None,
     }
 }

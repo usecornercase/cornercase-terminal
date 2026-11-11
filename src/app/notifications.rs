@@ -90,6 +90,40 @@ pub(super) struct Said<'a> {
     pub(super) subagent: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum MessageKind {
+    Notify,
+    QueueStarted,
+    QueueFailed,
+    QueueMissed,
+    QueueKept,
+    SetupFailed,
+    FlowConsent,
+    FlowMerged,
+}
+
+impl MessageKind {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Notify => "notify",
+            Self::QueueStarted => "queue-started",
+            Self::QueueFailed => "queue-failed",
+            Self::QueueMissed => "queue-missed",
+            Self::QueueKept => "queue-kept",
+            Self::SetupFailed => "setup-failed",
+            Self::FlowConsent => "flow-consent",
+            Self::FlowMerged => "flow-merged",
+        }
+    }
+}
+
+pub(in crate::app) struct Message {
+    pub(in crate::app) kind: MessageKind,
+    pub(in crate::app) text: String,
+    pub(in crate::app) workspace: Option<u64>,
+    pub(in crate::app) panes: Vec<u64>,
+}
+
 pub(super) fn wording(status: Status) -> (&'static str, sound::Kind) {
     match status {
         Status::Waiting => ("needs you", sound::Kind::NeedsYou),
@@ -128,6 +162,18 @@ impl App {
         self.messages.notices.sent.push_back(notice);
         self.messages.toast = Some(toast);
         self.clients.events.publish(&[event]);
+    }
+
+    pub(in crate::app) fn publish_message(&mut self, said: Message) {
+        let from_pane = || {
+            said.panes.iter().find_map(|pane| self.projects.tab_of_pane(*pane)).map(crate::project::TabAt::workspace)
+        };
+        let at = said.workspace.and_then(|id| self.projects.workspace_index(id)).or_else(from_pane);
+        let ids = at.map(|at| self.ids_of_workspace(at)).unwrap_or_default();
+        let what =
+            What::Message { kind: said.kind.id().to_string(), message: notify::clean(&said.text), panes: said.panes };
+        let time = crate::time::Stamp(std::time::SystemTime::now()).to_string();
+        self.clients.events.publish(&[Event { time, what, ids }]);
     }
 
     fn alert_windows(&mut self, message: &str, token: &str) {

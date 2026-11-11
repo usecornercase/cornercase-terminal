@@ -146,16 +146,48 @@ mod starts {
     #[test]
     fn reports_a_missing_agent_and_does_not_retry_it_every_tick() {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        app.clients.events.subscribe(9, Vec::new(), false, true);
         let at = time::now() + 3600;
         let mut task = task(&app, at, None);
         task.program = "/nonexistent/queued-agent".into();
         let id = app.panels.queued.schedule(None, task).expect("add");
         app.refresh_at(Instant::now(), at);
+        let told = messages(&app.take_events(), 9);
+        assert_eq!(told.len(), 1, "{told:?}");
+        let (kind, message, panes, ids) = &told[0];
+        assert_eq!((kind.as_str(), panes, ids), ("queue-failed", &Vec::new(), &crate::control::Ids::default()));
+        assert!(message.starts_with(&format!("queued agent {id} failed")), "{message}");
         assert!(
             matches!(&app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Failed { reason } if reason.contains("not installed"))
         );
         app.refresh_at(Instant::now(), at + 1);
         assert!(app.agents.launches.list().is_empty());
+    }
+
+    #[test]
+    fn an_entry_that_starts_is_told_with_its_pane_and_workspace() {
+        let (mut app, rx, _repo, _config, _worktrees) = queued_app();
+        app.clients.events.subscribe(9, Vec::new(), false, true);
+        let id = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
+        app.run_queued(id, Instant::now()).expect("start now");
+        refreshing(&mut app, &rx, "started now", |app| {
+            matches!(app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Started { .. })
+        });
+        let QueueState::Started { pane, .. } = app.panels.queued.queue().entry(id).expect("entry").state.clone() else {
+            panic!("started")
+        };
+
+        let workspace =
+            app.projects[0].workspaces.iter().find(|w| w.terms().any(|t| t.id == pane)).expect("its workspace");
+        let ids = crate::control::Ids {
+            project: Some(app.projects[0].id),
+            workspace: Some(workspace.id),
+            ..Default::default()
+        };
+        let started: Vec<_> =
+            messages(&app.take_events(), 9).into_iter().filter(|(kind, ..)| kind == "queue-started").collect();
+        assert_eq!(started.len(), 1, "{started:?}");
+        assert_eq!((&started[0].2, &started[0].3), (&vec![pane], &ids));
     }
 
     #[test]

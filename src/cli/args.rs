@@ -696,7 +696,7 @@ pub(crate) struct EventsArgs {
     pub(crate) host: bool,
     #[arg(
         long,
-        help = "Also print each notice about an agent that needs you, failed or finished, with its token for `cornercase go`"
+        help = "Also print each notice about an agent that needs you, failed or finished, with its token for `cornercase go`, and the server's other notices (notify, the queue, a failed setup, a flow)"
     )]
     pub(crate) notices: bool,
     #[arg(long, help = "Print one JSON object per line instead of text")]

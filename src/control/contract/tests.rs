@@ -56,6 +56,7 @@ mod describing {
             "held-after-draft",
             "flow-close-when-merged",
             "fresh-branches",
+            "notice-messages",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();

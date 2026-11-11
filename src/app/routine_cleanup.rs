@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use super::App;
 use super::event::AppEvent;
-use super::toast::Toast;
+use super::notifications::{Message, MessageKind};
 use super::worktrees::RemoveOptions;
 use crate::agents::activity::Status;
 use crate::git;
@@ -205,6 +205,7 @@ impl App {
         let State::Started { pane, server } = entry.state.clone() else { return };
         let label = entry.task.label.clone();
         let place = entry.task.place.clone();
+        let id = place.workspace_id;
         let workspace = place
             .workspace_id
             .and_then(|id| self.projects.workspace_by(id))
@@ -212,11 +213,10 @@ impl App {
             .or(place.workspace_name)
             .or(place.branch)
             .unwrap_or_default();
+        let panes = (server == control::server_token()).then_some(pane).into_iter().collect();
         self.panels.queued.set_state(run, State::Kept { pane, server, reason: reason.to_string() });
         let text = format!("routine {label} left changes in {workspace}: {reason}");
-        self.messages.toast = Some(Toast::new(&text, ui::ToastIcon::Bug));
-        self.outbox.notify(crate::host::notify::Notification::new(&text, &self.config.desktop_notifications));
-        self.announce(&text);
+        self.queue_notice(Message { kind: MessageKind::QueueKept, text, workspace: id, panes }, ui::ToastIcon::Bug);
         self.sync_queued();
     }
 }
