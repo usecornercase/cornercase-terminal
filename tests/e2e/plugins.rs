@@ -1,6 +1,8 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
+use super::machines::{VPS, reach};
+use super::remote::{fake_ssh_to, ssh_runs};
 use super::*;
 
 const MANIFEST: &str = r#"id = "acme.e2e"
@@ -31,11 +33,16 @@ command = ["/bin/sh", "-c", "exit 3"]
 
 fn plugin_folder(name: &str) -> PathBuf {
     let dir = temp_dir_named(name);
+    fill_plugin(&dir);
+    dir
+}
+
+fn fill_plugin(dir: &Path) {
+    std::fs::create_dir_all(dir).expect("plugin folder");
     std::fs::write(dir.join("cornercase-plugin.toml"), MANIFEST).expect("manifest");
     let run = dir.join("run");
     std::fs::write(&run, "#!/bin/sh\necho $$ > \"$CORNERCASE_PLUGIN_STATE/$1\"\nexec sleep 60\n").expect("script");
     std::fs::set_permissions(&run, std::fs::Permissions::from_mode(0o755)).expect("executable");
-    dir
 }
 
 fn pid_in(path: &Path) -> Option<i32> {
@@ -148,10 +155,13 @@ fn release(work: &Path, folder: &Path, repo: &str, version: &str) {
     git(work, &["push", "--quiet", repo, "HEAD:main"]);
 }
 
-fn previewed(session: &Session, args: &[&str]) -> serde_json::Value {
-    let out = session.cli(args);
+fn json_of(out: &std::process::Output) -> serde_json::Value {
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     serde_json::from_slice(&out.stdout).expect("one JSON object on standard output")
+}
+
+fn previewed(session: &Session, args: &[&str]) -> serde_json::Value {
+    json_of(&session.cli(args))
 }
 
 fn assert_install_asks_first(session: &Session, plugin: &str) {
@@ -399,4 +409,94 @@ fn stopping_the_server_answers_a_run_waiting_on_its_popup() {
     let said = String::from_utf8_lossy(&ran.stdout);
     assert!(said.starts_with("ran acme.popup ask: the popup was closed"), "{ran:?}");
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+mod on_another_machine {
+    use super::*;
+
+    fn on_vps(here: &Session, machine: &Session, args: &[&str]) -> std::process::Output {
+        vps_command(here, machine, true).args(args).output().expect("run cornercase")
+    }
+
+    fn vps_command(here: &Session, machine: &Session, flag: bool) -> std::process::Command {
+        let home = machine.dir.join("home");
+        let there = format!("env -u {REMOTE_ENV} {} HOME={}", reach(machine), home.display());
+        let mut cmd = here.cold_command();
+        cmd.env("PATH", fake_ssh_to(&here.dir, &[(VPS, &there)]));
+        if flag {
+            cmd.args(["--remote", VPS]);
+        } else {
+            cmd.env(REMOTE_ENV, VPS);
+        }
+        cmd
+    }
+
+    fn said(out: &std::process::Output) -> String {
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        String::from_utf8_lossy(&out.stdout).trim_end().to_string()
+    }
+
+    fn assert_linked_there(here: &Session, machine: &Session) {
+        let folder = machine.dir.join("home/my-plugin");
+        fill_plugin(&folder);
+
+        let linked = said(&on_vps(here, machine, &["plugin", "link", "~/my-plugin"]));
+        assert!(linked.starts_with("linked E2E 0.1.0 (acme.e2e), turned off"), "{linked}");
+        let listed = json_of(&machine.cli(&["plugin", "list", "--json"]));
+        let linked_path = std::fs::canonicalize(&folder).expect("the folder");
+        assert_eq!(listed["plugins"][0]["source"]["path"], linked_path.display().to_string());
+        assert!(here.says(&["plugin", "list"]).starts_with("no plugins"));
+    }
+
+    fn assert_read_there(here: &Session, machine: &Session) {
+        assert!(said(&on_vps(here, machine, &["plugin", "enable", "acme.e2e"])).contains("runs as you"));
+        let by_variable = vps_command(here, machine, false).args(["plugin", "list", "--json"]).output();
+        assert_eq!(json_of(&by_variable.expect("run cornercase"))["plugins"][0]["enabled"], true);
+        let path = said(&on_vps(here, machine, &["plugin", "logs", "acme.e2e", "--path"]));
+        assert_eq!(path, machine.says(&["plugin", "logs", "acme.e2e", "--path"]));
+        let log = on_vps(here, machine, &["plugin", "logs", "acme.e2e"]);
+        assert!(refused(&log, 1, "no log yet"), "{log:?}");
+    }
+
+    #[test]
+    fn a_folder_of_the_other_machine_is_linked_turned_on_and_read_there() {
+        let (here, machine) = (Session::new(), Session::new());
+        assert_linked_there(&here, &machine);
+        assert_read_there(&here, &machine);
+
+        said(&on_vps(&here, &machine, &["plugin", "disable", "acme.e2e"]));
+        said(&on_vps(&here, &machine, &["plugin", "unlink", "acme.e2e"]));
+        assert!(machine.says(&["plugin", "list"]).starts_with("no plugins"));
+        let runs = ssh_runs(&here);
+        let relative = on_vps(&here, &machine, &["plugin", "link", "my-plugin"]);
+        assert!(refused(&relative, 2, "with --remote, give its absolute path on vps"), "{relative:?}");
+        assert_eq!(ssh_runs(&here), runs, "ssh never ran");
+    }
+
+    #[test]
+    fn a_program_installs_a_plugin_on_the_other_machine_after_its_preview() {
+        let (here, machine) = (Session::new(), Session::new());
+        let base = temp_dir_named(&format!("ccremoteinstall-{}", std::process::id()));
+        let (work, folder, repo) = plugin_repository(&base);
+        let spec = format!("{repo}//plugins/e2e");
+
+        let shown = json_of(&on_vps(&here, &machine, &["plugin", "install", &spec, "--preview", "--json"]));
+        assert_eq!(
+            (&shown["id"], &shown["subdir"], &shown["replacing"]),
+            (&"acme.e2e".into(), &"plugins/e2e".into(), &serde_json::Value::Null)
+        );
+        let commit = shown["commit"].as_str().expect("a commit");
+        let installed = said(&on_vps(&here, &machine, &["plugin", "install", &spec, "--commit", commit, "--yes"]));
+        assert!(installed.contains("installed E2E 0.1.0 (acme.e2e), turned off"), "{installed}");
+        assert!(machine.says(&["plugin", "list"]).starts_with("acme.e2e  0.1.0  off"));
+        assert!(here.says(&["plugin", "list"]).starts_with("no plugins"));
+
+        release(&work, &folder, &repo, "0.2.0");
+        let newer = json_of(&on_vps(&here, &machine, &["plugin", "update", "acme.e2e", "--preview", "--json"]));
+        assert_eq!((&newer["up_to_date"], &newer["version"]), (&false.into(), &"0.2.0".into()));
+        let removed = said(&on_vps(&here, &machine, &["plugin", "remove", "acme.e2e"]));
+        assert!(removed.starts_with("removed acme.e2e"), "{removed}");
+        assert!(!machine.dir.join("plugins/installed/acme.e2e").exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }

@@ -7,7 +7,7 @@ use serde_json::json;
 
 use super::args::PluginAction;
 use super::args::plugin::{InstallArgs, RunArgs, UpdatePluginArgs};
-use super::print_log;
+use super::{home, print_log, reach};
 use crate::client::{answer, ask, confirm, use_plugin_run_view, use_view};
 use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
@@ -20,6 +20,7 @@ use crate::plugins::registry::{missing, short};
 use crate::plugins::source::{Origin, folder_on_this_computer};
 use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
+use crate::remote::Remote;
 
 mod windows;
 
@@ -62,7 +63,7 @@ fn run_here(action: PluginAction) -> Result<bool> {
 }
 
 fn link(registry: &mut Registry, folder: &Path) -> Result<()> {
-    let (manifest, enabled) = registry.link(folder).map_err(Error::Plugin)?;
+    let (manifest, enabled) = registry.link(&in_home(folder, home().as_deref())).map_err(Error::Plugin)?;
     registry.save()?;
     if enabled {
         println!("linked {} {} ({}), still on", manifest.name, manifest.version, manifest.id);
@@ -317,25 +318,42 @@ fn same_commit(found: &str, wanted: Option<&str>, what: &str, kept: &str) -> Res
 }
 
 fn folder_spec(spec: &str) -> Result<String> {
-    let home = std::env::var_os(paths::HOME_VAR).map(PathBuf::from);
-    folder_spec_from(spec, home.as_deref())
+    folder_spec_from(spec, home().as_deref())
+}
+
+fn folder_part(spec: &str) -> (&str, &str) {
+    let place = spec.split_once('@').map_or(spec, |(place, _)| place);
+    spec.split_at(place.find("//").unwrap_or(place.len()))
 }
 
 fn folder_spec_from(spec: &str, home: Option<&Path>) -> Result<String> {
     if !names_a_folder(spec) || reaches_network(spec) {
         return Ok(spec.to_string());
     }
-    let (place, at) = match spec.split_once('@') {
-        Some((place, at)) => (place, format!("@{at}")),
-        None => (spec, String::new()),
-    };
-    let (folder, subdir) = match place.split_once("//") {
-        Some((folder, subdir)) => (folder, format!("//{subdir}")),
-        None => (place, String::new()),
-    };
+    let (folder, rest) = folder_part(spec);
     let folder = absolute(config::expand_home(&home_with_a_slash(folder), home));
     folder_on_this_computer(&folder).map_err(Error::Plugin)?;
-    Ok(format!("{}{subdir}{at}", canonical(folder).display()))
+    Ok(format!("{}{rest}", canonical(folder).display()))
+}
+
+pub(super) fn source_there(spec: &str, remote: &Remote) -> Result<String> {
+    source_on(spec, &|folder| reach::open_path_on(folder, Some(remote)))
+}
+
+fn source_on(spec: &str, folder_there: &dyn Fn(&Path) -> Result<PathBuf>) -> Result<String> {
+    let a_folder = spec.starts_with(['.', '~', '/']) || reach::windows_path(spec);
+    if !a_folder || spec.starts_with("//") {
+        return Ok(spec.to_string());
+    }
+    let (folder, rest) = folder_part(spec);
+    Ok(format!("{}{rest}", folder_there(Path::new(folder))?.to_string_lossy()))
+}
+
+fn in_home(folder: &Path, home: Option<&Path>) -> PathBuf {
+    match folder.to_str() {
+        Some(text) => config::expand_home(&home_with_a_slash(text), home),
+        None => folder.to_path_buf(),
+    }
 }
 
 fn absolute(folder: PathBuf) -> PathBuf {

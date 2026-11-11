@@ -95,8 +95,8 @@ pub fn run(cli: Cli) -> Result<bool> {
     match (cli.command, remote) {
         (None, None) => client::run()?,
         (None, Some(remote)) => client::remote(&remote)?,
-        (Some(command), Some(remote)) if let Some(args) = reach::there(&command) => {
-            return reach::run_there(&remote, &args);
+        (Some(command), Some(remote)) if let Some(args) = reach::there(&command, &remote) => {
+            return reach::run_there(&remote, &args?);
         }
         (Some(command), remote) => {
             if let Some(remote) = remote {
@@ -727,6 +727,10 @@ fn say(value: Value, json: bool, lines: impl Fn(&Done) -> Vec<String>) -> Result
         print_out(&format!("{line}\n"))?;
     }
     Ok(())
+}
+
+pub(super) fn home() -> Option<PathBuf> {
+    std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from)
 }
 
 pub(super) fn note(text: &str) {

@@ -37,6 +37,12 @@ the running server. `list` still reads the files and works with no server.
 `windows` keeps the plugins' window processes running until it ends, as a window of cornercase does, for a program \
 that draws its own window. See `cornercase plugin windows --help`.
 
+With --remote DESTINATION (or CORNERCASE_REMOTE) every command but `windows` acts on that machine's plugins: \
+`status`, `actions`, `run` and `popup-close` ask its server, the others run there as its own `cornercase plugin` \
+through ssh, with the same output and exit status. A folder given to `link` or `install` is that machine's: \
+absolute, or ~/… for its home folder (quote it so this shell leaves it alone); a relative one is refused. At a \
+terminal, `install` and `update` show their preview and ask there; a program uses --preview --json, then --commit.
+
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
@@ -46,6 +52,8 @@ Examples:
   cornercase plugin install https://git.example.com/acme/tools.git//plugins/notes
   cornercase plugin link ~/code/my-plugin
   cornercase plugin enable my-plugin
+  cornercase --remote devbox plugin link '~/code/my-plugin'
+  cornercase --remote devbox plugin enable my-plugin
   cornercase plugin list
   cornercase plugin status
   cornercase plugin status --json

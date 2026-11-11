@@ -82,7 +82,16 @@ mod reaching {
     #[case::restart(&["restart"])]
     #[case::update(&["update"])]
     #[case::logs(&["logs"])]
-    fn the_lifecycle_commands_go_there(#[case] args: &[&str]) {
+    #[case::plugin_link(&["plugin", "link", "/srv/my-plugin"])]
+    #[case::plugin_install(&["plugin", "install", "acme/notes"])]
+    #[case::plugin_update(&["plugin", "update"])]
+    #[case::plugin_remove(&["plugin", "remove", "acme.notes"])]
+    #[case::plugin_unlink(&["plugin", "unlink", "acme.notes"])]
+    #[case::plugin_enable(&["plugin", "enable", "acme.notes"])]
+    #[case::plugin_disable(&["plugin", "disable", "acme.notes"])]
+    #[case::plugin_list(&["plugin", "list", "--json"])]
+    #[case::plugin_logs(&["plugin", "logs", "acme.notes", "-n", "60"])]
+    fn the_commands_that_run_as_processes_go_there(#[case] args: &[&str]) {
         let mut all = vec!["--remote", "devbox"];
         all.extend(args);
 
@@ -91,15 +100,6 @@ mod reaching {
 
         assert_eq!(flag.map(|remote| remote.destination), Some("devbox".to_string()));
         assert_eq!(variable.map(|remote| remote.destination), Some("devbox".to_string()));
-    }
-
-    #[test]
-    fn the_commands_that_change_plugins_refuse_it() {
-        let error = chosen(&parsed(&["--remote", "devbox", "plugin", "install", "x"]), &nothing).expect_err("refused");
-
-        assert!(matches!(&error, Error::WrongUsage(_)), "{error:?}");
-        let text = error.to_string();
-        assert!(text.contains("plugin") && text.contains("ssh"), "{text}");
     }
 
     #[test]
@@ -118,13 +118,6 @@ mod reaching {
         let error = chosen(&parsed(&["plugin", "windows"]), &set("devbox")).expect_err("refused");
 
         assert!(error.to_string().contains("CORNERCASE_REMOTE=devbox sets: unset it, or run it there"), "{error}");
-    }
-
-    #[test]
-    fn the_variable_is_named_when_it_is_the_cause() {
-        let error = chosen(&parsed(&["plugin", "install", "x"]), &set("devbox")).expect_err("refused");
-
-        assert!(error.to_string().contains("CORNERCASE_REMOTE=devbox"), "{error}");
     }
 
     #[rstest]
@@ -165,8 +158,10 @@ mod reaching {
 mod forwarding {
     use super::*;
 
+    const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
+
     fn there_of(args: &[&str]) -> Vec<String> {
-        there(&parsed(args).command.expect("a command")).expect("goes there")
+        there(&parsed(args).command.expect("a command"), &devbox()).expect("goes there").expect("its words")
     }
 
     #[rstest]
@@ -178,6 +173,25 @@ mod forwarding {
     #[case::logs_follow(&["logs", "-n", "50", "--follow"])]
     #[case::logs_path(&["logs", "--path"])]
     #[case::logs_default(&["logs"])]
+    #[case::plugin_link_from_the_root(&["plugin", "link", "/srv/my-plugin"])]
+    #[case::plugin_link_in_the_home_folder(&["plugin", "link", "~/code/my-plugin"])]
+    #[case::plugin_install(&["plugin", "install", "acme/notes"])]
+    #[case::plugin_install_preview(&["plugin", "install", "acme/notes@v1", "--preview", "--json"])]
+    #[case::plugin_install_a_folder(&["plugin", "install", "/srv/tools.git//plugins/notes@main"])]
+    #[case::plugin_install_the_commit(&[
+        "plugin", "install", "~/code/tools//plugins/notes", "--commit", COMMIT, "--yes",
+    ])]
+    #[case::plugin_update_all(&["plugin", "update", "--yes"])]
+    #[case::plugin_update_preview(&["plugin", "update", "acme.notes", "--preview", "--json"])]
+    #[case::plugin_update_the_commit(&["plugin", "update", "acme.notes", "--commit", COMMIT, "--yes"])]
+    #[case::plugin_remove(&["plugin", "remove", "acme.notes"])]
+    #[case::plugin_unlink(&["plugin", "unlink", "acme.notes"])]
+    #[case::plugin_enable(&["plugin", "enable", "acme.notes"])]
+    #[case::plugin_disable_an_odd_id(&["plugin", "disable", "--", "-odd"])]
+    #[case::plugin_list(&["plugin", "list"])]
+    #[case::plugin_list_json(&["plugin", "list", "--json"])]
+    #[case::plugin_logs_follow(&["plugin", "logs", "acme.notes", "-n", "60", "--follow"])]
+    #[case::plugin_logs_path(&["plugin", "logs", "acme.notes", "--path"])]
     fn what_goes_there_parses_to_the_same_command(#[case] args: &[&str]) {
         let sent = there_of(args);
 
@@ -194,12 +208,63 @@ mod forwarding {
         );
     }
 
+    #[test]
+    fn the_id_goes_last_after_a_double_dash() {
+        assert_eq!(
+            there_of(&["plugin", "logs", "acme.notes", "-n", "60"]),
+            ["plugin", "logs", "--lines", "60", "--", "acme.notes"]
+        );
+    }
+
     #[rstest]
     #[case::status(&["status"])]
-    #[case::plugin_install(&["plugin", "install", "x"])]
+    #[case::plugin_status(&["plugin", "status"])]
+    #[case::plugin_actions(&["plugin", "actions"])]
+    #[case::plugin_run(&["plugin", "run", "acme.notes", "open", "--pane", "5"])]
+    #[case::plugin_popup_close(&["plugin", "popup-close"])]
+    #[case::plugin_windows(&["plugin", "windows"])]
     #[case::start_server(&["start-server"])]
     fn the_others_do_not_run_as_processes(#[case] args: &[&str]) {
-        assert_eq!(there(&parsed(args).command.expect("a command")), None);
+        assert!(there(&parsed(args).command.expect("a command"), &devbox()).is_none());
+    }
+
+    #[rstest]
+    #[case::link(&["plugin", "link", "/x"])]
+    #[case::install(&["plugin", "install", "acme/notes"])]
+    #[case::update(&["plugin", "update"])]
+    #[case::remove(&["plugin", "remove", "a"])]
+    #[case::unlink(&["plugin", "unlink", "a"])]
+    #[case::list(&["plugin", "list"])]
+    #[case::status(&["plugin", "status"])]
+    #[case::actions(&["plugin", "actions"])]
+    #[case::run(&["plugin", "run", "a", "b"])]
+    #[case::popup_close(&["plugin", "popup-close"])]
+    #[case::windows(&["plugin", "windows"])]
+    #[case::enable(&["plugin", "enable", "a"])]
+    #[case::disable(&["plugin", "disable", "a"])]
+    #[case::logs(&["plugin", "logs", "a"])]
+    fn a_plugin_command_runs_there_exactly_when_its_kind_says_so(#[case] args: &[&str]) {
+        let command = parsed(args).command.expect("a command");
+
+        assert_eq!(kind(Some(&command)) == Kind::Run, there(&command, &devbox()).is_some());
+    }
+}
+
+mod plugin_folders {
+    use super::*;
+
+    #[rstest]
+    #[case::link_a_name(&["plugin", "link", "my-plugin"])]
+    #[case::link_from_here(&["plugin", "link", "./my-plugin"])]
+    #[case::install_from_here(&["plugin", "install", "./tools//plugins/notes"])]
+    #[case::install_from_above(&["plugin", "install", "../tools"])]
+    fn a_relative_folder_is_refused_before_anything_runs(#[case] args: &[&str]) {
+        let command = parsed(args).command.expect("a command");
+
+        let refused = there(&command, &devbox()).expect("goes there").expect_err("refused");
+
+        assert!(matches!(&refused, Error::WrongUsage(_)), "{refused:?}");
+        assert!(refused.to_string().contains("absolute path on devbox"), "{refused}");
     }
 }
 

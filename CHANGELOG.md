@@ -4,7 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.42
 
-- **Programs that draw cornercase can offer only what each agent can do.** `cornercase config --json` (and the `config` request) now lists `agents`: every agent the default agent setting can name, with its title, whether cornercase reads its status (`reads_status`: a routine can remove its workspace when it finishes only for those), whether a flow can run it (`flows`), and the models and efforts the flow editor offers for it. A form can grey the routine's cleanup box and offer a flow role's agents, models and efforts as the window does, instead of learning from a refusal. `cornercase contract` lists the feature `config-agents`.
+- **Manage another machine's plugins from here.** `cornercase --remote devbox plugin link`, `unlink`, `install`, `update`, `remove`, `enable`, `disable`, `list` and `logs` now run on that machine, as its own `cornercase plugin` through `ssh`, with the same arguments, output and exit status, instead of refusing `--remote`; `CORNERCASE_REMOTE` sends them there too. A folder you give `plugin link` or `plugin install` is that machine's: absolute, or `~/…` in quotes for its home folder; a relative one is refused. At a terminal, `install` and `update` show their preview and ask there; a program shows it with `--preview --json` and confirms with `--commit SHA --yes`, so another interface can now turn a machine's plugins on and off, install, update and remove them, and read their logs. `plugin windows` still refuses `--remote`, since window processes run on the machine that shows the window.
+- **`plugin link '~/code/my-plugin'` finds the folder in your home folder** even when no shell expanded the `~`, as `open` does.
 
 ## 0.13.41
 
