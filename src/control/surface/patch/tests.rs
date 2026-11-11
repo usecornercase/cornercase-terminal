@@ -261,14 +261,50 @@ fn styled_rows(rows: &[(&str, usize)]) -> Content {
     held
 }
 
+fn wrapping(mut held: Content, rows: &[u16]) -> Content {
+    held.panes[0].wrapped = rows.to_vec();
+    held
+}
+
+#[rstest]
+#[case::starts(&[], &[0], Some(vec![0]))]
+#[case::stops(&[0], &[], Some(vec![]))]
+#[case::moves(&[0], &[1], Some(vec![1]))]
+#[case::stays(&[1], &[1], None)]
+fn wrapped_rows_come_whole_when_they_change(
+    #[case] before: &[u16],
+    #[case] after: &[u16],
+    #[case] expected: Option<Vec<u16>>,
+) {
+    let was = wrapping(one(&["abc", "def"]), before);
+    let now = wrapping(one(&["abc", "def"]), after);
+
+    match expected {
+        Some(_) => {
+            let changed = patch(&was, &now);
+            assert_eq!((changed.wrapped, changed.lines.is_empty()), (expected, true));
+        }
+        None => assert!(changes(&was, &now).is_some_and(|all| all.panes.is_empty())),
+    }
+}
+
+#[test]
+fn unchanged_wraps_are_left_out_and_none_left_is_an_empty_list() {
+    let unchanged = serde_json::to_value(PaneChanges::default()).expect("json");
+    assert!(unchanged.get("wrapped").is_none());
+
+    let cleared = PaneChanges { wrapped: Some(Vec::new()), ..PaneChanges::default() };
+    assert_eq!(serde_json::to_value(cleared).expect("json")["wrapped"], json!([]));
+}
+
 #[test]
 fn applying_a_patch_gives_the_next_frame() {
     let steps = [
         styled_rows(&[("one", 0), ("two", 1), ("three", 2), ("four", 0), ("", 0), ("six", 0)]),
         styled_rows(&[("two", 1), ("three", 2), ("four", 0), ("", 0), ("six", 0), ("seven", 1)]),
-        styled_rows(&[("two", 1), ("three", 2), ("four", 0), ("", 0), ("six", 0), ("seven", 1)]),
-        styled_rows(&[("new", 2), ("two", 1), ("three", 2), ("four", 0), ("", 0), ("six", 0)]),
-        styled_rows(&[("", 0), ("", 0), ("", 0), ("", 0), ("", 0), ("", 0)]),
+        wrapping(styled_rows(&[("two", 1), ("three", 2), ("four", 0), ("", 0), ("six", 0), ("seven", 1)]), &[1, 2]),
+        wrapping(styled_rows(&[("new", 2), ("two", 1), ("three", 2), ("four", 0), ("", 0), ("six", 0)]), &[1, 2]),
+        wrapping(styled_rows(&[("", 0), ("", 0), ("", 0), ("", 0), ("", 0), ("", 0)]), &[3]),
         styled_rows(&[("a", 1), ("", 0), ("c", 2), ("", 0), ("e", 0), ("f", 1)]),
     ];
     let mut client = Mirror::of(&frame(1, steps[0].clone()));
@@ -315,6 +351,8 @@ fn the_patch_fixture_reads_back_as_its_patch() {
     assert_eq!(patch.content.panes[0].lines.keys().copied().collect::<Vec<_>>(), [3, 4]);
     assert_eq!(patch.content.panes[1].cursor, None);
     assert_eq!(patch.content.panes[1].colours, Some(Colours::default()));
+    assert_eq!(patch.content.panes[0].wrapped, Some(vec![1]));
+    assert_eq!(patch.content.panes[1].wrapped, None);
 }
 
 #[test]

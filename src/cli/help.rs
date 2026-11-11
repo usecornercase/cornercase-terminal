@@ -330,8 +330,8 @@ pub(super) const SURFACE_HELP: &str =
 GUI. It keeps running and prints the tab as one JSON object per line: first as it is now, then again
 each time something it shows changes, at most about 60 times a second. Each line is complete and
 replaces the one before. It holds the panes laid out at the given size, each with its place (rect),
-its terminal's own size (size), its cells (with their hyperlinks), the colours its program changed,
-cursor, modes and scroll position, plus the split tree, the dividers, and boot, session and revision.
+its terminal's own size (size), its cells (with their hyperlinks), the colours its program changed, which
+rows go on in the next one (wrapped), cursor, modes and scroll position, plus the split tree, the dividers, and boot, session and revision.
 
 Each line names its stream with `surface`, which `cornercase resize` takes to lay a --tab surface out at
 another size. With --tab the surface resizes no terminal: terminals keep the size of whoever sizes the tab (the
@@ -348,7 +348,7 @@ one pane, its program's terminal, at the popup's own size, with `popup` naming t
 
 With --patches, each line after the first carries only what changed since the line before: `base` is the
 revision it applies to, and each changed pane has its cursor and what changed of the rest (`lines` by
-row number, `copy` for rows that moved). A complete line, without `base`, comes again whenever the layout,
+row number, `copy` for rows that moved, `wrapped` whole). A complete line, without `base`, comes again whenever the layout,
 a size, the panes or the view change, after the reader fell behind, and when `cornercase redraw --surface
 ID` asks for one.
 

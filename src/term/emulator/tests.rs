@@ -468,6 +468,8 @@ mod scrollback;
 
 mod reveal;
 
+mod wraps;
+
 mod driven_selection {
     use super::*;
 

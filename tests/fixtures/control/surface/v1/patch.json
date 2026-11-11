@@ -15,6 +15,7 @@
       "cursor": {"x": 6, "y": 4, "shape": "bar", "blinking": true},
       "active": false,
       "scroll": {"total": 1201, "offset": 1196, "rows": 5},
+      "wrapped": [1],
       "copy": {"from": 1, "to": 0, "count": 3},
       "lines": {
         "3": [{"style": 1, "cells": ["o", "k"]}, {"style": 0, "hyperlink": 0, "cells": [" ", "s", "e", "e"]}],

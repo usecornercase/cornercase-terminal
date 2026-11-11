@@ -198,6 +198,19 @@ mod console_sequences {
     }
 
     #[test]
+    fn a_line_longer_than_the_pane_says_its_first_row_goes_on() {
+        let (mut term, rx) = spawn_cmd(None);
+
+        typed(&mut term, &rx, &format!("prompt cc-{}$G", "w".repeat(100)), "ww>");
+
+        let snap = term.emulator.surface_snapshot().expect("snapshot");
+        let text =
+            |row: &Vec<crate::term::emulator::Cell>| row.iter().map(|cell| cell.symbol.as_str()).collect::<String>();
+        let first = snap.rows.iter().rposition(|row| text(row).starts_with("cc-w")).expect("the prompt's first row");
+        assert!(snap.wrapped.contains(&u16::try_from(first).expect("a row")), "{first} in {:?}", snap.wrapped);
+    }
+
+    #[test]
     fn a_status_report_and_a_copy_reach_the_emulator() {
         let (mut term, rx) = spawn_cmd(None);
 

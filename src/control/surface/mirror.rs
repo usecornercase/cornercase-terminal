@@ -22,6 +22,7 @@ pub(crate) struct Held {
     pub(crate) modes: Modes,
     pub(crate) scroll: Scroll,
     pub(crate) colours: Colours,
+    pub(crate) wrapped: Vec<u16>,
     pub(crate) rows: Vec<Row>,
     weights: Vec<usize>,
 }
@@ -119,6 +120,7 @@ impl Mirror {
                     modes: pane.modes,
                     scroll: pane.scroll,
                     colours: pane.colours.clone(),
+                    wrapped: pane.wrapped.clone(),
                     weights: rows.iter().map(weight).collect(),
                     rows,
                 }
@@ -203,7 +205,8 @@ impl Mirror {
             if changes.copy.is_some_and(|copy| !fits(copy, len)) {
                 return Err("a copy reaches past the pane's rows".to_string());
             }
-            if let Some(y) = changes.lines.keys().copied().find(|y| usize::from(*y) >= len) {
+            let mut rows = changes.lines.keys().chain(changes.wrapped.iter().flatten()).copied();
+            if let Some(y) = rows.find(|y| usize::from(*y) >= len) {
                 return Err(format!("row {y} is not in the pane"));
             }
         }
@@ -229,6 +232,9 @@ fn apply_pane(held: &mut Held, changes: PaneChanges, styles: &[Style], links: &[
     }
     if let Some(colours) = changes.colours {
         held.colours = colours;
+    }
+    if let Some(wrapped) = changes.wrapped {
+        held.wrapped = wrapped;
     }
     if let Some(copy) = changes.copy {
         let (from, to, count) = (usize::from(copy.from), usize::from(copy.to), usize::from(copy.count));

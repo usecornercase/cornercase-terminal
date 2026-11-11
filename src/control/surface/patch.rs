@@ -30,6 +30,8 @@ pub(crate) struct PaneChanges {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) colours: Option<Colours>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) wrapped: Option<Vec<u16>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) copy: Option<Copied>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", deserialize_with = "rows")]
     pub(crate) lines: BTreeMap<u16, Vec<Run>>,
@@ -110,6 +112,7 @@ fn pane_changes(old: &Pane, was: Seen, new: &Pane, now: Seen, tables: &mut Table
         modes: (old.modes != new.modes).then_some(new.modes),
         scroll: (old.scroll != new.scroll).then_some(new.scroll),
         colours: (old.colours != new.colours).then(|| new.colours.clone()),
+        wrapped: (old.wrapped != new.wrapped).then(|| new.wrapped.clone()),
         copy,
         lines: BTreeMap::new(),
     };
@@ -122,6 +125,7 @@ fn pane_changes(old: &Pane, was: Seen, new: &Pane, now: Seen, tables: &mut Table
         && changed.modes.is_none()
         && changed.scroll.is_none()
         && changed.colours.is_none()
+        && changed.wrapped.is_none()
         && changed.copy.is_none()
         && changed.lines.is_empty();
     (!quiet).then_some(changed)
