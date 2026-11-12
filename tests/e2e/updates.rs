@@ -34,9 +34,10 @@ fn answer(mut stream: TcpStream, files: &[(String, Vec<u8>)]) {
 }
 
 fn fake_release(version: &str, script: &str) -> String {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
     let target = update::target().expect("a released platform");
     let name = format!("cornercase-{target}");
-    let build = temp_dir(&format!("release-{version}"));
+    let build = temp_dir(&format!("release-{version}-{}", NEXT.fetch_add(1, Ordering::Relaxed)));
     std::fs::create_dir_all(build.join(&name)).expect("archive folder");
     write_executable(&build.join(&name).join("cornercase"), script);
     let tar = std::process::Command::new("tar")
