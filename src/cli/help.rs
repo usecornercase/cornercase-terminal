@@ -570,7 +570,9 @@ first reaches a machine added this way, then stops asking. Remembering a listed 
 replaces its --command (none clears it). A window already open sees the change at its next
 connection or forget, or when it opens again; one on that machine writes it back, with the
 --command it reached it with, when it reconnects. DESTINATION is one word of at most 255 bytes that does not start with -;
-another exits with 2. A machine's host key must be known to ssh, since a window never asks for it. --forget of a machine that is not listed writes nothing and exits with 1.
+another exits with 2. A machine's host key must be known to ssh, since a window never asks for it: accept it with a plain
+ssh DESTINATION, or run cornercase remote DESTINATION with the same --command (without it, the saved
+command is cleared). A machines.json that exists but cannot be read is refused with 1 and left alone. --forget of a machine that is not listed writes nothing and exits with 1.
 
 Examples:
   cornercase remote devbox

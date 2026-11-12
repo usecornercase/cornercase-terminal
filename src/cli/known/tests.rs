@@ -234,6 +234,19 @@ mod writing {
         assert_eq!(std::fs::read_to_string(&file).expect("the list"), by_hand);
     }
 
+    #[rstest]
+    #[case::broken_json("[")]
+    #[case::not_a_list(r#"{"destination":"devbox"}"#)]
+    fn a_list_it_cannot_read_is_left_as_it_is(#[case] bytes: &str) {
+        let dir = TempDir::new();
+        let file = kept_in(&dir);
+        std::fs::write(&file, bytes).expect("a broken list");
+
+        assert!(not_listed(remembered(&file, remembered_machine("newbox", None))).starts_with("cannot read"));
+        assert!(not_listed(forgotten(&file, "devbox")).starts_with("cannot read"));
+        assert_eq!(std::fs::read_to_string(&file).expect("the list"), bytes);
+    }
+
     #[test]
     fn a_list_it_cannot_write_says_where() {
         let dir = TempDir::new();

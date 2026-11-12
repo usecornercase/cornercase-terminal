@@ -155,6 +155,17 @@ mod the_mark {
     }
 
     #[test]
+    fn a_list_that_is_there_but_broken_is_not_readable_and_a_missing_one_is() {
+        let dir = TempDir::new();
+        let file = kept_in(&dir);
+        assert!(readable(&file).is_ok());
+        std::fs::write(&file, "[").expect("a broken list");
+        assert!(readable(&file).is_err());
+        std::fs::write(&file, r#"[{"destination":"devbox"},42]"#).expect("a list");
+        assert!(readable(&file).is_ok());
+    }
+
+    #[test]
     fn a_list_it_cannot_write_is_an_error() {
         let dir = TempDir::new();
         let file = unwritable_file_in(&dir, "machines.json");

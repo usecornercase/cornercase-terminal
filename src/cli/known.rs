@@ -77,6 +77,7 @@ pub(super) fn forget(destination: &str) -> Result<()> {
 
 fn remembered(file: &Path, machine: Machine) -> Result<String> {
     let destination = escape_hidden(&machine.destination);
+    unreadable(file)?;
     let kept = machines::remember(file, machine).map_err(|error| unwritten(file, &error))?;
     Ok(if kept.unreached {
         format!("remembered {destination}; a window asks before it first connects there\n")
@@ -87,10 +88,17 @@ fn remembered(file: &Path, machine: Machine) -> Result<String> {
 
 fn forgotten(file: &Path, destination: &str) -> Result<String> {
     let shown = escape_hidden(destination);
+    unreadable(file)?;
     if machines::forget(file, destination).map_err(|error| unwritten(file, &error))? {
         return Ok(format!("forgot {shown}\n"));
     }
     Err(Error::Control(format!("`{shown}` is not on this machine's list; `cornercase remote --known` prints the list")))
+}
+
+fn unreadable(file: &Path) -> Result<()> {
+    machines::readable(file).map_err(|error| {
+        Error::Control(format!("cannot read `{}`: {error}; it is left as it is, fix or remove it", file.display()))
+    })
 }
 
 fn unwritten(file: &Path, error: &io::Error) -> Error {

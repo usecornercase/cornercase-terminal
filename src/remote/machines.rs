@@ -47,6 +47,15 @@ pub(crate) fn read(file: &Path) -> Vec<Machine> {
         .collect()
 }
 
+pub(crate) fn readable(file: &Path) -> io::Result<()> {
+    let bytes = match std::fs::read(file) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map(drop).map_err(io::Error::from)
+}
+
 pub(crate) fn remember(file: &Path, machine: Machine) -> io::Result<Machine> {
     let mut machines = read(file);
     let Some(known) = machines.iter_mut().find(|known| known.destination == machine.destination) else {
