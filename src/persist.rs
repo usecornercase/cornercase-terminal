@@ -1,12 +1,29 @@
+use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use serde::Serialize;
 
 use crate::os::fs::{OpenOptionsExt, Stat, set_file_mode, stat, stat_file};
 
+const TRIES: u32 = 16;
+
 pub(crate) const SETTLE: Duration = Duration::from_secs(2);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Kind {
+    Public,
+    Synced,
+    Private,
+}
+
+impl Kind {
+    fn mode(self) -> u32 {
+        if self == Self::Private { 0o600 } else { 0o666 }
+    }
+}
 
 pub(crate) type Mark = Option<((u64, u64), SystemTime, u64)>;
 
@@ -27,27 +44,57 @@ pub(crate) fn write(path: &Path, value: &impl Serialize, private: bool) -> io::R
 }
 
 pub(crate) fn write_marked(path: &Path, value: &impl Serialize, private: bool) -> io::Result<Mark> {
+    let bytes = if private { serde_json::to_vec(value)? } else { serde_json::to_vec_pretty(value)? };
+    write_bytes(path, &bytes, if private { Kind::Private } else { Kind::Public })
+}
+
+pub(crate) fn write_bytes(path: &Path, bytes: &[u8], kind: Kind) -> io::Result<Mark> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let tmp = path.with_extension("json.tmp");
-    let bytes = if private { serde_json::to_vec(value)? } else { serde_json::to_vec_pretty(value)? };
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(if private { 0o600 } else { 0o666 })
-        .open(&tmp)?;
-    if private {
-        set_file_mode(&file, 0o600)?;
+    let (temp, mut file) = create_temporary(path, kind, &NEXT)?;
+    let filled = fill(&mut file, bytes, kind);
+    drop(file);
+    let written = filled.and_then(|mark| std::fs::rename(&temp, path).map(|()| mark));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
     }
-    file.write_all(&bytes)?;
-    if private {
+    written
+}
+
+fn create_temporary(path: &Path, kind: Kind, next: &AtomicU64) -> io::Result<(PathBuf, File)> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true).mode(kind.mode());
+    for _ in 0..TRIES {
+        let temp = temporary(path, next.fetch_add(1, Ordering::Relaxed))?;
+        match options.open(&temp) {
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+            opened => return opened.map(|file| (temp, file)),
+        }
+    }
+    let message = format!("no free temporary name beside {}", path.display());
+    Err(io::Error::new(io::ErrorKind::AlreadyExists, message))
+}
+
+fn temporary(path: &Path, n: u64) -> io::Result<PathBuf> {
+    let Some(name) = path.file_name() else {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "a file to write needs a name"));
+    };
+    let mut name = name.to_os_string();
+    name.push(format!(".{}.{n}.tmp", std::process::id()));
+    Ok(path.with_file_name(name))
+}
+
+fn fill(file: &mut File, bytes: &[u8], kind: Kind) -> io::Result<Mark> {
+    if kind == Kind::Private {
+        set_file_mode(file, 0o600)?;
+    }
+    file.write_all(bytes)?;
+    if kind != Kind::Public {
         file.sync_all()?;
     }
-    let mark = mark_of(&stat_file(&file)?);
-    std::fs::rename(tmp, path)?;
-    Ok(mark)
+    Ok(mark_of(&stat_file(file)?))
 }
 
 pub(crate) fn back_up(path: &Path) -> io::Result<PathBuf> {

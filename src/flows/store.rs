@@ -1,8 +1,8 @@
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use super::Flow;
 use crate::error::{Error, Result};
+use crate::persist;
 
 pub(crate) const EXTENSION: &str = "toml";
 
@@ -315,18 +315,13 @@ pub(crate) fn file_name(name: &str) -> String {
 
 pub(crate) fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<PathBuf> {
     let text = to_text(flow).map_err(|reason| Error::FlowFile { path: dir.to_path_buf(), reason })?;
-    std::fs::create_dir_all(dir)?;
     let stem = file_name(&flow.name);
     let path = (1..=1000)
         .map(|n| if n == 1 { stem.clone() } else { format!("{stem}-{n}") })
         .map(|stem| dir.join(format!("{stem}.{EXTENSION}")))
         .find(|path| Some(path.as_path()) == previous || !path.exists())
         .ok_or_else(|| Error::FlowFile { path: dir.to_path_buf(), reason: "too many flows share its name".into() })?;
-    let tmp = path.with_extension(format!("{EXTENSION}.tmp"));
-    let mut file = std::fs::File::create(&tmp)?;
-    file.write_all(text.as_bytes())?;
-    file.sync_all()?;
-    std::fs::rename(&tmp, &path)?;
+    persist::write_bytes(&path, text.as_bytes(), persist::Kind::Synced)?;
     if let Some(previous) = previous.filter(|previous| *previous != path) {
         std::fs::remove_file(previous)?;
     }
