@@ -96,6 +96,33 @@
       ]
     }
   ],
+  "agents": [
+    {
+      "name": "claude",
+      "title": "Claude Code",
+      "reads_status": true,
+      "flows": true,
+      "models": [
+        "opus",
+        "sonnet",
+        "haiku"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    {
+      "name": "amp",
+      "reads_status": false,
+      "flows": false,
+      "models": [],
+      "efforts": []
+    }
+  ],
   "notices": [
     "sidebar: tree"
   ]

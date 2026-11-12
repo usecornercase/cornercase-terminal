@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use super::{Agents, CANCEL, DELETE_ROLE, DIAGRAM, DONE, FORM, Place, Room, SAVE};
 use crate::agents::{self, Known};
 use crate::editor::Editor;
-use crate::flows::{Back, End, Flow, MAX_ROLES, ORCHESTRATOR, Role, Stage, Worktree, builtin};
+use crate::flows::{Back, End, Flow, MAX_ROLES, ORCHESTRATOR, Role, Stage, Worktree, builtin, takes};
 use crate::list::Search;
 
 pub(crate) const DEFAULT_MODEL: &str = "default";
@@ -630,6 +630,7 @@ impl Editing {
             Row::End => End::ALL.iter().map(|end| choice(end.label().into(), end.label().into(), "")).collect(),
             Row::Agent => Known::ALL
                 .iter()
+                .filter(|kind| takes(kind.name()))
                 .map(|kind| {
                     let note = if agents.installed.contains(kind) {
                         kind.title().to_string()

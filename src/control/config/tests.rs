@@ -93,6 +93,17 @@ fn answer() -> Described {
             teardown: String::new(),
             builds: vec!["node_modules".into(), "target".into()],
         }],
+        agents: vec![
+            AgentEntry {
+                name: "claude".into(),
+                title: Some("Claude Code".into()),
+                reads_status: true,
+                flows: true,
+                models: vec!["opus".into(), "sonnet".into(), "haiku".into()],
+                efforts: vec!["low".into(), "medium".into(), "high".into(), "xhigh".into(), "max".into()],
+            },
+            AgentEntry { name: "amp".into(), ..AgentEntry::default() },
+        ],
         notices: vec!["sidebar: tree".into()],
     }
 }
@@ -165,6 +176,15 @@ mod answer {
         let text = r#"{"revision": 9, "settings": [{"key": "x", "type": "colour", "extra": 1}], "later": true}"#;
         let read: Described = serde_json::from_str(text).expect("lenient");
         assert_eq!((read.revision, read.settings[0].kind), (9, Kind::Other));
+    }
+
+    #[test]
+    fn an_older_answer_has_no_agents_and_a_newer_entry_reads_leniently() {
+        let older: Described = serde_json::from_str(r#"{"revision": 1}"#).expect("lenient");
+        assert_eq!(older.agents, Vec::new());
+        let newer: Described =
+            serde_json::from_str(r#"{"agents": [{"name": "x", "catalogue": true}]}"#).expect("lenient");
+        assert_eq!(newer.agents, vec![AgentEntry { name: "x".into(), ..AgentEntry::default() }]);
     }
 }
 

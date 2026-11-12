@@ -697,6 +697,20 @@ mod models {
     }
 
     #[test]
+    fn the_agent_row_is_red_with_its_reason_exactly_when_a_flow_cannot_take_the_agent() {
+        let mut d = editing();
+        d.hit(Hit::Tab(2), ROOM);
+        for agent in ["claude", "mine"] {
+            edit_mut(&mut d).flow.roles[0].agent = agent.into();
+            let rows = edit(&d).row_texts(&d.agents);
+            let row = rows.iter().find(|row| row.label == "agent").expect("the agent row");
+            let refused = !crate::flows::takes(agent);
+            assert_eq!(row.red, refused, "{agent}");
+            assert_eq!(row.note == "not an agent a flow can start", refused, "{agent}");
+        }
+    }
+
+    #[test]
     fn opencode_reads_its_models_once_and_fills_the_open_pick() {
         let mut d = editing();
         d.hit(Hit::Tab(3), ROOM);

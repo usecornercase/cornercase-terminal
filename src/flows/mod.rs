@@ -375,10 +375,14 @@ impl Role {
     }
 }
 
+pub(crate) fn takes(agent: &str) -> bool {
+    Known::of(agent).is_some()
+}
+
 fn role_problems(role: &Role, name: &str) -> Vec<String> {
     let mut out = Vec::new();
-    if Known::of(&role.agent).is_none() {
-        let known = Known::ALL.map(Known::name).join(", ");
+    if !takes(&role.agent) {
+        let known = Known::ALL.into_iter().map(Known::name).filter(|name| takes(name)).collect::<Vec<_>>().join(", ");
         out.push(format!("`{name}` runs `{}`, but a flow takes one of {known}", role.agent));
     } else if let Some(refusal) = agents::model_refusal(&role.agent, role.model.as_deref()) {
         out.push(format!("`{name}`: {refusal}"));

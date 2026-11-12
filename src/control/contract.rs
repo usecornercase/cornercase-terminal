@@ -68,6 +68,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "notice-messages",
     "surface-wrapped",
     "account-login-tab",
+    "config-agents",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

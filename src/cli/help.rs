@@ -471,6 +471,10 @@ pub(super) const CONFIG_HELP: &str =
 shows, whether each account and bot is connected (and as whom), refused or not set, and each
 project's setup and teardown. `--json` prints the whole answer, which a program can draw a form from.
 
+With --json it also lists `agents`: each agent the `agent` setting can name, with its title, whether
+cornercase reads its status (`reads_status`: a routine can remove the workspace of those only),
+whether a flow can run it (`flows`), and the `models` and `efforts` the flow editor offers for it.
+
 `set` changes settings with the dialog's own checks and applies them at once, as the dialog does;
 nothing is saved unless every value is accepted. Values are converted by the setting's type: true or
 false for a switch, a whole number, a comma-separated list for issue_tabs, otherwise text.

@@ -237,6 +237,10 @@ pub(crate) fn effort_levels(kind: &str) -> Option<&'static [&'static str]> {
     Known::of(kind).and_then(Known::effort).map(|effort| effort.levels)
 }
 
+pub(crate) fn reads_status(kind: &str) -> bool {
+    Known::of(kind).is_some()
+}
+
 pub(crate) fn without_effort(kind: &str, args: &[String]) -> Vec<String> {
     let Some(effort) = Known::of(kind).and_then(Known::effort) else { return args.to_vec() };
     let mut out = Vec::with_capacity(args.len());

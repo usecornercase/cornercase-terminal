@@ -261,7 +261,7 @@ impl App {
     fn queue_cleanup_off(&mut self) {
         let kind = self.queue_kind();
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
-        let unknown = form.flow().is_none() && !kind.is_empty() && agents::Known::of(&kind).is_none();
+        let unknown = form.flow().is_none() && !kind.is_empty() && !agents::reads_status(&kind);
         form.cleanup_off = unknown.then(|| format!("cornercase cannot tell when {kind} finishes"));
         if form.cleanup_off.is_some() {
             form.cleanup = false;

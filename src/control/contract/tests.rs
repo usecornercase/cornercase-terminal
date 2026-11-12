@@ -59,6 +59,7 @@ mod describing {
             "notice-messages",
             "surface-wrapped",
             "account-login-tab",
+            "config-agents",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();

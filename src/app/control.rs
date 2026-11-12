@@ -563,7 +563,7 @@ impl App {
             return Ok(());
         }
         match agents::detect(&self.config, &term.foreground_args()) {
-            Some(agent) if agents::Known::of(&agent).is_some() => Ok(()),
+            Some(agent) if agents::reads_status(&agent) => Ok(()),
             other => Err(other),
         }
     }
