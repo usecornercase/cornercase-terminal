@@ -73,8 +73,27 @@ ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes -o ControlPath=none \
 - **The row shows it.** `⇄ …` while it opens and `⇄ :5174` once it's up, and the row then offers **open** (your browser opens `http://localhost:5174`; it shows when your laptop has a default app), **copy** (that address) and **close tunnel**. The toast has an **open** button too.
 - **It only reaches that machine's own `localhost`.** A program that listens on a LAN address only has no **tunnel** button, and the server of `devbox` can ask for a port number, nothing more: it can't make your laptop reach a host or run anything. It can, however, find out which of your laptop's local ports are in use, since the window checks whether the same port is free.
 - **It is a plain `ssh` of yours**, with the destination the window used, so your keys, agent and `ProxyJump` apply. `BatchMode=yes` means it never asks for a password, and `ControlPath=none` makes it a connection of its own even with a shared `ControlMaster` in your config, so closing the tunnel really closes the port and it ends with the window.
-- **It ends with the window**, and when you switch to another machine or to this one. When the connection drops and the window reconnects, the tunnels come back. One that never came up (a taken port, a refused key) says why in a toast, `could not tunnel port 5173: …`, and is tried again when you click **tunnel** or the window reconnects. A window holds at most 32 tunnels.
-- **Scripts and agents** see and drive the same tunnels with `cornercase tunnels`, `cornercase tunnel open PORT` and `cornercase tunnel close PORT`, from a pane on `devbox` or with `--remote devbox`: see [Tunnels](../scripts-and-agents/#tunnels).
+- **Its ssh ends with the window**, and when you switch to another machine or to this one, but the tunnel is remembered (see below). When the connection drops and the window reconnects, the tunnels come back. One that never came up (a taken port, a refused key) says why in a toast, `could not tunnel port 5173: …`, and is tried again when you click **tunnel** or the window reconnects. A window holds at most 32 tunnels.
+- **Scripts and agents** see and drive the same tunnels with `cornercase tunnels`, `cornercase tunnel open PORT`, `cornercase tunnel close PORT` and `cornercase tunnel forget PORT`, from a pane on `devbox` or with `--remote devbox`: see [Tunnels](../scripts-and-agents/#tunnels).
+
+### Remembered per machine
+
+The window remembers the tunnels of each machine, on your laptop (`tunnels.json`, beside `machines.json`), so they are there next time:
+
+- **They come back.** A window that reaches `devbox` again brings up its tunnels that are not closed, on the same port of your laptop when it's free.
+- **close and forget are different.** **close** (the ports dialog's **close tunnel**, the menu, `tunnel close`) stops the ssh but keeps the tunnel listed as `closed`, so it stays out of the way and **open** brings it back. **forget** removes it for good.
+- **The machine button shows them.** `devbox ⇄2 ▴` counts the tunnels that aren't closed. Its menu lists each one after **add machine…** (`⇄ 5173 → localhost:5174  up`), and a click opens **open in browser**, **close**, **open** and **forget**, each only where it applies. A long name is cut, never the count.
+- **Windows share them.** With two windows on your laptop reaching `devbox`, one runs the ssh and the other shows the tunnel up on the same port and starts none. When the first window ends, the other takes the tunnel over within a second or two.
+
+### Hold one without a window
+
+A program that has no window of its own, such as another interface for cornercase, can hold a tunnel itself:
+
+```sh
+cornercase --remote devbox tunnel hold 5173
+```
+
+It starts its own `ssh`, waits until the tunnel is up and prints one line, `{"port":5173,"local":5174,"url":"http://localhost:5174"}`, then holds the tunnel until it ends. Killing it, closing its output or `cornercase tunnel close 5173` on `devbox` ends it with status 0, and a failing `ssh` or a lost connection with 1. It needs `--remote`, and it remembers nothing: see [Tunnels](../scripts-and-agents/#tunnels).
 
 If your `~/.ssh/config` has a `LocalForward`, `RemoteForward` or `DynamicForward` for that host, the window's own connection already holds it and every tunnel fails with `Could not request local forwarding`: remove it, or tunnel with your own `ssh -L`.
 
