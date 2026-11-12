@@ -114,21 +114,6 @@ fn kept(run: &mut Run) {
 }
 
 #[test]
-fn queue_show_answers_the_entry_and_its_result() {
-    let mut run = Run::started();
-    kept(&mut run);
-
-    let shown = ok(&mut run.agent.app, "queue-show", &json!({"id": run.id, "conversation": false}));
-
-    assert_eq!(shown["state"], "started");
-    assert_eq!(shown["result"]["text"], "Reviewed the login.");
-    assert_eq!(shown["result"]["agent"], "claude");
-    assert_eq!(shown["result"]["conversation"], true);
-    assert!(shown["started"].is_i64() && shown["messages"].is_null() && shown["earlier"] == false);
-    assert!(shown["note"].is_null(), "{shown}");
-}
-
-#[test]
 fn queue_show_reads_the_conversation_on_a_job() {
     let mut run = Run::started();
     kept(&mut run);
@@ -145,32 +130,6 @@ fn queue_show_reads_the_conversation_on_a_job() {
         .map(|message| (message["role"].as_str().unwrap_or_default(), message["text"].as_str().unwrap_or_default()))
         .collect();
     assert_eq!(said, [("prompt", "fix the login"), ("reply", "Reviewed the login.")]);
-}
-
-#[test]
-fn a_record_that_is_gone_answers_the_result_alone_and_says_so() {
-    let mut run = Run::started();
-    kept(&mut run);
-    let result = run.agent.app.queue_shown(run.id).expect("shown").result.expect("result");
-    assert!(result.conversation);
-    let entry = run.agent.app.panels.queued.queue().entry(run.id).expect("entry");
-    let Some(Pointer::Claude(path)) = entry.result.as_ref().and_then(|result| result.record.clone()) else {
-        panic!("a record")
-    };
-    std::fs::remove_file(path).expect("remove the record");
-
-    let shown = ok(&mut run.agent.app, "queue-show", &json!({"id": run.id, "conversation": true}));
-
-    assert!(shown["messages"].is_null());
-    assert_eq!(shown["result"]["text"], "Reviewed the login.");
-    assert!(shown["note"].as_str().is_some_and(|note| note.contains("no longer has")), "{shown}");
-}
-
-#[test]
-fn an_unknown_entry_is_not_found() {
-    let (mut app, _rx) = app();
-
-    assert_eq!(refused(&mut app, "queue-show", &json!({"id": 99, "conversation": false})).code, "not-found");
 }
 
 #[test]

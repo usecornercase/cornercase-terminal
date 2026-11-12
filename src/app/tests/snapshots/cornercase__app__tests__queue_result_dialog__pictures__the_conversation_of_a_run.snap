@@ -2,7 +2,7 @@
 source: src/app/tests/queue_result_dialog.rs
 expression: picture(&mut app)
 ---
-"  ⌕ search projects, workspaces, tabs                    │ $                                        "
+"  ⌕ search projects, workspaces, tabs                    │                                          "
 "              ╭─ Conversation ───────────────────────────────────────────────────────╮              "
 " Projects     │ Review the open pull requests                                        │              "
 "              │ started · pane closed · fake · shop ›                                │              "

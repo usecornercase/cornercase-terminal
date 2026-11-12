@@ -19,6 +19,16 @@ fn open_row(app: &mut App) {
     click(app, Position::new(list.x + 2, list.y));
 }
 
+fn await_conversation(app: &mut App, rx: &Receiver<AppEvent>) {
+    loop {
+        let event = rx.recv_timeout(Duration::from_secs(30)).expect("the conversation arrives");
+        if matches!(event, AppEvent::QueueResult(_)) {
+            app.handle_event(event, AREA).expect("handle the conversation");
+            return;
+        }
+    }
+}
+
 fn click_entry(app: &mut App, id: u64) {
     app.sync_queued();
     let row = app.panels.queued.queue().entries.iter().position(|entry| entry.id == id).expect("row");
@@ -133,7 +143,7 @@ fn conversation_reads_the_record_and_result_comes_back() {
 
     click(&mut app, ui::update_extra(AREA, "copy", "done", "conversation").as_position());
     assert!(matches!(update(&app).note, Some(ui::Note::Busy(_))));
-    refreshing(&mut app, &rx, "the conversation shows", |app| update(app).note.is_none());
+    await_conversation(&mut app, &rx);
 
     let shown = lines(&app);
     assert!(shown.starts_with("prompt\nreview them\n\nreply · 2026-11-12 09:41\nReviewed #480 and #482."), "{shown}");
@@ -266,7 +276,7 @@ mod pictures {
         keep(&mut app, id, "Reviewed #480 and #482.", Some(transcript(dirs[0].path())));
         open_row(&mut app);
         click(&mut app, ui::update_extra(AREA, "copy", "done", "conversation").as_position());
-        refreshing(&mut app, &rx, "the conversation shows", |app| update(app).note.is_none());
+        await_conversation(&mut app, &rx);
         insta::assert_snapshot!(picture(&mut app));
     }
 
