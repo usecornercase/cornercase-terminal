@@ -543,7 +543,9 @@ export function repeatWalk(r: Repeat, at: number, now: number): { last: number; 
 
 export const routineSlug = (label: string): string => label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30).replace(/-+$/, '') || 'routine';
 
-export const queueName = (prompt: string): string => {
+export const queueFirstLine = (prompt: string): string => {
   const lines = prompt.split('\n').map((line) => line.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').split(/\s+/).filter(Boolean).join(' '));
-  return firstWords(lines.find((line) => line !== '') ?? '', 40);
+  return lines.find((line) => line !== '') ?? '';
 };
+
+export const queueName = (prompt: string): string => firstWords(queueFirstLine(prompt), 40);

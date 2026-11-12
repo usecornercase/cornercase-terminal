@@ -1,4 +1,4 @@
-import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueName, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
+import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
 import { STATS } from './data';
@@ -3976,7 +3976,7 @@ export class App {
     const query = o.filter.toLowerCase();
     return this.queued.filter((entry) => {
       const row = this.queueRow(entry);
-      return [row.key, row.title, row.meta].some((text) => text.toLowerCase().includes(query));
+      return [row.key, row.title, queueFirstLine(entry.prompt), row.meta].some((text) => text.toLowerCase().includes(query));
     });
   }
 

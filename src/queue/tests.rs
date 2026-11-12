@@ -93,11 +93,23 @@ mod persistence {
                 queue.add(Task { label: (*label).into(), prompt: (*prompt).into(), ..task(1000) }).expect("add")
             })
             .collect();
-        persist::save(&path, &queue.saved()).expect("save");
+        let mut saved = queue.saved();
+        saved.names = 0;
+        persist::save(&path, &saved).expect("save");
         let restored = load(&path, 0);
         for (id, (_, _, name)) in ids.iter().zip(cases) {
             assert_eq!(restored.entry(*id).expect("entry").task.label, name);
         }
+    }
+
+    #[test]
+    fn a_file_this_release_wrote_keeps_a_name_written_equal_to_a_long_first_line() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        let mut queue = Queue::default();
+        let id = queue.add(Task { label: LONG.into(), prompt: LONG.into(), ..task(1000) }).expect("add");
+        persist::save(&path, &queue.saved()).expect("save");
+        assert_eq!(load(&path, 0).entry(id).expect("entry").task.label, LONG);
     }
 
     #[test]
@@ -476,7 +488,9 @@ mod results {
         let entry = &queue.entries[0];
         assert_eq!((entry.started, entry.result.clone()), (None, None));
         let written = serde_json::to_value(queue.saved()).expect("serialize");
-        assert_eq!(written, serde_json::from_str::<serde_json::Value>(before).expect("json"));
+        let mut expected = serde_json::from_str::<serde_json::Value>(before).expect("json");
+        expected["names"] = 1.into();
+        assert_eq!(written, expected);
     }
 
     #[test]

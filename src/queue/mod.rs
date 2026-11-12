@@ -18,6 +18,7 @@ pub(crate) const RUNS_KEPT: usize = 10;
 pub(crate) const GRACE: i64 = 600;
 pub(crate) const UNDOS: usize = 16;
 const NAME_MAX: usize = 40;
+const NAMES: u32 = 1;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Place {
@@ -146,6 +147,8 @@ pub(crate) struct Saved {
     pub(crate) version: u32,
     pub(crate) next_id: u64,
     pub(crate) entries: Vec<Entry>,
+    #[serde(default)]
+    pub(crate) names: u32,
 }
 
 #[derive(Debug, Default)]
@@ -254,7 +257,7 @@ impl Queue {
 
     pub(crate) fn saved(&self) -> Saved {
         let version = if self.entries.iter().any(Entry::uses_routines) { VERSION } else { 1 };
-        Saved { version, next_id: self.next_id, entries: self.entries.clone() }
+        Saved { version, next_id: self.next_id, entries: self.entries.clone(), names: NAMES }
     }
 }
 
@@ -272,13 +275,16 @@ pub(crate) fn read_saved(path: &Path) -> Option<Saved> {
     Some(saved)
 }
 
-pub(crate) fn prompt_name(prompt: &str) -> String {
-    let line = prompt
+pub(crate) fn prompt_first_line(prompt: &str) -> String {
+    prompt
         .lines()
         .map(|line| crate::text::one_line(&line.replace(char::is_control, " ")))
         .find(|line| !line.is_empty())
-        .unwrap_or_default();
-    crate::text::first_words(&line, NAME_MAX)
+        .unwrap_or_default()
+}
+
+pub(crate) fn prompt_name(prompt: &str) -> String {
+    crate::text::first_words(&prompt_first_line(prompt), NAME_MAX)
 }
 
 fn older_prompt_name(prompt: &str) -> String {
@@ -293,11 +299,14 @@ fn rename_older(task: &mut Task) {
 
 pub(crate) fn load(path: &Path, now: i64) -> Queue {
     let Some(saved) = read_saved(path) else { return Queue::default() };
+    let older = saved.names < NAMES;
     let mut queue = Queue { entries: saved.entries, next_id: saved.next_id };
     queue.next_id = queue.entries.iter().map(|entry| entry.id).max().unwrap_or_default().max(queue.next_id);
     queue.sort();
     for entry in &mut queue.entries {
-        rename_older(&mut entry.task);
+        if older {
+            rename_older(&mut entry.task);
+        }
         if entry.state == State::Starting {
             entry.state = State::Failed {
                 reason: "the server stopped while this entry was starting; check its workspace before trying again"
