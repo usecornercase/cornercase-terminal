@@ -19,11 +19,9 @@ fn row(label: &str, value: String, muted: Color) -> Line<'static> {
 }
 
 fn pull(pull: &Pull) -> String {
-    let mut text = format!("#{} {} · {}", pull.number, pull.title, pull.state);
-    if let Some(checks) = &pull.checks {
-        text.push_str(&format!(" · checks {checks}"));
-    }
-    text
+    let mut parts = vec![format!("#{} {}", pull.number, pull.title), pull.state.clone()];
+    parts.extend(pull.checks.as_ref().map(|checks| format!("checks {checks}")));
+    parts.join(" · ")
 }
 
 fn facts(shown: &QueueShown, entry: &queue::Entry, zone: &str, muted: Color) -> Vec<Line<'static>> {

@@ -222,7 +222,7 @@ impl App {
         entry.result.as_ref()?.record.clone().filter(Pointer::readable)
     }
 
-    pub(in crate::app) fn read_conversation(&self, entry: u64, pointer: Pointer, to: Reader) {
+    pub(in crate::app) fn read_conversation(&self, entry: u64, pointer: &Pointer, to: Reader) {
         let record = pointer.record();
         let job = Job::new(Level::Debug, "queue", "read conversation").with("entry", entry);
         self.spawn_job(
@@ -238,7 +238,7 @@ impl App {
     pub(super) fn queue_read(&mut self, event: QueueRead, area: Rect) {
         match event {
             QueueRead::Captured { entry, generation, taken, read } => {
-                self.queue_captured(entry, generation, taken, read)
+                self.queue_captured(entry, generation, taken, read);
             }
             QueueRead::Conversation { entry, to: Reader::Request(key), result } => {
                 self.queue_conversation_answered(key, entry, result);

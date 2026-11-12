@@ -42,7 +42,7 @@ fn in_time_order(heard: &mut [Spoken]) {
     }
 }
 
-fn message(spoken: Spoken) -> Option<Message> {
+fn message(spoken: &Spoken) -> Option<Message> {
     let kept = text::within_bytes(&spoken.said.text, MESSAGE_CAP);
     (!kept.trim().is_empty()).then(|| Message {
         role: spoken.role,
@@ -57,7 +57,7 @@ pub(crate) fn read(record: &Record) -> Result<Talk> {
     in_time_order(&mut heard);
     let earlier = heard.len() > MESSAGES;
     let skip = heard.len().saturating_sub(MESSAGES);
-    let messages = heard.into_iter().skip(skip).filter_map(message).collect();
+    let messages = heard.iter().skip(skip).filter_map(message).collect();
     Ok(Talk { messages, earlier })
 }
 

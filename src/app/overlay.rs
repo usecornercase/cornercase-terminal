@@ -201,8 +201,7 @@ impl Overlay {
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
-            Self::Queue(_) => "queue",
-            Self::QueueEntry(_) => "queue entry",
+            Self::Queue(_) | Self::QueueEntry(_) => self.queue_name(),
             Self::Search(_) => "search",
             Self::Update(_) => "update",
             Self::Usage => "usage",
@@ -254,6 +253,13 @@ impl Overlay {
         match self {
             Self::ShareSettings(_) => "share settings",
             _ => "settings",
+        }
+    }
+
+    fn queue_name(&self) -> &'static str {
+        match self {
+            Self::QueueEntry(_) => "queue entry",
+            _ => "queue",
         }
     }
 

@@ -138,7 +138,7 @@ impl App {
                 if reading { Showing::Reading } else { Showing::Failed("the agent no longer keeps its record".into()) };
         }
         if let Some(pointer) = pointer {
-            self.read_conversation(entry, pointer, Reader::Window);
+            self.read_conversation(entry, &pointer, Reader::Window);
         }
     }
 

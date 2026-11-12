@@ -155,9 +155,13 @@ impl QueueRuntime {
     }
 
     pub(super) fn started(&mut self, id: u64, pane: u64) {
+        self.started_at(id, pane, crate::time::now());
+    }
+
+    pub(super) fn started_at(&mut self, id: u64, pane: u64, at: i64) {
         if let Some(entry) = self.queue.entry_mut(id) {
             entry.state = State::Started { pane, server: control::server_token().into() };
-            entry.started = Some(crate::time::now());
+            entry.started = Some(at);
         }
     }
 

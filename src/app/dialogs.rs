@@ -229,18 +229,13 @@ impl App {
     }
 
     fn scroll_dialog(&mut self, delta: isize, area: Rect) {
-        if matches!(self.overlay, Some(Overlay::PullRequest { .. })) {
-            self.scroll_pull_request(delta, area);
-        } else if matches!(self.overlay, Some(Overlay::MergeCheck { .. })) {
-            self.scroll_merge_check(delta, area);
-        } else if matches!(self.overlay, Some(Overlay::Context { .. })) {
-            self.scroll_context(delta, area);
-        } else if matches!(self.overlay, Some(Overlay::FlowMessage { .. })) {
-            self.scroll_flow_message(delta, area);
-        } else if matches!(self.overlay, Some(Overlay::QueueEntry(_))) {
-            self.scroll_queue_detail(delta, area);
-        } else {
-            self.scroll_update(delta, area);
+        match &self.overlay {
+            Some(Overlay::PullRequest { .. }) => self.scroll_pull_request(delta, area),
+            Some(Overlay::MergeCheck { .. }) => self.scroll_merge_check(delta, area),
+            Some(Overlay::Context { .. }) => self.scroll_context(delta, area),
+            Some(Overlay::FlowMessage { .. }) => self.scroll_flow_message(delta, area),
+            Some(Overlay::QueueEntry(_)) => self.scroll_queue_detail(delta, area),
+            _ => self.scroll_update(delta, area),
         }
     }
 

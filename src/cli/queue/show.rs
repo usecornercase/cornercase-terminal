@@ -57,14 +57,10 @@ fn times(entry: &Listed, kept: Option<&Kept>, zone: &str) -> String {
 }
 
 fn pull_line(pull: &Pull) -> String {
-    let mut line = format!("pull request #{} {}", pull.number, pull.state);
-    if let Some(checks) = &pull.checks {
-        line.push_str(&format!(" · checks {checks}"));
-    }
-    if !pull.url.is_empty() {
-        line.push_str(&format!(" · {}", pull.url));
-    }
-    line
+    let mut parts = vec![format!("pull request #{} {}", pull.number, pull.state)];
+    parts.extend(pull.checks.as_ref().map(|checks| format!("checks {checks}")));
+    parts.extend(Some(pull.url.clone()).filter(|url| !url.is_empty()));
+    parts.join(" · ")
 }
 
 fn messages(value: &Value, zone: &str) -> Vec<String> {

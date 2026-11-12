@@ -70,13 +70,13 @@ fn lines(value: &Value, zone: &str) -> String {
 }
 
 enum Asked {
-    Queue(control::Queue, bool),
+    Queue(Box<control::Queue>, bool),
     Show(control::QueueShow, bool),
 }
 
 pub(super) fn run(action: QueueAction) -> Result<()> {
     match request_of(action)? {
-        Asked::Queue(command, json) => run_queue(command, json),
+        Asked::Queue(command, json) => run_queue(*command, json),
         Asked::Show(show, json) => run_show(show, json),
     }
 }
@@ -144,7 +144,7 @@ fn request_of(action: QueueAction) -> Result<Asked> {
         }
         other => queue_command(other)?,
     };
-    Ok(Asked::Queue(command, json))
+    Ok(Asked::Queue(Box::new(command), json))
 }
 
 fn queue_command(action: QueueAction) -> Result<(control::Queue, bool)> {

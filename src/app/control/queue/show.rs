@@ -56,7 +56,7 @@ impl App {
         let key = self.clients.requests.key();
         let waits = Waits { done: control::Done::default(), stage: Stage::Reading, timeout: None };
         self.clients.requests.push(client, key, waits);
-        self.read_conversation(show.id, pointer, crate::app::queue_results::Reader::Request(key));
+        self.read_conversation(show.id, &pointer, crate::app::queue_results::Reader::Request(key));
         Ok(None)
     }
 

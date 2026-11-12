@@ -473,6 +473,19 @@ impl App {
         Ok(id)
     }
 
+    fn new_run(
+        &mut self,
+        workspace: u64,
+        (flow, task): (Flow, String),
+        (close_when_merged, summary): (bool, bool),
+    ) -> Run {
+        let mut run = Run::new(workspace, flow, task);
+        run.id = self.take_id();
+        run.close_when_merged = close_when_merged;
+        run.summary = summary;
+        run
+    }
+
     pub(super) fn open_run(
         &mut self,
         place: WorkspaceAt,
@@ -482,25 +495,10 @@ impl App {
     ) -> Result<RunInfo, String> {
         let id = self.open_check(place)?;
         let Starting {
-            flow,
-            task,
-            branch,
-            focus,
-            view,
-            note,
-            trees,
-            parent,
-            accounts,
-            name,
-            close_when_merged,
-            summary,
-            ..
+            flow, task, branch, focus, view, note, trees, parent, accounts, name, close_when_merged, ..
         } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
-        let mut run = Run::new(id, flow, task);
-        run.id = self.take_id();
-        run.close_when_merged = close_when_merged;
-        run.summary = summary;
+        let mut run = self.new_run(id, (flow, task), (close_when_merged, starting.summary));
         let project = self.projects[place.project()].id;
         let mut info =
             RunInfo { run: run.id, project, workspace: id, branch, note, close_when_merged, ..RunInfo::default() };
