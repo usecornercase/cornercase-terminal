@@ -26,6 +26,8 @@ mod wrapping {
     #[case::breaks_after_the_last_space("fix the login bug", 10, vec![0..8, 8..17])]
     #[case::cuts_a_word_longer_than_the_line("abcdefghij", 4, vec![0..4, 4..8, 8..10])]
     #[case::keeps_runs_of_spaces("a    b", 3, vec![0..3, 3..6])]
+    #[case::a_character_wider_than_the_line_takes_a_row_of_its_own("字字", 1, vec![0..1, 1..2, 2..2])]
+    #[case::a_zero_width_character_stays_with_the_one_before_it("a\u{301}b", 1, vec![0..2, 2..3])]
     fn lines(#[case] text: &str, #[case] width: usize, #[case] expected: Vec<Range<usize>>) {
         assert_eq!(wrap(text, width), expected);
     }
@@ -38,6 +40,44 @@ mod wrapping {
     #[test]
     fn a_full_last_line_gets_an_empty_one_for_the_cursor() {
         assert_eq!(Editor::new("abcd").lines(4), vec![0..4, 4..4]);
+    }
+}
+
+mod long_lines {
+    use super::*;
+    use crate::flows::share::MAX_BYTES;
+
+    fn measuring<T>(work: impl FnOnce() -> T) -> (T, usize) {
+        let before = measured();
+        let out = work();
+        (out, measured() - before)
+    }
+
+    fn pasted(text: &str) -> Editor {
+        let mut e = Editor::default();
+        e.insert_lines(text);
+        e.reveal(40, 5);
+        e
+    }
+
+    #[test]
+    fn a_line_at_the_import_cap_is_measured_a_few_times_per_character() {
+        let line = "x".repeat(MAX_BYTES);
+        let (e, pasting) = measuring(|| pasted(&line));
+        let (_, drawing) = measuring(|| (e.lines(40), e.position(40), e.highlight(40)));
+        let total = pasting + drawing;
+        assert!(total <= 16 * line.len(), "{total} width lookups for {} characters", line.len());
+    }
+
+    #[rstest]
+    #[case::ending_inside_a_row(MAX_BYTES, (6553, 24))]
+    #[case::filling_its_last_row(6553 * 40, (6553, 0))]
+    fn a_line_at_the_import_cap_wraps_and_shows_its_end(#[case] length: usize, #[case] cursor: (usize, usize)) {
+        let e = pasted(&"x".repeat(length));
+        let lines = e.lines(40);
+        assert_eq!(lines.len(), 6554);
+        assert!(lines[..6553].iter().all(|line| line.len() == 40));
+        assert_eq!((e.position(40), e.scroll()), (cursor, 6549));
     }
 }
 
