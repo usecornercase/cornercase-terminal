@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.52
+
+- **Programs can read what `cornercase update` did.** `cornercase update --json` prints one line of JSON instead of sentences: `{"outcome":"updated","from":"0.13.51","version":"0.13.52","path":"/home/me/.local/bin/cornercase"}`, `{"outcome":"up-to-date","version":"0.13.52"}`, or, when cornercase can't replace itself (Homebrew installed it, or you can't write to its folder), `{"outcome":"manual","version":"0.13.51","latest":"0.13.52","command":"brew update && brew upgrade cornercase"}`. `version` is the one on disk afterwards, on the machine it ran on, so another interface can offer the command to copy, or confirm an install on another machine (`cornercase --remote devbox update --json`) before restarting its server. With `--json` it asks nothing and never restarts the server: run `cornercase restart` when you choose. `--check --json` says what it would do, without installing.
+- **`cornercase update` exits with status 6 when it can't install the release itself**, after printing the command to run, so a script can tell that from a failure, which still exits with 1.
+
 ## 0.13.51
 
 - **See what a queued agent did, even once its pane is gone.** Each time a queued agent or a routine's run ends a turn, when its pane closes, and right before a routine's cleanup removes its workspace, cornercase keeps the agent's last message, its branch and its pull request with the checks as they were then. In **Issues → Queue**, click a run whose workspace was removed, an entry whose pane was closed, or a failed or missed run: a dialog shows when it started, its agent, branch, pull request and that last message, and **conversation** shows the conversation, up to its newest 1,000 messages with each cut at 32 KiB, for as long as the agent keeps it. A queued prompt now ends with one more sentence asking the agent to finish with a short summary of what it did and what is left. Scripts get `cornercase queue show ID` (with `--conversation` and `--json`), and `queue list --json` and `status --app` say when each entry's result last changed (`result_at`).
