@@ -29,7 +29,7 @@ impl Watching {
         self.last.remove(&entry);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(super) fn watches(&self, entry: u64) -> bool {
         self.seen.contains_key(&entry)
     }
