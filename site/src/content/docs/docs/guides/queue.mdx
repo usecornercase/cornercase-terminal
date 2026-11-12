@@ -48,9 +48,27 @@ The server must be running, with its session opened at least once after a restar
 
 An entry more than ten minutes late becomes **`missed`** and waits for you. Waking or restarting within ten minutes still starts it. Select an entry to act on it: **`start now`** starts a pending, missed or failed one at once, and **`remove`** removes it; the notice that follows has **`undo`** for six seconds. Click a pending, missed or failed row, or press `Enter` on it, to edit and reschedule it. An entry shows `starting` while its worktree or agent is being prepared; it cannot be cancelled or edited then.
 
-Started entries stay until **`clear started`** or **`remove`** removes them, both undoable from their notice. Click one to close the dialog and jump to its pane while it is still open in that server. After a restart, its historical pane link is unavailable; it cannot point to a different pane with the same id. Removing a started entry does not stop its agent.
+Started entries stay until **`clear started`** or **`remove`** removes them, both undoable from their notice. Click one to close the dialog and jump to its pane while it is still open in that server. Once its pane is gone, or after a restart, a click or `Enter` opens [what its agent did](#what-each-run-did) instead; it cannot point to a different pane with the same id. Removing a started entry does not stop its agent.
 
 The agent command, mode, prompt and destination are captured when scheduled. Editing the prompt or time keeps that agent and mode, even if their settings changed or a custom agent was removed; choosing another agent or mode captures its current command. A closed project or workspace, a workspace that cannot be uniquely identified after restart, or a missing executable fails with a reason. If the server stops partway through starting, the entry asks you to check its workspace before retrying.
+
+## What each run did
+
+Every queued agent, and every run of a routine, keeps a **result**: what its agent last said, the branch and the pull request with its state and checks as they were then. cornercase keeps it each time the agent ends a turn (not only when you have not looked at the tab), when its pane closes, and right before a routine [removes the run's workspace](#remove-the-workspace-when-it-finishes), so the run that ended as `removed` still says what it did. A run of a flow keeps what its orchestrator said. The text is at most 4 KiB, cut at that size with a note, and lives in the entry in `queue.json`; the agent's own record of the conversation is read when you ask for it.
+
+To make that last message worth keeping, **every queued prompt ends with one more sentence**, after a blank line:
+
+> When you finish, end your last message with a short summary of what you did and what is left to do.
+
+The sentence is added when the prompt is sent. It is not saved in the entry, shown in the Flow panel or counted as part of the task, but it is in the agent's conversation, so you see it there.
+
+Click or press `Enter` on a started entry whose pane is gone, on a `removed` run and on a failed or missed **run** of a routine to open its **Result**: when it started and when the result was kept, its agent, branch and pull request, and the last message, wrapped. A failed or missed one-off entry still opens its form, and one whose pane is still open still jumps to it. The hint under the list says which. In the dialog:
+
+- **`conversation`** loads the whole conversation, prompts and replies without tool calls, for as long as the agent keeps it (the newest 1,000 messages, each cut at 32 KiB); **`result`** goes back. It only shows when the record can still be read.
+- **`copy`** copies what is shown. The wheel and `↑` `↓` scroll.
+- **`done`**, `Esc` or a click outside go back to the **`Queue`** tab, as the schedule form does.
+
+What is missing says why: an agent without a record cornercase can read (a custom command) keeps only the branch and the pull request, a run whose agent never finished a turn while cornercase watched it has no result, and a failed run shows the reason it did not start. cornercase does not notify you when a result is kept, and it watches only the entries the running server started: nothing is kept while the server is stopped, and an entry from before a restart keeps what it had.
 
 ## Routines
 
@@ -102,6 +120,9 @@ cornercase queue remove 2 --json
 cornercase queue clear-started
 cornercase queue clear-started --json
 cornercase queue restore 7
+cornercase queue show 7
+cornercase queue show 7 --json
+cornercase queue show 7 --conversation
 cornercase queue add --every 2h --agent claude --prompt 'Check the CI of main'
 cornercase queue add --every 'day 09:00' --agent claude --cleanup --prompt 'Review the open pull requests'
 cornercase queue add --every 'weekday 09:00' --agent codex --prompt 'Triage the new issues'
@@ -115,12 +136,14 @@ cornercase queue run 3
 
 An issue URL must belong to the project: GitHub and GitLab issues are read from the project's own repository, and Jira, Plane, Linear, Shortcut and Asana ones from the site or workspace you are connected to, so a URL of another repository or site is refused instead of starting the wrong issue. An Asana link works in its old (`/0/<project>/<task>`) and new (`/1/<workspace>/project/<project>/task/<task>`) forms and must name a task of the account you are connected to. A bare key goes to the only tracker that can read it: `#7` to the project's GitHub or GitLab, `sc-482` to Shortcut, a number to the repository or Shortcut, and keys such as `ENG-7` to Linear, Jira, Plane or Asana. A bare number is never taken for Asana: use `--source asana` to read a task by its id. When two trackers could read it, add `--source`. `--mode` names one of the agent's modes, or `default` for no mode arguments (without it, `add` takes the mode chosen in **settings → Agents** and `edit` keeps the entry's; before sending `default` the command checks the server's `mode-default` [feature](../scripts-and-agents/#ask-the-server-first), since an older server would read it as the mode chosen in settings), `--account AGENT=ACCOUNT` the [account](../accounts/) that agent starts with (`AGENT=` for its own login; without it, the default when it runs; `edit` changes only the agents it names, and cannot set one back to the default when it runs: remove the entry and add it again), and `--name` sets the entry and tab name. `edit` can omit `--at` to keep the exact scheduled instant; `add` needs `--at` (or `--every`) and either `--prompt` or `--issue`. Editing an entry's `--issue` moves it to the new issue's branch, unless you also pass `--worktree`. `add`, `edit`, `list`, `remove` and `clear-started` support `--json`.
 
+`show 7` prints what an entry's agent did: its state, when it started, the branch, the pull request and the last message. `--conversation` adds the whole conversation, oldest first, and exits **3** (after printing the result) when it cannot be read because the agent no longer has its record; `--json` prints the answer, whose `result.conversation` says whether it can be read. `queue list --json` gives each entry that started its `started` time and, once it kept a result, `result_at`, never the text. `show` checks the server's `queue-results` [feature](../scripts-and-agents/#ask-the-server-first) first.
+
 `remove` and `clear-started` print an **undo number**, which is separate from the entry id. `clear-started` removes every started entry, and every finished run of a routine, at once and leaves pending, starting, failed and missed one-off entries and routines alone; removing history does not stop its agents. With `--json`, both answer `{"entries": [...], "undo": 7}` with the complete removed entries. When nothing started, `clear-started` prints nothing, or `{"entries": []}` with `--json`, without using an undo number.
 
 `restore 7` puts that removal back with its original ids, captured prompt, agent, mode, destination, accounts and state, in time and insertion order. Restored pending entries follow the usual scheduling and lateness rules; restoring started history does not start agents again. The server keeps the last 16 nonempty command removals until it stops, independently of the window's six-second undo notice. Undo numbers are opaque and change with the server boot. An undo number works once; an unknown, used or expired number fails. The commands check the server's `queue-undo` [feature](../scripts-and-agents/#ask-the-server-first) before removing or restoring anything.
 
 ## Storage
 
-`queue.json` lives next to `session.json`, with its own format version (2 only while it holds a routine, its runs or a `removed` or `kept` state, so an older cornercase finds a version it refuses instead of starting a routine once as a plain entry). For a custom socket whose session is `server.json`, the queue is `server.queue.json`, keeping different servers in the same folder separate. Its entry ids survive restarts and are not reused when an entry is removed. The server saves changes after they settle and flushes the queue on shutdown. A missing, corrupt or unsupported-version file starts an empty queue. An unreadable file is kept unchanged until you change the queue.
+`queue.json` lives next to `session.json`, with its own format version (2 only while it holds a routine, its runs or a `removed` or `kept` state, so an older cornercase finds a version it refuses instead of starting a routine once as a plain entry). For a custom socket whose session is `server.json`, the queue is `server.queue.json`, keeping different servers in the same folder separate. Its entry ids survive restarts and are not reused when an entry is removed. An entry that started also keeps its start time and its result (about 4 KB), which an older cornercase ignores and drops the next time it saves. The server saves changes after they settle and flushes the queue on shutdown. A missing, corrupt or unsupported-version file starts an empty queue. An unreadable file is kept unchanged until you change the queue.
 
 The queue is independent of the [TODO list](../todo/). One-off entries run once; a [routine](#routines) repeats.
