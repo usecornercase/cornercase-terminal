@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.44
+
+- **Programs can add and forget the machines your window offers.** `cornercase remote --remember me@10.0.0.5 --command '~/bin/cornercase'` puts a machine on the list the machine button at the bottom of the sidebar offers, or gives one already there a new `--command`, and `cornercase remote --forget devbox` takes one off, as its **forget…** does. Like `--known`, they need no server and no `ssh`, and `CORNERCASE_REMOTE` changes nothing for them, so a machine another interface reached shows in your window's menu too, and the button shows once a program has added one. The window still asks before it first connects to a machine added this way, then stops asking; until then `remote --known --json` marks it `"unreached": true`. `ssh` must already know the host's key, since a window never asks for it: run `cornercase remote DESTINATION` once in a terminal. A destination that isn't one word, or starts with `-`, exits with status 2, and forgetting a machine that isn't on the list changes nothing and exits with 1. A window that is open sees the change once it connects again or forgets a machine, or when it is opened again, and a window that is on that machine writes its entry back when it reconnects.
+
 ## 0.13.43
 
 - **Programs that draw cornercase can offer only what each agent can do.** `cornercase config --json` (and the `config` request) now lists `agents`: every agent the default agent setting can name, with its title, whether cornercase reads its status (`reads_status`: a routine can remove its workspace when it finishes only for those), whether a flow can run it (`flows`), and the models and efforts the flow editor offers for it. A form can grey the routine's cleanup box and offer a flow role's agents, models and efforts as the window does, instead of learning from a refusal. `cornercase contract` lists the feature `config-agents`.
