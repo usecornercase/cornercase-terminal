@@ -56,9 +56,11 @@ pub(super) fn chosen(to: Option<String>, here: &Target, known: Vec<Machine>) -> 
     if !machines::valid(&destination) || here.machine() == Some(destination.as_str()) {
         return None;
     }
-    let known = known.into_iter().find(|machine| machine.destination == destination);
-    let asks = known.is_none();
-    let machine = known.unwrap_or(Machine { destination, command: None });
+    let machine = known
+        .into_iter()
+        .find(|machine| machine.destination == destination)
+        .unwrap_or_else(|| Machine::never_reached(destination, None));
+    let asks = machine.unreached;
     Some((Target::Remote(machine.remote()), asks))
 }
 
@@ -116,14 +118,14 @@ impl Window<'_> {
 
     pub(super) fn remember(&self) {
         if let Target::Remote(remote) = &self.target {
-            machines::remember(&machines::file(), Machine::of(remote));
+            let _ = machines::remember(&machines::file(), Machine::of(remote));
         }
     }
 
     pub(super) fn order(&mut self, order: MachineOrder) -> Result<()> {
         match order {
             MachineOrder::Forget(destination) => {
-                machines::forget(&machines::file(), &destination);
+                let _ = machines::forget(&machines::file(), &destination);
                 self.send_out(ClientMessage::Machines(Self::machines_at(&self.target)));
                 Ok(())
             }

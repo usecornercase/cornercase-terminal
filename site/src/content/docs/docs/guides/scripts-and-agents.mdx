@@ -1460,9 +1460,11 @@ cornercase machines update mini --json
 
 ```sh
 cornercase remote --known --json
+cornercase remote --remember me@10.0.0.5 --command '~/bin/cornercase'
+cornercase remote --forget devbox
 ```
 
-`machines` is your server's list. The machines a window on this computer reached with [`cornercase remote`](../remote/#switch-machines-from-the-window), which its machine button offers, are another list: `remote --known` prints them, `{"machines": [{"destination": "devbox", "command": null}]}` with `--json`, in the menu's order, each with the `--command` it was reached with. It reads this computer's list with no server and no `ssh`, so `CORNERCASE_REMOTE` changes nothing for it and `--remote` is refused. Pass a machine on as `cornercase remote DESTINATION --command COMMAND`, or `--remote DESTINATION --remote-command COMMAND` for a command, leaving out the command flag when `command` is `null`.
+`machines` is your server's list. The machines a window on this computer reached with [`cornercase remote`](../remote/#switch-machines-from-the-window), or a program added, which its machine button offers, are another list: `remote --known` prints them, `{"machines": [{"destination": "devbox", "command": null}]}` with `--json`, in the menu's order, each with its `--command`, and `"unreached": true` until a window has connected to a machine a program added (left out otherwise). `--remember` adds a machine or replaces its `--command` (none clears it) and `--forget` takes it off, so a machine your program reached shows in the window's menu too; the window asks before its first connection there. They read and write this computer's list with no server and no `ssh`, so `CORNERCASE_REMOTE` changes nothing for them and `--remote` is refused. A destination that isn't one word, or starts with `-`, exits with 2, and forgetting a machine that isn't listed writes nothing and exits with 1. A window that is open sees the change at its next connection or forget, or when it is opened again, and a window that is on that machine writes it back, with the `--command` it reached it with, when it reconnects. Pass a machine on as `cornercase remote DESTINATION --command COMMAND`, or `--remote DESTINATION --remote-command COMMAND` for a command, leaving out the command flag when `command` is `null`.
 
 #### Machines' workspaces
 

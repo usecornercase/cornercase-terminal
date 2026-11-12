@@ -6,14 +6,12 @@ use super::overlay::Overlay;
 use crate::editor::Editor;
 use crate::log;
 use crate::protocol::{MachineOrder, Machines};
-use crate::remote::machines::valid;
+use crate::remote::machines::{NOT_A_DESTINATION, valid};
 use crate::ui::{self, remote::THIS_MACHINE};
 
 pub(super) const CONNECT_SUBMIT: &str = "connect";
 
 const HINT: &str = "anything ssh takes: a host of ~/.ssh/config or user@host";
-
-const NOT_A_DESTINATION: &str = "one word that does not start with -, such as devbox or me@devbox";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MachineItem {

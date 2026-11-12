@@ -554,18 +554,33 @@ key or an agent. To send the commands for scripts and agents there, give them --
 The other machine may run Windows: the first time, cornercase finds out whether its sshd runs
 commands with cmd.exe or PowerShell, and remembers it.
 
---known prints the machines a window on this machine reached, with `cornercase remote` or its machine
-button, in the order its menu lists them, each with the --command it was reached with, and opens no
-window. With --json: {\"machines\": [{\"destination\", \"command\"}]}, command being null without one. It
-reads this machine's list, so it needs no server and no ssh, and CORNERCASE_REMOTE changes nothing
-for it: a program that offers to move to another server reads it this way rather than the file,
-whose shape can change.
+--known prints the machines a window on this machine offers in its machine button, in the order
+its menu lists them: those a window reached, with `cornercase remote` or the button, and those a
+program added with --remember, each with its --command, and opens no window. With --json:
+{\"machines\": [{\"destination\", \"command\", \"unreached\"}]}, command being null without one, and
+unreached true for a machine added with --remember that no window has reached yet (left out
+otherwise). It reads this machine's list, so it needs no server and no ssh, and CORNERCASE_REMOTE
+changes nothing for it: a program that offers to move to another server reads it this way rather
+than the file, whose shape can change.
+
+--remember DESTINATION adds a machine to that list, with --command if given, and --forget
+DESTINATION takes one off, as the button's forget… does. Like --known they open no window, need
+no server and no ssh, and CORNERCASE_REMOTE changes nothing for them. A window asks before it
+first reaches a machine added this way, then stops asking. Remembering a listed machine again
+replaces its --command (none clears it). A window already open sees the change at its next
+connection or forget, or when it opens again; one on that machine writes it back, with the
+--command it reached it with, when it reconnects. DESTINATION is one word of at most 255 bytes that does not start with -;
+another exits with 2. A machine's host key must be known to ssh, since a window never asks for it: accept it with a plain
+ssh DESTINATION, or run cornercase remote DESTINATION with the same --command (without it, the saved
+command is cleared). A machines.json that exists but cannot be read is refused with 1 and left alone. --forget of a machine that is not listed writes nothing and exits with 1.
 
 Examples:
   cornercase remote devbox
   cornercase remote me@10.0.0.5 --command '~/bin/cornercase'
   cornercase remote me@winbox --command 'C:\\tools\\cornercase.exe'
-  cornercase remote --known --json";
+  cornercase remote --known --json
+  cornercase remote --remember me@10.0.0.5 --command '~/bin/cornercase'
+  cornercase remote --forget devbox";
 pub(super) const LOGS_HELP: &str =
     "The server writes one line per event: the time in UTC, the level, where it happened and what,
 then key=value details. It says which windows attached, which commands ran and how they were
