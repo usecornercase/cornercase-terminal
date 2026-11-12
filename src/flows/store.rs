@@ -5,6 +5,9 @@ use crate::error::{Error, Result};
 use crate::persist;
 
 pub(crate) const EXTENSION: &str = "toml";
+const MAX_COPIES: u32 = 1000;
+const MAX_SLUG: usize =
+    persist::MAX_NAME - ("-".len() + MAX_COPIES.ilog10() as usize + 1) - (".".len() + EXTENSION.len());
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Origin {
@@ -309,14 +312,14 @@ pub(crate) fn file_name(name: &str) -> String {
             slug.push('-');
         }
     }
-    let slug = slug.trim_end_matches('-');
+    let slug = slug[..slug.floor_char_boundary(MAX_SLUG)].trim_end_matches('-');
     if slug.is_empty() { "flow".to_string() } else { slug.to_string() }
 }
 
 pub(crate) fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<PathBuf> {
     let text = to_text(flow).map_err(|reason| Error::FlowFile { path: dir.to_path_buf(), reason })?;
     let stem = file_name(&flow.name);
-    let path = (1..=1000)
+    let path = (1..=MAX_COPIES)
         .map(|n| if n == 1 { stem.clone() } else { format!("{stem}-{n}") })
         .map(|stem| dir.join(format!("{stem}.{EXTENSION}")))
         .find(|path| Some(path.as_path()) == previous || !path.exists())
@@ -332,3 +335,6 @@ pub(crate) fn delete(path: &Path) -> Result<()> {
     std::fs::remove_file(path)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
