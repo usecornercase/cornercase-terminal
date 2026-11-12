@@ -317,15 +317,12 @@ fn received(link: &mut Link, name: &'static str) -> Option<Result<Value>> {
         Ok(Some(ServerMessage::Response(text))) => Some(answered(&text)),
         Ok(Some(ServerMessage::Rejected(_))) => Some(Err(Error::OldServer(name))),
         Err(e) if e.kind() == io::ErrorKind::InvalidData => Some(Err(Error::OldServer(name))),
-        Ok(Some(
-            ServerMessage::Frame(_)
-            | ServerMessage::Detached
-            | ServerMessage::Sound(_)
-            | ServerMessage::Open(_)
-            | ServerMessage::Browse(_)
-            | ServerMessage::Machine(_),
-        )) => None,
+        Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached)) => None,
         Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_))) => Some(Err(Error::ServerGone)),
+        Ok(Some(message)) => {
+            debug_assert!(message.window_only());
+            None
+        }
         Ok(None) | Err(_) => Some(Err(lost(link, Error::ServerGone))),
     }
 }
@@ -444,14 +441,8 @@ fn follow_on(
                 }
             }
             Ok(Some(ServerMessage::Detached | ServerMessage::Shutdown | ServerMessage::Restart(_))) => return Ok(()),
-            Ok(Some(
-                ServerMessage::Frame(_)
-                | ServerMessage::Rejected(_)
-                | ServerMessage::Sound(_)
-                | ServerMessage::Open(_)
-                | ServerMessage::Browse(_)
-                | ServerMessage::Machine(_),
-            )) => {}
+            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Rejected(_))) => {}
+            Ok(Some(message)) => debug_assert!(message.window_only()),
             Ok(None) | Err(_) => return Err(Error::ServerLost),
         }
     }

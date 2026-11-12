@@ -14,23 +14,26 @@ use ratatui::layout::{Position, Rect};
 
 use self::imp::{Handle, read, watch_signals};
 use self::switch::Switch;
+use self::tunnels::{Ssh, Tunnels};
 use super::probe::{env, finish_tmux_check, start_tmux_check, window_cell};
 use super::{Ending, Guard, Host, INPUT_POLL, Link, Source, Target, input};
 use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::{self, Facts, Outer};
 use crate::host::notify::{self, Channel};
-use crate::host::open::{Browse, Failed, Open, Openers};
+use crate::host::open::{Browse, Failed, Open, Opener, Openers};
 use crate::host::sound::{self, Cue, Player};
 use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::plugins::Supervisor;
-use crate::protocol::{self, ClientMessage, Hello, MachineOrder, ServerMessage};
+use crate::protocol::{self, ClientMessage, Hello, MachineOrder, ServerMessage, TunnelOrder};
+use crate::remote::tunnel::Watched;
 use crate::remote::{self, Stderr};
 use crate::ui::remote::{self as notice, Notice, Shown};
 use crate::{host::pointer, version};
 
 mod switch;
+mod tunnels;
 
 enum Incoming {
     Input(Event),
@@ -42,6 +45,7 @@ enum Incoming {
     Switched(u64, Result<Link>),
     Signal,
     Tmux(Option<Outer>),
+    Tunnel(u64, Watched),
 }
 
 enum Received {
@@ -58,6 +62,7 @@ enum Next {
     Open(Open),
     Browse(Browse),
     Machine(MachineOrder),
+    Tunnel(TunnelOrder),
     Nothing,
 }
 
@@ -73,6 +78,7 @@ fn next(received: Received, reconnects: bool) -> Result<Next> {
         Received::Message(ServerMessage::Open(open)) => Next::Open(open),
         Received::Message(ServerMessage::Browse(browse)) => Next::Browse(browse),
         Received::Message(ServerMessage::Machine(order)) => Next::Machine(order),
+        Received::Message(ServerMessage::Tunnel(order)) => Next::Tunnel(order),
         Received::Message(ServerMessage::Detached | ServerMessage::Shutdown) | Received::Ended => {
             Next::End(Ending::Detached)
         }
@@ -154,6 +160,7 @@ struct Window<'a> {
     switch: Option<Switch>,
     switches: u64,
     plugins: Option<Supervisor>,
+    tunnels: Tunnels,
 }
 
 impl Window<'_> {
@@ -169,7 +176,15 @@ impl Window<'_> {
         self.guard = Some(guard);
         self.lost = None;
         self.retries.linked();
+        self.tunnels.sync(self.target.machine());
+        self.report_tunnels();
         Ok(())
+    }
+
+    fn report_tunnels(&self) {
+        if matches!(self.target, Target::Remote(_)) {
+            self.send_out(ClientMessage::Tunnels(self.tunnels.holding()));
+        }
     }
 
     fn next_id(&mut self) -> u64 {
@@ -200,7 +215,9 @@ impl Window<'_> {
         let retry = self.lost.as_ref().and_then(|lost| lost.retry_at);
         let retry = retry.map_or(Duration::MAX, |at| until_next_second(at.saturating_duration_since(now)));
         let answer = self.switch_deadline().map_or(Duration::MAX, |at| at.saturating_duration_since(now));
-        retry.min(answer)
+        let tunnels = self.tunnels.next_wake(self.out.is_some());
+        let tunnels = tunnels.map_or(Duration::MAX, |at| at.saturating_duration_since(now));
+        retry.min(answer).min(tunnels)
     }
 
     fn handle(&mut self, incoming: Incoming) -> Result<Option<Ending>> {
@@ -219,6 +236,12 @@ impl Window<'_> {
             }
             Incoming::Tmux(outer) => {
                 self.tmux_checked(outer);
+                Ok(None)
+            }
+            Incoming::Tunnel(attempt, watched) => {
+                if self.tunnels.watched(attempt, watched, Instant::now()) {
+                    self.report_tunnels();
+                }
                 Ok(None)
             }
             Incoming::Server(generation, received) if generation == self.generation => self.handle_server(received),
@@ -270,16 +293,29 @@ impl Window<'_> {
                     let _ = tx.send(Incoming::OpenFailed(generation, failed));
                 });
             }
-            Next::Browse(browse) => {
-                let (tx, generation) = (self.tx.clone(), self.generation);
-                self.openers.browse(browse, move |failed| {
-                    let _ = tx.send(Incoming::OpenFailed(generation, failed));
-                });
+            Next::Browse(browse) => self.browse(browse),
+            Next::Tunnel(order) => {
+                self.tunnels.order(order);
+                self.report_tunnels();
             }
             Next::Machine(order) => self.order(order)?,
             Next::Nothing => {}
         }
         Ok(None)
+    }
+
+    fn browse(&mut self, browse: Browse) {
+        let (tx, generation) = (self.tx.clone(), self.generation);
+        let failed = move |failed| {
+            let _ = tx.send(Incoming::OpenFailed(generation, failed));
+        };
+        if matches!(self.target, Target::Local) {
+            return self.openers.browse(browse, failed);
+        }
+        match self.tunnels.browse(browse) {
+            Ok(local) => self.tunnels.browser().browse(local, failed),
+            Err(reason) => failed(Failed { opener: Opener::Default, reason }),
+        }
     }
 
     fn input(&mut self, ev: Event) -> Result<Option<Ending>> {
@@ -365,6 +401,9 @@ impl Window<'_> {
 
     fn tick(&mut self, now: Instant) -> Result<()> {
         self.expire_switch(now)?;
+        if self.tunnels.tick(now, self.out.is_some()) {
+            self.report_tunnels();
+        }
         let Some(lost) = &mut self.lost else { return Ok(()) };
         if lost.retry_at.is_some_and(|at| at <= now) {
             lost.retry_at = None;
@@ -463,6 +502,7 @@ pub(super) fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal
         switch: None,
         switches: 0,
         plugins: None,
+        tunnels: Tunnels::new(Box::new(Ssh { tx: tx.clone() }), local_openers()),
     };
     window.sync_plugins();
     window.link(link)?;
@@ -487,8 +527,12 @@ fn local_player() -> Option<Player> {
         .then(|| Player::detect(paths::session().parent().map(Path::to_path_buf).unwrap_or_default()))
 }
 
+fn local_openers() -> Openers {
+    Openers::detect(|name| std::env::var(name).ok())
+}
+
 fn openers_for(target: &Target) -> Openers {
-    if matches!(target, Target::Local) { Openers::detect(|name| std::env::var(name).ok()) } else { Openers::default() }
+    if matches!(target, Target::Local) { local_openers() } else { Openers::default() }
 }
 
 fn run_window(window: &mut Window<'_>, rx: &Receiver<Incoming>) -> Result<Ending> {

@@ -57,6 +57,7 @@ impl App {
         let command = self.issue_requests(asked, command)?;
         let command = self.flow_requests(asked, command)?;
         let command = self.account_requests(asked, command)?;
+        let command = self.tunnel_requests(asked, command)?;
         self.server_requests(asked, command)
     }
 
@@ -191,6 +192,16 @@ impl App {
             Command::FlowOrder(req) => self.flow_order_request(caller, &req),
             Command::FlowMessages(messages) => self.flow_messages_request(client, caller, &messages),
             Command::FlowFiles(files) => self.flow_files_request(client, caller, &files),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn tunnel_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, now, .. } = asked;
+        ControlFlow::Break(match command {
+            Command::Tunnels(_) => Ok(Some(json(&self.tunnel_list(None)))),
+            Command::TunnelOpen(tunnel) => self.tunnel_open_request(client, &tunnel, now),
+            Command::TunnelClose(tunnel) => self.tunnel_close_request(client, &tunnel, now),
             other => return ControlFlow::Continue(other),
         })
     }

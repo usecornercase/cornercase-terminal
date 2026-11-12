@@ -193,6 +193,9 @@ fn newest_commands() -> Vec<Command> {
         Command::WorktreesRemove(WorktreesRemove::default()),
         Command::FlowCloseWhenMerged(FlowCloseWhenMerged::default()),
         Command::AccountLoginTab(AccountLogin::default()),
+        Command::Tunnels(ListTunnels::default()),
+        Command::TunnelOpen(TunnelPort::default()),
+        Command::TunnelClose(TunnelPort::default()),
     ]
 }
 

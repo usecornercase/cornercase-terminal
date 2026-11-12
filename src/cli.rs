@@ -58,6 +58,7 @@ mod terminal;
 mod theme;
 mod todo;
 mod tour;
+mod tunnels;
 mod update;
 mod usage;
 mod view;
@@ -322,6 +323,8 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Issue(args) => return ControlFlow::Break(issue::run(args.action)),
         Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
         Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
+        Control::Tunnels(args) => return ControlFlow::Break(tunnels::run_list(&args)),
+        Control::Tunnel(args) => return ControlFlow::Break(tunnels::run(&args)),
         Control::Processes(args) => return ControlFlow::Break(processes::run(&args)),
         Control::PullRequest(args) => return ControlFlow::Break(pull_request::run(&args)),
         Control::Context(args) => return ControlFlow::Break(context::run(&args)),
@@ -554,12 +557,21 @@ fn event_line(value: &Value) -> String {
             let failure = error.as_ref().map(|error| format!(": {error}")).unwrap_or_default();
             format!("recap {range}  {state} ({agent}){failure}")
         }
+        (_, What::Tunnel { port, local, state, error, holder }) => {
+            tunnel_line(*port, *local, state, error.as_deref(), *holder)
+        }
         (_, What::Dropped { count }) => format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
             if *count == 1 { "" } else { "s" }
         ),
         (None, _) => value.to_string(),
     }
+}
+
+fn tunnel_line(port: u16, local: Option<u16>, state: &str, error: Option<&str>, holder: u64) -> String {
+    let local = local.map(|local| format!(" → localhost:{local}")).unwrap_or_default();
+    let error = error.map(|error| format!(": {error}")).unwrap_or_default();
+    format!("tunnel {port}  {state}{local}{error}  (holder {holder})")
 }
 
 fn message_line(subject: Option<String>, kind: &str, message: &str) -> String {

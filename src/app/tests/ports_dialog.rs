@@ -22,6 +22,8 @@ fn port(pid: i32, number: u16) -> Port {
     }
 }
 
+mod tunnels;
+
 fn dialog(app: &mut App) -> &mut Dialog {
     match &mut app.overlay {
         Some(Overlay::Ports(dialog)) => dialog,

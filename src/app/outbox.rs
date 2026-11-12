@@ -2,7 +2,7 @@ use crate::host::clipboard;
 use crate::host::notify::Notification;
 use crate::host::open::{Browse, Open};
 use crate::host::sound::Cue;
-use crate::protocol::MachineOrder;
+use crate::protocol::{MachineOrder, TunnelOrder};
 
 #[derive(Default)]
 pub(super) struct Outbox {
@@ -12,6 +12,7 @@ pub(super) struct Outbox {
     opens: Vec<(u64, Open)>,
     browses: Vec<(u64, Browse)>,
     machine_orders: Vec<(u64, MachineOrder)>,
+    tunnel_orders: Vec<(u64, TunnelOrder)>,
     detach: bool,
     restart: bool,
     start: Option<(u64, (u16, u16))>,
@@ -40,6 +41,10 @@ impl Outbox {
 
     pub(super) fn order_machine(&mut self, client: u64, order: MachineOrder) {
         self.machine_orders.push((client, order));
+    }
+
+    pub(super) fn order_tunnel(&mut self, client: u64, order: TunnelOrder) {
+        self.tunnel_orders.push((client, order));
     }
 
     pub(super) fn detach(&mut self) {
@@ -76,6 +81,10 @@ impl Outbox {
 
     pub(super) fn take_machine_orders(&mut self) -> Vec<(u64, MachineOrder)> {
         std::mem::take(&mut self.machine_orders)
+    }
+
+    pub(super) fn take_tunnel_orders(&mut self) -> Vec<(u64, TunnelOrder)> {
+        std::mem::take(&mut self.tunnel_orders)
     }
 
     pub(super) fn take_detach(&mut self) -> bool {

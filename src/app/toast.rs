@@ -25,6 +25,12 @@ pub(super) enum Undo {
     Agents(u64),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TunnelButton {
+    Open { client: u64, port: u16 },
+    Close(u16),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Toast {
     pub(super) message: String,
@@ -32,16 +38,18 @@ pub(super) struct Toast {
     pub(super) at: Instant,
     pub(super) undo: Option<Undo>,
     pub(super) go: Option<String>,
+    pub(super) tunnel: Option<TunnelButton>,
+    pub(super) lingers: bool,
 }
 
 impl Toast {
     pub(super) fn new(message: impl Into<String>, icon: ui::ToastIcon) -> Self {
-        Self { message: message.into(), icon, at: Instant::now(), undo: None, go: None }
+        Self { message: message.into(), icon, at: Instant::now(), undo: None, go: None, tunnel: None, lingers: false }
     }
 
     pub(super) fn lasts(&self) -> Duration {
         match self.icon {
-            _ if self.undo.is_some() || self.go.is_some() => UNDO_FOR,
+            _ if self.undo.is_some() || self.go.is_some() || self.tunnel.is_some() || self.lingers => UNDO_FOR,
             ui::ToastIcon::Bug => BUG_FOR,
             ui::ToastIcon::Restart => Duration::MAX,
             ui::ToastIcon::Check | ui::ToastIcon::Agent(_) => TOAST_FOR,
@@ -53,6 +61,8 @@ impl Toast {
             _ if matches!(self.undo, Some(Undo::Agents(_))) => Some(ui::ToastButton::Reopen),
             _ if self.undo.is_some() => Some(ui::ToastButton::Undo),
             _ if self.go.is_some() => Some(ui::ToastButton::Go),
+            _ if matches!(self.tunnel, Some(TunnelButton::Open { .. })) => Some(ui::ToastButton::Open),
+            _ if self.tunnel.is_some() => Some(ui::ToastButton::Close),
             ui::ToastIcon::Restart => Some(ui::ToastButton::Cancel),
             ui::ToastIcon::Check | ui::ToastIcon::Agent(_) | ui::ToastIcon::Bug => None,
         };
@@ -71,6 +81,10 @@ impl App {
             Some(Toast { undo: Some(Undo::Queue(entries)), .. }) => self.panels.queued.restore(entries),
             Some(Toast { undo: Some(Undo::Agents(workspace)), .. }) => self.reopen_from_window(workspace, area),
             Some(Toast { go: Some(token), .. }) => self.notification_clicked(&token),
+            Some(Toast { tunnel: Some(TunnelButton::Open { client, port }), .. }) => self.browse_tunnel(client, port),
+            Some(Toast { tunnel: Some(TunnelButton::Close(port)), .. }) => {
+                self.close_tunnel(port);
+            }
             Some(Toast { icon: ui::ToastIcon::Restart, .. }) => self.cancel_restarts(),
             _ => {}
         }

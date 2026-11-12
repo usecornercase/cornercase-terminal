@@ -215,14 +215,8 @@ fn wait_for_restart(stream: &mut UnixStream, mut input: Option<BorrowedFd<'_>>, 
             Ok(Some(ServerMessage::Shutdown)) => return Err(Error::Control(STOPPED_INSTEAD.into())),
             Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer("restart --when-idle")),
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer("restart --when-idle")),
-            Ok(Some(
-                ServerMessage::Frame(_)
-                | ServerMessage::Detached
-                | ServerMessage::Sound(_)
-                | ServerMessage::Open(_)
-                | ServerMessage::Browse(_)
-                | ServerMessage::Machine(_),
-            )) => {}
+            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached)) => {}
+            Ok(Some(message)) => debug_assert!(message.window_only()),
             Ok(None) | Err(_) if report.is_some() => return Ok(Waited::Restarted(report.map(Box::new))),
             Ok(None) | Err(_) => return Err(Error::ServerGone),
         }

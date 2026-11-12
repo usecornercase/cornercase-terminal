@@ -211,8 +211,10 @@ impl Window<'_> {
         self.target = switch.to;
         self.openers = pending.openers;
         self.sync_plugins();
+        self.tunnels.sync(self.target.machine());
         self.remember();
         self.send_out(ClientMessage::Machines(Self::machines_at(&self.target)));
+        self.report_tunnels();
         self.lost = None;
         self.retries.linked();
         let size = self.terminal.size()?;
@@ -282,7 +284,7 @@ impl Window<'_> {
         match next {
             Next::End(_) | Next::Reconnect => switch.left = kept(switch.left.take(), next),
             Next::Show(_) | Next::Machine(_) | Next::Nothing => {}
-            Next::Sound(_) | Next::Open(_) | Next::Browse(_) => return Some(next),
+            Next::Sound(_) | Next::Open(_) | Next::Browse(_) | Next::Tunnel(_) => return Some(next),
         }
         None
     }

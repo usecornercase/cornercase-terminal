@@ -36,7 +36,6 @@ pub(crate) struct Ports {
     pub(crate) note: Option<Note>,
     pub(crate) empty: bool,
     pub(crate) confirm: Option<ConfirmBody>,
-    pub(crate) can_open: bool,
     pub(crate) compact: bool,
 }
 
@@ -47,6 +46,15 @@ pub(crate) struct PortRow {
     pub(crate) pid: i32,
     pub(crate) place: String,
     pub(crate) go: bool,
+    pub(crate) open: bool,
+    pub(crate) tunnel: Option<PortTunnel>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PortTunnel {
+    Offered,
+    Opening,
+    Up(u16),
 }
 
 pub(crate) struct ConfirmBody {
@@ -60,6 +68,8 @@ pub(crate) enum PortsHit {
     Row(usize),
     Copy(usize),
     Open(usize),
+    Tunnel(usize),
+    CloseTunnel(usize),
     Go(usize),
     StopRow(usize),
     Stop,
@@ -71,15 +81,20 @@ pub(crate) enum PortsHit {
 enum RowButton {
     Copy,
     Open,
+    Tunnel,
+    CloseTunnel,
     Go,
     Stop,
 }
 
 impl RowButton {
-    fn label(self) -> &'static str {
+    fn label(self, compact: bool) -> &'static str {
         match self {
             Self::Copy => "copy",
             Self::Open => "open",
+            Self::Tunnel => "tunnel",
+            Self::CloseTunnel if compact => "close",
+            Self::CloseTunnel => "close tunnel",
             Self::Go => "go",
             Self::Stop => STOP_LABEL,
         }
@@ -89,6 +104,8 @@ impl RowButton {
         match self {
             Self::Copy => PortsHit::Copy(row),
             Self::Open => PortsHit::Open(row),
+            Self::Tunnel => PortsHit::Tunnel(row),
+            Self::CloseTunnel => PortsHit::CloseTunnel(row),
             Self::Go => PortsHit::Go(row),
             Self::Stop => PortsHit::StopRow(row),
         }
@@ -114,12 +131,17 @@ fn pitch(compact: bool) -> u16 {
     if compact { COMPACT_PITCH } else { 1 }
 }
 
-fn row_buttons(view: &Ports, row: &PortRow, rect: Rect) -> Vec<(RowButton, Rect)> {
+fn row_buttons(row: &PortRow, rect: Rect, compact: bool) -> Vec<(RowButton, Rect)> {
     let mut buttons = vec![RowButton::Copy];
-    buttons.extend(view.can_open.then_some(RowButton::Open));
+    buttons.extend(row.open.then_some(RowButton::Open));
+    buttons.extend(match row.tunnel {
+        Some(PortTunnel::Offered) => Some(RowButton::Tunnel),
+        Some(PortTunnel::Opening | PortTunnel::Up(_)) => Some(RowButton::CloseTunnel),
+        None => None,
+    });
     buttons.extend(row.go.then_some(RowButton::Go));
     buttons.push(RowButton::Stop);
-    let labels: Vec<&str> = buttons.iter().map(|b| b.label()).collect();
+    let labels: Vec<&str> = buttons.iter().map(|b| b.label(compact)).collect();
     buttons.into_iter().zip(row_button_rects(rect, &labels)).collect()
 }
 
@@ -162,7 +184,7 @@ pub(crate) fn ports_hit(screen: Rect, view: &Ports, pos: Position) -> Option<Por
     let list = rows(area)[0];
     let (i, rect) = item_at(list, (view.rows.len(), view.scroll), pitch(view.compact), pos)?;
     let row = view.rows.get(i)?;
-    if let Some((button, _)) = row_buttons(view, row, rect).into_iter().find(|(_, r)| r.contains(pos)) {
+    if let Some((button, _)) = row_buttons(row, rect, view.compact).into_iter().find(|(_, r)| r.contains(pos)) {
         return Some(button.hit(i));
     }
     Some(if pos.x < list.x + LEAD { PortsHit::Tick(i) } else { PortsHit::Row(i) })
@@ -196,8 +218,11 @@ fn draw_list(f: &mut Frame, view: &View, ports: &Ports, list: Rect) {
         f.render_widget(Paragraph::new(Span::styled(format!(" {EMPTY}"), Style::default().fg(view.muted))), list);
     }
     let step = pitch(ports.compact);
-    let longest = |text: fn(&PortRow) -> &str| ports.rows.iter().map(|row| text(row).chars().count()).max();
-    let widths = (longest(|row| &row.url).unwrap_or(0), longest(|row| &row.command).unwrap_or(0));
+    let longest = |text: fn(&PortRow) -> usize| ports.rows.iter().map(text).max().unwrap_or(0);
+    let widths = (
+        longest(|row| row.url.chars().count() + tunnel_mark(row).chars().count()),
+        longest(|row| row.command.chars().count()),
+    );
     for (i, row) in ports.rows.iter().enumerate() {
         let rect = list_item_by(list, ports.rows.len(), ports.scroll, i, step);
         if !rect.is_empty() {
@@ -224,9 +249,10 @@ fn draw_row(
     };
     let room = usize::from(rect.width.saturating_sub(LEAD + 1));
     let pid = format!("pid {:<w$}", row.pid, w = PID_WIDTH - 4);
+    let styles = Styles { base, dim, mark: tunnel_style(row, dim, bg) };
     let lines = if ports.compact {
         let mut first = lead(true);
-        first.push(Span::styled(truncate_right(&row.url, room), base));
+        first.extend(url_cell(row, room, &styles, true));
         let mut second = lead(false);
         second.push(Span::styled(truncate_right(&format!("{}  {pid}", row.command), room), dim));
         let mut third = lead(false);
@@ -234,7 +260,7 @@ fn draw_row(
         vec![Line::from(first), Line::from(second), Line::from(third)]
     } else {
         let mut line = lead(true);
-        line.push(Span::styled(format!("{:<url$}  ", row.url), base));
+        line.extend(url_cell(row, url, &styles, false));
         let command = longest.min(room.saturating_sub(url + 2 + PID_WIDTH + 2) / 2);
         line.push(Span::styled(format!("{:<command$}  ", truncate_right(&row.command, command)), dim));
         line.push(Span::styled(format!("{pid}  "), dim));
@@ -243,12 +269,45 @@ fn draw_row(
     };
     f.render_widget(Paragraph::new(lines).style(bg), rect);
     if ports.compact || selected || hovered(view, rect) {
-        draw_row_buttons(f, view, ports, (row, rect), bg);
+        draw_row_buttons(f, view, (ports.compact, row, rect), bg);
     }
 }
 
-fn draw_row_buttons(f: &mut Frame, view: &View, ports: &Ports, (row, rect): (&PortRow, Rect), bg: Style) {
-    for (button, r) in row_buttons(ports, row, rect) {
-        draw_row_button(f, view, r, button.label(), bg);
+struct Styles {
+    base: Style,
+    dim: Style,
+    mark: Style,
+}
+
+fn tunnel_mark(row: &PortRow) -> String {
+    match row.tunnel {
+        Some(PortTunnel::Opening) => " ⇄ …".into(),
+        Some(PortTunnel::Up(local)) => format!(" ⇄ :{local}"),
+        Some(PortTunnel::Offered) | None => String::new(),
+    }
+}
+
+fn tunnel_style(row: &PortRow, dim: Style, bg: Style) -> Style {
+    if matches!(row.tunnel, Some(PortTunnel::Up(_))) { bg.fg(Color::Green) } else { dim }
+}
+
+fn url_cell(row: &PortRow, width: usize, styles: &Styles, trimmed: bool) -> Vec<Span<'static>> {
+    let mark = tunnel_mark(row);
+    let mark_width = mark.chars().count();
+    if trimmed {
+        let url = truncate_right(&row.url, width.saturating_sub(mark_width));
+        return vec![Span::styled(url, styles.base), Span::styled(mark, styles.mark)];
+    }
+    let pad = width.saturating_sub(row.url.chars().count() + mark_width);
+    vec![
+        Span::styled(row.url.clone(), styles.base),
+        Span::styled(mark, styles.mark),
+        Span::styled(" ".repeat(pad + 2), styles.dim),
+    ]
+}
+
+fn draw_row_buttons(f: &mut Frame, view: &View, (compact, row, rect): (bool, &PortRow, Rect), bg: Style) {
+    for (button, r) in row_buttons(row, rect, compact) {
+        draw_row_button(f, view, r, button.label(compact), bg);
     }
 }

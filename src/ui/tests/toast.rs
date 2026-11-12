@@ -9,6 +9,8 @@ fn copied() -> Toast<'static> {
 #[case::go("claude needs you in shop › main", ToastIcon::Agent(Status::Waiting), ToastButton::Go, " go ")]
 #[case::cancel("restart pending", ToastIcon::Restart, ToastButton::Cancel, " cancel ")]
 #[case::reopen("2 agents closed", ToastIcon::Check, ToastButton::Reopen, " reopen ")]
+#[case::open("port 5173 is tunnelled to localhost:5173", ToastIcon::Check, ToastButton::Open, " open ")]
+#[case::close("a program tunnelled port 5173 to localhost:5174", ToastIcon::Check, ToastButton::Close, " close ")]
 fn a_button_sits_at_its_end(
     #[case] message: &str,
     #[case] icon: ToastIcon,

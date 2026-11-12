@@ -100,6 +100,13 @@ pub(crate) enum What {
         agent: String,
         error: Option<String>,
     },
+    Tunnel {
+        port: u16,
+        local: Option<u16>,
+        state: String,
+        error: Option<String>,
+        holder: u64,
+    },
     Notice {
         token: String,
         agent: String,
@@ -136,7 +143,7 @@ impl Event {
             What::Opened { kind, .. } | What::Closed { kind } => Some(*kind),
             What::Status { .. } | What::Exited { .. } | What::Clipboard { .. } | What::Bell { .. } => Some(Kind::Pane),
             What::Notice { .. } | What::Message { .. } => Some(Kind::Workspace),
-            What::Dropped { .. } | What::Recap { .. } => None,
+            What::Dropped { .. } | What::Recap { .. } | What::Tunnel { .. } => None,
         }
     }
 

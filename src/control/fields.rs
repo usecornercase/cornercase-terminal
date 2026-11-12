@@ -17,6 +17,7 @@ impl Command {
             || self.issue_fields(&mut fields)
             || self.flow_fields(&mut fields)
             || self.account_fields(&mut fields)
+            || self.tunnel_fields(&mut fields)
             || self.server_fields(&mut fields);
         fields.0
     }
@@ -194,6 +195,14 @@ impl Command {
             | Self::ProfileDelete(ProfileDelete { name }) => {
                 fields.add("name", name);
             }
+            _ => return false,
+        }
+        true
+    }
+
+    fn tunnel_fields(&self, fields: &mut Fields) -> bool {
+        match self {
+            Self::TunnelOpen(tunnel) | Self::TunnelClose(tunnel) => tunnel.fields(fields),
             _ => return false,
         }
         true

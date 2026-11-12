@@ -171,6 +171,35 @@ mod compatibility {
         Sound(Cue),
     }
 
+    #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a client from before Tunnel reads it")]
+    enum BeforeTunnel {
+        Rejected(String),
+        Frame(Vec<u8>),
+        Detached,
+        Shutdown,
+        Restart(PathBuf),
+        Response(String),
+        Sound(Cue),
+        Open(Open),
+        Browse(Browse),
+        Machine(MachineOrder),
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a server from before Tunnels reads it")]
+    enum BeforeTunnels {
+        KillServer,
+        Hello(Box<Hello>),
+        Event(Event),
+        Restart,
+        Request(String),
+        Graphics(Support),
+        Activated(String),
+        OpenFailed(Failed),
+        Machines(Machines),
+    }
+
     fn read_as<T: DeserializeOwned + std::fmt::Debug>(msg: &impl Serialize) -> io::ErrorKind {
         let mut frame = Vec::new();
         send(&mut frame, msg).expect("encode");
@@ -325,6 +354,37 @@ mod compatibility {
         assert!(
             matches!(round_trip(&ClientMessage::Machines(machines.clone())), ClientMessage::Machines(m) if m == machines)
         );
+    }
+
+    fn holding() -> Holding {
+        Holding {
+            browse: true,
+            orders: 2,
+            tunnels: vec![Tunnel { port: 5173, local: Some(5174), state: TunnelState::Down("no".into()) }],
+        }
+    }
+
+    #[test]
+    fn a_tunnel_order_comes_after_every_older_server_variant_and_round_trips() {
+        let order = TunnelOrder::Open(5173);
+        assert_eq!(postcard::to_stdvec(&ServerMessage::Tunnel(order)).expect("encode")[0], 10);
+        assert!(matches!(round_trip(&ServerMessage::Tunnel(order)), ServerMessage::Tunnel(o) if o == order));
+    }
+
+    #[test]
+    fn the_tunnels_come_after_every_older_client_variant_and_round_trip() {
+        assert_eq!(postcard::to_stdvec(&ClientMessage::Tunnels(holding())).expect("encode")[0], 9);
+        assert!(matches!(round_trip(&ClientMessage::Tunnels(holding())), ClientMessage::Tunnels(h) if h == holding()));
+    }
+
+    #[test]
+    fn a_client_without_tunnel_orders_reads_one_as_invalid_data() {
+        assert_eq!(read_as::<BeforeTunnel>(&ServerMessage::Tunnel(TunnelOrder::Close(1))), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn a_server_without_tunnels_reads_them_as_invalid_data() {
+        assert_eq!(read_as::<BeforeTunnels>(&ClientMessage::Tunnels(holding())), io::ErrorKind::InvalidData);
     }
 
     fn framed(msg: &impl Serialize) -> String {

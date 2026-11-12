@@ -2,6 +2,31 @@ use super::*;
 
 const SSH_PID: &str = "ssh.pid";
 const SSH_RUNS: &str = "ssh.runs";
+const FORWARD_PY: &str = "import socket, sys, threading
+address, local, _host, port = sys.argv[1].split(':')
+server = socket.socket()
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind((address, int(local)))
+server.listen()
+def pipe(source, target):
+    try:
+        while True:
+            data = source.recv(4096)
+            if not data:
+                break
+            target.sendall(data)
+    except OSError:
+        pass
+    try:
+        target.shutdown(socket.SHUT_WR)
+    except OSError:
+        pass
+while True:
+    client, _ = server.accept()
+    upstream = socket.create_connection(('127.0.0.1', int(port)))
+    threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()
+    threading.Thread(target=pipe, args=(upstream, client), daemon=True).start()
+";
 const REFUSED: &str = "*) echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255 ;;";
 
 pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
@@ -27,12 +52,18 @@ pub(super) fn on_ssh_path(dir: &std::path::Path, name: &str, script: &str) {
 fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
     let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).expect("create the fake ssh's folder");
+    std::fs::write(dir.join("forward.py"), FORWARD_PY).expect("write the forwarder");
     let dir = dir.display();
     write_executable(
         &bin.join("ssh"),
         &format!(
-            "#!/bin/sh\necho $$ > '{dir}/{SSH_PID}'\necho $$ >> '{dir}/{SSH_RUNS}'\nwhile [ $# -gt 0 ]; do\n  \
-             case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
+            "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = -N ] && tunnel=1; done\n\
+             if [ -n \"$tunnel\" ]; then\n  prev=; spec=\n  \
+             for a in \"$@\"; do [ \"$prev\" = -L ] && spec=\"$a\"; prev=\"$a\"; done\n  \
+             port=${{spec##*:}}\n  printf '%s\\n' \"$@\" > '{dir}/tunnel-'\"$port\"'.args'\n  \
+             echo $$ > '{dir}/tunnel-'\"$port\"'.pid'\n  exec python3 '{dir}/forward.py' \"$spec\"\nfi\n\
+             echo $$ > '{dir}/{SSH_PID}'\necho $$ >> '{dir}/{SSH_RUNS}'\nwhile [ $# -gt 0 ]; do\n  \
+             case \"$1\" in\n    -o | -L) shift 2 ;;\n    --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
              if [ -e '{dir}/ssh-'\"$1\"'.held' ]; then\n  \
              echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255\nfi\n\
              echo $$ > '{dir}/ssh-'\"$1\"'.pid'\necho $$ >> '{dir}/ssh-'\"$1\"'.pids'\n\
@@ -64,6 +95,15 @@ pub(super) fn let_ssh_to(session: &Session, destination: &str) {
 
 fn pid_in(session: &Session, file: &str) -> String {
     std::fs::read_to_string(session.dir.join(file)).unwrap_or_default().trim().to_string()
+}
+
+pub(super) fn tunnel_args(session: &Session, port: u16) -> Vec<String> {
+    let text = std::fs::read_to_string(session.dir.join(format!("tunnel-{port}.args"))).unwrap_or_default();
+    text.lines().map(str::to_string).collect()
+}
+
+pub(super) fn tunnel_pid(session: &Session, port: u16) -> String {
+    pid_in(session, &format!("tunnel-{port}.pid"))
 }
 
 pub(super) fn ssh_runs(session: &Session) -> usize {
@@ -631,7 +671,7 @@ fn a_command_that_checks_the_server_first_opens_one_ssh_connection() {
     assert_eq!((focused, hidden), (1, 1));
 }
 
-fn remote_window(session: &Arc<Session>) -> Harness {
+pub(super) fn remote_window(session: &Arc<Session>) -> Harness {
     remote_window_with(session, &[])
 }
 

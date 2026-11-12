@@ -35,6 +35,10 @@ impl App {
         self.opening.machines.shown = machines;
     }
 
+    pub(super) fn window_in_use(&self) -> u64 {
+        self.opening.machines.client
+    }
+
     pub(crate) fn take_machine_orders(&mut self) -> Vec<(u64, MachineOrder)> {
         self.outbox.take_machine_orders()
     }

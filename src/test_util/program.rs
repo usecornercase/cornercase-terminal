@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::net::TcpListener;
 use std::path::Path;
 use std::time::Duration;
 
@@ -8,6 +9,13 @@ pub(crate) fn run(program: &Path, args: &[String], out: &mut impl Write, err: &m
     record(program, args);
     copy(&program.with_extension("out"), out);
     copy(&program.with_extension("err"), err);
+    let _listener = match listen(program, args) {
+        Ok(listener) => listener,
+        Err(message) => {
+            let _ = writeln!(err, "{message}");
+            return 255;
+        }
+    };
     hold(program);
     exit_code(program)
 }
@@ -29,6 +37,19 @@ fn copy(from: &Path, to: &mut impl Write) {
         let _ = to.write_all(&bytes);
         let _ = to.flush();
     }
+}
+
+fn listen(program: &Path, args: &[String]) -> Result<Option<TcpListener>, String> {
+    if !program.with_extension("forward").exists() {
+        return Ok(None);
+    }
+    let spec = args.iter().position(|arg| arg == "-L").and_then(|at| args.get(at + 1));
+    let mut fields = spec.map(|spec| spec.split(':')).into_iter().flatten();
+    let (Some(address), Some(local)) = (fields.next(), fields.next().and_then(|local| local.parse::<u16>().ok()))
+    else {
+        return Err("no -L forward to listen on".into());
+    };
+    TcpListener::bind((address, local)).map(Some).map_err(|error| format!("bind {address}:{local}: {error}"))
 }
 
 fn hold(program: &Path) {

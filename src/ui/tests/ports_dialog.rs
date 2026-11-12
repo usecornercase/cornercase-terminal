@@ -7,7 +7,16 @@ const BIG: (u16, u16) = (120, 30);
 const SMALL: (u16, u16) = (60, 28);
 
 fn row(url: &str, command: &str, pid: i32, place: &str) -> PortRow {
-    PortRow { ticked: false, url: url.into(), command: command.into(), pid, place: place.into(), go: true }
+    PortRow {
+        ticked: false,
+        url: url.into(),
+        command: command.into(),
+        pid,
+        place: place.into(),
+        go: true,
+        open: true,
+        tunnel: None,
+    }
 }
 
 fn ports() -> Ports {
@@ -31,7 +40,6 @@ fn ports() -> Ports {
         note: None,
         empty: false,
         confirm: None,
-        can_open: true,
         compact: false,
     }
 }
@@ -121,7 +129,7 @@ fn the_row_buttons_hit_their_action() {
 
 #[test]
 fn a_window_that_cannot_open_has_no_open_button_and_a_row_without_a_pane_no_go() {
-    let p = Ports { can_open: false, ..ports() };
+    let p = Ports { rows: ports().rows.into_iter().map(|row| PortRow { open: false, ..row }).collect(), ..ports() };
     let r = at(&p, BIG, 2);
     let hit = |x: u16| ports_hit(screen(BIG), &p, Position::new(x, r.y));
     assert_eq!(hit(r.right() - 2), Some(PortsHit::StopRow(2)));
@@ -153,4 +161,38 @@ fn ports_confirm_compact_overflowing() {
     let note = Some(Note::Info("↓ scroll for more".into()));
     let p = Ports { compact: true, confirm: Some(confirm), note, ..ports() };
     insta::assert_snapshot!(snapshot(p, (60, 12)));
+}
+
+fn tunnelled() -> Ports {
+    let states = [Some(PortTunnel::Offered), Some(PortTunnel::Opening), Some(PortTunnel::Up(5174)), None];
+    let opens = |tunnel: &Option<PortTunnel>| matches!(tunnel, Some(PortTunnel::Up(_)) | None);
+    let rows = ports().rows.into_iter().zip(states);
+    let rows = rows.map(|(row, tunnel)| PortRow { open: opens(&tunnel), tunnel, ..row }).collect();
+    Ports { rows, ..ports() }
+}
+
+#[test]
+fn ports_tunnels() {
+    insta::assert_snapshot!(snapshot(tunnelled(), BIG));
+}
+
+#[test]
+fn ports_tunnels_compact() {
+    insta::assert_snapshot!(snapshot(Ports { compact: true, ..tunnelled() }, SMALL));
+}
+
+#[test]
+fn a_tunnelled_row_offers_tunnel_or_close_tunnel() {
+    let p = tunnelled();
+    let hits = |row: usize| {
+        let r = at(&p, BIG, row);
+        let mut hits: Vec<PortsHit> =
+            (r.x..r.right()).filter_map(|x| ports_hit(screen(BIG), &p, Position::new(x, r.y))).collect();
+        hits.dedup();
+        hits
+    };
+    assert!(hits(0).contains(&PortsHit::Tunnel(0)) && !hits(0).contains(&PortsHit::CloseTunnel(0)));
+    assert!(hits(1).contains(&PortsHit::CloseTunnel(1)) && !hits(1).contains(&PortsHit::Open(1)));
+    assert!(hits(2).contains(&PortsHit::CloseTunnel(2)) && hits(2).contains(&PortsHit::Open(2)));
+    assert!(!hits(3).contains(&PortsHit::Tunnel(3)) && !hits(3).contains(&PortsHit::CloseTunnel(3)));
 }

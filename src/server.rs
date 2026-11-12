@@ -632,6 +632,7 @@ impl Server {
         self.flush_notifications();
         self.flush_sounds();
         self.flush_opens();
+        self.flush_tunnel_orders();
     }
 
     fn flush_pointer(&mut self) {
@@ -731,6 +732,7 @@ impl Server {
             ClientMessage::Request(text) => self.request(id, &text),
             ClientMessage::Graphics(graphics) => self.images_changed(id, graphics),
             ClientMessage::Machines(machines) => self.machines_changed(id, machines),
+            ClientMessage::Tunnels(holding) => self.tunnels_reported(id, holding),
         }
         ControlFlow::Continue(())
     }

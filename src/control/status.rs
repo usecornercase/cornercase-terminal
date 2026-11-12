@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::machines::{MachineSeen, ShownRemote};
-use super::{ConfigInfo, Ids, Layout, ThemeInfo, ViewInfo};
+use super::{ConfigInfo, Ids, Layout, ThemeInfo, TunnelInfo, ViewInfo};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -30,6 +30,8 @@ pub struct Report {
     pub(crate) machines: Vec<MachineSeen>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) shown_remote: Option<ShownRemote>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) tunnels: Vec<TunnelInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
