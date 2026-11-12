@@ -386,12 +386,18 @@ fn send_enter(app: &mut App, text: &str) {
 
 #[cfg(unix)]
 fn last_message(app: &mut App, rx: &Receiver<AppEvent>, pane: u64) -> Value {
-    let wanted = wire::LastMessage { pane: Some(pane), ..wire::LastMessage::default() };
-    ask(app, None, Command::LastMessage(wanted));
-    match answered(app, rx, "the last message is read") {
-        Response::Ok(message) => message,
-        Response::Error(error) => panic!("last message failed: {error}"),
-    }
+    let mut message = None;
+    wait_until("the conversation is found and its last message read", || {
+        let wanted = wire::LastMessage { pane: Some(pane), ..wire::LastMessage::default() };
+        ask(app, None, Command::LastMessage(wanted));
+        match answered(app, rx, "the last message is read") {
+            Response::Ok(value) => message = Some(value),
+            Response::Error(error) if error.contains("has not found where") => {}
+            Response::Error(error) => panic!("last message failed: {error}"),
+        }
+        message.is_some()
+    });
+    message.expect("the last message")
 }
 
 #[cfg(unix)]

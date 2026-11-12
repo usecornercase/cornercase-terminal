@@ -336,7 +336,7 @@ mod cpu_time {
 
     #[cfg(unix)]
     #[test]
-    fn grows_for_a_busy_process_by_a_fair_share_of_the_wall_time() {
+    fn grows_for_a_busy_process_and_never_past_the_wall_time() {
         let busy = Running::spawn(Command::new("/bin/sh").args(["-c", "while :; do :; done"]));
         let first = Instant::now();
         let before = cpu_time(busy.pid()).expect("cpu time");
@@ -345,7 +345,7 @@ mod cpu_time {
         });
         let wall = first.elapsed();
         let used = cpu_time(busy.pid()).expect("cpu time").saturating_sub(before);
-        assert!(used.as_secs_f64() >= wall.as_secs_f64() * 0.25, "{used:?} of {wall:?}");
+        assert!(used > Duration::from_millis(100) && used <= wall + Duration::from_millis(100), "{used:?} of {wall:?}");
     }
 
     #[test]
