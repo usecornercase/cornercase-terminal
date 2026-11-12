@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.49
+
+- **Pasting one very long line no longer holds the window.** Text fields wrap long lines, and every wrapped row measured the whole rest of its line again, so one line of a few hundred KiB (a minified file, say) pasted into the flow import page, a prompt or a script took seconds to appear, even on a fast computer, and the window stopped responding meanwhile and again at each redraw. Each row is now measured once, so even a line at the import page's 256 KiB limit shows at once. Lines wrap exactly where they did.
+
 ## 0.13.48
 
 - **Open a remote machine's dev server on your laptop.** In a window from `cornercase remote vps`, a workspace's **ports** dialog now offers **tunnel** on each port: it runs your own `ssh -N -L` to that machine, on the same port of your laptop when it's free (another one when it isn't, and the toast says which), and the row then shows `⇄ :5174` and offers **open** in your browser, **copy** of the laptop's address and **close tunnel**. A tunnel ends with the window, and comes back when the window reconnects. Scripts and agents get `cornercase tunnels`, `cornercase tunnel open PORT` and `cornercase tunnel close PORT` (also through `--remote`), and `status --json` and `events` list the tunnels. A tunnel only reaches the other machine's own `localhost`, and it is your own `ssh`, so your keys and `ProxyJump` apply.
