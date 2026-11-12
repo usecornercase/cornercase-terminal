@@ -52,10 +52,12 @@ fn the_default_mode_is_none_and_no_mode_given_is_the_one_chosen_in_settings() {
         agent_args: [("claude".to_string(), vec!["--permission-mode".to_string(), "plan".to_string()])].into(),
         ..Config::default()
     };
-    let entry = |mode: Option<&str>| Entry {
-        id: 1,
-        task: Task { agent: "claude".into(), mode: mode.map(str::to_string), ..Task::default() },
-        state: State::Pending,
+    let entry = |mode: Option<&str>| {
+        Entry::new(
+            1,
+            Task { agent: "claude".into(), mode: mode.map(str::to_string), ..Task::default() },
+            State::Pending,
+        )
     };
     let add = |mode: Option<&str>| QueueAdd { mode: mode.map(str::to_string), ..QueueAdd::default() };
 
@@ -67,8 +69,7 @@ fn the_default_mode_is_none_and_no_mode_given_is_the_one_chosen_in_settings() {
 
 #[test]
 fn a_started_entry_carries_the_choice_it_kept_for_its_branch() {
-    let entry =
-        |fresh| queue::Entry { id: 1, task: queue::Task { fresh, ..queue::Task::default() }, state: State::Pending };
+    let entry = |fresh| queue::Entry::new(1, queue::Task { fresh, ..queue::Task::default() }, State::Pending);
 
     let starts = |fresh| queued_start(&entry(fresh), (1, None), Some("feat/x".into())).fresh;
 

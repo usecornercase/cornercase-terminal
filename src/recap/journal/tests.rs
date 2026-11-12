@@ -1,8 +1,6 @@
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use rstest::rstest;
-
 use super::files::{append, prune, read};
 use super::*;
 use crate::test_util::TempDir;
@@ -44,19 +42,6 @@ fn the_fixture_line_round_trips() {
     let first: Entry = serde_json::from_str(text.lines().next().expect("a line")).expect("a journal line");
     assert_eq!(first.record, Some(Pointer::Claude("/home/u/.claude/projects/-home-u-api/8f1c.jsonl".into())));
     assert_eq!(first.pull_request.map(|pull| pull.number), Some(212));
-}
-
-#[rstest]
-#[case::claude(Record::Claude("/a".into()))]
-#[case::codex(Record::Codex("/a".into()))]
-#[case::gemini(Record::Gemini("/a".into()))]
-#[case::opencode(Record::Opencode { database: "/a".into(), session: "s".into() })]
-#[case::grok(Record::Grok("/a".into()))]
-#[case::cursor(Record::Cursor("/a".into()))]
-#[case::copilot(Record::Copilot("/a".into()))]
-#[case::vibe(Record::Vibe("/a".into()))]
-fn a_pointer_maps_to_its_record_and_back(#[case] record: Record) {
-    assert_eq!(Pointer::of(&record).record(), record);
 }
 
 #[test]

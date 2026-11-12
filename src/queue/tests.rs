@@ -384,3 +384,78 @@ mod capped_trimming {
         assert_eq!(queue.runs_of(id).count(), RUNS_KEPT * 2);
     }
 }
+
+mod results {
+    use super::*;
+    use crate::queue::outcome::{Outcome, Pull};
+
+    fn finished(queue: &mut Queue) -> u64 {
+        let id = queue.add(task(100)).expect("add");
+        let entry = queue.entry_mut(id).expect("entry");
+        entry.state = State::Started { pane: 3, server: "s".into() };
+        entry.started = Some(150);
+        entry.result = Some(Outcome {
+            at: 200,
+            text: "Reviewed it.".into(),
+            agent: Some("claude".into()),
+            pull_request: Some(Pull { number: 4, title: "Fix".into(), ..Pull::default() }),
+            ..Outcome::default()
+        });
+        id
+    }
+
+    #[test]
+    fn a_result_and_its_start_round_trip_and_leave_the_version_alone() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        let mut queue = Queue::default();
+        finished(&mut queue);
+        assert_eq!(queue.saved().version, 1);
+        persist::save(&path, &queue.saved()).expect("save");
+        assert_eq!(load(&path, 0).saved(), queue.saved());
+        assert!(load(&path, 0).entries[0].result.is_some());
+    }
+
+    #[test]
+    fn an_entry_without_a_result_is_written_as_before() {
+        let mut queue = Queue::default();
+        queue.add(task(100)).expect("add");
+        let text = serde_json::to_string(&queue.saved()).expect("serialize");
+        assert!(!text.contains("result") && !text.contains("started"), "{text}");
+    }
+
+    #[test]
+    fn a_file_from_before_results_reads_as_before() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        let before = r#"{"version":1,"next_id":1,"entries":[{"id":1,"at":100,"zone":"UTC","label":"","agent":"claude","command":"claude","program":"claude","mode":null,"prompt":"fix","submit":true,"place":{"project":"/p","workspace":null,"workspace_name":null,"workspace_id":null,"server":"","branch":null},"state":"started","pane":2,"server":"old"}]}"#;
+        std::fs::write(&path, before).expect("write");
+        let queue = load(&path, 0);
+        let entry = &queue.entries[0];
+        assert_eq!((entry.started, entry.result.clone()), (None, None));
+        let written = serde_json::to_value(queue.saved()).expect("serialize");
+        assert_eq!(written, serde_json::from_str::<serde_json::Value>(before).expect("json"));
+    }
+
+    #[test]
+    fn listing_leaves_the_text_out_and_says_when_it_changed() {
+        let mut queue = Queue::default();
+        let id = finished(&mut queue);
+        let value = serde_json::to_value(Listed::from(queue.entry(id).expect("entry"))).expect("serialize");
+        assert_eq!(value["result_at"], 200);
+        assert_eq!(value["started"], 150);
+        assert!(value.get("result").is_none(), "{value}");
+    }
+
+    #[test]
+    fn restoring_a_removal_brings_the_result_back() {
+        let mut queue = Queue::default();
+        let id = finished(&mut queue);
+        let removed = queue.remove(id).expect("remove");
+        queue.restore(removed);
+        assert_eq!(
+            queue.entry(id).and_then(|entry| entry.result.as_ref()).map(|r| r.text.as_str()),
+            Some("Reviewed it.")
+        );
+    }
+}

@@ -6,9 +6,9 @@ use crate::queue::{Entry, Listed, Place, State, Task};
 use crate::test_util::fixture;
 
 fn queued() -> Entry {
-    Entry {
-        id: 3,
-        task: Task {
+    Entry::new(
+        3,
+        Task {
             at: 1_760_000_000,
             zone: "UTC".into(),
             label: "Fix the login".into(),
@@ -22,8 +22,8 @@ fn queued() -> Entry {
             accounts: BTreeMap::new(),
             ..Task::default()
         },
-        state: State::Pending,
-    }
+        State::Pending,
+    )
 }
 
 fn update_info() -> UpdateInfo {
