@@ -123,6 +123,8 @@ mod reaching {
     #[rstest]
     #[case::remote(&["remote", "otherbox"])]
     #[case::the_known_machines(&["remote", "--known"])]
+    #[case::remembering_a_machine(&["remote", "--remember", "devbox"])]
+    #[case::forgetting_a_machine(&["remote", "--forget", "devbox"])]
     #[case::proxy(&["proxy"])]
     #[case::server(&["server"])]
     #[case::skill(&["skill"])]
@@ -133,6 +135,7 @@ mod reaching {
     #[rstest]
     #[case::a_window(&["--remote", "x", "remote", "y"])]
     #[case::the_known_machines(&["--remote", "x", "remote", "--known"])]
+    #[case::remembering_a_machine(&["--remote", "x", "remote", "--remember", "y"])]
     fn the_window_command_refuses_the_flag(#[case] args: &[&str]) {
         let error = chosen(&parsed(args), &nothing).expect_err("refused");
 

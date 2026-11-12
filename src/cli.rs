@@ -112,6 +112,12 @@ fn run_remote(args: RemoteArgs) -> Result<()> {
     if args.known {
         return known::run(args.json);
     }
+    if let Some(destination) = args.remember {
+        return known::remember(destination, args.command);
+    }
+    if let Some(destination) = args.forget {
+        return known::forget(&destination);
+    }
     let destination = args.destination.ok_or_else(|| Error::WrongUsage("say which machine to reach".into()))?;
     client::remote(&Remote { destination, command: args.command, option: "--command" })
 }

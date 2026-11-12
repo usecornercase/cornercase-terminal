@@ -1,3 +1,4 @@
+use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -7,17 +8,24 @@ use crate::{paths, persist};
 
 const LONGEST: usize = 255;
 const OPTION: &str = "--command";
+pub(crate) const NOT_A_DESTINATION: &str = "one word that does not start with -, such as devbox or me@devbox";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Machine {
     pub(crate) destination: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) command: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) unreached: bool,
 }
 
 impl Machine {
     pub(crate) fn of(remote: &Remote) -> Self {
-        Self { destination: remote.destination.clone(), command: remote.command.clone() }
+        Self { destination: remote.destination.clone(), command: remote.command.clone(), unreached: false }
+    }
+
+    pub(crate) fn never_reached(destination: String, command: Option<String>) -> Self {
+        Self { destination, command, unreached: true }
     }
 
     pub(crate) fn remote(self) -> Remote {
@@ -39,23 +47,30 @@ pub(crate) fn read(file: &Path) -> Vec<Machine> {
         .collect()
 }
 
-pub(crate) fn remember(file: &Path, machine: Machine) {
+pub(crate) fn remember(file: &Path, machine: Machine) -> io::Result<Machine> {
     let mut machines = read(file);
-    match machines.iter_mut().find(|known| known.destination == machine.destination) {
-        Some(known) if *known == machine => return,
-        Some(known) => *known = machine,
-        None => machines.push(machine),
+    let Some(known) = machines.iter_mut().find(|known| known.destination == machine.destination) else {
+        machines.push(machine.clone());
+        persist::write(file, &machines, true)?;
+        return Ok(machine);
+    };
+    let merged = Machine { unreached: known.unreached && machine.unreached, ..machine };
+    if *known != merged {
+        *known = merged.clone();
+        persist::write(file, &machines, true)?;
     }
-    let _ = persist::write(file, &machines, true);
+    Ok(merged)
 }
 
-pub(crate) fn forget(file: &Path, destination: &str) {
+pub(crate) fn forget(file: &Path, destination: &str) -> io::Result<bool> {
     let mut machines = read(file);
     let before = machines.len();
     machines.retain(|machine| machine.destination != destination);
-    if machines.len() != before {
-        let _ = persist::write(file, &machines, true);
+    if machines.len() == before {
+        return Ok(false);
     }
+    persist::write(file, &machines, true)?;
+    Ok(true)
 }
 
 pub(crate) fn valid(destination: &str) -> bool {

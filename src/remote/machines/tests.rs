@@ -1,14 +1,18 @@
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::TempDir;
+use crate::test_util::{TempDir, unwritable_file_in};
 
 fn kept_in(dir: &TempDir) -> PathBuf {
     dir.path().join("machines.json")
 }
 
 fn machine(destination: &str, command: Option<&str>) -> Machine {
-    Machine { destination: destination.into(), command: command.map(Into::into) }
+    Machine { destination: destination.into(), command: command.map(Into::into), unreached: false }
+}
+
+fn remembered(destination: &str, command: Option<&str>) -> Machine {
+    Machine::never_reached(destination.into(), command.map(Into::into))
 }
 
 fn destinations(file: &Path) -> Vec<String> {
@@ -22,7 +26,7 @@ mod remembering {
     fn a_machine_is_kept_for_the_next_window() {
         let dir = TempDir::new();
 
-        remember(&kept_in(&dir), machine("devbox", None));
+        remember(&kept_in(&dir), machine("devbox", None)).expect("written");
 
         assert_eq!(read(&kept_in(&dir)), [machine("devbox", None)]);
     }
@@ -33,7 +37,7 @@ mod remembering {
         let file = kept_in(&dir);
 
         for destination in ["devbox", "gpu-box", "devbox", "me@winbox"] {
-            remember(&file, machine(destination, None));
+            remember(&file, machine(destination, None)).expect("written");
         }
 
         assert_eq!(destinations(&file), ["devbox", "gpu-box", "me@winbox"]);
@@ -43,9 +47,9 @@ mod remembering {
     fn the_last_command_used_for_a_machine_wins() {
         let dir = TempDir::new();
         let file = kept_in(&dir);
-        remember(&file, machine("devbox", Some("~/tools/cornercase")));
+        remember(&file, machine("devbox", Some("~/tools/cornercase"))).expect("written");
 
-        remember(&file, machine("devbox", None));
+        remember(&file, machine("devbox", None)).expect("written");
 
         assert_eq!(read(&file), [machine("devbox", None)]);
     }
@@ -54,11 +58,11 @@ mod remembering {
     fn reaching_a_machine_again_writes_nothing() {
         let dir = TempDir::new();
         let file = kept_in(&dir);
-        remember(&file, machine("devbox", None));
+        remember(&file, machine("devbox", None)).expect("written");
         let by_hand = r#"[ { "destination": "devbox" } ]"#;
         std::fs::write(&file, by_hand).expect("the same list, written by hand");
 
-        remember(&file, machine("devbox", None));
+        remember(&file, machine("devbox", None)).expect("written");
 
         assert_eq!(std::fs::read_to_string(&file).expect("the list"), by_hand);
     }
@@ -67,10 +71,10 @@ mod remembering {
     fn forgetting_one_keeps_the_others() {
         let dir = TempDir::new();
         let file = kept_in(&dir);
-        remember(&file, machine("devbox", None));
-        remember(&file, machine("gpu-box", None));
+        remember(&file, machine("devbox", None)).expect("written");
+        remember(&file, machine("gpu-box", None)).expect("written");
 
-        forget(&file, "devbox");
+        assert!(forget(&file, "devbox").expect("written"));
 
         assert_eq!(destinations(&file), ["gpu-box"]);
     }
@@ -79,9 +83,83 @@ mod remembering {
     fn forgetting_a_machine_it_never_reached_creates_no_file() {
         let dir = TempDir::new();
 
-        forget(&kept_in(&dir), "devbox");
+        assert!(!forget(&kept_in(&dir), "devbox").expect("nothing to write"));
 
         assert!(!kept_in(&dir).exists());
+    }
+}
+
+mod the_mark {
+    use super::*;
+
+    fn text(file: &Path) -> String {
+        std::fs::read_to_string(file).expect("the list")
+    }
+
+    #[test]
+    fn a_machine_a_program_remembered_waits_for_a_window() {
+        let dir = TempDir::new();
+        let file = kept_in(&dir);
+
+        remember(&file, remembered("newbox", Some("/opt/cc"))).expect("written");
+
+        assert_eq!(read(&file), [remembered("newbox", Some("/opt/cc"))]);
+        assert_eq!(text(&file), r#"[{"destination":"newbox","command":"/opt/cc","unreached":true}]"#);
+    }
+
+    #[test]
+    fn a_link_drops_the_mark_and_writes_it_no_more() {
+        let dir = TempDir::new();
+        let file = kept_in(&dir);
+        remember(&file, remembered("newbox", Some("/opt/cc"))).expect("written");
+
+        remember(&file, machine("newbox", Some("/opt/cc"))).expect("written");
+
+        assert_eq!(read(&file), [machine("newbox", Some("/opt/cc"))]);
+        assert_eq!(text(&file), r#"[{"destination":"newbox","command":"/opt/cc"}]"#);
+    }
+
+    #[test]
+    fn remembering_again_takes_the_last_command_and_keeps_the_mark() {
+        let dir = TempDir::new();
+        let file = kept_in(&dir);
+        remember(&file, remembered("newbox", Some("/opt/cc"))).expect("written");
+
+        let kept = remember(&file, remembered("newbox", None)).expect("written");
+
+        assert_eq!(kept, remembered("newbox", None));
+        assert_eq!(read(&file), [remembered("newbox", None)]);
+    }
+
+    #[test]
+    fn remembering_a_machine_a_window_reached_adds_no_mark() {
+        let dir = TempDir::new();
+        let file = kept_in(&dir);
+        remember(&file, machine("devbox", None)).expect("written");
+
+        let kept = remember(&file, remembered("devbox", Some("/opt/cc"))).expect("written");
+
+        assert!(!kept.unreached);
+        assert_eq!(read(&file), [machine("devbox", Some("/opt/cc"))]);
+    }
+
+    #[test]
+    fn the_mark_of_one_machine_outlives_a_link_to_another() {
+        let dir = TempDir::new();
+        let file = kept_in(&dir);
+        remember(&file, remembered("newbox", None)).expect("written");
+
+        remember(&file, machine("devbox", None)).expect("written");
+
+        assert_eq!(read(&file), [remembered("newbox", None), machine("devbox", None)]);
+    }
+
+    #[test]
+    fn a_list_it_cannot_write_is_an_error() {
+        let dir = TempDir::new();
+        let file = unwritable_file_in(&dir, "machines.json");
+
+        assert!(remember(&file, machine("devbox", None)).is_err());
     }
 }
 
@@ -137,7 +215,7 @@ mod reading {
         let written = r#"[{"destination":null},{"destination":"devbox"},{"command":"/opt/cc"}]"#;
         std::fs::write(kept_in(&dir), written).expect("an edited file");
 
-        remember(&kept_in(&dir), machine("gpu-box", None));
+        remember(&kept_in(&dir), machine("gpu-box", None)).expect("written");
 
         assert_eq!(destinations(&kept_in(&dir)), ["devbox", "gpu-box"]);
     }

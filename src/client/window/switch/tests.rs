@@ -6,7 +6,7 @@ use super::*;
 const SCREEN: Rect = Rect { x: 0, y: 0, width: 80, height: 24 };
 
 fn machine(destination: &str, command: Option<&str>) -> Machine {
-    Machine { destination: destination.into(), command: command.map(Into::into) }
+    Machine { destination: destination.into(), command: command.map(Into::into), unreached: false }
 }
 
 fn on(destination: &str) -> Target {
@@ -50,6 +50,16 @@ mod choosing {
         let (to, asks) = chosen(Some("new-box".into()), &Target::Local, known()).expect("a switch");
 
         assert_eq!((to.machine(), asks), (Some("new-box"), true));
+    }
+
+    #[test]
+    fn a_machine_a_program_remembered_asks_first_with_its_command() {
+        let known = vec![Machine::never_reached("newbox".into(), Some("~/bin/cc".into()))];
+
+        let (to, asks) = chosen(Some("newbox".into()), &Target::Local, known).expect("a switch");
+
+        let Target::Remote(remote) = to else { panic!("a remote target") };
+        assert_eq!((remote.command.as_deref(), asks), (Some("~/bin/cc"), true));
     }
 
     #[rstest]

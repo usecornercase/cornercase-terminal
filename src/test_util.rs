@@ -78,6 +78,11 @@ pub(crate) fn spawn_term(
     (crate::term::Term::spawn(opts, tx).expect("spawn /bin/sh"), rx)
 }
 
+pub(crate) fn unwritable_file_in(dir: &TempDir, name: &str) -> PathBuf {
+    std::fs::write(dir.path().join("blocker"), "").expect("a file where a folder should be");
+    dir.path().join("blocker").join(name)
+}
+
 pub(crate) struct TempDir(PathBuf);
 
 impl TempDir {
