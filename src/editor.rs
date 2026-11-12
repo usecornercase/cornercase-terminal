@@ -427,8 +427,20 @@ fn lines_of(chars: &[char], width: usize) -> Vec<Range<usize>> {
     lines
 }
 
+#[cfg(test)]
+thread_local! {
+    static MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn cells(c: char) -> usize {
+    #[cfg(test)]
+    MEASURED.with(|measured| measured.set(measured.get() + 1));
     c.width().unwrap_or(0)
+}
+
+#[cfg(test)]
+pub(crate) fn measured() -> usize {
+    MEASURED.with(std::cell::Cell::get)
 }
 
 fn span(chars: &[char]) -> usize {
@@ -439,11 +451,10 @@ fn wrap_chars(chars: &[char], width: usize) -> Vec<Range<usize>> {
     let width = width.max(1);
     let mut lines = Vec::new();
     let mut start = 0;
-    while span(&chars[start..]) > width {
-        let (mut end, mut used) = (start, 0);
-        while end < chars.len() && used + cells(chars[end]) <= width {
-            used += cells(chars[end]);
-            end += 1;
+    loop {
+        let end = row_end(chars, start, width);
+        if end == chars.len() {
+            break;
         }
         let end = end.max(start + 1);
         let space = (start + 1..end).rev().find(|&i| chars[i] == ' ');
@@ -453,6 +464,15 @@ fn wrap_chars(chars: &[char], width: usize) -> Vec<Range<usize>> {
     }
     lines.push(start..chars.len());
     lines
+}
+
+fn row_end(chars: &[char], start: usize, width: usize) -> usize {
+    let (mut end, mut used) = (start, 0);
+    while let Some(cell) = chars.get(end).copied().map(cells).filter(|cell| used + cell <= width) {
+        used += cell;
+        end += 1;
+    }
+    end
 }
 
 #[cfg(test)]

@@ -753,6 +753,7 @@ mod sharing {
 
 mod import_page {
     use super::*;
+    use crate::flows::share;
 
     #[test]
     fn the_import_page() {
@@ -760,6 +761,32 @@ mod import_page {
         button(&mut s.app, WIDE, dialog::IMPORT);
         s.app.flows_paste("name = \"Pair\"\n", WIDE);
         insta::assert_snapshot!("the_import_page", shown(&mut s.app, WIDE));
+    }
+
+    #[test]
+    fn a_line_at_the_cap_is_drawn_from_its_end_with_the_cursor_after_it() {
+        let mut s = open(false);
+        button(&mut s.app, WIDE, dialog::IMPORT);
+        let line = "x".repeat(share::MAX_BYTES);
+        let before = crate::editor::measured();
+        s.app.handle_event(AppEvent::Input(Event::Paste(line.clone())), WIDE).expect("paste");
+        let mut t = render(&mut s.app, WIDE);
+        let work = crate::editor::measured() - before;
+        let shown = view(&s.app, WIDE);
+        let text = ui::flows_text(WIDE, shown.warnings.len(), shown.preview.is_some());
+        let row = |y: u16| -> String {
+            (text.left()..text.right()).map(|x| t.backend().buffer()[(x, y)].symbol().to_string()).collect()
+        };
+        let width = usize::from(text.width);
+        let tail = share::MAX_BYTES % width;
+        let last = text.bottom() - 1;
+        let (last_row, above) = (row(last), row(last - 1));
+        assert_eq!(last_row.trim_end(), "x".repeat(tail));
+        assert_eq!(above, "x".repeat(width));
+        let cursor = Position::new(text.x + u16::try_from(tail).expect("a column"), last);
+        assert_eq!(t.get_cursor_position().expect("cursor"), cursor);
+        assert_eq!(dialog(&s.app).error(), None);
+        assert!(work <= 16 * line.len(), "{work} width lookups for {} characters", line.len());
     }
 }
 
