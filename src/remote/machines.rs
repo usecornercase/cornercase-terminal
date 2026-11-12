@@ -50,7 +50,7 @@ pub(crate) fn read(file: &Path) -> Vec<Machine> {
 pub(crate) fn readable(file: &Path) -> io::Result<()> {
     let bytes = match std::fs::read(file) {
         Ok(bytes) => bytes,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(_) if !file.exists() => return Ok(()),
         Err(error) => return Err(error),
     };
     serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map(drop).map_err(io::Error::from)
