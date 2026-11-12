@@ -36,9 +36,12 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
             "- you, the orchestrator (pane 12): claude\n",
             "1. coder.\n",
             "2. reviewer and security, in parallel. If either reports findings, send them to coder and go back to \
-             stage 1; at most 3 times,",
-            "3. tester. If it reports failures, send them to coder and go back to stage 1; at most 2",
-            "At the end: push branch fix-login and open a pull request",
+             stage 1, then run every stage after it again, in order. Do this at most 3 times; after that, go on \
+             even if either reports findings again, and list what is left in your final summary.",
+            "3. tester. If it reports failures, send them to coder and go back to stage 1, then run every stage \
+             after it again, in order. Do this at most 2 times; after that, go on even if it reports failures again",
+            "At the end, once every stage after the last change has run on it and its last answer is clean, or its \
+             loop reached its limit (then list what is left): push branch fix-login and open a pull request",
             "(a merge request with `glab mr create` when the repository is on GitLab)",
             "Do not change the public API.\n\nKeep every message",
             "`cornercase wait --all --pane 14 --pane 15 --pane 16 --pane 17 --until turn-over",
@@ -119,8 +122,42 @@ fn a_flow_that_leaves_the_commits_says_not_to_push() {
     flow.stages[1].back = Some(Back { to: 1, when: "findings".into(), at_most: 1 });
     let text = brief(&flow, "x", "quick", Team { members: &members(), trees: &[] }, None);
 
-    assert!(text.contains("If it reports findings, send them to coder and go back to stage 1; at most once"));
-    assert!(text.contains("At the end: leave the commits on branch quick; do not push"), "{text}");
+    assert!(
+        text.contains(
+            "send them to coder and go back to stage 1, then run every stage after it again, in order. Do this at \
+             most once;"
+        ),
+        "{text}"
+    );
+    assert!(text.contains("(then list what is left): leave the commits on branch quick; do not push"), "{text}");
+}
+
+#[test]
+fn a_loop_runs_its_stage_and_every_stage_after_it_again() {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let text = brief(&flow, "x", "b", Team { members: &members(), trees: &[] }, None);
+
+    assert!(
+        text.contains(
+            "When the work goes back to an earlier stage, that stage and every stage after it run again, in order, \
+             on what changed, before the work goes on"
+        ),
+        "{text}"
+    );
+    assert_eq!(text.matches("then run every stage after it again, in order").count(), 2, "{text}");
+    assert!(!text.contains("then go on"), "{text}");
+}
+
+#[test]
+fn the_final_action_waits_for_every_stage_after_the_last_change() {
+    let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let when = "At the end, once every stage after the last change has run on it and its last answer is clean, or \
+                its loop reached its limit (then list what is left): ";
+    let pull = brief(&flow, "x", "b", Team { members: &members(), trees: &[] }, None);
+    assert!(pull.contains(&format!("{when}push branch b")), "{pull}");
+    flow.end = End::Commits;
+    let commits = brief(&flow, "x", "b", Team { members: &members(), trees: &[] }, None);
+    assert!(commits.contains(&format!("{when}leave the commits on branch b")), "{commits}");
 }
 
 #[test]
@@ -130,6 +167,7 @@ fn three_roles_in_parallel_are_any_of_them() {
     let text = brief(&flow, "x", "b", Team { members: &members(), trees: &[] }, None);
 
     assert!(text.contains("2. reviewer, security and tester, in parallel. If any of them reports findings"));
+    assert!(text.contains("go on even if any of them reports findings again"), "{text}");
 }
 
 #[test]
@@ -146,6 +184,7 @@ fn a_member_is_told_whether_it_may_edit() {
         "You are `reviewer` in this team: do not edit the worktree's files and do not commit. Wait for the orchestrator's first \
          message before doing anything."
     );
+    assert!(!member(&coder, None, None).contains("task.md"));
 }
 
 fn arena_trees() -> (Flow, Vec<RoleWorktree>) {
@@ -250,6 +289,21 @@ fn the_brief_names_the_run_folder_and_says_where_it_writes() {
     assert!(
         text.contains(&format!("## Files\n\nThe run has a folder for its files, {DIR} (also `$CORNERCASE_RUN_DIR`"))
     );
+    let task = folder().join("task.md").display().to_string();
+    assert!(
+        text.contains(&format!(
+            "The task is in it as `task.md` ({task}), exactly as it was given, and every role's prompt names that file."
+        )),
+        "{text}"
+    );
+    assert_holds(
+        &text,
+        &[
+            "send each of its roles the path of `task.md` (see Files) and what this stage adds",
+            "never a retelling of the task",
+            "## Task\n\nx\n",
+        ],
+    );
     assert!(text.contains("`orchestrator-<n>.md`"), "{text}");
     assert!(text.contains("Never edit the worktree's files, commit"), "{text}");
     assert!(text.contains("The run's folder is the only place you write."), "{text}");
@@ -263,6 +317,8 @@ fn without_a_folder_the_brief_has_no_files_section() {
     let text = brief(&flow, "x", "b", Team { members: &members(), trees: &[] }, None);
 
     assert!(!text.contains("## Files"), "{text}");
+    assert!(!text.contains("task.md"), "{text}");
+    assert!(text.contains("send each of its roles what it needs (the task, what the stages before produced)"));
     assert!(!text.contains("only place you write"), "{text}");
     assert!(text.contains("Never edit files, commit"), "{text}");
 }
@@ -271,20 +327,23 @@ fn without_a_folder_the_brief_has_no_files_section() {
 fn a_member_with_a_folder_writes_a_file_per_answer_and_still_waits_last() {
     let coder = Role { name: "coder".into(), edits: true, prompt: "Write code.".into(), ..Role::default() };
     let text = member(&coder, None, Some(folder()));
+    let task = folder().join("task.md").display().to_string();
     assert_eq!(
         text,
         format!(
-            "Write code.\n\nYou are `coder` in this team, and you may edit files and commit in this worktree. Write \
-             each answer to a file of its own in the run's folder, {DIR} (also `$CORNERCASE_RUN_DIR`), named after \
-             your role and the next number free there (`coder-1.md`, then `coder-2.md`), and end your turn with that \
-             file's path and a summary of a few lines. Anything else too long for a message (a design, logs, a \
-             script that shows a bug) goes there too, never in the worktree; if your file tools cannot reach the \
-             folder, use your shell. Wait for the orchestrator's first message before doing anything."
+            "Write code.\n\nYou are `coder` in this team, and you may edit files and commit in this worktree. The \
+             run's folder is {DIR} (also `$CORNERCASE_RUN_DIR`). The task in full, exactly as it was given, is \
+             `task.md` there ({task}): read it before you start on the work you are sent, since the orchestrator's \
+             messages say only what each step adds. Write each answer to a file of its own in that folder, named \
+             after your role and the next number free there (`coder-1.md`, then `coder-2.md`), and end your turn \
+             with that file's path and a summary of a few lines. Anything else too long for a message (a design, \
+             logs, a script that shows a bug) goes there too, never in the worktree; if your file tools cannot \
+             reach the folder, use your shell. Wait for the orchestrator's first message before doing anything."
         )
     );
     let reviewer = Role { name: "second reviewer".into(), ..Role::default() };
     let text = member(&reviewer, None, Some(folder()));
-    assert!(text.contains("do not edit the worktree's files and do not commit. Write each answer"), "{text}");
+    assert!(text.contains("do not edit the worktree's files and do not commit. The run's folder is"), "{text}");
     assert!(text.contains("`second-reviewer-1.md`, then `second-reviewer-2.md`"), "{text}");
     assert_eq!(text.matches("Wait for the orchestrator's first message").count(), 1, "{text}");
     assert!(text.ends_with("before doing anything."), "{text}");

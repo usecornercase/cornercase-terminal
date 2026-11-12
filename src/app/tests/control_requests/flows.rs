@@ -220,7 +220,8 @@ fn every_agent_starts_without_asking_its_trust_is_answered_and_the_orchestrator_
         "Fix the login form",
         &format!("coder (pane {}): claude, edits files", pane("coder")),
         &format!("reviewer (pane {}): claude · sonnet, must not edit files", pane("reviewer")),
-        "If it reports findings, send them to coder and go back to stage 1; at most 2 times",
+        "If it reports findings, send them to coder and go back to stage 1, then run every stage after it again, in \
+         order. Do this at most 2 times",
         "Keep it small.",
         "Be brief.",
         &format!("cornercase mark --pane {}", pane(ORCHESTRATOR)),
@@ -232,6 +233,34 @@ fn every_agent_starts_without_asking_its_trust_is_answered_and_the_orchestrator_
         order.iter().any(|l| l.starts_with("got Review it.") && l.contains("do not edit the worktree's files")),
         "{order:#?}"
     );
+}
+
+#[test]
+fn the_task_is_written_whole_to_the_run_folder_before_any_agent_starts() {
+    let script = FAKE.replacen(
+        "log=\"LOG\"\n",
+        "log=\"LOG\"\n[ -f \"$CORNERCASE_RUN_DIR/task.md\" ] && printf 'task there\\n' >> \"$log/order\"\n",
+        1,
+    );
+    let mut team = Team::with(&script);
+    let task = "  Fix the login form\n\nKeep the public API.\n";
+    let run: RunInfo = match team.run_task("Pair", task, None) {
+        Response::Ok(value) => serde_json::from_value(value).expect("the run"),
+        Response::Error(message) => panic!("the flow did not start: {message}"),
+    };
+    let order = team.until_got(3);
+
+    let dir = run.run_dir.expect("the run's folder");
+    let file = dir.join("task.md");
+    assert_eq!(order.iter().filter(|line| *line == "task there").count(), 3, "{order:#?}");
+    assert_eq!(std::fs::read(&file).expect("task.md"), task.as_bytes());
+    assert_eq!(team.app.runs.all()[0].task, task);
+    let written = file.display().to_string();
+    let coder = &order[position(&order, "got Write it.")];
+    assert!(coder.contains(&written), "{coder}");
+    let brief = &order[position(&order, "got You are the orchestrator")];
+    assert!(brief.contains(&written), "{brief}");
+    assert!(brief.contains("never a retelling of the task"), "{brief}");
 }
 
 fn consent_told(app: &mut App) -> Vec<Heard> {
@@ -816,10 +845,13 @@ fn a_restore_makes_a_deleted_folder_again_and_keeps_the_one_that_is_there() {
 
     assert_eq!(again.runs.all()[0].dir.as_deref(), Some(dir.as_path()));
     assert_eq!(mode(&dir), 0o700);
+    assert_eq!(std::fs::read_to_string(dir.join("task.md")).expect("task.md"), "Fix the login form");
     std::fs::write(dir.join("coder-1.md"), "kept").expect("a file");
+    std::fs::write(dir.join("task.md"), "mine").expect("a task of its own");
     let (mut third, _rx) = new_app(team.config.path().join("config.json"));
     assert!(third.restore(&saved, AREA));
     assert!(dir.join("coder-1.md").exists(), "a restore deletes nothing");
+    assert_eq!(std::fs::read_to_string(dir.join("task.md")).expect("task.md"), "mine");
 }
 
 #[test]

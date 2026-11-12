@@ -1,5 +1,5 @@
 use std::fs::{self, DirBuilder, Metadata};
-use std::io;
+use std::io::{self, Write as _};
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
@@ -8,6 +8,7 @@ use crate::os::fs::{DirBuilderExt, set_mode};
 use crate::time;
 
 pub(crate) const ENV: &str = "CORNERCASE_RUN_DIR";
+pub(crate) const TASK: &str = "task.md";
 pub(crate) const MAX_FILES: usize = 200;
 const MAX_DEPTH: usize = 3;
 const MAX_SEEN: usize = 2000;
@@ -60,6 +61,24 @@ pub(crate) fn make(root: &Path, workspace: &Path, millis: i64) -> io::Result<Pat
         }
     }
     Err(io::Error::new(io::ErrorKind::AlreadyExists, "too many folders with that name"))
+}
+
+pub(crate) fn write_task(dir: &Path, task: &str) -> io::Result<()> {
+    let mut file = fs::OpenOptions::new().write(true).create_new(true).open(dir.join(TASK))?;
+    file.write_all(task.as_bytes())
+}
+
+pub(crate) fn ensure_task(dir: &Path, task: &str) -> io::Result<bool> {
+    match write_task(dir, task) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+pub(crate) fn discard(dir: &Path) {
+    let _ = fs::remove_file(dir.join(TASK));
+    let _ = fs::remove_dir(dir);
 }
 
 pub(crate) fn ensure(dir: &Path) -> io::Result<bool> {
