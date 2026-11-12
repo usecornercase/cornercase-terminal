@@ -1,4 +1,4 @@
-import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
+import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueName, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
 import { STATS } from './data';
@@ -4603,7 +4603,7 @@ export class App {
     const o = queueForm(places, confirmed ? place : null, kinds, agent, Intl.DateTimeFormat().resolvedOptions().timeZone, date);
     if (entry) {
       o.id = entry.id;
-      o.label = entry.label !== entry.prompt ? entry.label : undefined;
+      o.label = entry.label !== queueName(entry.prompt) ? entry.label : undefined;
       o.prompt = entry.prompt;
       o.when = whenCombo('on');
       o.clock = clock;
@@ -4707,7 +4707,7 @@ export class App {
     const project = this.projects.find((p) => p.id === place.project);
     const ws = project?.workspaces.find((w) => w.id === place.workspace);
     const workspaceName = ws && (ws.name || (ws.root !== project?.root ? ws.root.split('/').pop() : undefined));
-    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? o.prompt, project: place.project, folder: project?.folder ?? '', workspace: place.workspace, workspaceName, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending', ...(routine ? { repeat: parsed && typeof parsed !== 'string' ? repeat : '', cleanup: o.cleanup && !o.cleanupOff } : {}) };
+    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? queueName(o.prompt), project: place.project, folder: project?.folder ?? '', workspace: place.workspace, workspaceName, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending', ...(routine ? { repeat: parsed && typeof parsed !== 'string' ? repeat : '', cleanup: o.cleanup && !o.cleanupOff } : {}) };
     const mode = (MODES[entry.agent] ?? []).find(([name]) => name === entry.mode)?.[1];
     entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : entry.mode ? this.agentCommand(entry.agent) : this.agentCommandWithoutMode(entry.agent);
     this.queued = [...this.queued.filter((item) => item.id !== entry.id), entry].sort((a, b) => a.at - b.at || a.id - b.id);

@@ -2,7 +2,7 @@ import { BOLD, type Rect, type Style, rect } from '../term/grid';
 import { type Combo, COMBO_ROWS, combo, comboKey, comboList, comboRows, drawComboField, drawComboList, openCombo, scrollCombo } from './combo';
 import { EMPTY, bottom, intersect, isEmpty, right } from './layout';
 import type { Key } from './programs';
-import { paintRows, seg, wrapWords } from './text';
+import { firstWords, paintRows, seg, wrapWords } from './text';
 import { type Editable, type FieldGrip, drawSelection, editKey, fieldLines, fieldPosition, placeIn } from './todo';
 import type { Painter } from './ui';
 
@@ -542,3 +542,8 @@ export function repeatWalk(r: Repeat, at: number, now: number): { last: number; 
 }
 
 export const routineSlug = (label: string): string => label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30).replace(/-+$/, '') || 'routine';
+
+export const queueName = (prompt: string): string => {
+  const lines = prompt.split('\n').map((line) => line.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').split(/\s+/).filter(Boolean).join(' '));
+  return firstWords(lines.find((line) => line !== '') ?? '', 40);
+};
