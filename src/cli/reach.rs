@@ -103,8 +103,8 @@ pub(super) fn there(command: &Command, remote: &Remote) -> Option<Result<Vec<Str
         Command::Restart(RestartArgs { yes, when }) => {
             [words("restart", &[("--yes", *yes)]), when_words(when)].concat()
         }
-        Command::Update(UpdateArgs { check, yes, when }) => {
-            [words("update", &[("--check", *check), ("--yes", *yes)]), when_words(when)].concat()
+        Command::Update(UpdateArgs { check, yes, when, json }) => {
+            [words("update", &[("--check", *check), ("--yes", *yes), ("--json", *json)]), when_words(when)].concat()
         }
         Command::Logs(logs) => [vec!["logs".to_string()], logs_flags(logs)].concat(),
         Command::Plugin(PluginArgs { action }) => return plugin_there(action, remote),

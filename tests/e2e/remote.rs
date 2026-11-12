@@ -193,7 +193,7 @@ fn older_there(name: &str, body: &str, args: &[&str]) -> (std::process::Output, 
     (out, path)
 }
 
-fn one_line_of_json(out: &std::process::Output) -> serde_json::Value {
+pub(super) fn one_line_of_json(out: &std::process::Output) -> serde_json::Value {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(stdout.trim_end().lines().count(), 1, "{out:?}");
     serde_json::from_str(&stdout).expect("a line of JSON")

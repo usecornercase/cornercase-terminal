@@ -1,7 +1,11 @@
 use std::io::{self, IsTerminal, Write, stdin, stdout};
 use std::net::Shutdown;
+use std::path::Path;
 use std::time::Duration;
 
+use serde::Serialize;
+
+use super::args::UpdateArgs;
 use crate::client::{
     Found, RESTART, answer, answered, confirm, find, input_ended, kill_server, report_now, request, restart_server,
     running_now, wait_for_exit, watched,
@@ -33,39 +37,76 @@ pub(super) enum When {
     Idle { timeout: Option<f64> },
 }
 
-pub(super) fn update(check_only: bool, yes: bool, when: When) -> Result<bool> {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "outcome", rename_all = "kebab-case")]
+enum Ended {
+    Updated { from: &'static str, version: String, path: String },
+    UpToDate { version: &'static str },
+    Manual { version: &'static str, latest: String, command: &'static str },
+    Available { version: &'static str, latest: String, path: String },
+}
+
+fn releases() -> Result<String> {
     let url = std::env::var(update::LATEST_ENV).ok();
     if cfg!(debug_assertions) && url.is_none() {
         return Err(Error::DevelopmentBuild);
     }
-    let url = url.unwrap_or_else(|| update::DEFAULT_LATEST.into());
-    let target = update::target();
-    let install = update::install(&canonicalize(std::env::current_exe()?)?, target);
-    if check_only {
-        match update::check(&url, CURRENT)? {
-            Some(release) => {
-                let command = match install {
-                    Install::Replace(_) => "cornercase update",
-                    Install::Command(command) => command,
-                };
-                announce(&release.version, command);
-            }
-            None => println!("cornercase {CURRENT} is up to date"),
+    Ok(url.unwrap_or_else(|| update::DEFAULT_LATEST.into()))
+}
+
+fn checking(url: &str, exe: &Path, target: Option<&str>) -> Result<Ended> {
+    let Some(release) = update::check(url, CURRENT)? else {
+        return Ok(Ended::UpToDate { version: CURRENT });
+    };
+    Ok(match update::install(exe, target) {
+        Install::Replace(path) => {
+            Ended::Available { version: CURRENT, latest: release.version, path: path.to_string_lossy().into_owned() }
         }
-        return Ok(true);
-    }
-    match update::install_latest(&url, CURRENT, &install, target)? {
-        Outcome::UpToDate => println!("cornercase {CURRENT} is up to date"),
-        Outcome::Manual(version, command) => {
-            announce(&version, command);
-            return Ok(false);
-        }
+        Install::Command(command) => Ended::Manual { version: CURRENT, latest: release.version, command },
+    })
+}
+
+fn installing(url: &str, exe: &Path, target: Option<&str>) -> Result<Ended> {
+    Ok(match update::install_latest(url, CURRENT, &update::install(exe, target), target)? {
+        Outcome::UpToDate => Ended::UpToDate { version: CURRENT },
         Outcome::Updated(version) => {
-            println!("updated cornercase {CURRENT} → {version}");
-            offer_restart(yes, when)?;
+            Ended::Updated { from: CURRENT, version, path: exe.to_string_lossy().into_owned() }
+        }
+        Outcome::Manual(latest, command) => Ended::Manual { version: CURRENT, latest, command },
+    })
+}
+
+fn say(ended: &Ended) {
+    match ended {
+        Ended::UpToDate { .. } => println!("cornercase {CURRENT} is up to date"),
+        Ended::Updated { version, .. } => println!("updated cornercase {CURRENT} → {version}"),
+        Ended::Available { latest, .. } => announce(latest, "cornercase update"),
+        Ended::Manual { latest, command, .. } => announce(latest, command),
+    }
+}
+
+fn json_line(ended: &Ended) -> Result<String> {
+    Ok(serde_json::to_string(ended).map_err(|e| Error::Control(e.to_string()))? + "\n")
+}
+
+fn status(ended: &Ended, check: bool) -> Result<bool> {
+    if matches!(ended, Ended::Manual { .. }) && !check { Err(Error::UpdateByHand) } else { Ok(true) }
+}
+
+pub(super) fn update(args: &UpdateArgs) -> Result<bool> {
+    let url = releases()?;
+    let exe = canonicalize(std::env::current_exe()?)?;
+    let target = update::target();
+    let ended = if args.check { checking(&url, &exe, target)? } else { installing(&url, &exe, target)? };
+    if args.json {
+        super::print_json_text(&json_line(&ended)?)?;
+    } else {
+        say(&ended);
+        if matches!(ended, Ended::Updated { .. }) {
+            offer_restart(args.yes, args.when.when())?;
         }
     }
-    Ok(true)
+    status(&ended, args.check)
 }
 
 fn announce(version: &str, command: &str) {

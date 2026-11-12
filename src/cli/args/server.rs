@@ -109,6 +109,12 @@ pub(crate) struct UpdateArgs {
     pub(crate) yes: bool,
     #[command(flatten)]
     pub(crate) when: WhenArgs,
+    #[arg(
+        long,
+        conflicts_with_all = ["yes", "when_idle", "timeout"],
+        help = "Print what it did (with --check, what it found) as one line of JSON, for a program; it asks nothing and never restarts the server"
+    )]
+    pub(crate) json: bool,
 }
 
 #[derive(Debug, Args)]

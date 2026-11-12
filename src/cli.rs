@@ -128,7 +128,7 @@ fn run_command(command: Command) -> Result<bool> {
         Command::Control(control) => return run_control(control),
         Command::Remote(args) => run_remote(args)?,
         Command::Skill => print!("{SKILL}"),
-        Command::Update(update) => return update::update(update.check, update.yes, update.when.when()),
+        Command::Update(update) => return update::update(&update),
         Command::Restart(restart) => update::restart(restart.yes, restart.when.when())?,
         Command::StartServer(start) => start_server::run(&start)?,
         Command::KillServer(kill) => return update::kill(kill.yes),

@@ -172,6 +172,8 @@ mod forwarding {
     #[case::restart(&["restart", "--yes", "--when-idle", "--timeout", "1.5"])]
     #[case::restart_now(&["restart"])]
     #[case::update_check(&["update", "--check"])]
+    #[case::update_json(&["update", "--json"])]
+    #[case::update_check_json(&["update", "--check", "--json"])]
     #[case::update_when_idle(&["update", "--yes", "--when-idle"])]
     #[case::logs_follow(&["logs", "-n", "50", "--follow"])]
     #[case::logs_path(&["logs", "--path"])]
@@ -201,6 +203,11 @@ mod forwarding {
         let again = parsed(&sent.iter().map(String::as_str).collect::<Vec<_>>());
 
         assert_eq!(format!("{:?}", again.command), format!("{:?}", parsed(args).command), "{sent:?}");
+    }
+
+    #[test]
+    fn the_json_flag_goes_there() {
+        assert_eq!(there_of(&["update", "--check", "--json"]), ["update", "--check", "--json"]);
     }
 
     #[test]
@@ -297,6 +304,7 @@ mod outcomes {
     #[case::usage(2, 2)]
     #[case::ssh(255, 255)]
     #[case::interrupted(130, 130)]
+    #[case::update_by_hand(6, 6)]
     fn another_code_is_passed_on_without_a_message(#[case] code: i32, #[case] passed: u8) {
         assert!(matches!(outcome(&devbox(), status(code)), Err(Error::Exited(c)) if c == passed));
     }
