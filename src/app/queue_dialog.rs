@@ -526,8 +526,7 @@ fn fill_routine(form: &mut Form, entry: &queue::Entry) {
 
 fn fill_from_entry(form: &mut Form, entry: &queue::Entry, id: Option<u64>, clock: &str) {
     form.id = id;
-    form.label =
-        (entry.task.label != entry.task.prompt.lines().next().unwrap_or_default()).then(|| entry.task.label.clone());
+    form.label = (entry.task.label != queue::prompt_name(&entry.task.prompt)).then(|| entry.task.label.clone());
     form.prompt = Editor::new(&entry.task.prompt);
     form.when = When::On.combo();
     form.clock = Editor::new(clock);

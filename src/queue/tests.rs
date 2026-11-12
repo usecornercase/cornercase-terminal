@@ -2,6 +2,8 @@ use super::*;
 use crate::persist;
 use crate::test_util::TempDir;
 
+const LONG: &str = "Review the open pull requests and fix the failing checks on main, then write a short summary of what changed and what is left for tomorrow.";
+
 fn task(at: i64) -> Task {
     Task { at, prompt: "fix the login".into(), zone: "UTC".into(), ..Task::default() }
 }
@@ -55,8 +57,48 @@ mod scheduling {
     }
 }
 
+mod names {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::a_short_prompt("fix the login", "fix the login")]
+    #[case::a_paragraph(LONG, "Review the open pull requests and fix…")]
+    #[case::blank_lines_first("\n   \nFix the login form\n\nand add a test", "Fix the login form")]
+    #[case::a_tab_between_words("Fix\tthe   login", "Fix the login")]
+    #[case::nothing("", "")]
+    fn a_prompt_names_its_entry_with_its_first_words(#[case] prompt: &str, #[case] name: &str) {
+        assert_eq!(prompt_name(prompt), name);
+    }
+}
+
 mod persistence {
     use super::*;
+
+    #[test]
+    fn a_name_older_releases_took_from_the_whole_first_line_is_cut_on_load() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        let mut queue = Queue::default();
+        let cases = [
+            (LONG, LONG, "Review the open pull requests and fix…"),
+            ("nightly review", LONG, "nightly review"),
+            ("#7 Fix login", "Work on https://github.com/acme/shop/issues/7", "#7 Fix login"),
+            ("", "\nFix the login", "Fix the login"),
+        ];
+        let ids: Vec<u64> = cases
+            .iter()
+            .map(|(label, prompt, _)| {
+                queue.add(Task { label: (*label).into(), prompt: (*prompt).into(), ..task(1000) }).expect("add")
+            })
+            .collect();
+        persist::save(&path, &queue.saved()).expect("save");
+        let restored = load(&path, 0);
+        for (id, (_, _, name)) in ids.iter().zip(cases) {
+            assert_eq!(restored.entry(*id).expect("entry").task.label, name);
+        }
+    }
 
     #[test]
     fn round_trips_states_targets_and_ids_without_reusing_removed_ids() {

@@ -17,6 +17,7 @@ pub(crate) const VERSION: u32 = 2;
 pub(crate) const RUNS_KEPT: usize = 10;
 pub(crate) const GRACE: i64 = 600;
 pub(crate) const UNDOS: usize = 16;
+const NAME_MAX: usize = 40;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Place {
@@ -271,12 +272,32 @@ pub(crate) fn read_saved(path: &Path) -> Option<Saved> {
     Some(saved)
 }
 
+pub(crate) fn prompt_name(prompt: &str) -> String {
+    let line = prompt
+        .lines()
+        .map(|line| crate::text::one_line(&line.replace(char::is_control, " ")))
+        .find(|line| !line.is_empty())
+        .unwrap_or_default();
+    crate::text::first_words(&line, NAME_MAX)
+}
+
+fn older_prompt_name(prompt: &str) -> String {
+    crate::text::one_line(&prompt.lines().next().unwrap_or_default().replace(char::is_control, ""))
+}
+
+fn rename_older(task: &mut Task) {
+    if task.label == older_prompt_name(&task.prompt) {
+        task.label = prompt_name(&task.prompt);
+    }
+}
+
 pub(crate) fn load(path: &Path, now: i64) -> Queue {
     let Some(saved) = read_saved(path) else { return Queue::default() };
     let mut queue = Queue { entries: saved.entries, next_id: saved.next_id };
     queue.next_id = queue.entries.iter().map(|entry| entry.id).max().unwrap_or_default().max(queue.next_id);
     queue.sort();
     for entry in &mut queue.entries {
+        rename_older(&mut entry.task);
         if entry.state == State::Starting {
             entry.state = State::Failed {
                 reason: "the server stopped while this entry was starting; check its workspace before trying again"

@@ -35,6 +35,19 @@ pub(crate) fn truncate_right(s: &str, max: usize) -> String {
     format!("{}…", head.trim_end_matches('…'))
 }
 
+pub(crate) fn first_words(s: &str, max: usize) -> String {
+    if s.chars().count() <= max || max < 2 {
+        return s.to_string();
+    }
+    let head: String = s.chars().take(max - 1).collect();
+    let at_a_word = s.chars().nth(max - 1).is_some_and(char::is_whitespace);
+    let kept = if at_a_word { Some(head.as_str()) } else { head.rfind(char::is_whitespace).map(|at| &head[..at]) };
+    match kept.map(str::trim_end) {
+        Some(kept) if kept.chars().count() * 2 >= max => format!("{}…", kept.trim_end_matches('…').trim_end()),
+        _ => truncate_right(s, max),
+    }
+}
+
 pub(crate) fn cells(s: &str) -> usize {
     s.width()
 }
