@@ -145,7 +145,7 @@ mod the_page {
     #[test]
     fn a_paste_past_the_cap_is_refused() {
         let mut d = dialog();
-        d.paste(&"x".repeat(share::MAX_BYTES), ROOM);
+        d.paste(&format!("{}\n", "x".repeat(63)).repeat(share::MAX_BYTES / 64), ROOM);
         d.paste("more", ROOM);
         assert_eq!(d.error(), Some(share::too_large()));
         assert_eq!(d.importing.as_ref().expect("page").editor.text().len(), share::MAX_BYTES);

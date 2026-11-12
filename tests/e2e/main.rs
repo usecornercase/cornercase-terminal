@@ -106,9 +106,15 @@ struct Session {
 impl Session {
     fn new() -> Arc<Self> {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("cornercase-e2e-sock-{}-{n}", std::process::id()));
-        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).expect("create socket dir");
+        let dir = loop {
+            let n = NEXT.fetch_add(1, Ordering::Relaxed);
+            let dir = std::env::temp_dir().join(format!("cornercase-e2e-sock-{}-{n}", std::process::id()));
+            match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
+                Ok(()) => break dir,
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => panic!("create socket dir: {e}"),
+            }
+        };
         std::fs::write(dir.join("tour.json"), r#"{"version":1,"offered":true,"announced":true}"#).expect("write tour");
         std::fs::write(dir.join("star.json"), r#"{"version":2,"shown":1}"#).expect("write star");
         Arc::new(Self { dir })

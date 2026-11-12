@@ -41,8 +41,9 @@ pub(super) mod a_bug {
     use super::*;
     use crate::graphics::Support;
     use crate::state::{PaneState, ProjectState, State, TabState, WorkspaceState};
-    use crate::test_util::wait_until;
+    use crate::test_util::wait_until_within;
 
+    const WITH_A_BACKTRACE: Duration = Duration::from_secs(30);
     pub(in crate::server) const COLS: u16 = 100;
     pub(in crate::server) const ROWS: u16 = 20;
     pub(in crate::server) const LISTEN: &str =
@@ -237,7 +238,7 @@ pub(super) mod a_bug {
     impl Client {
         pub(super) fn received(&self, last: impl Fn(&ServerMessage) -> bool) -> Vec<ServerMessage> {
             let mut got = Vec::new();
-            wait_until("the message arrives", || {
+            wait_until_within("the message arrives", WITH_A_BACKTRACE, || {
                 got.extend(std::iter::from_fn(|| self.frames.try_recv().ok()));
                 got.iter().any(&last)
             });
@@ -303,7 +304,7 @@ pub(super) mod a_bug {
         }
 
         pub(super) fn until(&mut self, what: &str, cond: impl Fn(&Self) -> bool) {
-            wait_until(what, || {
+            wait_until_within(what, WITH_A_BACKTRACE, || {
                 self.drain();
                 cond(self)
             });

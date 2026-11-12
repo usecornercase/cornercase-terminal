@@ -28,8 +28,10 @@ jobs:
         include:
           - os: ubuntu-24.04
             timeout: 30
+            threads: 8
           - os: macos-15
-            timeout: 60
+            timeout: 45
+            threads: 8
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
@@ -48,11 +50,23 @@ jobs:
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.151
+
       - name: clippy
         run: cargo clippy --all-targets --all-features --locked -- -D warnings
 
       - name: tests
-        run: cargo test --locked
+        run: cargo nextest run --locked --profile ci --test-threads ${{ matrix.threads }}
+
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
+          overwrite: true
 
   windows:
     name: clippy + tests (windows-2025)

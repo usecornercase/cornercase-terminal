@@ -2,6 +2,34 @@ use std::process::Command;
 
 use super::*;
 
+mod temp_dir {
+    use super::*;
+
+    #[test]
+    fn skips_a_folder_a_dead_process_left_behind() {
+        let base = TempDir::new();
+        std::fs::create_dir(base.path().join("stem-0")).expect("a leftover");
+        std::fs::create_dir(base.path().join("stem-1")).expect("a leftover");
+        let mut counter = 0..;
+
+        let dir = fresh_dir(base.path(), "stem", || counter.next().expect("a number"));
+
+        assert_eq!(dir, base.path().join("stem-2"));
+        assert!(dir.is_dir());
+    }
+}
+
+mod free_port {
+    use super::*;
+
+    #[test]
+    fn gives_a_different_port_each_time() {
+        let (a, b) = (free_port(), free_port());
+
+        assert_ne!(a, b);
+    }
+}
+
 mod fake_program {
     use super::*;
 
