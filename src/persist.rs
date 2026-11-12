@@ -8,6 +8,14 @@ use serde::Serialize;
 
 use crate::os::fs::{OpenOptionsExt, Stat, set_file_mode, stat, stat_file};
 
+const NAME_LIMIT: usize = 255;
+const TEMPORARY_END: &str = ".tmp";
+const PID_DIGITS: usize = u32::MAX.ilog10() as usize + 1;
+const COUNT_DIGITS: usize = u64::MAX.ilog10() as usize + 1;
+
+pub(crate) const MAX_NAME: usize =
+    NAME_LIMIT - (".".len() + PID_DIGITS + ".".len() + COUNT_DIGITS + TEMPORARY_END.len());
+
 const TRIES: u32 = 16;
 
 pub(crate) const SETTLE: Duration = Duration::from_secs(2);
@@ -67,7 +75,7 @@ fn create_temporary(path: &Path, kind: Kind, next: &AtomicU64) -> io::Result<(Pa
     let mut options = OpenOptions::new();
     options.write(true).create_new(true).mode(kind.mode());
     for _ in 0..TRIES {
-        let temp = temporary(path, next.fetch_add(1, Ordering::Relaxed))?;
+        let temp = temporary(path, std::process::id(), next.fetch_add(1, Ordering::Relaxed))?;
         match options.open(&temp) {
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
             opened => return opened.map(|file| (temp, file)),
@@ -77,12 +85,12 @@ fn create_temporary(path: &Path, kind: Kind, next: &AtomicU64) -> io::Result<(Pa
     Err(io::Error::new(io::ErrorKind::AlreadyExists, message))
 }
 
-fn temporary(path: &Path, n: u64) -> io::Result<PathBuf> {
+fn temporary(path: &Path, pid: u32, n: u64) -> io::Result<PathBuf> {
     let Some(name) = path.file_name() else {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "a file to write needs a name"));
     };
     let mut name = name.to_os_string();
-    name.push(format!(".{}.{n}.tmp", std::process::id()));
+    name.push(format!(".{pid}.{n}{TEMPORARY_END}"));
     Ok(path.with_file_name(name))
 }
 

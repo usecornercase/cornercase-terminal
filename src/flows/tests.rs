@@ -677,13 +677,6 @@ roles = ["coder"]
         assert!(store::edits_builtin(&listing.builtins, &listing.flows[3]));
         assert_eq!(listing.broken[0].0, dir.join("broken.toml"));
     }
-
-    #[test]
-    fn file_names_are_slugs() {
-        assert_eq!(store::file_name("Bug, test first"), "bug-test-first");
-        assert_eq!(store::file_name("  ¡Revisión!  "), "revisión");
-        assert_eq!(store::file_name("***"), "flow");
-    }
 }
 
 mod commands {

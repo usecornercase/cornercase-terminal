@@ -119,7 +119,7 @@ mod writing {
     fn a_temporary_name_a_crash_left_is_skipped() {
         let tmp = TempDir::new();
         let path = tmp.path().join("machines.json");
-        let left = temporary(&path, 0).expect("a name");
+        let left = temporary(&path, std::process::id(), 0).expect("a name");
         std::fs::write(&left, "left by a crash").expect("leave a file");
 
         let (made, file) = create_temporary(&path, Kind::Public, &AtomicU64::new(0)).expect("create");
@@ -146,5 +146,16 @@ mod writing {
 
         let mode = |path: &Path| std::fs::metadata(path).expect("stat").permissions().mode() & 0o777;
         assert_eq!((mode(&private), mode(&public)), (0o600, mode(&plain)));
+    }
+}
+
+mod naming {
+    use super::*;
+
+    #[test]
+    fn the_widest_temporary_name_of_the_longest_name_just_fits_the_limit() {
+        let path = Path::new("folder").join("a".repeat(MAX_NAME));
+        let temp = temporary(&path, u32::MAX, u64::MAX).expect("a name");
+        assert_eq!(temp.file_name().map(std::ffi::OsStr::len), Some(NAME_LIMIT));
     }
 }
