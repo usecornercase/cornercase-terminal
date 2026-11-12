@@ -103,7 +103,7 @@ They import only other leaves, the standard library and external crates.
 | `log.rs` | `server.log`: levels, the `key=value` line format, the writer thread and its rotation, background job timings, and `cornercase logs`. `app/trace.rs` logs what changed in the app after each step of the server loop. |
 | `panics.rs` | Containing panics: `catch_unwind` around each step of the server loop and each background job, and the hook that writes them to `server.log`. |
 | `paths.rs` | The socket, the lock and every file cornercase keeps. |
-| `persist.rs` | Safe JSON writes and the quiet-time `Saver`. |
+| `persist.rs` | Safe writes, each through a temporary file of its own renamed over the file (JSON, and a flow's TOML), and the quiet-time `Saver`. |
 | `process.rs` | A process's cwd, name, arguments, environment, children and memory footprint, per platform; it also stops and reaps a child. |
 | `text.rs` | Truncation, displayed paths, folder names, breadcrumbs, one-line text. |
 | `time.rs` | Timestamps, calendar dates and ages. |

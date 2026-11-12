@@ -12,10 +12,7 @@ pub(crate) fn save(folder: &Path, choice: Choice, recap: &Recap) -> std::io::Res
     let dir = folder.join(choice.name());
     crate::os::fs::create_private_dir_all(&dir)?;
     persist::write(&dir.join("recap.json"), recap, true)?;
-    let md = dir.join("recap.md");
-    let tmp = dir.join("recap.md.tmp");
-    write_private(&tmp, recap.text.as_bytes())?;
-    std::fs::rename(tmp, md)
+    persist::write_bytes(&dir.join("recap.md"), recap.text.as_bytes(), persist::Kind::Private).map(drop)
 }
 
 pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
