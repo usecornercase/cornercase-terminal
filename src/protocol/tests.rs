@@ -200,6 +200,21 @@ mod compatibility {
         Machines(Machines),
     }
 
+    #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a window from before Forget reads an order")]
+    enum BeforeForget {
+        Open(u16),
+        Close(u16),
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a server from before Closed reads a state")]
+    enum BeforeClosed {
+        Opening,
+        Up,
+        Down(String),
+    }
+
     fn read_as<T: DeserializeOwned + std::fmt::Debug>(msg: &impl Serialize) -> io::ErrorKind {
         let mut frame = Vec::new();
         send(&mut frame, msg).expect("encode");
@@ -385,6 +400,26 @@ mod compatibility {
     #[test]
     fn a_server_without_tunnels_reads_them_as_invalid_data() {
         assert_eq!(read_as::<BeforeTunnels>(&ClientMessage::Tunnels(holding())), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn a_forget_order_and_the_closed_state_come_after_the_older_variants_and_round_trip() {
+        assert_eq!(postcard::to_stdvec(&TunnelOrder::Forget(5173)).expect("encode")[0], 2);
+        assert_eq!(postcard::to_stdvec(&TunnelState::Closed).expect("encode")[0], 3);
+        let order = ServerMessage::Tunnel(TunnelOrder::Forget(5173));
+        assert!(matches!(round_trip(&order), ServerMessage::Tunnel(TunnelOrder::Forget(5173))));
+        let closed = ClientMessage::Tunnels(Holding {
+            browse: false,
+            orders: 0,
+            tunnels: vec![Tunnel { port: 1, local: None, state: TunnelState::Closed }],
+        });
+        assert!(matches!(round_trip(&closed), ClientMessage::Tunnels(h) if h.tunnels[0].state == TunnelState::Closed));
+    }
+
+    #[test]
+    fn a_window_without_forget_reads_one_as_an_error() {
+        assert_eq!(read_as::<BeforeForget>(&TunnelOrder::Forget(1)), io::ErrorKind::InvalidData);
+        assert_eq!(read_as::<BeforeClosed>(&TunnelState::Closed), io::ErrorKind::InvalidData);
     }
 
     fn framed(msg: &impl Serialize) -> String {

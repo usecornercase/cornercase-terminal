@@ -191,6 +191,14 @@ pub(crate) fn use_placed_start() -> Result<()> {
     require("machine-start", "cannot answer a start as soon as its tab is open")
 }
 
+pub(crate) fn use_tunnel_hold() -> Result<()> {
+    require("tunnel-hold", "cannot hold a tunnel for a program")
+}
+
+pub(crate) fn own_connection() -> Result<()> {
+    if shared::active() { Err(Error::OwnConnection) } else { Ok(()) }
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     if shared::active() {
         return shared::require(feature, lacks);

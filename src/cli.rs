@@ -557,8 +557,8 @@ fn event_line(value: &Value) -> String {
             let failure = error.as_ref().map(|error| format!(": {error}")).unwrap_or_default();
             format!("recap {range}  {state} ({agent}){failure}")
         }
-        (_, What::Tunnel { port, local, state, error, holder }) => {
-            tunnel_line(*port, *local, state, error.as_deref(), *holder)
+        (_, What::Tunnel { port, local, state, error, holder, kind }) => {
+            tunnel_line(*port, *local, (state, error.as_deref()), (*holder, kind.as_deref()))
         }
         (_, What::Dropped { count }) => format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
@@ -568,10 +568,16 @@ fn event_line(value: &Value) -> String {
     }
 }
 
-fn tunnel_line(port: u16, local: Option<u16>, state: &str, error: Option<&str>, holder: u64) -> String {
+fn tunnel_line(
+    port: u16,
+    local: Option<u16>,
+    (state, error): (&str, Option<&str>),
+    (holder, kind): (u64, Option<&str>),
+) -> String {
     let local = local.map(|local| format!(" → localhost:{local}")).unwrap_or_default();
     let error = error.map(|error| format!(": {error}")).unwrap_or_default();
-    format!("tunnel {port}  {state}{local}{error}  (holder {holder})")
+    let who = if kind == Some("hold") { "hold" } else { "holder" };
+    format!("tunnel {port}  {state}{local}{error}  ({who} {holder})")
 }
 
 fn message_line(subject: Option<String>, kind: &str, message: &str) -> String {

@@ -5,7 +5,11 @@ use crate::cli::Cli;
 use crate::cli::args::{Command as Cmd, Control};
 
 fn info(port: u16, local: Option<u16>, state: &str, error: Option<&str>, holder: u64) -> TunnelInfo {
-    TunnelInfo { port, local, state: state.into(), error: error.map(str::to_string), holder }
+    TunnelInfo { port, local, state: state.into(), error: error.map(str::to_string), holder, kind: "window".into() }
+}
+
+fn hold(port: u16, local: u16, holder: u64) -> TunnelInfo {
+    TunnelInfo { kind: "hold".into(), ..info(port, Some(local), "up", None, holder) }
 }
 
 mod the_list {
@@ -40,6 +44,27 @@ mod the_list {
         let said = text(&TunnelList::default());
 
         assert!(said.starts_with("no window holds tunnels for this server") && said.contains("cornercase remote"));
+    }
+
+    #[test]
+    fn says_a_closed_tunnel_is_closed() {
+        let list = TunnelList { tunnels: vec![info(3000, None, "closed", None, 3)], windows: 1 };
+
+        assert_eq!(text(&list), "3000  closed\n");
+    }
+
+    #[test]
+    fn marks_a_hold_and_prints_it_when_no_window_is_attached() {
+        let list = TunnelList { tunnels: vec![hold(5173, 5174, 9)], windows: 0 };
+
+        assert_eq!(text(&list), "5173 → localhost:5174  up (hold 9)\n");
+    }
+
+    #[test]
+    fn names_the_window_when_a_hold_is_listed_beside_it() {
+        let list = TunnelList { tunnels: vec![info(3000, Some(3000), "up", None, 3), hold(5173, 5174, 9)], windows: 1 };
+
+        assert_eq!(text(&list), "3000 → localhost:3000  up (window 3)\n5173 → localhost:5174  up (hold 9)\n");
     }
 
     #[test]
@@ -84,6 +109,33 @@ mod parsing {
         assert!(Cli::try_parse_from(["cornercase", "tunnel", "open", "0"]).is_err());
         assert!(Cli::try_parse_from(["cornercase", "tunnel", "open", "x"]).is_err());
         assert!(Cli::try_parse_from(["cornercase", "tunnel", "close", "70000"]).is_err());
+        assert!(Cli::try_parse_from(["cornercase", "tunnel", "hold", "0"]).is_err());
+    }
+
+    fn action_of(args: &[&str]) -> TunnelAction {
+        let words = ["cornercase", "tunnel"].into_iter().chain(args.iter().copied());
+        match Cli::try_parse_from(words).expect("parse").command {
+            Some(Cmd::Control(Control::Tunnel(args))) => args.action,
+            other => panic!("not tunnel: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn forget_and_hold_take_a_port() {
+        assert!(matches!(action_of(&["forget", "5173"]), TunnelAction::Forget(arg) if arg.port == 5173));
+        assert!(matches!(action_of(&["hold", "5173"]), TunnelAction::Hold(arg) if arg.port == 5173));
+    }
+
+    #[test]
+    fn hold_prints_json_always_so_it_takes_no_flag() {
+        assert!(Cli::try_parse_from(["cornercase", "tunnel", "hold", "5173", "--json"]).is_err());
+    }
+
+    #[test]
+    fn forgetting_says_which_port() {
+        let said = done_text(&action_of(&["forget", "5173"]), &TunnelList::default());
+
+        assert_eq!(said, "forgot the tunnel of port 5173\n");
     }
 
     #[test]
@@ -92,7 +144,7 @@ mod parsing {
         match cli.command {
             Some(Cmd::Control(Control::Tunnel(args))) => match args.action {
                 TunnelAction::Open(arg) => assert_eq!((arg.port, arg.print.json), (5173, true)),
-                TunnelAction::Close(_) => panic!("not open"),
+                TunnelAction::Close(_) | TunnelAction::Forget(_) | TunnelAction::Hold(_) => panic!("not open"),
             },
             other => panic!("not tunnel: {other:?}"),
         }
@@ -102,7 +154,14 @@ mod parsing {
 
     #[test]
     fn both_commands_run_there_so_remote_reaches_another_machine() {
-        for args in [&["tunnels"][..], &["tunnel", "open", "1"], &["tunnel", "close", "1"]] {
+        let all = [
+            &["tunnels"][..],
+            &["tunnel", "open", "1"],
+            &["tunnel", "close", "1"],
+            &["tunnel", "forget", "1"],
+            &["tunnel", "hold", "1"],
+        ];
+        for args in all {
             let words = ["cornercase", "--remote", "vps"].into_iter().chain(args.iter().copied());
             let cli = Cli::try_parse_from(words).expect("parse");
 

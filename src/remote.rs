@@ -25,6 +25,7 @@ mod known;
 pub(crate) mod machines;
 mod shell;
 pub(crate) mod tunnel;
+pub(crate) mod tunnels;
 
 const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";

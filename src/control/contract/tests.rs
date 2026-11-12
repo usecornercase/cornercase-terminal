@@ -61,6 +61,8 @@ mod describing {
             "account-login-tab",
             "config-agents",
             "tunnels",
+            "tunnels-remembered",
+            "tunnel-hold",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();

@@ -106,6 +106,8 @@ pub(crate) enum What {
         state: String,
         error: Option<String>,
         holder: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        kind: Option<String>,
     },
     Notice {
         token: String,

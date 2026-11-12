@@ -234,6 +234,10 @@ pub(crate) fn machines(session: &Path) -> PathBuf {
     session.with_file_name("machines.json")
 }
 
+pub(crate) fn tunnels(session: &Path) -> PathBuf {
+    session.with_file_name("tunnels.json")
+}
+
 pub(crate) fn star(session: &Path) -> PathBuf {
     session.with_file_name("star.json")
 }

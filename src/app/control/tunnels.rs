@@ -1,10 +1,10 @@
 use std::time::{Duration, Instant};
 
-use super::{Handled, Pending, Reply, Stage, json, malformed};
+use super::{Handled, Pending, Reply, Stage, conflict, json, malformed};
 use crate::app::App;
 use crate::app::tunnels::Origin;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{Done, TunnelPort};
+use crate::control::{Done, TunnelHold, TunnelPort};
 use crate::protocol::{TunnelOrder, TunnelState};
 
 const NO_WINDOW: &str = "no window holds tunnels for this server: tunnels are held by a window opened with \
@@ -12,9 +12,16 @@ const NO_WINDOW: &str = "no window holds tunnels for this server: tunnels are he
 const OPEN_WITHIN: u32 = 45;
 const CLOSE_WITHIN: u32 = 10;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Verb {
+    Open,
+    Close,
+    Forget,
+}
+
 pub(in crate::app) struct TunnelWait {
     port: u16,
-    opening: bool,
+    verb: Verb,
     asked: Vec<(u64, u64)>,
 }
 
@@ -24,7 +31,7 @@ impl App {
         if port == 0 {
             return Err(malformed("a port is 1 to 65535"));
         }
-        let holders = self.opening.tunnels.clients();
+        let holders = self.opening.tunnels.window_clients();
         if holders.is_empty() {
             return Err(Refusal::new(Code::Unavailable, NO_WINDOW));
         }
@@ -32,7 +39,7 @@ impl App {
             self.order_tunnel(*holder, TunnelOrder::Open(port), Some(Origin::Request));
         }
         let asked = holders.into_iter().map(|holder| (holder, self.opening.tunnels.sent(holder))).collect();
-        self.pend_tunnel(client, TunnelWait { port, opening: true, asked }, (now, OPEN_WITHIN));
+        self.pend_tunnel(client, TunnelWait { port, verb: Verb::Open, asked }, (now, OPEN_WITHIN));
         Ok(None)
     }
 
@@ -43,8 +50,33 @@ impl App {
             let message = format!("no window holds a tunnel for port {port}; `cornercase tunnels` lists them");
             return Err(Refusal::new(Code::NotFound, message));
         }
-        self.pend_tunnel(client, TunnelWait { port, opening: false, asked }, (now, CLOSE_WITHIN));
+        self.pend_tunnel(client, TunnelWait { port, verb: Verb::Close, asked }, (now, CLOSE_WITHIN));
         Ok(None)
+    }
+
+    pub(super) fn tunnel_forget_request(&mut self, client: u64, tunnel: &TunnelPort, now: Instant) -> Handled {
+        let port = tunnel.port;
+        if port == 0 {
+            return Err(malformed("a port is 1 to 65535"));
+        }
+        let asked = self.forget_tunnel(port);
+        if asked.is_empty() {
+            let message = format!("no window holds a tunnel for port {port}; `cornercase tunnels` lists them");
+            return Err(Refusal::new(Code::NotFound, message));
+        }
+        self.pend_tunnel(client, TunnelWait { port, verb: Verb::Forget, asked }, (now, CLOSE_WITHIN));
+        Ok(None)
+    }
+
+    pub(super) fn tunnel_hold_request(&mut self, client: u64, hold: &TunnelHold) -> Handled {
+        if hold.port == 0 || hold.local == 0 {
+            return Err(malformed("a port is 1 to 65535"));
+        }
+        if self.holds_tunnel(client) {
+            return Err(conflict("this connection already holds a tunnel; open another connection"));
+        }
+        self.hold_tunnel(client, hold.port, hold.local);
+        Ok(Some(json(&self.tunnel_list(Some(hold.port)))))
     }
 
     fn pend_tunnel(&mut self, client: u64, wait: TunnelWait, (now, seconds): (Instant, u32)) {
@@ -60,21 +92,30 @@ impl App {
         if !settled {
             return None;
         }
-        let list = self.tunnel_list(wait.opening.then_some(wait.port));
-        if !wait.opening || list.tunnels.iter().any(|tunnel| tunnel.state == "up") {
+        let opening = wait.verb == Verb::Open;
+        let list = self.tunnel_list(opening.then_some(wait.port));
+        let asked = |holder: u64| wait.asked.iter().any(|(client, _)| *client == holder);
+        if !opening || list.tunnels.iter().any(|tunnel| tunnel.state == "up" && asked(tunnel.holder)) {
             return Some(Ok(json(&list)));
         }
-        let reasons: Vec<&str> = list.tunnels.iter().filter_map(|tunnel| tunnel.error.as_deref()).collect();
+        let reasons: Vec<&str> = list
+            .tunnels
+            .iter()
+            .filter(|tunnel| asked(tunnel.holder))
+            .filter_map(|tunnel| tunnel.error.as_deref())
+            .collect();
         let why = if reasons.is_empty() { "no window answered".to_string() } else { reasons.join("; ") };
         Some(Err(format!("could not tunnel port {}: {why}", wait.port)))
     }
 
     fn tunnel_answered(&self, wait: &TunnelWait, client: u64, orders: u64) -> bool {
         let Some(holder) = self.opening.tunnels.holder(client) else { return true };
-        let busy = match holder.tunnel(wait.port).map(|tunnel| &tunnel.state) {
-            Some(TunnelState::Opening) => true,
-            Some(TunnelState::Up) => !wait.opening,
-            Some(TunnelState::Down(_)) | None => false,
+        let busy = match (wait.verb, holder.tunnel(wait.port).map(|tunnel| &tunnel.state)) {
+            (Verb::Open, Some(TunnelState::Opening)) | (Verb::Close, Some(TunnelState::Opening | TunnelState::Up)) => {
+                true
+            }
+            (Verb::Forget, found) => found.is_some(),
+            _ => false,
         };
         holder.applied >= orders && !busy
     }

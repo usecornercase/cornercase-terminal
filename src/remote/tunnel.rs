@@ -33,6 +33,14 @@ pub(crate) enum Watched {
 
 pub(crate) struct Running {
     child: Arc<Mutex<Option<Child>>>,
+    pid: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Owner {
+    Listening,
+    Starting,
+    Gone,
 }
 
 enum Step {
@@ -53,9 +61,31 @@ struct Watch {
 pub(crate) fn args(destination: &str, forward: Forward) -> Vec<String> {
     let mut args: Vec<String> = FORWARD[4..].iter().map(ToString::to_string).collect();
     args.extend(ALIVE.iter().chain(&BATCH).chain(&FORWARD[..4]).map(ToString::to_string));
-    args.extend(["-L".to_string(), format!("127.0.0.1:{}:localhost:{}", forward.local, forward.port)]);
+    args.extend(["-L".to_string(), spec(forward)]);
     args.extend(["--".to_string(), destination.to_string()]);
     args
+}
+
+fn spec(forward: Forward) -> String {
+    format!("127.0.0.1:{}:localhost:{}", forward.local, forward.port)
+}
+
+fn same_forward(args: &[String], destination: &str, forward: Forward) -> bool {
+    let spec = spec(forward);
+    let forwards = args.windows(2).any(|pair| pair[0] == "-L" && pair[1] == spec);
+    let ends = args.len() >= 2 && args[args.len() - 2] == "--" && args[args.len() - 1] == destination;
+    forwards && ends
+}
+
+pub(crate) fn owner(pid: i32, destination: &str, forward: Forward) -> Owner {
+    if pid <= 0 || !process::running(pid, None) || !same_forward(&process::args(pid), destination, forward) {
+        return Owner::Gone;
+    }
+    if listens(pid, forward.local) { Owner::Listening } else { Owner::Starting }
+}
+
+fn listens(pid: i32, local: u16) -> bool {
+    listen::listeners(&[pid]).iter().any(|l| l.port == local && l.address.is_loopback())
 }
 
 pub(crate) fn local_port(port: u16, before: Option<u16>) -> io::Result<u16> {
@@ -101,7 +131,7 @@ pub(crate) fn spawn_within(
     let collector = collector.unwrap_or_else(|| thread::spawn(|| {}));
     let watch = Watch { child: child.clone(), pid, local: forward.local, wait, stderr, collector };
     thread::spawn(move || watch.run(&report));
-    Ok(Running { child })
+    Ok(Running { child, pid })
 }
 
 impl Watch {
@@ -144,7 +174,7 @@ impl Watch {
     }
 
     fn listening(&self) -> bool {
-        listen::listeners(&[self.pid]).iter().any(|l| l.port == self.local && l.address.is_loopback())
+        listens(self.pid, self.local)
     }
 
     fn give_up(&self, report: &impl Fn(Watched)) {
@@ -162,6 +192,10 @@ impl Watch {
 }
 
 impl Running {
+    pub(crate) fn pid(&self) -> i32 {
+        self.pid
+    }
+
     pub(crate) fn stop(&self) {
         if let Some(child) = self.child.lock().take() {
             process::stop(child);

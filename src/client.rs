@@ -33,6 +33,7 @@ mod requests;
 mod server_process;
 mod window;
 
+pub(crate) use requests::own_connection;
 #[cfg(test)]
 pub(crate) use requests::share_socket;
 pub(crate) use requests::use_boot;
@@ -46,7 +47,7 @@ pub(crate) use requests::{
     use_flow_issue_prompt, use_flow_run_view, use_focus_reveal, use_fresh_branches, use_host_events, use_issue_names,
     use_issues, use_machine_start, use_machine_usage, use_mode_default, use_notices, use_open_into, use_placed_start,
     use_plugin_run_view, use_popup_terminal, use_queue_routines, use_queue_undo, use_recap, use_search_settings,
-    use_settings_search, use_surface_patches, use_todo_panel, use_view,
+    use_settings_search, use_surface_patches, use_todo_panel, use_tunnel_hold, use_view,
 };
 pub(crate) use requests::{input_ended, reader_gone_within, use_remote, used_remote, watched};
 pub(crate) use requests::{line_done, share, unshare};

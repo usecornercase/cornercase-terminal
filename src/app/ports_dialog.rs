@@ -156,7 +156,7 @@ impl App {
             Action::Copy(row) => port(self, row).iter().for_each(|port| self.copy_port(port)),
             Action::Open(row) => port(self, row).iter().for_each(|port| self.open_port(port)),
             Action::Tunnel(row) => port(self, row).iter().for_each(|port| self.tunnel_port(port)),
-            Action::CloseTunnel(row) => port(self, row).iter().for_each(|port| self.close_port_tunnel(port)),
+            Action::CloseTunnel(row) => port(self, row).iter().for_each(|port| self.close_tunnel_of(port.number)),
             Action::Go(row) => {
                 let Some(pane) = port(self, row).and_then(|port| port.place.pane) else { return };
                 self.overlay = None;

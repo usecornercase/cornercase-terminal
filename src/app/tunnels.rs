@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::Ipv6Addr;
 use std::time::SystemTime;
 
-use super::App;
 use super::toast::{Toast, TunnelButton};
+use super::{App, Streamed};
 use crate::control::{Event, Ids, TunnelInfo, TunnelList, What};
 use crate::host::open::Browse;
 use crate::log;
@@ -21,9 +21,29 @@ pub(super) struct Holders {
 
 #[derive(Debug, Clone)]
 pub(super) struct Holder {
+    pub(super) kind: Kind,
     pub(super) browse: bool,
     pub(super) tunnels: Vec<Tunnel>,
     pub(super) applied: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Kind {
+    Window,
+    Hold,
+}
+
+impl Kind {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Window => "window",
+            Self::Hold => "hold",
+        }
+    }
+
+    fn marked(self) -> Option<String> {
+        (self == Self::Hold).then(|| self.name().into())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,11 +60,11 @@ impl Holder {
 
 impl Holders {
     pub(super) fn windows(&self) -> usize {
-        self.by.len()
+        self.by.values().filter(|holder| holder.kind == Kind::Window).count()
     }
 
-    pub(super) fn clients(&self) -> Vec<u64> {
-        self.by.keys().copied().collect()
+    pub(super) fn window_clients(&self) -> Vec<u64> {
+        self.by.iter().filter(|(_, holder)| holder.kind == Kind::Window).map(|(client, _)| *client).collect()
     }
 
     pub(super) fn sent(&self, client: u64) -> u64 {
@@ -59,7 +79,7 @@ impl Holders {
         let mut infos: Vec<TunnelInfo> = self
             .by
             .iter()
-            .flat_map(|(client, holder)| holder.tunnels.iter().map(|tunnel| info_of(*client, tunnel)))
+            .flat_map(|(client, holder)| holder.tunnels.iter().map(|tunnel| info_of(*client, holder.kind, tunnel)))
             .filter(|info| port.is_none_or(|port| info.port == port))
             .collect();
         infos.sort_by_key(|info| (info.port, info.holder));
@@ -67,18 +87,20 @@ impl Holders {
     }
 }
 
-fn info_of(holder: u64, tunnel: &Tunnel) -> TunnelInfo {
+fn info_of(holder: u64, kind: Kind, tunnel: &Tunnel) -> TunnelInfo {
     let error = match &tunnel.state {
         TunnelState::Down(reason) => Some(reason.clone()),
-        TunnelState::Opening | TunnelState::Up => None,
+        TunnelState::Opening | TunnelState::Up | TunnelState::Closed => None,
     };
-    TunnelInfo { port: tunnel.port, local: tunnel.local, state: tunnel.state.name().into(), error, holder }
+    let kind = kind.name().into();
+    TunnelInfo { port: tunnel.port, local: tunnel.local, state: tunnel.state.name().into(), error, holder, kind }
 }
 
 impl App {
     pub(crate) fn tunnels_reported(&mut self, client: u64, holding: Holding) {
         let previous = self.opening.tunnels.by.get(&client).map(|holder| holder.tunnels.clone()).unwrap_or_default();
-        let holder = Holder { browse: holding.browse, applied: holding.orders, tunnels: holding.tunnels };
+        let holder =
+            Holder { kind: Kind::Window, browse: holding.browse, applied: holding.orders, tunnels: holding.tunnels };
         self.opening.tunnels.sent.entry(client).or_insert(holding.orders);
         self.opening.tunnels.by.insert(client, holder.clone());
         self.tunnels_changed(client, &previous, &holder);
@@ -89,12 +111,12 @@ impl App {
         for tunnel in &holder.tunnels {
             let before = previous.iter().find(|old| old.port == tunnel.port);
             if before != Some(tunnel) {
-                self.publish_tunnel(client, tunnel);
+                self.publish_tunnel(client, holder.kind, tunnel);
             }
             self.tunnel_settled(client, before, tunnel, (holder.browse, holder.applied));
         }
         for gone in previous.iter().filter(|old| holder.tunnel(old.port).is_none()) {
-            self.publish_gone(client, gone.port);
+            self.publish_gone(client, holder.kind, gone.port);
         }
     }
 
@@ -125,8 +147,20 @@ impl App {
         self.opening.tunnels.asked.retain(|(asker, _), _| *asker != client);
         self.opening.tunnels.sent.remove(&client);
         for tunnel in &holder.tunnels {
-            self.publish_gone(client, tunnel.port);
+            self.publish_gone(client, holder.kind, tunnel.port);
         }
+    }
+
+    pub(super) fn hold_tunnel(&mut self, client: u64, port: u16, local: u16) {
+        let tunnels = vec![Tunnel { port, local: Some(local), state: TunnelState::Up }];
+        let holder = Holder { kind: Kind::Hold, browse: false, applied: 0, tunnels };
+        self.opening.tunnels.by.insert(client, holder.clone());
+        self.tunnels_changed(client, &[], &holder);
+        log::info!("ui", "tunnel held", client = client, port = port, local = local);
+    }
+
+    pub(super) fn holds_tunnel(&self, client: u64) -> bool {
+        self.opening.tunnels.holder(client).is_some()
     }
 
     pub(crate) fn take_tunnel_orders(&mut self) -> Vec<(u64, TunnelOrder)> {
@@ -145,6 +179,14 @@ impl App {
     }
 
     pub(super) fn close_tunnel(&mut self, port: u16) -> Vec<(u64, u64)> {
+        self.end_tunnel(port, TunnelOrder::Close(port))
+    }
+
+    pub(super) fn forget_tunnel(&mut self, port: u16) -> Vec<(u64, u64)> {
+        self.end_tunnel(port, TunnelOrder::Forget(port))
+    }
+
+    fn end_tunnel(&mut self, port: u16, order: TunnelOrder) -> Vec<(u64, u64)> {
         let holding: Vec<u64> = self
             .opening
             .tunnels
@@ -153,14 +195,23 @@ impl App {
             .filter(|(_, holder)| holder.tunnel(port).is_some())
             .map(|(client, _)| *client)
             .chain(self.opening.tunnels.asked.keys().filter(|(_, asked)| *asked == port).map(|(client, _)| *client))
-            .collect::<std::collections::BTreeSet<u64>>()
+            .collect::<BTreeSet<u64>>()
             .into_iter()
             .collect();
         for client in &holding {
             self.opening.tunnels.asked.remove(&(*client, port));
-            self.order_tunnel(*client, TunnelOrder::Close(port), None);
+            self.end_for(*client, order);
         }
         holding.into_iter().map(|client| (client, self.opening.tunnels.sent(client))).collect()
+    }
+
+    fn end_for(&mut self, client: u64, order: TunnelOrder) {
+        if self.opening.tunnels.holder(client).is_some_and(|holder| holder.kind == Kind::Hold) {
+            log::info!("ui", "tunnel hold ended", client = client, port = order.port());
+            self.clients.events.push(client, Streamed::End);
+        } else {
+            self.order_tunnel(client, order, None);
+        }
     }
 
     pub(super) fn shown_holder(&self) -> Option<&Holder> {
@@ -175,7 +226,7 @@ impl App {
         Some(match holder.tunnel(port.number) {
             Some(Tunnel { state: TunnelState::Up, local, .. }) => ui::PortTunnel::Up(local.unwrap_or(port.number)),
             Some(Tunnel { state: TunnelState::Opening, .. }) => ui::PortTunnel::Opening,
-            Some(Tunnel { state: TunnelState::Down(_), .. }) | None => ui::PortTunnel::Offered,
+            Some(Tunnel { state: TunnelState::Down(_) | TunnelState::Closed, .. }) | None => ui::PortTunnel::Offered,
         })
     }
 
@@ -184,10 +235,27 @@ impl App {
         self.order_tunnel(client, TunnelOrder::Open(port.number), Some(Origin::Click));
     }
 
-    pub(super) fn close_port_tunnel(&mut self, port: &Port) {
-        self.close_tunnel(port.number);
-        let message = format!("closed the tunnel of port {}", port.number);
+    pub(super) fn close_tunnel_of(&mut self, port: u16) {
+        self.close_tunnel(port);
+        let message = format!("closed the tunnel of port {port}");
         self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+    }
+
+    pub(super) fn forget_tunnel_of(&mut self, port: u16) {
+        self.forget_tunnel(port);
+        let message = format!("forgot the tunnel of port {port}");
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+    }
+
+    pub(super) fn machine_tunnels(&self) -> usize {
+        let open = |tunnel: &&Tunnel| tunnel.state != TunnelState::Closed;
+        self.shown_holder().map_or(0, |holder| holder.tunnels.iter().filter(open).count())
+    }
+
+    pub(super) fn shown_tunnels(&self) -> Vec<Tunnel> {
+        let mut tunnels = self.shown_holder().map(|holder| holder.tunnels.clone()).unwrap_or_default();
+        tunnels.sort_by_key(|tunnel| tunnel.port);
+        tunnels
     }
 
     pub(super) fn browse_tunnel_here(&mut self, port: u16) {
@@ -213,14 +281,14 @@ impl App {
         self.opening.tunnels.listing(None)
     }
 
-    fn publish_tunnel(&mut self, holder: u64, tunnel: &Tunnel) {
-        let info = info_of(holder, tunnel);
-        let what = What::Tunnel { port: info.port, local: info.local, state: info.state, error: info.error, holder };
-        self.publish_tunnel_event(what);
+    fn publish_tunnel(&mut self, holder: u64, kind: Kind, tunnel: &Tunnel) {
+        let info = info_of(holder, kind, tunnel);
+        let (port, local, state, error) = (info.port, info.local, info.state, info.error);
+        self.publish_tunnel_event(What::Tunnel { port, local, state, error, holder, kind: kind.marked() });
     }
 
-    fn publish_gone(&mut self, holder: u64, port: u16) {
-        let what = What::Tunnel { port, local: None, state: "gone".into(), error: None, holder };
+    fn publish_gone(&mut self, holder: u64, kind: Kind, port: u16) {
+        let what = What::Tunnel { port, local: None, state: "gone".into(), error: None, holder, kind: kind.marked() };
         self.publish_tunnel_event(what);
     }
 

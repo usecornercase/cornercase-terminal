@@ -17,7 +17,7 @@ use crate::os::socket::UnixStream;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 12;
+pub(crate) const VERSION: u32 = 13;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const REMOTE_ENV: &str = "CORNERCASE_REMOTE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
@@ -97,6 +97,7 @@ pub(crate) enum TunnelState {
     Opening,
     Up,
     Down(String),
+    Closed,
 }
 
 impl TunnelState {
@@ -105,6 +106,7 @@ impl TunnelState {
             Self::Opening => "opening",
             Self::Up => "up",
             Self::Down(_) => "down",
+            Self::Closed => "closed",
         }
     }
 }
@@ -113,6 +115,7 @@ impl TunnelState {
 pub(crate) enum TunnelOrder {
     Open(u16),
     Close(u16),
+    Forget(u16),
 }
 
 impl TunnelOrder {
@@ -120,12 +123,13 @@ impl TunnelOrder {
         match self {
             Self::Open(_) => "open",
             Self::Close(_) => "close",
+            Self::Forget(_) => "forget",
         }
     }
 
     pub(crate) fn port(self) -> u16 {
         match self {
-            Self::Open(port) | Self::Close(port) => port,
+            Self::Open(port) | Self::Close(port) | Self::Forget(port) => port,
         }
     }
 }

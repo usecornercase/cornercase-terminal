@@ -6,6 +6,7 @@ use crate::protocol::{Holding, Tunnel, TunnelOrder, TunnelState};
 
 const WINDOW: u64 = 7;
 const OBSERVER: u64 = 21;
+const HOLD: u64 = 33;
 
 fn app() -> (App, Receiver<AppEvent>) {
     empty_app()
@@ -82,8 +83,8 @@ mod listing {
         assert_eq!(
             list,
             json!({"tunnels": [
-                {"port": 5173, "local": 5174, "state": "up", "error": null, "holder": WINDOW},
-                {"port": 8080, "local": null, "state": "down", "error": "refused", "holder": WINDOW},
+                {"port": 5173, "local": 5174, "state": "up", "error": null, "holder": WINDOW, "kind": "window"},
+                {"port": 8080, "local": null, "state": "down", "error": "refused", "holder": WINDOW, "kind": "window"},
             ], "windows": 1})
         );
     }
@@ -221,7 +222,7 @@ mod closing {
     }
 
     #[test]
-    fn orders_every_holder_and_answers_once_it_is_gone() {
+    fn orders_every_holder_and_answers_once_it_is_closed() {
         let (mut app, _rx) = app();
         app.tunnels_reported(WINDOW, holding(&app, vec![tunnel(5173, Some(5173), TunnelState::Up)]));
         let now = Instant::now();
@@ -231,9 +232,131 @@ mod closing {
 
         assert_eq!(app.take_tunnel_orders(), [(WINDOW, TunnelOrder::Close(5173))]);
         assert_eq!(app.take_answers(), Vec::new());
+        app.tunnels_reported(WINDOW, holding(&app, vec![tunnel(5173, Some(5173), TunnelState::Closed)]));
+        app.check_requests(now);
+        let list = answer(&mut app).expect("closed");
+        assert_eq!(list["tunnels"][0]["port"], json!(5173));
+        assert_eq!(list["tunnels"][0]["state"], json!("closed"));
+    }
+}
+
+mod forgetting {
+    use super::*;
+
+    #[test]
+    fn an_unknown_port_is_not_found_and_port_zero_is_malformed() {
+        let (mut app, _rx) = app();
+        attached(&mut app);
+
+        send(&mut app, "tunnel-forget", 5173, Instant::now());
+        assert_eq!(answer(&mut app).expect_err("refused").code, "not-found");
+
+        send(&mut app, "tunnel-forget", 0, Instant::now());
+        assert_eq!(answer(&mut app).expect_err("refused").code, "malformed");
+    }
+
+    #[test]
+    fn orders_every_holder_and_answers_once_the_port_is_no_longer_listed() {
+        let (mut app, _rx) = app();
+        app.tunnels_reported(WINDOW, holding(&app, vec![tunnel(5173, Some(5173), TunnelState::Closed)]));
+        let now = Instant::now();
+
+        send(&mut app, "tunnel-forget", 5173, now);
+        app.check_requests(now);
+
+        assert_eq!(app.take_tunnel_orders(), [(WINDOW, TunnelOrder::Forget(5173))]);
+        assert_eq!(app.take_answers(), Vec::new());
         app.tunnels_reported(WINDOW, holding(&app, vec![]));
         app.check_requests(now);
+        assert_eq!(answer(&mut app).expect("forgotten")["tunnels"], json!([]));
+    }
+}
+
+mod holding_for_a_program {
+    use super::*;
+
+    fn hold(app: &mut App, client: u64, port: u16, local: u16) {
+        let text = json!({"contract": 1, "command": "tunnel-hold", "args": {"port": port, "local": local}});
+        app.request(client, &text.to_string(), Some(AREA), Instant::now());
+    }
+
+    #[test]
+    fn answers_with_the_tunnel_as_a_hold_and_counts_no_window() {
+        let (mut app, _rx) = app();
+
+        hold(&mut app, HOLD, 5173, 5174);
+
+        let mut answers = app.take_answers();
+        let list = reply_of(&answers.remove(0).1).expect("the list");
+        assert_eq!(list["tunnels"][0]["kind"], json!("hold"));
+        assert_eq!(list["tunnels"][0]["local"], json!(5174));
+        assert_eq!(list["windows"], json!(0));
+    }
+
+    #[test]
+    fn leaves_the_open_request_unavailable_when_only_a_hold_exists() {
+        let (mut app, _rx) = app();
+        hold(&mut app, HOLD, 5173, 5174);
+        app.take_answers();
+
+        send(&mut app, "tunnel-open", 5173, Instant::now());
+
+        assert_eq!(answer(&mut app).expect_err("refused").code, "unavailable");
+    }
+
+    #[test]
+    fn an_existing_hold_does_not_hide_a_window_that_could_not_open() {
+        let (mut app, _rx) = app();
+        hold(&mut app, HOLD, 5173, 5174);
+        app.take_answers();
+        attached(&mut app);
+        let now = Instant::now();
+        send(&mut app, "tunnel-open", 5173, now);
+        app.take_tunnel_orders();
+
+        let down = tunnel(5173, None, TunnelState::Down("refused".into()));
+        app.tunnels_reported(WINDOW, holding(&app, vec![down]));
+        app.check_requests(now);
+
+        let refused = answer(&mut app).expect_err("failed");
+        assert_eq!(refused.message, "could not tunnel port 5173: refused");
+    }
+
+    #[test]
+    fn closing_its_port_ends_its_stream_and_orders_no_window() {
+        let (mut app, _rx) = app();
+        hold(&mut app, HOLD, 5173, 5174);
+        app.take_answers();
+        let now = Instant::now();
+
+        send(&mut app, "tunnel-close", 5173, now);
+
+        let ended: Vec<u64> = app
+            .take_events()
+            .into_iter()
+            .filter(|(_, streamed)| matches!(streamed, Streamed::End))
+            .map(|(c, _)| c)
+            .collect();
+        assert_eq!(ended, [HOLD]);
+        assert_eq!(app.take_tunnel_orders(), Vec::new());
+        app.forget(HOLD);
+        app.check_requests(now);
         assert_eq!(answer(&mut app).expect("closed")["tunnels"], json!([]));
+    }
+
+    #[test]
+    fn a_second_hold_on_the_connection_conflicts_and_zero_ports_are_malformed() {
+        let (mut app, _rx) = app();
+        hold(&mut app, HOLD, 5173, 5174);
+        app.take_answers();
+
+        hold(&mut app, HOLD, 3000, 3000);
+        assert_eq!(answer(&mut app).expect_err("refused").code, "conflict");
+
+        hold(&mut app, HOLD + 1, 0, 5);
+        assert_eq!(answer(&mut app).expect_err("refused").code, "malformed");
+        hold(&mut app, HOLD + 1, 5, 0);
+        assert_eq!(answer(&mut app).expect_err("refused").code, "malformed");
     }
 }
 
@@ -281,6 +404,27 @@ mod events {
         let states: Vec<&Value> = lines.iter().map(|line| &line["state"]).collect();
         assert_eq!(states, [&json!("up"), &json!("gone")], "{lines:?}");
         assert_eq!(lines[0]["event"], json!("tunnel"));
+        assert!(lines[0].get("kind").is_none(), "{lines:?}");
+    }
+
+    #[test]
+    fn a_closed_tunnel_publishes_its_state_and_a_hold_leaving_says_so() {
+        let (mut app, _rx) = app();
+        watch_events(&mut app);
+
+        app.tunnels_reported(WINDOW, holding(&app, vec![tunnel(3000, None, TunnelState::Closed)]));
+        let text = json!({"contract": 1, "command": "tunnel-hold", "args": {"port": 5173, "local": 5174}});
+        app.request(HOLD, &text.to_string(), Some(AREA), Instant::now());
+        app.forget(HOLD);
+
+        let lines = event_lines(&mut app);
+        let seen: Vec<(&Value, Option<&Value>)> = lines.iter().map(|line| (&line["state"], line.get("kind"))).collect();
+        let hold = json!("hold");
+        assert_eq!(
+            seen,
+            [(&json!("closed"), None), (&json!("up"), Some(&hold)), (&json!("gone"), Some(&hold))],
+            "{lines:?}"
+        );
     }
 
     #[test]

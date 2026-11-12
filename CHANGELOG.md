@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.50
+
+- **Tunnels are remembered per machine, and shared by your windows.** A window from `cornercase remote vps` now keeps its tunnels in `tunnels.json`, so the next window to that machine brings them back on the same port of your laptop. The machine button shows how many it holds (`vps ⇄2 ▴`) and its menu lists them: click one for **open in browser**, **close**, **open** or **forget**. Closing a tunnel keeps it as `closed` (`cornercase tunnels` lists it, **open** brings it back) and forgetting removes it (`cornercase tunnel forget PORT`). With two windows on one laptop, one runs the `ssh` and the other shows the tunnel up and takes it over within a second or two when the first one ends.
+- **Hold a tunnel from a program with no window.** `cornercase --remote vps tunnel hold 5173` starts its own `ssh`, prints `{"port":5173,"local":5174,"url":"http://localhost:5174"}` once it is up and holds the tunnel until it is killed (exit 0), `tunnel close 5173` is run on the machine (0) or `ssh` fails (1). `cornercase tunnels --json` carries a `kind` (`window` or `hold`), and a hold's `tunnel` events carry `"kind": "hold"`.
+
 ## 0.13.49
 
 - **Pasting one very long line no longer holds the window.** Text fields wrap long lines, and every wrapped row measured the whole rest of its line again, so one line of a few hundred KiB (a minified file, say) pasted into the flow import page, a prompt or a script took seconds to appear, even on a fast computer, and the window stopped responding meanwhile and again at each redraw. Each row is now measured once, so even a line at the import page's 256 KiB limit shows at once. Lines wrap exactly where they did.

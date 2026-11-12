@@ -433,7 +433,8 @@ impl App {
     }
 
     fn footer_hit(&self, areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
-        let machine = self.machine_label().map(|label| ui::machine_button(areas.machine, &label).0);
+        let machine =
+            self.machine_label().map(|label| ui::machine_button(areas.machine, &label, self.machine_tunnels()).0);
         [
             (ui::help_button(areas.more), ui::ActivityItem::Help),
             (ui::more_button(areas.more), ui::ActivityItem::More),
