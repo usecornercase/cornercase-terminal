@@ -82,7 +82,7 @@ The window remembers the tunnels of each machine, on your laptop (`tunnels.json`
 
 - **They come back.** A window that reaches `devbox` again brings up its tunnels that are not closed, on the same port of your laptop when it's free.
 - **close and forget are different.** **close** (the ports dialog's **close tunnel**, the menu, `tunnel close`) stops the ssh but keeps the tunnel listed as `closed`, so it stays out of the way and **open** brings it back. **forget** removes it for good.
-- **The machine button shows them.** `devbox ⇄2 ▴` counts the tunnels that aren't closed. Its menu lists each one after **add machine…** (`⇄ 5173 → localhost:5174  up`), and a click opens **open in browser**, **close**, **open** and **forget**, each only where it applies. A long name is cut, never the count.
+- **The machine button shows them.** `devbox ⇄2 ▴` counts the tunnels that aren't closed. Its menu lists each one at its end, after the machines (`⇄ 5173 → localhost:5174  up`), and a click opens **open in browser**, **close**, **open** and **forget**, each only where it applies. A long name is cut, never the count.
 - **Windows share them.** With two windows on your laptop reaching `devbox`, one runs the ssh and the other shows the tunnel up on the same port and starts none. When the first window ends, the other takes the tunnel over within a second or two.
 
 ### Hold one without a window
@@ -123,6 +123,7 @@ Once a window has reached another machine, or a program has added one (below), t
 - Every machine a window reached before, with `cornercase remote` or from this menu, or that a program added (below), attaches it there, with its last `--command`. The one the window is on has a `✓`.
 - **add machine…** asks for a destination, anything `ssh` takes, such as `devbox` or `me@gpu-box`.
 - **forget…** takes a machine off the list.
+- The tunnels the window holds, one row each, with what you can do to them: see [Remembered per machine](#remembered-per-machine). The button then shows their count, `devbox ⇄2 ▴`.
 
 The shells and agents of the machine you leave keep running there, and when you come back the window shows them as they are now. Until the other machine answers, the window says where it's going and stays where it was: **back** (or `Esc`) returns at once. If the switch fails, for instance because `ssh` refused the key or the other machine runs another version, the window says why and you stay where you were.
 
