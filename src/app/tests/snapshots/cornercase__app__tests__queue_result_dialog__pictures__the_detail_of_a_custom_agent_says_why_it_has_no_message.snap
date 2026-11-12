@@ -1,0 +1,24 @@
+---
+source: src/app/tests/queue_result_dialog.rs
+expression: picture(&mut app)
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"              ╭─ Result ─────────────────────────────────────────────────────────────╮              "
+" Projects     │ Review the open pull requests                                        │              "
+"              │ started · pane closed · fake · shop ›                                │              "
+"▌ cornercase-t│ routine/review-the-open-pull-requests                                │              "
+"              │                                                                      │              "
+"  + New       │ started   2026-11-12 09:00                                           │              "
+"              │ result    2026-11-12 09:41                                           │              "
+"              │ agent     fake                                                       │              "
+"              │ branch    feat/x                                                     │              "
+"              │                                                                      │              "
+"              │ fake keeps no record cornercase can read, so its result is the       │              "
+"              │ branch and pull request only                                         │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+" ─────────────│                                                         copy   done  │              "
+"  Worktrees   ╰──────────────────────────────────────────────────────────────────────╯              "
+"  More ▴                 Help  │  Files       TODO       │                                          "

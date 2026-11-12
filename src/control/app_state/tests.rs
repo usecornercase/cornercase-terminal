@@ -6,9 +6,9 @@ use crate::queue::{Entry, Listed, Place, State, Task};
 use crate::test_util::fixture;
 
 fn queued() -> Entry {
-    Entry {
-        id: 3,
-        task: Task {
+    Entry::new(
+        3,
+        Task {
             at: 1_760_000_000,
             zone: "UTC".into(),
             label: "Fix the login".into(),
@@ -22,8 +22,8 @@ fn queued() -> Entry {
             accounts: BTreeMap::new(),
             ..Task::default()
         },
-        state: State::Pending,
-    }
+        State::Pending,
+    )
 }
 
 fn update_info() -> UpdateInfo {
@@ -232,4 +232,18 @@ mod the_forum {
 
         assert!(serde_json::from_value::<Request>(sent).is_err());
     }
+}
+
+#[test]
+fn a_started_entry_lists_when_it_started_and_its_result_time_but_not_its_text() {
+    let mut entry = queued();
+    entry.state = State::Started { pane: 3, server: "1-2".into() };
+    entry.started = Some(1_760_000_100);
+    entry.result =
+        Some(crate::queue::outcome::Outcome { at: 1_760_000_900, text: "Reviewed it.".into(), ..Default::default() });
+
+    let value = serde_json::to_value(Listed::from(&entry)).expect("serialize");
+
+    assert_eq!((value["started"].as_i64(), value["result_at"].as_i64()), (Some(1_760_000_100), Some(1_760_000_900)));
+    assert!(value.get("result").is_none(), "{value}");
 }

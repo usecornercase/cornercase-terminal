@@ -85,6 +85,7 @@ pub(crate) struct Queued {
     pub(crate) meta: String,
     pub(crate) state: State,
     pub(crate) kind: QueuedKind,
+    pub(crate) live: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

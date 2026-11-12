@@ -1,8 +1,9 @@
 use super::App;
+use crate::agents::context::Pointer;
 use crate::control;
 use crate::project::Hierarchy;
 use crate::recap::dossier::{Live, LivePane, PullLive};
-use crate::recap::journal::{Pointer, key_of};
+use crate::recap::journal::key_of;
 use crate::recap::outdated::{Present, PresentPane};
 use crate::term::Term;
 

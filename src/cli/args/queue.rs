@@ -29,6 +29,17 @@ pub(crate) enum QueueAction {
     },
     #[command(about = "Start a pending, missed or failed entry now, or a routine once more")]
     Run { id: u64 },
+    #[command(
+        about = "Show what a started entry's agent did: its last message, branch and pull request; --conversation \
+                 adds the whole conversation"
+    )]
+    Show {
+        id: u64,
+        #[arg(long, help = "Also print the whole conversation, prompts and replies, while the agent keeps its record")]
+        conversation: bool,
+        #[command(flatten)]
+        print: Print,
+    },
     #[command(about = "Stop a routine from firing until it is resumed")]
     Pause { id: u64 },
     #[command(about = "Let a paused routine fire again, from the next occurrence after now")]

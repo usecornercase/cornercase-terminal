@@ -74,6 +74,7 @@ impl App {
         let mut starting = Starting::new(flow, entry.task.prompt.clone(), branch, accounts);
         starting.focus = false;
         starting.fresh = Some(true);
+        starting.summary = true;
         starting.note = note;
         let client = self.mark_starting(entry.id, Instant::now())?;
         let answer = self.run_flow(Some(client), project, starting, area);

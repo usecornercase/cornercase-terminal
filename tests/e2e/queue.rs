@@ -197,3 +197,29 @@ fn removing_a_routine_prints_an_undo_and_restore_puts_it_back() {
     app.session.says(&["queue", "restore", &undo]);
     assert_eq!(entries(&app), before);
 }
+
+#[test]
+fn a_run_keeps_what_its_agent_said_and_queue_show_answers_it() {
+    let session = agent_session();
+    let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
+    app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
+    let id = session.says(&["queue", "add", "--at", "in 2h", "--agent", "claude", "--prompt", "fix the login"]);
+
+    session.says(&["queue", "run", &id]);
+    session.wait_for_working();
+    std::fs::write(session.claude_dir().join("finish"), "").expect("let the agent finish");
+    wait_until("the result is kept", || entries(&app)["entries"][0].get("result_at").is_some());
+
+    let shown: Value = serde_json::from_str(&session.says(&["queue", "show", &id, "--json"])).expect("show JSON");
+    assert!(shown["result"]["text"].as_str().is_some_and(|text| text.starts_with("said: fix the login")), "{shown}");
+    assert_eq!((&shown["result"]["conversation"], &shown["result"]["agent"]), (&true.into(), &"claude".into()));
+    let listed = entries(&app);
+    assert!(listed["entries"][0].get("result").is_none(), "{listed}");
+    assert_eq!(listed["entries"][0]["prompt"], "fix the login");
+    let talk: Value =
+        serde_json::from_str(&session.says(&["queue", "show", &id, "--conversation", "--json"])).expect("talk JSON");
+    assert!(talk["messages"].as_array().is_some_and(|all| all.iter().any(|m| m["role"] == "reply")), "{talk}");
+    assert!(session.says(&["queue", "show", &id]).contains("said: fix the login"));
+    let app_state: Value = serde_json::from_str(&session.says(&["status", "--app"])).expect("the app's state");
+    assert_eq!(app_state["queue"][0]["result_at"], listed["entries"][0]["result_at"]);
+}

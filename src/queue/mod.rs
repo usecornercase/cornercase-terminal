@@ -1,5 +1,7 @@
 pub(crate) mod clock;
+pub(crate) mod conversation;
 pub(crate) mod form;
+pub(crate) mod outcome;
 pub(crate) mod repeat;
 pub(crate) mod routine;
 
@@ -80,9 +82,17 @@ pub(crate) struct Entry {
     pub(crate) task: Task,
     #[serde(flatten)]
     pub(crate) state: State,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) started: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) result: Option<outcome::Outcome>,
 }
 
 impl Entry {
+    pub(crate) fn new(id: u64, task: Task, state: State) -> Self {
+        Self { id, task, state, started: None, result: None }
+    }
+
     pub(crate) fn is_routine(&self) -> bool {
         self.task.repeat.is_some()
     }
@@ -117,12 +127,16 @@ pub(crate) struct Listed {
     pub(crate) entry: Entry,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) next: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) result_at: Option<i64>,
 }
 
 impl From<&Entry> for Listed {
     fn from(entry: &Entry) -> Self {
         let next = (entry.is_routine() && !entry.task.paused).then_some(entry.task.at);
-        Self { entry: entry.clone(), next }
+        let result_at = entry.result.as_ref().map(|result| result.at);
+        let listed = Entry { started: entry.started, ..Entry::new(entry.id, entry.task.clone(), entry.state.clone()) };
+        Self { entry: listed, next, result_at }
     }
 }
 
@@ -143,7 +157,7 @@ impl Queue {
     pub(crate) fn add(&mut self, task: Task) -> Result<u64, String> {
         let id = self.next_id.checked_add(1).ok_or("the queue has no ids left")?;
         self.next_id = id;
-        self.entries.push(Entry { id, task, state: State::Pending });
+        self.entries.push(Entry::new(id, task, State::Pending));
         self.sort();
         Ok(id)
     }

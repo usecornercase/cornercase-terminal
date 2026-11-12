@@ -72,6 +72,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "tunnels",
     "tunnels-remembered",
     "tunnel-hold",
+    "queue-results",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

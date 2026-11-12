@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::*;
+use crate::agents::context::Pointer;
 use crate::app::recap_panel::Overrides;
-use crate::recap::journal::{Entry, Event, Pointer, WorkspacePlace, files};
+use crate::recap::journal::{Entry, Event, WorkspacePlace, files};
 use crate::recap::{Choice, Named, Place, RECAP_VERSION, Recap, store};
 use crate::test_util::{fake_program, fixture};
 use crate::time::Stamp;

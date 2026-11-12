@@ -46,6 +46,7 @@ fn a_routine_starts_its_flow_on_a_routine_branch_with_its_prompt_as_the_task() {
     assert!(git::branch(&run.task.place.workspace.expect("folder")).is_some_and(|found| found == branch));
     team.until_got(3);
     assert!(team.order().iter().any(|line| line.contains("settle the login bug")), "{:#?}", team.order());
+    assert!(team.order().iter().any(|line| line.contains(queue::outcome::CLOSING)), "{:#?}", team.order());
 }
 
 fn duel() -> Flow {

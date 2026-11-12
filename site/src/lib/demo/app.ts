@@ -3989,8 +3989,8 @@ export class App {
     const shown = this.queueShown(o);
     const selected = Math.min(o.selected, Math.max(0, shown.length - 1));
     const sel = shown[selected];
-    const opens = sel?.state === 'started' || sel?.state === 'kept';
-    const hint = !sel ? QUEUE_EVERY : sel.repeat ? 'enter edits it · start now runs it once more' : sel.routine ? `${opens ? 'enter opens its pane' : ''}${opens ? ' · ' : ''}a run of a routine${opens ? '' : ` · ${QUEUE_EVERY}`}` : sel.state === 'started' ? `enter opens its pane · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
+    const opens = (sel?.state === 'started' || sel?.state === 'kept') && sel.pane !== undefined && !!this.findPane(sel.pane);
+    const hint = !sel ? QUEUE_EVERY : sel.repeat ? 'enter edits it · start now runs it once more' : sel.routine ? (opens ? 'enter opens its pane · a run of a routine' : sel.state === 'pending' ? `a run of a routine · ${QUEUE_EVERY}` : 'enter shows its result · a run of a routine') : sel.state === 'started' ? `${opens ? 'enter opens its pane' : 'enter shows its result'} · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
     const runnable = !!sel && (sel.repeat ? true : !sel.routine && sel.state !== 'started');
     const clearable = (entry: QueueEntry) => !entry.repeat && (entry.routine ? entry.state !== 'pending' : entry.state === 'started');
     const buttons = [
@@ -4565,6 +4565,7 @@ export class App {
   openQueued(entry: QueueEntry): void {
     if (entry.routine && entry.state !== 'started') return;
     if (entry.state !== 'started') return this.openQueueForm(entry);
+    if (entry.pane === undefined || !this.findPane(entry.pane)) return;
     this.closeOverlay();
     for (let p = 0; p < this.projects.length; p++) for (let w = 0; w < this.projects[p].workspaces.length; w++) {
       const t = this.projects[p].workspaces[w].tabs.findIndex((tab) => tab.panes.some((pane) => pane.id === entry.pane));

@@ -10,6 +10,13 @@ fn action(args: &[&str]) -> QueueAction {
     queue.action
 }
 
+fn queue_command(action: QueueAction) -> Result<(control::Queue, bool)> {
+    match request_of(action)? {
+        Asked::Queue(command, json) => Ok((*command, json)),
+        Asked::Show(..) => panic!("not a queue command"),
+    }
+}
+
 #[test]
 fn adding_without_a_time_or_a_prompt_is_wrong_usage_before_asking_the_server() {
     for args in [&["add", "--prompt", "fix it"][..], &["add", "--at", "in 2h"]] {
@@ -76,7 +83,7 @@ fn removals_take_json_and_restore_takes_the_undo_number() {
         (&["clear-started", "--json"][..], control::Queue::ClearStarted, true),
         (&["restore", "8"][..], control::Queue::Restore(8), false),
     ] {
-        assert_eq!(request_of(action(args)).expect("queue request"), (command, json), "{args:?}");
+        assert_eq!(queue_command(action(args)).expect("queue request"), (command, json), "{args:?}");
     }
 }
 
@@ -94,8 +101,8 @@ mod routines {
         assert_eq!(request.repeat.as_deref(), Some("day 09:00"));
         assert_eq!((request.flow.as_deref(), request.cleanup), (Some("Quick"), Some(true)));
         assert_eq!(request.at, "");
-        let (pause, _) = request_of(action(&["pause", "4"])).expect("pause");
-        let (resume, _) = request_of(action(&["resume", "4"])).expect("resume");
+        let (pause, _) = queue_command(action(&["pause", "4"])).expect("pause");
+        let (resume, _) = queue_command(action(&["resume", "4"])).expect("resume");
         assert_eq!((pause, resume), (control::Queue::Pause(4), control::Queue::Resume(4)));
     }
 
@@ -140,5 +147,98 @@ mod routines {
              4 1970-01-01 00:00 kept: 2 uncommitted review · claude · routine 1\n\
              5 1970-01-01 00:00 removed review · claude · routine 1\n"
         );
+    }
+}
+
+mod showing {
+    use super::*;
+
+    fn removed() -> Value {
+        json!({
+            "id": 7, "at": 1_794_474_000, "label": "Review the open pull requests", "agent": "claude",
+            "state": "removed", "started": 1_794_474_060,
+            "result": {"at": 1_794_476_460, "text": "Reviewed #480 and #482.", "agent": "claude",
+                       "branch": "routine/review-20261112-0900", "conversation": true,
+                       "pull_request": {"number": 482, "title": "Fix", "url": "https://example.test/482",
+                                        "state": "open", "checks": "passing"}},
+            "messages": null, "earlier": false, "note": null,
+        })
+    }
+
+    #[test]
+    fn show_takes_an_id_the_conversation_and_json() {
+        let Asked::Show(show, json) = request_of(action(&["show", "7", "--conversation", "--json"])).expect("show")
+        else {
+            panic!("not a show")
+        };
+
+        assert_eq!((show, json), (control::QueueShow { id: 7, conversation: true }, true));
+    }
+
+    #[test]
+    fn shows_a_result_as_text() {
+        let text = show::text(&removed(), "UTC");
+
+        assert_eq!(
+            text,
+            "7 removed · Review the open pull requests · claude\n\
+             started 2026-11-12 09:01 · result 2026-11-12 09:41\n\
+             branch routine/review-20261112-0900\n\
+             pull request #482 open · checks passing · https://example.test/482\n\
+             \n\
+             Reviewed #480 and #482.\n"
+        );
+    }
+
+    #[test]
+    fn shows_a_conversation_with_its_roles_and_times() {
+        let mut value = removed();
+        value["earlier"] = json!(true);
+        value["messages"] = json!([
+            {"role": "prompt", "text": "review them", "written": null, "cut": false},
+            {"role": "reply", "text": "Done.", "written": "2026-11-12T09:41:00.000Z", "cut": false},
+        ]);
+
+        let text = show::text(&value, "UTC");
+
+        assert!(
+            text.ends_with(
+                "\n(earlier messages are left out)\n\nprompt\nreview them\n\nreply · 2026-11-12 09:41\nDone.\n"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_conversation_that_could_not_be_read_is_partial() {
+        let mut value = removed();
+        value["note"] = json!("claude no longer has this conversation's record");
+
+        assert!(show::partial(&value, true));
+        assert!(!show::partial(&value, false));
+        assert!(show::text(&value, "UTC").ends_with("no longer has this conversation's record\n"));
+    }
+
+    #[test]
+    fn shows_an_answer_from_a_newer_server_without_failing() {
+        let mut value = removed();
+        value["colour"] = json!("red");
+        value["result"]["confidence"] = json!(0.5);
+        value["messages"] = json!([{"role": "reply", "text": "x", "tone": "calm"}, 5]);
+
+        assert!(show::text(&value, "UTC").contains("Reviewed #480 and #482."));
+    }
+
+    #[test]
+    fn says_when_a_result_or_a_message_was_cut() {
+        let mut value = removed();
+        value["result"]["cut"] = json!(true);
+        value["messages"] = json!([{"role": "reply", "text": "Long.", "written": null, "cut": true}]);
+
+        let text = show::text(&value, "UTC");
+
+        assert!(text.contains("Reviewed #480 and #482.\n… only the first 4 KiB are kept\n"), "{text}");
+        assert!(text.contains("Long.\n… cut at 32 KiB\n"), "{text}");
+        assert!(!show::text(&removed(), "UTC").contains('…'));
     }
 }

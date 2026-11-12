@@ -126,6 +126,11 @@ pub(crate) fn size(bytes: u64) -> String {
     format!("{}.{} GB", tenths / 10, tenths % 10)
 }
 
+pub(crate) fn within_bytes(text: &str, max: usize) -> &str {
+    let cut = (0..=max.min(text.len())).rev().find(|&at| text.is_char_boundary(at)).unwrap_or_default();
+    &text[..cut]
+}
+
 pub(crate) fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

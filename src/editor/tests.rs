@@ -855,3 +855,12 @@ mod drawing {
         assert_ne!(e, Editor::new("fix"));
     }
 }
+
+mod wrapping_text {
+    use super::*;
+
+    #[test]
+    fn empty_lines_stay_and_long_words_break_like_wrap() {
+        assert_eq!(wrap_text("ab\n\nabcdefghij", 4), vec!["ab", "", "abcd", "efgh", "ij"]);
+    }
+}

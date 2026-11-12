@@ -14,7 +14,7 @@ use super::overlay::Overlay;
 use super::pull_requests::DONE;
 use super::{App, Toast};
 use crate::control::{Command, FlowMessage};
-use crate::editor::wrap;
+use crate::editor::wrap_text;
 use crate::error::Result;
 use crate::files::Origin;
 use crate::files::link::Target;
@@ -61,8 +61,7 @@ pub(super) struct Noted {
 }
 
 fn kept(text: &str) -> String {
-    let cut = (0..=MAX_TEXT.min(text.len())).rev().find(|&at| text.is_char_boundary(at)).unwrap_or_default();
-    text[..cut].to_string()
+    crate::text::within_bytes(text, MAX_TEXT).to_string()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,10 +80,7 @@ fn lines(message: &Message, width: usize, muted: Color) -> Vec<Line<'static>> {
         out.push(Line::from(Span::styled(NOTHING_SENT, Style::default().fg(muted))));
         return out;
     };
-    for line in text.lines() {
-        let chars: Vec<char> = line.chars().collect();
-        out.extend(wrap(line, width).into_iter().map(|range| Line::from(chars[range].iter().collect::<String>())));
-    }
+    out.extend(wrap_text(text, width).into_iter().map(Line::from));
     if message.bytes > text.len() {
         let cut = format!("… only the first {} KiB are kept", MAX_TEXT / 1024);
         out.push(Line::from(Span::styled(cut, Style::default().fg(muted))));

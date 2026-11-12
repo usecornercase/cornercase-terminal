@@ -12,6 +12,7 @@ use crate::flows::run::{Kind, Message, Run};
 use crate::flows::{ORCHESTRATOR, Role};
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::pull_request::PullRequest;
+use crate::text;
 use crate::time;
 use crate::ui::{self, flow};
 
@@ -23,8 +24,8 @@ fn age(since: Option<SystemTime>, now: SystemTime) -> String {
 fn head_of(message: &Message) -> Option<String> {
     match (&message.text, message.kind) {
         (Some(text), _) => {
-            let cut = (0..=HEAD.min(text.len())).rev().find(|&at| text.is_char_boundary(at)).unwrap_or_default();
-            Some(if cut < text.len() { format!("{}…", &text[..cut]) } else { text.clone() })
+            let head = text::within_bytes(text, HEAD);
+            Some(if head.len() < text.len() { format!("{head}…") } else { text.clone() })
         }
         (None, Kind::Send) => Some(NOTHING_SENT.to_string()),
         (None, _) => None,

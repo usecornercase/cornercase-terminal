@@ -88,6 +88,7 @@ pub(crate) struct Run {
     pub(crate) sent: Vec<Sent>,
     pub(crate) close_when_merged: bool,
     pub(crate) merged_since: Option<Instant>,
+    pub(crate) summary: bool,
 }
 
 impl Run {
@@ -106,6 +107,7 @@ impl Run {
             sent: Vec::new(),
             close_when_merged: false,
             merged_since: None,
+            summary: false,
         }
     }
 

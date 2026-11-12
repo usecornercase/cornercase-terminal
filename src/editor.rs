@@ -393,6 +393,15 @@ pub(crate) fn wrap(text: &str, width: usize) -> Vec<Range<usize>> {
     wrap_chars(&text.chars().collect::<Vec<_>>(), width)
 }
 
+pub(crate) fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let chars: Vec<char> = line.chars().collect();
+        out.extend(wrap_chars(&chars, width).into_iter().map(|range| chars[range].iter().collect::<String>()));
+    }
+    out
+}
+
 fn word_at(chars: &[char], at: usize) -> Option<Range<usize>> {
     let on = |i: usize| chars.get(i).is_some_and(|c| *c != '\n');
     let at = if on(at) { at } else { at.checked_sub(1).filter(|i| on(*i))? };

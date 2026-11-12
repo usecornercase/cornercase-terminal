@@ -157,6 +157,7 @@ impl App {
         let own = self.panels.queued.queue().entry(run).and_then(|entry| entry.task.place.branch.clone());
         let branches = own.map(|own| own_branches(&own, found)).unwrap_or_default();
         let base = crate::changes::git::default_base(&repo);
+        self.capture_before_removal(run);
         if self.start_removal(project, workspace, RemoveOptions::default(), None) {
             self.panels.queued.cleanups.cleaning.insert(workspace, Cleaning { run, repo, base, branches });
         } else {
@@ -200,6 +201,7 @@ impl App {
     }
 
     fn keep_run(&mut self, run: u64, reason: &str) {
+        self.panels.queued.results.settled(run);
         self.panels.queued.cleanups.countdowns.remove(&run);
         let Some(entry) = self.panels.queued.queue().entry(run) else { return };
         let State::Started { pane, server } = entry.state.clone() else { return };

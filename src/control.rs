@@ -28,6 +28,7 @@ pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
 pub(crate) mod pull_request;
+mod queued;
 pub(crate) mod recap;
 mod search;
 pub(crate) mod setup;
@@ -84,6 +85,7 @@ pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun}
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
 pub(crate) use pull_request::{PullRequestAnswer, PullRequestRead};
+pub(crate) use queued::{MessageInfo, Queue, QueueAdd, QueueShow, QueueShown, ResultInfo};
 pub(crate) use recap::{RecapAsk, RecapInfo};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use setup::RunSetup;
@@ -269,6 +271,7 @@ pub(crate) enum Command {
     TunnelClose(TunnelPort),
     TunnelForget(TunnelPort),
     TunnelHold(TunnelHold),
+    QueueShow(QueueShow),
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
     Recap(RecapAsk),
@@ -404,6 +407,7 @@ impl Command {
             Self::IssueRead(_) => 56,
             Self::IssuePeople(_) => 57,
             Self::Queue(_) => 22,
+            Self::QueueShow(_) => 131,
             _ => return None,
         })
     }
@@ -618,6 +622,7 @@ impl Command {
         "tunnel-close",
         "tunnel-forget",
         "tunnel-hold",
+        "queue-show",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {
@@ -956,39 +961,3 @@ pub(crate) fn command_name(request: &Value) -> Option<&str> {
 
 #[cfg(test)]
 pub(crate) mod tests;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "action", content = "entry", rename_all = "kebab-case")]
-pub(crate) enum Queue {
-    Add(QueueAdd),
-    Edit { id: u64, add: QueueAdd },
-    List,
-    Remove(u64),
-    Run(u64),
-    ClearStarted,
-    Restore(u64),
-    Pause(u64),
-    Resume(u64),
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct QueueAdd {
-    pub(crate) at: String,
-    pub(crate) zone: String,
-    pub(crate) agent: Option<String>,
-    pub(crate) mode: Option<String>,
-    pub(crate) project: Option<u64>,
-    pub(crate) workspace: Option<u64>,
-    pub(crate) worktree: Option<String>,
-    pub(crate) prompt: Option<String>,
-    pub(crate) issue: Option<String>,
-    pub(crate) source: Option<String>,
-    pub(crate) label: Option<String>,
-    pub(crate) submit: Option<bool>,
-    pub(crate) accounts: BTreeMap<String, String>,
-    pub(crate) repeat: Option<String>,
-    pub(crate) flow: Option<String>,
-    pub(crate) cleanup: Option<bool>,
-    pub(crate) fresh: Option<bool>,
-}

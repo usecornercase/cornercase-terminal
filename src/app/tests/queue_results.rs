@@ -1,0 +1,131 @@
+use super::*;
+use crate::agents::context::{Pointer, Said};
+use crate::error::Error;
+use crate::issues::browser::Tab;
+use crate::queue::outcome::{CLOSING, Pull, Taken};
+use crate::queue::{Place, State as QueueState, Task};
+use crate::test_util::TempDir;
+
+pub(super) const STARTED: i64 = 1_794_474_000;
+pub(super) const RESULT: i64 = 1_794_476_460;
+
+pub(super) fn opened() -> (App, Receiver<AppEvent>, [TempDir; 2]) {
+    let folders = [TempDir::new(), TempDir::new()];
+    let shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
+    let (mut app, rx) = new_app_with_shell(shell, folders[0].path().join("config.json"));
+    app.open_project(folders[1].path().to_path_buf(), AREA).expect("the project");
+    render(&mut app, AREA);
+    app.open_issues(AREA).expect("open issues");
+    let Some(Overlay::Issues(browser)) = &mut app.overlay else { panic!("issues") };
+    browser.tab_to(Tab::Queue);
+    app.sync_queued();
+    (app, rx, folders)
+}
+
+pub(super) fn shop() -> Task {
+    let place = Place {
+        project: "/work/shop".into(),
+        branch: Some("routine/review-the-open-pull-requests".into()),
+        ..Place::default()
+    };
+    Task {
+        at: STARTED,
+        zone: "UTC".into(),
+        label: "Review the open pull requests".into(),
+        prompt: "fix the login".into(),
+        agent: "fake".into(),
+        command: "fake".into(),
+        program: "fake".into(),
+        submit: true,
+        place,
+        ..Task::default()
+    }
+}
+
+pub(super) fn gone(app: &mut App) -> u64 {
+    let id = app.panels.queued.schedule(None, shop()).expect("entry");
+    app.panels.queued.started_at(id, 999, STARTED);
+    id
+}
+
+pub(super) fn keep(app: &mut App, id: u64, text: &str, record: Option<Pointer>) {
+    let pull = Pull {
+        number: 482,
+        title: "Fix the login".into(),
+        state: "open".into(),
+        checks: Some("passing".into()),
+        ..Pull::default()
+    };
+    let taken = Taken {
+        agent: Some("claude".into()),
+        record,
+        branch: Some("routine/review-the-open-pull-requests".into()),
+        pull_request: Some(pull),
+    };
+    let said = Some(Said { text: text.into(), written: Some("2026-11-12T09:41:00.000Z".into()) });
+    app.panels.queued.keep_result(id, taken, said, RESULT);
+}
+
+fn said(text: &str) -> Said {
+    Said { text: text.into(), written: None }
+}
+
+fn text_of(app: &App, id: u64) -> String {
+    app.queue_shown(id).expect("shown").result.map(|result| result.text).unwrap_or_default()
+}
+
+#[test]
+fn a_read_that_fails_keeps_the_previous_result() {
+    let (mut app, _rx, _dirs) = opened();
+    let id = gone(&mut app);
+    app.queue_captured(id, 1, Taken::default(), Ok(Some(said("first"))));
+
+    app.queue_captured(id, 2, Taken::default(), Err(Error::Control("boom".into())));
+
+    assert_eq!(text_of(&app, id), "first");
+}
+
+#[test]
+fn an_older_read_that_finishes_late_is_dropped() {
+    let (mut app, _rx, _dirs) = opened();
+    let id = gone(&mut app);
+
+    app.queue_captured(id, 2, Taken::default(), Ok(Some(said("two"))));
+    app.queue_captured(id, 1, Taken::default(), Ok(Some(said("one"))));
+
+    assert_eq!(text_of(&app, id), "two");
+}
+
+#[test]
+fn a_custom_agents_capture_keeps_the_branch_and_pull_request() {
+    let (mut app, _rx, _dirs) = opened();
+    let id = gone(&mut app);
+    let pull = Pull { number: 4, title: "Fix".into(), state: "open".into(), ..Pull::default() };
+    let taken = Taken {
+        agent: Some("fake".into()),
+        branch: Some("feat/x".into()),
+        pull_request: Some(pull.clone()),
+        ..Taken::default()
+    };
+
+    app.queue_captured(id, 1, taken, Ok(None));
+
+    let shown = app.queue_shown(id).expect("shown");
+    let result = shown.result.expect("a result");
+    assert_eq!((result.branch.as_deref(), result.pull_request, result.text.as_str()), (Some("feat/x"), Some(pull), ""));
+    assert!(shown.note.is_some_and(|note| note.contains("keeps no record")));
+}
+
+#[test]
+fn the_closing_line_is_sent_and_never_stored() {
+    let (mut app, _rx, _dirs) = opened();
+    let id = gone(&mut app);
+    app.panels.queued.set_state(id, QueueState::Pending);
+
+    let client = app.panels.queued.start(id, Instant::now());
+    let spec = app.queued_spec(client).expect("a spec");
+
+    assert_eq!(spec.prompt, Some(format!("fix the login\n\n{CLOSING}")));
+    assert_eq!(app.panels.queued.queue().entry(id).expect("entry").task.prompt, "fix the login");
+    assert!(!serde_json::to_string(&app.queue_saved()).expect("saved").contains(CLOSING));
+}

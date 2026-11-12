@@ -266,6 +266,21 @@ test('a started entry closes the modal and shows its pane', () => {
   app.destroy();
 });
 
+test('a started entry whose pane is closed says it shows its result and a click leaves the list open', () => {
+  const app = appAt(140);
+  schedule(app, 'Fix the login', 1);
+  app.runQueue(app.queued[0]);
+  app.queued[0].pane = 987654;
+  const browser = queueTab(app);
+  assert.equal(app.issuesView(browser).hint, "enter shows its result · every project's scheduled agents");
+  app.render();
+  const row = app.textAt('Fix the login');
+  assert.ok(row);
+  click(app, row.x, row.y);
+  assert.equal(app.overlay?.kind, 'issues');
+  app.destroy();
+});
+
 test('an issue schedule carries its title and branch and comes back to the Queue tab', () => {
   const app = appAt(140);
   app.openIssues(); app.advance(1000);
