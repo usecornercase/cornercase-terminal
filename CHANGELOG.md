@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.47
+
+- **Open a remote machine's dev server on your laptop.** In a window from `cornercase remote vps`, a workspace's **ports** dialog now offers **tunnel** on each port: it runs your own `ssh -N -L` to that machine, on the same port of your laptop when it's free (another one when it isn't, and the toast says which), and the row then shows `⇄ :5174` and offers **open** in your browser, **copy** of the laptop's address and **close tunnel**. A tunnel ends with the window, and comes back when the window reconnects. Scripts and agents get `cornercase tunnels`, `cornercase tunnel open PORT` and `cornercase tunnel close PORT` (also through `--remote`), and `status --json` and `events` list the tunnels. A tunnel only reaches the other machine's own `localhost`, and it is your own `ssh`, so your keys and `ProxyJump` apply.
+
 ## 0.13.46
 
 - **Flows with very long names save.** A flow's file is named after it, so a name past about 80 Chinese, Japanese or Korean characters, or about 240 letters, made a file name too long to save (0.13.45 lowered that limit a little). The file's name is now cut short, never in the middle of a character, so a flow saves whatever its name: it keeps its whole name, and two flows whose long names start alike get a file each.
