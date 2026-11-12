@@ -136,6 +136,7 @@ fn two_attached_windows_asked_to_open_a_tunnel_end_with_one_ssh_between_them() {
         all.len() == 2 && all.iter().all(|t| t["state"] == "up") && locals[0] == locals[1]
     });
     let local = local_of(&session).expect("a local port");
+    wait_until("one ssh is left", || tunnel_pids(&session, port).iter().filter(|pid| !gone(pid)).count() == 1);
     let pids = tunnel_pids(&session, port);
     let alive: Vec<&String> = pids.iter().filter(|pid| !gone(pid)).collect();
     assert_eq!(alive.len(), 1, "one ssh is left of {pids:?}");

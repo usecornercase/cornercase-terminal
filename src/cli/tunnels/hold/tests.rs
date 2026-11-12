@@ -31,6 +31,27 @@ mod waiting_for_it_to_come_up {
     }
 }
 
+mod waiting_for_the_registration {
+    use super::*;
+
+    #[test]
+    fn goes_on_once_the_server_answered() {
+        assert!(wait_registered(&heard(vec![Heard::Registered]), 5173).expect("registered"));
+    }
+
+    #[test]
+    fn stops_quietly_on_a_signal_or_an_ended_stream() {
+        assert!(!wait_registered(&heard(vec![Heard::Signal]), 5173).expect("signalled"));
+        assert!(!wait_registered(&heard(vec![Heard::Stream(Ok(()))]), 5173).expect("ended"));
+    }
+
+    #[test]
+    fn fails_when_the_server_refuses_or_ssh_ends() {
+        assert!(wait_registered(&heard(vec![Heard::Stream(Err(Error::ServerLost))]), 5173).is_err());
+        assert!(wait_registered(&heard(vec![Heard::Ended("dropped".into())]), 5173).is_err());
+    }
+}
+
 mod holding_it {
     use super::*;
 

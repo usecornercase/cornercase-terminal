@@ -305,6 +305,24 @@ mod holding_for_a_program {
     }
 
     #[test]
+    fn an_existing_hold_does_not_hide_a_window_that_could_not_open() {
+        let (mut app, _rx) = app();
+        hold(&mut app, HOLD, 5173, 5174);
+        app.take_answers();
+        attached(&mut app);
+        let now = Instant::now();
+        send(&mut app, "tunnel-open", 5173, now);
+        app.take_tunnel_orders();
+
+        let down = tunnel(5173, None, TunnelState::Down("refused".into()));
+        app.tunnels_reported(WINDOW, holding(&app, vec![down]));
+        app.check_requests(now);
+
+        let refused = answer(&mut app).expect_err("failed");
+        assert_eq!(refused.message, "could not tunnel port 5173: refused");
+    }
+
+    #[test]
     fn closing_its_port_ends_its_stream_and_orders_no_window() {
         let (mut app, _rx) = app();
         hold(&mut app, HOLD, 5173, 5174);

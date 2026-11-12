@@ -16,6 +16,7 @@ const NEEDS_REMOTE: &str =
 
 enum Heard {
     Up,
+    Registered,
     Ended(String),
     Signal,
     Stream(Result<()>),
@@ -55,13 +56,18 @@ fn hold(heard: &Receiver<Heard>, tell: mpsc::Sender<Heard>, port: u16, local: u1
     if !wait_up(heard, port)? {
         return Ok(true);
     }
-    if announce(&mut io::stdout().lock(), port, local)? {
-        return Ok(true);
-    }
+    let registered = tell.clone();
     thread::spawn(move || {
         let command = Command::TunnelHold(TunnelHold { port, local });
-        let _ = tell.send(Heard::Stream(client::follow("tunnel-hold", command, |_| Ok(false))));
+        let said = client::follow_all("tunnel-hold", command, |_| {
+            let _ = registered.send(Heard::Registered);
+            Ok(false)
+        });
+        let _ = tell.send(Heard::Stream(said));
     });
+    if !wait_registered(heard, port)? || announce(&mut io::stdout().lock(), port, local)? {
+        return Ok(true);
+    }
     held(heard, port)
 }
 
@@ -71,7 +77,21 @@ fn wait_up(heard: &Receiver<Heard>, port: u16) -> Result<bool> {
             Heard::Up => return Ok(true),
             Heard::Signal => return Ok(false),
             Heard::Ended(reason) => return Err(Error::Control(format!("could not tunnel port {port}: {reason}"))),
-            Heard::Stream(_) => {}
+            Heard::Stream(_) | Heard::Registered => {}
+        }
+    }
+}
+
+fn wait_registered(heard: &Receiver<Heard>, port: u16) -> Result<bool> {
+    loop {
+        match heard.recv().unwrap_or(Heard::Signal) {
+            Heard::Registered => return Ok(true),
+            Heard::Signal | Heard::Stream(Ok(())) => return Ok(false),
+            Heard::Stream(Err(error)) => return Err(error),
+            Heard::Ended(reason) => {
+                return Err(Error::Control(format!("the tunnel of port {port} ended: {reason}")));
+            }
+            Heard::Up => {}
         }
     }
 }
@@ -84,7 +104,7 @@ fn held(heard: &Receiver<Heard>, port: u16) -> Result<bool> {
             Heard::Ended(reason) => {
                 return Err(Error::Control(format!("the tunnel of port {port} ended: {reason}")));
             }
-            Heard::Up => {}
+            Heard::Up | Heard::Registered => {}
         }
     }
 }

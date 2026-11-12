@@ -151,6 +151,17 @@ mod opening {
     }
 
     #[test]
+    fn a_port_the_cap_rejects_is_not_remembered() {
+        let mut rig = rig();
+        (1..=32).for_each(|port| open(&mut rig, 40_000 + port));
+
+        open(&mut rig, 3000);
+
+        assert!(rig.kept().iter().all(|kept| kept.port != 3000));
+        assert!(matches!(state_of(&rig.tunnels, 3000), Some(TunnelState::Down(_))));
+    }
+
+    #[test]
     fn a_long_reason_becomes_one_line_of_at_most_300_characters() {
         let (mut tunnels, _calls, _dir) = tunnels_with(Some(&format!("first\n{}", "x".repeat(500))));
         let port = free_port();

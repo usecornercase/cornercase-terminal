@@ -147,7 +147,9 @@ impl Tunnels {
             None if self.held.len() >= MAX_TUNNELS * 2 => return,
             _ => {}
         }
-        self.remember_open(port);
+        if self.running_besides(port) < MAX_TUNNELS {
+            self.remember_open(port);
+        }
         if let Some(held) = self.held.get_mut(&port) {
             held.failures = 0;
             held.was_up = false;

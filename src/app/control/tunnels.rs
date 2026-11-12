@@ -94,10 +94,16 @@ impl App {
         }
         let opening = wait.verb == Verb::Open;
         let list = self.tunnel_list(opening.then_some(wait.port));
-        if !opening || list.tunnels.iter().any(|tunnel| tunnel.state == "up") {
+        let asked = |holder: u64| wait.asked.iter().any(|(client, _)| *client == holder);
+        if !opening || list.tunnels.iter().any(|tunnel| tunnel.state == "up" && asked(tunnel.holder)) {
             return Some(Ok(json(&list)));
         }
-        let reasons: Vec<&str> = list.tunnels.iter().filter_map(|tunnel| tunnel.error.as_deref()).collect();
+        let reasons: Vec<&str> = list
+            .tunnels
+            .iter()
+            .filter(|tunnel| asked(tunnel.holder))
+            .filter_map(|tunnel| tunnel.error.as_deref())
+            .collect();
         let why = if reasons.is_empty() { "no window answered".to_string() } else { reasons.join("; ") };
         Some(Err(format!("could not tunnel port {}: {why}", wait.port)))
     }
