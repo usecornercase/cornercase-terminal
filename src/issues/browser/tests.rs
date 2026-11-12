@@ -612,6 +612,7 @@ mod queue_tab {
             meta: "claude · shop".into(),
             state,
             kind: QueuedKind::Entry,
+            live: false,
         }
     }
 

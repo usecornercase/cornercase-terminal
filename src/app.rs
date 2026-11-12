@@ -149,6 +149,7 @@ mod ports_dialog;
 mod processes_dialog;
 mod project_settings_dialog;
 mod pull_requests;
+mod queue_detail;
 mod queue_dialog;
 mod queue_panel;
 mod queue_results;
@@ -484,6 +485,7 @@ impl App {
         self.watch_ports_dialog(now);
         self.watch_processes_dialog(now);
         self.close_gone_flow_message();
+        self.close_gone_queue_detail();
         self.check_updates(now);
     }
 

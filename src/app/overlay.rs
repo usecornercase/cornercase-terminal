@@ -161,6 +161,7 @@ pub(super) enum Overlay {
         shown: Shown,
         scroll: usize,
     },
+    QueueEntry(Box<super::queue_detail::Detail>),
     Keys(Option<KeysGroup>),
     Worktrees(Box<crate::worktrees::Dialog>),
     Ports(Box<crate::ports::dialog::Dialog>),
@@ -201,6 +202,7 @@ impl Overlay {
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
             Self::Queue(_) => "queue",
+            Self::QueueEntry(_) => "queue entry",
             Self::Search(_) => "search",
             Self::Update(_) => "update",
             Self::Usage => "usage",
@@ -324,7 +326,7 @@ impl Overlay {
             Self::PullRequest { .. } => COPY_LINK,
             Self::MergeCheck { .. } => CHECK_AGAIN,
             Self::Context { .. } => REFRESH,
-            Self::FlowMessage { .. } => COPY,
+            Self::FlowMessage { .. } | Self::QueueEntry(_) => COPY,
             _ => CREATE_SUBMIT,
         }
     }
@@ -332,9 +334,11 @@ impl Overlay {
     pub(super) fn cancel_label(&self) -> &'static str {
         match self {
             Self::Update(UpdateStep::Installed) => LATER,
-            Self::PullRequest { .. } | Self::MergeCheck { .. } | Self::FlowMessage { .. } | Self::Context { .. } => {
-                DONE
-            }
+            Self::PullRequest { .. }
+            | Self::MergeCheck { .. }
+            | Self::FlowMessage { .. }
+            | Self::Context { .. }
+            | Self::QueueEntry(_) => DONE,
             _ => ui::CANCEL_LABEL,
         }
     }
@@ -411,6 +415,7 @@ impl App {
             Some(Overlay::MergeCheck { .. }) => self.merge_check_mouse(ev, pos, area),
             Some(Overlay::Context { .. }) => self.context_mouse(ev, pos, area),
             Some(Overlay::FlowMessage { .. }) => self.flow_message_mouse(ev, pos, area),
+            Some(Overlay::QueueEntry(_)) => self.queue_detail_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
             Some(Overlay::Pairing(via)) => self.pairing_mouse(*via, ev, pos, area),
             Some(Overlay::Forum(via)) => self.forum_mouse(*via, ev, pos, area),
@@ -464,7 +469,8 @@ impl App {
             Overlay::PullRequest { .. }
             | Overlay::MergeCheck { .. }
             | Overlay::FlowMessage { .. }
-            | Overlay::Context { .. } => self.notes_view(overlay, area)?,
+            | Overlay::Context { .. }
+            | Overlay::QueueEntry(_) => self.notes_view(overlay, area)?,
             Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
             Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
         })
@@ -511,6 +517,7 @@ impl App {
             Overlay::FlowMessage { workspace, shown, scroll } => {
                 self.flow_message_view(*workspace, shown, *scroll, area)?
             }
+            Overlay::QueueEntry(detail) => self.queue_detail_view(detail, area)?,
             _ => return None,
         })
     }

@@ -217,6 +217,11 @@ impl App {
         );
     }
 
+    pub(in crate::app) fn readable_record(&self, id: u64) -> Option<Pointer> {
+        let entry = self.panels.queued.queue().entry(id)?;
+        entry.result.as_ref()?.record.clone().filter(Pointer::readable)
+    }
+
     pub(in crate::app) fn read_conversation(&self, entry: u64, pointer: Pointer, to: Reader) {
         let record = pointer.record();
         let job = Job::new(Level::Debug, "queue", "read conversation").with("entry", entry);
@@ -243,8 +248,4 @@ impl App {
             }
         }
     }
-}
-
-impl App {
-    pub(super) fn queue_conversation_shown(&mut self, _entry: u64, _result: Result<Talk>, _area: Rect) {}
 }

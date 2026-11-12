@@ -44,11 +44,6 @@ impl App {
         })
     }
 
-    fn readable_record(&self, id: u64) -> Option<Pointer> {
-        let entry = self.panels.queued.queue().entry(id)?;
-        entry.result.as_ref()?.record.clone().filter(Pointer::readable)
-    }
-
     pub(in crate::app::control) fn queue_show_request(&mut self, client: u64, show: &QueueShow) -> Handled {
         let mut shown = self.queue_shown(show.id)?;
         if !show.conversation {

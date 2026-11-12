@@ -237,6 +237,8 @@ impl App {
             self.scroll_context(delta, area);
         } else if matches!(self.overlay, Some(Overlay::FlowMessage { .. })) {
             self.scroll_flow_message(delta, area);
+        } else if matches!(self.overlay, Some(Overlay::QueueEntry(_))) {
+            self.scroll_queue_detail(delta, area);
         } else {
             self.scroll_update(delta, area);
         }
@@ -246,6 +248,7 @@ impl App {
         match &self.overlay {
             Some(overlay) if overlay.busy() => {}
             Some(Overlay::Queue(_)) => self.close_queue_form(false),
+            Some(Overlay::QueueEntry(_)) => self.close_queue_detail(),
             Some(Overlay::Flows { .. }) => self.close_flows(),
             Some(Overlay::Star) => self.answer_star(None),
             Some(Overlay::RemoveAccount { .. }) => self.open_settings(),
@@ -288,6 +291,7 @@ impl App {
             Overlay::PullRequest { workspace, .. } => self.submit_pull_request(workspace),
             again @ (Overlay::MergeCheck { .. } | Overlay::Context { .. }) => Some(self.submit_again(again)),
             Overlay::FlowMessage { workspace, shown, .. } => self.submit_flow_message(workspace, &shown),
+            Overlay::QueueEntry(detail) => self.submit_queue_detail(detail),
             busy => Some(busy),
         };
         Ok(())

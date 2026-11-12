@@ -50,6 +50,10 @@ impl QueueRuntime {
         &self.zone
     }
 
+    pub(super) fn display_zone(&self) -> &str {
+        if self.zone.is_empty() { "UTC" } else { &self.zone }
+    }
+
     pub(super) fn area(&self) -> Option<Rect> {
         self.area
     }
@@ -332,11 +336,11 @@ impl App {
     }
 
     pub(super) fn queued_rows(&self) -> Vec<Queued> {
-        let zone = if self.panels.queued.zone.is_empty() { "UTC" } else { &self.panels.queued.zone };
+        let zone = self.panels.queued.display_zone();
         self.panels.queued.queue.entries.iter().map(|entry| self.queued_row(entry, zone)).collect()
     }
 
-    fn queued_row(&self, entry: &queue::Entry, zone: &str) -> Queued {
+    pub(super) fn queued_row(&self, entry: &queue::Entry, zone: &str) -> Queued {
         let place = self.queued_place(&entry.task.place);
         let (when, meta, kind) = if let Some(repeat) = entry.task.repeat {
             let when =
@@ -349,7 +353,11 @@ impl App {
             let meta = format!("{} · {who} · {place}", self.queued_status(&entry.state));
             (queue::clock::display(entry.task.at, zone), meta, kind)
         };
-        Queued { id: entry.id, when, label: entry.task.label.clone(), meta, state: entry.state.clone(), kind }
+        let live = match &entry.state {
+            State::Started { pane, server } | State::Kept { pane, server, .. } => self.queue_pane_live(*pane, server),
+            _ => false,
+        };
+        Queued { id: entry.id, when, label: entry.task.label.clone(), meta, state: entry.state.clone(), kind, live }
     }
 
     fn queued_status(&self, state: &State) -> String {
@@ -393,16 +401,24 @@ impl App {
         }
     }
 
+    fn queue_pane_live(&self, pane: u64, server: &str) -> bool {
+        server == control::server_token() && self.projects.pane_by(pane).is_some()
+    }
+
     pub(super) fn open_queued(&mut self, id: u64, area: Rect) {
         let Some(entry) = self.panels.queued.queue.entry(id) else { return };
         match &entry.state {
-            State::Started { pane, server } | State::Kept { pane, server, .. } if server == control::server_token() => {
+            State::Started { pane, server } | State::Kept { pane, server, .. }
+                if self.queue_pane_live(*pane, server) =>
+            {
                 let pane = *pane;
                 self.overlay = None;
                 self.focus_queued(pane, area);
             }
+            State::Started { .. } | State::Kept { .. } | State::Removed => self.open_queue_detail(id),
+            State::Failed { .. } | State::Missed if entry.is_run() => self.open_queue_detail(id),
+            State::Starting => {}
             _ if entry.is_run() => {}
-            State::Started { .. } | State::Kept { .. } | State::Removed | State::Starting => {}
             _ => self.new_queue_form(Some(id)),
         }
     }
@@ -465,6 +481,21 @@ fn queued_colour(queued: &Queued) -> Option<Color> {
     }
 }
 
+fn queue_hint(selected: Option<&Queued>) -> &'static str {
+    let Some(queued) = selected else { return "every project's scheduled agents" };
+    let opens = matches!(queued.state, State::Started { .. } | State::Kept { .. }) && queued.live;
+    match (queued.kind, &queued.state) {
+        (QueuedKind::Routine { .. }, _) => "enter edits it · start now runs it once more",
+        (QueuedKind::Run, _) if opens => "enter opens its pane · a run of a routine",
+        (QueuedKind::Run, State::Pending | State::Starting) => "a run of a routine · every project's scheduled agents",
+        (QueuedKind::Run, _) => "enter shows its result · a run of a routine",
+        (_, State::Started { .. }) if opens => "enter opens its pane · every project's scheduled agents",
+        (_, State::Started { .. }) => "enter shows its result · every project's scheduled agents",
+        (_, State::Starting) => "starting… · every project's scheduled agents",
+        _ => "enter edits it · start now runs it at once",
+    }
+}
+
 pub(super) fn queue_tab(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {
     let shown = browser.shown_queue();
     let selected = shown.len().checked_sub(1).map(|last| browser.search.selected().min(last));
@@ -482,17 +513,7 @@ pub(super) fn queue_tab(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>,
     } else {
         "nothing matches"
     };
-    let hint = match selected.map(|i| (shown[i].kind, &shown[i].state)) {
-        Some((QueuedKind::Routine { .. }, _)) => "enter edits it · start now runs it once more",
-        Some((QueuedKind::Run, State::Started { .. } | State::Kept { .. })) => {
-            "enter opens its pane · a run of a routine"
-        }
-        Some((QueuedKind::Run, _)) => "a run of a routine · every project's scheduled agents",
-        Some((_, State::Started { .. })) => "enter opens its pane · every project's scheduled agents",
-        Some((_, State::Starting)) => "starting… · every project's scheduled agents",
-        Some(_) => "enter edits it · start now runs it at once",
-        None => "every project's scheduled agents",
-    };
+    let hint = queue_hint(selected.map(|i| shown[i]));
     let body = ui::IssuesBody::List {
         filter: browser.search.query().to_string(),
         items,
