@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.46
+
+- **Flows with very long names save.** A flow's file is named after it, so a name past about 80 Chinese, Japanese or Korean characters, or about 240 letters, made a file name too long to save (0.13.45 lowered that limit a little). The file's name is now cut short, never in the middle of a character, so a flow saves whatever its name: it keeps its whole name, and two flows whose long names start alike get a file each.
+
 ## 0.13.45
 
 - **Saving the same file from two places at once no longer breaks it.** cornercase writes each of its files (your settings, the session, the machines your windows reached, plugins, saved flows…) to a temporary file and then puts it in place, but every write of a file used the same temporary name. Two writes in the same instant, from two windows or from a window and a `cornercase` command, could mix their bytes and leave a broken file: a broken `machines.json`, for one, read as an empty list, so the next save kept a single machine. Each write now has a temporary file of its own, so the file is always one whole save, the last one.
