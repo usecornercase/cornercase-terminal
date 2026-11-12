@@ -42,11 +42,20 @@ fn a_known_agent_says_its_title_models_and_efforts() {
             reads_status: true,
             flows: true,
             models: strings(&["opus", "sonnet", "haiku"]),
+            catalogue: false,
             efforts: strings(&["low", "medium", "high", "xhigh", "max"]),
         }
     );
     assert_eq!(entry("codex").efforts.first().map(String::as_str), Some("minimal"));
     assert_eq!(entry("copilot").models, strings(&["auto"]));
+}
+
+#[test]
+fn only_an_agent_with_a_catalogue_says_so() {
+    let names: Vec<String> =
+        listed().agents().into_iter().filter(|agent| agent.catalogue).map(|agent| agent.name).collect();
+    assert_eq!(names, ["opencode"]);
+    assert_eq!(entry("opencode").models, Vec::<String>::new());
 }
 
 #[test]

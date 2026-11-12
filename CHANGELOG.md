@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.52
+
+- **A program with a flow editor of its own can offer opencode's models.** `cornercase config models AGENT` (the `agent-models` request) lists every model the flow editor offers for an agent: for opencode, every `provider/model` id of the models.dev list it caches, read when asked, so `cornercase config` still answers at once; for any other agent, the models `config --json` already lists. `--json` prints `{"agent": "opencode", "models": [...]}`. Each agent in `config --json` now says whether it keeps such a list (`catalogue`), and `cornercase contract` lists the feature `agent-models`.
+
 ## 0.13.51
 
 - **See what a queued agent did, even once its pane is gone.** Each time a queued agent or a routine's run ends a turn, when its pane closes, and right before a routine's cleanup removes its workspace, cornercase keeps the agent's last message, its branch and its pull request with the checks as they were then. In **Issues → Queue**, click a run whose workspace was removed, an entry whose pane was closed, or a failed or missed run: a dialog shows when it started, its agent, branch, pull request and that last message, and **conversation** shows the conversation, up to its newest 1,000 messages with each cut at 32 KiB, for as long as the agent keeps it. A queued prompt now ends with one more sentence asking the agent to finish with a short summary of what it did and what is left. Scripts get `cornercase queue show ID` (with `--conversation` and `--json`), and `queue list --json` and `status --app` say when each entry's result last changed (`result_at`).

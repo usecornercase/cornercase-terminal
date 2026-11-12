@@ -378,6 +378,7 @@ fn agent_entry(name: String) -> AgentEntry {
         reads_status: agents::reads_status(&name),
         flows: flows::takes(&name),
         models: known.map(|kind| owned(kind.models())).unwrap_or_default(),
+        catalogue: known.is_some_and(|kind| kind.catalogue().is_some()),
         efforts: agents::effort_levels(&name).map(owned).unwrap_or_default(),
         name,
     }

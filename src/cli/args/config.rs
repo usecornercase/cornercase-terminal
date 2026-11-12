@@ -19,6 +19,13 @@ pub(crate) enum ConfigAction {
         #[arg(required = true, value_name = "TEXT", help = "The words to look for; every word must match")]
         text: Vec<String>,
     },
+    #[command(
+        about = "List every model the flow editor offers for an agent, reading the agent's own list when it keeps one"
+    )]
+    Models {
+        #[arg(value_name = "AGENT", help = "The agent, as the agent setting names it, such as opencode")]
+        agent: String,
+    },
     #[command(about = "Change settings: KEY VALUE pairs, checked together, all or none")]
     Set {
         #[arg(required = true, num_args = 2.., value_names = ["KEY", "VALUE"])]

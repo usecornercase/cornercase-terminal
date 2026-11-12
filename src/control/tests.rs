@@ -199,6 +199,7 @@ fn newest_commands() -> Vec<Command> {
         Command::TunnelForget(TunnelPort::default()),
         Command::TunnelHold(TunnelHold::default()),
         Command::QueueShow(QueueShow::default()),
+        Command::AgentModels(AgentModels { agent: "opencode".into() }),
     ]
 }
 

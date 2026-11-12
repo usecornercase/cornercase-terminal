@@ -138,7 +138,7 @@ impl Agents {
 
     pub(crate) fn models(&self, kind: Known) -> Vec<String> {
         let read = self.models.iter().find(|(k, _)| *k == kind).map(|(_, ids)| ids.clone()).unwrap_or_default();
-        kind.models().iter().map(|m| (*m).to_string()).chain(read).collect()
+        kind.offered_models(read)
     }
 
     pub(crate) fn reading(&self, kind: Known) -> bool {

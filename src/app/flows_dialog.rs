@@ -451,12 +451,18 @@ impl App {
     }
 
     fn read_models(&self, kind: Known) {
-        let Some(read) = kind.catalogue() else { return };
-        self.spawn_job(
-            Job::new(Level::Debug, "flows", "models").with("agent", kind.name()),
-            move || Ok(read()),
-            move |result, _| Some(AppEvent::FlowModels(kind, result.unwrap_or_default())),
-        );
+        let job = Job::new(Level::Debug, "flows", "models");
+        self.read_catalogue(kind, job, move |listed| AppEvent::FlowModels(kind, listed.unwrap_or_default()));
+    }
+
+    pub(in crate::app) fn read_catalogue(
+        &self,
+        kind: Known,
+        job: Job,
+        then: impl FnOnce(crate::error::Result<Vec<String>>) -> AppEvent + Send + 'static,
+    ) {
+        let Some(read) = self.agents.catalogue_of(kind) else { return };
+        self.spawn_job(job.with("agent", kind.name()), move || Ok(read()), move |listed, _| Some(then(listed)));
     }
 
     fn fetch_flow(&self, source: Source) {
