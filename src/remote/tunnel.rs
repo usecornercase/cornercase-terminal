@@ -135,7 +135,9 @@ impl Watch {
                 Step::Ended(Some(status))
             }
             Err(_) => {
-                held.take();
+                if let Some(child) = held.take() {
+                    process::stop(child);
+                }
                 Step::Ended(None)
             }
         }

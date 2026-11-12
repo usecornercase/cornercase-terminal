@@ -237,6 +237,35 @@ mod closing {
     }
 }
 
+mod pending_orders {
+    use super::*;
+
+    #[test]
+    fn closing_a_port_whose_open_is_still_on_its_way_orders_the_close_too() {
+        let (mut app, _rx) = app();
+        attached(&mut app);
+        let now = Instant::now();
+        send(&mut app, "tunnel-open", 5173, now);
+        app.take_tunnel_orders();
+
+        send(&mut app, "tunnel-close", 5173, now);
+
+        assert_eq!(app.take_tunnel_orders(), [(WINDOW, TunnelOrder::Close(5173))]);
+    }
+
+    #[test]
+    fn a_reconnected_window_starts_counting_from_the_orders_it_reports() {
+        let (mut app, _rx) = app();
+        app.tunnels_reported(WINDOW, Holding { browse: true, orders: 5, tunnels: vec![] });
+        let now = Instant::now();
+        send(&mut app, "tunnel-open", 5173, now);
+
+        app.check_requests(now);
+
+        assert_eq!(app.take_answers().len(), 0);
+    }
+}
+
 mod events {
     use super::*;
 

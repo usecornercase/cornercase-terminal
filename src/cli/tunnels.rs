@@ -44,9 +44,13 @@ fn done_text(action: &TunnelAction, list: &TunnelList) -> String {
 
 fn opened_text(port: u16, list: &TunnelList) -> String {
     let mut text = String::new();
-    for tunnel in list.tunnels.iter().filter(|tunnel| tunnel.state == "up") {
-        let local = tunnel.local.unwrap_or(port);
-        let _ = write!(text, "port {port} is tunnelled to localhost:{local}");
+    for tunnel in &list.tunnels {
+        if tunnel.state == "up" {
+            let local = tunnel.local.unwrap_or(port);
+            let _ = write!(text, "port {port} is tunnelled to localhost:{local}");
+        } else {
+            let _ = write!(text, "port {port} is not tunnelled: {}", tunnel.error.as_deref().unwrap_or("unknown"));
+        }
         if list.windows > 1 {
             let _ = write!(text, " (window {})", tunnel.holder);
         }

@@ -78,7 +78,8 @@ fn info_of(holder: u64, tunnel: &Tunnel) -> TunnelInfo {
 impl App {
     pub(crate) fn tunnels_reported(&mut self, client: u64, holding: Holding) {
         let previous = self.opening.tunnels.by.get(&client).map(|holder| holder.tunnels.clone()).unwrap_or_default();
-        let holder = Holder { browse: holding.browse, tunnels: holding.tunnels, applied: holding.orders };
+        let holder = Holder { browse: holding.browse, applied: holding.orders, tunnels: holding.tunnels };
+        self.opening.tunnels.sent.entry(client).or_insert(holding.orders);
         self.opening.tunnels.by.insert(client, holder.clone());
         self.tunnels_changed(client, &previous, &holder);
         log::debug!("ui", "tunnels reported", client = client, count = holder.tunnels.len());
@@ -107,7 +108,7 @@ impl App {
         let origin = self.opening.tunnels.asked.get(&(client, tunnel.port)).filter(|(_, order)| *order <= applied);
         let origin = origin.map(|(origin, _)| *origin);
         let toast = match (&tunnel.state, origin) {
-            (TunnelState::Up, Some(origin)) => Some(up_toast(client, tunnel, origin, browse)),
+            (TunnelState::Up, Some(origin)) => Some(up_toast(tunnel, origin, browse)),
             (TunnelState::Down(reason), origin) if origin.is_some() || opening(before) => {
                 Some(Toast::new(failed_text(tunnel.port, reason), ui::ToastIcon::Bug))
             }
@@ -151,6 +152,9 @@ impl App {
             .iter()
             .filter(|(_, holder)| holder.tunnel(port).is_some())
             .map(|(client, _)| *client)
+            .chain(self.opening.tunnels.asked.keys().filter(|(_, asked)| *asked == port).map(|(client, _)| *client))
+            .collect::<std::collections::BTreeSet<u64>>()
+            .into_iter()
             .collect();
         for client in &holding {
             self.opening.tunnels.asked.remove(&(*client, port));
@@ -184,6 +188,16 @@ impl App {
         self.close_tunnel(port.number);
         let message = format!("closed the tunnel of port {}", port.number);
         self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+    }
+
+    pub(super) fn browse_tunnel_here(&mut self, port: u16) {
+        let client = self.window_in_use();
+        let holds = self.opening.tunnels.holder(client).is_some_and(|holder| {
+            holder.browse && holder.tunnel(port).is_some_and(|tunnel| tunnel.state == TunnelState::Up)
+        });
+        if holds {
+            self.browse_tunnel(client, port);
+        }
     }
 
     pub(super) fn browse_tunnel(&mut self, client: u64, port: u16) {
@@ -224,7 +238,7 @@ fn failed_text(port: u16, reason: &str) -> String {
     format!("could not tunnel port {port}: {reason}")
 }
 
-fn up_toast(client: u64, tunnel: &Tunnel, origin: Origin, browse: bool) -> Toast {
+fn up_toast(tunnel: &Tunnel, origin: Origin, browse: bool) -> Toast {
     let port = tunnel.port;
     let local = tunnel.local.unwrap_or(port);
     match origin {
@@ -232,7 +246,7 @@ fn up_toast(client: u64, tunnel: &Tunnel, origin: Origin, browse: bool) -> Toast
             let taken = if local == port { String::new() } else { format!(" ({port} is taken here)") };
             let message = format!("port {port} is tunnelled to localhost:{local}{taken}");
             let mut toast = Toast::new(message, ui::ToastIcon::Check);
-            toast.tunnel = browse.then_some(TunnelButton::Open { client, port });
+            toast.tunnel = browse.then_some(TunnelButton::Open(port));
             toast.lingers = true;
             toast
         }

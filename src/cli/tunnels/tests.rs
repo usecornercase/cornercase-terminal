@@ -59,6 +59,23 @@ mod opening {
     }
 }
 
+mod opening_with_several_windows {
+    use super::*;
+
+    #[test]
+    fn says_why_a_window_could_not() {
+        let list = TunnelList {
+            tunnels: vec![info(5173, Some(5173), "up", None, 3), info(5173, None, "down", Some("denied"), 4)],
+            windows: 2,
+        };
+
+        assert_eq!(
+            opened_text(5173, &list),
+            "port 5173 is tunnelled to localhost:5173 (window 3)\nport 5173 is not tunnelled: denied (window 4)\n"
+        );
+    }
+}
+
 mod parsing {
     use super::*;
 

@@ -127,7 +127,7 @@ mod the_toast {
 
         assert_eq!(toast(&app), "port 5173 is tunnelled to localhost:5174 (5173 is taken here)");
         let shown = app.messages.toast.as_ref().expect("a toast");
-        assert_eq!(shown.tunnel, Some(TunnelButton::Open { client: WINDOW, port: 5173 }));
+        assert_eq!(shown.tunnel, Some(TunnelButton::Open(5173)));
         let button = ui::toast_button(AREA, shown.view());
         click(&mut app, Position::new(button.x, button.y));
         assert_eq!(app.take_browses(), [(WINDOW, Browse { ip: None, port: 5173 })]);
