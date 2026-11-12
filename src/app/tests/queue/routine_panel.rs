@@ -2,7 +2,7 @@ use super::routines::runs;
 use super::*;
 use crate::queue::repeat::Repeat;
 
-fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+pub(super) fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, repo, config, worktrees) = queued_app();
     queue_tab(&mut app);
     (app, rx, vec![repo, config, worktrees])

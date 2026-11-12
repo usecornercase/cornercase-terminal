@@ -1,3 +1,4 @@
+use super::routine_panel::opened;
 use super::*;
 use crate::agents::context::{Pointer, Said};
 use crate::control::server_token;
@@ -6,12 +7,6 @@ use crate::ui::Overlay as View;
 
 const STARTED: i64 = 1_794_474_000;
 const RESULT: i64 = 1_794_476_460;
-
-fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
-    let (mut app, rx, repo, config, worktrees) = queued_app();
-    queue_tab(&mut app);
-    (app, rx, vec![repo, config, worktrees])
-}
 
 fn shop(app: &App) -> Task {
     let place = Place {

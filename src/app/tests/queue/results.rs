@@ -14,8 +14,8 @@ fn started(app: &mut App) -> u64 {
     id
 }
 
-fn said(text: &str) -> Option<Said> {
-    Some(Said { text: text.into(), written: None })
+fn said(text: &str) -> Said {
+    Said { text: text.into(), written: None }
 }
 
 fn text_of(app: &App, id: u64) -> String {
@@ -26,7 +26,7 @@ fn text_of(app: &App, id: u64) -> String {
 fn a_read_that_fails_keeps_the_previous_result() {
     let (mut app, _rx, _dirs) = opened();
     let id = started(&mut app);
-    app.queue_captured(id, 1, Taken::default(), Ok(said("first")));
+    app.queue_captured(id, 1, Taken::default(), Ok(Some(said("first"))));
 
     app.queue_captured(id, 2, Taken::default(), Err(Error::Control("boom".into())));
 
@@ -38,8 +38,8 @@ fn an_older_read_that_finishes_late_is_dropped() {
     let (mut app, _rx, _dirs) = opened();
     let id = started(&mut app);
 
-    app.queue_captured(id, 2, Taken::default(), Ok(said("two")));
-    app.queue_captured(id, 1, Taken::default(), Ok(said("one")));
+    app.queue_captured(id, 2, Taken::default(), Ok(Some(said("two"))));
+    app.queue_captured(id, 1, Taken::default(), Ok(Some(said("one"))));
 
     assert_eq!(text_of(&app, id), "two");
 }

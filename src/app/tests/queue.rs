@@ -79,9 +79,6 @@ fn press_button(app: &mut App, label: &str) {
     click(app, button.as_position());
 }
 
-mod detail;
-mod results;
-
 mod starts {
     use super::*;
 
@@ -826,5 +823,7 @@ mod modes {
 
 mod accounts;
 mod cleanup;
+mod detail;
+mod results;
 mod routine_panel;
 mod routines;
