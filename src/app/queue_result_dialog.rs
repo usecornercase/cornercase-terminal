@@ -48,23 +48,36 @@ impl App {
         self.overlay = Some(Overlay::QueueResult(Box::new(Dialog { entry: id, scroll: 0, showing: Showing::Result })));
     }
 
-    fn queue_result_lines(&self, detail: &Dialog, area: Rect) -> Option<Vec<Line<'static>>> {
+    fn with_result_lines<R>(
+        &self,
+        detail: &Dialog,
+        area: Rect,
+        use_lines: impl FnOnce(&[Line<'static>]) -> R,
+    ) -> Option<R> {
         let zone = self.panels.queued.display_zone();
         let at = (zone, usize::from(ui::update_notes(area).width));
         Some(match &detail.showing {
             Showing::Result => {
                 let shown = self.queue_shown(detail.entry).ok()?;
                 let entry = self.panels.queued.queue().entry(detail.entry)?;
-                lines::result(&shown, entry, at, self.muted_color())
+                use_lines(&lines::result(&shown, entry, at, self.muted_color()))
             }
             Showing::Talk { talk, wrapped } => {
                 let mut cached = wrapped.borrow_mut();
                 if cached.0 != at.1 {
                     *cached = (at.1, lines::talk(talk, at, self.muted_color()));
                 }
-                cached.1.clone()
+                use_lines(&cached.1)
             }
-            Showing::Reading | Showing::Failed(_) => Vec::new(),
+            Showing::Reading | Showing::Failed(_) => use_lines(&[]),
+        })
+    }
+
+    fn queue_result_window(&self, detail: &Dialog, area: Rect) -> Option<Vec<Line<'static>>> {
+        let height = usize::from(ui::update_notes(area).height);
+        self.with_result_lines(detail, area, |all| {
+            let from = ui::update_scroll(area, all.len(), detail.scroll);
+            all.iter().skip(from).take(height).cloned().collect()
         })
     }
 
@@ -93,8 +106,8 @@ impl App {
         Some(ui::Overlay::Update(ui::Update {
             title,
             message: format!("{}\n{meta}", crate::text::truncate_right(first_line(&entry.task.label), width)),
-            notes: self.queue_result_lines(detail, area)?,
-            scroll: detail.scroll,
+            notes: self.queue_result_window(detail, area)?,
+            scroll: 0,
             note,
             submit: COPY,
             extra: self.queue_result_extra(detail),
@@ -133,7 +146,7 @@ impl App {
 
     pub(super) fn scroll_queue_result_dialog(&mut self, delta: isize, area: Rect) {
         let Some(Overlay::QueueResult(detail)) = &self.overlay else { return };
-        let count = self.queue_result_lines(detail, area).map_or(0, |lines| lines.len());
+        let count = self.with_result_lines(detail, area, <[Line]>::len).unwrap_or_default();
         let scroll = ui::update_scroll(area, count, detail.scroll.saturating_add_signed(delta));
         if let Some(Overlay::QueueResult(detail)) = &mut self.overlay {
             detail.scroll = scroll;

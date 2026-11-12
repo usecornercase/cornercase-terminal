@@ -83,6 +83,7 @@ impl Outcome {
             }
             None => (previous.text, previous.cut, previous.written),
         };
+        let moved = matches!((&taken.branch, &previous.branch), (Some(new), Some(old)) if new != old);
         Self {
             at,
             text,
@@ -91,7 +92,7 @@ impl Outcome {
             agent: taken.agent.or(previous.agent),
             record: taken.record.or(previous.record),
             branch: taken.branch.or(previous.branch),
-            pull_request: taken.pull_request.or(previous.pull_request),
+            pull_request: taken.pull_request.or(previous.pull_request.filter(|_| !moved)),
         }
     }
 }

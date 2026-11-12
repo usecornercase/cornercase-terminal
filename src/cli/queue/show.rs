@@ -3,6 +3,8 @@ use serde_json::Value;
 
 use super::Listed;
 use crate::queue::clock;
+use crate::queue::conversation::MESSAGE_CAP;
+use crate::queue::outcome::TEXT_CAP;
 use crate::time::{self, Stamp};
 
 #[derive(Debug, Default, Deserialize)]
@@ -19,6 +21,7 @@ struct Pull {
 struct Kept {
     at: i64,
     text: String,
+    cut: bool,
     branch: Option<String>,
     pull_request: Option<Pull>,
 }
@@ -28,6 +31,7 @@ struct Kept {
 struct Said {
     role: String,
     text: String,
+    cut: bool,
     written: Option<String>,
 }
 
@@ -76,6 +80,9 @@ fn messages(value: &Value, zone: &str) -> Vec<String> {
             None => out.push(said.role),
         }
         out.push(said.text);
+        if said.cut {
+            out.push(format!("… cut at {} KiB", MESSAGE_CAP / 1024));
+        }
         out.push(String::new());
     }
     out
@@ -94,6 +101,9 @@ pub(super) fn text(value: &Value, zone: &str) -> String {
     lines.push(String::new());
     if let Some(kept) = kept.as_ref().filter(|kept| !kept.text.is_empty()) {
         lines.push(kept.text.clone());
+        if kept.cut {
+            lines.push(format!("… only the first {} KiB are kept", TEXT_CAP / 1024));
+        }
     }
     if let Some(note) = value["note"].as_str() {
         lines.push(note.to_string());

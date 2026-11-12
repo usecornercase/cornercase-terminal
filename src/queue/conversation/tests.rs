@@ -62,3 +62,22 @@ fn a_missing_record_is_an_empty_talk() {
 
     assert_eq!(talk, Talk::default());
 }
+
+#[test]
+fn a_vibe_journal_that_reads_oldest_first_keeps_only_the_newest_thousand() {
+    let fake = crate::agents::vibe::fake::FakeVibe::new();
+    let records: Vec<serde_json::Value> = (0..=MESSAGES + 5)
+        .map(|n| {
+            json!({"type": "action_result", "payload": {"result": {"result": {
+                "parts": [{"type": "text", "text": format!("reply {n}")}]}}}})
+        })
+        .collect();
+    fake.journal(&records);
+
+    let talk = read(&Record::Vibe(fake.session())).expect("read");
+
+    assert_eq!(talk.messages.len(), MESSAGES);
+    assert!(talk.earlier);
+    assert_eq!(talk.messages.first().map(|m| m.text.as_str()), Some("reply 6"));
+    assert_eq!(talk.messages.last().map(|m| m.text.as_str()), Some("reply 1005"));
+}

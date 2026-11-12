@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::time::SystemTime;
 
 use crate::agents::context::{Record, Role, Spoken};
@@ -22,33 +23,45 @@ pub(crate) struct Talk {
     pub(crate) earlier: bool,
 }
 
-fn heard(record: &Record) -> Result<Vec<Spoken>> {
+struct Heard {
+    spoken: Spoken,
+    cut: bool,
+}
+
+fn heard(record: &Record) -> Result<Vec<Heard>> {
     let newest_first = record.said_newest_first();
-    let mut heard = Vec::new();
-    record.said(&mut |spoken| {
-        heard.push(spoken);
+    let mut heard: VecDeque<Heard> = VecDeque::new();
+    record.said(&mut |mut spoken| {
+        let kept = text::within_bytes(&spoken.said.text, MESSAGE_CAP).len();
+        let cut = kept < spoken.said.text.len();
+        spoken.said.text.truncate(kept);
+        heard.push_back(Heard { spoken, cut });
+        if !newest_first && heard.len() > MESSAGES + 1 {
+            heard.pop_front();
+        }
         !newest_first || heard.len() <= MESSAGES
     })?;
+    let mut heard = Vec::from(heard);
     if newest_first {
         heard.reverse();
     }
     Ok(heard)
 }
 
-fn in_time_order(heard: &mut [Spoken]) {
-    let stamp = |spoken: &Spoken| spoken.said.written.as_deref().and_then(Stamp::parse);
-    if heard.iter().all(|spoken| stamp(spoken).is_some()) {
-        heard.sort_by_key(|spoken| stamp(spoken).unwrap_or(SystemTime::UNIX_EPOCH));
+fn in_time_order(heard: &mut [Heard]) {
+    let stamp = |item: &Heard| item.spoken.said.written.as_deref().and_then(Stamp::parse);
+    if heard.iter().all(|item| stamp(item).is_some()) {
+        heard.sort_by_key(|item| stamp(item).unwrap_or(SystemTime::UNIX_EPOCH));
     }
 }
 
-fn message(spoken: &Spoken) -> Option<Message> {
-    let kept = text::within_bytes(&spoken.said.text, MESSAGE_CAP);
-    (!kept.trim().is_empty()).then(|| Message {
+fn message(item: &Heard) -> Option<Message> {
+    let spoken = &item.spoken;
+    (!spoken.said.text.trim().is_empty()).then(|| Message {
         role: spoken.role,
-        text: kept.to_string(),
+        text: spoken.said.text.clone(),
         written: spoken.said.written.clone(),
-        cut: kept.len() < spoken.said.text.len(),
+        cut: item.cut,
     })
 }
 

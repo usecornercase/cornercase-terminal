@@ -62,15 +62,25 @@ fn a_capture_with_a_message_replaces_the_text_and_keeps_what_it_did_not_see() {
         pull_request: Some(pull(4)),
         ..Outcome::default()
     };
-    let taken = Taken { agent: Some("claude".into()), branch: Some("feat/b".into()), ..Taken::default() };
+    let taken = Taken { agent: Some("claude".into()), branch: Some("feat/a".into()), ..Taken::default() };
 
     let outcome = Outcome::captured(Some(previous), taken, Some(said("  new  ")), 9);
 
     assert_eq!(outcome.text, "new");
     assert_eq!(outcome.at, 9);
     assert_eq!(outcome.written.as_deref(), Some("2026-11-12T09:41:00.000Z"));
-    assert_eq!(outcome.branch.as_deref(), Some("feat/b"));
+    assert_eq!(outcome.branch.as_deref(), Some("feat/a"));
     assert_eq!(outcome.pull_request, Some(pull(4)));
+}
+
+#[test]
+fn a_pull_request_does_not_follow_a_new_branch() {
+    let previous = Outcome { at: 1, branch: Some("feat/a".into()), pull_request: Some(pull(4)), ..Outcome::default() };
+    let taken = Taken { branch: Some("feat/b".into()), ..Taken::default() };
+
+    let outcome = Outcome::captured(Some(previous), taken, None, 9);
+
+    assert_eq!((outcome.branch.as_deref(), outcome.pull_request), (Some("feat/b"), None));
 }
 
 #[test]

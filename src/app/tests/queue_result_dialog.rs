@@ -106,18 +106,21 @@ fn the_wheel_and_the_arrows_scroll_a_long_result() {
     open_row(&mut app);
     let inside = ui::update_notes(AREA).as_position();
 
+    let top = |app: &App| lines(app).lines().next().unwrap_or_default().to_string();
+    let start = top(&app);
+
     mouse(&mut app, MouseEventKind::ScrollDown, inside);
-    let wheeled = update(&app).scroll;
+    let wheeled = top(&app);
     key(&mut app, KeyCode::Down);
-    let arrowed = update(&app).scroll;
+    let arrowed = top(&app);
     for _ in 0..200 {
         key(&mut app, KeyCode::Down);
     }
-    let furthest = update(&app).scroll;
+    let last = lines(&app).lines().last().unwrap_or_default().to_string();
 
-    assert!(wheeled > 0 && arrowed > wheeled, "{wheeled} {arrowed}");
-    let most = update(&app).notes.len() - usize::from(ui::update_notes(AREA).height);
-    assert_eq!(furthest, most);
+    assert!(start != wheeled && wheeled != arrowed, "{start} {wheeled} {arrowed}");
+    assert_eq!(last, "line 59");
+    assert!(usize::from(ui::update_notes(AREA).height) >= update(&app).notes.len());
 }
 
 fn transcript(dir: &Path) -> Pointer {

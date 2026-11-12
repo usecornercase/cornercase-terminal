@@ -69,11 +69,20 @@ impl Seen {
         Self { status, agent, record, workspace, branch, pull }
     }
 
+    fn follow(&mut self, branch: Option<String>, look: Look) -> bool {
+        if branch.is_some() && branch != self.branch {
+            self.pull = None;
+            self.branch = branch;
+        }
+        self.merge(look)
+    }
+
     fn merge(&mut self, look: Look) -> bool {
         let ended = outcome::turn_ended(self.status, look.status);
         self.status = look.status;
+        let replaced = look.agent.as_ref().is_some_and(|agent| self.agent.as_ref() != Some(agent));
         self.agent = look.agent.or(self.agent.take());
-        self.record = look.record.or(self.record.take());
+        self.record = if replaced { look.record } else { look.record.or(self.record.take()) };
         self.workspace = look.workspace.or(self.workspace);
         self.pull = look.pull.or(self.pull.take());
         ended
@@ -155,8 +164,9 @@ impl App {
 
     fn queue_looked(&mut self, entry: u64, look: Look) {
         if self.panels.queued.results.seen.contains_key(&entry) {
+            let branch = self.workspace_branch(look.workspace);
             let seen = self.panels.queued.results.seen.get_mut(&entry);
-            if seen.is_some_and(|seen| seen.merge(look)) {
+            if seen.is_some_and(|seen| seen.follow(branch, look)) {
                 self.capture_seen(entry);
             }
             return;
@@ -189,11 +199,14 @@ impl App {
     fn taken(&self, entry: u64, seen: &Seen) -> Taken {
         let placed = self.panels.queued.queue().entry(entry).and_then(|entry| entry.task.place.branch.clone());
         let live = seen.workspace.and_then(|id| self.pull_request(id)).map(pull_of);
+        let now = self.workspace_branch(seen.workspace);
+        let moved = now.is_some() && seen.branch.is_some() && now != seen.branch;
+        let known = seen.pull.clone().filter(|_| !moved);
         Taken {
             agent: seen.agent.clone(),
             record: seen.record.clone(),
-            branch: self.workspace_branch(seen.workspace).or_else(|| seen.branch.clone()).or(placed),
-            pull_request: live.or_else(|| seen.pull.clone()),
+            branch: now.or_else(|| seen.branch.clone()).or(placed),
+            pull_request: live.or(known),
         }
     }
 

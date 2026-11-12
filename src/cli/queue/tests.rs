@@ -228,4 +228,17 @@ mod showing {
 
         assert!(show::text(&value, "UTC").contains("Reviewed #480 and #482."));
     }
+
+    #[test]
+    fn says_when_a_result_or_a_message_was_cut() {
+        let mut value = removed();
+        value["result"]["cut"] = json!(true);
+        value["messages"] = json!([{"role": "reply", "text": "Long.", "written": null, "cut": true}]);
+
+        let text = show::text(&value, "UTC");
+
+        assert!(text.contains("Reviewed #480 and #482.\n… only the first 4 KiB are kept\n"), "{text}");
+        assert!(text.contains("Long.\n… cut at 32 KiB\n"), "{text}");
+        assert!(!show::text(&removed(), "UTC").contains('…'));
+    }
 }
