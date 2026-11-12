@@ -10,7 +10,7 @@ const NARROW: Rect = Rect { x: 0, y: 0, width: 90, height: 30 };
 
 struct Setup {
     app: App,
-    _rx: Receiver<AppEvent>,
+    rx: Receiver<AppEvent>,
     config: TempDir,
     #[cfg_attr(
         not(unix),
@@ -29,7 +29,7 @@ fn setup(project: bool) -> Setup {
     for kind in Known::ALL {
         app.config.agent_commands.insert(kind.name().into(), "/nonexistent/agent".into());
     }
-    Setup { app, _rx: rx, config, project }
+    Setup { app, rx, config, project }
 }
 
 fn open(project: bool) -> Setup {
@@ -589,6 +589,29 @@ mod long_texts {
 
 mod models {
     use super::*;
+
+    fn two_models() -> Vec<String> {
+        vec!["deepseek/deepseek-v4-flash".to_string(), "deepseek/deepseek-v4-pro".to_string()]
+    }
+
+    #[test]
+    fn the_model_pick_reads_the_catalogue_on_a_job() {
+        let mut s = open(false);
+        s.app.agents.set_catalogue(two_models);
+        duplicate_full_issue(&mut s, WIDE);
+        tab(&mut s.app, WIDE, 2);
+        let Some(Overlay::Flows { dialog, .. }) = &mut s.app.overlay else { panic!("no dialog") };
+        dialog.edit.as_deref_mut().expect("edit").flow.roles[0].agent = "opencode".into();
+        click_row(&mut s.app, WIDE, Row::Model);
+        wait_until("the models are read", || {
+            drain_in(&mut s.app, &s.rx, WIDE);
+            let labels: Vec<String> = view(&s.app, WIDE)
+                .pick
+                .map(|pick| pick.items.into_iter().map(|(label, _, _)| label).collect())
+                .unwrap_or_default();
+            labels == ["default", "deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro", "other…"]
+        });
+    }
 
     #[test]
     fn models_read_on_a_job_fill_the_open_pick() {

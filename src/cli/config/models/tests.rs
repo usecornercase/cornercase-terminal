@@ -1,15 +1,10 @@
 use super::*;
-use crate::cli::Control;
-use crate::cli::args::Command as Cli;
 use crate::cli::args::config::ConfigAction;
-use crate::cli::tests::parse;
+use crate::cli::tests::{config_args, parse};
 
 #[test]
 fn the_command_takes_one_agent() {
-    let Some(Cli::Control(Control::Config(config))) = parse(&["config", "models", "opencode"]).expect("parse").command
-    else {
-        panic!("not config")
-    };
+    let config = config_args(&["config", "models", "opencode"]);
 
     assert!(matches!(config.action, Some(ConfigAction::Models { agent }) if agent == "opencode"));
     assert!(parse(&["config", "models"]).is_err());
@@ -17,13 +12,7 @@ fn the_command_takes_one_agent() {
 
 #[test]
 fn json_may_come_after_the_agent() {
-    let Some(Cli::Control(Control::Config(config))) =
-        parse(&["config", "models", "opencode", "--json"]).expect("parse").command
-    else {
-        panic!("not config")
-    };
-
-    assert!(config.json);
+    assert!(config_args(&["config", "models", "opencode", "--json"]).json);
 }
 
 #[test]

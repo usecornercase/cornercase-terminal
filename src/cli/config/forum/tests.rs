@@ -1,15 +1,10 @@
 use super::*;
-use crate::cli::Control;
-use crate::cli::args::Command as Cli;
 use crate::cli::args::config::ConfigAction;
-use crate::cli::tests::parse;
+use crate::cli::tests::{config_args, parse};
 
 #[test]
 fn the_command_takes_one_id_as_text() {
-    let Some(Cli::Control(Control::Config(config))) = parse(&["config", "forum-server", "8"]).expect("parse").command
-    else {
-        panic!("not config")
-    };
+    let config = config_args(&["config", "forum-server", "8"]);
 
     assert!(matches!(config.action, Some(ConfigAction::ForumServer { id }) if id == "8"));
     assert!(parse(&["config", "forum-server"]).is_err());
@@ -17,13 +12,7 @@ fn the_command_takes_one_id_as_text() {
 
 #[test]
 fn json_may_come_after_the_id() {
-    let Some(Cli::Control(Control::Config(config))) =
-        parse(&["config", "forum-server", "8", "--json"]).expect("parse").command
-    else {
-        panic!("not config")
-    };
-
-    assert!(config.json);
+    assert!(config_args(&["config", "forum-server", "8", "--json"]).json);
 }
 
 #[test]
