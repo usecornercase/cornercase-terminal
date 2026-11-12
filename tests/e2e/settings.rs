@@ -165,6 +165,27 @@ fn search_with_settings_prints_them_after_the_matches() {
 }
 
 #[test]
+fn config_models_lists_what_the_flow_editor_offers_and_reads_opencode_s_list_on_the_server() {
+    let session = Session::new();
+    let cache = format!("{}/tests/fixtures/opencode/1.18.35/models.json", env!("CARGO_MANIFEST_DIR"));
+    let started = session
+        .cold_command()
+        .env("OPENCODE_MODELS_PATH", &cache)
+        .arg("start-server")
+        .output()
+        .expect("run cornercase");
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    let listed: Value = serde_json::from_str(&session.says(&["config", "models", "opencode", "--json"])).expect("json");
+    let models = ["deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro"];
+    assert_eq!(listed, serde_json::json!({"agent": "opencode", "models": models}));
+    assert_eq!(session.says(&["config", "models", "claude"]), "opus\nsonnet\nhaiku");
+    assert_eq!(session.says(&["config", "models", "amp"]), "");
+    let refused = session.cli(&["config", "models", "nope"]);
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("unknown agent `nope`"), "{refused:?}");
+}
+
+#[test]
 fn config_json_lists_each_agent_with_what_it_can_do() {
     let session = Session::new();
     std::fs::write(session.dir.join("config.json"), r#"{"agent_commands": {"mine": "/bin/true"}}"#).expect("config");
@@ -173,15 +194,16 @@ fn config_json_lists_each_agent_with_what_it_can_do() {
     let described: Value = serde_json::from_str(&session.says(&["config", "--json"])).expect("a description");
     let agents = described["agents"].as_array().expect("agents");
     let entry = |name: &str| agents.iter().find(|agent| agent["name"] == name).expect("listed").clone();
-    let bare = |name: &str| serde_json::json!({"name": name, "reads_status": false, "flows": false, "models": [], "efforts": []});
+    let bare = |name: &str| serde_json::json!({"name": name, "reads_status": false, "flows": false, "models": [], "catalogue": false, "efforts": []});
     assert_eq!(
         entry("claude"),
         serde_json::json!({
             "name": "claude", "title": "Claude Code", "reads_status": true, "flows": true,
-            "models": ["opus", "sonnet", "haiku"], "efforts": ["low", "medium", "high", "xhigh", "max"],
+            "models": ["opus", "sonnet", "haiku"], "catalogue": false, "efforts": ["low", "medium", "high", "xhigh", "max"],
         })
     );
     assert_eq!((entry("amp"), entry("mine")), (bare("amp"), bare("mine")));
+    assert_eq!(entry("opencode")["catalogue"], true);
     let names: Vec<&Value> = agents.iter().map(|agent| &agent["name"]).collect();
     let agent = described["settings"].as_array().expect("settings").iter().find(|s| s["key"] == "agent");
     let choices = agent.expect("the agent setting")["choices"].as_array().expect("choices");

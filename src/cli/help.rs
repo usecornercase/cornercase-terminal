@@ -474,7 +474,13 @@ project's setup and teardown. `--json` prints the whole answer, which a program 
 
 With --json it also lists `agents`: each agent the `agent` setting can name, with its title, whether
 cornercase reads its status (`reads_status`: a routine can remove the workspace of those only),
-whether a flow can run it (`flows`), and the `models` and `efforts` the flow editor offers for it.
+whether a flow can run it (`flows`), the `models` and `efforts` the flow editor offers for it at once,
+and whether it keeps more models in a list of its own (`catalogue`), which `config models AGENT` reads.
+
+`models AGENT` prints every model the flow editor offers for an agent, one per line and nothing when
+it offers none: its `models`, then, when `catalogue` is true (opencode: the models.dev list it
+caches), that list, which the server reads when asked. --json prints the agent and its models. An
+agent the `agent` setting cannot name is refused.
 
 `set` changes settings with the dialog's own checks and applies them at once, as the dialog does;
 nothing is saved unless every value is accepted. Values are converted by the setting's type: true or
@@ -502,6 +508,7 @@ meanwhile only rewrites the keys it touches, and it does not write over a file i
 Examples:
   cornercase config
   cornercase config --json
+  cornercase config models opencode --json
   cornercase config set sidebar tree
   cornercase config set fetch_minutes 10 counts false
   cornercase config set issue_tabs github,linear

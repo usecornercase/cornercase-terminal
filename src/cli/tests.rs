@@ -18,6 +18,13 @@ pub(super) fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied()))
 }
 
+pub(super) fn config_args(args: &[&str]) -> args::config::ConfigArgs {
+    match parse(args).expect("parse").command {
+        Some(Command::Control(Control::Config(config))) => config,
+        _ => panic!("not config"),
+    }
+}
+
 mod parsing {
     use super::*;
 

@@ -64,7 +64,7 @@ pub(crate) use changes::{
 pub(crate) use clone::{CloneFile, CloneRepository, Cloned, Unwritten};
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use code_workspace::ImportedWorkspace;
-pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
+pub(crate) use config::{AgentModels, ConfigExport, ConfigImport, ConfigInfo, Configure};
 pub(crate) use context::{ContextInfo, ContextRead};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
@@ -280,6 +280,7 @@ pub(crate) enum Command {
     RunSetup(RunSetup),
     ConfigPair(ConfigPair),
     WorktreesRemove(WorktreesRemove),
+    AgentModels(AgentModels),
 }
 
 impl Command {
@@ -486,6 +487,7 @@ impl Command {
             Self::PluginPopupClose(_) => 100,
             Self::ConfigExport(_) => 96,
             Self::ConfigImport(_) => 97,
+            Self::AgentModels(_) => 132,
             _ => return None,
         })
     }
@@ -623,6 +625,7 @@ impl Command {
         "tunnel-forget",
         "tunnel-hold",
         "queue-show",
+        "agent-models",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

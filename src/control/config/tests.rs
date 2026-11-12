@@ -100,7 +100,16 @@ fn answer() -> Described {
                 reads_status: true,
                 flows: true,
                 models: vec!["opus".into(), "sonnet".into(), "haiku".into()],
+                catalogue: false,
                 efforts: vec!["low".into(), "medium".into(), "high".into(), "xhigh".into(), "max".into()],
+            },
+            AgentEntry {
+                name: "opencode".into(),
+                title: Some("opencode".into()),
+                reads_status: true,
+                flows: true,
+                catalogue: true,
+                ..AgentEntry::default()
             },
             AgentEntry { name: "amp".into(), ..AgentEntry::default() },
         ],
@@ -182,9 +191,71 @@ mod answer {
     fn an_older_answer_has_no_agents_and_a_newer_entry_reads_leniently() {
         let older: Described = serde_json::from_str(r#"{"revision": 1}"#).expect("lenient");
         assert_eq!(older.agents, Vec::new());
-        let newer: Described =
-            serde_json::from_str(r#"{"agents": [{"name": "x", "catalogue": true}]}"#).expect("lenient");
+        let newer: Described = serde_json::from_str(r#"{"agents": [{"name": "x", "later": true}]}"#).expect("lenient");
         assert_eq!(newer.agents, vec![AgentEntry { name: "x".into(), ..AgentEntry::default() }]);
+    }
+
+    #[test]
+    fn an_entry_from_an_older_server_has_no_catalogue() {
+        let read: AgentEntry = serde_json::from_str(r#"{"name": "opencode", "models": []}"#).expect("lenient");
+        assert!(!read.catalogue);
+    }
+}
+
+mod models {
+    use super::*;
+    use crate::control::{Command, Request, command_name};
+
+    fn info() -> AgentModelsInfo {
+        AgentModelsInfo {
+            agent: "opencode".into(),
+            models: vec!["deepseek/deepseek-v4-flash".into(), "deepseek/deepseek-v4-pro".into()],
+        }
+    }
+
+    #[test]
+    fn the_request_is_a_command_of_its_own_that_names_its_agent() {
+        let asked = Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            command: Command::AgentModels(AgentModels { agent: "opencode".into() }),
+        };
+        let value = serde_json::to_value(&asked).expect("a request");
+        assert_eq!(command_name(&value), Some("agent-models"));
+        assert_eq!(value["args"], json!({"agent": "opencode"}));
+    }
+
+    #[test]
+    fn a_request_without_an_agent_is_not_read() {
+        let read = serde_json::from_value::<Request>(json!({"command": "agent-models", "args": {}}));
+        assert!(read.is_err());
+    }
+
+    #[test]
+    fn it_logs_the_agent() {
+        let command = Command::AgentModels(AgentModels { agent: "opencode".into() });
+        assert_eq!(command.fields(), [("agent", "opencode".to_string())]);
+    }
+
+    #[test]
+    fn its_answer_is_written_as_its_fixture() {
+        let written = serde_json::to_string_pretty(&info()).expect("json");
+        assert_eq!(written, fixture!("control/config/models.json").trim_end());
+    }
+
+    #[test]
+    fn its_fixture_reads_back() {
+        let read: AgentModelsInfo = serde_json::from_str(fixture!("control/config/models.json")).expect("an answer");
+        assert_eq!(read, info());
+    }
+
+    #[test]
+    fn its_answer_reads_leniently() {
+        let read: AgentModelsInfo = serde_json::from_str(r#"{"agent": "x", "later": 1}"#).expect("lenient");
+        assert_eq!(read.models, Vec::<String>::new());
     }
 }
 

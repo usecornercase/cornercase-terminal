@@ -244,7 +244,26 @@ pub(crate) struct AgentEntry {
     pub(crate) reads_status: bool,
     pub(crate) flows: bool,
     pub(crate) models: Vec<String>,
+    pub(crate) catalogue: bool,
     pub(crate) efforts: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct AgentModels {
+    pub(crate) agent: String,
+}
+
+impl AgentModels {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("agent", &self.agent);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AgentModelsInfo {
+    pub(crate) agent: String,
+    pub(crate) models: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
