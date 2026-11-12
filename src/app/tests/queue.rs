@@ -105,7 +105,10 @@ mod starts {
             wait_until("the fake gets the prompt", || {
                 std::fs::read_to_string(workspace.path.join("got")).is_ok_and(|text| !text.is_empty())
             });
-            assert_eq!(std::fs::read_to_string(workspace.path.join("got")).expect("prompt"), "fix the login");
+            assert_eq!(
+                std::fs::read_to_string(workspace.path.join("got")).expect("prompt"),
+                format!("fix the login {}", queue::outcome::CLOSING)
+            );
             assert_eq!(std::fs::read_to_string(workspace.path.join("answered")).expect("trust"), "");
             panes.push(workspace.tabs[0].panes[0].id);
         }
@@ -281,7 +284,7 @@ mod forms {
         assert!(entry.task.submit);
         if !repository {
             let id = entry.id;
-            let prompt = crate::text::one_line(&entry.task.prompt);
+            let prompt = crate::text::one_line(&queue::outcome::closing(&entry.task.prompt));
             app.run_queued(id, Instant::now()).expect("start a tab in the plain folder");
             refreshing(&mut app, &rx, "the queued tab starts", |app| {
                 matches!(app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Started { .. })

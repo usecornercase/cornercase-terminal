@@ -111,6 +111,10 @@ pub(crate) fn use_queue_undo() -> Result<()> {
     require("queue-undo", "cannot undo queue removals or clear started entries")
 }
 
+pub(crate) fn use_queue_results() -> Result<()> {
+    require("queue-results", "cannot show what a queued agent did")
+}
+
 pub(crate) fn use_queue_routines() -> Result<()> {
     require("queue-routines", "cannot repeat queue entries, run flows from the queue, or pause and resume routines")
 }

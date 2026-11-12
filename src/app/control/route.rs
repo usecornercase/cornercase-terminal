@@ -171,6 +171,7 @@ impl App {
             Command::IssueRead(read) => self.issue_read_request(client, asker, &read),
             Command::IssuePeople(people) => self.issue_people_request(client, asker, &people),
             Command::Queue(queue) => self.queue_request(asked, queue),
+            Command::QueueShow(show) => self.queue_show_request(client, &show),
             other => return ControlFlow::Continue(other),
         })
     }

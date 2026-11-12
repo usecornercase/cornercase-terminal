@@ -72,6 +72,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "tunnels",
     "tunnels-remembered",
     "tunnel-hold",
+    "queue-results",
     "agent-models",
 ];
 

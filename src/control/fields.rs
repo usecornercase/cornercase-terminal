@@ -154,6 +154,9 @@ impl Command {
             Self::Queue(_) => {
                 fields.add("queue", true);
             }
+            Self::QueueShow(show) => {
+                fields.add("id", show.id).add("conversation", show.conversation);
+            }
             _ => return false,
         }
         true

@@ -526,6 +526,7 @@ impl App {
             name: run.workspace_name.clone(),
             close_when_merged: run.close_when_merged,
             fresh: run.fresh,
+            summary: false,
         };
         self.run_refusal(p, &starting)?;
         starting.task = run.prompt.trim().to_string();

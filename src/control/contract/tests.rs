@@ -236,6 +236,7 @@ mod finding_unknown_fields {
     #[case::queue_pause(json!({"command": "queue", "args": {"action": "pause", "entry": 7}}))]
     #[case::queue_resume(json!({"command": "queue", "args": {"action": "resume", "entry": 7}}))]
     #[case::queue_list(json!({"command": "queue", "args": {"action": "list"}}))]
+    #[case::queue_show(json!({"command": "queue-show", "args": {"id": 7, "conversation": false}}))]
     #[case::todo_add(json!({"command": "todo", "args": {"add": "write the docs"}}))]
     #[case::todo_list(json!({"command": "todo", "args": "list"}))]
     #[case::app(json!({"command": "app", "args": {}}))]

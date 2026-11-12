@@ -29,7 +29,7 @@ impl Queue {
         self.next_id = id;
         let place = Place { project: routine.task.place.project.clone(), ..Place::default() };
         let task = Task { at, repeat: None, paused: false, routine: Some(routine.id), place, ..routine.task.clone() };
-        self.entries.push(Entry { id, task, state });
+        self.entries.push(Entry::new(id, task, state));
         self.sort();
         self.trim(routine.id);
         Ok(id)

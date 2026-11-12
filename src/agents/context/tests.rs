@@ -162,3 +162,49 @@ pub(in crate::agents) mod counting_records {
         assert_eq!(sum(pane.take_counted()).1.out, 0);
     }
 }
+
+mod order {
+    use serde_json::json;
+
+    use super::*;
+    use crate::agents::vibe::fake::FakeVibe;
+    use crate::test_util::TempDir;
+
+    fn heard(record: &Record) -> Vec<String> {
+        let mut texts = Vec::new();
+        record
+            .said(&mut |spoken| {
+                texts.push(spoken.said.text);
+                true
+            })
+            .expect("read the record");
+        texts
+    }
+
+    #[test]
+    fn said_comes_newest_first_except_from_vibe() {
+        let dir = TempDir::new();
+        let reply = |id: &str, text: &str| {
+            json!({
+                "type": "assistant", "isSidechain": false, "timestamp": "2026-10-08T19:56:01.000Z",
+                "message": {"id": id, "model": "claude-opus-5-5", "role": "assistant",
+                            "content": [{"type": "text", "text": text}]},
+            })
+            .to_string()
+        };
+        let path = dir.path().join("claude.jsonl");
+        std::fs::write(&path, format!("{}\n{}\n", reply("m1", "older"), reply("m2", "newer"))).expect("transcript");
+        let fake = FakeVibe::new();
+        let part = |text: &str| json!({"type": "action_result", "payload": {"result": {"result": {"parts": [{"type": "text", "text": text}]}}}});
+        fake.journal(&[part("older"), part("newer")]);
+
+        let claude = Record::Claude(path);
+        let vibe = Record::Vibe(fake.session());
+
+        assert_eq!(
+            (claude.said_newest_first(), heard(&claude)),
+            (true, vec!["newer".to_string(), "older".to_string()])
+        );
+        assert_eq!((vibe.said_newest_first(), heard(&vibe)), (false, vec!["older".to_string(), "newer".to_string()]));
+    }
+}

@@ -106,7 +106,7 @@ fn assert_features_and_streams(contract: &Value) {
     for feature in features
         .into_iter()
         .chain(["todo-panel", "agent-folds", "changes", "close-agent-tabs", "queue-undo"])
-        .chain(["focus-reveal", "files", "queue-routines"])
+        .chain(["focus-reveal", "files", "queue-routines", "queue-results"])
     {
         assert!(has_feature(contract, feature), "{feature}: {contract}");
     }

@@ -26,6 +26,7 @@ use crate::os::fs::canonical;
 use crate::paths;
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Project, Tab, Workspace, WorkspaceAt};
+use crate::queue;
 use crate::state::RunState;
 use crate::term::Term;
 use crate::time;
@@ -169,6 +170,7 @@ pub(super) struct Starting {
     pub(super) name: Option<String>,
     pub(super) close_when_merged: bool,
     pub(super) fresh: Option<bool>,
+    pub(super) summary: bool,
 }
 
 impl Starting {
@@ -186,6 +188,7 @@ impl Starting {
             name: None,
             close_when_merged: false,
             fresh: None,
+            summary: false,
         }
     }
 }
@@ -470,6 +473,19 @@ impl App {
         Ok(id)
     }
 
+    fn new_run(
+        &mut self,
+        workspace: u64,
+        (flow, task): (Flow, String),
+        (close_when_merged, summary): (bool, bool),
+    ) -> Run {
+        let mut run = Run::new(workspace, flow, task);
+        run.id = self.take_id();
+        run.close_when_merged = close_when_merged;
+        run.summary = summary;
+        run
+    }
+
     pub(super) fn open_run(
         &mut self,
         place: WorkspaceAt,
@@ -482,9 +498,7 @@ impl App {
             flow, task, branch, focus, view, note, trees, parent, accounts, name, close_when_merged, ..
         } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
-        let mut run = Run::new(id, flow, task);
-        run.id = self.take_id();
-        run.close_when_merged = close_when_merged;
+        let mut run = self.new_run(id, (flow, task), (close_when_merged, starting.summary));
         let project = self.projects[place.project()].id;
         let mut info =
             RunInfo { run: run.id, project, workspace: id, branch, note, close_when_merged, ..RunInfo::default() };
@@ -586,7 +600,8 @@ impl App {
             team.push(member.pane);
         }
         let members = brief::Team { members: &run.members, trees: seats };
-        let spec = self.flow_spec(&roles[0], brief::brief(&run.flow, &run.task, branch, members, dir), dir);
+        let task = if run.summary { queue::outcome::closing(&run.task) } else { run.task.clone() };
+        let spec = self.flow_spec(&roles[0], brief::brief(&run.flow, &task, branch, members, dir), dir);
         let mut launch = Launch::new(run.members[0].pane, spec, now);
         launch.after = team;
         self.agents.launches.add(launch);

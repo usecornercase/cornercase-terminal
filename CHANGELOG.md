@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.51
+
+- **See what a queued agent did, even once its pane is gone.** Each time a queued agent or a routine's run ends a turn, when its pane closes, and right before a routine's cleanup removes its workspace, cornercase keeps the agent's last message, its branch and its pull request with the checks as they were then. In **Issues → Queue**, click a run whose workspace was removed, an entry whose pane was closed, or a failed or missed run: a dialog shows when it started, its agent, branch, pull request and that last message, and **conversation** shows the conversation, up to its newest 1,000 messages with each cut at 32 KiB, for as long as the agent keeps it. A queued prompt now ends with one more sentence asking the agent to finish with a short summary of what it did and what is left. Scripts get `cornercase queue show ID` (with `--conversation` and `--json`), and `queue list --json` and `status --app` say when each entry's result last changed (`result_at`).
+
 ## 0.13.50
 
 - **Tunnels are remembered per machine, and shared by your windows.** A window from `cornercase remote vps` now keeps its tunnels in `tunnels.json`, so the next window to that machine brings them back on the same port of your laptop. The machine button shows how many it holds (`vps ⇄2 ▴`) and its menu lists them: click one for **open in browser**, **close**, **open** or **forget**. Closing a tunnel keeps it as `closed` (`cornercase tunnels` lists it, **open** brings it back) and forgetting removes it (`cornercase tunnel forget PORT`). With two windows on one laptop, one runs the `ssh` and the other shows the tunnel up and takes it over within a second or two when the first one ends.

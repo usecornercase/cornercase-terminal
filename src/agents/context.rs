@@ -10,8 +10,10 @@ pub(in crate::agents) mod counting;
 pub(in crate::agents) mod discovery;
 pub(in crate::agents) mod jsonl;
 pub(in crate::agents) mod message;
+mod pointer;
 
 pub(crate) use message::{Role, Said, Spoken};
+pub(crate) use pointer::Pointer;
 
 use counting::Ledger;
 
@@ -78,6 +80,10 @@ impl Record {
             Self::Copilot(path) => copilot::message::said_all(path, each),
             Self::Vibe(path) => vibe::message::said_all(path, each),
         }
+    }
+
+    pub(crate) fn said_newest_first(&self) -> bool {
+        !matches!(self, Self::Vibe(_))
     }
 
     pub(crate) fn conversation_files(&self) -> Option<Vec<(PathBuf, PathBuf)>> {

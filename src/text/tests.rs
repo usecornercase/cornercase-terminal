@@ -62,3 +62,16 @@ fn plural_names_one_in_the_singular() {
         ("1 repository".to_string(), "0 repositories".to_string(), "2 b".to_string())
     );
 }
+
+mod within_bytes {
+    use super::*;
+
+    #[rstest]
+    #[case::ascii_at_the_limit("abcd", 4, "abcd")]
+    #[case::ascii_over_the_limit("abcdef", 4, "abcd")]
+    #[case::a_three_byte_char_across_the_limit("ab日", 3, "ab")]
+    #[case::empty("", 4, "")]
+    fn keeps_whole_chars(#[case] text: &str, #[case] max: usize, #[case] expected: &str) {
+        assert_eq!(within_bytes(text, max), expected);
+    }
+}

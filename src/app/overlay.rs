@@ -161,6 +161,7 @@ pub(super) enum Overlay {
         shown: Shown,
         scroll: usize,
     },
+    QueueResult(Box<super::queue_result_dialog::Dialog>),
     Keys(Option<KeysGroup>),
     Worktrees(Box<crate::worktrees::Dialog>),
     Ports(Box<crate::ports::dialog::Dialog>),
@@ -200,7 +201,7 @@ impl Overlay {
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
-            Self::Queue(_) => "queue",
+            Self::Queue(_) | Self::QueueResult(_) => self.queue_name(),
             Self::Search(_) => "search",
             Self::Update(_) => "update",
             Self::Usage => "usage",
@@ -252,6 +253,13 @@ impl Overlay {
         match self {
             Self::ShareSettings(_) => "share settings",
             _ => "settings",
+        }
+    }
+
+    fn queue_name(&self) -> &'static str {
+        match self {
+            Self::QueueResult(_) => "queue result",
+            _ => "queue",
         }
     }
 
@@ -324,7 +332,7 @@ impl Overlay {
             Self::PullRequest { .. } => COPY_LINK,
             Self::MergeCheck { .. } => CHECK_AGAIN,
             Self::Context { .. } => REFRESH,
-            Self::FlowMessage { .. } => COPY,
+            Self::FlowMessage { .. } | Self::QueueResult(_) => COPY,
             _ => CREATE_SUBMIT,
         }
     }
@@ -332,9 +340,11 @@ impl Overlay {
     pub(super) fn cancel_label(&self) -> &'static str {
         match self {
             Self::Update(UpdateStep::Installed) => LATER,
-            Self::PullRequest { .. } | Self::MergeCheck { .. } | Self::FlowMessage { .. } | Self::Context { .. } => {
-                DONE
-            }
+            Self::PullRequest { .. }
+            | Self::MergeCheck { .. }
+            | Self::FlowMessage { .. }
+            | Self::Context { .. }
+            | Self::QueueResult(_) => DONE,
             _ => ui::CANCEL_LABEL,
         }
     }
@@ -411,6 +421,7 @@ impl App {
             Some(Overlay::MergeCheck { .. }) => self.merge_check_mouse(ev, pos, area),
             Some(Overlay::Context { .. }) => self.context_mouse(ev, pos, area),
             Some(Overlay::FlowMessage { .. }) => self.flow_message_mouse(ev, pos, area),
+            Some(Overlay::QueueResult(_)) => self.queue_result_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
             Some(Overlay::Pairing(via)) => self.pairing_mouse(*via, ev, pos, area),
             Some(Overlay::Forum(via)) => self.forum_mouse(*via, ev, pos, area),
@@ -464,7 +475,8 @@ impl App {
             Overlay::PullRequest { .. }
             | Overlay::MergeCheck { .. }
             | Overlay::FlowMessage { .. }
-            | Overlay::Context { .. } => self.notes_view(overlay, area)?,
+            | Overlay::Context { .. }
+            | Overlay::QueueResult(_) => self.notes_view(overlay, area)?,
             Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
             Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
         })
@@ -511,6 +523,7 @@ impl App {
             Overlay::FlowMessage { workspace, shown, scroll } => {
                 self.flow_message_view(*workspace, shown, *scroll, area)?
             }
+            Overlay::QueueResult(detail) => self.queue_result_view(detail, area)?,
             _ => return None,
         })
     }

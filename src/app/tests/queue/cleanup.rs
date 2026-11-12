@@ -86,6 +86,24 @@ fn done_for_the_grace_removes_the_workspace_its_folder_and_its_branch() {
 }
 
 #[test]
+fn the_cleanup_keeps_a_result_before_it_removes_the_workspace() {
+    let mut run = started(true);
+    let branch = git::branch(&run.path).expect("branch");
+    run.done_at(2);
+    run.at(2 + 181);
+    run.wait_for("the run is removed", |state| *state == QueueState::Removed);
+
+    let shown = run.world.app.queue_shown(run.run).expect("shown");
+
+    let result = shown.result.expect("a result");
+    assert_eq!(
+        (result.branch.as_deref(), result.agent.as_deref(), result.text.as_str()),
+        (Some(branch.as_str()), Some("fake"), "")
+    );
+    assert!(shown.note.is_some_and(|note| note.contains("keeps no record")));
+}
+
+#[test]
 fn a_routine_run_with_cleanup_on_is_cleaning_up_from_its_start() {
     let run = started(true);
     assert!(run.world.app.cleaning_up(run.workspace));

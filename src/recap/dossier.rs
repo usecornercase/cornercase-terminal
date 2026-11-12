@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 use std::time::SystemTime;
 
-use super::journal::{Entry, Event, Pointer, PullPlace};
+use super::journal::{Entry, Event, PullPlace};
 use super::range::Range;
 use super::{Choice, Named, Place};
+use crate::agents::context::Pointer;
 use crate::agents::context::{Record, Role};
 use crate::time::Stamp;
 

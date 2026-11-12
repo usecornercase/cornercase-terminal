@@ -21,6 +21,15 @@ pub(crate) enum Role {
     Reply,
 }
 
+impl Role {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Prompt => "prompt",
+            Self::Reply => "reply",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Spoken {
     pub(crate) role: Role,

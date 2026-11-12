@@ -78,7 +78,7 @@ impl App {
         }
     }
 
-    fn stash_browser(&mut self) {
+    pub(super) fn stash_browser(&mut self) {
         let back = match self.overlay.take() {
             Some(Overlay::Issues(browser)) => Some(browser),
             other => {

@@ -229,16 +229,13 @@ impl App {
     }
 
     fn scroll_dialog(&mut self, delta: isize, area: Rect) {
-        if matches!(self.overlay, Some(Overlay::PullRequest { .. })) {
-            self.scroll_pull_request(delta, area);
-        } else if matches!(self.overlay, Some(Overlay::MergeCheck { .. })) {
-            self.scroll_merge_check(delta, area);
-        } else if matches!(self.overlay, Some(Overlay::Context { .. })) {
-            self.scroll_context(delta, area);
-        } else if matches!(self.overlay, Some(Overlay::FlowMessage { .. })) {
-            self.scroll_flow_message(delta, area);
-        } else {
-            self.scroll_update(delta, area);
+        match &self.overlay {
+            Some(Overlay::PullRequest { .. }) => self.scroll_pull_request(delta, area),
+            Some(Overlay::MergeCheck { .. }) => self.scroll_merge_check(delta, area),
+            Some(Overlay::Context { .. }) => self.scroll_context(delta, area),
+            Some(Overlay::FlowMessage { .. }) => self.scroll_flow_message(delta, area),
+            Some(Overlay::QueueResult(_)) => self.scroll_queue_result_dialog(delta, area),
+            _ => self.scroll_update(delta, area),
         }
     }
 
@@ -246,6 +243,7 @@ impl App {
         match &self.overlay {
             Some(overlay) if overlay.busy() => {}
             Some(Overlay::Queue(_)) => self.close_queue_form(false),
+            Some(Overlay::QueueResult(_)) => self.close_queue_result_dialog(),
             Some(Overlay::Flows { .. }) => self.close_flows(),
             Some(Overlay::Star) => self.answer_star(None),
             Some(Overlay::RemoveAccount { .. }) => self.open_settings(),
@@ -288,6 +286,7 @@ impl App {
             Overlay::PullRequest { workspace, .. } => self.submit_pull_request(workspace),
             again @ (Overlay::MergeCheck { .. } | Overlay::Context { .. }) => Some(self.submit_again(again)),
             Overlay::FlowMessage { workspace, shown, .. } => self.submit_flow_message(workspace, &shown),
+            Overlay::QueueResult(detail) => self.submit_queue_result_dialog(detail),
             busy => Some(busy),
         };
         Ok(())

@@ -198,6 +198,7 @@ fn newest_commands() -> Vec<Command> {
         Command::TunnelClose(TunnelPort::default()),
         Command::TunnelForget(TunnelPort::default()),
         Command::TunnelHold(TunnelHold::default()),
+        Command::QueueShow(QueueShow::default()),
         Command::AgentModels(AgentModels { agent: "opencode".into() }),
     ]
 }
@@ -763,4 +764,11 @@ fn processes_and_stop_process_name_their_arguments_and_the_first_is_chatty() {
         serde_json::from_str(r#"{"command": "stop-process", "args": {"pid": 41, "started": 9}}"#).expect("a request");
     assert_eq!(stop.command, Command::StopProcess(StopProcess { pid: 41, started: Some(9) }));
     assert_eq!(stop.command.name(), "stop-process");
+}
+
+#[test]
+fn a_queue_show_logs_its_id_and_whether_it_reads_the_conversation() {
+    let command = Command::QueueShow(QueueShow { id: 7, conversation: true });
+
+    assert_eq!(command.fields(), [("id", "7".to_string()), ("conversation", "true".to_string())]);
 }

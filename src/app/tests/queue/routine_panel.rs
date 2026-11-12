@@ -100,7 +100,7 @@ fn enter_on_a_routine_opens_its_form_filled_and_saving_keeps_its_schedule() {
 }
 
 #[test]
-fn a_run_opens_no_form() {
+fn a_failed_run_opens_its_detail_and_no_form() {
     let (mut app, _rx, _dirs) = opened();
     let id = seed_routine(&mut app, "2h");
     let run = app.panels.queued.run_now(id, time::now()).expect("run");
@@ -108,7 +108,7 @@ fn a_run_opens_no_form() {
     app.sync_queued();
     let rows = app.panels.queued.queue().entries.iter().position(|entry| entry.id == run).expect("row");
     click(&mut app, queue_row(u16::try_from(rows).expect("row")));
-    assert!(matches!(app.overlay, Some(Overlay::Issues(_))));
+    assert!(matches!(app.overlay, Some(Overlay::QueueResult(_))));
 }
 
 mod the_form {

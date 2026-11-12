@@ -2,10 +2,11 @@ use std::time::SystemTime;
 
 use super::App;
 use super::live::tracked;
+use crate::agents::context::Pointer;
 use crate::control;
 use crate::log::{Job, Level};
 use crate::project::{Hierarchy, Project};
-use crate::recap::journal::{Entry, Observed, Pointer, PullPlace, WorkspacePlace, files};
+use crate::recap::journal::{Entry, Observed, PullPlace, WorkspacePlace, files};
 use crate::recap::{KEPT_DAYS, Named};
 
 impl App {
