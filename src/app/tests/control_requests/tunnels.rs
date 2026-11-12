@@ -7,6 +7,10 @@ use crate::protocol::{Holding, Tunnel, TunnelOrder, TunnelState};
 const WINDOW: u64 = 7;
 const OBSERVER: u64 = 21;
 
+fn app() -> (App, Receiver<AppEvent>) {
+    empty_app()
+}
+
 fn holding(app: &App, tunnels: Vec<Tunnel>) -> Holding {
     Holding { browse: true, orders: app.opening.tunnels.sent(WINDOW), tunnels }
 }
