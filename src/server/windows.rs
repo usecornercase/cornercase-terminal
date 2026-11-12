@@ -1,7 +1,7 @@
 use super::Server;
 use crate::host::sound;
 use crate::log;
-use crate::protocol::{Machines, ServerMessage};
+use crate::protocol::{Holding, Machines, ServerMessage, TunnelState};
 
 impl Server {
     pub(super) fn flush_notifications(&mut self) {
@@ -45,6 +45,26 @@ impl Server {
             if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && c.machines.is_some()) {
                 log::info!("server", "machine order sent", client = id, order = order.id());
                 client.send(ServerMessage::Machine(order));
+            }
+        }
+    }
+
+    pub(super) fn tunnels_reported(&mut self, id: u64, holding: Holding) {
+        if !self.clients.iter().any(|c| c.id == id && c.screen.is_some() && !c.browser) {
+            log::debug!("server", "tunnels dropped", client = id);
+            return;
+        }
+        let up = holding.tunnels.iter().filter(|tunnel| tunnel.state == TunnelState::Up).count();
+        log::info!("server", "tunnels reported", client = id, count = holding.tunnels.len(), up = up);
+        self.app.tunnels_reported(id, holding);
+    }
+
+    pub(super) fn flush_tunnel_orders(&mut self) {
+        let Self { app, clients, .. } = self;
+        for (id, order) in app.take_tunnel_orders() {
+            if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && !c.browser) {
+                log::info!("server", "tunnel order sent", client = id, order = order.id(), port = order.port());
+                client.send(ServerMessage::Tunnel(order));
             }
         }
     }

@@ -27,6 +27,7 @@ pub(crate) mod terminal;
 pub(crate) mod theme;
 pub(crate) mod todo;
 pub(crate) mod tour;
+pub(crate) mod tunnels;
 pub(crate) mod usage;
 pub(crate) mod view;
 pub(crate) mod worktrees;
@@ -46,7 +47,7 @@ use super::help::{
 };
 use super::help::{
     AGENTS_HELP, CHANGES_HELP, CONTEXT_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP,
-    PULL_REQUEST_HELP, RECAP_HELP, REQUESTS_HELP,
+    PULL_REQUEST_HELP, RECAP_HELP, REQUESTS_HELP, TUNNEL_HELP, TUNNELS_HELP,
 };
 use super::help::{CLONE_HELP, HELD_HELP, MACHINES_HELP, SETUP_HELP, WORKTREES_HELP};
 use crate::control::Until;
@@ -296,6 +297,16 @@ pub(crate) enum Control {
         after_help = PORTS_HELP
     )]
     Ports(ports::PortsArgs),
+    #[command(
+        about = "List the tunnels the windows attached to this server hold, with the port each listens on",
+        after_help = TUNNELS_HELP
+    )]
+    Tunnels(tunnels::TunnelsArgs),
+    #[command(
+        about = "Forward a port of this server's machine to the computer of the window attached to it, or close the tunnel",
+        after_help = TUNNEL_HELP
+    )]
+    Tunnel(tunnels::TunnelArgs),
     #[command(
         about = "Print a workspace's pull request and every check with its link, as its dialog shows it, asking gh at once",
         after_help = PULL_REQUEST_HELP

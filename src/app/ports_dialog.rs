@@ -16,7 +16,7 @@ use crate::control::contract::Refusal;
 use crate::control::{Item, PortStopped};
 use crate::error::Result;
 use crate::log::{Job, Level};
-use crate::ports::dialog::{Action, Dialog, Hit, Step};
+use crate::ports::dialog::{Action, Dialog, Hit, Row, Step};
 use crate::ports::stop::{self, Stopped, Target};
 use crate::ports::{self, Port, Via};
 use crate::process::command_line;
@@ -146,26 +146,40 @@ impl App {
     }
 
     pub(super) fn ports_act(&mut self, action: Action) {
-        let Some(Overlay::Ports(dialog)) = &self.overlay else { return };
-        let port = |row: usize| dialog.rows.get(row).map(|row| row.port.clone());
+        let port = |app: &Self, row: usize| match &app.overlay {
+            Some(Overlay::Ports(dialog)) => dialog.rows.get(row).map(|row| row.port.clone()),
+            _ => None,
+        };
         match action {
             Action::None => {}
             Action::Close => self.overlay = None,
-            Action::Copy(row) => {
-                let Some(url) = port(row).map(|port| port.url()) else { return };
-                self.copy(&url);
-                self.messages.toast = Some(Toast::new(format!("copied {url}"), ui::ToastIcon::Check));
-            }
-            Action::Open(row) => {
-                let Some(port) = port(row) else { return };
-                self.browse(port.browse());
-            }
+            Action::Copy(row) => port(self, row).iter().for_each(|port| self.copy_port(port)),
+            Action::Open(row) => port(self, row).iter().for_each(|port| self.open_port(port)),
+            Action::Tunnel(row) => port(self, row).iter().for_each(|port| self.tunnel_port(port)),
+            Action::CloseTunnel(row) => port(self, row).iter().for_each(|port| self.close_port_tunnel(port)),
             Action::Go(row) => {
-                let Some(pane) = port(row).and_then(|port| port.place.pane) else { return };
+                let Some(pane) = port(self, row).and_then(|port| port.place.pane) else { return };
                 self.overlay = None;
                 let _ = self.show(Item::Pane(pane));
             }
             Action::Stop(targets) => self.stop_ports(targets),
+        }
+    }
+
+    fn copy_port(&mut self, port: &Port) {
+        let url = match self.port_tunnel(port) {
+            Some(ui::PortTunnel::Up(local)) => format!("http://localhost:{local}"),
+            _ => port.url(),
+        };
+        self.copy(&url);
+        self.messages.toast = Some(Toast::new(format!("copied {url}"), ui::ToastIcon::Check));
+    }
+
+    fn open_port(&mut self, port: &Port) {
+        let holder = self.shown_holder().filter(|holder| holder.browse).map(|_| self.window_in_use());
+        match (self.port_tunnel(port), holder) {
+            (Some(ui::PortTunnel::Up(_)), Some(client)) => self.browse_tunnel(client, port.number),
+            _ => self.browse(port.browse()),
         }
     }
 
@@ -181,18 +195,7 @@ impl App {
 
     pub(super) fn ports_view(&self, dialog: &Dialog, area: Rect) -> Box<ui::Ports> {
         let label = self.projects.workspace_by(dialog.workspace).map(crate::project::Workspace::label);
-        let rows: Vec<ui::PortRow> = dialog
-            .rows
-            .iter()
-            .map(|row| ui::PortRow {
-                ticked: row.ticked,
-                url: row.port.url(),
-                command: command_line(row.port.program.as_deref(), &row.port.args, COMMAND_WIDTH),
-                pid: row.port.pid,
-                place: self.port_place(&row.port),
-                go: row.port.place.pane.is_some(),
-            })
-            .collect();
+        let rows: Vec<ui::PortRow> = dialog.rows.iter().map(|row| self.port_row(row)).collect();
         let compact = area.width < ui::COMPACT_WIDTH;
         let (_, body) = ui::ports_room(area, compact);
         let confirm = match &dialog.step {
@@ -211,9 +214,28 @@ impl App {
             ticked: dialog.ticked(),
             note,
             confirm,
-            can_open: self.can_browse(),
             compact,
         })
+    }
+
+    fn port_row(&self, row: &Row) -> ui::PortRow {
+        let tunnel = self.port_tunnel(&row.port);
+        let holder_opens = self.shown_holder().is_some_and(|holder| holder.browse);
+        let open = match tunnel {
+            Some(ui::PortTunnel::Up(_)) => holder_opens,
+            Some(_) => false,
+            None => self.can_browse(),
+        };
+        ui::PortRow {
+            ticked: row.ticked,
+            url: row.port.url(),
+            command: command_line(row.port.program.as_deref(), &row.port.args, COMMAND_WIDTH),
+            pid: row.port.pid,
+            place: self.port_place(&row.port),
+            go: row.port.place.pane.is_some(),
+            open,
+            tunnel,
+        }
     }
 
     fn ports_note(&self, dialog: &Dialog, confirm: Option<&ui::ConfirmBody>, body: Rect) -> Option<ui::Note> {
@@ -284,6 +306,8 @@ fn hit_of(hit: ui::PortsHit) -> Hit {
         ui::PortsHit::Row(row) => Hit::Row(row),
         ui::PortsHit::Copy(row) => Hit::Copy(row),
         ui::PortsHit::Open(row) => Hit::Open(row),
+        ui::PortsHit::Tunnel(row) => Hit::Tunnel(row),
+        ui::PortsHit::CloseTunnel(row) => Hit::CloseTunnel(row),
         ui::PortsHit::Go(row) => Hit::Go(row),
         ui::PortsHit::StopRow(row) => Hit::StopRow(row),
         ui::PortsHit::Stop => Hit::Stop,

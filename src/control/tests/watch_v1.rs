@@ -145,6 +145,7 @@ fn snapshot() -> Snapshot {
             home: None,
             machines: Vec::new(),
             shown_remote: None,
+            tunnels: Vec::new(),
         },
     }
 }

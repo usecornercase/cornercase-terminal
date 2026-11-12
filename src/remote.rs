@@ -24,6 +24,7 @@ mod attempts;
 mod known;
 pub(crate) mod machines;
 mod shell;
+pub(crate) mod tunnel;
 
 const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";
@@ -107,6 +108,13 @@ impl Stderr {
         let kept = self.0.lock();
         let said = kept.head.iter().find_map(|line| line.strip_prefix(ERROR_PREFIX));
         said.map(str::to_string).or_else(|| kept.tail.back().or(kept.head.last()).cloned())
+    }
+
+    pub(crate) fn reason(&self, status: Option<ExitStatus>) -> String {
+        self.last().unwrap_or_else(|| match status.and_then(|status| status.code()) {
+            Some(code) => format!("ssh exited with {code}"),
+            None => "ssh stopped".into(),
+        })
     }
 
     fn any(&self, text: &str) -> bool {
@@ -454,9 +462,7 @@ impl Remote {
             child.wait().ok()
         };
         if let Some(collector) = collector {
-            while !collector.is_finished() && Instant::now() < deadline {
-                thread::sleep(ENDED_POLL);
-            }
+            wait_for_collector(&collector, deadline);
         }
         self.classify(status, stderr)
     }
@@ -480,11 +486,13 @@ impl Remote {
         if stderr.any(OLD_CLI) {
             return Error::RemoteTooOld(host);
         }
-        let reason = stderr.last().unwrap_or_else(|| match status.and_then(|s| s.code()) {
-            Some(code) => format!("ssh exited with {code}"),
-            None => "ssh stopped".into(),
-        });
-        Error::Ssh { host, reason }
+        Error::Ssh { host, reason: stderr.reason(status) }
+    }
+}
+
+fn wait_for_collector(collector: &JoinHandle<()>, deadline: Instant) {
+    while !collector.is_finished() && Instant::now() < deadline {
+        thread::sleep(ENDED_POLL);
     }
 }
 

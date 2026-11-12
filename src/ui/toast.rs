@@ -16,6 +16,10 @@ const GO_LABEL: &str = "go";
 
 const REOPEN_LABEL: &str = "reopen";
 
+const OPEN_LABEL: &str = "open";
+
+const CLOSE_LABEL: &str = "close";
+
 const TOAST_ICON: &str = " ✓ ";
 
 const BUG_ICON: &str = " ✗ ";
@@ -38,6 +42,8 @@ pub(crate) enum ToastButton {
     Go,
     Cancel,
     Reopen,
+    Open,
+    Close,
 }
 
 impl ToastButton {
@@ -47,6 +53,8 @@ impl ToastButton {
             Self::Go => GO_LABEL,
             Self::Cancel => CANCEL_LABEL,
             Self::Reopen => REOPEN_LABEL,
+            Self::Open => OPEN_LABEL,
+            Self::Close => CLOSE_LABEL,
         }
     }
 }

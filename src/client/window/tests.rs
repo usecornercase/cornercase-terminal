@@ -73,6 +73,18 @@ mod sound {
     }
 }
 
+mod tunnelling {
+    use super::*;
+    use crate::protocol::TunnelOrder;
+
+    #[test]
+    fn a_tunnel_order_reaches_the_window_without_ending_it() {
+        let order = Received::Message(ServerMessage::Tunnel(TunnelOrder::Open(5173)));
+
+        assert!(matches!(next(order, true), Ok(Next::Tunnel(TunnelOrder::Open(5173)))));
+    }
+}
+
 mod opening {
     use super::*;
     use crate::host::open::{Open, Opener};

@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.48
+
+- **Open a remote machine's dev server on your laptop.** In a window from `cornercase remote vps`, a workspace's **ports** dialog now offers **tunnel** on each port: it runs your own `ssh -N -L` to that machine, on the same port of your laptop when it's free (another one when it isn't, and the toast says which), and the row then shows `⇄ :5174` and offers **open** in your browser, **copy** of the laptop's address and **close tunnel**. A tunnel ends with the window, and comes back when the window reconnects. Scripts and agents get `cornercase tunnels`, `cornercase tunnel open PORT` and `cornercase tunnel close PORT` (also through `--remote`), and `status --json` and `events` list the tunnels. A tunnel only reaches the other machine's own `localhost`, and it is your own `ssh`, so your keys and `ProxyJump` apply.
+
 ## 0.13.47
 
 - **On Linux and macOS, closing a tab, a workspace or a project no longer holds the window for a moment for each of its shells.** A closed pane's shell used to be given a fixed 50 milliseconds before cornercase first looked whether it had gone; it is now looked at at once, and again after a few milliseconds, with the same grace for a shell that ignores the hang-up before it is killed. Stopping the server with many panes open is quicker as well. Nothing changes on Windows, where a closed pane's shell already ended at once.

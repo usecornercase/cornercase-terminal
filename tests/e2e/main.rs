@@ -64,6 +64,7 @@ mod sidebar;
 mod socket;
 mod startup;
 mod todos;
+mod tunnels;
 mod updates;
 mod usage;
 mod views;

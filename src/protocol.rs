@@ -17,7 +17,7 @@ use crate::os::socket::UnixStream;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 11;
+pub(crate) const VERSION: u32 = 12;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const REMOTE_ENV: &str = "CORNERCASE_REMOTE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
@@ -36,6 +36,7 @@ pub(crate) enum ClientMessage {
     Activated(String),
     OpenFailed(Failed),
     Machines(Machines),
+    Tunnels(Holding),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,6 +78,58 @@ impl MachineOrder {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Holding {
+    pub(crate) browse: bool,
+    pub(crate) orders: u64,
+    pub(crate) tunnels: Vec<Tunnel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Tunnel {
+    pub(crate) port: u16,
+    pub(crate) local: Option<u16>,
+    pub(crate) state: TunnelState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum TunnelState {
+    Opening,
+    Up,
+    Down(String),
+}
+
+impl TunnelState {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Self::Opening => "opening",
+            Self::Up => "up",
+            Self::Down(_) => "down",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum TunnelOrder {
+    Open(u16),
+    Close(u16),
+}
+
+impl TunnelOrder {
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::Open(_) => "open",
+            Self::Close(_) => "close",
+        }
+    }
+
+    pub(crate) fn port(self) -> u16 {
+        match self {
+            Self::Open(port) | Self::Close(port) => port,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) enum ServerMessage {
     Rejected(String),
@@ -89,6 +142,21 @@ pub(crate) enum ServerMessage {
     Open(Open),
     Browse(Browse),
     Machine(MachineOrder),
+    Tunnel(TunnelOrder),
+}
+
+impl ServerMessage {
+    pub(crate) fn window_only(&self) -> bool {
+        match self {
+            Self::Sound(_) | Self::Open(_) | Self::Browse(_) | Self::Machine(_) | Self::Tunnel(_) => true,
+            Self::Rejected(_)
+            | Self::Frame(_)
+            | Self::Detached
+            | Self::Shutdown
+            | Self::Restart(_)
+            | Self::Response(_) => false,
+        }
+    }
 }
 
 pub(crate) fn send<T: Serialize>(w: &mut impl Write, msg: &T) -> io::Result<()> {

@@ -1,4 +1,4 @@
-use super::a_bug::{Attached, hello};
+use super::a_bug::{Attached, LISTEN, hello};
 use super::*;
 use crate::graphics::Support;
 use crate::host::open::{Failed, Opener};
@@ -70,9 +70,7 @@ fn only_a_window_that_can_open_is_told_to_open_a_port_in_the_browser() {
     let mut attached = Attached::new();
     let mut opener = attached.join_hello(Hello { openers: vec![Opener::Default], ..hello(HostTheme::default()) });
     attached.serve(Server::step, move |plain| {
-        let listen =
-            "python3 -c 'import socket,time; s=socket.socket(); s.bind((\"127.0.0.1\",0)); s.listen(); time.sleep(60)'";
-        opener.type_line(listen);
+        opener.type_line(LISTEN);
         opener.right_click_on("default");
         opener.click_on("ports");
         opener.shows("http://localhost:");

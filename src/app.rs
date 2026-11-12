@@ -173,6 +173,7 @@ mod todo_panel;
 mod tour_card;
 mod trace;
 mod trackers;
+mod tunnels;
 mod update_dialog;
 mod usage_dialog;
 mod view;

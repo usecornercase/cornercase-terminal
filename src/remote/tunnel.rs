@@ -1,0 +1,179 @@
+use std::ffi::OsStr;
+use std::io;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
+use std::process::{Child, ExitStatus, Stdio};
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+use parking_lot::Mutex;
+
+use super::{ALIVE, BATCH, ENDED_WAIT, SSH, Stderr, wait_for_collector};
+use crate::error::{Error, Result};
+use crate::ports::listen;
+use crate::process;
+
+pub(crate) const UP_WAIT: Duration = Duration::from_secs(30);
+const POLL: Duration = Duration::from_millis(100);
+const ALIVE_POLL: Duration = Duration::from_millis(500);
+const PROBE: Duration = Duration::from_millis(200);
+const FORWARD: [&str; 6] = ["-o", "ExitOnForwardFailure=yes", "-o", "ControlPath=none", "-N", "-T"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Forward {
+    pub(crate) port: u16,
+    pub(crate) local: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Watched {
+    Up,
+    Ended(String),
+}
+
+pub(crate) struct Running {
+    child: Arc<Mutex<Option<Child>>>,
+}
+
+enum Step {
+    Stopped,
+    Waiting,
+    Ended(Option<ExitStatus>),
+}
+
+struct Watch {
+    child: Arc<Mutex<Option<Child>>>,
+    pid: i32,
+    local: u16,
+    wait: Duration,
+    stderr: Stderr,
+    collector: JoinHandle<()>,
+}
+
+pub(crate) fn args(destination: &str, forward: Forward) -> Vec<String> {
+    let mut args: Vec<String> = FORWARD[4..].iter().map(ToString::to_string).collect();
+    args.extend(ALIVE.iter().chain(&BATCH).chain(&FORWARD[..4]).map(ToString::to_string));
+    args.extend(["-L".to_string(), format!("127.0.0.1:{}:localhost:{}", forward.local, forward.port)]);
+    args.extend(["--".to_string(), destination.to_string()]);
+    args
+}
+
+pub(crate) fn local_port(port: u16, before: Option<u16>) -> io::Result<u16> {
+    let candidates = [Some(port), before.filter(|before| *before != port)];
+    if let Some(free) = candidates.into_iter().flatten().find(|candidate| !taken(*candidate)) {
+        return Ok(free);
+    }
+    let socket = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+    Ok(socket.local_addr()?.port())
+}
+
+fn taken(port: u16) -> bool {
+    let answers = |address: SocketAddr| TcpStream::connect_timeout(&address, PROBE).is_ok();
+    let (v4, v6) = thread::scope(|scope| {
+        let v6 = scope.spawn(|| answers((Ipv6Addr::LOCALHOST, port).into()));
+        (answers((Ipv4Addr::LOCALHOST, port).into()), v6.join().unwrap_or(false))
+    });
+    v4 || v6 || TcpListener::bind((Ipv4Addr::LOCALHOST, port)).is_err()
+}
+
+pub(crate) fn spawn(destination: &str, forward: Forward, report: impl Fn(Watched) + Send + 'static) -> Result<Running> {
+    spawn_within(OsStr::new(SSH), destination, forward, UP_WAIT, report)
+}
+
+pub(crate) fn spawn_within(
+    ssh: &OsStr,
+    destination: &str,
+    forward: Forward,
+    wait: Duration,
+    report: impl Fn(Watched) + Send + 'static,
+) -> Result<Running> {
+    let mut child = std::process::Command::new(ssh)
+        .args(args(destination, forward))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(Error::RunSsh)?;
+    let stderr = Stderr::default();
+    let collector = child.stderr.take().map(|errors| stderr.clone().collect(errors));
+    let pid = i32::try_from(child.id()).unwrap_or(0);
+    let child = Arc::new(Mutex::new(Some(child)));
+    let collector = collector.unwrap_or_else(|| thread::spawn(|| {}));
+    let watch = Watch { child: child.clone(), pid, local: forward.local, wait, stderr, collector };
+    thread::spawn(move || watch.run(&report));
+    Ok(Running { child })
+}
+
+impl Watch {
+    fn run(self, report: &impl Fn(Watched)) {
+        let started = Instant::now();
+        let mut up = false;
+        loop {
+            match self.poll() {
+                Step::Stopped => return,
+                Step::Ended(status) => return report(Watched::Ended(self.reason(status))),
+                Step::Waiting => {}
+            }
+            if !up && self.listening() {
+                up = true;
+                report(Watched::Up);
+            }
+            if !up && started.elapsed() >= self.wait {
+                return self.give_up(report);
+            }
+            thread::sleep(if up { ALIVE_POLL } else { POLL });
+        }
+    }
+
+    fn poll(&self) -> Step {
+        let mut held = self.child.lock();
+        let Some(child) = held.as_mut() else { return Step::Stopped };
+        match child.try_wait() {
+            Ok(None) => Step::Waiting,
+            Ok(Some(status)) => {
+                held.take();
+                Step::Ended(Some(status))
+            }
+            Err(_) => {
+                if let Some(child) = held.take() {
+                    process::stop(child);
+                }
+                Step::Ended(None)
+            }
+        }
+    }
+
+    fn listening(&self) -> bool {
+        listen::listeners(&[self.pid]).iter().any(|l| l.port == self.local && l.address.is_loopback())
+    }
+
+    fn give_up(&self, report: &impl Fn(Watched)) {
+        if let Some(child) = self.child.lock().take() {
+            process::stop(child);
+        }
+        let seconds = self.wait.as_secs();
+        report(Watched::Ended(format!("ssh did not listen on 127.0.0.1:{} within {seconds} s", self.local)));
+    }
+
+    fn reason(&self, status: Option<ExitStatus>) -> String {
+        wait_for_collector(&self.collector, Instant::now() + ENDED_WAIT);
+        self.stderr.reason(status)
+    }
+}
+
+impl Running {
+    pub(crate) fn stop(&self) {
+        if let Some(child) = self.child.lock().take() {
+            process::stop(child);
+        }
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests;

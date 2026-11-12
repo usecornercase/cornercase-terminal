@@ -58,7 +58,25 @@ Everything that touches files or programs stays on the other machine: the shells
 
 Your laptop only shows the window. Keys, the mouse, pastes and your terminal's colours come from it, and copying, [desktop notifications](../projects-workspaces-tabs/#notifications) and the [images](../files/#images) the files panel shows go through it, so the text lands in your local clipboard, the notification on your local screen and the picture in your local terminal. A [sound](../projects-workspaces-tabs/#a-sound) plays on your laptop too, with a file path read there; a window opened with `ssh -t host cornercase` plays none.
 
-**open in…** can't open the other machine's folders in your laptop's Finder or editors, since they aren't there: the project, workspace and pane menus offer **copy path** instead, which copies the path as the other machine knows it. See [Open in another app](../projects-workspaces-tabs/#open-in-another-app).
+A port a dev server listens on there can be [tunnelled to your laptop](#tunnel-a-port-to-your-laptop), and its **open** then opens it in your browser here. **open in…** can't open the other machine's folders in your laptop's Finder or editors, since they aren't there: the project, workspace and pane menus offer **copy path** instead, which copies the path as the other machine knows it. See [Open in another app](../projects-workspaces-tabs/#open-in-another-app).
+
+## Tunnel a port to your laptop
+
+A dev server in a pane of `devbox` listens on that machine's own `localhost`, which is not your laptop's. Open the workspace's **ports** dialog (right-click or ` ⋯ ` on its row, then **ports**) in a window from `cornercase remote`, and a program that listens on every address, `127.0.0.1` or `::1` has a **tunnel** button. It runs your own `ssh` to forward that port to your laptop:
+
+```text
+ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes -o ControlPath=none \
+    -L 127.0.0.1:5173:localhost:5173 -- devbox
+```
+
+- **Same port, or another.** The tunnel listens on the same port of your laptop when it's free, so `http://localhost:5173` works as it does on `devbox`. When something there already uses it, it takes another port and the toast says which: `port 5173 is tunnelled to localhost:5174 (5173 is taken here)`.
+- **The row shows it.** `⇄ …` while it opens and `⇄ :5174` once it's up, and the row then offers **open** (your browser opens `http://localhost:5174`; it shows when your laptop has a default app), **copy** (that address) and **close tunnel**. The toast has an **open** button too.
+- **It only reaches that machine's own `localhost`.** A program that listens on a LAN address only has no **tunnel** button, and the server of `devbox` can ask for a port number, nothing more: it can't make your laptop reach a host or run anything. It can, however, find out which of your laptop's local ports are in use, since the window checks whether the same port is free.
+- **It is a plain `ssh` of yours**, with the destination the window used, so your keys, agent and `ProxyJump` apply. `BatchMode=yes` means it never asks for a password, and `ControlPath=none` makes it a connection of its own even with a shared `ControlMaster` in your config, so closing the tunnel really closes the port and it ends with the window.
+- **It ends with the window**, and when you switch to another machine or to this one. When the connection drops and the window reconnects, the tunnels come back. One that never came up (a taken port, a refused key) says why in a toast, `could not tunnel port 5173: …`, and is tried again when you click **tunnel** or the window reconnects. A window holds at most 32 tunnels.
+- **Scripts and agents** see and drive the same tunnels with `cornercase tunnels`, `cornercase tunnel open PORT` and `cornercase tunnel close PORT`, from a pane on `devbox` or with `--remote devbox`: see [Tunnels](../scripts-and-agents/#tunnels).
+
+If your `~/.ssh/config` has a `LocalForward`, `RemoteForward` or `DynamicForward` for that host, the window's own connection already holds it and every tunnel fails with `Could not request local forwarding`: remove it, or tunnel with your own `ssh -L`.
 
 ## When the connection drops
 
@@ -173,6 +191,7 @@ cornercase --remote devbox update --yes
 cornercase --remote devbox restart --when-idle --yes
 cornercase --remote devbox logs --follow
 cornercase --remote devbox plugin enable my-plugin
+cornercase --remote devbox tunnel open 5173
 ```
 - **`cornercase --remote devbox` alone** opens the window, as `cornercase remote devbox`.
 - **`input --follow` types through one connection**: a program that draws the terminals keeps one running for everything it types, instead of a command, and an `ssh` connection, for each batch of keys.

@@ -273,17 +273,12 @@ fn to_page(ws: &mut WebSocket<TcpStream>, from_server: &Receiver<Option<ServerMe
                     return Some("connection lost");
                 }
             }
-            Ok(Some(
-                ServerMessage::Response(_)
-                | ServerMessage::Sound(_)
-                | ServerMessage::Open(_)
-                | ServerMessage::Browse(_)
-                | ServerMessage::Machine(_),
-            )) => {}
+            Ok(Some(ServerMessage::Response(_))) => {}
             Ok(Some(ServerMessage::Rejected(why))) => return Some(finish(ws, "rejected", &why)),
             Ok(Some(ServerMessage::Detached)) => return Some(finish(ws, "detached", "")),
             Ok(Some(ServerMessage::Shutdown)) => return Some(finish(ws, "shutdown", "")),
             Ok(Some(ServerMessage::Restart(_))) => return Some(finish(ws, "restart", "")),
+            Ok(Some(message)) => debug_assert!(message.window_only()),
             Ok(None) | Err(TryRecvError::Disconnected) => return Some(finish(ws, "gone", "")),
             Err(TryRecvError::Empty) => return None,
         }

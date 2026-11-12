@@ -249,6 +249,7 @@ impl App {
             Stage::Machines(gathering) => self.gathered(gathering, now),
             Stage::Recap { choice, answers } => self.recap_reply(*choice, *answers),
             Stage::Dossier(token) => self.dossier_reply(*token),
+            Stage::Tunnel(wait) => self.tunnel_reply(wait),
             Stage::Setup(workspace) if !self.workspace_setting_up(*workspace) => {
                 Some(self.setup_reply(*workspace, &pending.done))
             }

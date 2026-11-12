@@ -46,6 +46,8 @@ pub(super) mod a_bug {
     const WITH_A_BACKTRACE: Duration = Duration::from_secs(30);
     pub(in crate::server) const COLS: u16 = 100;
     pub(in crate::server) const ROWS: u16 = 20;
+    pub(in crate::server) const LISTEN: &str =
+        "python3 -c 'import socket,time; s=socket.socket(); s.bind((\"127.0.0.1\",0)); s.listen(); time.sleep(60)'";
     const BUG: &str = "cornercase hit a bug, see server.log";
     const PANE_MENU: &str = "split right";
     const NOBODY: u64 = u64::MAX;
@@ -374,6 +376,7 @@ pub(super) mod a_bug {
 
 mod machines;
 mod opening;
+mod tunnels;
 
 mod streaming {
     use super::a_bug::Attached;

@@ -79,7 +79,7 @@ pub use dialog::menu::{menu_area, menu_item};
 pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
 pub use dialog::picker::{picker_area, picker_buttons, picker_item};
 pub(crate) use dialog::popup::{Popup, Wanted as PopupWanted, popup_close, popup_inner, popup_size};
-pub(crate) use dialog::ports::{ConfirmBody, PortRow, Ports, PortsHit, ports_hit, ports_room};
+pub(crate) use dialog::ports::{ConfirmBody, PortRow, PortTunnel, Ports, PortsHit, ports_hit, ports_room};
 pub(crate) use dialog::processes::{ProcessLine, Processes, ProcessesHit, processes_hit, processes_room};
 #[cfg(test)]
 #[cfg(unix)]

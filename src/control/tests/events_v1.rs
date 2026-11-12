@@ -15,6 +15,11 @@ fn recap(state: &str, range: &str, agent: &str, error: Option<&str>) -> Event {
     event(what, Ids::default())
 }
 
+fn tunnel(local: Option<u16>, state: &str, error: Option<&str>) -> Event {
+    let what = What::Tunnel { port: 5173, local, state: state.into(), error: error.map(str::to_string), holder: 3 };
+    event(what, Ids::default())
+}
+
 fn pane() -> Ids {
     Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
 }
@@ -57,6 +62,8 @@ fn plain_samples() -> Vec<(Event, &'static str)> {
         (recap("started", "yesterday", "claude", None), fixture!("control/events/v1/recap-started.json")),
         (recap("finished", "yesterday", "claude", None), fixture!("control/events/v1/recap-finished.json")),
         (recap("failed", "week", "codex", Some("Not logged in")), fixture!("control/events/v1/recap-failed.json")),
+        (tunnel(Some(5174), "up", None), fixture!("control/events/v1/tunnel.json")),
+        (tunnel(None, "gone", None), fixture!("control/events/v1/tunnel-gone.json")),
     ]
 }
 

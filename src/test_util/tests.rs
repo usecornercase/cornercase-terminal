@@ -62,6 +62,20 @@ mod fake_program {
     }
 
     #[test]
+    fn listens_on_the_forward_it_is_given_and_fails_like_ssh_when_it_is_taken() {
+        let dir = TempDir::new();
+        let ssh = fake_program(dir.path(), "ssh");
+        std::fs::write(ssh.with_extension("forward"), "").expect("make it listen");
+        let taken = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("take a port");
+        let port = taken.local_addr().expect("the port").port();
+
+        let output = Command::new(&ssh).args(["-L", &format!("127.0.0.1:{port}:localhost:80")]).output().expect("run");
+
+        assert_eq!(output.status.code(), Some(255));
+        assert!(String::from_utf8_lossy(&output.stderr).contains(&format!("bind 127.0.0.1:{port}")));
+    }
+
+    #[test]
     fn is_built_beside_the_test_binary_rather_than_in_the_shared_temp_folder() {
         let test_binary = std::env::current_exe().expect("the test binary's path");
 

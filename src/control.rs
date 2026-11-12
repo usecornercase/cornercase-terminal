@@ -38,6 +38,7 @@ pub(crate) mod terminal;
 pub(crate) mod theme;
 mod todo;
 pub(crate) mod tour;
+pub(crate) mod tunnels;
 pub(crate) mod usage;
 pub(crate) mod view;
 mod watch;
@@ -94,6 +95,7 @@ pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, Work
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
+pub(crate) use tunnels::{ListTunnels, TunnelInfo, TunnelList, TunnelPort};
 pub(crate) use usage::{Plans, Stats, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
@@ -262,6 +264,9 @@ pub(crate) enum Command {
     PullRequest(PullRequestRead),
     Context(ContextRead),
     Machines(Machines),
+    Tunnels(ListTunnels),
+    TunnelOpen(TunnelPort),
+    TunnelClose(TunnelPort),
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
     Recap(RecapAsk),
@@ -462,6 +467,9 @@ impl Command {
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
             Self::Machines(_) => 116,
+            Self::Tunnels(_) => 126,
+            Self::TunnelOpen(_) => 127,
+            Self::TunnelClose(_) => 128,
             Self::Clone(_) => 117,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
@@ -601,6 +609,9 @@ impl Command {
         "worktrees-remove",
         "flow-close-when-merged",
         "account-login-tab",
+        "tunnels",
+        "tunnel-open",
+        "tunnel-close",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

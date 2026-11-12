@@ -32,6 +32,7 @@ mod status;
 mod talk;
 mod terminal;
 mod tour;
+mod tunnels;
 mod updates;
 mod usage;
 mod wait;
@@ -201,6 +202,7 @@ enum Stage {
     Relay(relay::Relaying),
     Recap { choice: crate::recap::Choice, answers: u64 },
     Dossier(u64),
+    Tunnel(Box<tunnels::TunnelWait>),
 }
 
 impl Stage {
@@ -218,6 +220,7 @@ impl Stage {
             Self::RemovingFolders(_) => "git is still removing the worktrees".into(),
             Self::Recap { choice, .. } => format!("the agent is still writing the recap of {}", choice.name()),
             Self::Dossier(_) => "the dossier is still being built".into(),
+            Self::Tunnel(_) => "the windows have not said whether the tunnel is up".into(),
             _ => "the ports are still being listed".into(),
         }
     }
@@ -246,6 +249,7 @@ impl Stage {
                 | Self::Context { .. }
                 | Self::Recap { .. }
                 | Self::Dossier(_)
+                | Self::Tunnel(_)
         )
     }
 }
@@ -436,6 +440,7 @@ impl App {
         self.forget_file_streams(client);
         self.forget_surfaces(client);
         self.forget_views(client);
+        self.forget_tunnels(client);
         self.forget_pairing(client);
         self.messages.notices.forget(client);
         self.forget_flow_reads(Some(client));

@@ -385,7 +385,8 @@ The menu of a project or a workspace row (` ⋯ ` or right-click, in every layou
 Hover a row, or pick it with the arrows, for its buttons:
 
 - **copy** copies the address.
-- **open** opens it in your browser. It shows only in a window on the computer the server runs on: in a window from [`cornercase remote`](../remote/), your [phone's browser](../phone/) or an `ssh` session, `localhost` is the other computer, so **copy** is what you get, and the toast says so.
+- **open** opens it in your browser. It shows only in a window on the computer the server runs on, or for a port you tunnelled: in your [phone's browser](../phone/) or an `ssh` session, `localhost` is the other computer, so **copy** is what you get, and the toast says so. In a window from [`cornercase remote`](../remote/) a program that listens on every address, `127.0.0.1` or `::1` gets **tunnel** first, and **open** and **copy** then use the tunnel's port on your computer.
+- **tunnel** forwards the port to your computer with your own `ssh -N -L`, on the same port when it's free (the row then shows `⇄ :5173`), and **close tunnel** closes it. See [Tunnel a port to your laptop](../remote/#tunnel-a-port-to-your-laptop).
 - **go** shows the tab the program runs in (when a tab started it).
 - **stop** stops that program, after a confirmation that names it, its port and its tab, and warns when it is an agent (or something an agent started) or a program no tab started.
 

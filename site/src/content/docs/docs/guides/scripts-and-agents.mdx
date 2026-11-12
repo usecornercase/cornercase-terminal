@@ -1148,6 +1148,23 @@ cornercase ports stop 3000 --pid 48211 --json
 
 Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker's own process, not by the `docker` command in your tab, so they belong to no workspace: on macOS they show only with `--all`, and on Linux, where Docker's proxy runs as root, not at all. A program of another user, or one in a container or another network namespace, is not seen either.
 
+### Tunnels
+
+```sh
+cornercase tunnels
+cornercase tunnel open 5173
+cornercase tunnel close 5173
+cornercase --remote devbox tunnel open 5173 --json
+```
+
+A [tunnel](../remote/#tunnel-a-port-to-your-laptop) forwards a port of the server's machine to the computer of a window opened with `cornercase remote`, and the window holds it, so these commands drive what the windows attached to that server hold. `tunnels` lists them: `5173 → localhost:5174  up`, `3000  down: Could not request local forwarding.`, `4000  opening`, with ` (window 3)` added when several windows hold tunnels. With no window attached it says ``no window holds tunnels for this server: open one with `cornercase remote` from the computer that should listen``, and with windows but none open, `no tunnels`.
+
+`tunnel open PORT` asks every attached window and waits until each says whether it came up (at most 45 seconds), printing `port 5173 is tunnelled to localhost:5174` for each. It exits 1, saying why, when no window is attached (tunnels are held by windows, never by a command) or none came up (`could not tunnel port 5173: Permission denied`). The window shows a toast, `a program tunnelled port 5173 to localhost:5174`, with a **close** button. `tunnel close PORT` closes it in every window that holds it (`closed the tunnel of port 5173`) and exits 1 when none does. A port is 1 to 65535, or the command exits with status 2.
+
+With `--json` they print `{"tunnels": [...], "windows": N}`, each tunnel with every key present: `port`, `local` (the port on the window's computer, `null` before there is one), `state` (`opening`, `up` or `down`), `error` (ssh's last line when `down`, else `null`) and `holder` (the number of the window's connection, which keeps several windows' tunnels apart). `windows` is how many windows hold tunnels for this server. They are the requests `tunnels`, `tunnel-open` and `tunnel-close` (`{"port": 5173}`); an older server answers that it has no such command.
+
+[`status --json`](#look) has the same entries as `tunnels` (left out while there are none), and [`events`](#follow-events) sends `{"event": "tunnel", "port", "local", "state", "error", "holder"}` to a reader that did not ask for one pane, with the state `gone` once a tunnel is closed or its window leaves.
+
 ### Processes
 
 ```sh

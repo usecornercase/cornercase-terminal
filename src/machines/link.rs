@@ -597,14 +597,8 @@ pub(super) fn listen(reader: &mut impl Read) -> Heard {
             Ok(Some(ServerMessage::Shutdown)) => return Heard::Ended(Some(STOPPED)),
             Ok(Some(ServerMessage::Restart(_))) => return Heard::Ended(Some(RESTARTING)),
             Ok(Some(ServerMessage::Detached)) => return Heard::Ended(Some(LET_GO)),
-            Ok(Some(
-                ServerMessage::Frame(_)
-                | ServerMessage::Rejected(_)
-                | ServerMessage::Sound(_)
-                | ServerMessage::Open(_)
-                | ServerMessage::Browse(_)
-                | ServerMessage::Machine(_),
-            )) => {}
+            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Rejected(_))) => {}
+            Ok(Some(message)) => debug_assert!(message.window_only()),
             Err(e) if protocol::undecoded(&e) => {}
             Ok(None) | Err(_) => return Heard::Ended(None),
         }
