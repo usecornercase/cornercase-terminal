@@ -59,12 +59,48 @@ impl Tunnels {
             Owner::Listening => TunnelState::Up,
             Owner::Starting => TunnelState::Opening,
         };
+        self.follow(port, (pid, local), state, now);
+        true
+    }
+
+    fn follow(&mut self, port: u16, (pid, local): (i32, u16), state: TunnelState, now: Instant) {
         let held = self.held.entry(port).or_insert_with(Held::fresh);
         held.elsewhere = Some(pid);
         held.local = Some(local);
         held.started = None;
         held.retry_at = None;
+        held.settling = None;
+        if state == TunnelState::Up {
+            held.was_up = true;
+            held.failures = 0;
+        }
         held.state = state;
+        held.check_at = Some(now + CHECK_EVERY);
+    }
+
+    pub(super) fn converge(&mut self, port: u16, now: Instant) {
+        let Some(destination) = self.destination.clone() else { return };
+        let Some(held) = self.held.get(&port) else { return };
+        let (Some(own), Some(local)) = (held.started.as_ref().and_then(|started| started.pid), held.local) else {
+            return;
+        };
+        if let Some(Kept { pid: Some(other), local: Some(other_local), closed: false, .. }) = self.entry(port)
+            && other != own
+            && self.spawner.owner(other, &destination, Forward { port, local: other_local }) == Owner::Listening
+        {
+            self.follow(port, (other, other_local), TunnelState::Up, now);
+        } else {
+            self.claim(port, local, Some(own));
+        }
+    }
+
+    pub(super) fn settle_later(&mut self, port: u16, own: Option<i32>, reason: &str, now: Instant) -> bool {
+        if own.is_none() || self.entry(port).is_none_or(|kept| kept.pid != own) {
+            return false;
+        }
+        let Some(held) = self.held.get_mut(&port) else { return false };
+        held.state = TunnelState::Opening;
+        held.settling = Some(super::one_line(reason));
         held.check_at = Some(now + CHECK_EVERY);
         true
     }
@@ -73,7 +109,7 @@ impl Tunnels {
         let due: Vec<u16> = self
             .held
             .iter()
-            .filter(|(_, held)| held.elsewhere.is_some() && held.check_at.is_some_and(|at| at <= now))
+            .filter(|(_, held)| held.check_at.is_some_and(|at| at <= now))
             .map(|(port, _)| *port)
             .collect();
         let mut changed = false;
@@ -83,7 +119,23 @@ impl Tunnels {
         changed
     }
 
+    fn settle(&mut self, port: u16, now: Instant) -> bool {
+        let Some(reason) = self.held.get_mut(&port).and_then(|held| held.settling.take()) else { return false };
+        if let Some(held) = self.held.get_mut(&port) {
+            held.check_at = None;
+        }
+        if !self.claimed_elsewhere(port, now)
+            && let Some(held) = self.held.get_mut(&port)
+        {
+            held.state = TunnelState::Down(reason);
+        }
+        true
+    }
+
     fn check(&mut self, port: u16, now: Instant) -> bool {
+        if self.held.get(&port).is_some_and(|held| held.settling.is_some()) {
+            return self.settle(port, now);
+        }
         let Some(destination) = self.destination.clone() else { return false };
         let Some(held) = self.held.get_mut(&port) else { return false };
         let (Some(pid), Some(local)) = (held.elsewhere, held.local) else { return false };
@@ -97,6 +149,10 @@ impl Tunnels {
         };
         let Some(held) = self.held.get_mut(&port) else { return false };
         held.check_at = Some(now + CHECK_EVERY);
+        if state == TunnelState::Up {
+            held.was_up = true;
+            held.failures = 0;
+        }
         std::mem::replace(&mut held.state, state.clone()) != state
     }
 

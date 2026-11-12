@@ -58,6 +58,7 @@ struct Held {
     was_up: bool,
     elsewhere: Option<i32>,
     check_at: Option<Instant>,
+    settling: Option<String>,
 }
 
 impl Held {
@@ -72,6 +73,7 @@ impl Held {
             was_up: false,
             elsewhere: None,
             check_at: None,
+            settling: None,
         }
     }
 
@@ -80,6 +82,7 @@ impl Held {
         self.elsewhere = None;
         self.retry_at = None;
         self.check_at = None;
+        self.settling = None;
         self.state = TunnelState::Closed;
     }
 
@@ -183,6 +186,7 @@ impl Tunnels {
         held.attempt = attempt;
         held.elsewhere = None;
         held.check_at = None;
+        held.settling = None;
         match begun {
             Ok((local, started)) => {
                 held.local = Some(local);
@@ -221,6 +225,7 @@ impl Tunnels {
                     held.failures = 0;
                     held.was_up = true;
                 }
+                self.converge(port, now);
             }
             Watched::Ended(reason) => self.ended(port, &reason, now),
         }
@@ -229,8 +234,8 @@ impl Tunnels {
 
     fn ended(&mut self, port: u16, reason: &str, now: Instant) {
         let Some(held) = self.held.get_mut(&port) else { return };
-        held.started = None;
-        if !held.was_up && self.claimed_elsewhere(port, now) {
+        let own = held.started.take().and_then(|started| started.pid);
+        if !held.was_up && (self.claimed_elsewhere(port, now) || self.settle_later(port, own, reason, now)) {
             return;
         }
         let Some(held) = self.held.get_mut(&port) else { return };
@@ -263,7 +268,7 @@ impl Tunnels {
             return None;
         }
         let retries = self.held.values().filter(|held| held.down()).filter_map(|held| held.retry_at);
-        let checks = self.held.values().filter(|held| held.elsewhere.is_some()).filter_map(|held| held.check_at);
+        let checks = self.held.values().filter_map(|held| held.check_at);
         retries.chain(checks).min()
     }
 

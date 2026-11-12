@@ -8,7 +8,7 @@ use serde_json::Value;
 use super::machines;
 use crate::{paths, persist};
 
-pub(crate) const LIMIT: usize = 64;
+const LIMIT: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Kept {

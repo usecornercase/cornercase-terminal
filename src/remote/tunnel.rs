@@ -70,7 +70,7 @@ fn spec(forward: Forward) -> String {
     format!("127.0.0.1:{}:localhost:{}", forward.local, forward.port)
 }
 
-pub(crate) fn same_forward(args: &[String], destination: &str, forward: Forward) -> bool {
+fn same_forward(args: &[String], destination: &str, forward: Forward) -> bool {
     let spec = spec(forward);
     let forwards = args.windows(2).any(|pair| pair[0] == "-L" && pair[1] == spec);
     let ends = args.len() >= 2 && args[args.len() - 2] == "--" && args[args.len() - 1] == destination;

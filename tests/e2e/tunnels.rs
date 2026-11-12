@@ -77,6 +77,7 @@ fn local_of(session: &Session) -> Option<u16> {
 }
 
 fn read_through(local: u16) -> [u8; 5] {
+    wait_until("the local port accepts", || TcpStream::connect(("127.0.0.1", local)).is_ok());
     let mut stream = TcpStream::connect(("127.0.0.1", local)).expect("reach the tunnel");
     stream.set_read_timeout(Some(Duration::from_secs(20))).expect("a timeout");
     let mut said = [0u8; 5];
@@ -115,6 +116,30 @@ fn a_second_window_shares_the_tunnel_and_takes_it_over_when_the_first_quits() {
     assert!(gone(&first_pid));
     let kept = &kept_tunnels(&session)["devbox"][0];
     assert_eq!(kept["pid"].to_string(), tunnel_pid(&session, port));
+    assert_eq!(&read_through(local), b"hello");
+}
+
+#[test]
+fn two_attached_windows_asked_to_open_a_tunnel_end_with_one_ssh_between_them() {
+    let session = Session::new();
+    let _first = remote_window(&session);
+    let _second = remote_window(&session);
+    let pane: u64 = session.says(&["new-tab", "--name", "server", "--", SERVE]).parse().expect("a pane id");
+    let port = served_port(&session, pane);
+
+    listed(&session, &["tunnel", "open", &port.to_string(), "--json"]);
+
+    wait_until("both windows list it up on one local port", || {
+        let list = listed(&session, &["tunnels", "--json"]);
+        let all = list["tunnels"].as_array().expect("a list");
+        let locals: Vec<Option<u64>> = all.iter().map(|t| t["local"].as_u64()).collect();
+        all.len() == 2 && all.iter().all(|t| t["state"] == "up") && locals[0] == locals[1]
+    });
+    let local = local_of(&session).expect("a local port");
+    let pids = tunnel_pids(&session, port);
+    let alive: Vec<&String> = pids.iter().filter(|pid| !gone(pid)).collect();
+    assert_eq!(alive.len(), 1, "one ssh is left of {pids:?}");
+    assert_eq!(kept_tunnels(&session)["devbox"][0]["pid"].to_string(), *alive[0]);
     assert_eq!(&read_through(local), b"hello");
 }
 

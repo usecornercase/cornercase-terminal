@@ -19,13 +19,14 @@ struct Fake {
     calls: Calls,
     owners: Owners,
     refuse: Option<String>,
+    base: i32,
 }
 
 impl Spawn for Fake {
     fn spawn(&mut self, destination: &str, forward: Forward, attempt: u64) -> Result<Started, String> {
         let mut calls = self.calls.lock();
         calls.push((destination.into(), forward, attempt));
-        let pid = FIRST_PID + i32::try_from(calls.len()).expect("a few calls");
+        let pid = self.base + i32::try_from(calls.len()).expect("a few calls");
         self.refuse.clone().map_or(Ok(Started { _running: None, pid: Some(pid) }), Err)
     }
 
@@ -59,7 +60,8 @@ impl Rig {
 
 fn rig_before(refuse: Option<&str>, entries: &[Kept]) -> Rig {
     let (calls, owners, dir) = (Calls::default(), Owners::default(), TempDir::new());
-    let fake = Fake { calls: calls.clone(), owners: owners.clone(), refuse: refuse.map(str::to_string) };
+    let fake =
+        Fake { calls: calls.clone(), owners: owners.clone(), refuse: refuse.map(str::to_string), base: FIRST_PID };
     let file = dir.path().join("tunnels.json");
     let tunnels = Tunnels::new(Box::new(fake), Openers::default(), file);
     let mut rig = Rig { tunnels, calls, owners, dir };
@@ -189,6 +191,8 @@ mod watching {
         tunnels.order(TunnelOrder::Open(port), Instant::now());
 
         assert!(tunnels.watched(attempt_of(&calls), Watched::Ended("refused".into()), now));
+        assert_eq!(state_of(&tunnels, port), Some(TunnelState::Opening));
+        assert!(tunnels.tick(now + CHECK_EVERY, true));
 
         assert_eq!(state_of(&tunnels, port), Some(TunnelState::Down("refused".into())));
         assert!(!tunnels.tick(now + Duration::from_secs(600), true));
@@ -297,7 +301,9 @@ mod linking {
         let (mut tunnels, calls, _dir) = tunnels_with(None);
         let port = free_port();
         tunnels.order(TunnelOrder::Open(port), Instant::now());
-        tunnels.watched(attempt_of(&calls), Watched::Ended("refused".into()), Instant::now());
+        let now = Instant::now();
+        tunnels.watched(attempt_of(&calls), Watched::Ended("refused".into()), now);
+        tunnels.tick(now + CHECK_EVERY, true);
 
         tunnels.sync(Some("vps"), Instant::now());
 
@@ -651,5 +657,94 @@ mod sharing {
         let mapped = rig.tunnels.browse(Browse { ip: None, port });
 
         assert_eq!(mapped, Ok(Browse { ip: None, port }));
+    }
+}
+
+mod converging {
+    use super::*;
+
+    struct Pair {
+        a: Rig,
+        b: Tunnels,
+        b_calls: Calls,
+        port: u16,
+    }
+
+    fn pair() -> Pair {
+        let a = rig();
+        let b_calls = Calls::default();
+        let fake = Fake { calls: b_calls.clone(), owners: a.owners.clone(), refuse: None, base: FIRST_PID * 3 };
+        let mut b = Tunnels::new(Box::new(fake), Openers::default(), a.file());
+        b.sync(Some("vps"), Instant::now());
+        Pair { a, b, b_calls, port: free_port() }
+    }
+
+    fn both_spawned(pair: &mut Pair) -> (i32, i32) {
+        open(&mut pair.a, pair.port);
+        let first = FIRST_PID + 1;
+        pair.a.write(&[entry(pair.port, None, None, false)]);
+        pair.b.order(TunnelOrder::Open(pair.port), Instant::now());
+        let second = FIRST_PID * 3 + 1;
+        pair.a.owners.lock().insert(first, Owner::Listening);
+        pair.a.owners.lock().insert(second, Owner::Listening);
+        (first, second)
+    }
+
+    #[test]
+    fn two_windows_that_both_came_up_keep_one_ssh_between_them() {
+        let mut pair = pair();
+        let (_, second) = both_spawned(&mut pair);
+        let attempt = attempt_of(&pair.a.calls);
+
+        pair.a.tunnels.watched(attempt, Watched::Up, Instant::now());
+        pair.b.watched(attempt_of(&pair.b_calls), Watched::Up, Instant::now());
+
+        assert_eq!(pair.a.tunnels.held[&pair.port].elsewhere, Some(second));
+        assert!(pair.a.tunnels.held[&pair.port].started.is_none());
+        assert_eq!(state_of(&pair.a.tunnels, pair.port), Some(TunnelState::Up));
+        assert!(pair.b.held[&pair.port].started.is_some());
+        assert_eq!(pair.a.kept()[0].pid, Some(second));
+    }
+
+    #[test]
+    fn the_loser_of_a_bind_waits_for_the_winner_instead_of_settling_down() {
+        let mut pair = pair();
+        let (first, second) = both_spawned(&mut pair);
+        let (attempt_a, attempt_b) = (attempt_of(&pair.a.calls), attempt_of(&pair.b_calls));
+        pair.a.owners.lock().insert(second, Owner::Gone);
+        let now = Instant::now();
+
+        pair.b.watched(attempt_b, Watched::Ended("Address already in use".into()), now);
+        assert_eq!(state_of_held(&pair.b, pair.port), Some(TunnelState::Opening));
+        pair.a.tunnels.watched(attempt_a, Watched::Up, now);
+        assert_eq!(pair.a.kept()[0].pid, Some(first));
+        pair.b.tick(now + CHECK_EVERY, true);
+
+        assert_eq!(state_of_held(&pair.b, pair.port), Some(TunnelState::Up));
+        assert_eq!(pair.b.held[&pair.port].elsewhere, Some(first));
+    }
+
+    fn state_of_held(tunnels: &Tunnels, port: u16) -> Option<TunnelState> {
+        state_of(tunnels, port)
+    }
+
+    #[test]
+    fn a_take_over_that_fails_before_it_is_up_is_retried() {
+        let mut rig = rig();
+        let port = free_port();
+        let pid = FIRST_PID * 2 + 1;
+        rig.owners.lock().insert(pid, Owner::Listening);
+        rig.write(&[entry(port, Some(port), Some(pid), false)]);
+        let now = Instant::now();
+        rig.tunnels.sync(Some("vps"), now);
+        rig.owners.lock().insert(pid, Owner::Gone);
+        rig.tunnels.tick(now + CHECK_EVERY, true);
+        let attempt = attempt_of(&rig.calls);
+
+        rig.tunnels.watched(attempt, Watched::Ended("refused".into()), now + CHECK_EVERY);
+
+        let wake = rig.tunnels.next_wake(true).expect("a retry is planned");
+        assert!(rig.tunnels.tick(wake, true));
+        assert_eq!(rig.calls.lock().len(), 2);
     }
 }
