@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.47
+
+- **On Linux and macOS, closing a tab, a workspace or a project no longer holds the window for a moment for each of its shells.** A closed pane's shell used to be given a fixed 50 milliseconds before cornercase first looked whether it had gone; it is now looked at at once, and again after a few milliseconds, with the same grace for a shell that ignores the hang-up before it is killed. Stopping the server with many panes open is quicker as well. Nothing changes on Windows, where a closed pane's shell already ended at once.
+
 ## 0.13.46
 
 - **Flows with very long names save.** A flow's file is named after it, so a name past about 80 Chinese, Japanese or Korean characters, or about 240 letters, made a file name too long to save (0.13.45 lowered that limit a little). The file's name is now cut short, never in the middle of a character, so a flow saves whatever its name: it keeps its whole name, and two flows whose long names start alike get a file each.
