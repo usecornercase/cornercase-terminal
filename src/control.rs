@@ -95,7 +95,7 @@ pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, Work
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
-pub(crate) use tunnels::{ListTunnels, TunnelInfo, TunnelList, TunnelPort};
+pub(crate) use tunnels::{ListTunnels, TunnelHold, TunnelInfo, TunnelList, TunnelPort};
 pub(crate) use usage::{Plans, Stats, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
@@ -267,6 +267,8 @@ pub(crate) enum Command {
     Tunnels(ListTunnels),
     TunnelOpen(TunnelPort),
     TunnelClose(TunnelPort),
+    TunnelForget(TunnelPort),
+    TunnelHold(TunnelHold),
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
     Recap(RecapAsk),
@@ -470,6 +472,8 @@ impl Command {
             Self::Tunnels(_) => 126,
             Self::TunnelOpen(_) => 127,
             Self::TunnelClose(_) => 128,
+            Self::TunnelForget(_) => 129,
+            Self::TunnelHold(_) => 130,
             Self::Clone(_) => 117,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
@@ -612,6 +616,8 @@ impl Command {
         "tunnels",
         "tunnel-open",
         "tunnel-close",
+        "tunnel-forget",
+        "tunnel-hold",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

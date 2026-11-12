@@ -50,6 +50,14 @@ mod the_row {
     use super::*;
 
     #[test]
+    fn of_a_closed_tunnel_offers_one_again() {
+        let (mut app, _rx, _dirs) = remote_with(true, vec![(5173, Some(5174), TunnelState::Closed)]);
+        showing(&mut app, vec![port(10, 5173)]);
+
+        assert_eq!(first_row(&app).tunnel, Some(PortTunnel::Offered));
+    }
+
+    #[test]
     fn of_a_remote_window_offers_a_tunnel_and_asks_for_it_when_clicked() {
         let (mut app, _rx, _dirs) = remote_with(true, vec![]);
         showing(&mut app, vec![port(10, 5173)]);

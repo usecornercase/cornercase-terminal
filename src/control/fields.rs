@@ -202,7 +202,8 @@ impl Command {
 
     fn tunnel_fields(&self, fields: &mut Fields) -> bool {
         match self {
-            Self::TunnelOpen(tunnel) | Self::TunnelClose(tunnel) => tunnel.fields(fields),
+            Self::TunnelOpen(tunnel) | Self::TunnelClose(tunnel) | Self::TunnelForget(tunnel) => tunnel.fields(fields),
+            Self::TunnelHold(hold) => hold.fields(fields),
             _ => return false,
         }
         true

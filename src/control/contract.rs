@@ -70,6 +70,8 @@ pub(crate) const FEATURES: &[&str] = &[
     "account-login-tab",
     "config-agents",
     "tunnels",
+    "tunnels-remembered",
+    "tunnel-hold",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

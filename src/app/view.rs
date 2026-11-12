@@ -236,6 +236,7 @@ impl App {
             update: self.update_label(),
             remote: self.remote_button(),
             machine: self.machine_label(),
+            machine_tunnels: self.machine_tunnels(),
             attention,
             spin: self.spin(now),
             drag: self.row_drag_view(area),

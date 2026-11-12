@@ -60,8 +60,11 @@ fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
             "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = -N ] && tunnel=1; done\n\
              if [ -n \"$tunnel\" ]; then\n  prev=; spec=\n  \
              for a in \"$@\"; do [ \"$prev\" = -L ] && spec=\"$a\"; prev=\"$a\"; done\n  \
+             if [ -e '{dir}/tunnel.fails' ]; then\n  \
+             echo 'ssh: connect to host devbox port 22: Connection refused' >&2; exit 255\n  fi\n  \
              port=${{spec##*:}}\n  printf '%s\\n' \"$@\" > '{dir}/tunnel-'\"$port\"'.args'\n  \
-             echo $$ > '{dir}/tunnel-'\"$port\"'.pid'\n  exec python3 '{dir}/forward.py' \"$spec\"\nfi\n\
+             echo $$ > '{dir}/tunnel-'\"$port\"'.pid'\n  echo $$ >> '{dir}/tunnel-'\"$port\"'.pids'\n  \
+             exec python3 '{dir}/forward.py' \"$spec\" \"$@\"\nfi\n\
              echo $$ > '{dir}/{SSH_PID}'\necho $$ >> '{dir}/{SSH_RUNS}'\nwhile [ $# -gt 0 ]; do\n  \
              case \"$1\" in\n    -o | -L) shift 2 ;;\n    --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
              if [ -e '{dir}/ssh-'\"$1\"'.held' ]; then\n  \
@@ -104,6 +107,15 @@ pub(super) fn tunnel_args(session: &Session, port: u16) -> Vec<String> {
 
 pub(super) fn tunnel_pid(session: &Session, port: u16) -> String {
     pid_in(session, &format!("tunnel-{port}.pid"))
+}
+
+pub(super) fn tunnel_pids(session: &Session, port: u16) -> Vec<String> {
+    pid_in(session, &format!("tunnel-{port}.pids")).lines().map(str::to_string).collect()
+}
+
+pub(super) fn kept_tunnels(session: &Session) -> serde_json::Value {
+    let text = std::fs::read_to_string(session.dir.join("tunnels.json")).unwrap_or_else(|_| "{}".into());
+    serde_json::from_str(&text).expect("tunnels.json is json")
 }
 
 pub(super) fn ssh_runs(session: &Session) -> usize {
@@ -678,12 +690,16 @@ pub(super) fn remote_window(session: &Arc<Session>) -> Harness {
 fn remote_window_with(session: &Arc<Session>, env: &[(&str, &str)]) -> Harness {
     let path = fake_ssh(&session.dir, "");
     let exe = env!("CARGO_BIN_EXE_cornercase");
-    std::os::unix::fs::symlink(exe, session.dir.join("bin/cornercase"))
-        .expect("cornercase for a machine without --command");
+    let link = session.dir.join("bin/cornercase");
+    if !link.exists() {
+        std::os::unix::fs::symlink(exe, link).expect("cornercase for a machine without --command");
+    }
     let args = ["remote", "devbox", "--command", exe];
     let env: Vec<(&str, &str)> = [("PATH", path.as_str())].into_iter().chain(env.iter().copied()).collect();
     let mut app = Harness::run(exe.as_ref(), &args, Arc::clone(session), (ROWS, COLS), &env);
-    app.wait_for("the remote window names its machine", |s| s.contains(&first_entry()) && s.contains("devbox ▴"));
+    app.wait_for("the remote window names its machine", |s| {
+        s.contains(&first_entry()) && (s.contains("devbox ▴") || s.contains("devbox ⇄"))
+    });
     app
 }
 

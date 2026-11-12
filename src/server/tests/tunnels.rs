@@ -1,4 +1,4 @@
-use super::a_bug::{Attached, LISTEN, hello};
+use super::a_bug::{Attached, Client, LISTEN, hello};
 use super::*;
 use crate::graphics::Support;
 use crate::protocol::{Holding, TunnelOrder};
@@ -49,5 +49,27 @@ fn a_browser_cannot_hold_tunnels() {
         browser.click_on("ports");
         browser.shows("http://localhost:");
         assert!(!browser.text().contains(" tunnel "));
+    });
+}
+
+fn request(client: &Client, text: &str) {
+    client.send(ServerEvent::Message(client.id, ClientMessage::Request(text.into())));
+}
+
+#[test]
+fn a_connection_that_holds_a_tunnel_is_detached_and_removed_when_the_tunnel_is_closed() {
+    let mut attached = Attached::new();
+    let holder = attached.join_hello(a_window(None));
+    let closer = attached.join_hello(a_window(None));
+    attached.serve(Server::step, move |_| {
+        request(&holder, r#"{"contract":1,"command":"tunnel-hold","args":{"port":5173,"local":5174}}"#);
+        let answers = holder.received(|m| matches!(m, ServerMessage::Response(_)));
+        assert!(answers.iter().any(|m| matches!(m, ServerMessage::Response(text) if text.contains("hold"))));
+
+        request(&closer, r#"{"contract":1,"command":"tunnel-close","args":{"port":5173}}"#);
+
+        holder.received(|m| matches!(m, ServerMessage::Detached));
+        let said = closer.received(|m| matches!(m, ServerMessage::Response(_)));
+        assert!(said.iter().any(|m| matches!(m, ServerMessage::Response(text) if text.contains("\"tunnels\":[]"))));
     });
 }

@@ -176,7 +176,7 @@ impl Window<'_> {
         self.guard = Some(guard);
         self.lost = None;
         self.retries.linked();
-        self.tunnels.sync(self.target.machine());
+        self.tunnels.sync(self.target.machine(), Instant::now());
         self.report_tunnels();
         Ok(())
     }
@@ -295,7 +295,7 @@ impl Window<'_> {
             }
             Next::Browse(browse) => self.browse(browse),
             Next::Tunnel(order) => {
-                self.tunnels.order(order);
+                self.tunnels.order(order, Instant::now());
                 self.report_tunnels();
             }
             Next::Machine(order) => self.order(order)?,
@@ -502,7 +502,7 @@ pub(super) fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal
         switch: None,
         switches: 0,
         plugins: None,
-        tunnels: Tunnels::new(Box::new(Ssh { tx: tx.clone() }), local_openers()),
+        tunnels: Tunnels::new(Box::new(Ssh { tx: tx.clone() }), local_openers(), remote::tunnels::file()),
     };
     window.sync_plugins();
     window.link(link)?;
@@ -538,7 +538,13 @@ fn openers_for(target: &Target) -> Openers {
 fn run_window(window: &mut Window<'_>, rx: &Receiver<Incoming>) -> Result<Ending> {
     loop {
         let ending = match rx.recv_timeout(window.wait(Instant::now())) {
-            Ok(incoming) => window.handle(incoming)?,
+            Ok(incoming) => {
+                let ending = window.handle(incoming)?;
+                if ending.is_none() && window.wait(Instant::now()).is_zero() {
+                    window.tick(Instant::now())?;
+                }
+                ending
+            }
             Err(RecvTimeoutError::Timeout) => {
                 window.tick(Instant::now())?;
                 None

@@ -196,6 +196,8 @@ fn newest_commands() -> Vec<Command> {
         Command::Tunnels(ListTunnels::default()),
         Command::TunnelOpen(TunnelPort::default()),
         Command::TunnelClose(TunnelPort::default()),
+        Command::TunnelForget(TunnelPort::default()),
+        Command::TunnelHold(TunnelHold::default()),
     ]
 }
 

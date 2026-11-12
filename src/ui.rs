@@ -245,6 +245,7 @@ pub(crate) struct View<'a> {
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
     pub(crate) machine: Option<String>,
+    pub(crate) machine_tunnels: usize,
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
     pub(crate) todo: Option<todo::View>,

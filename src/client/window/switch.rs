@@ -211,7 +211,7 @@ impl Window<'_> {
         self.target = switch.to;
         self.openers = pending.openers;
         self.sync_plugins();
-        self.tunnels.sync(self.target.machine());
+        self.tunnels.sync(self.target.machine(), Instant::now());
         self.remember();
         self.send_out(ClientMessage::Machines(Self::machines_at(&self.target)));
         self.report_tunnels();

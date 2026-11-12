@@ -1,6 +1,8 @@
 use std::net::{Ipv4Addr, Ipv6Addr, TcpListener};
 use std::sync::mpsc;
 
+use rstest::rstest;
+
 use super::*;
 use crate::test_util::{TempDir, fake_program, wait_until};
 
@@ -43,6 +45,101 @@ mod the_ssh_line {
         ];
         assert_eq!(line, expected);
         assert!(!line.iter().any(|word| word.contains("ClearAllForwardings")));
+    }
+}
+
+mod the_same_forward {
+    use super::*;
+
+    const FORWARD: Forward = Forward { port: 5173, local: 5174 };
+
+    fn words(line: &[&str]) -> Vec<String> {
+        line.iter().map(ToString::to_string).collect()
+    }
+
+    #[test]
+    fn is_the_line_the_window_builds() {
+        assert!(same_forward(&args("vps", FORWARD), "vps", FORWARD));
+    }
+
+    #[test]
+    fn is_also_the_line_after_other_words() {
+        let spec = spec(FORWARD);
+        let line = words(&["python3", "forward.py", &spec, "-N", "-L", &spec, "--", "vps"]);
+
+        assert!(same_forward(&line, "vps", FORWARD));
+    }
+
+    #[rstest]
+    #[case::another_local(Forward { port: 5173, local: 9999 }, "vps")]
+    #[case::another_port(Forward { port: 3000, local: 5174 }, "vps")]
+    #[case::another_destination(FORWARD, "other")]
+    fn is_not_a_line_of_another_forward(#[case] forward: Forward, #[case] destination: &str) {
+        assert!(!same_forward(&args("vps", FORWARD), destination, forward));
+    }
+
+    #[test]
+    fn is_not_a_line_without_the_double_dash() {
+        let mut line = args("vps", FORWARD);
+        line.retain(|word| word != "--");
+
+        assert!(!same_forward(&line, "vps", FORWARD));
+    }
+}
+
+mod the_owner {
+    use super::*;
+
+    fn ssh_in(dir: &TempDir) -> std::path::PathBuf {
+        let ssh = fake_program(dir.path(), "ssh");
+        std::fs::write(ssh.with_extension("hold"), "").expect("hold it");
+        ssh
+    }
+
+    fn start(ssh: &std::path::Path, forward: Forward) -> (Running, mpsc::Receiver<Watched>) {
+        let (tx, rx) = mpsc::channel();
+        let report = move |watched| {
+            let _ = tx.send(watched);
+        };
+        (spawn_within(ssh.as_os_str(), "vps", forward, UP_WAIT, report).expect("start ssh"), rx)
+    }
+
+    #[test]
+    fn is_listening_once_ssh_listens_and_gone_for_another_destination() {
+        let dir = TempDir::new();
+        let ssh = ssh_in(&dir);
+        std::fs::write(ssh.with_extension("forward"), "").expect("make it listen");
+        let forward = Forward { port: 5173, local: free_port() };
+        let (running, reports) = start(&ssh, forward);
+        assert_eq!(reports.recv_timeout(Duration::from_secs(20)), Ok(Watched::Up));
+
+        assert_eq!(owner(running.pid(), "vps", forward), Owner::Listening);
+        assert_eq!(owner(running.pid(), "other", forward), Owner::Gone);
+    }
+
+    #[test]
+    fn is_starting_while_ssh_has_not_listened_yet() {
+        let dir = TempDir::new();
+        let ssh = ssh_in(&dir);
+        let forward = Forward { port: 5173, local: free_port() };
+        let (running, _reports) = start(&ssh, forward);
+
+        assert_eq!(owner(running.pid(), "vps", forward), Owner::Starting);
+    }
+
+    #[test]
+    fn is_gone_once_ssh_is_stopped_and_for_no_pid() {
+        let dir = TempDir::new();
+        let ssh = ssh_in(&dir);
+        let forward = Forward { port: 5173, local: free_port() };
+        let (running, _reports) = start(&ssh, forward);
+        let pid = running.pid();
+        assert_eq!(pid, pid_of(&running));
+
+        running.stop();
+
+        wait_until("the owner is gone", || owner(pid, "vps", forward) == Owner::Gone);
+        assert_eq!(owner(0, "vps", forward), Owner::Gone);
     }
 }
 

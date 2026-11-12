@@ -202,6 +202,8 @@ impl App {
             Command::Tunnels(_) => Ok(Some(json(&self.tunnel_list(None)))),
             Command::TunnelOpen(tunnel) => self.tunnel_open_request(client, &tunnel, now),
             Command::TunnelClose(tunnel) => self.tunnel_close_request(client, &tunnel, now),
+            Command::TunnelForget(tunnel) => self.tunnel_forget_request(client, &tunnel, now),
+            Command::TunnelHold(hold) => self.tunnel_hold_request(client, &hold),
             other => return ControlFlow::Continue(other),
         })
     }
