@@ -79,6 +79,7 @@ impl Held {
 
     fn stop(&mut self) {
         self.started = None;
+        self.attempt = 0;
         self.elsewhere = None;
         self.retry_at = None;
         self.check_at = None;

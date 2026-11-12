@@ -660,6 +660,39 @@ mod sharing {
     }
 }
 
+mod late_reports {
+    use super::*;
+
+    #[test]
+    fn from_an_ssh_closed_here_are_ignored() {
+        let mut rig = rig();
+        let port = free_port();
+        open(&mut rig, port);
+        let old = attempt_of(&rig.calls);
+        rig.tunnels.order(TunnelOrder::Close(port), Instant::now());
+
+        assert!(!rig.tunnels.watched(old, Watched::Up, Instant::now()));
+        assert!(!rig.tunnels.watched(old, Watched::Ended("gone".into()), Instant::now()));
+
+        assert_eq!(state_of(&rig.tunnels, port), Some(TunnelState::Closed));
+    }
+
+    #[test]
+    fn from_an_ssh_given_up_for_another_window_s_are_ignored() {
+        let mut rig = rig();
+        let port = free_port();
+        open(&mut rig, port);
+        let old = attempt_of(&rig.calls);
+        rig.owners.lock().insert(FIRST_PID * 2, Owner::Listening);
+        rig.write(&[entry(port, Some(port), Some(FIRST_PID * 2), false)]);
+        rig.tunnels.converge(port, Instant::now());
+
+        assert!(!rig.tunnels.watched(old, Watched::Ended("stopped".into()), Instant::now()));
+
+        assert_eq!(state_of(&rig.tunnels, port), Some(TunnelState::Up));
+    }
+}
+
 mod converging {
     use super::*;
 

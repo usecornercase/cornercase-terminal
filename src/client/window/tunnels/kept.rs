@@ -68,6 +68,7 @@ impl Tunnels {
         held.elsewhere = Some(pid);
         held.local = Some(local);
         held.started = None;
+        held.attempt = 0;
         held.retry_at = None;
         held.settling = None;
         if state == TunnelState::Up {
