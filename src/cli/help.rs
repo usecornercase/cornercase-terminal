@@ -474,7 +474,7 @@ project's setup and teardown. `--json` prints the whole answer, which a program 
 With --json it also lists `agents`: each agent the `agent` setting can name, with its title, whether
 cornercase reads its status (`reads_status`: a routine can remove the workspace of those only),
 whether a flow can run it (`flows`), the `models` and `efforts` the flow editor offers for it at once,
-and whether it keeps more models in a list of its own (`catalogue`), which `models` reads.
+and whether it keeps more models in a list of its own (`catalogue`), which `config models AGENT` reads.
 
 `models AGENT` prints every model the flow editor offers for an agent, one per line and nothing when
 it offers none: its `models`, then, when `catalogue` is true (opencode: the models.dev list it

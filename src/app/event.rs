@@ -33,7 +33,7 @@ pub(crate) enum AppEvent {
     Usage(usage::Key, Result<usage::Report>),
     Breakdown { pane: u64, pid: i32, result: Box<Result<crate::agents::breakdown::Breakdown>> },
     FlowModels(crate::agents::Known, Vec<String>),
-    AgentModels { request: u64, kind: crate::agents::Known, read: Result<Vec<String>> },
+    AgentModels { request: u64, kind: crate::agents::Known, result: Result<Vec<String>> },
     FlowFetched(crate::flows::registry::Source, std::result::Result<String, String>),
     LastMessage { request: u64, result: Result<Option<context::Said>> },
     Ports(super::ports_dialog::PortsEvent),

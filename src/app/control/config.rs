@@ -32,14 +32,19 @@ impl App {
         };
         let key = self.clients.requests.key();
         let job = Job::new(Level::Debug, "control", "agent models");
-        self.read_catalogue(kind, job, move |read| AppEvent::AgentModels { request: key, kind, read });
+        self.read_catalogue(kind, job, move |result| AppEvent::AgentModels { request: key, kind, result });
         self.pend_reading(client, key);
         Ok(None)
     }
 
-    pub(in crate::app) fn agent_models_read(&mut self, key: u64, kind: Known, read: crate::error::Result<Vec<String>>) {
+    pub(in crate::app) fn agent_models_read(
+        &mut self,
+        key: u64,
+        kind: Known,
+        result: crate::error::Result<Vec<String>>,
+    ) {
         self.answer_read(key, |_| {
-            let read = read.map_err(|e| failed(format!("cannot read the models {} keeps: {e}", kind.title())))?;
+            let read = result.map_err(|e| failed(format!("cannot read the models {} keeps: {e}", kind.title())))?;
             Ok(json(&AgentModelsInfo { agent: kind.name().to_string(), models: kind.offered_models(read) }))
         });
     }
