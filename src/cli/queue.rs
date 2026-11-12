@@ -10,6 +10,8 @@ use crate::control;
 use crate::error::{Error, Result};
 use crate::queue::clock;
 
+mod show;
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct Listed {
@@ -27,6 +29,7 @@ struct Listed {
     flow: Option<String>,
     routine: Option<u64>,
     next: Option<i64>,
+    started: Option<i64>,
 }
 
 impl Listed {
@@ -66,9 +69,32 @@ fn lines(value: &Value, zone: &str) -> String {
     out
 }
 
+enum Asked {
+    Queue(control::Queue, bool),
+    Show(control::QueueShow, bool),
+}
+
 pub(super) fn run(action: QueueAction) -> Result<()> {
-    let list = matches!(action, QueueAction::List(_));
-    let (command, json) = request_of(action)?;
+    match request_of(action)? {
+        Asked::Queue(command, json) => run_queue(command, json),
+        Asked::Show(show, json) => run_show(show, json),
+    }
+}
+
+fn run_show(show: control::QueueShow, json: bool) -> Result<()> {
+    crate::client::use_queue_results()?;
+    let conversation = show.conversation;
+    let value = ask("queue show", control::Command::QueueShow(show))?;
+    if json {
+        print_json(&value)?;
+    } else {
+        super::print_out(&show::text(&value, &clock::local_zone()))?;
+    }
+    if show::partial(&value, conversation) { Err(Error::Partial) } else { Ok(()) }
+}
+
+fn run_queue(command: control::Queue, json: bool) -> Result<()> {
+    let list = matches!(command, control::Queue::List);
     if matches!(command, control::Queue::Remove(_) | control::Queue::ClearStarted | control::Queue::Restore(_)) {
         crate::client::use_queue_undo()?;
     }
@@ -111,7 +137,17 @@ fn needs_mode_default(command: &control::Queue) -> bool {
     }
 }
 
-fn request_of(action: QueueAction) -> Result<(control::Queue, bool)> {
+fn request_of(action: QueueAction) -> Result<Asked> {
+    let (command, json) = match action {
+        QueueAction::Show { id, conversation, print } => {
+            return Ok(Asked::Show(control::QueueShow { id, conversation }, print.json));
+        }
+        other => queue_command(other)?,
+    };
+    Ok(Asked::Queue(command, json))
+}
+
+fn queue_command(action: QueueAction) -> Result<(control::Queue, bool)> {
     Ok(match action {
         QueueAction::Add(add) => {
             let json = add.print.json;
@@ -128,6 +164,7 @@ fn request_of(action: QueueAction) -> Result<(control::Queue, bool)> {
         QueueAction::Restore { undo } => (control::Queue::Restore(undo), false),
         QueueAction::Pause { id } => (control::Queue::Pause(id), false),
         QueueAction::Resume { id } => (control::Queue::Resume(id), false),
+        QueueAction::Show { .. } => return Err(Error::WrongUsage("queue show takes no queue command".into())),
     })
 }
 

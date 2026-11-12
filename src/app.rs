@@ -84,6 +84,7 @@ use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use plugins::{PluginEvent, Plugins};
 use queue_panel::QueueEvent;
+use queue_results::QueueRead;
 use recap_panel::RecapEvent;
 use routine_cleanup::RoutineEvent;
 use search_dialog::SearchEvent;
@@ -150,6 +151,7 @@ mod project_settings_dialog;
 mod pull_requests;
 mod queue_dialog;
 mod queue_panel;
+mod queue_results;
 mod recap_panel;
 mod refresh;
 mod remote_access;
@@ -642,6 +644,7 @@ impl App {
             AppEvent::Update(event) => self.update_answered(event),
             AppEvent::Search(event) => self.search_answered(event),
             AppEvent::Queue(event) => self.queue_prepared(*event),
+            AppEvent::QueueRead(event) => self.queue_read(*event, area),
             AppEvent::Routine(event) => self.routine_event(*event),
             AppEvent::Usage(key, result) => self.usages.state.answered(key, result, Instant::now()),
             AppEvent::Breakdown { pane, pid, result } => self.breakdown_answered(pane, pid, *result),

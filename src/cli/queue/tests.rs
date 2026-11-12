@@ -76,7 +76,7 @@ fn removals_take_json_and_restore_takes_the_undo_number() {
         (&["clear-started", "--json"][..], control::Queue::ClearStarted, true),
         (&["restore", "8"][..], control::Queue::Restore(8), false),
     ] {
-        assert_eq!(request_of(action(args)).expect("queue request"), (command, json), "{args:?}");
+        assert_eq!(queue_command(action(args)).expect("queue request"), (command, json), "{args:?}");
     }
 }
 
@@ -94,8 +94,8 @@ mod routines {
         assert_eq!(request.repeat.as_deref(), Some("day 09:00"));
         assert_eq!((request.flow.as_deref(), request.cleanup), (Some("Quick"), Some(true)));
         assert_eq!(request.at, "");
-        let (pause, _) = request_of(action(&["pause", "4"])).expect("pause");
-        let (resume, _) = request_of(action(&["resume", "4"])).expect("resume");
+        let (pause, _) = queue_command(action(&["pause", "4"])).expect("pause");
+        let (resume, _) = queue_command(action(&["resume", "4"])).expect("resume");
         assert_eq!((pause, resume), (control::Queue::Pause(4), control::Queue::Resume(4)));
     }
 

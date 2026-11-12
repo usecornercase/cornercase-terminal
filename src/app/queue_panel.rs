@@ -10,11 +10,13 @@ use super::App;
 use super::notifications::{Message, MessageKind};
 use super::overlay::Overlay;
 use super::toast::{Toast, Undo};
+use crate::agents::context::Said;
 use crate::agents::launch;
 use crate::control;
 use crate::host::notify::Notification;
 use crate::issues::browser::{Browser, Queued, QueuedKind};
 use crate::project::Hierarchy;
+use crate::queue::outcome::Taken;
 use crate::queue::{self, Queue, State, Task};
 use crate::ui;
 
@@ -32,6 +34,7 @@ pub(super) struct QueueRuntime {
     pub(super) cleanups: super::routine_cleanup::Cleanups,
     removals: VecDeque<(u64, Vec<queue::Entry>)>,
     next_undo: u64,
+    pub(super) results: super::queue_results::Watching,
 }
 
 impl QueueRuntime {
@@ -150,7 +153,20 @@ impl QueueRuntime {
     pub(super) fn started(&mut self, id: u64, pane: u64) {
         if let Some(entry) = self.queue.entry_mut(id) {
             entry.state = State::Started { pane, server: control::server_token().into() };
+            entry.started = Some(crate::time::now());
         }
+    }
+
+    pub(super) fn keep_result(
+        &mut self,
+        id: u64,
+        taken: Taken,
+        said: Option<Said>,
+        at: i64,
+    ) -> Option<&queue::outcome::Outcome> {
+        let entry = self.queue.entry_mut(id)?;
+        let outcome = queue::outcome::Outcome::captured(entry.result.take(), taken, said, at);
+        Some(&*entry.result.insert(outcome))
     }
 
     pub(super) fn fail(&mut self, id: u64, reason: &str) {
@@ -223,7 +239,7 @@ impl App {
         let entry = self.panels.queued.queue.entry(*self.panels.queued.running.get(&client)?)?;
         Some(launch::Spec {
             command: entry.task.command.clone(),
-            prompt: Some(entry.task.prompt.clone()),
+            prompt: Some(queue::outcome::closing(&entry.task.prompt)),
             submit: entry.task.submit,
             trusted: false,
         })

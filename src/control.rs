@@ -28,6 +28,7 @@ pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
 pub(crate) mod pull_request;
+mod queued;
 pub(crate) mod recap;
 mod search;
 pub(crate) mod setup;
@@ -269,6 +270,7 @@ pub(crate) enum Command {
     TunnelClose(TunnelPort),
     TunnelForget(TunnelPort),
     TunnelHold(TunnelHold),
+    QueueShow(QueueShow),
     Clone(CloneRepository),
     FocusMachine(FocusMachine),
     Recap(RecapAsk),
@@ -474,6 +476,7 @@ impl Command {
             Self::TunnelClose(_) => 128,
             Self::TunnelForget(_) => 129,
             Self::TunnelHold(_) => 130,
+            Self::QueueShow(_) => 131,
             Self::Clone(_) => 117,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
@@ -618,6 +621,7 @@ impl Command {
         "tunnel-close",
         "tunnel-forget",
         "tunnel-hold",
+        "queue-show",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {
@@ -943,6 +947,8 @@ pub(crate) struct TodoItem {
     pub(crate) done: bool,
 }
 
+pub(crate) use queued::{MessageInfo, Queue, QueueAdd, QueueShow, QueueShown, ResultInfo};
+
 pub(crate) fn unknown_command(name: &str) -> String {
     format!(
         "the running cornercase server ({}) has no `{name}` command; update cornercase and restart the server",
@@ -956,39 +962,3 @@ pub(crate) fn command_name(request: &Value) -> Option<&str> {
 
 #[cfg(test)]
 pub(crate) mod tests;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "action", content = "entry", rename_all = "kebab-case")]
-pub(crate) enum Queue {
-    Add(QueueAdd),
-    Edit { id: u64, add: QueueAdd },
-    List,
-    Remove(u64),
-    Run(u64),
-    ClearStarted,
-    Restore(u64),
-    Pause(u64),
-    Resume(u64),
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct QueueAdd {
-    pub(crate) at: String,
-    pub(crate) zone: String,
-    pub(crate) agent: Option<String>,
-    pub(crate) mode: Option<String>,
-    pub(crate) project: Option<u64>,
-    pub(crate) workspace: Option<u64>,
-    pub(crate) worktree: Option<String>,
-    pub(crate) prompt: Option<String>,
-    pub(crate) issue: Option<String>,
-    pub(crate) source: Option<String>,
-    pub(crate) label: Option<String>,
-    pub(crate) submit: Option<bool>,
-    pub(crate) accounts: BTreeMap<String, String>,
-    pub(crate) repeat: Option<String>,
-    pub(crate) flow: Option<String>,
-    pub(crate) cleanup: Option<bool>,
-    pub(crate) fresh: Option<bool>,
-}

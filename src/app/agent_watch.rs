@@ -179,6 +179,7 @@ impl App {
         self.agents.stats.sample(clock, elapsed, samples);
         self.agents.stats.prune(clock);
         self.learn_conversations();
+        self.watch_queue_results();
     }
 
     fn send_notices(&mut self, notices: Vec<(NoticeKey, Vec<u64>)>) {
