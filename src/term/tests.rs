@@ -417,6 +417,77 @@ mod kill {
             std::iter::from_fn(|| rx.recv_timeout(RECV_TIMEOUT).ok()).any(|ev| matches!(ev, Event::Exited(1, 0)));
         assert!(exited, "no Exited(1) event received");
     }
+
+    #[test]
+    fn ends_a_shell_that_ignores_the_hangup() {
+        let (mut term, rx) = spawn_sh();
+        term.write(b"trap '' HUP; echo trapped-\"\"now\r");
+        wait_until("the trap is set", || contents(&mut term, &rx).contains("trapped-now"));
+        let pid = term.shell_pid().expect("pid");
+
+        term.kill();
+
+        wait_until("the shell is gone", || {
+            term.exited();
+            !crate::os::process::alive(pid)
+        });
+    }
+
+    #[test]
+    fn reaps_an_ordinary_shell_before_it_returns() {
+        let (mut term, _rx) = spawn_sh();
+        let pid = term.shell_pid().expect("pid");
+
+        term.kill();
+
+        assert!(!crate::os::process::alive(pid), "the shell is still there");
+    }
+}
+
+#[cfg(unix)]
+mod ends_within_grace {
+    use std::cell::Cell;
+
+    use super::*;
+    use crate::term::imp::ends_within_grace;
+
+    #[test]
+    fn checks_before_any_nap() {
+        let napped = Cell::new(Duration::ZERO);
+
+        let ended = ends_within_grace(|| true, |d| napped.set(napped.get() + d));
+
+        assert!(ended);
+        assert_eq!(napped.get(), Duration::ZERO);
+    }
+
+    #[test]
+    fn a_child_ending_at_the_third_check_costs_a_few_milliseconds() {
+        let checks = Cell::new(0);
+        let napped = Cell::new(Duration::ZERO);
+
+        let ended = ends_within_grace(
+            || {
+                checks.set(checks.get() + 1);
+                checks.get() == 3
+            },
+            |d| napped.set(napped.get() + d),
+        );
+
+        assert!(ended);
+        assert!(napped.get() < Duration::from_millis(10), "{:?}", napped.get());
+    }
+
+    #[test]
+    fn a_child_that_never_ends_gets_the_whole_grace() {
+        let napped = Cell::new(Duration::ZERO);
+
+        let ended = ends_within_grace(|| false, |d| napped.set(napped.get() + d));
+
+        assert!(!ended);
+        assert!(napped.get() >= Duration::from_millis(200), "{:?}", napped.get());
+        assert!(napped.get() < Duration::from_millis(300), "{:?}", napped.get());
+    }
 }
 
 #[cfg(windows)]

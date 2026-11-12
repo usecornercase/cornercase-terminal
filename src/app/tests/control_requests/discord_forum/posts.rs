@@ -69,7 +69,9 @@ impl Posting {
         let mut got = Vec::new();
         wait_until(what, || {
             drain(&mut self.agent.app, &self.agent.rx);
-            self.agent.app.refresh(Instant::now());
+            let launching = !self.agent.app.agents.launches.list().is_empty();
+            self.at = if launching { Instant::now() } else { (self.at + Duration::from_secs(3)).max(Instant::now()) };
+            self.agent.app.refresh(self.at);
             got.extend(self.orders.try_iter());
             got.iter().any(&pick)
         });

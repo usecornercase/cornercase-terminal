@@ -425,7 +425,8 @@ impl Term {
 
     pub(crate) fn kill(&mut self) {
         if !self.exited() {
-            let _ = self.child.kill();
+            let pid = self.shell_pid();
+            imp::end(self.child.as_mut(), pid);
         }
     }
 }
@@ -502,11 +503,17 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
 #[cfg(unix)]
 mod imp {
     use std::path::PathBuf;
+    use std::time::Duration;
 
-    use portable_pty::{CommandBuilder, MasterPty, PtyPair, PtySize};
+    use portable_pty::{Child, CommandBuilder, MasterPty, PtyPair, PtySize};
 
     use super::{Started, Writer};
     use crate::error::BoxError;
+    use crate::os::process::{Pid, Signal, kill_process};
+
+    const GRACE: Duration = Duration::from_millis(200);
+    const FIRST_NAP: Duration = Duration::from_millis(1);
+    const LONGEST_NAP: Duration = Duration::from_millis(50);
 
     pub(super) struct Master(Box<dyn MasterPty + Send>);
 
@@ -524,6 +531,33 @@ mod imp {
 
     pub(super) fn group_leader(master: &Master, _shell: Option<i32>) -> Option<i32> {
         master.0.process_group_leader()
+    }
+
+    pub(super) fn end(child: &mut (dyn Child + Send + Sync), pid: Option<i32>) {
+        let Some(pid) = pid.and_then(Pid::from_raw) else {
+            let _ = child.kill();
+            return;
+        };
+        let hung_up = kill_process(pid, Signal::HUP).is_ok();
+        if !hung_up || !ends_within_grace(|| child.try_wait().is_ok_and(|status| status.is_some()), std::thread::sleep)
+        {
+            let _ = kill_process(pid, Signal::KILL);
+            let _ = child.try_wait();
+        }
+    }
+
+    pub(super) fn ends_within_grace(mut ended: impl FnMut() -> bool, mut nap: impl FnMut(Duration)) -> bool {
+        let mut waited = Duration::ZERO;
+        let mut next = FIRST_NAP;
+        while !ended() {
+            if waited >= GRACE {
+                return false;
+            }
+            nap(next);
+            waited += next;
+            next = (next * 2).min(LONGEST_NAP);
+        }
+        true
     }
 
     pub(super) fn at_prompt(foreground: Option<i32>, shell: Option<i32>) -> bool {
@@ -605,6 +639,10 @@ mod imp {
         let Some(master) = shared.lock().take() else { return };
         let _ = write_to(replies, CURSOR_REPORT);
         drop(master);
+    }
+
+    pub(super) fn end(child: &mut (dyn Child + Send + Sync), _pid: Option<i32>) {
+        let _ = child.kill();
     }
 
     pub(super) fn group_leader(_master: &Master, shell: Option<i32>) -> Option<i32> {

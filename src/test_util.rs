@@ -88,14 +88,24 @@ pub(crate) struct TempDir(PathBuf);
 impl TempDir {
     pub(crate) fn new() -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("cornercase-test-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let stem = format!("cornercase-test-{}", std::process::id());
+        let dir = fresh_dir(&std::env::temp_dir(), &stem, || NEXT.fetch_add(1, Ordering::Relaxed));
         Self(canonicalize(&dir).expect("canonicalize temp dir"))
     }
 
     pub(crate) fn path(&self) -> &Path {
         &self.0
+    }
+}
+
+fn fresh_dir(base: &Path, stem: &str, mut next: impl FnMut() -> usize) -> PathBuf {
+    loop {
+        let dir = base.join(format!("{stem}-{}", next()));
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return dir,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => panic!("create temp dir: {e}"),
+        }
     }
 }
 
@@ -620,7 +630,7 @@ impl FakeHttp {
 
 pub(crate) fn free_port() -> u16 {
     static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
-    let base = 30_000 + u16::try_from(std::process::id() % 80).expect("fits") * 32;
+    let base = 30_000 + u16::try_from(std::process::id() % 2_500).expect("fits");
     loop {
         let port = base + NEXT.fetch_add(1, Ordering::SeqCst);
         if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {

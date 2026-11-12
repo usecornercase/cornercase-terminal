@@ -7,9 +7,16 @@ struct Home {
 impl Home {
     fn new() -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("cch-{}-{n}", std::process::id()));
-        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir.join("home")).expect("create the home");
+        let dir = loop {
+            let n = NEXT.fetch_add(1, Ordering::Relaxed);
+            let dir = std::env::temp_dir().join(format!("cch-{}-{n}", std::process::id()));
+            match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
+                Ok(()) => break dir,
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => panic!("create the home folder: {e}"),
+            }
+        };
+        std::fs::DirBuilder::new().mode(0o700).create(dir.join("home")).expect("create the home");
         Self { dir }
     }
 
