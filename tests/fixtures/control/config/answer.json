@@ -107,6 +107,7 @@
         "sonnet",
         "haiku"
       ],
+      "catalogue": false,
       "efforts": [
         "low",
         "medium",
@@ -116,10 +117,20 @@
       ]
     },
     {
+      "name": "opencode",
+      "title": "opencode",
+      "reads_status": true,
+      "flows": true,
+      "models": [],
+      "catalogue": true,
+      "efforts": []
+    },
+    {
       "name": "amp",
       "reads_status": false,
       "flows": false,
       "models": [],
+      "catalogue": false,
       "efforts": []
     }
   ],

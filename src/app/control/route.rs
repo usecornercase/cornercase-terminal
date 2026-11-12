@@ -233,6 +233,7 @@ impl App {
             Command::Config(config) => self.config_request(client, config),
             Command::ConfigExport(_) => self.config_export_request(),
             Command::ConfigImport(import) => self.config_import_request(&import),
+            Command::AgentModels(ask) => self.agent_models_request(client, &ask),
             Command::Theme(theme) => self.theme_request(&theme),
             Command::Go(go) => self.go_request(asker, &go),
             Command::UpdateCheck(_) => {

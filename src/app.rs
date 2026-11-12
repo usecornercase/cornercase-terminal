@@ -646,6 +646,7 @@ impl App {
             AppEvent::Usage(key, result) => self.usages.state.answered(key, result, Instant::now()),
             AppEvent::Breakdown { pane, pid, result } => self.breakdown_answered(pane, pid, *result),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
+            AppEvent::AgentModels { request, kind, read } => self.agent_models_read(request, kind, read),
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Ports(event) => self.ports_answered(event),

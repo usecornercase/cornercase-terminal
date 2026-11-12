@@ -69,6 +69,7 @@ pub(super) struct AgentRuntime {
     pub(super) launches: Launches,
     claude_dir: Option<PathBuf>,
     vibe_dir: Option<PathBuf>,
+    catalogue: Option<fn() -> Vec<String>>,
     watched: Option<Instant>,
     pub(super) awake: Awake,
     pub(super) stats: agents::stats::Stats,
@@ -83,6 +84,7 @@ impl AgentRuntime {
             launches: Launches::default(),
             claude_dir: agents::claude::claude_dir(home),
             vibe_dir: None,
+            catalogue: None,
             watched: None,
             awake: Awake::new(awake::tools()),
             stats: agents::stats::Stats::new(SystemTime::now()),
@@ -100,6 +102,15 @@ impl AgentRuntime {
     #[cfg(unix)]
     pub(super) fn set_claude_dir(&mut self, dir: &Path) {
         self.claude_dir = Some(dir.to_path_buf());
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_catalogue(&mut self, read: fn() -> Vec<String>) {
+        self.catalogue = Some(read);
+    }
+
+    pub(super) fn catalogue_of(&self, kind: Known) -> Option<fn() -> Vec<String>> {
+        kind.catalogue().map(|own| self.catalogue.unwrap_or(own))
     }
 
     #[cfg(test)]

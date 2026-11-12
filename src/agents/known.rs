@@ -203,6 +203,10 @@ impl Known {
         }
     }
 
+    pub(crate) fn offered_models(self, read: Vec<String>) -> Vec<String> {
+        self.models().iter().map(|model| (*model).to_string()).chain(read).collect()
+    }
+
     pub(crate) fn status_by_folder(self) -> bool {
         match self {
             Self::Claude => claude::STATUS_BY_FOLDER,

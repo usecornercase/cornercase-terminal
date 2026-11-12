@@ -63,6 +63,7 @@ mod describing {
             "tunnels",
             "tunnels-remembered",
             "tunnel-hold",
+            "agent-models",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();
@@ -249,6 +250,7 @@ mod finding_unknown_fields {
     #[case::flow_import(json!({"command": "flow-import", "args": {"text": "name = 'x'", "place": "yours",
         "replace": true}}))]
     #[case::search(json!({"command": "search", "args": {"query": "token"}}))]
+    #[case::agent_models(json!({"command": "agent-models", "args": {"agent": "opencode"}}))]
     #[case::contract(json!({"contract": 1, "command": "contract", "args": {}}))]
     #[case::watch(json!({"contract": 1, "boot": "1-2", "command": "watch", "args": {}}))]
     fn a_request_the_server_knows_has_none(#[case] raw: Value) {
@@ -279,6 +281,7 @@ mod finding_unknown_fields {
     #[case::focus(json!({"command": "focus", "args": {"item": {"tab": 2}}}))]
     #[case::queue_list(json!({"command": "queue", "args": {"action": "list"}}))]
     #[case::flow_run(json!({"command": "flow-run", "args": {"name": "Quick", "prompt": "go"}}))]
+    #[case::agent_models(json!({"command": "agent-models", "args": {"agent": "opencode"}}))]
     #[case::contract(json!({"command": "contract", "args": {}}))]
     #[case::watch(json!({"command": "watch", "args": {}}))]
     fn an_extra_argument_is_named(#[case] raw: Value) {

@@ -80,6 +80,7 @@ const OPERATIONS: &[&str] = &[
     "files-search",
     "paste-file",
     "config-pair",
+    "agent-models",
 ];
 
 fn assert_operations(contract: &Value) {

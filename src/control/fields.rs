@@ -218,6 +218,7 @@ impl Command {
             | Self::ConfigExport(_) => {}
             Self::Config(config) => config.fields(fields),
             Self::ConfigImport(import) => import.fields(fields),
+            Self::AgentModels(ask) => ask.fields(fields),
             Self::Theme(theme) => theme.fields(fields),
             Self::RestartWhenIdle(restart) => {
                 fields.maybe("timeout", restart.timeout);

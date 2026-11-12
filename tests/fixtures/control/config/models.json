@@ -1,0 +1,7 @@
+{
+  "agent": "opencode",
+  "models": [
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v4-pro"
+  ]
+}

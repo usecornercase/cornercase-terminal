@@ -1,21 +1,49 @@
 use std::path::{Path, PathBuf};
 
-use super::{Handled, Pending, Stage, json, malformed};
+use super::{Asker, Handled, Pending, Stage, json, malformed};
+use crate::agents::Known;
 use crate::app::App;
+use crate::app::event::AppEvent;
 use crate::config::{self, Config, ProjectSettings};
 use crate::control::Done;
 use crate::control::config::{
-    ConfigImport, Configure, Described, ProjectChange, ProjectEntry, SecretChange, SettingsFound,
+    AgentModels, AgentModelsInfo, ConfigImport, Configure, Described, ProjectChange, ProjectEntry, SecretChange,
+    SettingsFound,
 };
 use crate::control::contract::{Code, Refusal};
 use crate::error::Error;
 use crate::git;
 use crate::issues::{Account, Secret, Source};
+use crate::log::{Job, Level};
 use crate::os::fs::canonical;
 use crate::project::Hierarchy;
 use crate::settings::share::{self, Section};
 use crate::settings::{Action, Page, Refused};
 use crate::text;
+
+impl App {
+    pub(super) fn agent_models_request(&mut self, client: u64, ask: &AgentModels) -> Handled {
+        let agent = self
+            .agent_kind(Asker::default(), Some(ask.agent.clone()))
+            .map_err(|why| Refusal::new(Code::NotFound, why))?;
+        let Some(kind) = Known::of(&agent).filter(|kind| kind.catalogue().is_some()) else {
+            let models = Known::of(&agent).map(|kind| kind.offered_models(Vec::new())).unwrap_or_default();
+            return Ok(Some(json(&AgentModelsInfo { agent, models })));
+        };
+        let key = self.clients.requests.key();
+        let job = Job::new(Level::Debug, "control", "agent models");
+        self.read_catalogue(kind, job, move |read| AppEvent::AgentModels { request: key, kind, read });
+        self.pend_reading(client, key);
+        Ok(None)
+    }
+
+    pub(in crate::app) fn agent_models_read(&mut self, key: u64, kind: Known, read: crate::error::Result<Vec<String>>) {
+        self.answer_read(key, |_| {
+            let read = read.map_err(|e| failed(format!("cannot read the models {} keeps: {e}", kind.title())))?;
+            Ok(json(&AgentModelsInfo { agent: kind.name().to_string(), models: kind.offered_models(read) }))
+        });
+    }
+}
 
 impl From<Refused> for Refusal {
     fn from(refused: Refused) -> Self {

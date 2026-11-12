@@ -15,6 +15,18 @@ fn only_opencode_finds_its_status_by_its_folder() {
 }
 
 #[test]
+fn only_opencode_keeps_a_catalogue() {
+    let kept: Vec<Known> = Known::ALL.into_iter().filter(|kind| kind.catalogue().is_some()).collect();
+    assert_eq!(kept, [Known::Opencode]);
+}
+
+#[test]
+fn the_models_offered_are_the_agent_s_own_then_what_its_catalogue_read() {
+    assert_eq!(Known::Claude.offered_models(vec!["x".into()]), ["opus", "sonnet", "haiku", "x"]);
+    assert_eq!(Known::Opencode.offered_models(vec!["deepseek/deepseek-v4-pro".into()]), ["deepseek/deepseek-v4-pro"]);
+}
+
+#[test]
 fn codex_gemini_and_opencode_find_their_records_by_their_folder() {
     let by_folder: Vec<Known> = Known::ALL.into_iter().filter(|kind| kind.record_by_folder()).collect();
     assert_eq!(by_folder, [Known::Codex, Known::Gemini, Known::Opencode]);

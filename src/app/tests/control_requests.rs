@@ -622,6 +622,7 @@ fn reacted(message: i64) -> impl Fn(&Order) -> bool {
 mod account_home;
 mod account_login;
 mod accounts;
+mod agent_models;
 mod agents;
 mod arranging;
 mod build_folders;
