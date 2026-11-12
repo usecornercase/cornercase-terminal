@@ -1,49 +1,29 @@
-use super::routine_panel::opened;
+use super::queue_results::{RESULT, STARTED, gone, keep, opened, shop};
+use crossterm::event::Event;
+
 use super::*;
-use crate::agents::context::{Pointer, Said};
-use crate::control::server_token;
-use crate::queue::outcome::{Pull, Taken};
+use crate::agents::context::Pointer;
+use crate::issues::browser::Tab as IssueTab;
+use crate::queue::outcome::Taken;
+use crate::queue::{Place, State as QueueState, Task};
+use crate::test_util::TempDir;
 use crate::ui::Overlay as View;
 
-const STARTED: i64 = 1_794_474_000;
-const RESULT: i64 = 1_794_476_460;
-
-fn shop(app: &App) -> Task {
-    let place = Place {
-        project: "/work/shop".into(),
-        branch: Some("routine/review-the-open-pull-requests".into()),
-        ..Place::default()
-    };
-    Task { label: "Review the open pull requests".into(), place, ..task(app, STARTED, None) }
-}
-
-fn gone(app: &mut App) -> u64 {
-    let id = app.panels.queued.schedule(None, shop(app)).expect("entry");
-    app.panels.queued.started_at(id, 999, STARTED);
-    id
-}
-
-fn keep(app: &mut App, id: u64, text: &str, record: Option<Pointer>) {
-    let pull = Pull {
-        number: 482,
-        title: "Fix the login".into(),
-        state: "open".into(),
-        checks: Some("passing".into()),
-        ..Pull::default()
-    };
-    let taken = Taken {
-        agent: Some("claude".into()),
-        record,
-        branch: Some("routine/review-the-open-pull-requests".into()),
-        pull_request: Some(pull),
-    };
-    let said = Some(Said { text: text.into(), written: Some("2026-11-12T09:41:00.000Z".into()) });
-    app.panels.queued.keep_result(id, taken, said, RESULT);
+fn key(app: &mut App, code: KeyCode) {
+    app.handle_event(AppEvent::Input(Event::Key(KeyEvent::new(code, KeyModifiers::NONE))), AREA).expect("handle key");
 }
 
 fn open_row(app: &mut App) {
     app.sync_queued();
-    click(app, queue_row(0));
+    let list = ui::issues_list(ui::issues_area(AREA));
+    click(app, Position::new(list.x + 2, list.y));
+}
+
+fn click_entry(app: &mut App, id: u64) {
+    app.sync_queued();
+    let row = app.panels.queued.queue().entries.iter().position(|entry| entry.id == id).expect("row");
+    let list = ui::issues_list(ui::issues_area(AREA));
+    click(app, Position::new(list.x + 2, list.y + u16::try_from(row).expect("row")));
 }
 
 fn update(app: &App) -> ui::Update {
@@ -72,8 +52,8 @@ fn enter_on_an_entry_whose_pane_is_gone_opens_its_detail_and_esc_goes_back_to_th
 
     open_row(&mut app);
 
-    assert!(matches!(app.overlay, Some(Overlay::QueueEntry(_))));
-    send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(matches!(app.overlay, Some(Overlay::QueueResult(_))));
+    key(&mut app, KeyCode::Esc);
     assert!(back_on_the_queue_tab(&app));
 }
 
@@ -96,7 +76,7 @@ fn a_click_outside_and_done_go_back_too() {
 #[test]
 fn a_failed_run_opens_its_detail_and_a_failed_one_off_entry_its_form() {
     let (mut app, _rx, _dirs) = opened();
-    let one_off = app.panels.queued.schedule(None, shop(&app)).expect("entry");
+    let one_off = app.panels.queued.schedule(None, shop()).expect("entry");
     app.panels.queued.set_state(one_off, QueueState::Failed { reason: "no room".into() });
 
     open_row(&mut app);
@@ -118,10 +98,10 @@ fn the_wheel_and_the_arrows_scroll_a_long_result() {
 
     mouse(&mut app, MouseEventKind::ScrollDown, inside);
     let wheeled = update(&app).scroll;
-    send_key(&mut app, KeyCode::Down, KeyModifiers::NONE);
+    key(&mut app, KeyCode::Down);
     let arrowed = update(&app).scroll;
     for _ in 0..200 {
-        send_key(&mut app, KeyCode::Down, KeyModifiers::NONE);
+        key(&mut app, KeyCode::Down);
     }
     let furthest = update(&app).scroll;
 
@@ -147,18 +127,16 @@ fn transcript(dir: &Path) -> Pointer {
 fn conversation_reads_the_record_and_result_comes_back() {
     let (mut app, rx, dirs) = opened();
     let id = gone(&mut app);
-    keep(&mut app, id, "Reviewed #480 and #482.", Some(transcript(dirs[1].path())));
+    keep(&mut app, id, "Reviewed #480 and #482.", Some(transcript(dirs[0].path())));
     open_row(&mut app);
     assert_eq!(update(&app).extra, Some("conversation"));
 
-    let extra = ui::update_extra(AREA, "copy", "done", "conversation");
-    click(&mut app, extra.as_position());
+    click(&mut app, ui::update_extra(AREA, "copy", "done", "conversation").as_position());
     assert!(matches!(update(&app).note, Some(ui::Note::Busy(_))));
     refreshing(&mut app, &rx, "the conversation shows", |app| update(app).note.is_none());
 
     let shown = lines(&app);
-    assert!(shown.contains("prompt · 2026-11-12 09:41") || shown.contains("prompt"), "{shown}");
-    assert!(shown.contains("review them") && shown.contains("Reviewed #480 and #482."), "{shown}");
+    assert!(shown.starts_with("prompt\nreview them\n\nreply · 2026-11-12 09:41\nReviewed #480 and #482."), "{shown}");
     assert_eq!(update(&app).extra, Some("result"));
     click(&mut app, ui::update_extra(AREA, "copy", "done", "result").as_position());
     assert!(lines(&app).contains("agent     claude"), "{}", lines(&app));
@@ -168,8 +146,7 @@ fn conversation_reads_the_record_and_result_comes_back() {
 fn a_gone_record_offers_no_conversation_and_says_why() {
     let (mut app, _rx, dirs) = opened();
     let id = gone(&mut app);
-    let record = Pointer::Claude(dirs[1].path().join("missing.jsonl"));
-    keep(&mut app, id, "Reviewed #480.", Some(record));
+    keep(&mut app, id, "Reviewed #480.", Some(Pointer::Claude(dirs[0].path().join("missing.jsonl"))));
 
     open_row(&mut app);
 
@@ -178,27 +155,48 @@ fn a_gone_record_offers_no_conversation_and_says_why() {
 }
 
 #[test]
-fn copy_copies_the_result_and_keeps_the_detail_open() {
+fn copy_copies_what_is_shown_and_keeps_the_detail_open() {
     let (mut app, _rx, _dirs) = opened();
     let id = gone(&mut app);
     keep(&mut app, id, "Reviewed #480.", None);
     open_row(&mut app);
-
     let [copy, _] = ui::update_buttons(AREA, "copy", "done");
+
     click(&mut app, copy.as_position());
 
-    assert_eq!(app.take_host_writes(), [clipboard::osc52("Reviewed #480.")]);
-    assert!(matches!(app.overlay, Some(Overlay::QueueEntry(_))));
+    let writes = app.take_host_writes();
+    let expected = lines(&app).trim_end().to_string();
+    assert_eq!(writes, [clipboard::osc52(&expected)]);
+    assert!(expected.contains("Reviewed #480.") && expected.contains("branch"), "{expected}");
+    assert!(matches!(app.overlay, Some(Overlay::QueueResult(_))));
 }
 
 #[test]
-fn the_detail_closes_when_its_entry_is_removed() {
+fn copy_on_a_run_with_no_message_copies_what_the_dialog_says() {
+    let (mut app, _rx, _dirs) = opened();
+    let routine = Task { repeat: crate::queue::repeat::Repeat::parse("2h", "UTC", STARTED).ok(), ..shop() };
+    let routine = app.panels.queued.schedule(None, routine).expect("routine");
+    let run = app.panels.queued.run_now(routine, STARTED).expect("run");
+    app.panels.queued.set_state(run, QueueState::Failed { reason: "the folder is gone".into() });
+    click_entry(&mut app, run);
+    let [copy, _] = ui::update_buttons(AREA, "copy", "done");
+
+    click(&mut app, copy.as_position());
+
+    let writes = app.take_host_writes();
+    assert_eq!(writes.len(), 1);
+    assert!(lines(&app).contains("it did not start: the folder is gone"));
+    assert_eq!(writes, [clipboard::osc52(lines(&app).trim_end())]);
+}
+
+#[test]
+fn the_detail_closes_when_its_entry_goes_on_the_next_refresh() {
     let (mut app, _rx, _dirs) = opened();
     let id = gone(&mut app);
     open_row(&mut app);
 
     app.panels.queued.remove(id).expect("removed");
-    app.close_gone_queue_detail();
+    app.refresh(Instant::now());
 
     assert!(matches!(app.overlay, Some(Overlay::Issues(_))));
 }
@@ -217,14 +215,14 @@ fn the_hint_says_what_enter_does() {
 mod pictures {
     use super::*;
 
-    fn pictured() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+    fn picture(app: &mut App) -> String {
+        format!("{}", render(app, AREA).backend())
+    }
+
+    fn pictured() -> (App, Receiver<AppEvent>, [TempDir; 2]) {
         let (mut app, rx, dirs) = opened();
         app.set_queue_zone("UTC".into());
         (app, rx, dirs)
-    }
-
-    fn picture(app: &mut App) -> String {
-        format!("{}", render(app, AREA).backend())
     }
 
     #[test]
@@ -250,16 +248,14 @@ mod pictures {
     #[test]
     fn the_detail_of_a_failed_run() {
         let (mut app, _rx, _dirs) = pictured();
-        let routine = {
-            let repeat = queue::repeat::Repeat::parse("day 09:00", "UTC", STARTED).expect("repeat");
-            let task = Task { repeat: Some(repeat), ..shop(&app) };
-            app.panels.queued.schedule(None, task).expect("routine")
-        };
+        let repeat = crate::queue::repeat::Repeat::parse("day 09:00", "UTC", STARTED).expect("repeat");
+        let routine = app.panels.queued.schedule(None, Task { repeat: Some(repeat), ..shop() }).expect("routine");
         let run = app.panels.queued.run_now(routine, STARTED).expect("run");
         app.panels.queued.set_state(run, QueueState::Failed { reason: "the project folder is gone".into() });
         app.sync_queued();
         let row = app.panels.queued.queue().entries.iter().position(|entry| entry.id == run).expect("row");
-        click(&mut app, queue_row(u16::try_from(row).expect("row")));
+        let list = ui::issues_list(ui::issues_area(AREA));
+        click(&mut app, Position::new(list.x + 2, list.y + u16::try_from(row).expect("row")));
         insta::assert_snapshot!(picture(&mut app));
     }
 
@@ -267,20 +263,35 @@ mod pictures {
     fn the_conversation_of_a_run() {
         let (mut app, rx, dirs) = pictured();
         let id = gone(&mut app);
-        keep(&mut app, id, "Reviewed #480 and #482.", Some(transcript(dirs[1].path())));
+        keep(&mut app, id, "Reviewed #480 and #482.", Some(transcript(dirs[0].path())));
         open_row(&mut app);
         click(&mut app, ui::update_extra(AREA, "copy", "done", "conversation").as_position());
         refreshing(&mut app, &rx, "the conversation shows", |app| update(app).note.is_none());
         insta::assert_snapshot!(picture(&mut app));
     }
-}
 
-#[test]
-fn the_server_token_marks_an_entry_as_this_servers() {
-    let (mut app, _rx, _dirs) = opened();
-    let id = gone(&mut app);
-
-    let state = &app.panels.queued.queue().entry(id).expect("entry").state;
-
-    assert!(matches!(state, QueueState::Started { server, .. } if server == server_token()));
+    #[test]
+    fn a_long_label_and_a_long_pull_request_title_keep_the_state_and_wrap_the_facts() {
+        let (mut app, _rx, _dirs) = pictured();
+        let place = Place {
+            project: "/work/shop".into(),
+            branch: Some("routine/review-20261112-0900".into()),
+            ..Place::default()
+        };
+        let label = "Review every open pull request of the shop, comment on the ones that need a rebase and tell me which ones wait";
+        let task = Task { label: label.into(), place, ..shop() };
+        let id = app.panels.queued.schedule(None, task).expect("entry");
+        app.panels.queued.started_at(id, 999, STARTED);
+        let pull = crate::queue::outcome::Pull {
+            number: 482,
+            title: "Fix the login form so that a password with a trailing space is accepted again".into(),
+            state: "open".into(),
+            checks: Some("passing".into()),
+            ..Default::default()
+        };
+        let taken = Taken { agent: Some("claude".into()), pull_request: Some(pull), ..Taken::default() };
+        app.panels.queued.keep_result(id, taken, None, RESULT);
+        open_row(&mut app);
+        insta::assert_snapshot!(picture(&mut app));
+    }
 }

@@ -1,5 +1,5 @@
 use super::{Handled, Stage, Waits};
-use crate::agents::context::{Pointer, Role};
+use crate::agents::context::Pointer;
 use crate::app::App;
 use crate::app::control::json;
 use crate::control::contract::{Code, Refusal};
@@ -23,11 +23,12 @@ fn result_info(outcome: &Outcome, conversation: bool) -> ResultInfo {
 }
 
 fn message_info(message: &Message) -> MessageInfo {
-    let role = match message.role {
-        Role::Prompt => "prompt",
-        Role::Reply => "reply",
-    };
-    MessageInfo { role: role.into(), text: message.text.clone(), written: message.written.clone(), cut: message.cut }
+    MessageInfo {
+        role: message.role.name().into(),
+        text: message.text.clone(),
+        written: message.written.clone(),
+        cut: message.cut,
+    }
 }
 
 impl App {

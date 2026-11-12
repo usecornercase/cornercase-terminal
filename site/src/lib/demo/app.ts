@@ -3990,7 +3990,7 @@ export class App {
     const selected = Math.min(o.selected, Math.max(0, shown.length - 1));
     const sel = shown[selected];
     const opens = sel?.state === 'started' || sel?.state === 'kept';
-    const hint = !sel ? QUEUE_EVERY : sel.repeat ? 'enter edits it · start now runs it once more' : sel.routine ? `${opens ? 'enter opens its pane' : ''}${opens ? ' · ' : ''}a run of a routine${opens ? '' : ` · ${QUEUE_EVERY}`}` : sel.state === 'started' ? `enter opens its pane · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
+    const hint = !sel ? QUEUE_EVERY : sel.repeat ? 'enter edits it · start now runs it once more' : sel.routine ? (opens ? 'enter opens its pane · a run of a routine' : sel.state === 'pending' ? `a run of a routine · ${QUEUE_EVERY}` : 'enter shows its result · a run of a routine') : sel.state === 'started' ? `enter opens its pane · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
     const runnable = !!sel && (sel.repeat ? true : !sel.routine && sel.state !== 'started');
     const clearable = (entry: QueueEntry) => !entry.repeat && (entry.routine ? entry.state !== 'pending' : entry.state === 'started');
     const buttons = [

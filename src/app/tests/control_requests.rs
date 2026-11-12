@@ -676,6 +676,7 @@ mod ports;
 mod processes;
 mod pull_request;
 mod queue;
+mod queue_show;
 mod recap;
 #[cfg(unix)]
 mod repos;

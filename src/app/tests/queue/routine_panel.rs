@@ -2,7 +2,7 @@ use super::routines::runs;
 use super::*;
 use crate::queue::repeat::Repeat;
 
-pub(super) fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, repo, config, worktrees) = queued_app();
     queue_tab(&mut app);
     (app, rx, vec![repo, config, worktrees])
@@ -108,7 +108,7 @@ fn a_failed_run_opens_its_detail_and_no_form() {
     app.sync_queued();
     let rows = app.panels.queued.queue().entries.iter().position(|entry| entry.id == run).expect("row");
     click(&mut app, queue_row(u16::try_from(rows).expect("row")));
-    assert!(matches!(app.overlay, Some(Overlay::QueueEntry(_))));
+    assert!(matches!(app.overlay, Some(Overlay::QueueResult(_))));
 }
 
 mod the_form {

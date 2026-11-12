@@ -768,6 +768,8 @@ mod path_links;
 mod pull_request_stacks;
 mod pull_requests;
 mod queue;
+mod queue_result_dialog;
+mod queue_results;
 mod recap_panel;
 mod remote_access;
 mod restarting;

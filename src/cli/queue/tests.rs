@@ -10,6 +10,13 @@ fn action(args: &[&str]) -> QueueAction {
     queue.action
 }
 
+fn queue_command(action: QueueAction) -> Result<(control::Queue, bool)> {
+    match request_of(action)? {
+        Asked::Queue(command, json) => Ok((*command, json)),
+        Asked::Show(..) => panic!("not a queue command"),
+    }
+}
+
 #[test]
 fn adding_without_a_time_or_a_prompt_is_wrong_usage_before_asking_the_server() {
     for args in [&["add", "--prompt", "fix it"][..], &["add", "--at", "in 2h"]] {

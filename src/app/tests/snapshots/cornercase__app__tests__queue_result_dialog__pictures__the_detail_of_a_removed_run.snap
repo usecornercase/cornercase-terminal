@@ -1,21 +1,21 @@
 ---
-source: src/app/tests/queue/detail.rs
+source: src/app/tests/queue_result_dialog.rs
 expression: picture(&mut app)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "              ╭─ Result ─────────────────────────────────────────────────────────────╮              "
 " Projects     │ Review the open pull requests                                        │              "
-"              │ started · pane closed · fake · shop ›                                │              "
-"▌ cornercase-t│ routine/review-the-open-pull-requests                                │              "
+"              │ removed · fake · shop › routine/review-the-open-pull-requests        │              "
+"▌ cornercase-t│                                                                      │              "
 "              │                                                                      │              "
 "  + New       │ started   2026-11-12 09:00                                           │              "
 "              │ result    2026-11-12 09:41                                           │              "
-"              │ agent     fake                                                       │              "
-"              │ branch    feat/x                                                     │              "
+"              │ agent     claude                                                     │              "
+"              │ branch    routine/review-the-open-pull-requests                      │              "
+"              │ pull      #482 Fix the login · open · checks passing                 │              "
 "              │                                                                      │              "
-"              │ fake keeps no record cornercase can read, so its result is the       │              "
-"              │ branch and pull request only                                         │              "
-"              │                                                                      │              "
+"              │ Reviewed #480 and #482. #482 needed a rebase; done.                  │              "
+"              │ Left: #479 waits on a reply.                                         │              "
 "              │                                                                      │              "
 "              │                                                                      │              "
 "              │                                                                      │              "

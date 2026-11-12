@@ -419,8 +419,8 @@ impl App {
                 self.overlay = None;
                 self.focus_queued(pane, area);
             }
-            State::Started { .. } | State::Kept { .. } | State::Removed => self.open_queue_detail(id),
-            State::Failed { .. } | State::Missed if entry.is_run() => self.open_queue_detail(id),
+            State::Started { .. } | State::Kept { .. } | State::Removed => self.open_queue_result_dialog(id),
+            State::Failed { .. } | State::Missed if entry.is_run() => self.open_queue_result_dialog(id),
             State::Starting => {}
             _ if entry.is_run() => {}
             _ => self.new_queue_form(Some(id)),

@@ -1,21 +1,21 @@
 ---
-source: src/app/tests/queue/detail.rs
+source: src/app/tests/queue_result_dialog.rs
 expression: picture(&mut app)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "              ╭─ Result ─────────────────────────────────────────────────────────────╮              "
-" Projects     │ Review the open pull requests                                        │              "
-"              │ failed · the project folder is gone · fake · shop                    │              "
+" Projects     │ Review every open pull request of the shop, comment on the ones tha… │              "
+"              │ started · pane closed · fake · shop › routine/review-20261112-0900   │              "
 "▌ cornercase-t│                                                                      │              "
 "              │                                                                      │              "
-"  + New       │ scheduled 2026-11-12 09:00                                           │              "
-"              │ agent     fake                                                       │              "
+"  + New       │ started   2026-11-12 09:00                                           │              "
+"              │ result    2026-11-12 09:41                                           │              "
+"              │ agent     claude                                                     │              "
+"              │ branch    routine/review-20261112-0900                               │              "
+"              │ pull      #482 Fix the login form so that a password with a          │              "
+"              │           trailing space is accepted again · open · checks passing   │              "
 "              │                                                                      │              "
-"              │ it did not start: the project folder is gone                         │              "
-"              │                                                                      │              "
-"              │                                                                      │              "
-"              │                                                                      │              "
-"              │                                                                      │              "
+"              │ claude's record was not found when its result was kept               │              "
 "              │                                                                      │              "
 "              │                                                                      │              "
 "              │                                                                      │              "

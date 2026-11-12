@@ -29,6 +29,11 @@ impl Watching {
         self.last.remove(&entry);
     }
 
+    #[cfg(test)]
+    pub(super) fn watches(&self, entry: u64) -> bool {
+        self.seen.contains_key(&entry)
+    }
+
     fn retain(&mut self, watched: &HashSet<u64>) {
         self.seen.retain(|entry, _| watched.contains(entry));
         self.last.retain(|entry| watched.contains(entry));
@@ -82,9 +87,18 @@ pub(crate) enum Reader {
 }
 
 #[derive(Debug)]
-pub(crate) enum QueueRead {
+pub(crate) enum QueueResultEvent {
     Captured { entry: u64, generation: u64, taken: Taken, read: Result<Option<Said>> },
     Conversation { entry: u64, to: Reader, result: Result<Talk> },
+}
+
+impl QueueResultEvent {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Self::Captured { .. } => "queue result",
+            Self::Conversation { .. } => "queue conversation",
+        }
+    }
 }
 
 fn pull_of(pull: &PullRequest) -> Pull {
@@ -195,7 +209,9 @@ impl App {
         self.spawn_job(
             job,
             move || record.last_message(),
-            move |read, _| Some(AppEvent::QueueRead(Box::new(QueueRead::Captured { entry, generation, taken, read }))),
+            move |read, _| {
+                Some(AppEvent::QueueResult(Box::new(QueueResultEvent::Captured { entry, generation, taken, read })))
+            },
         );
     }
 
@@ -230,20 +246,20 @@ impl App {
             move || queue::conversation::read(&record),
             move |result, job| {
                 job.note("messages", result.as_ref().map_or(0, |talk| talk.messages.len()));
-                Some(AppEvent::QueueRead(Box::new(QueueRead::Conversation { entry, to, result })))
+                Some(AppEvent::QueueResult(Box::new(QueueResultEvent::Conversation { entry, to, result })))
             },
         );
     }
 
-    pub(super) fn queue_read(&mut self, event: QueueRead, area: Rect) {
+    pub(super) fn queue_result_event(&mut self, event: QueueResultEvent, area: Rect) {
         match event {
-            QueueRead::Captured { entry, generation, taken, read } => {
+            QueueResultEvent::Captured { entry, generation, taken, read } => {
                 self.queue_captured(entry, generation, taken, read);
             }
-            QueueRead::Conversation { entry, to: Reader::Request(key), result } => {
+            QueueResultEvent::Conversation { entry, to: Reader::Request(key), result } => {
                 self.queue_conversation_answered(key, entry, result);
             }
-            QueueRead::Conversation { entry, to: Reader::Window, result } => {
+            QueueResultEvent::Conversation { entry, to: Reader::Window, result } => {
                 self.queue_conversation_shown(entry, result, area);
             }
         }

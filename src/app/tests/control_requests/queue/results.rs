@@ -207,5 +207,6 @@ fn an_entry_of_another_server_is_not_watched() {
     agent.refreshing("the turn ends", |a| pane_status(a, pane) != Some(activity::Status::Working));
     drain(&mut agent.app, &agent.rx);
 
+    assert!(!agent.app.panels.queued.results.watches(id));
     assert_eq!(text_of(&agent.app, id), "");
 }

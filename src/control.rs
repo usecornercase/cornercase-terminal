@@ -85,6 +85,7 @@ pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun}
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
 pub(crate) use pull_request::{PullRequestAnswer, PullRequestRead};
+pub(crate) use queued::{MessageInfo, Queue, QueueAdd, QueueShow, QueueShown, ResultInfo};
 pub(crate) use recap::{RecapAsk, RecapInfo};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use setup::RunSetup;
@@ -406,6 +407,7 @@ impl Command {
             Self::IssueRead(_) => 56,
             Self::IssuePeople(_) => 57,
             Self::Queue(_) => 22,
+            Self::QueueShow(_) => 131,
             _ => return None,
         })
     }
@@ -476,7 +478,6 @@ impl Command {
             Self::TunnelClose(_) => 128,
             Self::TunnelForget(_) => 129,
             Self::TunnelHold(_) => 130,
-            Self::QueueShow(_) => 131,
             Self::Clone(_) => 117,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
@@ -946,8 +947,6 @@ pub(crate) struct TodoItem {
     pub(crate) text: String,
     pub(crate) done: bool,
 }
-
-pub(crate) use queued::{MessageInfo, Queue, QueueAdd, QueueShow, QueueShown, ResultInfo};
 
 pub(crate) fn unknown_command(name: &str) -> String {
     format!(

@@ -32,7 +32,7 @@ pub(crate) struct Outcome {
     pub(crate) written: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) agent: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "known_record")]
     pub(crate) record: Option<Pointer>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) branch: Option<String>,
@@ -46,6 +46,17 @@ pub(crate) struct Taken {
     pub(crate) record: Option<Pointer>,
     pub(crate) branch: Option<String>,
     pub(crate) pull_request: Option<Pull>,
+}
+
+fn known_record<'de, D: serde::Deserializer<'de>>(from: D) -> Result<Option<Pointer>, D::Error> {
+    let value = Option::<serde_json::Value>::deserialize(from)?;
+    Ok(value.and_then(|value| Pointer::deserialize(value).ok()))
+}
+
+impl Outcome {
+    pub(crate) fn without_record(&self) -> Self {
+        Self { record: None, ..self.clone() }
+    }
 }
 
 pub(crate) fn cap(text: &str) -> (String, bool) {

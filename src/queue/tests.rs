@@ -448,6 +448,23 @@ mod results {
     }
 
     #[test]
+    fn an_agent_kind_this_release_does_not_know_leaves_the_queue_whole() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        let mut queue = Queue::default();
+        let id = finished(&mut queue);
+        let mut value = serde_json::to_value(queue.saved()).expect("serialize");
+        value["entries"][0]["result"]["record"] = serde_json::json!({"newagent": "/x"});
+        std::fs::write(&path, value.to_string()).expect("write");
+
+        let restored = load(&path, 0);
+
+        let entry = restored.entry(id).expect("the entry stays");
+        let result = entry.result.as_ref().expect("its result stays");
+        assert_eq!((result.record.clone(), result.text.as_str()), (None, "Reviewed it."));
+    }
+
+    #[test]
     fn restoring_a_removal_brings_the_result_back() {
         let mut queue = Queue::default();
         let id = finished(&mut queue);

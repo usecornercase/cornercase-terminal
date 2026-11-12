@@ -823,7 +823,5 @@ mod modes {
 
 mod accounts;
 mod cleanup;
-mod detail;
-mod results;
 mod routine_panel;
 mod routines;

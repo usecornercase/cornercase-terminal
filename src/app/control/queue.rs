@@ -48,7 +48,7 @@ impl App {
     }
 
     fn queue_removal(&mut self, entries: Vec<queue::Entry>) -> serde_json::Value {
-        let mut value = json!({ "entries": entries });
+        let mut value = json!({ "entries": answered(&entries) });
         if let Some(undo) = self.panels.queued.keep_removed(entries) {
             value["undo"] = json!(undo);
         }
@@ -65,7 +65,7 @@ impl App {
                 ),
             )
         })?;
-        let value = json!({ "entries": entries });
+        let value = json!({ "entries": answered(&entries) });
         self.panels.queued.restore(entries);
         Ok(Some(value))
     }
@@ -337,6 +337,15 @@ pub(super) fn reset_time(report: &usage::Report, now: i64) -> Result<i64, String
         .ok_or_else(|| {
             "the plan probe returned no future reset for its 5-hour window; choose a clock time instead".into()
         })
+}
+
+fn answered(entries: &[queue::Entry]) -> Vec<queue::Entry> {
+    let strip = |entry: &queue::Entry| queue::Entry {
+        started: entry.started,
+        result: entry.result.as_ref().map(queue::outcome::Outcome::without_record),
+        ..queue::Entry::new(entry.id, entry.task.clone(), entry.state.clone())
+    };
+    entries.iter().map(strip).collect()
 }
 
 #[cfg(test)]
