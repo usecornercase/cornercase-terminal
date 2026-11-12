@@ -21,7 +21,8 @@ expand, account restart, context) exits with 4 when it names another run of the 
 then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
-updates it as one JSON line.
+updates it as one JSON line. `update` exits with 6 when this cornercase cannot replace itself, after printing the command
+to run instead.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
@@ -645,9 +646,18 @@ pub(super) const UPDATE_HELP: &str =
     "With --when-idle, it installs the release at once, then restarts the server on it once no agent
 is working, as `cornercase restart --when-idle` does. With --remote DESTINATION it runs on that machine, through ssh.
 
+When this cornercase cannot replace itself (Homebrew installed it, its folder cannot be written, an unknown platform), it
+changes nothing, prints the command to run instead and exits with 6; --check exits with 0 whatever it finds. --json prints
+one line of JSON instead, asks nothing and never restarts the server (run `cornercase restart` after it):
+{\"outcome\": \"updated\", \"from\", \"version\", \"path\"}, {\"outcome\": \"up-to-date\", \"version\"} or
+{\"outcome\": \"manual\", \"version\", \"latest\", \"command\"}, and with --check \"available\" (with \"latest\" and
+\"path\") where it would install. version is the binary on disk afterwards, on the machine it ran on. A failure prints
+nothing on stdout and exits with 1.
+
 Examples:
   cornercase update
-  cornercase update --when-idle --yes";
+  cornercase update --when-idle --yes
+  cornercase update --json";
 pub(super) const WHEN_IDLE: &str = "Wait until no agent is working, then restart";
 pub(super) const RESTART_TIMEOUT: &str =
     "With --when-idle, give up after this many seconds and keep the server running";

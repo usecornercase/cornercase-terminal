@@ -194,6 +194,13 @@ mod parsing {
     }
 
     #[rstest]
+    #[case::alone(&["update", "--json"])]
+    #[case::checking(&["update", "--check", "--json"])]
+    fn update_takes_json_with_or_without_check(#[case] args: &[&str]) {
+        assert!(matches!(parse(args).expect("parse").command, Some(Command::Update(UpdateArgs { json: true, .. }))));
+    }
+
+    #[rstest]
     #[case::wait_without_enter(&["send", "--wait", "hi"])]
     #[case::a_timeout_without_enter(&["send", "--timeout", "5", "hi"])]
     #[case::sending_until_without_waiting(&["send", "--enter", "--until", "turn-over", "hi"])]
@@ -210,6 +217,9 @@ mod parsing {
     #[case::a_negative_timeout(&["wait", "--timeout", "-1"])]
     #[case::a_restart_timeout_without_waiting(&["restart", "--timeout", "60"])]
     #[case::checking_and_waiting(&["update", "--check", "--when-idle"])]
+    #[case::json_and_yes(&["update", "--json", "--yes"])]
+    #[case::json_and_when_idle(&["update", "--json", "--when-idle"])]
+    #[case::json_and_a_timeout(&["update", "--json", "--timeout", "5"])]
     #[case::any_and_all(&["wait", "--any", "--all", "--pane", "1", "--pane", "2"])]
     #[case::no_lines(&["read", "--lines", "0"])]
     #[case::lines_of_the_last_message(&["read", "--last-message", "--lines", "5"])]

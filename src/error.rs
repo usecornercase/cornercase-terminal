@@ -112,6 +112,8 @@ pub enum Error {
     WrongUsage(String),
     #[error("the answer is printed, but part of it failed")]
     Partial,
+    #[error("this cornercase cannot replace itself; run the command it printed")]
+    UpdateByHand,
     #[error("the command there exited with {0}")]
     Exited(u8),
     #[error("{0}")]

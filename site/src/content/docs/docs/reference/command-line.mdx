@@ -82,6 +82,7 @@ Installs the latest release from any shell, without waiting for the next check:
 cornercase update          # install it, then ask whether to restart the server
 cornercase update --yes    # install it and restart the server without asking (-y works too)
 cornercase update --check  # only say whether a newer version is out
+cornercase update --json   # for a program: say what happened as one line of JSON, never restart
 ```
 
 It asks GitHub for the latest release. If yours is the latest, it prints `cornercase 0.5.0 is up to date` and stops. Otherwise it replaces the binary the same way the [update dialog](../../installation/#update) does (download, checksum, a test run of the new binary) and prints `updated cornercase 0.4.2 → 0.5.0`. If anything fails, it says why and the old binary stays.
@@ -102,9 +103,11 @@ You can run it inside one of cornercase's own panes. That pane closes with the s
 
 A server running 0.4.2 or older doesn't know how to restart itself, so this first time `update` stops it instead, like `kill-server`, and the attached windows close. Run `cornercase` again to get your session back on the new version. From the next update on, the windows reopen by themselves.
 
-When cornercase can't replace its own binary (Homebrew installed it, you can't write to its folder, or your platform isn't one it knows), `update` changes nothing. It prints the command to run instead (`brew update && brew upgrade cornercase`, or the install script) and exits with a non-zero status. After that command, the next `cornercase` [offers to restart](#a-server-from-another-build) the old server.
+When cornercase can't replace its own binary (Homebrew installed it, you can't write to its folder, or your platform isn't one it knows), `update` changes nothing. It prints the command to run instead (`brew update && brew upgrade cornercase`, or the install script) and exits with status 6, so a script can tell it from a failure (1). After that command, the next `cornercase` [offers to restart](#a-server-from-another-build) the old server.
 
-`--check` prints `cornercase 0.5.0 is out (you have 0.4.2). Update it with:` followed by the command, or that you are up to date. It exits with status 0 in both cases. Builds made with `cargo run` refuse to update.
+`--check` prints `cornercase 0.5.0 is out (you have 0.4.2). Update it with:` followed by the command, or that you are up to date. It exits with status 0 whatever it finds. Builds made with `cargo run` refuse to update.
+
+`--json` is for a program, such as another interface's update button, or a script that updates another machine with `--remote`: it prints what happened as one line of JSON and nothing else, asks nothing and never restarts the server, so it refuses `--yes` and `--when-idle` (status 2); restart it afterwards with [`cornercase restart`](#cornercase-restart). See [Updates from a program](../../guides/scripts-and-agents/#updates-from-a-program).
 
 ### `cornercase restart`
 

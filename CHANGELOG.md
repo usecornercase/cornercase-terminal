@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.53
+
+- **Programs can read what `cornercase update` did.** `cornercase update --json` prints one line of JSON instead of sentences: `{"outcome":"updated","from":"0.13.52","version":"0.13.53","path":"/home/me/.local/bin/cornercase"}`, `{"outcome":"up-to-date","version":"0.13.53"}`, or, when cornercase can't replace itself (Homebrew installed it, or you can't write to its folder), `{"outcome":"manual","version":"0.13.52","latest":"0.13.53","command":"brew update && brew upgrade cornercase"}`. `version` is the one on disk afterwards, on the machine it ran on, so another interface can offer the command to copy, or confirm an install on another machine (`cornercase --remote devbox update --json`) before restarting its server. With `--json` it asks nothing and never restarts the server: run `cornercase restart` when you choose. `--check --json` says what it would do, without installing.
+- **`cornercase update` exits with status 6 when it can't install the release itself**, after printing the command to run, so a script can tell that from a failure, which still exits with 1.
+
 ## 0.13.52
 
 - **A program with a flow editor of its own can offer opencode's models.** `cornercase config models AGENT` (the `agent-models` request) lists every model the flow editor offers for an agent: for opencode, every `provider/model` id of the models.dev list it caches, read when asked, so `cornercase config` still answers at once; for any other agent, the models `config --json` already lists. `--json` prints `{"agent": "opencode", "models": [...]}`. Each agent in `config --json` now says whether it keeps such a list (`catalogue`), and `cornercase contract` lists the feature `agent-models`.
