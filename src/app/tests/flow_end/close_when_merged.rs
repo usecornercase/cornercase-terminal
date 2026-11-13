@@ -5,17 +5,17 @@ use crate::agents::launch::Launch;
 use crate::flows::run::{MERGED_GRACE, Sent};
 use crate::project::split::Dir;
 
-fn opted(end: End) -> Repo {
+pub(super) fn opted(end: End) -> Repo {
     let mut repo = with_run(end);
     repo.app.runs.first_mut().close_when_merged = true;
     repo
 }
 
-fn pull(repo: &mut Repo, state: &str) {
+pub(super) fn pull(repo: &mut Repo, state: &str) {
     answer(repo, &VIEW.replace("\"OPEN\"", state), 1);
 }
 
-fn workspace_id(app: &App) -> u64 {
+pub(super) fn workspace_id(app: &App) -> u64 {
     app.runs.all()[0].workspace
 }
 
@@ -147,6 +147,7 @@ fn a_flow_that_leaves_the_commits_never_closes() {
 #[test]
 fn a_manual_close_keeps_the_opt_in_and_drops_the_countdown() {
     let mut repo = opted(End::PullRequest);
+    repo.app.runs.first_mut().free_builds = true;
     pull(&mut repo, "\"MERGED\"");
     let id = workspace_id(&repo.app);
     repo.app.close_merged_runs(Instant::now());
@@ -156,7 +157,7 @@ fn a_manual_close_keeps_the_opt_in_and_drops_the_countdown() {
     repo.app.close_agents(&plan);
 
     let kept = &repo.app.agents.closed.of(id).and_then(|kept| kept.run.as_ref()).expect("a kept run").run;
-    assert_eq!((kept.close_when_merged, kept.merged_since), (true, None));
+    assert_eq!((kept.close_when_merged, kept.free_builds, kept.merged_since), (true, true, None));
 }
 
 #[test]
@@ -223,6 +224,7 @@ fn an_agent_of_another_kind_opened_in_the_workspace_that_cannot_resume_keeps_the
 #[test]
 fn reopening_after_the_merge_keeps_the_team_open() {
     let mut repo = opted(End::PullRequest);
+    repo.app.runs.first_mut().free_builds = true;
     let id = workspace_id(&repo.app);
     let plan = repo.app.agents_close_plan(id).expect("a plan");
     repo.app.close_agents(&plan);
@@ -235,4 +237,5 @@ fn reopening_after_the_merge_keeps_the_team_open() {
     repo.app.reopen_agents(id, AREA).expect("reopened");
 
     assert!(!repo.app.runs.all()[0].close_when_merged);
+    assert!(!repo.app.runs.all()[0].free_builds);
 }

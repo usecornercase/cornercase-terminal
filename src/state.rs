@@ -150,6 +150,8 @@ pub(crate) struct RunState {
     pub(crate) ended: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) close_when_merged: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) free_builds: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,6 +188,7 @@ impl RunState {
             dir: run.dir.as_deref().and_then(folder_name),
             ended: run.ended.clone(),
             close_when_merged: run.close_when_merged,
+            free_builds: run.free_builds,
         }
     }
 

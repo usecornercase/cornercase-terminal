@@ -63,6 +63,7 @@ impl App {
             not_run: progress.not_run().to_vec(),
             messages: run.recorded,
             close_when_merged: run.close_when_merged,
+            free_builds: run.free_builds,
             ..RunState::default()
         }
     }

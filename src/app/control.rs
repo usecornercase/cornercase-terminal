@@ -36,7 +36,7 @@ mod tunnels;
 mod updates;
 mod usage;
 mod wait;
-mod worktrees;
+pub(in crate::app) mod worktrees;
 
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant, SystemTime};

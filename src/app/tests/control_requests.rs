@@ -626,7 +626,7 @@ mod agent_models;
 mod agents;
 mod api_errors;
 mod arranging;
-mod build_folders;
+pub(in crate::app::tests) mod build_folders;
 mod changes;
 #[cfg(unix)]
 mod cloning;

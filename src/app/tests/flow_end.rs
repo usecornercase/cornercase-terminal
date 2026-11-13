@@ -12,6 +12,7 @@ use crate::pull_request::{Ci, State};
 use crate::test_util::{fixture, git};
 
 mod close_when_merged;
+mod free_builds;
 
 fn flow(end: End) -> Flow {
     let mut flow = builtin::flows(&agents::Known::ALL, Some(agents::Known::Claude)).remove(0);

@@ -257,6 +257,21 @@ mod merged {
     }
 }
 
+mod free_due {
+    use super::*;
+
+    #[rstest]
+    #[case::too_soon(4, true, false)]
+    #[case::settled_and_gone(5, true, true)]
+    #[case::settled_but_tabs_left(5, false, false)]
+    #[case::still_waiting(59, false, false)]
+    #[case::given_up_waiting(60, false, true)]
+    fn it_waits_for_the_tabs_to_go_but_not_forever(#[case] seconds: u64, #[case] gone: bool, #[case] due: bool) {
+        let closed = Instant::now();
+        assert_eq!(free_due(closed, closed + Duration::from_secs(seconds), gone), due);
+    }
+}
+
 mod close_due {
     use super::*;
 

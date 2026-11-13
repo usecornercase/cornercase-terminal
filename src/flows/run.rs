@@ -12,6 +12,8 @@ use crate::pull_request::{self, PullRequest};
 
 pub(crate) const MAX_MESSAGES: usize = 256;
 pub(crate) const MERGED_GRACE: Duration = Duration::from_secs(180);
+pub(crate) const FREE_SETTLE: Duration = Duration::from_secs(5);
+pub(crate) const FREE_GIVE_UP: Duration = Duration::from_secs(60);
 pub(crate) const RETRY_AFTER: Duration = Duration::from_secs(60);
 pub(crate) const RETRIES: u32 = 3;
 
@@ -136,10 +138,16 @@ pub(crate) struct Run {
     pub(crate) ended: Option<String>,
     pub(crate) sent: Vec<Sent>,
     pub(crate) close_when_merged: bool,
+    pub(crate) free_builds: bool,
     pub(crate) merged_since: Option<Instant>,
     pub(crate) summary: bool,
     pub(crate) retry: Retry,
     pub(crate) stopped: Option<SystemTime>,
+}
+
+pub(crate) fn free_due(closed: Instant, now: Instant, gone: bool) -> bool {
+    let waited = now.saturating_duration_since(closed);
+    waited >= FREE_SETTLE && (gone || waited >= FREE_GIVE_UP)
 }
 
 impl Run {
@@ -157,6 +165,7 @@ impl Run {
             ended: None,
             sent: Vec::new(),
             close_when_merged: false,
+            free_builds: false,
             merged_since: None,
             summary: false,
             retry: Retry::default(),

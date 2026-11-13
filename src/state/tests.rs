@@ -247,6 +247,7 @@ mod file {
                 dir: Some("2026-10-21-fix".into()),
                 ended: None,
                 close_when_merged: false,
+                free_builds: false,
             }),
         });
         saved
@@ -263,11 +264,14 @@ mod file {
         let mut saved = closed_state();
         let text = serde_json::to_string(&saved).expect("json");
         assert!(!text.contains("close_when_merged"));
+        assert!(!text.contains("free_builds"));
         if let Some(run) = saved.projects[0].workspaces[0].closed.as_mut().and_then(|closed| closed.run.as_mut()) {
             run.close_when_merged = true;
+            run.free_builds = true;
         }
         let text = serde_json::to_string(&saved).expect("json");
         assert!(text.contains("\"close_when_merged\":true"));
+        assert!(text.contains("\"free_builds\":true"));
         assert_eq!(serde_json::from_str::<State>(&text).expect("a session"), saved);
     }
 
@@ -277,6 +281,9 @@ mod file {
         assert!(!RunState::seated(&run, Vec::new()).close_when_merged);
         run.close_when_merged = true;
         assert!(RunState::seated(&run, Vec::new()).close_when_merged);
+        assert!(!RunState::seated(&run, Vec::new()).free_builds);
+        run.free_builds = true;
+        assert!(RunState::seated(&run, Vec::new()).free_builds);
     }
 
     #[test]

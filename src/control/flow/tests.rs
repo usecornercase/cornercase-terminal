@@ -331,12 +331,46 @@ mod close_when_merged {
         assert_eq!(serde_json::to_value(opted).expect("json")["close_when_merged"], json!(true));
     }
 
+    #[test]
+    fn free_builds_is_written_only_when_set_by_every_type_that_carries_it() {
+        let key = |value: Value| value.get("free_builds").cloned();
+        assert_eq!(key(serde_json::to_value(FlowRun::default()).expect("json")), None);
+        assert_eq!(key(serde_json::to_value(RunInfo::default()).expect("json")), None);
+        assert_eq!(key(serde_json::to_value(example_run()).expect("json")), None);
+        assert_eq!(key(serde_json::to_value(FlowCloseWhenMerged::default()).expect("json")), None);
+        assert_eq!(key(serde_json::to_value(CloseWhenMergedSet::default()).expect("json")), None);
+        let (run, info) =
+            (FlowRun { free_builds: true, ..FlowRun::default() }, RunInfo { free_builds: true, ..RunInfo::default() });
+        let (state, close) = (
+            RunState { free_builds: true, ..example_run() },
+            FlowCloseWhenMerged { free_builds: true, ..FlowCloseWhenMerged::default() },
+        );
+        let set = CloseWhenMergedSet { free_builds: true, ..CloseWhenMergedSet::default() };
+        for value in [json_of(&run), json_of(&info), json_of(&state), json_of(&close), json_of(&set)] {
+            assert_eq!(key(value), Some(json!(true)));
+        }
+        let fields = |command: Command| command.fields().contains(&("free_builds", "true".into()));
+        assert!(fields(Command::FlowRun(run)));
+        assert!(fields(Command::FlowCloseWhenMerged(close)));
+    }
+
+    fn json_of(value: &impl Serialize) -> Value {
+        serde_json::to_value(value).expect("json")
+    }
+
     fn asked() -> Command {
-        Command::FlowCloseWhenMerged(FlowCloseWhenMerged { workspace: Some(7), off: false })
+        Command::FlowCloseWhenMerged(FlowCloseWhenMerged { workspace: Some(7), off: false, free_builds: false })
     }
 
     fn answered() -> CloseWhenMergedSet {
-        CloseWhenMergedSet { run: 9, project: 2, workspace: 7, close_when_merged: true, changed: true }
+        CloseWhenMergedSet {
+            run: 9,
+            project: 2,
+            workspace: 7,
+            close_when_merged: true,
+            free_builds: false,
+            changed: true,
+        }
     }
 
     #[test]

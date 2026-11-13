@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.64
 
-- Nothing changes for users: tests that fail part-way no longer leave their stand-in programs running on the computer that ran them, and every sample of the `events` stream's format is now checked.
+- **A flow run can free its build folders once its pull request merges.** `cornercase flow run … --close-when-merged --free-builds` (or `cornercase flow close-when-merged --free-builds` for a run already going) frees the build folders of the run's worktree and of its roles' own worktrees once its agents closed, as `cornercase worktrees free-builds` does: only the git-ignored folders on the project's list (`node_modules`, `target`…), and a worktree where a program still runs, or whose build folder holds a git checkout, keeps them. The toast and the `flow-merged` message say how much went (`pull request merged in fix-login: 5 agents closed, 15.7 GB of builds freed`) or why not. The worktrees, their branches and the run's folder stay, so reopening the agents rebuilds what they need. `--free-builds` needs `--close-when-merged`, and `--off` turns both off. `flow runs`, `status --json` and `flow run --json` show `free_builds`, and `cornercase contract` lists the feature `flow-free-builds`.
 
 ## 0.13.63
 

@@ -525,6 +525,7 @@ impl App {
             accounts,
             name: run.workspace_name.clone(),
             close_when_merged: run.close_when_merged,
+            free_builds: run.free_builds,
             fresh: run.fresh,
             summary: false,
         };

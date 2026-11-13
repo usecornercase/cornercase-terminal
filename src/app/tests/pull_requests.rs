@@ -39,7 +39,7 @@ impl Repo {
     }
 }
 
-fn gh_answering(dir: &Path, found: &str) -> PathBuf {
+pub(super) fn gh_answering(dir: &Path, found: &str) -> PathBuf {
     fake_gh(
         dir,
         &format!(

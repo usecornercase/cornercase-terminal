@@ -98,29 +98,33 @@ impl App {
         });
     }
 
-    pub(super) fn free_builds_request(&mut self, client: u64, asker: Asker, request: &FreeBuilds) -> Handled {
-        let target = self.worktree_target(asker, request.workspace, request.path.as_deref())?;
-        if !request.check && self.being_removed(&target.path) {
+    pub(in crate::app) fn freeing(
+        &self,
+        asker: Asker,
+        workspace: Option<u64>,
+        path: Option<&Path>,
+        check: bool,
+    ) -> std::result::Result<Freeing, Refusal> {
+        let target = self.worktree_target(asker, workspace, path)?;
+        if !check && self.being_removed(&target.path) {
             return Err(Refusal::new(Code::Busy, format!("{}: {BEING_REMOVED}", target.path.display())));
         }
         let names = self.config.project(&target.repo, self.home.as_deref()).builds();
-        let shells = self.shell_pids();
-        let mut running = self.workspace_at_path(&target.path).map(|at| self.running_in(at)).unwrap_or_default();
+        let running = self.workspace_at_path(&target.path).map(|at| self.running_in(at)).unwrap_or_default();
+        Ok(Freeing { path: target.path, names, running, shells: self.shell_pids() })
+    }
+
+    pub(super) fn free_builds_request(&mut self, client: u64, asker: Asker, request: &FreeBuilds) -> Handled {
+        let freeing = self.freeing(asker, request.workspace, request.path.as_deref(), request.check)?;
         let key = self.clients.requests.key();
         if !request.check {
-            self.git.frees.request_frees(key, target.path.clone());
+            self.git.frees.request_frees(key, freeing.path.clone());
         }
-        let job = Job::new(Level::Info, "control", "free builds").with("path", target.path.display());
-        let (path, request) = (target.path, request.clone());
+        let job = Job::new(Level::Info, "control", "free builds").with("path", freeing.path.display());
+        let request = request.clone();
         self.spawn_job(
             job,
-            move || {
-                let found = outside_names(&path, shells);
-                running.extend(found);
-                running.sort();
-                running.dedup();
-                free_or_refuse(&path, &names, &request, running)
-            },
+            move || freeing.answer(&request),
             move |result, _| {
                 let result = result.unwrap_or_else(|e| Err(Refusal::new(Code::Failed, e.to_string())));
                 Some(AppEvent::Worktree(WorktreeEvent::BuildsRequest { key, result: Box::new(result) }))
@@ -233,20 +237,52 @@ fn outside_names(path: &Path, shells: Vec<i32>) -> Vec<String> {
     found.into_iter().map(|(_, name, _)| name).filter(|name| !process::is_shell(name)).collect()
 }
 
-fn free_or_refuse(
+pub(in crate::app) struct Freeing {
+    pub(in crate::app) path: PathBuf,
+    names: Vec<String>,
+    running: Vec<String>,
+    shells: Vec<i32>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Risky {
+    pub(crate) running: Vec<String>,
+    pub(crate) size: Size,
+}
+
+impl Freeing {
+    fn outside(&mut self) {
+        let found = outside_names(&self.path, std::mem::take(&mut self.shells));
+        self.running.extend(found);
+        self.running.sort();
+        self.running.dedup();
+    }
+
+    pub(in crate::app) fn unless_risky(mut self) -> Result<std::result::Result<BuildsFreed, Risky>> {
+        self.outside();
+        free_unless_risky(&self.path, &self.names, self.running, false)
+    }
+
+    fn answer(mut self, request: &FreeBuilds) -> Result<std::result::Result<BuildsFreed, Refusal>> {
+        self.outside();
+        if request.check {
+            let size = builds::measure(&self.path, Kind::Linked, &self.names)?;
+            return Ok(Ok(BuildsFreed::would(self.path, &size, self.running)));
+        }
+        let freed = free_unless_risky(&self.path, &self.names, self.running, request.force)?;
+        Ok(freed.map_err(|risky| conflict(risks(&risky.running, &risky.size).unwrap_or_default())))
+    }
+}
+
+fn free_unless_risky(
     path: &Path,
     names: &[String],
-    request: &FreeBuilds,
     running: Vec<String>,
-) -> Result<std::result::Result<BuildsFreed, Refusal>> {
+    force: bool,
+) -> Result<std::result::Result<BuildsFreed, Risky>> {
     let size = builds::measure(path, Kind::Linked, names)?;
-    if request.check {
-        return Ok(Ok(BuildsFreed::would(path.to_path_buf(), &size, running)));
-    }
-    if !request.force
-        && let Some(why) = risks(&running, &size)
-    {
-        return Ok(Err(conflict(why)));
+    if !force && risks(&running, &size).is_some() {
+        return Ok(Err(Risky { running, size }));
     }
     let chosen: Vec<PathBuf> = size.builds.iter().map(|folder| folder.path.clone()).collect();
     let freed = builds::free(path, names, &chosen)?;
@@ -263,3 +299,6 @@ fn risks(running: &[String], size: &Size) -> Option<String> {
     }));
     (!why.is_empty()).then(|| format!("{}; pass --force to free them anyway", why.join("; ")))
 }
+
+#[cfg(test)]
+mod tests;

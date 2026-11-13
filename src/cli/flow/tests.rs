@@ -263,13 +263,50 @@ mod runs {
         assert!(runs_text_at(&FlowRuns { runs: vec![opted], ..FlowRuns::default() }).ends_with(line));
     }
 
+    #[test]
+    fn a_run_that_frees_its_builds_says_so() {
+        let both = RunState { close_when_merged: true, free_builds: true, ..run() };
+        let line = "  closes its agents and frees their worktrees' build folders once its pull request merges\n";
+        assert!(runs_text_at(&FlowRuns { runs: vec![both], ..FlowRuns::default() }).ends_with(line));
+        let only_closing = RunState { close_when_merged: true, ..run() };
+        assert!(!runs_text_at(&FlowRuns { runs: vec![only_closing], ..FlowRuns::default() }).contains("build folders"));
+    }
+
     #[rstest::rstest]
-    #[case::on(true, true, "the agents of workspace 7 close once its pull request merges and none of them works\n")]
+    #[case::on(
+        true,
+        true,
+        "the agents of workspace 7 close once its pull request merges and none of them works, freeing their worktrees' build folders\n"
+    )]
+    #[case::again(
+        true,
+        false,
+        "the agents of workspace 7 already close once its pull request merges, freeing their worktrees' build folders\n"
+    )]
+    fn the_toggle_says_it_frees_the_builds(#[case] on: bool, #[case] changed: bool, #[case] says: &str) {
+        let set =
+            CloseWhenMergedSet { run: 9, project: 2, workspace: 7, close_when_merged: on, free_builds: true, changed };
+        assert_eq!(closes_line(&set), says);
+    }
+
+    #[test]
+    fn the_note_of_a_run_that_frees_its_builds_says_so() {
+        let info = RunInfo { workspace: 8, close_when_merged: true, free_builds: true, ..RunInfo::default() };
+        assert!(closing_note(&info, false).contains("build folders are freed"));
+    }
+
+    #[rstest::rstest]
+    #[case::on(
+        true,
+        true,
+        "the agents of workspace 7 close once its pull request merges and none of them works, keeping their worktrees' build folders\n"
+    )]
     #[case::on_again(true, false, "the agents of workspace 7 already close once its pull request merges\n")]
     #[case::off(false, true, "the agents of workspace 7 stay open after its pull request merges\n")]
     #[case::off_again(false, false, "the agents of workspace 7 already stay open after its pull request merges\n")]
     fn the_toggle_says_what_it_did(#[case] on: bool, #[case] changed: bool, #[case] says: &str) {
-        let set = CloseWhenMergedSet { run: 9, project: 2, workspace: 7, close_when_merged: on, changed };
+        let set =
+            CloseWhenMergedSet { run: 9, project: 2, workspace: 7, close_when_merged: on, free_builds: false, changed };
         assert_eq!(closes_line(&set), says);
     }
 

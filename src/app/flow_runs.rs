@@ -33,6 +33,7 @@ use crate::time;
 use crate::ui;
 
 mod merged;
+pub(super) use merged::MergedBuilds;
 
 pub(super) struct Runs {
     list: Vec<Run>,
@@ -40,6 +41,7 @@ pub(super) struct Runs {
     pending_dirs: Vec<(u64, Vec<PathBuf>)>,
     wakes: Vec<Wake>,
     woken: u64,
+    to_free: Vec<merged::BuildsToFree>,
 }
 
 pub(super) struct Wake {
@@ -57,7 +59,18 @@ impl Runs {
             pending_dirs: Vec::new(),
             wakes: Vec::new(),
             woken: 0,
+            to_free: Vec::new(),
         }
+    }
+
+    pub(super) fn wait_to_free(&mut self, entry: merged::BuildsToFree) {
+        self.to_free.push(entry);
+    }
+
+    pub(super) fn due_frees(&mut self, due: impl Fn(&merged::BuildsToFree) -> bool) -> Vec<merged::BuildsToFree> {
+        let (now, later) = std::mem::take(&mut self.to_free).into_iter().partition(|entry| due(entry));
+        self.to_free = later;
+        now
     }
 
     pub(super) fn all(&self) -> &[Run] {
@@ -162,6 +175,7 @@ impl Runs {
     }
 }
 
+#[expect(clippy::struct_excessive_bools, reason = "independent choices a run starts with")]
 pub(super) struct Starting {
     pub(super) flow: Flow,
     pub(super) task: String,
@@ -174,6 +188,7 @@ pub(super) struct Starting {
     pub(super) accounts: Accounts,
     pub(super) name: Option<String>,
     pub(super) close_when_merged: bool,
+    pub(super) free_builds: bool,
     pub(super) fresh: Option<bool>,
     pub(super) summary: bool,
 }
@@ -192,6 +207,7 @@ impl Starting {
             accounts,
             name: None,
             close_when_merged: false,
+            free_builds: false,
             fresh: None,
             summary: false,
         }
@@ -499,14 +515,21 @@ impl App {
         setup: bool,
     ) -> Result<RunInfo, String> {
         let id = self.open_check(place)?;
-        let Starting {
-            flow, task, branch, focus, view, note, trees, parent, accounts, name, close_when_merged, ..
-        } = starting;
+        let Starting { flow, task, branch, focus, view, note, trees, parent, accounts, name, .. } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
-        let mut run = self.new_run(id, (flow, task), (close_when_merged, starting.summary));
+        let mut run = self.new_run(id, (flow, task), (starting.close_when_merged, starting.summary));
+        run.free_builds = starting.free_builds;
         let project = self.projects[place.project()].id;
-        let mut info =
-            RunInfo { run: run.id, project, workspace: id, branch, note, close_when_merged, ..RunInfo::default() };
+        let mut info = RunInfo {
+            run: run.id,
+            project,
+            workspace: id,
+            branch,
+            note,
+            close_when_merged: starting.close_when_merged,
+            free_builds: starting.free_builds,
+            ..RunInfo::default()
+        };
         let dir = self.make_run_dir(place, &run.task)?;
         let panes = RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts };
         let terms = self.spawn_run_panes(area, place, &panes)?;
@@ -726,6 +749,7 @@ impl App {
         run.dir = dir.map(Path::to_path_buf);
         run.ended.clone_from(&saved.ended);
         run.close_when_merged = saved.close_when_merged;
+        run.free_builds = saved.free_builds;
         run.id = self.take_id();
         run.progress = Progress::resumed(&run.flow, saved.stage, &saved.rounds);
         for seat in &saved.members {

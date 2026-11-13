@@ -60,6 +60,13 @@ and nothing in the workspace has worked, waited, started or been typed into for 
 keeps them open. A flow that leaves the commits has no pull request, so it is refused. It needs a server that knows the
 `flow-close-when-merged` feature; `flow close-when-merged` turns it on or off for a run that is already going.
 
+With --free-builds too, once the agents closed it frees the build folders of the run's worktree and of its roles'
+own worktrees, as `worktrees free-builds` does without --force: only git-ignored folders on the project's list
+(node_modules, target...); a worktree where a program still runs, or whose build folder holds a git checkout,
+keeps them, and the toast and the `flow-merged` message say what was freed or why not. The worktrees, their branches
+and the run's folder stay, so reopening the agents rebuilds what they need. --free-builds needs --close-when-merged
+and a server that knows the `flow-free-builds` feature.
+
 With --machine NAME the flow runs on that machine of `cornercase machines`, by its server: the flow,
 its agents and accounts are the machine's, --project and the ids printed are that machine's, as
 `status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
@@ -71,7 +78,8 @@ Examples:
   cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json
   cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
   cornercase flow run Quick --issue '#482' --project 2 --machine vps
-  cornercase flow run 'Full issue' --issue '#482' --close-when-merged";
+  cornercase flow run 'Full issue' --issue '#482' --close-when-merged
+  cornercase flow run 'Full issue' --issue '#482' --close-when-merged --free-builds";
 pub(in crate::cli) const FLOW_EXPORT_HELP: &str =
     "It prints the flow as TOML, the file a flow is kept in, so a teammate can read its prompts, variables
 and arguments before importing it. A name is looked up as `flow run` does. Variables a flow sets are
@@ -165,7 +173,7 @@ orchestrator marked its pane, `ended with stage 3 and 4 not run on the last chan
 counted from 0, left out when there is none). A first pass that skips a stage shows only as outside the plan,
 and a restart forgets what was not run.
 
-A run that closes its agents once its pull request merges says so (close_when_merged with --json).
+A run that closes its agents once its pull request merges says so (close_when_merged with --json), and one that frees its builds then too (free_builds).
 
 A run that has stopped moving (its orchestrator's turn is over, no agent of the team works, it has not
 ended and no wake is being sent) says `stopped moving 50 min ago: …` (stopped with --json, the UTC time it
@@ -180,10 +188,13 @@ its workspace has worked, waited, started or been typed into for 3 minutes, as `
 The agents are kept, as `agents close` keeps them: the workspace's ▶ or `agents reopen` brings them back. A flow
 that leaves the commits has no pull request, so it cannot be turned on; --off is always accepted. Without --workspace
 or --worktree it is the workspace this runs in, else the shown one. It sets the choice, never toggles it, so
-saying it twice changes nothing the second time.
+saying it twice changes nothing the second time. --free-builds also frees the build folders of the run's worktrees
+once its agents close, as `flow run --free-builds` does; without it they are kept, and --off turns both off
+(--free-builds with --off is refused).
 
 Examples:
   cornercase flow close-when-merged --worktree fix-login
+  cornercase flow close-when-merged --worktree fix-login --free-builds
   cornercase flow close-when-merged --worktree fix-login --off";
 pub(in crate::cli) const FLOW_MESSAGES_HELP: &str =
     "It prints what the orchestrator and the roles of the run sent each other, as the Flow panel's arrows show it:
