@@ -10,7 +10,7 @@ use crate::error::Result;
 mod hold;
 mod orders;
 
-const NO_WINDOW: &str = "no window holds tunnels for this server: open one with `cornercase remote` from the computer that should listen, or take the orders with `cornercase --remote DESTINATION tunnel orders`\n";
+const NO_WINDOW: &str = "no window holds tunnels for this server: open one with `cornercase remote` from the computer that should listen, or have a program there run `tunnel orders`\n";
 
 pub(super) fn run_list(args: &TunnelsArgs) -> Result<bool> {
     let value = ask("tunnels", Command::Tunnels(ListTunnels::default()))?;
@@ -48,9 +48,13 @@ fn failed(arg: &FailedArg) -> Result<bool> {
     if arg.print.json {
         print_json(&value)?;
     } else {
-        print_out(&format!("reported that port {} could not be tunnelled\n", arg.port))?;
+        print_out(&failed_text(arg.port))?;
     }
     Ok(true)
+}
+
+fn failed_text(port: u16) -> String {
+    format!("reported that port {port} could not be tunnelled\n")
 }
 
 fn done_text(action: &TunnelAction, list: &TunnelList) -> String {

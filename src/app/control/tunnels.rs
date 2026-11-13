@@ -4,10 +4,10 @@ use super::{Handled, Pending, Reply, Stage, conflict, json, malformed};
 use crate::app::App;
 use crate::app::tunnels::Origin;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{Done, TunnelFailed, TunnelHold, TunnelPort};
+use crate::control::{Done, TunnelFailed, TunnelHold, TunnelInfo, TunnelPort};
 use crate::log;
 use crate::protocol::{TunnelOrder, TunnelState};
-use crate::text;
+use crate::remote::tunnel;
 
 const NO_WINDOW: &str = "no window holds tunnels for this server: tunnels are held by a window opened with \
     `cornercase remote` on the computer that should listen, or by a program there that runs `tunnel orders`";
@@ -15,7 +15,6 @@ const NOT_HELD: &str = "no window holds a tunnel for port";
 const BUSY_CONNECTION: &str = "this connection already holds a tunnel or takes tunnel orders; open another connection";
 const OPEN_WITHIN: u32 = 45;
 const CLOSE_WITHIN: u32 = 10;
-const REASON_CHARS: usize = 300;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Verb {
@@ -49,6 +48,21 @@ impl TunnelWait {
 
     fn waits_for_a_program(&self, port: u16) -> bool {
         self.verb == Verb::Open && self.port == port && !self.takers.is_empty()
+    }
+
+    fn asked_window(&self, holder: u64) -> bool {
+        self.asked.iter().any(|(client, _)| *client == holder)
+    }
+
+    fn failure(&self, tunnels: &[TunnelInfo]) -> String {
+        let mut reasons: Vec<&str> = tunnels
+            .iter()
+            .filter(|tunnel| self.asked_window(tunnel.holder))
+            .filter_map(|tunnel| tunnel.error.as_deref())
+            .collect();
+        reasons.extend(self.failures.iter().map(String::as_str));
+        let why = if reasons.is_empty() { self.no_answer().to_string() } else { reasons.join("; ") };
+        format!("could not tunnel port {}: {why}", self.port)
     }
 
     fn no_answer(&self) -> &'static str {
@@ -128,7 +142,7 @@ impl App {
         if port == 0 {
             return Err(malformed("a port is 1 to 65535"));
         }
-        let reason: String = text::one_line(&failed.error).chars().take(REASON_CHARS).collect();
+        let reason = tunnel::reason(&failed.error);
         if reason.is_empty() {
             return Err(malformed("say why the tunnel could not be held"));
         }
@@ -154,36 +168,25 @@ impl App {
     }
 
     pub(in crate::app) fn tunnel_reply(&self, wait: &TunnelWait) -> Option<Reply> {
-        let windows_settled = wait.asked.iter().all(|(client, at)| self.tunnel_answered(wait, *client, *at));
-        let list = self.tunnel_list(Some(wait.port));
-        if wait.verb != Verb::Open {
-            return windows_settled.then(|| Ok(json(&list)));
+        if !wait.asked.iter().all(|(client, at)| self.tunnel_answered(wait, *client, *at)) {
+            return None;
         }
-        let held = self.held_for(wait, &list.tunnels);
-        if held || (windows_settled && self.takers_answered(wait)) {
-            return Some(if held { Ok(json(&list)) } else { Err(Self::tunnel_failure(wait, &list.tunnels)) });
+        let opening = wait.verb == Verb::Open;
+        let list = self.tunnel_list(opening.then_some(wait.port));
+        if !opening || self.held_for(wait, &list.tunnels) {
+            return Some(Ok(json(&list)));
         }
-        None
+        self.takers_answered(wait).then(|| Err(wait.failure(&list.tunnels)))
     }
 
-    fn held_for(&self, wait: &TunnelWait, tunnels: &[crate::control::TunnelInfo]) -> bool {
-        let asked = |holder: u64| wait.asked.iter().any(|(client, _)| *client == holder);
-        let by_window = tunnels.iter().any(|tunnel| tunnel.state == "up" && asked(tunnel.holder));
+    fn held_for(&self, wait: &TunnelWait, tunnels: &[TunnelInfo]) -> bool {
+        let by_window = tunnels.iter().any(|tunnel| tunnel.state == "up" && wait.asked_window(tunnel.holder));
         by_window || (!wait.takers.is_empty() && self.opening.tunnels.held_by_a_hold(wait.port))
     }
 
     fn takers_answered(&self, wait: &TunnelWait) -> bool {
         let attached = wait.takers.iter().filter(|taker| self.opening.tunnels.takes_orders(**taker)).count();
         wait.takers.is_empty() || wait.failures.len() >= attached
-    }
-
-    fn tunnel_failure(wait: &TunnelWait, tunnels: &[crate::control::TunnelInfo]) -> String {
-        let asked = |holder: u64| wait.asked.iter().any(|(client, _)| *client == holder);
-        let mut reasons: Vec<&str> =
-            tunnels.iter().filter(|tunnel| asked(tunnel.holder)).filter_map(|tunnel| tunnel.error.as_deref()).collect();
-        reasons.extend(wait.failures.iter().map(String::as_str));
-        let why = if reasons.is_empty() { wait.no_answer().to_string() } else { reasons.join("; ") };
-        format!("could not tunnel port {}: {why}", wait.port)
     }
 
     fn tunnel_answered(&self, wait: &TunnelWait, client: u64, orders: u64) -> bool {

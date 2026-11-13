@@ -169,9 +169,8 @@ mod parsing {
 
     #[test]
     fn failing_says_which_port() {
-        let said = done_text(&action_of(&["failed", "3000", "no"]), &TunnelList::default());
-
-        assert_eq!(said, "");
+        assert_eq!(failed_text(3000), "reported that port 3000 could not be tunnelled\n");
+        assert_eq!(done_text(&action_of(&["failed", "3000", "no"]), &TunnelList::default()), "");
     }
 
     #[test]

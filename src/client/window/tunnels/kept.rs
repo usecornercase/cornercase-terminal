@@ -101,7 +101,7 @@ impl Tunnels {
         }
         let Some(held) = self.held.get_mut(&port) else { return false };
         held.state = TunnelState::Opening;
-        held.settling = Some(super::one_line(reason));
+        held.settling = Some(crate::remote::tunnel::reason(reason));
         held.check_at = Some(now + CHECK_EVERY);
         true
     }

@@ -166,16 +166,27 @@ fn a_new_window_brings_back_the_tunnels_it_remembered() {
     assert_eq!(&read_through(local), b"hello");
 }
 
-fn held(session: &Session, port: u16) -> (std::process::Child, Value, BufReader<std::process::ChildStdout>) {
-    let mut child = remotely(session, &["tunnel", "hold", &port.to_string()])
+type Streaming = (std::process::Child, Value, BufReader<std::process::ChildStdout>);
+
+fn streaming(session: &Session, args: &[&str]) -> Streaming {
+    let mut child = remotely(session, args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("run tunnel hold");
-    let mut line = String::new();
+        .expect("run the command");
     let mut reader = BufReader::new(child.stdout.take().expect("piped"));
+    let first = next_line(&mut reader);
+    (child, first, reader)
+}
+
+fn next_line(reader: &mut BufReader<std::process::ChildStdout>) -> Value {
+    let mut line = String::new();
     reader.read_line(&mut line).expect("one line");
-    (child, serde_json::from_str(&line).expect("a json line"), reader)
+    serde_json::from_str(&line).expect("a json line")
+}
+
+fn held(session: &Session, port: u16) -> Streaming {
+    streaming(session, &["tunnel", "hold", &port.to_string()])
 }
 
 fn exit_of(child: &mut std::process::Child) -> Option<i32> {
@@ -282,23 +293,8 @@ fn opening_a_tunnel_with_no_window_says_why() {
     assert!(stderr.contains("cornercase remote") && stderr.contains("tunnel orders"), "{out:?}");
 }
 
-type Orders = (std::process::Child, Value, BufReader<std::process::ChildStdout>);
-
-fn taking_orders(session: &Session) -> Orders {
-    let mut child = remotely(session, &["tunnel", "orders"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("run tunnel orders");
-    let mut reader = BufReader::new(child.stdout.take().expect("piped"));
-    let first = next_line(&mut reader);
-    (child, first, reader)
-}
-
-fn next_line(reader: &mut BufReader<std::process::ChildStdout>) -> Value {
-    let mut line = String::new();
-    reader.read_line(&mut line).expect("one line");
-    serde_json::from_str(&line).expect("a json line")
+fn taking_orders(session: &Session) -> Streaming {
+    streaming(session, &["tunnel", "orders"])
 }
 
 fn asking(session: &Session, port: u16) -> std::process::Child {

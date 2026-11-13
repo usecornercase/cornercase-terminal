@@ -5,6 +5,7 @@ use crate::app::events::Streamed;
 use crate::protocol::{Holding, Tunnel, TunnelOrder, TunnelState};
 
 const WINDOW: u64 = 7;
+const SECOND_WINDOW: u64 = 8;
 const OBSERVER: u64 = 21;
 const HOLD: u64 = 33;
 const TAKER: u64 = 45;
@@ -123,6 +124,27 @@ mod opening {
     }
 
     #[test]
+    fn waits_for_every_window_before_answering() {
+        let (mut app, _rx) = app();
+        attached(&mut app);
+        app.tunnels_reported(SECOND_WINDOW, Holding { browse: true, orders: 0, tunnels: vec![] });
+        let now = Instant::now();
+        send(&mut app, "tunnel-open", 5173, now);
+        app.take_tunnel_orders();
+
+        let up = vec![tunnel(5173, Some(5173), TunnelState::Up)];
+        app.tunnels_reported(WINDOW, holding(&app, up.clone()));
+        app.check_requests(now);
+        assert_eq!(app.take_answers(), Vec::new());
+        let second = Holding { browse: true, orders: app.opening.tunnels.sent(SECOND_WINDOW), tunnels: up };
+        app.tunnels_reported(SECOND_WINDOW, second);
+        app.check_requests(now);
+
+        let list = answer(&mut app).expect("both up");
+        assert_eq!(list["tunnels"].as_array().map(Vec::len), Some(2));
+    }
+
+    #[test]
     fn port_zero_is_malformed() {
         let (mut app, _rx) = app();
         attached(&mut app);
@@ -217,6 +239,28 @@ mod opening {
 
 mod closing {
     use super::*;
+
+    #[test]
+    fn answers_with_every_tunnel_not_only_the_closed_port() {
+        let (mut app, _rx) = app();
+        let both = vec![tunnel(3000, Some(3000), TunnelState::Up), tunnel(5173, Some(5173), TunnelState::Up)];
+        app.tunnels_reported(WINDOW, holding(&app, both));
+        let now = Instant::now();
+        send(&mut app, "tunnel-close", 5173, now);
+        app.take_tunnel_orders();
+
+        let after = vec![tunnel(3000, Some(3000), TunnelState::Up), tunnel(5173, Some(5173), TunnelState::Closed)];
+        app.tunnels_reported(WINDOW, holding(&app, after));
+        app.check_requests(now);
+
+        let ports: Vec<Value> = answer(&mut app).expect("closed")["tunnels"]
+            .as_array()
+            .expect("a list")
+            .iter()
+            .map(|tunnel| tunnel["port"].clone())
+            .collect();
+        assert_eq!(ports, [json!(3000), json!(5173)]);
+    }
 
     #[test]
     fn an_unknown_port_is_not_found() {
