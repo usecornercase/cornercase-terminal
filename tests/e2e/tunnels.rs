@@ -278,5 +278,130 @@ fn opening_a_tunnel_with_no_window_says_why() {
     let out = app.session.cli(&["tunnel", "open", "5173"]);
 
     assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert!(String::from_utf8_lossy(&out.stderr).contains("cornercase remote"), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("cornercase remote") && stderr.contains("tunnel orders"), "{out:?}");
+}
+
+type Orders = (std::process::Child, Value, BufReader<std::process::ChildStdout>);
+
+fn taking_orders(session: &Session) -> Orders {
+    let mut child = remotely(session, &["tunnel", "orders"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("run tunnel orders");
+    let mut reader = BufReader::new(child.stdout.take().expect("piped"));
+    let first = next_line(&mut reader);
+    (child, first, reader)
+}
+
+fn next_line(reader: &mut BufReader<std::process::ChildStdout>) -> Value {
+    let mut line = String::new();
+    reader.read_line(&mut line).expect("one line");
+    serde_json::from_str(&line).expect("a json line")
+}
+
+fn asking(session: &Session, port: u16) -> std::process::Child {
+    session
+        .command()
+        .args(["tunnel", "open", &port.to_string(), "--json"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("run tunnel open")
+}
+
+fn finished(mut child: std::process::Child) -> (Option<i32>, String, String) {
+    let code = exit_of(&mut child);
+    let (mut out, mut err) = (String::new(), String::new());
+    child.stdout.take().expect("piped").read_to_string(&mut out).expect("stdout");
+    child.stderr.take().expect("piped").read_to_string(&mut err).expect("stderr");
+    (code, out, err)
+}
+
+#[test]
+fn a_program_with_no_window_takes_an_open_and_answers_it_with_a_hold() {
+    let app = Harness::start();
+    let port = serving(&app);
+    let (mut orders, first, mut reader) = taking_orders(&app.session);
+    assert_eq!((first["takers"].as_u64(), first["windows"].as_u64()), (Some(1), Some(0)), "{first}");
+
+    let asked = asking(&app.session, port);
+
+    assert_eq!(next_line(&mut reader), serde_json::json!({"order": "open", "port": port}));
+    let (mut hold, line, _held) = held(&app.session, port);
+    let (code, out, _) = finished(asked);
+    assert_eq!(code, Some(0));
+    let answer: Value = serde_json::from_str(&out).expect("json");
+    assert_eq!(answer["tunnels"][0]["kind"], "hold");
+    assert_eq!(answer["tunnels"][0]["local"], line["local"]);
+    let local = u16::try_from(line["local"].as_u64().expect("a local port")).expect("a port");
+    assert_eq!(&read_through(local), b"hello");
+    app.session.says(&["tunnel", "close", &port.to_string()]);
+    assert_eq!(next_line(&mut reader), serde_json::json!({"order": "close", "port": port}));
+    assert_eq!(exit_of(&mut hold), Some(0));
+    drop(reader);
+    assert_eq!(exit_of(&mut orders), Some(0));
+    wait_until("no program takes orders", || listed(&app.session, &["tunnels", "--json"])["takers"] == 0);
+}
+
+#[test]
+fn a_program_that_cannot_hold_the_port_fails_the_open_with_its_reason() {
+    let app = Harness::start();
+    let (_orders, _first, mut reader) = taking_orders(&app.session);
+    let asked = asking(&app.session, 3999);
+    assert_eq!(next_line(&mut reader), serde_json::json!({"order": "open", "port": 3999}));
+
+    let reported = remotely(&app.session, &["tunnel", "failed", "3999", "the user said no"]).output().expect("run");
+
+    assert!(reported.status.success(), "{reported:?}");
+    let (code, _, err) = finished(asked);
+    assert_eq!(code, Some(1));
+    assert!(err.contains("could not tunnel port 3999: the user said no"), "{err}");
+}
+
+#[test]
+fn a_hold_whose_ssh_fails_fails_the_open_it_answers() {
+    let app = Harness::start();
+    let port = serving(&app);
+    let (_orders, _first, mut reader) = taking_orders(&app.session);
+    let asked = asking(&app.session, port);
+    assert_eq!(next_line(&mut reader), serde_json::json!({"order": "open", "port": port}));
+    std::fs::write(app.session.dir.join("tunnel.fails"), "").expect("make the tunnel's ssh fail");
+
+    let held = remotely(&app.session, &["tunnel", "hold", &port.to_string()]).output().expect("run tunnel hold");
+
+    assert_eq!(held.status.code(), Some(1), "{held:?}");
+    let (code, _, err) = finished(asked);
+    assert_eq!(code, Some(1));
+    assert!(err.contains("Connection refused"), "{err}");
+}
+
+#[test]
+fn a_program_that_stops_taking_orders_answers_what_waited_and_no_longer_counts() {
+    let app = Harness::start();
+    let (orders, _first, mut reader) = taking_orders(&app.session);
+    let asked = asking(&app.session, 3999);
+    assert_eq!(next_line(&mut reader), serde_json::json!({"order": "open", "port": 3999}));
+
+    let killed = std::process::Command::new("kill").args(["-TERM", &orders.id().to_string()]).status().expect("kill");
+
+    assert!(killed.success());
+    let (code, _, err) = finished(asked);
+    assert_eq!(code, Some(1));
+    assert!(err.contains("no program answered"), "{err}");
+    wait_until("no program takes orders", || listed(&app.session, &["tunnels", "--json"])["takers"] == 0);
+    let again = app.session.cli(&["tunnel", "open", "3999"]);
+    assert_eq!(again.status.code(), Some(1), "{again:?}");
+    assert!(String::from_utf8_lossy(&again.stderr).contains("tunnel orders"), "{again:?}");
+}
+
+#[test]
+fn tunnel_orders_needs_remote() {
+    let session = Session::new();
+
+    let out = session.cli(&["tunnel", "orders"]);
+
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("needs --remote"), "{out:?}");
 }

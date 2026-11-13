@@ -15,19 +15,38 @@ mod waiting_for_it_to_come_up {
 
     #[test]
     fn goes_on_once_ssh_listens() {
-        assert!(wait_up(&heard(vec![Heard::Up]), 5173).expect("up"));
+        assert!(wait_up(&heard(vec![Heard::Up]), 5173, |_| {}).expect("up"));
     }
 
     #[test]
     fn fails_with_the_reason_when_ssh_ends_first() {
-        let error = wait_up(&heard(vec![Heard::Ended("refused".into())]), 5173).expect_err("ended");
+        let error = wait_up(&heard(vec![Heard::Ended("refused".into())]), 5173, |_| {}).expect_err("ended");
 
         assert_eq!(error.to_string(), "could not tunnel port 5173: refused");
     }
 
     #[test]
+    fn reports_ssh_s_reason_without_the_prefix_when_ssh_ends_first() {
+        let mut reported = Vec::new();
+
+        let _ = wait_up(&heard(vec![Heard::Ended("refused".into())]), 5173, |reason| reported.push(reason.to_string()));
+
+        assert_eq!(reported, ["refused"]);
+    }
+
+    #[test]
+    fn reports_nothing_when_ssh_comes_up_or_a_signal_comes() {
+        let mut reported = Vec::new();
+
+        let _ = wait_up(&heard(vec![Heard::Up]), 5173, |reason| reported.push(reason.to_string()));
+        let _ = wait_up(&heard(vec![Heard::Signal]), 5173, |reason| reported.push(reason.to_string()));
+
+        assert!(reported.is_empty());
+    }
+
+    #[test]
     fn stops_quietly_when_a_signal_comes_first() {
-        assert!(!wait_up(&heard(vec![Heard::Signal]), 5173).expect("signalled"));
+        assert!(!wait_up(&heard(vec![Heard::Signal]), 5173, |_| {}).expect("signalled"));
     }
 }
 
@@ -36,19 +55,44 @@ mod waiting_for_the_registration {
 
     #[test]
     fn goes_on_once_the_server_answered() {
-        assert!(wait_registered(&heard(vec![Heard::Registered]), 5173).expect("registered"));
+        assert!(wait_registered(&heard(vec![Heard::Registered]), 5173, |_| {}).expect("registered"));
     }
 
     #[test]
     fn stops_quietly_on_a_signal_or_an_ended_stream() {
-        assert!(!wait_registered(&heard(vec![Heard::Signal]), 5173).expect("signalled"));
-        assert!(!wait_registered(&heard(vec![Heard::Stream(Ok(()))]), 5173).expect("ended"));
+        assert!(!wait_registered(&heard(vec![Heard::Signal]), 5173, |_| {}).expect("signalled"));
+        assert!(!wait_registered(&heard(vec![Heard::Stream(Ok(()))]), 5173, |_| {}).expect("ended"));
     }
 
     #[test]
     fn fails_when_the_server_refuses_or_ssh_ends() {
-        assert!(wait_registered(&heard(vec![Heard::Stream(Err(Error::ServerLost))]), 5173).is_err());
-        assert!(wait_registered(&heard(vec![Heard::Ended("dropped".into())]), 5173).is_err());
+        assert!(wait_registered(&heard(vec![Heard::Stream(Err(Error::ServerLost))]), 5173, |_| {}).is_err());
+        assert!(wait_registered(&heard(vec![Heard::Ended("dropped".into())]), 5173, |_| {}).is_err());
+    }
+}
+
+mod reporting_before_the_registration {
+    use super::*;
+
+    #[test]
+    fn a_failure_before_the_registration_is_reported_with_ssh_s_reason() {
+        let mut reported = Vec::new();
+
+        let _ = wait_registered(&heard(vec![Heard::Ended("dropped".into())]), 5173, |reason| {
+            reported.push(reason.to_string());
+        });
+
+        assert_eq!(reported, ["dropped"]);
+    }
+
+    #[test]
+    fn nothing_is_reported_once_it_is_registered() {
+        let mut reported = Vec::new();
+
+        let _ = wait_registered(&heard(vec![Heard::Registered]), 5173, |reason| reported.push(reason.to_string()));
+        let _ = held(&heard(vec![Heard::Ended("dropped".into())]), 5173);
+
+        assert!(reported.is_empty());
     }
 }
 

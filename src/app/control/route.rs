@@ -205,6 +205,8 @@ impl App {
             Command::TunnelClose(tunnel) => self.tunnel_close_request(client, &tunnel, now),
             Command::TunnelForget(tunnel) => self.tunnel_forget_request(client, &tunnel, now),
             Command::TunnelHold(hold) => self.tunnel_hold_request(client, &hold),
+            Command::TunnelOrders(_) => self.tunnel_orders_request(client),
+            Command::TunnelFailed(failed) => self.tunnel_failed_request(&failed),
             other => return ControlFlow::Continue(other),
         })
     }

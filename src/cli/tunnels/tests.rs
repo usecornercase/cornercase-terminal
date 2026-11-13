@@ -24,6 +24,7 @@ mod the_list {
                 info(5173, Some(5174), "up", None, 3),
             ],
             windows: 1,
+            ..TunnelList::default()
         };
 
         assert_eq!(
@@ -34,7 +35,8 @@ mod the_list {
 
     #[test]
     fn names_the_window_when_several_hold_tunnels() {
-        let list = TunnelList { tunnels: vec![info(5173, Some(5173), "up", None, 3)], windows: 2 };
+        let list =
+            TunnelList { tunnels: vec![info(5173, Some(5173), "up", None, 3)], windows: 2, ..TunnelList::default() };
 
         assert_eq!(text(&list), "5173 → localhost:5173  up (window 3)\n");
     }
@@ -47,29 +49,39 @@ mod the_list {
     }
 
     #[test]
+    fn says_no_tunnels_when_only_a_program_takes_orders() {
+        assert_eq!(text(&TunnelList { takers: 1, ..TunnelList::default() }), "no tunnels\n");
+    }
+
+    #[test]
     fn says_a_closed_tunnel_is_closed() {
-        let list = TunnelList { tunnels: vec![info(3000, None, "closed", None, 3)], windows: 1 };
+        let list =
+            TunnelList { tunnels: vec![info(3000, None, "closed", None, 3)], windows: 1, ..TunnelList::default() };
 
         assert_eq!(text(&list), "3000  closed\n");
     }
 
     #[test]
     fn marks_a_hold_and_prints_it_when_no_window_is_attached() {
-        let list = TunnelList { tunnels: vec![hold(5173, 5174, 9)], windows: 0 };
+        let list = TunnelList { tunnels: vec![hold(5173, 5174, 9)], windows: 0, ..TunnelList::default() };
 
         assert_eq!(text(&list), "5173 → localhost:5174  up (hold 9)\n");
     }
 
     #[test]
     fn names_the_window_when_a_hold_is_listed_beside_it() {
-        let list = TunnelList { tunnels: vec![info(3000, Some(3000), "up", None, 3), hold(5173, 5174, 9)], windows: 1 };
+        let list = TunnelList {
+            tunnels: vec![info(3000, Some(3000), "up", None, 3), hold(5173, 5174, 9)],
+            windows: 1,
+            ..TunnelList::default()
+        };
 
         assert_eq!(text(&list), "3000 → localhost:3000  up (window 3)\n5173 → localhost:5174  up (hold 9)\n");
     }
 
     #[test]
     fn says_there_are_none_when_windows_hold_nothing() {
-        assert_eq!(text(&TunnelList { tunnels: vec![], windows: 1 }), "no tunnels\n");
+        assert_eq!(text(&TunnelList { tunnels: vec![], windows: 1, ..TunnelList::default() }), "no tunnels\n");
     }
 }
 
@@ -78,9 +90,21 @@ mod opening {
 
     #[test]
     fn says_where_each_window_listens() {
-        let list = TunnelList { tunnels: vec![info(5173, Some(5174), "up", None, 3)], windows: 1 };
+        let list =
+            TunnelList { tunnels: vec![info(5173, Some(5174), "up", None, 3)], windows: 1, ..TunnelList::default() };
 
         assert_eq!(opened_text(5173, &list), "port 5173 is tunnelled to localhost:5174\n");
+    }
+}
+
+mod opening_with_a_program {
+    use super::*;
+
+    #[test]
+    fn names_a_hold_that_answered_an_open() {
+        let list = TunnelList { tunnels: vec![hold(5173, 5174, 9)], takers: 1, ..TunnelList::default() };
+
+        assert_eq!(opened_text(5173, &list), "port 5173 is tunnelled to localhost:5174 (hold 9)\n");
     }
 }
 
@@ -92,6 +116,7 @@ mod opening_with_several_windows {
         let list = TunnelList {
             tunnels: vec![info(5173, Some(5173), "up", None, 3), info(5173, None, "down", Some("denied"), 4)],
             windows: 2,
+            ..TunnelList::default()
         };
 
         assert_eq!(
@@ -127,6 +152,29 @@ mod parsing {
     }
 
     #[test]
+    fn orders_takes_no_port_and_no_json() {
+        assert!(matches!(action_of(&["orders"]), TunnelAction::Orders));
+        assert!(Cli::try_parse_from(["cornercase", "tunnel", "orders", "1"]).is_err());
+        assert!(Cli::try_parse_from(["cornercase", "tunnel", "orders", "--json"]).is_err());
+    }
+
+    #[test]
+    fn failed_takes_a_port_and_a_reason() {
+        let TunnelAction::Failed(arg) = action_of(&["failed", "3000", "no", "--json"]) else { panic!("not failed") };
+
+        assert_eq!((arg.port, arg.reason.as_str(), arg.print.json), (3000, "no", true));
+        assert!(Cli::try_parse_from(["cornercase", "tunnel", "failed", "0", "no"]).is_err());
+        assert!(Cli::try_parse_from(["cornercase", "tunnel", "failed", "3000"]).is_err());
+    }
+
+    #[test]
+    fn failing_says_which_port() {
+        let said = done_text(&action_of(&["failed", "3000", "no"]), &TunnelList::default());
+
+        assert_eq!(said, "");
+    }
+
+    #[test]
     fn hold_prints_json_always_so_it_takes_no_flag() {
         assert!(Cli::try_parse_from(["cornercase", "tunnel", "hold", "5173", "--json"]).is_err());
     }
@@ -144,7 +192,11 @@ mod parsing {
         match cli.command {
             Some(Cmd::Control(Control::Tunnel(args))) => match args.action {
                 TunnelAction::Open(arg) => assert_eq!((arg.port, arg.print.json), (5173, true)),
-                TunnelAction::Close(_) | TunnelAction::Forget(_) | TunnelAction::Hold(_) => panic!("not open"),
+                TunnelAction::Close(_)
+                | TunnelAction::Forget(_)
+                | TunnelAction::Hold(_)
+                | TunnelAction::Orders
+                | TunnelAction::Failed(_) => panic!("not open"),
             },
             other => panic!("not tunnel: {other:?}"),
         }
@@ -160,6 +212,8 @@ mod parsing {
             &["tunnel", "close", "1"],
             &["tunnel", "forget", "1"],
             &["tunnel", "hold", "1"],
+            &["tunnel", "orders"],
+            &["tunnel", "failed", "1", "x"],
         ];
         for args in all {
             let words = ["cornercase", "--remote", "vps"].into_iter().chain(args.iter().copied());
