@@ -8,12 +8,10 @@ use crate::host::open::{Browse, Opener, Openers};
 use crate::protocol::{Holding, Tunnel, TunnelOrder, TunnelState};
 use crate::remote::tunnel::{self, Forward, Owner, Running, Watched};
 use crate::remote::{self};
-use crate::text;
 
 mod kept;
 
 const MAX_TUNNELS: usize = 32;
-const REASON_CHARS: usize = 300;
 const CHECK_EVERY: Duration = Duration::from_secs(1);
 const TOO_MANY: &str = "a window holds at most 32 tunnels";
 
@@ -106,10 +104,6 @@ pub(super) struct Tunnels {
     applied: u64,
 }
 
-fn one_line(reason: &str) -> String {
-    text::one_line(reason).chars().take(REASON_CHARS).collect()
-}
-
 impl Tunnels {
     pub(super) fn new(spawner: Box<dyn Spawn>, browser: Openers, file: PathBuf) -> Self {
         Self { spawner, browser, file, destination: None, held: BTreeMap::new(), attempts: 0, applied: 0 }
@@ -199,7 +193,7 @@ impl Tunnels {
                 self.claim(port, local, pid);
             }
             Err(reason) => {
-                held.state = TunnelState::Down(one_line(&reason));
+                held.state = TunnelState::Down(tunnel::reason(&reason));
                 held.started = None;
             }
         }
@@ -246,7 +240,7 @@ impl Tunnels {
             held.failures += 1;
             held.retry_at = Some(now + remote::backoff(held.failures));
         }
-        held.state = TunnelState::Down(one_line(reason));
+        held.state = TunnelState::Down(tunnel::reason(reason));
     }
 
     pub(super) fn tick(&mut self, now: Instant, linked: bool) -> bool {

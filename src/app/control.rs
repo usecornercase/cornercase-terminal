@@ -220,7 +220,7 @@ impl Stage {
             Self::RemovingFolders(_) => "git is still removing the worktrees".into(),
             Self::Recap { choice, .. } => format!("the agent is still writing the recap of {}", choice.name()),
             Self::Dossier(_) => "the dossier is still being built".into(),
-            Self::Tunnel(_) => "the windows have not said whether the tunnel is up".into(),
+            Self::Tunnel(wait) => wait.waiting_for().into(),
             _ => "the ports are still being listed".into(),
         }
     }

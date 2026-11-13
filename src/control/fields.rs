@@ -207,6 +207,7 @@ impl Command {
         match self {
             Self::TunnelOpen(tunnel) | Self::TunnelClose(tunnel) | Self::TunnelForget(tunnel) => tunnel.fields(fields),
             Self::TunnelHold(hold) => hold.fields(fields),
+            Self::TunnelFailed(failed) => failed.fields(fields),
             _ => return false,
         }
         true

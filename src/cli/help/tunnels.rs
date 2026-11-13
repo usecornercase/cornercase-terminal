@@ -7,10 +7,11 @@ the reason ssh gave, or closed: a tunnel that was closed stays listed so the win
 the server's machine lists and drives them with this command and `tunnel open`, `tunnel close`
 and `tunnel forget`. With several windows attached, each line says which one holds it, and a
 tunnel held by `tunnel hold` ends with (hold N). With --json it prints
-{\"tunnels\": [{\"port\", \"local\", \"state\", \"error\", \"holder\", \"kind\"}], \"windows\": N}: local and
-error are null when they do not apply, holder is the number of the holder's connection, kind is
-window or hold, and windows is how many windows hold tunnels for this server, 0 when none is
-attached from another computer.
+{\"tunnels\": [{\"port\", \"local\", \"state\", \"error\", \"holder\", \"kind\"}], \"windows\": N, \"takers\": N}:
+local and error are null when they do not apply, holder is the number of the holder's connection,
+kind is window or hold, windows is how many windows hold tunnels for this server, 0 when none is
+attached from another computer, and takers is how many programs take tunnel orders
+(`tunnel orders`).
 
 Examples:
   cornercase tunnels
@@ -22,25 +23,40 @@ pub(in crate::cli) const TUNNEL_HELP: &str =
 the window runs your own ssh, `ssh -N -L 127.0.0.1:LOCAL:localhost:PORT DESTINATION`, with the
 destination it used, so every ssh setting of yours applies, and the far end is always the
 machine's own loopback. The window listens on the same port when it is free there and on another
-when it is not, and says which. `tunnel open PORT` asks every attached window and waits up to
-45 s until it is up; it prints one line per window and exits with 1 when none came up, or when
-no window is attached (tunnels are held by windows opened with `cornercase remote`).
+when it is not, and says which. `tunnel open PORT` asks every attached window, and every
+program that takes tunnel orders, and waits up to 45 s until it is up; it prints one line per
+holder and exits with 1 when none came up, or when neither is attached (tunnels are held by
+windows opened with `cornercase remote`, or by programs that run `tunnel orders`).
 `tunnel close PORT` closes it but keeps it remembered, as closed. `tunnel forget PORT` removes it.
 A window remembers its tunnels per machine on its own computer, in tunnels.json beside
 machines.json: the next window to that machine brings back the ones that are not closed, on the
 same port when it is free. Windows of one computer share a tunnel: one runs the ssh and the others
-take it over when it ends. With --json they print {\"tunnels\": [...], \"windows\": N}, as
+take it over when it ends. With --json they print {\"tunnels\": [...], \"windows\": N, \"takers\": N}, as
 `cornercase tunnels --json` does.
 
 `cornercase --remote vps tunnel hold PORT` is for a program with no window: it starts its own ssh
 from this computer, waits until it is up and prints one line, {\"port\", \"local\", \"url\"}, then
 holds the tunnel until it is killed (exit 0), its output reader leaves (0), `tunnel close PORT` or
 `tunnel forget PORT` is run on the server (0), or ssh or the server connection fails (1). It
-needs --remote (exit 2 without it), and it remembers nothing in tunnels.json.
+needs --remote (exit 2 without it), and it remembers nothing in tunnels.json. If it fails
+before the server counts it (ssh, or the local port), it tells the server, so a `tunnel open`
+that waits for it fails with the reason.
+
+`cornercase --remote vps tunnel orders` is for such a program too: it prints one JSON line once
+the server counts it, {\"tunnels\": [...], \"windows\": N, \"takers\": N}, then one line per order,
+{\"order\": \"open\", \"port\": 3000} (or close, or forget), for as long as it runs. `tunnel open` on
+the server then asks it and waits: it answers by holding the port with `tunnel hold PORT`, or
+with `tunnel failed PORT REASON`, which fails the request with REASON; `tunnel failed` prints
+`reported that port 3000 could not be tunnelled` (with --json, that port's list) and exits 0 even
+when no request waits. close and forget tell it which ports to drop or forget. It ends with 0
+when its output reader leaves or the server stops, and 1 when the connection is lost; it needs
+--remote (exit 2 without it).
 
 Examples:
   cornercase tunnel open 5173
   cornercase tunnel close 5173
   cornercase tunnel forget 5173
   cornercase --remote vps tunnel open 5173 --json
-  cornercase --remote vps tunnel hold 5173";
+  cornercase --remote vps tunnel hold 5173
+  cornercase --remote vps tunnel orders
+  cornercase --remote vps tunnel failed 3000 \"the user said no\"";

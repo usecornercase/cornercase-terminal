@@ -200,6 +200,8 @@ fn newest_commands() -> Vec<Command> {
         Command::TunnelHold(TunnelHold::default()),
         Command::QueueShow(QueueShow::default()),
         Command::AgentModels(AgentModels { agent: "opencode".into() }),
+        Command::TunnelOrders(TunnelOrders::default()),
+        Command::TunnelFailed(TunnelFailed::default()),
     ]
 }
 
@@ -771,4 +773,11 @@ fn a_queue_show_logs_its_id_and_whether_it_reads_the_conversation() {
     let command = Command::QueueShow(QueueShow { id: 7, conversation: true });
 
     assert_eq!(command.fields(), [("id", "7".to_string()), ("conversation", "true".to_string())]);
+}
+
+#[test]
+fn a_tunnel_failure_logs_its_port_and_size_but_never_its_text() {
+    let command = Command::TunnelFailed(TunnelFailed { port: 3000, error: "the user said no".into() });
+
+    assert_eq!(command.fields(), [("port", "3000".to_string()), ("bytes", "16".to_string())]);
 }

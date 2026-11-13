@@ -76,6 +76,11 @@ mod describing {
     }
 
     #[test]
+    fn taking_tunnel_orders_is_a_feature() {
+        assert!(FEATURES.contains(&"tunnel-orders"));
+    }
+
+    #[test]
     fn the_events_watch_surface_view_app_changes_flow_and_files_streams_are_version_one() {
         let descriptor = describe("1-2", &[]);
 
@@ -90,6 +95,7 @@ mod describing {
             Stream { name: "flow-messages".into(), version: 1 },
             Stream { name: "files".into(), version: 1 },
             Stream { name: "config-pair".into(), version: 1 },
+            Stream { name: "tunnel-orders".into(), version: 1 },
         ];
         assert_eq!(descriptor.streams, streams);
     }
@@ -116,7 +122,7 @@ mod describing {
         assert_eq!(keys, ["boot", "contract", "features", "operations", "streams", "version"]);
         assert_eq!(
             sent["streams"],
-            json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}, {"name": "surface", "version": 1}, {"name": "view", "version": 1}, {"name": "app", "version": 1}, {"name": "changes", "version": 1}, {"name": "flow-runs", "version": 1}, {"name": "flow-messages", "version": 1}, {"name": "files", "version": 1}, {"name": "config-pair", "version": 1}])
+            json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}, {"name": "surface", "version": 1}, {"name": "view", "version": 1}, {"name": "app", "version": 1}, {"name": "changes", "version": 1}, {"name": "flow-runs", "version": 1}, {"name": "flow-messages", "version": 1}, {"name": "files", "version": 1}, {"name": "config-pair", "version": 1}, {"name": "tunnel-orders", "version": 1}])
         );
         assert_eq!(sent["operations"][0], json!({"name": "status", "available": true}));
         let search = sent["operations"].as_array().expect("a list").iter().find(|o| o["name"] == "search").cloned();
@@ -257,6 +263,8 @@ mod finding_unknown_fields {
         "replace": true}}))]
     #[case::search(json!({"command": "search", "args": {"query": "token"}}))]
     #[case::agent_models(json!({"command": "agent-models", "args": {"agent": "opencode"}}))]
+    #[case::tunnel_orders(json!({"command": "tunnel-orders", "args": {}}))]
+    #[case::tunnel_failed(json!({"command": "tunnel-failed", "args": {"port": 3000, "error": "refused"}}))]
     #[case::contract(json!({"contract": 1, "command": "contract", "args": {}}))]
     #[case::watch(json!({"contract": 1, "boot": "1-2", "command": "watch", "args": {}}))]
     fn a_request_the_server_knows_has_none(#[case] raw: Value) {
@@ -288,6 +296,8 @@ mod finding_unknown_fields {
     #[case::queue_list(json!({"command": "queue", "args": {"action": "list"}}))]
     #[case::flow_run(json!({"command": "flow-run", "args": {"name": "Quick", "prompt": "go"}}))]
     #[case::agent_models(json!({"command": "agent-models", "args": {"agent": "opencode"}}))]
+    #[case::tunnel_orders(json!({"command": "tunnel-orders", "args": {}}))]
+    #[case::tunnel_failed(json!({"command": "tunnel-failed", "args": {"port": 3000, "error": "refused"}}))]
     #[case::contract(json!({"command": "contract", "args": {}}))]
     #[case::watch(json!({"command": "watch", "args": {}}))]
     fn an_extra_argument_is_named(#[case] raw: Value) {

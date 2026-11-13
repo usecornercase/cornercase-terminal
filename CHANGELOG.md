@@ -2,10 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.57
+## 0.13.58
 
 - **A flow run's folder is dated with your day.** Run folders in `runs/` were named after the day in UTC, so a run started just after midnight was filed under the day before (or, west of UTC, an evening run under the next day). New folders take your local day, the one `queue list` and the window show; folders made before keep their names.
 - **A flow says which stages never saw the last change.** When a review or a test sends the work back, the Flow panel's heading lists the stages the work has not been through since, in orange (`stage 3 not run since the last change`), until each gets it again, so a fix that was never reviewed or tested shows. `cornercase flow runs` prints them (`ended with stage 3 not run on the last change` once the run ended), and programs read `not_run` in `flow runs --json` (feature `flow-not-run`).
+
+## 0.13.57
+
+- **A program with no window can take the tunnels scripts ask for.** `cornercase --remote vps tunnel orders` prints a line once the server counts it, then one per order (`{"order":"open","port":3000}`, or `close`, `forget`), so `cornercase tunnel open 3000` on that machine asks it as it asks windows and waits for its answer: holding the port with `tunnel hold 3000` answers it, and `cornercase tunnel failed 3000 REASON` fails it with that reason (a `tunnel hold` whose `ssh` fails does that by itself). `cornercase tunnels --json` counts these programs in `takers`, and `cornercase contract` lists the feature and stream `tunnel-orders`.
 
 ## 0.13.56
 

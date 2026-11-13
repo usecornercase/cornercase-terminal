@@ -95,6 +95,8 @@ cornercase --remote devbox tunnel hold 5173
 
 It starts its own `ssh`, waits until the tunnel is up and prints one line, `{"port":5173,"local":5174,"url":"http://localhost:5174"}`, then holds the tunnel until it ends. Killing it, closing its output or `cornercase tunnel close 5173` on `devbox` ends it with status 0, and a failing `ssh` or a lost connection with 1. It needs `--remote`, and it remembers nothing: see [Tunnels](../scripts-and-agents/#tunnels).
 
+A program that holds its tunnels this way can also take the ones a script or an agent on `devbox` asks for: `cornercase --remote devbox tunnel orders` prints a line such as `{"order":"open","port":3000}` for each `cornercase tunnel open 3000`, and the program answers with `tunnel hold 3000`, or with `tunnel failed 3000 REASON`. See [Tunnels](../scripts-and-agents/#tunnels).
+
 If your `~/.ssh/config` has a `LocalForward`, `RemoteForward` or `DynamicForward` for that host, the window's own connection already holds it and every tunnel fails with `Could not request local forwarding`: remove it, or tunnel with your own `ssh -L`.
 
 ## When the connection drops

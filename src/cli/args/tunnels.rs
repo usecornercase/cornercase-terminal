@@ -24,6 +24,22 @@ pub(crate) enum TunnelAction {
     Forget(PortArg),
     #[command(about = "Hold a tunnel to the machine of --remote with no window, until this command ends")]
     Hold(HoldArg),
+    #[command(
+        about = "Take the tunnel orders of the server of --remote for a program with no window, until this command ends"
+    )]
+    Orders,
+    #[command(about = "Tell the server that the tunnel of a port it asked for cannot be held from this computer")]
+    Failed(FailedArg),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FailedArg {
+    #[arg(value_name = "PORT", value_parser = clap::value_parser!(u16).range(1..), help = "The port that was asked for, on this server's machine")]
+    pub(crate) port: u16,
+    #[arg(value_name = "REASON", help = "Why it cannot be held, as one line: `tunnel open` fails with it")]
+    pub(crate) reason: String,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

@@ -4,7 +4,7 @@ use std::time::SystemTime;
 
 use super::toast::{Toast, TunnelButton};
 use super::{App, Streamed};
-use crate::control::{Event, Ids, TunnelInfo, TunnelList, What};
+use crate::control::{Event, Ids, TunnelInfo, TunnelList, TunnelOrderLine, What, streamed_line};
 use crate::host::open::Browse;
 use crate::log;
 use crate::ports::Port;
@@ -17,6 +17,7 @@ pub(super) struct Holders {
     by: BTreeMap<u64, Holder>,
     asked: BTreeMap<(u64, u16), (Origin, u64)>,
     sent: BTreeMap<u64, u64>,
+    takers: BTreeSet<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +66,19 @@ impl Holders {
 
     pub(super) fn window_clients(&self) -> Vec<u64> {
         self.by.iter().filter(|(_, holder)| holder.kind == Kind::Window).map(|(client, _)| *client).collect()
+    }
+
+    pub(super) fn takers(&self) -> Vec<u64> {
+        self.takers.iter().copied().collect()
+    }
+
+    pub(super) fn takes_orders(&self, client: u64) -> bool {
+        self.takers.contains(&client)
+    }
+
+    pub(super) fn held_by_a_hold(&self, port: u16) -> bool {
+        let up = |holder: &&Holder| holder.tunnel(port).is_some_and(|tunnel| tunnel.state == TunnelState::Up);
+        self.by.values().filter(|holder| holder.kind == Kind::Hold).any(|holder| up(&holder))
     }
 
     pub(super) fn sent(&self, client: u64) -> u64 {
@@ -142,7 +156,24 @@ impl App {
         }
     }
 
+    pub(super) fn add_taker(&mut self, client: u64) {
+        self.opening.tunnels.takers.insert(client);
+        log::info!("ui", "tunnel orders taken", client = client);
+    }
+
+    pub(super) fn tell_takers(&mut self, order: TunnelOrder) {
+        let line = TunnelOrderLine { order: order.id().into(), port: order.port() };
+        let Some(text) = streamed_line(&line) else { return };
+        for taker in self.opening.tunnels.takers() {
+            log::info!("ui", "tunnel order told", client = taker, port = order.port(), order = order.id());
+            self.clients.events.push(taker, Streamed::Event(text.clone()));
+        }
+    }
+
     pub(super) fn forget_tunnels(&mut self, client: u64) {
+        if self.opening.tunnels.takers.remove(&client) {
+            log::info!("ui", "tunnel orders ended", client = client);
+        }
         let Some(holder) = self.opening.tunnels.by.remove(&client) else { return };
         self.opening.tunnels.asked.retain(|(asker, _), _| *asker != client);
         self.opening.tunnels.sent.remove(&client);
@@ -202,6 +233,7 @@ impl App {
             self.opening.tunnels.asked.remove(&(*client, port));
             self.end_for(*client, order);
         }
+        self.tell_takers(order);
         holding.into_iter().map(|client| (client, self.opening.tunnels.sent(client))).collect()
     }
 
@@ -274,7 +306,11 @@ impl App {
     }
 
     pub(in crate::app) fn tunnel_list(&self, port: Option<u16>) -> TunnelList {
-        TunnelList { tunnels: self.opening.tunnels.listing(port), windows: self.opening.tunnels.windows() }
+        TunnelList {
+            tunnels: self.opening.tunnels.listing(port),
+            windows: self.opening.tunnels.windows(),
+            takers: self.opening.tunnels.takers.len(),
+        }
     }
 
     pub(super) fn tunnel_infos(&self) -> Vec<TunnelInfo> {
