@@ -11,9 +11,9 @@ use crate::error::{Error, Result};
 
 pub(super) fn run(args: AgentsArgs) -> Result<()> {
     match args.action {
-        AgentsAction::Close { place, check, force, print } => close(&place, (check, force), print.json),
-        AgentsAction::Reopen { place, print } => reopen(&place, print.json),
-        AgentsAction::Forget { place, yes, print } => forget(&place, yes, print.json),
+        AgentsAction::Close { place, check, force, print, .. } => close(&place, (check, force), print.json),
+        AgentsAction::Reopen { place, print, .. } => reopen(&place, print.json),
+        AgentsAction::Forget { place, yes, print, .. } => forget(&place, yes, print.json),
     }
 }
 

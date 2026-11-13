@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 
+use super::BootArg;
 use crate::cli::help::CONFIG_PAIR_HELP;
 
 #[derive(Debug, Args)]
@@ -47,6 +48,8 @@ pub(crate) enum ConfigAction {
             help = "The folders `worktrees free-builds` deletes, separated by spaces or commas; `default` restores the usual list; empty means none"
         )]
         builds: Option<String>,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Check and save a tracker's token or a bot's, read from standard input")]
     Secret {
@@ -89,4 +92,13 @@ pub(crate) enum ConfigAction {
         #[arg(long, help = "Show what would change and exit, without asking or importing")]
         preview: bool,
     },
+}
+
+impl ConfigAction {
+    pub(crate) fn boot(&self) -> Option<&BootArg> {
+        match self {
+            Self::Project { boot, .. } => Some(boot),
+            _ => None,
+        }
+    }
 }

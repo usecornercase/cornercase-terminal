@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 
-use super::{LogsArgs, Print, Which};
+use super::{BootArg, LogsArgs, Print, Which};
 use crate::cli::help::PLUGIN_WINDOWS_HELP;
 use crate::plugins::install::is_commit;
 
@@ -114,6 +114,8 @@ pub(crate) struct RunArgs {
     pub(crate) revision: Option<u32>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]

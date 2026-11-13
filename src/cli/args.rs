@@ -383,17 +383,62 @@ impl Control {
 
 impl Control {
     pub(crate) fn boot(&self) -> Option<&str> {
+        self.own_boot().or_else(|| self.action_boot()).and_then(|arg| arg.boot.as_deref())
+    }
+
+    fn own_boot(&self) -> Option<&BootArg> {
+        Some(match self {
+            Self::Close(a) => &a.boot,
+            Self::Rename(a) => &a.boot,
+            Self::Mark(a) => &a.boot,
+            Self::MovePane(a) => &a.boot,
+            Self::Context(a) => &a.boot,
+            Self::Send(a) => &a.boot,
+            Self::Input(a) => &a.boot,
+            Self::PasteFile(a) => &a.boot,
+            Self::Collapse(a) | Self::Expand(a) => &a.boot,
+            _ => return self.terminal_boot(),
+        })
+    }
+
+    fn terminal_boot(&self) -> Option<&BootArg> {
+        Some(match self {
+            Self::Keys(a) => &a.boot,
+            Self::Held(a) => &a.boot,
+            Self::Scroll(a) => &a.boot,
+            Self::Selection(a) => &a.boot,
+            Self::Split(a) => &a.boot,
+            Self::Focus(a) => &a.boot,
+            Self::Ratio(a) => &a.boot,
+            Self::Resize(a) => &a.boot,
+            Self::Redraw(a) => &a.boot,
+            Self::ViewSet(a) => &a.boot,
+            _ => return self.creating_boot(),
+        })
+    }
+
+    fn creating_boot(&self) -> Option<&BootArg> {
+        Some(match self {
+            Self::Move(a) => &a.boot,
+            Self::NewTab(a) => &a.boot,
+            Self::Setup(a) => &a.boot,
+            Self::Start(a) => &a.boot,
+            Self::NewWorkspace(a) => &a.boot,
+            Self::Open(a) => &a.boot,
+            _ => return None,
+        })
+    }
+
+    fn action_boot(&self) -> Option<&BootArg> {
         match self {
-            Self::Close(a) => a.boot.boot.as_deref(),
-            Self::Rename(a) => a.boot.boot.as_deref(),
-            Self::Mark(a) => a.boot.boot.as_deref(),
-            Self::MovePane(a) => a.boot.boot.as_deref(),
-            Self::Context(a) => a.boot.boot.as_deref(),
-            Self::Send(a) => a.boot.boot.as_deref(),
-            Self::Input(a) => a.boot.boot.as_deref(),
-            Self::PasteFile(a) => a.boot.boot.as_deref(),
-            Self::Collapse(a) | Self::Expand(a) => a.boot.boot.as_deref(),
-            Self::Account(AccountArgs { action: AccountAction::Restart(a) }) => a.boot.boot.as_deref(),
+            Self::Group(a) => a.action.boot(),
+            Self::Todo(a) => a.action.boot(),
+            Self::Agents(a) => Some(a.action.boot()),
+            Self::Changes(a) => a.action.boot(),
+            Self::Queue(a) => a.action.boot(),
+            Self::Account(a) => a.action.boot(),
+            Self::Worktrees(a) => a.action.boot(),
+            Self::Config(a) => a.action.as_ref().and_then(config::ConfigAction::boot),
             _ => None,
         }
     }
@@ -492,6 +537,8 @@ pub(crate) struct KeysArgs {
     pub(crate) target: Target,
     #[arg(required = true, value_name = "KEY", value_parser = key, help = KEY_NAMES)]
     pub(crate) keys: Vec<String>,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -598,7 +645,7 @@ pub(crate) struct FocusArgs {
     #[arg(
         long,
         value_name = "NAME",
-        conflicts_with_all = ["pane", "worktree", "project", "view", "reveal"],
+        conflicts_with_all = ["pane", "worktree", "project", "view", "reveal", "boot"],
         help = "Pick one of this machine's workspaces or tabs as the one shown, whose tab the window shows from there: --workspace and --tab are its ids"
     )]
     pub(crate) machine: Option<String>,
@@ -618,6 +665,8 @@ pub(crate) struct FocusArgs {
     pub(crate) line: Option<usize>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -740,3 +789,6 @@ fn branch(text: &str) -> Result<String, String> {
 fn key(text: &str) -> Result<String, String> {
     keys::named(text).map(|_| text.to_string()).ok_or_else(|| format!("unknown key; use {KEY_NAMES}"))
 }
+
+#[cfg(test)]
+mod tests;

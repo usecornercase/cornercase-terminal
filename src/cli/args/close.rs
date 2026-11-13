@@ -97,6 +97,3 @@ pub(crate) struct RenameArgs {
     #[arg(value_name = "NAME", help = "The new name; an empty one goes back to the default")]
     pub(crate) name: String,
 }
-
-#[cfg(test)]
-mod tests;

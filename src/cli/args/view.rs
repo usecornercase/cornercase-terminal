@@ -1,6 +1,6 @@
 use clap::Args;
 
-use super::Print;
+use super::{BootArg, Print};
 
 #[derive(Debug, Args)]
 pub(crate) struct ViewArgs {
@@ -50,4 +50,6 @@ pub(crate) struct ViewSetArgs {
     pub(crate) hidden: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }

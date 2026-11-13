@@ -12,6 +12,8 @@ With --machine NAME the workspace is made on that machine of `cornercase machine
 --project is that machine's id, as `status --json` lists it under machines, and so is the id printed.
 --focus shows it in this window once the machine lists it. It needs a server that knows the
 `machine-start` feature.
+--boot does not go with --machine, whose ids are that machine's: send the command there with
+--remote and its boot.
 
 Examples:
   cornercase new-workspace experiments
@@ -45,9 +47,9 @@ is checked out as it is, with no fetch. --fresh needs a server that knows the `f
 With --machine NAME the agent starts on that machine of `cornercase machines`, by its server, as if
 the command ran there: --project, --workspace and the pane's id printed are that machine's ids, as
 `status --json` lists them under machines, and the agent, its accounts, profiles and issue trackers
-are the machine's own. --wait, --until and --timeout are refused: follow the agent there, with
-`cornercase --remote`. --focus shows its tab in this window once the machine lists it. It needs a
-server that knows the `machine-start` feature.
+are the machine's own. --wait, --until, --timeout and --boot (the ids are that machine's) are refused:
+follow the agent there, with `cornercase --remote` and its boot. --focus shows its tab in this window
+once the machine lists it. It needs a server that knows the `machine-start` feature.
 
 With --placed the command answers as soon as the tab is open, after its worktree is made or its
 issue read, with the same ids, and the launch goes on, here or on a machine, as the window's dialogs

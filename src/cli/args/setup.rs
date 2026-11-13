@@ -1,6 +1,6 @@
 use clap::Args;
 
-use super::{Create, branch};
+use super::{BootArg, Create, branch};
 use crate::cli::help::{BY_BRANCH, HERE_WORKSPACE};
 
 #[derive(Debug, Args)]
@@ -11,4 +11,6 @@ pub(crate) struct SetupArgs {
     pub(crate) worktree: Option<String>,
     #[command(flatten)]
     pub(crate) create: Create,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
