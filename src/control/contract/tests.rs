@@ -64,11 +64,15 @@ mod describing {
             "tunnels-remembered",
             "tunnel-hold",
             "agent-models",
-            "tunnel-orders",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();
         assert!(missing.is_empty(), "missing features {missing:?}");
+    }
+
+    #[test]
+    fn taking_tunnel_orders_is_a_feature() {
+        assert!(FEATURES.contains(&"tunnel-orders"));
     }
 
     #[test]

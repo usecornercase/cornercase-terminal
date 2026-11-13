@@ -41,7 +41,7 @@ mod waiting_for_it_to_come_up {
         let _ = wait_up(&heard(vec![Heard::Up]), 5173, |reason| reported.push(reason.to_string()));
         let _ = wait_up(&heard(vec![Heard::Signal]), 5173, |reason| reported.push(reason.to_string()));
 
-        assert!(reported.is_empty());
+        assert_eq!(reported, Vec::<String>::new());
     }
 
     #[test]
@@ -92,7 +92,7 @@ mod reporting_before_the_registration {
         let _ = wait_registered(&heard(vec![Heard::Registered]), 5173, |reason| reported.push(reason.to_string()));
         let _ = held(&heard(vec![Heard::Ended("dropped".into())]), 5173);
 
-        assert!(reported.is_empty());
+        assert_eq!(reported, Vec::<String>::new());
     }
 }
 

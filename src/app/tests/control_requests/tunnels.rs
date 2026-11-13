@@ -9,6 +9,7 @@ const OBSERVER: u64 = 21;
 const HOLD: u64 = 33;
 const TAKER: u64 = 45;
 const OTHER_TAKER: u64 = 46;
+const REPORTER: u64 = 47;
 
 fn app() -> (App, Receiver<AppEvent>) {
     empty_app()
@@ -456,7 +457,7 @@ mod taking_orders {
 
     fn fail(app: &mut App, port: u16, error: &str) {
         let text = json!({"contract": 1, "command": "tunnel-failed", "args": {"port": port, "error": error}});
-        app.request(CLIENT, &text.to_string(), Some(AREA), Instant::now());
+        app.request(REPORTER, &text.to_string(), Some(AREA), Instant::now());
     }
 
     fn hold(app: &mut App, client: u64, port: u16, local: u16) {

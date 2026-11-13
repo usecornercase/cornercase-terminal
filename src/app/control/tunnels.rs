@@ -161,7 +161,7 @@ impl App {
         }
         let held = self.held_for(wait, &list.tunnels);
         if held || (windows_settled && self.takers_answered(wait)) {
-            return Some(if held { Ok(json(&list)) } else { Err(self.tunnel_failure(wait, &list.tunnels)) });
+            return Some(if held { Ok(json(&list)) } else { Err(Self::tunnel_failure(wait, &list.tunnels)) });
         }
         None
     }
@@ -177,7 +177,7 @@ impl App {
         wait.takers.is_empty() || wait.failures.len() >= attached
     }
 
-    fn tunnel_failure(&self, wait: &TunnelWait, tunnels: &[crate::control::TunnelInfo]) -> String {
+    fn tunnel_failure(wait: &TunnelWait, tunnels: &[crate::control::TunnelInfo]) -> String {
         let asked = |holder: u64| wait.asked.iter().any(|(client, _)| *client == holder);
         let mut reasons: Vec<&str> =
             tunnels.iter().filter(|tunnel| asked(tunnel.holder)).filter_map(|tunnel| tunnel.error.as_deref()).collect();
