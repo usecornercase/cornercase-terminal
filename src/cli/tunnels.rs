@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
-use super::args::tunnels::{FailedArg, PortArg, TunnelAction, TunnelArgs, TunnelsArgs};
+use super::args::tunnels::{EndArg, FailedArg, PortArg, TunnelAction, TunnelArgs, TunnelsArgs};
 use super::{print_json, print_out};
-use crate::client::{answer, ask};
-use crate::control::{Command, ListTunnels, TunnelFailed, TunnelInfo, TunnelList, TunnelPort};
+use crate::client::{self, answer, ask};
+use crate::control::{Command, Direction, ListTunnels, TunnelFailed, TunnelInfo, TunnelList, TunnelPort};
 use crate::error::Result;
 
 mod hold;
@@ -24,15 +24,20 @@ pub(super) fn run_list(args: &TunnelsArgs) -> Result<bool> {
 }
 
 pub(super) fn run(args: &TunnelArgs) -> Result<bool> {
-    let (name, port, print, command): (_, _, _, fn(TunnelPort) -> Command) = match &args.action {
-        TunnelAction::Open(arg) => ("tunnel-open", arg.port, &arg.print, Command::TunnelOpen),
-        TunnelAction::Close(arg) => ("tunnel-close", arg.port, &arg.print, Command::TunnelClose),
-        TunnelAction::Forget(arg) => ("tunnel-forget", arg.port, &arg.print, Command::TunnelForget),
-        TunnelAction::Hold(arg) => return hold::run(arg.port),
+    let (name, tunnel, print, command): (_, _, _, fn(TunnelPort) -> Command) = match &args.action {
+        TunnelAction::Open(arg) => {
+            ("tunnel-open", TunnelPort { port: arg.port, direction: None }, &arg.print, Command::TunnelOpen)
+        }
+        TunnelAction::Close(arg) => ("tunnel-close", ending(arg), &arg.print, Command::TunnelClose),
+        TunnelAction::Forget(arg) => ("tunnel-forget", ending(arg), &arg.print, Command::TunnelForget),
+        TunnelAction::Hold(arg) => return hold::run(arg),
         TunnelAction::Orders => return orders::run(),
         TunnelAction::Failed(arg) => return failed(arg),
     };
-    let value = ask(name, command(TunnelPort { port }))?;
+    if tunnel.direction == Some(Direction::Reverse) {
+        client::use_tunnel_reverse()?;
+    }
+    let value = ask(name, command(tunnel))?;
     let list: TunnelList = answer(value.clone())?;
     if print.json {
         print_json(&value)?;
@@ -40,6 +45,10 @@ pub(super) fn run(args: &TunnelArgs) -> Result<bool> {
         print_out(&done_text(&args.action, &list))?;
     }
     Ok(true)
+}
+
+fn ending(arg: &EndArg) -> TunnelPort {
+    TunnelPort { port: arg.port, direction: arg.reverse.then_some(Direction::Reverse) }
 }
 
 fn failed(arg: &FailedArg) -> Result<bool> {
@@ -60,8 +69,12 @@ fn failed_text(port: u16) -> String {
 fn done_text(action: &TunnelAction, list: &TunnelList) -> String {
     match action {
         TunnelAction::Open(PortArg { port, .. }) => opened_text(*port, list),
-        TunnelAction::Close(PortArg { port, .. }) => format!("closed the tunnel of port {port}\n"),
-        TunnelAction::Forget(PortArg { port, .. }) => format!("forgot the tunnel of port {port}\n"),
+        TunnelAction::Close(EndArg { port, reverse, .. }) => {
+            format!("closed the {}tunnel of port {port}\n", if *reverse { "reverse " } else { "" })
+        }
+        TunnelAction::Forget(EndArg { port, reverse, .. }) => {
+            format!("forgot the {}tunnel of port {port}\n", if *reverse { "reverse " } else { "" })
+        }
         TunnelAction::Hold(_) | TunnelAction::Orders | TunnelAction::Failed(_) => String::new(),
     }
 }
@@ -92,9 +105,10 @@ pub(crate) fn text(list: &TunnelList) -> String {
 
 fn line(tunnel: &TunnelInfo, several: bool) -> String {
     let mut text = format!("{}", tunnel.port);
+    let arrow = if tunnel.direction == Some(Direction::Reverse) { "←" } else { "→" };
     match (tunnel.state.as_str(), tunnel.local) {
         ("up", Some(local)) => {
-            let _ = write!(text, " → localhost:{local}  up");
+            let _ = write!(text, " {arrow} localhost:{local}  up");
         }
         ("down", _) => {
             let _ = write!(text, "  down: {}", tunnel.error.as_deref().unwrap_or("unknown"));
@@ -109,7 +123,9 @@ fn line(tunnel: &TunnelInfo, several: bool) -> String {
 }
 
 fn holder_suffix(tunnel: &TunnelInfo, several: bool) -> String {
-    if tunnel.kind == "hold" {
+    if tunnel.direction == Some(Direction::Reverse) {
+        format!(" (reverse hold {})", tunnel.holder)
+    } else if tunnel.kind == "hold" {
         format!(" (hold {})", tunnel.holder)
     } else if several {
         format!(" (window {})", tunnel.holder)

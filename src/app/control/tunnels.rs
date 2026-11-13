@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use super::{Handled, Pending, Reply, Stage, conflict, json, malformed};
 use crate::app::App;
-use crate::app::tunnels::Origin;
+use crate::app::tunnels::{Kind, Origin};
 use crate::control::contract::{Code, Refusal};
-use crate::control::{Done, TunnelFailed, TunnelHold, TunnelInfo, TunnelPort};
+use crate::control::{Direction, Done, TunnelFailed, TunnelHold, TunnelInfo, TunnelPort};
 use crate::log;
 use crate::protocol::{TunnelOrder, TunnelState};
 use crate::remote::tunnel;
@@ -12,6 +12,9 @@ use crate::remote::tunnel;
 const NO_WINDOW: &str = "no window holds tunnels for this server: tunnels are held by a window opened with \
     `cornercase remote` on the computer that should listen, or by a program there that runs `tunnel orders`";
 const NOT_HELD: &str = "no window holds a tunnel for port";
+const NOT_HELD_REVERSE: &str = "no program holds a reverse tunnel on port";
+const REVERSE_OPEN: &str =
+    "a reverse tunnel is opened by `tunnel hold --reverse` on the computer whose port it is, never by the server";
 const BUSY_CONNECTION: &str = "this connection already holds a tunnel or takes tunnel orders; open another connection";
 const OPEN_WITHIN: u32 = 45;
 const CLOSE_WITHIN: u32 = 10;
@@ -80,6 +83,9 @@ impl App {
         if port == 0 {
             return Err(malformed("a port is 1 to 65535"));
         }
+        if tunnel.direction == Some(Direction::Reverse) {
+            return Err(malformed(REVERSE_OPEN));
+        }
         let windows = self.opening.tunnels.window_clients();
         let takers = self.opening.tunnels.takers();
         if windows.is_empty() && takers.is_empty() {
@@ -96,23 +102,25 @@ impl App {
     }
 
     pub(super) fn tunnel_close_request(&mut self, client: u64, tunnel: &TunnelPort, now: Instant) -> Handled {
-        self.end_tunnel_request(client, tunnel.port, Verb::Close, now)
+        self.end_tunnel_request(client, tunnel, Verb::Close, now)
     }
 
     pub(super) fn tunnel_forget_request(&mut self, client: u64, tunnel: &TunnelPort, now: Instant) -> Handled {
         if tunnel.port == 0 {
             return Err(malformed("a port is 1 to 65535"));
         }
-        self.end_tunnel_request(client, tunnel.port, Verb::Forget, now)
+        self.end_tunnel_request(client, tunnel, Verb::Forget, now)
     }
 
-    fn end_tunnel_request(&mut self, client: u64, port: u16, verb: Verb, now: Instant) -> Handled {
-        let asked = match verb {
-            Verb::Forget => self.forget_tunnel(port),
-            _ => self.close_tunnel(port),
-        };
-        if asked.is_empty() && self.opening.tunnels.takers().is_empty() {
-            return Err(Refusal::new(Code::NotFound, format!("{NOT_HELD} {port}; `cornercase tunnels` lists them")));
+    fn end_tunnel_request(&mut self, client: u64, tunnel: &TunnelPort, verb: Verb, now: Instant) -> Handled {
+        let port = tunnel.port;
+        let direction = tunnel.direction.unwrap_or(Direction::Forward);
+        let order = if verb == Verb::Forget { TunnelOrder::Forget(port) } else { TunnelOrder::Close(port) };
+        let asked = self.end_tunnel(port, direction, order);
+        let reverse = direction == Direction::Reverse;
+        if asked.is_empty() && (reverse || self.opening.tunnels.takers().is_empty()) {
+            let held = if reverse { NOT_HELD_REVERSE } else { NOT_HELD };
+            return Err(Refusal::new(Code::NotFound, format!("{held} {port}; `cornercase tunnels` lists them")));
         }
         self.pend_tunnel(client, TunnelWait::new(port, verb, asked), (now, CLOSE_WITHIN));
         Ok(None)
@@ -125,8 +133,10 @@ impl App {
         if self.holds_tunnel(client) || self.opening.tunnels.takes_orders(client) {
             return Err(conflict(BUSY_CONNECTION));
         }
-        self.hold_tunnel(client, hold.port, hold.local);
-        Ok(Some(json(&self.tunnel_list(Some(hold.port)))))
+        let direction = hold.direction.unwrap_or(Direction::Forward);
+        let kind = if direction == Direction::Reverse { Kind::ReverseHold } else { Kind::Hold };
+        self.hold_tunnel(client, kind, (hold.port, hold.local));
+        Ok(Some(json(&self.tunnel_list(Some((hold.port, direction))))))
     }
 
     pub(super) fn tunnel_orders_request(&mut self, client: u64) -> Handled {
@@ -156,7 +166,7 @@ impl App {
             }
         }
         log::info!("ui", "tunnel failure reported", port = port, requests = told, bytes = reason.len());
-        Ok(Some(json(&self.tunnel_list(Some(port)))))
+        Ok(Some(json(&self.tunnel_list(Some((port, Direction::Forward))))))
     }
 
     fn pend_tunnel(&mut self, client: u64, wait: TunnelWait, (now, seconds): (Instant, u32)) {
@@ -172,7 +182,7 @@ impl App {
             return None;
         }
         let opening = wait.verb == Verb::Open;
-        let list = self.tunnel_list(opening.then_some(wait.port));
+        let list = self.tunnel_list(opening.then_some((wait.port, Direction::Forward)));
         if !opening || self.held_for(wait, &list.tunnels) {
             return Some(Ok(json(&list)));
         }

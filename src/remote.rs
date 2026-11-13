@@ -141,8 +141,19 @@ impl Stderr {
     }
 
     fn collect(self, from: impl Read + Send + 'static) -> JoinHandle<()> {
+        self.collect_lines(from, |_| true)
+    }
+
+    fn collect_lines(
+        self,
+        from: impl Read + Send + 'static,
+        mut keep: impl FnMut(&str) -> bool + Send + 'static,
+    ) -> JoinHandle<()> {
         thread::spawn(move || {
-            BufReader::new(from).lines().map_while(io::Result::ok).for_each(|line| self.keep(&line));
+            let lines = BufReader::new(from).lines().map_while(io::Result::ok);
+            for line in lines.filter(|line| keep(line)) {
+                self.keep(&line);
+            }
         })
     }
 }

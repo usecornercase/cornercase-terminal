@@ -1,10 +1,13 @@
-use std::io::{BufRead, BufReader, Read};
-use std::net::TcpStream;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::thread;
 use std::time::Duration;
 
 use serde_json::Value;
 
-use super::remote::{gone, kept_tunnels, remote_window, remotely, tunnel_args, tunnel_pid, tunnel_pids};
+use super::remote::{
+    gone, kept_tunnels, remote_window, remotely, reverse_args, reverse_pid, tunnel_args, tunnel_pid, tunnel_pids,
+};
 use super::*;
 
 const SERVE: &str = "python3 -c 'import socket; s = socket.socket(); s.bind((\"127.0.0.1\", 0)); s.listen(); [(c.sendall(b\"hello\"), c.close()) for c in iter(lambda: s.accept()[0], None)]'";
@@ -276,10 +279,30 @@ fn a_held_tunnel_ends_when_its_reader_leaves() {
 fn tunnel_hold_needs_remote() {
     let session = Session::new();
 
-    let out = session.cli(&["tunnel", "hold", "5173"]);
+    for args in [&["tunnel", "hold", "5173"][..], &["tunnel", "hold", "--reverse", "9222"]] {
+        let out = session.cli(args);
 
-    assert_eq!(out.status.code(), Some(2), "{out:?}");
-    assert!(String::from_utf8_lossy(&out.stderr).contains("needs --remote"), "{out:?}");
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("needs --remote"), "{out:?}");
+    }
+}
+
+fn free_port() -> u16 {
+    let socket = TcpListener::bind(("127.0.0.1", 0)).expect("bind a port");
+    socket.local_addr().expect("the port").port()
+}
+
+#[test]
+fn a_held_tunnel_takes_the_local_port_it_asks_for_when_its_port_is_taken_here() {
+    let app = Harness::start();
+    let port = serving(&app);
+    let wanted = free_port();
+
+    let (_child, line, _reader) =
+        streaming(&app.session, &["tunnel", "hold", &port.to_string(), "--local", &wanted.to_string()]);
+
+    assert_eq!(line["local"].as_u64(), Some(u64::from(wanted)), "{line}");
+    assert_eq!(&read_through(wanted), b"hello");
 }
 
 #[test]
@@ -400,4 +423,151 @@ fn tunnel_orders_needs_remote() {
 
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("needs --remote"), "{out:?}");
+}
+
+fn serving_here() -> u16 {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind a port");
+    let port = listener.local_addr().expect("the port").port();
+    thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let _ = stream.write_all(b"hello");
+        }
+    });
+    port
+}
+
+fn held_reverse(session: &Session, local: u16, there: Option<u16>) -> Streaming {
+    let local = local.to_string();
+    let there = there.map(|there| there.to_string());
+    let mut args = vec!["tunnel", "hold", "--reverse", &local];
+    if let Some(there) = &there {
+        args.extend(["--there", there]);
+    }
+    streaming(session, &args)
+}
+
+fn port_of(line: &Value) -> u16 {
+    u16::try_from(line["port"].as_u64().expect("a port")).expect("a port")
+}
+
+fn assert_reverse_line(session: &Session, local: u16) {
+    let args = reverse_args(session, local);
+    let wanted = ["-R", "127.0.0.1:0:localhost", "LogLevel=INFO", "ExitOnForwardFailure=yes", "ControlPath=none"];
+    for word in wanted.into_iter().chain(["BatchMode=yes", "-N", "--", "devbox"]) {
+        assert!(args.iter().any(|arg| arg.contains(word)), "{word} in {args:?}");
+    }
+}
+
+fn assert_reverse_listed(session: &Session) {
+    let list = listed(session, &["tunnels", "--json"]);
+    let tunnel = &list["tunnels"][0];
+    assert_eq!((tunnel["kind"].as_str(), tunnel["direction"].as_str()), (Some("hold"), Some("reverse")));
+}
+
+#[test]
+fn a_program_holds_a_reverse_tunnel_until_it_is_closed() {
+    let app = Harness::start();
+    let local = serving_here();
+
+    let (mut child, line, _reader) = held_reverse(&app.session, local, None);
+
+    let port = port_of(&line);
+    assert_ne!(port, 0);
+    assert_eq!(line["local"].as_u64(), Some(u64::from(local)));
+    assert_eq!(line["direction"].as_str(), Some("reverse"));
+    assert_eq!(line["url"].as_str(), Some(format!("http://127.0.0.1:{port}").as_str()));
+    assert_eq!(&read_through(port), b"hello");
+    assert_reverse_listed(&app.session);
+    assert_reverse_line(&app.session, local);
+    let pid = reverse_pid(&app.session, local);
+    let plain = app.session.cli(&["tunnel", "close", &port.to_string()]);
+    assert_eq!(plain.status.code(), Some(1), "{plain:?}");
+    assert!(child.try_wait().expect("wait").is_none(), "a plain close does not reach a reverse hold");
+
+    app.session.says(&["tunnel", "close", "--reverse", &port.to_string()]);
+
+    assert_eq!(exit_of(&mut child), Some(0));
+    wait_until("the tunnel's ssh is gone", || gone(&pid));
+    assert_eq!(listed(&app.session, &["tunnels", "--json"])["tunnels"], serde_json::json!([]));
+}
+
+#[test]
+fn a_reverse_tunnel_on_a_chosen_port() {
+    let app = Harness::start();
+    let local = serving_here();
+    let there = free_port();
+
+    let (_child, line, _reader) = held_reverse(&app.session, local, Some(there));
+
+    assert_eq!(port_of(&line), there);
+    let args = reverse_args(&app.session, local);
+    assert!(args.contains(&"LogLevel=DEBUG1".to_string()), "{args:?}");
+    assert!(args.contains(&format!("127.0.0.1:{there}:localhost:{local}")), "{args:?}");
+    assert_eq!(&read_through(there), b"hello");
+}
+
+#[test]
+fn a_reverse_tunnel_on_a_port_taken_there_fails_at_once() {
+    let app = Harness::start();
+    let local = serving_here();
+    let taken = TcpListener::bind(("127.0.0.1", 0)).expect("take a port");
+    let there = taken.local_addr().expect("the port").port();
+
+    let (local, there) = (local.to_string(), there.to_string());
+    let out = remotely(&app.session, &["tunnel", "hold", "--reverse", &local, "--there", &there])
+        .output()
+        .expect("run tunnel hold");
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(stderr.contains(&format!("remote port forwarding failed for listen port {there}")), "{stderr}");
+    assert_eq!(listed(&app.session, &["tunnels", "--json"])["tunnels"], serde_json::json!([]));
+}
+
+#[test]
+fn a_forward_and_a_reverse_tunnel_of_one_port_are_kept_apart() {
+    let app = Harness::start();
+    let local = serving_here();
+    let (mut reverse, line, _reverse_reader) = held_reverse(&app.session, local, None);
+    let port = port_of(&line);
+
+    let (mut forward, held_line, _forward_reader) = held(&app.session, port);
+
+    let through = u16::try_from(held_line["local"].as_u64().expect("a local port")).expect("a port");
+    assert_ne!(through, port, "the reverse relay listens on {port} here");
+    assert_eq!(&read_through(through), b"hello");
+    let tunnels = listed(&app.session, &["tunnels", "--json"]);
+    let all = tunnels["tunnels"].as_array().expect("a list");
+    let reversed = all.iter().filter(|tunnel| tunnel["direction"] == "reverse").count();
+    assert_eq!((all.len(), reversed), (2, 1), "{tunnels}");
+
+    app.session.says(&["tunnel", "close", &port.to_string()]);
+
+    assert_eq!(exit_of(&mut forward), Some(0));
+    assert!(reverse.try_wait().expect("wait").is_none());
+    assert_eq!(listed(&app.session, &["tunnels", "--json"])["tunnels"][0]["direction"], "reverse");
+    app.session.says(&["tunnel", "close", "--reverse", &port.to_string()]);
+    assert_eq!(exit_of(&mut reverse), Some(0));
+}
+
+#[test]
+fn a_reverse_hold_never_answers_an_open() {
+    let app = Harness::start();
+    let port = serving(&app);
+    let (_orders, _first, mut reader) = taking_orders(&app.session);
+    let asked = asking(&app.session, port);
+    assert_eq!(next_line(&mut reader), serde_json::json!({"order": "open", "port": port}));
+    std::fs::write(app.session.dir.join("tunnel.fails"), "").expect("make the tunnel's ssh fail");
+    let (local, there) = (serving_here().to_string(), port.to_string());
+
+    let failed = remotely(&app.session, &["tunnel", "hold", "--reverse", &local, "--there", &there])
+        .output()
+        .expect("run tunnel hold");
+
+    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    std::fs::remove_file(app.session.dir.join("tunnel.fails")).expect("let the tunnel's ssh work");
+    let (_hold, _line, _held) = held(&app.session, port);
+    let (code, out, err) = finished(asked);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(serde_json::from_str::<Value>(&out).expect("json")["tunnels"][0]["kind"], "hold");
 }
