@@ -44,7 +44,12 @@ case "$1 $2" in
         ;;
     "run list") cat "$FAKE/runs" ;;
     "run view") cat "$FAKE/jobs" ;;
-    "issue list") cat "$FAKE/issues" ;;
+    "issue list")
+        case "$*" in
+            *"--state all"*) cat "$FAKE/issues" ;;
+            *) grep -v CLOSED "$FAKE/issues" || true ;;
+        esac
+        ;;
     "issue view") cat "$FAKE/told" ;;
     "workflow run" | "run rerun" | "issue create" | "issue comment") ;;
     *) exit 1 ;;
@@ -190,15 +195,7 @@ expect_output "is already released"
 new_case "notes carry the versions that never got a release"
 tag_released
 printf 'v0.3.0\nv0.1.0\n' >"$FAKE/releases"
-cat >"$FAKE/body" <<'BODY'
-## Release Notes
-
-- what 0.3.0 changed
-
-## Install cornercase 0.3.0
-
-### Install prebuilt binaries
-BODY
+dist_body
 cat >"$FAKE/expected" <<'BODY'
 ## Release Notes
 
@@ -246,6 +243,14 @@ run_script notes v0.3.0
 expect_no_call "release edit"
 expect_output "has no release"
 
+new_case "notes of a release older than the newest one leave Latest alone"
+tag_released
+printf 'v0.4.0\nv0.3.0\nv0.1.0\n' >"$FAKE/releases"
+dist_body
+run_script notes v0.3.0
+expect_call "gh release edit v0.3.0 --notes-file"
+expect_call "--latest=false"
+
 new_case "a failed release opens an issue once"
 tag_released
 run_script failed v0.3.0 https://example.com/runs/42
@@ -255,14 +260,6 @@ echo "7 OPEN" >"$FAKE/issues"
 run_script failed v0.3.0 https://example.com/runs/42
 expect_call "gh issue comment 7"
 expect_no_call "issue create"
-
-new_case "notes of a release older than the newest one leave Latest alone"
-tag_released
-printf 'v0.4.0\nv0.3.0\nv0.1.0\n' >"$FAKE/releases"
-dist_body
-run_script notes v0.3.0
-expect_call "gh release edit v0.3.0 --notes-file"
-expect_call "--latest=false"
 
 new_case "a failure already told is not told again"
 tag_released
@@ -356,6 +353,14 @@ run_script watch
 expect_call "issue create"
 expect_call "after its GitHub Release was published"
 
+new_case "a failure of a later attempt is told again"
+tag_released
+echo "7 OPEN" >"$FAKE/issues"
+echo "see https://example.com/runs/42/attempts/1" >"$FAKE/told"
+run_script failed v0.3.0 https://example.com/runs/42 2
+expect_call "gh issue comment 7"
+expect_call "runs/42/attempts/2"
+
 new_case "watch tells each failure once"
 tag_released
 last_run 1 failure
@@ -391,6 +396,15 @@ last_run 1 success
 run_script watch
 expect_call "gh release edit v0.3.0 --notes-file"
 expect_no_call "release edit v0.2.0"
+
+new_case "watch completes the notes of an older tag among the newest"
+tag_released
+printf 'v0.3.0\nv0.2.0\n' >"$FAKE/releases"
+dist_body
+last_run 1 success
+run_script watch
+expect_call "gh release edit v0.2.0 --notes-file"
+expect_call "--latest=false"
 
 new_case "a dry run writes nothing"
 DRY_RUN=1 run_script release
