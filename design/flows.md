@@ -14,12 +14,12 @@ Code: `flows/`, `app/flow_runs.rs`, `app/flow_panel.rs`, `app/flows_dialog.rs`, 
 - [Built-in flows](flows/built-in-flows.md): the flows that ship, editing one, deleting and restoring them.
 - [Agents never ask, and starting a run](flows/starting-a-run.md): Agents never ask: unattended modes, Claude Code's consent, a project's `env` and `args`; Starting a run; Shown with `--focus`, in the window or a view.
 - [A worktree of its own](flows/own-worktrees.md): #313: file version 2, branches and folders, one job, setup, integration, removal, the tag.
-- [The run's folder](flows/run-folder.md): #312, #778: the task as a file, where, `CORNERCASE_RUN_DIR`, answers as files, `--add-dir`, lifecycle, the panel.
+- [The run's folder](flows/run-folder.md): #312, #778, #781: the task as a file, where (the local day), `CORNERCASE_RUN_DIR`, answers as files, `--add-dir`, lifecycle, the panel.
 - [The brief, the team and the session](flows/brief-and-team.md): The brief; After a loop, every later stage runs again (#780); Members' notifications and marks; Waking the orchestrator; The team hangs under its orchestrator; The session.
 - [Commands and sharing](flows/commands-and-sharing.md): Commands: the lookup order; Sharing: export, import, risks, names.
 - [Community flows](flows/community-flows.md): the `cornercase-flow` topic, the snapshot, validation, the pages, importing by `owner/repo`.
 - [Through the server](flows/through-the-server.md): #342: the flow as JSON, saving, deleting, hiding, restoring, following runs and messages.
-- [Recording, progress, the diagram and the Flow panel](flows/progress-and-diagram.md): Recording; Where a run stands; The diagram; The Flow panel.
+- [Recording, progress, the diagram and the Flow panel](flows/progress-and-diagram.md): Recording; Where a run stands; Not run since the last change (#782); The diagram; The Flow panel.
 - [The end](flows/end.md): #372: when the end lights, the latched mark, the pull request tag, scripts.
 - [Closing a merged run's agents](flows/closing-when-merged.md): #734: the opt-in, the conditions, the 3 minutes, what clients see.
 - [The Flows and start dialogs](flows/dialogs.md): The Flows dialog; The preview scrolls; The start dialog; On another machine; The order and the default flow; Line breaks and display columns.

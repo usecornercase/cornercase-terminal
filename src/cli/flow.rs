@@ -13,6 +13,7 @@ use crate::control::{
     FlowRuns, FlowSaved, FlowSpec, Flows, Imported, RoleInfo, RunEdge, RunFiles, RunInfo, RunState, contract,
 };
 use crate::error::{Error, Result};
+use crate::flows::progress::stages_in_words;
 use crate::flows::registry::{self, Source};
 use crate::flows::share;
 use crate::flows::{Flow, Worktree};
@@ -593,6 +594,12 @@ fn run_block(run: &RunState) -> String {
         };
         let _ = writeln!(out, "  {:<width$}  {pane:<9}  {status}", share::visible(&role.role));
     }
+    out.push_str(&run_notes(run));
+    out
+}
+
+fn run_notes(run: &RunState) -> String {
+    let mut out = String::new();
     if let Some(last) = &run.last {
         let from = last.from.as_deref().map(|from| format!("{} ", share::visible(from))).unwrap_or_default();
         let _ = writeln!(out, "  last: {from}→ {}", share::visible(&last.to));
@@ -600,6 +607,12 @@ fn run_block(run: &RunState) -> String {
     if let Some(RunEdge::Outside { from, to }) = run.outside {
         let from = from.map_or_else(|| "the start".to_string(), |from| format!("stage {}", from + 1));
         let _ = writeln!(out, "  outside the plan: {from} → stage {}", to + 1);
+    }
+    if run.ended && !run.not_run.is_empty() {
+        let _ = writeln!(out, "  ended with {} not run on the last change", stages_in_words(&run.not_run));
+    } else if !run.not_run.is_empty() {
+        let stages: Vec<String> = run.not_run.iter().map(|stage| format!("stage {}", stage + 1)).collect();
+        let _ = writeln!(out, "  not run since the last change: {}", stages.join(", "));
     }
     if run.ended {
         out.push_str("  ended: the orchestrator marked its pane for review\n");

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { inputKey } from '../src/lib/demo/client';
-import { type Flow, Progress } from '../src/lib/demo/flow';
+import { type Flow, Progress, WAITING } from '../src/lib/demo/flow';
 import { FULL_ISSUE, RUN_BRANCH } from '../src/lib/demo/flowrun';
 import { keysItems } from '../src/lib/demo/keys';
 import { markPane, workspaceLabel } from '../src/lib/demo/model';
@@ -61,6 +61,21 @@ test('progress follows the plan: next stage, a loop round, a step outside the pl
   assert.equal(p.message({ kind: 'forward', stage: 0 }, 'reviewer')?.text, 'to reviewer');
   assert.equal(p.travelled(4500), 0.5);
   assert.equal(p.travelled(5000), null);
+});
+
+test('progress lists the stages not run since the last change', () => {
+  const p = new Progress();
+  for (const to of ['coder', 'reviewer', 'coder']) send(p, FULL_ISSUE, to, 0);
+  assert.deepEqual(p.notRun, [1, 2]);
+  send(p, FULL_ISSUE, 'reviewer', 0);
+  assert.deepEqual(p.notRun, [2]);
+  send(p, FULL_ISSUE, 'tester', 0);
+  assert.deepEqual(p.notRun, []);
+  const skipped = new Progress();
+  for (const to of ['coder', 'tester']) send(skipped, FULL_ISSUE, to, 0);
+  assert.deepEqual(skipped.notRun, []);
+  send(skipped, FULL_ISSUE, 'reviewer', 0);
+  assert.deepEqual(skipped.notRun, [2]);
 });
 
 test('the run workspace offers show flow in its menu, and the panel draws the plan', () => {
@@ -349,6 +364,20 @@ test('the Flow panel heading follows the run: running, its stage, its loop and i
   assert.ok(shown(app, 'stage 1 of 3 · findings 1/3'));
   playUntil(app, 'reached its end');
   assert.equal(app.textAt('Full issue · running'), null);
+  app.destroy();
+});
+
+test('the Flow panel heading says which stages have not run since the last change, in orange, until they get the work', () => {
+  const app = demo(160, 60);
+  toRun(app);
+  app.toggleFlow();
+  playUntil(app, 'stage 2 and 3 not run since the last change');
+  const at = app.textAt('stage 2 and 3 not run since the last change');
+  assert.ok(at);
+  assert.equal(app.render().grid.at(at.x, at.y)?.fg, WAITING);
+  playUntil(app, 'stage 3 not run since the last change');
+  playUntil(app, 'stage 3 of 3');
+  assert.equal(app.textAt('not run since the last change'), null);
   app.destroy();
 });
 

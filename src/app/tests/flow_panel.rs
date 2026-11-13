@@ -578,6 +578,21 @@ mod heading {
         app.show_flow();
         assert!(screen(&mut app).contains("not started"));
     }
+
+    #[test]
+    fn a_change_shows_the_stages_not_run_until_they_get_the_work() {
+        let (mut app, _rx, _dir) = team();
+        for to in ["coder", "reviewer", "coder"] {
+            send(&mut app, ORCHESTRATOR, to, "go");
+        }
+        app.show_flow();
+        assert!(screen(&mut app).contains("stage 2 and 3 not run"));
+        send(&mut app, ORCHESTRATOR, "reviewer", "go");
+        let reviewed = screen(&mut app);
+        assert!(reviewed.contains("stage 3 not run") && !reviewed.contains("stage 2 and 3"), "{reviewed}");
+        send(&mut app, ORCHESTRATOR, "tester", "go");
+        assert!(!screen(&mut app).contains("not run"));
+    }
 }
 
 mod team_rows {

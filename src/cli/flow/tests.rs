@@ -211,6 +211,29 @@ mod runs {
     }
 
     #[test]
+    fn a_run_after_a_change_lists_the_stages_not_run() {
+        let changed = RunState { not_run: vec![2, 3], ended: false, ..run() };
+        let text = runs_text(&FlowRuns { runs: vec![changed], ..FlowRuns::default() });
+        assert!(
+            text.contains("  outside the plan: stage 1 → stage 3\n  not run since the last change: stage 3, stage 4\n"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_run_that_ended_says_which_stages_never_saw_the_last_change() {
+        let ended = |not_run| {
+            runs_text(&FlowRuns { runs: vec![RunState { not_run, ended: true, ..run() }], ..FlowRuns::default() })
+        };
+        let one = ended(vec![2]);
+        assert!(
+            one.contains("  ended with stage 3 not run on the last change\n  ended: the orchestrator marked"),
+            "{one}"
+        );
+        assert!(ended(vec![1, 2, 3]).contains("ended with stage 2, 3 and 4 not run"));
+    }
+
+    #[test]
     fn a_run_that_closes_when_merged_says_so_and_others_do_not() {
         let line = "  closes its agents once its pull request merges\n";
         assert!(!runs_text(&FlowRuns { runs: vec![run()], ..FlowRuns::default() }).contains(line));

@@ -93,6 +93,14 @@ pub(crate) fn display(at: i64, name: &str) -> String {
     )
 }
 
+pub(crate) fn day(at: i64, name: &str) -> String {
+    let zone = zone(name).unwrap_or(TimeZone::UTC);
+    Timestamp::from_second(at).map_or_else(
+        |_| crate::time::date(at.saturating_mul(1000)),
+        |timestamp| timestamp.to_zoned(zone).strftime("%Y-%m-%d").to_string(),
+    )
+}
+
 pub(crate) fn stamp(at: i64, name: &str) -> String {
     Timestamp::from_second(at).ok().zip(zone(name).ok()).map_or_else(
         || at.to_string(),

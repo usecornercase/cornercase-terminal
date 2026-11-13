@@ -26,6 +26,11 @@ mod describing {
     }
 
     #[test]
+    fn it_lists_the_feature_of_a_runs_not_run() {
+        assert!(FEATURES.contains(&"flow-not-run"));
+    }
+
+    #[test]
     fn it_names_the_version_the_contract_and_the_boot() {
         let descriptor = describe("1-2", &[]);
 
