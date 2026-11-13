@@ -73,8 +73,7 @@ impl App {
     fn queue_zone(&self, entry: Option<&queue::Entry>) -> String {
         match entry {
             Some(entry) => entry.task.zone.clone(),
-            None if self.panels.queued.zone().is_empty() => queue::clock::local_zone(),
-            None => self.panels.queued.zone().to_string(),
+            None => self.window_zone(),
         }
     }
 

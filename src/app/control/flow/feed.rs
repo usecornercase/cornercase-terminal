@@ -12,7 +12,7 @@ use crate::error::Result;
 use crate::flows::run::Run;
 use crate::flows::{self, folder};
 use crate::log::{self, Job, Level};
-use crate::project::{Hierarchy, Workspace};
+use crate::project::{Hierarchy, Workspace, WorkspaceAt};
 use crate::state::SeatState;
 use crate::time::Stamp;
 use crate::version;
@@ -42,25 +42,28 @@ impl App {
             .map(|role| self.run_role(run, workspace, &role.name))
             .collect();
         let ended = roles.first().and_then(|role| role.status.as_deref()) == Some(Status::Pending.name());
+        Some(RunState { roles, ended, state: None, ..self.base_state(run, at) })
+    }
+
+    fn base_state(&self, run: &Run, at: WorkspaceAt) -> RunState {
         let progress = &run.progress;
-        Some(RunState {
+        RunState {
             run: run.id,
             project: self.projects[at.project()].id,
             workspace: run.workspace,
             flow: (&run.flow).into(),
             task: run.task.clone(),
             dir: run.dir.clone(),
-            roles,
             stage: progress.active,
             rounds: (0..run.flow.stages.len()).map(|stage| progress.rounds(stage)).collect(),
             holder: progress.holder.clone(),
             last: progress.last.as_ref().map(StepInfo::from),
             outside: progress.outside.map(Into::into),
-            ended,
+            not_run: progress.not_run().to_vec(),
             messages: run.recorded,
-            state: None,
             close_when_merged: run.close_when_merged,
-        })
+            ..RunState::default()
+        }
     }
 
     fn closed_run_state(&self, kept: &Kept) -> Option<RunState> {
@@ -79,25 +82,7 @@ impl App {
                 ..RoleState::default()
             }
         });
-        let progress = &run.progress;
-        Some(RunState {
-            run: run.id,
-            project: self.projects[at.project()].id,
-            workspace: run.workspace,
-            flow: (&run.flow).into(),
-            task: run.task.clone(),
-            dir: run.dir.clone(),
-            roles: roles.collect(),
-            stage: progress.active,
-            rounds: (0..run.flow.stages.len()).map(|stage| progress.rounds(stage)).collect(),
-            holder: progress.holder.clone(),
-            last: progress.last.as_ref().map(StepInfo::from),
-            outside: progress.outside.map(Into::into),
-            ended,
-            messages: run.recorded,
-            state: Some("closed".to_string()),
-            close_when_merged: run.close_when_merged,
-        })
+        Some(RunState { roles: roles.collect(), ended, state: Some("closed".to_string()), ..self.base_state(run, at) })
     }
 
     fn run_role(&self, run: &Run, workspace: &Workspace, role: &str) -> RoleState {

@@ -221,6 +221,13 @@ impl App {
         self.panels.queued.queue.saved()
     }
 
+    pub(super) fn window_zone(&self) -> String {
+        match self.panels.queued.zone() {
+            "" => queue::clock::local_zone(),
+            zone => zone.to_string(),
+        }
+    }
+
     pub(crate) fn set_queue_zone(&mut self, zone: String) {
         self.panels.queued.zone = zone;
     }

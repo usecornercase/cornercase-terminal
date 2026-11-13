@@ -102,9 +102,5 @@ pub(crate) fn stamp(at: i64, zone_name: &str) -> String {
         .unwrap_or_default()
 }
 
-pub(crate) fn today_of(now: i64, zone_name: &str) -> Option<String> {
-    local_date(now, &zone_of(zone_name)).map(|date| date.to_string())
-}
-
 #[cfg(test)]
 mod tests;

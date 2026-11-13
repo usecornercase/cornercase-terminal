@@ -11,6 +11,7 @@ use super::{Choice, KEPT_DAYS, Options, Recap, prompt};
 use crate::agents::recap::{Ask, Call};
 use crate::agents::{self, Known};
 use crate::error::{Error, Result};
+use crate::queue::clock;
 
 pub(crate) struct Input {
     pub(crate) choice: Choice,
@@ -55,7 +56,7 @@ pub(crate) fn prepare(input: &Input) -> Option<(Range, Dossier)> {
 }
 
 fn current(input: &Input, range: &Range) -> bool {
-    let today = range::today_of(input.now, &input.zone).unwrap_or_default();
+    let today = clock::day(input.now, &input.zone);
     let moment = Moment { now: input.now, today: &today, last_day: range.day.as_deref() };
     !input.fresh && !store::due(input.choice, input.cached.as_ref(), moment)
 }

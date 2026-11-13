@@ -2,7 +2,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use super::*;
 use crate::agents::Known;
-use crate::flows::{ORCHESTRATOR, builtin};
+use crate::flows::{Back, ORCHESTRATOR, Stage, builtin};
 
 fn full_issue() -> Flow {
     builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0)
@@ -301,5 +301,111 @@ mod the_edge_a_step_returns {
         let last = script.progress().last.expect("a step");
 
         assert_eq!(last.time, SystemTime::UNIX_EPOCH + Duration::from_secs(1));
+    }
+}
+
+mod not_run {
+    use super::*;
+
+    fn none() -> Vec<usize> {
+        Vec::new()
+    }
+
+    fn left(script: &Script) -> Vec<usize> {
+        script.progress().not_run().to_vec()
+    }
+
+    #[test]
+    fn nothing_is_left_before_the_work_goes_back() {
+        assert_eq!(left(&Script::new().send("coder").send("reviewer").send("tester")), none());
+        let skipped = Script::new().send("coder").send("tester");
+        assert!(skipped.progress().outside.is_some());
+        assert_eq!(left(&skipped), none());
+    }
+
+    #[test]
+    fn a_round_leaves_every_stage_after_its_target() {
+        assert_eq!(left(&Script::new().send("coder").send("reviewer").send("coder")), [1, 2]);
+    }
+
+    #[test]
+    fn each_send_into_a_stage_takes_it_off() {
+        let round = Script::new().send("coder").send("reviewer").send("coder");
+        let reviewed = round.send("reviewer");
+        assert_eq!(left(&reviewed), [2]);
+        let secured = reviewed.send("security");
+        assert_eq!(left(&secured), [2]);
+        assert_eq!(left(&secured.send("tester")), none());
+    }
+
+    #[test]
+    fn going_on_past_a_stage_leaves_it() {
+        let script = Script::new().send("coder").send("reviewer").send("coder").send("tester");
+        assert_eq!(left(&script), [1]);
+    }
+
+    #[test]
+    fn a_round_of_the_last_stage_also_counts() {
+        let script = Script::new().send("coder").send("reviewer").send("tester").send("coder");
+        assert_eq!(script.edges().last(), Some(&Some(Edge::Loop(2))));
+        assert_eq!(left(&script), [1, 2]);
+    }
+
+    #[test]
+    fn a_step_back_outside_the_plan_is_a_change_whatever_its_roles() {
+        let script = Script::new().send("coder").send("reviewer").send("tester").send("reviewer");
+        assert_eq!(script.edges().last(), Some(&Some(Edge::Outside { from: Some(2), to: 1 })));
+        assert_eq!(left(&script), [2]);
+    }
+
+    #[test]
+    fn a_step_back_to_the_first_stage() {
+        let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(3);
+        flow.name = "Bug, test first".into();
+        let mut script = Script::new();
+        script.flow = flow;
+        let first = script.flow.stages[0].roles[0].clone();
+        let second = script.flow.stages[1].roles[0].clone();
+        let script = script.send(&first).send(&second).send(&first);
+        assert_eq!(left(&script), [1, 2]);
+    }
+
+    #[test]
+    fn a_follow_up_and_a_compact_command_change_nothing() {
+        let round = Script::new().send("coder").send("reviewer").send("coder");
+        assert_eq!(left(&round.compact("reviewer")), [1, 2]);
+        let round = Script::new().send("coder").send("reviewer").send("coder");
+        assert_eq!(left(&round.send("coder")), [1, 2]);
+    }
+
+    #[test]
+    fn a_stage_still_owed_stays_when_a_later_step_goes_back() {
+        let stage = |role: &str, back: Option<usize>| Stage {
+            roles: vec![role.into()],
+            back: back.map(|to| Back { to, when: "findings".into(), at_most: 3 }),
+        };
+        let mut script = Script::new();
+        script.flow.stages = vec![stage("a", None), stage("b", Some(1)), stage("c", None), stage("d", Some(3))];
+        let script = script.send("a").send("b").send("a");
+        assert_eq!(left(&script), [1, 2, 3]);
+        let script = script.send("c");
+        assert_eq!(left(&script), [1, 3]);
+        let script = script.send("d");
+        assert_eq!(left(&script), [1]);
+        assert_eq!(left(&script.send("c")), [1, 3]);
+    }
+
+    #[test]
+    fn a_restore_forgets_it() {
+        let flow = full_issue();
+        assert_eq!(Progress::resumed(&flow, Some(1), &[0, 1, 0]).not_run(), [] as [usize; 0]);
+    }
+
+    #[rstest::rstest]
+    #[case::one(&[2], "stage 3")]
+    #[case::two(&[2, 3], "stage 3 and 4")]
+    #[case::three(&[1, 2, 3], "stage 2, 3 and 4")]
+    fn stages_read_as_words(#[case] stages: &[usize], #[case] words: &str) {
+        assert_eq!(stages_in_words(stages), words);
     }
 }

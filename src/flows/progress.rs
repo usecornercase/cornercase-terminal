@@ -35,6 +35,7 @@ pub(crate) struct Progress {
     pub(crate) last: Option<Step>,
     pub(crate) outside: Option<Edge>,
     entry: Option<(Edge, Option<String>)>,
+    not_run: Vec<usize>,
     rounds: Vec<u32>,
     along: Vec<(Edge, Message)>,
 }
@@ -60,6 +61,10 @@ impl Progress {
 
     pub(crate) fn all_rounds(&self) -> &[u32] {
         &self.rounds
+    }
+
+    pub(crate) fn not_run(&self) -> &[usize] {
+        &self.not_run
     }
 
     pub(crate) fn rounds(&self, stage: usize) -> u32 {
@@ -89,14 +94,25 @@ impl Progress {
             return None;
         }
         let moved = self.moved(flow, message, target);
-        if self.active != Some(target) {
+        let moving = self.active != Some(target);
+        if moving {
             self.entry.clone_from(&moved);
         }
         let edge = moved.as_ref().map(|(edge, _)| *edge);
+        self.track(flow.stages.len(), target, moving && edge.is_some_and(went_back));
         self.record(moved, message);
         self.active = Some(target);
         self.holder = Some(message.to.clone());
         edge
+    }
+
+    fn track(&mut self, stages: usize, target: usize, back: bool) {
+        if back {
+            self.not_run.extend(target + 1..stages);
+            self.not_run.sort_unstable();
+            self.not_run.dedup();
+        }
+        self.not_run.retain(|stage| *stage != target);
     }
 
     fn moved(&mut self, flow: &Flow, message: &Message, target: usize) -> Option<(Edge, Option<String>)> {
@@ -130,6 +146,24 @@ impl Progress {
             return None;
         }
         self.entry.clone()
+    }
+}
+
+fn went_back(edge: Edge) -> bool {
+    match edge {
+        Edge::Loop(_) => true,
+        Edge::Outside { from: Some(from), to } => to < from,
+        Edge::Forward(_) | Edge::Outside { from: None, .. } => false,
+    }
+}
+
+pub(crate) fn stages_in_words(stages: &[usize]) -> String {
+    let names: Vec<String> = stages.iter().map(|stage| (stage + 1).to_string()).collect();
+    match names.split_last() {
+        None => String::new(),
+        Some((only, [])) => format!("stage {only}"),
+        Some((last, [first])) => format!("stage {first} and {last}"),
+        Some((last, rest)) => format!("stage {} and {last}", rest.join(", ")),
     }
 }
 

@@ -6,6 +6,7 @@ use ratatui::text::Span;
 use super::stack::{Look, Slot, cells};
 use super::{Hit, View, dim};
 use crate::flows::ORCHESTRATOR;
+use crate::flows::progress::stages_in_words;
 use crate::text;
 use crate::ui::put;
 use crate::ui::theme::{BRAND_COLOR, WAITING_COLOR, line_colour};
@@ -15,6 +16,7 @@ const RUNNING: &str = "running";
 const REACHED: &str = "reached its end";
 const LEAD_BUTTON: &str = " orchestrator ";
 const STOP_BUTTON: &str = " stop ";
+const NOT_RUN: &str = "not run since the last change";
 const NOT_STARTED: &str = "not started";
 const MIN_NAME: usize = 4;
 const CLOSE_ROOM: u16 = 4;
@@ -25,6 +27,7 @@ pub(crate) struct Heading {
     pub(crate) run: u64,
     pub(crate) messages: u64,
     pub(crate) active: Option<usize>,
+    pub(crate) not_run: Vec<usize>,
     pub(crate) lead: bool,
 }
 
@@ -72,18 +75,34 @@ fn buttons_width(view: &View) -> u16 {
     if view.heading.lead { cells(LEAD_BUTTON).saturating_add(1).saturating_add(stop) } else { stop }
 }
 
-fn fits(view: &View, width: u16) -> bool {
+fn note(view: &View) -> Option<String> {
+    let stages = &view.heading.not_run;
+    (!stages.is_empty()).then(|| format!("{} {NOT_RUN}", stages_in_words(stages)))
+}
+
+struct Rows {
+    inline: bool,
+    note: Option<u16>,
+    buttons: u16,
+}
+
+fn rows(view: &View, width: u16) -> Rows {
     let summary = summary(view).iter().fold(0u16, |n, span| n.saturating_add(cells(&span.content)));
-    summary.saturating_add(1).saturating_add(buttons_width(view)) <= width
+    let note = note(view).map(|note| cells(&note));
+    let inline = note.is_some_and(|note| summary.saturating_add(3).saturating_add(note) <= width);
+    let own = note.is_some() && !inline;
+    let line = summary.saturating_add(note.filter(|_| inline).map_or(0, |note| note.saturating_add(3)));
+    let fits = line.saturating_add(1).saturating_add(buttons_width(view)) <= width;
+    Rows { inline, note: own.then_some(3), buttons: if fits { 2 } else { 3 + u16::from(own) } }
 }
 
 pub(super) fn height(view: &View, width: u16) -> u16 {
-    if fits(view, width) { 3 } else { 4 }
+    let rows = rows(view, width);
+    rows.note.unwrap_or_default().max(rows.buttons) + 1
 }
 
 fn buttons(slot: &Slot, view: &View) -> Vec<(Rect, &'static str, Hit)> {
-    let row = if fits(view, slot.area.width) { 2 } else { 3 };
-    let Some(y) = slot.y(row) else { return Vec::new() };
+    let Some(y) = slot.y(rows(view, slot.area.width).buttons) else { return Vec::new() };
     let stop = cells(STOP_BUTTON).min(slot.area.width);
     let at = |x: u16, label: &'static str, hit: Hit| {
         (Rect { x: slot.area.x + x, y, width: cells(label), height: 1 }.intersection(slot.area), label, hit)
@@ -127,6 +146,24 @@ fn draw_bar(buf: &mut Buffer, slot: &Slot, view: &View) {
     }
 }
 
+fn draw_summary(buf: &mut Buffer, slot: &Slot, view: &View) {
+    let rows = rows(view, slot.area.width);
+    let mut spans = summary(view);
+    let orange = Style::default().fg(WAITING_COLOR);
+    let note = note(view);
+    if let Some(note) = note.as_deref().filter(|_| rows.inline) {
+        spans.push(Span::styled(format!(" · {note}"), orange));
+    }
+    let mut x = 0;
+    for span in spans {
+        slot.put(buf, (2, x), &span.content, span.style);
+        x = x.saturating_add(cells(&span.content));
+    }
+    if let (Some(row), Some(note)) = (rows.note, note) {
+        slot.put(buf, (row, 0), &text::truncate_cells(&note, usize::from(slot.area.width)), orange);
+    }
+}
+
 pub(super) fn draw(buf: &mut Buffer, slot: &Slot, view: &View, look: Look) {
     let heading = &view.heading;
     let messages = if heading.messages == 1 { "message" } else { "messages" };
@@ -137,11 +174,7 @@ pub(super) fn draw(buf: &mut Buffer, slot: &Slot, view: &View, look: Look) {
     let room = usize::from(width.saturating_sub(tail.saturating_add(1)));
     slot.put(buf, (0, 0), &text::truncate_cells(&heading.place, room), Style::default());
     draw_bar(buf, slot, view);
-    let mut x = 0;
-    for span in summary(view) {
-        slot.put(buf, (2, x), &span.content, span.style);
-        x = x.saturating_add(cells(&span.content));
-    }
+    draw_summary(buf, slot, view);
     for (rect, label, _) in buttons(slot, view) {
         let lit = look.hover.is_some_and(|pos| rect.contains(pos));
         put(buf, (rect.x, rect.y), label, action_style(lit), slot.area.right());
