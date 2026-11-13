@@ -35,6 +35,7 @@ rm -f "$1/sessions/$$.json"
 d="$1"; s="$d/sessions/$$.json"; t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"
 mkdir -p "$t"
 state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
+finished() { while [ -d "$d" ] && [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
 state idle
 n=0
 while printf '\033[H\033[2J%s\n────────────\n❯ ' "$said" && IFS= read -r line; do
@@ -45,8 +46,7 @@ while printf '\033[H\033[2J%s\n────────────\n❯ ' "$sai
   esac
   case "$line" in /compact*)
     state busy
-    while [ ! -e "$d/finish" ]; do sleep 0.02; done
-    rm -f "$d/finish"
+    finished
     case "$line" in *nothing*) ;; *)
       printf '{"type":"system","subtype":"compact_boundary","timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl" ;;
     esac
@@ -55,8 +55,7 @@ while printf '\033[H\033[2J%s\n────────────\n❯ ' "$sai
   n=$((n + 1))
   printf '{"type":"user","uuid":"p%s","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$n" "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
   state busy
-  while [ ! -e "$d/finish" ]; do sleep 0.02; done
-  rm -f "$d/finish"
+  finished
   printf '{"type":"assistant","timestamp":"%s.999Z","message":{"id":"m%s","model":"synthetic","usage":{"input_tokens":20,"output_tokens":50,"cache_read_input_tokens":200,"cache_creation_input_tokens":10}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" >> "$t/s$$.jsonl"
   case "$line" in
     *api-error*) printf '{"type":"assistant","timestamp":"%s.999Z","isApiErrorMessage":true,"error":"authentication_failed","apiErrorStatus":403,"message":{"id":"e%s","model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","content":[{"type":"text","text":"Please run /login · API Error: 403 Attention Required! | Cloudflare"}],"usage":{"input_tokens":0,"output_tokens":0}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" >> "$t/s$$.jsonl"
@@ -71,10 +70,10 @@ while printf '\033[H\033[2J%s\n────────────\n❯ ' "$sai
       printf '{"agentType":"general-purpose","requestShape":"background"}' > "$a/agent-a1.meta.json"
       printf '{"type":"user","isSidechain":true,"agentId":"a1","message":{"role":"user","content":"look"}}\n' > "$a/agent-a1.jsonl"
       state idle
-      while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"
+      finished
       printf '{"type":"assistant","isSidechain":true,"agentId":"a1","timestamp":"%s.999Z","message":{"id":"sm1","model":"synthetic","stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$a/agent-a1.jsonl" ;;
     *background*) state shell
-      while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish" ;;
+      finished ;;
   esac
   said="done: $line"
   state idle

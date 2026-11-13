@@ -83,6 +83,24 @@ mod fake_program {
     }
 }
 
+#[cfg(unix)]
+mod gate {
+    use super::*;
+
+    #[test]
+    fn ends_once_its_folder_is_gone() {
+        let dir = TempDir::new();
+        let script = dir.path().join("gated");
+        write_executable(&script, &format!("#!/bin/sh\ntouch \"$0.waits\"\n{}\n", gate("$0.go")));
+        let mut fake = Running::spawn(&mut Command::new(&script));
+        wait_until("the fake waits at its gate", || script.with_extension("waits").exists());
+
+        drop(dir);
+
+        wait_until("the fake ends on its own", || fake.0.try_wait().expect("check the fake").is_some());
+    }
+}
+
 #[test]
 fn a_written_executable_runs() {
     let dir = TempDir::new();
