@@ -403,7 +403,10 @@ mod reversed {
     #[test]
     fn a_debug_line_or_the_report_is_never_the_reason() {
         let dir = TempDir::new();
-        let ssh = ssh_saying(&dir, "debug1: something\nAllocated port 41234 for remote forward to localhost:9222\nTransferred: sent 1, received 2 bytes, in 0.1 seconds\nBytes per second: sent 10.0, received 20.0\n");
+        let ssh = ssh_saying(
+            &dir,
+            "debug1: something\nAllocated port 41234 for remote forward to localhost:9222\nTransferred: sent 1, received 2 bytes, in 0.1 seconds\nBytes per second: sent 10.0, received 20.0\n",
+        );
         std::fs::write(ssh.with_extension("code"), "255").expect("code");
 
         let (_running, reports) = start(&ssh, ANY, UP_WAIT);
