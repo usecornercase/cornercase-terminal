@@ -425,6 +425,23 @@ impl Control {
             Self::Start(a) => &a.boot,
             Self::NewWorkspace(a) => &a.boot,
             Self::Open(a) => &a.boot,
+            Self::Clone(a) => &a.boot,
+            Self::Go(a) => &a.boot,
+            _ => return self.reading_boot(),
+        })
+    }
+
+    fn reading_boot(&self) -> Option<&BootArg> {
+        Some(match self {
+            Self::Read(a) => &a.boot,
+            Self::Wait(a) => &a.boot,
+            Self::Link(a) => &a.boot,
+            Self::Events(a) => &a.boot,
+            Self::Surface(a) => &a.boot,
+            Self::View(a) => &a.boot,
+            Self::Processes(a) => &a.boot,
+            Self::Ports(a) => &a.boot,
+            Self::PullRequest(a) => &a.boot,
             _ => return None,
         })
     }
@@ -434,7 +451,10 @@ impl Control {
             Self::Group(a) => a.action.boot(),
             Self::Todo(a) => a.action.boot(),
             Self::Agents(a) => Some(a.action.boot()),
-            Self::Changes(a) => a.action.boot(),
+            Self::Changes(a) => Some(a.action.boot()),
+            Self::Files(a) => Some(a.action.boot()),
+            Self::Issue(a) => Some(a.action.boot()),
+            Self::Flow(a) => a.action.boot(),
             Self::Queue(a) => a.action.boot(),
             Self::Account(a) => a.action.boot(),
             Self::Worktrees(a) => a.action.boot(),
@@ -568,6 +588,8 @@ pub(crate) struct ReadArgs {
     pub(crate) view: ViewArg,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -624,6 +646,8 @@ pub(crate) struct WaitArgs {
     pub(crate) view: ViewArg,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -634,6 +658,8 @@ pub(crate) struct GoArgs {
     pub(crate) view: ViewArg,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -717,6 +743,8 @@ pub(crate) struct SurfaceArgs {
     pub(crate) popup: bool,
     #[arg(long, help = "After the first line, send only what changed (see below)")]
     pub(crate) patches: bool,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -768,6 +796,8 @@ pub(crate) struct EventsArgs {
     pub(crate) notices: bool,
     #[arg(long, help = "Print one JSON object per line instead of text")]
     pub(crate) json: bool,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 fn seconds(text: &str) -> Result<f64, String> {

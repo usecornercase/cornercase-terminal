@@ -23,6 +23,8 @@ pub(crate) struct ViewArgs {
     pub(crate) project: Option<u64>,
     #[arg(long, help = "Start hidden: the tab it shows does not count as seen until `view-set --visible`")]
     pub(crate) hidden: bool,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]

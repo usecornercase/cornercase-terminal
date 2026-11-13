@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand};
 
-use super::{Print, branch};
+use super::{BootArg, Print, branch};
 use crate::cli::help::{BY_BRANCH, HERE_WORKSPACE, PORTS_STOP_ABOUT, PORTS_STOP_HELP};
 
 #[derive(Debug, Args)]
@@ -16,6 +16,8 @@ pub(crate) struct PortsArgs {
     pub(crate) all: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Subcommand)]
