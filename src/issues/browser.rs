@@ -82,6 +82,7 @@ pub(crate) struct Queued {
     pub(crate) id: u64,
     pub(crate) when: String,
     pub(crate) label: String,
+    pub(crate) first_line: String,
     pub(crate) meta: String,
     pub(crate) state: State,
     pub(crate) kind: QueuedKind,
@@ -117,7 +118,7 @@ impl Queued {
 
     fn matches(&self, query: &str) -> bool {
         let query = query.to_lowercase();
-        [&self.when, &self.label, &self.meta].iter().any(|text| text.to_lowercase().contains(&query))
+        [&self.when, &self.label, &self.first_line, &self.meta].iter().any(|text| text.to_lowercase().contains(&query))
     }
 }
 

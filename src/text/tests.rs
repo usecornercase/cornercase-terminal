@@ -3,6 +3,7 @@ use rstest::rstest;
 use super::*;
 
 mod display_path;
+mod first_words;
 mod folder_name;
 mod truncate_cells;
 mod truncate_left;
