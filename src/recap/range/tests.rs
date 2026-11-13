@@ -19,6 +19,7 @@ const MADRID: &str = "Europe/Madrid";
 #[case::monday_finds_friday("2026-11-02T09:00:00.000Z", "2026-10-30T15:00:00.000Z", "2026-10-30")]
 #[case::after_a_holiday("2026-11-10T09:00:00.000Z", "2026-11-06T15:00:00.000Z", "2026-11-06")]
 #[case::late_night_is_next_utc_day("2026-11-04T09:00:00.000Z", "2026-11-03T22:30:00.000Z", "2026-11-03")]
+#[case::ten_minutes_ago_just_after_midnight("2026-11-03T23:05:00.000Z", "2026-11-03T22:55:00.000Z", "2026-11-03")]
 fn yesterday_is_the_last_day_with_agent_activity(#[case] now: &str, #[case] active: &str, #[case] expected: &str) {
     let entries = [prompt_at(active)];
     let range = resolve(Choice::Yesterday, &entries, seconds(now), MADRID).expect("a day");
