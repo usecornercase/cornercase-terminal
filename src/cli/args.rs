@@ -389,6 +389,9 @@ impl Control {
             Self::Mark(a) => a.boot.boot.as_deref(),
             Self::MovePane(a) => a.boot.boot.as_deref(),
             Self::Context(a) => a.boot.boot.as_deref(),
+            Self::Send(a) => a.boot.boot.as_deref(),
+            Self::Input(a) => a.boot.boot.as_deref(),
+            Self::PasteFile(a) => a.boot.boot.as_deref(),
             Self::Collapse(a) | Self::Expand(a) => a.boot.boot.as_deref(),
             Self::Account(AccountArgs { action: AccountAction::Restart(a) }) => a.boot.boot.as_deref(),
             _ => None,
@@ -473,6 +476,8 @@ pub(crate) struct SendArgs {
     pub(crate) force: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
     #[arg(
         value_name = "TEXT",
         required_unless_present = "enter",

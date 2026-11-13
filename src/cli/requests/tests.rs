@@ -306,6 +306,9 @@ mod streams {
     #[case::context(r#"{"args": ["context", "--pane", "4", "--boot", "old"]}"#)]
     #[case::collapse(r#"{"args": ["collapse", "--pane", "4", "--boot", "old"]}"#)]
     #[case::expand(r#"{"args": ["expand", "--worktree", "fix/login", "--boot", "old"]}"#)]
+    #[case::send(r#"{"args": ["send", "--pane", "4", "--enter", "x", "--boot", "old"]}"#)]
+    #[case::input(r#"{"args": ["input", "--pane", "4", "-", "--boot", "old"], "stdin": "{\"paste\": \"x\"}"}"#)]
+    #[case::paste_file(r#"{"args": ["paste-file", "--pane", "4", "--boot", "old"], "stdin": "a picture"}"#)]
     fn a_boot_from_an_earlier_run_gives_status_4_and_the_next_line_runs_without_it(#[case] line: &str) {
         let refusing = |theirs| serving(theirs, control::contract::describe("boot", &[]), "\"boot\":\"old\"");
 
@@ -400,6 +403,13 @@ mod streams {
     #[case::context(r#"{"args": ["context", "--tab", "4", "--cached", "--boot", "old"]}"#)]
     #[case::collapse(r#"{"args": ["collapse", "--group", "4", "--boot", "old"]}"#)]
     #[case::expand(r#"{"args": ["expand", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::send(r#"{"args": ["send", "--tab", "4", "x", "--json", "--boot", "old"]}"#)]
+    #[case::input(
+        r#"{"args": ["input", "--popup", "--pane", "4", "{\"key\": {\"code\": \"enter\"}}", "--boot", "old"]}"#
+    )]
+    #[case::paste_file(
+        r#"{"args": ["paste-file", "--pane", "4", "--name", "x.png", "--json", "--boot", "old"], "stdin": "a picture"}"#
+    )]
     fn a_boot_for_a_server_that_would_ignore_it_never_sends_the_request(#[case] line: &str) {
         let older = lacking("boot");
 

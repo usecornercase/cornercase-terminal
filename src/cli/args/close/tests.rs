@@ -52,6 +52,15 @@ mod boot {
     #[case::expand_a_workspace(&["expand", "--workspace", "4"])]
     #[case::expand_a_branch(&["expand", "--worktree", "fix/login"])]
     #[case::expand_an_agent(&["expand", "--pane", "4"])]
+    #[case::send_here(&["send", "x"])]
+    #[case::send_to_a_pane(&["send", "--pane", "4", "--enter", "x"])]
+    #[case::send_to_a_tab_and_wait(&["send", "--tab", "4", "--enter", "--wait", "--until", "turn-over", "--timeout", "60", "x"])]
+    #[case::send_standard_input(&["send", "--pane", "4", "--force", "--json", "-"])]
+    #[case::input_into_a_pane(&["input", "--pane", "4", r#"{"paste": "x"}"#])]
+    #[case::input_from_standard_input(&["input", "--pane", "4", "--json", "-"])]
+    #[case::input_into_a_popup(&["input", "--popup", "--pane", "4", r#"{"key": {"code": "enter"}}"#])]
+    #[case::paste_a_file(&["paste-file", "--pane", "4", "shot.png"])]
+    #[case::paste_standard_input(&["paste-file", "--pane", "4", "--name", "x.png", "--json"])]
     fn goes_with_every_form_of_the_commands_that_take_it(#[case] args: &[&str]) {
         assert_eq!(boot_of(&[args, &["--boot", "1-2"]].concat()).as_deref(), Some("1-2"));
         assert_eq!(boot_of(args), None);
@@ -66,6 +75,9 @@ mod boot {
     #[case::context(&["context", "--boot", ""])]
     #[case::collapse(&["collapse", "--pane", "4", "--boot", ""])]
     #[case::expand(&["expand", "--group", "4", "--boot", ""])]
+    #[case::send(&["send", "--pane", "4", "x", "--boot", ""])]
+    #[case::input(&["input", "--pane", "4", r#"{"text": "x"}"#, "--boot", ""])]
+    #[case::paste_file(&["paste-file", "--pane", "4", "--boot", ""])]
     fn cannot_be_empty_so_an_unset_variable_never_reaches_the_server(#[case] args: &[&str]) {
         assert!(parsed(args).is_err());
     }
@@ -73,6 +85,13 @@ mod boot {
     #[test]
     fn is_no_flag_of_the_commands_that_would_ignore_it() {
         assert!(parsed(&["status", "--boot", "1-2"]).is_err());
-        assert!(parsed(&["send", "--pane", "4", "x", "--boot", "1-2"]).is_err());
+        assert!(parsed(&["keys", "--pane", "4", "enter", "--boot", "1-2"]).is_err());
+        assert!(parsed(&["held", "--pane", "4", "--send-now", "--boot", "1-2"]).is_err());
+    }
+
+    #[test]
+    fn is_a_usage_error_with_input_follow_rather_than_left_unchecked() {
+        assert!(parsed(&["input", "--pane", "4", "--follow", "-", "--boot", "1-2"]).is_err());
+        assert_eq!(boot_of(&["input", "--pane", "4", "--follow", "-"]), None);
     }
 }

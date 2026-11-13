@@ -354,6 +354,97 @@ fn the_boot_of_this_run_lets_mark_move_pane_account_restart_and_context_act() {
     assert_eq!(ssh_runs(&session), before + 4, "each command's checks and request share one ssh connection");
 }
 
+struct Typed {
+    session: Arc<Session>,
+    pane: String,
+    tab: String,
+    file: String,
+}
+
+fn a_machine_with_a_shell_to_type_into() -> Typed {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let opened = remote_says(&session, &["new-tab", "--json"]);
+    let opened: Value = serde_json::from_str(&opened).expect("the new tab");
+    let (pane, tab) = (opened["pane"].to_string(), opened["tab"].to_string());
+    let file = session.dir.join("shot.txt");
+    std::fs::write(&file, "from the laptop").expect("write the file");
+    Typed { session, pane, tab, file: file.display().to_string() }
+}
+
+fn screen(session: &Session, pane: &str) -> String {
+    session.says(&["read", "--pane", pane])
+}
+
+fn kept(session: &Session) -> usize {
+    std::fs::read_dir(session.dir.join("server.pasted")).map_or(0, Iterator::count)
+}
+
+fn nothing_stale_arrived(typed: &Typed) {
+    let Typed { session, pane, .. } = typed;
+    remote_says(session, &["input", "--pane", pane, r#"{"text": "fresh-marker"}"#]);
+    wait_until("the marker shows", || screen(session, pane).contains("fresh-marker"));
+    let shown = screen(session, pane);
+    assert!(!shown.contains("stale-") && !shown.contains("shot.txt"), "{shown}");
+    assert_eq!(kept(session), 0);
+}
+
+#[test]
+fn every_form_of_send_input_and_paste_file_refuses_an_earlier_boot_and_types_nothing() {
+    let typed = a_machine_with_a_shell_to_type_into();
+    let Typed { session, pane, tab, file } = &typed;
+    let forms: [&[&str]; 7] = [
+        &["send", "--pane", pane, "stale-send"],
+        &["send", "--tab", tab, "--enter", "stale-enter"],
+        &["send", "--pane", pane, "--enter", "--wait", "--timeout", "5", "stale-wait"],
+        &["input", "--pane", pane, r#"{"paste": "stale-paste"}"#],
+        &["input", "--pane", pane, r#"{"text": "stale-typed"}"#, r#"{"key": {"code": "enter"}}"#],
+        &["paste-file", "--pane", pane, file],
+        &["paste-file", "--pane", pane, file, "--name", "x.txt", "--json"],
+    ];
+
+    refuses_every_form_and_changes_nothing(session, &forms);
+
+    nothing_stale_arrived(&typed);
+}
+
+#[test]
+fn what_was_aimed_before_a_restart_never_reaches_the_pane_that_has_the_id_now() {
+    let typed = a_machine_with_a_shell_to_type_into();
+    let Typed { session, pane, file, .. } = &typed;
+    let earlier = boot(session);
+    restarted(session);
+    assert!(panes(session.report()).any(|p| p.id.to_string() == *pane), "a pane of this run has id {pane}");
+
+    let sent = there(session, &at(&["send", "--pane", pane, "--enter", "stale-send"], &earlier));
+    let pasted = there(session, &at(&["input", "--pane", pane, r#"{"paste": "stale-paste"}"#], &earlier));
+    let filed = there(session, &at(&["paste-file", "--pane", pane, file], &earlier));
+
+    for out in [sent, pasted, filed] {
+        assert_stale(&out, &earlier);
+    }
+    nothing_stale_arrived(&typed);
+}
+
+#[test]
+fn the_boot_of_this_run_lets_send_input_and_paste_file_act() {
+    let Typed { session, pane, file, .. } = a_machine_with_a_shell_to_type_into();
+    let boot = boot(&session);
+    let before = ssh_runs(&session);
+
+    let sent = remote_says(&session, &at(&["send", "--pane", &pane, "sent-text "], &boot));
+    let typed = remote_says(&session, &at(&["input", "--pane", &pane, r#"{"paste": "typed-text "}"#], &boot));
+    let path = remote_says(&session, &at(&["paste-file", "--pane", &pane, &file], &boot));
+
+    assert_eq!((sent.as_str(), typed.as_str()), ("", ""));
+    assert!(path.starts_with(&session.dir.join("server.pasted").display().to_string()), "{path}");
+    assert_eq!(ssh_runs(&session), before + 3, "each command's check and request share one ssh connection");
+    wait_until("all three show", || {
+        let shown = screen(&session, &pane);
+        ["sent-text", "typed-text", "shot.txt"].iter().all(|text| shown.contains(text))
+    });
+}
+
 #[rstest]
 #[case::close(&["close", "--workspace", "99999"], "there is no workspace 99999")]
 #[case::check(&["close", "--workspace", "99999", "--remove-worktree", "--check"], "there is no workspace 99999")]
@@ -365,6 +456,8 @@ fn the_boot_of_this_run_lets_mark_move_pane_account_restart_and_context_act() {
 #[case::context(&["context", "--pane", "99999"], "there is no pane 99999")]
 #[case::collapse(&["collapse", "--pane", "99999"], "there is no pane 99999")]
 #[case::expand(&["expand", "--group", "99999"], "there is no group 99999")]
+#[case::send(&["send", "--pane", "99999", "x"], "there is no pane 99999")]
+#[case::input(&["input", "--pane", "99999", r#"{"text": "x"}"#], "there is no pane 99999")]
 fn any_other_refusal_keeps_its_message_and_status(#[case] args: &[&str], #[case] message: &str) {
     let (session, _) = machine_with(&[]);
     let boot = boot(&session);
@@ -483,6 +576,12 @@ mod a_server_that_knows_no_boot {
     #[case::context_without_a_contract(WITHOUT_A_CONTRACT, &["context", "--pane", "7", "--boot", "1-1"])]
     #[case::collapse_without_the_feature(WITHOUT_THE_FEATURE, &["collapse", "--pane", "7", "--boot", "1-1"])]
     #[case::expand_without_a_contract(WITHOUT_A_CONTRACT, &["expand", "--worktree", "fix/login", "--boot", "1-1"])]
+    #[case::send_without_the_feature(WITHOUT_THE_FEATURE, &["send", "--pane", "7", "x", "--boot", "1-1"])]
+    #[case::input_without_a_contract(WITHOUT_A_CONTRACT, &["input", "--pane", "7", r#"{"text": "x"}"#, "--boot", "1-1"])]
+    #[case::paste_file_without_the_feature(
+        WITHOUT_THE_FEATURE,
+        &["paste-file", "--pane", "7", "shot.png", "--boot", "1-1"]
+    )]
     fn is_refused_by_name_and_never_gets_the_request(#[case] answer: &'static str, #[case] args: &[&str]) {
         let (here, far) = (Session::new(), Session::new());
         let (near, away) = (answering(&here, answer), answering(&far, answer));

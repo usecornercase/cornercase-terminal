@@ -54,6 +54,20 @@ fn a_pasted_file_is_kept_and_its_path_pasted() {
     assert!(flat.contains(&expected), "{screen}");
 }
 
+#[test]
+fn a_paste_from_an_earlier_boot_keeps_nothing_and_pastes_nothing() {
+    let (mut app, _rx) = app();
+    let temp = keeping(&mut app);
+    let id = first(&app);
+    let args = json!({"pane": id, "name": "a.png", "data": encoded(b"hi")});
+
+    let refusal = call_as(&mut app, "paste-file", &args, Some("1-other")).expect_err("refused");
+
+    assert_eq!(refusal.code, "stale-boot");
+    assert_eq!(folders(&temp), Vec::<PathBuf>::new());
+    assert!(pane(&app, id).input_at.is_none());
+}
+
 #[rstest]
 #[case::no_pane(json!({"data": "aGk="}), "malformed")]
 #[case::unknown_pane(json!({"pane": 99999, "data": "aGk="}), "not-found")]

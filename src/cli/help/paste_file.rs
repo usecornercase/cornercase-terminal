@@ -12,7 +12,12 @@ earlier server left there after 7 days. Prints the path; --json prints the pane,
 
 Like `input`, it pastes whatever the program in the pane is doing: a dialog or a question there gets the path too.
 
+--boot BOOT says which run of the server the pane id is from: `boot` in `status --json`, or in a machine's \
+entry there. Ids last one run, so a server that restarted since refuses, nothing is kept there or pasted, and \
+the command prints why and exits with 4.
+
 Examples:
   cornercase --remote devbox paste-file --pane 12 ~/Desktop/shot.png
+  cornercase --remote devbox paste-file --pane 12 ~/Desktop/shot.png --boot 4242-1700000000
   pngpaste - | cornercase --remote devbox paste-file --pane 12
   wl-paste --type image/png | cornercase --remote devbox paste-file --pane 12 --name error.png";

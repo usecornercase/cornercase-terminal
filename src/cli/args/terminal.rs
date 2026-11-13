@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, ValueEnum};
 
-use super::Print;
+use super::{BootArg, Print};
 use crate::cli::help::PANE_REQUIRED;
 use crate::control::terminal::{InputEvent, Point};
 
@@ -12,12 +12,14 @@ pub(crate) struct InputArgs {
     pub(crate) pane: Option<u64>,
     #[arg(long, help = "Type into the plugin popup open in the window instead of a pane")]
     pub(crate) popup: bool,
-    #[arg(long, help = INPUT_FOLLOW)]
+    #[arg(long, conflicts_with = "boot", help = INPUT_FOLLOW)]
     pub(crate) follow: bool,
     #[arg(required = true, value_name = "EVENT", value_parser = event, help = "One JSON event, or - to read one per line from standard input")]
     pub(crate) events: Vec<String>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 const INPUT_PANE: &str = "The pane to type into; `cornercase status --panes` lists them. With --follow, for the lines that name \
@@ -105,6 +107,8 @@ pub(crate) struct PasteFileArgs {
     pub(crate) file: Option<PathBuf>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 const SURFACE_ID: &str = "The surface: the `surface` of the lines `cornercase surface` prints";
