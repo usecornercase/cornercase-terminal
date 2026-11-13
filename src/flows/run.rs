@@ -102,6 +102,10 @@ impl Retry {
         self.tries < RETRIES && self.failed.is_some_and(|at| now >= at + wait)
     }
 
+    pub(crate) fn exhausted(&self) -> bool {
+        self.tries >= RETRIES
+    }
+
     pub(crate) fn sent(&mut self) {
         self.tries += 1;
         self.failed = None;

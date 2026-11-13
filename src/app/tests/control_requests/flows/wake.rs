@@ -310,3 +310,24 @@ fn a_send_that_waits_still_carries_the_warning_of_a_skipped_stage() {
         )
     );
 }
+
+#[test]
+fn a_role_finishing_while_the_orchestrator_is_failed_waits_for_the_retry_delay() {
+    let mut agent = Agent::new();
+    let o = failed_orchestrator(&mut agent);
+    let c = agent.app.runs.all()[0].pane_of("coder").expect("the coder");
+    sends(&mut agent, o, c, "build the form");
+    working(&mut agent, c);
+    agent.finish();
+    agent.refreshing("the role is due", |app| !app.runs.all()[0].due().is_empty());
+    reads(&mut agent, 3);
+    assert_eq!(prompts(&agent, o), 1, "not woken before the delay");
+    assert_eq!(sent(&agent), 1, "the role stays due");
+
+    failed_long_ago(&mut agent);
+    agent.refreshing("the orchestrator is told", |app| prompts_in(app, o) == 2);
+    agent.finish();
+    agent.refreshing("the orchestrator answers", |app| pane_screen(app, o).contains("done: coder (pane"));
+
+    assert_eq!(sent(&agent), 0);
+}

@@ -918,6 +918,12 @@ mod failures {
     }
 
     #[test]
+    fn a_reply_with_usage_that_is_not_an_error_after_one_clears_it() {
+        let reply = r#"{"type":"assistant","isApiErrorMessage":false,"message":{"usage":{"output_tokens":1}}}"#;
+        assert!(!failed(&[ERROR, reply]));
+    }
+
+    #[test]
     fn a_line_with_the_marker_alone_counts() {
         assert!(failed(&[MARKED_ONLY]));
     }

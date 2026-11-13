@@ -450,7 +450,7 @@ fn the_rules_say_what_to_do_with_a_failed_agent_and_a_skipped_stage() {
         &text,
         &[
             "An agent whose turn ended `failed` (its last message is an `API Error` line, for instance) did not do \
-             the work: send it the same work again once",
+             the work: read its last message first, since the error can come after it did part of it, send it the work again once",
             "If `cornercase send` or `cornercase mark` warns that a stage has not run since the last change, run \
              that stage first, or say in your final summary why not.",
         ],

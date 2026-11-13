@@ -110,6 +110,7 @@ impl App {
         let Some(run) = self.runs.all().iter().find(|run| run.id == id) else { return };
         let workspace = run.workspace;
         let own = run.pane_of(ORCHESTRATOR);
+        let (retry_due, exhausted) = (run.retry.due(now), run.retry.exhausted());
         match own.and_then(|own| self.projects.pane_by(own)) {
             None => {
                 let roles = self.take_due_roles(id);
@@ -118,7 +119,10 @@ impl App {
             Some(term) if over(turn_ended(&term.agent)) => {
                 let Some(own) = own else { return };
                 let failed = term.agent.status() == Some(Status::Failed);
-                self.send_wake(id, (own, failed), now);
+                if failed && !retry_due && !exhausted {
+                    return;
+                }
+                self.send_wake(id, (own, failed && retry_due), now);
             }
             Some(_) => {}
         }

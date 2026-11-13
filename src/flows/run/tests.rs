@@ -363,6 +363,16 @@ mod failures {
     }
 
     #[test]
+    fn the_retries_run_out_after_three() {
+        let mut retry = Retry::default();
+        for _ in 0..RETRIES {
+            assert!(!retry.exhausted());
+            retry.sent();
+        }
+        assert!(retry.exhausted());
+    }
+
+    #[test]
     fn a_failure_is_not_retried_without_having_been_seen() {
         assert!(!Retry::default().due(Instant::now() + RETRY_AFTER * 10));
     }
