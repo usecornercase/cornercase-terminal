@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.59
+
+- **`cornercase send`, `input` and `paste-file` can say which run of the server their pane id is from.** Ids last one run of the server, and two servers both count from 1. So a program that draws another machine's agents, or a script that read a pane's id there, could hand a prompt, a paste or a picture to whatever agent took that id when that server restarted on the way. With `--boot BOOT`, the `boot` from `status --json` or from a machine's entry there, a server that restarted since refuses. Nothing is sent, typed or pasted, and no file is kept there; the command prints why and exits with status 4 (`cornercase --remote vps paste-file --pane 9 shot.png --boot "$boot"`), as `close`, `rename`, `mark`, `move-pane`, `collapse`, `expand`, `account restart` and `context` already do. It works in every form (`send --tab` and `input --popup` included) and on a line of `requests --follow` for that line only. A server too old to know `boot` is refused before anything is sent. `input --follow` doesn't take it yet.
+
 ## 0.13.58
 
 - Nothing changes for users: tests that sometimes failed on CI (the flows' tests on macOS, and one about when a process started on Linux) now pass every time.
