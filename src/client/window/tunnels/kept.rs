@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use super::{CHECK_EVERY, Held, Tunnels};
 use crate::protocol::TunnelState;
-use crate::remote::tunnel::{Forward, Owner};
+use crate::remote::tunnel::{self, Forward, Owner};
 use crate::remote::tunnels::{self, Kept};
 
 impl Tunnels {
@@ -101,7 +101,7 @@ impl Tunnels {
         }
         let Some(held) = self.held.get_mut(&port) else { return false };
         held.state = TunnelState::Opening;
-        held.settling = Some(crate::remote::tunnel::reason(reason));
+        held.settling = Some(tunnel::reason(reason));
         held.check_at = Some(now + CHECK_EVERY);
         true
     }

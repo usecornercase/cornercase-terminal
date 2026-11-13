@@ -46,11 +46,11 @@ that waits for it fails with the reason.
 the server counts it, {\"tunnels\": [...], \"windows\": N, \"takers\": N}, then one line per order,
 {\"order\": \"open\", \"port\": 3000} (or close, or forget), for as long as it runs. `tunnel open` on
 the server then asks it and waits: it answers by holding the port with `tunnel hold PORT`, or
-with `tunnel failed PORT REASON` (it prints `reported that port 3000 could not be tunnelled`, or
-with --json that port's list, and exits 0 even when no request waits), which fails the request
-with REASON. close and forget tell it
-which ports to drop or forget. It ends with 0 when its output reader leaves or the server stops,
-and 1 when the connection is lost; it needs --remote (exit 2 without it).
+with `tunnel failed PORT REASON`, which fails the request with REASON; `tunnel failed` prints
+`reported that port 3000 could not be tunnelled` (with --json, that port's list) and exits 0 even
+when no request waits. close and forget tell it which ports to drop or forget. It ends with 0
+when its output reader leaves or the server stops, and 1 when the connection is lost; it needs
+--remote (exit 2 without it).
 
 Examples:
   cornercase tunnel open 5173
