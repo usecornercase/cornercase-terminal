@@ -65,8 +65,13 @@ pub(in crate::app) fn forgotten(count: usize) -> String {
 }
 
 pub(in crate::app) fn closed_message(count: usize) -> String {
+    closed_and(count, None)
+}
+
+pub(in crate::app) fn closed_and(count: usize, and: Option<&str>) -> String {
     let (what, them) = if count == 1 { ("agent", "it") } else { ("agents", "them") };
-    format!("{count} {what} closed · {} on the workspace reopens {them}", ui::REOPEN_ICON)
+    let and = and.map(|and| format!(", {and}")).unwrap_or_default();
+    format!("{count} {what} closed{and} · {} on the workspace reopens {them}", ui::REOPEN_ICON)
 }
 
 impl App {

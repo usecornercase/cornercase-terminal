@@ -341,6 +341,8 @@ pub(crate) struct RunStatus {
     pub(crate) reached: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) close_when_merged: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) free_builds: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

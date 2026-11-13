@@ -57,22 +57,25 @@ fn gives_issue_prompt(run: &args::FlowRunArgs) -> bool {
     run.issue.key.is_some() && (run.prompt.is_some() || run.prompt_file.is_some())
 }
 
-fn flow_issue_features(run: &args::FlowRunArgs) -> Result<()> {
+fn flow_run_features(run: &args::FlowRunArgs) -> Result<()> {
     super::issue_features(&run.issue)?;
     if gives_issue_prompt(run) {
         client::use_flow_issue_prompt()?;
     }
-    Ok(())
-}
-
-fn flow_run(run: args::FlowRunArgs) -> Result<()> {
-    flow_issue_features(&run)?;
     if run.create.view.view.is_some() {
         client::use_flow_run_view()?;
     }
     if run.close_when_merged {
         client::use_flow_close_when_merged()?;
     }
+    if run.free_builds {
+        client::use_flow_free_builds()?;
+    }
+    Ok(())
+}
+
+fn flow_run(run: args::FlowRunArgs) -> Result<()> {
+    flow_run_features(&run)?;
     let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
     let machine = super::machine(run.on)?;
     let on_machine = machine.is_some();
@@ -89,6 +92,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         accounts,
         machine,
         close_when_merged: run.close_when_merged,
+        free_builds: run.free_builds,
         fresh: super::fresh(&run.fresh)?,
     };
     let value = ask("flow run", control::Command::FlowRun(request))?;
@@ -287,7 +291,10 @@ pub(super) fn default_line(set: &FlowDefaultSet) -> String {
 
 fn close_when_merged(args: &FlowCloseWhenMergedArgs) -> Result<()> {
     let workspace = workspace("flow close-when-merged", args.place.workspace, args.place.worktree.as_deref())?;
-    let request = control::FlowCloseWhenMerged { workspace, off: args.off };
+    if args.free_builds {
+        client::use_flow_free_builds()?;
+    }
+    let request = control::FlowCloseWhenMerged { workspace, off: args.off, free_builds: args.free_builds };
     let command = control::Command::FlowCloseWhenMerged(request);
     answered("flow close-when-merged", command, args.print.json, closes_line)
 }
@@ -300,7 +307,8 @@ pub(super) fn closes_line(set: &CloseWhenMergedSet) -> String {
         } else {
             "close once its pull request merges"
         };
-        return format!("the agents of workspace {id} {already}{tail}\n");
+        let free = if set.free_builds { ", freeing their worktrees' build folders" } else { "" };
+        return format!("the agents of workspace {id} {already}{tail}{free}\n");
     }
     format!("the agents of workspace {id} {already}stay open after its pull request merges\n")
 }
@@ -539,7 +547,8 @@ pub(super) fn closing_note(run: &RunInfo, on_machine: bool) -> String {
     } else {
         format!("cornercase agents reopen --workspace {} brings them back", run.workspace)
     };
-    format!("its agents close once its pull request merges and none of them works; {back}")
+    let free = if run.free_builds { ", and their worktrees' build folders are freed then" } else { "" };
+    format!("its agents close once its pull request merges and none of them works{free}; {back}")
 }
 
 pub(super) fn started(run: &RunInfo) -> String {
@@ -623,9 +632,17 @@ fn run_notes(run: &RunState, now: SystemTime) -> String {
         out.push_str("  ended: the orchestrator marked its pane for review\n");
     }
     if run.close_when_merged {
-        out.push_str("  closes its agents once its pull request merges\n");
+        out.push_str(closes_text(run.free_builds));
     }
     out
+}
+
+fn closes_text(free_builds: bool) -> &'static str {
+    if free_builds {
+        "  closes its agents and frees their worktrees' build folders once its pull request merges\n"
+    } else {
+        "  closes its agents once its pull request merges\n"
+    }
 }
 
 fn messages_of(args: &FlowMessagesArgs) -> Result<()> {

@@ -266,6 +266,41 @@ mod streams {
         assert!(run.contains("\"close_when_merged\":true"), "{run}");
     }
 
+    #[rstest::rstest]
+    #[case::run(
+        r#"{"args": ["flow", "run", "Pair", "--prompt", "x", "--close-when-merged", "--free-builds", "--json"]}"#,
+        "flow-run"
+    )]
+    #[case::close(
+        r#"{"args": ["flow", "close-when-merged", "--workspace", "7", "--free-builds", "--json"]}"#,
+        "flow-close-when-merged"
+    )]
+    fn freeing_builds_is_refused_up_front_by_a_server_that_would_drop_it(#[case] args: &str, #[case] request: &str) {
+        let (answer, seen) = in_a_view_on(args, lacking("flow-free-builds"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("cannot free a flow's builds") && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains(request)), "{seen:?}");
+    }
+
+    #[rstest::rstest]
+    #[case::run(
+        r#"{"args": ["flow", "run", "Pair", "--prompt", "x", "--close-when-merged", "--free-builds", "--json"]}"#,
+        "flow-run"
+    )]
+    #[case::close(
+        r#"{"args": ["flow", "close-when-merged", "--workspace", "7", "--free-builds", "--json"]}"#,
+        "flow-close-when-merged"
+    )]
+    fn freeing_builds_sends_the_field(#[case] args: &str, #[case] request: &str) {
+        let (answer, seen) = in_a_view_on(args, control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let sent = seen.iter().find(|text| text.contains(request)).expect("the request");
+        assert!(sent.contains("\"free_builds\":true"), "{sent}");
+    }
+
     const FRESH_START: &str = r#"{"args": ["new-workspace", "b", "--worktree", "--fresh", "--json"]}"#;
     const HEAD_START: &str = r#"{"args": ["new-workspace", "b", "--worktree", "--no-fresh", "--json"]}"#;
 

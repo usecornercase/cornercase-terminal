@@ -281,6 +281,7 @@ impl App {
         let KeptRun { mut run, seats } = kept;
         if run.merged(self.pull_request(run.workspace)) {
             run.close_when_merged = false;
+            run.free_builds = false;
         }
         run.members.clear();
         for seat in &seats {

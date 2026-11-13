@@ -108,6 +108,12 @@ pub(crate) struct FlowCloseWhenMergedArgs {
     pub(crate) place: Where,
     #[arg(long, help = "Keep the run's agents open after its pull request merges")]
     pub(crate) off: bool,
+    #[arg(
+        long,
+        conflicts_with = "off",
+        help = "Also free the build folders of the run's worktrees once its agents close; without it they are kept"
+    )]
+    pub(crate) free_builds: bool,
     #[command(flatten)]
     pub(crate) print: Print,
 }
@@ -322,6 +328,12 @@ pub(crate) struct FlowRunArgs {
         help = "Close the team's agents, as agents close does, once the run's pull request has merged and none of them has worked for 3 minutes; the workspace's ▶ or agents reopen brings them back"
     )]
     pub(crate) close_when_merged: bool,
+    #[arg(
+        long,
+        requires = "close_when_merged",
+        help = "With --close-when-merged, also free the build folders of the run's worktrees once its agents close, as worktrees free-builds does without --force; the worktrees and their branches stay"
+    )]
+    pub(crate) free_builds: bool,
     #[command(flatten)]
     pub(crate) fresh: FreshArg,
     #[command(flatten)]

@@ -8,7 +8,7 @@ use super::App;
 use super::dialogs::named;
 use super::event::AppEvent;
 use super::event::Start;
-use super::flow_runs::Made;
+use super::flow_runs::{Made, MergedBuilds};
 use super::overlay::{FORCE_REMOVE_SUBMIT, Overlay, REMOVE_SUBMIT, UNLOCK_SUBMIT};
 use super::pull_requests::Looked;
 use super::toast::Toast;
@@ -104,6 +104,7 @@ pub(crate) enum WorktreeEvent {
     Measured { answer: Measure, path: PathBuf, size: Box<Result<Size>> },
     Freed { key: u64, path: PathBuf, result: Box<Result<Freed>> },
     BuildsRequest { key: u64, result: Box<std::result::Result<BuildsFreed, Refusal>> },
+    MergedBuilds(Box<MergedBuilds>),
 }
 
 impl WorktreeEvent {
@@ -125,6 +126,7 @@ impl WorktreeEvent {
             Self::Measured { .. } => "worktree measured",
             Self::Freed { .. } => "builds freed",
             Self::BuildsRequest { .. } => "builds request",
+            Self::MergedBuilds(_) => "merged builds freed",
         }
     }
 }
@@ -166,6 +168,7 @@ impl App {
             WorktreeEvent::Measured { answer, path, size } => self.worktree_measured(answer, &path, *size),
             WorktreeEvent::Freed { key, path, result } => self.builds_freed(key, &path, *result),
             WorktreeEvent::BuildsRequest { key, result } => self.builds_request_answered(key, *result),
+            WorktreeEvent::MergedBuilds(done) => self.merged_builds_freed(*done),
         }
         Ok(())
     }

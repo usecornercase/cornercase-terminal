@@ -86,6 +86,16 @@ mod parsing {
     }
 
     #[test]
+    fn freeing_builds_needs_the_close_and_never_comes_with_off() {
+        assert!(parse(&["flow", "run", "Quick", "--prompt", "p", "--close-when-merged", "--free-builds"]).is_ok());
+        assert!(parse(&["flow", "close-when-merged", "--worktree", "b", "--free-builds"]).is_ok());
+        let alone = parse(&["flow", "run", "Quick", "--prompt", "p", "--free-builds"]).expect_err("needs the close");
+        assert_eq!(alone.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        let both = parse(&["flow", "close-when-merged", "--free-builds", "--off"]).expect_err("not with off");
+        assert_eq!(both.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
     fn the_issue_filters_have_the_dialogs_names_as_aliases() {
         let cli = parse(&["issue", "list", "--owner", "me", "--reporter", "@bo", "--source", "jira"]).expect("parse");
         let Some(Command::Control(Control::Issue(args))) = cli.command else { panic!("not an issue command") };

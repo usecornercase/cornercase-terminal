@@ -690,15 +690,18 @@ fn todo_actions_read_by_name(#[case] text: &str, #[case] expected: Todo) {
 
 #[test]
 fn a_workspace_says_whether_its_flow_run_reached_its_end() {
-    let run = RunStatus { end: "pull_request".into(), reached: true, close_when_merged: false };
+    let run = RunStatus { end: "pull_request".into(), reached: true, close_when_merged: false, free_builds: false };
     let with = WorkspaceInfo { run: Some(run), ..WorkspaceInfo::default() };
 
     let sent = serde_json::to_value(&with).expect("json");
 
     assert_eq!(sent["run"], json!({"end": "pull_request", "reached": true}));
-    let closing = RunStatus { end: "pull_request".into(), reached: false, close_when_merged: true };
+    let closing = RunStatus { end: "pull_request".into(), reached: false, close_when_merged: true, free_builds: false };
     let sent = serde_json::to_value(WorkspaceInfo { run: Some(closing), ..WorkspaceInfo::default() }).expect("json");
     assert_eq!(sent["run"], json!({"end": "pull_request", "reached": false, "close_when_merged": true}));
+    let freeing = RunStatus { end: "pull_request".into(), reached: false, close_when_merged: true, free_builds: true };
+    let sent = serde_json::to_value(WorkspaceInfo { run: Some(freeing), ..WorkspaceInfo::default() }).expect("json");
+    assert_eq!(sent["run"]["free_builds"], json!(true));
     assert!(serde_json::to_value(WorkspaceInfo::default()).expect("json").get("run").is_none());
 }
 
