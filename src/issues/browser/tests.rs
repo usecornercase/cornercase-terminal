@@ -609,6 +609,7 @@ mod queue_tab {
             id,
             when: "2026-10-15 09:00".into(),
             label: label.into(),
+            first_line: String::new(),
             meta: "claude · shop".into(),
             state,
             kind: QueuedKind::Entry,
@@ -701,5 +702,15 @@ mod queue_tab {
         }
         assert_eq!(b.shown_queue().iter().map(|q| q.id).collect::<Vec<_>>(), [3]);
         assert_eq!(press(&mut b, KeyCode::Enter), Action::QueueOpen(3));
+    }
+
+    #[test]
+    fn typing_finds_an_entry_by_a_word_its_cut_name_lost() {
+        let mut b = on_queue();
+        b.queued[1].first_line = "Update the docs and the changelog for the failing checks".into();
+        for c in "failing".chars() {
+            press(&mut b, KeyCode::Char(c));
+        }
+        assert_eq!(b.shown_queue().iter().map(|q| q.id).collect::<Vec<_>>(), [2]);
     }
 }

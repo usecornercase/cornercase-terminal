@@ -689,3 +689,23 @@ test('a routine cannot turn into a one-off entry', () => {
   assert.match(o.error ?? '', /cannot turn into each other/);
   app.destroy();
 });
+
+test('a long prompt names its entry and its tab with its first words', () => {
+  const app = appAt(140);
+  const name = 'Review the open pull requests and fix…';
+  schedule(app, 'Review the open pull requests and fix the failing checks on main, then write a short summary of what changed and what is left for tomorrow.', 1);
+  assert.equal(app.queued[0].label, name);
+  app.advance(60000);
+  assert.equal(app.findPane(app.queued[0].pane ?? -1)?.t.name, name);
+  app.destroy();
+});
+
+test('typing in the Queue tab finds an entry by a word its cut name lost', () => {
+  const app = appAt(140);
+  schedule(app, 'Review the open pull requests and fix the failing checks on main, then write a short summary', 1);
+  queueTab(app);
+  issues(app).filter = 'failing';
+  app.render();
+  assert.ok(app.textAt('Review the open pull requests and fix…'));
+  app.destroy();
+});

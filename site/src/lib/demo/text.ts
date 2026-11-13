@@ -102,6 +102,17 @@ export function truncateRight(s: string, max: number): string {
   return `${chars.slice(0, max - 1).join('').replace(/…+$/, '')}…`;
 }
 
+export function firstWords(s: string, max: number): string {
+  const chars = [...s];
+  if (chars.length <= max || max < 2) return s;
+  const head = chars.slice(0, max - 1).join('');
+  const atWord = /\s/.test(chars[max - 1]);
+  const at = atWord ? head.length : head.search(/\s\S*$/);
+  const kept = at < 0 ? '' : head.slice(0, at).trimEnd();
+  if ([...kept].length * 2 < max) return truncateRight(s, max);
+  return `${kept.replace(/…+$/, '').trimEnd()}…`;
+}
+
 export function truncateLeft(s: string, max: number): string {
   const chars = [...s];
   if (max <= 0) return '';

@@ -75,3 +75,30 @@ fn a_started_entry_carries_the_choice_it_kept_for_its_branch() {
 
     assert_eq!([starts(Some(true)), starts(Some(false)), starts(None)], [Some(true), Some(false), None]);
 }
+
+const LONG: &str = "Review the open pull requests and fix the failing checks on main, then write a short summary of what changed and what is left for tomorrow.";
+
+#[rstest::rstest]
+#[case::written(Some("nightly review"), LONG, "nightly review")]
+#[case::from_the_prompt(None, LONG, "Review the open pull requests and fix…")]
+#[case::first_line(None, "Fix the login form\nand add a test", "Fix the login form")]
+fn a_name_is_written_or_taken_from_the_prompts_first_words(
+    #[case] label: Option<&str>,
+    #[case] prompt: &str,
+    #[case] name: &str,
+) {
+    let add = QueueAdd { label: label.map(str::to_string), ..QueueAdd::default() };
+
+    assert_eq!(prepare::queue_label(&add, prompt, None), name);
+}
+
+#[test]
+fn an_unchanged_prompt_keeps_the_entrys_name() {
+    let old = queue::Entry::new(
+        1,
+        queue::Task { label: "nightly review".into(), prompt: LONG.into(), ..queue::Task::default() },
+        State::Pending,
+    );
+
+    assert_eq!(prepare::queue_label(&QueueAdd::default(), LONG, Some(&old)), "nightly review");
+}

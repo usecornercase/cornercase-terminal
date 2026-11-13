@@ -7,6 +7,19 @@ use crate::queue::form::{Control, When};
 use crate::queue::{self, Place, State as QueueState, Task};
 use crate::time;
 
+const LONG: &str = "Review the open pull requests and fix the failing checks on main, then write a short summary of what changed and what is left for tomorrow.";
+
+fn long_add(label: Option<&str>) -> crate::control::QueueAdd {
+    crate::control::QueueAdd {
+        at: "in 2h".into(),
+        zone: "UTC".into(),
+        agent: Some("fake".into()),
+        prompt: Some(LONG.into()),
+        label: label.map(str::to_string),
+        ..crate::control::QueueAdd::default()
+    }
+}
+
 fn queued_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
     let (mut app, rx, repo, config, worktrees) = undrawn_queued_app();
     render(&mut app, AREA);
@@ -193,6 +206,31 @@ mod starts {
         assert_eq!((&started[0].2, &started[0].3), (&vec![pane], &ids));
     }
 
+    #[rstest::rstest]
+    #[case::from_the_prompt(None, "Review the open pull requests and fix…")]
+    #[case::as_written(Some("nightly review"), "nightly review")]
+    fn a_long_prompt_names_its_tab_with_its_first_words_unless_the_entry_was_named(
+        #[case] label: Option<&str>,
+        #[case] name: &str,
+    ) {
+        let (mut app, rx, _repo, _config, _worktrees) = queued_app();
+        let answer = app.add_queue_request(None, None, None, &long_add(label)).expect("add").expect("answer");
+        let id = answer["id"].as_u64().expect("id");
+        app.run_queued(id, Instant::now()).expect("start now");
+        refreshing(&mut app, &rx, "started now", |app| {
+            matches!(app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Started { .. })
+        });
+        let QueueState::Started { pane, .. } = app.panels.queued.queue().entry(id).expect("entry").state.clone() else {
+            panic!("started")
+        };
+
+        let (_, tab) = app.projects.tab_with_pane(pane).expect("its tab");
+        assert_eq!(tab.name.as_deref(), Some(name));
+        assert_eq!(tab.label(&app.config), name);
+        let entry = app.panels.queued.queue().entry(id).expect("entry");
+        assert_eq!((entry.task.label.as_str(), entry.task.prompt.as_str()), (name, LONG));
+    }
+
     #[test]
     fn a_restored_missed_entry_waits_for_start_now() {
         let (mut app, rx, repo, _config, _worktrees) = queued_app();
@@ -336,6 +374,26 @@ mod forms {
         let text = ui::queue_form::text(AREA, form, Control::Amount);
         right_click(&mut app, Position::new(text.x + 1, text.y));
         assert_eq!(app.focused_field(), Some(TextField::Queue(Control::Amount)));
+    }
+
+    #[rstest::rstest]
+    #[case::named_after_its_prompt(None, "fix logout instead")]
+    #[case::written(Some("nightly review"), "nightly review")]
+    fn the_form_renames_an_entry_named_after_its_prompt_and_keeps_a_written_name(
+        #[case] label: Option<&str>,
+        #[case] expected: &str,
+    ) {
+        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        let answer = app.add_queue_request(None, None, None, &long_add(label)).expect("add").expect("answer");
+        let id = answer["id"].as_u64().expect("id");
+        app.new_queue_form(Some(id));
+        let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("edit form") };
+        assert_eq!(form.label.as_deref(), label);
+        form.prompt = Editor::new("fix logout instead");
+        form.when = When::In.combo();
+        form.amount = Editor::new("3");
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        assert_eq!(app.panels.queued.queue().entry(id).expect("edited").task.label, expected);
     }
 
     #[test]

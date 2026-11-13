@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.54
+
+- **A queued agent's tab is named after the first words of its prompt.** An entry or a routine scheduled with a prompt and no name took the prompt's whole first line as its name, so a prompt of one long paragraph named the run's tab with the paragraph: `cornercase status` printed it on one line and `status --json` gave it whole. The name is now the start of that line, cut after a whole word at 40 characters with `…`, in the tab, the **Issues → Queue** list, `queue list`, `queue show` and the notifications, and the whole prompt stays in the entry (`queue list --json`). A name you gave with `--name` stays as you wrote it, an issue's entry keeps its number and title, and the entries and routines you scheduled before are renamed the same way once the updated server starts.
+
 ## 0.13.53
 
 - **Programs can read what `cornercase update` did.** `cornercase update --json` prints one line of JSON instead of sentences: `{"outcome":"updated","from":"0.13.52","version":"0.13.53","path":"/home/me/.local/bin/cornercase"}`, `{"outcome":"up-to-date","version":"0.13.53"}`, or, when cornercase can't replace itself (Homebrew installed it, or you can't write to its folder), `{"outcome":"manual","version":"0.13.52","latest":"0.13.53","command":"brew update && brew upgrade cornercase"}`. `version` is the one on disk afterwards, on the machine it ran on, so another interface can offer the command to copy, or confirm an install on another machine (`cornercase --remote devbox update --json`) before restarting its server. With `--json` it asks nothing and never restarts the server: run `cornercase restart` when you choose. `--check --json` says what it would do, without installing.
