@@ -90,6 +90,7 @@ fn assert_run_stood(stood: &Fed) {
         (step.edge, step.from.as_deref(), step.to.as_str()),
         (RunEdge::Loop { stage: 1 }, Some("reviewer"), "coder")
     );
+    assert_eq!(run.not_run, vec![1]);
 }
 
 #[test]
@@ -152,6 +153,22 @@ fn the_last_step_outside_the_plan_and_the_end_are_told() {
 }
 
 #[test]
+fn a_change_leaves_the_later_stages_not_run_until_they_get_the_work() {
+    let (mut app, _rx, _dir) = lightweight();
+    follow(&mut app);
+    for to in ["coder", "reviewer", "coder"] {
+        tell(&mut app, "orchestrator", to, "go");
+    }
+    assert_eq!(last(&mut app).report.runs[0].not_run, vec![1, 2]);
+    tell(&mut app, "orchestrator", "reviewer", "again");
+    assert_eq!(last(&mut app).report.runs[0].not_run, vec![2]);
+    tell(&mut app, "orchestrator", "tester", "go");
+    let run = &last(&mut app).report.runs[0];
+    assert_eq!(run.not_run, Vec::<usize>::new());
+    assert!(serde_json::to_value(run).expect("json").get("not_run").is_none());
+}
+
+#[test]
 fn a_member_whose_tab_closed_is_closed_and_the_rest_are_not() {
     let (mut app, rx, _dir) = lightweight();
     let first = follow(&mut app);
@@ -181,6 +198,7 @@ fn a_run_restored_with_its_stage_and_rounds_has_no_messages_and_a_new_id() {
         (app.runs.all()[0].id, Some(1), vec![0, 2, 0], 0)
     );
     assert_eq!(run.last, None);
+    assert_eq!(run.not_run, Vec::<usize>::new());
     assert_eq!(backlog(&mut app).messages.len(), 0);
 }
 

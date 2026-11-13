@@ -497,6 +497,8 @@ pub(crate) struct RunState {
     pub(crate) holder: Option<String>,
     pub(crate) last: Option<StepInfo>,
     pub(crate) outside: Option<RunEdge>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) not_run: Vec<usize>,
     pub(crate) ended: bool,
     pub(crate) messages: u64,
     #[serde(skip_serializing_if = "Option::is_none")]

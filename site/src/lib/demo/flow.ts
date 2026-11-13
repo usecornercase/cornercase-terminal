@@ -64,6 +64,8 @@ export interface Step {
   at: number;
 }
 
+const wentBack = (e: Edge): boolean => e.kind === 'loop' || (e.kind === 'outside' && e.from !== null && e.to < e.from);
+
 const stageOf = (flow: Flow, role: string): number => flow.stages.findIndex((s) => s.roles.includes(role));
 
 export class Progress {
@@ -71,6 +73,7 @@ export class Progress {
   holder: string | null = null;
   last: Step | null = null;
   outside: Edge | null = null;
+  notRun: number[] = [];
   private entry: [Edge, string | null] | null = null;
   private counted: number[] = [];
   private along = new Map<string, Message>();
@@ -105,7 +108,13 @@ export class Progress {
       moved = [{ kind: 'loop', stage: active }, this.holder];
     } else if (active === null && target === 0) moved = null;
     else moved = [{ kind: 'outside', from: active, to: target }, this.holder];
-    if (active !== target) this.entry = moved;
+    const moving = active !== target;
+    if (moving) this.entry = moved;
+    if (moving && moved && wentBack(moved[0])) {
+      const later = Array.from({ length: flow.stages.length - target - 1 }, (_, i) => target + 1 + i);
+      this.notRun = [...new Set([...this.notRun, ...later])].sort((a, b) => a - b);
+    }
+    this.notRun = this.notRun.filter((s) => s !== target);
     if (moved) {
       const [edge, from] = moved;
       if (edge.kind === 'outside') this.outside = edge;

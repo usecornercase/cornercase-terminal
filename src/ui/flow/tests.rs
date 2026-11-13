@@ -685,6 +685,7 @@ mod panel {
             run: 2,
             messages: 3,
             active: Some(1),
+            not_run: Vec::new(),
             lead: true,
         };
         let rows = vec![
@@ -749,6 +750,46 @@ mod panel {
         let t = drawn(&view, WIDE);
         let (x, y) = find(&t, "findings 4/3").expect("the summary");
         assert_eq!(cell(&t, x, y).fg, WAITING_COLOR);
+    }
+
+    fn not_run(stages: &[usize]) -> View {
+        let mut view = full(false);
+        view.heading.not_run = stages.to_vec();
+        view
+    }
+
+    #[test]
+    fn stages_not_run_take_a_row_of_their_own_in_orange() {
+        let view = not_run(&[2]);
+        let t = drawn(&view, WIDE);
+        let (x, y) = find(&t, "stage 3 not run since the last change").expect("the note");
+        assert_eq!(cell(&t, x, y).fg, WAITING_COLOR);
+        let (_, summary) = find(&t, "stage 2 of 3").expect("the summary");
+        assert_eq!(y, summary + 1);
+        let stop = at(&view, WIDE, "stop");
+        assert!(stop.y > y);
+        insta::assert_snapshot!("panel_not_run", t.backend());
+    }
+
+    #[test]
+    fn stages_not_run_follow_the_loops_when_the_row_has_room() {
+        let view = not_run(&[2]);
+        let t = drawn(&view, WIDER);
+        let (_, summary) = find(&t, "stage 2 of 3").expect("the summary");
+        let (x, y) = find(&t, "· stage 3 not run since the last change").expect("the note");
+        assert_eq!(y, summary);
+        assert_eq!(cell(&t, x + 2, y).fg, WAITING_COLOR);
+        let stop = at(&view, WIDER, "stop");
+        assert_eq!(stop.y, summary + 1);
+    }
+
+    #[test]
+    fn stages_not_run_are_cut_at_the_end_in_a_narrow_panel() {
+        let t = drawn(&not_run(&[1, 2]), NARROW);
+        let (x, y) = find(&t, "stage 2 and 3 not run").expect("the note");
+        assert_eq!(cell(&t, x, y).fg, WAITING_COLOR);
+        assert!(find(&t, "since the last change").is_none());
+        assert_eq!(cell(&t, NARROW.width - 2, y).symbol(), "…");
     }
 
     #[test]
