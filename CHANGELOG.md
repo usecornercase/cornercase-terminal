@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.65
+
+- **A program that holds a tunnel learns why it ended.** `cornercase --remote vps tunnel hold 5173` (forward or `--reverse`) prints one more line when it ends: `{"ended":"closed"}` or `{"ended":"forgotten"}` after `cornercase tunnel close` or `forget` on vps, exiting 0 as before, and `{"ended":"server-stopped"}` or `{"ended":"server-restarted"}` when vps's server stops or restarts, now exiting 7 instead of 0, so the program can hold the tunnel again once the server is back instead of guessing from timings. Killed, or with its output closed, it still exits 0 with nothing more. `cornercase contract` lists the feature `tunnel-hold-ended`.
+- **Your server lists the tunnels of each machine.** Each entry of `machines` in `cornercase status --json`, `status --follow` and `view` has `tunnels`, the tunnels that machine lists (windows' and programs' holds, with their port, local port, state and holder), left out when there are none, so a program sees who else holds a tunnel to that machine without connecting there. `cornercase contract` lists the feature `machine-tunnels`.
+
 ## 0.13.64
 
 - **A flow run can free its build folders once its pull request merges.** `cornercase flow run … --close-when-merged --free-builds` (or `cornercase flow close-when-merged --free-builds` for a run already going) frees the build folders of the run's worktree and of its roles' own worktrees once its agents closed, as `cornercase worktrees free-builds` does: only the git-ignored folders on the project's list (`node_modules`, `target`…), and a worktree where a program still runs, or whose build folder holds a git checkout, keeps them. The toast and the `flow-merged` message say how much went (`pull request merged in fix-login: 5 agents closed, 15.7 GB of builds freed`) or why not. The worktrees, their branches and the run's folder stay, so reopening the agents rebuilds what they need. `--free-builds` needs `--close-when-merged`, and `--off` turns both off. `flow runs`, `status --json` and `flow run --json` show `free_builds`, and `cornercase contract` lists the feature `flow-free-builds`.
