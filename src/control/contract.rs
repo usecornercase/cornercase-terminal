@@ -15,6 +15,7 @@ pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
 pub(crate) const FILES_VERSION: u32 = 1;
 pub(crate) const CONFIG_PAIR_VERSION: u32 = 1;
+pub(crate) const TUNNEL_ORDERS_VERSION: u32 = 1;
 pub(crate) const FEATURES: &[&str] = &[
     "boot",
     "structured-errors",
@@ -74,6 +75,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "tunnel-hold",
     "queue-results",
     "agent-models",
+    "tunnel-orders",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -190,6 +192,7 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
             Stream { name: "flow-messages".into(), version: FLOW_MESSAGES_VERSION },
             Stream { name: "files".into(), version: FILES_VERSION },
             Stream { name: "config-pair".into(), version: CONFIG_PAIR_VERSION },
+            Stream { name: "tunnel-orders".into(), version: TUNNEL_ORDERS_VERSION },
         ],
     }
 }

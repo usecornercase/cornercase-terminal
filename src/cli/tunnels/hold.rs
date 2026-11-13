@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::cli::quietly;
 use crate::client;
-use crate::control::{Command, TunnelHold};
+use crate::control::{Command, TunnelFailed, TunnelHold};
 use crate::error::{Error, Result};
 use crate::os::process::on_end_signal;
 use crate::remote::tunnel::{self, Forward, Watched};
@@ -33,7 +33,7 @@ pub(super) fn run(port: u16) -> Result<bool> {
     client::own_connection()?;
     let remote = client::used_remote().ok_or_else(|| Error::WrongUsage(NEEDS_REMOTE.into()))?;
     client::use_tunnel_hold()?;
-    let local = tunnel::local_port(port, None)?;
+    let local = tunnel::local_port(port, None).inspect_err(|error| report(port, &error.to_string()))?;
     let (tell, heard) = mpsc::channel();
     let signalled = tell.clone();
     on_end_signal(move || {
@@ -46,14 +46,15 @@ pub(super) fn run(port: u16) -> Result<bool> {
             Watched::Up => Heard::Up,
             Watched::Ended(reason) => Heard::Ended(reason),
         });
-    })?;
+    })
+    .inspect_err(|error| report(port, &error.to_string()))?;
     let held = hold(&heard, tell, port, local);
     drop(running);
     held
 }
 
 fn hold(heard: &Receiver<Heard>, tell: mpsc::Sender<Heard>, port: u16, local: u16) -> Result<bool> {
-    if !wait_up(heard, port)? {
+    if !wait_up(heard, port, |reason| report(port, reason))? {
         return Ok(true);
     }
     let registered = tell.clone();
@@ -65,30 +66,41 @@ fn hold(heard: &Receiver<Heard>, tell: mpsc::Sender<Heard>, port: u16, local: u1
         });
         let _ = tell.send(Heard::Stream(said));
     });
-    if !wait_registered(heard, port)? || announce(&mut io::stdout().lock(), port, local)? {
+    if !wait_registered(heard, port, |reason| report(port, reason))? || announce(&mut io::stdout().lock(), port, local)?
+    {
         return Ok(true);
     }
     held(heard, port)
 }
 
-fn wait_up(heard: &Receiver<Heard>, port: u16) -> Result<bool> {
+fn report(port: u16, reason: &str) {
+    let error = if reason.trim().is_empty() { "the tunnel could not be held" } else { reason };
+    let command = Command::TunnelFailed(TunnelFailed { port, error: error.into() });
+    let _ = client::ask("tunnel-failed", command);
+}
+
+fn wait_up(heard: &Receiver<Heard>, port: u16, report: impl FnOnce(&str)) -> Result<bool> {
     loop {
         match heard.recv().unwrap_or(Heard::Signal) {
             Heard::Up => return Ok(true),
             Heard::Signal => return Ok(false),
-            Heard::Ended(reason) => return Err(Error::Control(format!("could not tunnel port {port}: {reason}"))),
+            Heard::Ended(reason) => {
+                report(&reason);
+                return Err(Error::Control(format!("could not tunnel port {port}: {reason}")));
+            }
             Heard::Stream(_) | Heard::Registered => {}
         }
     }
 }
 
-fn wait_registered(heard: &Receiver<Heard>, port: u16) -> Result<bool> {
+fn wait_registered(heard: &Receiver<Heard>, port: u16, report: impl FnOnce(&str)) -> Result<bool> {
     loop {
         match heard.recv().unwrap_or(Heard::Signal) {
             Heard::Registered => return Ok(true),
             Heard::Signal | Heard::Stream(Ok(())) => return Ok(false),
             Heard::Stream(Err(error)) => return Err(error),
             Heard::Ended(reason) => {
+                report(&reason);
                 return Err(Error::Control(format!("the tunnel of port {port} ended: {reason}")));
             }
             Heard::Up => {}

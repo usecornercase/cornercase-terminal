@@ -73,3 +73,26 @@ fn a_connection_that_holds_a_tunnel_is_detached_and_removed_when_the_tunnel_is_c
         assert!(said.iter().any(|m| matches!(m, ServerMessage::Response(text) if text.contains("\"tunnels\":[]"))));
     });
 }
+
+#[test]
+fn a_connection_taking_orders_hears_an_open_as_a_line_and_its_leaving_answers_it() {
+    let mut attached = Attached::new();
+    let taker = attached.join_hello(a_window(None));
+    let asker = attached.join_hello(a_window(None));
+    attached.serve(Server::step, move |_| {
+        request(&taker, r#"{"contract":1,"command":"tunnel-orders","args":{}}"#);
+        let taking = taker.received(|m| matches!(m, ServerMessage::Response(_)));
+        assert!(taking.iter().any(|m| matches!(m, ServerMessage::Response(text) if text.contains("\"takers\":1"))));
+
+        request(&asker, r#"{"contract":1,"command":"tunnel-open","args":{"port":5173}}"#);
+
+        let heard =
+            taker.received(|m| matches!(m, ServerMessage::Response(text) if text.contains("\"order\":\"open\"")));
+        assert!(orders(&heard).is_empty(), "a program with no window was sent a postcard order");
+        taker.send(ServerEvent::Gone(taker.id));
+        let said = asker.received(|m| matches!(m, ServerMessage::Response(_)));
+        assert!(
+            said.iter().any(|m| matches!(m, ServerMessage::Response(text) if text.contains("no program answered")))
+        );
+    });
+}

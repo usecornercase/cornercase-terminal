@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.57
+
+- **A program with no window can take the tunnels scripts ask for.** `cornercase --remote vps tunnel orders` prints a line once the server counts it, then one per order (`{"order":"open","port":3000}`, or `close`, `forget`), so `cornercase tunnel open 3000` on that machine asks it as it asks windows and waits for its answer: holding the port with `tunnel hold 3000` answers it, and `cornercase tunnel failed 3000 REASON` fails it with that reason (a `tunnel hold` whose `ssh` fails does that by itself). `cornercase tunnels --json` counts these programs in `takers`, and `cornercase contract` lists the feature and stream `tunnel-orders`.
+
 ## 0.13.56
 
 - Nothing changes for users: two Recap tests that failed when run in the first minutes after midnight now pass at any hour.

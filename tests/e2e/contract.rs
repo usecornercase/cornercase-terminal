@@ -81,6 +81,8 @@ const OPERATIONS: &[&str] = &[
     "paste-file",
     "config-pair",
     "agent-models",
+    "tunnel-orders",
+    "tunnel-failed",
 ];
 
 fn assert_operations(contract: &Value) {
@@ -106,11 +108,12 @@ fn assert_features_and_streams(contract: &Value) {
     for feature in features
         .into_iter()
         .chain(["todo-panel", "agent-folds", "changes", "close-agent-tabs", "queue-undo"])
-        .chain(["focus-reveal", "files", "queue-routines", "queue-results"])
+        .chain(["focus-reveal", "files", "queue-routines", "queue-results", "tunnel-orders"])
     {
         assert!(has_feature(contract, feature), "{feature}: {contract}");
     }
     let streams = ["events", "app", "changes", "flow-runs", "flow-messages", "files", "view", "surface", "config-pair"];
+    let streams = streams.into_iter().chain(["tunnel-orders"]);
     for stream in streams {
         assert!(has_stream(contract, stream), "{stream}: {contract}");
     }

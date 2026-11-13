@@ -12,12 +12,18 @@ use super::{ALIVE, BATCH, ENDED_WAIT, SSH, Stderr, wait_for_collector};
 use crate::error::{Error, Result};
 use crate::ports::listen;
 use crate::process;
+use crate::text;
 
 pub(crate) const UP_WAIT: Duration = Duration::from_secs(30);
+const REASON_CHARS: usize = 300;
 const POLL: Duration = Duration::from_millis(100);
 const ALIVE_POLL: Duration = Duration::from_millis(500);
 const PROBE: Duration = Duration::from_millis(200);
 const FORWARD: [&str; 6] = ["-o", "ExitOnForwardFailure=yes", "-o", "ControlPath=none", "-N", "-T"];
+
+pub(crate) fn reason(text: &str) -> String {
+    text::one_line(text).chars().take(REASON_CHARS).collect()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Forward {
