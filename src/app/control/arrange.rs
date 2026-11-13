@@ -25,7 +25,8 @@ impl App {
         if self.mark(Marked::Pane(pane), !mark.reviewed) == 0 {
             return Err(format!("pane {pane} runs no agent cornercase reads, so there is nothing to mark").into());
         }
-        Ok(Some(json(&pane_ids(pane))))
+        let warning = self.runs.owed_at(pane);
+        Ok(Some(json(&Done { warning: warning.filter(|_| !mark.reviewed), ..pane_ids(pane) })))
     }
 
     pub(in crate::app) fn go_request(&mut self, asker: Asker, go: &control::Go) -> Handled {

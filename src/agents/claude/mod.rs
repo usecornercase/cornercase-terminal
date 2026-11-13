@@ -248,7 +248,13 @@ impl Reader {
     }
 
     pub(in crate::agents) fn activity(&self, title: &str) -> Activity {
-        self.session.as_ref().and_then(Session::activity).or_else(|| from_title(title)).unwrap_or(Activity::Idle)
+        let activity =
+            self.session.as_ref().and_then(Session::activity).or_else(|| from_title(title)).unwrap_or(Activity::Idle);
+        let failed = self.transcript.as_ref().is_some_and(|t| t.failed);
+        match activity {
+            Activity::Idle | Activity::Waiting if failed => Activity::Failed,
+            other => other,
+        }
     }
 
     pub(in crate::agents) fn record(&self) -> Option<Record> {

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::{Closed, Team, brief, finished, member, reopened, restored, where_it_stands};
+use super::{Closed, Team, brief, failed, finished, member, reopened, restored, where_it_stands, woken};
 use crate::agents::Known;
 use crate::flows::run::{Member, RoleWorktree};
 use crate::flows::{Back, End, Flow, ORCHESTRATOR, Role, builtin, role_branch};
@@ -140,7 +140,7 @@ fn a_loop_runs_its_stage_and_every_stage_after_it_again() {
     assert!(
         text.contains(
             "When the work goes back to an earlier stage, that stage and every stage after it run again, in order, \
-             on what changed, before the work goes on"
+             on what changed, however small the change"
         ),
         "{text}"
     );
@@ -428,4 +428,104 @@ fn several_finished_roles_share_one_message() {
     assert!(two.contains("Read their answers with `cornercase read --last-message --pane 14 --pane 15`"), "{two}");
     let three = finished(&[("a".into(), 1), ("b".into(), 2), ("c".into(), 3)]);
     assert!(three.starts_with("a (pane 1), b (pane 2) and c (pane 3) finished"), "{three}");
+}
+
+#[test]
+fn the_plan_names_the_small_changes_that_run_every_later_stage_again() {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let text = brief(&flow, "x", "fix", Team { members: &members(), trees: &[] }, None);
+
+    assert_holds(
+        &text,
+        &["however small the change (a fix of docs only, a rebase or a merge of a moved branch included)"],
+    );
+}
+
+#[test]
+fn the_rules_say_what_to_do_with_a_failed_agent_and_a_skipped_stage() {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let text = brief(&flow, "x", "fix", Team { members: &members(), trees: &[] }, None);
+
+    assert_holds(
+        &text,
+        &[
+            "An agent whose turn ended `failed` (its last message is an `API Error` line, for instance) did not do \
+             the work: read its last message first, since the error can come after it did part of it, send it the work again once",
+            "If `cornercase send` or `cornercase mark` warns that a stage has not run since the last change, run \
+             that stage first, or say in your final summary why not.",
+        ],
+    );
+}
+
+mod waking {
+    use super::*;
+
+    fn coder() -> Vec<(String, u64)> {
+        vec![("coder".into(), 3)]
+    }
+
+    #[test]
+    fn a_failed_role_did_not_do_the_work() {
+        assert_eq!(
+            failed(&coder()),
+            "coder (pane 3) ended its turn on an error (such as an API error) before finishing the work you sent it, \
+             so that work was not done. Read what it last wrote with `cornercase read --last-message --pane 3`, then \
+             send it the work again; if it fails again, tell the user with `cornercase notify`."
+        );
+        let two = failed(&[("a".into(), 1), ("b".into(), 2)]);
+        assert!(two.starts_with("a (pane 1) and b (pane 2) ended their turn on an error"), "{two}");
+        assert!(two.contains("what they last wrote with `cornercase read --last-message --pane 1 --pane 2`"), "{two}");
+    }
+
+    #[test]
+    fn the_wake_joins_what_applies() {
+        assert!(woken(true, &[], &[]).starts_with("Your last turn ended on an error"));
+        assert_eq!(woken(false, &[], &coder()), failed(&coder()));
+        assert_eq!(woken(false, &coder(), &[]), finished(&coder()));
+        let mixed = woken(true, &[("reviewer".into(), 4)], &coder());
+        assert!(mixed.starts_with("reviewer (pane 4) finished the work"), "{mixed}");
+        assert!(mixed.contains(". coder (pane 3) ended its turn"), "{mixed}");
+        assert!(mixed.ends_with("go on with the plan from where you stopped."), "{mixed}");
+        assert_eq!(woken(false, &[], &[]), "");
+    }
+
+    #[test]
+    fn no_wake_holds_a_word_the_fake_agent_branches_on() {
+        let texts = [
+            woken(true, &[], &[]),
+            woken(false, &[], &coder()),
+            woken(false, &coder(), &[]),
+            woken(true, &[("reviewer".into(), 4)], &coder()),
+        ];
+        for text in texts {
+            for word in ["ask", "panel", "survey", "questions", "subagent", "background", "api-error", "/compact"] {
+                assert!(!text.contains(word), "{word} in {text}");
+            }
+        }
+    }
+}
+
+mod owed_stages {
+    use super::*;
+    use crate::flows::brief::owed;
+
+    #[rstest::rstest]
+    #[case::one(&[1], Some(0), "stage 2 (reviewer, security) has not run since the last change in stage 1: run it first, or say in your summary why not")]
+    #[case::two(&[1, 2], Some(0), "stage 2 (reviewer, security) and stage 3 (tester) have not run since the last change in stage 1: run them first, or say in your summary why not")]
+    #[case::three(&[0, 1, 2], None, "stage 1 (coder), stage 2 (reviewer, security) and stage 3 (tester) have not run since the last change: run them first, or say in your summary why not")]
+    fn the_stages_owed_are_told_with_their_roles(
+        #[case] stages: &[usize],
+        #[case] changed: Option<usize>,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            owed(&builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0), stages, changed).as_deref(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn nothing_owed_is_not_told() {
+        assert_eq!(owed(&builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0), &[], Some(0)), None);
+    }
 }

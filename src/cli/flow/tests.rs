@@ -192,9 +192,31 @@ mod runs {
         }
     }
 
+    fn now() -> SystemTime {
+        crate::time::Stamp::parse("2026-11-13T10:50:00.000Z").expect("a time")
+    }
+
+    fn runs_text_at(runs: &FlowRuns) -> String {
+        runs_text(runs, now())
+    }
+
+    #[test]
+    fn a_run_that_stopped_moving_says_since_when() {
+        let stopped = RunState { stopped: Some("2026-11-13T10:00:00.000Z".into()), ended: false, ..run() };
+        let text = runs_text_at(&FlowRuns { runs: vec![stopped], ..FlowRuns::default() });
+        assert!(
+            text.contains(
+                "  outside the plan: stage 1 → stage 3\n  stopped moving 50 min ago: the orchestrator's turn is over \
+                 and no agent of the team works\n"
+            ),
+            "{text}"
+        );
+        assert!(!runs_text_at(&FlowRuns { runs: vec![run()], ..FlowRuns::default() }).contains("stopped moving"));
+    }
+
     #[test]
     fn a_run_is_a_block_of_its_stage_its_roles_and_its_steps() {
-        let text = runs_text(&FlowRuns { runs: vec![run()], ..FlowRuns::default() });
+        let text = runs_text_at(&FlowRuns { runs: vec![run()], ..FlowRuns::default() });
 
         assert_eq!(
             text,
@@ -213,7 +235,7 @@ mod runs {
     #[test]
     fn a_run_after_a_change_lists_the_stages_not_run() {
         let changed = RunState { not_run: vec![2, 3], ended: false, ..run() };
-        let text = runs_text(&FlowRuns { runs: vec![changed], ..FlowRuns::default() });
+        let text = runs_text_at(&FlowRuns { runs: vec![changed], ..FlowRuns::default() });
         assert!(
             text.contains("  outside the plan: stage 1 → stage 3\n  not run since the last change: stage 3, stage 4\n"),
             "{text}"
@@ -223,7 +245,7 @@ mod runs {
     #[test]
     fn a_run_that_ended_says_which_stages_never_saw_the_last_change() {
         let ended = |not_run| {
-            runs_text(&FlowRuns { runs: vec![RunState { not_run, ended: true, ..run() }], ..FlowRuns::default() })
+            runs_text_at(&FlowRuns { runs: vec![RunState { not_run, ended: true, ..run() }], ..FlowRuns::default() })
         };
         let one = ended(vec![2]);
         assert!(
@@ -236,9 +258,9 @@ mod runs {
     #[test]
     fn a_run_that_closes_when_merged_says_so_and_others_do_not() {
         let line = "  closes its agents once its pull request merges\n";
-        assert!(!runs_text(&FlowRuns { runs: vec![run()], ..FlowRuns::default() }).contains(line));
+        assert!(!runs_text_at(&FlowRuns { runs: vec![run()], ..FlowRuns::default() }).contains(line));
         let opted = RunState { close_when_merged: true, ..run() };
-        assert!(runs_text(&FlowRuns { runs: vec![opted], ..FlowRuns::default() }).ends_with(line));
+        assert!(runs_text_at(&FlowRuns { runs: vec![opted], ..FlowRuns::default() }).ends_with(line));
     }
 
     #[rstest::rstest]
@@ -263,16 +285,16 @@ mod runs {
     fn a_run_that_has_not_started_says_so_and_nothing_running_says_that() {
         let fresh = RunState { stage: None, rounds: Vec::new(), last: None, outside: None, ended: false, ..run() };
 
-        let text = runs_text(&FlowRuns { runs: vec![fresh], ..FlowRuns::default() });
+        let text = runs_text_at(&FlowRuns { runs: vec![fresh], ..FlowRuns::default() });
 
         assert!(text.starts_with("workspace 4  Full issue  not started\n"), "{text}");
         assert!(!text.contains("last:") && !text.contains("ended"), "{text}");
-        assert_eq!(runs_text(&FlowRuns::default()), "no flow is running\n");
+        assert_eq!(runs_text_at(&FlowRuns::default()), "no flow is running\n");
     }
 
     #[test]
     fn several_runs_are_separated_by_a_blank_line() {
-        let text = runs_text(&FlowRuns { runs: vec![run(), run()], ..FlowRuns::default() });
+        let text = runs_text_at(&FlowRuns { runs: vec![run(), run()], ..FlowRuns::default() });
 
         assert_eq!(text.matches("\n\nworkspace 4").count(), 1, "{text}");
     }

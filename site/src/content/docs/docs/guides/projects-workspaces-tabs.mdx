@@ -142,7 +142,7 @@ An icon before the tab's name tells you what a recognised agent is doing when it
 | --- | --- |
 | `◐` yellow | The agent is working. With **working icon** set to *spinner* in [settings → UI](../../reference/configuration/#ui), it is a spinner instead, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, turning about ten times a second. For Claude and GitHub Copilot CLI, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. Also while it waits for [subagents](#subagents-still-running) it started. |
 | `!` orange | The agent needs you: it asks for permission or asks you a question. Any recognised agent reporting OSC 7501; otherwise Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI and GitHub Copilot CLI (Cursor only with `/status-indicators` turned on; Copilot for a permission prompt, a question or a plan awaiting approval). |
-| `!` red | The agent reported a failure through OSC 7501. It stays until the agent reports another state or clears it. |
+| `!` red | The agent reported a failure through OSC 7501, or a Claude Code turn ended on an API error (its last message is the `API Error` line, such as `Please run /login · API Error: 403`). The first stays until the agent reports another state or clears it; the second goes once the agent gets its next prompt. |
 | `●` blue | You marked the agent as pending review. It stays until you mark it as reviewed, send the agent a new prompt or answer its question; opening the tab does not take it off. |
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab, or when a program that draws cornercase shows it. |
 | `○` grey | The agent waits for your next message. |

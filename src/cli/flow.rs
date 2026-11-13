@@ -1,6 +1,7 @@
 use std::fmt::Write as _;
 use std::io::IsTerminal as _;
 use std::path::{Component, Path, PathBuf};
+use std::time::SystemTime;
 
 use super::args::{
     self, FlowAction, FlowCloseWhenMergedArgs, FlowDefaultArgs, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs,
@@ -558,17 +559,17 @@ fn follow_runs(args: &FlowRunsArgs) -> Result<()> {
     if args.print.json {
         return print_json(&value);
     }
-    print_out(&runs_text(&answer(value)?))
+    print_out(&runs_text(&answer(value)?, SystemTime::now()))
 }
 
-pub(super) fn runs_text(runs: &FlowRuns) -> String {
+pub(super) fn runs_text(runs: &FlowRuns, now: SystemTime) -> String {
     if runs.runs.is_empty() {
         return "no flow is running\n".into();
     }
-    runs.runs.iter().map(run_block).collect::<Vec<_>>().join("\n")
+    runs.runs.iter().map(|run| run_block(run, now)).collect::<Vec<_>>().join("\n")
 }
 
-fn run_block(run: &RunState) -> String {
+fn run_block(run: &RunState, now: SystemTime) -> String {
     let mut out = format!("workspace {}  {}", run.workspace, share::visible(&run.flow.name));
     match run.stage {
         Some(stage) => {
@@ -594,11 +595,11 @@ fn run_block(run: &RunState) -> String {
         };
         let _ = writeln!(out, "  {:<width$}  {pane:<9}  {status}", share::visible(&role.role));
     }
-    out.push_str(&run_notes(run));
+    out.push_str(&run_notes(run, now));
     out
 }
 
-fn run_notes(run: &RunState) -> String {
+fn run_notes(run: &RunState, now: SystemTime) -> String {
     let mut out = String::new();
     if let Some(last) = &run.last {
         let from = last.from.as_deref().map(|from| format!("{} ", share::visible(from))).unwrap_or_default();
@@ -607,6 +608,10 @@ fn run_notes(run: &RunState) -> String {
     if let Some(RunEdge::Outside { from, to }) = run.outside {
         let from = from.map_or_else(|| "the start".to_string(), |from| format!("stage {}", from + 1));
         let _ = writeln!(out, "  outside the plan: {from} → stage {}", to + 1);
+    }
+    if let Some(since) = run.stopped.as_deref().and_then(crate::time::Stamp::parse) {
+        let ago = crate::time::ago(now.duration_since(since).unwrap_or_default());
+        let _ = writeln!(out, "  stopped moving {ago}: the orchestrator's turn is over and no agent of the team works");
     }
     if run.ended && !run.not_run.is_empty() {
         let _ = writeln!(out, "  ended with {} not run on the last change", stages_in_words(&run.not_run));

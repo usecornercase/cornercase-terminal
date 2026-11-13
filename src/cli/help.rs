@@ -64,7 +64,10 @@ after a restart (`resuming` in the JSON), where the text would reach its shell o
 send again once it is back, or pass --force. While a person is typing in the pane the text waits for them
 and goes right after their prompt (`held_sends` in the JSON); `cornercase held` acts on it from elsewhere.
 If they choose send now while they have a draft, the text is pasted after it without its Enter, and the
-command fails saying it is in their input.
+command fails saying it is in their input. A Claude Code agent whose turn ended on an API error is
+`failed`, not waiting, and takes the text. From a flow's orchestrator, a send that goes on to a stage
+while an earlier one has not run since the last change still goes, and prints `warning: stage 3 (reviewer)
+has not run since the last change in stage 2: …` on stderr (`warning` with --json).
 
 With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI,
 Vibe CLI or GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
@@ -257,6 +260,7 @@ pub(super) const MARK_HELP: &str =
 group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an
 answer to its question. Looking at the tab does not take it off, unlike the ✓ of an agent that finished while you looked elsewhere.
 Both marks are saved with the session, so they come back after a restart with the conversation.
+From a flow's orchestrator, marking its own pane prints one `warning: …` on stderr naming every stage not run since the last change.
 
 --boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
 a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is

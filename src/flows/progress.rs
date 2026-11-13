@@ -36,6 +36,7 @@ pub(crate) struct Progress {
     pub(crate) outside: Option<Edge>,
     entry: Option<(Edge, Option<String>)>,
     not_run: Vec<usize>,
+    changed: Option<usize>,
     rounds: Vec<u32>,
     along: Vec<(Edge, Message)>,
 }
@@ -65,6 +66,15 @@ impl Progress {
 
     pub(crate) fn not_run(&self) -> &[usize] {
         &self.not_run
+    }
+
+    pub(crate) fn changed(&self) -> Option<usize> {
+        self.changed
+    }
+
+    pub(crate) fn passed(&self) -> Vec<usize> {
+        let active = self.active.unwrap_or_default();
+        self.not_run.iter().copied().filter(|stage| *stage < active).collect()
     }
 
     pub(crate) fn rounds(&self, stage: usize) -> u32 {
@@ -108,6 +118,7 @@ impl Progress {
 
     fn track(&mut self, stages: usize, target: usize, back: bool) {
         if back {
+            self.changed = Some(target);
             self.not_run.extend(target + 1..stages);
             self.not_run.sort_unstable();
             self.not_run.dedup();

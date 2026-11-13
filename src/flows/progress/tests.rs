@@ -408,4 +408,18 @@ mod not_run {
     fn stages_read_as_words(#[case] stages: &[usize], #[case] words: &str) {
         assert_eq!(stages_in_words(stages), words);
     }
+
+    #[test]
+    fn a_stage_passed_over_since_the_last_change_is_owed_before_the_target() {
+        let p = Script::new().send("coder").send("reviewer").send("coder").send("tester").progress();
+        assert_eq!((p.passed(), p.changed()), (vec![1], Some(0)));
+    }
+
+    #[test]
+    fn nothing_is_passed_over_in_the_plan_or_before_a_change() {
+        let p = Script::new().send("coder").send("tester").progress();
+        assert_eq!((p.passed(), p.changed()), (Vec::<usize>::new(), None));
+        let p = Script::new().send("coder").send("reviewer").send("coder").send("reviewer").progress();
+        assert_eq!(p.passed(), Vec::<usize>::new());
+    }
 }
