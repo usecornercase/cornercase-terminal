@@ -46,7 +46,7 @@ pub(crate) struct FailedArg {
 
 #[derive(Debug, Args)]
 pub(crate) struct HoldArg {
-    #[arg(value_name = "PORT", value_parser = clap::value_parser!(u16).range(1..), required_unless_present = "reverse", conflicts_with = "reverse", help = "The port to tunnel, on the machine of --remote")]
+    #[arg(value_name = "PORT", value_parser = clap::value_parser!(u16).range(1..), required_unless_present_any = ["reverse", "there"], conflicts_with = "reverse", help = "The port to tunnel, on the machine of --remote")]
     pub(crate) port: Option<u16>,
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u16).range(1..), conflicts_with = "reverse", help = "The port of this computer to listen on when PORT is taken here, such as the one the hold had before (any free one when N is taken too)")]
     pub(crate) local: Option<u16>,

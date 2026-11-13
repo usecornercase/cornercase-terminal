@@ -51,6 +51,13 @@ impl Kind {
         (self == Self::ReverseHold).then_some(Direction::Reverse)
     }
 
+    fn held(direction: Direction) -> Self {
+        match direction {
+            Direction::Forward => Self::Hold,
+            Direction::Reverse => Self::ReverseHold,
+        }
+    }
+
     fn goes(self, direction: Direction) -> bool {
         self.direction().unwrap_or(Direction::Forward) == direction
     }
@@ -201,7 +208,8 @@ impl App {
         }
     }
 
-    pub(super) fn hold_tunnel(&mut self, client: u64, kind: Kind, (port, local): (u16, u16)) {
+    pub(super) fn hold_tunnel(&mut self, client: u64, direction: Direction, (port, local): (u16, u16)) {
+        let kind = Kind::held(direction);
         let tunnels = vec![Tunnel { port, local: Some(local), state: TunnelState::Up }];
         let holder = Holder { kind, browse: false, applied: 0, tunnels };
         self.opening.tunnels.by.insert(client, holder.clone());

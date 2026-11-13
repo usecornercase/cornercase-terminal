@@ -575,15 +575,10 @@ fn tunnel_line(
     (state, error): (&str, Option<&str>),
     (holder, kind, direction): (u64, Option<&str>, Option<Direction>),
 ) -> String {
-    let reverse = direction == Some(Direction::Reverse);
-    let arrow = if reverse { "←" } else { "→" };
+    let arrow = tunnels::arrow(direction);
     let local = local.map(|local| format!(" {arrow} localhost:{local}")).unwrap_or_default();
     let error = error.map(|error| format!(": {error}")).unwrap_or_default();
-    let who = match (reverse, kind == Some("hold")) {
-        (true, _) => "reverse hold",
-        (false, true) => "hold",
-        (false, false) => "holder",
-    };
+    let who = tunnels::hold_word(kind == Some("hold"), direction).unwrap_or("holder");
     format!("tunnel {port}  {state}{local}{error}  ({who} {holder})")
 }
 

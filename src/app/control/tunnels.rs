@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::{Handled, Pending, Reply, Stage, conflict, json, malformed};
 use crate::app::App;
-use crate::app::tunnels::{Kind, Origin};
+use crate::app::tunnels::Origin;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{Direction, Done, TunnelFailed, TunnelHold, TunnelInfo, TunnelPort};
 use crate::log;
@@ -134,8 +134,7 @@ impl App {
             return Err(conflict(BUSY_CONNECTION));
         }
         let direction = hold.direction.unwrap_or(Direction::Forward);
-        let kind = if direction == Direction::Reverse { Kind::ReverseHold } else { Kind::Hold };
-        self.hold_tunnel(client, kind, (hold.port, hold.local));
+        self.hold_tunnel(client, direction, (hold.port, hold.local));
         Ok(Some(json(&self.tunnel_list(Some((hold.port, direction))))))
     }
 

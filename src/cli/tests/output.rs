@@ -386,6 +386,45 @@ const TAB: Ids = Ids { pane: None, ..PANE };
     Ids { project: Some(1), workspace: Some(2), ..Ids::default() },
     "workspace 2  flow-merged  pull request merged in fix-login: 2 agents closed · ▶ on the workspace reopens them"
 )]
+#[case::a_tunnel_held_by_a_program(
+    What::Tunnel {
+        port: 5173,
+        local: Some(5174),
+        state: "up".into(),
+        error: None,
+        holder: 3,
+        kind: Some("hold".into()),
+        direction: None,
+    },
+    Ids::default(),
+    "tunnel 5173  up → localhost:5174  (hold 3)"
+)]
+#[case::a_reverse_tunnel(
+    What::Tunnel {
+        port: 9223,
+        local: Some(9222),
+        state: "up".into(),
+        error: None,
+        holder: 3,
+        kind: Some("hold".into()),
+        direction: Some(Direction::Reverse),
+    },
+    Ids::default(),
+    "tunnel 9223  up ← localhost:9222  (reverse hold 3)"
+)]
+#[case::a_reverse_tunnel_gone(
+    What::Tunnel {
+        port: 9223,
+        local: None,
+        state: "gone".into(),
+        error: None,
+        holder: 3,
+        kind: Some("hold".into()),
+        direction: Some(Direction::Reverse),
+    },
+    Ids::default(),
+    "tunnel 9223  gone  (reverse hold 3)"
+)]
 fn an_event_reads_as_one_line(#[case] what: What, #[case] ids: Ids, #[case] expected: &str) {
     assert_eq!(event_line(&event(what, ids)), expected);
 }

@@ -207,8 +207,12 @@ fn start(
     Ok(Running { child, pid, up })
 }
 
+fn is_debug_noise(line: &str) -> bool {
+    line.starts_with("debug") || line.starts_with("Transferred: ") || line.starts_with("Bytes per second: ")
+}
+
 fn keeps(line: &str, reverse: Reverse, port: &Mutex<Option<u16>>) -> bool {
-    let Some(there) = reported(line, reverse) else { return !line.trim_start().starts_with("debug") };
+    let Some(there) = reported(line, reverse) else { return !is_debug_noise(line.trim_start()) };
     *port.lock() = Some(there);
     false
 }

@@ -105,7 +105,7 @@ pub(crate) fn text(list: &TunnelList) -> String {
 
 fn line(tunnel: &TunnelInfo, several: bool) -> String {
     let mut text = format!("{}", tunnel.port);
-    let arrow = if tunnel.direction == Some(Direction::Reverse) { "←" } else { "→" };
+    let arrow = arrow(tunnel.direction);
     match (tunnel.state.as_str(), tunnel.local) {
         ("up", Some(local)) => {
             let _ = write!(text, " {arrow} localhost:{local}  up");
@@ -122,11 +122,21 @@ fn line(tunnel: &TunnelInfo, several: bool) -> String {
     text
 }
 
+pub(super) fn arrow(direction: Option<Direction>) -> &'static str {
+    if direction == Some(Direction::Reverse) { "←" } else { "→" }
+}
+
+pub(super) fn hold_word(held: bool, direction: Option<Direction>) -> Option<&'static str> {
+    match (direction, held) {
+        (Some(Direction::Reverse), _) => Some("reverse hold"),
+        (_, true) => Some("hold"),
+        (_, false) => None,
+    }
+}
+
 fn holder_suffix(tunnel: &TunnelInfo, several: bool) -> String {
-    if tunnel.direction == Some(Direction::Reverse) {
-        format!(" (reverse hold {})", tunnel.holder)
-    } else if tunnel.kind == "hold" {
-        format!(" (hold {})", tunnel.holder)
+    if let Some(word) = hold_word(tunnel.kind == "hold", tunnel.direction) {
+        format!(" ({word} {})", tunnel.holder)
     } else if several {
         format!(" (window {})", tunnel.holder)
     } else {

@@ -169,20 +169,12 @@ fn reverse_tunnel(port: u16, local: Option<u16>, state: &str) -> Event {
     event(What::Tunnel { port, local, state: state.into(), error: None, holder: 3, kind, direction }, Ids::default())
 }
 
-fn reverse_tunnels() -> Vec<(Event, &'static str)> {
-    vec![
-        (held_tunnel(Some(5174), "up", None, Some("hold")), fixture!("control/events/v1/tunnel-hold.json")),
-        (reverse_tunnel(9223, Some(9222), "up"), fixture!("control/events/v1/tunnel-reverse.json")),
-        (reverse_tunnel(9223, None, "gone"), fixture!("control/events/v1/tunnel-reverse-gone.json")),
-    ]
-}
-
-#[test]
-fn a_hold_s_events_are_written_and_read_as_their_fixtures() {
-    for (event, fixture) in reverse_tunnels() {
-        assert_eq!(serde_json::to_string(&event).expect("json"), fixture.trim_end());
-        assert_eq!(serde_json::from_str::<Event>(fixture).expect("an event"), event);
-    }
+#[rstest]
+#[case::up(reverse_tunnel(9223, Some(9222), "up"), fixture!("control/events/v1/tunnel-reverse.json"))]
+#[case::gone(reverse_tunnel(9223, None, "gone"), fixture!("control/events/v1/tunnel-reverse-gone.json"))]
+fn a_reverse_hold_s_event_is_written_and_read_as_its_fixture(#[case] event: Event, #[case] fixture: &str) {
+    assert_eq!(serde_json::to_string(&event).expect("json"), fixture.trim_end());
+    assert_eq!(serde_json::from_str::<Event>(fixture).expect("an event"), event);
 }
 
 #[test]
