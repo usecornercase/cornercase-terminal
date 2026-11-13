@@ -83,6 +83,8 @@ const NO_PANE: &str = "no pane is open here; pass --pane or --tab (`cornercase s
 
 type Reply = Result<Value, String>;
 
+const WARNING: &str = "warning";
+
 pub(in crate::app) type Handled = Result<Option<Value>, Refusal>;
 
 pub(super) struct Clients {
@@ -163,7 +165,7 @@ impl Requests {
         self.pending.push(Pending { client: Some(client), key, timeout, done, stage });
     }
 
-    pub(in crate::app) fn warn_pending(&mut self, client: u64, warning: String) {
+    fn warn_pending(&mut self, client: u64, warning: String) {
         if let Some(pending) = self.pending.iter_mut().rev().find(|p| p.client == Some(client)) {
             pending.done.warning.get_or_insert(warning);
         }
@@ -488,6 +490,21 @@ impl App {
 
     pub(crate) fn answer_start(&mut self, client: u64, started: Result<&Started, String>) {
         self.refuse_or_answer(Some(client), started.map(json).map_err(|message| Refusal::new(Code::Failed, message)));
+    }
+
+    pub(super) fn warn(&mut self, client: u64, handled: Handled, warning: Option<String>) -> Handled {
+        let Some(warning) = warning else { return handled };
+        match handled {
+            Ok(Some(Value::Object(mut answer))) => {
+                answer.entry(WARNING).or_insert(Value::String(warning));
+                Ok(Some(Value::Object(answer)))
+            }
+            Ok(None) => {
+                self.clients.requests.warn_pending(client, warning);
+                Ok(None)
+            }
+            other => other,
+        }
     }
 
     fn answer(&mut self, client: Option<u64>, reply: Reply) {

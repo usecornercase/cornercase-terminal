@@ -178,28 +178,6 @@ pub(crate) fn stages_in_words(stages: &[usize]) -> String {
     }
 }
 
-pub(crate) fn owed(flow: &Flow, stages: &[usize], changed: Option<usize>) -> Option<String> {
-    if stages.is_empty() {
-        return None;
-    }
-    let named: Vec<String> = stages
-        .iter()
-        .map(|stage| {
-            let roles = flow.stages.get(*stage).map(|s| s.roles.join(", ")).unwrap_or_default();
-            format!("stage {} ({roles})", stage + 1)
-        })
-        .collect();
-    let (verb, pronoun) = if stages.len() == 1 { ("has", "it") } else { ("have", "them") };
-    let since = changed
-        .map_or_else(|| "since the last change".to_string(), |at| format!("since the last change in stage {}", at + 1));
-    let list = match named.split_last() {
-        None => String::new(),
-        Some((only, [])) => only.clone(),
-        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
-    };
-    Some(format!("{list} {verb} not run {since}: run {pronoun} first, or say in your summary why not"))
-}
-
 fn loops_back(flow: &Flow, from: usize, to: usize) -> bool {
     flow.stages.get(from).and_then(|stage| stage.back.as_ref()).is_some_and(|back| back.to == to + 1)
 }

@@ -260,7 +260,7 @@ pub(super) const MARK_HELP: &str =
 group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an
 answer to its question. Looking at the tab does not take it off, unlike the ✓ of an agent that finished while you looked elsewhere.
 Both marks are saved with the session, so they come back after a restart with the conversation.
-From a flow's orchestrator, marking its own pane prints `warning: …` on stderr for each stage not run since the last change.
+From a flow's orchestrator, marking its own pane prints one `warning: …` on stderr naming every stage not run since the last change.
 
 --boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
 a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is

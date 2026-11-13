@@ -6,7 +6,6 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use serde_json::Value;
 
-use super::control::Handled;
 use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
@@ -380,21 +379,6 @@ impl App {
             }
         }
         warning
-    }
-
-    pub(super) fn warn(&mut self, client: u64, handled: Handled, warning: Option<String>) -> Handled {
-        let Some(warning) = warning else { return handled };
-        match handled {
-            Ok(Some(Value::Object(mut answer))) => {
-                answer.entry("warning").or_insert(Value::String(warning));
-                Ok(Some(Value::Object(answer)))
-            }
-            Ok(None) => {
-                self.clients.requests.warn_pending(client, warning);
-                Ok(None)
-            }
-            other => other,
-        }
     }
 
     fn hold_flow_read(&mut self, client: u64, noted: Noted) {

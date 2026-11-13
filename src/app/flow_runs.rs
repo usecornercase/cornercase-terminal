@@ -110,6 +110,11 @@ impl Runs {
         }
     }
 
+    pub(super) fn owed_at(&self, pane: u64) -> Option<String> {
+        let (run, role) = self.seat(pane)?;
+        (role == flows::ORCHESTRATOR).then(|| run.owed()).flatten()
+    }
+
     pub(super) fn next_wake(&mut self) -> u64 {
         self.woken += 1;
         self.woken

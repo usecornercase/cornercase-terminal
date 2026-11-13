@@ -4,7 +4,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
-use super::progress::{self, Edge, Progress};
+use super::brief;
+use super::progress::{Edge, Progress};
 use super::{End, Flow, ORCHESTRATOR};
 use crate::agents::activity::Status;
 use crate::pull_request::{self, PullRequest};
@@ -78,6 +79,7 @@ pub(crate) struct Due {
 pub(crate) struct Retry {
     failed: Option<Instant>,
     tries: u32,
+    worked: bool,
 }
 
 impl Retry {
@@ -86,8 +88,12 @@ impl Retry {
             Some(ended) if ended == Status::Failed.name() => {
                 self.failed.get_or_insert(now);
             }
-            None | Some(crate::agents::activity::SHELL) => self.failed = None,
-            Some(_) => *self = Self::default(),
+            None | Some(crate::agents::activity::SHELL) => {
+                self.failed = None;
+                self.worked = true;
+            }
+            Some(_) if self.worked => *self = Self::default(),
+            Some(_) => self.failed = None,
         }
     }
 
@@ -99,6 +105,7 @@ impl Retry {
     pub(crate) fn sent(&mut self) {
         self.tries += 1;
         self.failed = None;
+        self.worked = false;
     }
 }
 
@@ -233,11 +240,11 @@ impl Run {
 
     pub(crate) fn skipped(&self, edge: Option<Edge>) -> Option<String> {
         edge?;
-        progress::owed(&self.flow, &self.progress.passed(), self.progress.changed())
+        brief::owed(&self.flow, &self.progress.passed(), self.progress.changed())
     }
 
     pub(crate) fn owed(&self) -> Option<String> {
-        progress::owed(&self.flow, self.progress.not_run(), self.progress.changed())
+        brief::owed(&self.flow, self.progress.not_run(), self.progress.changed())
     }
 
     pub(crate) fn pull<'a>(&self, pull: Option<&'a PullRequest>) -> Option<&'a PullRequest> {

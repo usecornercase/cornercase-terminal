@@ -163,6 +163,23 @@ pub(crate) fn finished(roles: &[(String, u64)]) -> String {
     )
 }
 
+pub(crate) fn owed(flow: &Flow, stages: &[usize], changed: Option<usize>) -> Option<String> {
+    if stages.is_empty() {
+        return None;
+    }
+    let named: Vec<String> = stages
+        .iter()
+        .map(|stage| {
+            let roles = flow.stages.get(*stage).map(|s| s.roles.join(", ")).unwrap_or_default();
+            format!("stage {} ({roles})", stage + 1)
+        })
+        .collect();
+    let (verb, pronoun) = if stages.len() == 1 { ("has", "it") } else { ("have", "them") };
+    let since = changed
+        .map_or_else(|| "since the last change".to_string(), |at| format!("since the last change in stage {}", at + 1));
+    Some(format!("{} {verb} not run {since}: run {pronoun} first, or say in your summary why not", names(&named)))
+}
+
 const OWN_FAILURE: &str = "Your last turn ended on an error (such as an API error) before you were done, so what \
     you were doing then was not done: go on with the plan from where you stopped.";
 

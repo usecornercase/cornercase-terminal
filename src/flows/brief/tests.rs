@@ -504,3 +504,28 @@ mod waking {
         }
     }
 }
+
+mod owed_stages {
+    use super::*;
+    use crate::flows::brief::owed;
+
+    #[rstest::rstest]
+    #[case::one(&[1], Some(0), "stage 2 (reviewer, security) has not run since the last change in stage 1: run it first, or say in your summary why not")]
+    #[case::two(&[1, 2], Some(0), "stage 2 (reviewer, security) and stage 3 (tester) have not run since the last change in stage 1: run them first, or say in your summary why not")]
+    #[case::three(&[0, 1, 2], None, "stage 1 (coder), stage 2 (reviewer, security) and stage 3 (tester) have not run since the last change: run them first, or say in your summary why not")]
+    fn the_stages_owed_are_told_with_their_roles(
+        #[case] stages: &[usize],
+        #[case] changed: Option<usize>,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            owed(&builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0), stages, changed).as_deref(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn nothing_owed_is_not_told() {
+        assert_eq!(owed(&builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0), &[], Some(0)), None);
+    }
+}

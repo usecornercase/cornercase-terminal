@@ -274,7 +274,7 @@ fn a_run_stopped_moving_while_its_orchestrator_and_team_rest_and_not_while_one_w
 }
 
 #[test]
-fn a_send_the_orchestrator_waits_for_still_carries_the_warning_of_a_skipped_stage() {
+fn a_send_that_waits_still_carries_the_warning_of_a_skipped_stage() {
     let mut agent = Agent::new();
     let [o, _, _, t] = team(&mut agent, &[ORCHESTRATOR, "coder", "reviewer", "tester"])[..] else {
         panic!("four panes")
@@ -296,8 +296,11 @@ fn a_send_the_orchestrator_waits_for_still_carries_the_warning_of_a_skipped_stag
         run.record(message);
     }
 
-    ask(&mut agent.app, Some(o), send_text(t, "test it", true, false));
-    let answer = done(agent.answered("the send is confirmed"));
+    ask(&mut agent.app, Some(o), send_text(t, "test it", true, true));
+    working(&mut agent, t);
+    agent.finish();
+    let answer = done(agent.answered("the wait ends"));
+    assert_eq!(answer.ended.as_deref(), Some("idle"));
 
     assert_eq!(
         answer.warning.as_deref(),

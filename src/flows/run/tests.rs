@@ -351,6 +351,18 @@ mod failures {
     }
 
     #[test]
+    fn an_ending_before_the_retry_worked_keeps_the_count() {
+        let t0 = Instant::now();
+        let mut retry = Retry::default();
+        after(&mut retry, t0, "failed");
+        retry.sent();
+        retry.saw(Some("waiting"), t0);
+        after(&mut retry, t0, "failed");
+        assert!(!retry.due(t0 + RETRY_AFTER));
+        assert!(retry.due(t0 + RETRY_AFTER * 2));
+    }
+
+    #[test]
     fn a_failure_is_not_retried_without_having_been_seen() {
         assert!(!Retry::default().due(Instant::now() + RETRY_AFTER * 10));
     }
