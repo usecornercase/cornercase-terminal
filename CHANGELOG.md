@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.55
+
+- Nothing changes for users: two Recap tests that failed when run in the first minutes after midnight now pass at any hour.
+
 ## 0.13.54
 
 - **A queued agent's tab is named after the first words of its prompt.** An entry or a routine scheduled with a prompt and no name took the prompt's whole first line as its name, so a prompt of one long paragraph named the run's tab with the paragraph: `cornercase status` printed it on one line and `status --json` gave it whole. The name is now the start of that line, cut after a whole word at 40 characters with `…`, in the tab, the **Issues → Queue** list, `queue list`, `queue show` and the notifications, and the whole prompt stays in the entry (`queue list --json`). A name you gave with `--name` stays as you wrote it, an issue's entry keeps its number and title, and the entries and routines you scheduled before are renamed the same way once the updated server starts.
