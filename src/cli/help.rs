@@ -16,7 +16,12 @@ commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no works
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
-why, in its error with --json. A command given --boot (account add, account login, account restart, agents close, agents forget, agents reopen, changes base, changes discard, changes stage, changes unstage, changes viewed, close, collapse, context, expand, focus, group delete, group style, held, input, keys, mark, move, move-pane, new-tab, new-workspace, open, paste-file, plugin run, queue add, queue edit, ratio, redraw, rename, resize, scroll, selection, send, setup, split, start, todo send, view-set and worktrees free-builds) exits with 4 when it names another run
+why, in its error with --json. A command given --boot (account add, account login, account restart, agents close, agents forget,
+agents reopen, changes base, changes discard, changes stage, changes unstage, changes viewed, close,
+collapse, config project, context, expand, focus, group delete, group style, held, input, keys,
+mark, move, move-pane, new-tab, new-workspace, open, paste-file, plugin run, queue add, queue edit,
+ratio, redraw, rename, resize, scroll, selection, send, setup, split, start, todo send, view-set and
+worktrees free-builds) exits with 4 when it names another run
 of the server, which then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
@@ -199,7 +204,8 @@ stderr and the exit status is 0.
 take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
 since this server started. The window then shows that tab, or the workspace's active tab, streamed
 from the machine, and `status --json` reports it as `shown_remote`, with its stream's state.
---boot does not go with --machine, whose ids are that machine's: send the command there with --remote and its boot.
+--boot does not go with --machine, whose ids are that machine's: send the command there with
+--remote and its boot.
 
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
@@ -654,7 +660,12 @@ pub(super) const CONTRACT_HELP: &str =
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; account add, account login, account restart, agents close, agents forget, agents reopen, changes base, changes discard, changes stage, changes unstage, changes viewed, close, collapse, context, expand, focus, group delete, group style, held, input, keys, mark, move, move-pane, new-tab, new-workspace, open, paste-file, plugin run, queue add, queue edit, ratio, redraw, rename, resize, scroll, selection, send, setup, split, start, todo send, view-set and worktrees free-builds take it as --boot, and then act only in that run. Each command is listed
+since ids last only one run; account add, account login, account restart, agents close, agents
+forget, agents reopen, changes base, changes discard, changes stage, changes unstage, changes
+viewed, close, collapse, config project, context, expand, focus, group delete, group style, held,
+input, keys, mark, move, move-pane, new-tab, new-workspace, open, paste-file, plugin run, queue add,
+queue edit, ratio, redraw, rename, resize, scroll, selection, send, setup, split, start, todo send,
+view-set and worktrees free-builds take it as --boot, and then act only in that run. Each command is listed
 with whether it is available, and each stream with its version. A server without this command is older than the
 contract.
 

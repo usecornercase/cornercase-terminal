@@ -438,6 +438,7 @@ impl Control {
             Self::Queue(a) => a.action.boot(),
             Self::Account(a) => a.action.boot(),
             Self::Worktrees(a) => a.action.boot(),
+            Self::Config(a) => a.action.as_ref().and_then(config::ConfigAction::boot),
             _ => None,
         }
     }

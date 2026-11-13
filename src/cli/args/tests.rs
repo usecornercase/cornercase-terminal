@@ -120,6 +120,8 @@ mod boot {
     #[case::add_an_account(&["account", "add", "claude", "work"])]
     #[case::log_an_account_in(&["account", "login", "claude", "work"])]
     #[case::log_in_to_the_own_login(&["account", "login", "claude", "--system"])]
+    #[case::set_a_projects_scripts(&["config", "project", "--project", "4", "--setup", "make"])]
+    #[case::set_a_projects_scripts_by_folder(&["config", "project", "/x", "--teardown", ""])]
     #[case::free_builds_of_a_workspace(&["worktrees", "free-builds", "--workspace", "4"])]
     #[case::free_builds_of_a_folder(&["worktrees", "free-builds", "--path", "/x", "--check"])]
     fn goes_with_every_form_of_the_commands_that_take_it(#[case] args: &[&str]) {
@@ -171,6 +173,7 @@ mod boot {
     #[case::queue_edit(&["queue", "edit", "3", "--prompt", "y", "--boot", ""])]
     #[case::account_add(&["account", "add", "claude", "work", "--boot", ""])]
     #[case::account_login(&["account", "login", "claude", "work", "--boot", ""])]
+    #[case::config_project(&["config", "project", "--project", "4", "--setup", "make", "--boot", ""])]
     #[case::free_builds(&["worktrees", "free-builds", "--workspace", "4", "--boot", ""])]
     #[case::plugin_run(&["plugin", "run", "p", "a", "--pane", "4", "--boot", ""])]
     fn cannot_be_empty_so_an_unset_variable_never_reaches_the_server(#[case] args: &[&str]) {
@@ -183,6 +186,7 @@ mod boot {
     #[case::wait(&["wait", "--pane", "4"])]
     #[case::events(&["events", "--pane", "4"])]
     #[case::go(&["go", "x"])]
+    #[case::config_set(&["config", "set", "a", "b"])]
     #[case::flow_run(&["flow", "run", "Pair", "--prompt", "x"])]
     fn is_no_flag_of_the_commands_that_would_ignore_it(#[case] args: &[&str]) {
         assert!(parsed(&[args, &["--boot", "1-2"]].concat()).is_err());
