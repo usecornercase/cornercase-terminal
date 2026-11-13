@@ -97,7 +97,9 @@ pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, Work
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
-pub(crate) use tunnels::{ListTunnels, TunnelHold, TunnelInfo, TunnelList, TunnelPort};
+pub(crate) use tunnels::{
+    ListTunnels, TunnelFailed, TunnelHold, TunnelInfo, TunnelList, TunnelOrderLine, TunnelOrders, TunnelPort,
+};
 pub(crate) use usage::{Plans, Stats, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
@@ -281,6 +283,8 @@ pub(crate) enum Command {
     ConfigPair(ConfigPair),
     WorktreesRemove(WorktreesRemove),
     AgentModels(AgentModels),
+    TunnelOrders(TunnelOrders),
+    TunnelFailed(TunnelFailed),
 }
 
 impl Command {
@@ -295,6 +299,7 @@ impl Command {
             .or_else(|| self.issue_name())
             .or_else(|| self.flow_name())
             .or_else(|| self.account_name())
+            .or_else(|| self.tunnel_name())
             .or_else(|| self.server_name());
         Self::NAMES[at.unwrap_or_default()]
     }
@@ -450,6 +455,19 @@ impl Command {
         })
     }
 
+    fn tunnel_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::Tunnels(_) => 126,
+            Self::TunnelOpen(_) => 127,
+            Self::TunnelClose(_) => 128,
+            Self::TunnelForget(_) => 129,
+            Self::TunnelHold(_) => 130,
+            Self::TunnelOrders(_) => 133,
+            Self::TunnelFailed(_) => 134,
+            _ => return None,
+        })
+    }
+
     fn server_name(&self) -> Option<usize> {
         Some(match self {
             Self::Config(_) => 45,
@@ -474,11 +492,6 @@ impl Command {
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
             Self::Machines(_) => 116,
-            Self::Tunnels(_) => 126,
-            Self::TunnelOpen(_) => 127,
-            Self::TunnelClose(_) => 128,
-            Self::TunnelForget(_) => 129,
-            Self::TunnelHold(_) => 130,
             Self::Clone(_) => 117,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
@@ -626,6 +639,8 @@ impl Command {
         "tunnel-hold",
         "queue-show",
         "agent-models",
+        "tunnel-orders",
+        "tunnel-failed",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {
