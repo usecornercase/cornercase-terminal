@@ -332,6 +332,32 @@ mod streams {
         assert!(new.contains("\"fresh\":false"), "{new}");
     }
 
+    fn refused_by_a_later_run(line: &str) {
+        let refusing = |theirs| serving(theirs, control::contract::describe("boot", &[]), "\"boot\":\"old\"");
+
+        let (answers, seen) = lines_on(refusing, &[line, r#"{"args": ["close", "--pane", "4"]}"#]);
+
+        let (stale, next) = (&answers[0], &answers[1]);
+        assert_eq!((stale.status, stale.error.as_deref()), (4, Some("it restarted")), "{stale:?}");
+        assert_eq!(next.status, 0, "{next:?}");
+        assert_eq!(seen.len(), 3, "the contract, then each line: {seen:?}");
+        assert!(seen[0].contains("\"contract\"") && !seen[0].contains("\"boot\""), "{seen:?}");
+        assert!(!seen[2].contains("\"boot\""), "{seen:?}");
+    }
+
+    fn never_sent_without_boot(line: &str) {
+        let older = lacking("boot");
+
+        let (mut answers, seen) = lines_on(|theirs| serving(theirs, older, NO_REQUEST_NAMES_THIS), &[line]);
+
+        let answer = answers.remove(0);
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("would ignore --boot"), "{error}");
+        assert_eq!(seen.len(), 1, "only the contract: {seen:?}");
+        assert!(seen[0].contains("\"contract\""), "{seen:?}");
+    }
+
     #[rstest]
     #[case::close(r#"{"args": ["close", "--pane", "4", "--boot", "old"]}"#)]
     #[case::rename(r#"{"args": ["rename", "--tab", "4", "x", "--boot", "old"]}"#)]
@@ -345,16 +371,7 @@ mod streams {
     #[case::input(r#"{"args": ["input", "--pane", "4", "-", "--boot", "old"], "stdin": "{\"paste\": \"x\"}"}"#)]
     #[case::paste_file(r#"{"args": ["paste-file", "--pane", "4", "--boot", "old"], "stdin": "a picture"}"#)]
     fn a_boot_from_an_earlier_run_gives_status_4_and_the_next_line_runs_without_it(#[case] line: &str) {
-        let refusing = |theirs| serving(theirs, control::contract::describe("boot", &[]), "\"boot\":\"old\"");
-
-        let (answers, seen) = lines_on(refusing, &[line, r#"{"args": ["close", "--pane", "4"]}"#]);
-
-        let (stale, next) = (&answers[0], &answers[1]);
-        assert_eq!((stale.status, stale.error.as_deref()), (4, Some("it restarted")), "{stale:?}");
-        assert_eq!(next.status, 0, "{next:?}");
-        assert_eq!(seen.len(), 3, "the contract, then each line: {seen:?}");
-        assert!(seen[0].contains("\"contract\"") && !seen[0].contains("\"boot\""), "{seen:?}");
-        assert!(!seen[2].contains("\"boot\""), "{seen:?}");
+        refused_by_a_later_run(line);
     }
 
     #[test]
@@ -390,6 +407,21 @@ mod streams {
         assert!(!lookup.contains("\"view\""), "{lookup}");
         let run = seen.iter().find(|text| text.contains("plugin-run")).expect("the run");
         assert!(run.contains("\"view\":7"), "{run}");
+    }
+
+    #[test]
+    fn plugin_run_sends_the_boot_with_the_lookup_of_the_revision_and_with_the_run() {
+        let line = r#"{"args": ["plugin", "run", "a", "b", "--pane", "4", "--boot", "now"]}"#;
+
+        let (answer, seen) = in_a_view_on(line, control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        for request in ["plugin-actions", "plugin-run"] {
+            let sent = seen.iter().find(|text| text.contains(request)).expect("the request");
+            assert!(sent.contains("\"boot\":\"now\""), "{sent}");
+        }
+        let contract = seen.iter().find(|text| text.contains("\"contract\"")).expect("the contract");
+        assert!(!contract.contains("\"boot\""), "{contract}");
     }
 
     #[test]
@@ -446,16 +478,56 @@ mod streams {
         r#"{"args": ["paste-file", "--pane", "4", "--name", "x.png", "--json", "--boot", "old"], "stdin": "a picture"}"#
     )]
     fn a_boot_for_a_server_that_would_ignore_it_never_sends_the_request(#[case] line: &str) {
-        let older = lacking("boot");
+        never_sent_without_boot(line);
+    }
 
-        let (mut answers, seen) = lines_on(|theirs| serving(theirs, older, NO_REQUEST_NAMES_THIS), &[line]);
-
-        let answer = answers.remove(0);
-        assert_eq!(answer.status, 1, "{answer:?}");
-        let error = answer.error.expect("an error");
-        assert!(error.contains("would ignore --boot"), "{error}");
-        assert_eq!(seen.len(), 1, "only the contract: {seen:?}");
-        assert!(seen[0].contains("\"contract\""), "{seen:?}");
+    #[rstest]
+    #[case::keys(r#"{"args": ["keys", "--pane", "4", "enter", "--boot", "old"]}"#)]
+    #[case::held(r#"{"args": ["held", "--pane", "4", "--send-now", "--boot", "old"]}"#)]
+    #[case::todo_send(r#"{"args": ["todo", "send", "3", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::scroll(r#"{"args": ["scroll", "--pane", "4", "--up", "3", "--boot", "old"]}"#)]
+    #[case::selection(r#"{"args": ["selection", "--pane", "4", "--clear", "--boot", "old"]}"#)]
+    #[case::split(r#"{"args": ["split", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::focus(r#"{"args": ["focus", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::focus_and_reveal(r#"{"args": ["focus", "--pane", "4", "--reveal", "x", "--boot", "old"]}"#)]
+    #[case::ratio(r#"{"args": ["ratio", "--tab", "4", "0.3", "--boot", "old"]}"#)]
+    #[case::resize(r#"{"args": ["resize", "--surface", "4", "--cols", "80", "--rows", "24", "--boot", "old"]}"#)]
+    #[case::redraw(r#"{"args": ["redraw", "--surface", "4", "--boot", "old"]}"#)]
+    #[case::view_set(r#"{"args": ["view-set", "--view", "7", "--cols", "80", "--rows", "24", "--boot", "old"]}"#)]
+    #[case::move_a_tab(r#"{"args": ["move", "--tab", "4", "--last", "--boot", "old"]}"#)]
+    #[case::group_style(r#"{"args": ["group", "style", "4", "--icon", "★", "--boot", "old"]}"#)]
+    #[case::group_delete(r#"{"args": ["group", "delete", "4", "--boot", "old"]}"#)]
+    #[case::new_tab(r#"{"args": ["new-tab", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::new_tab_by_branch(r#"{"args": ["new-tab", "--worktree", "fix/login", "--boot", "old"]}"#)]
+    #[case::setup(r#"{"args": ["setup", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::start(r#"{"args": ["start", "claude", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::new_workspace(r#"{"args": ["new-workspace", "x", "--project", "4", "--boot", "old"]}"#)]
+    #[case::open(r#"{"args": ["open", "/x", "--into", "2", "--boot", "old"]}"#)]
+    #[case::agents_close(r#"{"args": ["agents", "close", "--workspace", "4", "--check", "--boot", "old"]}"#)]
+    #[case::agents_reopen(r#"{"args": ["agents", "reopen", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::agents_forget(r#"{"args": ["agents", "forget", "--workspace", "4", "--yes", "--boot", "old"]}"#)]
+    #[case::changes_viewed(r#"{"args": ["changes", "viewed", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_stage(r#"{"args": ["changes", "stage", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_unstage(r#"{"args": ["changes", "unstage", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_discard(
+        r#"{"args": ["changes", "discard", "a.rs", "--workspace", "4", "--yes", "--boot", "old"]}"#
+    )]
+    #[case::changes_base(r#"{"args": ["changes", "base", "main", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::queue_add(
+        r#"{"args": ["queue", "add", "--workspace", "4", "--prompt", "x", "--at", "10:00", "--boot", "old"]}"#
+    )]
+    #[case::queue_edit(r#"{"args": ["queue", "edit", "3", "--prompt", "y", "--boot", "old"]}"#)]
+    #[case::account_add(r#"{"args": ["account", "add", "claude", "work", "--boot", "old"]}"#)]
+    #[case::account_login(r#"{"args": ["account", "login", "claude", "work", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::free_builds(r#"{"args": ["worktrees", "free-builds", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::plugin_run(r#"{"args": ["plugin", "run", "p", "a", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::config_project(r#"{"args": ["config", "project", "--project", "4", "--setup", "make", "--boot", "old"]}"#)]
+    #[case::plugin_run_with_a_revision(
+        r#"{"args": ["plugin", "run", "p", "a", "--pane", "4", "--revision", "1", "--boot", "old"]}"#
+    )]
+    fn every_command_that_acts_is_refused_by_a_later_run_and_by_a_server_without_boot(#[case] line: &str) {
+        refused_by_a_later_run(line);
+        never_sent_without_boot(line);
     }
 
     #[rstest]

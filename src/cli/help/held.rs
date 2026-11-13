@@ -27,4 +27,5 @@ them. A server without the feature held-after-draft (`cornercase contract`) send
 
 Examples:
   cornercase held --pane 9 --send-now
-  cornercase held --pane 9 --wait-turn --json";
+  cornercase held --pane 9 --wait-turn --json
+  cornercase --remote vps held --pane 9 --send-now --boot 4242-1700000000";

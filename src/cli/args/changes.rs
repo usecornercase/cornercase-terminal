@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand, ValueEnum};
 
-use super::{Print, branch};
+use super::{BootArg, Print, branch};
 use crate::changes::Mode;
 use crate::cli::help::{BY_BRANCH, CHANGES_FILE_HELP, CHANGES_GAP_HELP, HERE_WORKSPACE, SEEN_DIGEST};
 use crate::control::changes::parse_digest;
@@ -113,6 +113,8 @@ pub(crate) enum ChangesAction {
         place: Where,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(
         about = "Merge a workspace's work, committed or not, into its base and with the workspaces it shares files \
@@ -152,6 +154,8 @@ pub(crate) enum ChangesAction {
         place: Where,
         #[command(flatten)]
         mode: ModeFlag,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Throw away a file's uncommitted changes, after asking")]
     Discard {
@@ -163,6 +167,8 @@ pub(crate) enum ChangesAction {
         digest: DigestFlag,
         #[arg(short, long, help = "Discard without asking")]
         yes: bool,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Put a file's changes in git's index, as `git add` does")]
     Stage {
@@ -172,6 +178,8 @@ pub(crate) enum ChangesAction {
         place: Where,
         #[command(flatten)]
         digest: DigestFlag,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Take a file's changes out of git's index; the file keeps them")]
     Unstage {
@@ -181,5 +189,20 @@ pub(crate) enum ChangesAction {
         place: Where,
         #[command(flatten)]
         digest: DigestFlag,
+        #[command(flatten)]
+        boot: BootArg,
     },
+}
+
+impl ChangesAction {
+    pub(crate) fn boot(&self) -> Option<&BootArg> {
+        match self {
+            Self::Viewed { boot, .. }
+            | Self::Discard { boot, .. }
+            | Self::Stage { boot, .. }
+            | Self::Unstage { boot, .. }
+            | Self::Base { boot, .. } => Some(boot),
+            _ => None,
+        }
+    }
 }

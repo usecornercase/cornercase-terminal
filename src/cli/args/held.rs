@@ -1,6 +1,6 @@
 use clap::Args;
 
-use super::{Print, Target};
+use super::{BootArg, Print, Target};
 
 #[derive(Debug, Args)]
 pub(crate) struct HeldArgs {
@@ -10,6 +10,8 @@ pub(crate) struct HeldArgs {
     pub(crate) button: HeldButton,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]

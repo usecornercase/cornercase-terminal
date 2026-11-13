@@ -350,7 +350,7 @@ mod parsing {
         let cli = parse(&["todo", "send", "3", "--pane", "5", "--force", "--json"]).expect("parse");
 
         let Some(Command::Control(Control::Todo(todo))) = cli.command else { panic!("not todo") };
-        let TodoAction::Send { id, pane, tab, force, print } = todo.action else { panic!("not send") };
+        let TodoAction::Send { id, pane, tab, force, print, .. } = todo.action else { panic!("not send") };
         assert_eq!((id, pane, tab, force, print.json), (3, Some(5), None, true, true));
         assert!(parse(&["todo", "send", "3", "--pane", "5", "--tab", "6"]).is_err());
     }

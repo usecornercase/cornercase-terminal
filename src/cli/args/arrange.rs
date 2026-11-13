@@ -41,6 +41,8 @@ pub(crate) struct MoveArgs {
         help = "Out of its group, after the projects that have none"
     )]
     pub(crate) ungroup: bool,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -120,6 +122,8 @@ pub(crate) enum GroupAction {
         colour: Option<u8>,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Delete a group; its projects stay, outside any group, unless --close-projects")]
     Delete {
@@ -127,5 +131,16 @@ pub(crate) enum GroupAction {
         group: u64,
         #[arg(long, help = "Close its projects too, then delete the group once their shells have stopped")]
         close_projects: bool,
+        #[command(flatten)]
+        boot: BootArg,
     },
+}
+
+impl GroupAction {
+    pub(crate) fn boot(&self) -> Option<&BootArg> {
+        match self {
+            Self::Style { boot, .. } | Self::Delete { boot, .. } => Some(boot),
+            Self::New { .. } => None,
+        }
+    }
 }

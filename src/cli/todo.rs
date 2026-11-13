@@ -12,7 +12,7 @@ pub(super) fn run(action: TodoAction) -> Result<()> {
         }
         TodoAction::List(print) => list(print.json),
         TodoAction::Done { id } => ask("todo", control::Command::Todo(control::Todo::Done(id))).map(drop),
-        TodoAction::Send { id, pane, tab, force, print } => {
+        TodoAction::Send { id, pane, tab, force, print, .. } => {
             send(control::TodoSend { id, pane, tab, force }, print.json)
         }
         TodoAction::Rm { id, print } => removal(control::Todo::Rm(id), print.json),

@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 
-use super::Print;
 use super::changes::Where;
+use super::{BootArg, Print};
 
 #[derive(Debug, Args)]
 pub(crate) struct AgentsArgs {
@@ -21,6 +21,8 @@ pub(crate) enum AgentsAction {
         force: bool,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Reopen the closed agents of a workspace, each in its own conversation")]
     Reopen {
@@ -28,6 +30,8 @@ pub(crate) enum AgentsAction {
         place: Where,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Forget the closed agents of a workspace, after asking")]
     Forget {
@@ -37,5 +41,15 @@ pub(crate) enum AgentsAction {
         yes: bool,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
+}
+
+impl AgentsAction {
+    pub(crate) fn boot(&self) -> &BootArg {
+        match self {
+            Self::Close { boot, .. } | Self::Reopen { boot, .. } | Self::Forget { boot, .. } => boot,
+        }
+    }
 }

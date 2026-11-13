@@ -1,6 +1,6 @@
 use clap::{ArgGroup, Args, Subcommand};
 
-use super::Print;
+use super::{BootArg, Print};
 use crate::cli::help::{HERE_PANE, TODO_SEND_HELP};
 
 #[derive(Debug, Args)]
@@ -39,6 +39,8 @@ pub(crate) enum TodoAction {
         force: bool,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Remove an item, and print the number that `restore` takes to put it back")]
     Rm {
@@ -78,4 +80,13 @@ pub(crate) enum TodoAction {
         #[arg(value_name = "UNDO", help = "The number `rm` or `clear-done` printed")]
         undo: u64,
     },
+}
+
+impl TodoAction {
+    pub(crate) fn boot(&self) -> Option<&BootArg> {
+        match self {
+            Self::Send { boot, .. } => Some(boot),
+            _ => None,
+        }
+    }
 }
