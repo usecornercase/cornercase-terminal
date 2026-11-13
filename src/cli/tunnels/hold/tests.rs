@@ -7,6 +7,18 @@ use super::*;
 const FORWARD: Held = Held { port: 5173, local: 5174, direction: None };
 const REVERSE: Held = Held { port: 9223, local: 9222, direction: Some(Direction::Reverse) };
 
+struct Closed;
+
+impl Write for Closed {
+    fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+        Err(io::ErrorKind::BrokenPipe.into())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 fn heard(events: Vec<Heard>) -> Receiver<Heard> {
     let (tell, heard) = mpsc::channel();
     for event in events {
@@ -151,18 +163,6 @@ mod announcing_it {
         assert_eq!(String::from_utf8(out).expect("text"), expected);
     }
 
-    struct Closed;
-
-    impl Write for Closed {
-        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
-            Err(io::ErrorKind::BrokenPipe.into())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     #[test]
     fn stops_when_the_reader_is_gone() {
         assert!(announce(&mut Closed, FORWARD).expect("quiet"));
@@ -241,18 +241,6 @@ mod how_it_ended {
         assert!(!say_ended(&mut out, end).expect("written"));
 
         assert_eq!(String::from_utf8(out).expect("text"), format!("{{\"ended\":\"{name}\"}}\n"));
-    }
-
-    struct Closed;
-
-    impl Write for Closed {
-        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
-            Err(io::ErrorKind::BrokenPipe.into())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
     }
 
     #[test]

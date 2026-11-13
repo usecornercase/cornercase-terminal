@@ -6,6 +6,7 @@ use super::super::usage_modal::{ANSWER, CODEX_ANSWER, with_agents, with_claude_a
 use super::*;
 use crate::control::Plans;
 use crate::control::usage::PlanInfo;
+use crate::test_util::gate;
 
 const CLAUDE: &str = "claude";
 const CODEX: &str = "codex";
@@ -110,9 +111,7 @@ fn without_any_agent_installed_each_one_says_why() {
 fn an_answer_does_not_wait_for_a_probe_started_after_it() {
     let claude =
         script(&format!("[ -e \"$0.ran\" ] && exec sleep 30\ntouch \"$0.ran\"\nread -r a\nread -r b\necho '{ANSWER}'"));
-    let codex = script(&format!(
-        "while [ ! -e \"$(dirname \"$0\")/go\" ]; do sleep 0.05; done\nread -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'"
-    ));
+    let codex = script(&format!("{}\nread -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'", gate("$0.go")));
     let (mut app, rx, dir) = with_agents(&[(CLAUDE, &claude), (CODEX, &codex)]);
     app.usages.set_timeout(Duration::from_secs(3));
     let text = json!({"contract": 1, "command": "usage", "args": {}}).to_string();
@@ -120,7 +119,7 @@ fn an_answer_does_not_wait_for_a_probe_started_after_it() {
     pump_until(&mut app, &rx, "claude answers", |a| a.usages.state.probe(crate::agents::Known::Claude).answers() == 1);
     app.request(10, &text, Some(AREA), Instant::now());
     assert!(app.usages.state.probe(crate::agents::Known::Claude).loading());
-    std::fs::write(dir.path().join("go"), "").expect("go");
+    std::fs::write(dir.path().join("codex.go"), "").expect("open the codex gate");
     let mut got = Vec::new();
     wait_until("the first request is answered", || {
         drain(&mut app, &rx);

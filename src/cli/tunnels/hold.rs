@@ -122,7 +122,7 @@ fn forward(destination: &str, port: u16, wanted: Option<u16>) -> Result<bool> {
     let running = tunnel::spawn(destination, Forward { port, local }, watcher(&tell))
         .inspect_err(|error| hold.report(&error.to_string()))?;
     let ended = if wait_up(&heard, hold, |reason| hold.report(reason))? { serve(&heard, tell, hold) } else { Ok(None) };
-    drop(running);
+    running.finish();
     said(ended)
 }
 
@@ -133,7 +133,7 @@ fn reverse(destination: &str, local: u16, there: Option<u16>) -> Result<bool> {
     let wanted = Reverse { local, there: asked.port };
     let running = tunnel::spawn_reverse(destination, wanted, watcher(&tell))?;
     let ended = reversed(&heard, tell, &running, asked);
-    drop(running);
+    running.finish();
     said(ended)
 }
 

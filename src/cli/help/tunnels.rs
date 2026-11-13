@@ -44,12 +44,11 @@ holds the tunnel until it is killed (exit 0), its output reader leaves (0), `tun
 `tunnel forget PORT` is run on the server (0, after one more line: {\"ended\": \"closed\"} or
 {\"ended\": \"forgotten\"}), the server stops or restarts (7, after {\"ended\": \"server-stopped\"} or
 {\"ended\": \"server-restarted\"}: hold it again once the server is back), or ssh or the server
-connection fails (1). It
-needs --remote (exit 2 without it), and it remembers nothing in tunnels.json. If it fails
-before the server counts it (ssh, or the local port), it tells the server, so a `tunnel open`
-that waits for it fails with the reason. With --local N it listens on N when PORT is taken on this
-computer (such as the port the hold had before, since it remembers nothing), and on any free port
-when N is taken too; the line says which.
+connection fails (1). It needs --remote (exit 2 without it), and it remembers nothing in
+tunnels.json. If it fails before the server counts it (ssh, or the local port), it tells the
+server, so a `tunnel open` that waits for it fails with the reason. With --local N it listens on N
+when PORT is taken on this computer (such as the port the hold had before, since it remembers
+nothing), and on any free port when N is taken too; the line says which.
 
 `cornercase --remote vps tunnel hold --reverse 9222` is the other direction: it makes port 9222 of
 this computer reachable on 127.0.0.1 of vps, with `ssh -N -R 127.0.0.1:THERE:localhost:9222 vps`,
@@ -58,8 +57,8 @@ server picks, or the one of `--there PORT`, which fails at once when PORT is tak
 is up it prints {\"port\", \"local\", \"url\", \"direction\": \"reverse\"}, where port is the port on vps
 and url is http://127.0.0.1:PORT, and it ends as a hold does, with the same last line: `tunnel close
 --reverse PORT` or `tunnel forget --reverse PORT` run on vps (0), the server stopping or restarting
-(7), killed (0), or ssh fails (1). It listens only on
-vps's loopback, which every program and user of vps can reach, and nothing on vps can open one.
+(7), killed (0), or ssh fails (1). It listens only on vps's loopback, which every program and user
+of vps can reach, and nothing on vps can open one.
 `tunnel close PORT` and `tunnel forget PORT` without --reverse never end it.
 
 `cornercase --remote vps tunnel orders` is for such a program too: it prints one JSON line once

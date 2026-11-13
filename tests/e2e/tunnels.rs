@@ -250,7 +250,7 @@ fn a_held_tunnel_ends_with_seven_when_its_server_stops_or_restarts(#[case] comma
 
     assert_eq!(next_line(&mut reader), serde_json::json!({"ended": ended}));
     assert_eq!(exit_of(&mut child), Some(7));
-    assert!(gone(&pid));
+    wait_until("the tunnel's ssh is gone", || gone(&pid));
 }
 
 #[test]

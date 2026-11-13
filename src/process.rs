@@ -84,6 +84,11 @@ pub(crate) fn stop(mut child: Child) {
     reap(child);
 }
 
+pub(crate) fn stop_and_wait(mut child: Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Result<Option<Output>> {
     let deadline = Instant::now() + timeout;
     let mut child = Grouped::spawn(command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()))?;

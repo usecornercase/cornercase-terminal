@@ -316,6 +316,14 @@ impl Running {
     }
 }
 
+impl Running {
+    pub(crate) fn finish(self) {
+        if let Some(child) = self.child.lock().take() {
+            process::stop_and_wait(child);
+        }
+    }
+}
+
 impl Drop for Running {
     fn drop(&mut self) {
         self.stop();
