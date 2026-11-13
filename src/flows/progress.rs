@@ -36,6 +36,7 @@ pub(crate) struct Progress {
     pub(crate) outside: Option<Edge>,
     entry: Option<(Edge, Option<String>)>,
     not_run: Vec<usize>,
+    changed: Option<usize>,
     rounds: Vec<u32>,
     along: Vec<(Edge, Message)>,
 }
@@ -65,6 +66,15 @@ impl Progress {
 
     pub(crate) fn not_run(&self) -> &[usize] {
         &self.not_run
+    }
+
+    pub(crate) fn changed(&self) -> Option<usize> {
+        self.changed
+    }
+
+    pub(crate) fn passed(&self) -> Vec<usize> {
+        let active = self.active.unwrap_or_default();
+        self.not_run.iter().copied().filter(|stage| *stage < active).collect()
     }
 
     pub(crate) fn rounds(&self, stage: usize) -> u32 {
@@ -108,6 +118,7 @@ impl Progress {
 
     fn track(&mut self, stages: usize, target: usize, back: bool) {
         if back {
+            self.changed = Some(target);
             self.not_run.extend(target + 1..stages);
             self.not_run.sort_unstable();
             self.not_run.dedup();
@@ -165,6 +176,28 @@ pub(crate) fn stages_in_words(stages: &[usize]) -> String {
         Some((last, [first])) => format!("stage {first} and {last}"),
         Some((last, rest)) => format!("stage {} and {last}", rest.join(", ")),
     }
+}
+
+pub(crate) fn owed(flow: &Flow, stages: &[usize], changed: Option<usize>) -> Option<String> {
+    if stages.is_empty() {
+        return None;
+    }
+    let named: Vec<String> = stages
+        .iter()
+        .map(|stage| {
+            let roles = flow.stages.get(*stage).map(|s| s.roles.join(", ")).unwrap_or_default();
+            format!("stage {} ({roles})", stage + 1)
+        })
+        .collect();
+    let (verb, pronoun) = if stages.len() == 1 { ("has", "it") } else { ("have", "them") };
+    let since = changed
+        .map_or_else(|| "since the last change".to_string(), |at| format!("since the last change in stage {}", at + 1));
+    let list = match named.split_last() {
+        None => String::new(),
+        Some((only, [])) => only.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+    };
+    Some(format!("{list} {verb} not run {since}: run {pronoun} first, or say in your summary why not"))
 }
 
 fn loops_back(flow: &Flow, from: usize, to: usize) -> bool {

@@ -163,6 +163,12 @@ impl Requests {
         self.pending.push(Pending { client: Some(client), key, timeout, done, stage });
     }
 
+    pub(in crate::app) fn warn_pending(&mut self, client: u64, warning: String) {
+        if let Some(pending) = self.pending.iter_mut().rev().find(|p| p.client == Some(client)) {
+            pending.done.warning.get_or_insert(warning);
+        }
+    }
+
     fn take(&mut self, key: u64) -> Option<Pending> {
         let found = self.pending.iter().position(|p| p.key == key)?;
         Some(self.pending.remove(found))

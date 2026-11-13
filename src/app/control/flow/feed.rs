@@ -42,7 +42,8 @@ impl App {
             .map(|role| self.run_role(run, workspace, &role.name))
             .collect();
         let ended = roles.first().and_then(|role| role.status.as_deref()) == Some(Status::Pending.name());
-        Some(RunState { roles, ended, state: None, ..self.base_state(run, at) })
+        let stopped = run.stopped.map(|at| Stamp(at).to_string());
+        Some(RunState { roles, ended, stopped, state: None, ..self.base_state(run, at) })
     }
 
     fn base_state(&self, run: &Run, at: WorkspaceAt) -> RunState {

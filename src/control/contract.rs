@@ -77,6 +77,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "agent-models",
     "tunnel-orders",
     "flow-not-run",
+    "flow-stopped",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

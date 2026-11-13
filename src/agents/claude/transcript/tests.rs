@@ -891,3 +891,47 @@ mod subagents {
         assert_eq!((at.is_some(), transcript.interrupted), (true, None));
     }
 }
+
+mod failures {
+    use super::*;
+
+    const ERROR: &str = r#"{"type":"assistant","isApiErrorMessage":true,"message":{"id":"e","model":"<synthetic>","usage":{"input_tokens":0,"output_tokens":0}}}"#;
+    const PROMPT: &str = r#"{"type":"user","origin":{"kind":"human"},"timestamp":"2026-11-13T10:00:00.000Z"}"#;
+    const MARKED_ONLY: &str =
+        r#"{"type":"assistant","isApiErrorMessage":true,"message":{"id":"e","model":"<synthetic>"}}"#;
+
+    fn failed(lines: &[&str]) -> bool {
+        let mut written = Written::new();
+        for line in lines {
+            written.append(&format!("{line}\n"));
+        }
+        written.transcript.failed
+    }
+
+    #[test]
+    fn the_newest_of_an_error_a_reply_and_a_prompt_decides() {
+        assert!(failed(&[ERROR]));
+        assert!(!failed(&[ERROR, PROMPT]));
+        assert!(!failed(&[ERROR, &assistant("claude-opus-5-5", 2, 0, 100)]));
+        assert!(failed(&[PROMPT, ERROR]));
+        assert!(failed(&[ERROR, r#"{"type":"system","subtype":"turn_duration"}"#]));
+    }
+
+    #[test]
+    fn a_line_with_the_marker_alone_counts() {
+        assert!(failed(&[MARKED_ONLY]));
+    }
+
+    #[test]
+    fn it_holds_across_reads_and_a_reset_clears_it() {
+        let mut written = Written::new();
+        written.append(&format!("{ERROR}\n"));
+        written.transcript.update();
+        assert!(written.transcript.failed);
+
+        write_file(&written.dir.path().join("session.jsonl"), &format!("{}\n", user("hi")));
+        written.transcript.update();
+
+        assert!(!written.transcript.failed);
+    }
+}

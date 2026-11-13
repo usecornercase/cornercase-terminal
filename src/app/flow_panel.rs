@@ -6,6 +6,7 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use serde_json::Value;
 
+use super::control::Handled;
 use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
@@ -365,16 +366,34 @@ impl App {
             .collect()
     }
 
-    pub(super) fn flow_requested(&mut self, client: u64, noted: Vec<Noted>, accepted: bool) {
+    pub(super) fn flow_requested(&mut self, client: u64, noted: Vec<Noted>, accepted: bool) -> Option<String> {
         if !accepted {
-            return;
+            return None;
         }
+        let mut warning = None;
         for noted in noted {
             if noted.answered {
                 self.hold_flow_read(client, noted);
             } else {
-                self.record_flow(noted);
+                let skipped = self.record_flow(noted);
+                warning = warning.or(skipped);
             }
+        }
+        warning
+    }
+
+    pub(super) fn warn(&mut self, client: u64, handled: Handled, warning: Option<String>) -> Handled {
+        let Some(warning) = warning else { return handled };
+        match handled {
+            Ok(Some(Value::Object(mut answer))) => {
+                answer.entry("warning").or_insert(Value::String(warning));
+                Ok(Some(Value::Object(answer)))
+            }
+            Ok(None) => {
+                self.clients.requests.warn_pending(client, warning);
+                Ok(None)
+            }
+            other => other,
         }
     }
 
@@ -400,13 +419,15 @@ impl App {
         self.panels.flow.reads.retain(|(c, noted)| Some(*c) != client && runs.has(noted.run));
     }
 
-    fn record_flow(&mut self, noted: Noted) {
+    fn record_flow(&mut self, noted: Noted) -> Option<String> {
         let Noted { run, panes: (from, to), message, .. } = noted;
         let same = |r: &Run| r.role_of(from) == Some(&message.from) && r.role_of(to) == Some(&message.to);
-        let Some(run) = self.runs.run_mut(run).filter(|r| same(r)) else { return };
+        let run = self.runs.run_mut(run).filter(|r| same(r))?;
         let message = run.record(message).clone();
+        let skipped = run.skipped(message.edge);
         let wire = FlowMessage::of(run, &message);
         self.publish_flow_message(&wire);
+        skipped
     }
 }
 

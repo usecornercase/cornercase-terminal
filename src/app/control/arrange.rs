@@ -10,6 +10,7 @@ use crate::control::arrange::{GroupDelete, GroupNew, GroupStyle, Move, MovePane,
 use crate::control::contract::{Code, Refusal};
 use crate::control::terminal::Moved;
 use crate::control::{self, Command, Done, Item, Layout, Request, TodoItem, TodoList};
+use crate::flows::ORCHESTRATOR;
 use crate::host::notify::{self, Notification};
 use crate::log;
 use crate::project::Hierarchy;
@@ -25,7 +26,8 @@ impl App {
         if self.mark(Marked::Pane(pane), !mark.reviewed) == 0 {
             return Err(format!("pane {pane} runs no agent cornercase reads, so there is nothing to mark").into());
         }
-        Ok(Some(json(&pane_ids(pane))))
+        let warning = self.runs.seat(pane).filter(|(_, role)| *role == ORCHESTRATOR).and_then(|(run, _)| run.owed());
+        Ok(Some(json(&Done { warning: warning.filter(|_| !mark.reviewed), ..pane_ids(pane) })))
     }
 
     pub(in crate::app) fn go_request(&mut self, asker: Asker, go: &control::Go) -> Handled {

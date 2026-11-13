@@ -23,6 +23,7 @@ const COMMAND: &str = "<command-name>";
 const SHELL_INPUT: &str = "<bash-input>";
 const USER: &str = r#""type":"user""#;
 const INTERRUPTED: &str = "[Request interrupted by user";
+const API_ERROR: &str = r#""isApiErrorMessage":true"#;
 const NOT_TYPED: [&str; 2] = ["<task-notification>", "<agent-message"];
 const MODEL_ENV: &str = "ANTHROPIC_MODEL";
 pub(crate) const NO_LONG_ENV: &str = "CLAUDE_CODE_DISABLE_1M_CONTEXT";
@@ -225,6 +226,7 @@ pub(in crate::agents) struct Transcript {
     pub(in crate::agents) prompted: Option<SystemTime>,
     pub(in crate::agents) interrupted: Option<SystemTime>,
     pub(in crate::agents) compaction: Compaction,
+    pub(in crate::agents) failed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -300,6 +302,7 @@ impl Transcript {
             prompted: None,
             interrupted: None,
             compaction: Compaction::default(),
+            failed: false,
         }
     }
 
@@ -308,6 +311,7 @@ impl Transcript {
             self.reply = None;
             self.interrupted = None;
             self.compaction = Compaction::default();
+            self.failed = false;
             self.len = 0;
             self.tail = Tail::default();
             return;
@@ -317,6 +321,7 @@ impl Transcript {
             self.prompted = None;
             self.interrupted = None;
             self.compaction = Compaction::default();
+            self.failed = false;
         }
         self.len = std::fs::metadata(&self.path).map_or(0, |m| m.len());
         if let Some(mark) = batch.bytes.rsplit(|b| *b == b'\n').find_map(mark) {
@@ -335,7 +340,9 @@ impl Transcript {
             {
                 self.interrupted = self.interrupted.max(counting::timestamp(&entry).or(Some(read_at)));
             }
-            self.prompted = self.prompted.max(prompt(&entry, read_at));
+            let typed = prompt(&entry, read_at);
+            self.prompted = self.prompted.max(typed);
+            self.note_ending(&entry, typed.is_some());
             if let Some(record) = counted_claude(&entry, true) {
                 self.counted.push(record);
             }
@@ -356,6 +363,15 @@ impl Transcript {
         self.reply.as_ref().map(|reply| reply.shown(limits, self.compaction))
     }
 
+    fn note_ending(&mut self, entry: &Value, prompted: bool) {
+        if prompted {
+            self.failed = false;
+        }
+        if entry["type"] == "assistant" && entry["isSidechain"] != true {
+            self.failed = entry["isApiErrorMessage"] == true;
+        }
+    }
+
     fn note_compaction(&mut self, entry: &Value) {
         if entry["type"] == "system"
             && entry["subtype"] == "compact_boundary"
@@ -370,6 +386,7 @@ impl Transcript {
 fn relevant_claude(line: &str) -> bool {
     [
         r#""usage""#,
+        API_ERROR,
         r#""origin""#,
         "queued_command",
         COMMAND,

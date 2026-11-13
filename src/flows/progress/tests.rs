@@ -408,4 +408,35 @@ mod not_run {
     fn stages_read_as_words(#[case] stages: &[usize], #[case] words: &str) {
         assert_eq!(stages_in_words(stages), words);
     }
+
+    #[test]
+    fn a_stage_passed_over_since_the_last_change_is_owed_before_the_target() {
+        let p = Script::new().send("coder").send("reviewer").send("coder").send("tester").progress();
+        assert_eq!((p.passed(), p.changed()), (vec![1], Some(0)));
+    }
+
+    #[test]
+    fn nothing_is_passed_over_in_the_plan_or_before_a_change() {
+        let p = Script::new().send("coder").send("tester").progress();
+        assert_eq!((p.passed(), p.changed()), (Vec::<usize>::new(), None));
+        let p = Script::new().send("coder").send("reviewer").send("coder").send("reviewer").progress();
+        assert_eq!(p.passed(), Vec::<usize>::new());
+    }
+
+    #[rstest::rstest]
+    #[case::one(&[1], Some(0), "stage 2 (reviewer, security) has not run since the last change in stage 1: run it first, or say in your summary why not")]
+    #[case::two(&[1, 2], Some(0), "stage 2 (reviewer, security) and stage 3 (tester) have not run since the last change in stage 1: run them first, or say in your summary why not")]
+    #[case::three(&[0, 1, 2], None, "stage 1 (coder), stage 2 (reviewer, security) and stage 3 (tester) have not run since the last change: run them first, or say in your summary why not")]
+    fn the_stages_owed_are_told_with_their_roles(
+        #[case] stages: &[usize],
+        #[case] changed: Option<usize>,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(owed(&full_issue(), stages, changed).as_deref(), Some(expected));
+    }
+
+    #[test]
+    fn nothing_owed_is_not_told() {
+        assert_eq!(owed(&full_issue(), &[], Some(0)), None);
+    }
 }

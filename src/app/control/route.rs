@@ -43,8 +43,8 @@ impl App {
             ControlFlow::Break(handled) => handled,
             ControlFlow::Continue(command) => Err(malformed(format!("no area answers `{}`", command.name()))),
         };
-        self.flow_requested(client, noted, handled.is_ok());
-        handled
+        let warning = self.flow_requested(client, noted, handled.is_ok());
+        self.warn(client, handled, warning)
     }
 
     fn route(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {

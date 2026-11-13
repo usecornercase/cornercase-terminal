@@ -406,7 +406,17 @@ fn run_send(send: args::SendArgs) -> Result<()> {
         timeout: send.timeout,
         force: send.force,
     };
-    say(ask("send", control::Command::Send(request))?, send.print.json, ending)
+    let value = ask("send", control::Command::Send(request))?;
+    if !send.print.json {
+        warn(&value);
+    }
+    say(value, send.print.json, ending)
+}
+
+fn warn(value: &Value) {
+    if let Some(warning) = value.get("warning").and_then(Value::as_str) {
+        note(&format!("warning: {warning}\n"));
+    }
 }
 
 fn run_keys(keys: args::KeysArgs) -> Result<()> {
@@ -417,7 +427,8 @@ fn run_keys(keys: args::KeysArgs) -> Result<()> {
 fn run_mark(mark: &args::MarkArgs) -> Result<()> {
     let Target { pane, tab, .. } = mark.target;
     let request = control::Mark { pane, tab, reviewed: mark.reviewed };
-    ask("mark", control::Command::Mark(request)).map(drop)
+    warn(&ask("mark", control::Command::Mark(request))?);
+    Ok(())
 }
 
 fn run_close(close: &args::CloseArgs) -> Result<bool> {
@@ -434,10 +445,7 @@ fn run_close(close: &args::CloseArgs) -> Result<bool> {
     }
     let request =
         control::Close { item, remove_worktree: close.remove_worktree, force: close.force, unlock: close.unlock };
-    let value = ask("close", control::Command::Close(request))?;
-    if let Some(warning) = value.get("warning").and_then(Value::as_str) {
-        note(&format!("warning: {warning}\n"));
-    }
+    warn(&ask("close", control::Command::Close(request))?);
     Ok(true)
 }
 

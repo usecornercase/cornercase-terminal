@@ -624,6 +624,7 @@ mod account_login;
 mod accounts;
 mod agent_models;
 mod agents;
+mod api_errors;
 mod arranging;
 mod build_folders;
 mod changes;

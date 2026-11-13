@@ -4,13 +4,15 @@ use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
-use super::progress::{Edge, Progress};
+use super::progress::{self, Edge, Progress};
 use super::{End, Flow, ORCHESTRATOR};
 use crate::agents::activity::Status;
 use crate::pull_request::{self, PullRequest};
 
 pub(crate) const MAX_MESSAGES: usize = 256;
 pub(crate) const MERGED_GRACE: Duration = Duration::from_secs(180);
+pub(crate) const RETRY_AFTER: Duration = Duration::from_secs(60);
+pub(crate) const RETRIES: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
@@ -62,6 +64,42 @@ pub(crate) struct Sent {
     pub(crate) pane: u64,
     pub(crate) at: Instant,
     pub(crate) finished: bool,
+    pub(crate) failed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Due {
+    pub(crate) role: String,
+    pub(crate) pane: u64,
+    pub(crate) failed: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Retry {
+    failed: Option<Instant>,
+    tries: u32,
+}
+
+impl Retry {
+    pub(crate) fn saw(&mut self, ended: Option<&str>, now: Instant) {
+        match ended {
+            Some(ended) if ended == Status::Failed.name() => {
+                self.failed.get_or_insert(now);
+            }
+            None | Some(crate::agents::activity::SHELL) => self.failed = None,
+            Some(_) => *self = Self::default(),
+        }
+    }
+
+    pub(crate) fn due(&self, now: Instant) -> bool {
+        let wait = RETRY_AFTER * 2_u32.pow(self.tries.min(RETRIES));
+        self.tries < RETRIES && self.failed.is_some_and(|at| now >= at + wait)
+    }
+
+    pub(crate) fn sent(&mut self) {
+        self.tries += 1;
+        self.failed = None;
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -89,6 +127,8 @@ pub(crate) struct Run {
     pub(crate) close_when_merged: bool,
     pub(crate) merged_since: Option<Instant>,
     pub(crate) summary: bool,
+    pub(crate) retry: Retry,
+    pub(crate) stopped: Option<SystemTime>,
 }
 
 impl Run {
@@ -108,6 +148,8 @@ impl Run {
             close_when_merged: false,
             merged_since: None,
             summary: false,
+            retry: Retry::default(),
+            stopped: None,
         }
     }
 
@@ -143,7 +185,7 @@ impl Run {
     pub(crate) fn sent_to(&mut self, pane: u64, at: Instant) {
         self.forget_sent(pane);
         if self.role_of(pane).is_some_and(|role| role != ORCHESTRATOR) {
-            self.sent.push(Sent { pane, at, finished: false });
+            self.sent.push(Sent { pane, at, finished: false, failed: false });
         }
     }
 
@@ -168,6 +210,7 @@ impl Run {
             self.sent.remove(index);
         } else {
             self.sent[index].finished = true;
+            self.sent[index].failed = seen.ended == Some(Status::Failed.name());
         }
     }
 
@@ -175,10 +218,26 @@ impl Run {
         self.sent.iter().filter(|sent| sent.finished).map(|sent| sent.pane).collect()
     }
 
-    pub(crate) fn take_due(&mut self) -> Vec<u64> {
-        let due = self.due();
+    pub(crate) fn take_due(&mut self) -> Vec<Due> {
+        let due = self
+            .sent
+            .iter()
+            .filter(|sent| sent.finished)
+            .filter_map(|sent| {
+                Some(Due { role: self.role_of(sent.pane)?.to_string(), pane: sent.pane, failed: sent.failed })
+            })
+            .collect();
         self.sent.retain(|sent| !sent.finished);
         due
+    }
+
+    pub(crate) fn skipped(&self, edge: Option<Edge>) -> Option<String> {
+        edge?;
+        progress::owed(&self.flow, &self.progress.passed(), self.progress.changed())
+    }
+
+    pub(crate) fn owed(&self) -> Option<String> {
+        progress::owed(&self.flow, self.progress.not_run(), self.progress.changed())
     }
 
     pub(crate) fn pull<'a>(&self, pull: Option<&'a PullRequest>) -> Option<&'a PullRequest> {

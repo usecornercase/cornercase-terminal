@@ -228,7 +228,9 @@ mod sent {
         run.sent_to(CODER, Instant::now());
         run.settle(CODER, seen(true, Some("idle")));
         run.settle(REVIEWER, seen(true, Some("idle")));
-        assert_eq!(run.take_due(), vec![REVIEWER, CODER]);
+        let due = run.take_due();
+        assert_eq!(due.iter().map(|due| due.pane).collect::<Vec<_>>(), vec![REVIEWER, CODER]);
+        assert_eq!(due.iter().map(|due| due.role.as_str()).collect::<Vec<_>>(), vec!["reviewer", "coder"]);
         assert_eq!(run.sent.len(), 0);
     }
 }
@@ -290,5 +292,120 @@ mod close_due {
         run.close_when_merged = false;
         assert!(!run.close_due(true, t0 + MERGED_GRACE));
         assert!(run.merged_since.is_none());
+    }
+}
+
+mod failures {
+    use super::*;
+
+    #[test]
+    fn a_failed_turn_is_due_and_told_apart() {
+        let mut run = run(End::Commits);
+        run.members = vec![Member { role: ORCHESTRATOR.into(), pane: 13 }, Member { role: "coder".into(), pane: 14 }];
+        run.sent_to(14, Instant::now());
+        run.settle(14, Seen { worked: true, ended: Some("failed"), ..Seen::default() });
+        let due = run.take_due();
+        assert_eq!(due, vec![Due { role: "coder".into(), pane: 14, failed: true }]);
+    }
+
+    fn after(retry: &mut Retry, at: Instant, ended: &str) {
+        retry.saw(Some(ended), at);
+    }
+
+    #[test]
+    fn the_orchestrator_is_retried_after_one_two_and_four_minutes_and_then_no_more() {
+        let t0 = Instant::now();
+        let mut retry = Retry::default();
+        after(&mut retry, t0, "failed");
+        assert!(!retry.due(t0 + RETRY_AFTER / 2));
+        assert!(retry.due(t0 + RETRY_AFTER));
+        retry.sent();
+        let t1 = t0 + RETRY_AFTER;
+        after(&mut retry, t1, "failed");
+        assert!(!retry.due(t1 + RETRY_AFTER));
+        assert!(retry.due(t1 + RETRY_AFTER * 2));
+        retry.sent();
+        let t2 = t1 + RETRY_AFTER * 2;
+        after(&mut retry, t2, "failed");
+        assert!(!retry.due(t2 + RETRY_AFTER * 3));
+        assert!(retry.due(t2 + RETRY_AFTER * 4));
+        retry.sent();
+        after(&mut retry, t2, "failed");
+        assert!(!retry.due(t2 + RETRY_AFTER * 100));
+    }
+
+    #[test]
+    fn another_ending_starts_over_and_working_keeps_the_count() {
+        let t0 = Instant::now();
+        let mut retry = Retry::default();
+        after(&mut retry, t0, "failed");
+        retry.sent();
+        retry.saw(None, t0);
+        assert!(!retry.due(t0 + RETRY_AFTER * 10));
+        after(&mut retry, t0, "failed");
+        assert!(!retry.due(t0 + RETRY_AFTER));
+        assert!(retry.due(t0 + RETRY_AFTER * 2));
+        retry.saw(Some("idle"), t0);
+        after(&mut retry, t0, "failed");
+        assert!(retry.due(t0 + RETRY_AFTER));
+    }
+
+    #[test]
+    fn a_failure_is_not_retried_without_having_been_seen() {
+        assert!(!Retry::default().due(Instant::now() + RETRY_AFTER * 10));
+    }
+}
+
+mod skipped_stages {
+    use super::*;
+
+    fn sent(run: &mut Run, to: &str) -> Option<String> {
+        let mut message = Message {
+            from: ORCHESTRATOR.into(),
+            to: to.into(),
+            kind: Kind::Send,
+            text: None,
+            bytes: 0,
+            at: Instant::now(),
+            time: SystemTime::now(),
+            seq: 0,
+            edge: None,
+        };
+        message.edge = run.record(message.clone()).edge;
+        run.skipped(message.edge)
+    }
+
+    fn full() -> Run {
+        run(End::Commits)
+    }
+
+    #[test]
+    fn a_send_past_a_stage_owed_since_a_change_is_told() {
+        let mut run = full();
+        let told: Vec<Option<String>> =
+            ["coder", "reviewer", "coder", "tester"].into_iter().map(|to| sent(&mut run, to)).collect();
+        assert_eq!(told[..3], [None, None, None]);
+        assert_eq!(
+            told[3].as_deref(),
+            Some(
+                "stage 2 (reviewer, security) has not run since the last change in stage 1: run it first, or say in your summary why not"
+            )
+        );
+        assert!(run.owed().is_some());
+    }
+
+    #[test]
+    fn a_send_in_the_plan_or_a_follow_up_is_not_told() {
+        let mut run = full();
+        for to in ["coder", "reviewer", "coder", "reviewer"] {
+            assert_eq!(sent(&mut run, to), None);
+        }
+        assert_eq!(sent(&mut run, "reviewer"), None);
+        assert_eq!(run.owed().as_deref().map(|text| text.starts_with("stage 3 (tester)")), Some(true));
+    }
+
+    #[test]
+    fn a_run_with_nothing_owed_has_nothing_to_tell_at_the_mark() {
+        assert_eq!(full().owed(), None);
     }
 }

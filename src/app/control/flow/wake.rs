@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use serde_json::Value;
 
@@ -9,7 +9,7 @@ use crate::app::control::wait::turn_ended;
 use crate::app::flow_runs::Wake;
 use crate::control::{self, Command, Request};
 use crate::flows::ORCHESTRATOR;
-use crate::flows::run::Seen;
+use crate::flows::run::{Due, Seen};
 use crate::flows::{brief, run::Run};
 use crate::log;
 use crate::project::Hierarchy;
@@ -26,7 +26,40 @@ impl App {
             return;
         }
         self.settle_sent_work();
+        self.watch_orchestrators(now);
         self.wake_orchestrators(now);
+    }
+
+    fn orchestrator_state(&self, run: &Run) -> (Option<&'static str>, bool) {
+        let Some(term) = run.pane_of(ORCHESTRATOR).and_then(|pane| self.projects.pane_by(pane)) else {
+            return (Some(Status::Pending.name()), false);
+        };
+        if run.ended.is_some() || term.agent.pending() {
+            return (Some(Status::Pending.name()), false);
+        }
+        let working = |member: &crate::flows::run::Member| {
+            self.projects.pane_by(member.pane).is_some_and(|term| term.agent.status() == Some(Status::Working))
+        };
+        let resting = term.agent.status().is_some_and(|status| status != Status::Working);
+        let stopped = resting && !run.members.iter().any(working) && !self.runs.waking(run.id);
+        (turn_ended(&term.agent), stopped)
+    }
+
+    fn watch_orchestrators(&mut self, now: Instant) {
+        let seen: Vec<(u64, Option<&'static str>, bool)> = self
+            .runs
+            .all()
+            .iter()
+            .map(|run| {
+                let (ended, stopped) = self.orchestrator_state(run);
+                (run.id, ended, stopped)
+            })
+            .collect();
+        for (id, ended, stopped) in seen {
+            let Some(run) = self.runs.run_mut(id) else { continue };
+            run.retry.saw(ended, now);
+            run.stopped = stopped.then(|| run.stopped.unwrap_or_else(SystemTime::now));
+        }
     }
 
     fn seen(&self, run: &Run, pane: u64, since: Instant) -> Seen {
@@ -65,7 +98,7 @@ impl App {
             .runs
             .all()
             .iter()
-            .filter(|run| !run.due().is_empty() && !self.runs.waking(run.id))
+            .filter(|run| (!run.due().is_empty() || run.retry.due(now)) && !self.runs.waking(run.id))
             .map(|run| run.id)
             .collect();
         for id in due {
@@ -84,29 +117,30 @@ impl App {
             }
             Some(term) if over(turn_ended(&term.agent)) => {
                 let Some(own) = own else { return };
-                self.send_wake(id, own, now);
+                let failed = term.agent.status() == Some(Status::Failed);
+                self.send_wake(id, (own, failed), now);
             }
             Some(_) => {}
         }
     }
 
-    fn take_due_roles(&mut self, id: u64) -> Vec<(String, u64)> {
-        let Some(run) = self.runs.run_mut(id) else { return Vec::new() };
-        let due = run.take_due();
-        due.into_iter().filter_map(|pane| Some((run.role_of(pane)?.to_string(), pane))).collect()
+    fn take_due_roles(&mut self, id: u64) -> Vec<Due> {
+        self.runs.run_mut(id).map(Run::take_due).unwrap_or_default()
     }
 
-    fn send_wake(&mut self, id: u64, own: u64, now: Instant) {
+    fn send_wake(&mut self, id: u64, (own, failed): (u64, bool), now: Instant) {
         let roles = self.take_due_roles(id);
+        if failed && let Some(run) = self.runs.run_mut(id) {
+            run.retry.sent();
+        }
+        let named = |failed: bool| -> Vec<(String, u64)> {
+            roles.iter().filter(|due| due.failed == failed).map(|due| (due.role.clone(), due.pane)).collect()
+        };
+        let text = brief::woken(failed, &named(false), &named(true));
         let Some(workspace) = self.runs.all().iter().find(|run| run.id == id).map(|run| run.workspace) else { return };
         let client = CLIENTS + self.runs.next_wake();
         self.runs.start_wake(Wake { client, run: id, workspace, roles: roles.clone() });
-        let send = control::SendText {
-            pane: Some(own),
-            text: Some(brief::finished(&roles)),
-            enter: true,
-            ..control::SendText::default()
-        };
+        let send = control::SendText { pane: Some(own), text: Some(text), enter: true, ..control::SendText::default() };
         let request = Request {
             caller: None,
             server: None,
@@ -135,15 +169,15 @@ impl App {
         true
     }
 
-    fn tell_person(&mut self, workspace: u64, roles: &[(String, u64)]) {
+    fn tell_person(&mut self, workspace: u64, roles: &[Due]) {
         let Some(at) = self.projects.workspace_index(workspace) else { return };
         let project = self.projects[at.project()].id;
-        for (role, pane) in roles {
+        for due in roles {
             self.notify(Notice {
-                agent: role,
-                status: Status::Done,
+                agent: &due.role,
+                status: if due.failed { Status::Failed } else { Status::Done },
                 at: (project, workspace),
-                panes: vec![*pane],
+                panes: vec![due.pane],
                 principal: true,
             });
         }
