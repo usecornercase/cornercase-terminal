@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.54
+
+- **Every role of a flow reads the whole task.** Starting a flow (with `cornercase flow run`, **start a flow**, an issue or a routine, here or on a machine) now saves the task to `task.md` in the run's folder before any agent starts, exactly as you gave it. Every role's prompt names the file, and the orchestrator passes its path instead of retelling the task, so the constraints of a long task reach the coder and the tester whole, not only what the orchestrator kept of them.
+- **A fix goes through the reviews and tests again.** When a review or a test sends the work back, the orchestrator is now told to run that stage and every stage after it again, in order, on what changed, and to do the final action (such as opening the pull request) only once each of them answered clean or its loop reached its limit. Before, a fix could go on unreviewed, or a pull request open with the last fix untested.
+
 ## 0.13.53
 
 - **Programs can read what `cornercase update` did.** `cornercase update --json` prints one line of JSON instead of sentences: `{"outcome":"updated","from":"0.13.52","version":"0.13.53","path":"/home/me/.local/bin/cornercase"}`, `{"outcome":"up-to-date","version":"0.13.53"}`, or, when cornercase can't replace itself (Homebrew installed it, or you can't write to its folder), `{"outcome":"manual","version":"0.13.52","latest":"0.13.53","command":"brew update && brew upgrade cornercase"}`. `version` is the one on disk afterwards, on the machine it ran on, so another interface can offer the command to copy, or confirm an install on another machine (`cornercase --remote devbox update --json`) before restarting its server. With `--json` it asks nothing and never restarts the server: run `cornercase restart` when you choose. `--check --json` says what it would do, without installing.
