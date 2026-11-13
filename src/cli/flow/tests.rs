@@ -296,7 +296,11 @@ mod runs {
     }
 
     #[rstest::rstest]
-    #[case::on(true, true, "the agents of workspace 7 close once its pull request merges and none of them works\n")]
+    #[case::on(
+        true,
+        true,
+        "the agents of workspace 7 close once its pull request merges and none of them works, keeping their worktrees' build folders\n"
+    )]
     #[case::on_again(true, false, "the agents of workspace 7 already close once its pull request merges\n")]
     #[case::off(false, true, "the agents of workspace 7 stay open after its pull request merges\n")]
     #[case::off_again(false, false, "the agents of workspace 7 already stay open after its pull request merges\n")]

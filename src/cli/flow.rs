@@ -307,7 +307,11 @@ pub(super) fn closes_line(set: &CloseWhenMergedSet) -> String {
         } else {
             "close once its pull request merges"
         };
-        let free = if set.free_builds { ", freeing their worktrees' build folders" } else { "" };
+        let free = match (set.free_builds, set.changed) {
+            (true, _) => ", freeing their worktrees' build folders",
+            (false, true) => ", keeping their worktrees' build folders",
+            (false, false) => "",
+        };
         return format!("the agents of workspace {id} {already}{tail}{free}\n");
     }
     format!("the agents of workspace {id} {already}stay open after its pull request merges\n")
