@@ -99,6 +99,8 @@ The `recap` request (feature `recap`, additive; `cornercase recap` refuses an ol
 
 The journal, ranges, dossier, the outdated check (`recap/outdated/tests.rs`), text and cache are pure and run on every OS; the agents' readers are tested against real streams cut down (`tests/fixtures/claude/2.1.318/recap-*.jsonl`, `tests/fixtures/codex/0.164.0/recap-*.jsonl`), and the runs with `test_util::fake_program` fakes named `claude` and `codex` (`fake_program` also records the folder it ran in, `.cwd`). Nothing runs a real agent.
 
+**The panel's and the request's tests give the window a zone at local noon** (#783). `yesterday` is the last local day before today with activity, and `recaps()` (`app/tests/recap_panel.rs`) writes its prompt ten minutes before now. In the host's zone that prompt fell on yesterday between 00:00 and 00:10, so the two tests that expect nothing to sum up ran the agent then. `recaps()` now sets the window's zone (`set_queue_zone`, which the server sets from the window in production) to the fixed offset that puts the test's start at local noon (`noon_zone`). A prompt minutes old is then today and one 48 hours old is the last active day, whatever the hour and the host's zone. Rejected: a clock in `App` that tests could set (code only tests need), and skipping or waiting near midnight (a test whose result depends on when it runs).
+
 ## Rejected
 
 - One `journal.jsonl` (see above); importing the agents' past history (the journal starts when this version does); a dialog instead of a panel; a plain recap without an agent; sending a recap to Telegram or Discord or writing it on a schedule (a routine, #653, could do that later); other machines (#539, #547).

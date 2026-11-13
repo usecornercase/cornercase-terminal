@@ -7,7 +7,7 @@ use super::*;
 use crate::agents::context::Pointer;
 use crate::app::recap_panel::Overrides;
 use crate::recap::journal::{Entry, Event, WorkspacePlace, files};
-use crate::recap::{Choice, Named, Place, RECAP_VERSION, Recap, store};
+use crate::recap::{Choice, Named, Place, RECAP_VERSION, Recap, range, store};
 use crate::test_util::{fake_program, fixture};
 use crate::time::Stamp;
 
@@ -24,6 +24,11 @@ pub(super) struct Recaps {
 
 fn at(ago: Duration) -> String {
     Stamp(SystemTime::now() - ago).to_string()
+}
+
+fn noon_zone(now: i64) -> String {
+    let offset = 12 - now.rem_euclid(86_400) / 3_600;
+    format!("{offset:+03}:00")
 }
 
 fn transcript(dir: &Path, prompt_at: &str) -> PathBuf {
@@ -56,6 +61,7 @@ fn entry(event: Event, ago: Duration, app: &App, record: &Path) -> Entry {
 
 pub(super) fn recaps(prompted: Duration) -> Recaps {
     let (mut app, rx) = app();
+    app.set_queue_zone(noon_zone(crate::time::now()));
     let (state, bin) = (TempDir::new(), TempDir::new());
     let claude = fake_program(bin.path(), "claude");
     std::fs::write(claude.with_extension("out"), OK).expect("canned output");
@@ -83,6 +89,21 @@ impl Recaps {
 
     fn text(&self, choice: Choice) -> Option<String> {
         self.app.panels.recap.run(choice).last.as_ref().map(|recap| recap.text.clone())
+    }
+}
+
+#[test]
+fn the_zone_these_tests_give_the_window_keeps_a_prompt_ten_minutes_old_on_today_at_any_hour() {
+    for step in 0..288 {
+        let now = 1_794_528_000 + step * 300;
+        let zone = noon_zone(now);
+        assert!(crate::queue::clock::zone(&zone).is_ok(), "{zone} does not parse");
+        let mut prompt = Entry::blank("claude");
+        prompt.event = Event::Prompt;
+        let at = SystemTime::UNIX_EPOCH + Duration::from_secs(u64::try_from(now - 600).expect("after 1970"));
+        prompt.at = Stamp(at).to_string();
+        let yesterday = range::resolve(Choice::Yesterday, &[prompt], now, &zone);
+        assert!(yesterday.is_none(), "zone {zone} at minute {} of the UTC day", step * 5);
     }
 }
 
