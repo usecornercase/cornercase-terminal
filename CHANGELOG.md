@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.59
+
+- **A program can open a port of your computer on a machine.** `cornercase --remote vps tunnel hold --reverse 9222` makes port 9222 of this computer reachable on `127.0.0.1` of `vps`, on a free port its `ssh` server picks, or on the one `--there 9223` asks for (it fails at once when that port is taken there). Once it is up it prints `{"port":41234,"local":9222,"url":"http://127.0.0.1:41234","direction":"reverse"}`, and it lasts until it is killed or `cornercase tunnel close --reverse 41234` runs on `vps`. An agent there can reach, say, a browser's DevTools port on your laptop, without an `ssh -R` that cornercase can't list or close. It listens only on the machine's loopback, which every user of a shared machine can reach. `cornercase tunnels` lists it (`41234 ← localhost:9222  up (reverse hold 4)`), `--json`, `status` and the `tunnel` events carry `"direction":"reverse"`, and `cornercase contract` lists the feature `tunnel-reverse`.
+- **`tunnel hold` can ask for the local port it had before.** `cornercase --remote vps tunnel hold 5173 --local 54012` listens on 54012 when 5173 is taken on this computer (and on any free port when 54012 is taken too), so a program that holds its tunnels again after the connection drops keeps the address a browser tab has open.
+
 ## 0.13.58
 
 - Nothing changes for users: tests that sometimes failed on CI (the flows' tests on macOS, and one about when a process started on Linux) now pass every time.
