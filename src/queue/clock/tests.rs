@@ -18,6 +18,19 @@ fn parses_a_client_time_into_an_absolute_instant(#[case] text: &str, #[case] exp
 }
 
 #[rstest]
+#[case::east_of_utc_after_midnight("2026-11-12T23:27:00Z", "Europe/Madrid", "2026-11-13")]
+#[case::west_of_utc_in_the_evening("2026-11-13T03:00:00Z", "America/New_York", "2026-11-12")]
+#[case::a_fixed_offset("2026-11-12T23:27:00Z", "+05:30", "2026-11-13")]
+#[case::utc("2026-11-12T23:27:00Z", "UTC", "2026-11-12")]
+#[case::a_zone_that_cannot_be_read_is_utc("2026-11-12T23:27:00Z", "Not/AZone", "2026-11-12")]
+fn the_day_of_an_instant_is_the_one_its_zone_shows(#[case] at: &str, #[case] zone: &str, #[case] expected: &str) {
+    assert_eq!(day(stamp(at), zone), expected);
+    if zone != "Not/AZone" {
+        assert!(display(stamp(at), zone).starts_with(&day(stamp(at), zone)));
+    }
+}
+
+#[rstest]
 #[case::nonexistent("2026-03-29 02:30")]
 #[case::ambiguous("2026-10-25 02:30")]
 #[case::bad_day("2026-02-30 09:00")]

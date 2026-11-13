@@ -1760,7 +1760,7 @@ export class App {
     if (own !== undefined && this.findPane(own)?.pane.pending) run.ended = true;
     const diagram = live(plan(run.flow), run.progress, state, run.ended, this.now());
     const files = run.files.map((f) => ({ name: f.name, size: fileSize(f.bytes), age: fileAge(this.now() - f.at) })).reverse();
-    const heading = { place: this.runPlace(run), run: 1, messages: run.recorded, active: run.progress.active, lead: state(ORCHESTRATOR) !== 'closed' };
+    const heading = { place: this.runPlace(run), run: 1, messages: run.recorded, active: run.progress.active, notRun: [...run.progress.notRun], lead: state(ORCHESTRATOR) !== 'closed' };
     return { name: run.flow.name, task: run.task, heading, team: this.runTeam(run, state), diagram, history: this.runHistory(run), files, scroll: this.flowScroll };
   }
 

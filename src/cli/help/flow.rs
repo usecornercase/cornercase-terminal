@@ -159,6 +159,12 @@ how a run ends. Stages count from 1 here; --json counts them from 0, as the diag
 server stops; each line has a revision that only goes up while the server runs. The answer of a run that
 has no message yet or no step has them null.
 
+After the work goes back to an earlier stage (a loop's round, or a step outside the plan), a run lists the
+stages it has not been through since: `not run since the last change: stage 3, stage 4`, or, once the
+orchestrator marked its pane, `ended with stage 3 and 4 not run on the last change` (not_run with --json,
+counted from 0, left out when there is none). A first pass that skips a stage shows only as outside the plan,
+and a restart forgets what was not run.
+
 A run that closes its agents once its pull request merges says so (close_when_merged with --json).
 
 Examples:

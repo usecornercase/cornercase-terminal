@@ -168,8 +168,7 @@ fn example_run() -> RunState {
         outside: Some(RunEdge::Outside { from: Some(0), to: 1 }),
         ended: true,
         messages: 4,
-        state: None,
-        close_when_merged: false,
+        ..RunState::default()
     }
 }
 
@@ -186,6 +185,15 @@ fn message(seq: u64, to: &str, kind: &str, text: Option<&str>, edge: Option<RunE
         bytes: text.map_or(0, str::len),
         edge,
     }
+}
+
+#[test]
+fn not_run_is_counted_from_0_and_left_out_when_empty() {
+    let changed = RunState { not_run: vec![2, 3], ..example_run() };
+    let value = serde_json::to_value(&changed).expect("json");
+    assert_eq!(value["not_run"], serde_json::json!([2, 3]));
+    assert_eq!(serde_json::from_value::<RunState>(value).expect("read"), changed);
+    assert!(serde_json::to_value(example_run()).expect("json").get("not_run").is_none());
 }
 
 #[test]

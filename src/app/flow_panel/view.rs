@@ -70,7 +70,14 @@ impl App {
             None => place,
         };
         let lead = run.pane_of(ORCHESTRATOR).is_some_and(|pane| self.projects.pane_by(pane).is_some());
-        flow::Heading { place, run: run.id, messages: run.recorded, active: run.progress.active, lead }
+        flow::Heading {
+            place,
+            run: run.id,
+            messages: run.recorded,
+            active: run.progress.active,
+            not_run: run.progress.not_run().to_vec(),
+            lead,
+        }
     }
 
     pub(super) fn run_team(&self, run: &Run, at: WorkspaceAt) -> Vec<flow::Member> {

@@ -8,12 +8,12 @@ use std::time::{Duration, SystemTime};
 use rstest::rstest;
 
 #[cfg(unix)]
-use super::{MAX_FILES, ensure, list, make, remove, valid};
-use super::{TASK, discard, ensure_task, write_task};
+use super::{MAX_FILES, ensure, list, remove, valid};
+use super::{TASK, discard, ensure_task, make, write_task};
 use crate::test_util::TempDir;
 
 #[cfg(unix)]
-const DAY: i64 = 1_760_000_000_000;
+const DAY: &str = "2025-10-09";
 
 #[cfg(unix)]
 fn mode(path: &std::path::Path) -> u32 {
@@ -25,6 +25,31 @@ fn touch(path: &std::path::Path, age: u64) {
     fs::create_dir_all(path.parent().expect("parent")).expect("parents");
     let file = fs::File::create(path).expect("create");
     file.set_modified(SystemTime::now() - Duration::from_secs(age)).expect("set the time");
+}
+
+mod days {
+    use super::*;
+
+    fn name(dir: &std::path::Path) -> Option<&str> {
+        dir.file_name().and_then(|n| n.to_str())
+    }
+
+    #[test]
+    fn a_folder_takes_the_day_it_is_given() {
+        let temp = TempDir::new();
+        let dir = make(&temp.path().join("runs"), std::path::Path::new("/w/api"), "2026-11-13").expect("make");
+        assert_eq!(name(&dir), Some("2026-11-13-api"));
+    }
+
+    #[test]
+    fn the_number_counts_runs_of_the_same_day_only() {
+        let temp = TempDir::new();
+        let (root, path) = (temp.path().join("runs"), std::path::Path::new("/w/api"));
+        let day = |day| make(&root, path, day).expect("make");
+        assert_eq!(name(&day("2026-11-12")), Some("2026-11-12-api"));
+        assert_eq!(name(&day("2026-11-13")), Some("2026-11-13-api"));
+        assert_eq!(name(&day("2026-11-13")), Some("2026-11-13-api-2"));
+    }
 }
 
 #[cfg(unix)]

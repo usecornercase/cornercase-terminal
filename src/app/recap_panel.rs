@@ -141,11 +141,7 @@ impl App {
     }
 
     fn recap_input(&self, folders: &Folders, want: Want<'_>) -> Input {
-        let queued = self.panels.queued.zone();
-        let zone = want.zone.map_or_else(
-            || if queued.is_empty() { crate::queue::clock::local_zone() } else { queued.to_string() },
-            str::to_string,
-        );
+        let zone = want.zone.map_or_else(|| self.window_zone(), str::to_string);
         let Want { choice, options, fresh, .. } = want;
         let kind = Known::of(&options.agent);
         let home = options
@@ -242,9 +238,7 @@ impl App {
         if choice == Choice::Yesterday {
             return true;
         }
-        let queued = self.panels.queued.zone();
-        let zone = if queued.is_empty() { crate::queue::clock::local_zone() } else { queued.to_string() };
-        let today = crate::recap::range::today_of(crate::time::now(), &zone).unwrap_or_default();
+        let today = crate::queue::clock::day(crate::time::now(), &self.window_zone());
         let moment = store::Moment { now: crate::time::now(), today: &today, last_day: None };
         store::due(choice, run.last.as_ref(), moment) || self.recap_outdated(choice).any()
     }

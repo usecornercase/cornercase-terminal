@@ -28,6 +28,7 @@ export interface PanelHeading {
   run: number;
   messages: number;
   active: number | null;
+  notRun: number[];
   lead: boolean;
 }
 
@@ -112,10 +113,40 @@ function summary(view: PanelView): [string, Style][] {
   return out;
 }
 
+const NOT_RUN = 'not run since the last change';
+
+export function stagesInWords(stages: number[]): string {
+  const names = stages.map((s) => String(s + 1));
+  const last = names[names.length - 1];
+  if (names.length <= 1) return `stage ${last}`;
+  return `stage ${names.slice(0, -1).join(', ')} and ${last}`;
+}
+
+const note = (view: PanelView): string | null => (view.heading.notRun.length ? `${stagesInWords(view.heading.notRun)} ${NOT_RUN}` : null);
+
 const summaryWidth = (view: PanelView): number => summary(view).reduce((n, [t]) => n + len(t), 0);
 const buttonsWidth = (view: PanelView): number => (view.heading.lead ? len(LEAD_BUTTON) + 1 : 0) + len(STOP_BUTTON);
-const fits = (view: PanelView, width: number): boolean => summaryWidth(view) + 1 + buttonsWidth(view) <= width;
-const headingHeight = (view: PanelView, width: number): number => (fits(view, width) ? 3 : 4);
+
+interface Rows {
+  inline: boolean;
+  note: number | null;
+  buttons: number;
+}
+
+function rows(view: PanelView, width: number): Rows {
+  const text = note(view);
+  const summary = summaryWidth(view);
+  const inline = text !== null && summary + 3 + len(text) <= width;
+  const own = text !== null && !inline;
+  const line = summary + (inline && text !== null ? 3 + len(text) : 0);
+  const fits = line + 1 + buttonsWidth(view) <= width;
+  return { inline, note: own ? 3 : null, buttons: fits ? 2 : own ? 4 : 3 };
+}
+
+const headingHeight = (view: PanelView, width: number): number => {
+  const r = rows(view, width);
+  return Math.max(r.note ?? 0, r.buttons) + 1;
+};
 
 const teamHeight = (team: PanelMember[]): number => (team.length ? LEAD + team.length : 0);
 
@@ -222,7 +253,7 @@ interface Button {
 }
 
 function buttons(s: Slot, view: PanelView): Button[] {
-  const y = rowY(s, fits(view, s.area.w) ? 2 : 3);
+  const y = rowY(s, rows(view, s.area.w).buttons);
   if (y === null) return [];
   const stop = len(STOP_BUTTON);
   const x = s.area.x + s.area.w - stop;
@@ -261,11 +292,17 @@ function drawHeading(p: Painter, s: Slot, view: PanelView, click: (hit: PanelHit
       p.span(s.area.x + x, bar, (on ? '━' : '─').repeat(n), on ? { fg: BRAND } : { fg: p.lineColour });
     });
   }
+  const r = rows(view, width);
+  const text = note(view);
   const y2 = rowY(s, 2);
   if (y2 !== null) {
     let x = s.area.x;
-    for (const [text, style] of summary(view)) x = p.span(x, y2, text, style);
+    const parts = summary(view);
+    if (r.inline && text !== null) parts.push([` · ${text}`, { fg: WAITING }]);
+    for (const [part, style] of parts) x = p.span(x, y2, part, style);
   }
+  const own = r.note === null ? null : rowY(s, r.note);
+  if (own !== null && text !== null) p.span(s.area.x, own, truncateRight(text, width), { fg: WAITING });
   for (const b of buttons(s, view)) {
     const lit = p.hovered(b.r);
     p.span(b.r.x, b.r.y, b.label, lit ? ACTION_LIT : ACTION);

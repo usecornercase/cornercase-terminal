@@ -5,7 +5,6 @@ use std::time::SystemTime;
 
 use crate::issues::slug;
 use crate::os::fs::{DirBuilderExt, set_mode};
-use crate::time;
 
 pub(crate) const ENV: &str = "CORNERCASE_RUN_DIR";
 pub(crate) const TASK: &str = "task.md";
@@ -40,10 +39,10 @@ fn private(path: &Path) -> io::Result<()> {
     set_mode(path, 0o700)
 }
 
-pub(crate) fn make(root: &Path, workspace: &Path, millis: i64) -> io::Result<PathBuf> {
+pub(crate) fn make(root: &Path, workspace: &Path, day: &str) -> io::Result<PathBuf> {
     DirBuilder::new().recursive(true).mode(0o700).create(root)?;
     let folder = workspace.file_name().and_then(|name| name.to_str()).map(|name| slug(name, NAME_MAX));
-    let stem = format!("{}-{}", time::date(millis), folder.filter(|s| !s.is_empty()).as_deref().unwrap_or(FALLBACK));
+    let stem = format!("{day}-{}", folder.filter(|s| !s.is_empty()).as_deref().unwrap_or(FALLBACK));
     for attempt in 1..=TRIES {
         let name = if attempt == 1 { stem.clone() } else { format!("{stem}-{attempt}") };
         let dir = root.join(name);
