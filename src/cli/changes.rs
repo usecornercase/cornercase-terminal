@@ -22,13 +22,13 @@ pub(super) fn run(args: ChangesArgs) -> Result<()> {
         }
         ChangesAction::File { path, place, mode, print } => file(&path, &place, &mode, print.json),
         ChangesAction::Gap { path, hunk, place, mode, print } => gap(&path, hunk, &place, &mode, print.json),
-        ChangesAction::Base { branch, default, place, print } => base(branch, default, &place, print.json),
+        ChangesAction::Base { branch, default, place, print, .. } => base(branch, default, &place, print.json),
         ChangesAction::MergeCheck { place, with, base, print } => merge_check(&place, with, base, print.json),
         ChangesAction::Shared { place, print } => shared(&place, print.json),
-        ChangesAction::Viewed { path, clear, digest, place, mode } => viewed(&path, clear, digest, &place, &mode),
-        ChangesAction::Discard { path, place, digest, yes } => discard(&path, &place, digest.digest, yes),
-        ChangesAction::Stage { path, place, digest } => stage(&path, &place, digest.digest, true),
-        ChangesAction::Unstage { path, place, digest } => stage(&path, &place, digest.digest, false),
+        ChangesAction::Viewed { path, clear, digest, place, mode, .. } => viewed(&path, clear, digest, &place, &mode),
+        ChangesAction::Discard { path, place, digest, yes, .. } => discard(&path, &place, digest.digest, yes),
+        ChangesAction::Stage { path, place, digest, .. } => stage(&path, &place, digest.digest, true),
+        ChangesAction::Unstage { path, place, digest, .. } => stage(&path, &place, digest.digest, false),
     }
 }
 

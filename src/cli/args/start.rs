@@ -2,11 +2,14 @@ use std::path::PathBuf;
 
 use clap::{ArgGroup, Args};
 
-use super::{Create, FreshArg, UntilArg, accounts, issue, machine, seconds};
+use super::{BootArg, Create, FreshArg, UntilArg, accounts, issue, machine, seconds};
 use crate::cli::help::{HERE_WORKSPACE, UNTIL_AFTER};
 
 #[derive(Debug, Args)]
-#[command(group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).conflicts_with("workspace")))]
+#[command(
+    group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).conflicts_with("workspace")),
+    group(ArgGroup::new("one_server").args(["boot", "machine"]).multiple(false))
+)]
 pub(crate) struct StartArgs {
     #[arg(
         value_name = "AGENT",
@@ -78,4 +81,6 @@ pub(crate) struct StartArgs {
     pub(crate) on: machine::MachineArg,
     #[command(flatten)]
     pub(crate) create: Create,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }

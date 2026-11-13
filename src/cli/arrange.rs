@@ -76,7 +76,7 @@ pub(super) fn group(action: GroupAction) -> Result<()> {
             let value = ask("group-new", Command::GroupNew(GroupNew { name: name.join(" ") }))?;
             say(value, print.json, |done| id(done.group))
         }
-        GroupAction::Style { group, icon, colour, print } => {
+        GroupAction::Style { group, icon, colour, print, .. } => {
             let request = GroupStyle { group: Some(group), icon, colour };
             let value = ask("group-style", Command::GroupStyle(request))?;
             if print.json {
@@ -85,7 +85,7 @@ pub(super) fn group(action: GroupAction) -> Result<()> {
             let styled: Styled = answer(value)?;
             print_out(&format!("{} {}\n", styled.icon, styled.colour))
         }
-        GroupAction::Delete { group, close_projects } => {
+        GroupAction::Delete { group, close_projects, .. } => {
             let request = GroupDelete { group: Some(group), close_projects };
             ask("group-delete", Command::GroupDelete(request)).map(drop)
         }

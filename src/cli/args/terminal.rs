@@ -12,7 +12,7 @@ pub(crate) struct InputArgs {
     pub(crate) pane: Option<u64>,
     #[arg(long, help = "Type into the plugin popup open in the window instead of a pane")]
     pub(crate) popup: bool,
-    #[arg(long, conflicts_with = "boot", help = INPUT_FOLLOW)]
+    #[arg(long, help = INPUT_FOLLOW)]
     pub(crate) follow: bool,
     #[arg(required = true, value_name = "EVENT", value_parser = event, help = "One JSON event, or - to read one per line from standard input")]
     pub(crate) events: Vec<String>,
@@ -50,6 +50,8 @@ pub(crate) struct ScrollArgs {
     pub(crate) bottom: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 fn rows(text: &str) -> Result<i64, String> {
@@ -75,6 +77,8 @@ pub(crate) struct SelectionArgs {
     pub(crate) copy: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 fn point(text: &str) -> Result<Point, String> {
@@ -119,6 +123,8 @@ pub(crate) struct RedrawArgs {
     pub(crate) surface: u64,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -131,6 +137,8 @@ pub(crate) struct ResizeArgs {
     pub(crate) rows: u16,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -154,6 +162,8 @@ pub(crate) struct RatioArgs {
     pub(crate) ratio: f64,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 fn share(text: &str) -> Result<f64, String> {

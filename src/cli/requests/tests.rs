@@ -309,6 +309,48 @@ mod streams {
     #[case::send(r#"{"args": ["send", "--pane", "4", "--enter", "x", "--boot", "old"]}"#)]
     #[case::input(r#"{"args": ["input", "--pane", "4", "-", "--boot", "old"], "stdin": "{\"paste\": \"x\"}"}"#)]
     #[case::paste_file(r#"{"args": ["paste-file", "--pane", "4", "--boot", "old"], "stdin": "a picture"}"#)]
+    #[case::keys(r#"{"args": ["keys", "--pane", "4", "enter", "--boot", "old"]}"#)]
+    #[case::held(r#"{"args": ["held", "--pane", "4", "--send-now", "--boot", "old"]}"#)]
+    #[case::todo_send(r#"{"args": ["todo", "send", "3", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::scroll(r#"{"args": ["scroll", "--pane", "4", "--up", "3", "--boot", "old"]}"#)]
+    #[case::selection(r#"{"args": ["selection", "--pane", "4", "--clear", "--boot", "old"]}"#)]
+    #[case::split(r#"{"args": ["split", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::focus(r#"{"args": ["focus", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::focus_and_reveal(r#"{"args": ["focus", "--pane", "4", "--reveal", "x", "--boot", "old"]}"#)]
+    #[case::ratio(r#"{"args": ["ratio", "--tab", "4", "0.3", "--boot", "old"]}"#)]
+    #[case::resize(r#"{"args": ["resize", "--surface", "4", "--cols", "80", "--rows", "24", "--boot", "old"]}"#)]
+    #[case::redraw(r#"{"args": ["redraw", "--surface", "4", "--boot", "old"]}"#)]
+    #[case::view_set(r#"{"args": ["view-set", "--view", "7", "--cols", "80", "--rows", "24", "--boot", "old"]}"#)]
+    #[case::move_a_tab(r#"{"args": ["move", "--tab", "4", "--last", "--boot", "old"]}"#)]
+    #[case::group_style(r#"{"args": ["group", "style", "4", "--icon", "★", "--boot", "old"]}"#)]
+    #[case::group_delete(r#"{"args": ["group", "delete", "4", "--boot", "old"]}"#)]
+    #[case::new_tab(r#"{"args": ["new-tab", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::new_tab_by_branch(r#"{"args": ["new-tab", "--worktree", "fix/login", "--boot", "old"]}"#)]
+    #[case::setup(r#"{"args": ["setup", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::start(r#"{"args": ["start", "claude", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::new_workspace(r#"{"args": ["new-workspace", "x", "--project", "4", "--boot", "old"]}"#)]
+    #[case::open(r#"{"args": ["open", "/x", "--into", "2", "--boot", "old"]}"#)]
+    #[case::agents_close(r#"{"args": ["agents", "close", "--workspace", "4", "--check", "--boot", "old"]}"#)]
+    #[case::agents_reopen(r#"{"args": ["agents", "reopen", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::agents_forget(r#"{"args": ["agents", "forget", "--workspace", "4", "--yes", "--boot", "old"]}"#)]
+    #[case::changes_viewed(r#"{"args": ["changes", "viewed", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_stage(r#"{"args": ["changes", "stage", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_unstage(r#"{"args": ["changes", "unstage", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_discard(
+        r#"{"args": ["changes", "discard", "a.rs", "--workspace", "4", "--yes", "--boot", "old"]}"#
+    )]
+    #[case::changes_base(r#"{"args": ["changes", "base", "main", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::queue_add(
+        r#"{"args": ["queue", "add", "--workspace", "4", "--prompt", "x", "--at", "10:00", "--boot", "old"]}"#
+    )]
+    #[case::queue_edit(r#"{"args": ["queue", "edit", "3", "--prompt", "y", "--boot", "old"]}"#)]
+    #[case::account_add(r#"{"args": ["account", "add", "claude", "work", "--boot", "old"]}"#)]
+    #[case::account_login(r#"{"args": ["account", "login", "claude", "work", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::free_builds(r#"{"args": ["worktrees", "free-builds", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::plugin_run(r#"{"args": ["plugin", "run", "p", "a", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::plugin_run_with_a_revision(
+        r#"{"args": ["plugin", "run", "p", "a", "--pane", "4", "--revision", "1", "--boot", "old"]}"#
+    )]
     fn a_boot_from_an_earlier_run_gives_status_4_and_the_next_line_runs_without_it(#[case] line: &str) {
         let refusing = |theirs| serving(theirs, control::contract::describe("boot", &[]), "\"boot\":\"old\"");
 
@@ -409,6 +451,48 @@ mod streams {
     )]
     #[case::paste_file(
         r#"{"args": ["paste-file", "--pane", "4", "--name", "x.png", "--json", "--boot", "old"], "stdin": "a picture"}"#
+    )]
+    #[case::keys(r#"{"args": ["keys", "--pane", "4", "enter", "--boot", "old"]}"#)]
+    #[case::held(r#"{"args": ["held", "--pane", "4", "--send-now", "--boot", "old"]}"#)]
+    #[case::todo_send(r#"{"args": ["todo", "send", "3", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::scroll(r#"{"args": ["scroll", "--pane", "4", "--up", "3", "--boot", "old"]}"#)]
+    #[case::selection(r#"{"args": ["selection", "--pane", "4", "--clear", "--boot", "old"]}"#)]
+    #[case::split(r#"{"args": ["split", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::focus(r#"{"args": ["focus", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::focus_and_reveal(r#"{"args": ["focus", "--pane", "4", "--reveal", "x", "--boot", "old"]}"#)]
+    #[case::ratio(r#"{"args": ["ratio", "--tab", "4", "0.3", "--boot", "old"]}"#)]
+    #[case::resize(r#"{"args": ["resize", "--surface", "4", "--cols", "80", "--rows", "24", "--boot", "old"]}"#)]
+    #[case::redraw(r#"{"args": ["redraw", "--surface", "4", "--boot", "old"]}"#)]
+    #[case::view_set(r#"{"args": ["view-set", "--view", "7", "--cols", "80", "--rows", "24", "--boot", "old"]}"#)]
+    #[case::move_a_tab(r#"{"args": ["move", "--tab", "4", "--last", "--boot", "old"]}"#)]
+    #[case::group_style(r#"{"args": ["group", "style", "4", "--icon", "★", "--boot", "old"]}"#)]
+    #[case::group_delete(r#"{"args": ["group", "delete", "4", "--boot", "old"]}"#)]
+    #[case::new_tab(r#"{"args": ["new-tab", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::new_tab_by_branch(r#"{"args": ["new-tab", "--worktree", "fix/login", "--boot", "old"]}"#)]
+    #[case::setup(r#"{"args": ["setup", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::start(r#"{"args": ["start", "claude", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::new_workspace(r#"{"args": ["new-workspace", "x", "--project", "4", "--boot", "old"]}"#)]
+    #[case::open(r#"{"args": ["open", "/x", "--into", "2", "--boot", "old"]}"#)]
+    #[case::agents_close(r#"{"args": ["agents", "close", "--workspace", "4", "--check", "--boot", "old"]}"#)]
+    #[case::agents_reopen(r#"{"args": ["agents", "reopen", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::agents_forget(r#"{"args": ["agents", "forget", "--workspace", "4", "--yes", "--boot", "old"]}"#)]
+    #[case::changes_viewed(r#"{"args": ["changes", "viewed", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_stage(r#"{"args": ["changes", "stage", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_unstage(r#"{"args": ["changes", "unstage", "a.rs", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::changes_discard(
+        r#"{"args": ["changes", "discard", "a.rs", "--workspace", "4", "--yes", "--boot", "old"]}"#
+    )]
+    #[case::changes_base(r#"{"args": ["changes", "base", "main", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::queue_add(
+        r#"{"args": ["queue", "add", "--workspace", "4", "--prompt", "x", "--at", "10:00", "--boot", "old"]}"#
+    )]
+    #[case::queue_edit(r#"{"args": ["queue", "edit", "3", "--prompt", "y", "--boot", "old"]}"#)]
+    #[case::account_add(r#"{"args": ["account", "add", "claude", "work", "--boot", "old"]}"#)]
+    #[case::account_login(r#"{"args": ["account", "login", "claude", "work", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::free_builds(r#"{"args": ["worktrees", "free-builds", "--workspace", "4", "--boot", "old"]}"#)]
+    #[case::plugin_run(r#"{"args": ["plugin", "run", "p", "a", "--pane", "4", "--boot", "old"]}"#)]
+    #[case::plugin_run_with_a_revision(
+        r#"{"args": ["plugin", "run", "p", "a", "--pane", "4", "--revision", "1", "--boot", "old"]}"#
     )]
     fn a_boot_for_a_server_that_would_ignore_it_never_sends_the_request(#[case] line: &str) {
         let older = lacking("boot");

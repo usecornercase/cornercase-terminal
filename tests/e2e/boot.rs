@@ -458,6 +458,12 @@ fn the_boot_of_this_run_lets_send_input_and_paste_file_act() {
 #[case::expand(&["expand", "--group", "99999"], "there is no group 99999")]
 #[case::send(&["send", "--pane", "99999", "x"], "there is no pane 99999")]
 #[case::input(&["input", "--pane", "99999", r#"{"text": "x"}"#], "there is no pane 99999")]
+#[case::keys(&["keys", "--pane", "99999", "enter"], "there is no pane 99999")]
+#[case::split(&["split", "--pane", "99999"], "there is no pane 99999")]
+#[case::focus(&["focus", "--pane", "99999"], "there is no pane 99999")]
+#[case::new_tab(&["new-tab", "--workspace", "99999"], "there is no workspace 99999")]
+#[case::scroll(&["scroll", "--pane", "99999", "--up", "1"], "there is no pane 99999")]
+#[case::group_style(&["group", "style", "99999"], "there is no group 99999")]
 fn any_other_refusal_keeps_its_message_and_status(#[case] args: &[&str], #[case] message: &str) {
     let (session, _) = machine_with(&[]);
     let boot = boot(&session);
@@ -582,6 +588,15 @@ mod a_server_that_knows_no_boot {
         WITHOUT_THE_FEATURE,
         &["paste-file", "--pane", "7", "shot.png", "--boot", "1-1"]
     )]
+    #[case::keys_without_the_feature(WITHOUT_THE_FEATURE, &["keys", "--pane", "7", "enter", "--boot", "1-1"])]
+    #[case::held_without_a_contract(WITHOUT_A_CONTRACT, &["held", "--pane", "7", "--send-now", "--boot", "1-1"])]
+    #[case::input_follow_without_the_feature(WITHOUT_THE_FEATURE, &["input", "--pane", "7", "--follow", "-", "--boot", "1-1"])]
+    #[case::plugin_run_without_a_contract(WITHOUT_A_CONTRACT, &["plugin", "run", "p", "a", "--pane", "7", "--boot", "1-1"])]
+    #[case::split_without_the_feature(WITHOUT_THE_FEATURE, &["split", "--pane", "7", "--boot", "1-1"])]
+    #[case::queue_add_without_the_feature(
+        WITHOUT_THE_FEATURE,
+        &["queue", "add", "--workspace", "7", "--prompt", "x", "--at", "10:00", "--boot", "1-1"]
+    )]
     fn is_refused_by_name_and_never_gets_the_request(#[case] answer: &'static str, #[case] args: &[&str]) {
         let (here, far) = (Session::new(), Session::new());
         let (near, away) = (answering(&here, answer), answering(&far, answer));
@@ -597,3 +612,5 @@ mod a_server_that_knows_no_boot {
         }
     }
 }
+
+mod acting;
