@@ -22,6 +22,7 @@ fn gone(pid: i32) -> bool {
 #[cfg(unix)]
 mod stopping {
     use super::*;
+    use crate::test_util::Running;
 
     #[test]
     fn a_program_ends_on_sigterm_with_everything_it_started() {
@@ -34,12 +35,13 @@ mod stopping {
 
     #[test]
     fn a_program_that_ignores_sigterm_is_killed() {
-        let mut child = spawn("trap '' TERM; while :; do sleep 1; done");
-        let pid = pid_of(&child);
+        let child = Running::spawn(
+            Command::new("/bin/sh").args(["-c", "trap '' TERM; while :; do sleep 1; done"]).stdin(Stdio::null()),
+        );
+        let pid = child.pid();
         wait_until("the trap is set", || process::name(pid).is_some() && !process::children(pid).is_empty());
         let stopped = stop(Group::live(pid));
         assert!(matches!(&stopped[..], [(_, Ok(Outcome::Killed))]), "{stopped:?}");
-        child.wait().expect("reap");
     }
 
     #[test]
