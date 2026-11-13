@@ -7,7 +7,20 @@ Without a command, cornercase opens its window, starting the server if none is r
 commands drive the running server from scripts, git hooks and the agents in its panes; they never
 start a server, except `start-server`. With --remote DESTINATION they drive the server of another
 machine, through ssh.";
-pub(super) const AFTER_HELP: &str =
+macro_rules! boot_commands {
+    () => {
+        "account add, account login, account restart, agents close, agents
+forget, agents reopen, changes base, changes discard, changes stage,
+changes unstage, changes viewed, close, collapse, config project,
+context, expand, focus, group delete, group style, held, input,
+keys, mark, move, move-pane, new-tab, new-workspace, open,
+paste-file, plugin run, queue add, queue edit, ratio, redraw,
+rename, resize, scroll, selection, send, setup, split, start, todo
+send, view-set and worktrees free-builds"
+    };
+}
+
+pub(super) const AFTER_HELP: &str = concat!(
     "Ids come from `cornercase status` and last while the server runs. Inside a pane, the commands
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window
 shows. Where a command takes --workspace ID, --worktree BRANCH names the workspace on that branch
@@ -16,12 +29,8 @@ commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no works
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
-why, in its error with --json. A command given --boot (account add, account login, account restart, agents close, agents forget,
-agents reopen, changes base, changes discard, changes stage, changes unstage, changes viewed, close,
-collapse, config project, context, expand, focus, group delete, group style, held, input, keys,
-mark, move, move-pane, new-tab, new-workspace, open, paste-file, plugin run, queue add, queue edit,
-ratio, redraw, rename, resize, scroll, selection, send, setup, split, start, todo send, view-set and
-worktrees free-builds) exits with 4 when it names another run
+why, in its error with --json.
+A command given --boot (", boot_commands!(), ") exits with 4 when it names another run
 of the server, which then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
@@ -45,7 +54,8 @@ Examples:
   pane=$(cornercase new-tab --name tests -- cargo test)
   cornercase wait --pane \"$pane\" --until shell --timeout 900
   cornercase read --pane \"$pane\" --lines 40
-  cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
+  cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait"
+);
 pub(super) const COMMAND_HELP: &str =
     "The words of COMMAND are joined with spaces and typed at the prompt once the shell is ready,
 as ssh does, so quote what the shell should read as one argument. The command returns once it
@@ -655,23 +665,21 @@ pub(super) const NO_FRESH_HELP: &str =
 pub(super) const QUEUE_FRESH_HELP: &str = "Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches when the entry runs; edit keeps the entry's]";
 pub(super) const BOOT_ARG: &str = "Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]";
 
-pub(super) const CONTRACT_HELP: &str =
+pub(super) const CONTRACT_HELP: &str = concat!(
     "Programs that drive cornercase without this command line (an editor extension, a dashboard) ask
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; account add, account login, account restart, agents close, agents
-forget, agents reopen, changes base, changes discard, changes stage, changes unstage, changes
-viewed, close, collapse, config project, context, expand, focus, group delete, group style, held,
-input, keys, mark, move, move-pane, new-tab, new-workspace, open, paste-file, plugin run, queue add,
-queue edit, ratio, redraw, rename, resize, scroll, selection, send, setup, split, start, todo send,
-view-set and worktrees free-builds take it as --boot, and then act only in that run. Each command is listed
+since ids last only one run; ",
+    boot_commands!(),
+    " take it as --boot, and then act only in that run. Each command is listed
 with whether it is available, and each stream with its version. A server without this command is older than the
 contract.
 
 Examples:
   cornercase contract
-  cornercase contract --json";
+  cornercase contract --json"
+);
 
 pub(super) const MOVE_HELP: &str =
     "Puts a group, a project, a workspace or a tab before another of its kind, or at the end of its
