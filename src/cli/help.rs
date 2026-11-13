@@ -17,7 +17,7 @@ included, or one several are on (both list the workspaces to pick from), and 3 w
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json. A command given --boot (close, rename, mark, move-pane, collapse,
-expand, account restart, context) exits with 4 when it names another run of the server, which
+expand, account restart, context, send, input, paste-file) exits with 4 when it names another run of the server, which
 then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
@@ -78,6 +78,10 @@ confirming a prompt record. A compact command
 (`/compact` of Claude Code and Codex) returns once the agent records the compaction, however long that takes
 while the agent works on it; --timeout bounds it. In other programs it returns once Enter is pressed.
 
+--boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
+a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is
+sent, and the command prints why and exits with 4.
+
 With --wait, the command fails if the agent does not start working within 10 seconds of the Enter,
 and otherwise prints how the wait ended; with --until it waits for that state instead, as
 `cornercase wait --until` does.
@@ -85,7 +89,8 @@ and otherwise prints how the wait ended; with --until it waits for that state in
 Examples:
   cornercase send --pane 12 --enter 'Now add tests for it'
   cornercase send --pane 12 --enter --wait --timeout 900 - < next-step.md
-  cornercase send --pane 12 --enter --wait --until turn-over 'Run the tests'";
+  cornercase send --pane 12 --enter --wait --until turn-over 'Run the tests'
+  cornercase --remote vps send --pane 9 --enter --boot 4242-1700000000 'Now add tests for it'";
 pub(super) const KEYS_HELP: &str = "Keys are encoded the way the program in the pane asked for.
 
 Examples:
@@ -382,6 +387,10 @@ or the program is not reading its input, nothing is sent. Scripts and agents sho
 in the window, its x and y being cells of the popup's terminal; add --pane with the popup's id from its
 surface lines (popup.pane) so that nothing is sent if that popup closed and another one opened.
 
+--boot BOOT says which run of the server the pane id (with --popup, the popup's id) is from: `boot` in
+`status --json`, or in a machine's entry there. Ids last one run, so a server that restarted since
+refuses, nothing is typed, and the command prints why and exits with 4. --follow does not take it.
+
 With --follow it keeps running and reads one event per line from standard input (give - as the
 only EVENT) until it ends: each line goes as soon as it arrives, and the lines that arrive while
 the answer before is on its way go together, so a program types through one process (and with
@@ -394,7 +403,8 @@ Examples:
   cornercase input --pane 12 --follow --json -
   cornercase input --pane 12 '{\"text\": \"ls\"}' '{\"key\": {\"code\": \"enter\"}}'
   cornercase input --pane 12 '{\"mouse\": {\"kind\": \"scroll-up\", \"x\": 10, \"y\": 5}}'
-  cornercase input --popup --pane 40 '{\"key\": {\"code\": \"down\"}}' '{\"key\": {\"code\": \"enter\"}}'";
+  cornercase input --popup --pane 40 '{\"key\": {\"code\": \"down\"}}' '{\"key\": {\"code\": \"enter\"}}'
+  cornercase --remote vps input --pane 9 '{\"paste\": \"two\\nlines\"}' --boot 4242-1700000000";
 pub(super) const SCROLL_HELP: &str =
     "Moves the pane's view through its history, as the wheel does in the window, which shows the same
 view. On its alternate screen, or when it reads the mouse, a program scrolls itself: send it keys or
@@ -681,8 +691,8 @@ pub(super) const CONTRACT_HELP: &str =
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; close, rename, mark, move-pane, collapse, expand, account restart and
-context take it as --boot, and then act only in that run. Each command is listed with whether it is
+since ids last only one run; close, rename, mark, move-pane, collapse, expand, account restart, context,
+send, input and paste-file take it as --boot, and then act only in that run. Each command is listed with whether it is
 available, and each stream with its version. A server without this command is older than the
 contract.
 
