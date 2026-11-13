@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use clap::{Args, Subcommand, ValueEnum};
+use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 
 use super::changes::Where;
-use super::{Create, FreshArg, Print, branch};
+use super::{BootArg, Create, FreshArg, Print, branch};
 use super::{accounts, issue, machine};
 use crate::cli::help::{
     FLOW_CLOSE_WHEN_MERGED_HELP, FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP,
@@ -85,6 +85,25 @@ pub(crate) enum FlowAction {
     Order(FlowOrderArgs),
 }
 
+impl FlowAction {
+    pub(crate) fn boot(&self) -> Option<&BootArg> {
+        Some(match self {
+            Self::List(a) => &a.boot,
+            Self::Run(a) => &a.boot,
+            Self::Export(a) => &a.boot,
+            Self::Import(a) => &a.boot,
+            Self::Save(a) => &a.boot,
+            Self::Messages(a) => &a.boot,
+            Self::Files(a) => &a.boot,
+            Self::Delete(a) => &a.boot,
+            Self::Default(a) => &a.boot,
+            Self::CloseWhenMerged(a) => &a.boot,
+            Self::Order(a) => &a.boot,
+            Self::Runs(_) | Self::Hide(_) | Self::Restore(_) => return None,
+        })
+    }
+}
+
 #[derive(Debug, Args)]
 pub(crate) struct FlowDefaultArgs {
     #[arg(
@@ -100,6 +119,8 @@ pub(crate) struct FlowDefaultArgs {
     pub(crate) project: Option<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -116,6 +137,8 @@ pub(crate) struct FlowCloseWhenMergedArgs {
     pub(crate) free_builds: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -134,6 +157,8 @@ pub(crate) struct FlowOrderArgs {
     pub(crate) project: Option<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -152,6 +177,8 @@ pub(crate) struct FlowMessagesArgs {
     pub(crate) follow: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -160,6 +187,8 @@ pub(crate) struct FlowFilesArgs {
     pub(crate) place: Where,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -195,6 +224,8 @@ pub(crate) struct FlowSaveArgs {
     pub(crate) check: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -222,6 +253,8 @@ pub(crate) struct FlowDeleteArgs {
     pub(crate) path: Option<PathBuf>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -232,6 +265,8 @@ pub(crate) struct FlowExportArgs {
     pub(crate) project: Option<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -276,6 +311,8 @@ pub(crate) struct FlowImportArgs {
     pub(crate) yes: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -288,9 +325,12 @@ pub(crate) struct FlowListArgs {
     pub(crate) project: Option<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
+#[command(group(ArgGroup::new("one_server").args(["boot", "machine"]).multiple(false)))]
 pub(crate) struct FlowRunArgs {
     #[arg(value_name = "NAME", help = "The flow, as `cornercase flow list` names it")]
     pub(crate) name: String,
@@ -338,4 +378,6 @@ pub(crate) struct FlowRunArgs {
     pub(crate) fresh: FreshArg,
     #[command(flatten)]
     pub(crate) create: Create,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }

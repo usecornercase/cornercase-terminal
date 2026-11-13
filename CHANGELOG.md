@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.66
+
+- **Every command that reads an id can say which run of the server it is from, and so can `flow`, `go` and `clone`.** `read` (also `--last-message`), `wait`, `link`, `events`, `surface`, `view`, `processes`, `ports`, `pull-request`, `changes list`, `file`, `gap`, `shared` and `merge-check`, `files list`, `read` and `search`, `issue sources`, `list`, `read` and `people`, `worktrees list` and `size`, every `flow` command that takes `--project` or `--workspace` (`run`, `save`, `import`, `delete`, `default`, `order`, `close-when-merged`, `list`, `export`, `messages` and `files`), `go` and `clone` take `--boot BOOT`. A server that restarted since you read the id refuses with status 4 and prints nothing of it, instead of reading (or, for `flow`, `go --view` and `clone --view`, acting on) whatever took the id: `cornercase --remote vps read --pane 9 --last-message --boot "$boot"`. A stream (`events`, `surface`, `view`, `changes list`, `--follow`) is refused before its first line; one that is running still ends when the server restarts. `flow run --machine` refuses `--boot`, as `start` does.
+- **`changes shared` works as a line of `requests --follow`.** It failed there with `cannot read the workspaces`.
+
 ## 0.13.65
 
 - Nothing changes for users: tests that fail part-way no longer leave their stand-in programs running on the computer that ran them, and every sample of the `events` stream's format is now checked.

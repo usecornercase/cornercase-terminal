@@ -73,6 +73,8 @@ pub(crate) enum ChangesAction {
         follow: bool,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Print one file's diff", after_help = CHANGES_FILE_HELP)]
     File {
@@ -84,6 +86,8 @@ pub(crate) enum ChangesAction {
         mode: ModeFlag,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Print the unchanged lines between a hunk of a file and the one before", after_help = CHANGES_GAP_HELP)]
     Gap {
@@ -102,6 +106,8 @@ pub(crate) enum ChangesAction {
         mode: ModeFlag,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "List the branches to compare with, or choose one")]
     Base {
@@ -134,6 +140,8 @@ pub(crate) enum ChangesAction {
         base: Option<String>,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Print the files a workspace changes that other workspaces of its project change too")]
     Shared {
@@ -141,6 +149,8 @@ pub(crate) enum ChangesAction {
         place: Where,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Mark a file as viewed, or clear the mark")]
     Viewed {
@@ -195,14 +205,18 @@ pub(crate) enum ChangesAction {
 }
 
 impl ChangesAction {
-    pub(crate) fn boot(&self) -> Option<&BootArg> {
+    pub(crate) fn boot(&self) -> &BootArg {
         match self {
-            Self::Viewed { boot, .. }
+            Self::List { boot, .. }
+            | Self::File { boot, .. }
+            | Self::Gap { boot, .. }
+            | Self::MergeCheck { boot, .. }
+            | Self::Shared { boot, .. }
+            | Self::Viewed { boot, .. }
             | Self::Discard { boot, .. }
             | Self::Stage { boot, .. }
             | Self::Unstage { boot, .. }
-            | Self::Base { boot, .. } => Some(boot),
-            _ => None,
+            | Self::Base { boot, .. } => boot,
         }
     }
 }

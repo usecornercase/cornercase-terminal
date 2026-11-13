@@ -71,7 +71,8 @@ With --machine NAME the flow runs on that machine of `cornercase machines`, by i
 its agents and accounts are the machine's, --project and the ids printed are that machine's, as
 `status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
 window once the machine lists it, and takes no --view there. It needs a server that knows the
-`machine-start` feature.
+`machine-start` feature. --boot does not go with --machine, whose ids are that machine's: send the
+command there with --remote and its boot.
 
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'

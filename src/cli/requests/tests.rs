@@ -374,6 +374,66 @@ mod streams {
         refused_by_a_later_run(line);
     }
 
+    fn line(args: &[&str], boot: &str, stdin: Option<&str>) -> String {
+        let args: Vec<&str> = args.iter().copied().chain(["--boot", boot]).collect();
+        let mut line = serde_json::json!({ "args": args });
+        if let Some(stdin) = stdin {
+            line["stdin"] = serde_json::json!(stdin);
+        }
+        line.to_string()
+    }
+
+    fn carries_the_boot(args: &[&str], stdin: Option<&str>) {
+        let (_, seen) = lines_on(fake_server, &[&line(args, "now", stdin)]);
+
+        let requests: Vec<_> = seen.iter().filter(|text| !text.contains("\"contract\"")).collect();
+        assert!(!requests.is_empty(), "no request was sent: {seen:?}");
+        assert!(requests.iter().all(|text| text.contains("\"boot\":\"now\"")), "{requests:?}");
+        assert!(seen.iter().filter(|text| text.contains("\"contract\"")).all(|text| !text.contains("\"boot\"")));
+    }
+
+    #[rstest]
+    #[case::read(&["read", "--pane", "4"], None)]
+    #[case::read_last_messages(&["read", "--pane", "4", "--pane", "5", "--last-message"], None)]
+    #[case::wait(&["wait", "--pane", "4", "--quiet", "1"], None)]
+    #[case::wait_for_several(&["wait", "--pane", "4", "--pane", "5", "--any"], None)]
+    #[case::link(&["link", "--pane", "4", "--cell", "0,0"], None)]
+    #[case::processes(&["processes", "--pane", "4"], None)]
+    #[case::ports(&["ports", "--workspace", "4"], None)]
+    #[case::pull_request(&["pull-request", "--workspace", "4"], None)]
+    #[case::changes_file(&["changes", "file", "a.rs", "--workspace", "4"], None)]
+    #[case::changes_gap(&["changes", "gap", "a.rs", "--hunk", "1", "--workspace", "4"], None)]
+    #[case::changes_shared(&["changes", "shared", "--workspace", "4"], None)]
+    #[case::changes_merge_check(&["changes", "merge-check", "--workspace", "4"], None)]
+    #[case::files_list(&["files", "list", "--workspace", "4"], None)]
+    #[case::files_read(&["files", "read", "a.rs", "--workspace", "4"], None)]
+    #[case::files_search(&["files", "search", "x", "--workspace", "4"], None)]
+    #[case::issue_sources(&["issue", "sources", "--project", "4"], None)]
+    #[case::issue_list(&["issue", "list", "--project", "4"], None)]
+    #[case::issue_read(&["issue", "read", "4", "--project", "4"], None)]
+    #[case::issue_people(&["issue", "people", "github", "--project", "4"], None)]
+    #[case::worktrees_size(&["worktrees", "size", "--workspace", "4"], None)]
+    #[case::worktrees_list(&["worktrees", "list", "--project", "4"], None)]
+    #[case::flow_list(&["flow", "list", "--project", "4"], None)]
+    #[case::flow_export(&["flow", "export", "Pair", "--project", "4"], None)]
+    #[case::flow_save(&["flow", "save", "-", "--project", "4"], Some(r#"{"name":"x"}"#))]
+    #[case::flow_delete(&["flow", "delete", "Mine", "--project", "4"], None)]
+    #[case::flow_default(&["flow", "default", "Pair", "--project", "4"], None)]
+    #[case::flow_order(&["flow", "order", "A", "B", "--project", "4"], None)]
+    #[case::flow_close_when_merged(&["flow", "close-when-merged", "--workspace", "4"], None)]
+    #[case::flow_messages(&["flow", "messages", "--workspace", "4"], None)]
+    #[case::flow_files(&["flow", "files", "--workspace", "4"], None)]
+    #[case::flow_run(&["flow", "run", "Pair", "--prompt", "x", "--project", "4"], None)]
+    #[case::go(&["go", "cc-1-2"], None)]
+    fn a_command_that_reads_or_acts_on_an_id_sends_the_boot_and_is_refused_by_a_later_run_and_by_a_server_without_it(
+        #[case] args: &[&str],
+        #[case] stdin: Option<&str>,
+    ) {
+        carries_the_boot(args, stdin);
+        refused_by_a_later_run(&line(args, "old", stdin));
+        never_sent_without_boot(&line(args, "old", stdin));
+    }
+
     #[test]
     fn plugin_status_json_lands_in_json_not_text() {
         let (mut answers, _) = lines_on(fake_server, &[r#"{"args": ["plugin", "status", "--json"]}"#]);

@@ -84,13 +84,15 @@ pub(crate) struct CloneArgs {
     pub(crate) from: Option<PathBuf>,
     #[arg(
         long,
-        conflicts_with_all = ["url", "folder", "files", "focus", "view"],
+        conflicts_with_all = ["url", "folder", "files", "focus", "view", "boot"],
         help = "Print the git-ignored files in that folder that --file can copy, and clone nothing; it needs no \
                 server, and --remote changes nothing for it"
     )]
     pub(crate) list_ignored: bool,
     #[command(flatten)]
     pub(crate) create: Create,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]

@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand};
 
-use super::{Print, branch};
+use super::{BootArg, Print, branch};
 use crate::cli::help::{BY_BRANCH, PROCESSES_STOP_ABOUT, PROCESSES_STOP_HELP};
 
 #[derive(Debug, Args)]
@@ -23,6 +23,8 @@ pub(crate) struct ProcessesArgs {
     pub(crate) interval: Option<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Subcommand)]
