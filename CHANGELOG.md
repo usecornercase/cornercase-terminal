@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.66
+
+- Nothing changes for users: tests that failed at random on macOS are steadier, and a test that fails part-way no longer leaves running a program that ignores SIGTERM.
+
 ## 0.13.65
 
 - Nothing changes for users: tests that fail part-way no longer leave their stand-in programs running on the computer that ran them, and every sample of the `events` stream's format is now checked.
