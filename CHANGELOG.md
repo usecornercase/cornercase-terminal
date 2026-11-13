@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.55
+
+- **Every role of a flow reads the whole task.** Starting a flow (with `cornercase flow run`, **start a flow**, an issue or a routine, here or on a machine) now saves the task to `task.md` in the run's folder before any agent starts, exactly as you gave it. Every role's prompt names the file, and the orchestrator passes its path instead of retelling the task, so the constraints of a long task reach the coder and the tester whole, not only what the orchestrator kept of them.
+- **A fix goes through the reviews and tests again.** When a review or a test sends the work back, the orchestrator is now told to run the stage the work went back to and every stage after it again, in order, on what changed, and to do the final action (such as opening the pull request) only once each of them that has a loop answered clean or reached its limit. Before, a fix could go on unreviewed, or a pull request open with the last fix untested.
+
 ## 0.13.54
 
 - **A queued agent's tab is named after the first words of its prompt.** An entry or a routine scheduled with a prompt and no name took the prompt's whole first line as its name, so a prompt of one long paragraph named the run's tab with the paragraph: `cornercase status` printed it on one line and `status --json` gave it whole. The name is now the start of that line, cut after a whole word at 40 characters with `…`, in the tab, the **Issues → Queue** list, `queue list`, `queue show` and the notifications, and the whole prompt stays in the entry (`queue list --json`). A name you gave with `--name` stays as you wrote it, an issue's entry keeps its number and title, and the entries and routines you scheduled before are renamed the same way once the updated server starts.

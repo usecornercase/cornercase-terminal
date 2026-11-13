@@ -209,7 +209,7 @@ impl App {
 impl App {
     pub(in crate::app) fn reopen_run_dir(&self, run: &Run) -> Option<PathBuf> {
         let name = run.dir.as_deref().and_then(|dir| dir.file_name()).and_then(|name| name.to_str());
-        self.ensure_run_dir(name)
+        self.ensure_run_dir(name, &run.task)
     }
 
     fn fresh_starts(&mut self, kept: &Kept, tabs: &[Tab], place: &Place, info: &mut Reopened) {

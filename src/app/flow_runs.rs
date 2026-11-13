@@ -444,7 +444,7 @@ impl App {
             match term {
                 Ok(term) => terms.push(term),
                 Err(e) => {
-                    let _ = std::fs::remove_dir(dir);
+                    folder::discard(dir);
                     self.projects.workspace_mut(at).run_dirs.retain(|kept| kept != dir);
                     return Err(e.to_string());
                 }
@@ -502,15 +502,12 @@ impl App {
         let project = self.projects[place.project()].id;
         let mut info =
             RunInfo { run: run.id, project, workspace: id, branch, note, close_when_merged, ..RunInfo::default() };
-        let path = self.projects.workspace(place).path.clone();
-        let dir = folder::make(&self.runs.dir, &path, time::now() * 1000)
-            .map_err(|e| format!("could not make the run's folder: {e}"))?;
-        self.projects.workspace_mut(place).run_dirs.push(dir.clone());
+        let dir = self.make_run_dir(place, &run.task)?;
         let panes = RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts };
         let terms = self.spawn_run_panes(area, place, &panes)?;
         self.name_flow_workspace(place, name);
         let seats: Vec<RoleWorktree> = trees.iter().map(|(tree, _)| tree.clone()).collect();
-        log::info!("flow", "run folder made", workspace = id, path = dir.display());
+        log::info!("flow", "run folder made", workspace = id, path = dir.display(), task_bytes = run.task.len());
         run.dir = Some(dir.clone());
         info.run_dir = Some(dir);
         (run.members, info.members) = self.seat_members(place, &roles, terms, &seats);
@@ -522,6 +519,18 @@ impl App {
             info.projection = self.focus_run(&info, view);
         }
         Ok(info)
+    }
+
+    fn make_run_dir(&mut self, place: WorkspaceAt, task: &str) -> Result<PathBuf, String> {
+        let path = self.projects.workspace(place).path.clone();
+        let dir = folder::make(&self.runs.dir, &path, time::now() * 1000)
+            .map_err(|e| format!("could not make the run's folder: {e}"))?;
+        if let Err(e) = folder::write_task(&dir, task) {
+            folder::discard(&dir);
+            return Err(format!("could not write the task to the run's folder: {e}"));
+        }
+        self.projects.workspace_mut(place).run_dirs.push(dir.clone());
+        Ok(dir)
     }
 
     fn focus_run(&mut self, info: &RunInfo, view: Option<u64>) -> Option<u64> {
