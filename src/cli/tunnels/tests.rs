@@ -5,11 +5,23 @@ use crate::cli::Cli;
 use crate::cli::args::{Command as Cmd, Control};
 
 fn info(port: u16, local: Option<u16>, state: &str, error: Option<&str>, holder: u64) -> TunnelInfo {
-    TunnelInfo { port, local, state: state.into(), error: error.map(str::to_string), holder, kind: "window".into() }
+    TunnelInfo {
+        port,
+        local,
+        state: state.into(),
+        error: error.map(str::to_string),
+        holder,
+        kind: "window".into(),
+        direction: None,
+    }
 }
 
 fn hold(port: u16, local: u16, holder: u64) -> TunnelInfo {
     TunnelInfo { kind: "hold".into(), ..info(port, Some(local), "up", None, holder) }
+}
+
+fn reverse_hold(port: u16, local: u16, holder: u64) -> TunnelInfo {
+    TunnelInfo { direction: Some(Direction::Reverse), ..hold(port, local, holder) }
 }
 
 mod the_list {
@@ -80,6 +92,14 @@ mod the_list {
     }
 
     #[test]
+    fn marks_a_reverse_hold_with_its_arrow_and_kind() {
+        let list =
+            TunnelList { tunnels: vec![hold(5173, 5174, 3), reverse_hold(9223, 9222, 4)], ..TunnelList::default() };
+
+        assert_eq!(text(&list), "5173 → localhost:5174  up (hold 3)\n9223 ← localhost:9222  up (reverse hold 4)\n");
+    }
+
+    #[test]
     fn says_there_are_none_when_windows_hold_nothing() {
         assert_eq!(text(&TunnelList { tunnels: vec![], windows: 1, ..TunnelList::default() }), "no tunnels\n");
     }
@@ -128,6 +148,7 @@ mod opening_with_several_windows {
 
 mod parsing {
     use super::*;
+    use crate::cli::args::tunnels::HoldArg;
 
     #[test]
     fn a_port_is_one_to_65535() {
@@ -148,7 +169,66 @@ mod parsing {
     #[test]
     fn forget_and_hold_take_a_port() {
         assert!(matches!(action_of(&["forget", "5173"]), TunnelAction::Forget(arg) if arg.port == 5173));
-        assert!(matches!(action_of(&["hold", "5173"]), TunnelAction::Hold(arg) if arg.port == 5173));
+        assert!(matches!(action_of(&["hold", "5173"]), TunnelAction::Hold(arg) if arg.port == Some(5173)));
+    }
+
+    fn hold_of(args: &[&str]) -> HoldArg {
+        let all = ["hold"].into_iter().chain(args.iter().copied()).collect::<Vec<_>>();
+        match action_of(&all) {
+            TunnelAction::Hold(arg) => arg,
+            other => panic!("not hold: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hold_takes_the_local_port_it_had_before() {
+        let arg = hold_of(&["5173", "--local", "5174"]);
+
+        assert_eq!((arg.port, arg.local, arg.reverse, arg.there), (Some(5173), Some(5174), None, None));
+    }
+
+    #[test]
+    fn hold_can_be_reverse_with_a_port_there() {
+        let arg = hold_of(&["--reverse", "9222"]);
+        assert_eq!((arg.port, arg.reverse, arg.there), (None, Some(9222), None));
+
+        let arg = hold_of(&["--reverse", "9222", "--there", "9223"]);
+        assert_eq!((arg.reverse, arg.there), (Some(9222), Some(9223)));
+    }
+
+    #[rstest::rstest]
+    #[case::there_needs_reverse(&["hold", "--there", "9223"])]
+    #[case::reverse_and_a_port(&["hold", "5173", "--reverse", "9222"])]
+    #[case::reverse_and_local(&["hold", "--reverse", "9222", "--local", "1"])]
+    #[case::reverse_port_zero(&["hold", "--reverse", "0"])]
+    #[case::local_port_zero(&["hold", "--local", "0", "5173"])]
+    #[case::nothing_to_hold(&["hold"])]
+    #[case::open_has_no_reverse(&["open", "--reverse", "5173"])]
+    fn a_hold_or_an_open_that_asks_for_too_much_is_refused(#[case] args: &[&str]) {
+        let words = ["cornercase", "tunnel"].into_iter().chain(args.iter().copied());
+
+        assert!(Cli::try_parse_from(words).is_err());
+    }
+
+    #[test]
+    fn close_and_forget_take_reverse() {
+        assert!(matches!(action_of(&["close", "--reverse", "9223"]), TunnelAction::Close(arg) if arg.reverse));
+        assert!(matches!(action_of(&["forget", "--reverse", "9223"]), TunnelAction::Forget(arg) if arg.reverse));
+        assert!(matches!(action_of(&["close", "9223"]), TunnelAction::Close(arg) if !arg.reverse));
+    }
+
+    #[test]
+    fn closing_and_forgetting_a_reverse_tunnel_say_so() {
+        let list = TunnelList::default();
+
+        assert_eq!(
+            done_text(&action_of(&["close", "--reverse", "9223"]), &list),
+            "closed the reverse tunnel of port 9223\n"
+        );
+        assert_eq!(
+            done_text(&action_of(&["forget", "--reverse", "9223"]), &list),
+            "forgot the reverse tunnel of port 9223\n"
+        );
     }
 
     #[test]
@@ -211,6 +291,8 @@ mod parsing {
             &["tunnel", "close", "1"],
             &["tunnel", "forget", "1"],
             &["tunnel", "hold", "1"],
+            &["tunnel", "hold", "--reverse", "1"],
+            &["tunnel", "close", "--reverse", "1"],
             &["tunnel", "orders"],
             &["tunnel", "failed", "1", "x"],
         ];

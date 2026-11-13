@@ -199,6 +199,10 @@ pub(crate) fn use_tunnel_hold() -> Result<()> {
     require("tunnel-hold", "cannot hold a tunnel for a program")
 }
 
+pub(crate) fn use_tunnel_reverse() -> Result<()> {
+    require("tunnel-reverse", "has no reverse tunnels")
+}
+
 pub(crate) fn use_tunnel_orders() -> Result<()> {
     require("tunnel-orders", "cannot send tunnel orders to a program with no window")
 }

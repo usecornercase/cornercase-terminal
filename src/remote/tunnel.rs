@@ -1,5 +1,5 @@
 use std::ffi::OsStr;
-use std::io;
+use std::io::{self, Read};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::process::{Child, ExitStatus, Stdio};
 use std::sync::Arc;
@@ -31,15 +31,28 @@ pub(crate) struct Forward {
     pub(crate) local: u16,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Reverse {
+    pub(crate) local: u16,
+    pub(crate) there: u16,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Watched {
     Up,
     Ended(String),
 }
 
+#[derive(Clone)]
+enum Up {
+    Listens(u16),
+    Reported(Reverse, Arc<Mutex<Option<u16>>>),
+}
+
 pub(crate) struct Running {
     child: Arc<Mutex<Option<Child>>>,
     pid: i32,
+    up: Up,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,18 +71,43 @@ enum Step {
 struct Watch {
     child: Arc<Mutex<Option<Child>>>,
     pid: i32,
-    local: u16,
+    up: Up,
     wait: Duration,
     stderr: Stderr,
     collector: JoinHandle<()>,
 }
 
 pub(crate) fn args(destination: &str, forward: Forward) -> Vec<String> {
+    line(destination, &[], ("-L", spec(forward)))
+}
+
+pub(crate) fn reverse_args(destination: &str, reverse: Reverse) -> Vec<String> {
+    let level = if reverse.there == 0 { "LogLevel=INFO" } else { "LogLevel=DEBUG1" };
+    line(destination, &["-o", level], ("-R", reverse_spec(reverse)))
+}
+
+fn line(destination: &str, options: &[&str], (flag, spec): (&str, String)) -> Vec<String> {
     let mut args: Vec<String> = FORWARD[4..].iter().map(ToString::to_string).collect();
-    args.extend(ALIVE.iter().chain(&BATCH).chain(&FORWARD[..4]).map(ToString::to_string));
-    args.extend(["-L".to_string(), spec(forward)]);
-    args.extend(["--".to_string(), destination.to_string()]);
+    args.extend(ALIVE.iter().chain(&BATCH).chain(&FORWARD[..4]).chain(options).map(ToString::to_string));
+    args.extend([flag.to_string(), spec, "--".to_string(), destination.to_string()]);
     args
+}
+
+fn reverse_spec(reverse: Reverse) -> String {
+    format!("127.0.0.1:{}:localhost:{}", reverse.there, reverse.local)
+}
+
+pub(crate) fn reported(line: &str, reverse: Reverse) -> Option<u16> {
+    let line = line.trim();
+    let target = format!("localhost:{}", reverse.local);
+    if reverse.there == 0 {
+        let (port, said) = line.strip_prefix("Allocated port ")?.split_once(" for remote forward to ")?;
+        return (said == target).then(|| port.parse().ok().filter(|port| *port != 0)).flatten();
+    }
+    let said = line.split_once("remote forward success for: listen ")?.1;
+    let (listen, connect) = said.split_once(", connect ")?;
+    let port = listen.rsplit(':').next()?;
+    (connect == target && port.parse() == Ok(reverse.there)).then_some(reverse.there)
 }
 
 fn spec(forward: Forward) -> String {
@@ -123,21 +161,88 @@ pub(crate) fn spawn_within(
     wait: Duration,
     report: impl Fn(Watched) + Send + 'static,
 ) -> Result<Running> {
+    start(ssh, &args(destination, forward), Up::Listens(forward.local), wait, report)
+}
+
+pub(crate) fn spawn_reverse(
+    destination: &str,
+    reverse: Reverse,
+    report: impl Fn(Watched) + Send + 'static,
+) -> Result<Running> {
+    spawn_reverse_within(OsStr::new(SSH), destination, reverse, UP_WAIT, report)
+}
+
+pub(crate) fn spawn_reverse_within(
+    ssh: &OsStr,
+    destination: &str,
+    reverse: Reverse,
+    wait: Duration,
+    report: impl Fn(Watched) + Send + 'static,
+) -> Result<Running> {
+    let up = Up::Reported(reverse, Arc::new(Mutex::new(None)));
+    start(ssh, &reverse_args(destination, reverse), up, wait, report)
+}
+
+fn start(
+    ssh: &OsStr,
+    args: &[String],
+    up: Up,
+    wait: Duration,
+    report: impl Fn(Watched) + Send + 'static,
+) -> Result<Running> {
     let mut child = std::process::Command::new(ssh)
-        .args(args(destination, forward))
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(Error::RunSsh)?;
     let stderr = Stderr::default();
-    let collector = child.stderr.take().map(|errors| stderr.clone().collect(errors));
+    let collector = child.stderr.take().map(|errors| up.collect(&stderr, errors));
     let pid = i32::try_from(child.id()).unwrap_or(0);
     let child = Arc::new(Mutex::new(Some(child)));
     let collector = collector.unwrap_or_else(|| thread::spawn(|| {}));
-    let watch = Watch { child: child.clone(), pid, local: forward.local, wait, stderr, collector };
+    let watch = Watch { child: child.clone(), pid, up: up.clone(), wait, stderr, collector };
     thread::spawn(move || watch.run(&report));
-    Ok(Running { child, pid })
+    Ok(Running { child, pid, up })
+}
+
+fn is_debug_noise(line: &str) -> bool {
+    line.starts_with("debug") || line.starts_with("Transferred: ") || line.starts_with("Bytes per second: ")
+}
+
+fn keeps(line: &str, reverse: Reverse, port: &Mutex<Option<u16>>) -> bool {
+    let Some(there) = reported(line, reverse) else { return !is_debug_noise(line.trim_start()) };
+    *port.lock() = Some(there);
+    false
+}
+
+impl Up {
+    fn collect(&self, stderr: &Stderr, errors: impl Read + Send + 'static) -> JoinHandle<()> {
+        match self {
+            Self::Listens(_) => stderr.clone().collect(errors),
+            Self::Reported(reverse, port) => {
+                let (reverse, port) = (*reverse, port.clone());
+                stderr.clone().collect_lines(errors, move |line| keeps(line, reverse, &port))
+            }
+        }
+    }
+
+    fn is_up(&self, pid: i32) -> bool {
+        match self {
+            Self::Listens(local) => listens(pid, *local),
+            Self::Reported(_, port) => port.lock().is_some(),
+        }
+    }
+
+    fn gave_up(&self, seconds: u64) -> String {
+        match self {
+            Self::Listens(local) => format!("ssh did not listen on 127.0.0.1:{local} within {seconds} s"),
+            Self::Reported(reverse, _) => {
+                format!("ssh did not report the forward to localhost:{} within {seconds} s", reverse.local)
+            }
+        }
+    }
 }
 
 impl Watch {
@@ -150,7 +255,7 @@ impl Watch {
                 Step::Ended(status) => return report(Watched::Ended(self.reason(status))),
                 Step::Waiting => {}
             }
-            if !up && self.listening() {
+            if !up && self.up.is_up(self.pid) {
                 up = true;
                 report(Watched::Up);
             }
@@ -179,16 +284,11 @@ impl Watch {
         }
     }
 
-    fn listening(&self) -> bool {
-        listens(self.pid, self.local)
-    }
-
     fn give_up(&self, report: &impl Fn(Watched)) {
         if let Some(child) = self.child.lock().take() {
             process::stop(child);
         }
-        let seconds = self.wait.as_secs();
-        report(Watched::Ended(format!("ssh did not listen on 127.0.0.1:{} within {seconds} s", self.local)));
+        report(Watched::Ended(self.up.gave_up(self.wait.as_secs())));
     }
 
     fn reason(&self, status: Option<ExitStatus>) -> String {
@@ -200,6 +300,13 @@ impl Watch {
 impl Running {
     pub(crate) fn pid(&self) -> i32 {
         self.pid
+    }
+
+    pub(crate) fn there(&self) -> Option<u16> {
+        match &self.up {
+            Up::Listens(_) => None,
+            Up::Reported(_, port) => *port.lock(),
+        }
     }
 
     pub(crate) fn stop(&self) {

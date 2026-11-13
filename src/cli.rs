@@ -12,7 +12,7 @@ use self::args::{
 };
 use self::status::run_status;
 use crate::client::{self, answer, ask};
-use crate::control::{self, Done, Event, Item, Report, Until, What};
+use crate::control::{self, Direction, Done, Event, Item, Report, Until, What};
 use crate::error::{Error, Result};
 use crate::machines::send;
 use crate::os::console;
@@ -565,8 +565,9 @@ fn event_line(value: &Value) -> String {
             let failure = error.as_ref().map(|error| format!(": {error}")).unwrap_or_default();
             format!("recap {range}  {state} ({agent}){failure}")
         }
-        (_, What::Tunnel { port, local, state, error, holder, kind }) => {
-            tunnel_line(*port, *local, (state, error.as_deref()), (*holder, kind.as_deref()))
+        (_, What::Tunnel { port, local, state, error, holder, kind, direction }) => {
+            let who = (*holder, kind.as_deref(), *direction);
+            tunnel_line(*port, *local, (state, error.as_deref()), who)
         }
         (_, What::Dropped { count }) => format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
@@ -580,11 +581,12 @@ fn tunnel_line(
     port: u16,
     local: Option<u16>,
     (state, error): (&str, Option<&str>),
-    (holder, kind): (u64, Option<&str>),
+    (holder, kind, direction): (u64, Option<&str>, Option<Direction>),
 ) -> String {
-    let local = local.map(|local| format!(" → localhost:{local}")).unwrap_or_default();
+    let arrow = tunnels::arrow(direction);
+    let local = local.map(|local| format!(" {arrow} localhost:{local}")).unwrap_or_default();
     let error = error.map(|error| format!(": {error}")).unwrap_or_default();
-    let who = if kind == Some("hold") { "hold" } else { "holder" };
+    let who = tunnels::hold_word(kind == Some("hold"), direction).unwrap_or("holder");
     format!("tunnel {port}  {state}{local}{error}  ({who} {holder})")
 }
 

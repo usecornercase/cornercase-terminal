@@ -46,6 +46,79 @@ mod the_ssh_line {
         assert_eq!(line, expected);
         assert!(!line.iter().any(|word| word.contains("ClearAllForwardings")));
     }
+
+    #[test]
+    fn a_reverse_tunnel_asks_the_machine_for_a_port_at_info_level() {
+        let line = reverse_args("vps", Reverse { local: 9222, there: 0 });
+
+        let expected = [
+            "-N",
+            "-T",
+            "-o",
+            "ServerAliveInterval=5",
+            "-o",
+            "ServerAliveCountMax=3",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ExitOnForwardFailure=yes",
+            "-o",
+            "ControlPath=none",
+            "-o",
+            "LogLevel=INFO",
+            "-R",
+            "127.0.0.1:0:localhost:9222",
+            "--",
+            "vps",
+        ];
+        assert_eq!(line, expected);
+        assert!(!line.iter().any(|word| word.contains("ClearAllForwardings") || word == "-L"));
+    }
+
+    #[test]
+    fn a_reverse_tunnel_on_a_chosen_port_asks_for_debug_lines() {
+        let line = reverse_args("vps", Reverse { local: 9222, there: 9223 });
+
+        assert!(line.iter().any(|word| word == "LogLevel=DEBUG1"));
+        assert!(line.iter().any(|word| word == "127.0.0.1:9223:localhost:9222"));
+    }
+}
+
+mod the_report {
+    use super::*;
+
+    const ANY: Reverse = Reverse { local: 9222, there: 0 };
+    const CHOSEN: Reverse = Reverse { local: 9222, there: 9223 };
+
+    #[rstest]
+    #[case::allocated(ANY, "Allocated port 41234 for remote forward to localhost:9222", Some(41234))]
+    #[case::with_a_carriage_return(ANY, "Allocated port 41234 for remote forward to localhost:9222\r", Some(41234))]
+    #[case::another_forward(ANY, "Allocated port 41234 for remote forward to localhost:9333", None)]
+    #[case::port_zero(ANY, "Allocated port 0 for remote forward to localhost:9222", None)]
+    #[case::success(
+        CHOSEN,
+        "debug1: remote forward success for: listen 127.0.0.1:9223, connect localhost:9222",
+        Some(9223)
+    )]
+    #[case::old_wording(CHOSEN, "debug1: remote forward success for: listen 9223, connect localhost:9222", Some(9223))]
+    #[case::another_port(
+        CHOSEN,
+        "debug1: remote forward success for: listen 127.0.0.1:9224, connect localhost:9222",
+        None
+    )]
+    #[case::debug_line_while_asking_for_any(
+        ANY,
+        "debug1: remote forward success for: listen 127.0.0.1:0, connect localhost:9222",
+        None
+    )]
+    #[case::failure(CHOSEN, "Error: remote port forwarding failed for listen port 9223", None)]
+    #[case::empty(ANY, "", None)]
+    #[case::junk(CHOSEN, "hello", None)]
+    fn is_read_from_ssh_s_own_words(#[case] reverse: Reverse, #[case] line: &str, #[case] port: Option<u16>) {
+        assert_eq!(reported(line, reverse), port);
+    }
 }
 
 mod the_same_forward {
@@ -219,6 +292,7 @@ mod running {
         assert_eq!(reports.recv_timeout(Duration::from_secs(20)), Ok(Watched::Up));
         let listening = listen::listeners(&[pid_of(&running)]);
         assert!(listening.iter().any(|listener| listener.port == forward.local));
+        assert_eq!(running.there(), None);
     }
 
     #[test]
@@ -261,5 +335,98 @@ mod running {
             panic!("the tunnel should end");
         };
         assert!(reason.starts_with("ssh did not listen on 127.0.0.1:5174 within"), "{reason}");
+    }
+}
+
+mod reversed {
+    use super::*;
+
+    const ANY: Reverse = Reverse { local: 9222, there: 0 };
+
+    fn ssh_saying(dir: &TempDir, said: &str) -> std::path::PathBuf {
+        let ssh = fake_program(dir.path(), "ssh");
+        std::fs::write(ssh.with_extension("err"), said).expect("err");
+        ssh
+    }
+
+    fn hold(ssh: &std::path::Path) {
+        std::fs::write(ssh.with_extension("hold"), "").expect("hold it");
+    }
+
+    fn start(ssh: &std::path::Path, reverse: Reverse, wait: Duration) -> (Running, mpsc::Receiver<Watched>) {
+        let (tx, rx) = mpsc::channel();
+        let report = move |watched| {
+            let _ = tx.send(watched);
+        };
+        (spawn_reverse_within(ssh.as_os_str(), "vps", reverse, wait, report).expect("start ssh"), rx)
+    }
+
+    #[test]
+    fn is_up_once_ssh_reports_the_port_the_machine_picked() {
+        let dir = TempDir::new();
+        let ssh = ssh_saying(&dir, "Allocated port 41234 for remote forward to localhost:9222\n");
+        hold(&ssh);
+
+        let (running, reports) = start(&ssh, ANY, UP_WAIT);
+
+        assert_eq!(reports.recv_timeout(Duration::from_secs(20)), Ok(Watched::Up));
+        assert_eq!(running.there(), Some(41234));
+        let args = std::fs::read_to_string(ssh.with_extension("args")).expect("args");
+        assert!(args.contains("-R 127.0.0.1:0:localhost:9222"), "{args}");
+    }
+
+    #[test]
+    fn is_up_on_a_chosen_port_once_ssh_reports_the_forward() {
+        let dir = TempDir::new();
+        let said = "debug1: remote forward success for: listen 127.0.0.1:9223, connect localhost:9222\n";
+        let ssh = ssh_saying(&dir, said);
+        hold(&ssh);
+
+        let (running, reports) = start(&ssh, Reverse { local: 9222, there: 9223 }, UP_WAIT);
+
+        assert_eq!(reports.recv_timeout(Duration::from_secs(20)), Ok(Watched::Up));
+        assert_eq!(running.there(), Some(9223));
+    }
+
+    #[test]
+    fn ends_with_ssh_s_line_when_the_port_is_taken_there() {
+        let dir = TempDir::new();
+        let ssh = ssh_saying(&dir, "Error: remote port forwarding failed for listen port 9223\n");
+        std::fs::write(ssh.with_extension("code"), "255").expect("code");
+
+        let (_running, reports) = start(&ssh, Reverse { local: 9222, there: 9223 }, UP_WAIT);
+
+        let ended = Watched::Ended("remote port forwarding failed for listen port 9223".into());
+        assert_eq!(reports.recv_timeout(Duration::from_secs(20)), Ok(ended));
+    }
+
+    #[test]
+    fn a_debug_line_or_the_report_is_never_the_reason() {
+        let dir = TempDir::new();
+        let ssh = ssh_saying(
+            &dir,
+            "debug1: something\nAllocated port 41234 for remote forward to localhost:9222\nTransferred: sent 1, received 2 bytes, in 0.1 seconds\nBytes per second: sent 10.0, received 20.0\n",
+        );
+        std::fs::write(ssh.with_extension("code"), "255").expect("code");
+
+        let (_running, reports) = start(&ssh, ANY, UP_WAIT);
+
+        let heard: Vec<Watched> = reports.iter().take(2).collect();
+        let ended = heard.iter().find(|watched| matches!(watched, Watched::Ended(_)));
+        assert_eq!(ended, Some(&Watched::Ended("ssh exited with 255".into())), "{heard:?}");
+    }
+
+    #[test]
+    fn gives_up_when_ssh_never_reports() {
+        let dir = TempDir::new();
+        let ssh = ssh_saying(&dir, "");
+        hold(&ssh);
+
+        let (_running, reports) = start(&ssh, ANY, Duration::from_millis(300));
+
+        let Ok(Watched::Ended(reason)) = reports.recv_timeout(Duration::from_secs(20)) else {
+            panic!("the tunnel should end");
+        };
+        assert!(reason.starts_with("ssh did not report the forward to localhost:9222 within"), "{reason}");
     }
 }

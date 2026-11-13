@@ -4,7 +4,7 @@ use std::time::SystemTime;
 
 use super::toast::{Toast, TunnelButton};
 use super::{App, Streamed};
-use crate::control::{Event, Ids, TunnelInfo, TunnelList, TunnelOrderLine, What, streamed_line};
+use crate::control::{Direction, Event, Ids, TunnelInfo, TunnelList, TunnelOrderLine, What, streamed_line};
 use crate::host::open::Browse;
 use crate::log;
 use crate::ports::Port;
@@ -32,18 +32,34 @@ pub(super) struct Holder {
 pub(super) enum Kind {
     Window,
     Hold,
+    ReverseHold,
 }
 
 impl Kind {
     fn name(self) -> &'static str {
         match self {
             Self::Window => "window",
-            Self::Hold => "hold",
+            Self::Hold | Self::ReverseHold => "hold",
         }
     }
 
     fn marked(self) -> Option<String> {
-        (self == Self::Hold).then(|| self.name().into())
+        (self != Self::Window).then(|| self.name().into())
+    }
+
+    fn direction(self) -> Option<Direction> {
+        (self == Self::ReverseHold).then_some(Direction::Reverse)
+    }
+
+    fn held(direction: Direction) -> Self {
+        match direction {
+            Direction::Forward => Self::Hold,
+            Direction::Reverse => Self::ReverseHold,
+        }
+    }
+
+    fn goes(self, direction: Direction) -> bool {
+        self.direction().unwrap_or(Direction::Forward) == direction
     }
 }
 
@@ -89,12 +105,13 @@ impl Holders {
         self.by.get(&client)
     }
 
-    pub(super) fn listing(&self, port: Option<u16>) -> Vec<TunnelInfo> {
+    pub(super) fn listing(&self, only: Option<(u16, Direction)>) -> Vec<TunnelInfo> {
         let mut infos: Vec<TunnelInfo> = self
             .by
             .iter()
+            .filter(|(_, holder)| only.is_none_or(|(_, direction)| holder.kind.goes(direction)))
             .flat_map(|(client, holder)| holder.tunnels.iter().map(|tunnel| info_of(*client, holder.kind, tunnel)))
-            .filter(|info| port.is_none_or(|port| info.port == port))
+            .filter(|info| only.is_none_or(|(port, _)| info.port == port))
             .collect();
         infos.sort_by_key(|info| (info.port, info.holder));
         infos
@@ -106,8 +123,17 @@ fn info_of(holder: u64, kind: Kind, tunnel: &Tunnel) -> TunnelInfo {
         TunnelState::Down(reason) => Some(reason.clone()),
         TunnelState::Opening | TunnelState::Up | TunnelState::Closed => None,
     };
+    let direction = kind.direction();
     let kind = kind.name().into();
-    TunnelInfo { port: tunnel.port, local: tunnel.local, state: tunnel.state.name().into(), error, holder, kind }
+    TunnelInfo {
+        port: tunnel.port,
+        local: tunnel.local,
+        state: tunnel.state.name().into(),
+        error,
+        holder,
+        kind,
+        direction,
+    }
 }
 
 impl App {
@@ -182,12 +208,14 @@ impl App {
         }
     }
 
-    pub(super) fn hold_tunnel(&mut self, client: u64, port: u16, local: u16) {
+    pub(super) fn hold_tunnel(&mut self, client: u64, direction: Direction, (port, local): (u16, u16)) {
+        let kind = Kind::held(direction);
         let tunnels = vec![Tunnel { port, local: Some(local), state: TunnelState::Up }];
-        let holder = Holder { kind: Kind::Hold, browse: false, applied: 0, tunnels };
+        let holder = Holder { kind, browse: false, applied: 0, tunnels };
         self.opening.tunnels.by.insert(client, holder.clone());
         self.tunnels_changed(client, &[], &holder);
-        log::info!("ui", "tunnel held", client = client, port = port, local = local);
+        let reverse = kind == Kind::ReverseHold;
+        log::info!("ui", "tunnel held", client = client, port = port, local = local, reverse = reverse);
     }
 
     pub(super) fn holds_tunnel(&self, client: u64) -> bool {
@@ -210,22 +238,24 @@ impl App {
     }
 
     pub(super) fn close_tunnel(&mut self, port: u16) -> Vec<(u64, u64)> {
-        self.end_tunnel(port, TunnelOrder::Close(port))
+        self.end_tunnel(port, Direction::Forward, TunnelOrder::Close(port))
     }
 
     pub(super) fn forget_tunnel(&mut self, port: u16) -> Vec<(u64, u64)> {
-        self.end_tunnel(port, TunnelOrder::Forget(port))
+        self.end_tunnel(port, Direction::Forward, TunnelOrder::Forget(port))
     }
 
-    fn end_tunnel(&mut self, port: u16, order: TunnelOrder) -> Vec<(u64, u64)> {
+    pub(super) fn end_tunnel(&mut self, port: u16, direction: Direction, order: TunnelOrder) -> Vec<(u64, u64)> {
+        let forward = direction == Direction::Forward;
+        let asking = self.opening.tunnels.asked.keys().filter(|(_, asked)| forward && *asked == port);
         let holding: Vec<u64> = self
             .opening
             .tunnels
             .by
             .iter()
-            .filter(|(_, holder)| holder.tunnel(port).is_some())
+            .filter(|(_, holder)| holder.kind.goes(direction) && holder.tunnel(port).is_some())
             .map(|(client, _)| *client)
-            .chain(self.opening.tunnels.asked.keys().filter(|(_, asked)| *asked == port).map(|(client, _)| *client))
+            .chain(asking.map(|(client, _)| *client))
             .collect::<BTreeSet<u64>>()
             .into_iter()
             .collect();
@@ -233,12 +263,14 @@ impl App {
             self.opening.tunnels.asked.remove(&(*client, port));
             self.end_for(*client, order);
         }
-        self.tell_takers(order);
+        if forward {
+            self.tell_takers(order);
+        }
         holding.into_iter().map(|client| (client, self.opening.tunnels.sent(client))).collect()
     }
 
     fn end_for(&mut self, client: u64, order: TunnelOrder) {
-        if self.opening.tunnels.holder(client).is_some_and(|holder| holder.kind == Kind::Hold) {
+        if self.opening.tunnels.holder(client).is_some_and(|holder| holder.kind != Kind::Window) {
             log::info!("ui", "tunnel hold ended", client = client, port = order.port());
             self.clients.events.push(client, Streamed::End);
         } else {
@@ -305,9 +337,9 @@ impl App {
         self.outbox.browse(client, Browse { ip: None, port });
     }
 
-    pub(in crate::app) fn tunnel_list(&self, port: Option<u16>) -> TunnelList {
+    pub(in crate::app) fn tunnel_list(&self, only: Option<(u16, Direction)>) -> TunnelList {
         TunnelList {
-            tunnels: self.opening.tunnels.listing(port),
+            tunnels: self.opening.tunnels.listing(only),
             windows: self.opening.tunnels.windows(),
             takers: self.opening.tunnels.takers.len(),
         }
@@ -320,11 +352,13 @@ impl App {
     fn publish_tunnel(&mut self, holder: u64, kind: Kind, tunnel: &Tunnel) {
         let info = info_of(holder, kind, tunnel);
         let (port, local, state, error) = (info.port, info.local, info.state, info.error);
-        self.publish_tunnel_event(What::Tunnel { port, local, state, error, holder, kind: kind.marked() });
+        let direction = kind.direction();
+        self.publish_tunnel_event(What::Tunnel { port, local, state, error, holder, kind: kind.marked(), direction });
     }
 
     fn publish_gone(&mut self, holder: u64, kind: Kind, port: u16) {
-        let what = What::Tunnel { port, local: None, state: "gone".into(), error: None, holder, kind: kind.marked() };
+        let (kind, direction) = (kind.marked(), kind.direction());
+        let what = What::Tunnel { port, local: None, state: "gone".into(), error: None, holder, kind, direction };
         self.publish_tunnel_event(what);
     }
 

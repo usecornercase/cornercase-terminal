@@ -56,6 +56,9 @@ fn left_out(command: &str, key: &str, value: &Value) -> bool {
         "cached" => value == &Value::Bool(false) && command == "stats",
         "fresh" => value.is_null() && matches!(command, "start" | "start-with" | "new-workspace" | "flow-run"),
         "close_when_merged" => value == &Value::Bool(false) && command == "flow-run",
+        "direction" => {
+            value.is_null() && matches!(command, "tunnel-open" | "tunnel-close" | "tunnel-forget" | "tunnel-hold")
+        }
         _ => false,
     }
 }

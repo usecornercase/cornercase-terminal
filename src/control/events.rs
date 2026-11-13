@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Fields, Ids, Response};
+use super::{Direction, Fields, Ids, Response};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -108,6 +108,8 @@ pub(crate) enum What {
         holder: u64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         kind: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        direction: Option<Direction>,
     },
     Notice {
         token: String,

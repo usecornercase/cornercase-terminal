@@ -37,3 +37,54 @@ mod the_orders_stream {
         assert_eq!(list.windows, 1);
     }
 }
+
+mod the_direction {
+    use super::*;
+
+    fn info(port: u16, local: u16, holder: u64, kind: &str, direction: Option<Direction>) -> TunnelInfo {
+        TunnelInfo { port, local: Some(local), state: "up".into(), error: None, holder, kind: kind.into(), direction }
+    }
+
+    #[test]
+    fn a_reverse_entry_says_its_direction_and_a_forward_one_leaves_it_out() {
+        let list = TunnelList {
+            tunnels: vec![info(5173, 5174, 7, "window", None), info(9223, 9222, 33, "hold", Some(Direction::Reverse))],
+            windows: 1,
+            takers: 0,
+        };
+
+        let written = serde_json::to_string_pretty(&list).expect("json");
+        let read: TunnelList = serde_json::from_str(fixture!("control/tunnels/list.json")).expect("list");
+
+        assert_eq!(written, fixture!("control/tunnels/list.json").trim_end());
+        assert_eq!(read, list);
+    }
+
+    #[test]
+    fn a_forward_request_keeps_the_bytes_older_servers_get() {
+        let hold = TunnelHold { port: 5173, local: 5174, direction: None };
+        let port = TunnelPort { port: 5173, direction: None };
+
+        assert_eq!(serde_json::to_string(&hold).expect("json"), r#"{"port":5173,"local":5174}"#);
+        assert_eq!(serde_json::to_string(&port).expect("json"), r#"{"port":5173}"#);
+    }
+
+    #[test]
+    fn a_reverse_request_says_so() {
+        let hold = TunnelHold { port: 9223, local: 9222, direction: Some(Direction::Reverse) };
+        let port = TunnelPort { port: 9223, direction: Some(Direction::Reverse) };
+
+        assert_eq!(serde_json::to_string(&hold).expect("json"), r#"{"port":9223,"local":9222,"direction":"reverse"}"#);
+        assert_eq!(serde_json::to_string(&port).expect("json"), r#"{"port":9223,"direction":"reverse"}"#);
+    }
+
+    #[test]
+    fn a_list_from_an_older_server_has_no_direction() {
+        let text =
+            r#"{"tunnels":[{"port":1,"local":2,"state":"up","error":null,"holder":3,"kind":"hold"}],"windows":0}"#;
+
+        let list: TunnelList = serde_json::from_str(text).expect("list");
+
+        assert_eq!(list.tunnels[0].direction, None);
+    }
+}
