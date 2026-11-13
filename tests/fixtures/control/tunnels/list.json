@@ -1,0 +1,23 @@
+{
+  "tunnels": [
+    {
+      "port": 5173,
+      "local": 5174,
+      "state": "up",
+      "error": null,
+      "holder": 7,
+      "kind": "window"
+    },
+    {
+      "port": 9223,
+      "local": 9222,
+      "state": "up",
+      "error": null,
+      "holder": 33,
+      "kind": "hold",
+      "direction": "reverse"
+    }
+  ],
+  "windows": 1,
+  "takers": 0
+}

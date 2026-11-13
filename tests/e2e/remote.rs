@@ -3,11 +3,7 @@ use super::*;
 const SSH_PID: &str = "ssh.pid";
 const SSH_RUNS: &str = "ssh.runs";
 const FORWARD_PY: &str = "import socket, sys, threading
-address, local, _host, port = sys.argv[1].split(':')
-server = socket.socket()
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-server.bind((address, int(local)))
-server.listen()
+mode, spec = sys.argv[1], sys.argv[2]
 def pipe(source, target):
     try:
         while True:
@@ -21,11 +17,32 @@ def pipe(source, target):
         target.shutdown(socket.SHUT_WR)
     except OSError:
         pass
-while True:
-    client, _ = server.accept()
-    upstream = socket.create_connection(('127.0.0.1', int(port)))
-    threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()
-    threading.Thread(target=pipe, args=(upstream, client), daemon=True).start()
+def serve(server, port):
+    while True:
+        client, _ = server.accept()
+        upstream = socket.create_connection(('127.0.0.1', int(port)))
+        threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()
+        threading.Thread(target=pipe, args=(upstream, client), daemon=True).start()
+def bound(address, port):
+    server = socket.socket()
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((address, int(port)))
+    server.listen()
+    return server
+if mode == '-L':
+    address, local, _host, port = spec.split(':')
+    serve(bound(address, local), port)
+address, there, host, local = spec.split(':')
+try:
+    server = bound(address, there)
+except OSError:
+    print('Error: remote port forwarding failed for listen port ' + there, file=sys.stderr, flush=True)
+    sys.exit(255)
+if there == '0':
+    print('Allocated port ' + str(server.getsockname()[1]) + ' for remote forward to ' + host + ':' + local, file=sys.stderr, flush=True)
+elif 'LogLevel=DEBUG1' in sys.argv:
+    print('debug1: remote forward success for: listen ' + address + ':' + there + ', connect ' + host + ':' + local, file=sys.stderr, flush=True)
+serve(server, local)
 ";
 const REFUSED: &str = "*) echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255 ;;";
 
@@ -58,15 +75,16 @@ fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
         &bin.join("ssh"),
         &format!(
             "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = -N ] && tunnel=1; done\n\
-             if [ -n \"$tunnel\" ]; then\n  prev=; spec=\n  \
-             for a in \"$@\"; do [ \"$prev\" = -L ] && spec=\"$a\"; prev=\"$a\"; done\n  \
+             if [ -n \"$tunnel\" ]; then\n  prev=; spec=; flag=\n  \
+             for a in \"$@\"; do case \"$prev\" in -L | -R) spec=\"$a\"; flag=\"$prev\" ;; esac; prev=\"$a\"; done\n  \
              if [ -e '{dir}/tunnel.fails' ]; then\n  \
              echo 'ssh: connect to host devbox port 22: Connection refused' >&2; exit 255\n  fi\n  \
-             port=${{spec##*:}}\n  printf '%s\\n' \"$@\" > '{dir}/tunnel-'\"$port\"'.args'\n  \
-             echo $$ > '{dir}/tunnel-'\"$port\"'.pid'\n  echo $$ >> '{dir}/tunnel-'\"$port\"'.pids'\n  \
-             exec python3 '{dir}/forward.py' \"$spec\" \"$@\"\nfi\n\
+             port=${{spec##*:}}\n  name=tunnel; [ \"$flag\" = -R ] && name=reverse\n  \
+             printf '%s\\n' \"$@\" > '{dir}/'\"$name-$port\"'.args'\n  \
+             echo $$ > '{dir}/'\"$name-$port\"'.pid'\n  echo $$ >> '{dir}/'\"$name-$port\"'.pids'\n  \
+             exec python3 '{dir}/forward.py' \"$flag\" \"$spec\" \"$@\"\nfi\n\
              echo $$ > '{dir}/{SSH_PID}'\necho $$ >> '{dir}/{SSH_RUNS}'\nwhile [ $# -gt 0 ]; do\n  \
-             case \"$1\" in\n    -o | -L) shift 2 ;;\n    --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
+             case \"$1\" in\n    -o | -L | -R) shift 2 ;;\n    --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\n\
              if [ -e '{dir}/ssh-'\"$1\"'.held' ]; then\n  \
              echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255\nfi\n\
              echo $$ > '{dir}/ssh-'\"$1\"'.pid'\necho $$ >> '{dir}/ssh-'\"$1\"'.pids'\n\
@@ -111,6 +129,15 @@ pub(super) fn tunnel_pid(session: &Session, port: u16) -> String {
 
 pub(super) fn tunnel_pids(session: &Session, port: u16) -> Vec<String> {
     pid_in(session, &format!("tunnel-{port}.pids")).lines().map(str::to_string).collect()
+}
+
+pub(super) fn reverse_args(session: &Session, local: u16) -> Vec<String> {
+    let text = std::fs::read_to_string(session.dir.join(format!("reverse-{local}.args"))).unwrap_or_default();
+    text.lines().map(str::to_string).collect()
+}
+
+pub(super) fn reverse_pid(session: &Session, local: u16) -> String {
+    pid_in(session, &format!("reverse-{local}.pid"))
 }
 
 pub(super) fn kept_tunnels(session: &Session) -> serde_json::Value {

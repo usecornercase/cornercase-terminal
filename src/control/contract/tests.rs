@@ -81,6 +81,11 @@ mod describing {
     }
 
     #[test]
+    fn reverse_tunnels_are_a_feature() {
+        assert!(FEATURES.contains(&"tunnel-reverse"));
+    }
+
+    #[test]
     fn the_events_watch_surface_view_app_changes_flow_and_files_streams_are_version_one() {
         let descriptor = describe("1-2", &[]);
 

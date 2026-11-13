@@ -95,7 +95,25 @@ cornercase --remote devbox tunnel hold 5173
 
 It starts its own `ssh`, waits until the tunnel is up and prints one line, `{"port":5173,"local":5174,"url":"http://localhost:5174"}`, then holds the tunnel until it ends. Killing it, closing its output or `cornercase tunnel close 5173` on `devbox` ends it with status 0, and a failing `ssh` or a lost connection with 1. It needs `--remote`, and it remembers nothing: see [Tunnels](../scripts-and-agents/#tunnels).
 
+When `5173` is taken on your laptop, the hold listens on another port. `--local 5174` names the one to take then, such as the port it had before, so a page you had open keeps working when the program holds it again (any free port when that one is taken too, and the line says which):
+
+```sh
+cornercase --remote devbox tunnel hold 5173 --local 5174
+```
+
 A program that holds its tunnels this way can also take the ones a script or an agent on `devbox` asks for: `cornercase --remote devbox tunnel orders` prints a line such as `{"order":"open","port":3000}` for each `cornercase tunnel open 3000`, and the program answers with `tunnel hold 3000`, or with `tunnel failed 3000 REASON`. See [Tunnels](../scripts-and-agents/#tunnels).
+
+### Reach your laptop from the machine
+
+The other direction: a port of your laptop, reachable on `devbox`, so an agent there can use, say, a headless Chrome's DevTools port that runs on your laptop. A program on your laptop holds it:
+
+```sh
+cornercase --remote devbox tunnel hold --reverse 9222
+```
+
+It runs `ssh -N -R 127.0.0.1:PORT:localhost:9222 devbox` and prints one line once it is up, `{"port":41234,"local":9222,"url":"http://127.0.0.1:41234","direction":"reverse"}`: `port` is the port on `devbox`, which its `ssh` server picked, and `local` the port of your laptop. `--there 9223` asks for that port on `devbox` instead and fails at once when it is taken there. `cornercase tunnels` on `devbox` lists it as `41234 ← localhost:9222  up (reverse hold 4)`, and `cornercase tunnel close --reverse 41234` on `devbox` ends it, as killing the program does; a plain `tunnel close 41234` never touches it. Nothing on `devbox` can open one: only the computer whose port it is.
+
+It listens only on `127.0.0.1` of `devbox`, but every program and every user of `devbox` can reach that, so on a shared machine others can use your port for as long as the hold runs (a browser's DevTools port gives whoever connects that browser and its logins). If `devbox`'s `sshd_config` has `GatewayPorts yes`, it listens on every address whatever cornercase asks. See [Tunnels](../scripts-and-agents/#tunnels).
 
 If your `~/.ssh/config` has a `LocalForward`, `RemoteForward` or `DynamicForward` for that host, the window's own connection already holds it and every tunnel fails with `Could not request local forwarding`: remove it, or tunnel with your own `ssh -L`.
 

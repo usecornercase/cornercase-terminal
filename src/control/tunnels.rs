@@ -6,15 +6,34 @@ use super::Fields;
 #[serde(default)]
 pub(crate) struct ListTunnels {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Direction {
+    Forward,
+    Reverse,
+}
+
+impl Direction {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Forward => "forward",
+            Self::Reverse => "reverse",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct TunnelPort {
     pub(crate) port: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) direction: Option<Direction>,
 }
 
 impl TunnelPort {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("port", self.port);
+        fields.maybe("direction", self.direction.map(Direction::name));
     }
 }
 
@@ -23,12 +42,15 @@ impl TunnelPort {
 pub(crate) struct TunnelHold {
     pub(crate) port: u16,
     pub(crate) local: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) direction: Option<Direction>,
 }
 
 impl TunnelHold {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("port", self.port);
         fields.add("local", self.local);
+        fields.maybe("direction", self.direction.map(Direction::name));
     }
 }
 
@@ -74,6 +96,8 @@ pub(crate) struct TunnelInfo {
     pub(crate) error: Option<String>,
     pub(crate) holder: u64,
     pub(crate) kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) direction: Option<Direction>,
 }
 
 #[cfg(test)]

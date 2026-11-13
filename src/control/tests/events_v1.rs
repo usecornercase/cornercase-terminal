@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::control::Direction;
 use crate::test_util::fixture;
 
 const TIME: &str = "2026-10-16T09:30:00.123Z";
@@ -21,7 +22,10 @@ fn tunnel(local: Option<u16>, state: &str, error: Option<&str>) -> Event {
 
 fn held_tunnel(local: Option<u16>, state: &str, error: Option<&str>, kind: Option<&str>) -> Event {
     let (error, kind) = (error.map(str::to_string), kind.map(str::to_string));
-    event(What::Tunnel { port: 5173, local, state: state.into(), error, holder: 3, kind }, Ids::default())
+    event(
+        What::Tunnel { port: 5173, local, state: state.into(), error, holder: 3, kind, direction: None },
+        Ids::default(),
+    )
 }
 
 fn pane() -> Ids {
@@ -158,6 +162,19 @@ fn a_message(panes: Vec<u64>) -> Event {
 
 fn samples() -> Vec<(Event, &'static str)> {
     [plain_samples(), rich_samples(), sound_and_accounts(), machines(), subagents(), messages()].concat()
+}
+
+fn reverse_tunnel(port: u16, local: Option<u16>, state: &str) -> Event {
+    let (kind, direction) = (Some("hold".to_string()), Some(Direction::Reverse));
+    event(What::Tunnel { port, local, state: state.into(), error: None, holder: 3, kind, direction }, Ids::default())
+}
+
+#[rstest]
+#[case::up(reverse_tunnel(9223, Some(9222), "up"), fixture!("control/events/v1/tunnel-reverse.json"))]
+#[case::gone(reverse_tunnel(9223, None, "gone"), fixture!("control/events/v1/tunnel-reverse-gone.json"))]
+fn a_reverse_hold_s_event_is_written_and_read_as_its_fixture(#[case] event: Event, #[case] fixture: &str) {
+    assert_eq!(serde_json::to_string(&event).expect("json"), fixture.trim_end());
+    assert_eq!(serde_json::from_str::<Event>(fixture).expect("an event"), event);
 }
 
 #[test]

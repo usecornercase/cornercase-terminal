@@ -119,6 +119,10 @@ mod opting_in {
         r#"{"contract":1,"command":"notify","args":{"text":"hi","fresh":null}}"#,
         "args.fresh"
     )]
+    #[case::no_direction_where_no_tunnel_runs(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","direction":null}}"#,
+        "args.direction"
+    )]
     #[case::not_closing_when_merged_where_no_flow_runs(
         r#"{"contract":1,"command":"notify","args":{"text":"hi","close_when_merged":false}}"#,
         "args.close_when_merged"
@@ -167,6 +171,12 @@ mod opting_in {
     #[case::no_choice_for_a_start(r#"{"contract":1,"command":"start","args":{"project":999,"fresh":null}}"#)]
     #[case::no_choice_for_a_flow(
         r#"{"contract":1,"command":"flow-run","args":{"name":"Quick","prompt":"x","project":999,"fresh":null}}"#
+    )]
+    #[case::no_direction_to_close(r#"{"contract":1,"command":"tunnel-close","args":{"port":9223,"direction":null}}"#)]
+    #[case::no_direction_to_forget(r#"{"contract":1,"command":"tunnel-forget","args":{"port":9223,"direction":null}}"#)]
+    #[case::no_direction_to_open(r#"{"contract":1,"command":"tunnel-open","args":{"port":9223,"direction":null}}"#)]
+    #[case::no_direction_to_hold(
+        r#"{"contract":1,"command":"tunnel-hold","args":{"port":9223,"local":9222,"direction":null}}"#
     )]
     #[case::not_closing_when_merged(
         r#"{"contract":1,"command":"flow-run","args":{"name":"Quick","prompt":"x","project":999,"close_when_merged":false}}"#
