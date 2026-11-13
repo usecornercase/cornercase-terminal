@@ -36,6 +36,7 @@ impl FakeCopilot {
                 "#!/bin/sh
 [ -n \"$COPILOT_HOME\" ] || exec env COPILOT_HOME={home} \"$0\" \"$@\"
 signals={signals}
+[ -d \"$signals\" ] || exit 0
 id={ID}
 resumed=
 for arg in \"$@\"; do case $arg in --resume=*) id=${{arg#--resume=}}; resumed=1 ;; esac; done

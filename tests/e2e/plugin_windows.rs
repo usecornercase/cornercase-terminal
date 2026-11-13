@@ -80,9 +80,35 @@ impl Drop for Panel {
     }
 }
 
+fn sent(pid: &impl ToString, name: &str) -> bool {
+    Command::new("kill").args([name, &pid.to_string()]).status().is_ok_and(|status| status.success())
+}
+
 fn signal(pid: &impl ToString, name: &str) {
-    let sent = Command::new("kill").args([name, &pid.to_string()]).status().expect("run kill");
-    assert!(sent.success(), "kill {name} failed");
+    assert!(sent(pid, name), "kill {name} failed");
+}
+
+struct Keeper(Option<Child>);
+
+impl Keeper {
+    fn spawn(command: &mut Command) -> Self {
+        Self(Some(command.spawn().expect("run cornercase")))
+    }
+
+    fn stop(mut self) {
+        let keeper = self.0.take().expect("the keeper runs");
+        signal(&keeper.id(), "-TERM");
+        ended_well(keeper);
+    }
+}
+
+impl Drop for Keeper {
+    fn drop(&mut self) {
+        if let Some(keeper) = self.0.take() {
+            sent(&keeper.id(), "-TERM");
+            finish_within(keeper, TIMEOUT);
+        }
+    }
 }
 
 fn ended_well(keeper: Child) {
@@ -280,7 +306,7 @@ fn without_json_it_says_each_change_in_words() {
     let mut command = panel.session.command();
     command.args(["plugin", "windows"]).stderr(Stdio::piped());
     command.stdout(std::fs::File::create(&path).expect("a file to say it in"));
-    let keeper = command.spawn().expect("run cornercase");
+    let keeper = Keeper::spawn(&mut command);
     let said = || std::fs::read_to_string(&path).unwrap_or_default();
     wait_until("it says the process runs", || said().contains("panel: running") && panel.pids().len() == 1);
     let pid = panel.pids()[0];
@@ -290,6 +316,5 @@ fn without_json_it_says_each_change_in_words() {
 
     wait_until("it says the process stopped", || said().contains("panel: stopped"));
     assert!(said().ends_with(&format!("pid {pid}\nacme.panel panel: stopped\n")), "{}", said());
-    signal(&keeper.id(), "-TERM");
-    ended_well(keeper);
+    keeper.stop();
 }
