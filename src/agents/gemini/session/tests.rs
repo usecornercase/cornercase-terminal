@@ -226,7 +226,7 @@ fn a_process_the_agent_starts_during_the_scan_is_not_another_gemini() {
     let parent = project.path().join("gemini");
     crate::test_util::write_executable(
         &parent,
-        "#!/bin/sh\nwhile [ ! -e \"$1\" ]; do sleep 0.02; done\n\"$2\" \"$3\" \"$4\"\n",
+        &format!("#!/bin/sh\n{}\n\"$2\" \"$3\" \"$4\"\n", crate::test_util::gate("$1")),
     );
     let mut forker = std::process::Command::new(&parent)
         .arg(&go)

@@ -8,7 +8,7 @@ use crate::app::tests::merge_requests::gitlab;
 use crate::app::tests::pull_requests::{Repo, printing, repo_on, repo_with};
 use crate::pull_request::Provider;
 use crate::pull_request::glab::LOGGED_OUT;
-use crate::test_util::{fake_gh, fixture, git, git_repo};
+use crate::test_util::{fake_gh, fixture, gate, git, git_repo};
 
 const JOB: &str = "https://github.com/acme/web-shop/actions/runs/1001/job";
 
@@ -35,12 +35,12 @@ fn failing(message: &str) -> Repo {
 }
 
 fn gated() -> Repo {
-    let gate = "while [ ! -f \"$0.go\" ]; do sleep 0.05; done";
     repo_on(
         &["feat/x"],
         |dir| {
             let script = format!(
-                "if [ \"$1\" = api ]; then echo '{{\"data\":{{\"resource\":{{\"stack\":null}}}}}}'; exit 0; fi\npwd >> \"$0.calls\"\n{gate}\n{}",
+                "if [ \"$1\" = api ]; then echo '{{\"data\":{{\"resource\":{{\"stack\":null}}}}}}'; exit 0; fi\npwd >> \"$0.calls\"\n{}\n{}",
+                gate("$0.go"),
                 printing()
             );
             fake_gh(dir, &script)

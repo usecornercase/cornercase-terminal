@@ -432,6 +432,11 @@ pub(crate) fn fake_glab(dir: &Path, script: &str) -> PathBuf {
     fake_tool(dir, "glab", script)
 }
 
+#[cfg(unix)]
+pub(crate) fn gate(file: &str) -> String {
+    format!("while [ -d \"$(dirname \"{file}\")\" ] && [ ! -e \"{file}\" ]; do sleep 0.05; done")
+}
+
 pub(crate) fn link_folder(target: &Path, link: &Path) {
     #[cfg(unix)]
     std::os::unix::fs::symlink(target, link).expect("a symbolic link");
