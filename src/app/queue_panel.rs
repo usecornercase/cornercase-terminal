@@ -221,7 +221,7 @@ impl App {
         self.panels.queued.queue.saved()
     }
 
-    pub(super) fn shown_zone(&self) -> String {
+    pub(super) fn window_zone(&self) -> String {
         match self.panels.queued.zone() {
             "" => queue::clock::local_zone(),
             zone => zone.to_string(),

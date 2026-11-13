@@ -789,7 +789,7 @@ mod panel {
         let (x, y) = find(&t, "stage 2 and 3 not run").expect("the note");
         assert_eq!(cell(&t, x, y).fg, WAITING_COLOR);
         assert!(find(&t, "since the last change").is_none());
-        assert!(find(&t, "…").is_some_and(|(_, row)| row <= y + 1));
+        assert_eq!(cell(&t, NARROW.width - 2, y).symbol(), "…");
     }
 
     #[test]

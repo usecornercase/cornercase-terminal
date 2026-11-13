@@ -78,6 +78,23 @@ test('progress lists the stages not run since the last change', () => {
   assert.deepEqual(skipped.notRun, [2]);
 });
 
+test('a later step back keeps the stages still owed from an earlier change', () => {
+  const flow: Flow = {
+    ...FULL_ISSUE,
+    stages: [
+      { roles: ['a'] },
+      { roles: ['b'], back: { to: 1, when: 'findings', atMost: 3 } },
+      { roles: ['c'] },
+      { roles: ['d'], back: { to: 3, when: 'findings', atMost: 3 } },
+    ],
+  };
+  const p = new Progress();
+  for (const to of ['a', 'b', 'a', 'c', 'd']) send(p, flow, to, 0);
+  assert.deepEqual(p.notRun, [1]);
+  send(p, flow, 'c', 0);
+  assert.deepEqual(p.notRun, [1, 3]);
+});
+
 test('the run workspace offers show flow in its menu, and the panel draws the plan', () => {
   const app = demo();
   const said: string[] = [];
@@ -378,6 +395,16 @@ test('the Flow panel heading says which stages have not run since the last chang
   playUntil(app, 'stage 3 not run since the last change');
   playUntil(app, 'stage 3 of 3');
   assert.equal(app.textAt('not run since the last change'), null);
+  app.destroy();
+});
+
+test('the note on its own row stays when the panel is scrolled past the summary', () => {
+  const app = demo(110, 60);
+  toRun(app);
+  app.toggleFlow();
+  playUntil(app, 'stage 2 and 3 not run');
+  assert.equal(app.scrollFlow(3), true);
+  assert.ok(shown(app, 'stage 2 and 3 not run'));
   app.destroy();
 });
 

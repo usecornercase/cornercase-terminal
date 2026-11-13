@@ -292,17 +292,17 @@ function drawHeading(p: Painter, s: Slot, view: PanelView, click: (hit: PanelHit
       p.span(s.area.x + x, bar, (on ? '━' : '─').repeat(n), on ? { fg: BRAND } : { fg: p.lineColour });
     });
   }
+  const r = rows(view, width);
+  const text = note(view);
   const y2 = rowY(s, 2);
   if (y2 !== null) {
     let x = s.area.x;
-    const r = rows(view, width);
-    const text = note(view);
     const parts = summary(view);
     if (r.inline && text !== null) parts.push([` · ${text}`, { fg: WAITING }]);
     for (const [part, style] of parts) x = p.span(x, y2, part, style);
-    const own = r.note === null ? null : rowY(s, r.note);
-    if (own !== null && text !== null) p.span(s.area.x, own, truncateRight(text, width), { fg: WAITING });
   }
+  const own = r.note === null ? null : rowY(s, r.note);
+  if (own !== null && text !== null) p.span(s.area.x, own, truncateRight(text, width), { fg: WAITING });
   for (const b of buttons(s, view)) {
     const lit = p.hovered(b.r);
     p.span(b.r.x, b.r.y, b.label, lit ? ACTION_LIT : ACTION);

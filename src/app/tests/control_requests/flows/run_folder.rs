@@ -34,5 +34,5 @@ fn a_run_folder_is_named_after_the_day_in_the_windows_zone() {
 #[test]
 fn without_a_window_the_zone_is_this_machines() {
     let team = Team::new();
-    assert_eq!(team.app.shown_zone(), clock::local_zone());
+    assert_eq!(team.app.window_zone(), clock::local_zone());
 }

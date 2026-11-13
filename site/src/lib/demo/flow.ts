@@ -110,7 +110,10 @@ export class Progress {
     else moved = [{ kind: 'outside', from: active, to: target }, this.holder];
     const moving = active !== target;
     if (moving) this.entry = moved;
-    if (moving && moved && wentBack(moved[0])) this.notRun = Array.from({ length: flow.stages.length - target - 1 }, (_, i) => target + 1 + i);
+    if (moving && moved && wentBack(moved[0])) {
+      const later = Array.from({ length: flow.stages.length - target - 1 }, (_, i) => target + 1 + i);
+      this.notRun = [...new Set([...this.notRun, ...later])].sort((a, b) => a - b);
+    }
     this.notRun = this.notRun.filter((s) => s !== target);
     if (moved) {
       const [edge, from] = moved;

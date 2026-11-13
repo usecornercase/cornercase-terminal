@@ -523,7 +523,7 @@ impl App {
 
     fn make_run_dir(&mut self, place: WorkspaceAt, task: &str) -> Result<PathBuf, String> {
         let path = self.projects.workspace(place).path.clone();
-        let day = queue::clock::day(time::now(), &self.shown_zone());
+        let day = queue::clock::day(time::now(), &self.window_zone());
         let dir =
             folder::make(&self.runs.dir, &path, &day).map_err(|e| format!("could not make the run's folder: {e}"))?;
         if let Err(e) = folder::write_task(&dir, task) {

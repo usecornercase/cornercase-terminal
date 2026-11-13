@@ -108,7 +108,9 @@ impl Progress {
 
     fn track(&mut self, stages: usize, target: usize, back: bool) {
         if back {
-            self.not_run = (target + 1..stages).collect();
+            self.not_run.extend(target + 1..stages);
+            self.not_run.sort_unstable();
+            self.not_run.dedup();
         }
         self.not_run.retain(|stage| *stage != target);
     }

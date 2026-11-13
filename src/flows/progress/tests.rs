@@ -2,7 +2,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use super::*;
 use crate::agents::Known;
-use crate::flows::{ORCHESTRATOR, builtin};
+use crate::flows::{Back, ORCHESTRATOR, Stage, builtin};
 
 fn full_issue() -> Flow {
     builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0)
@@ -376,6 +376,23 @@ mod not_run {
         assert_eq!(left(&round.compact("reviewer")), [1, 2]);
         let round = Script::new().send("coder").send("reviewer").send("coder");
         assert_eq!(left(&round.send("coder")), [1, 2]);
+    }
+
+    #[test]
+    fn a_stage_still_owed_stays_when_a_later_step_goes_back() {
+        let stage = |role: &str, back: Option<usize>| Stage {
+            roles: vec![role.into()],
+            back: back.map(|to| Back { to, when: "findings".into(), at_most: 3 }),
+        };
+        let mut script = Script::new();
+        script.flow.stages = vec![stage("a", None), stage("b", Some(1)), stage("c", None), stage("d", Some(3))];
+        let script = script.send("a").send("b").send("a");
+        assert_eq!(left(&script), [1, 2, 3]);
+        let script = script.send("c");
+        assert_eq!(left(&script), [1, 3]);
+        let script = script.send("d");
+        assert_eq!(left(&script), [1]);
+        assert_eq!(left(&script.send("c")), [1, 3]);
     }
 
     #[test]
