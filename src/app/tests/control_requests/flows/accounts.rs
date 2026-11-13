@@ -7,11 +7,11 @@ use crate::agents::Known;
 
 const ACCOUNTED: &str = r#"#!/bin/sh
 log="LOG"
-printf 'account %s\n' "${CLAUDE_CONFIG_DIR:-system}" >> "$log/order"
+record "account ${CLAUDE_CONFIG_DIR:-system}"
 printf 'agent ready> '
 stty -icanon 2>/dev/null
 IFS= read -r line
-printf 'got %s\n' "$line" >> "$log/order"
+record "got $line"
 while [ -d "$log" ]; do sleep 0.1; done
 "#;
 
@@ -51,10 +51,8 @@ fn every_role_on(team: &mut Team, response: Response, home: &Path) -> RunInfo {
         Response::Ok(value) => serde_json::from_value(value).expect("the run"),
         Response::Error(message) => panic!("the flow did not start: {message}"),
     };
-    let log = team.log.path().join("order");
-    let accounted = |log: &Path| {
-        std::fs::read_to_string(log).unwrap_or_default().lines().filter(|l| l.starts_with("account ")).count() >= 3
-    };
+    let log = team.log.path().to_path_buf();
+    let accounted = |log: &Path| read_order(log).iter().filter(|l| l.starts_with("account ")).count() >= 3;
     until_logged(&mut team.app, &team.rx, "every role says its account", || accounted(&log));
     let lines: Vec<String> = team.order().into_iter().filter(|line| line.starts_with("account ")).collect();
     assert_eq!(lines, vec![format!("account {}", home.display()); 3]);
