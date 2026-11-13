@@ -873,7 +873,7 @@ workspace 2  flow-merged  pull request merged in fix-login: 3 agents closed Â· â
 - It only tells what happens after it starts. Start it before what you want to follow, or read `cornercase status` once it runs, so nothing falls in between.
 - cornercase looks at the program in each pane every half second while something follows events, so a program that runs for less than that may not show. To wait for one program, `wait --until shell` is exact.
 - A reader that falls far behind (over a thousand events waiting for it) loses events, and gets a line such as `12 events dropped` when it catches up, so it knows to read `status` again. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client; the command then says the connection ended and exits with status 1.
-- `--boot BOOT` (see [Arrange](#arrange)) refuses it before its first line, with [status 4](#exit-status) and nothing printed, when the server restarted since you read the pane ids; one that restarts while it runs ends it as above, never with 4. `cornercase --remote vps events --pane 9 --json --boot 4242-1700000000`
+- `--boot BOOT` (see [Arrange](#arrange)) refuses it before its first line, with [status 4](#exit-status) and nothing printed, when the server restarted since you read the pane ids; one that restarts while it runs ends it as above, never with 4. For example: `cornercase --remote vps events --pane 9 --json --boot 4242-1700000000`.
 
 ### Arrange
 

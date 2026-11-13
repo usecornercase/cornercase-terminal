@@ -409,6 +409,7 @@ impl Control {
             Self::Selection(a) => &a.boot,
             Self::Split(a) => &a.boot,
             Self::Focus(a) => &a.boot,
+            Self::Go(a) => &a.boot,
             Self::Ratio(a) => &a.boot,
             Self::Resize(a) => &a.boot,
             Self::Redraw(a) => &a.boot,
@@ -426,7 +427,6 @@ impl Control {
             Self::NewWorkspace(a) => &a.boot,
             Self::Open(a) => &a.boot,
             Self::Clone(a) => &a.boot,
-            Self::Go(a) => &a.boot,
             _ => return self.reading_boot(),
         })
     }
