@@ -11,26 +11,39 @@ use crate::test_util::git_repo;
 
 const STARTING: Duration = Duration::from_secs(30);
 
+const RECORD: &str = r#"record() {
+    n=$((${n:-0} + 1))
+    printf '%s\n' "$1" > "$log/line.$$.$n"
+    printf '%s\n' "line.$$.$n" >> "$log/order"
+}
+"#;
+
+fn read_order(log: &Path) -> Vec<String> {
+    let markers = std::fs::read_to_string(log.join("order")).unwrap_or_default();
+    let line = |marker: &str| std::fs::read_to_string(log.join(marker)).ok().map(|text| text.trim_end().to_string());
+    markers.lines().filter_map(line).collect()
+}
+
 const CONSENTING: &str = r#"#!/bin/sh
 log="LOG"
-printf 'start %s\n' "$*" >> "$log/order"
+record "start $*"
 printf '  WARNING: Claude Code running in Bypass Permissions mode\n\n  \342\235\257 1. No, exit\n    2. Yes, I accept\n'
 stty -icanon 2>/dev/null
 IFS= read -r line
-printf 'got %s\n' "$line" >> "$log/order"
+record "got $line"
 while [ -d "$log" ]; do sleep 0.1; done
 "#;
 
 const FAKE: &str = r#"#!/bin/sh
 log="LOG"
-printf 'start %s\n' "$*" >> "$log/order"
-printf 'env %s\n' "$CORNERCASE_RUN_DIR" >> "$log/order"
+record "start $*"
+record "env $CORNERCASE_RUN_DIR"
 printf 'Do you trust the files in this folder?\n❯ 1. Yes, proceed\n  2. No, exit\n'
 read answer
 printf '\033[2J\033[Hagent ready> '
 stty -icanon 2>/dev/null
 IFS= read -r line
-printf 'got %s\n' "$line" >> "$log/order"
+record "got $line"
 while [ -d "$log" ]; do sleep 0.1; done
 "#;
 
@@ -82,7 +95,9 @@ impl Team {
         let (repo, log, config, worktrees, bin) =
             (git_repo(&[("README", "hi")]), TempDir::new(), TempDir::new(), TempDir::new(), TempDir::new());
         let fake = bin.path().join("claude");
-        write_executable(&fake, &script.replace("LOG", &log.path().display().to_string()));
+        let (shebang, body) = script.split_once('\n').expect("a script after its shebang");
+        let script = format!("{shebang}\n{RECORD}{body}").replace("LOG", &log.path().display().to_string());
+        write_executable(&fake, &script);
         let mut settings = Config {
             worktrees_dir: worktrees.path().display().to_string(),
             agent_commands: [("claude".to_string(), fake.display().to_string())].into(),
@@ -120,14 +135,12 @@ impl Team {
     }
 
     fn order(&self) -> Vec<String> {
-        std::fs::read_to_string(self.log.path().join("order")).unwrap_or_default().lines().map(String::from).collect()
+        read_order(self.log.path())
     }
 
     fn until_got(&mut self, n: usize) -> Vec<String> {
-        let log = self.log.path().join("order");
-        let got = |log: &Path| {
-            std::fs::read_to_string(log).unwrap_or_default().lines().filter(|l| l.starts_with("got ")).count() >= n
-        };
+        let log = self.log.path().to_path_buf();
+        let got = |log: &Path| read_order(log).iter().filter(|l| l.starts_with("got ")).count() >= n;
         let deadline = Instant::now() + STARTING;
         until_logged(&mut self.app, &self.rx, "every agent got its prompt", || got(&log) || Instant::now() >= deadline);
         assert!(got(&log), "timed out waiting for every agent to get its prompt\n{}", self.state());
@@ -239,7 +252,7 @@ fn every_agent_starts_without_asking_its_trust_is_answered_and_the_orchestrator_
 fn the_task_is_written_whole_to_the_run_folder_before_any_agent_starts() {
     let script = FAKE.replacen(
         "log=\"LOG\"\n",
-        "log=\"LOG\"\n[ -f \"$CORNERCASE_RUN_DIR/task.md\" ] && printf 'task there\\n' >> \"$log/order\"\n",
+        "log=\"LOG\"\n[ -f \"$CORNERCASE_RUN_DIR/task.md\" ] && record 'task there'\n",
         1,
     );
     let mut team = Team::with(&script);
@@ -698,9 +711,9 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
     let members: Vec<(Option<String>, u64)> =
         again.runs.all()[0].members.iter().map(|m| (Some(m.role.clone()), m.pane)).collect();
     assert_eq!(members, tabs);
-    let log = team.log.path().join("order");
+    let log = team.log.path().to_path_buf();
     until_logged(&mut again, &rx, "the orchestrator is told", || {
-        std::fs::read_to_string(&log).unwrap_or_default().lines().any(|l| l.starts_with("got cornercase restarted"))
+        read_order(&log).iter().any(|l| l.starts_with("got cornercase restarted"))
     });
     let order = team.order();
     let dir = again.runs.all()[0].dir.as_ref().expect("the run's folder").display().to_string();

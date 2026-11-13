@@ -8,14 +8,14 @@ use crate::test_util::git as git_in;
 
 const AT: &str = r#"#!/bin/sh
 log="LOG"
-printf 'start in %s\n' "$(pwd -P)" >> "$log/order"
-printf 'with %s | %s\n' "$CORNERCASE_RUN_DIR" "$*" >> "$log/order"
+record "start in $(pwd -P)"
+record "with $CORNERCASE_RUN_DIR | $*"
 printf 'Do you trust the files in this folder?\n❯ 1. Yes, proceed\n  2. No, exit\n'
 read answer
 printf '\033[2J\033[Hagent ready> '
 stty -icanon 2>/dev/null
 IFS= read -r line
-printf 'got %s\n' "$line" >> "$log/order"
+record "got $line"
 while [ -d "$log" ]; do sleep 0.1; done
 "#;
 
@@ -198,8 +198,11 @@ fn a_role_worktree_cannot_be_removed_while_its_run_lives() {
 fn a_run_comes_back_with_its_roles_in_their_worktrees_and_removal_still_finds_them() {
     let mut team = team("", "");
     let run = started(&mut team);
-    team.until_got(4);
     let trees = [tree_of(&team, "coder A"), tree_of(&team, "coder B")];
+    refreshing(&mut team.app, &team.rx, "each role's shell stands in its worktree", |app| {
+        let cwds = folders_of(app.projects.tabs());
+        trees.iter().all(|tree| cwds.contains(&Some(tree.clone())))
+    });
     let saved = team.app.state();
     let (mut again, _rx) = new_app(team.config.path().join("config.json"));
 
@@ -210,9 +213,13 @@ fn a_run_comes_back_with_its_roles_in_their_worktrees_and_removal_still_finds_th
     let workspace = workspace.expect("the run's workspace");
     let remembered: Vec<&PathBuf> = workspace.role_worktrees.iter().map(|tree| &tree.path).collect();
     assert_eq!(remembered, trees.iter().collect::<Vec<_>>());
-    let cwds: Vec<Option<PathBuf>> = workspace.tabs.iter().filter_map(|t| t.pane()).map(Term::cwd).collect();
+    let cwds = folders_of(&workspace.tabs);
     assert!(trees.iter().all(|tree| cwds.contains(&Some(tree.clone()))), "{cwds:?}");
     assert!(run.workspace > 0);
+}
+
+fn folders_of<'a>(tabs: impl IntoIterator<Item = &'a Tab>) -> Vec<Option<PathBuf>> {
+    tabs.into_iter().filter_map(|tab| tab.pane()).map(Term::cwd).collect()
 }
 
 #[test]
@@ -341,7 +348,6 @@ fn unlock_removes_a_run_whose_role_worktree_is_locked() {
 fn a_role_whose_worktree_is_gone_on_restore_says_so_in_a_toast() {
     let mut team = team("", "");
     started(&mut team);
-    team.until_got(4);
     let mut saved = team.app.state();
     let workspace = saved.projects[0].workspaces.iter_mut().find(|w| w.run.is_some()).expect("the run");
     let seat = workspace.run.as_ref().and_then(|run| run.members.iter().find(|s| s.role == "coder A")).expect("seat");
