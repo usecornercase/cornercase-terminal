@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Fields, Item, ProjectInfo};
+use super::{Fields, Item, ProjectInfo, TunnelInfo};
 use crate::machines::{Info, State};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,6 +80,8 @@ pub(crate) struct MachineSeen {
     pub(crate) retry_at: Option<String>,
     pub(crate) boot: String,
     pub(crate) projects: Vec<ProjectInfo>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) tunnels: Vec<TunnelInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -415,12 +415,20 @@ pub(crate) fn answered(text: &str) -> Result<Value> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StreamEnd {
+    Left,
+    Detached,
+    Stopped,
+    Restarted,
+}
+
 pub(crate) fn follow(
     name: &'static str,
     command: control::Command,
     each: impl FnMut(Value) -> Result<bool>,
 ) -> Result<()> {
-    follow_from(name, command, false, each)
+    follow_from(name, command, false, each).map(|_| ())
 }
 
 pub(crate) fn follow_all(
@@ -428,6 +436,14 @@ pub(crate) fn follow_all(
     command: control::Command,
     each: impl FnMut(Value) -> Result<bool>,
 ) -> Result<()> {
+    follow_from(name, command, true, each).map(|_| ())
+}
+
+pub(crate) fn follow_to_end(
+    name: &'static str,
+    command: control::Command,
+    each: impl FnMut(Value) -> Result<bool>,
+) -> Result<StreamEnd> {
     follow_from(name, command, true, each)
 }
 
@@ -436,11 +452,11 @@ fn follow_from(
     command: control::Command,
     first: bool,
     mut each: impl FnMut(Value) -> Result<bool>,
-) -> Result<()> {
+) -> Result<StreamEnd> {
     let mut link = connect()?;
     let answer = ask_on(&mut link, name, command)?;
     if first && each(answer)? {
-        return Ok(());
+        return Ok(StreamEnd::Left);
     }
     match follow_on(&mut link.reader, watched(console::stdout()), each) {
         Err(Error::ServerLost) => Err(lost(&mut link, Error::ServerLost)),
@@ -452,19 +468,21 @@ fn follow_on(
     mut stream: impl Source,
     mut out: Option<BorrowedFd<'_>>,
     mut each: impl FnMut(Value) -> Result<bool>,
-) -> Result<()> {
+) -> Result<StreamEnd> {
     loop {
         if reader_left(&stream, &mut out) {
             stream.close();
-            return Ok(());
+            return Ok(StreamEnd::Left);
         }
         match protocol::recv::<ServerMessage>(&mut stream) {
             Ok(Some(ServerMessage::Response(text))) => {
                 if each(answered(&text)?)? {
-                    return Ok(());
+                    return Ok(StreamEnd::Left);
                 }
             }
-            Ok(Some(ServerMessage::Detached | ServerMessage::Shutdown | ServerMessage::Restart(_))) => return Ok(()),
+            Ok(Some(ServerMessage::Detached)) => return Ok(StreamEnd::Detached),
+            Ok(Some(ServerMessage::Shutdown)) => return Ok(StreamEnd::Stopped),
+            Ok(Some(ServerMessage::Restart(_))) => return Ok(StreamEnd::Restarted),
             Ok(Some(ServerMessage::Frame(_) | ServerMessage::Rejected(_))) => {}
             Ok(Some(message)) => debug_assert!(message.window_only()),
             Ok(None) | Err(_) => return Err(Error::ServerLost),

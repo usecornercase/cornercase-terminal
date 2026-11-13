@@ -4,7 +4,9 @@ use std::time::SystemTime;
 
 use super::toast::{Toast, TunnelButton};
 use super::{App, Streamed};
-use crate::control::{Direction, Event, Ids, TunnelInfo, TunnelList, TunnelOrderLine, What, streamed_line};
+use crate::control::{
+    Direction, Event, HoldEnd, HoldEnded, Ids, TunnelInfo, TunnelList, TunnelOrderLine, What, streamed_line,
+};
 use crate::host::open::Browse;
 use crate::log;
 use crate::ports::Port;
@@ -271,7 +273,10 @@ impl App {
 
     fn end_for(&mut self, client: u64, order: TunnelOrder) {
         if self.opening.tunnels.holder(client).is_some_and(|holder| holder.kind != Kind::Window) {
-            log::info!("ui", "tunnel hold ended", client = client, port = order.port());
+            log::info!("ui", "tunnel hold ended", client = client, port = order.port(), ended = order.id());
+            if let Some(text) = streamed_line(&HoldEnded { ended: hold_end(order) }) {
+                self.clients.events.push(client, Streamed::Event(text));
+            }
             self.clients.events.push(client, Streamed::End);
         } else {
             self.order_tunnel(client, order, None);
@@ -365,6 +370,13 @@ impl App {
     fn publish_tunnel_event(&mut self, what: What) {
         let time = Stamp(SystemTime::now()).to_string();
         self.clients.events.publish(&[Event { time, what, ids: Ids::default() }]);
+    }
+}
+
+fn hold_end(order: TunnelOrder) -> HoldEnd {
+    match order {
+        TunnelOrder::Forget(_) => HoldEnd::Forgotten,
+        _ => HoldEnd::Closed,
     }
 }
 

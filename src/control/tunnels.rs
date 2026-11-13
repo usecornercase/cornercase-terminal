@@ -100,5 +100,25 @@ pub(crate) struct TunnelInfo {
     pub(crate) direction: Option<Direction>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum HoldEnd {
+    Closed,
+    Forgotten,
+    ServerStopped,
+    ServerRestarted,
+}
+
+impl HoldEnd {
+    pub(crate) fn server_stopped(self) -> bool {
+        matches!(self, Self::ServerStopped | Self::ServerRestarted)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct HoldEnded {
+    pub(crate) ended: HoldEnd,
+}
+
 #[cfg(test)]
 mod tests;

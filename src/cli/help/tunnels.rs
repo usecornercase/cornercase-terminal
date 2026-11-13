@@ -14,7 +14,8 @@ port 9222 of the computer that holds it. With --json it prints
 holder's connection, kind is window or hold, direction is \"reverse\" for a reverse tunnel and left
 out for the others, windows is how many windows hold tunnels for this server, 0 when none is
 attached from another computer, and takers is how many programs take tunnel orders
-(`tunnel orders`).
+(`tunnel orders`). `status --json` has the same entries, and under each of its `machines` the
+tunnels that machine lists.
 
 Examples:
   cornercase tunnels
@@ -40,7 +41,10 @@ take it over when it ends. With --json they print {\"tunnels\": [...], \"windows
 `cornercase --remote vps tunnel hold PORT` is for a program with no window: it starts its own ssh
 from this computer, waits until it is up and prints one line, {\"port\", \"local\", \"url\"}, then
 holds the tunnel until it is killed (exit 0), its output reader leaves (0), `tunnel close PORT` or
-`tunnel forget PORT` is run on the server (0), or ssh or the server connection fails (1). It
+`tunnel forget PORT` is run on the server (0, after one more line: {\"ended\": \"closed\"} or
+{\"ended\": \"forgotten\"}), the server stops or restarts (7, after {\"ended\": \"server-stopped\"} or
+{\"ended\": \"server-restarted\"}: hold it again once the server is back), or ssh or the server
+connection fails (1). It
 needs --remote (exit 2 without it), and it remembers nothing in tunnels.json. If it fails
 before the server counts it (ssh, or the local port), it tells the server, so a `tunnel open`
 that waits for it fails with the reason. With --local N it listens on N when PORT is taken on this
@@ -52,8 +56,9 @@ this computer reachable on 127.0.0.1 of vps, with `ssh -N -R 127.0.0.1:THERE:loc
 so a program on vps reaches, say, a browser's DevTools port here. THERE is a free port vps's ssh
 server picks, or the one of `--there PORT`, which fails at once when PORT is taken there. Once it
 is up it prints {\"port\", \"local\", \"url\", \"direction\": \"reverse\"}, where port is the port on vps
-and url is http://127.0.0.1:PORT, and it ends as a hold does: `tunnel close --reverse PORT` or
-`tunnel forget --reverse PORT` run on vps (0), killed (0), or ssh fails (1). It listens only on
+and url is http://127.0.0.1:PORT, and it ends as a hold does, with the same last line: `tunnel close
+--reverse PORT` or `tunnel forget --reverse PORT` run on vps (0), the server stopping or restarting
+(7), killed (0), or ssh fails (1). It listens only on
 vps's loopback, which every program and user of vps can reach, and nothing on vps can open one.
 `tunnel close PORT` and `tunnel forget PORT` without --reverse never end it.
 

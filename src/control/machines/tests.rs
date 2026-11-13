@@ -2,7 +2,7 @@ use rstest::rstest;
 use serde_json::{Value, json};
 
 use super::*;
-use crate::control::{Report, WorkspaceInfo};
+use crate::control::{Report, TunnelInfo, WorkspaceInfo};
 use crate::machines::State;
 use crate::test_util::fixture;
 
@@ -173,6 +173,15 @@ mod in_status {
                 project(1, "web-shop", Some(7), Some("github.com/acme/web-shop")),
                 project(3, "blog", None, None),
             ],
+            tunnels: vec![TunnelInfo {
+                port: 5173,
+                local: Some(5174),
+                state: "up".into(),
+                error: None,
+                holder: 9,
+                kind: "hold".into(),
+                direction: None,
+            }],
         };
         let fallen = MachineSeen {
             name: "pi".into(),
@@ -182,6 +191,7 @@ mod in_status {
             retry_at: Some("2026-10-29T10:00:04.250Z".into()),
             boot: "77-1760500000".into(),
             projects: Vec::new(),
+            tunnels: Vec::new(),
         };
         vec![linked, fallen]
     }

@@ -35,7 +35,7 @@ of the server, which then did nothing, and every command that sends a request ex
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
 updates it as one JSON line. `update` exits with 6 when this cornercase cannot replace itself, after printing the command
-to run instead.
+to run instead. `tunnel hold` exits with 7 when the server it registered with stopped or restarted.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
