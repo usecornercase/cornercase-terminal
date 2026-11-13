@@ -1,26 +1,33 @@
-#![cfg(unix)]
-
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
+#[cfg(unix)]
 use std::time::{Duration, SystemTime};
 
+#[cfg(unix)]
 use rstest::rstest;
 
+#[cfg(unix)]
 use super::{MAX_FILES, ensure, list, make, remove, valid};
+use super::{TASK, discard, ensure_task, write_task};
 use crate::test_util::TempDir;
 
+#[cfg(unix)]
 const DAY: i64 = 1_760_000_000_000;
 
+#[cfg(unix)]
 fn mode(path: &std::path::Path) -> u32 {
     fs::metadata(path).expect("metadata").permissions().mode() & 0o777
 }
 
+#[cfg(unix)]
 fn touch(path: &std::path::Path, age: u64) {
     fs::create_dir_all(path.parent().expect("parent")).expect("parents");
     let file = fs::File::create(path).expect("create");
     file.set_modified(SystemTime::now() - Duration::from_secs(age)).expect("set the time");
 }
 
+#[cfg(unix)]
 mod naming {
     use super::*;
 
@@ -62,6 +69,7 @@ mod naming {
     }
 }
 
+#[cfg(unix)]
 mod ensuring {
     use super::*;
 
@@ -94,6 +102,7 @@ mod ensuring {
     }
 }
 
+#[cfg(unix)]
 mod listing {
     use super::*;
 
@@ -133,6 +142,7 @@ mod listing {
     }
 }
 
+#[cfg(unix)]
 mod removing {
     use super::*;
 
@@ -150,5 +160,65 @@ mod removing {
     #[test]
     fn a_missing_folder_is_nothing_to_remove() {
         assert_eq!(remove(&TempDir::new().path().join("gone")).expect("remove"), (0, 0));
+    }
+}
+
+mod the_task {
+    use super::*;
+
+    #[test]
+    fn it_is_written_with_the_exact_bytes() {
+        let temp = TempDir::new();
+        let task = "  Fix the login form\r\n\nKeep the API, \u{e9}\u{1f600}.\n\n";
+        write_task(temp.path(), task).expect("write");
+        assert_eq!(fs::read(temp.path().join(TASK)).expect("read"), task.as_bytes());
+    }
+
+    #[test]
+    fn an_existing_file_is_never_overwritten() {
+        let temp = TempDir::new();
+        fs::write(temp.path().join(TASK), "mine").expect("write");
+        let e = write_task(temp.path(), "theirs").expect_err("exists");
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+        assert!(!ensure_task(temp.path(), "theirs").expect("ensure"));
+        assert_eq!(fs::read_to_string(temp.path().join(TASK)).expect("read"), "mine");
+    }
+
+    #[test]
+    fn a_missing_file_is_written_again() {
+        let temp = TempDir::new();
+        assert!(ensure_task(temp.path(), "the task").expect("ensure"));
+        assert_eq!(fs::read_to_string(temp.path().join(TASK)).expect("read"), "the task");
+    }
+
+    #[test]
+    fn discarding_removes_the_task_and_an_empty_folder_only() {
+        let temp = TempDir::new();
+        let alone = temp.path().join("alone");
+        fs::create_dir(&alone).expect("dir");
+        write_task(&alone, "x").expect("write");
+        discard(&alone);
+        assert!(!alone.exists());
+
+        let busy = temp.path().join("busy");
+        fs::create_dir(&busy).expect("dir");
+        write_task(&busy, "x").expect("write");
+        fs::write(busy.join("coder-1.md"), "answer").expect("answer");
+        discard(&busy);
+        assert!(!busy.join(TASK).exists());
+        assert!(busy.join("coder-1.md").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_named_task_is_not_written_through() {
+        let temp = TempDir::new();
+        let outside = temp.path().join("outside.txt");
+        fs::write(&outside, "outside").expect("write");
+        let dir = temp.path().join("run");
+        fs::create_dir(&dir).expect("dir");
+        symlink(&outside, dir.join(TASK)).expect("link");
+        assert!(!ensure_task(&dir, "the task").expect("ensure"));
+        assert_eq!(fs::read_to_string(&outside).expect("read"), "outside");
     }
 }

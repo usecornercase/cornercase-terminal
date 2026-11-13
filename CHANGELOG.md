@@ -4,7 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.55
 
-- Nothing changes for users: two Recap tests that failed when run in the first minutes after midnight now pass at any hour.
+- **Every role of a flow reads the whole task.** Starting a flow (with `cornercase flow run`, **start a flow**, an issue or a routine, here or on a machine) now saves the task to `task.md` in the run's folder before any agent starts, exactly as you gave it. Every role's prompt names the file, and the orchestrator passes its path instead of retelling the task, so the constraints of a long task reach the coder and the tester whole, not only what the orchestrator kept of them.
+- **A fix goes through the reviews and tests again.** When a review or a test sends the work back, the orchestrator is now told to run the stage the work went back to and every stage after it again, in order, on what changed, and to do the final action (such as opening the pull request) only once each of them that has a loop answered clean or reached its limit. Before, a fix could go on unreviewed, or a pull request open with the last fix untested.
 
 ## 0.13.54
 

@@ -258,7 +258,8 @@ test("the Flow panel lists the run's files as it plays, and a click opens one", 
   toRun(app);
   app.toggleFlow();
   app.render();
-  assert.ok(shown(app, 'Files · 0'));
+  assert.ok(shown(app, 'Files · 1'));
+  assert.ok(shown(app, 'task.md'));
   assert.ok(shown(app, 'nothing yet'));
   playUntil(app, 'coder-1.md');
   assert.ok(shown(app, 'Files · '));
@@ -269,6 +270,21 @@ test("the Flow panel lists the run's files as it plays, and a click opens one", 
   app.render();
   assert.equal(app.filesShown(), true);
   assert.ok(shown(app, '# coder, answer 1'));
+  app.destroy();
+});
+
+test("the run's folder holds the task from the start, and a click shows it whole", () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  app.render();
+  const at = app.textAt('task.md');
+  assert.ok(at);
+  app.pointerDown(at.x + 1, at.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.equal(app.filesShown(), true);
+  assert.ok(shown(app, 'Check the Stripe signature'));
   app.destroy();
 });
 

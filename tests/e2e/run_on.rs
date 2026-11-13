@@ -166,6 +166,9 @@ fn a_flow_run_on_a_machine_starts_its_team_in_a_worktree_there() {
     assert_eq!(agents, ["claude"; 3], "a role there runs an agent this test does not fake: {run}");
     let orchestrator = members.iter().find(|member| member["role"] == "orchestrator").expect("the orchestrator");
     let pane = orchestrator["pane"].to_string();
+    let folder = PathBuf::from(run["run_dir"].as_str().expect("the run's folder"));
+    assert!(!folder.starts_with(&vps.here.dir), "the folder is on the machine, not here: {run}");
+    assert_eq!(std::fs::read_to_string(folder.join("task.md")).expect("task.md there"), "add dark mode");
     let got = vps.machine.dir.join("worktrees").join("shop").join("dark-mode").join("got");
     let deadline = Instant::now() + TIMEOUT;
     while !std::fs::read_to_string(&got).unwrap_or_default().contains("add dark mode") {

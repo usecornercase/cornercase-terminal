@@ -41,6 +41,8 @@ fn a_routine_starts_its_flow_on_a_routine_branch_with_its_prompt_as_the_task() {
     let workspace = run.task.place.workspace_id.expect("the run's workspace");
     let flow_run = team.app.runs.of_workspace(workspace).expect("the flow's run");
     assert_eq!(flow_run.task, "settle the login bug");
+    let dir = flow_run.dir.as_ref().expect("the run's folder");
+    assert_eq!(std::fs::read_to_string(dir.join("task.md")).expect("task.md"), "settle the login bug");
     let QueueState::Started { pane, .. } = run.state else { panic!("started") };
     assert_eq!(Some(pane), flow_run.pane_of(ORCHESTRATOR));
     assert!(git::branch(&run.task.place.workspace.expect("folder")).is_some_and(|found| found == branch));
