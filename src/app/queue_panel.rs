@@ -361,7 +361,17 @@ impl App {
             State::Started { pane, server } | State::Kept { pane, server, .. } => self.queue_pane_live(*pane, server),
             _ => false,
         };
-        Queued { id: entry.id, when, label: entry.task.label.clone(), meta, state: entry.state.clone(), kind, live }
+        let first_line = queue::prompt_first_line(&entry.task.prompt);
+        Queued {
+            id: entry.id,
+            when,
+            label: entry.task.label.clone(),
+            first_line,
+            meta,
+            state: entry.state.clone(),
+            kind,
+            live,
+        }
     }
 
     fn queued_status(&self, state: &State) -> String {

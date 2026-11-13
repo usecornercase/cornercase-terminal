@@ -8,7 +8,7 @@ use crate::git;
 use crate::issues::Client;
 use crate::issues::locate::Locator;
 use crate::project::{Hierarchy, WorkspaceAt};
-use crate::queue::{Entry, Place, Task};
+use crate::queue::{self, Entry, Place, Task};
 
 impl App {
     pub(super) fn queue_issue(&self, project: u64, add: &QueueAdd) -> Result<Option<(Client, Locator)>, String> {
@@ -141,7 +141,7 @@ pub(super) fn queue_mode(config: &Config, agent: &str, add: &QueueAdd, old: Opti
 }
 
 pub(super) fn queue_label(add: &QueueAdd, prompt: &str, old: Option<&Entry>) -> String {
-    let mut label = add.label.clone().unwrap_or_else(|| prompt.lines().next().unwrap_or_default().trim().to_string());
+    let mut label = add.label.clone().unwrap_or_else(|| queue::prompt_name(prompt));
     if add.label.is_none()
         && add.issue.is_none()
         && let Some(old) = old.filter(|entry| entry.task.prompt == prompt)
@@ -153,7 +153,7 @@ pub(super) fn queue_label(add: &QueueAdd, prompt: &str, old: Option<&Entry>) -> 
 
 pub(super) fn queue_zone(add: &QueueAdd, old: Option<&Entry>) -> String {
     if add.zone.is_empty() {
-        old.map_or_else(crate::queue::clock::local_zone, |entry| entry.task.zone.clone())
+        old.map_or_else(queue::clock::local_zone, |entry| entry.task.zone.clone())
     } else {
         add.zone.clone()
     }

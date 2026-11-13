@@ -24,7 +24,8 @@ pub(in crate::cli) const FLOW_RUN_HELP: &str =
     "It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
 tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
 answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
-its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
+its pane ids, the stages (when the work goes back to an earlier stage, that stage and every stage
+after it run again before the work goes on), and how to drive the agents. Nothing is shown in the window unless you
 pass --focus, which shows the orchestrator's tab and opens the Flow panel; with --view ID it shows
 that tab in the view instead, and the window and its Flow panel stay as they are.
 
@@ -46,7 +47,8 @@ opens, and --no-fresh asks for HEAD whatever the setting says. Role branches sta
 either way. --fresh needs a server that knows the `fresh-branches` feature.
 
 It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
-by a tab. The run's folder for files, where every role writes its answers, is printed on stderr
+by a tab. The run's folder for files, where the task is saved as task.md before any agent starts (byte for
+byte the run's task in `flow runs --json`) and where every role writes its answers, is printed on stderr
 (run_dir with --json) and is in $CORNERCASE_RUN_DIR in the team's panes. A name is looked up in yours, then the built-in flows, then the project's: yours replaces
 a built-in flow of its name, and a project's flow never stands in for another of the same name; the
 command says so on stderr when it happens. A built-in flow deleted in Settings › Flows is refused,
@@ -187,9 +189,9 @@ Examples:
   cornercase flow messages --workspace 4
   cornercase flow messages --worktree fix-login --follow --json";
 pub(in crate::cli) const FLOW_FILES_HELP: &str =
-    "It lists the files in the run's folder, where every role writes its answers: name, size, when it was
-changed and its path, tab-separated under a header, newest first, at most 200. After the run ended it lists the
-last folder the workspace's runs made, for as long as the workspace lives.
+    "It lists the files in the run's folder, where the task is (task.md) and every role writes its
+answers: name, size, when it was changed and its path, tab-separated under a header, newest first, at most
+200. After the run ended it lists the last folder the workspace's runs made, for as long as the workspace lives.
 
 Examples:
   cornercase flow files

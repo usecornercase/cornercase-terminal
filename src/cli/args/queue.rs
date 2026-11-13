@@ -99,7 +99,10 @@ pub(crate) struct QueueAdd {
     pub(crate) worktree: Option<String>,
     #[command(flatten)]
     pub(crate) fresh: FreshArg,
-    #[arg(long, help = "Entry and tab name")]
+    #[arg(
+        long,
+        help = "Entry and tab name [default: the prompt's first words, cut after a whole word at 40 characters; with --issue, its number and title]"
+    )]
     pub(crate) name: Option<String>,
     #[arg(
         long = "account",

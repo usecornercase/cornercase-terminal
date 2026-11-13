@@ -28,21 +28,48 @@ pub(crate) fn member(role: &Role, branch: Option<&str>, dir: Option<&Path>) -> S
         ),
     };
     if let Some(dir) = dir {
-        let stem = crate::issues::slug(&role.name, 40);
-        let stem = if stem.is_empty() { "answer" } else { stem.as_str() };
-        let _ = write!(
-            told,
-            " Write each answer to a file of its own in the run's folder, {} (also `${}`), named after your role \
-             and the next number free there (`{stem}-1.md`, then `{stem}-2.md`), and end your turn with that \
-             file's path and a summary of a few lines. Anything else too long for a message (a design, logs, a \
-             script that shows a bug) goes there too, never in the worktree; if your file tools cannot reach the \
-             folder, use your shell.",
-            dir.display(),
-            super::folder::ENV
-        );
+        told.push_str(&answers(role, dir));
     }
     if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told} {WAIT_FIRST}") }
 }
+
+fn answers(role: &Role, dir: &Path) -> String {
+    let stem = crate::issues::slug(&role.name, 40);
+    let stem = if stem.is_empty() { "answer" } else { stem.as_str() };
+    format!(
+        " The run's folder is {dir} (also `${env}`). The task in full, exactly as it was given, is `{file}` there \
+         ({task}): read it before you start on the work you are sent, since the orchestrator's messages say only \
+         what each step adds. Write each answer to a file of its own in that folder, named after your role and the \
+         next number free there (`{stem}-1.md`, then `{stem}-2.md`), and end your turn with that file's path and a \
+         summary of a few lines. Anything else too long for a message (a design, logs, a script that shows a bug) \
+         goes there too, never in the worktree; if your file tools cannot reach the folder, use your shell.",
+        dir = dir.display(),
+        env = super::folder::ENV,
+        file = super::folder::TASK,
+        task = dir.join(super::folder::TASK).display()
+    )
+}
+
+fn plan(dir: Option<&Path>) -> String {
+    let give = if dir.is_some() {
+        format!(
+            "the path of `{}` (see Files) and what this stage adds, such as the paths of what the stages before \
+             produced, never a retelling of the task,",
+            super::folder::TASK
+        )
+    } else {
+        "what it needs (the task, what the stages before produced)".to_string()
+    };
+    format!(
+        "\n## Plan\n\nRun the stages in order. At each stage, send each of its roles {give} and wait for all their \
+         answers. When the work goes back to an earlier stage, that stage and every stage after it run again, in \
+         order, on what changed, before the work goes on, so no change skips a stage the first version went \
+         through.\n\n"
+    )
+}
+
+const END_WHEN: &str = "once every stage after the last change has run on it, and each of them that has a loop \
+    answered clean or reached its limit (then list what is left)";
 
 #[derive(Clone, Copy)]
 pub(crate) struct Team<'a> {
@@ -66,14 +93,11 @@ pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, team: Team, dir: Opti
     let own = pane(ORCHESTRATOR);
     let you = own.map_or_else(String::new, |id| format!(" (pane {id})"));
     let _ = writeln!(out, "- you, the orchestrator{you}: {}", flow.orchestrator.summary());
-    out.push_str(
-        "\n## Plan\n\nRun the stages in order. At each stage, send each of its roles what it needs (the task, what \
-         the stages before produced) and wait for all their answers.\n\n",
-    );
+    out.push_str(&plan(dir));
     for (i, stage) in flow.stages.iter().enumerate() {
         let _ = writeln!(out, "{}. {}", i + 1, stage_line(flow, stage));
     }
-    let _ = writeln!(out, "\nAt the end: {}.", end_line(flow.end, branch));
+    let _ = writeln!(out, "\nAt the end, {END_WHEN}: {}.", end_line(flow.end, branch));
     if !trees.is_empty() {
         out.push_str(&worktrees(branch));
     }
@@ -221,12 +245,12 @@ fn stage_line(flow: &Flow, stage: &Stage) -> String {
     };
     let to = flow.stages.get(back.to.wrapping_sub(1)).map(|s| names(&s.roles)).unwrap_or_default();
     let times = if back.at_most == 1 { "once".to_string() } else { format!("{} times", back.at_most) };
+    let (when, n) = (back.when.trim(), back.to);
     let _ = write!(
         line,
-        " If {who} {}, send them to {to} and go back to stage {}; at most {times}, then go on and list what is left \
-         in your final summary.",
-        back.when.trim(),
-        back.to
+        " If {who} {when}, send them to {to} and go back to stage {n}, then run every stage after it again, in \
+         order. Do this at most {times}; after that, go on even if {who} {when} again, and list what is left in \
+         your final summary."
     );
     line
 }
@@ -244,12 +268,15 @@ fn end_line(end: End, branch: &str) -> String {
 fn files(dir: &Path) -> String {
     format!(
         "\n## Files\n\nThe run has a folder for its files, {dir} (also `${env}` in every pane of the team). It is \
-         outside the worktree, so nothing in it is ever committed. Each agent writes every answer to a file of its \
+         outside the worktree, so nothing in it is ever committed. The task is in it as `{file}` ({task}), exactly as \
+         it was given, and every role's prompt names that file. Each agent writes every answer to a file of its \
          own there and replies with the file's path and a few lines. Pass work on by path rather than pasting \
          text, and read a file only when the summary is not enough. Write your own decisions there too, one file \
          each (`orchestrator-<n>.md`: what you asked, what came back, what you decided and why).\n",
         dir = dir.display(),
-        env = super::folder::ENV
+        env = super::folder::ENV,
+        file = super::folder::TASK,
+        task = dir.join(super::folder::TASK).display()
     )
 }
 

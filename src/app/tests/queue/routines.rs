@@ -69,6 +69,28 @@ mod runs_in_fresh_worktrees {
     }
 
     #[test]
+    fn a_routine_with_a_long_prompt_names_its_runs_tab_after_its_first_words() {
+        let mut world = routines();
+        let project = world.app.projects[0].id;
+        let add = crate::control::QueueAdd {
+            at: String::new(),
+            project: Some(project),
+            repeat: Some("2h".into()),
+            ..long_add(None)
+        };
+        let answer = world.app.add_queue_request(None, None, None, &add).expect("add").expect("answer");
+        let id = answer["id"].as_u64().expect("id");
+        world.app.run_queued(id, Instant::now()).expect("start now");
+        start_flowing(&mut world, id, 1);
+        let run = runs(&world.app, id).remove(0);
+        let QueueState::Started { pane, .. } = run.state else { panic!("started") };
+        let (_, tab) = world.app.projects.tab_with_pane(pane).expect("its tab");
+        assert_eq!(tab.name.as_deref(), Some("Review the open pull requests and fix…"));
+        let branch = run.task.place.branch.expect("branch");
+        assert!(branch.starts_with("routine/review-the-open-pull-requests-"), "{branch}");
+    }
+
+    #[test]
     fn a_run_starts_while_the_previous_one_still_works_and_branches_never_collide() {
         let mut world = routines();
         let at = time::now() + 3600;

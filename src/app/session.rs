@@ -116,10 +116,11 @@ impl App {
     }
 
     fn restore_run_dir(&self, saved: &WorkspaceState) -> Option<PathBuf> {
-        self.ensure_run_dir(saved.run.as_ref()?.dir.as_deref())
+        let run = saved.run.as_ref()?;
+        self.ensure_run_dir(run.dir.as_deref(), &run.task)
     }
 
-    pub(super) fn ensure_run_dir(&self, name: Option<&str>) -> Option<PathBuf> {
+    pub(super) fn ensure_run_dir(&self, name: Option<&str>, task: &str) -> Option<PathBuf> {
         let name = name.filter(|name| folder::valid(name))?;
         let dir = self.runs.dir().join(name);
         match folder::ensure(&dir) {
@@ -130,6 +131,7 @@ impl App {
                 return None;
             }
         }
+        ensure_task(&dir, task);
         Some(dir)
     }
 
@@ -362,4 +364,12 @@ pub(super) fn not_restored(missed: &[(String, usize)]) -> String {
     };
     let projects: Vec<&str> = missed.iter().map(|(name, _)| name.as_str()).collect();
     format!("could not restore {tabs} ({}), see server.log", projects.join(", "))
+}
+
+fn ensure_task(dir: &Path, task: &str) {
+    match folder::ensure_task(dir, task) {
+        Ok(true) => log::info!("flow", "run task written again", path = dir.display(), task_bytes = task.len()),
+        Ok(false) => {}
+        Err(e) => log::warning!("flow", "cannot write the run's task", path = dir.display(), error = e),
+    }
 }

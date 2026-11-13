@@ -80,9 +80,11 @@ function agentOf(app: App, run: Run, role: string): Agent | null {
   return fg instanceof Agent ? fg : null;
 }
 
+const taskFile = (app: App): RunFile => ({ name: 'task.md', at: app.now(), text: RUN_TASK, bytes: RUN_TASK.length });
+
 export function startRun(app: App, p: Project): Run {
   const w = app.addWorkspace(p, RUN_BRANCH, true);
-  const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], recorded: 0, files: [], ended: false };
+  const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], recorded: 0, files: [taskFile(app)], ended: false };
   for (const role of [FULL_ISSUE.orchestrator, ...FULL_ISSUE.roles]) {
     const pane = app.newPane(p, w);
     if (run.members.length) pane.parent = run.members[0].pane;
@@ -157,7 +159,7 @@ function play(app: App, run: Run): void {
           run.ended = false;
           run.messages = [];
           run.recorded = 0;
-          run.files = [];
+          run.files = [taskFile(app)];
           begin();
         },
       ),
