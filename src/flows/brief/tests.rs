@@ -40,8 +40,8 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
              even if either reports findings again, and list what is left in your final summary.",
             "3. tester. If it reports failures, send them to coder and go back to stage 1, then run every stage \
              after it again, in order. Do this at most 2 times; after that, go on even if it reports failures again",
-            "At the end, once every stage after the last change has run on it and its last answer is clean, or its \
-             loop reached its limit (then list what is left): push branch fix-login and open a pull request",
+            "At the end, once every stage after the last change has run on it, and each of them that has a loop \
+             answered clean or reached its limit (then list what is left): push branch fix-login and open a pull request",
             "(a merge request with `glab mr create` when the repository is on GitLab)",
             "Do not change the public API.\n\nKeep every message",
             "`cornercase wait --all --pane 14 --pane 15 --pane 16 --pane 17 --until turn-over",
@@ -149,10 +149,20 @@ fn a_loop_runs_its_stage_and_every_stage_after_it_again() {
 }
 
 #[test]
+fn a_last_stage_without_a_loop_does_not_hold_the_final_action_for_a_clean_answer() {
+    let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    flow.stages[2].back = None;
+    let text = brief(&flow, "x", "b", Team { members: &members(), trees: &[] }, None);
+
+    assert!(text.contains("and each of them that has a loop answered clean or reached its limit"), "{text}");
+    assert!(!text.contains("its last answer is clean"), "{text}");
+}
+
+#[test]
 fn the_final_action_waits_for_every_stage_after_the_last_change() {
     let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
-    let when = "At the end, once every stage after the last change has run on it and its last answer is clean, or \
-                its loop reached its limit (then list what is left): ";
+    let when = "At the end, once every stage after the last change has run on it, and each of them that has a loop \
+                answered clean or reached its limit (then list what is left): ";
     let pull = brief(&flow, "x", "b", Team { members: &members(), trees: &[] }, None);
     assert!(pull.contains(&format!("{when}push branch b")), "{pull}");
     flow.end = End::Commits;

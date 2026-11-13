@@ -68,8 +68,8 @@ fn plan(dir: Option<&Path>) -> String {
     )
 }
 
-const END_WHEN: &str = "once every stage after the last change has run on it and its last answer is clean, or its \
-    loop reached its limit (then list what is left)";
+const END_WHEN: &str = "once every stage after the last change has run on it, and each of them that has a loop \
+    answered clean or reached its limit (then list what is left)";
 
 #[derive(Clone, Copy)]
 pub(crate) struct Team<'a> {

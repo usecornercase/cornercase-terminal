@@ -368,7 +368,7 @@ pub(super) fn not_restored(missed: &[(String, usize)]) -> String {
 
 fn ensure_task(dir: &Path, task: &str) {
     match folder::ensure_task(dir, task) {
-        Ok(true) => log::info!("flow", "run task written again", path = dir.display(), bytes = task.len()),
+        Ok(true) => log::info!("flow", "run task written again", path = dir.display(), task_bytes = task.len()),
         Ok(false) => {}
         Err(e) => log::warning!("flow", "cannot write the run's task", path = dir.display(), error = e),
     }

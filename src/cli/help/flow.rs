@@ -24,8 +24,8 @@ pub(in crate::cli) const FLOW_RUN_HELP: &str =
     "It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
 tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
 answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
-its pane ids, the stages (a stage that sends the work back runs again with every stage after it
-before the work goes on), and how to drive the agents. Nothing is shown in the window unless you
+its pane ids, the stages (when the work goes back to an earlier stage, that stage and every stage
+after it run again before the work goes on), and how to drive the agents. Nothing is shown in the window unless you
 pass --focus, which shows the orchestrator's tab and opens the Flow panel; with --view ID it shows
 that tab in the view instead, and the window and its Flow panel stay as they are.
 
@@ -190,9 +190,8 @@ Examples:
   cornercase flow messages --worktree fix-login --follow --json";
 pub(in crate::cli) const FLOW_FILES_HELP: &str =
     "It lists the files in the run's folder, where the task is (task.md) and every role writes its
-answers: name, size, when it was
-changed and its path, tab-separated under a header, newest first, at most 200. After the run ended it lists the
-last folder the workspace's runs made, for as long as the workspace lives.
+answers: name, size, when it was changed and its path, tab-separated under a header, newest first, at most
+200. After the run ended it lists the last folder the workspace's runs made, for as long as the workspace lives.
 
 Examples:
   cornercase flow files
