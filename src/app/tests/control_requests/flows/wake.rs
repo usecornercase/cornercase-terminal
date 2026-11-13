@@ -4,7 +4,7 @@ use super::*;
 use crate::agents::Known;
 use crate::app::WATCH_AGENTS_EVERY;
 use crate::control::{FlowRuns, Snapshot};
-use crate::flows::run::{Member, RETRY_AFTER, Run};
+use crate::flows::run::{Member, RETRIES, RETRY_AFTER, Run};
 
 fn team(agent: &mut Agent, roles: &[&str]) -> Vec<u64> {
     let panes: Vec<u64> = roles.iter().map(|_| agent.start(None)).collect();
@@ -329,5 +329,25 @@ fn a_role_finishing_while_the_orchestrator_is_failed_waits_for_the_retry_delay()
     agent.finish();
     agent.refreshing("the orchestrator answers", |app| pane_screen(app, o).contains("done: coder (pane"));
 
+    assert_eq!(sent(&agent), 0);
+}
+
+#[test]
+fn a_role_finishing_after_the_retries_are_spent_wakes_the_orchestrator_with_its_line_alone() {
+    let mut agent = Agent::new();
+    let o = failed_orchestrator(&mut agent);
+    for _ in 0..RETRIES {
+        agent.app.runs.first_mut().retry.sent();
+    }
+    let c = agent.app.runs.all()[0].pane_of("coder").expect("the coder");
+    sends(&mut agent, o, c, "build the form");
+    working(&mut agent, c);
+    agent.finish();
+
+    agent.refreshing("the orchestrator is told at once", |app| prompts_in(app, o) == 2);
+    agent.finish();
+    agent.refreshing("the orchestrator answers", |app| pane_screen(app, o).contains("done: coder (pane"));
+
+    assert!(!pane_screen(&agent.app, o).contains("Your last turn ended on an error"));
     assert_eq!(sent(&agent), 0);
 }

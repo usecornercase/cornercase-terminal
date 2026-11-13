@@ -339,9 +339,10 @@ const CONTEXT_RULE: &str = "- Check your team's context before you send a role a
     80 %, tell the user with `cornercase notify`.\n";
 
 const FAILED_RULE: &str = "- An agent whose turn ended `failed` (its last message is an `API Error` line, for \
-    instance) did not do the work: read its last message first, since the error can come after it did part of it, send it the work again once, and if it fails again, tell the user with \
-    `cornercase notify`. If `cornercase send` or `cornercase mark` warns that a stage has not run since the last \
-    change, run that stage first, or say in your final summary why not.\n";
+    instance) did not do the work: read its last message first, since the error can come after it did part of \
+    it, send it the work again once, and if it fails again, tell the user with `cornercase notify`. If \
+    `cornercase send` or `cornercase mark` warns that a stage has not run since the last change, run that stage \
+    first, or say in your final summary why not.\n";
 
 fn pane_flags(flow: &Flow, members: &[Member]) -> String {
     let flags: Vec<String> = flow
