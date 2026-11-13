@@ -18,8 +18,6 @@ use crate::project::{Hierarchy, WorkspaceAt};
 use crate::ui;
 
 mod said;
-#[cfg(test)]
-mod tests;
 
 #[derive(Debug)]
 pub(crate) struct BuildsToFree {

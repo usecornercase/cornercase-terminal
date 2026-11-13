@@ -92,3 +92,6 @@ pub(super) fn builds_said(trees: &[TreeFreed]) -> (String, bool) {
     }
     (parts.join("; "), failed)
 }
+
+#[cfg(test)]
+mod tests;

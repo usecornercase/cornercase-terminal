@@ -246,3 +246,6 @@ fn seats_in(run: &Run, tab: &Tab, index: usize) -> Vec<SeatState> {
     };
     run.members.iter().filter_map(found).collect()
 }
+
+#[cfg(test)]
+mod tests;
