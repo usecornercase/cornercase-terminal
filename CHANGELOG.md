@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.54
+
+- **A program with no window can take the tunnels scripts ask for.** `cornercase --remote vps tunnel orders` prints a line once the server counts it, then one per order (`{"order":"open","port":3000}`, or `close`, `forget`), so `cornercase tunnel open 3000` on that machine asks it as it asks windows and waits for its answer: holding the port with `tunnel hold 3000` answers it, and `cornercase tunnel failed 3000 REASON` fails it with that reason (a `tunnel hold` whose `ssh` fails does that by itself). `cornercase tunnels --json` counts these programs in `takers`, and `cornercase contract` lists the feature and stream `tunnel-orders`.
+
 ## 0.13.53
 
 - **Programs can read what `cornercase update` did.** `cornercase update --json` prints one line of JSON instead of sentences: `{"outcome":"updated","from":"0.13.52","version":"0.13.53","path":"/home/me/.local/bin/cornercase"}`, `{"outcome":"up-to-date","version":"0.13.53"}`, or, when cornercase can't replace itself (Homebrew installed it, or you can't write to its folder), `{"outcome":"manual","version":"0.13.52","latest":"0.13.53","command":"brew update && brew upgrade cornercase"}`. `version` is the one on disk afterwards, on the machine it ran on, so another interface can offer the command to copy, or confirm an install on another machine (`cornercase --remote devbox update --json`) before restarting its server. With `--json` it asks nothing and never restarts the server: run `cornercase restart` when you choose. `--check --json` says what it would do, without installing.
