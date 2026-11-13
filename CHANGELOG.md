@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.56
+
+- Nothing changes for users: two Recap tests that failed when run in the first minutes after midnight now pass at any hour.
+
 ## 0.13.55
 
 - **Every role of a flow reads the whole task.** Starting a flow (with `cornercase flow run`, **start a flow**, an issue or a routine, here or on a machine) now saves the task to `task.md` in the run's folder before any agent starts, exactly as you gave it. Every role's prompt names the file, and the orchestrator passes its path instead of retelling the task, so the constraints of a long task reach the coder and the tester whole, not only what the orchestrator kept of them.
