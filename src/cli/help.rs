@@ -7,7 +7,20 @@ Without a command, cornercase opens its window, starting the server if none is r
 commands drive the running server from scripts, git hooks and the agents in its panes; they never
 start a server, except `start-server`. With --remote DESTINATION they drive the server of another
 machine, through ssh.";
-pub(super) const AFTER_HELP: &str =
+macro_rules! boot_commands {
+    () => {
+        "account add, account login, account restart, agents close, agents
+forget, agents reopen, changes base, changes discard, changes stage,
+changes unstage, changes viewed, close, collapse, config project,
+context, expand, focus, group delete, group style, held, input,
+keys, mark, move, move-pane, new-tab, new-workspace, open,
+paste-file, plugin run, queue add, queue edit, ratio, redraw,
+rename, resize, scroll, selection, send, setup, split, start, todo
+send, view-set and worktrees free-builds"
+    };
+}
+
+pub(super) const AFTER_HELP: &str = concat!(
     "Ids come from `cornercase status` and last while the server runs. Inside a pane, the commands
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window
 shows. Where a command takes --workspace ID, --worktree BRANCH names the workspace on that branch
@@ -16,8 +29,8 @@ commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no works
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
-why, in its error with --json. A command given --boot (close, rename, mark, move-pane, collapse,
-expand, account restart, context, send, input, paste-file) exits with 4 when it names another run
+why, in its error with --json.
+A command given --boot (", boot_commands!(), ") exits with 4 when it names another run
 of the server, which then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
@@ -41,7 +54,8 @@ Examples:
   pane=$(cornercase new-tab --name tests -- cargo test)
   cornercase wait --pane \"$pane\" --until shell --timeout 900
   cornercase read --pane \"$pane\" --lines 40
-  cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
+  cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait"
+);
 pub(super) const COMMAND_HELP: &str =
     "The words of COMMAND are joined with spaces and typed at the prompt once the shell is ready,
 as ssh does, so quote what the shell should read as one argument. The command returns once it
@@ -98,7 +112,8 @@ pub(super) const KEYS_HELP: &str = "Keys are encoded the way the program in the 
 
 Examples:
   cornercase keys --pane 12 ctrl+c
-  cornercase keys --pane 12 down enter";
+  cornercase keys --pane 12 down enter
+  cornercase --remote vps keys --pane 9 ctrl+c --boot 4242-1700000000";
 pub(super) const UNTIL_AFTER: &str = "Wait until the pane is in this state instead";
 pub(super) const KEY_NAMES: &str = "enter, esc, tab, backspace, space, up, down, left, right, home, end, pageup,
 pagedown, delete, insert, f1 to f12 or one character, each after any of ctrl+, alt+ and shift+";
@@ -202,6 +217,8 @@ stderr and the exit status is 0.
 take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
 since this server started. The window then shows that tab, or the workspace's active tab, streamed
 from the machine, and `status --json` reports it as `shown_remote`, with its stream's state.
+--boot does not go with --machine, whose ids are that machine's: send the command there with
+--remote and its boot.
 
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
@@ -371,44 +388,6 @@ Examples:
   cornercase surface --tab 3 --cols 120 --rows 40 --patches
   cornercase surface --view 41
   cornercase surface --popup";
-pub(super) const INPUT_HELP: &str = "For programs that draw cornercase's terminals themselves (see `cornercase surface`). Each
-EVENT is one JSON object, sent in order:
-  {\"key\": {\"code\": \"c\", \"mods\": [\"ctrl\"]}}   code as for `keys`; mods ctrl, alt, shift, super; kind press, repeat, release
-  {\"text\": \"héllo\"}                           typed text, without control characters
-  {\"paste\": \"two\\nlines\"}                     bracketed when the program asked for it
-  {\"mouse\": {\"kind\": \"down\", \"button\": \"left\", \"x\": 3, \"y\": 1}}
-                                             kind down, up, drag, moved, scroll-up, scroll-down,
-                                             scroll-left, scroll-right; x and y are cells of the
-                                             pane's terminal, from 0
-- reads one event per line from standard input.
-
-Events are encoded the way the program in the pane asked for (its keyboard protocol, application
-cursor keys, bracketed paste, mouse mode), whatever the window shows: a dialog or a field there
-takes nothing. Keys, text and pastes bring the pane's view back to the bottom. Mouse events and key
-releases that the program does not take are not sent, and said on stderr. When one event is wrong,
-or the program is not reading its input, nothing is sent. Scripts and agents should use `send` and
-`keys`, which check before typing into an agent. With --popup the events go to the plugin popup open
-in the window, its x and y being cells of the popup's terminal; add --pane with the popup's id from its
-surface lines (popup.pane) so that nothing is sent if that popup closed and another one opened.
-
---boot BOOT says which run of the server the pane id (with --popup, the popup's id) is from: `boot` in
-`status --json`, or in a machine's entry there. Ids last one run, so a server that restarted since
-refuses, nothing is typed, and the command prints why and exits with 4. --follow does not take it.
-
-With --follow it keeps running and reads one event per line from standard input (give - as the
-only EVENT) until it ends: each line goes as soon as it arrives, and the lines that arrive while
-the answer before is on its way go together, so a program types through one process (and with
---remote one ssh connection). A line may name its pane, {\"pane\": 14, \"key\": {\"code\": \"enter\"}},
-else it goes to --pane. Each request is all or nothing on its own: with --json it prints one line
-each, the answer with events (how many lines it answers) or its error, and a line that is wrong or
-refused does not stop the next ones; the command then exits with 3.
-
-Examples:
-  cornercase input --pane 12 --follow --json -
-  cornercase input --pane 12 '{\"text\": \"ls\"}' '{\"key\": {\"code\": \"enter\"}}'
-  cornercase input --pane 12 '{\"mouse\": {\"kind\": \"scroll-up\", \"x\": 10, \"y\": 5}}'
-  cornercase input --popup --pane 40 '{\"key\": {\"code\": \"down\"}}' '{\"key\": {\"code\": \"enter\"}}'
-  cornercase --remote vps input --pane 9 '{\"paste\": \"two\\nlines\"}' --boot 4242-1700000000";
 pub(super) const SCROLL_HELP: &str =
     "Moves the pane's view through its history, as the wheel does in the window, which shows the same
 view. On its alternate screen, or when it reads the mouse, a program scrolls itself: send it keys or
@@ -690,19 +669,21 @@ pub(super) const NO_FRESH_HELP: &str =
 pub(super) const QUEUE_FRESH_HELP: &str = "Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches when the entry runs; edit keeps the entry's]";
 pub(super) const BOOT_ARG: &str = "Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]";
 
-pub(super) const CONTRACT_HELP: &str =
+pub(super) const CONTRACT_HELP: &str = concat!(
     "Programs that drive cornercase without this command line (an editor extension, a dashboard) ask
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; close, rename, mark, move-pane, collapse, expand, account restart, context,
-send, input and paste-file take it as --boot, and then act only in that run. Each command is listed
+since ids last only one run; ",
+    boot_commands!(),
+    " take it as --boot, and then act only in that run. Each command is listed
 with whether it is available, and each stream with its version. A server without this command is older than the
 contract.
 
 Examples:
   cornercase contract
-  cornercase contract --json";
+  cornercase contract --json"
+);
 
 pub(super) const MOVE_HELP: &str =
     "Puts a group, a project, a workspace or a tab before another of its kind, or at the end of its
@@ -790,6 +771,7 @@ mod context;
 mod files;
 mod flow;
 mod held;
+mod input;
 mod machines;
 mod open;
 mod pair;
@@ -817,6 +799,7 @@ pub(in crate::cli) use flow::{
     FLOW_RUNS_HELP, FLOW_SAVE_HELP,
 };
 pub(in crate::cli) use held::HELD_HELP;
+pub(in crate::cli) use input::INPUT_HELP;
 pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
 pub(in crate::cli) use open::OPEN_HELP;
 pub(in crate::cli) use pair::CONFIG_PAIR_HELP;

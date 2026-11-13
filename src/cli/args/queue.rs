@@ -1,6 +1,6 @@
 use clap::{ArgGroup, Args, Subcommand};
 
-use super::{FreshArg, Print};
+use super::{BootArg, FreshArg, Print};
 use crate::cli::help::QUEUE_FRESH_HELP;
 
 #[derive(Debug, Args)]
@@ -114,4 +114,15 @@ pub(crate) struct QueueAdd {
     pub(crate) accounts: Vec<(String, String)>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
+}
+
+impl QueueAction {
+    pub(crate) fn boot(&self) -> Option<&BootArg> {
+        match self {
+            Self::Add(add) | Self::Edit { add, .. } => Some(&add.boot),
+            _ => None,
+        }
+    }
 }

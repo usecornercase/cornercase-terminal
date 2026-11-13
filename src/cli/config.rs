@@ -39,7 +39,7 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
         }
         None => answered(request(Configure::Get)?, false, json),
         Some(ConfigAction::Set { pairs }) => answered(request(Configure::Set(converted(&pairs)?))?, true, json),
-        Some(ConfigAction::Project { path, project, setup, teardown, builds }) => {
+        Some(ConfigAction::Project { path, project, setup, teardown, builds, .. }) => {
             answered(change_project(path.as_deref(), project, setup, teardown, builds.as_deref())?, true, json)
         }
         Some(ConfigAction::Secret { key }) => answered(change_secret(key)?, true, json),

@@ -209,6 +209,19 @@ mod typing {
         assert_eq!(text.err, "warning: event 2 was not sent: the program does not read the mouse that way\n");
     }
 
+    #[rstest]
+    #[case::text(false)]
+    #[case::json(true)]
+    fn ends_the_command_and_sends_nothing_after_a_stale_boot(#[case] json: bool) {
+        let lines = [r#"{"pane":2,"text":"a"}"#, r#"{"pane":3,"text":"b"}"#];
+
+        let done = typing(&lines, json, |_, _| Err(Error::StaleBoot("it restarted".into())));
+
+        assert!(matches!(done.result, Err(Error::StaleBoot(_))), "{:?}", done.result);
+        assert_eq!(done.asked.len(), 1);
+        assert!(done.out.is_empty() && done.err.is_empty(), "{:?} {:?}", done.out, done.err);
+    }
+
     #[test]
     fn goes_on_after_a_refusal_and_ends_with_a_partial_answer() {
         let done = typing(&[r#"{"pane":9,"text":"a"}"#, r#"{"pane":1,"text":"b"}"#], true, |input, _| {

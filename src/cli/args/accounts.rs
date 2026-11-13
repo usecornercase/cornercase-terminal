@@ -125,6 +125,8 @@ pub(crate) struct AccountAddArgs {
     pub(crate) view: Option<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -143,6 +145,8 @@ pub(crate) struct AccountLoginArgs {
     pub(crate) view: ViewArg,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -215,5 +219,16 @@ pub(super) fn choice(text: &str) -> Result<(String, String), String> {
     match text.split_once('=') {
         Some((agent, account)) if !agent.is_empty() => Ok((agent.to_string(), account.to_string())),
         _ => Err(format!("`{text}` is not AGENT=ACCOUNT, such as claude=work, or claude= for its system login")),
+    }
+}
+
+impl AccountAction {
+    pub(crate) fn boot(&self) -> Option<&BootArg> {
+        match self {
+            Self::Add(a) => Some(&a.boot),
+            Self::Login(a) => Some(&a.boot),
+            Self::Restart(a) => Some(&a.boot),
+            _ => None,
+        }
     }
 }

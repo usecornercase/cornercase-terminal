@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Args};
 
-use super::{Print, ViewArg, accounts, branch, machine};
+use super::{BootArg, Print, ViewArg, accounts, branch, machine};
 use crate::cli::help::{BY_BRANCH, FRESH_HELP, HERE_PANE, HERE_WORKSPACE, NO_FRESH_HELP};
 
 #[derive(Debug, Args)]
@@ -42,6 +42,8 @@ pub(crate) struct OpenArgs {
     pub(crate) into: Option<u64>,
     #[command(flatten)]
     pub(crate) create: Create,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -92,7 +94,10 @@ pub(crate) struct CloneArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).requires("worktree")))]
+#[command(
+    group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).requires("worktree")),
+    group(ArgGroup::new("one_server").args(["boot", "machine"]).multiple(false))
+)]
 pub(crate) struct NewWorkspaceArgs {
     #[arg(value_name = "NAME", help = "Its name, or its branch with --worktree")]
     pub(crate) name: String,
@@ -106,6 +111,8 @@ pub(crate) struct NewWorkspaceArgs {
     pub(crate) on: machine::MachineArg,
     #[command(flatten)]
     pub(crate) create: Create,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -122,6 +129,8 @@ pub(crate) struct NewTabArgs {
     pub(crate) create: Create,
     #[arg(last = true, value_name = "COMMAND", help = "What to type into its shell")]
     pub(crate) command: Vec<String>,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -134,4 +143,6 @@ pub(crate) struct SplitArgs {
     pub(crate) create: Create,
     #[arg(last = true, value_name = "COMMAND", help = "What to type into the new shell")]
     pub(crate) command: Vec<String>,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }

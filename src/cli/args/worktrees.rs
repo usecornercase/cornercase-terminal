@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 
-use super::{Print, branch};
+use super::{BootArg, Print, branch};
 use crate::cli::help::{
     BY_BRANCH, HERE_WORKSPACE, WORKTREES_FREE_HELP, WORKTREES_LIST_HELP, WORKTREES_REMOVE_HELP, WORKTREES_SIZE_HELP,
 };
@@ -54,6 +54,8 @@ pub(crate) struct FreeArgs {
     pub(crate) check: bool,
     #[arg(long, help = "Go on while a program runs in the worktree or a build folder holds a git checkout")]
     pub(crate) force: bool,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -95,4 +97,13 @@ pub(crate) struct ListArgs {
     pub(crate) no_sizes: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+}
+
+impl WorktreesAction {
+    pub(crate) fn boot(&self) -> Option<&BootArg> {
+        match self {
+            Self::FreeBuilds(a) => Some(&a.boot),
+            _ => None,
+        }
+    }
 }
