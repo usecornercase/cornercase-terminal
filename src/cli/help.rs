@@ -17,8 +17,8 @@ included, or one several are on (both list the workspaces to pick from), and 3 w
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json. A command given --boot (close, rename, mark, move-pane, collapse,
-expand, account restart, context, send, input, paste-file) exits with 4 when it names another run of the server, which
-then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
+expand, account restart, context, send, input, paste-file) exits with 4 when it names another run
+of the server, which then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
 updates it as one JSON line. `update` exits with 6 when this cornercase cannot replace itself, after printing the command
@@ -692,8 +692,8 @@ the server for it before anything else. `contract` is the version of the request
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
 since ids last only one run; close, rename, mark, move-pane, collapse, expand, account restart, context,
-send, input and paste-file take it as --boot, and then act only in that run. Each command is listed with whether it is
-available, and each stream with its version. A server without this command is older than the
+send, input and paste-file take it as --boot, and then act only in that run. Each command is listed
+with whether it is available, and each stream with its version. A server without this command is older than the
 contract.
 
 Examples:
