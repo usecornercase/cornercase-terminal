@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.63
+
+- **A flow run can free its build folders once its pull request merges.** `cornercase flow run … --close-when-merged --free-builds` (or `cornercase flow close-when-merged --free-builds` for a run already going) frees the build folders of the run's worktree and of its roles' own worktrees once its agents closed, as `cornercase worktrees free-builds` does: only the git-ignored folders on the project's list (`node_modules`, `target`…), and a worktree where a program still runs, or whose build folder holds a git checkout, keeps them. The toast and the `flow-merged` message say how much went (`pull request merged in fix-login: 5 agents closed, 15.7 GB of builds freed`) or why not. The worktrees, their branches and the run's folder stay, so reopening the agents rebuilds what they need. `--free-builds` needs `--close-when-merged`, and `--off` turns both off. `flow runs`, `status --json` and `flow run --json` show `free_builds`, and `cornercase contract` lists the feature `flow-free-builds`.
+
 ## 0.13.62
 
 - **An agent whose turn ended on an API error shows as failed, not as waiting for you.** A Claude Code turn that ended on an API error (a Cloudflare block, a login that expired, a rate limit) showed as `waiting` for a question nobody had asked: `cornercase send` refused the pane, a flow's orchestrator was never woken and the run sat there for an hour. Now the tab shows the red `!`, the notice says `failed`, `send` takes the next prompt and `wait --until turn-over` ends `failed`. A flow wakes its orchestrator when a role's turn ended that way, saying the work was not done, and wakes an orchestrator whose own turn failed a minute later (then after 2 and 4 minutes, three times at most). A logged-out account is not told apart: it fails the same way and needs you to log in. `cornercase flow runs` says when a run has stopped moving and for how long (`stopped` in `--json`, feature `flow-stopped`).
