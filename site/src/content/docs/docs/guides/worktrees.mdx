@@ -244,7 +244,7 @@ The confirmation checks the ticked worktrees again, so work written since the li
 
 ### Free build folders
 
-A worktree that has been idle for weeks still holds its `node_modules` or `target/`. **free builds**, on a row (hover it) or at the bottom for the ticked rows, deletes just those folders and keeps the worktree, its branch, its files and its uncommitted changes. It opens a confirmation that says how much it frees and from which folders:
+A worktree that has been idle for weeks still holds its `node_modules` or `target/`. A flow run started with `--close-when-merged --free-builds` frees its worktrees' build folders by itself once its pull request merged and its agents closed ([details](../flows/#close-them-once-the-pull-request-merges)). **free builds**, on a row (hover it) or at the bottom for the ticked rows, deletes just those folders and keeps the worktree, its branch, its files and its uncommitted changes. It opens a confirmation that says how much it frees and from which folders:
 
 <Screen
   name="worktrees-free"

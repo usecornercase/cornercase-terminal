@@ -621,6 +621,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         accounts: crate::accounts::Accounts::default(),
         name: None,
         close_when_merged: false,
+        free_builds: false,
         fresh: None,
         summary: false,
     };

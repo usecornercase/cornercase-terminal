@@ -32,6 +32,8 @@ pub(crate) struct FlowRun {
     pub(crate) machine: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) close_when_merged: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) free_builds: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fresh: Option<bool>,
 }
@@ -227,6 +229,8 @@ pub(crate) struct RunInfo {
     pub(crate) projection: Option<u64>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) close_when_merged: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) free_builds: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -328,6 +332,8 @@ pub(crate) struct FlowDefault {
 pub(crate) struct FlowCloseWhenMerged {
     pub(crate) workspace: Option<u64>,
     pub(crate) off: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) free_builds: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -337,6 +343,8 @@ pub(crate) struct CloseWhenMergedSet {
     pub(crate) project: u64,
     pub(crate) workspace: u64,
     pub(crate) close_when_merged: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) free_builds: bool,
     pub(crate) changed: bool,
 }
 
@@ -434,13 +442,13 @@ impl FlowRun {
         fields.add("issue", self.issue.is_some()).maybe("source", self.source.as_ref());
         fields.maybe("profile", self.profile.as_ref()).maybe("accounts", super::chosen(&self.accounts));
         fields.maybe("machine", self.machine.as_ref()).add("close_when_merged", self.close_when_merged);
-        fields.maybe("fresh", self.fresh);
+        fields.add("free_builds", self.free_builds).maybe("fresh", self.fresh);
     }
 }
 
 impl FlowCloseWhenMerged {
     pub(super) fn fields(&self, fields: &mut Fields) {
-        fields.maybe("workspace", self.workspace).add("off", self.off);
+        fields.maybe("workspace", self.workspace).add("off", self.off).add("free_builds", self.free_builds);
     }
 }
 
@@ -507,6 +515,8 @@ pub(crate) struct RunState {
     pub(crate) state: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) close_when_merged: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) free_builds: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

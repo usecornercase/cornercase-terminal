@@ -118,6 +118,11 @@ impl App {
 
     pub(super) fn flow_run_request(&mut self, asked: Asked, run: control::FlowRun) -> Handled {
         let Asked { client, asker, area, .. } = asked;
+        if run.free_builds && !run.close_when_merged {
+            return Err(super::malformed(
+                "free_builds needs close_when_merged: the builds are freed when the merged run's agents close",
+            ));
+        }
         if let Some(machine) = run.machine.clone() {
             return self.relay_request(client, &machine, Send::FlowRun(run));
         }
@@ -139,13 +144,14 @@ impl App {
         if run.workspace_name.is_some() {
             return Err(super::malformed("--workspace-name needs --issue"));
         }
-        let (close_when_merged, fresh) = (run.close_when_merged, run.fresh);
+        let (close_when_merged, free_builds, fresh) = (run.close_when_merged, run.free_builds, run.fresh);
         let starting = Starting {
             focus,
             view,
             note,
             parent,
             close_when_merged,
+            free_builds,
             fresh,
             ..Starting::new(flow, task, branch, accounts)
         };

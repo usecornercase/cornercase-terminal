@@ -109,3 +109,75 @@ fn the_request_is_refused_where_there_is_no_live_run(
     assert_eq!(refused.code, code);
     assert!(refused.message.contains(says), "{}", refused.message);
 }
+
+fn freeing(app: &mut App, workspace: u64, off: bool, free_builds: bool) -> CloseWhenMergedSet {
+    let args = json!({"workspace": workspace, "off": off, "free_builds": free_builds});
+    serde_json::from_value(ok(app, "flow-close-when-merged", &args)).expect("an answer")
+}
+
+#[test]
+fn a_run_started_with_free_builds_is_opted_in_and_says_so() {
+    let mut team = Team::new();
+    let run = wire::FlowRun {
+        name: "Pair".into(),
+        prompt: "Fix the login form".into(),
+        close_when_merged: true,
+        free_builds: true,
+        ..wire::FlowRun::default()
+    };
+    ask(&mut team.app, None, Command::FlowRun(run));
+
+    let Response::Ok(value) = answered(&mut team.app, &team.rx, "the flow's tabs are open") else { panic!("refused") };
+
+    let info: RunInfo = serde_json::from_value(value).expect("the run");
+    assert!(info.free_builds && info.close_when_merged);
+    assert!(team.app.runs.all()[0].free_builds);
+    assert!(listed(&team.app).runs[0].free_builds);
+}
+
+#[test]
+fn free_builds_without_close_when_merged_is_refused_and_opens_nothing() {
+    let mut team = Team::new();
+    let tabs = team.app.projects[0].workspaces[0].tabs.len();
+    let workspaces = team.app.projects[0].workspaces.len();
+
+    let refused = refused(&mut team.app, "flow-run", &json!({"name": "Pair", "prompt": "x", "free_builds": true}));
+
+    assert_eq!(refused.code, "malformed");
+    assert!(refused.message.contains("free_builds needs close_when_merged"), "{}", refused.message);
+    assert!(team.app.runs.all().is_empty());
+    assert_eq!(team.app.projects[0].workspaces.len(), workspaces);
+    assert_eq!(team.app.projects[0].workspaces[0].tabs.len(), tabs);
+}
+
+#[test]
+fn the_request_states_the_whole_choice_of_closing_and_freeing() {
+    let (mut app, _rx, _dir) = lightweight();
+    let id = workspace(&app);
+
+    let on = freeing(&mut app, id, false, true);
+    assert_eq!((on.close_when_merged, on.free_builds, on.changed), (true, true, true));
+    assert!(listed(&app).runs[0].free_builds);
+    assert!(!freeing(&mut app, id, false, true).changed);
+
+    let closing_only = freeing(&mut app, id, false, false);
+    assert_eq!((closing_only.close_when_merged, closing_only.free_builds, closing_only.changed), (true, false, true));
+    assert!(!listed(&app).runs[0].free_builds);
+
+    freeing(&mut app, id, false, true);
+    let off = freeing(&mut app, id, true, false);
+    assert_eq!((off.close_when_merged, off.free_builds, off.changed), (false, false, true));
+    assert!(!app.runs.all()[0].free_builds && !app.runs.all()[0].close_when_merged);
+}
+
+#[test]
+fn off_together_with_free_builds_is_refused() {
+    let (mut app, _rx, _dir) = lightweight();
+    let id = workspace(&app);
+
+    let refused =
+        refused(&mut app, "flow-close-when-merged", &json!({"workspace": id, "off": true, "free_builds": true}));
+
+    assert_eq!(refused.code, "malformed");
+    assert!(!app.runs.all()[0].free_builds);
+}

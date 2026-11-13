@@ -216,7 +216,12 @@ impl App {
     fn run_status(&self, workspace: u64) -> Option<RunStatus> {
         let run = self.run_of(workspace)?;
         let reached = run.reached(self.pull_request(workspace));
-        Some(RunStatus { end: run.flow.end.name().into(), reached, close_when_merged: run.close_when_merged })
+        Some(RunStatus {
+            end: run.flow.end.name().into(),
+            reached,
+            close_when_merged: run.close_when_merged,
+            free_builds: run.free_builds,
+        })
     }
 
     pub(in crate::app) fn refreshed(&self) -> u64 {
