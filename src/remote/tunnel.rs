@@ -318,8 +318,9 @@ impl Running {
 
 impl Running {
     pub(crate) fn finish(self) {
-        if let Some(child) = self.child.lock().take() {
-            process::stop_and_wait(child);
+        if let Some(mut child) = self.child.lock().take() {
+            let _ = child.kill();
+            let _ = child.wait();
         }
     }
 }
