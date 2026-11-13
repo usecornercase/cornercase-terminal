@@ -383,3 +383,80 @@ mod files {
         assert_eq!(refused.code, "not-found");
     }
 }
+
+fn told_with_warning(app: &mut App, to: &str) -> Option<String> {
+    let send = wire::SendText { pane: Some(pane_of(app, to)), text: Some("go".into()), ..wire::SendText::default() };
+    ask(app, Some(pane_of(app, "orchestrator")), Command::Send(send));
+    let mut answers = answers(app);
+    assert_eq!(answers.len(), 1);
+    done(answers.remove(0)).warning
+}
+
+#[test]
+fn a_send_that_goes_past_a_stage_not_run_since_a_change_says_so_and_still_goes() {
+    let (mut app, _rx, _dir) = lightweight();
+    for to in ["coder", "reviewer", "coder"] {
+        assert_eq!(told_with_warning(&mut app, to), None, "{to}");
+    }
+
+    let warning = told_with_warning(&mut app, "tester");
+
+    assert_eq!(
+        warning.as_deref(),
+        Some(
+            "stage 2 (reviewer, security) has not run since the last change in stage 1: run it first, or say in \
+             your summary why not"
+        )
+    );
+    assert_eq!(app.runs.all()[0].progress.active, Some(2));
+}
+
+#[test]
+fn a_send_in_the_plan_after_a_change_says_nothing() {
+    let (mut app, _rx, _dir) = lightweight();
+    for to in ["coder", "reviewer", "coder", "reviewer", "security"] {
+        assert_eq!(told_with_warning(&mut app, to), None, "{to}");
+    }
+    assert_eq!(told_with_warning(&mut app, "tester"), None);
+}
+
+#[test]
+fn marking_the_orchestrator_with_stages_not_run_says_which() {
+    let (mut app, _rx, _dir) = lightweight();
+    for to in ["coder", "reviewer", "coder"] {
+        told_with_warning(&mut app, to);
+    }
+    let orchestrator = pane_of(&app, "orchestrator");
+    let term = app.projects.pane_by_mut(orchestrator).expect("its pane");
+    term.agent.follow(Some("claude"));
+    term.agent.update(Some(Activity::Idle), true, Instant::now());
+    let mark = |reviewed| Command::Mark(wire::Mark { pane: Some(orchestrator), tab: None, reviewed });
+
+    ask(&mut app, Some(orchestrator), mark(false));
+    let told = done(answers(&mut app).remove(0)).warning;
+    ask(&mut app, Some(orchestrator), mark(true));
+    let cleared = done(answers(&mut app).remove(0)).warning;
+
+    assert_eq!(
+        told.as_deref(),
+        Some(
+            "stage 2 (reviewer, security) and stage 3 (tester) have not run since the last change in stage 1: run \
+             them first, or say in your summary why not"
+        )
+    );
+    assert_eq!(cleared, None);
+}
+
+#[test]
+fn a_run_that_stopped_moving_is_in_the_feed_only_then() {
+    let (mut app, _rx, _dir) = lightweight();
+    assert!(follow(&mut app).report.runs[0].stopped.is_none());
+    app.runs.first_mut().stopped = Some(SystemTime::UNIX_EPOCH + Duration::from_hours(500_000));
+
+    let stopped = follow(&mut app);
+    app.runs.first_mut().stopped = None;
+    let moving = serde_json::to_value(&follow(&mut app).report.runs[0]).expect("json");
+
+    assert_eq!(stopped.report.runs[0].stopped.as_deref(), Some("2027-01-15T08:00:00.000Z"));
+    assert!(moving.get("stopped").is_none(), "{moving}");
+}

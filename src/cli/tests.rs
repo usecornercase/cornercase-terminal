@@ -560,6 +560,7 @@ mod on_a_machine;
 mod output;
 mod placed;
 mod terminal;
+mod warnings;
 
 mod reading_capped {
     use super::*;

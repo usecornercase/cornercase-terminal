@@ -365,17 +365,20 @@ impl App {
             .collect()
     }
 
-    pub(super) fn flow_requested(&mut self, client: u64, noted: Vec<Noted>, accepted: bool) {
+    pub(super) fn flow_requested(&mut self, client: u64, noted: Vec<Noted>, accepted: bool) -> Option<String> {
         if !accepted {
-            return;
+            return None;
         }
+        let mut warning = None;
         for noted in noted {
             if noted.answered {
                 self.hold_flow_read(client, noted);
             } else {
-                self.record_flow(noted);
+                let skipped = self.record_flow(noted);
+                warning = warning.or(skipped);
             }
         }
+        warning
     }
 
     fn hold_flow_read(&mut self, client: u64, noted: Noted) {
@@ -400,13 +403,15 @@ impl App {
         self.panels.flow.reads.retain(|(c, noted)| Some(*c) != client && runs.has(noted.run));
     }
 
-    fn record_flow(&mut self, noted: Noted) {
+    fn record_flow(&mut self, noted: Noted) -> Option<String> {
         let Noted { run, panes: (from, to), message, .. } = noted;
         let same = |r: &Run| r.role_of(from) == Some(&message.from) && r.role_of(to) == Some(&message.to);
-        let Some(run) = self.runs.run_mut(run).filter(|r| same(r)) else { return };
+        let run = self.runs.run_mut(run).filter(|r| same(r))?;
         let message = run.record(message).clone();
+        let skipped = run.skipped(message.edge);
         let wire = FlowMessage::of(run, &message);
         self.publish_flow_message(&wire);
+        skipped
     }
 }
 

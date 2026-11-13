@@ -59,6 +59,8 @@ while printf '\033[H\033[2J%s\n────────────\n❯ ' "$sai
   rm -f "$d/finish"
   printf '{"type":"assistant","timestamp":"%s.999Z","message":{"id":"m%s","model":"synthetic","usage":{"input_tokens":20,"output_tokens":50,"cache_read_input_tokens":200,"cache_creation_input_tokens":10}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" >> "$t/s$$.jsonl"
   case "$line" in
+    *api-error*) printf '{"type":"assistant","timestamp":"%s.999Z","isApiErrorMessage":true,"error":"authentication_failed","apiErrorStatus":403,"message":{"id":"e%s","model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","content":[{"type":"text","text":"Please run /login · API Error: 403 Attention Required! | Cloudflare"}],"usage":{"input_tokens":0,"output_tokens":0}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" >> "$t/s$$.jsonl"
+      said="Please run /login · API Error: 403"; state waiting; continue ;;
     *questions*) state waiting; stty -icanon -echo min 1; q=1
       while [ $q -le 2 ]; do
         printf '\033[H\033[2JQuestion %s of 2\n❯ 1. Yes\n  2. No\n' $q

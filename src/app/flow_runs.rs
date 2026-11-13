@@ -16,7 +16,7 @@ use crate::agents::launch::{self, Launch};
 use crate::agents::parent::Parent;
 use crate::control::{MemberInfo, RunInfo};
 use crate::flows::progress::Progress;
-use crate::flows::run::{Member, RoleWorktree, Run};
+use crate::flows::run::{Due, Member, RoleWorktree, Run};
 use crate::flows::{self, Flow, Role, brief, builtin, folder, store};
 use crate::git;
 use crate::git::worktree;
@@ -46,7 +46,7 @@ pub(super) struct Wake {
     pub(super) client: u64,
     pub(super) run: u64,
     pub(super) workspace: u64,
-    pub(super) roles: Vec<(String, u64)>,
+    pub(super) roles: Vec<Due>,
 }
 
 impl Runs {
@@ -108,6 +108,11 @@ impl Runs {
                 run.forget_sent(to);
             }
         }
+    }
+
+    pub(super) fn owed_at(&self, pane: u64) -> Option<String> {
+        let (run, role) = self.seat(pane)?;
+        (role == flows::ORCHESTRATOR).then(|| run.owed()).flatten()
     }
 
     pub(super) fn next_wake(&mut self) -> u64 {

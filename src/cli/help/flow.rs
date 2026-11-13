@@ -167,6 +167,10 @@ and a restart forgets what was not run.
 
 A run that closes its agents once its pull request merges says so (close_when_merged with --json).
 
+A run that has stopped moving (its orchestrator's turn is over, no agent of the team works, it has not
+ended and no wake is being sent) says `stopped moving 50 min ago: …` (stopped with --json, the UTC time it
+stopped, left out while the run moves).
+
 Examples:
   cornercase flow runs
   cornercase flow runs --follow";

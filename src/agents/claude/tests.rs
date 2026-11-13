@@ -215,3 +215,61 @@ mod probe_model {
         assert_eq!(pane.breakdown_target(None).map(|t| t.model), Some(None));
     }
 }
+
+mod api_errors {
+    use super::*;
+    use crate::agents::Known;
+    use crate::agents::claude::transcript::transcript_path;
+    use crate::agents::context::tests::pane_look;
+    use crate::agents::context::{Look, Pane};
+
+    const PROMPT: &str =
+        r#"{"type":"user","uuid":"p","origin":{"kind":"human"},"timestamp":"2026-11-13T10:00:00.000Z"}"#;
+    const REPLY: &str = r#"{"type":"assistant","timestamp":"2026-11-13T10:00:05.000Z","message":{"id":"m1","model":"claude-opus-5-5","usage":{"input_tokens":2,"output_tokens":9}}}"#;
+    const BLOCKED: &str = r#"{"type":"assistant","timestamp":"2026-11-13T10:01:00.000Z","isApiErrorMessage":true,"error":"authentication_failed","apiErrorStatus":403,"message":{"id":"e1","model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","content":[{"type":"text","text":"Please run /login · API Error: 403 Attention Required! | Cloudflare"}],"usage":{"input_tokens":0,"output_tokens":0}}}"#;
+    const LOGGED_OUT: &str = r#"{"type":"assistant","timestamp":"2026-11-13T10:01:00.000Z","isApiErrorMessage":true,"error":"authentication_failed","message":{"id":"e2","model":"<synthetic>","role":"assistant","content":[{"type":"text","text":"Login expired · Please run /login"}],"usage":{"input_tokens":0,"output_tokens":0}}}"#;
+    const SIDECHAIN: &str = r#"{"type":"assistant","isSidechain":true,"isApiErrorMessage":true,"timestamp":"2026-11-13T10:01:00.000Z","message":{"id":"e3","model":"<synthetic>","usage":{"input_tokens":0,"output_tokens":0}}}"#;
+    const NOT_AN_ERROR: &str = r#"{"type":"assistant","isApiErrorMessage":false,"timestamp":"2026-11-13T10:01:00.000Z","message":{"id":"e4","model":"<synthetic>","usage":{"input_tokens":0,"output_tokens":0}}}"#;
+    const AFTER: &str = r#"{"type":"system","subtype":"turn_duration","timestamp":"2026-11-13T10:01:01.000Z"}"#;
+
+    fn activity(status: &str, lines: &[&str]) -> Activity {
+        let (home, work) = (TempDir::new(), TempDir::new());
+        let path = transcript_path(home.path(), work.path(), "one").expect("path");
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("project folder");
+        std::fs::write(path, lines.iter().flat_map(|line| [*line, "\n"]).collect::<String>()).expect("transcript");
+        std::fs::create_dir_all(home.path().join("sessions")).expect("sessions");
+        let session = serde_json::json!({"pid": 7, "sessionId": "one", "cwd": work.path(), "status": status});
+        std::fs::write(home.path().join("sessions/7.json"), session.to_string()).expect("session");
+        let mut pane = Pane::default();
+        pane.update(Some(Known::Claude), &Look { claude_dir: Some(home.path()), ..pane_look(7) });
+        pane.activity("").expect("an activity")
+    }
+
+    #[rstest]
+    #[case::idle("idle")]
+    #[case::waiting("waiting")]
+    fn a_turn_whose_newest_assistant_line_is_an_api_error_is_failed(#[case] status: &str) {
+        assert_eq!(activity(status, &[PROMPT, REPLY, BLOCKED, AFTER]), Activity::Failed);
+    }
+
+    #[test]
+    fn a_logged_out_account_fails_the_same_way() {
+        assert_eq!(activity("waiting", &[PROMPT, LOGGED_OUT]), Activity::Failed);
+    }
+
+    #[rstest]
+    #[case::a_prompt(&[BLOCKED, PROMPT], Activity::Idle)]
+    #[case::a_reply(&[BLOCKED, REPLY], Activity::Idle)]
+    #[case::a_sidechain_error(&[PROMPT, REPLY, SIDECHAIN], Activity::Idle)]
+    #[case::not_an_error(&[PROMPT, NOT_AN_ERROR], Activity::Idle)]
+    fn what_is_not_a_failed_turn_stays_idle(#[case] lines: &[&str], #[case] expected: Activity) {
+        assert_eq!(activity("idle", lines), expected);
+    }
+
+    #[rstest]
+    #[case::busy("busy", Activity::Working)]
+    #[case::shell("shell", Activity::Shell)]
+    fn a_working_session_is_not_failed(#[case] status: &str, #[case] expected: Activity) {
+        assert_eq!(activity(status, &[PROMPT, BLOCKED]), expected);
+    }
+}

@@ -31,6 +31,11 @@ mod describing {
     }
 
     #[test]
+    fn it_lists_the_feature_of_a_run_that_stopped_moving() {
+        assert!(FEATURES.contains(&"flow-stopped"));
+    }
+
+    #[test]
     fn it_names_the_version_the_contract_and_the_boot() {
         let descriptor = describe("1-2", &[]);
 

@@ -500,6 +500,8 @@ pub(crate) struct RunState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) not_run: Vec<usize>,
     pub(crate) ended: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) stopped: Option<String>,
     pub(crate) messages: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) state: Option<String>,

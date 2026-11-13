@@ -63,8 +63,8 @@ fn plan(dir: Option<&Path>) -> String {
     format!(
         "\n## Plan\n\nRun the stages in order. At each stage, send each of its roles {give} and wait for all their \
          answers. When the work goes back to an earlier stage, that stage and every stage after it run again, in \
-         order, on what changed, before the work goes on, so no change skips a stage the first version went \
-         through.\n\n"
+         order, on what changed, however small the change (a fix of docs only, a rebase or a merge of a moved branch \
+         included), before the work goes on, so no change skips a stage the first version went through.\n\n"
     )
 }
 
@@ -161,6 +161,54 @@ pub(crate) fn finished(roles: &[(String, u64)]) -> String {
         names(&named),
         panes.join(" ")
     )
+}
+
+pub(crate) fn owed(flow: &Flow, stages: &[usize], changed: Option<usize>) -> Option<String> {
+    if stages.is_empty() {
+        return None;
+    }
+    let named: Vec<String> = stages
+        .iter()
+        .map(|stage| {
+            let roles = flow.stages.get(*stage).map(|s| s.roles.join(", ")).unwrap_or_default();
+            format!("stage {} ({roles})", stage + 1)
+        })
+        .collect();
+    let (verb, pronoun) = if stages.len() == 1 { ("has", "it") } else { ("have", "them") };
+    let since = changed
+        .map_or_else(|| "since the last change".to_string(), |at| format!("since the last change in stage {}", at + 1));
+    Some(format!("{} {verb} not run {since}: run {pronoun} first, or say in your summary why not", names(&named)))
+}
+
+const OWN_FAILURE: &str = "Your last turn ended on an error (such as an API error) before you were done, so what \
+    you were doing then was not done: go on with the plan from where you stopped.";
+
+pub(crate) fn failed(roles: &[(String, u64)]) -> String {
+    let named: Vec<String> = roles.iter().map(|(role, pane)| format!("{role} (pane {pane})")).collect();
+    let panes: Vec<String> = roles.iter().map(|(_, pane)| format!("--pane {pane}")).collect();
+    let (their, them, wrote) =
+        if roles.len() == 1 { ("its", "it", "it last wrote") } else { ("their", "them", "they last wrote") };
+    format!(
+        "{} ended {their} turn on an error (such as an API error) before finishing the work you sent {them}, so that \
+         work was not done. Read what {wrote} with `cornercase read --last-message {}`, then send {them} the work \
+         again; if it fails again, tell the user with `cornercase notify`.",
+        names(&named),
+        panes.join(" ")
+    )
+}
+
+pub(crate) fn woken(own: bool, finished: &[(String, u64)], failed_roles: &[(String, u64)]) -> String {
+    let mut parts = Vec::new();
+    if !finished.is_empty() {
+        parts.push(self::finished(finished));
+    }
+    if !failed_roles.is_empty() {
+        parts.push(failed(failed_roles));
+    }
+    if own {
+        parts.push(OWN_FAILURE.to_string());
+    }
+    parts.join(" ")
 }
 
 pub(crate) struct Closed<'a> {
@@ -290,6 +338,12 @@ const CONTEXT_RULE: &str = "- Check your team's context before you send a role a
     its next reply: that is not \"not available\". You cannot compact yourself: when your own context passes about \
     80 %, tell the user with `cornercase notify`.\n";
 
+const FAILED_RULE: &str = "- An agent whose turn ended `failed` (its last message is an `API Error` line, for \
+    instance) did not do the work: read its last message first, since the error can come after it did part of \
+    it, send it the work again once, and if it fails again, tell the user with `cornercase notify`. If \
+    `cornercase send` or `cornercase mark` warns that a stage has not run since the last change, run that stage \
+    first, or say in your final summary why not.\n";
+
 fn pane_flags(flow: &Flow, members: &[Member]) -> String {
     let flags: Vec<String> = flow
         .roles
@@ -332,7 +386,7 @@ fn rules(flow: &Flow, members: &[Member], own: Option<u64>, dir: Option<&Path>) 
          and end your turn with a short summary.\n\
          - These rules hold after the plan too: when the user asks for more work, send it to the agent that does \
          it, wait in the foreground until it answers, then report.\n",
-        context = CONTEXT_RULE,
+        context = [CONTEXT_RULE, FAILED_RULE].concat(),
         panes = others,
         edit = if dir.is_some() { "the worktree's files" } else { "files" },
         only = if dir.is_some() { " The run's folder is the only place you write." } else { "" }

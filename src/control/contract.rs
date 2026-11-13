@@ -78,6 +78,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "tunnel-orders",
     "tunnel-reverse",
     "flow-not-run",
+    "flow-stopped",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
