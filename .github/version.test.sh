@@ -285,6 +285,14 @@ run_script failed v0.3.0 https://example.com/runs/42
 expect_call "issue create"
 expect_no_call "issue comment 7"
 
+new_case "a failure of a later attempt is told again"
+tag_released
+echo "7 OPEN" >"$FAKE/issues"
+echo "see https://example.com/runs/42/attempts/1" >"$FAKE/told"
+run_script failed v0.3.0 https://example.com/runs/42 2
+expect_call "gh issue comment 7"
+expect_call "runs/42/attempts/2"
+
 new_case "watch re-runs the jobs GitHub never started"
 tag_released
 last_run 1 failure
@@ -352,14 +360,6 @@ echo "6 publish-homebrew-formula" >"$FAKE/jobs"
 run_script watch
 expect_call "issue create"
 expect_call "after its GitHub Release was published"
-
-new_case "a failure of a later attempt is told again"
-tag_released
-echo "7 OPEN" >"$FAKE/issues"
-echo "see https://example.com/runs/42/attempts/1" >"$FAKE/told"
-run_script failed v0.3.0 https://example.com/runs/42 2
-expect_call "gh issue comment 7"
-expect_call "runs/42/attempts/2"
 
 new_case "watch tells each failure once"
 tag_released
