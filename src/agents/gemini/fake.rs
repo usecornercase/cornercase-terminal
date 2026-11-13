@@ -32,9 +32,9 @@ watch_titles() {
     sleep 0.02
   done
 }
+printf '\033]0;◇  Ready (project)\007'
 watch_titles "$@" & watcher=$!
 trap 'kill "$watcher" 2>/dev/null; wait "$watcher" 2>/dev/null' EXIT
-printf '\033]0;◇  Ready (project)\007'
 while IFS= read -r line; do
   case "$line" in
     /*|\?*|!*) printf 'local command\n' ;;
