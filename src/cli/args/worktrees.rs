@@ -21,7 +21,7 @@ pub(crate) enum WorktreesAction {
     )]
     List(ListArgs),
     #[command(about = "Measure the disk a worktree takes and its build folders", after_help = WORKTREES_SIZE_HELP)]
-    Size(TargetArgs),
+    Size(SizeArgs),
     #[command(
         about = "Delete the git-ignored build folders of a worktree and keep the worktree",
         after_help = WORKTREES_FREE_HELP
@@ -44,6 +44,14 @@ pub(crate) struct TargetArgs {
     pub(crate) path: Option<PathBuf>,
     #[command(flatten)]
     pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SizeArgs {
+    #[command(flatten)]
+    pub(crate) target: TargetArgs,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -97,13 +105,17 @@ pub(crate) struct ListArgs {
     pub(crate) no_sizes: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 impl WorktreesAction {
     pub(crate) fn boot(&self) -> Option<&BootArg> {
         match self {
+            Self::List(a) => Some(&a.boot),
+            Self::Size(a) => Some(&a.boot),
             Self::FreeBuilds(a) => Some(&a.boot),
-            _ => None,
+            Self::Remove(_) => None,
         }
     }
 }

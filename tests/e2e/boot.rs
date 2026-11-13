@@ -618,6 +618,15 @@ mod a_server_that_knows_no_boot {
         WITHOUT_THE_FEATURE,
         &["queue", "add", "--workspace", "7", "--prompt", "x", "--at", "10:00", "--boot", "1-1"]
     )]
+    #[case::read_without_the_feature(WITHOUT_THE_FEATURE, &["read", "--pane", "7", "--boot", "1-1"])]
+    #[case::wait_without_a_contract(WITHOUT_A_CONTRACT, &["wait", "--pane", "7", "--boot", "1-1"])]
+    #[case::events_without_the_feature(WITHOUT_THE_FEATURE, &["events", "--boot", "1-1"])]
+    #[case::surface_without_a_contract(WITHOUT_A_CONTRACT, &["surface", "--tab", "7", "--cols", "80", "--rows", "24", "--boot", "1-1"])]
+    #[case::view_without_the_feature(WITHOUT_THE_FEATURE, &["view", "--boot", "1-1"])]
+    #[case::changes_shared_without_a_contract(WITHOUT_A_CONTRACT, &["changes", "shared", "--workspace", "7", "--boot", "1-1"])]
+    #[case::flow_run_without_the_feature(WITHOUT_THE_FEATURE, &["flow", "run", "Quick", "--prompt", "x", "--boot", "1-1"])]
+    #[case::go_without_the_feature(WITHOUT_THE_FEATURE, &["go", "cc-1-1", "--boot", "1-1"])]
+    #[case::clone_without_the_feature(WITHOUT_THE_FEATURE, &["clone", "https://x/y.git", "--boot", "1-1"])]
     fn is_refused_by_name_and_never_gets_the_request(#[case] answer: &'static str, #[case] args: &[&str]) {
         let (here, far) = (Session::new(), Session::new());
         let (near, away) = (answering(&here, answer), answering(&far, answer));
@@ -774,3 +783,5 @@ mod acting {
         assert_eq!(ssh_runs(&session), before + 1);
     }
 }
+
+mod reading;

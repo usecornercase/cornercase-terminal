@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand};
 
-use super::Print;
+use super::{BootArg, Print};
 use crate::cli::help::ISSUE_LIST_HELP;
 
 pub(crate) const SOURCES: [&str; 7] = ["github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
@@ -26,12 +26,25 @@ pub(crate) enum IssueAction {
     People(PeopleArgs),
 }
 
+impl IssueAction {
+    pub(crate) fn boot(&self) -> &BootArg {
+        match self {
+            Self::Sources(a) => &a.boot,
+            Self::List(a) => &a.boot,
+            Self::Read(a) => &a.boot,
+            Self::People(a) => &a.boot,
+        }
+    }
+}
+
 #[derive(Debug, Args)]
 pub(crate) struct SourcesArgs {
     #[arg(long, value_name = "ID", help = PROJECT)]
     pub(crate) project: Option<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -60,6 +73,8 @@ pub(crate) struct ListArgs {
     pub(crate) cached: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -72,6 +87,8 @@ pub(crate) struct ReadArgs {
     pub(crate) project: Option<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]
@@ -84,6 +101,8 @@ pub(crate) struct PeopleArgs {
     pub(crate) cached: bool,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]

@@ -451,15 +451,24 @@ fn follow_from(
     name: &'static str,
     command: control::Command,
     first: bool,
+    each: impl FnMut(Value) -> Result<bool>,
+) -> Result<StreamEnd> {
+    follow_link(&mut connect()?, name, command, first, each)
+}
+
+fn follow_link(
+    link: &mut Link,
+    name: &'static str,
+    command: control::Command,
+    first: bool,
     mut each: impl FnMut(Value) -> Result<bool>,
 ) -> Result<StreamEnd> {
-    let mut link = connect()?;
-    let answer = ask_on(&mut link, name, command)?;
+    let answer = ask_on(link, name, command)?;
     if first && each(answer)? {
         return Ok(StreamEnd::Left);
     }
     match follow_on(&mut link.reader, watched(console::stdout()), each) {
-        Err(Error::ServerLost) => Err(lost(&mut link, Error::ServerLost)),
+        Err(Error::ServerLost) => Err(lost(link, Error::ServerLost)),
         followed => followed,
     }
 }

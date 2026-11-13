@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 
-use super::Print;
 use super::changes::Where;
+use super::{BootArg, Print};
 
 #[derive(Debug, Args)]
 pub(crate) struct FilesArgs {
@@ -24,6 +24,8 @@ pub(crate) enum FilesAction {
         follow: bool,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Print a file's text, or what kind of file it is")]
     Read {
@@ -35,6 +37,8 @@ pub(crate) enum FilesAction {
         follow: bool,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
     #[command(about = "Search the names or the text of the files of a workspace")]
     Search {
@@ -48,5 +52,15 @@ pub(crate) enum FilesAction {
         place: Where,
         #[command(flatten)]
         print: Print,
+        #[command(flatten)]
+        boot: BootArg,
     },
+}
+
+impl FilesAction {
+    pub(crate) fn boot(&self) -> &BootArg {
+        match self {
+            Self::List { boot, .. } | Self::Read { boot, .. } | Self::Search { boot, .. } => boot,
+        }
+    }
 }

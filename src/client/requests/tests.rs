@@ -829,3 +829,40 @@ mod a_shared_link {
         unshare();
     }
 }
+
+mod a_stream_from_an_earlier_run {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::the_first_answer_is_printed(true)]
+    #[case::only_what_follows_is_printed(false)]
+    fn is_refused_before_its_first_line(#[case] first: bool) {
+        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+        let server = thread::spawn(move || {
+            protocol::recv::<ClientMessage>(&mut theirs).expect("a request");
+            let refusal = control::contract::Refusal::new(control::contract::Code::StaleBoot, "it restarted");
+            let refusal = control::contract::render(Err(refusal), true).expect("an answer");
+            protocol::send(&mut theirs, &ServerMessage::Response(refusal)).expect("an answer");
+            let line = serde_json::to_string(&Response::Ok(serde_json::json!({"line": 1}))).expect("json");
+            let _ = protocol::send(&mut theirs, &ServerMessage::Response(line));
+        });
+        let mut printed = Vec::new();
+
+        let followed = follow_link(
+            &mut Link::socket(ours).expect("a link"),
+            "events",
+            control::Command::Events(control::Events::default()),
+            first,
+            |value| {
+                printed.push(value);
+                Ok(false)
+            },
+        );
+
+        server.join().expect("the fake server");
+        assert!(matches!(followed, Err(Error::StaleBoot(_))), "{followed:?}");
+        assert!(printed.is_empty(), "{printed:?}");
+    }
+}

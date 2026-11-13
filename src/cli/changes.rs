@@ -12,19 +12,19 @@ use crate::control::changes::{
 use crate::control::{
     Changes, ChangesBase, ChangesDiscard, ChangesFile, ChangesGap, ChangesMergeCheck, ChangesStage, ChangesViewed,
 };
-use crate::control::{Command, ProjectInfo, Report, WorkspaceInfo};
+use crate::control::{Command, ProjectInfo, Report, Status, WorkspaceInfo};
 use crate::error::{Error, Result};
 
 pub(super) fn run(args: ChangesArgs) -> Result<()> {
     match args.action {
-        ChangesAction::List { place, every, mode, follow, print } => {
+        ChangesAction::List { place, every, mode, follow, print, .. } => {
             list(&place, every, mode.mode.into(), follow, print.json)
         }
-        ChangesAction::File { path, place, mode, print } => file(&path, &place, &mode, print.json),
-        ChangesAction::Gap { path, hunk, place, mode, print } => gap(&path, hunk, &place, &mode, print.json),
+        ChangesAction::File { path, place, mode, print, .. } => file(&path, &place, &mode, print.json),
+        ChangesAction::Gap { path, hunk, place, mode, print, .. } => gap(&path, hunk, &place, &mode, print.json),
         ChangesAction::Base { branch, default, place, print, .. } => base(branch, default, &place, print.json),
-        ChangesAction::MergeCheck { place, with, base, print } => merge_check(&place, with, base, print.json),
-        ChangesAction::Shared { place, print } => shared(&place, print.json),
+        ChangesAction::MergeCheck { place, with, base, print, .. } => merge_check(&place, with, base, print.json),
+        ChangesAction::Shared { place, print, .. } => shared(&place, print.json),
         ChangesAction::Viewed { path, clear, digest, place, mode, .. } => viewed(&path, clear, digest, &place, &mode),
         ChangesAction::Discard { path, place, digest, yes, .. } => discard(&path, &place, digest.digest, yes),
         ChangesAction::Stage { path, place, digest, .. } => stage(&path, &place, digest.digest, true),
@@ -269,10 +269,11 @@ fn merge_verdict(check: &MergeInfo) -> String {
 }
 
 fn shared(at: &Where, json: bool) -> Result<()> {
-    let report = client::report_now().ok_or_else(|| Error::Control("cannot read the workspaces".into()))?;
-    let id = match place("changes shared", at)? {
-        Some(id) => id,
-        None => report
+    let report: Report = answer(ask("changes shared", Command::Status(Status {}))?)?;
+    let id = match (at.workspace, at.worktree.as_deref()) {
+        (Some(id), _) => id,
+        (None, Some(branch)) => report.workspace_on(branch).map_err(Error::WrongUsage)?,
+        (None, None) => report
             .workspace_here()
             .map(|w| w.id)
             .ok_or_else(|| Error::WrongUsage("no workspace is open here: pass --workspace or --worktree".into()))?,
