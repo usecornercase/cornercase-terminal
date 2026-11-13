@@ -3,6 +3,18 @@ use std::path::Path;
 use super::*;
 use crate::test_util::{exited_pid, this_pid};
 
+fn started_after(stamp: u64, spawn: impl Fn() -> crate::test_util::Running) -> crate::test_util::Running {
+    let mut later = None;
+    crate::test_util::wait_until("a process that started after the first one", || {
+        let child = spawn();
+        let started = start_stamp(child.pid()).expect("a stamp");
+        assert!(started >= stamp, "{started} is before {stamp}");
+        later = (started > stamp).then_some(child);
+        later.is_some()
+    });
+    later.expect("a later process")
+}
+
 mod alive {
     use super::*;
 
@@ -82,9 +94,9 @@ mod start_stamp {
     #[test]
     fn stays_the_same_for_a_process_and_differs_for_a_later_one() {
         let ours = start_stamp(this_pid()).expect("a stamp");
-        assert_eq!(start_stamp(this_pid()), Some(ours));
-        let later = crate::test_util::Running::spawn(Command::new("/bin/sleep").arg("30"));
+        let later = started_after(ours, || crate::test_util::Running::spawn(Command::new("/bin/sleep").arg("30")));
         assert!(start_stamp(later.pid()).is_some_and(|stamp| stamp > ours));
+        assert_eq!(start_stamp(this_pid()), Some(ours));
     }
 
     #[test]
@@ -642,10 +654,12 @@ mod on_windows {
     #[test]
     fn a_child_starts_after_this_process_and_keeps_its_start() {
         let dir = TempDir::new();
-        let ping = ping(dir.path());
+        let ours = start_stamp(this_pid()).expect("a stamp");
+        let ping = started_after(ours, || ping(dir.path()));
         let stamp = start_stamp(ping.pid()).expect("a stamp");
 
-        assert!(start_stamp(this_pid()).is_some_and(|ours| ours < stamp));
+        assert_eq!(start_stamp(this_pid()), Some(ours));
+        assert!(ours < stamp);
         assert_eq!(start_stamp(ping.pid()), Some(stamp));
         assert!(running(ping.pid(), Some(stamp)));
         assert!(!running(ping.pid(), Some(stamp + 1)));
