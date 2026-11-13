@@ -314,9 +314,7 @@ impl Running {
             process::stop(child);
         }
     }
-}
 
-impl Running {
     pub(crate) fn finish(self) {
         if let Some(mut child) = self.child.lock().take() {
             let _ = child.kill();

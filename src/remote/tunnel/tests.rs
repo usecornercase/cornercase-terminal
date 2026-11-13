@@ -214,6 +214,19 @@ mod the_owner {
         wait_until("the owner is gone", || owner(pid, "vps", forward) == Owner::Gone);
         assert_eq!(owner(0, "vps", forward), Owner::Gone);
     }
+
+    #[test]
+    fn is_gone_the_moment_finish_returns() {
+        let dir = TempDir::new();
+        let ssh = ssh_in(&dir);
+        let forward = Forward { port: 5173, local: free_port() };
+        let (running, _reports) = start(&ssh, forward);
+        let pid = running.pid();
+
+        running.finish();
+
+        assert_eq!(owner(pid, "vps", forward), Owner::Gone);
+    }
 }
 
 mod the_local_port {
