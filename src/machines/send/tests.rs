@@ -4,6 +4,7 @@ use rstest::rstest;
 use serde_json::{Value, json};
 
 use super::*;
+use crate::control::contract::Code;
 
 fn start() -> Start {
     Start {

@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use super::act::{self, CHECK, QUICK, REMOVE as WORKTREE};
 use super::run_on;
-use crate::control::contract::{Code, Refusal};
+use crate::control::contract::{self, Refusal};
 use crate::control::{
     AccountList, CloneFile, CloneRepository, Command, FlowList, FlowRun, Fold, IssueSources, Item, NewTab,
     NewWorkspace, Start, Until,
@@ -146,13 +146,9 @@ impl Send {
 
 pub(crate) fn same_run(machine: &str, asked: Option<&str>, reported: Option<&str>) -> Result<(), Refusal> {
     match (asked, reported) {
-        (Some(asked), Some(reported)) if asked != reported => Err(Refusal::new(
-            Code::StaleBoot,
-            format!(
-                "this request is for the cornercase server started as {asked} on {machine}, but {machine} last \
-                reported from the one started as {reported}; its ids may name other items now, so read \
-                `cornercase status` again"
-            ),
+        (Some(asked), Some(reported)) if asked != reported => Err(contract::stale_boot(
+            &format!("{asked} on {machine}"),
+            &format!("{machine} last reported from the one started as {reported}"),
         )),
         _ => Ok(()),
     }
