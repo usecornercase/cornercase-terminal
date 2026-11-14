@@ -57,6 +57,14 @@ pub(super) fn set_view(view: u64) {
     });
 }
 
+pub(super) fn set_contract() {
+    SHARED.with_borrow_mut(|shared| {
+        if let Some(shared) = shared {
+            shared.envelope.contract = Some(control::contract::CONTRACT);
+        }
+    });
+}
+
 pub(super) fn set_boot(boot: &str) {
     SHARED.with_borrow_mut(|shared| {
         if let Some(shared) = shared {

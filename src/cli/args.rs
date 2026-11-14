@@ -382,6 +382,16 @@ impl Control {
 }
 
 impl Control {
+    pub(crate) fn machine(&self) -> Option<&str> {
+        match self {
+            Self::Start(a) => a.on.machine.as_deref(),
+            Self::NewWorkspace(a) => a.on.machine.as_deref(),
+            Self::Focus(a) => a.machine.as_deref(),
+            Self::Flow(FlowArgs { action: FlowAction::Run(run) }) => run.on.machine.as_deref(),
+            _ => None,
+        }
+    }
+
     pub(crate) fn boot(&self) -> Option<&str> {
         self.own_boot().or_else(|| self.action_boot()).and_then(|arg| arg.boot.as_deref())
     }
@@ -671,7 +681,7 @@ pub(crate) struct FocusArgs {
     #[arg(
         long,
         value_name = "NAME",
-        conflicts_with_all = ["pane", "worktree", "project", "view", "reveal", "boot"],
+        conflicts_with_all = ["pane", "worktree", "project", "view", "reveal"],
         help = "Pick one of this machine's workspaces or tabs as the one shown, whose tab the window shows from there: --workspace and --tab are its ids"
     )]
     pub(crate) machine: Option<String>,

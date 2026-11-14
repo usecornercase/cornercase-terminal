@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use super::MachineEvent;
 use super::checks::Checking;
+use super::{Held, MachineEvent};
 use crate::app::App;
 use crate::app::control::machines::unknown;
 use crate::app::event::AppEvent;
@@ -110,6 +110,19 @@ impl App {
         });
     }
 
+    fn relayed_boot(&self, held: &Held, send: &send::Send) -> Result<Option<String>, Refusal> {
+        let boot = held.seen.as_ref().map(|seen| seen.boot.clone());
+        send::same_run(&held.name, send.machine_boot(), boot.as_deref())?;
+        if held.status.state != State::Linked {
+            return Err(Refusal::new(Code::Unavailable, self.unlinked(held)));
+        }
+        if boot.is_none() && (send.focus() || send.machine_boot().is_some()) {
+            let why = format!("{} has not reported yet; try again", held.name);
+            return Err(Refusal::new(Code::Unavailable, why));
+        }
+        Ok(boot)
+    }
+
     pub(in crate::app) fn send_to_machine(
         &mut self,
         name: &str,
@@ -119,14 +132,7 @@ impl App {
         self.follow_machines();
         let held = self.machines.held().iter().find(|held| held.name.eq_ignore_ascii_case(name));
         let Some(held) = held else { return Err(unknown(name)) };
-        if held.status.state != State::Linked {
-            return Err(Refusal::new(Code::Unavailable, self.unlinked(held)));
-        }
-        let boot = held.seen.as_ref().map(|seen| seen.boot.clone());
-        if boot.is_none() && send.focus() {
-            let why = format!("{} has not reported yet; try again", held.name);
-            return Err(Refusal::new(Code::Unavailable, why));
-        }
+        let boot = self.relayed_boot(held, &send)?;
         let picks = self.machines.picks;
         let target = Sent { machine: held.name.clone(), link: held.link.id(), boot: boot.clone(), picks };
         let awaited = target.clone();

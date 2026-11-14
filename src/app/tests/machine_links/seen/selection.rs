@@ -243,7 +243,10 @@ mod requested {
     use super::*;
 
     fn focused(app: &mut App, machine: &str, item: &Value) -> std::result::Result<Value, Value> {
-        let args = json!({"machine": machine, "item": item});
+        focused_on(app, &json!({"machine": machine, "item": item}))
+    }
+
+    fn focused_on(app: &mut App, args: &Value) -> std::result::Result<Value, Value> {
         let text = json!({"contract": 1, "command": "focus-machine", "args": args}).to_string();
         app.request(7, &text, Some(AREA), Instant::now());
         let answers = app.take_answers();
@@ -292,6 +295,42 @@ mod requested {
         assert_eq!(error["code"], code);
         assert!(error["message"].as_str().is_some_and(|message| message.contains(words)), "{error}");
         assert_eq!(shown(&rig.app), Some(at(BOOT, 1, 13, "web-shop")));
+    }
+
+    #[test]
+    fn picks_it_when_the_boot_it_was_aimed_at_is_its_last_snapshot_s() {
+        let (mut rig, _ends, _theirs) = seen_by();
+
+        focused_on(&mut rig.app, &json!({"machine": "vps", "item": {"tab": 21}, "machine_boot": BOOT})).expect("shown");
+
+        assert_eq!(shown(&rig.app), Some(at(BOOT, 2, 21, "blog")));
+    }
+
+    #[rstest]
+    #[case::a_workspace_it_has(json!({"workspace": 20}))]
+    #[case::a_workspace_it_does_not_have(json!({"workspace": 99}))]
+    fn refuses_another_run_before_looking_for_the_id_and_picks_nothing(#[case] item: Value) {
+        let (mut rig, _ends, _theirs) = seen_by();
+        rig.app.select_remote("vps", RemoteItem::Workspace(10));
+
+        let error = focused_on(&mut rig.app, &json!({"machine": "vps", "item": item, "machine_boot": "vps-2"}))
+            .expect_err("refused");
+
+        assert_eq!(error["code"], "stale-boot");
+        let message = error["message"].as_str().unwrap_or_default();
+        assert!(message.contains("started as vps-2 on vps") && message.contains("started as vps-1"), "{error}");
+        assert_eq!(shown(&rig.app), Some(at(BOOT, 1, 13, "web-shop")));
+    }
+
+    #[test]
+    fn refuses_a_boot_for_a_machine_that_has_sent_nothing_yet() {
+        let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
+
+        let args = json!({"machine": "vps", "item": {"workspace": 10}, "machine_boot": BOOT});
+        let error = focused_on(&mut rig.app, &args).expect_err("refused");
+
+        assert_eq!(error["code"], "unavailable");
+        assert_eq!(rig.app.shown_remote(), None);
     }
 
     #[test]
