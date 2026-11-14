@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.79
+
+- **The window shows your bots.** Once a bot exists, a **Bots** section appears in the sidebar (` More ▴ › new bot… ` or `b` in the keys menu makes the first). A click on a bot shows its chat in place of the panes: what you wrote in bubbles, its answers in Markdown with highlighted code, the commands it ran folded under `+N steps`, and a spinner with ` stop ` while it works. Type in the field at the bottom and press `Enter` to send; a paste keeps its line breaks, `Esc` clears the field, and a message sent while the bot answers is held and goes next. A row shows the spinner, or `●` with the number of unread answers, and its ` ⋯ ` (or a right-click) has rename, edit…, new conversation, open folder and remove…, which asks first. The new bot form picks the agent (the ones that cannot be bots are greyed with the reason), the model, effort, account, access (full access is never chosen for you) and what the bot is for. The section folds, and the fold is kept. In a narrow window, ` Bots › ` in the projects menu lists them.
+- **A bot's answer has a ` go ` in its toast, and a click on its desktop notification shows the chat.** An answer that arrives while you read that chat is not counted as unread and does not notify.
+- **A link in a bot's answer is copied when you click it**, not opened: a server never makes your window open an address.
+- **For programs**: `cornercase bot edit --about TEXT` writes what a bot is for (`bot.md`), `cornercase status --json` has `shown_bot` while a window shows a bot's chat, and `cornercase contract` lists the features `bot-about` and `shown-bot`.
+
 ## 0.13.78
 
 - **Pair the cornercase app on your phone.** Settings › Remote has a **Phone app** section: turn on **phone app**, select **pair a phone app** and scan the code with the app. It reaches this computer on your Wi-Fi or over Tailscale, with no ssh and no browser, and the code works once, for ten minutes. Each paired app gets a row there, and `Enter` on it forgets the app and disconnects it at once. The phone app has its own switch, code and list, apart from the browser's.
