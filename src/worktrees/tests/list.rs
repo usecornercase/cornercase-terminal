@@ -297,3 +297,52 @@ fn a_merged_pull_request_covers_a_row_only_at_the_commit_it_ended_at() {
     assert!(!at(Some("abc"), None), "it does not say where it ended");
     assert!(!at(None, None), "nothing was read");
 }
+
+#[test]
+fn a_merged_tickable_linked_row_is_the_one_to_free() {
+    let merged = || {
+        let mut r = row("p", "a", Kind::Linked);
+        r.scan = Some(Ok(scan_of(Some(HOUR), true)));
+        r
+    };
+    assert!(merged().merged_to_free());
+
+    let mut fresh = merged();
+    fresh.scan = Some(Ok(Scan { has_upstream: false, ..scan_of(Some(HOUR), true) }));
+    let mut prunable = merged();
+    prunable.found.kind = Kind::Prunable;
+    let mut orphan = merged();
+    orphan.found.kind = Kind::Orphan;
+    let mut removing = merged();
+    removing.removing = true;
+    let mut live_removing = merged();
+    live_removing.live = Some(Live { removing: true, ..live() });
+    let mut role = merged();
+    role.live = Some(Live { role_of_run: true, ..live() });
+    let mut freeing = merged();
+    freeing.freeing = true;
+    let mut gone = merged();
+    gone.gone = true;
+    for not in [fresh, prunable, orphan, removing, live_removing, role, freeing, gone] {
+        assert!(!not.merged_to_free(), "{not:?}");
+    }
+}
+
+#[test]
+fn the_merged_total_counts_merged_rows_with_builds_only() {
+    let row_with = |branch: &str, merged: bool, builds: Option<u64>| {
+        let mut r = row("p", branch, Kind::Linked);
+        r.scan = Some(Ok(scan_of(Some(HOUR), merged)));
+        r.size = builds.map(|bytes| Ok(size_of(bytes + 10, bytes)));
+        r
+    };
+    let list = List::new(vec![
+        row_with("a", true, Some(100)),
+        row_with("b", true, Some(50)),
+        row_with("c", true, Some(0)),
+        row_with("d", true, None),
+        row_with("e", false, Some(900)),
+    ]);
+
+    assert_eq!(list.merged_total(), (150, 2));
+}

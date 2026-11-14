@@ -74,6 +74,33 @@ fn every_worktree_is_listed_with_its_reasons_and_size() {
     let _ = std::fs::remove_dir_all(&repo);
 }
 
+#[test]
+fn the_builds_of_merged_worktrees_are_added_up_and_freed_by_one_command() {
+    let Opened { session, repo, checkout, .. } = open_worktree("worktree-merged", "e2e/merged");
+    let url = repo.display().to_string();
+    git(&repo, &["config", "remote.origin.url", &url]);
+    git(&repo, &["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"]);
+    git(&repo, &["config", "branch.e2e/merged.remote", "origin"]);
+    git(&repo, &["config", "branch.e2e/merged.merge", "refs/heads/e2e/merged"]);
+    git(&repo, &["update-ref", "refs/remotes/origin/e2e/merged", "refs/heads/e2e/merged"]);
+
+    let listed = session.says(&["worktrees", "list"]);
+    assert!(listed.ends_with("of builds in 1 merged worktree: cornercase worktrees free-builds --merged"), "{listed}");
+    let check = session.says(&["worktrees", "free-builds", "--merged", "--check"]);
+    assert!(check.starts_with("would free ") && check.contains("node_modules"), "{check}");
+    assert!(checkout.join("node_modules").is_dir(), "the check deleted the folder");
+
+    let freed = session.says(&["worktrees", "free-builds", "--merged"]);
+
+    assert!(freed.starts_with("freed ") && freed.ends_with("in 1 merged worktree"), "{freed}");
+    assert!(!checkout.join("node_modules").exists() && checkout.join("tracked.txt").is_file());
+    let again = session.says(&["worktrees", "free-builds", "--merged"]);
+    assert_eq!(again, "no merged worktree has builds to free");
+    let forced = session.cli(&["worktrees", "free-builds", "--merged", "--force"]);
+    assert_eq!(forced.status.code(), Some(2), "{forced:?}");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
 fn has_branch(repo: &std::path::Path, branch: &str) -> bool {
     let reference = format!("refs/heads/{branch}");
     let mut found = std::process::Command::new("git");

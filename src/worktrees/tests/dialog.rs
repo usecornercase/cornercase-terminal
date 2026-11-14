@@ -334,3 +334,44 @@ fn the_order_tabs_change_the_order_and_restart_the_selection() {
     assert_eq!(d.list.order, Order::Size);
     assert_eq!(d.selected, Some(0));
 }
+
+fn merged_row(d: &mut Dialog, row: usize) {
+    d.list.rows[row].scan = Some(Ok(scan_of(Some(Duration::from_secs(60)), true)));
+}
+
+#[test]
+fn free_merged_opens_the_free_step_for_every_merged_row_with_builds() {
+    let mut d = dialog();
+    with_builds(&mut d, &[0, 1]);
+    merged_row(&mut d, 0);
+    d.list.filter = "b".to_string();
+    d.toggle(1);
+
+    assert_eq!(d.click(Hit::FreeMerged), Action::Free);
+
+    assert_eq!(d.step, Step::Free { paths: vec![d.list.rows[0].found.path.clone()] });
+    assert!(d.list.rows[1].ticked && !d.list.rows[0].ticked);
+}
+
+#[test]
+fn free_merged_with_nothing_merged_does_nothing() {
+    let mut d = dialog();
+    with_builds(&mut d, &[0, 1]);
+    merged_row(&mut d, 1);
+    d.list.rows[1].size = None;
+
+    assert_eq!(d.click(Hit::FreeMerged), Action::None);
+    assert_eq!(d.step, Step::List);
+}
+
+#[test]
+fn free_merged_does_nothing_outside_the_list_step() {
+    let mut d = dialog();
+    with_builds(&mut d, &[0, 1]);
+    merged_row(&mut d, 0);
+    d.click(Hit::Free(1));
+    let step = d.step.clone();
+
+    assert_eq!(d.click(Hit::FreeMerged), Action::None);
+    assert_eq!(d.step, step);
+}

@@ -154,6 +154,7 @@ impl App {
         match to {
             ListFor::Dialog(generation) => self.worktrees_listed(generation, found.unwrap_or_default()),
             ListFor::Request { key, sizes } => self.worktree_rows_listed(key, sizes, found),
+            ListFor::FreeMerged { key, check } => self.merged_rows_listed(key, check, found),
         }
     }
 
@@ -450,6 +451,7 @@ impl App {
             Some(ui::WorktreesHit::Changes(i)) => row(i).map(Hit::Changes),
             Some(ui::WorktreesHit::Free(i)) => row(i).map(Hit::Free),
             Some(ui::WorktreesHit::FreeTicked) => Some(Hit::FreeTicked),
+            Some(ui::WorktreesHit::FreeMerged) => Some(Hit::FreeMerged),
             Some(ui::WorktreesHit::Order(order)) => Some(Hit::Order(order)),
             Some(ui::WorktreesHit::Remove) => Some(Hit::Remove),
             Some(ui::WorktreesHit::Done) => Some(Hit::Done),
@@ -558,6 +560,7 @@ impl App {
             scroll: dialog.scroll,
             ticked,
             free,
+            merged: dialog.list.merged_total().1,
             order: dialog.list.order,
             total,
             note,

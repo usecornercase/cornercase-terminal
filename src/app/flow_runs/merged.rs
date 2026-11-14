@@ -4,7 +4,6 @@ use std::time::Instant;
 use self::said::{Outcome, TreeFreed, builds_said};
 use crate::app::App;
 use crate::app::closed_agents::{Plan, closed_and, closed_message};
-use crate::app::control::Asker;
 use crate::app::control::worktrees::Freeing;
 use crate::app::event::AppEvent;
 use crate::app::notifications::{Message, MessageKind};
@@ -124,17 +123,9 @@ impl App {
     }
 
     fn start_free(&mut self, entry: BuildsToFree) {
-        let mut keys = Vec::new();
-        let mut targets = Vec::new();
-        for (role, path) in &entry.trees {
-            let target = self.freeing(Asker::default(), None, Some(path), false);
-            if let Ok(freeing) = &target {
-                let key = self.clients.requests.key();
-                self.git.frees.request_frees(key, freeing.path.clone());
-                keys.push(key);
-            }
-            targets.push((role.clone(), path.clone(), target));
-        }
+        let (claims, keys) = self.claim_frees(entry.trees.iter().map(|(_, path)| path.as_path()), false);
+        let targets: Vec<_> =
+            entry.trees.iter().zip(claims).map(|((role, path), claim)| (role.clone(), path.clone(), claim)).collect();
         let job = Job::new(Level::Info, "flow", "free builds after the merge")
             .with("workspace", entry.workspace)
             .with("worktrees", entry.trees.len());
@@ -150,9 +141,7 @@ impl App {
 
     pub(in crate::app) fn merged_builds_freed(&mut self, done: MergedBuilds) {
         let MergedBuilds { entry, keys, result } = done;
-        for key in keys {
-            self.git.frees.request_ended(key);
-        }
+        self.end_frees(&keys);
         let (clause, failed) = match &result {
             Ok(trees) => builds_said(trees),
             Err(e) => (format!("could not free the builds: {e}"), true),

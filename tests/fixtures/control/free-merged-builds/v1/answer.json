@@ -1,0 +1,46 @@
+{
+  "check": false,
+  "bytes": 27380416512,
+  "worktrees": [
+    {
+      "outcome": "freed",
+      "why": null,
+      "path": "/wt/shop/issue-106",
+      "check": false,
+      "bytes": 27380416512,
+      "folders": [
+        {
+          "path": "target",
+          "bytes": 27380416512
+        }
+      ],
+      "kept": [],
+      "failed": [],
+      "running": []
+    },
+    {
+      "outcome": "refused",
+      "why": "cargo runs in it",
+      "path": "/wt/shop/issue-156",
+      "check": false,
+      "bytes": 0,
+      "folders": [],
+      "kept": [],
+      "failed": [],
+      "running": [
+        "cargo"
+      ]
+    },
+    {
+      "outcome": "failed",
+      "why": "/wt/shop/issue-164: No such file or directory (os error 2)",
+      "path": "/wt/shop/issue-164",
+      "check": false,
+      "bytes": 0,
+      "folders": [],
+      "kept": [],
+      "failed": [],
+      "running": []
+    }
+  ]
+}

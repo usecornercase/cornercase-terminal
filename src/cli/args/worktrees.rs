@@ -23,7 +23,7 @@ pub(crate) enum WorktreesAction {
     #[command(about = "Measure the disk a worktree takes and its build folders", after_help = WORKTREES_SIZE_HELP)]
     Size(SizeArgs),
     #[command(
-        about = "Delete the git-ignored build folders of a worktree and keep the worktree",
+        about = "Delete the git-ignored build folders of a worktree, or of every merged one, and keep the worktrees",
         after_help = WORKTREES_FREE_HELP
     )]
     FreeBuilds(FreeArgs),
@@ -62,6 +62,19 @@ pub(crate) struct FreeArgs {
     pub(crate) check: bool,
     #[arg(long, help = "Go on while a program runs in the worktree or a build folder holds a git checkout")]
     pub(crate) force: bool,
+    #[arg(
+        long,
+        conflicts_with_all = ["workspace", "worktree", "path", "force"],
+        help = "Free the build folders of every merged worktree, as `worktrees list` adds them up; one where a program runs or a build folder holds a git checkout keeps them"
+    )]
+    pub(crate) merged: bool,
+    #[arg(
+        long,
+        value_name = "ID",
+        requires = "merged",
+        help = "With --merged, only the worktrees of this project's repository [default: every worktree on disk]"
+    )]
+    pub(crate) project: Option<u64>,
     #[command(flatten)]
     pub(crate) boot: BootArg,
 }

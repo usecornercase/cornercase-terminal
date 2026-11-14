@@ -18,6 +18,7 @@ impl Command {
             || self.flow_fields(&mut fields)
             || self.account_fields(&mut fields)
             || self.tunnel_fields(&mut fields)
+            || self.worktree_fields(&mut fields)
             || self.server_fields(&mut fields);
         fields.0
     }
@@ -213,6 +214,18 @@ impl Command {
         true
     }
 
+    fn worktree_fields(&self, fields: &mut Fields) -> bool {
+        match self {
+            Self::WorktreeSize(size) => size.fields(fields),
+            Self::Worktrees(list) => list.fields(fields),
+            Self::FreeBuilds(free) => free.fields(fields),
+            Self::FreeMergedBuilds(free) => free.fields(fields),
+            Self::WorktreesRemove(remove) => remove.fields(fields),
+            _ => return false,
+        }
+        true
+    }
+
     fn server_fields(&self, fields: &mut Fields) -> bool {
         match self {
             Self::Go(_)
@@ -237,14 +250,10 @@ impl Command {
             Self::StopPort(stop) => stop.fields(fields),
             Self::Processes(processes) => processes.fields(fields),
             Self::StopProcess(stop) => stop.fields(fields),
-            Self::WorktreeSize(size) => size.fields(fields),
-            Self::Worktrees(list) => list.fields(fields),
             Self::PullRequest(read) => read.fields(fields),
             Self::Context(read) => read.fields(fields),
             Self::Clone(clone) => clone.fields(fields),
             Self::Recap(ask) => ask.fields(fields),
-            Self::FreeBuilds(free) => free.fields(fields),
-            Self::WorktreesRemove(remove) => remove.fields(fields),
             Self::Machines(machines) => machines.fields(fields),
             Self::FocusMachine(focus) => focus.fields(fields),
             Self::Tour(tour) => tour.fields(fields),

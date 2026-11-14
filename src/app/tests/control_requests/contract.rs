@@ -131,6 +131,10 @@ mod opting_in {
         r#"{"contract":1,"command":"notify","args":{"text":"hi","close_when_merged":false}}"#,
         "args.close_when_merged"
     )]
+    #[case::no_force_where_a_sweep_never_forces(
+        r#"{"contract":1,"command":"free-merged-builds","args":{"project":null,"check":true,"force":true}}"#,
+        "args.force"
+    )]
     #[case::not_freeing_builds_where_no_flow_runs(
         r#"{"contract":1,"command":"notify","args":{"text":"hi","free_builds":false}}"#,
         "args.free_builds"

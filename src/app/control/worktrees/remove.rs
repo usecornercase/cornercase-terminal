@@ -273,11 +273,7 @@ impl App {
     }
 
     fn removal_looked(&mut self, mut pending: Pending, mut rows: Vec<Row>) {
-        self.refresh_places();
-        for row in &mut rows {
-            self.relive(row);
-            row.freeing = self.freeing_path(&row.found.path);
-        }
+        self.relive_rows(&mut rows);
         let key = pending.key;
         let Stage::RemovingFolders(removing) = &mut pending.stage else { return };
         self.judge_folders(removing, &rows);

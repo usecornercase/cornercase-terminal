@@ -52,6 +52,7 @@ impl App {
         let command = self.flow_requests(asked, command)?;
         let command = self.account_requests(asked, command)?;
         let command = self.tunnel_requests(asked, command)?;
+        let command = self.worktree_requests(asked, command)?;
         self.server_requests(asked, command)
     }
 
@@ -205,6 +206,18 @@ impl App {
         })
     }
 
+    fn worktree_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, .. } = asked;
+        ControlFlow::Break(match command {
+            Command::WorktreeSize(size) => self.worktree_size_request(client, asker, &size),
+            Command::FreeBuilds(free) => self.free_builds_request(client, asker, &free),
+            Command::FreeMergedBuilds(free) => self.free_merged_builds_request(client, &free),
+            Command::Worktrees(list) => self.worktrees_request(client, &list),
+            Command::WorktreesRemove(remove) => self.worktrees_remove_request(client, &remove),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
     fn account_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
         let Asked { client, asker, area, now } = asked;
         ControlFlow::Break(match command {
@@ -253,10 +266,6 @@ impl App {
                 self.stop_process_request(client, &stop);
                 Ok(None)
             }
-            Command::WorktreeSize(size) => self.worktree_size_request(client, asker, &size),
-            Command::FreeBuilds(free) => self.free_builds_request(client, asker, &free),
-            Command::Worktrees(list) => self.worktrees_request(client, &list),
-            Command::WorktreesRemove(remove) => self.worktrees_remove_request(client, &remove),
             Command::Machines(machines) => self.machines_request(client, machines),
             Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),

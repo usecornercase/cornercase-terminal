@@ -28,6 +28,8 @@ const CHANGES_LABEL: &str = "changes";
 
 const FREE_LABEL: &str = "free builds";
 
+const FREE_MERGED_LABEL: &str = "free merged";
+
 const SAFE_LABEL: &str = "safe first";
 
 const SIZE_LABEL: &str = "largest first";
@@ -50,8 +52,9 @@ pub(crate) struct Worktrees {
     pub(crate) scroll: usize,
     pub(crate) ticked: usize,
     pub(crate) free: usize,
+    pub(crate) merged: usize,
     pub(crate) order: Order,
-    pub(crate) total: Option<(String, String)>,
+    pub(crate) total: Vec<String>,
     pub(crate) note: Option<Note>,
     pub(crate) confirm: Option<ConfirmView>,
     pub(crate) compact: bool,
@@ -94,6 +97,7 @@ pub(crate) enum WorktreesHit {
     Changes(usize),
     Free(usize),
     FreeTicked,
+    FreeMerged,
     Order(Order),
     Remove,
     Done,
@@ -152,6 +156,7 @@ fn changes_rect(row: Rect, compact: bool) -> Rect {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Button {
+    FreeMerged,
     FreeTicked,
     Remove,
     Done,
@@ -172,6 +177,7 @@ fn free_ticked_label(view: &Worktrees) -> String {
 
 fn enabled(view: &Worktrees, button: Button) -> bool {
     match (button, &view.confirm) {
+        (Button::FreeMerged, _) => view.merged > 0,
         (Button::FreeTicked, _) => view.free > 0,
         (Button::Remove, Some(confirm)) => !confirm.checking,
         (Button::Remove, None) => view.ticked > 0,
@@ -180,22 +186,32 @@ fn enabled(view: &Worktrees, button: Button) -> bool {
 }
 
 fn buttons(area: Rect, view: &Worktrees) -> Vec<(Button, String, Rect)> {
-    let (row, wanted) = match &view.confirm {
-        Some(_) => {
-            (confirm_rows(area)[3], vec![(Button::Back, BACK_LABEL.to_string()), (Button::Remove, confirm_label(view))])
-        }
-        None => (
-            list_rows(area)[3],
-            vec![
-                (Button::FreeTicked, free_ticked_label(view)),
-                (Button::Remove, confirm_label(view)),
-                (Button::Done, DONE_LABEL.to_string()),
-            ],
-        ),
+    let (row, wanted) = if view.confirm.is_some() {
+        (confirm_rows(area)[3], vec![(Button::Back, BACK_LABEL.to_string()), (Button::Remove, confirm_label(view))])
+    } else {
+        let row = list_rows(area)[3];
+        (row, list_buttons(view, row))
     };
     let labels: Vec<&str> = wanted.iter().map(|(_, label)| label.as_str()).collect();
     let rects = right_aligned(row, &labels, button_width, 1);
     wanted.into_iter().zip(rects).map(|((button, label), rect)| (button, label, rect)).collect()
+}
+
+fn list_buttons(view: &Worktrees, row: Rect) -> Vec<(Button, String)> {
+    let mut wanted = vec![
+        (Button::FreeTicked, free_ticked_label(view)),
+        (Button::Remove, confirm_label(view)),
+        (Button::Done, DONE_LABEL.to_string()),
+    ];
+    if view.merged > 0 {
+        wanted.insert(0, (Button::FreeMerged, FREE_MERGED_LABEL.to_string()));
+        let widths: usize = wanted.iter().map(|(_, label)| usize::from(button_width(label)) + 1).sum();
+        let total = view.total.last().map_or(0, |total| total.chars().count() + 1);
+        if widths + total > usize::from(row.width) {
+            wanted.remove(0);
+        }
+    }
+    wanted
 }
 
 fn order_rects(filter: Rect) -> Vec<Rect> {
@@ -213,6 +229,7 @@ pub(crate) fn worktrees_hit(screen: Rect, view: &Worktrees, pos: Position) -> Op
     for (button, _, rect) in buttons(area, view) {
         if rect.contains(pos) && enabled(view, button) {
             return Some(match button {
+                Button::FreeMerged => WorktreesHit::FreeMerged,
                 Button::FreeTicked => WorktreesHit::FreeTicked,
                 Button::Remove => WorktreesHit::Remove,
                 Button::Done => WorktreesHit::Done,
@@ -260,11 +277,15 @@ pub(in crate::ui) fn draw_worktrees(f: &mut Frame, view: &View, worktrees: &Work
 fn draw_buttons(f: &mut Frame, view: &View, worktrees: &Worktrees, area: Rect) {
     let all = buttons(area, worktrees);
     for (button, label, rect) in &all {
-        match button {
-            Button::Done | Button::Back => draw_secondary(f, view, *rect, label),
-            Button::FreeTicked if enabled(worktrees, *button) => draw_secondary(f, view, *rect, label),
-            _ if enabled(worktrees, *button) => draw_submit(f, view, *rect, label),
-            _ => draw_waiting(f, view, *rect, label),
+        let on = enabled(worktrees, *button);
+        let secondary = matches!(button, Button::Done | Button::Back)
+            || (on && matches!(button, Button::FreeMerged | Button::FreeTicked));
+        if secondary {
+            draw_secondary(f, view, *rect, label);
+        } else if on {
+            draw_submit(f, view, *rect, label);
+        } else {
+            draw_waiting(f, view, *rect, label);
         }
     }
     if worktrees.confirm.is_none() {
@@ -279,9 +300,8 @@ fn draw_buttons(f: &mut Frame, view: &View, worktrees: &Worktrees, area: Rect) {
 }
 
 fn draw_total(f: &mut Frame, view: &View, worktrees: &Worktrees, room: Rect) {
-    let Some((long, short)) = &worktrees.total else { return };
     let width = usize::from(room.width);
-    let text = [long, short].into_iter().find(|text| text.chars().count() <= width);
+    let text = worktrees.total.iter().find(|text| text.chars().count() <= width);
     if let Some(text) = text {
         f.render_widget(Paragraph::new(Span::styled(text.clone(), Style::default().fg(view.muted))), room);
     }

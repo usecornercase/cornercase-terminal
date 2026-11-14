@@ -42,6 +42,7 @@ pub(crate) enum Hit {
     Changes(usize),
     Free(usize),
     FreeTicked,
+    FreeMerged,
     Order(Order),
     Remove,
     Done,
@@ -149,6 +150,11 @@ impl Dialog {
         self.open_free(paths.collect())
     }
 
+    fn free_merged(&mut self) -> Action {
+        let paths = self.list.rows.iter().filter(|row| row.merged_builds().is_some()).map(|r| r.found.path.clone());
+        self.open_free(paths.collect())
+    }
+
     fn remove(&self) -> Action {
         match &self.step {
             Step::Confirm { branches, .. } if self.can_remove() => Action::Remove { branches: *branches },
@@ -178,6 +184,7 @@ impl Dialog {
             (Hit::Done, Step::List) => Action::Close,
             (Hit::Free(row), Step::List) => self.free_row(row),
             (Hit::FreeTicked, Step::List) => self.free_ticked(),
+            (Hit::FreeMerged, Step::List) => self.free_merged(),
             (Hit::Order(order), Step::List) => {
                 self.list.order_by(order);
                 self.refit();
