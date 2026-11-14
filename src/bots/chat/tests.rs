@@ -118,6 +118,34 @@ mod replay {
         assert_eq!(state(&lines), Replayed { next_id: 6, running: true, held: 0 });
     }
 
+    fn after_a_stop_with_a_message_held_in_flight() -> Vec<Line> {
+        vec![
+            you(1, false),
+            you(2, true),
+            you(3, true),
+            Line::notice(4, 1, STOPPED),
+            Line::notice(5, 1, "1 held message dropped"),
+        ]
+    }
+
+    #[test]
+    fn the_turn_that_followed_a_stop_ends_with_its_answer_and_leaves_it_idle() {
+        for end in [answer(6), Line::failed(6, 1, "no")] {
+            let mut lines = after_a_stop_with_a_message_held_in_flight();
+            lines.push(end);
+            assert_eq!(state(&lines), Replayed { next_id: 7, running: false, held: 0 });
+        }
+    }
+
+    #[test]
+    fn a_message_held_while_that_turn_runs_is_still_held() {
+        let mut lines = after_a_stop_with_a_message_held_in_flight();
+        lines.push(you(6, true));
+        assert_eq!(state(&lines), Replayed { next_id: 7, running: true, held: 1 });
+        let notices: Vec<String> = restart_notices(state(&lines), 99).into_iter().map(|line| line.text).collect();
+        assert_eq!(notices, ["interrupted by a restart", "1 held message dropped"]);
+    }
+
     #[test]
     fn other_notices_change_nothing() {
         let lines = [you(1, false), Line::notice(2, 1, NEW_CONVERSATION)];

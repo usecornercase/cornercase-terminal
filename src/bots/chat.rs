@@ -124,10 +124,23 @@ fn dropped_in(text: &str) -> usize {
     count.parse().unwrap_or_default()
 }
 
+fn settle(state: &mut Replayed) {
+    if state.held > 0 {
+        state.running = true;
+        state.held = 0;
+    }
+}
+
 pub(crate) fn replay(lines: &[Line]) -> Replayed {
     let mut state = Replayed { next_id: 1, ..Replayed::default() };
+    let mut stopping = false;
     for line in lines {
         state.next_id = state.next_id.max(line.id + 1);
+        let dropped = line.kind == Kind::Notice && dropped_in(&line.text) > 0;
+        if stopping && !dropped {
+            settle(&mut state);
+            stopping = false;
+        }
         match line.kind {
             Kind::You if line.held => state.held += 1,
             Kind::You => state.running = true,
@@ -135,7 +148,10 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
                 state.running = state.held > 0;
                 state.held = 0;
             }
-            Kind::Notice if line.text == STOPPED => state.running = false,
+            Kind::Notice if line.text == STOPPED => {
+                state.running = false;
+                stopping = true;
+            }
             Kind::Notice if line.text == INTERRUPTED => {
                 state.running = false;
                 state.held = 0;
@@ -144,9 +160,8 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
             Kind::Step => {}
         }
     }
-    if !state.running && state.held > 0 {
-        state.running = true;
-        state.held = 0;
+    if stopping {
+        settle(&mut state);
     }
     state
 }

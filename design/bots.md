@@ -91,7 +91,7 @@ A turn runs without its interface, so the agent cannot stop halfway to ask for p
 - `Ask::tools` (`Tools::Recap` or `Tools::Bot(Access)`) picks the arguments; `Ask::conversation` continues a session; `Ask::env` sets (`Some`) or removes (`None`) variables.
 - `Ran::session` (the session id out) and `Ran::fresh` (the tools used since the last line, which `run_watched` hands to `Watch::steps` as they arrive). `Action` is a tool and its one-line summary (Bash: the command's first line; Read, Edit and Write: the path; Grep and Glob: the pattern; WebSearch, WebFetch: the query or URL).
 - `run_watched(call, ask, Watch)` carries the progress counter, the steps callback and a `probe::Running`. `Spec::bot` says whether the agent can be a bot, with its accesses and why they are limited (`BotSupport`).
-- **`probe::Running`** remembers the process of a run and whether it was stopped. `agents::probe::run` used to kill only its direct child on a timeout; with `Running`, a timeout or a stop ends the whole tree through `processes::stop`.
+- **`probe::Running`** lets a bot's `stop` end a run, also before its process exists; a timeout ends the whole tree (see Plan usage › A timeout ends the whole tree).
 
 ## Requests and events
 
