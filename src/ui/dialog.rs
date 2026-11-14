@@ -61,6 +61,32 @@ pub(super) fn form_inner(form: Rect) -> Rect {
     Block::bordered().inner(form).inner(Margin::new(FORM_PADDING, 0))
 }
 
+pub(super) fn centred(screen: Rect, wide: u16, height: u16) -> Rect {
+    let width = screen.width.saturating_sub(2).min(wide);
+    let height = screen.height.min(height);
+    Rect::new(screen.x + (screen.width - width) / 2, screen.y + (screen.height - height) / 2, width, height)
+}
+
+pub(super) fn padded(area: Rect) -> Rect {
+    area.inner(Margin::new(2, 1))
+}
+
+pub(super) fn row_in(inner: Rect, at: u16, height: u16) -> Rect {
+    Rect::new(inner.x, inner.y.saturating_add(at), inner.width, height).intersection(inner)
+}
+
+pub(super) fn with_list(area: Rect, list: Option<Rect>) -> Rect {
+    list.map_or(area, |list| area.union(list))
+}
+
+pub(super) fn inset(r: Rect) -> Rect {
+    Rect { x: r.x.saturating_add(1), width: r.width.saturating_sub(1), ..r }
+}
+
+pub(super) fn bottom_buttons(inner: Rect, submit: &str) -> [Rect; 2] {
+    buttons_in(Rect { y: inner.bottom().saturating_sub(1), height: 1, ..inner }, submit, "cancel")
+}
+
 fn buttons_in(row: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
     let cancel_width = button_width(cancel);
     let submit_width = button_width(submit);

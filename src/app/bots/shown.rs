@@ -94,26 +94,31 @@ impl Chat {
         }
         let all = groups(&self.lines);
         let mut entries = Vec::new();
-        let (mut rows, mut reached) = (0, true);
+        let (mut sum, mut gaps, mut reached) = (0, 0, true);
         for group in all.iter().rev() {
-            if rows >= need {
+            let oldest_gap = usize::from(entries.last().is_some_and(|entry| !matches!(entry, ChatEntry::Steps { .. })));
+            if sum + gaps - oldest_gap >= need {
                 reached = false;
                 break;
             }
             let entry = self.entry(group, facts, width);
-            rows += ui::bots::chat::entry_rows(&entry, width, tone).len() + 1;
+            sum += ui::entry_rows(&entry, width, tone).len();
+            gaps += usize::from(!matches!(entry, ChatEntry::Steps { .. }));
             entries.push(entry);
         }
         entries.reverse();
         (ui::chat_rows(&entries, width, tone), reached)
     }
 
-    pub(super) fn height_of(&mut self, line: &Line, facts: &Facts, width: u16, tone: ui::Tone) -> usize {
-        self.lines.push(line.clone());
-        let group = self.lines.len() - 1..self.lines.len();
-        let entry = self.entry(&group, facts, width);
-        self.lines.pop();
-        ui::bots::chat::entry_rows(&entry, width, tone).len() + 1
+    fn tail_start(&self) -> usize {
+        groups(&self.lines).len().saturating_sub(2)
+    }
+
+    fn tail_height(&mut self, from: usize, facts: &Facts, width: u16, tone: ui::Tone) -> usize {
+        let all = groups(&self.lines);
+        let entries: Vec<ChatEntry> =
+            all[from.min(all.len())..].iter().map(|group| self.entry(group, facts, width)).collect();
+        ui::chat_rows(&entries, width, tone).len()
     }
 }
 
@@ -147,19 +152,13 @@ impl App {
         ui::Tone { muted: ui::muted(self.themes.host()), surface: ui::surface_colour(self.themes.light()) }
     }
 
-    fn chat_pane(&self, area: Rect) -> (Rect, u16) {
-        let areas = self.layout(area).shown(self.screen.nav);
-        (areas.pane, areas.pitch)
-    }
-
     pub(in crate::app) fn shown_chat(&mut self, area: Rect) -> Option<Shown> {
         let at = self.shown_bot()?;
-        let (pane, pitch) = self.chat_pane(area);
         let tone = self.chat_tone();
         let draft = self.panels.bots.live[at].draft.clone();
-        let areas = ui::chat_areas(pane, ui::input_rows(&draft, pane), pitch);
+        let areas = self.chat_geometry(area);
         let thinking = self.thinking_text(at);
-        let body = ui::bots::chat::body(areas.lines, thinking.is_some());
+        let body = ui::chat_body(areas.lines, thinking.is_some());
         let facts = self.chat_facts(at);
         let focused = self.chat_typing();
         let shown = self.panels.bots.shown.as_mut()?;
@@ -207,8 +206,10 @@ impl App {
         let (scrolled, width) = (shown.scroll > 0, shown.width);
         let (facts, tone) = (self.chat_facts(at), self.chat_tone());
         let Some(shown) = self.panels.bots.shown.as_mut() else { return };
-        let height = if scrolled { shown.height_of(line, &facts, width, tone) } else { 0 };
+        let from = shown.tail_start();
+        let before = if scrolled { shown.tail_height(from, &facts, width, tone) } else { 0 };
         shown.lines.push(line.clone());
+        let height = if scrolled { shown.tail_height(from, &facts, width, tone).saturating_sub(before) } else { 0 };
         let extra = shown.lines.len().saturating_sub(super::window::CHAT_KEPT);
         shown.lines.drain(..extra);
         if scrolled {

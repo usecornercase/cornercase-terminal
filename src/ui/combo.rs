@@ -21,6 +21,22 @@ pub(crate) fn list(field: Rect, combo: &Combo, screen: Rect) -> Rect {
     Rect::new(field.x.saturating_sub(1), y, field.width.saturating_add(2), height).intersection(screen)
 }
 
+pub(crate) enum Choice {
+    Item(usize),
+    Outside,
+}
+
+pub(crate) fn open_hit(list: Option<Rect>, open: Option<&Combo>, pos: Position) -> Option<Choice> {
+    let (list, open) = list.zip(open)?;
+    Some(hit(list, open, pos).map_or(Choice::Outside, Choice::Item))
+}
+
+pub(crate) fn draw_open(f: &mut Frame, view: &View, list: Option<Rect>, open: Option<&Combo>) {
+    if let Some((list, open)) = list.zip(open) {
+        draw_list(f, view, list, open);
+    }
+}
+
 pub(crate) fn rows(list: Rect) -> usize {
     usize::from(list.height.saturating_sub(2))
 }

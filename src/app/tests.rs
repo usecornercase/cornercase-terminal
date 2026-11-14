@@ -427,7 +427,6 @@ fn mouse_in(app: &mut App, kind: MouseEventKind, pos: Position, area: Rect) {
     app.handle_event(AppEvent::Input(Event::Mouse(ev)), area).expect("handle mouse");
 }
 
-#[cfg(unix)]
 fn mouse_down(app: &mut App, button: MouseButton, pos: Position) {
     mouse(app, MouseEventKind::Down(button), pos);
 }
@@ -461,7 +460,6 @@ fn right_click_first_agent(app: &mut App) {
     right_click(app, Position::new(row.x + 4, row.y));
 }
 
-#[cfg(unix)]
 fn right_click(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Right, pos);
     mouse(app, MouseEventKind::Up(MouseButton::Right), pos);
@@ -485,12 +483,10 @@ fn submit_text(app: &mut App, text: &str) {
     send_key(app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
-#[cfg(unix)]
 fn list() -> Rect {
     areas().list
 }
 
-#[cfg(unix)]
 fn entry_pos() -> Position {
     Position::new(list().x + 3, list().y)
 }
@@ -561,7 +557,6 @@ fn form_value(app: &App) -> Option<String> {
     }
 }
 
-#[cfg(unix)]
 fn confirmation(app: &App) -> Option<String> {
     match app.overlay_view(app.overlay.as_ref()?, AREA)? {
         ui::Overlay::Confirm(confirm) => Some(confirm.message),
@@ -595,7 +590,6 @@ fn menu_labels(app: &App) -> Vec<String> {
     app.menu_labels(actions)
 }
 
-#[cfg(unix)]
 fn menu_disabled(app: &App) -> Vec<bool> {
     match overlay_shown(app, AREA) {
         ui::Overlay::Menu { disabled, .. } => disabled,

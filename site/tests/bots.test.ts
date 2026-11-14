@@ -15,6 +15,7 @@ function demo(columns: number): App {
   app.scripted = true;
   app.resize(columns, 38);
   world(app, { scripted: true });
+  app.bots.folded = false;
   if (columns < 90) app.navTo('projects');
   app.render();
   return app;
@@ -215,4 +216,14 @@ test('scrolling up shows ↓ new when a line arrives, and a click goes back down
   press(app, '↓ new');
   assert.equal(bot.scroll, 0);
   assert.doesNotMatch(screen(app), /↓ new/);
+});
+
+test('at the landing’s 32 rows the stacked section still shows a bot to click', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(120, 32);
+  world(app, { scripted: true });
+  app.bots.folded = false;
+  app.render();
+  assert.ok(app.textAt('prs'), screen(app));
 });

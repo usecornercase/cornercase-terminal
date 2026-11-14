@@ -54,7 +54,9 @@ impl App {
         let live = &self.panels.bots.live[at];
         let bot = &live.bot;
         let title = Known::of(&bot.agent).map_or_else(|| bot.agent.clone(), |kind| kind.title().to_string());
-        let mut rows = vec![ui::CardRow::new("agent", title)];
+        let folder = crate::text::display_path(&live.folder, self.home.as_deref());
+        let mut rows = vec![ui::CardRow { folder: true, ..ui::CardRow::new("folder", folder) }];
+        rows.push(ui::CardRow::new("agent", title));
         rows.push(ui::CardRow::new("model", bot.model.clone().unwrap_or_else(|| NO_MODEL.to_string())));
         if let Some(effort) = &bot.effort {
             rows.push(ui::CardRow::new("effort", effort.clone()));
@@ -67,8 +69,6 @@ impl App {
             Access::Full => ui::CardRow { red: true, ..ui::CardRow::new("access", "full access") },
             Access::Cornercase => ui::CardRow::new("access", "through cornercase"),
         });
-        let folder = crate::text::display_path(&live.folder, self.home.as_deref());
-        rows.push(ui::CardRow { folder: true, ..ui::CardRow::new("folder", folder) });
         rows.push(ui::CardRow::new("made", crate::queue::clock::day(bot.created, &self.window_zone())));
         ui::BotCard { name: bot.name.clone(), rows }
     }

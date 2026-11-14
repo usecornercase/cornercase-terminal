@@ -102,7 +102,13 @@ impl App {
         });
         self.spawn_job(
             job,
-            move || Ok(turn::run(&input, watch)),
+            move || {
+                let ran = turn::run(&input, watch);
+                if let Ok(ran) = &ran {
+                    crate::highlight::markdown::warm(&ran.text);
+                }
+                Ok(ran)
+            },
             move |result, _| {
                 let (result, took) = (result.and_then(|inner| inner), started.elapsed());
                 Some(AppEvent::Bot(Box::new(BotEvent::Ended { bot: ended_bot, turn: id, result, took })))
@@ -294,7 +300,7 @@ impl App {
         if self.panels.bots.shown.as_ref().is_some_and(|shown| shown.bot == removed.bot.id) {
             self.leave_bot();
         }
-        if self.overlay.as_ref().is_some_and(|overlay| overlay.names_bot(removed.key)) {
+        if self.overlay.as_ref().is_some_and(|overlay| overlay.names_bot(removed.key, &removed.bot.id)) {
             self.overlay = None;
         }
         self.clamp_bots_scroll();

@@ -1,5 +1,5 @@
 use super::*;
-use crate::bots::chat::Kind;
+use crate::agents::headless::Action;
 
 fn drawn(app: &mut App) -> String {
     format!("{}", render(app, AREA).backend())
@@ -21,6 +21,7 @@ fn show(c: &mut Chat) {
     click_bot(&mut c.app, 0);
 }
 
+#[cfg(unix)]
 fn project_chat(out: &str) -> Chat {
     let mut c = chat(out);
     c.app.open_here(AREA).expect("open the first project");
@@ -46,6 +47,7 @@ fn a_click_on_a_bot_shows_its_chat_and_marks_it_seen() {
     assert_eq!(c.app.report(None).shown_bot.as_deref(), Some("prs"));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_chat_is_drawn_in_place_of_the_panes_with_the_card_beside_it() {
     let mut c = project_chat(ANSWER);
@@ -103,11 +105,8 @@ fn stop_ends_the_turn_and_new_conversation_resets_it() {
     c.started(1);
     let pane = c.app.layout(AREA).pane;
     let areas = ui::chat_areas(pane, 1, 1);
-    let thinking = ui::bots::chat::thinking_row(areas.lines);
-    let stop = ui::bots::chat::stop_button(
-        areas.lines,
-        &ui::Thinking { text: String::from("thinking · 1s"), stopping: false },
-    );
+    let thinking = ui::thinking_row(areas.lines);
+    let stop = ui::stop_button(areas.lines, &ui::Thinking { text: String::from("thinking · 1s"), stopping: false });
     assert!(!stop.is_empty() && stop.y == thinking.y);
     click(&mut c.app, Position::new(stop.x + 1, stop.y));
     c.settle();
@@ -168,6 +167,7 @@ fn an_answer_on_screen_is_neither_unread_nor_notified() {
     assert_eq!(c.app.panels.bots.shown.as_ref().map(|shown| shown.lines.len()), Some(4));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_click_on_a_project_goes_back_to_the_panes() {
     let mut c = project_chat(ANSWER);
@@ -216,7 +216,7 @@ fn an_example_fills_the_field_and_sends_nothing() {
     render(&mut c.app, AREA);
     let shown = c.app.shown_chat(AREA).expect("a chat");
     let areas = ui::chat_areas(c.app.layout(AREA).pane, 1, 1);
-    let y = ui::bots::chat::row_y(areas.lines, shown.view.rows.len(), true, shown.view.rows.len() - 1);
+    let y = ui::row_y(areas.lines, shown.view.rows.len(), true, shown.view.rows.len() - 1);
     click(&mut c.app, Position::new(areas.lines.x + 20, y));
     assert_eq!(c.app.panels.bots.live[0].draft.text(), ui::EXAMPLES[2]);
     assert_eq!(c.lines(), []);
@@ -237,20 +237,72 @@ fn the_fold_of_the_section_is_saved_and_restored() {
 }
 
 #[cfg(unix)]
+fn pane_shows_nothing_of(c: &mut Chat, words: &[&str]) {
+    type_line(&mut c.app, "markerend");
+    shows(&mut c.app, &c.rx, "markerend");
+    let text = screen(&mut c.app);
+    for word in words {
+        assert!(!text.contains(word), "the pane got {word}: {text}");
+    }
+}
+
+#[cfg(unix)]
 #[test]
 fn keys_while_a_chat_shows_never_reach_a_pane() {
     let mut c = project_chat(ANSWER);
     type_line(&mut c.app, "echo cat-\"\"starts; cat -v");
     shows(&mut c.app, &c.rx, "cat-starts");
-    let before = screen(&mut c.app);
     show(&mut c);
     for ch in "abc".chars() {
         send_key(&mut c.app, KeyCode::Char(ch), KeyModifiers::NONE);
     }
-    send_key(&mut c.app, KeyCode::Char('d'), KeyModifiers::CONTROL);
+    send_key(&mut c.app, KeyCode::Char('b'), KeyModifiers::CONTROL);
     c.app.handle_event(AppEvent::Input(Event::Paste("pasted".into())), AREA).expect("paste");
     send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
     click(&mut c.app, entry_pos());
-    assert_eq!(screen(&mut c.app), before);
-    assert_eq!(c.lines().first().map(|line| line.kind), Some(Kind::You));
+    assert_eq!(c.lines().first().map(|line| line.kind), Some(chat::Kind::You));
+    pane_shows_nothing_of(&mut c, &["abc", "pasted", "^B"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_key_while_a_bot_shows_but_the_chat_has_no_keys_reaches_no_pane() {
+    let mut c = project_chat(ANSWER);
+    type_line(&mut c.app, "echo cat-\"\"starts; cat -v");
+    shows(&mut c.app, &c.rx, "cat-starts");
+    show(&mut c);
+    c.app.screen.nav = Some(ui::Nav::Bots);
+    assert!(!c.app.chat_typing());
+    send_key(&mut c.app, KeyCode::Char('q'), KeyModifiers::NONE);
+    c.app.handle_event(AppEvent::Input(Event::Paste("pasted".into())), AREA).expect("paste");
+    c.app.screen.nav = None;
+    click(&mut c.app, entry_pos());
+    pane_shows_nothing_of(&mut c, &["pasted", "qq"]);
+}
+
+#[test]
+fn the_text_read_stays_put_when_steps_arrive_while_scrolled_up() {
+    let mut c = chat(ANSWER);
+    c.app.window_attached();
+    for n in 0..30 {
+        let id = c.app.panels.bots.live[0].next_line;
+        let path = c.app.panels.bots.live[0].folder.join(folder::CHAT_FILE);
+        chat::append(&path, &Line::you(id, 100, &format!("question {n}"), false)).expect("append");
+        c.app.panels.bots.live[0].next_line += 1;
+    }
+    c.app.show_bot(0);
+    c.hold();
+    c.say("long job");
+    c.started(1);
+    c.app.panels.bots.shown.as_mut().expect("shown").scroll = 6;
+    let before = drawn(&mut c.app);
+    let row = |text: &str| text.lines().position(|line| line.contains("question 24"));
+    let turn = c.app.panels.bots.live[0].turn.as_ref().map(|turn| turn.id).expect("a turn");
+    for n in 0..6 {
+        let step = Action { tool: "Bash".into(), text: format!("step {n}") };
+        c.app.bot_event(crate::app::bots::BotEvent::Step { bot: "prs".into(), turn, step });
+    }
+    let after = drawn(&mut c.app);
+    std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
+    assert_eq!(row(&before), row(&after), "{before}\n{after}");
 }

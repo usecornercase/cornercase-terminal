@@ -152,12 +152,10 @@ pub(crate) fn chat_areas(pane: Rect, input_rows: u16, pitch: u16) -> ChatAreas {
     ChatAreas { header, new_conversation, menu, rule, lines, input, field, input_text, send }
 }
 
-pub(crate) fn text_width(pane: Rect) -> usize {
-    usize::from(chat_areas(pane, 1, 1).input_text.width)
-}
-
 pub(crate) fn input_rows(input: &Editor, pane: Rect) -> u16 {
-    u16::try_from(input.lines(text_width(pane).max(1)).len()).unwrap_or(MAX_INPUT).clamp(1, MAX_INPUT)
+    u16::try_from(input.lines(usize::from(chat_areas(pane, 1, 1).input_text.width).max(1)).len())
+        .unwrap_or(MAX_INPUT)
+        .clamp(1, MAX_INPUT)
 }
 
 pub(crate) fn body(lines: Rect, thinking: bool) -> Rect {
@@ -359,12 +357,17 @@ pub(crate) fn chat_hit(areas: &ChatAreas, chat: &ChatView, pos: Position) -> Opt
     row_hit(body, chat, pos)
 }
 
+fn shown_rows(chat: &ChatView, body: Rect) -> &[ChatRow] {
+    &chat.rows[chat.rows.len().saturating_sub(usize::from(body.height))..]
+}
+
 fn row_hit(body: Rect, chat: &ChatView, pos: Position) -> Option<ChatHit> {
     if !body.contains(pos) {
         return None;
     }
-    let top = row_y(body, chat.rows.len(), chat.empty, 0);
-    let row = chat.rows.get(usize::from(pos.y.checked_sub(top)?))?;
+    let shown = shown_rows(chat, body);
+    let top = row_y(body, shown.len(), chat.empty, 0);
+    let row = shown.get(usize::from(pos.y.checked_sub(top)?))?;
     let col = pos.x.saturating_sub(body.x);
     let (hit, cols) = row.hit.as_ref()?;
     if !cols.contains(&col) {
@@ -425,8 +428,7 @@ fn draw_header(f: &mut Frame, view: &View, chat: &ChatView, areas: &ChatAreas) {
 
 fn draw_rows(f: &mut Frame, chat: &ChatView, areas: &ChatAreas) {
     let body = body(areas.lines, chat.thinking.is_some());
-    let skip = chat.rows.len().saturating_sub(usize::from(body.height));
-    let shown = &chat.rows[skip..];
+    let shown = shown_rows(chat, body);
     for (i, row) in shown.iter().enumerate() {
         let y = row_y(body, shown.len(), chat.empty, i);
         f.render_widget(Paragraph::new(row.line.clone()), Rect { y, height: 1, ..body });

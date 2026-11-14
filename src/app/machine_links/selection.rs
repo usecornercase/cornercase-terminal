@@ -85,8 +85,9 @@ impl App {
         self.machines.awaited = None;
         self.machines.picks += 1;
         log::info!("machines", "remote selected", name = held.name, workspace = workspace.id);
-        self.panels.bots.shown = None;
-        self.machines.selection = Some(selected(link, seen, project, workspace, tab));
+        let selection = selected(link, seen, project, workspace, tab);
+        self.leave_bot();
+        self.machines.selection = Some(selection);
         self.panels.files.set_full_screen(false);
         self.follow_pairing();
         self.follow_stream();

@@ -222,7 +222,7 @@ function chatRows(p: Painter, bot: Bot, w: number): Row[] {
   const lines = bot.lines;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
-    if (previous !== null && !(l.kind === 'step' && previous === 'step')) rows.push({ x: 0, w, line: [] });
+    if (previous !== null && l.kind !== 'step') rows.push({ x: 0, w, line: [] });
     if (l.kind === 'step') {
       const run = [l];
       while (lines[i + 1]?.kind === 'step') run.push(lines[++i]);
@@ -231,15 +231,14 @@ function chatRows(p: Painter, bot: Bot, w: number): Row[] {
     previous = l.kind;
   }
   if (bot.turn) {
-    if (previous !== null && previous !== 'step') rows.push({ x: 0, w, line: [] });
     rows.push(thinkingRow(p, bot, w));
   }
   return rows;
 }
 
 function emptyRows(p: Painter, bot: Bot, w: number): Row[] {
-  const intro = 'A bot is an agent of your own: it belongs to no project, sees every one through cornercase, and keeps a memory. It runs only when you write to it, and answers here. Try:';
-  const rows: Row[] = wrapText(intro, Math.min(w, 84)).map((t) => ({ x: Math.floor((w - [...t].length) / 2), w, line: [seg(t, DARK)] }));
+  const intro = ['A bot is an agent of your own. It belongs to no project and keeps a memory.', 'It runs only when you write to it, and answers here. Try:'];
+  const rows: Row[] = intro.flatMap((line) => wrapText(line, Math.max(1, w))).map((t) => ({ x: Math.floor((w - [...t].length) / 2), w, line: [seg(t, DARK)] }));
   rows.push({ x: 0, w, line: [] });
   for (const text of EXAMPLES) {
     const shown = truncateRight(text, w);

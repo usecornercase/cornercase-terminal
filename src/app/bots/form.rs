@@ -82,15 +82,7 @@ impl App {
         form.error = None;
     }
 
-    pub(in crate::app) fn forms_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
-        if matches!(self.overlay, Some(Overlay::BotForm(_))) {
-            self.bot_form_mouse(ev, pos, area);
-        } else {
-            self.queue_form_mouse(ev, pos, area);
-        }
-    }
-
-    fn bot_form_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
+    pub(in crate::app) fn bot_form_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
         let Some(Overlay::BotForm(form)) = &mut self.overlay else { return };
         if let Some(delta) = wheel(ev.kind) {
             let rows = bot_form::list(area, form).map(ui::combo::rows);
@@ -119,7 +111,7 @@ impl App {
         let Some(Overlay::BotForm(form)) = &mut self.overlay else { return None };
         let text = bot_form::text(area, form, field);
         let editor = form.editor(field)?;
-        let top = ui::queue_form::first_line(editor, text);
+        let top = ui::first_line(editor, text);
         Some((FieldArea { text, width: usize::from(text.width.max(1)), top, scrolls: field == Field::About }, editor))
     }
 
@@ -165,11 +157,7 @@ impl App {
 
 fn choose_in_list(form: &mut Form, i: usize) -> Option<Field> {
     let open = form.opened()?;
-    let changed = form.combo(open).is_some_and(|combo| {
-        let changed = combo.chosen() != Some(i);
-        combo.choose(i);
-        changed && combo.chosen() == Some(i)
-    });
+    let changed = form.combo(open).is_some_and(|combo| combo.pick(i));
     if !changed {
         return None;
     }
@@ -183,7 +171,7 @@ fn press_field(form: &mut Form, area: Rect, (field, row, col): (Field, usize, us
     let grey = field == Field::Agent && form.editing.is_some();
     form.focus_on(field);
     if let Some(editor) = form.editor(field) {
-        let line = ui::queue_form::first_line(editor, r) + row;
+        let line = ui::first_line(editor, r) + row;
         editor.place(usize::from(r.width.max(1)), line, col);
     } else if opening && !grey {
         form.combo(field).into_iter().for_each(Combo::open);

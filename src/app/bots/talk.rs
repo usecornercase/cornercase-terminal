@@ -14,8 +14,10 @@ use crate::ui::{self, ChatHit, RowHit};
 const INPUT_ROWS: usize = 6;
 
 impl App {
-    fn chat_pane_area(&self, area: Rect) -> Rect {
-        self.layout(area).shown(self.screen.nav).pane
+    pub(in crate::app) fn chat_geometry(&self, area: Rect) -> ui::ChatAreas {
+        let areas = self.layout(area).shown(self.screen.nav);
+        let rows = self.shown_bot().map_or(1, |at| ui::input_rows(&self.panels.bots.live[at].draft, areas.pane));
+        ui::chat_areas(areas.pane, rows, areas.pitch)
     }
 
     pub(in crate::app) fn chat_key(&mut self, key: KeyEvent, area: Rect) {
@@ -28,7 +30,7 @@ impl App {
             KeyCode::Esc if self.panel_shown() => self.close_panel(),
             KeyCode::Esc => {}
             _ => {
-                let width = ui::text_width(self.chat_pane_area(area)).max(1);
+                let width = usize::from(self.chat_geometry(area).input_text.width.max(1));
                 self.panels.bots.live[at].draft.key(key, width, INPUT_ROWS);
             }
         }
@@ -36,7 +38,7 @@ impl App {
 
     pub(in crate::app) fn chat_paste(&mut self, text: &str, area: Rect) {
         let Some(at) = self.shown_bot() else { return };
-        let width = ui::text_width(self.chat_pane_area(area)).max(1);
+        let width = usize::from(self.chat_geometry(area).input_text.width.max(1));
         let draft = &mut self.panels.bots.live[at].draft;
         draft.insert_lines(text);
         draft.reveal(width, INPUT_ROWS);
@@ -101,8 +103,7 @@ impl App {
     fn press_chat(&mut self, pos: Position, area: Rect) {
         let Some(at) = self.shown_bot() else { return };
         let Some(shown) = self.shown_chat(area) else { return };
-        let (pane, pitch) = (self.chat_pane_area(area), self.layout(area).shown(self.screen.nav).pitch);
-        let areas = ui::chat_areas(pane, ui::input_rows(&shown.view.input, pane), pitch);
+        let areas = self.chat_geometry(area);
         let Some(hit) = ui::chat_hit(&areas, &shown.view, pos) else { return };
         self.chat_hit(at, hit, (areas.input_text, pos));
     }
@@ -155,12 +156,9 @@ impl App {
 impl App {
     pub(in crate::app) fn chat_text(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
         let at = self.shown_bot()?;
-        let areas = self.layout(area).shown(self.screen.nav);
-        let draft = self.panels.bots.live[at].draft.clone();
-        let geometry = ui::chat_areas(areas.pane, ui::input_rows(&draft, areas.pane), areas.pitch);
-        let text = geometry.input_text;
+        let text = self.chat_geometry(area).input_text;
         let editor = &mut self.panels.bots.live[at].draft;
-        let top = ui::queue_form::first_line(editor, text);
+        let top = ui::first_line(editor, text);
         Some((FieldArea { text, width: usize::from(text.width.max(1)), top, scrolls: true }, editor))
     }
 

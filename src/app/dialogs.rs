@@ -164,9 +164,34 @@ impl App {
         }
     }
 
+    pub(super) fn form_dialog_key(&mut self, key: KeyEvent, area: Rect) {
+        match &self.overlay {
+            Some(Overlay::Queue(_)) => self.queue_key(key, area),
+            Some(Overlay::BotForm(_)) => self.bot_form_key(key, area),
+            Some(Overlay::Settings(_)) => self.settings_key(key, area),
+            Some(Overlay::ShareSettings(_)) => self.share_settings_key(key, area),
+            Some(Overlay::Machine(_)) => self.machine_form_key(key, area),
+            Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_key(key, area),
+            Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
+            _ => {}
+        }
+    }
+
+    pub(super) fn form_dialog_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
+        match &self.overlay {
+            Some(Overlay::Queue(_)) => self.queue_form_mouse(ev, pos, area),
+            Some(Overlay::BotForm(_)) => self.bot_form_mouse(ev, pos, area),
+            Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
+            Some(Overlay::ShareSettings(_)) => self.share_settings_mouse(ev, pos, area),
+            Some(Overlay::Machine(_)) => self.machine_form_mouse(ev, pos, area),
+            Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_mouse(ev, pos, area),
+            Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
+            _ => {}
+        }
+    }
+
     pub(super) fn form_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
         match key.code {
-            _ if matches!(self.overlay, Some(Overlay::BotForm(_))) => self.bot_form_key(key, area),
             KeyCode::Esc => self.cancel_form(),
             KeyCode::Enter => self.submit_form(area)?,
             KeyCode::Tab => self.toggle_worktree(),

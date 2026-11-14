@@ -76,6 +76,10 @@ impl Bots {
         key
     }
 
+    pub(super) fn folder_of(&self, key: u64) -> Option<PathBuf> {
+        self.by_key(key).map(|at| self.live[at].folder.clone())
+    }
+
     pub(super) fn by_key(&self, key: u64) -> Option<usize> {
         self.live.iter().position(|live| live.key == key)
     }

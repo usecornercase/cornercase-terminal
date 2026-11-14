@@ -719,7 +719,7 @@ mod panel {
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = Editor::new(&"word ".repeat(80));
         let field = ui::queue_form::text(AREA, form, Control::Prompt);
-        let start = ui::queue_form::first_line(&form.prompt, field);
+        let start = ui::first_line(&form.prompt, field);
         assert!(start > 0);
         click(&mut app, Position::new(field.x, field.y));
         let Some(Overlay::Queue(form)) = &app.overlay else { panic!("form") };

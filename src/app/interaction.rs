@@ -220,13 +220,7 @@ impl App {
                         border,
                         pos,
                         main,
-                        ui::Screen {
-                            agents: self.config.agents_section,
-                            icon_bar: self.config.icon_bar,
-                            plugins: self.has_plugin_buttons(),
-                            machine: self.machine_label().is_some(),
-                            ..self.bots_screen()
-                        },
+                        ui::Screen { changes: false, ..self.screen_flags() },
                     )
                 }
                 _ => self.screen.widths.dragged(border, column, main.width),

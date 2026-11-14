@@ -11,13 +11,13 @@ import type { Painter } from './ui';
 
 const MUTED: Style = { fg: 8 };
 const LABEL = 9;
-const HEIGHT = 20;
+const HEIGHT = 19;
 const WIDTH = 76;
 const COMBO = 44;
 const ABOUT_ROWS = 4;
 const CONTROLS = ['name', 'agent', 'model', 'access', 'about'] as const;
 const LISTS = ['agent', 'model', 'access'] as const;
-const ROWS: Record<Control, number> = { name: 1, agent: 3, model: 5, access: 7, about: 11 };
+const ROWS: Record<Control, number> = { name: 0, agent: 1, model: 2, access: 3, about: 6 };
 const ACCESS_LABELS: [Access, string][] = [['cornercase', 'through cornercase'], ['full', 'full access']];
 const NOTES = ['through cornercase: reads anything, writes only in its folder', 'full access: can change any file and run anything, unattended'];
 
@@ -206,7 +206,7 @@ function drawNotes(p: Painter, screen: Rect): void {
   const r = inner(screen.w, screen.h);
   NOTES.forEach((text, i) => {
     const y = r.y + ROWS.access + 1 + i;
-    p.span(r.x + LABEL, y, truncateRight(text, Math.max(0, r.w - LABEL)), i ? { fg: 1 } : MUTED, Math.max(0, r.w - LABEL));
+    p.span(r.x + LABEL + 1, y, truncateRight(text, Math.max(0, r.w - LABEL - 1)), i ? { fg: 1 } : MUTED, Math.max(0, r.w - LABEL - 1));
   });
 }
 
@@ -215,7 +215,7 @@ function drawControls(p: Painter, o: BotForm, screen: Rect, open: List | null): 
   for (const c of CONTROLS) {
     const r = controlRect(screen, c);
     const field = fieldOf(o, c);
-    if (field) drawField(p, r, textRect(screen, c), field, !open && o.focus === c, c === 'name' ? 'a short name' : 'what it is for (optional)');
+    if (field) drawField(p, r, textRect(screen, c), field, !open && o.focus === c, c === 'name' ? '' : 'optional: what the bot is for');
     else if (isList(c)) drawComboField(p, r, o[c], c === 'access' ? 'choose its access' : '', o.focus === c);
     p.region({
       r,
@@ -248,7 +248,7 @@ export function drawBotForm(p: Painter, o: BotForm): void {
   drawNotes(p, screen);
   const buttons = bottom(r) - 1;
   if (o.error) {
-    const y = Math.max(r.y + ROWS.about + ABOUT_ROWS, buttons - 2);
+    const y = buttons - 2;
     wrapText(o.error, r.w).slice(0, buttons - y).forEach((t, i) => p.span(r.x, y + i, t, { fg: 1 }, r.w));
   }
   p.dialogButtons(rect(r.x, buttons, r.w, isEmpty(r) ? 0 : 1), 'create', () => submitBotForm(app, o), () => app.closeOverlay());

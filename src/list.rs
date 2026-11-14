@@ -132,6 +132,12 @@ impl Combo {
         self.open = None;
     }
 
+    pub(crate) fn pick(&mut self, i: usize) -> bool {
+        let before = self.chosen;
+        self.choose(i);
+        self.chosen != before
+    }
+
     pub(crate) fn is_open(&self) -> bool {
         self.open.is_some()
     }

@@ -207,11 +207,12 @@ impl Overlay {
             Self::Flows { .. } => "flows",
             Self::StartFlow { .. } => "start flow",
             Self::ProjectSettings(_) => "project settings",
-            Self::Rename { .. } | Self::RenameBot { .. } | Self::RemoveBot { .. } => self.rename_name(),
+            Self::Rename { .. } => "rename",
+            Self::BotForm(_) | Self::RenameBot { .. } | Self::RemoveBot { .. } => self.bot_name(),
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
-            Self::Queue(_) | Self::QueueResult(_) | Self::BotForm(_) => self.queue_name(),
+            Self::Queue(_) | Self::QueueResult(_) => self.queue_name(),
             Self::Search(_) => "search",
             Self::Update(_) => "update",
             Self::Usage | Self::Remote | Self::PhoneAppCode => self.access_name(),
@@ -230,11 +231,12 @@ impl Overlay {
         }
     }
 
-    fn rename_name(&self) -> &'static str {
+    fn bot_name(&self) -> &'static str {
         match self {
+            Self::BotForm(form) if form.editing.is_some() => "edit bot",
+            Self::BotForm(_) => "new bot",
             Self::RenameBot { .. } => "rename bot",
-            Self::RemoveBot { .. } => "remove bot",
-            _ => "rename",
+            _ => "remove bot",
         }
     }
 
@@ -252,6 +254,19 @@ impl Overlay {
             Self::CloseAgents(_) => "close agents",
             _ => "forget agents",
         }
+    }
+
+    pub(super) fn is_form_dialog(&self) -> bool {
+        matches!(
+            self,
+            Self::Queue(_)
+                | Self::BotForm(_)
+                | Self::Settings(_)
+                | Self::ShareSettings(_)
+                | Self::Machine(_)
+                | Self::CloneOnMachine(_)
+                | Self::ProjectSettings(_)
+        )
     }
 
     pub(super) fn closes_from_outside(&self) -> bool {
@@ -284,8 +299,6 @@ impl Overlay {
     fn queue_name(&self) -> &'static str {
         match self {
             Self::QueueResult(_) => "queue result",
-            Self::BotForm(form) if form.editing.is_some() => "edit bot",
-            Self::BotForm(_) => "new bot",
             _ => "queue",
         }
     }
@@ -438,15 +451,10 @@ impl App {
             Some(Overlay::Search(_)) => self.search_mouse(ev, pos, area),
             Some(Overlay::Branches(_)) => self.branches_mouse(ev, pos, area),
             Some(Overlay::Issues(_)) => return self.issues_mouse(ev, pos, area),
-            Some(Overlay::Queue(_) | Overlay::BotForm(_)) => self.forms_mouse(ev, pos, area),
+            Some(overlay) if overlay.is_form_dialog() => self.form_dialog_mouse(ev, pos, area),
             Some(Overlay::Star) => self.star_mouse(ev, pos, area),
-            Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
-            Some(Overlay::ShareSettings(_)) => self.share_settings_mouse(ev, pos, area),
-            Some(Overlay::Machine(_)) => self.machine_form_mouse(ev, pos, area),
-            Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_mouse(ev, pos, area),
             Some(Overlay::Flows { .. }) => self.flows_mouse(ev, pos, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_mouse(ev, pos, area),
-            Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
             Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
             Some(Overlay::PullRequest { .. }) => self.pull_request_mouse(ev, pos, area),

@@ -30,8 +30,8 @@ Example:
 
 pub(in crate::cli) const BOT_EDIT_HELP: &str =
     "Changes what the bot uses from its next message on; a running answer is not changed. An empty
---model, --effort or --account goes back to the agent's own; --about writes bot.md. The agent cannot change, because
-another agent cannot continue the conversation: make another bot instead.";
+--model, --effort or --account goes back to the agent's own; --about writes bot.md. The agent cannot
+change, because another agent cannot continue the conversation: make another bot instead.";
 
 pub(in crate::cli) const BOT_SAY_HELP: &str =
     "Writes to a bot and starts a turn: the agent runs without its window, continuing the bot's

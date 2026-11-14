@@ -133,9 +133,10 @@ impl App {
 }
 
 impl Overlay {
-    pub(in crate::app) fn names_bot(&self, key: u64) -> bool {
+    pub(in crate::app) fn names_bot(&self, key: u64, id: &str) -> bool {
         match self {
             Self::RenameBot { bot, .. } | Self::RemoveBot { bot } => *bot == key,
+            Self::BotForm(form) => form.editing.as_deref() == Some(id),
             Self::Menu { actions, .. } => {
                 actions.iter().any(|action| matches!(action, MenuAction::Bot(found, _) if *found == key))
             }

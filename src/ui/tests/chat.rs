@@ -90,7 +90,7 @@ fn a_stopping_turn_shows_no_stop_button() {
     let mut view = chat(&[]);
     view.thinking = Some(Thinking { text: "stopping…".into(), stopping: true });
     let areas = chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1);
-    assert!(bots::chat::stop_button(areas.lines, view.thinking.as_ref().expect("thinking")).is_empty());
+    assert!(stop_button(areas.lines, view.thinking.as_ref().expect("thinking")).is_empty());
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn an_example_in_the_empty_state_is_hit() {
     view.rows = empty_rows(CHAT_W - 2, TONE);
     view.empty = true;
     let areas = chat_areas(pane, 1, 1);
-    let top = bots::chat::row_y(areas.lines, view.rows.len(), true, view.rows.len() - 1);
+    let top = row_y(areas.lines, view.rows.len(), true, view.rows.len() - 1);
     let hit = chat_hit(&areas, &view, Position::new(areas.lines.x + 30, top));
     assert_eq!(hit, Some(ChatHit::Row(RowHit::Example(2))));
 }
@@ -179,15 +179,15 @@ fn the_card_lists_the_bot_and_its_folder_is_a_target() {
     let card = BotCard {
         name: "prs".into(),
         rows: vec![
+            CardRow { folder: true, ..CardRow::new("folder", "~/.local/state/cornercase/bots/prs") },
             CardRow::new("agent", "Claude Code"),
             CardRow::new("model", "opus"),
             CardRow { red: true, ..CardRow::new("access", "full access") },
-            CardRow { folder: true, ..CardRow::new("folder", "~/.local/state/cornercase/bots/prs") },
             CardRow::new("made", "2026-11-14"),
         ],
     };
     let v = View { bot_card: Some(card.clone()), has_project: true, ..view(&["cornercase"]) };
     insta::assert_snapshot!(render(&v).backend());
     let a = areas();
-    assert_eq!(card_folder(a.workspaces_list, &card).y, a.workspaces_list.y + 5);
+    assert_eq!(card_folder(a.workspaces_list, &card).y, a.workspaces_list.y + 1);
 }

@@ -39,10 +39,7 @@ impl App {
             }
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                 if let Some(delta) = wheel(ev.kind) {
-                    match drag.target {
-                        Grab::Todo(_) => self.scroll_todo(areas.changes, delta),
-                        _ => self.scroll_listed(areas, pos, delta),
-                    }
+                    self.wheel_row(drag.target, delta, (areas, pos));
                 }
                 self.screen.drag = Some(Drag::Row(RowDrag { moved: true, area, ..drag }));
             }
@@ -50,8 +47,11 @@ impl App {
         }
     }
 
-    fn scroll_listed(&mut self, areas: &ui::Areas, pos: Position, delta: isize) {
-        self.scroll_column(areas, pos, delta);
+    fn wheel_row(&mut self, target: Grab, delta: isize, (areas, pos): (&ui::Areas, Position)) {
+        match target {
+            Grab::Row(_) | Grab::Agent(_) | Grab::Bot(_) | Grab::Remote(_) => _ = self.scroll_column(areas, pos, delta),
+            Grab::Todo(_) => self.scroll_todo(areas.changes, delta),
+        }
     }
 
     fn release_row(&mut self, drag: RowDrag, pos: Position, area: Rect) {

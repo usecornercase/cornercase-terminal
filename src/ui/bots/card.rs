@@ -10,7 +10,7 @@ use crate::ui::layout::Areas;
 use crate::ui::widgets::draw_title;
 
 const LABEL: usize = 9;
-const HEADER: u16 = 2;
+const HEADER: u16 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CardRow {

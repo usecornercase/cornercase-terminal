@@ -6,7 +6,7 @@ use ratatui::widgets::Clear;
 mod accounts_bar;
 mod activity;
 mod agents_section;
-pub(crate) mod bots;
+mod bots;
 pub(crate) mod changes;
 mod chrome;
 mod code;
@@ -50,10 +50,13 @@ pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use bots::card::{BotCard, CardRow, card_folder};
+pub(crate) use bots::chat::body as chat_body;
 pub(crate) use bots::chat::{
-    ChatEntry, ChatHit, ChatRow, ChatView, EXAMPLES, RowHit, Thinking, Tone, chat_areas, chat_hit, chat_rows,
-    empty_rows, input_rows, text_width,
+    ChatAreas, ChatEntry, ChatHit, ChatRow, ChatView, EXAMPLES, RowHit, Thinking, Tone, chat_areas, chat_hit,
+    chat_rows, empty_rows, entry_rows, input_rows,
 };
+#[cfg(test)]
+pub(crate) use bots::chat::{row_y, stop_button, thinking_row};
 pub(crate) use bots::{BotEntry, BotsView, bot_menu, bot_rows, bots_fold, bots_new};
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;
@@ -166,6 +169,7 @@ pub(crate) use tree::{
 };
 #[cfg(test)]
 pub(crate) use tree::{tree_arrow, tree_close};
+pub(crate) use widgets::first_line;
 pub use widths::SIDEBAR_WIDTH;
 #[cfg(test)]
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
