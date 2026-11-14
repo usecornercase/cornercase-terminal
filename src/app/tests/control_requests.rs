@@ -293,6 +293,10 @@ impl Agent {
         self.fake.signal("finish");
     }
 
+    fn reports_its_status(&self) {
+        self.fake.signal("osc");
+    }
+
     fn until(&mut self, what: &str, cond: impl Fn(&App) -> bool) {
         let (app, rx) = (&mut self.app, &self.rx);
         pump_until(app, rx, what, |a| cond(a));

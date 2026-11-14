@@ -273,3 +273,68 @@ mod api_errors {
         assert_eq!(activity(status, &[PROMPT, BLOCKED]), expected);
     }
 }
+
+mod reports {
+    use super::*;
+    use crate::test_util::fixture;
+
+    fn reader(status: &str) -> Reader {
+        let text = format!(r#"{{"pid":7,"status":"{status}"}}"#);
+        Reader { session: Session::parse(&text, 7), ..Reader::default() }
+    }
+
+    #[rstest]
+    #[case::done_with_a_shell("shell", Activity::Done, Some(Activity::Shell))]
+    #[case::stopped_with_a_shell("shell", Activity::Ready, Some(Activity::Shell))]
+    #[case::failed_with_a_shell("shell", Activity::Failed, Some(Activity::Shell))]
+    #[case::working_with_a_shell("shell", Activity::Working, Some(Activity::Working))]
+    #[case::blocked_with_a_shell("shell", Activity::Waiting, Some(Activity::Waiting))]
+    #[case::done_still_busy("busy", Activity::Done, Some(Activity::Working))]
+    #[case::failed_still_busy("busy", Activity::Failed, Some(Activity::Working))]
+    #[case::stopped_still_busy("busy", Activity::Ready, Some(Activity::Ready))]
+    #[case::done_and_idle("idle", Activity::Done, Some(Activity::Done))]
+    #[case::done_with_a_dialog("waiting", Activity::Done, Some(Activity::Done))]
+    fn a_report_is_refined_by_the_session_file(
+        #[case] file: &str,
+        #[case] reported: Activity,
+        #[case] expected: Option<Activity>,
+    ) {
+        assert_eq!(reader(file).refine(Some(reported)), expected);
+    }
+
+    #[test]
+    fn a_report_without_a_session_file_stands() {
+        let mut reader = Reader::default();
+
+        assert_eq!(reader.refine(Some(Activity::Done)), Some(Activity::Done));
+        assert_eq!(reader.refine(None), None);
+        assert_eq!(reader.refine(None), None);
+    }
+
+    #[test]
+    fn no_report_stays_none_for_any_file() {
+        assert_eq!(reader("shell").refine(None), None);
+        assert_eq!(reader("busy").refine(None), None);
+    }
+
+    #[test]
+    fn a_finish_is_held_for_one_read_while_the_file_says_busy() {
+        let mut reader = reader("busy");
+
+        let reads = [reader.refine(Some(Activity::Done)), reader.refine(Some(Activity::Done))];
+        let cleared = reader.refine(None);
+        let again = reader.refine(Some(Activity::Done));
+
+        assert_eq!(reads, [Some(Activity::Working), Some(Activity::Done)]);
+        assert_eq!((cleared, again), (None, Some(Activity::Working)));
+    }
+
+    #[test]
+    fn claude_code_2_1_325_writes_shell_for_a_background_shell() {
+        let text = fixture!("claude/2.1.325/session-shell.json");
+        let mut reader = Reader { session: Session::parse(text, 4242), ..Reader::default() };
+
+        assert_eq!(session(text, 4242), Some(Activity::Shell));
+        assert_eq!(reader.refine(Some(Activity::Done)), Some(Activity::Shell));
+    }
+}
