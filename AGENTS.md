@@ -111,7 +111,7 @@ Astro + Starlight, deployed to GitHub Pages by `.github/workflows/pages.yml` (Pa
 - Shells do not survive the server: after `kill-server` or a reboot, panes come back as new shells (every known agent but opencode resumes its conversation in them).
 - Host colours are read once; a theme switch is not seen.
 - Inner programs never get key releases.
-- On Windows (x64 only), a Windows computer as the far end of `cornercase remote` was checked only against a stand-in for its sshd, the chat bots and Tailscale's `serve` are not tried live (#603), an agent's launch line is refused a word its pane's shell would split (PowerShell 5.1 or cmd) or holding a word it cannot quote for another shell (nu, for instance), and a batch file other than an npm shim one with cmd's metacharacters (#632), and a few smaller gaps remain: `design/windows.md` and the website's Known limitations list them.
+- On Windows (x64 only), a Windows computer as the far end of `cornercase remote` was checked only against a stand-in for its sshd, the chat bots and Tailscale's `serve` are not tried live (#603), an agent's launch line is refused a word its pane's shell would split (PowerShell 5.1 or cmd) or holding a word it cannot quote for another shell (nu, for instance), and a batch file other than an npm shim one with cmd's metacharacters (#632), what the commands run there at a terminal through `--remote` print is not rewritten with `--remote` (#834), and a few smaller gaps remain: `design/windows.md` and the website's Known limitations list them.
 
 ## Instruction files
 

@@ -7,6 +7,7 @@ use crate::app::machine_links::relay::{Sent, Then};
 use crate::control::contract::Refusal;
 use crate::control::{Command, Done, Start, Until};
 use crate::machines::send::{Send, UNWAITED};
+use crate::remote::hints;
 
 pub(super) struct Relaying {
     sent: Sent,
@@ -34,10 +35,22 @@ impl App {
     pub(in crate::app) fn relay_answered(&mut self, key: u64, result: Result<Value, Refusal>) {
         let Some(pending) = self.clients.requests.take(key) else { return };
         let reply = match pending.stage {
-            Stage::Relay(relaying) => result.map(|value| self.relayed_here(relaying, value)),
+            Stage::Relay(relaying) => self.relayed_reply(relaying, result),
             _ => result,
         };
         self.refuse_or_answer(pending.client, reply);
+    }
+
+    fn relayed_reply(&mut self, relaying: Relaying, result: Result<Value, Refusal>) -> Result<Value, Refusal> {
+        let machine = relaying.sent.machine.clone();
+        match result {
+            Ok(value) => {
+                let mut value = self.relayed_here(relaying, value);
+                hints::errors_on_machine(&machine, &mut value);
+                Ok(value)
+            }
+            Err(refusal) => Err(Refusal::new(refusal.code, hints::on_machine(&machine, &refusal.message))),
+        }
     }
 
     fn relayed_here(&mut self, relaying: Relaying, mut value: Value) -> Value {

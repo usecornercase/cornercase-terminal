@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.75
+
+- **A command run on the other machine names it in the commands it says to run.** `cornercase --remote vps update`, `restart`, `kill-server` and the plugin commands now print `cornercase --remote vps …` in what they say to run, also with an older cornercase there, so the command works as written. `update --check` says `cornercase --remote vps update`. `logs` and `--json` output are printed as they are.
+- **A refusal from a machine says which machine in the command it gives.** When `cornercase start --machine vps` is refused with ``such as `cornercase start claude` ``, it now says `cornercase start --machine vps claude`, and `flow run Nope --machine vps` says ``(`cornercase flow list` there)``, meaning run it on vps. `cornercase status` stays as it is, since it lists vps's ids. With `--remote devbox` the command names both: `cornercase --remote devbox start --machine vps claude`.
+
 ## 0.13.74
 
 - **The Flow panel shows a role whose agent exited.** A flow role whose agent exited by itself (a crash, a stray `pkill`, `/exit`) no longer looks idle there: its row in **Team** and its box in the diagram read `exited`, with the cyan `▶` the workspace's row shows for it. Click that `▶` to bring it back in its pane, as the workspace's `▶` does (every exited role, the orchestrator last); a click elsewhere on the row still goes to its pane.
