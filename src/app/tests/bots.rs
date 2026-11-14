@@ -22,7 +22,7 @@ fn a_turn_that_never_ended_is_interrupted_and_what_was_held_is_dropped_once() {
     for line in [Line::you(1, 10, "first", false), Line::you(2, 11, "second", true)] {
         chat::append(&path, &line).expect("append");
     }
-    let (mut app, _rx) = app();
+    let (mut app, _rx) = empty_app();
 
     app.set_bots_dir(dir.path());
     app.set_bots_dir(dir.path());
@@ -41,7 +41,7 @@ fn a_finished_chat_gets_no_notice() {
     let path = folder::of(dir.path(), "prs").join(folder::CHAT_FILE);
     chat::append(&path, &Line::you(1, 10, "first", false)).expect("append");
     chat::append(&path, &Line::failed(2, 11, "no")).expect("append");
-    let (mut app, _rx) = app();
+    let (mut app, _rx) = empty_app();
 
     app.set_bots_dir(dir.path());
 
@@ -60,7 +60,7 @@ struct Chat {
 }
 
 fn chat(out: &str) -> Chat {
-    let (mut app, rx) = app();
+    let (mut app, rx) = empty_app();
     let (dir, bin) = (TempDir::new(), TempDir::new());
     let claude = fake_program(bin.path(), "claude");
     std::fs::write(claude.with_extension("out"), out).expect("canned output");
