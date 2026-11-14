@@ -17,6 +17,7 @@ struct Rig {
     rx: Receiver<AppEvent>,
     addresses: Arc<Mutex<Vec<IpAddr>>>,
     port: u16,
+    at: Instant,
     _dir: TempDir,
 }
 
@@ -28,14 +29,30 @@ fn rig() -> Rig {
     app.phone.set_probe(move || seen.lock().clone());
     let port = free_port();
     app.config.phone_app_port = port;
-    Rig { app, rx, addresses, port, _dir: dir }
+    Rig { app, rx, addresses, port, at: Instant::now(), _dir: dir }
 }
 
 fn on() -> Rig {
     let mut r = rig();
     r.app.config.phone_app = true;
-    r.app.refresh(Instant::now());
+    listening(&mut r, Instant::now());
     r
+}
+
+/// Refreshes at `at`, then a read later each time, until the listener has its port, as the app tries again
+/// at its next read. A child that a test beside this one forks holds a copy of every socket until it runs
+/// its program, so a port can be taken for a moment (`web::bind` waits for the same reason).
+fn listening(r: &mut Rig, at: Instant) {
+    r.at = at;
+    r.app.refresh(r.at);
+    wait_until("the phone app listens", || {
+        if matches!(r.app.phone.phase(), Phase::Listening(_)) {
+            return true;
+        }
+        r.at += Duration::from_secs(2);
+        r.app.refresh(r.at);
+        false
+    });
 }
 
 fn dialog(app: &App) -> Option<ui::RemoteAccess> {
@@ -134,14 +151,8 @@ fn a_code_is_refused_while_it_is_off() {
 
 #[test]
 fn the_routes_follow_the_addresses_every_two_seconds() {
-    // The listener closes and binds its port again, and another test's `free_port` can hand out that
-    // port in between: a port the system picks is outside the ones it hands out.
-    let mut r = rig();
-    r.port = TcpListener::bind(("127.0.0.1", 0)).expect("a port").local_addr().expect("its address").port();
-    r.app.config.phone_app_port = r.port;
-    r.app.config.phone_app = true;
-    r.app.refresh(Instant::now());
-    let start = Instant::now();
+    let mut r = on();
+    let start = r.at;
     r.addresses.lock().clear();
 
     r.app.refresh(start + Duration::from_secs(1));
@@ -155,7 +166,7 @@ fn the_routes_follow_the_addresses_every_two_seconds() {
     assert_eq!(shown.url, None);
     assert!(shown.lines[0].contains("no LAN or Tailscale address"), "{:?}", shown.lines);
     r.addresses.lock().push(LOCALHOST);
-    r.app.refresh(start + Duration::from_secs(6));
+    listening(&mut r, start + Duration::from_secs(6));
     let phase = r.app.phone.phase().clone();
     assert!(matches!(&phase, Phase::Listening(routes) if routes.len() == 1), "{phase:?}");
 }
@@ -181,7 +192,8 @@ fn changing_the_port_keeps_the_held_code_working() {
     let port = free_port();
 
     r.app.config.phone_app_port = port;
-    r.app.refresh(Instant::now());
+    let at = r.at;
+    listening(&mut r, at);
     let url = dialog(&r.app).and_then(|view| view.url).expect("an address");
 
     assert!(url.starts_with(&format!("ws://127.0.0.1:{port}/?code=")), "{url}");
@@ -211,7 +223,7 @@ fn enter_on_the_switch_and_on_pair_a_phone_app_open_the_code() {
     open_remote_settings(&mut r.app);
     enter_on(&mut r.app, &Row::PhoneApp);
     assert!(r.app.config.phone_app);
-    r.app.refresh(Instant::now());
+    listening(&mut r, Instant::now());
     assert!(settings_rows(&r.app).contains(&Row::PhoneAppCode));
 
     enter_on(&mut r.app, &Row::PhoneAppCode);
