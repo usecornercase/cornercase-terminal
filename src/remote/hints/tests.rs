@@ -127,3 +127,152 @@ mod an_answer {
         );
     }
 }
+
+mod a_relayed_message {
+    use clap::CommandFactory;
+
+    use super::*;
+    use crate::cli::Cli;
+
+    const NO_AGENT: &str = "say which agent to start, such as `cornercase start claude`: settings → agents is on auto and no agent runs here";
+
+    fn on_vps(text: &str) -> String {
+        on_machine("vps", text)
+    }
+
+    #[rstest]
+    #[case::start(
+        NO_AGENT,
+        "say which agent to start, such as `cornercase start --machine vps claude`: settings → agents is on auto and no agent runs here"
+    )]
+    #[case::flow_run("`cornercase flow run Quick --prompt x`", "`cornercase flow run --machine vps Quick --prompt x`")]
+    #[case::new_workspace("`cornercase new-workspace notes`", "`cornercase new-workspace --machine vps notes`")]
+    #[case::focus("`cornercase focus --workspace 4`", "`cornercase focus --machine vps --workspace 4`")]
+    #[case::stats("`cornercase stats`", "`cornercase stats --machine vps`")]
+    #[case::usage("`cornercase usage`", "`cornercase usage --machine vps`")]
+    fn names_the_machine_in_a_command_that_takes_it(#[case] text: &str, #[case] expected: &str) {
+        assert_eq!(on_vps(text), expected);
+    }
+
+    #[rstest]
+    #[case::flow_list("(`cornercase flow list`)", "(`cornercase flow list` there)")]
+    #[case::profile("`cornercase profile list` lists them", "`cornercase profile list` there lists them")]
+    #[case::status_panes("`cornercase status --panes`", "`cornercase status --panes` there")]
+    #[case::focus_with_a_pane("`cornercase focus --pane 3`", "`cornercase focus --pane 3` there")]
+    fn says_there_after_a_command_without_it(#[case] text: &str, #[case] expected: &str) {
+        assert_eq!(on_vps(text), expected);
+    }
+
+    #[rstest]
+    #[case::status("read `cornercase status` again")]
+    #[case::status_json("read `cornercase status --json` again")]
+    #[case::machine_after("`cornercase start claude --machine gpu`")]
+    #[case::machine_equals("`cornercase start --machine=gpu claude`")]
+    #[case::remote("`cornercase --remote gpu start claude`")]
+    #[case::there("`cornercase flow list` there")]
+    #[case::here("`cornercase flow list` here")]
+    #[case::the_window("or open a window with `cornercase`")]
+    #[case::unclosed("run `cornercase flow list shows it")]
+    fn keeps_what_names_the_machine_already_or_is_no_hint(#[case] text: &str) {
+        assert_eq!(on_vps(text), text);
+    }
+
+    #[rstest]
+    #[case(NO_AGENT)]
+    #[case("(`cornercase flow list`) and `cornercase status --panes`")]
+    #[case("`cornercase focus --pane 3`")]
+    fn is_the_same_when_rewritten_again(#[case] text: &str) {
+        let once = on_vps(text);
+
+        assert_eq!(on_vps(&once), once);
+    }
+
+    #[test]
+    fn names_the_machine_in_every_error_at_any_depth_and_nowhere_else() {
+        let mut answer = json!({
+            "text": "`cornercase flow list`",
+            "why": "`cornercase flow list`",
+            "error": "see `cornercase flow list`",
+            "panes": [{"error": "`cornercase stats`"}],
+            "note": {"error": {"error": "`cornercase usage`"}}
+        });
+
+        errors_on_machine("vps", &mut answer);
+
+        assert_eq!(
+            answer,
+            json!({
+                "text": "`cornercase flow list`",
+                "why": "`cornercase flow list`",
+                "error": "see `cornercase flow list` there",
+                "panes": [{"error": "`cornercase stats --machine vps`"}],
+                "note": {"error": {"error": "`cornercase usage --machine vps`"}}
+            })
+        );
+    }
+
+    fn walk(command: &clap::Command, prefix: &str, checked: &mut Vec<String>) {
+        for sub in command.get_subcommands() {
+            let path = format!("{prefix}{}", sub.get_name());
+            let takes = sub.get_arguments().any(|arg| arg.get_id() == "machine");
+            let named = on_vps(&format!("`cornercase {path}`")).contains("--machine vps");
+            assert_eq!(named, takes, "`cornercase {path}`");
+            checked.push(path.clone());
+            walk(sub, &format!("{path} "), checked);
+        }
+    }
+
+    #[test]
+    fn every_command_that_takes_machine_gets_it_and_no_other_does() {
+        let mut checked = Vec::new();
+        walk(&Cli::command(), "", &mut checked);
+
+        for (path, _) in ON_A_MACHINE {
+            assert!(checked.iter().any(|name| name == path), "{path}");
+        }
+    }
+
+    #[test]
+    fn focus_is_given_no_machine_next_to_what_conflicts_with_it() {
+        let cli = Cli::command();
+        let focus = cli.find_subcommand("focus").expect("focus");
+        let machine = focus.get_arguments().find(|arg| arg.get_id() == "machine").expect("--machine");
+        let mut conflicts: Vec<String> = focus
+            .get_arg_conflicts_with(machine)
+            .iter()
+            .filter_map(|arg| arg.get_long().map(|long| format!("--{long}")))
+            .collect();
+        conflicts.sort();
+        let (_, refused) = ON_A_MACHINE.iter().find(|(path, _)| *path == "focus").expect("focus");
+        let mut refused: Vec<String> = refused.iter().map(ToString::to_string).collect();
+        refused.sort();
+
+        assert_eq!(refused, conflicts);
+    }
+
+    #[rstest]
+    #[case::start(NO_AGENT)]
+    #[case::flow_run("`cornercase flow run Quick --prompt x`")]
+    #[case::status("read `cornercase status` again")]
+    #[case::focus("`cornercase focus --workspace 4`")]
+    fn with_remote_it_names_both_in_an_order_the_cli_reads(#[case] text: &str) {
+        let remote = Remote { destination: "devbox".into(), command: None, option: "--remote-command" };
+        let said = remote.hinted(&on_vps(text));
+
+        for span in said.split('`').skip(1).step_by(2).filter(|span| span.starts_with("cornercase ")) {
+            let words = span.split(' ');
+            let parsed = Cli::command().try_get_matches_from(words);
+            assert!(parsed.is_ok(), "{span}: {:?}", parsed.err());
+            assert!(span.contains("--remote devbox"), "{span}");
+            assert_eq!(span.contains("--machine vps"), !text.contains("status"), "{span}");
+        }
+    }
+
+    #[test]
+    fn with_remote_a_command_for_the_machine_is_left_alone() {
+        let remote = Remote { destination: "devbox".into(), command: None, option: "--remote-command" };
+        let text = on_vps("(`cornercase flow list`)");
+
+        assert_eq!(remote.hinted(&text), text);
+    }
+}

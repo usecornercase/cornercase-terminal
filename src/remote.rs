@@ -21,7 +21,7 @@ use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
 
 mod attempts;
-mod hints;
+pub(crate) mod hints;
 mod known;
 pub(crate) mod machines;
 mod shell;
