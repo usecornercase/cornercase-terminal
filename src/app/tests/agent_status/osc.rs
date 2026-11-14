@@ -2,11 +2,23 @@ use ratatui::style::Color;
 
 use super::*;
 
-fn report(w: &mut Watched, state: &str, ticks: usize) {
-    w.app.projects[0].workspaces[0].tabs[0].panes[0].feed(format!("\x1b]7501;state={state}\x1b\\").as_bytes());
-    for _ in 0..ticks {
+fn feed(w: &mut Watched, payload: &str) {
+    w.app.projects[0].workspaces[0].tabs[0].panes[0].feed(format!("\x1b]7501;{payload}\x1b\\").as_bytes());
+}
+
+fn ticks(w: &mut Watched, count: usize) {
+    for _ in 0..count {
         tick(&mut w.app);
     }
+}
+
+fn state_of(w: &Watched) -> Option<&'static str> {
+    tab_term(&w.app, 0, 0).agent.state()
+}
+
+fn report(w: &mut Watched, state: &str, count: usize) {
+    feed(w, &format!("state={state}"));
+    ticks(w, count);
 }
 
 #[rstest]
@@ -126,4 +138,69 @@ fn a_shell_report_does_not_belong_to_the_departed_agent(#[case] state: &str, #[c
     report(&mut w, "error:id=build:app=cargo", 6);
     assert_eq!(status(&w.app, 0, 0), expected);
     assert!(w.told().1.iter().all(|notice| !notice.text.contains("claude failed")));
+}
+
+#[test]
+fn a_turn_left_with_a_background_shell_reads_as_claude_reports_it() {
+    let mut w = Watched::start(agents::Known::Claude, true);
+    let mut states = Vec::new();
+
+    for line in crate::test_util::fixture!("claude/2.1.325/background-shell.txt").lines() {
+        let (file, payload) = line.split_once(' ').expect("a file status and a report");
+        w.report(file, 0);
+        if payload != "-" {
+            feed(&mut w, payload);
+        }
+        ticks(&mut w, 1);
+        states.push(state_of(&w));
+    }
+    ticks(&mut w, 5);
+
+    let expected = ["working", "shell", "working", "working", "done"].map(Some);
+    assert_eq!(states, expected);
+    let told = w.told().1;
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0].text, format!("claude finished in {}", w.place()));
+}
+
+#[rstest]
+#[case::finished("done", Status::Done, Some("finished"))]
+#[case::stopped("idle", Status::Idle, None)]
+#[case::failed("error", Status::Failed, Some("failed"))]
+fn a_reported_turn_over_waits_for_claudes_background_shell(
+    #[case] state: &str,
+    #[case] after: Status,
+    #[case] notice: Option<&str>,
+) {
+    let mut w = Watched::start(agents::Known::Claude, true);
+    report(&mut w, "working", 1);
+    w.report("shell", 0);
+
+    report(&mut w, &format!("{state}:app=claude-code"), 6);
+
+    assert_eq!((status(&w.app, 0, 0), state_of(&w)), (Some(Status::Working), Some("shell")));
+    assert!(w.told().1.is_empty(), "the turn is not over while the shell runs");
+    w.report("idle", 6);
+    assert_eq!(status(&w.app, 0, 0), Some(after));
+    let told = w.told().1;
+    let said = told.first().map(|n| n.text.clone());
+    assert_eq!(said, notice.map(|word| format!("claude {word} in {}", w.place())));
+}
+
+#[rstest]
+#[case::the_file_catches_up(Some("shell"), "shell")]
+#[case::the_file_never_does(None, "done")]
+fn a_finish_reported_before_claudes_file_turns_waits_one_read(#[case] file: Option<&str>, #[case] expected: &str) {
+    let mut w = Watched::start(agents::Known::Claude, true);
+    report(&mut w, "working", 1);
+    feed(&mut w, "state=done:app=claude-code");
+
+    ticks(&mut w, 1);
+    let held = state_of(&w);
+    if let Some(file) = file {
+        w.report(file, 0);
+    }
+    ticks(&mut w, 1);
+
+    assert_eq!((held, state_of(&w)), (Some("working"), Some(expected)));
 }

@@ -171,6 +171,7 @@ pub(in crate::agents) struct Reader {
     live: usize,
     home: Option<(i32, Vec<String>, Option<PathBuf>)>,
     probe_model: Option<String>,
+    reported: Option<Activity>,
 }
 
 impl Reader {
@@ -241,6 +242,17 @@ impl Reader {
 
     pub(in crate::agents) fn compaction(&self) -> Compaction {
         self.transcript.as_ref().map(|transcript| transcript.compaction).unwrap_or_default()
+    }
+
+    pub(in crate::agents) fn refine(&mut self, reported: Option<Activity>) -> Option<Activity> {
+        let first = self.reported != reported;
+        self.reported = reported;
+        let own = self.session.as_ref().and_then(Session::activity);
+        Some(match (reported?, own) {
+            (Activity::Done | Activity::Ready | Activity::Failed, Some(Activity::Shell)) => Activity::Shell,
+            (Activity::Done | Activity::Failed, Some(Activity::Working)) if first => Activity::Working,
+            (reported, _) => reported,
+        })
     }
 
     pub(in crate::agents) fn subagents(&self) -> usize {

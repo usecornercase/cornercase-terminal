@@ -34,7 +34,12 @@ rm -f "$1/sessions/$$.json"
     pub(crate) const CONTROL: &str = r#"#!/bin/sh
 d="$1"; s="$d/sessions/$$.json"; t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"
 mkdir -p "$t"
-state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
+state() {
+  printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"
+  [ -e "$d/osc" ] || return 0
+  case "$1" in busy) r=working ;; waiting) r=blocked:kind=permission ;; *) r=done ;; esac
+  printf '\033]7501;state=%s:app=claude-code\033\\' "$r"
+}
 finished() { while [ -d "$d" ] && [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
 state idle
 n=0
