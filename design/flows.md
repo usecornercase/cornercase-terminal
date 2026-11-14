@@ -15,7 +15,7 @@ Code: `flows/`, `app/flow_runs.rs`, `app/flow_panel.rs`, `app/flows_dialog.rs`, 
 - [Agents never ask, and starting a run](flows/starting-a-run.md): Agents never ask: unattended modes, Claude Code's consent, a project's `env` and `args`; Starting a run; Shown with `--focus`, in the window or a view.
 - [A worktree of its own](flows/own-worktrees.md): #313: file version 2, branches and folders, one job, setup, integration, removal, the tag.
 - [The run's folder](flows/run-folder.md): #312, #778, #781: the task as a file, where (the local day), `CORNERCASE_RUN_DIR`, answers as files, `--add-dir`, lifecycle, the panel.
-- [The brief, the team and the session](flows/brief-and-team.md): The brief; After a loop, every later stage runs again (#780); Members' notifications and marks; Waking the orchestrator; The team hangs under its orchestrator; The session.
+- [The brief, the team and the session](flows/brief-and-team.md): The brief; After a loop, every later stage runs again (#780); Members' notifications and marks; Waking the orchestrator; The team hangs under its orchestrator; The session; A resumed orchestrator takes its brief (#843).
 - [Commands and sharing](flows/commands-and-sharing.md): Commands: the lookup order; Sharing: export, import, risks, names.
 - [Community flows](flows/community-flows.md): the `cornercase-flow` topic, the snapshot, validation, the pages, importing by `owner/repo`.
 - [Through the server](flows/through-the-server.md): #342: the flow as JSON, saving, deleting, hiding, restoring, following runs and messages, a role whose agent exited.

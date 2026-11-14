@@ -109,3 +109,5 @@ fn the_roles_come_back_after_a_restart() {
         (vec![&(Some(ORCHESTRATOR.to_string()), true)], true)
     );
 }
+
+mod brief_taken;

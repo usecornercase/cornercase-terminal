@@ -2,10 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.79
+## 0.13.80
 
 - **A bot can only type into your agents.** For a bot with `cornercase` access, the default, the server now refuses its `cornercase send`, `keys`, `input`, `paste-file`, `held --send-now` and `todo send` into a pane that runs no agent (a shell, an editor, an agent that exited back to its shell), and `new-tab` or `split` with a command. Writing to an agent works as before. The server knows a bot's commands by their process, not by a variable the bot could drop.
 - **What a bot starts ends with its answer.** When such a bot answers, anything it left running in the background is stopped, as `cornercase bot stop` already did.
+
+## 0.13.79
+
+- **A flow's orchestrator takes its message after a restart.** After a restart, **reopen agents** or `cornercase agents reopen`, the orchestrator resumes its conversation and is told its team's new pane ids. When Claude Code was still finishing its resume, that message could stay in its input box, unsent, and the run stood still until you pressed `Enter` in its tab. cornercase now checks that the agent took it (it records the prompt or starts working), and when it has not, presses `Enter` again every 3 seconds, up to 4 more times. `server.log` has a `launch: enter again` line for each, and `launch: the agent did not take the prompt` when it gives up.
 
 ## 0.13.78
 

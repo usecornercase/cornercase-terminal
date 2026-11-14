@@ -384,16 +384,20 @@ impl Term {
         self.typing.clear();
     }
 
+    pub(crate) fn seen_draft(&mut self) -> Option<bool> {
+        let pid = self.foreground_pid();
+        let seen =
+            self.agent.agent().and_then(Known::of).filter(|_| self.input_seen.is_some() && self.input_seen == pid)?;
+        let emulator = &mut self.emulator;
+        seen.draft(|| emulator.active_snapshot().map(|s| s.lit_lines()).unwrap_or_default())
+    }
+
     pub(crate) fn settle_draft(&mut self, now: Instant) {
         if !self.typing.drafting() {
             return;
         }
         let pid = self.foreground_pid();
-        let seen =
-            self.agent.agent().and_then(Known::of).filter(|_| self.input_seen.is_some() && self.input_seen == pid);
-        let emulator = &mut self.emulator;
-        let lines = || emulator.active_snapshot().map(|s| s.lit_lines()).unwrap_or_default();
-        let empty = seen.is_some_and(|agent| agent.draft(lines) == Some(false));
+        let empty = self.seen_draft() == Some(false);
         if empty || !self.typing.draft(pid, now) {
             self.typing.clear();
         }
