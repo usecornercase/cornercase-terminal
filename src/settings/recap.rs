@@ -107,7 +107,7 @@ fn stored(value: &str, word: &str) -> String {
 
 impl Settings {
     fn recap_kind(&self) -> Known {
-        let usable = |name: &str| Known::of(name.trim()).filter(|kind| kind.recap().is_some());
+        let usable = |name: &str| Known::of(name.trim()).filter(|kind| kind.headless().is_some());
         usable(&self.config.recap_agent).or_else(|| usable(&self.config.agent)).unwrap_or(Known::Claude)
     }
 

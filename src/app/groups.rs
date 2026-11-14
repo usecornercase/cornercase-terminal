@@ -63,4 +63,5 @@ pub(super) struct Panels {
     pub(super) processes: processes_dialog::ProcessesState,
     pub(super) merges: MergeChecks,
     pub(super) recap: recap_panel::Recaps,
+    pub(super) bots: super::bots::Bots,
 }

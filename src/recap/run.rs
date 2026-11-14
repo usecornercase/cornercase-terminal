@@ -8,7 +8,7 @@ use super::journal::files;
 use super::range::{self, Range};
 use super::store::{self, Moment};
 use super::{Choice, KEPT_DAYS, Options, Recap, prompt};
-use crate::agents::recap::{Ask, Call};
+use crate::agents::headless::{Ask, Call};
 use crate::agents::{self, Known};
 use crate::error::{Error, Result};
 use crate::queue::clock;
@@ -61,6 +61,18 @@ fn current(input: &Input, range: &Range) -> bool {
     !input.fresh && !store::due(input.choice, input.cached.as_ref(), moment)
 }
 
+fn asked(input: &Input, kind: Known, label: &str, folder: PathBuf) -> Ask {
+    let effort = input.options.effort.as_deref().filter(|level| agents::effort_refusal(kind.name(), level).is_none());
+    Ask {
+        prompt: prompt::prompt(input.choice, label, &input.options),
+        model: input.options.model.clone(),
+        effort: effort.map(str::to_string),
+        folder,
+        socket: input.socket.clone(),
+        ..Ask::default()
+    }
+}
+
 pub(crate) fn run(input: &Input) -> Result<Outcome> {
     let Some((range, dossier)) = prepare(input) else { return Ok(Outcome::Empty(empty_text(input.choice))) };
     if current(input, &range) {
@@ -71,16 +83,9 @@ pub(crate) fn run(input: &Input) -> Result<Outcome> {
     let folder = input.folder.join(input.choice.name());
     crate::os::fs::create_private_dir_all(&folder)?;
     store::write_private(&folder.join("dossier.md"), dossier.text.as_bytes())?;
-    let effort = input.options.effort.as_deref().filter(|level| agents::effort_refusal(kind.name(), level).is_none());
-    let ask = Ask {
-        prompt: prompt::prompt(input.choice, &range.label, &input.options),
-        model: input.options.model.clone(),
-        effort: effort.map(str::to_string),
-        folder,
-        socket: input.socket.clone(),
-    };
+    let ask = asked(input, kind, &range.label, folder);
     let call = Call { agent: kind, program: &input.program, home: input.home.as_deref(), timeout: input.timeout };
-    let ran = agents::recap::run(&call, &ask, &input.progress)?;
+    let ran = agents::headless::run(&call, &ask, &input.progress)?;
     let recap = Recap {
         v: super::RECAP_VERSION,
         range: input.choice.name().to_string(),

@@ -15,6 +15,7 @@ pub mod version;
 
 pub(crate) mod accounts;
 pub mod agents;
+pub(crate) mod bots;
 pub(crate) mod changes;
 pub mod config;
 pub(crate) mod discord;

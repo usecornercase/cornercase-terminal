@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.77
+
+- **Bots: agents of your own that you talk to.** `cornercase bot new prs --about "review my pull requests"` makes one, and `cornercase bot say prs "which of my PRs are blocked?" --wait` asks it. A bot belongs to no project but can see every one through `cornercase`: it answers in the same chat every time, keeps a memory of its own, and starts agents in your projects when it should. Claude Code and Codex can be bots (a Codex bot has full access only). Making a bot starts nothing and spends no tokens, a bot works only while the server runs, and the window shows bots in a later release. `cornercase bot list`, `history`, `reset`, `stop`, `edit` and `remove` do the rest, and the [Bots page](https://usecornercase.dev/docs/guides/bots/) says what each access allows.
+- **Programs can follow bots.** `cornercase events` reports each line of a bot's chat, its turns starting and ending, and bots being created, edited or removed; `cornercase status --app` has the list as `bots`, and `cornercase contract` lists the feature `bots`.
+- **Commands refuse to act on "here" inside a bot.** A bot runs in no pane, so `cornercase start`, `send` and the other commands that default to the pane they run in now ask it to name the project, workspace or pane, and `kill-server`, `restart` and `update` are refused there, as is a bot writing to itself.
+
 ## 0.13.76
 
 - **A Claude Code agent waiting on a command it started in the background shows as working again.** Recent Claude Code versions report their own state to cornercase, and that report called the turn finished while a build, a test run or a Monitor started with `run_in_background` still ran. So the tab turned `✓` and told you it finished before the work was done, and `cornercase status` said `idle` or `done` with `background_shell: false`. `cornercase wait` and `--until idle` ended at once, `--until turn-over` said `done` instead of `shell`, and a routine with cleanup could remove its workspace under the running command. cornercase now also reads the session file Claude Code keeps, which still says when such a command runs: the tab keeps its working icon, `cornercase status` says `working (background shell)` again (`background_shell: true` in its JSON and in `--panes`), `events` says `shell`, and the agent counts as finished once that command ends and its next turn is over.

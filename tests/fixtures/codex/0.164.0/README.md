@@ -1,0 +1,1 @@
+`bot-new.jsonl` and `bot-resumed.jsonl` are cut down from real `codex exec --json` runs (0.164.0) of a first turn and of one continued with `codex exec … resume <thread>`: the `thread.started` line, a command and the answer, with the commands and texts replaced.

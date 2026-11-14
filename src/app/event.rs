@@ -52,6 +52,7 @@ pub(crate) enum AppEvent {
     Machine(MachineEvent),
     Cloned { request: u64, result: std::result::Result<Vec<Unwritten>, Failure> },
     Recap(Box<super::RecapEvent>),
+    Bot(Box<super::bots::BotEvent>),
 }
 
 impl AppEvent {
@@ -105,6 +106,7 @@ impl AppEvent {
             Self::Machine(_) => "machine",
             Self::Cloned { .. } => "cloned",
             Self::Recap(event) => event.name(),
+            Self::Bot(event) => event.name(),
         }
     }
 }

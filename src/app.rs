@@ -99,6 +99,7 @@ mod account_restart;
 mod accounts_page;
 mod actions;
 mod agent_watch;
+mod bots;
 mod changes_panel;
 mod clock;
 mod clone_on_machine;
@@ -290,6 +291,7 @@ impl App {
     pub(crate) fn stop_background(&mut self) {
         self.stop_plugins();
         self.stop_machines();
+        self.stop_bots();
     }
 
     pub(crate) fn take_start(&mut self) -> Option<(u64, (u16, u16))> {
@@ -634,11 +636,7 @@ impl App {
     pub(crate) fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
         match ev {
             AppEvent::Input(event) => self.handle_input(event, area)?,
-            AppEvent::Output(id, generation, bytes) if self.is_popup(id, generation) => self.popup_output(id, &bytes),
-            AppEvent::Exited(id, generation) if self.is_popup(id, generation) => self.reap_popup(Instant::now()),
-            AppEvent::Output(id, generation, bytes) if self.current_shell(id, generation) => self.output(id, &bytes),
-            AppEvent::Exited(id, generation) if self.current_shell(id, generation) => self.remove(id),
-            AppEvent::Output(..) | AppEvent::Exited(..) => {}
+            AppEvent::Output(..) | AppEvent::Exited(..) => self.terminal_event(ev),
             AppEvent::Worktree(event) => self.worktree_answered(event, area)?,
             AppEvent::Issues(event) => self.issue_answered(event, area)?,
             AppEvent::Changes(event) => self.changes_answered(event),
@@ -665,6 +663,7 @@ impl App {
             AppEvent::Messenger(event) => self.messenger_event(event, area),
             AppEvent::Merged(answer) => self.merged_answered(answer),
             AppEvent::Recap(event) => self.recap_answered(*event),
+            AppEvent::Bot(event) => self.bot_event(*event),
             AppEvent::Plugin(event) => self.plugin_answered(event),
             AppEvent::Login(kind, name, login) => self.login_checked(kind, name, login),
             AppEvent::Restarted(restarted) => self.restarted(*restarted),
@@ -672,6 +671,16 @@ impl App {
             AppEvent::Cloned { request, result } => self.clone_answered(request, result, area),
         }
         Ok(())
+    }
+
+    fn terminal_event(&mut self, ev: AppEvent) {
+        match ev {
+            AppEvent::Output(id, generation, bytes) if self.is_popup(id, generation) => self.popup_output(id, &bytes),
+            AppEvent::Exited(id, generation) if self.is_popup(id, generation) => self.reap_popup(Instant::now()),
+            AppEvent::Output(id, generation, bytes) if self.current_shell(id, generation) => self.output(id, &bytes),
+            AppEvent::Exited(id, generation) if self.current_shell(id, generation) => self.remove(id),
+            _ => {}
+        }
     }
 
     fn handle_input(&mut self, event: Event, area: Rect) -> Result<()> {

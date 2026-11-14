@@ -17,6 +17,7 @@ pub(crate) fn run(program: &Path, args: &[String], out: &mut impl Write, err: &m
         }
     };
     hold(program);
+    copy(&program.with_extension("after"), out);
     exit_code(program)
 }
 
@@ -25,6 +26,19 @@ fn record(program: &Path, args: &[String]) {
     append(&program.with_extension("argv"), &format!("{args:?}\n"));
     let folder = std::env::current_dir().map(|dir| dir.display().to_string()).unwrap_or_default();
     append(&program.with_extension("cwd"), &format!("{folder}\n"));
+    record_env(program);
+}
+
+fn record_env(program: &Path) {
+    let Ok(names) = std::fs::read_to_string(program.with_extension("vars")) else { return };
+    let lines: String = names
+        .split_whitespace()
+        .map(|name| match std::env::var_os(name) {
+            Some(value) => format!("{name}={}\n", value.to_string_lossy()),
+            None => format!("{name}\n"),
+        })
+        .collect();
+    append(&program.with_extension("env"), &lines);
 }
 
 fn append(path: &Path, line: &str) {

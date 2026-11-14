@@ -68,8 +68,12 @@ pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(cra
     answer: usage::answer,
     no_limits: "no plan limits for this account (API key, Bedrock or Vertex)",
 });
-pub(in crate::agents) const RECAP: Option<crate::agents::recap::Spec> =
-    Some(crate::agents::recap::Spec { command: recap::command, read: recap::read });
+pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> =
+    Some(crate::agents::headless::Spec { command: headless::command, read: headless::read, bot: Some(BOT) });
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],
+    why: None,
+};
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> =
     Some(crate::agents::breakdown::Spec { probe: breakdown::probe });
 pub(in crate::agents) const UNFOUND: &str = "Claude Code has not said yet which conversation it is in";
@@ -314,8 +318,8 @@ fn from_title(title: &str) -> Option<Activity> {
 }
 
 pub(in crate::agents) mod breakdown;
+pub(in crate::agents) mod headless;
 pub(in crate::agents) mod message;
-pub(in crate::agents) mod recap;
 pub(crate) mod screen;
 pub(in crate::agents) mod transcript;
 pub(crate) mod usage;
