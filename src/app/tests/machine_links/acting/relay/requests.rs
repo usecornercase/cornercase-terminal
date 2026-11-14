@@ -114,6 +114,7 @@ mod a_start_on_a_machine {
         let (code, why) = remote.ask("new-workspace", &on("box", new_workspace())).expect_err("a refusal");
 
         assert_eq!((code.as_str(), why.contains("`box`")), ("not-found", true));
+        assert!(why.contains("`cornercase machines`"), "{why}");
         assert_eq!(remote.rig.seen("ask"), 0);
     }
 
@@ -293,5 +294,54 @@ mod its_focus {
         remote.serves(2, with_new(BOOT));
 
         assert_eq!(remote.selected(), None);
+    }
+}
+
+mod a_refusal_from_the_machine {
+    use super::*;
+    use crate::control::contract::{Code, Refusal, Structured};
+
+    fn refusing(message: &str) -> Structured {
+        Structured::Error(Refusal::new(Code::Failed, message))
+    }
+
+    fn no_agent(_: &str) -> Structured {
+        refusing("say which agent to start, such as `cornercase start claude`: no agent runs here")
+    }
+
+    fn no_flow(_: &str) -> Structured {
+        refusing("there is no flow named `Nope`; the flows are Pair (`cornercase flow list`)")
+    }
+
+    fn no_project(_: &str) -> Structured {
+        refusing("there is no project 999; `cornercase status` lists them")
+    }
+
+    #[test]
+    fn names_the_machine_in_a_start_hint() {
+        let mut remote = seeing(Reply::Told(no_agent));
+
+        let (code, why) = remote.ask("start", &start()).expect_err("a refusal");
+
+        assert_eq!(code, "failed");
+        assert!(why.contains("such as `cornercase start --machine vps claude`:"), "{why}");
+    }
+
+    #[test]
+    fn says_there_after_a_command_without_machine() {
+        let mut remote = seeing(Reply::Told(no_flow));
+
+        let (_, why) = remote.ask("flow-run", &flow_run()).expect_err("a refusal");
+
+        assert!(why.ends_with("(`cornercase flow list` there)"), "{why}");
+    }
+
+    #[test]
+    fn keeps_its_status_hint() {
+        let mut remote = seeing(Reply::Told(no_project));
+
+        let (_, why) = remote.ask("start", &start()).expect_err("a refusal");
+
+        assert_eq!(why, "there is no project 999; `cornercase status` lists them");
     }
 }

@@ -16,6 +16,13 @@ fn pid_of(running: &Running) -> i32 {
     i32::try_from(child.as_ref().expect("ssh runs").id()).expect("a pid")
 }
 
+fn runs_as_itself(running: &Running, forward: Forward) {
+    let pid = running.pid();
+    wait_until("ssh runs as itself", || {
+        !process::running(pid, None) || same_forward(&process::args(pid), "vps", forward)
+    });
+}
+
 mod the_ssh_line {
     use super::*;
 
@@ -174,7 +181,9 @@ mod the_owner {
         let report = move |watched| {
             let _ = tx.send(watched);
         };
-        (spawn_within(ssh.as_os_str(), "vps", forward, UP_WAIT, report).expect("start ssh"), rx)
+        let running = spawn_within(ssh.as_os_str(), "vps", forward, UP_WAIT, report).expect("start ssh");
+        runs_as_itself(&running, forward);
+        (running, rx)
     }
 
     #[test]
@@ -290,7 +299,22 @@ mod running {
         let report = move |watched| {
             let _ = tx.send(watched);
         };
-        (spawn_within(ssh.as_os_str(), "vps", forward, wait, report).expect("start ssh"), rx)
+        let running = spawn_within(ssh.as_os_str(), "vps", forward, wait, report).expect("start ssh");
+        runs_as_itself(&running, forward);
+        (running, rx)
+    }
+
+    fn up_on_a_port_of_its_own(ssh: &std::path::Path) -> (Forward, Running) {
+        let mut taken = 0;
+        loop {
+            let forward = Forward { port: 5173, local: free_port() };
+            let (running, reports) = start(ssh, forward, UP_WAIT);
+            match reports.recv_timeout(Duration::from_secs(20)) {
+                Ok(Watched::Up) => return (forward, running),
+                Ok(Watched::Ended(why)) if why.contains("Address already in use") && taken < 5 => taken += 1,
+                other => panic!("ssh did not come up: {other:?}"),
+            }
+        }
     }
 
     #[test]
@@ -298,11 +322,8 @@ mod running {
         let dir = TempDir::new();
         let ssh = ssh_in(&dir);
         std::fs::write(ssh.with_extension("hold"), "").expect("hold it");
-        let forward = Forward { port: 5173, local: free_port() };
+        let (forward, running) = up_on_a_port_of_its_own(&ssh);
 
-        let (running, reports) = start(&ssh, forward, UP_WAIT);
-
-        assert_eq!(reports.recv_timeout(Duration::from_secs(20)), Ok(Watched::Up));
         let listening = listen::listeners(&[pid_of(&running)]);
         assert!(listening.iter().any(|listener| listener.port == forward.local));
         assert_eq!(running.there(), None);

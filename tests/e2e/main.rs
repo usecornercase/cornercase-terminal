@@ -38,6 +38,7 @@ mod contract;
 mod flows;
 mod forum;
 mod held;
+mod hints;
 mod input;
 mod issues;
 mod machine_actions;
@@ -344,7 +345,19 @@ impl Harness {
     }
 
     fn run_answering(session: Arc<Session>, terminal: &Terminal) -> Self {
-        let Terminal { bin, args, size: (rows, cols), env, reply } = *terminal;
+        let mut harness = Self::spawned(session, terminal);
+        harness.wait_for_raw("app asks for the host colors", |raw| raw.contains("\x1b]4;15;?\x1b\\\x1b[>q\x1b[c"));
+        harness.send(terminal.reply);
+        harness
+    }
+
+    fn command_in_pty(args: &[&str], session: Arc<Session>, env: &[(&str, &str)]) -> Self {
+        let bin = std::path::Path::new(env!("CARGO_BIN_EXE_cornercase"));
+        Self::spawned(session, &Terminal { bin, args, size: (ROWS, COLS), env, reply: &[] })
+    }
+
+    fn spawned(session: Arc<Session>, terminal: &Terminal) -> Self {
+        let Terminal { bin, args, size: (rows, cols), env, reply: _ } = *terminal;
         let pair =
             native_pty_system().openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).expect("open pty");
         let mut cmd = CommandBuilder::new(bin);
@@ -381,10 +394,7 @@ impl Harness {
         });
 
         let writer = pair.master.take_writer().expect("pty writer");
-        let mut harness = Self { session, cols, screen, raw, writer, child, master: pair.master };
-        harness.wait_for_raw("app asks for the host colors", |raw| raw.contains("\x1b]4;15;?\x1b\\\x1b[>q\x1b[c"));
-        harness.send(reply);
-        harness
+        Self { session, cols, screen, raw, writer, child, master: pair.master }
     }
 
     fn text(&self) -> String {

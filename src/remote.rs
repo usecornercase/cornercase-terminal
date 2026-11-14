@@ -11,6 +11,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 
 use self::attempts::{Ask, Attempt, Failed};
+use self::hints::Printed;
 use self::shell::RemoteShell;
 use crate::control;
 use crate::error::{Behind, Error, Result};
@@ -21,7 +22,7 @@ use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
 
 mod attempts;
-mod hints;
+pub(crate) mod hints;
 mod known;
 pub(crate) mod machines;
 mod shell;
@@ -371,12 +372,20 @@ impl Remote {
         let line = self.command_for(shell, args, run == Run::Tied)?;
         let mut command = Command::new(SSH);
         command.args(self.ssh_line(batched(batch), run, line));
-        if run != Run::Tied {
-            return command.status().map_err(Error::RunSsh);
+        let words: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
+        let printed = hints::printed_in(run == Run::Terminal, cfg!(windows), &words);
+        if run == Run::Tied {
+            command.stdin(Stdio::piped());
         }
-        let mut child = command.stdin(Stdio::piped()).spawn().map_err(Error::RunSsh)?;
+        if printed != Printed::Data {
+            command.stderr(Stdio::piped());
+        }
+        if printed == Printed::Messages {
+            command.stdout(Stdio::piped());
+        }
+        let mut child = command.spawn().map_err(Error::RunSsh)?;
         let held = child.stdin.take();
-        let status = child.wait().map_err(Error::RunSsh);
+        let status = hints::relayed(self, &mut child, io::stdout(), io::stderr());
         drop(held);
         status
     }
