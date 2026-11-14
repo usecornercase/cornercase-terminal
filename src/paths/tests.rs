@@ -174,6 +174,13 @@ fn the_journal_and_the_recaps_live_beside_the_session(
     assert_eq!(recap(Path::new(session)), PathBuf::from(recap_dir));
 }
 
+#[rstest::rstest]
+#[case::default("/c/cornercase/session.json", "/c/cornercase/bots")]
+#[case::custom("/c/server.json", "/c/server.bots")]
+fn the_bots_live_beside_the_session(#[case] session: &str, #[case] bots_dir: &str) {
+    assert_eq!(bots(Path::new(session)), PathBuf::from(bots_dir));
+}
+
 #[cfg(windows)]
 mod on_windows {
     use super::*;

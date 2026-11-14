@@ -27,7 +27,10 @@ struct Older {
 pub fn parse() -> (Cli, bool) {
     let matches = Cli::command().get_matches();
     let json = wants_json(&matches);
-    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    let mut cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    if let Some(own) = std::env::var(crate::bots::BOT_ENV).ok().filter(|id| !id.is_empty()) {
+        cli.refused = super::guard::refusal(&Cli::command(), &matches, &own);
+    }
     (cli, json)
 }
 

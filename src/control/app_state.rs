@@ -32,6 +32,8 @@ pub(crate) struct AppState {
     pub(crate) machines: Vec<Info>,
     #[serde(skip_serializing_if = "is_zero")]
     pub(crate) accounts_revision: u64,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) bots: Vec<super::bots::BotInfo>,
 }
 
 #[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if passes a reference")]

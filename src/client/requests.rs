@@ -102,6 +102,10 @@ pub(crate) fn use_recap() -> Result<()> {
     require("recap", "has no recap")
 }
 
+pub(crate) fn use_bots() -> Result<()> {
+    require("bots", "has no bots")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }

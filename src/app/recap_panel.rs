@@ -144,11 +144,7 @@ impl App {
         let zone = want.zone.map_or_else(|| self.window_zone(), str::to_string);
         let Want { choice, options, fresh, .. } = want;
         let kind = Known::of(&options.agent);
-        let home = options
-            .account
-            .as_deref()
-            .zip(kind)
-            .map(|(name, kind)| crate::os::fs::canonical(crate::accounts::path(self.accounts.dir(), kind, name)));
+        let home = self.account_home(kind, options.account.as_deref());
         Input {
             choice,
             journal: folders.journal.clone(),

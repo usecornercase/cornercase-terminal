@@ -68,6 +68,7 @@ export default defineConfig({
             { label: 'Files panel', slug: 'docs/guides/files' },
             { label: 'TODO list', slug: 'docs/guides/todo' },
             { label: 'Recap', slug: 'docs/guides/recap' },
+            { label: 'Bots', slug: 'docs/guides/bots' },
             { label: 'Issues and agents', slug: 'docs/guides/issues-and-agents' },
             { label: 'Flows', slug: 'docs/guides/flows' },
             { label: 'Community flows', link: '/flows/' },

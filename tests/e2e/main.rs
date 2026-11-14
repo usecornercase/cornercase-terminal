@@ -29,6 +29,7 @@ mod accounts;
 mod agents;
 mod arranging;
 mod boot;
+mod bots;
 mod browser;
 mod clone_files;
 mod code_workspace;
