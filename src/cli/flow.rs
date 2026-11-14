@@ -77,6 +77,7 @@ fn flow_run_features(run: &args::FlowRunArgs) -> Result<()> {
 fn flow_run(run: args::FlowRunArgs) -> Result<()> {
     flow_run_features(&run)?;
     let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
+    let machine_boot = super::machine_boot(&run.on, &run.boot);
     let machine = super::machine(run.on)?;
     let on_machine = machine.is_some();
     let request = control::FlowRun {
@@ -91,6 +92,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         profile,
         accounts,
         machine,
+        machine_boot,
         close_when_merged: run.close_when_merged,
         free_builds: run.free_builds,
         fresh: super::fresh(&run.fresh)?,

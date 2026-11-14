@@ -96,8 +96,23 @@ mod focusing {
 
         let request: Request = serde_json::from_value(sent).expect("a request");
 
-        assert_eq!(request.command, Command::FocusMachine(FocusMachine { machine: "vps".into(), item: read }));
+        assert_eq!(
+            request.command,
+            Command::FocusMachine(FocusMachine { machine: "vps".into(), item: read, machine_boot: None })
+        );
         assert_eq!(request.command.name(), "focus-machine");
+    }
+
+    #[rstest]
+    #[case::with_it(json!({"machine": "vps", "item": {"workspace": 4}, "machine_boot": "vps-1"}), Some("vps-1"))]
+    #[case::without_it(json!({"machine": "vps", "item": {"workspace": 4}}), None)]
+    fn reads_the_boot_it_was_aimed_at_when_it_has_one(#[case] args: Value, #[case] boot: Option<&str>) {
+        let sent = json!({"command": "focus-machine", "args": args});
+
+        let request: Request = serde_json::from_value(sent).expect("a request");
+
+        let Command::FocusMachine(focus) = request.command else { panic!("a focus-machine") };
+        assert_eq!(focus.machine_boot.as_deref(), boot);
     }
 
     #[test]
@@ -109,7 +124,8 @@ mod focusing {
 
     #[test]
     fn its_fields_name_the_machine_and_the_item() {
-        let focus = Command::FocusMachine(FocusMachine { machine: "vps".into(), item: Item::Tab(41) });
+        let focus =
+            Command::FocusMachine(FocusMachine { machine: "vps".into(), item: Item::Tab(41), machine_boot: None });
 
         assert_eq!(focus.fields(), [("machine", "vps".to_string()), ("item", "tab-41".to_string())]);
     }

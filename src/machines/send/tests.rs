@@ -15,6 +15,7 @@ fn start() -> Start {
         timeout: Some(90.0),
         focus: true,
         machine: Some("vps".into()),
+        machine_boot: Some("vps-1".into()),
         ..Start::default()
     }
 }
@@ -27,13 +28,22 @@ fn new_workspace() -> Send {
         worktree: true,
         focus: true,
         machine,
+        machine_boot: Some("vps-1".into()),
         fresh: None,
     })
 }
 
 fn flow_run() -> Send {
     let machine = Some("vps".into());
-    Send::FlowRun(FlowRun { name: "review".into(), project: Some(4), focus: true, machine, ..FlowRun::default() })
+    let machine_boot = Some("vps-1".into());
+    Send::FlowRun(FlowRun {
+        name: "review".into(),
+        project: Some(4),
+        focus: true,
+        machine,
+        machine_boot,
+        ..FlowRun::default()
+    })
 }
 
 fn clone_with(files: Vec<CloneFile>) -> CloneRepository {
@@ -72,6 +82,19 @@ mod a_send {
         let sent = sent(send);
 
         assert_eq!((sent["args"].get("machine"), &sent["args"]["project"]), (None, &json!(4)));
+        assert_eq!(sent["args"].get("machine_boot"), None);
+    }
+
+    #[rstest]
+    #[case::start(Send::Start(start()), Some("vps-1"))]
+    #[case::start_with(Send::StartWith(start()), Some("vps-1"))]
+    #[case::new_workspace(new_workspace(), Some("vps-1"))]
+    #[case::flow_run(flow_run(), Some("vps-1"))]
+    #[case::without(Send::Start(Start { machine_boot: None, ..start() }), None)]
+    #[case::account_list(Send::AccountList, None)]
+    #[case::fold(Send::Fold { pane: 3, collapse: true }, None)]
+    fn reads_the_boot_it_was_aimed_at(#[case] send: Send, #[case] boot: Option<&str>) {
+        assert_eq!(send.machine_boot(), boot);
     }
 
     #[test]
@@ -203,5 +226,37 @@ mod an_answer {
         let heard = (send.hearing())(&text).expect("an answer");
 
         assert_eq!(heard["prompt"], json!(kept));
+    }
+}
+
+mod same_run {
+    use super::*;
+
+    #[rstest]
+    #[case::the_same(Some("vps-1"), Some("vps-1"), None)]
+    #[case::another(Some("vps-1"), Some("vps-2"), Some(Code::StaleBoot))]
+    #[case::none_asked(None, Some("vps-2"), None)]
+    #[case::none_reported(Some("vps-1"), None, None)]
+    fn compares_what_was_asked_with_what_was_reported(
+        #[case] asked: Option<&str>,
+        #[case] reported: Option<&str>,
+        #[case] refused: Option<Code>,
+    ) {
+        let result = same_run("vps", asked, reported);
+
+        assert_eq!(result.err().map(|refusal| refusal.code), refused);
+    }
+
+    #[test]
+    fn says_which_runs_and_which_machine() {
+        let refusal = same_run("vps", Some("vps-1"), Some("vps-2")).expect_err("another run");
+
+        assert!(
+            refusal.message.starts_with("this request is for the cornercase server started as vps-1 on vps, "),
+            "{}",
+            refusal.message
+        );
+        assert!(refusal.message.contains("vps last reported from the one started as vps-2"));
+        assert!(refusal.message.contains("its ids may name other items now"));
     }
 }

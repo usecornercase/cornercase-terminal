@@ -96,10 +96,7 @@ pub(crate) struct CloneArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(
-    group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).requires("worktree")),
-    group(ArgGroup::new("one_server").args(["boot", "machine"]).multiple(false))
-)]
+#[command(group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).requires("worktree")))]
 pub(crate) struct NewWorkspaceArgs {
     #[arg(value_name = "NAME", help = "Its name, or its branch with --worktree")]
     pub(crate) name: String,

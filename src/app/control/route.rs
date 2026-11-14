@@ -37,6 +37,7 @@ impl App {
         }
         let asker = Asker { caller, view: request.view };
         self.check_view(&request)?;
+        relay::lone_machine_boot(&request.command)?;
         self.settle_views();
         let noted = self.flow_steps(caller, &request.command, now);
         let handled = match self.route(Asked { client, asker, area, now }, request.command) {

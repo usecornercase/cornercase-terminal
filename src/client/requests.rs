@@ -27,6 +27,7 @@ pub(crate) use watch::{input_ended, reader_gone_within, watched};
 const STALE_BOOT: &str = "stale-boot";
 
 static VIEW: OnceLock<u64> = OnceLock::new();
+static STRUCTURED: OnceLock<u32> = OnceLock::new();
 static BOOT: OnceLock<String> = OnceLock::new();
 static REMOTE: OnceLock<Remote> = OnceLock::new();
 static CHECKED: Mutex<Option<Link>> = Mutex::new(None);
@@ -55,6 +56,16 @@ pub(crate) fn use_boot(boot: &str) -> Result<()> {
         shared::set_boot(boot);
     } else {
         let _ = BOOT.set(boot.to_string());
+    }
+    Ok(())
+}
+
+pub(crate) fn use_machine_boot() -> Result<()> {
+    require("machine-boot", "would ignore --boot with --machine and act on whatever has that id on the machine now")?;
+    if shared::active() {
+        shared::set_contract();
+    } else {
+        let _ = STRUCTURED.set(control::contract::CONTRACT);
     }
     Ok(())
 }
@@ -368,11 +379,12 @@ pub(crate) fn request(stream: &mut impl Write, command: control::Command) -> Res
 struct Envelope {
     view: Option<u64>,
     boot: Option<String>,
+    contract: Option<u32>,
 }
 
 impl Envelope {
     fn of_the_invocation() -> Self {
-        Self { view: VIEW.get().copied(), boot: BOOT.get().cloned() }
+        Self { view: VIEW.get().copied(), boot: BOOT.get().cloned(), contract: STRUCTURED.get().copied() }
     }
 
     fn for_command(self, command: &control::Command) -> Self {
@@ -383,8 +395,8 @@ impl Envelope {
 fn send_request(stream: &mut impl Write, command: control::Command, envelope: Envelope) -> Result<()> {
     let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
     let server = std::env::var(control::SERVER_ENV).ok();
-    let Envelope { view, boot } = envelope.for_command(&command);
-    let request = serde_json::to_string(&Request { caller, server, contract: None, boot, view, command })
+    let Envelope { view, boot, contract } = envelope.for_command(&command);
+    let request = serde_json::to_string(&Request { caller, server, contract, boot, view, command })
         .map_err(|e| Error::Control(e.to_string()))?;
     protocol::send(stream, &ClientMessage::Request(request))?;
     Ok(())

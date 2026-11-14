@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use super::act::{self, CHECK, QUICK, REMOVE as WORKTREE};
 use super::run_on;
-use crate::control::contract::Refusal;
+use crate::control::contract::{Code, Refusal};
 use crate::control::{
     AccountList, CloneFile, CloneRepository, Command, FlowList, FlowRun, Fold, IssueSources, Item, NewTab,
     NewWorkspace, Start, Until,
@@ -39,8 +39,10 @@ impl Send {
         match self {
             Self::Start(start) => Command::Start(unwaited(start)),
             Self::StartWith(start) => Command::StartWith(unwaited(start)),
-            Self::NewWorkspace(new) => Command::NewWorkspace(NewWorkspace { focus: false, machine: None, ..new }),
-            Self::FlowRun(run) => Command::FlowRun(FlowRun { focus: false, machine: None, ..run }),
+            Self::NewWorkspace(new) => {
+                Command::NewWorkspace(NewWorkspace { focus: false, machine: None, machine_boot: None, ..new })
+            }
+            Self::FlowRun(run) => Command::FlowRun(FlowRun { focus: false, machine: None, machine_boot: None, ..run }),
             Self::NewTab(tab) => Command::NewTab(NewTab { focus: false, ..tab }),
             Self::Clone(clone) => Command::Clone(CloneRepository { focus: false, ..clone }),
             Self::AccountList => Command::AccountList(AccountList { check: true }),
@@ -96,6 +98,20 @@ impl Send {
         }
     }
 
+    pub(crate) fn machine_boot(&self) -> Option<&str> {
+        match self {
+            Self::Start(start) | Self::StartWith(start) => start.machine_boot.as_deref(),
+            Self::NewWorkspace(new) => new.machine_boot.as_deref(),
+            Self::FlowRun(run) => run.machine_boot.as_deref(),
+            Self::NewTab(_)
+            | Self::Clone(_)
+            | Self::AccountList
+            | Self::IssueSources(_)
+            | Self::FlowList(_)
+            | Self::Fold { .. } => None,
+        }
+    }
+
     pub(crate) fn logged(&self, job: Job) -> Job {
         let job = match self.about() {
             Some((key, id)) => job.with(key, id),
@@ -128,8 +144,30 @@ impl Send {
     }
 }
 
+pub(crate) fn same_run(machine: &str, asked: Option<&str>, reported: Option<&str>) -> Result<(), Refusal> {
+    match (asked, reported) {
+        (Some(asked), Some(reported)) if asked != reported => Err(Refusal::new(
+            Code::StaleBoot,
+            format!(
+                "this request is for the cornercase server started as {asked} on {machine}, but {machine} last \
+                reported from the one started as {reported}; its ids may name other items now, so read \
+                `cornercase status` again"
+            ),
+        )),
+        _ => Ok(()),
+    }
+}
+
 fn unwaited(start: Start) -> Start {
-    Start { wait: false, until: Until::default(), timeout: None, focus: false, machine: None, ..start }
+    Start {
+        wait: false,
+        until: Until::default(),
+        timeout: None,
+        focus: false,
+        machine: None,
+        machine_boot: None,
+        ..start
+    }
 }
 
 pub(crate) fn bytes(files: &[CloneFile]) -> u64 {

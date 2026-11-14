@@ -70,6 +70,22 @@ fn unwaited(send: &Send) -> Result<(), Refusal> {
     }
 }
 
+const LONE_MACHINE_BOOT: &str =
+    "`machine_boot` goes with `machine`: it is the boot of that machine's ids; send `boot` for this server's";
+
+pub(super) fn lone_machine_boot(command: &Command) -> Result<(), Refusal> {
+    let (machine, boot) = match command {
+        Command::Start(start) | Command::StartWith(start) => (&start.machine, &start.machine_boot),
+        Command::NewWorkspace(new) => (&new.machine, &new.machine_boot),
+        Command::FlowRun(run) => (&run.machine, &run.machine_boot),
+        _ => return Ok(()),
+    };
+    match (machine, boot) {
+        (None, Some(_)) => Err(malformed(LONE_MACHINE_BOOT)),
+        _ => Ok(()),
+    }
+}
+
 pub(super) fn viewless(command: &Command) -> Result<(), Refusal> {
     let (machine, focus) = match command {
         Command::Start(start) | Command::StartWith(start) => (&start.machine, start.focus),

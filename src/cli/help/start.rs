@@ -12,8 +12,9 @@ With --machine NAME the workspace is made on that machine of `cornercase machine
 --project is that machine's id, as `status --json` lists it under machines, and so is the id printed.
 --focus shows it in this window once the machine lists it. It needs a server that knows the
 `machine-start` feature.
---boot does not go with --machine, whose ids are that machine's: send the command there with
---remote and its boot.
+Given --boot BOOT with --machine, the workspace is made only if BOOT is the `boot` of that machine's
+entry in `status --json`, the entry --project came from: otherwise nothing is made and the exit status
+is 4, also when the machine restarted after its last report. It needs the `machine-boot` feature.
 
 Examples:
   cornercase new-workspace experiments
@@ -47,9 +48,12 @@ is checked out as it is, with no fetch. --fresh needs a server that knows the `f
 With --machine NAME the agent starts on that machine of `cornercase machines`, by its server, as if
 the command ran there: --project, --workspace and the pane's id printed are that machine's ids, as
 `status --json` lists them under machines, and the agent, its accounts, profiles and issue trackers
-are the machine's own. --wait, --until, --timeout and --boot (the ids are that machine's) are refused:
-follow the agent there, with `cornercase --remote` and its boot. --focus shows its tab in this window
-once the machine lists it. It needs a server that knows the `machine-start` feature.
+are the machine's own. --wait, --until and --timeout are refused: follow the agent there, with
+`cornercase --remote` and its boot. --focus shows its tab in this window once the machine lists it. It
+needs a server that knows the `machine-start` feature. --boot BOOT is the `boot` of that machine's
+entry in `status --json`, where the ids were read: another run of the machine's server starts nothing
+and exits with 4, and so does one that restarted after its last report. It needs the `machine-boot`
+feature.
 
 With --placed the command answers as soon as the tab is open, after its worktree is made or its
 issue read, with the same ids, and the launch goes on, here or on a machine, as the window's dialogs
