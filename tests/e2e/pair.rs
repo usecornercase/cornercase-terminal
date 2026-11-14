@@ -75,6 +75,7 @@ fn it_says_why_it_cannot() {
 
     for (key, words) in [
         ("browsers", "remote access is off"),
+        ("app", "the phone app's access is off"),
         ("telegram.chat", "paste the bot's token first"),
         ("discord.chat", "paste the bot's token first"),
         ("linear", "cannot be paired"),

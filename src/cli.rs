@@ -66,6 +66,7 @@ mod worktrees;
 
 pub use args::Cli;
 pub use older::{older, parse, print_older};
+pub(crate) use reach::{command_name, over_cli};
 #[cfg(test)]
 pub(crate) use status::{pane_table, render};
 

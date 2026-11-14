@@ -110,8 +110,38 @@ mod a_key {
         let telegram = PairKey::Chat(Via::Telegram);
 
         assert_eq!(PairKey::Browsers.connected(None), "a browser connected");
+        assert_eq!(PairKey::App.connected(None), "a phone app connected");
         assert_eq!(telegram.connected(Some("@ada")), "Telegram connected with @ada");
         assert_eq!(telegram.connected(Some("")), "Telegram connected");
         assert_eq!(PairKey::Chat(Via::Discord).connected(None), "Discord connected");
+    }
+}
+
+mod the_routes {
+    use super::*;
+
+    #[test]
+    fn are_pinned_by_their_fixture() {
+        let fixture = fixture!("control/app-routes/routes.json");
+        let routes = Routes {
+            routes: vec![
+                Route { host: "192.168.1.20".into(), port: 47682 },
+                Route { host: "fd7a:115c:a1e0::1".into(), port: 47682 },
+            ],
+        };
+
+        let pinned: serde_json::Value = serde_json::from_str(fixture).expect("a fixture");
+
+        assert_eq!(serde_json::to_value(&routes).expect("json"), pinned);
+        assert_eq!(serde_json::from_str::<Routes>(fixture).expect("read back"), routes);
+    }
+
+    #[test]
+    fn the_request_takes_no_fields() {
+        let request: Request = serde_json::from_str(r#"{"command": "app-routes", "args": {}}"#).expect("a request");
+
+        assert_eq!(request.command, Command::AppRoutes(AppRoutes::default()));
+        assert_eq!(request.command.name(), "app-routes");
+        assert_eq!(request.command.fields().len(), 0);
     }
 }

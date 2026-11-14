@@ -142,6 +142,7 @@ mod overlaps;
 mod overlay;
 mod panes;
 mod pasted_files;
+mod phone_app;
 mod picker_dialog;
 mod plugin_popup;
 mod plugins;
@@ -223,6 +224,7 @@ pub(crate) struct App {
     home: Option<PathBuf>,
     settings_page: Page,
     remote: remote_access::Remote,
+    phone: phone_app::PhoneApp,
     messengers: Vec<Messenger>,
     runs: flow_runs::Runs,
     sessions: said::Sessions,
@@ -232,9 +234,12 @@ pub(crate) struct App {
     machines: machine_links::Machines,
 }
 
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os(paths::HOME_VAR).map(PathBuf::from)
+}
+
 impl App {
     pub(crate) fn new(shell: String, theme: HostTheme, config_path: &Path, tx: Sender<AppEvent>) -> Self {
-        let home = std::env::var_os(paths::HOME_VAR).map(PathBuf::from);
         let (config, config_file) = config_file::ConfigFile::open(config_path);
         Self {
             screen: groups::Screen::default(),
@@ -248,7 +253,7 @@ impl App {
             scroll: Scrolls::default(),
             outbox: outbox::Outbox::default(),
             opening: opening::Opening::default(),
-            agents: AgentRuntime::new(home.as_deref()),
+            agents: AgentRuntime::new(home_dir().as_deref()),
             update: UpdateState::from_env(),
             issues: IssueConnections::new(paths::secrets(config_path)),
             groups: Vec::new(),
@@ -262,6 +267,7 @@ impl App {
             clock: clock::Clock::new(),
             settings_page: Page::default(),
             remote: remote_access::Remote::new(Web::new(paths::browsers(config_path), paths::socket(), tx.clone())),
+            phone: phone_app::PhoneApp::new(config_path, &tx),
             messengers: messenger::messengers(config_path, &paths::secrets(config_path)),
             runs: flow_runs::Runs::new(config_path),
             sessions: said::Sessions::default(),
@@ -271,7 +277,7 @@ impl App {
             machines: machine_links::Machines::new(),
             config,
             config_file,
-            home,
+            home: home_dir(),
             tx,
         }
     }
@@ -290,6 +296,7 @@ impl App {
     pub(crate) fn stop_background(&mut self) {
         self.stop_plugins();
         self.stop_machines();
+        self.stop_phone_app();
     }
 
     pub(crate) fn take_start(&mut self) -> Option<(u64, (u16, u16))> {
@@ -473,6 +480,7 @@ impl App {
         self.offer_tour(now);
         self.watch_messengers(now);
         self.sync_remote();
+        self.sync_phone_app(now);
         self.sync_machines(now, clock);
         self.sync_messengers();
         self.pair_by_owner(now);

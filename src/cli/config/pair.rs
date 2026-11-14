@@ -3,20 +3,39 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::cli::quietly;
-use crate::client::{self, answer};
-use crate::control::Command;
-use crate::control::pair::{ConfigPair, PairEnded, PairKey, PairLine, PairShown};
+use crate::cli::{print_json, print_out, quietly};
+use crate::client::{self, answer, ask};
+use crate::control::pair::{ConfigPair, PairEnded, PairKey, PairLine, PairShown, Route, Routes};
+use crate::control::{AppRoutes, Command};
 use crate::error::{Error, Result};
 use crate::os::console;
 
 const SERVER_LEFT: &str = "the server stopped before a phone paired";
 const NOT_PAIRED: &str = "no phone was paired";
 
-pub(super) fn run(key: String, json: bool) -> Result<()> {
+pub(super) fn run(key: String, routes: bool, json: bool) -> Result<()> {
+    if routes && key != "app" {
+        return Err(Error::WrongUsage("--routes goes with `config pair app`".into()));
+    }
+    if routes {
+        return listed(json);
+    }
     let mut reading = Reading { key: PairKey::of(&key), json, ended: None, reader_left: false };
     client::follow_all("config pair", Command::ConfigPair(ConfigPair { key }), |value| reading.line(&value))?;
     reading.finished(reader_gone)
+}
+
+fn listed(json: bool) -> Result<()> {
+    let value = ask("app-routes", Command::AppRoutes(AppRoutes {}))?;
+    let routes: Routes = answer(value.clone())?;
+    if json { print_json(&value) } else { print_out(&routes_text(&routes)) }
+}
+
+fn routes_text(routes: &Routes) -> String {
+    let route = |Route { host, port }: &Route| {
+        if host.contains(':') { format!("[{host}]:{port}\n") } else { format!("{host}:{port}\n") }
+    };
+    routes.routes.iter().map(route).collect()
 }
 
 struct Reading {

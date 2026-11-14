@@ -86,6 +86,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "machine-boot",
     "flow-exited",
     "message-failed",
+    "cli-endpoint",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

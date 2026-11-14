@@ -300,6 +300,7 @@ impl App {
             Some(Action::RemoveToken(source)) => self.remove_token(source).map_err(failed)?,
             Some(Action::RemoveBot(via)) => self.remove_messenger(via).map_err(failed)?,
             Some(Action::ForgetChat(via)) => self.forget_chat(via),
+            Some(Action::ForgetApp(id)) => self.forget_app(&id).map_err(failed)?,
             Some(Action::ForgetBrowsers) => self.forget_browsers().map(String::from).map_err(failed)?,
             Some(_) => return Err(failed(format!("`{key}` cannot be removed"))),
         };

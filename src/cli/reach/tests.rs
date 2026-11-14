@@ -6,7 +6,7 @@ use rstest::rstest;
 use super::*;
 
 fn parsed(args: &[&str]) -> Cli {
-    Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied())).expect("parse")
+    Cli::try_parse_from(once("cornercase").chain(args.iter().copied())).expect("parse")
 }
 
 fn nothing(_: &str) -> Option<OsString> {
@@ -438,5 +438,95 @@ mod hints {
         let text = format!("run `cornercase {hint}`");
 
         assert_eq!((stays, devbox().hinted(&text)), (true, text));
+    }
+}
+
+mod over_cli {
+    use clap::CommandFactory as _;
+
+    use super::*;
+
+    fn words(line: &str) -> Vec<String> {
+        line.split_whitespace().map(String::from).collect()
+    }
+
+    #[rstest]
+    #[case::status("status --json")]
+    #[case::contract("contract --json")]
+    #[case::stats("stats")]
+    #[case::stats_everywhere("stats --machine all")]
+    #[case::plugin_status("plugin status")]
+    #[case::plugin_run("plugin run x y")]
+    #[case::requests("requests --follow -")]
+    #[case::help("--help")]
+    #[case::version("--version")]
+    #[case::a_commands_help("status --help")]
+    #[case::the_routes("config pair app --routes --json")]
+    fn allows_what_asks_the_server(#[case] line: &str) {
+        assert_eq!(over_cli(&words(line)), Ok(()));
+    }
+
+    #[rstest]
+    #[case::start_server("start-server", "`start-server` is not allowed through /cli: the server is already running")]
+    #[case::kill_server("kill-server", "`kill-server` is not allowed through /cli")]
+    #[case::update("update", "`update` is not allowed through /cli")]
+    #[case::restart("restart", "`restart` is not allowed through /cli")]
+    #[case::logs("logs", "`logs` is not allowed through /cli")]
+    #[case::remote("remote vps", "`remote` is not allowed through /cli")]
+    #[case::skill("skill", "`skill` is not allowed through /cli")]
+    #[case::server("server", "`server` is not allowed through /cli")]
+    #[case::proxy("proxy", "`proxy` is not allowed through /cli")]
+    #[case::plugin_list("plugin list", "`plugin list` is not allowed through /cli")]
+    #[case::plugin_windows("plugin windows", "`plugin windows` is not allowed through /cli")]
+    #[case::plugin_install("plugin install a/b", "`plugin install` is not allowed through /cli")]
+    fn refuses_what_runs_as_a_process(#[case] line: &str, #[case] expected: &str) {
+        assert_eq!(over_cli(&words(line)), Err(expected.to_string()));
+    }
+
+    #[test]
+    fn refuses_no_command() {
+        assert_eq!(over_cli(&[]), Err("no command: /cli does not open the window".to_string()));
+    }
+
+    #[rstest]
+    #[case::flag("status --remote vps", "--remote")]
+    #[case::equals("--remote=vps status", "--remote")]
+    #[case::command_equals("status --remote-command=x", "--remote-command")]
+    #[case::command("status --remote-command x", "--remote-command")]
+    #[case::after_the_dashes("new-tab -- echo --remote", "--remote")]
+    fn refuses_the_remote_flags_in_any_position(#[case] line: &str, #[case] flag: &str) {
+        let expected = format!("`{flag}` is not allowed through /cli: it runs commands on this computer");
+        assert_eq!(over_cli(&words(line)), Err(expected));
+    }
+
+    #[test]
+    fn gives_clap_s_first_line_for_an_unknown_command() {
+        let refused = over_cli(&words("bogus")).expect_err("refused");
+
+        assert!(refused.starts_with("unrecognized subcommand 'bogus'"), "{refused}");
+        assert!(!refused.contains('\n'));
+    }
+
+    #[test]
+    fn names_a_long_command_in_at_most_80_characters() {
+        let name = command_name(&["x".repeat(200)]);
+
+        assert_eq!(name.chars().count(), 81);
+        assert!(name.ends_with('…'));
+        assert_eq!(command_name(&words("plugin run x y")), "plugin run");
+        assert_eq!(command_name(&words("status --json")), "status");
+        assert_eq!(command_name(&[]), "");
+    }
+
+    #[test]
+    fn lists_nothing_by_hand() {
+        for command in Cli::command().get_subcommands() {
+            let name = command.get_name().to_string();
+            let Ok(cli) = Cli::try_parse_from(["cornercase", &name]) else { continue };
+            let there =
+                kind(cli.command.as_ref()) == Kind::There && !matches!(cli.command, Some(Command::StartServer(_)));
+
+            assert_eq!(over_cli(std::slice::from_ref(&name)).is_ok(), there, "{name}");
+        }
     }
 }

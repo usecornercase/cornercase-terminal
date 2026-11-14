@@ -141,6 +141,7 @@ pub(super) enum Overlay {
     Restart,
     Usage,
     Remote,
+    PhoneAppCode,
     Pairing(Via),
     Forum(Via),
     Branches(BranchPicker),
@@ -204,8 +205,7 @@ impl Overlay {
             Self::Queue(_) | Self::QueueResult(_) => self.queue_name(),
             Self::Search(_) => "search",
             Self::Update(_) => "update",
-            Self::Usage => "usage",
-            Self::Remote => "remote",
+            Self::Usage | Self::Remote | Self::PhoneAppCode => self.access_name(),
             Self::Pairing(via) => via.target(),
             Self::Forum(_) => "forum",
             Self::Branches(_) => "branches",
@@ -218,6 +218,14 @@ impl Overlay {
             Self::CloseAgent(_) | Self::CloseAgents(_) | Self::ForgetAgents { .. } => self.agents_name(),
             Self::Popup(_) => "plugin popup",
             Self::Star => "star",
+        }
+    }
+
+    fn access_name(&self) -> &'static str {
+        match self {
+            Self::Usage => "usage",
+            Self::Remote => "remote",
+            _ => "phone app",
         }
     }
 
@@ -422,7 +430,7 @@ impl App {
             Some(Overlay::Context { .. }) => self.context_mouse(ev, pos, area),
             Some(Overlay::FlowMessage { .. }) => self.flow_message_mouse(ev, pos, area),
             Some(Overlay::QueueResult(_)) => self.queue_result_mouse(ev, pos, area),
-            Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
+            Some(Overlay::Remote | Overlay::PhoneAppCode) => self.access_mouse(ev, pos, area),
             Some(Overlay::Pairing(via)) => self.pairing_mouse(*via, ev, pos, area),
             Some(Overlay::Forum(via)) => self.forum_mouse(*via, ev, pos, area),
             Some(Overlay::GroupStyle { group }) => self.group_style_mouse(*group, ev, pos, area),
@@ -470,7 +478,7 @@ impl App {
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
             Overlay::Restart => self.restart_view(area),
-            Overlay::Usage | Overlay::Remote => self.access_view(overlay),
+            Overlay::Usage | Overlay::Remote | Overlay::PhoneAppCode => self.access_view(overlay),
             Overlay::Pairing(_) | Overlay::Forum(_) => self.messenger_view(overlay)?,
             Overlay::PullRequest { .. }
             | Overlay::MergeCheck { .. }
@@ -508,9 +516,17 @@ impl App {
         }
     }
 
+    fn access_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
+        match &self.overlay {
+            Some(Overlay::PhoneAppCode) => self.phone_app_mouse(ev, pos, area),
+            _ => self.remote_mouse(ev, pos, area),
+        }
+    }
+
     fn access_view(&self, overlay: &Overlay) -> ui::Overlay {
         match overlay {
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
+            Overlay::PhoneAppCode => ui::Overlay::Remote(self.phone_app_view()),
             _ => ui::Overlay::Remote(self.remote_view()),
         }
     }

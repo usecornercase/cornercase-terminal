@@ -121,3 +121,77 @@ mod devices {
         assert_eq!(Devices::load(file).len(), 0);
     }
 }
+
+mod apps {
+    use super::*;
+    use crate::test_util::TempDir;
+
+    #[test]
+    fn an_app_is_saved_by_name_with_no_browser_and_never_its_secret() {
+        let dir = TempDir::new();
+        let file = dir.path().join("apps.json");
+        let (id, credential) = Devices::load(file.clone()).add_app("cornercase-mobile/0.1 (Phone)").expect("paired");
+
+        let text = std::fs::read_to_string(&file).expect("saved");
+        let secret = credential.split_once('.').expect("id and secret").1;
+        let saved: serde_json::Value = serde_json::from_str(&text).expect("json");
+        let device = &saved["devices"][0];
+
+        assert!(!text.contains(secret));
+        assert_eq!(device["id"], id.as_str());
+        assert_eq!(device["name"], "cornercase-mobile/0.1 (Phone)");
+        assert!(device.get("browser").is_none());
+        assert_eq!(Devices::load(file).check(&credential), Some(id.as_str()));
+    }
+
+    #[test]
+    fn a_browser_keeps_the_bytes_it_always_had() {
+        let dir = TempDir::new();
+        let file = dir.path().join("browsers.json");
+        Devices::load(file.clone()).add("Safari").expect("paired");
+
+        let saved: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&file).expect("saved")).expect("json");
+
+        assert_eq!(saved["devices"][0]["browser"], "Safari");
+        assert!(saved["devices"][0].get("name").is_none());
+    }
+
+    #[test]
+    fn a_file_without_a_name_loads() {
+        let dir = TempDir::new();
+        let file = dir.path().join("browsers.json");
+        std::fs::write(&file, r#"{"version":1,"devices":[{"id":"a","hash":"b","paired":1,"browser":"Safari"}]}"#)
+            .expect("write");
+
+        let devices = Devices::load(file);
+
+        assert_eq!(devices.list().len(), 1);
+        assert_eq!(devices.list()[0].name, "");
+    }
+
+    #[test]
+    fn removing_forgets_one_app_and_saves() {
+        let dir = TempDir::new();
+        let file = dir.path().join("apps.json");
+        let mut devices = Devices::load(file.clone());
+        let (first, secret) = devices.add_app("one").expect("paired");
+        let (second, _) = devices.add_app("two").expect("paired");
+
+        assert!(devices.remove(&first).expect("removed"));
+
+        assert_eq!(devices.check(&secret), None);
+        let again = Devices::load(file);
+        assert_eq!(again.list().iter().map(|d| d.id.as_str()).collect::<Vec<_>>(), [second.as_str()]);
+    }
+
+    #[test]
+    fn removing_an_unknown_id_is_false_and_writes_nothing() {
+        let dir = TempDir::new();
+        let file = dir.path().join("apps.json");
+        let mut devices = Devices::load(file.clone());
+
+        assert!(!devices.remove("nope").expect("no error"));
+        assert!(!file.exists());
+    }
+}

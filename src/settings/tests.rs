@@ -57,7 +57,7 @@ mod pages {
     #[case::flows(Page::Flows, &[])]
     #[case::issues(Page::Issues, &["Accounts", "Sources shown"])]
     #[case::ui(Page::Ui, &[""])]
-    #[case::remote(Page::Remote, &["Browser", "Telegram", "Discord"])]
+    #[case::remote(Page::Remote, &["Browser", "Phone app", "Telegram", "Discord"])]
     #[case::machines(Page::Machines, &[""])]
     fn hold_their_sections(#[case] page: Page, #[case] expected: &[&str]) {
         assert_eq!(sections(page), expected);
@@ -358,6 +358,112 @@ mod remote {
         go_to(&mut s, &Row::Browsers);
         assert_eq!(press(&mut s, KeyCode::Enter), Action::ForgetBrowsers);
         assert!(s.rows().contains(&Row::Browsers) && s.notice.is_none());
+    }
+}
+
+mod the_phone_app {
+    use super::*;
+    use crate::control::config::ConnectionKind;
+
+    fn two_apps() -> Settings {
+        let mut s = settings();
+        s.config.phone_app = true;
+        s.apps = vec![
+            PairedApp { id: "aa11".into(), name: "cornercase-mobile/0.1 (Ana's iPhone)".into(), paired: 1_700_000_000 },
+            PairedApp { id: "bb22".into(), name: String::new(), paired: 1_700_086_400 },
+        ];
+        s
+    }
+
+    fn remote_rows(s: &mut Settings) -> Vec<Row> {
+        s.open_page(Page::Remote);
+        s.rows()
+    }
+
+    #[test]
+    fn the_rows_follow_the_switch_and_the_paired_apps() {
+        let mut off = settings();
+        let mut on = settings();
+        on.config.phone_app = true;
+
+        let (off, on, two) = (remote_rows(&mut off), remote_rows(&mut on), remote_rows(&mut two_apps()));
+
+        assert!(off.contains(&Row::PhoneApp) && !off.contains(&Row::PhoneAppCode));
+        assert!(on.contains(&Row::PhoneAppCode));
+        let at = |rows: &[Row], row: &Row| rows.iter().position(|r| r == row).expect("a row");
+        let (switch, code) = (at(&two, &Row::PhoneApp), at(&two, &Row::PhoneAppCode));
+        assert_eq!(
+            &two[switch..=switch + 3],
+            [Row::PhoneApp, Row::PhoneAppCode, Row::PairedApp("aa11".into()), Row::PairedApp("bb22".into())]
+        );
+        assert_eq!(code, switch + 1);
+    }
+
+    #[test]
+    fn enter_on_each_row_gives_its_action() {
+        let mut s = two_apps();
+
+        go_to(&mut s, &Row::PhoneApp);
+        let flipped = saved(press(&mut s, KeyCode::Enter));
+        let mut s = two_apps();
+        go_to(&mut s, &Row::PhoneAppCode);
+        let code = press(&mut s, KeyCode::Enter);
+        go_to(&mut s, &Row::PairedApp("bb22".into()));
+        let forget = press(&mut s, KeyCode::Enter);
+
+        assert!(!flipped.phone_app);
+        assert_eq!((code, forget), (Action::PairApp, Action::ForgetApp("bb22".into())));
+    }
+
+    #[test]
+    fn a_paired_apps_row_says_its_name_and_date() {
+        let s = two_apps();
+
+        let named = s.row_text(&Row::PairedApp("aa11".into()));
+        let unnamed = s.row_text(&Row::PairedApp("bb22".into()));
+
+        assert_eq!(
+            (named.label.as_str(), named.value.as_str()),
+            ("paired app", "cornercase-mobile/0.1 (Ana's iPhone)")
+        );
+        assert_eq!(named.note, "paired 2023-11-14 · enter forgets it");
+        assert_eq!(unnamed.value, "phone app");
+        assert!(named.dangerous);
+    }
+
+    #[test]
+    fn removing_an_app_by_its_key_forgets_it_and_an_unknown_one_is_refused() {
+        let s = two_apps();
+
+        assert_eq!(s.removal_of("app.aa11").ok(), Some(Some(Action::ForgetApp("aa11".into()))));
+        assert!(matches!(s.removal_of("app.zz"), Err(Refused::Unknown(_))));
+    }
+
+    #[test]
+    fn each_app_is_a_connection_and_the_switch_is_a_setting() {
+        let s = two_apps();
+
+        let apps: Vec<_> = s.connections().into_iter().filter(|c| c.key.starts_with("app.")).collect();
+        let switch = s.describe().into_iter().find(|setting| setting.key == "phone_app").expect("the switch");
+
+        assert_eq!(apps.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(), ["app.aa11", "app.bb22"]);
+        assert!(apps.iter().all(|c| c.kind == ConnectionKind::App && c.removable));
+        assert_eq!(serde_json::to_value(apps[0].kind).expect("json"), "app");
+        assert_eq!(switch.value, serde_json::Value::Bool(true));
+    }
+
+    #[test]
+    fn the_code_row_is_found_by_search_while_the_switch_is_off() {
+        let s = settings();
+
+        let hits = s.search("pair a phone app");
+
+        assert!(hits.iter().any(|hit| hit.label == "pair a phone app"), "{hits:?}");
+    }
+
+    #[test]
+    fn it_is_never_shared() {
+        assert!(share::LEFT_OUT.contains(&"phone_app") && share::LEFT_OUT.contains(&"phone_app_port"));
     }
 }
 

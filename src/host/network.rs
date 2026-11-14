@@ -23,5 +23,45 @@ fn source(any: IpAddr, far: IpAddr) -> Option<IpAddr> {
     socket.local_addr().ok().map(|local| local.ip()).filter(|ip| !ip.is_unspecified())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Reach {
+    Lan,
+    Tailscale,
+}
+
+const TAILSCALE_V6: [u16; 3] = [0xfd7a, 0x115c, 0xa1e0];
+
+fn eligible(ip: IpAddr) -> Option<Reach> {
+    match ip {
+        IpAddr::V4(v4) if v4.is_private() => Some(Reach::Lan),
+        IpAddr::V4(v4) if v4.octets()[0] == 100 && (64..128).contains(&v4.octets()[1]) => Some(Reach::Tailscale),
+        IpAddr::V6(v6) if v6.segments()[..3] == TAILSCALE_V6 => Some(Reach::Tailscale),
+        _ => None,
+    }
+}
+
+fn sorted(mut ips: Vec<IpAddr>) -> Vec<IpAddr> {
+    ips.retain(|ip| eligible(*ip).is_some());
+    ips.sort_by_key(|ip| (eligible(*ip), *ip));
+    ips.dedup();
+    ips
+}
+
+pub(crate) fn addresses() -> Vec<IpAddr> {
+    let found =
+        if_addrs::get_if_addrs().map(|all| all.iter().map(if_addrs::Interface::ip).collect()).unwrap_or_default();
+    sorted(found)
+}
+
+pub(crate) fn listed(text: &str) -> Vec<IpAddr> {
+    let mut seen = Vec::new();
+    for ip in text.split(',').filter_map(|part| part.trim().parse::<IpAddr>().ok()) {
+        if !seen.contains(&ip) {
+            seen.push(ip);
+        }
+    }
+    seen
+}
+
 #[cfg(test)]
 mod tests;

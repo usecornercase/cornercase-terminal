@@ -31,6 +31,11 @@ mod describing {
     }
 
     #[test]
+    fn cli_endpoint_is_a_feature() {
+        assert!(FEATURES.contains(&"cli-endpoint"));
+    }
+
+    #[test]
     fn it_lists_the_feature_of_a_run_that_stopped_moving() {
         assert!(FEATURES.contains(&"flow-stopped"));
     }

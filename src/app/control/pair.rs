@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use super::{Handled, conflict, json, malformed};
 use crate::app::events::Streamed;
 use crate::app::{App, Overlay};
-use crate::control::pair::{ConfigPair, PairEnded, PairKey, PairLine, PairShown};
+use crate::control::pair::{ConfigPair, PairEnded, PairKey, PairLine, PairShown, Route, Routes};
 use crate::control::streamed_line;
 use crate::log;
 use crate::messenger::Via;
@@ -42,7 +42,7 @@ impl App {
     pub(in crate::app) fn pairing_held(&self, key: PairKey) -> bool {
         self.clients.pairings.holds(key)
             || match (key, &self.overlay) {
-                (PairKey::Browsers, Some(Overlay::Remote)) => true,
+                (PairKey::Browsers, Some(Overlay::Remote)) | (PairKey::App, Some(Overlay::PhoneAppCode)) => true,
                 (PairKey::Chat(via), Some(Overlay::Pairing(shown))) => *shown == via,
                 _ => false,
             }
@@ -50,7 +50,7 @@ impl App {
 
     pub(super) fn config_pair_request(&mut self, client: u64, asked: &ConfigPair, now: Instant) -> Handled {
         let Some(key) = PairKey::of(&asked.key) else {
-            let message = format!("`{}` cannot be paired; use browsers, telegram.chat or discord.chat", asked.key);
+            let message = format!("`{}` cannot be paired; use app, browsers, telegram.chat or discord.chat", asked.key);
             return Err(malformed(message));
         };
         if self.clients.pairings.follows(client) {
@@ -58,6 +58,7 @@ impl App {
         }
         let since = match key {
             PairKey::Browsers => self.request_browser_code(now)?,
+            PairKey::App => self.request_app_code(now)?,
             PairKey::Chat(via) => self.request_chat_code(via, now).map(|()| 0)?,
         };
         let shown = self.pairing_shown(key);
@@ -69,6 +70,7 @@ impl App {
     fn pairing_shown(&self, key: PairKey) -> PairShown {
         match key {
             PairKey::Browsers => self.remote_shown(),
+            PairKey::App => self.app_shown(),
             PairKey::Chat(via) => self.chat_shown(via),
         }
     }
@@ -90,6 +92,7 @@ impl App {
     fn pairing_stops(&self, follower: &Follower, now: Instant) -> Option<String> {
         let down = match follower.key {
             PairKey::Browsers => self.browsers_down(),
+            PairKey::App => self.phone_app_down(),
             PairKey::Chat(via) => self.chat_down(via),
         };
         down.map(String::from).or_else(|| (now >= follower.until).then(|| TIMED_OUT.to_string()))
@@ -112,6 +115,16 @@ impl App {
 
     pub(in crate::app) fn browser_paired(&mut self, taken: u64) {
         self.pairing_done(PairKey::Browsers, None, |follower| follower.since < taken);
+    }
+
+    pub(in crate::app) fn app_paired(&mut self, taken: u64) {
+        self.pairing_done(PairKey::App, None, |follower| follower.since < taken);
+    }
+
+    pub(super) fn app_routes_request(&self) -> Handled {
+        let routes = self.app_routes()?;
+        let routes = routes.iter().map(|route| Route { host: route.ip().to_string(), port: route.port() }).collect();
+        Ok(Some(json(&Routes { routes })))
     }
 
     pub(in crate::app) fn chat_paired(&mut self, via: Via, name: &str) {
@@ -152,6 +165,7 @@ impl App {
     fn drop_pairing_code(&mut self, key: PairKey) {
         match key {
             PairKey::Browsers => self.drop_browser_code(),
+            PairKey::App => self.drop_app_code(),
             PairKey::Chat(via) => self.drop_chat_code(via),
         }
     }

@@ -45,6 +45,7 @@ fn switch(row: &Row) -> Option<&'static str> {
         Row::StarPrompt => "star_prompt",
         Row::Tour => "tour",
         Row::Remote => "remote",
+        Row::PhoneApp => "phone_app",
         Row::Forum(_) => "discord_forum",
         _ => return None,
     })
@@ -259,6 +260,7 @@ impl Settings {
             Row::Bot(via) => Some(via.target().into()),
             Row::Chat(via) => Some(format!("{}.chat", via.target())),
             Row::Browsers => Some("browsers".into()),
+            Row::PairedApp(id) => Some(format!("app.{id}")),
             row => self.setting_of(row).map(|setting| setting.key),
         }
     }
@@ -274,6 +276,7 @@ impl Settings {
     pub(crate) fn connections(&self) -> Vec<Connection> {
         let mut found = self.tracker_connections();
         found.push(self.browsers_connection());
+        found.extend(self.apps.iter().map(|app| self.app_connection(&app.id, app.label())));
         for via in Via::ALL {
             found.extend(self.messenger_connections(via));
         }
@@ -326,6 +329,24 @@ impl Settings {
             state: if self.browsers > 0 { State::Connected } else { State::Missing },
             count: Some(self.browsers),
             removable: self.browsers > 0,
+            ..Connection::default()
+        }
+    }
+
+    fn app_connection(&self, id: &str, label: &str) -> Connection {
+        let row = Row::PairedApp(id.to_string());
+        let text = self.row_text(&row);
+        let (page, section) = place(&row);
+        Connection {
+            key: format!("app.{id}"),
+            kind: ConnectionKind::App,
+            page,
+            section,
+            label: text.label,
+            note: text.note,
+            state: State::Connected,
+            account: Some(label.to_string()),
+            removable: true,
             ..Connection::default()
         }
     }

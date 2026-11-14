@@ -1134,7 +1134,7 @@ checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
 
 [[package]]
 name = "cornercase"
-version = "0.13.76"
+version = "0.13.77"
 dependencies = [
  "anyhow",
  "arborium",
@@ -1148,6 +1148,7 @@ dependencies = [
  "grep-searcher",
  "httparse",
  "icy_sixel",
+ "if-addrs",
  "ignore",
  "image",
  "insta",
@@ -1850,6 +1851,16 @@ name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
+name = "if-addrs"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a05c691e1fae256cf7013d99dad472dc52d5543322761f83ec8d47eab40d2b"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "ignore"
