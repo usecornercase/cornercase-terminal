@@ -74,9 +74,8 @@ pub(in crate::app) fn closed_and(count: usize, and: Option<&str>) -> String {
 }
 
 pub(in crate::app) fn closed_words(count: usize, and: Option<&str>) -> String {
-    let what = if count == 1 { "agent" } else { "agents" };
     let and = and.map(|and| format!(", {and}")).unwrap_or_default();
-    format!("{count} {what} closed{and}")
+    format!("{} closed{and}", agents_label(count))
 }
 
 pub(in crate::app) fn reopen_hint(count: usize) -> String {
