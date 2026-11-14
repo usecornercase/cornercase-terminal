@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.73
+
+- **The Flow panel shows a role whose agent exited.** A flow role whose agent exited by itself (a crash, a stray `pkill`, `/exit`) no longer looks idle there: its row in **Team** and its box in the diagram read `exited`, with the cyan `▶` the workspace's row shows for it. Click that `▶` to bring it back in its pane, as the workspace's `▶` does (every exited role, the orchestrator last); a click elsewhere on the row still goes to its pane.
+
 ## 0.13.72
 
 - **A merged run's message no longer points at the window's ▶.** The `flow-merged` message programs get from `cornercase events --notices` now reads `pull request merged in fix-login: 2 agents closed` (or `…: 5 agents closed, 15.7 GB of builds freed`), without ` · ▶ on the workspace reopens them`, which only the window can offer: a program brings the agents back with `cornercase agents reopen --workspace ID`. The window's toast still says it.
