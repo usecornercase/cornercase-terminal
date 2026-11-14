@@ -181,7 +181,8 @@ fn a_reported_turn_over_waits_for_claudes_background_shell(
     report(&mut w, &format!("{state}:app=claude-code"), 6);
 
     assert_eq!((status(&w.app, 0, 0), state_of(&w)), (Some(Status::Working), Some("shell")));
-    assert!(w.told().1.is_empty());
+    let early = w.told().1.len();
+    assert_eq!(early, 0);
     w.report("idle", 6);
     assert_eq!(status(&w.app, 0, 0), Some(after));
     let told = w.told().1;
