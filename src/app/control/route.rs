@@ -120,6 +120,7 @@ impl App {
             Command::ViewSet(set) => self.view_set_asked(asker, &set, area, now),
             Command::Search(search) => self.search_request(client, &search),
             Command::ConfigPair(pair) => self.config_pair_request(client, &pair, now),
+            Command::AppRoutes(_) => self.app_routes_request(),
             other => return ControlFlow::Continue(other),
         })
     }

@@ -92,11 +92,33 @@ mod the_arguments {
 
         let Some(Command::Control(Control::Config(config))) = cli.command else { panic!("not config") };
         assert!(config.json);
-        assert!(matches!(config.action, Some(ConfigAction::Pair { key }) if key == "telegram.chat"));
+        assert!(matches!(config.action, Some(ConfigAction::Pair { key, routes: false }) if key == "telegram.chat"));
     }
 
     #[test]
     fn need_the_key() {
         assert!(Cli::try_parse_from(["cornercase", "config", "pair"]).is_err());
+    }
+}
+
+mod the_routes {
+    use super::*;
+
+    #[test]
+    fn print_one_address_per_line_with_brackets_for_ipv6() {
+        let routes: Routes = serde_json::from_value(json!({"routes": [
+            {"host": "192.168.1.20", "port": 47682},
+            {"host": "fd7a:115c:a1e0::1", "port": 47682},
+        ]}))
+        .expect("routes");
+
+        assert_eq!(routes_text(&routes), "192.168.1.20:47682\n[fd7a:115c:a1e0::1]:47682\n");
+    }
+
+    #[test]
+    fn go_only_with_the_app() {
+        let refused = run("browsers".into(), true, false);
+
+        assert!(matches!(refused, Err(Error::WrongUsage(message)) if message.contains("config pair app")));
     }
 }

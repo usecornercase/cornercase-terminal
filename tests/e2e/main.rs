@@ -49,6 +49,7 @@ mod opening;
 mod pair;
 mod panels;
 mod panes;
+mod phone;
 mod plugin_views;
 mod plugin_windows;
 mod plugins;
