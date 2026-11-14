@@ -273,7 +273,7 @@ By default the prompt is typed and left for you to press `Enter`. Turn on **sett
 
 ### A flow's orchestrator stays idle after a restart
 
-Its message with the team's new pane ids is typed into its input box and sent; when its agent is still finishing its resume, cornercase presses `Enter` again, every 3 seconds and up to 4 more times. If the message still sits in its input box, press `Enter` in its tab: [`server.log`](#the-server-log) then has a `launch: the agent did not take the prompt` line for that pane.
+Its message with the team's new pane ids is typed into its input box and sent; when a Claude Code orchestrator is still finishing its resume, cornercase presses `Enter` again, every 3 seconds and up to 4 more times. If the message still sits in its input box (always, for an orchestrator running another agent), press `Enter` in its tab: [`server.log`](#the-server-log) then has a `launch: the agent did not take the prompt` line for that pane.
 
 ## The server log
 
