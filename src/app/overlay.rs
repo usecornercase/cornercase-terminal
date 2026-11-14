@@ -136,6 +136,15 @@ pub(super) enum Overlay {
     },
     Issues(Box<Browser>),
     Queue(Box<crate::queue::form::Form>),
+    BotForm(Box<crate::bots::form::Form>),
+    RenameBot {
+        bot: u64,
+        input: Editor,
+        error: Option<String>,
+    },
+    RemoveBot {
+        bot: u64,
+    },
     Search(Finder),
     Update(UpdateStep),
     Restart,
@@ -199,6 +208,7 @@ impl Overlay {
             Self::StartFlow { .. } => "start flow",
             Self::ProjectSettings(_) => "project settings",
             Self::Rename { .. } => "rename",
+            Self::BotForm(_) | Self::RenameBot { .. } | Self::RemoveBot { .. } => self.bot_name(),
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
@@ -221,6 +231,15 @@ impl Overlay {
         }
     }
 
+    fn bot_name(&self) -> &'static str {
+        match self {
+            Self::BotForm(form) if form.editing.is_some() => "edit bot",
+            Self::BotForm(_) => "new bot",
+            Self::RenameBot { .. } => "rename bot",
+            _ => "remove bot",
+        }
+    }
+
     fn access_name(&self) -> &'static str {
         match self {
             Self::Usage => "usage",
@@ -235,6 +254,19 @@ impl Overlay {
             Self::CloseAgents(_) => "close agents",
             _ => "forget agents",
         }
+    }
+
+    pub(super) fn is_form_dialog(&self) -> bool {
+        matches!(
+            self,
+            Self::Queue(_)
+                | Self::BotForm(_)
+                | Self::Settings(_)
+                | Self::ShareSettings(_)
+                | Self::Machine(_)
+                | Self::CloneOnMachine(_)
+                | Self::ProjectSettings(_)
+        )
     }
 
     pub(super) fn closes_from_outside(&self) -> bool {
@@ -314,16 +346,18 @@ impl Overlay {
                 | Overlay::ClosePane { .. }
                 | Overlay::ForgetAgents { .. }
                 | Overlay::MachineWorkspace(_)
+                | Overlay::RenameBot { .. }
+                | Overlay::RemoveBot { .. }
         )
     }
 
     pub(super) fn submit_label(&self) -> &'static str {
         match self {
-            Self::Rename { .. } => RENAME_SUBMIT,
+            Self::Rename { .. } | Self::RenameBot { .. } => RENAME_SUBMIT,
             Self::NewMachine { .. } => CONNECT_SUBMIT,
             Self::RemoveWorkspace { check, lock, .. } => removal_submit(*check, lock.is_some()),
             Self::MachineWorkspace(dialog) => dialog.submit_label(),
-            Self::RemoveAccount { .. } => REMOVE_SUBMIT,
+            Self::RemoveAccount { .. } | Self::RemoveBot { .. } => REMOVE_SUBMIT,
             Self::DiscardChanges(_) => DISCARD_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseAgents(_) => CLOSE_AGENTS_SUBMIT,
@@ -362,6 +396,7 @@ impl Overlay {
             Self::NewWorkspace { input, creating: false, .. }
             | Self::Rename { input, .. }
             | Self::NewGroup { input }
+            | Self::RenameBot { input, .. }
             | Self::NewMachine { input, .. } => Some(input),
             Self::MachineWorkspace(dialog) => dialog.input(),
             _ => None,
@@ -369,7 +404,8 @@ impl Overlay {
     }
 
     pub(super) fn clear_error(&mut self) {
-        if let Self::NewWorkspace { error, .. } | Self::NewMachine { error, .. } = self {
+        if let Self::NewWorkspace { error, .. } | Self::NewMachine { error, .. } | Self::RenameBot { error, .. } = self
+        {
             *error = None;
         }
     }
@@ -380,6 +416,7 @@ impl Overlay {
             Self::NewWorkspace { creating: false, .. }
                 | Self::Rename { .. }
                 | Self::NewGroup { .. }
+                | Self::RenameBot { .. }
                 | Self::NewMachine { .. }
         ) || matches!(self, Self::MachineWorkspace(dialog) if dialog.takes_input())
     }
@@ -414,15 +451,10 @@ impl App {
             Some(Overlay::Search(_)) => self.search_mouse(ev, pos, area),
             Some(Overlay::Branches(_)) => self.branches_mouse(ev, pos, area),
             Some(Overlay::Issues(_)) => return self.issues_mouse(ev, pos, area),
-            Some(Overlay::Queue(_)) => self.queue_form_mouse(ev, pos, area),
+            Some(overlay) if overlay.is_form_dialog() => self.form_dialog_mouse(ev, pos, area),
             Some(Overlay::Star) => self.star_mouse(ev, pos, area),
-            Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
-            Some(Overlay::ShareSettings(_)) => self.share_settings_mouse(ev, pos, area),
-            Some(Overlay::Machine(_)) => self.machine_form_mouse(ev, pos, area),
-            Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_mouse(ev, pos, area),
             Some(Overlay::Flows { .. }) => self.flows_mouse(ev, pos, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_mouse(ev, pos, area),
-            Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
             Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
             Some(Overlay::PullRequest { .. }) => self.pull_request_mouse(ev, pos, area),
@@ -448,7 +480,6 @@ impl App {
     }
 
     pub(super) fn overlay_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
-        let home = self.home.as_deref();
         Some(match overlay {
             Overlay::Menu { at, actions } => self.menu_view(*at, actions),
             Overlay::GroupStyle { group } => self.group_style_view(*group)?,
@@ -472,7 +503,7 @@ impl App {
             Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) => self.listing_view(overlay, area)?,
             Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
             Overlay::CloseAgents(_) | Overlay::ForgetAgents { .. } => self.closed_agents_view(overlay, area)?,
-            Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
+            Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), self.home.as_deref()),
             Overlay::Queue(form) => ui::Overlay::Queue(Self::queue_form_view(form)),
             Overlay::Issues(b) => view(b, room(area), time::now()),
             Overlay::Search(search) => self.search_view(search),
@@ -486,6 +517,7 @@ impl App {
             | Overlay::Context { .. }
             | Overlay::QueueResult(_) => self.notes_view(overlay, area)?,
             Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
+            Overlay::BotForm(_) | Overlay::RenameBot { .. } | Overlay::RemoveBot { .. } => self.bot_view(overlay)?,
             Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
         })
     }

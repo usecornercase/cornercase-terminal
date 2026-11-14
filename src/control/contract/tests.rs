@@ -122,6 +122,12 @@ mod describing {
     }
 
     #[test]
+    fn the_shown_bot_and_what_a_bot_is_for_are_features() {
+        assert!(FEATURES.contains(&"shown-bot"));
+        assert!(FEATURES.contains(&"bot-about"));
+    }
+
+    #[test]
     fn the_events_watch_surface_view_app_changes_flow_and_files_streams_are_version_one() {
         let descriptor = describe("1-2", &[]);
 

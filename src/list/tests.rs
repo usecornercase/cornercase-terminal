@@ -96,4 +96,52 @@ mod combo {
     fn a_choice_out_of_range_is_no_choice() {
         assert_eq!(Combo::new(vec!["a".into()], Some(3)).label(), None);
     }
+
+    fn noted() -> Combo {
+        let notes = vec![None, Some(String::from("not yet")), None];
+        Combo::with_notes(vec!["claude".into(), "gemini".into(), "codex".into()], Some(0), notes)
+    }
+
+    #[test]
+    fn an_option_with_a_note_cannot_be_chosen_and_the_list_stays_open() {
+        let mut c = noted();
+        c.open();
+        c.choose(1);
+        assert_eq!((c.chosen(), c.is_open(), c.note(1)), (Some(0), true, Some("not yet")));
+    }
+
+    #[test]
+    fn enter_on_an_option_with_a_note_chooses_nothing() {
+        let mut c = noted();
+        c.open();
+        key(&mut c, KeyCode::Down);
+        assert!(!key(&mut c, KeyCode::Enter));
+        assert_eq!((c.chosen(), c.is_open()), (Some(0), true));
+    }
+
+    #[test]
+    fn an_option_without_a_note_is_chosen_beside_one_with_a_note() {
+        let mut c = noted();
+        c.open();
+        c.choose(2);
+        assert_eq!((c.chosen(), c.is_open(), c.note(2)), (Some(2), false, None));
+    }
+
+    #[test]
+    fn a_typed_value_that_matches_nothing_is_added_and_chosen_on_enter() {
+        let mut c = Combo::typed(vec!["default".into(), "opus".into()], Some(0));
+        c.open();
+        "my-model".chars().for_each(|ch| _ = key(&mut c, KeyCode::Char(ch)));
+        assert!(key(&mut c, KeyCode::Enter));
+        assert_eq!((c.label(), c.options().len(), c.is_open()), (Some("my-model"), 3, false));
+    }
+
+    #[test]
+    fn a_combo_without_typing_adds_nothing() {
+        let mut c = Combo::new(vec!["default".into(), "opus".into()], Some(0));
+        c.open();
+        "zzz".chars().for_each(|ch| _ = key(&mut c, KeyCode::Char(ch)));
+        key(&mut c, KeyCode::Enter);
+        assert_eq!((c.label(), c.options().len()), (Some("default"), 2));
+    }
 }

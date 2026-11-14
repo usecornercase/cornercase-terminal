@@ -51,7 +51,8 @@ fn home(report: &Report) -> Option<PathBuf> {
 pub(crate) fn render(report: &Report, home: Option<&Path>, now: SystemTime) -> String {
     let mut lines = Vec::new();
     lines.extend(report.view.as_ref().map(super::view::describe));
-    let window = if report.shown_remote.is_some() { control::Ids::default() } else { report.shown };
+    let away = report.shown_remote.is_some() || report.shown_bot.is_some();
+    let window = if away { control::Ids::default() } else { report.shown };
     let shown = report.view.as_ref().map_or(window, |view| view.shown);
     let marks = Marks { shown, word: if report.view.is_some() { "view" } else { "shown" } };
     for project in report.loose() {
@@ -67,6 +68,7 @@ pub(crate) fn render(report: &Report, home: Option<&Path>, now: SystemTime) -> S
     for machine in &report.machines {
         machine_lines(&mut lines, machine, report.shown_remote.as_ref(), now);
     }
+    lines.extend(report.shown_bot.as_ref().map(|bot| format!("bot {bot}  (shown)")));
     lines.into_iter().map(|line| line + "\n").collect()
 }
 

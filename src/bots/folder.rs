@@ -23,6 +23,10 @@ pub(crate) fn create(dir: &Path, bot: &Bot, about: &str) -> io::Result<PathBuf> 
     Ok(folder)
 }
 
+pub(crate) fn write_about(folder: &Path, about: &str) -> io::Result<()> {
+    persist::write_bytes(&folder.join(ABOUT_FILE), about.as_bytes(), Kind::Private).map(drop)
+}
+
 pub(crate) fn save(folder: &Path, bot: &Bot) -> io::Result<()> {
     persist::write(&folder.join(BOT_FILE), bot, true)
 }

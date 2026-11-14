@@ -1,4 +1,6 @@
 import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
+import { botFormKey, botFormPaste, newBotForm } from './botform';
+import { Bots } from './bots';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
 import { STATS } from './data';
@@ -151,7 +153,7 @@ const HELP_LABELS: Record<HelpItem, string> = {
   keys: 'keys menu',
   bug: 'report a bug',
 };
-const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'quit'];
+const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'new bot…', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const CONTEXT_NEEDS = "this needs cornercase on your computer: the demo's agents are not real Claude Code sessions";
 const AGENT_TITLES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', opencode: 'opencode', grok: 'Grok Build', cursor: 'Cursor CLI', copilot: 'GitHub Copilot CLI', vibe: 'Vibe CLI' };
@@ -496,6 +498,7 @@ export class App {
   runs: Run[] = [];
   flowOpen = false;
   recap = new RecapPanel();
+  bots = new Bots(this);
   flowScroll = 0;
   private flowHinted = false;
   queued: QueueEntry[] = [];
@@ -642,7 +645,7 @@ export class App {
   }
 
   private visibleTab(): Tab | undefined {
-    return this.nav ? undefined : this.tab();
+    return this.nav || this.bots.current() ? undefined : this.tab();
   }
 
   private awakeAt: number | null = null;
@@ -947,7 +950,7 @@ export class App {
   private agentsDragged(y: number): Widths {
     const end = bottom(this.areas().agents);
     const wanted = { ...this.widths, agents: Math.max(0, end - (y + 1)) };
-    const rows = layout(this.cols, this.rows, wanted, this.nav, this.panelShown(), this.sidebar(), true, this.tabsOnTop()).agents.h;
+    const rows = layout(this.cols, this.rows, wanted, this.nav, this.panelShown(), this.sidebar(), true, this.tabsOnTop(), this.bots.shape()).agents.h;
     return { ...wanted, agents: rows };
   }
 
@@ -963,7 +966,7 @@ export class App {
   }
 
   areas() {
-    const areas = layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar(), this.config.agentsSection, this.tabsOnTop());
+    const areas = layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar(), this.config.agentsSection, this.tabsOnTop(), this.bots.shape());
     return this.fileFullScreen() ? withFullScreen(areas, this.cols, this.rows) : areas;
   }
 
@@ -1173,7 +1176,7 @@ export class App {
   private follow(): void {
     const p = this.project();
     const { tabBar } = this.areas();
-    const { list, pitch, tree } = layout(this.cols, this.rows, this.widths, 'projects', false, this.sidebar(), this.config.agentsSection, this.tabsOnTop());
+    const { list, pitch, tree } = layout(this.cols, this.rows, this.widths, 'projects', false, this.sidebar(), this.config.agentsSection, this.tabsOnTop(), this.bots.shape());
     const focus: Focus = { project: p?.id ?? null, workspace: this.workspace()?.id ?? null, tab: this.tab()?.id ?? null, tree };
     const before = this.followed;
     if (focus.project !== before.project || focus.workspace !== before.workspace || focus.tab !== before.tab) this.files.full = false;
@@ -1519,7 +1522,14 @@ export class App {
     if (item === 'settings') this.openSettings();
     else if (item === 'usage') this.openUsage();
     else if (item === 'processes') this.bug(PROCESSES_NEED);
+    else if (item === 'new bot…') this.openBotForm();
     else this.quit();
+  }
+
+  openBotForm(): void {
+    this.nav = null;
+    this.overlay = newBotForm();
+    this.dirty();
   }
 
   openNewMenu(at: Pos): void {
@@ -1552,6 +1562,7 @@ export class App {
   }
 
   selectProject(i: number): void {
+    this.bots.hide();
     this.active = i;
     this.unfoldFocus();
     if (this.nav) this.nav = 'workspaces';
@@ -1576,6 +1587,7 @@ export class App {
     const project = this.projects[p];
     const ws = project?.workspaces[w];
     if (!ws) return;
+    this.bots.hide();
     this.nav = null;
     this.files.full = false;
     this.active = p;
@@ -1600,6 +1612,7 @@ export class App {
     const project = this.projects[p];
     const ws = project?.workspaces[w];
     if (!ws) return;
+    this.bots.hide();
     ws.tabs.push(this.newTab([this.newPane(project, ws)]));
     this.active = p;
     project.active = w;
@@ -1702,7 +1715,7 @@ export class App {
   }
 
   toggleNav(): void {
-    this.nav = this.nav ? null : 'projects';
+    this.nav = this.nav ? null : this.bots.current() ? 'bots' : 'projects';
     if (this.nav) {
       this.changesOpen = false;
       this.closeTodo();
@@ -1983,7 +1996,7 @@ export class App {
     this.todo.open = false;
   }
 
-  private closePanel(): boolean {
+  closePanel(): boolean {
     this.todo.field = null;
     this.closeTodo();
     this.changesOpen = false;
@@ -3312,6 +3325,7 @@ export class App {
       this.toggleTodo();
       if (opening) this.addTodo();
     } else if (a.kind === 'recap') this.toggleRecap();
+    else if (a.kind === 'newBot') this.openBotForm();
     else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
     else if (a.kind === 'processes') this.bug(PROCESSES_NEED);
@@ -5189,6 +5203,7 @@ export class App {
           o.cursor += typed.length;
         }
       }
+      else if (o.kind === 'bot') botFormPaste(o, text);
       else if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') nameEdit(o, (f) => insertText(f, text.replace(/\s+/g, ' ')));
       else if (o.kind === 'search') o.query += text;
       else if (o.kind === 'picker') o.filter += text;
@@ -5216,6 +5231,7 @@ export class App {
       this.dirty();
       return;
     }
+    if (this.bots.current() && !this.nav) return this.bots.paste(text);
     const t = this.tab();
     if (t) activePane(t)?.shell.paste(text);
   }
@@ -5260,6 +5276,7 @@ export class App {
       this.dirty();
       return true;
     }
+    if (this.bots.current() && !this.nav) return this.bots.key(k, this.botWidth());
     if (k.key === 'Escape' && this.panelShown()) return this.closePanel();
     const t = this.tab();
     const pane = t ? activePane(t) : undefined;
@@ -5268,12 +5285,21 @@ export class App {
     return true;
   }
 
+  private botWidth(): number {
+    return Math.max(1, this.areas().pane.w - 12);
+  }
+
   private typed(k: Key): string | null {
     return k.key.length === 1 && !k.ctrl && !k.alt ? k.key : null;
   }
 
   private overlayKey(o: Overlay, k: Key): boolean {
     if (o.kind === 'queue') return this.queueKey(o, k);
+    if (o.kind === 'bot') {
+      botFormKey(this, o, k);
+      this.dirty();
+      return true;
+    }
     const ch = this.typed(k);
     if (o.kind === 'menu') {
       if (k.key === 'Escape') this.closeOverlay();

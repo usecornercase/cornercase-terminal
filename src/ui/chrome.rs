@@ -277,7 +277,18 @@ pub(super) fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     draw_band(f, r, Span::styled(centered(glyphs.search, r.width), style), style);
 }
 
+fn bot_breadcrumb(view: &View, name: &str, room: usize) -> Vec<Span<'static>> {
+    let bold = Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD);
+    let text = truncate_right(&format!("Bots{CRUMB_SEPARATOR}{name}"), room);
+    let head: String = text.chars().take("Bots".len()).collect();
+    let rest: String = text.chars().skip("Bots".len()).collect();
+    vec![Span::styled(head, bold), Span::styled(rest, Style::default().fg(view.soft))]
+}
+
 fn breadcrumb(view: &View, room: usize) -> Vec<Span<'static>> {
+    if let Some(chat) = &view.chat {
+        return bot_breadcrumb(view, &chat.name, room);
+    }
     let Some(project) = view.shown_project().and_then(|p| view.projects.get(p)) else {
         return wordmark();
     };

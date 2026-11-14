@@ -39,6 +39,7 @@ pub(crate) struct EditBot {
     pub(crate) effort: Option<String>,
     pub(crate) account: Option<String>,
     pub(crate) access: Option<String>,
+    pub(crate) about: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,7 +114,8 @@ impl BotRequest {
             }
             Self::Edit(edit) => {
                 fields.add("action", "edit").add("bot", &edit.bot).maybe("name", edit.name.as_deref());
-                fields.maybe("access", edit.access.as_deref())
+                fields.maybe("access", edit.access.as_deref());
+                fields.maybe("about_bytes", edit.about.as_ref().map(String::len))
             }
             Self::Remove(target) => fields.add("action", "remove").add("bot", &target.bot),
             Self::Reset(target) => fields.add("action", "reset").add("bot", &target.bot),

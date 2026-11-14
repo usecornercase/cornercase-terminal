@@ -17,6 +17,7 @@ pub(super) struct Scrolls {
     projects: usize,
     workspaces: usize,
     agents: usize,
+    bots: usize,
     tab_bar: usize,
     followed: Focus,
     followed_pane: Option<u64>,
@@ -28,6 +29,7 @@ pub(super) enum List {
     Projects,
     Workspaces,
     Agents,
+    Bots,
     TabBar,
 }
 
@@ -37,6 +39,7 @@ impl Scrolls {
             List::Projects => self.projects,
             List::Workspaces => self.workspaces,
             List::Agents => self.agents,
+            List::Bots => self.bots,
             List::TabBar => self.tab_bar,
         }
     }
@@ -46,6 +49,7 @@ impl Scrolls {
             List::Projects => self.projects = offset,
             List::Workspaces => self.workspaces = offset,
             List::Agents => self.agents = offset,
+            List::Bots => self.bots = offset,
             List::TabBar => self.tab_bar = offset,
         }
     }
@@ -81,23 +85,31 @@ impl App {
         config::Sidebar::from_setting(&self.config.sidebar)
     }
 
+    pub(super) fn bots_screen(&self) -> ui::Screen {
+        let count = self.panels.bots.live.len();
+        ui::Screen {
+            bots: u16::try_from(count).unwrap_or(u16::MAX),
+            bots_folded: self.panels.bots.collapsed,
+            ..ui::Screen::default()
+        }
+    }
+
+    pub(super) fn screen_flags(&self) -> ui::Screen {
+        ui::Screen {
+            changes: self.panel_shown(),
+            sidebar: self.sidebar(),
+            agents: self.config.agents_section,
+            icon_bar: self.config.icon_bar,
+            plugins: self.has_plugin_buttons(),
+            machine: self.machine_label().is_some(),
+            ..self.bots_screen()
+        }
+    }
+
     pub(super) fn layout(&self, area: Rect) -> ui::Areas {
-        let (panel, sidebar) = (self.panel_shown(), self.sidebar());
-        let (agents, icons) = (self.config.agents_section, self.config.icon_bar);
-        ui::full_layout(
-            area,
-            self.screen.widths,
-            ui::Screen {
-                changes: panel,
-                sidebar,
-                agents,
-                icon_bar: icons,
-                plugins: self.has_plugin_buttons(),
-                machine: self.machine_label().is_some(),
-            },
-        )
-        .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
-        .with_full_screen(self.file_full_screen(), area)
+        ui::full_layout(area, self.screen.widths, self.screen_flags())
+            .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
+            .with_full_screen(self.file_full_screen(), area)
     }
 
     pub(super) fn panel_shown(&self) -> bool {
@@ -138,9 +150,9 @@ impl App {
     }
 
     pub(super) fn visible_tab(&self) -> Option<u64> {
-        self.focus()
-            .tab
-            .filter(|_| self.screen.nav.is_none() && !self.file_full_screen() && self.shown_remote().is_none())
+        self.focus().tab.filter(|_| {
+            self.screen.nav.is_none() && !self.file_full_screen() && self.shown_remote().is_none() && !self.bot_shown()
+        })
     }
 
     pub(super) fn focus(&self) -> Focus {

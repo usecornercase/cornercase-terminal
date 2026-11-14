@@ -27,6 +27,7 @@ fn saved(projects: Vec<ProjectState>, active: usize) -> State {
         todo: false,
         files: false,
         flow: false,
+        bots_collapsed: false,
     }
 }
 
@@ -187,6 +188,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
         todo,
         files,
         flow: false,
+        bots_collapsed: false,
     };
     let (mut app, _rx) = empty_app();
 

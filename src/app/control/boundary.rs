@@ -86,7 +86,8 @@ fn lifts(command: &Command) -> Option<Gated> {
         Command::Bot(BotRequest::New(new)) => {
             new.access.as_deref().filter(|a| Access::parse(a) != Some(Access::Cornercase)).map(|_| Gated::Access)
         }
-        Command::Bot(BotRequest::Edit(edit)) => edit.access.as_ref().map(|_| Gated::Access),
+        Command::Bot(BotRequest::Edit(edit)) if edit.access.is_some() => Some(Gated::Access),
+        Command::Bot(BotRequest::Edit(edit)) => Some(Gated::Says(edit.bot.clone())),
         Command::Bot(BotRequest::Say(say)) => Some(Gated::Says(say.bot.clone())),
         Command::Config(Configure::Get | Configure::Search(_)) => None,
         Command::Config(_) => Some(Gated::Settings),

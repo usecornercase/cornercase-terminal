@@ -65,7 +65,7 @@ const PANE: Option<Gated> = Some(Gated::Pane { pane: Some(4), tab: None });
 #[case::a_new_cornercase_bot(new_bot(Some("cornercase")), None)]
 #[case::a_new_bot_by_default(new_bot(None), None)]
 #[case::editing_the_access(edit_bot(Some("cornercase")), Some(Gated::Access))]
-#[case::editing_something_else(edit_bot(None), None)]
+#[case::editing_something_else(edit_bot(None), Some(Gated::Says("x".into())))]
 #[case::saying_to_a_bot(Command::Bot(BotRequest::Say(BotSay { bot: "x".into(), ..BotSay::default() })), Some(Gated::Says("x".into())))]
 #[case::reading_the_settings(Command::Config(Configure::Get), None)]
 #[case::searching_the_settings(Command::Config(Configure::Search("a".into())), None)]

@@ -1,11 +1,8 @@
 use std::fmt::Write as _;
 
-use jiff::Timestamp;
-use jiff::tz::TimeZone;
-
 use crate::bots::chat::{Kind, Line};
 use crate::control::bots::{AgentInfo, BotInfo};
-use crate::queue::clock;
+use crate::queue::clock::when;
 use crate::text;
 
 const WIDTH: usize = 120;
@@ -30,20 +27,6 @@ pub(in crate::cli) fn event_text(bot: &str, news: (Option<&Line>, Option<&str>, 
     let (line, state, change) = news;
     let what = line.map(line_text).or_else(|| state.or(change).map(str::to_string)).unwrap_or_default();
     format!("bot {bot}  {what}")
-}
-
-pub(super) fn when(at: i64, now: i64, zone: &str) -> String {
-    let Some((timestamp, zone)) = Timestamp::from_second(at).ok().zip(clock::zone(zone).ok().or(Some(TimeZone::UTC)))
-    else {
-        return at.to_string();
-    };
-    let shown = timestamp.to_zoned(zone.clone());
-    let today = Timestamp::from_second(now).ok().map(|now| now.to_zoned(zone));
-    if today.is_some_and(|today| today.date() == shown.date()) {
-        shown.strftime("%H:%M").to_string()
-    } else {
-        shown.strftime("%a %-d %b %H:%M").to_string()
-    }
 }
 
 pub(super) fn agents(found: &[AgentInfo]) -> String {

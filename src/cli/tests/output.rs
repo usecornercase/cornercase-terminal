@@ -79,6 +79,7 @@ fn report() -> Report {
         home: None,
         machines: Vec::new(),
         shown_remote: None,
+        shown_bot: None,
         tunnels: Vec::new(),
     }
 }

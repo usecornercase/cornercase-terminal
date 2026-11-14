@@ -83,6 +83,8 @@ pub(crate) struct EditArgs {
     pub(crate) account: Option<String>,
     #[arg(long, value_name = "ACCESS", value_parser = ACCESS, help = "cornercase or full")]
     pub(crate) access: Option<String>,
+    #[arg(long, value_name = "TEXT", help = "What the bot is for, written to bot.md; an empty one empties it")]
+    pub(crate) about: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,
 }

@@ -25,6 +25,7 @@ pub(super) enum Grab {
     Row(Target),
     Todo(u64),
     Agent(u64),
+    Bot(u64),
     Remote(RemoteAt),
 }
 
@@ -219,13 +220,7 @@ impl App {
                         border,
                         pos,
                         main,
-                        ui::Screen {
-                            agents: self.config.agents_section,
-                            icon_bar: self.config.icon_bar,
-                            plugins: self.has_plugin_buttons(),
-                            machine: self.machine_label().is_some(),
-                            ..ui::Screen::default()
-                        },
+                        ui::Screen { changes: false, ..self.screen_flags() },
                     )
                 }
                 _ => self.screen.widths.dragged(border, column, main.width),
@@ -239,21 +234,7 @@ impl App {
     fn agents_dragged(&self, row: u16, area: Rect) -> state::Widths {
         let bottom = self.layout(area).agents.bottom();
         let wanted = state::Widths { agents: Some(bottom.saturating_sub(row.saturating_add(1))), ..self.screen.widths };
-        let (panel, sidebar) = (self.panel_shown(), self.sidebar());
-        let rows = ui::full_layout(
-            area,
-            wanted,
-            ui::Screen {
-                changes: panel,
-                sidebar,
-                agents: true,
-                icon_bar: self.config.icon_bar,
-                plugins: self.has_plugin_buttons(),
-                machine: self.machine_label().is_some(),
-            },
-        )
-        .agents
-        .height;
+        let rows = ui::full_layout(area, wanted, ui::Screen { agents: true, ..self.screen_flags() }).agents.height;
         state::Widths { agents: Some(rows), ..wanted }
     }
 

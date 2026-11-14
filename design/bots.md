@@ -1,10 +1,10 @@
 # Bots
 
-Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`), `agents/headless.rs`, `agents/{claude,codex}/headless.rs`, `agents/probe.rs`, `app/bots.rs`, `app/bots/` (`turns.rs`, `manage.rs`), `app/control/bots.rs`, `control/bots.rs`, `cli/bot.rs`, `cli/bot/`, `cli/args/bot.rs`, `cli/help/bot.rs`, `cli/guard.rs`, `paths.rs` (#844), `app/control/boundary.rs`, `os/socket.rs`, `os/process.rs` (`Lineage`), `processes/stop.rs`, `app/launches.rs` (#856)
+Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`), `agents/headless.rs`, `agents/{claude,codex}/headless.rs`, `agents/probe.rs`, `bots/form.rs`, `app/bots.rs`, `app/bots/` (`turns.rs`, `manage.rs`, `shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/`, `ui/dialog/bot.rs`, `app/control/bots.rs`, `control/bots.rs`, `cli/bot.rs`, `cli/bot/`, `cli/args/bot.rs`, `cli/help/bot.rs`, `cli/guard.rs`, `paths.rs` (#844, #845), `app/control/boundary.rs`, `os/socket.rs`, `os/process.rs` (`Lineage`), `processes/stop.rs`, `app/launches.rs` (#856)
 
 A **bot** is an agent of your own: a name, a folder, a memory and a chat. It belongs to no project, but it can see all of them and act on them through the `cornercase` command line. It exists for work that belongs to no project, or to all of them ("review my open pull requests every morning", "tell me which issues labelled `bug` came in today, in every project"), which today meant opening a folder as a fake project, or keeping an agent alive in a pane whose context grows for ever.
 
-This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. Nothing is drawn in the window (#845), there are no routines (#846), no following of the agents a bot starts (#847), no chat apps (#848), and only Claude Code and Codex can be bots (#849 adds the others).
+This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. The window draws them since #845 (see [The window](#the-window-845)), there are no routines (#846), no following of the agents a bot starts (#847), no chat apps (#848), and only Claude Code and Codex can be bots (#849 adds the others).
 
 **Making one starts nothing and spends no tokens.** A bot runs only when someone writes to it, and only while the server runs: a turn's process does not survive the server.
 
@@ -52,10 +52,10 @@ A turn is one run of the agent without its interface, through the shared runner 
 - **A restart** drops a turn's process with the server: see Replay above.
 - **A second `stop`** adds what was held since to the ones to drop and starts no second job, so a `say --wait` held in between is answered with the dropped notice. **The server stopping** (`stop_background`, so `kill-server`, `restart` and an update) ends every running turn's process tree, one thread each, so the agent does not outlive the server it reports to. A message held while a stop was in flight runs as the next turn: replay keeps `held` at `stopped`, takes off the count a following `N held messages dropped` names, and reads what is left as the turn that runs.
 - **`reset` and `remove` refuse while a turn runs** (`stop it first`), the same way: forgetting a session a process still uses, or deleting its folder under it, would leave the chat saying something false.
-- **`reset`** (the window's ` new conversation `, #845) forgets the session id and writes `new conversation`. `bot.md` and `memory.md` stay, so the next message starts a new session that reads them.
+- **`reset`** (the window's ` new conversation `) forgets the session id and writes `new conversation`. `bot.md` and `memory.md` stay, so the next message starts a new session that reads them.
 - **Failures keep the agent's words** (`Not logged in`, `usage limit`). Two are worded by cornercase: `error_max_turns` becomes `claude stopped after 40 steps, its limit for one message`, and a failure whose words name the context (`prompt is too long`, `context window`, `context length`, `maximum context`, `context_length_exceeded`) gets `; start a new conversation: cornercase bot reset <id>`.
 - **Unread**: each bot counts the `bot` and `error` lines since a client last showed its chat (`bot seen`). It lives in memory, so a restart shows nothing unread.
-- **Notices**: a `bot` or `error` line makes a toast (` <name>: <first line> `, with no ` go `: #845 adds it with the chat) and a desktop notification. A turn that a `say --wait` client waits on counts as shown: it neither notifies nor counts as unread. No client shows a chat until #845, so everything else does. Chat apps are #848.
+- **Notices**: a `bot` or `error` line makes a toast (` <name>: <first line> ` with a ` go ` that shows the chat) and a desktop notification, whose click shows it too. A turn that a `say --wait` client waits on counts as shown, and so does one answered while a window shows the chat: it neither notifies nor counts as unread. Everything else does. Chat apps are #848.
 
 ## The brief
 
@@ -129,7 +129,7 @@ Under `cornercase` access, **the server refuses what a bot types into a pane tha
 - **Where it runs.** The gate sits at the top of `handle_request` for a bot's client (`boundary::bot_writes`), resolving the target as the handler does. The writes that happen later are checked again when they happen, keyed on the pending request (kept when its client leaves, the keys in `Clients::bots` (`boundary::BotClients`)): a held send when it goes out (`held::release`), `paste-file` when its stored file is pasted (`file_stored`), and the Enter cornercase presses after `send --enter` (`drive_launches` ends that launch, answers the request with the refusal and leaves the pasted text unrun on the shell's line). `keys` and `input` write at once, so the race of keys, `input` or a `send`'s paste (without `--enter`) written in the instant an agent exits remains.
 - **`full` bots are unchanged**: they can run anything themselves, so refusing them adds friction and no safety. Their turns are not contained.
 
-**Also refused to a bot's connection** (it could lift the boundary itself): `bot new` with an access other than `cornercase` and `bot edit` with any access (`a bot cannot change a bot's access`), `bot say` to a bot with `full` access (`a bot cannot write to a bot with full access`), and every write to the settings (`config` other than get and search, `config-import` applied: `a bot cannot change cornercase's settings`), since `agent_commands` decides which programs count as an agent.
+**Also refused to a bot's connection** (it could lift the boundary itself): `bot new` with an access other than `cornercase` and `bot edit` with any access (`a bot cannot change a bot's access`), `bot say` to a bot with `full` access, and any `bot edit` of one, `--about` writing its `bot.md` included (`a bot cannot write to a bot with full access`), and every write to the settings (`config` other than get and search, `config-import` applied: `a bot cannot change cornercase's settings`), since `agent_commands` decides which programs count as an agent.
 
 **What is still not a boundary**: the user's own Claude allow rules (`--setting-sources user` loads them on top of `--allowedTools`); an agent's own shell (Claude Code's `!` mode, which `send` and `keys` can type into), its permission prompts (which `keys` can answer), and starting agents in a mode that skips them; requests that change what cornercase runs (`flow-import`, `flow-save`, plugins); destructive requests (`close`, `stop-process`, `stop-port`, `changes-discard`, `worktrees-remove`); `--remote` over ssh (that machine's server sees an ssh process); and, on macOS, the orphan above. `cornercase requests` also lets a bot send a request the command line's guard refuses (`restart-when-idle`, `update-install`): now that the server knows a bot's connections it can refuse those too. Work you would give an assistant at your keyboard is the right size for a bot.
 
@@ -173,4 +173,12 @@ The boundary (#856): the classifier of the writing requests (`boundary/tests.rs`
 
 ## What later issues add
 
-#845 the section, the chat and the form (and ` go ` on the toast); #846 routines (`queue add --bot`); #847 following the agents a bot starts; #848 chat apps; #849 the other agents. The rest of the boundary (the open list above) and the server-side refusal of `cornercase requests` are follow-up issues.
+#846 routines (`queue add --bot`); #847 following the agents a bot starts; #848 chat apps; #849 the other agents. The rest of the boundary (the open list above) and the server-side refusal of `cornercase requests` are follow-up issues.
+
+## The window (#845)
+
+The Bots section, the chat and the form are in [bots/window.md](bots/window.md): where the chat shows and what leaves it, the shown bot shared by windows and reported as `shown_bot`, the keys, the drawing of each line, unread and ` go `, the form and `bot edit --about`, why a link is copied and not opened, and what was checked.
+
+## Topics
+
+- [The window](bots/window.md)

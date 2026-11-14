@@ -1,3 +1,4 @@
+pub(crate) mod bot;
 pub(crate) mod clone_on_machine;
 pub(crate) mod context;
 pub(super) mod flows;
@@ -58,6 +59,30 @@ pub(crate) const CANCEL_LABEL: &str = "cancel";
 
 pub(super) fn form_inner(form: Rect) -> Rect {
     Block::bordered().inner(form).inner(Margin::new(FORM_PADDING, 0))
+}
+
+pub(super) fn centred_in(screen: Rect, wide: u16, height: u16) -> Rect {
+    super::widgets::centred(screen, wide.min(screen.width.saturating_sub(2)), height)
+}
+
+pub(super) fn padded(area: Rect) -> Rect {
+    area.inner(Margin::new(2, 1))
+}
+
+pub(super) fn row_in(inner: Rect, at: u16, height: u16) -> Rect {
+    Rect::new(inner.x, inner.y.saturating_add(at), inner.width, height).intersection(inner)
+}
+
+pub(super) fn with_list(area: Rect, list: Option<Rect>) -> Rect {
+    list.map_or(area, |list| area.union(list))
+}
+
+pub(super) fn inset(r: Rect) -> Rect {
+    Rect { x: r.x.saturating_add(1), width: r.width.saturating_sub(1), ..r }
+}
+
+pub(super) fn bottom_buttons(inner: Rect, submit: &str) -> [Rect; 2] {
+    buttons_in(Rect { y: inner.bottom().saturating_sub(1), height: 1, ..inner }, submit, "cancel")
 }
 
 fn buttons_in(row: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
@@ -168,6 +193,7 @@ pub(crate) enum Overlay {
     Form(Form),
     RunOnForm(Form, RunOnRow),
     Queue(Box<crate::queue::form::Form>),
+    BotForm(Box<crate::bots::form::Form>),
     Machine(Box<crate::machines::form::Form>),
     CloneOnMachine(Box<crate::machines::clone_form::CloneForm>),
     GroupStyle(GroupEntry),
@@ -200,6 +226,7 @@ impl Overlay {
     pub(crate) fn area(&self, area: Rect) -> Option<Rect> {
         match self {
             Self::Queue(form) => Some(queue::area_with_list(area, form)),
+            Self::BotForm(form) => Some(bot::area_with_list(area, form)),
             Self::Machine(form) => Some(machine::area_with_list(area, form)),
             Self::Form(_) | Self::RunOnForm(..) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
             Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),

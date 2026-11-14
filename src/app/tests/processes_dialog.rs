@@ -81,7 +81,7 @@ mod opening {
         render(&mut app, AREA);
         let more = app_areas(&app).more.as_position();
         click(&mut app, more);
-        assert_eq!(menu_labels(&app), ["settings", "usage", "processes", "quit"]);
+        assert_eq!(menu_labels(&app), ["new bot…", "settings", "usage", "processes", "quit"]);
         pick(&mut app, "processes");
         assert!(matches!(app.overlay, Some(Overlay::Processes(_))));
     }

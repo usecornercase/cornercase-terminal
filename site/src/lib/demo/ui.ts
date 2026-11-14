@@ -1,3 +1,5 @@
+import { drawBotForm, botFormBounds } from './botform';
+import { drawBotsSection, drawCard, drawChat } from './botchat';
 import { drawQueueForm, queueBounds } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
@@ -301,7 +303,7 @@ export class Painter {
     }
   }
 
-  private rail(r: Rect): void {
+  rail(r: Rect): void {
     for (let y = r.y; y < bottom(r); y++) if (this.g.at(r.x, y)?.ch === ' ') this.g.put(r.x, y, '▌', { fg: 6 });
   }
 
@@ -369,6 +371,7 @@ export class Painter {
     if (areas.tree) this.tree(areas);
     else if (!isEmpty(areas.sidebar)) this.sidebar(areas);
     if (app.config.agentsSection) this.agents(areas);
+    drawBotsSection(this, areas);
     if ([areas.separator, areas.worktrees, areas.moreSeparator, areas.more].some((r) => !isEmpty(r))) this.footer(areas);
     if (!isEmpty(areas.workspaces)) this.workspaces(areas);
     if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
@@ -408,7 +411,9 @@ export class Painter {
   private pane(areas: Areas): void {
     const app = this.app;
     const tab = app.tab();
-    if (tab) this.tab(tab, areas.pane);
+    const bot = app.bots.current();
+    if (bot) drawChat(this, areas.pane, bot, areas.pitch);
+    else if (tab) this.tab(tab, areas.pane);
     else if (app.project()) this.noTab(areas.pane);
     else if (!app.projects.length) this.welcome(areas.pane);
   }
@@ -662,6 +667,8 @@ export class Painter {
 
   private breadcrumb(room: number): Line {
     const app = this.app;
+    const bot = app.bots.current();
+    if (bot) return [seg('Bots', { fg: DEFAULT, add: BOLD }), seg(` › ${truncateRight(bot.name, Math.max(0, room - 7))}`, { fg: 7 })];
     const p = app.project();
     if (!p) return wordmark();
     const w = p.workspaces[p.active];
@@ -672,11 +679,11 @@ export class Painter {
     return [seg([...text].slice(0, head).join(''), { fg: DEFAULT, add: BOLD }), seg([...text].slice(head).join(''), { fg: 7 })];
   }
 
-  private title(r: Rect, text: string): void {
+  title(r: Rect, text: string): void {
     this.line(middle(r), [seg(` ${text}`, { fg: 8, add: BOLD })]);
   }
 
-  private more<R>(list: Rect, rows: Rows, specs: R[], named: (r: R) => boolean): void {
+  more<R>(list: Rect, rows: Rows, specs: R[], named: (r: R) => boolean): void {
     const [above, under] = rows.hidden();
     const count = (from: number, to: number) => specs.slice(from, to).filter(named).length;
     for (const [n, arrow, r] of [
@@ -990,7 +997,7 @@ export class Painter {
     this.band(close, [seg(centered('×', close.w))], style);
   }
 
-  private back(areas: Areas, name: string): void {
+  back(areas: Areas, name: string): void {
     const style = this.buttonStyle(areas.back, CYAN, 6);
     this.button(areas.back, '', '‹ Projects', style);
     this.region({ r: areas.back, click: () => this.app.navTo('projects'), cursor: 'pointer' });
@@ -1026,6 +1033,7 @@ export class Painter {
 
   private workspaces(areas: Areas): void {
     const app = this.app;
+    if (app.bots.current() && !areas.compact) return drawCard(this, areas);
     if (isEmpty(areas.back)) this.title(areas.workspacesTitle, 'Workspaces');
     else this.back(areas, app.project() ? projectLabel(app.project()!) : '');
     const p = app.project();
@@ -1134,6 +1142,7 @@ export class Painter {
     if (o.kind === 'settings') return this.settings(o);
     if (o.kind === 'usage') return this.usage();
     if (o.kind === 'queue') { this.dialogBackdrop(queueBounds(this.app.cols, this.app.rows, o)); return drawQueueForm(this, o); }
+    if (o.kind === 'bot') { this.dialogBackdrop(botFormBounds(this.app.cols, this.app.rows, o)); return drawBotForm(this, o); }
     if (o.kind === 'issues') return this.issues(o);
     if (o.kind === 'search') return this.results(areas);
   }

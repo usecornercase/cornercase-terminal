@@ -6,7 +6,7 @@ description: Every mouse gesture cornercase understands, the optional prefix key
 import { Aside } from '@astrojs/starlight/components';
 import Screen from '../../../../components/Screen.astro';
 
-cornercase is driven with the mouse. Out of the box it has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and find field and the TODO panel's text field (and `Esc` while you drag a row, a border or a divider, or while the changes, files, TODO or Flow panel is open), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
+cornercase is driven with the mouse. Out of the box it has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and find field and the TODO panel's text field, a [bot's chat](../../guides/bots/#the-chat) field (and `Esc` while you drag a row, a border or a divider, or while the changes, files, TODO or Flow panel is open), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
 
 If your hands would rather stay on the keyboard, or your terminal can't send clicks, you can turn on a **prefix key** that opens a menu of [keyboard shortcuts](#keyboard-shortcuts). It takes that one key, and only once you choose it.
 
@@ -46,6 +46,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Drag | The line above the agents section | Makes it taller or shorter. |
 | Double-click | That line | Gives it a third of the room again. |
 | Click | `Agents ›` in the [compact](../../guides/small-terminals/#the-menu) projects menu | Shows the agents. |
+| Click | `Bots ›` in the compact projects menu | Shows the [bots](../../guides/bots/#the-bots-section). |
 | Click | `Issues` | Opens the issue browser. |
 | Click | `Worktrees` (its slot in the icon bar, or the projects menu in compact mode) | Opens the [Worktrees dialog](../../guides/worktrees/#clean-up-worktrees) for every project: each worktree on disk, when it last changed and what makes it safe to remove, and removing several at once. |
 | Click | The machine on its own row under `Worktrees`, such as `devbox ▴` (its icon above `Help` in the icon bar), once a window has reached another machine or a program has added one | Opens a menu to move the window to **this machine** or another one on its list, **add machine…** or **forget…** one; see [Switch machines from the window](../../guides/remote/#switch-machines-from-the-window). |
@@ -162,6 +163,29 @@ See [TODO list](../../guides/todo/).
 
 See [Flows](../../guides/flows/#the-flow-panel).
 
+### Bots
+
+| Gesture | Where | Does |
+| --- | --- | --- |
+| Click | The title of the [Bots section](../../guides/bots/#the-bots-section) | Folds or unfolds it; folded, the title shows the spinner or the unread count. |
+| Click | ` + ` on that title | Opens the new bot form. |
+| Click | A bot's row | Shows its chat in place of the panes, with its card, and marks its answers as read. A click on a project, workspace or tab goes back. |
+| Right-click, or hover and click `⋯` | A bot's row | Opens its menu: **rename**, **edit…**, **new conversation**, **open folder**, **remove…**. A bot has no `×`. |
+| Wheel | The Bots section | Scrolls its rows. |
+| Wheel | A [chat](../../guides/bots/#the-chat) | Scrolls its lines. |
+| Click | `+N steps` | Unfolds the steps of that run. |
+| Click | ` retry ` | Sends your last message again. |
+| Click | ` stop ` | Ends the turn that is running. |
+| Click | ` new conversation ` | Forgets the conversation: the next message starts a new one. |
+| Click | ` send ` | Sends the text of the field. |
+| Click | One of the three examples of an empty chat | Fills the field with it and sends nothing. |
+| Click | ` ↓ new ` | Goes back to the bottom of the chat. |
+| Click | A link in a bot's answer | Copies it: it is never opened. |
+| Click | The folder on a bot's card | Opens it through **open in…**, or copies its path. |
+| `Enter`, `Esc` | The chat's field | `Enter` sends; a paste keeps its line breaks. `Esc` clears the field, and does nothing when it is empty. Every key goes to this field, never to a pane, while a chat shows. |
+
+See [Bots](../../guides/bots/#in-the-window).
+
 ### Dialogs and lists
 
 Click buttons and rows to use them. In lists (the folder picker, the issue browser, the settings, search results) and in an update's release notes, the wheel scrolls. A right-click menu closes when you click anywhere else (a text field's menu closes without its dialog), and so do the search and every dialog, as its cancel button would, so whatever you typed in it is dropped. A dialog that is busy (creating a worktree, installing an update, checking a token, starting an issue) stays open until it is done. A plugin's [popup](../../guides/plugins/#popups) is the exception: a click outside it does nothing, and it closes with its `×`.
@@ -221,6 +245,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `w` `f` | Opens or closes the [Flow panel](../../guides/flows/#the-flow-panel) of the workspace's run, or says it runs no flow. |
 | `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, Usage and stats. |
 | `s` | Opens or closes the [Recap panel](../../guides/recap/). |
+| `b` | Opens the [new bot](../../guides/bots/#make-a-bot-in-the-window) form. |
 | `k` | Opens the [Processes](../../guides/projects-workspaces-tabs/#processes) dialog: what every pane runs, with its CPU and memory, and a way to stop a program. |
 | `h` | Opens the **`Help`** menu. |
 | `o` | Away on chat apps: turns the away mode of [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) on or off, on every one that is set up, as **More ▴ › remote…** does for each. With none paired, it opens the settings to set one up. |
@@ -257,6 +282,8 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Agent, place and person pickers | Type to filter. `↑` `↓` select. `Enter` picks. `Esc` goes back. |
 | Changes panel filter | Type a piece of a path or a pattern: `*.test.js` keeps only those files, `!*.snap` leaves them out. `Enter` keeps the filter and gives the keys back to your program, `Esc` clears it, or closes the panel when the field is empty. A click in a pane gives the keys back too. |
 | Files panel search | Type to search. `↑` `↓` pick a result. `Enter` opens it. `Esc` clears the search and gives the keys back to your program, or closes the panel when the bar is empty. A click in a pane gives them back too and keeps the search. |
+| A bot's chat field | Type, paste. `Enter` sends, and a paste keeps its line breaks. `Esc` clears the field. The arrows, `Home` and `End`, word moves and selection work as in every field below. |
+| New bot form | `Tab` / `Shift+Tab` move between its fields; a list opens with `Space`, `↑` or `↓` and `Esc` closes it first. `Enter` creates the bot, or breaks the line in **For**. `Esc` closes. |
 | TODO field | Type, paste. `←` `→` move the cursor, `Ctrl+←` `Ctrl+→` (or `Option+←` `Option+→`) a word at a time, `↑` `↓` move across the lines of a long item, `Home` `End` (or `Ctrl+A` `Ctrl+E`) go to its start and end, `Backspace` `Delete` delete. `Enter` saves (a new item keeps the field open for the next one), `Esc` cancels, or closes the panel when the field is empty. A click outside the field saves it and gives the keys back. |
 | Files panel find field | Type to find in the open file. `↓` or `Enter` go to the next match, `↑` to the previous one, wrapping. `Esc` clears it, or closes it when it is empty. A click in a pane gives the keys back and keeps it. |
 | Changes, files, TODO or Flow panel | `Esc` closes it, as its `×` does, unless one of its fields above has text; the files find field closes, and a file shown full screen goes back to its panel, first. That `Esc` does not reach your program; the next one does. |

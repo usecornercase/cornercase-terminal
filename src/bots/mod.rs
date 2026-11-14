@@ -7,6 +7,7 @@ use crate::agents::headless::Access;
 pub(crate) mod brief;
 pub(crate) mod chat;
 pub(crate) mod folder;
+pub(crate) mod form;
 pub(crate) mod turn;
 
 pub(crate) const MAX_BOTS: usize = 50;

@@ -5,7 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::View;
-use super::remote::centred;
+use super::widgets::centred;
 use super::widgets::overlay_block;
 use crate::agents::activity::Status;
 use crate::text::{truncate_left, truncate_right};

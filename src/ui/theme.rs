@@ -50,7 +50,7 @@ pub(super) fn line_colour(light: bool) -> Color {
     if light { LIGHT_LINE } else { DARK_LINE }
 }
 
-pub(super) fn surface_colour(light: bool) -> Color {
+pub(crate) fn surface_colour(light: bool) -> Color {
     if light { LIGHT_SURFACE } else { DARK_SURFACE }
 }
 

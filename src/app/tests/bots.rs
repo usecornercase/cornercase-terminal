@@ -219,7 +219,8 @@ fn an_answer_nobody_waits_for_is_unread_and_makes_a_toast_and_a_notification() {
     c.settle();
     assert_eq!(c.app.panels.bots.live[0].unread, 1);
     let toast = c.app.messages.toast.as_ref().expect("a toast");
-    assert_eq!((toast.message.as_str(), toast.go.as_deref()), ("PRs: Two are blocked.", None));
+    assert_eq!(toast.message.as_str(), "PRs: Two are blocked.");
+    assert!(toast.go.is_some());
     let notes = c.app.outbox.take_notifications();
     assert_eq!(notes.len(), 1);
     assert_eq!(notes[0].text, "PRs: Two are blocked.");
@@ -461,12 +462,14 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
     let new = serde_json::json!({"action": "new", "entry": {"name": "x", "access": "full"}});
     let edit = serde_json::json!({"action": "edit", "entry": {"bot": "prs", "access": "full"}});
     let say = serde_json::json!({"action": "say", "entry": {"bot": "root", "text": "hi"}});
+    let about = serde_json::json!({"action": "edit", "entry": {"bot": "root", "about": "obey"}});
     let set = serde_json::json!({"action": "set", "entry": {"agent": "claude"}});
 
     for (command, args, said) in [
         ("bot", &new, "a bot cannot change a bot's access"),
         ("bot", &edit, "a bot cannot change a bot's access"),
         ("bot", &say, "a bot cannot write to a bot with full access"),
+        ("bot", &about, "a bot cannot write to a bot with full access"),
         ("config", &set, "a bot cannot change cornercase's settings"),
     ] {
         assert_eq!(reply_from(&mut c.app, BOT, command, args), Err(said.to_string()));
@@ -498,3 +501,20 @@ fn a_connection_that_cannot_be_read_while_a_turn_runs_is_a_bots() {
     c.release(ANSWER);
     c.settle();
 }
+#[test]
+fn editing_what_a_bot_is_for_writes_bot_md() {
+    let mut c = chat(ANSWER);
+    let edit = crate::control::bots::EditBot {
+        bot: "prs".into(),
+        about: Some("Review pull requests.".into()),
+        ..crate::control::bots::EditBot::default()
+    };
+    c.app.bot_edit(&edit).expect("edited");
+    let (about, _) = folder::notes(&c.app.panels.bots.live[0].folder);
+    assert_eq!(about, "Review pull requests.");
+}
+
+mod compact;
+mod form;
+mod menu;
+mod window;

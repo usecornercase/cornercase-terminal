@@ -49,12 +49,13 @@ pub(super) struct Notices {
     run: String,
     next: u64,
     sent: VecDeque<Notice>,
+    bots: VecDeque<(String, String)>,
     windows: HashMap<u64, Window>,
 }
 
 impl Default for Notices {
     fn default() -> Self {
-        Self { run: run_id(), next: 0, sent: VecDeque::new(), windows: HashMap::new() }
+        Self { run: run_id(), next: 0, sent: VecDeque::new(), bots: VecDeque::new(), windows: HashMap::new() }
     }
 }
 
@@ -70,6 +71,19 @@ impl Notices {
             self.sent.pop_front();
         }
         token
+    }
+
+    pub(super) fn bot_token(&mut self, bot: &str) -> String {
+        let token = self.next_token();
+        if self.bots.len() >= notify::KEPT {
+            self.bots.pop_front();
+        }
+        self.bots.push_back((token.clone(), bot.to_string()));
+        token
+    }
+
+    fn bot_of(&self, token: &str) -> Option<&str> {
+        self.bots.iter().find(|(found, _)| found == token).map(|(_, bot)| bot.as_str())
     }
 
     fn find(&self, token: &str) -> Option<&Notice> {
@@ -227,6 +241,10 @@ impl App {
     }
 
     pub(crate) fn notification_clicked(&mut self, token: &str) {
+        if let Some(bot) = self.messages.notices.bot_of(token).map(str::to_string) {
+            self.go_to_bot(&bot);
+            return;
+        }
         let Some(went) = self.act_on_notice(token) else { return };
         let (pane, to) = match went {
             Ok(Went::Here(_, Item::Pane(pane))) => {

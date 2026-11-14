@@ -159,7 +159,7 @@ impl App {
     }
 
     pub(super) fn tab_view(&mut self, area: Rect) -> Option<ui::TabView> {
-        if self.shown_remote().is_some() {
+        if self.shown_remote().is_some() || self.bot_shown() {
             return None;
         }
         let dragging = self.screen.drag.as_ref().and_then(Drag::divider);
@@ -201,6 +201,7 @@ impl App {
         ui::View {
             tree: self.screen.drawn.tree.then(|| self.tree_view()),
             agents: self.config.agents_section.then(|| self.agents_view()),
+            bots: self.bots_view(),
             counts: self.config.counts,
             icon_bar: self.config.icon_bar,
             icons: false,
@@ -273,7 +274,7 @@ impl App {
         moved.and_then(|(d, pos)| match d.target {
             Grab::Row(target) => self.drag_view(target, pos, area),
             Grab::Todo(id) => Some(ui::Drag::Todo(id)),
-            Grab::Agent(_) | Grab::Remote(_) => None,
+            Grab::Agent(_) | Grab::Bot(_) | Grab::Remote(_) => None,
         })
     }
 }

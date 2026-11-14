@@ -227,7 +227,7 @@ fn a_bots_enter_is_not_pressed_when_its_client_left_before_it() {
 
     let (app, rx) = (&mut b.app, &b.rx);
     refreshing(app, rx, "the launch is over", |app| app.agents.launches.of_pane(agent).next().is_none());
-    value(&mut b.app, None, press_keys(agent, &["ctrl+c"]));
+    value(&mut b.app, None, press_keys(agent, &["ctrl+u"]));
     ask(&mut b.app, None, text(agent, "echo after", true));
     done(answered(&mut b.app, &b.rx, "the send is answered"));
     let (app, rx) = (&mut b.app, &b.rx);

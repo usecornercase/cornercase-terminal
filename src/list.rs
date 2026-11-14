@@ -88,12 +88,26 @@ pub(crate) struct Combo {
     options: Vec<String>,
     chosen: Option<usize>,
     open: Option<Search>,
+    notes: Vec<Option<String>>,
+    typed: bool,
 }
 
 impl Combo {
     pub(crate) fn new(options: Vec<String>, chosen: Option<usize>) -> Self {
         let chosen = chosen.filter(|i| *i < options.len());
-        Self { options, chosen, open: None }
+        Self { options, chosen, open: None, notes: Vec::new(), typed: false }
+    }
+
+    pub(crate) fn with_notes(options: Vec<String>, chosen: Option<usize>, notes: Vec<Option<String>>) -> Self {
+        Self { notes, ..Self::new(options, chosen) }
+    }
+
+    pub(crate) fn typed(options: Vec<String>, chosen: Option<usize>) -> Self {
+        Self { typed: true, ..Self::new(options, chosen) }
+    }
+
+    pub(crate) fn note(&self, i: usize) -> Option<&str> {
+        self.notes.get(i).and_then(Option::as_deref)
     }
 
     pub(crate) fn options(&self) -> &[String] {
@@ -109,10 +123,19 @@ impl Combo {
     }
 
     pub(crate) fn choose(&mut self, i: usize) {
+        if self.note(i).is_some() {
+            return;
+        }
         if i < self.options.len() {
             self.chosen = Some(i);
         }
         self.open = None;
+    }
+
+    pub(crate) fn pick(&mut self, i: usize) -> bool {
+        let before = self.chosen;
+        self.choose(i);
+        self.chosen != before
     }
 
     pub(crate) fn is_open(&self) -> bool {
@@ -182,12 +205,24 @@ impl Combo {
     }
 
     fn choose_highlighted(&mut self) -> bool {
-        let chosen = self.highlighted();
-        let changed = chosen.is_some_and(|i| self.chosen != Some(i));
+        let (chosen, before) = (self.highlighted(), self.chosen);
         match chosen {
             Some(i) => self.choose(i),
+            None if self.typed && !self.query().trim().is_empty() => return self.choose_typed(),
             None => self.close(),
         }
+        self.chosen != before
+    }
+
+    fn choose_typed(&mut self) -> bool {
+        let typed = self.query().trim().to_string();
+        let found = self.options.iter().position(|option| option.eq_ignore_ascii_case(&typed));
+        let at = found.unwrap_or_else(|| {
+            self.options.push(typed);
+            self.options.len() - 1
+        });
+        let changed = self.chosen != Some(at);
+        self.choose(at);
         changed
     }
 

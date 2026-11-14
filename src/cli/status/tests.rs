@@ -121,6 +121,17 @@ mod machines {
     }
 
     #[test]
+    fn a_shown_bot_is_marked_and_nothing_local_is() {
+        let local = ProjectInfo { id: 3, name: "shop".into(), path: "/Users/me/shop".into(), ..ProjectInfo::default() };
+        let shown = control::Ids { project: Some(3), ..control::Ids::default() };
+        let report = Report { projects: vec![local], shown, shown_bot: Some("prs".into()), ..Report::default() };
+
+        let text = render(&report, Some(Path::new("/Users/me")), Stamp::parse(SEEN).expect("a stamp"));
+
+        assert_eq!(text, "project 3  shop  ~/shop\nbot prs  (shown)\n");
+    }
+
+    #[test]
     fn one_that_is_down_says_when_it_was_seen() {
         let pi = seen("pi", State::Unreachable, Vec::new());
 
