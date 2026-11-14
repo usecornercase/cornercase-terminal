@@ -214,6 +214,53 @@ mod runs {
         assert!(!runs_text_at(&FlowRuns { runs: vec![run()], ..FlowRuns::default() }).contains("stopped moving"));
     }
 
+    fn exited(mut run: RunState, roles: &[&str]) -> RunState {
+        for role in run.roles.iter_mut().filter(|role| roles.contains(&role.role.as_str())) {
+            role.exited = true;
+            role.status = None;
+        }
+        run
+    }
+
+    #[test]
+    fn a_role_whose_agent_exited_says_so_and_how_to_bring_it_back() {
+        let text = runs_text_at(&FlowRuns { runs: vec![exited(run(), &["coder"])], ..FlowRuns::default() });
+
+        assert!(text.contains("  coder         pane 13    exited\n"), "{text}");
+        assert!(text.contains("  tester        -          -\n"), "{text}");
+        assert!(text.contains("  exited: coder; cornercase agents reopen --workspace 4 brings it back\n"), "{text}");
+        assert!(text.contains("  reviewer      pane 14    closed\n"), "{text}");
+    }
+
+    #[test]
+    fn several_exited_roles_are_brought_back_together() {
+        let runs = FlowRuns { runs: vec![exited(run(), &["coder", "orchestrator"])], ..FlowRuns::default() };
+
+        let text = runs_text_at(&runs);
+
+        assert!(
+            text.contains("  exited: orchestrator, coder; cornercase agents reopen --workspace 4 brings them back\n")
+        );
+    }
+
+    #[test]
+    fn a_stopped_run_whose_orchestrator_exited_says_so() {
+        let stopped = RunState { stopped: Some("2026-11-13T10:00:00.000Z".into()), ended: false, ..run() };
+        let runs = FlowRuns { runs: vec![exited(stopped, &["orchestrator"])], ..FlowRuns::default() };
+
+        let text = runs_text_at(&runs);
+
+        assert!(text.contains("  stopped moving 50 min ago: the orchestrator's agent exited\n"), "{text}");
+        assert!(!text.contains("turn is over"), "{text}");
+    }
+
+    #[test]
+    fn a_run_a_role_has_not_exited_from_says_nothing_of_it() {
+        let text = runs_text_at(&FlowRuns { runs: vec![run()], ..FlowRuns::default() });
+
+        assert!(!text.contains("exited"), "{text}");
+    }
+
     #[test]
     fn a_run_is_a_block_of_its_stage_its_roles_and_its_steps() {
         let text = runs_text_at(&FlowRuns { runs: vec![run()], ..FlowRuns::default() });

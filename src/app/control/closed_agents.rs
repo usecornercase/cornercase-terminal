@@ -1,6 +1,6 @@
 use ratatui::layout::Rect;
 
-use super::{Asker, Handled, conflict, json, none, sized};
+use super::{Asker, Handled, conflict, json, none};
 use crate::app::App;
 use crate::app::closed_agents::reopen::{Reopened, ReopenedPane};
 use crate::app::closed_agents::{Plan, agents_label};
@@ -92,8 +92,7 @@ impl App {
         area: Option<Rect>,
     ) -> Handled {
         let workspace = self.closed_target(asker, ask.workspace)?;
-        let area = sized(area)?;
-        let done = self.reopen_agents(workspace, area)?;
+        let done = self.reopen_workspace(workspace, area)?;
         Ok(Some(json(&reopened_answer(done))))
     }
 

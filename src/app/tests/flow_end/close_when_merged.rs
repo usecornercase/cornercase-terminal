@@ -200,7 +200,7 @@ fn a_wake_of_the_orchestrator_that_is_due_keeps_them_open() {
     pull(&mut repo, "\"MERGED\"");
     let member = repo.app.runs.all()[0].members[1].pane;
     let t0 = Instant::now();
-    repo.app.runs.first_mut().sent.push(Sent { pane: member, at: t0, finished: true, failed: false });
+    repo.app.runs.first_mut().sent.push(Sent { pane: member, at: t0, finished: true, failed: false, back: false });
 
     assert!(!closes_at(&mut repo, t0));
 }

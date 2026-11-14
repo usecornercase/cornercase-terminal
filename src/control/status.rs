@@ -343,6 +343,8 @@ pub(crate) struct RunStatus {
     pub(crate) close_when_merged: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) free_builds: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) exited: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

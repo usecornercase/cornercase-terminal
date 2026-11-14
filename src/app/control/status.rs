@@ -221,6 +221,7 @@ impl App {
             reached,
             close_when_merged: run.close_when_merged,
             free_builds: run.free_builds,
+            exited: run.exited.iter().filter_map(|&pane| run.role_of(pane)).map(str::to_string).collect(),
         })
     }
 
