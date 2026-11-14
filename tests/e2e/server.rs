@@ -189,11 +189,7 @@ fn clients_starting_at_once_share_one_server() {
 
 #[test]
 fn a_new_server_reopens_the_saved_projects() {
-    let name = format!("ccrs-{}", std::process::id());
-    let dir = temp_dir_named(&name);
-    let mut app = Harness::start();
-    app.open_project(1, &dir);
-    app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
+    let (_dir, name, mut app) = sidebar::with_a_second_project("ccrs");
     app.session.wait_for_saved("both projects are saved", |saved| saved.contains(name.as_str()));
 
     let out = app.session.run("kill-server");

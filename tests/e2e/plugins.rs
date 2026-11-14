@@ -339,13 +339,18 @@ fn pane_text(app: &Harness) -> String {
     (p.y..p.bottom()).map(|y| app.row(y).chars().skip(usize::from(p.x)).collect::<String>() + "\n").collect()
 }
 
-#[test]
-fn a_button_opens_its_popup_on_every_client_and_its_keys_never_reach_the_pane() {
+fn popup_over_cat() -> Harness {
     let mut app = Harness::start();
     app.send(b"echo cat-\"\"starts; cat -v\r");
     app.wait_for("cat runs in the pane", |s| s.contains("cat-starts"));
     popup_plugin(&app.session);
     app.wait_for("the plugin's button shows", |s| s.contains("Popper"));
+    app
+}
+
+#[test]
+fn a_button_opens_its_popup_on_every_client_and_its_keys_never_reach_the_pane() {
+    let mut app = popup_over_cat();
 
     app.click(app.position_of("Popper"));
     app.wait_for("the popup shows its program", |s| s.contains("popup-ready") && s.contains("Popper: ask a line"));
@@ -366,11 +371,7 @@ fn a_button_opens_its_popup_on_every_client_and_its_keys_never_reach_the_pane() 
 
 #[test]
 fn a_popup_stays_open_when_the_last_client_leaves() {
-    let mut app = Harness::start();
-    app.send(b"echo cat-\"\"starts; cat -v\r");
-    app.wait_for("cat runs in the pane", |s| s.contains("cat-starts"));
-    popup_plugin(&app.session);
-    app.wait_for("the plugin's button shows", |s| s.contains("Popper"));
+    let mut app = popup_over_cat();
     app.click(app.position_of("Popper"));
     app.wait_for("the popup shows its program", |s| s.contains("popup-ready"));
 

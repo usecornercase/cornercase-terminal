@@ -15,12 +15,6 @@ pub(super) fn reach(machine: &Session) -> String {
     format!("env {}", machine.socket_var())
 }
 
-fn folder(session: &Session, name: &str) -> PathBuf {
-    let dir = session.dir.join(name);
-    std::fs::create_dir_all(&dir).expect("create a folder");
-    dir
-}
-
 fn here_with(listed: &[&str], reached: &[(&str, &str)]) -> Arc<Session> {
     let named: Vec<(&str, &str)> = listed.iter().map(|name| (*name, *name)).collect();
     here_listing(&named, reached)
@@ -127,8 +121,8 @@ fn a_dropped_link_comes_back_to_the_same_server() {
 #[test]
 fn a_machine_without_cornercase_says_so_and_links_on_retry_once_it_is_there() {
     let machine = Session::new();
-    let there = folder(&machine, "there");
-    let home = folder(&machine, "home");
+    let there = machine.folder("there");
+    let home = machine.folder("home");
     let prefix = format!("{} HOME={} PATH={}:/usr/bin:/bin", reach(&machine), home.display(), there.display());
     let here = here_with(&[VPS], &[(VPS, &prefix)]);
     let missing = wait_for_machine(&here, VPS, "cornercase is not found there", in_state("unreachable"));
@@ -252,7 +246,7 @@ fn two_machines_on_one_server_are_linked_once() {
 #[test]
 fn an_older_machine_is_updated_there_and_then_linked() {
     let machine = Session::new();
-    let old = folder(&machine, "old");
+    let old = machine.folder("old");
     let script = format!(
         "#!/bin/sh\necho \"$*\" >> '{old}/args'\nif [ -e '{old}/updated' ]; then exec '{bin}' \"$@\"; fi\n\
          if [ \"$1\" = update ]; then : > '{old}/updated'; exit 0; fi\necho 'cornercase-proxy 1 0.0.1'\nexec cat > /dev/null\n",
@@ -275,7 +269,7 @@ fn an_older_machine_is_updated_there_and_then_linked() {
 fn an_update_that_fails_there_is_logged_by_the_machine_s_name_only() {
     let destination = "ana@vps.example.com";
     let machine = Session::new();
-    let old = folder(&machine, "old");
+    let old = machine.folder("old");
     let script = "#!/bin/sh\nif [ \"$1\" = update ]; then echo 'cannot reach vps.example.com port 443' >&2; exit 1; fi\n\
                   echo 'cornercase-proxy 1 0.0.1'\nexec cat > /dev/null\n";
     write_executable(&old.join("cornercase"), script);
@@ -294,7 +288,7 @@ fn an_update_that_fails_there_is_logged_by_the_machine_s_name_only() {
 const SHOP: &str = "github.com/acme/web-shop";
 
 fn clone_of(session: &Session, name: &str, url: &str) -> String {
-    let dir = folder(session, name);
+    let dir = session.folder(name);
     git(&dir, &["init", "--quiet"]);
     git(&dir, &["remote", "add", "origin", url]);
     dir.display().to_string()

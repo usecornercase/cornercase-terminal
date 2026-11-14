@@ -2,15 +2,8 @@ use super::*;
 
 #[test]
 fn a_tab_running_claude_shows_what_it_is_doing() {
-    let bin = temp_dir("claude");
     let mut app = Harness::start();
-    let sessions = app.session.claude_dir().join("sessions");
-    std::fs::create_dir_all(&sessions).expect("create the sessions folder");
-    let claude = bin.join("claude");
-    write_executable(
-        &claude,
-        "#!/bin/sh\nprintf '{\"pid\":%s,\"status\":\"waiting\"}' $$ > \"$1/$$.json\"\nread answer\nrm -f \"$1/$$.json\"\n",
-    );
+    let (sessions, claude) = claude_waiting(&app.session, "claude-bin", "rm -f \"$1/$$.json\"\n");
     let tab = usize::from(ui::workspace_row(workspaces_list(), 1, &tab_lines(&[1]), 0, WorkspaceRow::Tab(0, 0)).y);
     let tab_row = |s: &str| s.lines().nth(tab).unwrap_or_default().to_string();
 
@@ -19,6 +12,16 @@ fn a_tab_running_claude_shows_what_it_is_doing() {
     app.send(b"\r");
 
     app.wait_for("the icon goes once claude exits", |s| !tab_row(s).contains('!'));
+}
+
+pub(super) fn claude_waiting(session: &Session, name: &str, after: &str) -> (PathBuf, PathBuf) {
+    let sessions = session.claude_dir().join("sessions");
+    std::fs::create_dir_all(&sessions).expect("create the sessions folder");
+    let claude = session.folder(name).join("claude");
+    let script =
+        format!("#!/bin/sh\nprintf '{{\"pid\":%s,\"status\":\"waiting\"}}' $$ > \"$1/$$.json\"\nread answer\n{after}");
+    write_executable(&claude, &script);
+    (sessions, claude)
 }
 
 pub(super) fn claude_asking_on_cue(session: &Session, name: &str) -> (PathBuf, PathBuf) {
