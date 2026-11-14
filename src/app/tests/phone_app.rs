@@ -134,7 +134,13 @@ fn a_code_is_refused_while_it_is_off() {
 
 #[test]
 fn the_routes_follow_the_addresses_every_two_seconds() {
-    let mut r = on();
+    // The listener closes and binds its port again, and another test's `free_port` can hand out that
+    // port in between: a port the system picks is outside the ones it hands out.
+    let mut r = rig();
+    r.port = TcpListener::bind(("127.0.0.1", 0)).expect("a port").local_addr().expect("its address").port();
+    r.app.config.phone_app_port = r.port;
+    r.app.config.phone_app = true;
+    r.app.refresh(Instant::now());
     let start = Instant::now();
     r.addresses.lock().clear();
 
