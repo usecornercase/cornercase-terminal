@@ -149,7 +149,8 @@ See [TODO list](../../guides/todo/).
 | --- | --- | --- |
 | Click | A role's box | Shows its tab and focuses its pane. |
 | Click | An arrow, or a loop's label | Shows the last message sent along it, with **`copy`**; a branch into a parallel stage shows the one its role got. Only the arrows that carried a message light up under the mouse. |
-| Click | A team row | Shows its tab and focuses its pane; a closed member does nothing. |
+| Click | A team row | Shows its tab and focuses its pane (a shell, for a role whose agent exited); a closed member does nothing. |
+| Click | The cyan `▶` of a role whose agent exited, in its team row or its box | Starts every role whose [agent exited by itself](../../guides/flows/#when-a-roles-agent-exits-by-itself) again in its pane, the orchestrator last, as the workspace's `▶` does. |
 | Click | ` orchestrator ` | Shows the orchestrator's tab and focuses its pane. |
 | Click | ` stop ` | Asks, then closes the orchestrator and its whole team, and the run ends. |
 | Click | A message | Shows it whole, with **`copy`**. |

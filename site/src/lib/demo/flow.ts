@@ -1,8 +1,9 @@
-import { BOLD, type Rect, type Style, contains, rect } from '../term/grid';
+import { BOLD, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
 import { drawPanelBorder } from './changes';
 import { type Areas, bottom, right } from './layout';
-import type { Status } from './model';
+import { REOPEN_ICON, type Status } from './model';
 import type { Painter } from './ui';
+import type { Seg } from './text';
 import { truncateRight } from './text';
 
 export const TRAVEL = 1000;
@@ -22,6 +23,10 @@ const W = 8;
 export const BRAND = 27;
 export const WAITING = 208;
 export const DARK: Style = { fg: 8 };
+
+export const reopenSeg = (lit: boolean): Seg => ({ t: REOPEN_ICON, s: lit ? { fg: 6, add: BOLD | UNDERLINE } : { fg: 6 } });
+
+export const stateWords = (state: NodeState | null, text: string): string => (state === 'closed' ? 'closed' : state === 'exited' ? 'exited' : text);
 const OWN_LONG = ' own worktree ';
 const OWN_SHORT = ' own ';
 
@@ -129,7 +134,7 @@ export class Progress {
   }
 }
 
-export type NodeState = Status | 'closed' | 'none';
+export type NodeState = Status | 'closed' | 'exited' | 'none';
 
 interface Node {
   role: string;
@@ -537,6 +542,7 @@ export interface DiagramHit {
   edge?: string;
   to?: string | null;
   file?: number;
+  reopen?: boolean;
 }
 
 export function drawDiagram(p: Painter, area: Rect, d: Diagram, scroll: number, click: (hit: DiagramHit) => void): void {
@@ -624,6 +630,8 @@ function drawBox(p: Painter, put: (at: At, text: string, s: Style) => void, spot
   const { node } = b;
   const working = node.state === 'working';
   const closed = node.state === 'closed';
+  const exited = node.state === 'exited';
+  const gone = closed || exited;
   const lit = !!local && contains(r, local[0], local[1]);
   const bg: Style = lit ? { bg: p.app.light ? 255 : 235 } : {};
   const border: Style = { ...bg, fg: working ? node.colour : p.lineColour };
@@ -637,16 +645,22 @@ function drawBox(p: Painter, put: (at: At, text: string, s: Style) => void, spot
     put([right(r) - 1, y], v, border);
   }
   if (b.exit !== null) put([b.exit, bottom(r) - 1], x, border);
-  if (r.w >= 6) put([r.x + 2, r.y], ` ${truncateRight(node.role, r.w - 6)} `, closed ? { ...bg, fg: 8 } : { ...bg, fg: node.colour, add: BOLD });
+  if (r.w >= 6) put([r.x + 2, r.y], ` ${truncateRight(node.role, r.w - 6)} `, gone ? { ...bg, fg: 8 } : { ...bg, fg: node.colour, add: BOLD });
   if (node.own && r.w >= 6) {
     const used = len(truncateRight(node.role, r.w - 6)) + 4;
     const tag = [OWN_LONG, OWN_SHORT].find((t) => len(t) + 1 + used <= r.w);
     if (tag) put([right(r) - 1 - len(tag), r.y], tag, { ...bg, fg: 8 });
   }
-  const icon = node.state && node.state !== 'closed' ? p.statusSeg(node.state === 'none' ? 'idle' : node.state) : null;
-  const words = closed ? 'closed' : node.text;
+  const mark: [number, number] = [right(r) - 3, r.y + 1];
+  const markLit = !!local && local[0] === mark[0] && local[1] === mark[1];
+  const state = node.state;
+  const live = state && state !== 'closed' && state !== 'exited' ? p.statusSeg(state === 'none' ? 'idle' : state) : null;
+  const icon = exited ? reopenSeg(markLit) : live;
+  const words = stateWords(node.state, node.text);
   put([r.x + 2, r.y + 1], truncateRight(words, Math.max(0, r.w - (icon ? 6 : 4))), { ...bg, fg: 8 });
   if (icon && r.w >= 5) put([right(r) - 3, r.y + 1], icon.t, { ...bg, ...icon.s });
   const top = spot([r.x, r.y]);
   if (top) p.region({ r: rect(top[0], top[1], r.w, Math.max(0, Math.min(BOX_HEIGHT, bottom(p.app.areas().changes) - top[1]))), click: () => click({ role: node.role }), cursor: 'pointer' });
+  const at = exited && r.w >= 5 ? spot(mark) : null;
+  if (at) p.region({ r: rect(at[0], at[1], 1, 1), click: () => click({ reopen: true }), cursor: 'pointer' });
 }

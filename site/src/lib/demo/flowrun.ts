@@ -1,6 +1,6 @@
 import type { App } from './app';
-import { type Edge, type Flow, type Message, Progress, TRAVEL } from './flow';
-import { type Project, markPane } from './model';
+import { type Edge, type Flow, type FlowRole, type Message, Progress, TRAVEL } from './flow';
+import { type Pane, type Project, type Workspace, markPane } from './model';
 import { Agent } from './programs';
 
 export const ORCHESTRATOR = 'orchestrator';
@@ -82,14 +82,44 @@ function agentOf(app: App, run: Run, role: string): Agent | null {
 
 const taskFile = (app: App): RunFile => ({ name: 'task.md', at: app.now(), text: RUN_TASK, bytes: RUN_TASK.length });
 
+function startRole(app: App, p: Project, w: Workspace, pane: Pane, role: FlowRole): void {
+  const args = [...(ARGS[role.agent] ?? []), ...(role.model ? ['--model', role.model] : [])];
+  pane.shell.start(new Agent(app.host(p, w, () => pane.id), () => pane.shell.finish(), role.agent, args, { trusted: true }));
+}
+
+export const exited = (pane: Pane): boolean => !pane.shell.busy;
+
+const exitedPane = (app: App, id: number): boolean => {
+  const found = app.findPane(id);
+  return !!found && exited(found.pane);
+};
+
+export function exitedPanes(app: App, run: Run): number[] {
+  const roles = [ORCHESTRATOR, ...run.flow.roles.map((r) => r.name)];
+  const ids = roles.map((role) => run.members.find((m) => m.role === role)?.pane);
+  return ids.filter((id): id is number => id !== undefined && exitedPane(app, id));
+}
+
+export function bringBack(app: App, run: Run): number {
+  const back = exitedPanes(app, run);
+  const roles = [run.flow.orchestrator, ...run.flow.roles];
+  const lead = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
+  const order = [...back.filter((id) => id !== lead), ...back.filter((id) => id === lead)];
+  for (const id of order) {
+    const found = app.findPane(id);
+    const role = roles.find((r) => run.members.find((m) => m.role === r.name)?.pane === id);
+    if (found && role) startRole(app, found.p, found.w, found.pane, role);
+  }
+  return order.length;
+}
+
 export function startRun(app: App, p: Project): Run {
   const w = app.addWorkspace(p, RUN_BRANCH, true);
   const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], recorded: 0, files: [taskFile(app)], ended: false };
   for (const role of [FULL_ISSUE.orchestrator, ...FULL_ISSUE.roles]) {
     const pane = app.newPane(p, w);
     if (run.members.length) pane.parent = run.members[0].pane;
-    const args = [...(ARGS[role.agent] ?? []), ...(role.model ? ['--model', role.model] : [])];
-    pane.shell.start(new Agent(app.host(p, w, () => pane.id), () => pane.shell.finish(), role.agent, args, { trusted: true }));
+    startRole(app, p, w, pane, role);
     const tab = app.newTab([pane]);
     tab.name = role.name;
     w.tabs.push(tab);

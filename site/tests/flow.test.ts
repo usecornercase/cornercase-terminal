@@ -134,6 +134,7 @@ test('the run plays while its panel shows: working boxes, a round, then the end'
   assert.equal(done(), 0);
   playUntil(app, '┏━ coder', 60000);
   assert.deepEqual([done(), run.messages.length], [0, 1]);
+  assert.ok(!shown(app, 'exited'));
   app.destroy();
 });
 
@@ -425,6 +426,52 @@ test('the Flow panel lists the team, and a click on a row goes to that role', ()
   app.pointerDown(reviewer.x + 1, reviewer.y, 0);
   app.pointerUp();
   assert.equal(app.tab()?.name, 'reviewer');
+  app.destroy();
+});
+
+test('a role whose agent exited reads exited with a ▶ in the Flow panel, and the ▶ brings it back', () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  const run = app.runs[0];
+  const coder = run.members.find((m) => m.role === 'coder')?.pane ?? 0;
+  const found = app.findPane(coder);
+  assert.ok(found);
+  assert.equal(app.reopenableCount(run.workspace), 0);
+  found.pane.shell.finish();
+  assert.ok(shown(app, '▶ coder'));
+  const mark = app.textAt('▶ coder');
+  assert.ok(mark);
+  assert.equal(app.render().grid.at(mark.x, mark.y)?.fg, 6);
+  assert.equal(app.render().grid.at(mark.x + 2, mark.y)?.fg, 8);
+  assert.ok(shown(app, 'exited'));
+  assert.equal(app.reopenableCount(run.workspace), 1);
+  app.pointerDown(mark.x + 2, mark.y, 0);
+  app.pointerUp();
+  assert.equal(app.tab()?.name, 'coder');
+  app.pointerDown(mark.x, mark.y, 0);
+  app.pointerUp();
+  assert.ok(found.pane.shell.fg);
+  assert.match(app.toast?.text ?? '', /1 agent reopened in /);
+  assert.ok(!shown(app, '▶ coder'));
+  assert.equal(app.reopenableCount(run.workspace), 0);
+  app.destroy();
+});
+
+test('a pane whose shell runs a job is not an exited role', () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  const run = app.runs[0];
+  const coder = run.members.find((m) => m.role === 'coder')?.pane ?? 0;
+  const found = app.findPane(coder);
+  assert.ok(found);
+  found.pane.shell.finish();
+  assert.ok(shown(app, '▶ coder'));
+  found.pane.shell.run('npm run dev');
+  assert.ok(found.pane.shell.busy);
+  assert.ok(!shown(app, '▶ coder'));
+  assert.equal(app.reopenableCount(run.workspace), 0);
   app.destroy();
 });
 

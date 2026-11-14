@@ -15,7 +15,7 @@ use super::rows::{
     row_button, row_close_button, row_menu_button, row_rect,
 };
 use super::sidebar::NEW_BUTTON;
-use super::theme::{pull_tag, severity_color, stack_tag, status_icon};
+use super::theme::{pull_tag, reopen_mark, severity_color, stack_tag, status_icon};
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle, sidebar_hovered};
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
@@ -35,8 +35,6 @@ pub(crate) const ICON_WIDTH: usize = 2;
 
 const BEHIND_ICON: &str = "↓";
 const SHARED_ICON: &str = "⇄";
-
-pub(crate) const REOPEN_ICON: &str = "▶";
 
 const REMOVING_LABEL: &str = "removing…";
 const SETTING_UP_LABEL: &str = "setting up…";
@@ -489,7 +487,7 @@ fn marks(entry: &WorkspaceEntry, badge: Badge, muted: Color, spin: Option<u8>) -
         Badge::Highest => activity::highest(statuses),
     }
     .map(|status| status_icon(muted, status, spin));
-    let reopen = (entry.closed > 0).then(|| Span::styled(REOPEN_ICON, Style::default().fg(Color::Cyan)));
+    let reopen = (entry.closed > 0).then(|| reopen_mark(false));
     let setting = entry.setting_up.then(|| Span::styled(SETTING_UP_LABEL, Style::default().fg(muted)));
     let reopen_at = usize::from(badge.is_some());
     let pull_at = reopen_at + usize::from(reopen.is_some()) + usize::from(setting.is_some());

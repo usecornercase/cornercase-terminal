@@ -5,7 +5,6 @@ use ratatui::style::{Color, Modifier, Style};
 use super::stack::{Look, Slot, cells, count};
 use super::{Hit, State, dim};
 use crate::text;
-use crate::ui::theme::status_icon;
 
 const TITLE: &str = "Team";
 const LEAD: u16 = 2;
@@ -30,6 +29,9 @@ pub(super) fn height(team: &[Member]) -> u16 {
 pub(super) fn hit(slot: &Slot, team: &[Member], pos: Position) -> Option<Hit> {
     let index = usize::from(slot.row_at(pos)?.checked_sub(LEAD)?);
     let member = team.get(index).filter(|member| member.state != State::Closed)?;
+    if member.state == State::Exited && pos.x == slot.area.x {
+        return Some(Hit::Reopen);
+    }
     Some(Hit::Role(member.role.clone()))
 }
 
@@ -60,7 +62,7 @@ fn fit(member: &Member, width: u16, longest: u16) -> Fit {
     let role_w = longest.min(after_icon).max(MIN_ROLE.min(longest));
     let role = text::truncate_cells(&member.role, usize::from(role_w));
     let left = after_icon.saturating_sub(role_w.saturating_add(2));
-    let said = if member.state == State::Closed { "closed" } else { member.agent.as_str() };
+    let said = member.state.words(&member.agent);
     let agent = cut(said, left, MIN_TEXT);
     let left = left.saturating_sub(agent.as_deref().map_or(0, |a| cells(a).saturating_add(2)));
     let branch = member.branch.as_deref().filter(|_| member.state != State::Closed);
@@ -68,21 +70,25 @@ fn fit(member: &Member, width: u16, longest: u16) -> Fit {
     Fit { role, role_w, agent, branch, pane }
 }
 
-fn icon(member: &Member, muted: Color, spin: Option<u8>) -> ratatui::text::Span<'static> {
-    match member.state {
-        State::Agent(Some(status)) => status_icon(muted, status, spin),
-        State::Agent(None) => status_icon(muted, crate::agents::activity::Status::Idle, spin),
-        State::Closed => ratatui::text::Span::styled("·", dim(muted)),
-    }
+fn icon(member: &Member, look: Look, spin: Option<u8>, lit: bool) -> ratatui::text::Span<'static> {
+    let muted = look.muted;
+    member.state.icon(muted, spin, lit).unwrap_or_else(|| ratatui::text::Span::styled("·", dim(muted)))
+}
+
+fn lit(slot: &Slot, look: Look, (row, member): (u16, &Member)) -> bool {
+    member.state == State::Exited && look.hover.is_some_and(|pos| pos.x == slot.area.x && slot.row_at(pos) == Some(row))
 }
 
 fn draw_row(buf: &mut Buffer, slot: &Slot, (row, member): (u16, &Member), longest: (u16, Look, Option<u8>)) {
     let (longest, look, spin) = longest;
-    let closed = member.state == State::Closed;
     let fit = fit(member, slot.area.width, longest);
-    let icon = icon(member, look.muted, spin);
+    let icon = icon(member, look, spin, lit(slot, look, (row, member)));
     slot.put(buf, (row, 0), &icon.content, icon.style);
-    let role = if closed { dim(look.muted) } else { Style::default().fg(member.colour).add_modifier(Modifier::BOLD) };
+    let role = if member.state.gone() {
+        dim(look.muted)
+    } else {
+        Style::default().fg(member.colour).add_modifier(Modifier::BOLD)
+    };
     slot.put(buf, (row, 2), &fit.role, role);
     let mut x = fit.role_w.saturating_add(4);
     for part in [&fit.agent, &fit.branch].into_iter().flatten() {

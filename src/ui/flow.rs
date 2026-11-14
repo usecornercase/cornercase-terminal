@@ -15,7 +15,7 @@ use crate::flows::{Flow, ORCHESTRATOR, Role, Stage};
 use crate::project::group::GROUP_STYLES;
 use crate::pull_request::Mark;
 use crate::text;
-use crate::ui::theme::{WAITING_COLOR, pull_tag};
+use crate::ui::theme::{WAITING_COLOR, pull_tag, reopen_mark, status_icon};
 
 mod files;
 mod geometry;
@@ -46,7 +46,33 @@ const TAG_GAP: &str = " · ";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {
     Agent(Option<Status>),
+    Exited,
     Closed,
+}
+
+const CLOSED: &str = "closed";
+const EXITED: &str = "exited";
+
+impl State {
+    fn gone(self) -> bool {
+        matches!(self, Self::Closed | Self::Exited)
+    }
+
+    fn words(self, agent: &str) -> &str {
+        match self {
+            Self::Closed => CLOSED,
+            Self::Exited => EXITED,
+            Self::Agent(_) => agent,
+        }
+    }
+
+    fn icon(self, muted: Color, spin: Option<u8>, lit: bool) -> Option<Span<'static>> {
+        match self {
+            Self::Agent(status) => Some(status_icon(muted, status.unwrap_or(Status::Idle), spin)),
+            Self::Exited => Some(reopen_mark(lit)),
+            Self::Closed => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,6 +143,7 @@ pub(crate) struct Diagram {
 pub(crate) enum Hit {
     Close,
     Role(String),
+    Reopen,
     Edge(Edge, Option<String>),
     File(usize),
     Pull,

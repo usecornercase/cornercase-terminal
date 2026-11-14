@@ -281,7 +281,7 @@ impl App {
             Side::Todo => self.todo_mouse(ev, pos, panel, area),
             Side::Files => return self.files_mouse(ev, pos, panel, area),
             Side::Changes => return self.changes_mouse(ev, pos, panel, area),
-            Side::Flow => self.flow_mouse(ev, pos, panel),
+            Side::Flow => self.flow_mouse(ev, pos, panel, area),
             Side::Recap => self.recap_mouse(ev, pos, panel, area),
         }
         Ok(())

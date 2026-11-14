@@ -4,7 +4,7 @@ use serde_json::json;
 
 use super::*;
 use crate::agents::Known;
-use crate::agents::activity::Activity;
+use crate::agents::activity::{Activity, Status};
 use crate::app::flow_panel::{FRAME_EVERY, Shown};
 use crate::control::{self as wire, Command};
 use crate::flows::ORCHESTRATOR;
@@ -646,6 +646,53 @@ mod team_rows {
         let view = app.flow_view(Instant::now(), None).expect("a view");
         assert_eq!(view.team[1].branch.as_deref(), Some("fix/coder"));
         assert_eq!(view.team[2].branch, None);
+    }
+
+    fn exited_coder() -> (App, u64, TempDir) {
+        let (mut app, _rx, dir) = team();
+        give_agents(&mut app);
+        let coder = pane(&app, "coder");
+        let term = app.projects.pane_by_mut(coder).expect("a pane");
+        term.agent.follow(None);
+        term.became_shell();
+        let kind = app.runs.all()[0].flow.role("coder").expect("the coder").agent.clone();
+        app.config.agent_commands.insert(kind, "/bin/sh".into());
+        app.runs.first_mut().exited = vec![coder];
+        app.show_flow();
+        (app, coder, dir)
+    }
+
+    fn states(app: &App) -> (ui::flow::State, ui::flow::State, Option<ui::flow::State>) {
+        let view = app.flow_view(Instant::now(), None).expect("a view");
+        (view.team[1].state, view.team[0].state, view.diagram.stages[0][0].state)
+    }
+
+    #[test]
+    fn an_exited_member_reads_exited_in_its_row_and_its_box() {
+        let (mut app, _coder, _dir) = exited_coder();
+        let (team, orchestrator, node) = states(&app);
+        assert_eq!(team, ui::flow::State::Exited);
+        assert_eq!(orchestrator, ui::flow::State::Agent(Some(Status::Idle)));
+        assert_eq!(node, Some(ui::flow::State::Exited));
+        let text = screen(&mut app);
+        assert!(text.contains("▶ coder") && text.contains("exited"));
+    }
+
+    #[test]
+    fn the_mark_of_an_exited_member_brings_it_back_and_its_name_goes_to_its_pane() {
+        let (mut app, coder, _dir) = exited_coder();
+        let name = spots(&mut app, "coder")[0];
+        click_in(&mut app, name, TALL);
+        assert_eq!(app.term().map(|term| term.id), Some(coder));
+        assert_eq!(app.screen.side, Some(Side::Flow));
+
+        let mark = spot(&mut app, "▶ coder");
+        click_in(&mut app, mark, TALL);
+        assert!(app.agents.launches.of_pane(coder).next().is_some());
+        assert!(toast(&app).is_some_and(|toast| toast.starts_with("1 agent reopened in")), "{:?}", toast(&app));
+        assert_eq!(app.runs.all()[0].exited, Vec::<u64>::new());
+        assert_ne!(states(&app).0, ui::flow::State::Exited);
+        app.agents.launches.drop_panes(&[coder]);
     }
 }
 
