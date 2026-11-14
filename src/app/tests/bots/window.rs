@@ -75,7 +75,7 @@ fn an_empty_message_sends_nothing() {
     let mut c = chat(ANSWER);
     show(&mut c);
     send(&mut c, "  ");
-    assert!(c.lines().is_empty());
+    assert_eq!(c.lines(), []);
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn an_answer_on_screen_is_neither_unread_nor_notified() {
     c.settle();
     assert_eq!(c.app.panels.bots.live[0].unread, 0);
     assert!(c.app.messages.toast.is_none());
-    assert!(c.app.outbox.take_notifications().is_empty());
+    assert_eq!(c.app.outbox.take_notifications().len(), 0);
     assert_eq!(c.app.panels.bots.shown.as_ref().map(|shown| shown.lines.len()), Some(4));
 }
 
@@ -219,7 +219,7 @@ fn an_example_fills_the_field_and_sends_nothing() {
     let y = ui::bots::chat::row_y(areas.lines, shown.view.rows.len(), true, shown.view.rows.len() - 1);
     click(&mut c.app, Position::new(areas.lines.x + 20, y));
     assert_eq!(c.app.panels.bots.live[0].draft.text(), ui::EXAMPLES[2]);
-    assert!(c.lines().is_empty());
+    assert_eq!(c.lines(), []);
 }
 
 #[test]

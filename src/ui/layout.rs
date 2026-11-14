@@ -552,6 +552,22 @@ fn compact_bots(menu: Rect, title: Rect, screen: Screen) -> [Rect; 4] {
     [shown(menu), shown(bots_title), shown(bots_list), shown(button)]
 }
 
+fn compact_sections(menu: Rect, title: Rect, screen: Screen) -> Areas {
+    let [agents, agents_title, agents_list, agents_button] = compact_agents(menu, title, screen.agents);
+    let [bots, bots_title, bots_list, bots_button] = compact_bots(menu, title, screen);
+    Areas {
+        agents,
+        agents_title,
+        agents_list,
+        agents_button,
+        bots,
+        bots_title,
+        bots_list,
+        bots_button,
+        ..Areas::default()
+    }
+}
+
 fn compact_column(menu: Rect, bands: u16) -> [Rect; 6] {
     let [title, gap, list, separator, footer] = Layout::vertical([
         Constraint::Length(COMPACT_PITCH),
@@ -574,7 +590,7 @@ fn compact_projects(menu: Rect, screen: Screen) -> [Rect; 7] {
 }
 
 fn compact_layout(area: Rect, screen: Screen) -> Areas {
-    let Screen { changes, agents, .. } = screen;
+    let changes = screen.changes;
     let pitch = COMPACT_PITCH;
     let [bar, below] = Layout::vertical([Constraint::Length(pitch), Constraint::Min(0)]).areas(area);
     let [search_button, todo_button, files_button, changes_button] = compact_buttons(bar);
@@ -582,8 +598,6 @@ fn compact_layout(area: Rect, screen: Screen) -> Areas {
     let [title, list, separator, plugins, worktrees, machine, more] = compact_projects(menu, screen);
     let [workspaces_title, _, workspaces_list, workspaces_separator, _, issues] = compact_column(menu, 0);
     let back = Rect { width: button_width(BACK_LABEL) + 2, ..workspaces_title }.intersection(workspaces_title);
-    let [agents, agents_title, agents_list, agents_button] = compact_agents(menu, title, agents);
-    let [bots, bots_title, bots_list, bots_button] = compact_bots(menu, title, screen);
     Areas {
         pitch,
         bar,
@@ -605,19 +619,11 @@ fn compact_layout(area: Rect, screen: Screen) -> Areas {
         issues,
         results: below,
         pane: below,
-        agents,
-        agents_title,
-        agents_list,
-        agents_button,
-        bots,
-        bots_title,
-        bots_list,
-        bots_button,
         changes: if changes { below } else { Rect::default() },
         changes_button,
         todo_button,
         files_button,
-        ..Areas::default()
+        ..compact_sections(menu, title, screen)
     }
 }
 

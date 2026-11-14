@@ -7,7 +7,7 @@ const STREAM: &str = r#"{"type":"system","subtype":"init","model":"claude-opus-5
 {"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"text","text":"hello from the bot"}]}}
 {"type":"result","subtype":"success","is_error":false,"result":"hello from the bot","session_id":"s1","usage":{"input_tokens":3,"output_tokens":4}}"#;
 
-pub(super) fn started() -> Arc<Session> {
+pub(super) fn with_agent() -> Arc<Session> {
     let session = Session::new();
     let claude = session.dir.join("claude-bot");
     write_executable(
@@ -16,6 +16,11 @@ pub(super) fn started() -> Arc<Session> {
     );
     let config = serde_json::json!({"agent_commands": agent_commands(&[("claude", &claude)]), "agent": "claude"});
     std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");
+    session
+}
+
+pub(super) fn started() -> Arc<Session> {
+    let session = with_agent();
     let started = session.cold(&["start-server"]);
     assert!(started.status.success(), "start-server failed: {started:?}");
     session

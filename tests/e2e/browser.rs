@@ -88,10 +88,18 @@ fn a_paired_browser_types_into_the_shell_over_a_websocket() {
 
 #[test]
 fn a_paired_browser_types_into_a_bots_chat() {
-    let session = bots::started();
-    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let session = bots::with_agent();
     let (port, path) = fake_tailscale(&session, TAILSCALE_READY);
+    let claude = session.dir.join("claude-bot");
+    let config = serde_json::json!({
+        "remote": true,
+        "remote_port": port,
+        "agent": "claude",
+        "agent_commands": agent_commands(&[("claude", &claude)]),
+    });
+    std::fs::write(session.dir.join("config.json"), config.to_string()).expect("config");
     let mut ui = window_on(&session, &path);
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
     ui.wait_for("the section lists the bot", |s| s.contains("Bots"));
     ui.click(ui.position_of("prs"));
     ui.wait_for("its chat shows", |s| s.contains("Message prs…"));

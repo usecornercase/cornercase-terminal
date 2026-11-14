@@ -14,6 +14,23 @@ use crate::project::split::{Dir, Place};
 use crate::shortcuts::Action;
 
 fn every_action() -> Vec<Action> {
+    let mut actions = going_actions();
+    actions.extend([
+        Action::Issues,
+        Action::Todo,
+        Action::Recap,
+        Action::NewBot,
+        Action::Settings,
+        Action::Usage,
+        Action::Processes,
+        Action::Away,
+        Action::Quit,
+        Action::Help,
+    ]);
+    actions
+}
+
+fn going_actions() -> Vec<Action> {
     vec![
         Action::NextTab,
         Action::PreviousTab,
@@ -44,16 +61,6 @@ fn every_action() -> Vec<Action> {
         Action::CloseWorkspace,
         Action::CloseAgents,
         Action::ReopenAgents,
-        Action::Issues,
-        Action::Todo,
-        Action::Recap,
-        Action::NewBot,
-        Action::Settings,
-        Action::Usage,
-        Action::Processes,
-        Action::Away,
-        Action::Quit,
-        Action::Help,
     ]
 }
 
@@ -88,6 +95,12 @@ fn action_index(action: &Action) -> usize {
         Action::CloseWorkspace => 26,
         Action::CloseAgents => 27,
         Action::ReopenAgents => 28,
+        other => later_action_index(other),
+    }
+}
+
+fn later_action_index(action: &Action) -> usize {
+    match action {
         Action::Issues => 29,
         Action::Todo => 30,
         Action::Recap => 31,
@@ -98,6 +111,7 @@ fn action_index(action: &Action) -> usize {
         Action::Away => 36,
         Action::Quit => 37,
         Action::Help => 38,
+        other => panic!("{other:?} is counted by action_index"),
     }
 }
 

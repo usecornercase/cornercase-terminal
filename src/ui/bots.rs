@@ -7,7 +7,7 @@ use ratatui::widgets::Paragraph;
 use super::View;
 use super::chrome::draw_back;
 use super::layout::Areas;
-use super::rows::{Rows, Tags, arrow, draw_hidden, draw_menu_in, draw_rail, marker, row_close_button, row_menu_button};
+use super::rows::{Rows, Tags, arrow, draw_hidden, draw_menu_in, draw_rail, marker, row_menu_button};
 use super::theme::{BRAND_COLOR, status_icon};
 use super::widgets::{button_style, draw_band, draw_button, draw_separator, middle};
 use crate::agents::activity::Status;
