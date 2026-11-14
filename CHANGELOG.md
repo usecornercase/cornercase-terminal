@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.69
+
+- **A flow role whose agent exits by itself can be brought back.** When a role's agent exits while its tab and its run are still there (a stray `pkill`, a crash), the workspace's ▶, **reopen agents** and `cornercase agents reopen` start it again in its own tab, with the role's model, effort, account and the run's folder, in its own conversation when cornercase saw one (also after a restart), or from its role's prompt. The orchestrator comes back last and is told where its team stands; an orchestrator that kept running is told which roles came back. `cornercase flow runs` shows `exited` for such a role instead of `-`, with the command that brings it back, and a run whose orchestrator's agent exited now counts as stopped: `stopped moving 5 min ago: the orchestrator's agent exited`. Programs read `exited` on each role of `flow runs --json` and in each workspace's `run` of `status --json`; `cornercase contract` lists the feature `flow-exited`.
+
 ## 0.13.68
 
 - Nothing changes for users: tests that failed at random on macOS are steadier, and a test that fails part-way no longer leaves running a program that ignores SIGTERM.
