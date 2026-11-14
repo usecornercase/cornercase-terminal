@@ -122,19 +122,24 @@ impl App {
         let all = text::size(bytes);
         let (idle, _) = dialog.list.idle_builds(now);
         let (merged, merged_count) = dialog.list.merged_total();
-        let mut long = format!("{all}{more} in {}", text::plural(count, "worktree", "worktrees"));
-        let mut middle = format!("{all}{more}");
-        if idle > 0 {
-            let idle = text::size(idle);
-            long = format!("{long} · {idle} of builds idle 7+ days");
-            middle = format!("{middle} · {idle} idle");
-        }
-        if merged > 0 {
-            let (merged, noun) =
-                (text::size(merged), text::plural(merged_count, "merged worktree", "merged worktrees"));
-            long = format!("{long} · {merged} of builds in {noun}");
-            middle = format!("{middle} · {merged} merged");
-        }
-        vec![long, middle, format!("{all}{more}")]
+        let head = format!("{all}{more}");
+        let long_head = format!("{head} in {}", text::plural(count, "worktree", "worktrees"));
+        let idle_long = (idle > 0).then(|| format!("{} of builds idle 7+ days", text::size(idle)));
+        let idle_short = (idle > 0).then(|| format!("{} idle", text::size(idle)));
+        let noun = text::plural(merged_count, "merged worktree", "merged worktrees");
+        let merged_long = (merged > 0).then(|| format!("{} of builds in {noun}", text::size(merged)));
+        let merged_short = (merged > 0).then(|| format!("{} merged", text::size(merged)));
+        let join = |head: &str, parts: [&Option<String>; 2]| {
+            parts.into_iter().flatten().fold(head.to_string(), |text, part| format!("{text} · {part}"))
+        };
+        let mut forms = vec![
+            join(&long_head, [&idle_long, &merged_long]),
+            join(&head, [&idle_short, &merged_long]),
+            join(&head, [&idle_short, &merged_short]),
+            join(&head, [&idle_short, &None]),
+            head,
+        ];
+        forms.dedup();
+        forms
     }
 }

@@ -28,7 +28,7 @@ fn answer() -> MergedBuildsFreed {
     };
     let failed = WorktreeFreed {
         outcome: FAILED.into(),
-        why: Some("/wt/shop/issue-164 is not a linked worktree".into()),
+        why: Some("/wt/shop/issue-164: No such file or directory (os error 2)".into()),
         freed: BuildsFreed { path: "/wt/shop/issue-164".into(), ..BuildsFreed::default() },
     };
     MergedBuildsFreed { check: false, bytes: 27_380_416_512, worktrees: vec![freed, refused, failed] }

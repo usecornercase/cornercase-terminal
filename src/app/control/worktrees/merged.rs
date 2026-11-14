@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use super::{Freeing, Risky};
+use super::{Claim, Risky};
 use crate::app::App;
-use crate::app::control::{Asker, Handled, json};
+use crate::app::control::{Handled, json};
 use crate::app::event::AppEvent;
 use crate::app::worktrees::{ListFor, WorktreeEvent};
 use crate::control::contract::{Code, Refusal};
@@ -11,8 +11,6 @@ use crate::control::{BuildsFreed, FreeMergedBuilds, MergedBuildsFreed, WorktreeF
 use crate::error::Result;
 use crate::log::{Job, Level};
 use crate::worktrees::{Found, Row};
-
-type Target = std::result::Result<Freeing, Refusal>;
 
 impl App {
     pub(in crate::app) fn free_merged_builds_request(&mut self, client: u64, request: &FreeMergedBuilds) -> Handled {
@@ -29,16 +27,12 @@ impl App {
     }
 
     pub(in crate::app) fn merged_rows_ready(&mut self, key: u64, check: bool, rows: Result<Vec<Row>>) {
-        let Some(pending) = self.clients.requests.take(key) else { return };
-        if pending.client.is_none() {
-            return;
-        }
-        let mut rows = match rows {
-            Ok(rows) => rows,
-            Err(e) => return self.refuse_or_answer(pending.client, Err(Refusal::new(Code::Failed, e.to_string()))),
-        };
+        let Some((pending, mut rows)) = self.take_listed(key, rows) else { return };
         self.relive_rows(&mut rows);
-        let (targets, keys) = self.merged_targets(&rows, check);
+        let paths: Vec<&Path> =
+            rows.iter().filter(|row| row.merged_to_free()).map(|row| row.found.path.as_path()).collect();
+        let (claims, keys) = self.claim_frees(paths.iter().copied(), check);
+        let targets: Vec<(PathBuf, Claim)> = paths.into_iter().map(Path::to_path_buf).zip(claims).collect();
         let job = Job::new(Level::Info, "control", "free merged builds")
             .with("worktrees", targets.len())
             .with("check", check);
@@ -53,33 +47,15 @@ impl App {
         self.clients.requests.pending.push(pending);
     }
 
-    fn merged_targets(&mut self, rows: &[Row], check: bool) -> (Vec<(PathBuf, Target)>, Vec<u64>) {
-        let mut keys = Vec::new();
-        let mut targets = Vec::new();
-        for row in rows.iter().filter(|row| row.merged_to_free()) {
-            let path = row.found.path.clone();
-            let target = self.freeing(Asker::default(), None, Some(&path), check);
-            if let (Ok(freeing), false) = (&target, check) {
-                let key = self.clients.requests.key();
-                self.git.frees.request_frees(key, freeing.path.clone());
-                keys.push(key);
-            }
-            targets.push((path, target));
-        }
-        (targets, keys)
-    }
-
-    pub(in crate::app) fn merged_freed(&mut self, key: u64, keys: &[u64], result: Result<MergedBuildsFreed>) {
-        for ended in keys {
-            self.git.frees.request_ended(*ended);
-        }
+    pub(in crate::app) fn merged_builds_answered(&mut self, key: u64, keys: &[u64], result: Result<MergedBuildsFreed>) {
+        self.end_frees(keys);
         self.answer_read(key, |_| {
             result.map(|answer| json(&answer)).map_err(|e| Refusal::new(Code::Failed, e.to_string()))
         });
     }
 }
 
-fn merged_answer(targets: Vec<(PathBuf, Target)>, check: bool) -> MergedBuildsFreed {
+fn merged_answer(targets: Vec<(PathBuf, Claim)>, check: bool) -> MergedBuildsFreed {
     let worktrees: Vec<WorktreeFreed> =
         targets.into_iter().filter_map(|(path, target)| worktree_freed(&path, target, check)).collect();
     MergedBuildsFreed { check, bytes: worktrees.iter().map(|entry| entry.freed.bytes).sum(), worktrees }
@@ -89,7 +65,7 @@ fn entry(outcome: &str, why: Option<String>, freed: BuildsFreed) -> WorktreeFree
     WorktreeFreed { outcome: outcome.to_string(), why, freed }
 }
 
-fn worktree_freed(path: &Path, target: Target, check: bool) -> Option<WorktreeFreed> {
+fn worktree_freed(path: &Path, target: Claim, check: bool) -> Option<WorktreeFreed> {
     let bare = |path: &Path| BuildsFreed { path: path.to_path_buf(), check, ..BuildsFreed::default() };
     let freeing = match target {
         Ok(freeing) => freeing,

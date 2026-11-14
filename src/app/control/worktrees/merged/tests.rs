@@ -2,7 +2,7 @@ use super::super::tests::{freeing, linked_with_builds};
 use super::*;
 use crate::control::contract::Code;
 
-fn freed(path: &Path, target: Target, check: bool) -> Option<WorktreeFreed> {
+fn freed(path: &Path, target: Claim, check: bool) -> Option<WorktreeFreed> {
     worktree_freed(path, target, check)
 }
 

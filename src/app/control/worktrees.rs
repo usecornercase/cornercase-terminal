@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::{Asker, Handled, conflict, json, malformed, none};
+use super::{Asker, Handled, Pending, conflict, json, malformed, none};
 use crate::app::App;
 use crate::app::event::AppEvent;
 use crate::app::worktrees::{ListFor, Measure, WorktreeEvent};
@@ -22,6 +22,8 @@ use crate::worktrees::{Asks, Found, Kind, Row, discover, fill, folders_of, merge
 
 mod merged;
 pub(super) mod remove;
+
+pub(in crate::app) type Claim = std::result::Result<Freeing, Refusal>;
 
 struct Target {
     path: PathBuf,
@@ -174,14 +176,7 @@ impl App {
         found: Result<Vec<Found>>,
         event: impl FnOnce(Box<Result<Vec<Row>>>) -> WorktreeEvent + Send + 'static,
     ) {
-        let Some(pending) = self.clients.requests.take(key) else { return };
-        if pending.client.is_none() {
-            return;
-        }
-        let found = match found {
-            Ok(found) => found,
-            Err(e) => return self.refuse_or_answer(pending.client, Err(Refusal::new(Code::Failed, e.to_string()))),
-        };
+        let Some((pending, found)) = self.take_listed(key, found) else { return };
         self.refresh_places();
         let rows = self.fresh_rows(found);
         let asks = self.row_asks(&rows, sizes);
@@ -192,6 +187,43 @@ impl App {
             move |rows, _| Some(AppEvent::Worktree(event(Box::new(rows)))),
         );
         self.clients.requests.pending.push(pending);
+    }
+
+    pub(super) fn take_listed<T>(&mut self, key: u64, listed: Result<T>) -> Option<(Pending, T)> {
+        let pending = self.clients.requests.take(key)?;
+        pending.client?;
+        match listed {
+            Ok(listed) => Some((pending, listed)),
+            Err(e) => {
+                self.refuse_or_answer(pending.client, Err(Refusal::new(Code::Failed, e.to_string())));
+                None
+            }
+        }
+    }
+
+    pub(in crate::app) fn claim_frees<'a>(
+        &mut self,
+        paths: impl IntoIterator<Item = &'a Path>,
+        check: bool,
+    ) -> (Vec<Claim>, Vec<u64>) {
+        let mut keys = Vec::new();
+        let mut claims = Vec::new();
+        for path in paths {
+            let claim = self.freeing(Asker::default(), None, Some(path), check);
+            if let (Ok(freeing), false) = (&claim, check) {
+                let key = self.clients.requests.key();
+                self.git.frees.request_frees(key, freeing.path.clone());
+                keys.push(key);
+            }
+            claims.push(claim);
+        }
+        (claims, keys)
+    }
+
+    pub(in crate::app) fn end_frees(&mut self, keys: &[u64]) {
+        for key in keys {
+            self.git.frees.request_ended(*key);
+        }
     }
 
     fn row_asks(&self, rows: &[Row], sizes: bool) -> Asks {

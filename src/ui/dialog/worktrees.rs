@@ -206,7 +206,8 @@ fn list_buttons(view: &Worktrees, row: Rect) -> Vec<(Button, String)> {
     if view.merged > 0 {
         wanted.insert(0, (Button::FreeMerged, FREE_MERGED_LABEL.to_string()));
         let widths: usize = wanted.iter().map(|(_, label)| usize::from(button_width(label)) + 1).sum();
-        if widths > usize::from(row.width) {
+        let total = view.total.last().map_or(0, |total| total.chars().count() + 1);
+        if widths + total > usize::from(row.width) {
             wanted.remove(0);
         }
     }

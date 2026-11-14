@@ -33,7 +33,7 @@
     },
     {
       "outcome": "failed",
-      "why": "/wt/shop/issue-164 is not a linked worktree",
+      "why": "/wt/shop/issue-164: No such file or directory (os error 2)",
       "path": "/wt/shop/issue-164",
       "check": false,
       "bytes": 0,

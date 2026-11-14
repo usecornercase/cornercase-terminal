@@ -23,7 +23,7 @@ pub(crate) enum WorktreesAction {
     #[command(about = "Measure the disk a worktree takes and its build folders", after_help = WORKTREES_SIZE_HELP)]
     Size(SizeArgs),
     #[command(
-        about = "Delete the git-ignored build folders of a worktree and keep the worktree",
+        about = "Delete the git-ignored build folders of a worktree, or of every merged one, and keep the worktrees",
         after_help = WORKTREES_FREE_HELP
     )]
     FreeBuilds(FreeArgs),

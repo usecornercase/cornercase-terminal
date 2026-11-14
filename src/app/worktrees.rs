@@ -165,7 +165,7 @@ impl App {
             WorktreeEvent::Listed { to, found } => self.worktrees_found(to, found),
             WorktreeEvent::Rows { key, sizes, rows } => self.worktree_rows_answered(key, sizes, *rows),
             WorktreeEvent::MergedRows { key, check, rows } => self.merged_rows_ready(key, check, *rows),
-            WorktreeEvent::MergedFreed { key, keys, result } => self.merged_freed(key, &keys, *result),
+            WorktreeEvent::MergedFreed { key, keys, result } => self.merged_builds_answered(key, &keys, *result),
             WorktreeEvent::Removal { key, step } => self.removal_step(key, *step),
             WorktreeEvent::Scanned { generation, ticket, path, scan, confirm } => {
                 self.worktree_scanned((generation, ticket), &path, *scan, confirm);

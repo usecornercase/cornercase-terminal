@@ -368,14 +368,16 @@ fn buttons_y_for(size: (u16, u16), compact: bool) -> u16 {
     list_rows(area)[3].y
 }
 
-const THREE_FORMS: [&str; 3] = [
+const FORMS: [&str; 5] = [
     "3.2 GB in 5 worktrees · 2.4 GB of builds idle 7+ days · 1.1 GB of builds in 2 merged worktrees",
+    "3.2 GB · 2.4 GB idle · 1.1 GB of builds in 2 merged worktrees",
     "3.2 GB · 2.4 GB idle · 1.1 GB merged",
+    "3.2 GB · 2.4 GB idle",
     "3.2 GB",
 ];
 
 fn merged_total() -> Vec<String> {
-    THREE_FORMS.iter().map(ToString::to_string).collect()
+    FORMS.iter().map(ToString::to_string).collect()
 }
 
 #[test]
@@ -416,8 +418,8 @@ fn the_total_falls_back_to_the_form_that_fits() {
     };
     let all = Worktrees { merged: 1, total: merged_total(), ..worktrees() };
     let big = room(BIG, all);
-    assert!(big.contains("3.2 GB · 2.4 GB idle · 1.1 GB merged"), "{big}");
-    assert!(!big.contains("merged worktrees"), "{big}");
+    assert!(big.contains("1.1 GB of builds in 2 merged worktrees"), "{big}");
+    assert!(!big.contains("in 5 worktrees"), "{big}");
 
     let small = Worktrees { merged: 1, total: merged_total(), compact: true, ..worktrees() };
     let line = room(SMALL, small);
@@ -425,4 +427,14 @@ fn the_total_falls_back_to_the_form_that_fits() {
 
     let fits = Worktrees { total: vec!["12 GB in 3 worktrees".into(), "12 GB".into()], ..worktrees() };
     assert!(room(BIG, fits).contains("12 GB in 3 worktrees"));
+}
+
+#[test]
+fn free_merged_never_pushes_the_whole_total_out_of_the_row() {
+    for width in 44..=60 {
+        let w = Worktrees { merged: 1, total: merged_total(), compact: true, ..worktrees() };
+        let line = list_rows(worktrees_area(screen((width, 28)), true))[3];
+        let text = row_text(&render_sized(&shown(w), width, 28), line);
+        assert!(text.contains("3.2 GB"), "{width}: {text}");
+    }
 }

@@ -105,7 +105,8 @@ fn a_check_deletes_nothing_and_says_freeable() {
 #[test]
 fn a_merged_worktree_with_nothing_left_to_free_is_left_out() {
     let mut m = merged_and_others();
-    m.sweep(false);
+    let first = m.sweep(false);
+    assert_eq!(first["worktrees"][0]["outcome"], "freed", "{first}");
 
     let again = m.sweep(false);
 
@@ -115,6 +116,9 @@ fn a_merged_worktree_with_nothing_left_to_free_is_left_out() {
 #[test]
 fn a_worktree_being_freed_is_left_out() {
     let mut m = merged_and_others();
+    let before = m.sweep(true);
+    assert_eq!(before["worktrees"][0]["outcome"], "freeable", "{before}");
+    assert_eq!(before["worktrees"][0]["path"], m.merged.display().to_string());
     m.s.app.git.frees.freeing(m.merged.clone());
 
     let answer = m.sweep(false);
