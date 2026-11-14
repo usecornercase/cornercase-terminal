@@ -1,3 +1,5 @@
+# Claude Code 2.1.325 fixtures
+
 Claude Code 2.1.325, Linux, 2026-11-14.
 
 - `session-shell.json` is a live session file of a turn that ended with a background shell running, with the pid, ids, paths and name replaced.

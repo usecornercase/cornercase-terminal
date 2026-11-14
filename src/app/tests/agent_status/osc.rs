@@ -6,11 +6,19 @@ fn feed(w: &mut Watched, payload: &str) {
     w.app.projects[0].workspaces[0].tabs[0].panes[0].feed(format!("\x1b]7501;{payload}\x1b\\").as_bytes());
 }
 
-fn report(w: &mut Watched, state: &str, ticks: usize) {
-    feed(w, &format!("state={state}"));
-    for _ in 0..ticks {
+fn ticks(w: &mut Watched, count: usize) {
+    for _ in 0..count {
         tick(&mut w.app);
     }
+}
+
+fn state_of(w: &Watched) -> Option<&'static str> {
+    tab_term(&w.app, 0, 0).agent.state()
+}
+
+fn report(w: &mut Watched, state: &str, count: usize) {
+    feed(w, &format!("state={state}"));
+    ticks(w, count);
 }
 
 #[rstest]
@@ -132,16 +140,6 @@ fn a_shell_report_does_not_belong_to_the_departed_agent(#[case] state: &str, #[c
     assert!(w.told().1.iter().all(|notice| !notice.text.contains("claude failed")));
 }
 
-fn ticks(w: &mut Watched, count: usize) {
-    for _ in 0..count {
-        tick(&mut w.app);
-    }
-}
-
-fn state_of(w: &Watched) -> Option<&'static str> {
-    tab_term(&w.app, 0, 0).agent.state()
-}
-
 #[test]
 fn a_turn_left_with_a_background_shell_reads_as_claude_reports_it() {
     let mut w = Watched::start(agents::Known::Claude, true);
@@ -181,8 +179,7 @@ fn a_reported_turn_over_waits_for_claudes_background_shell(
     report(&mut w, &format!("{state}:app=claude-code"), 6);
 
     assert_eq!((status(&w.app, 0, 0), state_of(&w)), (Some(Status::Working), Some("shell")));
-    let early = w.told().1.len();
-    assert_eq!(early, 0);
+    assert!(w.told().1.is_empty(), "the turn is not over while the shell runs");
     w.report("idle", 6);
     assert_eq!(status(&w.app, 0, 0), Some(after));
     let told = w.told().1;
