@@ -227,8 +227,16 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn account_home(&self, kind: Option<Known>, account: Option<&str>) -> Option<PathBuf> {
+        account.zip(kind).map(|(name, kind)| self.account_folder(kind, name))
+    }
+
+    fn account_folder(&self, kind: Known, name: &str) -> PathBuf {
+        canonical(accounts::path(&self.accounts.dir, kind, name))
+    }
+
     fn account_info(&self, kind: Known, name: String, default: Option<&Path>) -> AccountInfo {
-        let path = canonical(accounts::path(&self.accounts.dir, kind, &name));
+        let path = self.account_folder(kind, &name);
         let unshared = default.map(|default| links::status(kind, default, &path)).unwrap_or_default();
         let login = self.accounts.logins.seen.get(&(kind, name.clone())).cloned();
         let label = self.saved_label(kind, &name).to_string();

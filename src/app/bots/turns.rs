@@ -7,7 +7,7 @@ use crate::agents::probe::Running;
 use crate::app::App;
 use crate::app::event::AppEvent;
 use crate::bots::chat::{self, Answer, Kind, Line};
-use crate::bots::{MESSAGE_MAX, folder, turn};
+use crate::bots::{folder, turn};
 use crate::control::contract::{Code, Refusal};
 use crate::error::Result;
 use crate::log::{self, Job, Level};
@@ -40,13 +40,8 @@ impl App {
 
     pub(in crate::app) fn bot_say(&mut self, key: &str, text: &str, wait: bool) -> Done<(usize, Line)> {
         let at = self.bot_at(key)?;
-        let count = text.chars().count();
-        if text.trim().is_empty() {
-            return Err(Refusal::new(Code::Malformed, "the message is empty"));
-        }
-        if count > MESSAGE_MAX {
-            let message = format!("the message is {count} characters; a bot takes at most {MESSAGE_MAX}");
-            return Err(Refusal::new(Code::Malformed, message));
+        if let Some(why) = crate::bots::message_refusal(text) {
+            return Err(Refusal::new(Code::Malformed, why));
         }
         let busy = self.panels.bots.live[at].turn.is_some();
         if !busy {
@@ -231,12 +226,32 @@ impl App {
         let state = &mut self.panels.bots.live[at];
         let held = std::mem::take(&mut state.held);
         let Some(running) = state.turn.as_mut() else { return Ok(false) };
-        running.stopping = true;
-        running.dropped = held.iter().map(|(id, _)| *id).collect();
+        running.dropped.extend(held.iter().map(|(id, _)| *id));
+        if std::mem::replace(&mut running.stopping, true) {
+            return Ok(true);
+        }
         let tree = running.running.clone();
         let job = Job::new(Level::Info, "bots", "stop").with("bot", &state.bot.id);
         self.spawn_job(job, move || Ok(tree.stop()), |_, _| None);
         Ok(true)
+    }
+
+    pub(in crate::app) fn stop_bots(&mut self) {
+        let trees: Vec<_> = self
+            .panels
+            .bots
+            .live
+            .iter_mut()
+            .filter_map(|state| {
+                let turn = state.turn.as_mut()?;
+                turn.stopping = true;
+                Some(turn.running.clone())
+            })
+            .collect();
+        let stopping: Vec<_> = trees.into_iter().map(|tree| std::thread::spawn(move || tree.stop())).collect();
+        for handle in stopping {
+            let _ = handle.join();
+        }
     }
 
     pub(in crate::app) fn bot_reset(&mut self, key: &str) -> Done<()> {
@@ -261,9 +276,9 @@ impl App {
     pub(in crate::app) fn bot_remove(&mut self, key: &str) -> Done<String> {
         let at = self.bot_at(key)?;
         self.bot_idle(at, "is answering")?;
-        let state = self.panels.bots.live.remove(at);
+        let state = &self.panels.bots.live[at];
         folder::remove(&state.folder).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
-        Ok(state.bot.id)
+        Ok(self.panels.bots.live.remove(at).bot.id)
     }
 
     pub(in crate::app) fn bot_seen(&mut self, key: &str) -> Done<()> {

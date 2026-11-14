@@ -36,14 +36,19 @@ mod ids {
     #[case::words("PRs review", "prs-review")]
     #[case::nothing_to_keep("!!!", "bot")]
     fn are_a_slug_of_the_name(#[case] name: &str, #[case] id: &str) {
-        assert_eq!(new_id(name, &[]), id);
+        assert_eq!(new_id(name, &[], &|_| false), id);
+    }
+
+    #[test]
+    fn a_folder_already_on_disk_counts_as_taken() {
+        assert_eq!(new_id("prs", &[], &|id| id == "prs"), "prs-2");
     }
 
     #[test]
     fn a_taken_one_gets_a_number() {
         let (first, second) = (bot("prs", "PRs"), bot("prs-2", "Other"));
-        assert_eq!(new_id("prs", &[&first]), "prs-2");
-        assert_eq!(new_id("prs", &[&first, &second]), "prs-3");
+        assert_eq!(new_id("prs", &[&first], &|_| false), "prs-2");
+        assert_eq!(new_id("prs", &[&first, &second], &|_| false), "prs-3");
     }
 }
 

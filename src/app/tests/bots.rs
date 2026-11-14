@@ -279,3 +279,33 @@ fn a_message_must_be_there_and_not_too_long() {
     );
     assert_eq!(c.lines(), Vec::new());
 }
+
+#[test]
+fn stopping_twice_still_answers_the_client_waiting_on_a_held_message() {
+    let mut c = chat(ANSWER);
+    c.hold();
+    c.say("long job");
+    c.started(1);
+    let (at, held) = c.app.bot_say("prs", "and this", true).expect("say");
+    assert_eq!(c.app.bot_stop("prs"), Ok(true));
+    assert_eq!(c.app.bot_stop("prs"), Ok(true));
+    c.settle();
+    let notices = c.lines().into_iter().filter(|line| line.text == "1 held message dropped").count();
+    assert_eq!(notices, 1);
+    let answer = c.app.bot_answer(at, held.id).expect("the waiter is answered");
+    assert_eq!(answer.text, "1 held message dropped");
+    std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
+}
+
+#[test]
+fn the_server_stopping_ends_the_turns_that_run() {
+    let mut c = chat(ANSWER);
+    c.app.panels.bots.timeout = Duration::from_secs(600);
+    c.hold();
+    c.say("long job");
+    c.started(1);
+    c.app.stop_background();
+    c.settle();
+    assert!(c.app.panels.bots.live[0].turn.is_none());
+    std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
+}

@@ -14,23 +14,23 @@ fn request(args: &str) -> Request {
 #[case::agents(r#"{"action":"agents"}"#, BotRequest::Agents)]
 #[case::list(r#"{"action":"list"}"#, BotRequest::List)]
 #[case::new(
-    r#"{"action":"new","name":"PRs","agent":"claude","model":null,"effort":null,"account":null,"access":null,"about":"x"}"#,
+    r#"{"action":"new","entry":{"name":"PRs","agent":"claude","model":null,"effort":null,"account":null,"access":null,"about":"x"}}"#,
     BotRequest::New(NewBot { name: "PRs".into(), agent: Some("claude".into()), about: "x".into(), ..NewBot::default() })
 )]
 #[case::edit(
-    r#"{"action":"edit","bot":"prs","name":"Other","agent":null,"model":"","effort":null,"account":null,"access":null}"#,
+    r#"{"action":"edit","entry":{"bot":"prs","name":"Other","agent":null,"model":"","effort":null,"account":null,"access":null}}"#,
     BotRequest::Edit(EditBot { bot: "prs".into(), name: Some("Other".into()), model: Some(String::new()), ..EditBot::default() })
 )]
-#[case::remove(r#"{"action":"remove","bot":"prs"}"#, BotRequest::Remove(BotTarget { bot: "prs".into() }))]
-#[case::reset(r#"{"action":"reset","bot":"prs"}"#, BotRequest::Reset(BotTarget { bot: "prs".into() }))]
-#[case::seen(r#"{"action":"seen","bot":"prs"}"#, BotRequest::Seen(BotTarget { bot: "prs".into() }))]
-#[case::stop(r#"{"action":"stop","bot":"prs"}"#, BotRequest::Stop(BotTarget { bot: "prs".into() }))]
+#[case::remove(r#"{"action":"remove","entry":{"bot":"prs"}}"#, BotRequest::Remove(BotTarget { bot: "prs".into() }))]
+#[case::reset(r#"{"action":"reset","entry":{"bot":"prs"}}"#, BotRequest::Reset(BotTarget { bot: "prs".into() }))]
+#[case::seen(r#"{"action":"seen","entry":{"bot":"prs"}}"#, BotRequest::Seen(BotTarget { bot: "prs".into() }))]
+#[case::stop(r#"{"action":"stop","entry":{"bot":"prs"}}"#, BotRequest::Stop(BotTarget { bot: "prs".into() }))]
 #[case::say(
-    r#"{"action":"say","bot":"prs","text":"hi","wait":true}"#,
+    r#"{"action":"say","entry":{"bot":"prs","text":"hi","wait":true}}"#,
     BotRequest::Say(BotSay { bot: "prs".into(), text: "hi".into(), wait: true })
 )]
 #[case::history(
-    r#"{"action":"history","bot":"prs","last":5,"after":9}"#,
+    r#"{"action":"history","entry":{"bot":"prs","last":5,"after":9}}"#,
     BotRequest::History(BotHistory { bot: "prs".into(), last: Some(5), after: Some(9) })
 )]
 fn every_action_travels_as_the_request_it_names(#[case] args: &str, #[case] wanted: BotRequest) {
@@ -45,9 +45,10 @@ fn every_action_travels_as_the_request_it_names(#[case] args: &str, #[case] want
 #[test]
 fn a_key_the_server_does_not_know_is_named_to_a_strict_client() {
     let raw: Value =
-        serde_json::from_str(r#"{"action":"say","bot":"prs","text":"hi","wait":false,"loud":true}"#).expect("json");
+        serde_json::from_str(r#"{"action":"say","entry":{"bot":"prs","text":"hi","wait":false,"loud":true}}"#)
+            .expect("json");
     let parsed: BotRequest = serde_json::from_value(raw.clone()).expect("a request");
-    assert_eq!(unknown_fields(&raw, &parsed).as_deref(), Some("loud"));
+    assert_eq!(unknown_fields(&raw, &parsed).as_deref(), Some("entry.loud"));
 }
 
 #[test]

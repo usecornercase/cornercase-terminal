@@ -62,21 +62,36 @@ pub(super) fn agents(found: &[AgentInfo]) -> String {
 }
 
 pub(super) fn list(bots: &[BotInfo], now: i64, zone: &str) -> String {
+    if bots.is_empty() {
+        return String::from("no bots; cornercase bot new NAME makes one\n");
+    }
+    let rows: Vec<[String; 6]> = bots
+        .iter()
+        .map(|bot| {
+            let state = if bot.held > 0 { format!("{} (+{} held)", bot.state, bot.held) } else { bot.state.clone() };
+            let last = bot.last.as_ref().map_or_else(String::new, |last| {
+                format!("{} · {}", when(last.at, now, zone), text::truncate_right(&text::one_line(&last.text), LAST))
+            });
+            [
+                bot.id.clone(),
+                text::truncate_right(&bot.name, 18),
+                bot.agent.clone(),
+                state,
+                format!("{} unread", bot.unread),
+                last,
+            ]
+        })
+        .collect();
+    let width = |column: usize| rows.iter().map(|row| row[column].chars().count()).max().unwrap_or_default() + 2;
+    let widths: Vec<usize> = (0..5).map(width).collect();
     let mut out = String::new();
-    for bot in bots {
-        let state = if bot.held > 0 { format!("{} (+{} held)", bot.state, bot.held) } else { bot.state.clone() };
-        let last = bot.last.as_ref().map_or_else(String::new, |last| {
-            format!("{} · {}", when(last.at, now, zone), text::truncate_right(&text::one_line(&last.text), LAST))
-        });
-        let _ = writeln!(
-            out,
-            "{:<16}{:<20}{:<8}{:<20}{:<10}{last}",
-            bot.id,
-            text::truncate_right(&bot.name, 18),
-            bot.agent,
-            state,
-            format!("{} unread", bot.unread),
-        );
+    for row in &rows {
+        let mut line = String::new();
+        for (column, cell) in row.iter().enumerate().take(5) {
+            let _ = write!(line, "{cell:<width$}", width = widths[column]);
+        }
+        line.push_str(&row[5]);
+        let _ = writeln!(out, "{}", line.trim_end());
     }
     out
 }
@@ -137,6 +152,9 @@ impl Chat<'_> {
 }
 
 pub(super) fn chat(name: &str, lines: &[Line], now: i64, zone: &str) -> String {
+    if lines.is_empty() {
+        return String::from("nothing said yet\n");
+    }
     let mut chat = Chat { name, now, zone, out: String::new(), open: false };
     for line in lines {
         chat.add(line);

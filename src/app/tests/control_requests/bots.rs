@@ -25,13 +25,20 @@ fn bots() -> Bots {
     Bots { app, rx, claude, _dirs: (state, bin) }
 }
 
+fn wire(args: &Value) -> Value {
+    let mut entry = args.as_object().cloned().unwrap_or_default();
+    let action = entry.remove("action").unwrap_or(Value::Null);
+    if entry.is_empty() { json!({"action": action}) } else { json!({"action": action, "entry": entry}) }
+}
+
 impl Bots {
     fn ask(&mut self, command: &str, args: &Value) -> Value {
-        asked(&mut self.app, &self.rx, command, args).unwrap_or_else(|e| panic!("{command}: {} {}", e.code, e.message))
+        asked(&mut self.app, &self.rx, command, &wire(args))
+            .unwrap_or_else(|e| panic!("{command}: {} {}", e.code, e.message))
     }
 
     fn refuse(&mut self, args: &Value) -> Refused {
-        match asked(&mut self.app, &self.rx, "bot", args) {
+        match asked(&mut self.app, &self.rx, "bot", &wire(args)) {
             Ok(value) => panic!("{args} was taken: {value}"),
             Err(refused) => refused,
         }

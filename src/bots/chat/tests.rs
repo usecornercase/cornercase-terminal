@@ -98,11 +98,24 @@ mod replay {
     }
 
     #[test]
-    fn stopping_or_a_restart_leaves_it_idle_with_nothing_held() {
-        for notice in [STOPPED, INTERRUPTED] {
-            let lines = [you(1, false), you(2, true), Line::notice(3, 1, notice)];
-            assert_eq!(state(&lines), Replayed { next_id: 4, running: false, held: 0 }, "{notice}");
-        }
+    fn a_stop_with_its_dropped_notice_or_a_restart_leaves_it_idle_with_nothing_held() {
+        let stopped =
+            [you(1, false), you(2, true), Line::notice(3, 1, STOPPED), Line::notice(4, 1, "1 held message dropped")];
+        assert_eq!(state(&stopped), Replayed { next_id: 5, running: false, held: 0 });
+        let restarted = [you(1, false), you(2, true), Line::notice(3, 1, INTERRUPTED)];
+        assert_eq!(state(&restarted), Replayed { next_id: 4, running: false, held: 0 });
+    }
+
+    #[test]
+    fn a_message_held_while_a_stop_was_in_flight_is_the_turn_that_runs_next() {
+        let lines = [
+            you(1, false),
+            you(2, true),
+            you(3, true),
+            Line::notice(4, 1, STOPPED),
+            Line::notice(5, 1, "1 held message dropped"),
+        ];
+        assert_eq!(state(&lines), Replayed { next_id: 6, running: true, held: 0 });
     }
 
     #[test]

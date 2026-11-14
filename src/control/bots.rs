@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::Fields;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "action", rename_all = "kebab-case")]
+#[serde(tag = "action", content = "entry", rename_all = "kebab-case")]
 pub(crate) enum BotRequest {
     Agents,
     New(NewBot),

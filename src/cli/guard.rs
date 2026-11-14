@@ -1,9 +1,7 @@
 use clap::parser::ValueSource;
 use clap::{ArgMatches, Command};
 
-const HERE: &str = "this runs in";
 const PLACES: [&str; 6] = ["workspace", "project", "pane", "tab", "group", "path"];
-const STOPS: [&str; 3] = ["kill-server", "restart", "update"];
 
 fn walk<'a>(command: &'a Command, matches: &'a ArgMatches, path: &mut Vec<&'a str>) -> (&'a Command, &'a ArgMatches) {
     let next = matches.subcommand().and_then(|(name, sub)| command.find_subcommand(name).map(|found| (found, sub)));
@@ -26,7 +24,7 @@ fn named(command: &Command, matches: &ArgMatches, long: &str) -> bool {
 }
 
 fn defaults_here(command: &Command) -> bool {
-    let mentions = |text: Option<String>| text.is_some_and(|text| text.contains(HERE));
+    let mentions = |text: Option<String>| text.is_some_and(|text| text.contains(crate::cli::help::HERE));
     command.get_arguments().any(|arg| {
         mentions(arg.get_help().map(ToString::to_string)) || mentions(arg.get_long_help().map(ToString::to_string))
     })
@@ -52,15 +50,18 @@ fn access_change(path: &[&str], matches: &ArgMatches) -> bool {
     }
 }
 
-pub(super) fn refusal(command: &Command, matches: &ArgMatches) -> Option<String> {
+pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Option<String> {
     let (top, _) = matches.subcommand()?;
-    if STOPS.contains(&top) {
+    if crate::bots::SERVER_STOPS.contains(&top) {
         return Some(String::from("a bot cannot stop its own server"));
     }
     let mut path = vec![top];
     let (leaf, found) = walk(command.find_subcommand(top)?, matches.subcommand()?.1, &mut path);
     if access_change(&path, found) {
         return Some(String::from("a bot cannot change a bot's access"));
+    }
+    if path == ["bot", "say"] && found.get_one::<String>("bot").is_some_and(|bot| bot.eq_ignore_ascii_case(own)) {
+        return Some(String::from("a bot cannot write to itself"));
     }
     let places = PLACES.iter().chain(["all"].iter());
     if defaults_here(leaf) && !places.into_iter().any(|long| named(leaf, found, long)) {

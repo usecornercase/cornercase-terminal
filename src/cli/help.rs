@@ -624,6 +624,7 @@ pub(super) const WHEN_IDLE: &str = "Wait until no agent is working, then restart
 pub(super) const RESTART_TIMEOUT: &str =
     "With --when-idle, give up after this many seconds and keep the server running";
 pub(super) const PANE_REQUIRED: &str = "The pane to act on; `cornercase status --panes` lists them";
+pub(super) const HERE: &str = "this runs in";
 pub(super) const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
 pub(super) const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait on several [default: the one this runs in, else \
     the shown one]";
@@ -734,7 +735,7 @@ Examples:
   cornercase changes discard src/main.rs --yes
   cornercase changes discard src/main.rs --digest 550a7a517a389403 --yes";
 
-pub(in crate::cli) mod bot;
+mod bot;
 mod changes;
 mod clone;
 mod context;
@@ -760,6 +761,9 @@ mod status;
 mod tunnels;
 mod worktrees;
 
+pub(in crate::cli) use bot::{
+    BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HELP, BOT_HISTORY_HELP, BOT_NEW_HELP, BOT_SAY_HELP,
+};
 pub(in crate::cli) use changes::{CHANGES_FILE_HELP, CHANGES_GAP_HELP};
 pub(in crate::cli) use clone::CLONE_HELP;
 pub(in crate::cli) use context::CONTEXT_HELP;

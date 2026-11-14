@@ -70,6 +70,8 @@ pub(crate) struct Ask {
     pub(crate) tools: Tools,
     pub(crate) conversation: Option<String>,
     pub(crate) env: Env,
+    pub(crate) protected: Vec<&'static str>,
+    pub(crate) stops: &'static [&'static str],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,7 +144,8 @@ fn prepared(call: &Call<'_>, ask: &Ask, spec: &Spec) -> Command {
 
 pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ran> {
     let agent = call.agent;
-    let spec = agent.headless().ok_or_else(|| Error::Probe(format!("{} cannot write a recap", agent.name())))?;
+    let spec =
+        agent.headless().ok_or_else(|| Error::Probe(format!("{} cannot run without its interface", agent.name())))?;
     let command = prepared(call, ask, &spec);
     let limits = Limits { name: agent.name(), timeout: call.timeout, grace: GRACE, close_input: true };
     let Watch { progress, mut steps, running } = watch;

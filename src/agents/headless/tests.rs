@@ -137,7 +137,7 @@ fn a_run_that_never_ends_times_out() {
 fn an_agent_without_a_recap_is_refused() {
     let folder = TempDir::new();
     let error = ran(Known::Gemini, Path::new("gemini"), folder.path()).expect_err("no recap");
-    assert!(error.to_string().contains("cannot write a recap"), "{error}");
+    assert!(error.to_string().contains("cannot run without its interface"), "{error}");
 }
 
 #[test]
@@ -191,6 +191,8 @@ mod bots {
             prompt: "hi".into(),
             model: Some("opus".into()),
             effort: None,
+            protected: vec!["bot.json", "chat.jsonl"],
+            stops: &["kill-server", "restart", "update"],
             tools: Tools::Bot(access),
             conversation: conversation.map(str::to_string),
             ..ask(folder)
@@ -378,6 +380,25 @@ mod bots {
         assert!(crate::process::running(pid, None));
         running.stop();
         handle.join().expect("the run").expect_err("stopped");
+        crate::test_util::wait_until("the child ended", || !crate::process::running(pid, None));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_turn_that_runs_out_of_time_has_what_the_agent_started_ended_too() {
+        use crate::test_util::write_executable;
+        let dir = TempDir::new();
+        let folder = TempDir::new();
+        let child = dir.path().join("child.pid");
+        let script = format!("#!/bin/sh\nsleep 60 &\necho $! > '{}'\nwait\n", child.display());
+        let program = dir.path().join("claude");
+        write_executable(&program, &script);
+        let command = program.display().to_string();
+        let call = called(Known::Claude, &command, Duration::from_millis(600));
+        let error =
+            run_watched(&call, &bot_ask(folder.path(), Access::Full, None), Watch::default()).expect_err("slow");
+        assert_eq!(error.to_string(), "claude did not answer in time");
+        let pid: i32 = std::fs::read_to_string(&child).expect("pid").trim().parse().expect("a pid");
         crate::test_util::wait_until("the child ended", || !crate::process::running(pid, None));
     }
 

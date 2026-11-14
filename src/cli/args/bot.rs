@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 
 use super::Print;
-use crate::cli::help::bot::{ABOUT_HELP, AGENTS_HELP, EDIT_HELP, HISTORY_HELP, NEW_HELP, SAY_HELP};
+use crate::cli::help::{BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_NEW_HELP, BOT_SAY_HELP};
 
 const ACCESS: [&str; 2] = ["cornercase", "full"];
 
@@ -13,19 +13,19 @@ pub(crate) struct BotArgs {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum BotAction {
-    #[command(about = "List the agents, which can be a bot and why not", after_help = AGENTS_HELP)]
+    #[command(about = "List the agents, which can be a bot and why not", after_help = BOT_AGENTS_HELP)]
     Agents(Print),
-    #[command(about = "Make a bot: a name, a folder, a memory and a chat; it starts nothing", after_help = NEW_HELP)]
+    #[command(about = "Make a bot: a name, a folder, a memory and a chat; it starts nothing", after_help = BOT_NEW_HELP)]
     New(NewArgs),
     #[command(about = "List the bots with their state and unread answers")]
     List(Print),
-    #[command(about = "Change a bot's name, model, effort, account or access, from its next message", after_help = EDIT_HELP)]
+    #[command(about = "Change a bot's name, model, effort, account or access, from its next message", after_help = BOT_EDIT_HELP)]
     Edit(EditArgs),
     #[command(about = "Delete a bot and its folder; refused while it answers")]
     Remove(Target),
-    #[command(about = "Write to a bot; it answers in its chat", after_help = SAY_HELP)]
+    #[command(about = "Write to a bot; it answers in its chat", after_help = BOT_SAY_HELP)]
     Say(SayArgs),
-    #[command(about = "Print a bot's chat", after_help = HISTORY_HELP)]
+    #[command(about = "Print a bot's chat", after_help = BOT_HISTORY_HELP)]
     History(HistoryArgs),
     #[command(
         about = "Forget the bot's conversation; the next message starts a new one that reads bot.md and memory.md"
@@ -39,7 +39,7 @@ pub(crate) enum BotAction {
 
 #[derive(Debug, Args)]
 pub(crate) struct Target {
-    #[arg(value_name = "BOT", help = ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
     pub(crate) bot: String,
 }
 
@@ -69,7 +69,7 @@ pub(crate) struct NewArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct EditArgs {
-    #[arg(value_name = "BOT", help = ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
     pub(crate) bot: String,
     #[arg(long, value_name = "NAME", help = "The new name; the id stays")]
     pub(crate) name: Option<String>,
@@ -89,7 +89,7 @@ pub(crate) struct EditArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct SayArgs {
-    #[arg(value_name = "BOT", help = ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
     pub(crate) bot: String,
     #[arg(value_name = "TEXT", help = "The message, at most 20,000 characters; - reads it from standard input")]
     pub(crate) text: Option<String>,
@@ -108,7 +108,7 @@ pub(crate) struct SayArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct HistoryArgs {
-    #[arg(value_name = "BOT", help = ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
     pub(crate) bot: String,
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize), help = "Only the last N lines")]
     pub(crate) last: Option<usize>,

@@ -2,7 +2,7 @@ use clap::CommandFactory;
 
 use super::*;
 use crate::cli::args::Cli;
-use crate::cli::help::{BY_BRANCH, HERE_PANE, HERE_WORKSPACE, WAIT_PANE};
+use crate::cli::help::{BY_BRANCH, HERE, HERE_PANE, HERE_WORKSPACE, WAIT_PANE};
 
 fn refused(args: &[&str]) -> Option<String> {
     let command = Cli::command();
@@ -10,7 +10,7 @@ fn refused(args: &[&str]) -> Option<String> {
         .clone()
         .try_get_matches_from(std::iter::once("cornercase").chain(args.iter().copied()))
         .unwrap_or_else(|error| panic!("{args:?}: {error}"));
-    refusal(&command, &matches)
+    refusal(&command, &matches, "prs")
 }
 
 #[rstest::rstest]
@@ -22,6 +22,7 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::changes(&["changes", "list"], "a bot runs in no pane")]
 #[case::edit_access(&["bot", "edit", "prs", "--access", "cornercase"], "a bot cannot change a bot's access")]
 #[case::new_full(&["bot", "new", "x", "--access", "full"], "a bot cannot change a bot's access")]
+#[case::itself(&["bot", "say", "PRs", "hi"], "a bot cannot write to itself")]
 #[case::kill(&["kill-server"], "a bot cannot stop its own server")]
 #[case::restart(&["restart"], "a bot cannot stop its own server")]
 #[case::update(&["update"], "a bot cannot stop its own server")]
@@ -48,7 +49,7 @@ fn the_refusal_names_the_flags_that_take_a_place() {
 #[case::recap(&["recap"])]
 #[case::worktrees(&["worktrees", "list"])]
 #[case::notify(&["notify", "hi"])]
-#[case::say(&["bot", "say", "prs", "hi"])]
+#[case::say_to_another(&["bot", "say", "other", "hi"])]
 #[case::new(&["bot", "new", "x"])]
 #[case::edit(&["bot", "edit", "prs", "--name", "y"])]
 #[case::ports_all(&["ports", "--all"])]

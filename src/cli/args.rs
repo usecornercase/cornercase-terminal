@@ -327,7 +327,7 @@ pub(crate) enum Control {
     Recap(recap::RecapArgs),
     #[command(
         about = "Make and talk to bots: agents of your own, outside any project, with a chat and a memory",
-        after_help = crate::cli::help::bot::BOT_HELP
+        after_help = crate::cli::help::BOT_HELP
     )]
     Bot(bot::BotArgs),
     #[command(

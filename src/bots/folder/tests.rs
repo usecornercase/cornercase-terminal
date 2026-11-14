@@ -1,5 +1,5 @@
 use super::*;
-use crate::bots::Access;
+use crate::agents::headless::Access;
 use crate::bots::sample as bot;
 use crate::test_util::TempDir;
 

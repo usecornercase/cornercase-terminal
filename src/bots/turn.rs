@@ -57,6 +57,8 @@ pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> As
         tools: Tools::Bot(bot.access),
         conversation: bot.conversation.clone(),
         env: environment(bot, bin, path),
+        protected: vec![folder::BOT_FILE, folder::CHAT_FILE],
+        stops: &super::SERVER_STOPS,
     }
 }
 

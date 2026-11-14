@@ -291,6 +291,7 @@ impl App {
     pub(crate) fn stop_background(&mut self) {
         self.stop_plugins();
         self.stop_machines();
+        self.stop_bots();
     }
 
     pub(crate) fn take_start(&mut self) -> Option<(u64, (u16, u16))> {

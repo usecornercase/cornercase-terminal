@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) use crate::agents::headless::Access;
+use crate::agents::headless::Access;
 
 pub(crate) mod brief;
 pub(crate) mod chat;
@@ -15,6 +15,8 @@ pub(crate) const ID_MAX: usize = 32;
 pub(crate) const MESSAGE_MAX: usize = 20_000;
 pub(crate) const NOTES_CAP: usize = 8 * 1024;
 pub(crate) const TURN_TIMEOUT: Duration = Duration::from_mins(15);
+pub(crate) const SERVER_STOPS: [&str; 3] = ["kill-server", "restart", "update"];
+pub(crate) const LAST_CHARS: usize = 200;
 pub(crate) const BOT_ENV: &str = "CORNERCASE_BOT";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,12 +65,20 @@ pub(crate) fn name_refusal(name: &str, others: &[&Bot]) -> Option<NameProblem> {
         .map(|other| NameProblem::Taken(format!("there is a bot called {} already", other.name)))
 }
 
-pub(crate) fn new_id(name: &str, taken: &[&Bot]) -> String {
+pub(crate) fn message_refusal(text: &str) -> Option<String> {
+    let count = text.chars().count();
+    if text.trim().is_empty() {
+        return Some(String::from("the message is empty"));
+    }
+    (count > MESSAGE_MAX).then(|| format!("the message is {count} characters; a bot takes at most {MESSAGE_MAX}"))
+}
+
+pub(crate) fn new_id(name: &str, taken: &[&Bot], on_disk: &dyn Fn(&str) -> bool) -> String {
     let base = match crate::issues::slug(name, ID_MAX) {
         slug if slug.is_empty() => String::from("bot"),
         slug => slug,
     };
-    let used = |id: &str| taken.iter().any(|bot| bot.id == id);
+    let used = |id: &str| taken.iter().any(|bot| bot.id == id) || on_disk(id);
     let mut id = base.clone();
     let mut n = 2;
     while used(&id) {

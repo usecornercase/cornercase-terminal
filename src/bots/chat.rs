@@ -115,6 +115,15 @@ pub(crate) struct Replayed {
     pub(crate) held: usize,
 }
 
+fn dropped_in(text: &str) -> usize {
+    let Some(count) =
+        text.strip_suffix(" held message dropped").or_else(|| text.strip_suffix(" held messages dropped"))
+    else {
+        return 0;
+    };
+    count.parse().unwrap_or_default()
+}
+
 pub(crate) fn replay(lines: &[Line]) -> Replayed {
     let mut state = Replayed { next_id: 1, ..Replayed::default() };
     for line in lines {
@@ -126,12 +135,18 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
                 state.running = state.held > 0;
                 state.held = 0;
             }
-            Kind::Notice if line.text == STOPPED || line.text == INTERRUPTED => {
+            Kind::Notice if line.text == STOPPED => state.running = false,
+            Kind::Notice if line.text == INTERRUPTED => {
                 state.running = false;
                 state.held = 0;
             }
-            Kind::Step | Kind::Notice => {}
+            Kind::Notice => state.held = state.held.saturating_sub(dropped_in(&line.text)),
+            Kind::Step => {}
         }
+    }
+    if !state.running && state.held > 0 {
+        state.running = true;
+        state.held = 0;
     }
     state
 }

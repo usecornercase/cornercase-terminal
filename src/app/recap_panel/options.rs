@@ -17,16 +17,6 @@ fn named(text: &str) -> Option<String> {
 }
 
 impl App {
-    pub(in crate::app) fn account_home(
-        &self,
-        kind: Option<Known>,
-        account: Option<&str>,
-    ) -> Option<std::path::PathBuf> {
-        account
-            .zip(kind)
-            .map(|(name, kind)| crate::os::fs::canonical(crate::accounts::path(self.accounts.dir(), kind, name)))
-    }
-
     pub(in crate::app) fn recap_agent(&self, wanted: Option<&str>) -> Known {
         let from = |name: &str| Known::of(name).filter(|kind| kind.headless().is_some());
         wanted

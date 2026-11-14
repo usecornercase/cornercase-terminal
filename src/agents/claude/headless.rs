@@ -27,7 +27,6 @@ const READS: &str = "Read,Grep,Glob,WebSearch,WebFetch,Bash(cornercase:*)";
 const GIT: &str = "Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*)";
 const GH: &str =
     "Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr checks:*),Bash(gh issue list:*),Bash(gh issue view:*)";
-const STOPS: &str = "Bash(cornercase kill-server:*),Bash(cornercase restart:*),Bash(cornercase update:*)";
 
 pub(in crate::agents) fn rule_path(folder: &str, windows: bool) -> String {
     if !windows {
@@ -40,20 +39,27 @@ pub(in crate::agents) fn rule_path(folder: &str, windows: bool) -> String {
     }
 }
 
+fn stop_rules(ask: &Ask) -> String {
+    let rules: Vec<String> = ask.stops.iter().map(|name| format!("Bash(cornercase {name}:*)")).collect();
+    rules.join(",")
+}
+
 fn bot_args(ask: &Ask, access: Access) -> Vec<String> {
+    let stops = stop_rules(ask);
     let mut args: Vec<String> = BOT_ARGS.iter().map(ToString::to_string).collect();
     match access {
         Access::Cornercase => {
             let folder = rule_path(&ask.folder.display().to_string(), cfg!(windows));
             let allowed = format!("{READS},{GIT},{GH},Edit({folder}/**)");
-            let denied = format!("NotebookEdit,Task,{STOPS},Edit({folder}/bot.json),Edit({folder}/chat.jsonl)");
+            let files: Vec<String> = ask.protected.iter().map(|file| format!("Edit({folder}/{file})")).collect();
+            let denied = format!("NotebookEdit,Task,{stops},{}", files.join(","));
             args.extend(
                 ["--permission-mode", "dontAsk", "--allowedTools", &allowed, "--disallowedTools", &denied]
                     .map(String::from),
             );
         }
         Access::Full => {
-            args.extend(["--permission-mode", "bypassPermissions", "--disallowedTools", STOPS].map(String::from));
+            args.extend(["--permission-mode", "bypassPermissions", "--disallowedTools", &stops].map(String::from));
         }
     }
     if let Some(session) = &ask.conversation {

@@ -155,7 +155,7 @@ impl App {
         }
         let kind = self.bot_kind(new.agent.as_deref())?;
         let access = self.bot_access(kind, new.access.as_deref())?;
-        let id = crate::bots::new_id(name, &others);
+        let id = crate::bots::new_id(name, &others, &|id| folder::of(&dir, id).exists());
         let blank = Bot {
             id,
             name: name.to_string(),
@@ -214,5 +214,5 @@ impl App {
 
 fn last(line: &chat::Line) -> BotLast {
     let kind = if line.kind == chat::Kind::You { "you" } else { "bot" };
-    BotLast { kind: kind.to_string(), text: line.text.chars().take(200).collect(), at: line.at }
+    BotLast { kind: kind.to_string(), text: line.text.chars().take(crate::bots::LAST_CHARS).collect(), at: line.at }
 }

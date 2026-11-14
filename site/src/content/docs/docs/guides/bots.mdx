@@ -50,7 +50,7 @@ cornercase bot list
 - **Steps stream.** Each tool the bot uses, such as `cornercase status --json` or `Read src/main.rs`, is written to the chat as it happens, so you see what it is doing while it works.
 - **`cornercase bot history prs`** prints the chat as you would read it: what you wrote, what the bot used and its answers, with `--last N` and `--after LINE` to cut it.
 - **`cornercase bot list`** shows each bot with its state (`idle` or `thinking`), the messages held and the answers you have not read, which `cornercase bot seen prs` marks as read.
-- **`cornercase bot reset prs`** forgets the conversation: the next message starts a new one that reads `bot.md` and `memory.md` again. Do it when the context fills up (the error says so) or the bot has lost the thread. `bot reset` and `bot remove` wait for a turn to end, or for you to stop it.
+- **`cornercase bot reset prs`** forgets the conversation: the next message starts a new one that reads `bot.md` and `memory.md` again. Do it when the context fills up (the error says so) or the bot has lost the thread. `bot reset` and `bot remove` are refused while the bot answers: `cornercase bot stop` comes first.
 - **`cornercase bot stop prs`** ends the answer being written, and everything the bot started in it. The conversation stays, so the next message continues it; the messages held are dropped.
 
 An answer, or an error, that nobody waited for makes a toast and a desktop notification (`prs: Two are blocked.`).
@@ -59,7 +59,7 @@ An answer, or an error, that nobody waited for makes a toast and a desktop notif
 
 A bot can look at your work with `cornercase status --json` (projects, workspaces, tabs and agents, with their ids), `cornercase search`, `cornercase recap`, `cornercase worktrees list`, `cornercase read --pane ID`, and read-only `git` and `gh`. It acts through cornercase: `cornercase start --project ID --prompt TEXT` starts an agent in a project, and you see it like any other agent; `cornercase send --pane ID` writes to an agent; `cornercase notify` sends a notice. It never changes a project's files itself unless its access is `full` and you asked: it starts an agent to do it.
 
-A bot runs in no pane, so there is no "here". Its commands run with `CORNERCASE_BOT` set, and the command line **refuses** one that would act on "the pane this runs in, else the one shown" unless it names a project, workspace or pane (`a bot runs in no pane: name the place with --workspace ID or --project ID`). It also refuses `kill-server`, `restart` and `update` (`a bot cannot stop its own server`), and a bot cannot change a bot's access.
+A bot runs in no pane, so there is no "here". Its commands run with `CORNERCASE_BOT` set, and the command line **refuses** one that would act on "the pane this runs in, else the one shown" unless it names a project, workspace or pane (`a bot runs in no pane: name the place with --workspace ID or --project ID`). It also refuses `kill-server`, `restart` and `update` (`a bot cannot stop its own server`), a bot cannot change a bot's access, and it cannot write to itself.
 
 ## Access
 
@@ -67,9 +67,10 @@ A turn runs without its window, so the agent cannot stop halfway to ask you for 
 
 | Access | What the bot may do |
 | --- | --- |
-| **`cornercase`** (the default) | Read anything, run the `cornercase` command line (except `kill-server`, `restart` and `update`), run read-only `git` (`log`, `show`, `diff`, `status`) and `gh` (`pr list`, `pr view`, `pr checks`, `issue list`, `issue view`), search the web, and **write only in its own folder**, `bot.json` and `chat.jsonl` excepted. |
-| **`full`** | Change any file and run anything, unattended. Off by default; `cornercase bot new --access full` is the only way to ask for it, and a bot cannot grant it to itself. |
+| **`cornercase`** (the default) | The agent itself reads anything, runs the `cornercase` command line (except `kill-server`, `restart` and `update`), runs read-only `git` (`log`, `show`, `diff`, `status`) and `gh` (`pr list`, `pr view`, `pr checks`, `issue list`, `issue view`), searches the web, and **writes only in its own folder**, `bot.json` and `chat.jsonl` excepted. Your own Claude allow rules apply on top. |
+| **`full`** | Change any file and run anything, unattended. Off by default: you ask for it with `cornercase bot new --access full` or `cornercase bot edit ID --access full`, and a bot cannot grant it through `cornercase bot`. |
 
+- **What `cornercase` access is, and is not.** It keeps the agent itself in its folder, but what it drives through `cornercase` is as powerful as what that reaches: it can start agents and type into your panes. The refusals and the denied files prevent mistakes, not a determined bot. Give a bot only the work you would give an assistant at your keyboard.
 - **Claude Code** supports both. It loads your own Claude settings, so your MCP servers and `~/.claude/CLAUDE.md` work in a bot, and no project's settings do.
 - **Codex** can be a bot with **`full` access only**: its sandbox does not let `cornercase` reach the server (checked on Linux; macOS and Windows have not been tried, so they are treated the same). `cornercase bot agents` says so, and `cornercase bot new --agent codex` refuses to start without `--access full`. A Codex bot reads your own Codex configuration.
 - The other agents cannot be a bot yet (`not yet`).

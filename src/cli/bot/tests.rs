@@ -51,7 +51,7 @@ fn the_list_has_a_row_per_bot() {
         ..BotInfo::default()
     };
     let text = list(&[bot], NOON, ZONE);
-    assert!(text.starts_with("prs             PRs                 claude  thinking (+1 held)  2 unread"), "{text}");
+    assert!(text.starts_with("prs  PRs  claude  thinking (+1 held)  2 unread  "), "{text}");
     assert!(text.trim_end().ends_with("11:59 · Two are blocked."), "{text}");
 }
 
@@ -105,4 +105,34 @@ fn an_event_is_one_short_line() {
     assert_eq!(event_text("prs", (Some(&Line::notice(5, 0, "stopped")), None, None)), "bot prs  notice: stopped");
     assert_eq!(event_text("prs", (None, Some("thinking"), None)), "bot prs  thinking");
     assert_eq!(event_text("prs", (None, None, Some("created"))), "bot prs  created");
+}
+
+#[test]
+fn the_list_columns_follow_the_longest_id_and_rows_end_without_spaces() {
+    let long = BotInfo {
+        id: "a-very-long-bot-name-that-is".into(),
+        name: "A very long name".into(),
+        agent: "claude".into(),
+        state: "idle".into(),
+        unread: 100,
+        ..BotInfo::default()
+    };
+    let short = BotInfo {
+        id: "prs".into(),
+        name: "PRs".into(),
+        agent: "claude".into(),
+        state: "idle".into(),
+        ..BotInfo::default()
+    };
+    let text = list(&[long, short], NOON, ZONE);
+    let rows: Vec<&str> = text.lines().collect();
+    assert!(rows[0].starts_with("a-very-long-bot-name-that-is  A very long name  claude  idle  100 unread"), "{text}");
+    assert!(rows[1].starts_with("prs                           PRs"), "{text}");
+    assert!(rows.iter().all(|row| *row == row.trim_end()), "{text}");
+}
+
+#[test]
+fn nothing_to_list_or_to_read_says_so() {
+    assert_eq!(list(&[], NOON, ZONE), "no bots; cornercase bot new NAME makes one\n");
+    assert_eq!(chat("PRs", &[], NOON, ZONE), "nothing said yet\n");
 }
