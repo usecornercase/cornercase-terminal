@@ -1,7 +1,6 @@
-use std::path::Path;
-
 use super::super::flow_panel::team;
 use super::*;
+use crate::agents::Known;
 use crate::agents::claude::fake::FakeClaude;
 use crate::agents::launch::{CONFIRM_EVERY, MAX_ENTERS};
 
@@ -45,27 +44,15 @@ impl Briefed {
     }
 
     fn prompts(&self) -> usize {
-        records(&self.fake.dir().join("projects"))
+        let Some(context::Record::Claude(path)) = pane(&self.app, self.own).context.record_for(Known::Claude) else {
+            return 0;
+        };
+        std::fs::read_to_string(path).map_or(0, |text| text.matches("\"type\":\"user\"").count())
     }
 }
 
 fn pane(app: &App, id: u64) -> &Term {
     app.projects.pane_by(id).expect("the pane")
-}
-
-fn records(dir: &Path) -> usize {
-    let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
-    entries
-        .flatten()
-        .map(|entry| {
-            let path = entry.path();
-            if path.is_dir() {
-                records(&path)
-            } else {
-                std::fs::read_to_string(&path).map_or(0, |text| text.matches("\"type\":\"user\"").count())
-            }
-        })
-        .sum()
 }
 
 #[test]
@@ -130,4 +117,16 @@ fn a_restored_orchestrator_confirms_its_brief_and_its_team_does_not() {
     for member in run.members.iter().filter(|m| m.pane != orchestrator) {
         assert_eq!(confirms(member.pane), Some(None), "{} is only resumed", member.role);
     }
+}
+
+#[test]
+fn an_orchestrator_that_is_not_claude_code_gets_its_brief_without_confirmation() {
+    let (mut app, _rx, _dir) = team();
+    let mut run = app.runs.all()[0].clone();
+    run.flow.orchestrator.agent = "codex".into();
+    let own = run.pane_of(ORCHESTRATOR).expect("the orchestrator");
+
+    app.launch_briefed(&run, (own, None), "codex resume c1".into(), "go on with the plan".into());
+
+    assert_eq!(app.agents.launches.of_pane(own).next().map(|launch| launch.confirm), Some(None));
 }
