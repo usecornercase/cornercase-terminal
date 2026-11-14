@@ -271,6 +271,10 @@ cornercase waits while the question is on screen. If your agent's normal screen 
 
 By default the prompt is typed and left for you to press `Enter`. Turn on **settings → Agents → send the prompt** to have it sent for you.
 
+### A flow's orchestrator stays idle after a restart
+
+Its message with the team's new pane ids is typed into its input box and sent; when a Claude Code orchestrator is still finishing its resume, cornercase presses `Enter` again, every 3 seconds and up to 4 more times. If the message still sits in its input box, press `Enter` in its tab. For a Claude Code orchestrator, [`server.log`](#the-server-log) then has a `launch: the agent did not take the prompt` line for that pane; another agent's message is sent once, without that check.
+
 ## The server log
 
 The server writes one line for each thing it does: a window attaching and at what size, a command from a script and its answer, a tab or pane opening and closing (and how its shell exited), an agent starting step by step and every change of its status, a dialog opening, a git run or issue list that failed or took long, and every error and bug. Each line starts with the time (in UTC), the level and where it happened:
