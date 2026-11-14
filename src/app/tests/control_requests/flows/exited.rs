@@ -239,7 +239,7 @@ fn an_exited_orchestrator_comes_back_last_told_where_its_team_stands() {
     assert_eq!(exited_in(&team), 0);
 }
 
-fn saved_with_exited_roles(team: &mut Team) -> crate::state::State {
+fn saved_with_exited_roles(team: &mut Team) -> State {
     keep_conversation(team, "coder", "c1");
     keep_conversation(team, "reviewer", "c2");
     let mut saved = team.app.state();
