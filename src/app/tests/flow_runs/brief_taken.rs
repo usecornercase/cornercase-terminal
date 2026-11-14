@@ -76,6 +76,7 @@ fn a_resumed_orchestrator_that_takes_its_brief_at_once_gets_one_enter() {
 
     run.until("the brief is entered", |app, own| pane(app, own).submitted.is_some());
     let first = pane(&run.app, run.own).submitted;
+    run.until("the brief is recorded", |app, own| pane(app, own).context.prompted().is_some());
     run.until("the launch is over", |app, own| app.agents.launches.of_pane(own).next().is_none());
 
     assert_eq!((pane(&run.app, run.own).submitted, run.lost(), run.prompts()), (first, 0, 1));
