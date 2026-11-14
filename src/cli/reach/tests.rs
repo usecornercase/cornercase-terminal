@@ -423,3 +423,20 @@ mod paths {
         assert!(path_on(Path::new("src"), None, cfg!(windows), &|| false).expect("absolute").is_absolute());
     }
 }
+
+mod hints {
+    use super::*;
+
+    #[rstest]
+    #[case::the_window(&["remote", "devbox"], "remote devbox")]
+    #[case::the_skill(&["skill"], "skill")]
+    #[case::the_server(&["server"], "server")]
+    #[case::the_proxy(&["proxy"], "proxy")]
+    #[case::window_processes(&["plugin", "windows"], "plugin windows")]
+    fn names_no_remote_for_a_command_that_stays_here(#[case] words: &[&str], #[case] hint: &str) {
+        let stays = matches!(kind(parsed(words).command.as_ref()), Kind::Apart(_) | Kind::BesideTheWindow);
+        let text = format!("run `cornercase {hint}`");
+
+        assert_eq!((stays, devbox().hinted(&text)), (true, text));
+    }
+}

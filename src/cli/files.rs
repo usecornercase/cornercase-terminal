@@ -3,7 +3,7 @@ use std::fmt::Write as _;
 use super::args::changes::Where;
 use super::args::files::{FilesAction, FilesArgs};
 use super::{note, print_json, print_out, stream_json, workspace};
-use crate::client::{answer, ask};
+use crate::client::{answer, ask, hinted};
 use crate::control::changes::FileStatus;
 use crate::control::files::{EntryKind, Found, Line, Listing, Read, ReadKind, SearchMode};
 use crate::control::{Command, FilesList, FilesRead, FilesSearch};
@@ -129,7 +129,7 @@ pub(super) fn read_text(read: &Read) -> Result<String> {
         (ReadKind::TooLarge, ..) => format!("{path}: too large to read, {bytes} bytes\n"),
         (ReadKind::Missing, ..) => return Err(Error::Control(format!("cannot read {path}: no such file"))),
         (ReadKind::Folder, ..) => {
-            return Err(Error::Control(format!("{path} is a folder; `cornercase files list {path}` lists it")));
+            return Err(Error::Control(hinted(format!("{path} is a folder; `cornercase files list {path}` lists it"))));
         }
         _ => format!("{path}: binary, {bytes} bytes\n"),
     })

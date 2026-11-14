@@ -349,7 +349,7 @@ fn ask_with(
 
 fn received(link: &mut Link, name: &'static str) -> Option<Result<Value>> {
     match protocol::recv::<ServerMessage>(&mut link.reader) {
-        Ok(Some(ServerMessage::Response(text))) => Some(answered(&text)),
+        Ok(Some(ServerMessage::Response(text))) => Some(answered_through(&text, link.guard.remote.as_ref())),
         Ok(Some(ServerMessage::Rejected(_))) => Some(Err(Error::OldServer(name))),
         Err(e) if e.kind() == io::ErrorKind::InvalidData => Some(Err(Error::OldServer(name))),
         Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached)) => None,
@@ -427,6 +427,28 @@ pub(crate) fn answered(text: &str) -> Result<Value> {
     }
 }
 
+pub(crate) fn hinted(text: String) -> String {
+    match used_remote() {
+        Some(remote) => remote.hinted(&text),
+        None => text,
+    }
+}
+
+fn answered_through(text: &str, remote: Option<&Remote>) -> Result<Value> {
+    let Some(remote) = remote else {
+        return answered(text);
+    };
+    match answered(text) {
+        Ok(mut value) => {
+            remote.hint_answer(text, &mut value);
+            Ok(value)
+        }
+        Err(Error::Control(message)) => Err(Error::Control(remote.hinted(&message))),
+        Err(Error::StaleBoot(message)) => Err(Error::StaleBoot(remote.hinted(&message))),
+        Err(other) => Err(other),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StreamEnd {
     Left,
@@ -479,7 +501,7 @@ fn follow_link(
     if first && each(answer)? {
         return Ok(StreamEnd::Left);
     }
-    match follow_on(&mut link.reader, watched(console::stdout()), each) {
+    match follow_on(&mut link.reader, watched(console::stdout()), link.guard.remote.as_ref(), each) {
         Err(Error::ServerLost) => Err(lost(link, Error::ServerLost)),
         followed => followed,
     }
@@ -488,6 +510,7 @@ fn follow_link(
 fn follow_on(
     mut stream: impl Source,
     mut out: Option<BorrowedFd<'_>>,
+    remote: Option<&Remote>,
     mut each: impl FnMut(Value) -> Result<bool>,
 ) -> Result<StreamEnd> {
     loop {
@@ -497,7 +520,7 @@ fn follow_on(
         }
         match protocol::recv::<ServerMessage>(&mut stream) {
             Ok(Some(ServerMessage::Response(text))) => {
-                if each(answered(&text)?)? {
+                if each(answered_through(&text, remote)?)? {
                     return Ok(StreamEnd::Left);
                 }
             }

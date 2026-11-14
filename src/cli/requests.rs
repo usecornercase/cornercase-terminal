@@ -128,9 +128,10 @@ fn checked(cli: Cli, name: &str) -> std::result::Result<Command, Answer> {
     }
     let Some(command) = cli.command else { return Err(Answer::refused("a line needs a command")) };
     if matches!(command, Command::StartServer(_)) {
-        return Err(Answer::refused(
-            "`start-server` cannot run on a line, since `requests` needs a running server: run `cornercase start-server` first",
-        ));
+        return Err(Answer::refused(client::hinted(
+            "`start-server` cannot run on a line, since `requests` needs a running server: run `cornercase start-server` first"
+                .to_string(),
+        )));
     }
     match reach::kind(Some(&command)) {
         Kind::There => Ok(command),
@@ -141,11 +142,7 @@ fn checked(cli: Cli, name: &str) -> std::result::Result<Command, Answer> {
 }
 
 fn alone(name: &str) -> String {
-    let line = match client::used_remote() {
-        Some(remote) => remote.line(name),
-        None => format!("cornercase {name}"),
-    };
-    format!("`{name}` runs as a process of its own: run `{line}` on its own")
+    client::hinted(format!("`{name}` runs as a process of its own: run `cornercase {name}` on its own"))
 }
 
 fn run_line(command: Command, stdin: Option<String>, name: &str) -> Ran {
@@ -171,7 +168,9 @@ fn outcome(result: Result<bool>, printed: Printed, name: &str) -> Answer {
 }
 
 fn own_connection(name: &str) -> String {
-    format!("`{name}` keeps a connection of its own (a stream): run `cornercase {name}` as a command of its own")
+    client::hinted(format!(
+        "`{name}` keeps a connection of its own (a stream): run `cornercase {name}` as a command of its own"
+    ))
 }
 
 #[cfg(unix)]

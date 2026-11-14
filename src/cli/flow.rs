@@ -342,7 +342,7 @@ pub(super) fn hidden_line(removed: &FlowRemoved) -> String {
     }
     let edit =
         removed.deleted.as_ref().map(|path| format!(", and your version {}", path.display())).unwrap_or_default();
-    format!("deleted the built-in flow {name}{edit}; `cornercase flow restore {name}` brings it back\n")
+    client::hinted(format!("deleted the built-in flow {name}{edit}; `cornercase flow restore {name}` brings it back\n"))
 }
 
 pub(super) fn restored_line(removed: &FlowRemoved) -> String {
@@ -509,11 +509,9 @@ pub(super) fn listing(flows: &Flows) -> String {
     }
     if !flows.hidden.is_empty() {
         let names: Vec<String> = flows.hidden.iter().map(|flow| share::visible(&flow.name)).collect();
-        let _ = writeln!(
-            out,
-            "deleted built-in flows: {} (`cornercase flow restore NAME` brings one back)",
-            names.join(", ")
-        );
+        let line =
+            format!("deleted built-in flows: {} (`cornercase flow restore NAME` brings one back)", names.join(", "));
+        let _ = writeln!(out, "{}", client::hinted(line));
     }
     out
 }
@@ -551,7 +549,7 @@ pub(super) fn closing_note(run: &RunInfo, on_machine: bool) -> String {
     let back = if on_machine {
         "the workspace's ▶ brings them back".to_string()
     } else {
-        format!("cornercase agents reopen --workspace {} brings them back", run.workspace)
+        client::hinted(format!("`cornercase agents reopen --workspace {}` brings them back", run.workspace))
     };
     let free = if run.free_builds { ", and their worktrees' build folders are freed then" } else { "" };
     format!("its agents close once its pull request merges and none of them works{free}; {back}")
@@ -657,11 +655,11 @@ fn exited_note(run: &RunState) -> String {
     if exited.is_empty() {
         return String::new();
     }
-    format!(
-        "  exited: {}; cornercase agents reopen --workspace {} brings {brings} back\n",
+    client::hinted(format!(
+        "  exited: {}; `cornercase agents reopen --workspace {}` brings {brings} back\n",
         exited.join(", "),
         run.workspace
-    )
+    ))
 }
 
 fn closes_text(free_builds: bool) -> &'static str {

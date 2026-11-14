@@ -29,7 +29,7 @@ fn closed(done: bool) -> AgentsClosed {
 fn a_close_teaches_the_way_back() {
     assert_eq!(
         closed_text(&closed(true)),
-        "closed 2 agents in workspace 7; cornercase agents reopen --workspace 7 reopens them\n"
+        "closed 2 agents in workspace 7; `cornercase agents reopen --workspace 7` reopens them\n"
     );
 }
 

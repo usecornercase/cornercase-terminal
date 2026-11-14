@@ -8,7 +8,7 @@ use serde_json::json;
 use super::args::PluginAction;
 use super::args::plugin::{InstallArgs, RunArgs, UpdatePluginArgs};
 use super::{home, print_log, reach};
-use crate::client::{answer, ask, confirm, use_boot, use_plugin_run_view, use_view};
+use crate::client::{answer, ask, confirm, hinted, use_boot, use_plugin_run_view, use_view};
 use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::control::{Command, Item, PluginActions, PluginList, PluginPopupClose, PluginRun};
@@ -264,7 +264,10 @@ fn ran_text(ran: &ActionRan, item: Option<Item>) -> String {
     }
     match &ran.error {
         None => format!("{head}: exit status: 0\n"),
-        Some(error) => format!("{head}: {error}; `cornercase plugin logs {}` says more\n", name(&ran.plugin)),
+        Some(error) => {
+            let more = hinted(format!("`cornercase plugin logs {}` says more", name(&ran.plugin)));
+            format!("{head}: {error}; {more}\n")
+        }
     }
 }
 

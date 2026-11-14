@@ -1,5 +1,5 @@
 use crate::cli::{print_json, print_out};
-use crate::client::{answer, ask};
+use crate::client::{answer, ask, hinted};
 use crate::control::{Command, ForumServer, ForumServerInfo};
 use crate::error::Result;
 
@@ -12,7 +12,7 @@ pub(super) fn pick(id: String, as_json: bool) -> Result<()> {
 }
 
 fn picked(server: &ForumServerInfo) -> String {
-    format!("the forum goes in {}; `cornercase status --app` says when it is ready\n", server.name)
+    hinted(format!("the forum goes in {}; `cornercase status --app` says when it is ready\n", server.name))
 }
 
 #[cfg(test)]

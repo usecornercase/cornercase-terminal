@@ -228,7 +228,7 @@ mod runs {
 
         assert!(text.contains("  coder         pane 13    exited\n"), "{text}");
         assert!(text.contains("  tester        -          -\n"), "{text}");
-        assert!(text.contains("  exited: coder; cornercase agents reopen --workspace 4 brings it back\n"), "{text}");
+        assert!(text.contains("  exited: coder; `cornercase agents reopen --workspace 4` brings it back\n"), "{text}");
         assert!(text.contains("  reviewer      pane 14    closed\n"), "{text}");
     }
 
@@ -239,7 +239,7 @@ mod runs {
         let text = runs_text_at(&runs);
 
         assert!(
-            text.contains("  exited: orchestrator, coder; cornercase agents reopen --workspace 4 brings them back\n")
+            text.contains("  exited: orchestrator, coder; `cornercase agents reopen --workspace 4` brings them back\n")
         );
     }
 
@@ -360,7 +360,7 @@ mod runs {
     #[test]
     fn the_note_of_a_run_that_closes_when_merged_names_its_workspace() {
         let info = RunInfo { workspace: 8, close_when_merged: true, ..RunInfo::default() };
-        assert!(closing_note(&info, false).contains("agents reopen --workspace 8"));
+        assert!(closing_note(&info, false).contains("`cornercase agents reopen --workspace 8`"));
         let there = closing_note(&info, true);
         assert!(!there.contains("agents reopen") && there.contains('▶'), "{there}");
     }
