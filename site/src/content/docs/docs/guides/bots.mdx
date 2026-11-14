@@ -1,0 +1,96 @@
+---
+title: Bots
+description: Agents of your own, outside any project, that you talk to. Each one has a name, a folder, a memory and a chat, and can see every project through the cornercase command line.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Some work belongs to no project, or to all of them: "review my open pull requests every morning and tell me which ones are blocked", "tell me which issues labelled `bug` came in today, in every project", "start an agent on this issue and tell me when it is done". Until now that meant opening some folder as a fake project, or keeping an agent alive in a pane whose context grows for ever.
+
+A **bot** is an agent of your own for that: a name, a folder, a memory and a chat. It belongs to no project, but it sees all of them and acts on them through the `cornercase` command line. You write to it, one turn of its agent (Claude Code or Codex) runs in a conversation that continues, and the answer lands in its chat.
+
+<Aside type="note">
+This release has the bots and their commands. The window shows them in a later release: for now you talk to a bot with [`cornercase bot`](#talk-to-a-bot), and a program can follow it through [events](../scripts-and-agents/#bots).
+</Aside>
+
+**Making a bot starts nothing and spends no tokens.** It runs only when you write to it, and **only while the server runs**: a turn's process does not survive `cornercase kill-server`, a reboot or an update's restart. A turn that was running then ends with `interrupted by a restart` in its chat, and the messages held for it are dropped.
+
+## Make a bot
+
+```sh
+cornercase bot agents                     # which agents can be a bot, and why not
+cornercase bot new prs --about "Review my open pull requests and tell me which are blocked"
+cornercase bot new nightly --agent claude --model sonnet --effort low
+```
+
+`bot new` prints the bot's id, a slug of its name that stays when you rename it. The name takes 1 to 40 characters and no two bots share one, whatever the case. There can be at most 50 bots.
+
+- **`--agent`**: `claude` or `codex`. Without it, the agent you chose in Settings when it can be a bot; otherwise the command asks you to say which.
+- **`--model`, `--effort`**: as [`start --model`](../scripts-and-agents/#start-an-agent) and `--effort` take them.
+- **`--account`**: one of the agent's [accounts](../accounts/); without it, the agent's own login.
+- **`--access`**: what the bot may do, see [Access](#access).
+- **`--about`**: what the bot is for. It goes into `bot.md` and may be empty.
+
+`cornercase bot edit prs --model opus` changes the name, model, effort, account or access from the bot's next message on; an empty value goes back to the agent's own. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot and its folder, and is refused while it answers.
+
+## Talk to a bot
+
+```sh
+cornercase bot say prs "which of my PRs are blocked?" --wait
+cornercase bot say prs "and the drafts?"
+echo "summarize this log" | cornercase bot say prs - --wait
+cornercase bot history prs
+cornercase bot list
+```
+
+`bot say` writes your message and starts a turn, answering at once with the line's id. With **`--wait`** it waits and prints the bot's answer; it exits with 3 when the turn fails, is stopped or takes more than 15 minutes, with the reason on standard error. A message is at most 20,000 characters; a longer one is refused with its size, not cut.
+
+- **One turn at a time.** A message sent while the bot answers is **held**, and goes with the others held as the next turn. Different bots answer at the same time.
+- **The first message of a conversation** opens with what cornercase tells the bot about itself, then its `bot.md` and `memory.md` (each cut to 8 KB), then what you wrote. Later messages continue the same session.
+- **Steps stream.** Each tool the bot uses, such as `cornercase status --json` or `Read src/main.rs`, is written to the chat as it happens, so you see what it is doing while it works.
+- **`cornercase bot history prs`** prints the chat as you would read it: what you wrote, what the bot used and its answers, with `--last N` and `--after LINE` to cut it.
+- **`cornercase bot list`** shows each bot with its state (`idle` or `thinking`), the messages held and the answers you have not read, which `cornercase bot seen prs` marks as read.
+- **`cornercase bot reset prs`** forgets the conversation: the next message starts a new one that reads `bot.md` and `memory.md` again. Do it when the context fills up (the error says so) or the bot has lost the thread. `bot reset` and `bot remove` wait for a turn to end, or for you to stop it.
+- **`cornercase bot stop prs`** ends the answer being written, and everything the bot started in it. The conversation stays, so the next message continues it; the messages held are dropped.
+
+An answer, or an error, that nobody waited for makes a toast and a desktop notification (`prs: Two are blocked.`).
+
+## What a bot can see and do
+
+A bot can look at your work with `cornercase status --json` (projects, workspaces, tabs and agents, with their ids), `cornercase search`, `cornercase recap`, `cornercase worktrees list`, `cornercase read --pane ID`, and read-only `git` and `gh`. It acts through cornercase: `cornercase start --project ID --prompt TEXT` starts an agent in a project, and you see it like any other agent; `cornercase send --pane ID` writes to an agent; `cornercase notify` sends a notice. It never changes a project's files itself unless its access is `full` and you asked: it starts an agent to do it.
+
+A bot runs in no pane, so there is no "here". Its commands run with `CORNERCASE_BOT` set, and the command line **refuses** one that would act on "the pane this runs in, else the one shown" unless it names a project, workspace or pane (`a bot runs in no pane: name the place with --workspace ID or --project ID`). It also refuses `kill-server`, `restart` and `update` (`a bot cannot stop its own server`), and a bot cannot change a bot's access.
+
+## Access
+
+A turn runs without its window, so the agent cannot stop halfway to ask you for permission. What it may do is fixed when the bot is made.
+
+| Access | What the bot may do |
+| --- | --- |
+| **`cornercase`** (the default) | Read anything, run the `cornercase` command line (except `kill-server`, `restart` and `update`), run read-only `git` (`log`, `show`, `diff`, `status`) and `gh` (`pr list`, `pr view`, `pr checks`, `issue list`, `issue view`), search the web, and **write only in its own folder**, `bot.json` and `chat.jsonl` excepted. |
+| **`full`** | Change any file and run anything, unattended. Off by default; `cornercase bot new --access full` is the only way to ask for it, and a bot cannot grant it to itself. |
+
+- **Claude Code** supports both. It loads your own Claude settings, so your MCP servers and `~/.claude/CLAUDE.md` work in a bot, and no project's settings do.
+- **Codex** can be a bot with **`full` access only**: its sandbox does not let `cornercase` reach the server (checked on Linux; macOS and Windows have not been tried, so they are treated the same). `cornercase bot agents` says so, and `cornercase bot new --agent codex` refuses to start without `--access full`. A Codex bot reads your own Codex configuration.
+- The other agents cannot be a bot yet (`not yet`).
+
+<Aside type="caution" title="Full access">
+A bot with `full` access can change any file and run any command, with nobody to ask. Give it only to a bot you would trust with an open shell.
+</Aside>
+
+## What is in a bot's folder
+
+Each bot has a folder in `bots/` next to `session.json` (`bots/<id>/`, private to you, `0700`):
+
+| File | What it holds |
+| --- | --- |
+| `bot.json` | The bot's settings and the id of its conversation. cornercase rewrites it; it does not read it again while it runs. |
+| `bot.md` | What the bot is for. You and the bot both write it: it updates it when you give it a job or change one. |
+| `memory.md` | What it keeps from one conversation to the next. It adds to it, keeps it short and prunes it. |
+| `chat.jsonl` | The chat as cornercase shows it, one JSON line per message, step, answer, error or notice. It survives `reset` and a change of model. |
+
+The chat is cornercase's own, not the agent's transcript, so what other features write to a bot later lands in the same place. cornercase tells each bot about itself in the first message of a conversation and never writes it to the folder, so a new release updates every bot at its next conversation.
+
+## For programs
+
+Everything is a request over the socket, so a window, a script or a plugin can build on it. See [Scripts and agents](../scripts-and-agents/#bots) for the `bot` request, its events and the `bots` of `status --app`.

@@ -48,6 +48,7 @@ pub(super) fn when(at: i64, now: i64, zone: &str) -> String {
 
 pub(super) fn agents(found: &[AgentInfo]) -> String {
     let mut out = String::new();
+    let title = found.iter().map(|agent| agent.title.chars().count()).max().unwrap_or_default() + 2;
     for agent in found {
         let accesses = agent.accesses.join(", ");
         let note = match (&agent.why, agent.bot) {
@@ -55,7 +56,7 @@ pub(super) fn agents(found: &[AgentInfo]) -> String {
             (Some(why), false) => why.clone(),
             (None, _) => accesses,
         };
-        let _ = writeln!(out, "{:<10}{:<16}{note}", agent.agent, agent.title);
+        let _ = writeln!(out, "{:<10}{:<title$}{note}", agent.agent, agent.title);
     }
     out
 }

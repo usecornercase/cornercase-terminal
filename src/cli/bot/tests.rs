@@ -82,9 +82,9 @@ fn the_agents_say_what_each_can_do() {
     ];
     assert_eq!(
         agents(&found),
-        "claude    Claude Code     cornercase, full\n\
-         codex     Codex           full  (its sandbox cannot reach cornercase)\n\
-         gemini    Gemini CLI      not yet\n"
+        "claude    Claude Code  cornercase, full\n\
+         codex     Codex        full  (its sandbox cannot reach cornercase)\n\
+         gemini    Gemini CLI   not yet\n"
     );
 }
 
