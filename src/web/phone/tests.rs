@@ -392,8 +392,14 @@ mod the_command_line {
         let secret = rig.paired();
 
         let (mut ws, pid) = rig.holding(&secret);
-        let big = format!(r#"{{"stdin":"{}"}}"#, "x".repeat(1024 * 1024));
-        let _ = ws.send(Message::text(big));
+        // Only the head of a masked text frame that says 1 MiB + 1 bytes, and a few of them: the server
+        // refuses on the head, and a client blocked writing the rest would hang where a refused write is
+        // not reset (Windows).
+        let mut frame = vec![0x81, 0x80 | 127];
+        frame.extend_from_slice(&(1024 * 1024 + 1_u64).to_be_bytes());
+        frame.extend_from_slice(&[0; 4]);
+        frame.extend_from_slice(br#"{"stdin":"xxxx"#);
+        io::Write::write_all(ws.get_mut(), &frame).expect("the frame's head");
         let seen = read_all(&mut ws);
 
         assert!(stderr_then_exit_2(&seen), "{seen:?}");
