@@ -1,5 +1,6 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
+use super::activity::Status;
 use super::claude;
 use crate::term::bracketed;
 use crate::text::one_line;
@@ -11,6 +12,8 @@ const AGENT_GONE: Duration = Duration::from_secs(3);
 const AGENT_LATEST: Duration = Duration::from_secs(30);
 const SUBMIT_QUIET: Duration = Duration::from_millis(300);
 const SUBMIT_LATEST: Duration = Duration::from_secs(3);
+pub(crate) const CONFIRM_EVERY: Duration = Duration::from_secs(3);
+pub(crate) const MAX_ENTERS: u8 = 5;
 const MAX_TRUSTS: u8 = 4;
 const MARKERS: [&str; 5] = ["❯", "›", ">", "▸", "→"];
 const MENU_REACH: usize = 6;
@@ -34,6 +37,14 @@ enum Stage {
     Shell,
     Agent,
     Submit,
+    Confirm,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Entered {
+    first: Instant,
+    last: Instant,
+    enters: u8,
 }
 
 #[derive(Debug)]
@@ -45,6 +56,7 @@ pub(crate) struct Launch {
     pub(crate) trust: Option<Trust>,
     pub(crate) resume: Option<Instant>,
     pub(crate) restart: Option<String>,
+    pub(crate) confirm: Option<Duration>,
     spec: Spec,
     agent: bool,
     stage: Stage,
@@ -55,6 +67,17 @@ pub(crate) struct Launch {
     echo: String,
     undrawn: bool,
     parked: Option<Parked>,
+    entered: Option<Entered>,
+    pasted: Option<SystemTime>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Reaction {
+    pub(crate) status: Option<Status>,
+    pub(crate) prompted: Option<SystemTime>,
+    pub(crate) worked: Option<Instant>,
+    pub(crate) clock: SystemTime,
+    pub(crate) dialog: bool,
 }
 
 pub(crate) struct Seen<'a> {
@@ -65,6 +88,7 @@ pub(crate) struct Seen<'a> {
     pub(crate) trust_prompt: &'a dyn Fn(&str) -> bool,
     pub(crate) trust: Trust,
     pub(crate) typed: &'a dyn Fn(&str) -> Result<String, Refusal>,
+    pub(crate) reaction: Reaction,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +110,9 @@ pub(crate) enum Step {
     Done(Vec<u8>),
     Abandon,
     Refuse(Refusal),
+    Enter(u8),
+    Taken { enters: u8, seen: &'static str },
+    NotTaken(u8),
 }
 
 impl Launch {
@@ -98,6 +125,7 @@ impl Launch {
             trust: None,
             resume: None,
             restart: None,
+            confirm: None,
             spec,
             agent: true,
             stage: Stage::Shell,
@@ -108,6 +136,8 @@ impl Launch {
             echo: String::new(),
             undrawn: false,
             parked: None,
+            entered: None,
+            pasted: None,
         }
     }
 
@@ -161,6 +191,7 @@ impl Launch {
                 None => "agent",
             },
             Stage::Submit => "submit",
+            Stage::Confirm => "confirm",
         }
     }
 
@@ -181,7 +212,7 @@ impl Launch {
     }
 
     pub(crate) fn submits(&self) -> bool {
-        self.stage == Stage::Submit
+        matches!(self.stage, Stage::Submit | Stage::Confirm)
     }
 
     fn quiet(&self, now: Instant) -> Duration {
@@ -207,14 +238,41 @@ impl Launch {
             }
             Stage::Agent if self.parked.is_some() => Step::Wait,
             Stage::Agent => self.step_agent(now, seen),
-            Stage::Submit => {
-                if self.quiet(now) >= SUBMIT_QUIET || now.duration_since(self.since) >= SUBMIT_LATEST {
-                    Step::Done(b"\r".to_vec())
-                } else {
-                    Step::Wait
-                }
-            }
+            Stage::Submit => self.step_submit(now, seen),
+            Stage::Confirm => self.step_confirm(now, seen),
         }
+    }
+
+    fn step_submit(&mut self, now: Instant, seen: &Seen) -> Step {
+        if self.quiet(now) < SUBMIT_QUIET && now.duration_since(self.since) < SUBMIT_LATEST {
+            return Step::Wait;
+        }
+        if self.confirm.is_none() || seen.reaction.status.is_none() {
+            return Step::Done(b"\r".to_vec());
+        }
+        self.entered = Some(Entered { first: now, last: now, enters: 1 });
+        self.next(Stage::Confirm, now);
+        Step::Enter(1)
+    }
+
+    fn step_confirm(&mut self, now: Instant, seen: &Seen) -> Step {
+        let (Some(every), Some(entered)) = (self.confirm, self.entered) else { return Step::Done(Vec::new()) };
+        let reaction = &seen.reaction;
+        if let Some(how) = taken(reaction, self.pasted, entered.first) {
+            return Step::Taken { enters: entered.enters, seen: how };
+        }
+        let spent = now.duration_since(entered.first) >= every * u32::from(MAX_ENTERS);
+        if seen.shell_in_foreground || spent {
+            return Step::NotTaken(entered.enters);
+        }
+        let due = now.duration_since(entered.last) >= every && entered.enters < MAX_ENTERS;
+        let safe = matches!(reaction.status, Some(Status::Idle | Status::Done | Status::Pending)) && !reaction.dialog;
+        if !(due && safe) {
+            return Step::Wait;
+        }
+        let enters = entered.enters + 1;
+        self.entered = Some(Entered { last: now, enters, ..entered });
+        Step::Enter(enters)
     }
 
     fn step_shell(&mut self, now: Instant, seen: &mut Seen) -> Step {
@@ -279,6 +337,7 @@ impl Launch {
         let Some(prompt) = &self.spec.prompt else { return Step::Done(Vec::new()) };
         let text = if self.spec.submit && seen.bracketed_paste { prompt.clone() } else { one_line(prompt) };
         let bytes = if seen.bracketed_paste { bracketed(&text) } else { text };
+        self.pasted = Some(seen.reaction.clock);
         if self.spec.submit {
             self.next(Stage::Submit, now);
             Step::Write(bytes.into_bytes())
@@ -286,6 +345,16 @@ impl Launch {
             Step::Done(bytes.into_bytes())
         }
     }
+}
+
+fn taken(reaction: &Reaction, pasted: Option<SystemTime>, first: Instant) -> Option<&'static str> {
+    if reaction.prompted.is_some_and(|at| pasted.is_none_or(|pasted| at >= pasted)) {
+        return Some("prompt");
+    }
+    if reaction.worked.is_some_and(|at| at >= first) {
+        return Some(Status::Working.name());
+    }
+    reaction.status.filter(|status| !matches!(status, Status::Idle | Status::Done | Status::Pending)).map(Status::name)
 }
 
 fn compact(text: &str) -> String {

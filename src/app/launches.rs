@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use ratatui::layout::Rect;
 
@@ -157,6 +157,7 @@ fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes
         out.parked.push(pane);
     }
     log_step(&step, (pane, kind), (before, stage));
+    log_give_up(&step, (pane, kind), term);
     if let Step::Refuse(refusal) = &step {
         out.refused.push((pane, refusal.clone()));
     }
@@ -169,6 +170,7 @@ fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
     let application_cursor = term.emulator.application_cursor();
     let shell = term.shell_pid();
     let typed = |line: &str| typed_in(line, shell);
+    let reaction = reaction(term, launch.stage() == "confirm");
     let emulator = &mut term.emulator;
     let mut screen = || emulator.active_contents().unwrap_or_default();
     let mut seen = launch::Seen {
@@ -179,8 +181,19 @@ fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
         trust_prompt: round.asks,
         trust: launch.trust.unwrap_or(round.trust),
         typed: &typed,
+        reaction,
     };
     launch.step(round.now, &mut seen)
+}
+
+fn reaction(term: &Term, confirming: bool) -> launch::Reaction {
+    launch::Reaction {
+        status: term.agent.status(),
+        prompted: term.context.prompted(),
+        worked: term.agent.worked(),
+        clock: SystemTime::now(),
+        dialog: confirming && term.dialog(),
+    }
 }
 
 fn typed_in(line: &str, shell: Option<i32>) -> std::result::Result<String, Refusal> {
@@ -199,11 +212,44 @@ fn log_step(step: &Step, (pane, kind): (u64, &str), (before, stage): (&str, &str
             let bytes = bytes.len();
             log::info!("launch", message, pane = pane, kind = kind, from = before, to = stage, bytes = bytes);
         }
+        Step::Enter(_) | Step::Taken { .. } | Step::NotTaken(_) => log_confirm(step, (pane, kind), (before, stage)),
         Step::Abandon => log::warning!("launch", "the agent did not start", pane = pane, kind = kind),
         Step::Refuse(refusal) => {
             log::warning!("launch", "refused", pane = pane, kind = kind, reason = refusal.reason);
         }
     }
+}
+
+fn log_confirm(step: &Step, (pane, kind): (u64, &str), (before, stage): (&str, &str)) {
+    match step {
+        Step::Enter(1) => {
+            log::info!("launch", "wrote", pane = pane, kind = kind, from = before, to = stage, bytes = 1);
+        }
+        Step::Enter(enters) => log::info!("launch", "enter again", pane = pane, kind = kind, enters = *enters),
+        Step::Taken { enters, seen } => {
+            log::info!("launch", "taken", pane = pane, kind = kind, enters = *enters, seen = *seen);
+        }
+        _ => {}
+    }
+}
+
+fn log_give_up(step: &Step, (pane, kind): (u64, &str), term: &mut Term) {
+    let Step::NotTaken(enters) = step else { return };
+    let status = term.agent.state().unwrap_or("none");
+    let input = match term.seen_draft() {
+        Some(true) => "text",
+        Some(false) => "empty",
+        None => "unknown",
+    };
+    log::warning!(
+        "launch",
+        "the agent did not take the prompt",
+        pane = pane,
+        kind = kind,
+        enters = *enters,
+        status = status,
+        input = input
+    );
 }
 
 fn apply_step(step: Step, launch: &Launch, term: &mut Term, now: Instant) -> Option<bool> {
@@ -217,6 +263,12 @@ fn apply_step(step: Step, launch: &Launch, term: &mut Term, now: Instant) -> Opt
             }
             Some(true)
         }
+        Step::Enter(_) if !written(term, b"\r") => Some(false),
+        Step::Enter(_) => {
+            term.entered(now);
+            None
+        }
+        Step::Taken { .. } | Step::NotTaken(_) => Some(true),
         Step::Abandon | Step::Refuse(_) => Some(false),
     }
 }

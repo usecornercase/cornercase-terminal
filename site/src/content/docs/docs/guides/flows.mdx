@@ -80,7 +80,7 @@ Before it sends a role a large piece of work, the orchestrator checks its team's
 A team that stops to ask defeats the point, and the orchestrator must not answer another agent's permission prompt. So every role starts in its agent's mode that skips permission prompts: Claude Code with `--dangerously-skip-permissions`, Codex with `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI with `--yolo --skip-trust`, opencode with `--auto`, Grok Build with `--always-approve` Cursor CLI with `--force --trust` and GitHub Copilot CLI with `--allow-all --no-ask-user` (never its autopilot mode, which keeps sending itself continuation messages). Start flows in repositories you trust, and read what they did before you merge it.
 </Aside>
 
-A run lives in its workspace: closing the workspace closes the run. It is saved with the [session](../sessions/), so after a restart the agents [resume their conversations](../sessions/#agents-resume-their-conversations) in their tabs, each in its role's mode, model and effort, and the orchestrator is told its team's new pane ids.
+A run lives in its workspace: closing the workspace closes the run. It is saved with the [session](../sessions/), so after a restart the agents [resume their conversations](../sessions/#agents-resume-their-conversations) in their tabs, each in its role's mode, model and effort, and the orchestrator is told its team's new pane ids. If its agent is still finishing its resume and leaves that message in its input box, cornercase presses `Enter` again, every 3 seconds and up to 4 more times, until it takes it; the same goes when you reopen the team's agents.
 
 ## The Flow panel
 

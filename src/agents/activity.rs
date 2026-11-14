@@ -195,6 +195,10 @@ impl Pane {
         [self.worked, self.moved].into_iter().flatten().any(|at| at >= since)
     }
 
+    pub(crate) fn worked(&self) -> Option<Instant> {
+        self.worked
+    }
+
     pub(crate) fn worked_since(&self, since: Instant) -> bool {
         self.worked.is_some_and(|at| at >= since)
     }
