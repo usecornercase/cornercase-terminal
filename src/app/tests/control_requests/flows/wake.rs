@@ -249,11 +249,15 @@ fn an_ended_run_is_not_retried() {
     assert_eq!(prompts(&agent, o), 1);
 }
 
-pub(super) fn stopped(agent: &mut Agent) -> Option<String> {
+pub(super) fn runs_report(agent: &mut Agent) -> FlowRuns {
     agent.app.clients.events.runs.set_every(Duration::ZERO);
     let answer = value(&mut agent.app, None, Command::FlowRuns(wire::FlowRunsWatch::default()));
     let fed: Snapshot<FlowRuns> = serde_json::from_value(answer).expect("a runs snapshot");
-    fed.report.runs[0].stopped.clone()
+    fed.report
+}
+
+pub(super) fn stopped(agent: &mut Agent) -> Option<String> {
+    runs_report(agent).runs[0].stopped.clone()
 }
 
 #[test]

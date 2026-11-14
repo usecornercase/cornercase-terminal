@@ -1,12 +1,9 @@
-use std::time::Duration;
-
-use super::wake::{prompts_in, reads, sends, stopped, team, working};
+use super::wake::{prompts_in, reads, runs_report, sends, stopped, team, working};
 use super::*;
 use crate::agents::AgentState;
 use crate::agents::launch::Launch;
 use crate::app::menus::MenuAction;
 use crate::control::closed_agents::AgentsReopened;
-use crate::control::{FlowRuns, Snapshot};
 
 fn kill(agent: &Agent, id: u64) {
     let (pid, _) = pane(&agent.app, id).context.agent().expect("the agent's process");
@@ -39,13 +36,6 @@ fn exited_coder(agent: &mut Agent) -> (u64, u64, String) {
     (o, c, conversation)
 }
 
-fn runs(agent: &mut Agent) -> FlowRuns {
-    agent.app.clients.events.runs.set_every(Duration::ZERO);
-    let answer = value(&mut agent.app, None, Command::FlowRuns(wire::FlowRunsWatch::default()));
-    let fed: Snapshot<FlowRuns> = serde_json::from_value(answer).expect("a runs snapshot");
-    fed.report
-}
-
 fn reopened(agent: &mut Agent) -> AgentsReopened {
     let workspace = agent.app.runs.all()[0].workspace;
     serde_json::from_value(ok(&mut agent.app, "agents-reopen", &json!({"workspace": workspace}))).expect("an answer")
@@ -59,7 +49,7 @@ fn a_role_whose_agent_exits_keeps_its_conversation_and_shows_as_exited() {
     let kept = pane(&agent.app, c).exited_agent.clone().expect("the conversation is kept");
     assert_eq!(kept.conversation, conversation);
     assert!(pane(&agent.app, c).resume.is_none());
-    let report = runs(&mut agent);
+    let report = runs_report(&mut agent);
     let roles: Vec<(u64, bool, Option<String>)> = report.runs[0]
         .roles
         .iter()
@@ -132,7 +122,7 @@ fn a_run_whose_orchestrators_agent_exited_stops_once_no_member_works() {
     agent.refreshing("the run stopped", |app| app.runs.all()[0].stopped.is_some());
 
     assert!(stopped(&mut agent).is_some());
-    let report = runs(&mut agent);
+    let report = runs_report(&mut agent);
     assert!(report.runs[0].roles[0].exited);
 }
 
