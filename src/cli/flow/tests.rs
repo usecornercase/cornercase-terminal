@@ -228,7 +228,7 @@ mod runs {
 
         assert!(text.contains("  coder         pane 13    exited\n"), "{text}");
         assert!(text.contains("  tester        -          -\n"), "{text}");
-        assert!(text.contains("  exited: coder; cornercase agents reopen --workspace 4 brings it back\n"), "{text}");
+        assert!(text.contains("  exited: coder; `cornercase agents reopen --workspace 4` brings it back\n"), "{text}");
         assert!(text.contains("  reviewer      pane 14    closed\n"), "{text}");
     }
 
@@ -239,7 +239,7 @@ mod runs {
         let text = runs_text_at(&runs);
 
         assert!(
-            text.contains("  exited: orchestrator, coder; cornercase agents reopen --workspace 4 brings them back\n")
+            text.contains("  exited: orchestrator, coder; `cornercase agents reopen --workspace 4` brings them back\n")
         );
     }
 

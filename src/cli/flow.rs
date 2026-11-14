@@ -655,11 +655,11 @@ fn exited_note(run: &RunState) -> String {
     if exited.is_empty() {
         return String::new();
     }
-    format!(
-        "  exited: {}; cornercase agents reopen --workspace {} brings {brings} back\n",
+    client::hinted(format!(
+        "  exited: {}; `cornercase agents reopen --workspace {}` brings {brings} back\n",
         exited.join(", "),
         run.workspace
-    )
+    ))
 }
 
 fn closes_text(free_builds: bool) -> &'static str {
