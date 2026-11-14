@@ -1,4 +1,4 @@
-use super::{ModeTable, breakdown, claude, codex, copilot, cursor, gemini, grok, opencode, recap, usage, vibe};
+use super::{ModeTable, breakdown, claude, codex, copilot, cursor, gemini, grok, headless, opencode, usage, vibe};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Known {
@@ -363,16 +363,16 @@ impl Known {
         }
     }
 
-    pub(crate) fn recap(self) -> Option<recap::Spec> {
+    pub(crate) fn headless(self) -> Option<headless::Spec> {
         match self {
-            Self::Claude => claude::RECAP,
-            Self::Codex => codex::RECAP,
-            Self::Gemini => gemini::RECAP,
-            Self::Opencode => opencode::RECAP,
-            Self::Grok => grok::RECAP,
-            Self::Cursor => cursor::RECAP,
-            Self::Copilot => copilot::RECAP,
-            Self::Vibe => vibe::RECAP,
+            Self::Claude => claude::HEADLESS,
+            Self::Codex => codex::HEADLESS,
+            Self::Gemini => gemini::HEADLESS,
+            Self::Opencode => opencode::HEADLESS,
+            Self::Grok => grok::HEADLESS,
+            Self::Cursor => cursor::HEADLESS,
+            Self::Copilot => copilot::HEADLESS,
+            Self::Vibe => vibe::HEADLESS,
         }
     }
 

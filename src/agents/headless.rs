@@ -58,7 +58,7 @@ pub(crate) struct Call<'a> {
 
 pub(crate) fn run(call: &Call<'_>, ask: &Ask, progress: &Arc<AtomicUsize>) -> Result<Ran> {
     let Call { agent, program, home, timeout } = *call;
-    let spec = agent.recap().ok_or_else(|| Error::Probe(format!("{} cannot write a recap", agent.name())))?;
+    let spec = agent.headless().ok_or_else(|| Error::Probe(format!("{} cannot write a recap", agent.name())))?;
     let mut command = (spec.command)(program, ask);
     command.current_dir(&ask.folder);
     if let Some(socket) = &ask.socket {

@@ -18,7 +18,7 @@ fn named(text: &str) -> Option<String> {
 
 impl App {
     pub(in crate::app) fn recap_agent(&self, wanted: Option<&str>) -> Known {
-        let from = |name: &str| Known::of(name).filter(|kind| kind.recap().is_some());
+        let from = |name: &str| Known::of(name).filter(|kind| kind.headless().is_some());
         wanted
             .and_then(from)
             .or_else(|| from(self.config.recap_agent.trim()))

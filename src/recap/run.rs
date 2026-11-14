@@ -8,7 +8,7 @@ use super::journal::files;
 use super::range::{self, Range};
 use super::store::{self, Moment};
 use super::{Choice, KEPT_DAYS, Options, Recap, prompt};
-use crate::agents::recap::{Ask, Call};
+use crate::agents::headless::{Ask, Call};
 use crate::agents::{self, Known};
 use crate::error::{Error, Result};
 use crate::queue::clock;
@@ -80,7 +80,7 @@ pub(crate) fn run(input: &Input) -> Result<Outcome> {
         socket: input.socket.clone(),
     };
     let call = Call { agent: kind, program: &input.program, home: input.home.as_deref(), timeout: input.timeout };
-    let ran = agents::recap::run(&call, &ask, &input.progress)?;
+    let ran = agents::headless::run(&call, &ask, &input.progress)?;
     let recap = Recap {
         v: super::RECAP_VERSION,
         range: input.choice.name().to_string(),

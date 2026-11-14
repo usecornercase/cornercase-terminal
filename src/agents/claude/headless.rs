@@ -2,7 +2,7 @@ use std::process::Command;
 
 use serde_json::Value;
 
-use crate::agents::recap::{Ask, Ran, Used};
+use crate::agents::headless::{Ask, Ran, Used};
 use crate::error::{Error, Result};
 use crate::{agents, process};
 

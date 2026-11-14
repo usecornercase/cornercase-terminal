@@ -138,3 +138,39 @@ fn an_agent_without_a_recap_is_refused() {
     let error = ran(Known::Gemini, Path::new("gemini"), folder.path()).expect_err("no recap");
     assert!(error.to_string().contains("cannot write a recap"), "{error}");
 }
+
+#[test]
+fn claude_argv_is_exactly_what_recap_always_ran() {
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, "claude", fixture!("claude/2.1.318/recap-ok.jsonl"));
+    ran(Known::Claude, &program, folder.path()).expect("a recap");
+    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
+    assert_eq!(
+        argv.trim_end(),
+        concat!(
+            "[\"-p\", \"--setting-sources\", \"\", \"--no-session-persistence\", \"--strict-mcp-config\", ",
+            "\"--output-format\", \"stream-json\", \"--verbose\", \"--max-turns\", \"40\", ",
+            "\"--allowedTools\", \"Read,Grep,Glob,Bash(cornercase search:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*)\", ",
+            "\"--disallowedTools\", \"Edit,Write,NotebookEdit,WebFetch,WebSearch,Task\", ",
+            "\"--model\", \"opus\", \"--effort\", \"low\", \"--\", \"Sum it up\"]"
+        )
+    );
+}
+
+#[test]
+fn codex_argv_is_exactly_what_recap_always_ran() {
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, "codex", fixture!("codex/0.164.0/recap-ok.jsonl"));
+    ran(Known::Codex, &program, folder.path()).expect("a recap");
+    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
+    let wanted = format!(
+        concat!(
+            "[\"exec\", \"--json\", \"--skip-git-repo-check\", \"--ephemeral\", \"--sandbox\", \"read-only\", ",
+            "\"-C\", {:?}, \"--model\", \"opus\", \"-c\", \"model_reasoning_effort=low\", \"--\", \"Sum it up\"]"
+        ),
+        folder.path().display().to_string()
+    );
+    assert_eq!(argv.trim_end(), wanted);
+}
