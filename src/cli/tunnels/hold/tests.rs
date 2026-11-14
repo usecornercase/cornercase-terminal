@@ -252,13 +252,20 @@ mod how_it_ended {
     #[case::closed(HoldEnd::Closed)]
     #[case::forgotten(HoldEnd::Forgotten)]
     fn a_close_or_a_forget_exits_with_success(#[case] end: HoldEnd) {
-        assert!(status_of(end).expect("success"));
+        assert!(status_of(end, false).expect("success"));
     }
 
     #[rstest]
     #[case::stopped(HoldEnd::ServerStopped)]
     #[case::restarted(HoldEnd::ServerRestarted)]
     fn a_server_that_stopped_exits_with_its_own_status(#[case] end: HoldEnd) {
-        assert!(matches!(status_of(end), Err(Error::ServerStopped)));
+        assert!(matches!(status_of(end, false), Err(Error::ServerStopped)));
+    }
+
+    #[rstest]
+    #[case::stopped(HoldEnd::ServerStopped)]
+    #[case::restarted(HoldEnd::ServerRestarted)]
+    fn a_reader_that_left_makes_it_a_quiet_success(#[case] end: HoldEnd) {
+        assert!(status_of(end, true).expect("quiet"));
     }
 }

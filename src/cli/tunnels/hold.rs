@@ -171,12 +171,12 @@ fn serve(heard: &Receiver<Heard>, tell: Sender<Heard>, hold: Held) -> Result<Opt
 
 fn said(ended: Result<Option<HoldEnd>>) -> Result<bool> {
     let Some(end) = ended? else { return Ok(true) };
-    say_ended(&mut io::stdout().lock(), end)?;
-    status_of(end)
+    let reader_left = say_ended(&mut io::stdout().lock(), end)?;
+    status_of(end, reader_left)
 }
 
-fn status_of(end: HoldEnd) -> Result<bool> {
-    if end.server_stopped() { Err(Error::ServerStopped) } else { Ok(true) }
+fn status_of(end: HoldEnd, reader_left: bool) -> Result<bool> {
+    if end.server_stopped() && !reader_left { Err(Error::ServerStopped) } else { Ok(true) }
 }
 
 fn wait_up(heard: &Receiver<Heard>, hold: Held, report: impl FnOnce(&str)) -> Result<bool> {

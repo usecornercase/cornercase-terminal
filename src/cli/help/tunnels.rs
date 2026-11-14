@@ -42,7 +42,8 @@ take it over when it ends. With --json they print {\"tunnels\": [...], \"windows
 from this computer, waits until it is up and prints one line, {\"port\", \"local\", \"url\"}, then
 holds the tunnel until it is killed (exit 0), its output reader leaves (0), `tunnel close PORT` or
 `tunnel forget PORT` is run on the server (0, after one more line: {\"ended\": \"closed\"} or
-{\"ended\": \"forgotten\"}), the server stops or restarts (7, after {\"ended\": \"server-stopped\"} or
+{\"ended\": \"forgotten\"}; a server older than the feature `tunnel-hold-ended` says nothing, and the
+hold exits 0 with no line), the server stops or restarts (7, after {\"ended\": \"server-stopped\"} or
 {\"ended\": \"server-restarted\"}: hold it again once the server is back), or ssh or the server
 connection fails (1). It needs --remote (exit 2 without it), and it remembers nothing in
 tunnels.json. If it fails before the server counts it (ssh, or the local port), it tells the
