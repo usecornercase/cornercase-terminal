@@ -98,8 +98,7 @@ pub(super) struct Clients {
     pub(super) views: views::Views,
     pub(super) pasted: pasted_files::PastedFiles,
     pub(super) pairings: pair::Pairings,
-    pub(super) bots: HashMap<u64, String>,
-    pub(super) bot_keys: HashSet<u64>,
+    pub(super) bots: boundary::BotClients,
     confirm_within: Duration,
     typing_holds: Duration,
 }
@@ -115,8 +114,7 @@ impl Default for Clients {
             views: views::Views::default(),
             pasted: pasted_files::PastedFiles::default(),
             pairings: pair::Pairings::default(),
-            bots: HashMap::new(),
-            bot_keys: HashSet::new(),
+            bots: boundary::BotClients::default(),
             confirm_within: CONFIRM_WITHIN,
             typing_holds: INPUT_HOLDS,
         }

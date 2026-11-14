@@ -112,7 +112,8 @@ pub(crate) fn stop(group: Group) -> Vec<Stopped> {
 }
 
 pub(crate) fn below(pid: i32) -> Vec<Group> {
-    process::children(pid).into_iter().map(|child| Group::live_with(child, None)).collect()
+    let alone = |root| Group { root, members: Vec::new() };
+    process::descendants(pid).into_iter().filter_map(Member::stamped).map(alone).collect()
 }
 
 pub(crate) fn stop_all(groups: Vec<Group>) -> Vec<Stopped> {

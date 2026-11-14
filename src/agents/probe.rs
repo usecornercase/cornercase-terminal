@@ -93,6 +93,11 @@ impl Running {
         process::running(root, started) && (pid == root || stop::inside(pid, root) || lineage.holds(pid))
     }
 
+    pub(crate) fn contained(&self) -> bool {
+        let spawned = self.0.lock();
+        spawned.lineage.is_some() && spawned.pid.is_some_and(|(root, started)| process::running(root, started))
+    }
+
     fn end_lineage(&self) {
         let lineage = self.0.lock().lineage.take();
         if let Some(lineage) = lineage {

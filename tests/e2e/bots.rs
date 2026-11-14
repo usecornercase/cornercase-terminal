@@ -57,21 +57,12 @@ fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped()
 
 const HEAD: &str = "a bot can only type into a pane that runs an agent";
 
-fn shell_pane(session: &Session) -> String {
-    let work = session.dir.join("work");
-    std::fs::create_dir_all(&work).expect("a folder");
-    let project: u64 = session.says(&["open", &work.display().to_string()]).parse().expect("an id");
-    let report: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("json");
-    let opened = report["projects"].as_array().and_then(|all| all.iter().find(|p| p["id"] == project));
-    opened.expect("the project")["workspaces"][0]["tabs"][0]["panes"][0]["id"].to_string()
-}
-
 #[test]
 fn a_bot_cannot_type_into_a_shell_pane_but_you_can() {
     let session = started_running(
-        "cornercase send --pane \"$(cat \"$0.pane\")\" --enter \"touch $0.typed\" > \"$0.out\" 2> \"$0.err\"\necho $? > \"$0.status\"",
+        "env -u CORNERCASE_BOT cornercase send --pane \"$(cat \"$0.pane\")\" --enter \"touch $0.typed\" > \"$0.out\" 2> \"$0.err\"\necho $? > \"$0.status\"",
     );
-    let pane = shell_pane(&session);
+    let pane = held::new_shell(&session);
     std::fs::write(session.dir.join("claude-bot.pane"), &pane).expect("the pane");
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
 
@@ -92,7 +83,7 @@ fn a_bot_cannot_type_into_a_shell_pane_but_you_can() {
 fn a_command_whose_environment_names_a_bot_is_refused_by_the_server() {
     let session = started();
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
-    let pane = shell_pane(&session);
+    let pane = held::new_shell(&session);
 
     let sent =
         session.command().env("CORNERCASE_BOT", "prs").args(["send", "--pane", &pane, "x"]).output().expect("run");

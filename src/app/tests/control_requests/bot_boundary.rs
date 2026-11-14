@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use super::*;
+use crate::agents::activity::Activity;
 use crate::agents::headless::Access;
 use crate::app::control::boundary::HEAD;
 use crate::app::tests::bots::install_bot;
@@ -17,20 +18,22 @@ struct Bounded {
     agent: u64,
     helper: PathBuf,
     claude: PathBuf,
-    _folders: [TempDir; 2],
+    _folders: [TempDir; 3],
 }
 
 fn bounded() -> Bounded {
     let (mut app, rx) = app();
     let shell = first(&app);
     let (bots, bin, claude) = install_bot(&mut app, "", Access::Cornercase);
+    let pasted = TempDir::new();
+    app.set_pasted_dir(&pasted.path().join("pasted"));
     let helper = fake_program(bin.path(), "helper");
     std::fs::write(helper.with_extension("hold"), "").expect("hold");
     app.config.agent_commands.insert("helper".into(), helper.display().to_string());
     ask(&mut app, None, new_tab(Some(&helper.display().to_string())));
     let agent = done(answered(&mut app, &rx, "the agent's tab")).ids.pane.expect("the agent's pane");
     refreshing(&mut app, &rx, "the helper is in front", |app| in_front(app, agent));
-    let mut bounded = Bounded { app, rx, shell, agent, helper, claude, _folders: [bots, bin] };
+    let mut bounded = Bounded { app, rx, shell, agent, helper, claude, _folders: [bots, bin, pasted] };
     bounded.connect_as_the_bot();
     bounded
 }
@@ -51,7 +54,7 @@ impl Bounded {
     }
 
     fn as_you(&mut self) {
-        self.app.clients.bots.remove(&CLIENT);
+        self.app.clients.bots.forget(CLIENT, std::iter::empty());
     }
 
     fn refused(&mut self, command: Command) -> String {
@@ -62,6 +65,12 @@ impl Bounded {
 
     fn screen(&self, pane: u64) -> String {
         pane_screen(&self.app, pane)
+    }
+
+    fn gone_from_front(&mut self) {
+        std::fs::remove_file(self.helper.with_extension("hold")).expect("release the helper");
+        let (app, agent) = (&self.app, self.agent);
+        wait_until("the agent's shell is in front", || !in_front(app, agent));
     }
 
     fn leaves_the_agent(&mut self) {
@@ -76,10 +85,6 @@ fn text(pane: u64, text: &str, enter: bool) -> Command {
     send_text(pane, text, enter, false)
 }
 
-fn keys(pane: u64, keys: &[&str]) -> Command {
-    Command::Keys(wire::Keys { pane: Some(pane), keys: keys.iter().map(|key| (*key).to_string()).collect(), tab: None })
-}
-
 fn input(pane: u64) -> Command {
     let events = vec![crate::control::terminal::InputEvent::Text("typed-by-bot".into())];
     Command::Input(wire::Input { pane: Some(pane), events, ..wire::Input::default() })
@@ -92,7 +97,7 @@ fn a_bot_cannot_type_into_a_shell_pane() {
 
     let sent = b.refused(text(shell, "echo typed-by-bot", true));
     assert!(sent.contains(&format!("pane {shell} runs none")), "{sent}");
-    b.refused(keys(shell, &["enter"]));
+    b.refused(press_keys(shell, &["enter"]));
     b.refused(input(shell));
     b.refused(Command::PasteFile(wire::PasteFile { pane: Some(shell), name: "a.txt".into(), data: String::new() }));
     let todo = wire::TodoSend { id: 1, pane: Some(shell), tab: None, force: false };
@@ -112,7 +117,7 @@ fn a_bot_can_type_into_an_agent_pane_and_start_a_plain_shell() {
     let agent = b.agent;
 
     value(&mut b.app, None, text(agent, "hello", false));
-    value(&mut b.app, None, keys(agent, &["esc"]));
+    value(&mut b.app, None, press_keys(agent, &["esc"]));
     value(&mut b.app, None, new_tab(None));
 }
 
@@ -160,11 +165,8 @@ fn a_bots_held_send_is_checked_again_when_it_goes_out() {
     assert_eq!(b.app.take_answers(), Vec::new(), "the send is held");
     b.leaves_the_agent();
 
-    let held = json!({"pane": agent, "action": "send-now"});
-    let envelope = json!({"contract": 1, "command": "held", "args": held}).to_string();
-    b.app.request(OTHER, &envelope, Some(AREA), Instant::now());
-    let answers = b.app.take_answers();
-    let (_, reply) = answers.into_iter().find(|(client, _)| *client == CLIENT).expect("the bot's answer");
+    let (_, answered) = held::asked_by_another_client(&mut b.app, &json!({"pane": agent, "action": "send-now"}));
+    let reply = answered.into_iter().next().expect("the bot's answer");
 
     let refusal = error(serde_json::from_str(&reply).expect("a response"));
     assert!(refusal.starts_with(HEAD), "{refusal}");
@@ -182,5 +184,47 @@ fn a_bots_enter_is_not_pressed_once_its_agent_is_gone() {
 
     assert!(message.starts_with(HEAD), "{message}");
     assert!(b.screen(agent).lines().all(|line| !line.trim_end().ends_with("pwned") || line.contains("echo pwned")));
+    assert!(!b.screen(agent).lines().any(|line| line.trim() == "pwned"), "{}", b.screen(agent));
+}
+
+#[test]
+fn a_bot_cannot_type_into_a_pane_whose_agent_went_back_to_its_shell_while_status_still_shows_it() {
+    let mut b = bounded();
+    let agent = b.agent;
+    b.leaves_the_agent();
+    b.app.projects.pane_by_mut(agent).expect("the pane").agent.update(Some(Activity::Done), false, Instant::now());
+    assert!(pane(&b.app, agent).agent.status().is_some(), "the status outlives the agent");
+
+    b.refused(text(agent, "echo typed-by-bot", true));
+}
+
+#[test]
+fn a_bots_pasted_file_is_checked_again_when_it_is_stored() {
+    let mut b = bounded();
+    let agent = b.agent;
+    ask(
+        &mut b.app,
+        None,
+        Command::PasteFile(wire::PasteFile { pane: Some(agent), name: "a.txt".into(), data: "eA==".into() }),
+    );
+    b.gone_from_front();
+
+    let message = error(answered(&mut b.app, &b.rx, "the paste is answered"));
+
+    assert!(message.starts_with(HEAD), "{message}");
+    assert!(!b.screen(agent).contains("pasted"), "{}", b.screen(agent));
+}
+
+#[test]
+fn a_bots_enter_is_not_pressed_when_its_client_left_before_it() {
+    let mut b = bounded();
+    let agent = b.agent;
+    ask(&mut b.app, None, text(agent, "echo pwned", true));
+    b.app.forget(CLIENT);
+    b.gone_from_front();
+
+    let (app, rx) = (&mut b.app, &b.rx);
+    refreshing(app, rx, "the launch is over", |app| app.agents.launches.of_pane(agent).next().is_none());
+
     assert!(!b.screen(agent).lines().any(|line| line.trim() == "pwned"), "{}", b.screen(agent));
 }
