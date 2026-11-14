@@ -24,7 +24,9 @@ pub(crate) enum AgentsAction {
         #[command(flatten)]
         boot: BootArg,
     },
-    #[command(about = "Reopen the closed agents of a workspace, each in its own conversation")]
+    #[command(
+        about = "Reopen the closed agents of a workspace, each in its own conversation, and start again a running flow's roles whose agent exited"
+    )]
     Reopen {
         #[command(flatten)]
         place: Where,

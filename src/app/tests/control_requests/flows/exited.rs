@@ -238,3 +238,31 @@ fn an_exited_orchestrator_comes_back_last_told_where_its_team_stands() {
     assert!(told.contains("coder starts over"), "{told}");
     assert_eq!(exited_in(&team), 0);
 }
+
+fn saved_with_exited_roles(team: &mut Team) -> crate::state::State {
+    keep_conversation(team, "coder", "c1");
+    keep_conversation(team, "reviewer", "c2");
+    let mut saved = team.app.state();
+    let workspace = saved.projects[0].workspaces.iter_mut().find(|w| w.run.is_some()).expect("the run is saved");
+    let panes: Vec<_> = workspace.tabs.iter().map(|tab| tab.panes[0].exited_agent.clone()).collect();
+    assert_eq!(panes.iter().flatten().count(), 2, "the exited conversations are saved");
+    workspace.run.as_mut().expect("the run").flow.roles[1].worktree = crate::flows::Worktree::Own;
+    workspace.tabs[2].panes[0].cwd = Some(team.repo.path().join("gone"));
+    saved
+}
+
+#[test]
+fn an_exited_conversation_survives_a_restart_unless_the_roles_worktree_is_gone() {
+    let mut team = Team::new();
+    team.started();
+    team.until_got(3);
+    let saved = saved_with_exited_roles(&mut team);
+    let (mut again, _rx) = new_app(team.config.path().join("config.json"));
+
+    assert!(again.restore(&saved, AREA));
+
+    let run = &again.runs.all()[0];
+    let kept = |role: &str| pane(&again, run.pane_of(role).expect("the role")).exited_agent.clone();
+    assert_eq!(kept("coder").map(|agent| agent.conversation), Some("c1".to_string()));
+    assert_eq!(kept("reviewer"), None, "a role whose worktree is gone does not get it back");
+}

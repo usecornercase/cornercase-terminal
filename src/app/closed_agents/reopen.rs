@@ -63,6 +63,10 @@ struct Setup<'a> {
     area: Rect,
 }
 
+pub(super) fn nothing_to_reopen(workspace: u64) -> Refusal {
+    conflict(format!("workspace {workspace} has no closed agents"))
+}
+
 pub(super) fn missing_refusal(missing: &[String]) -> Refusal {
     Refusal::new(
         Code::Failed,
@@ -94,11 +98,7 @@ impl App {
 
     pub(in crate::app) fn reopenable(&self, workspace: u64) -> Result<WorkspaceAt, Refusal> {
         let at = self.agents_workspace(workspace)?;
-        let kept = self
-            .agents
-            .closed
-            .of(workspace)
-            .ok_or_else(|| conflict(format!("workspace {workspace} has no closed agents")))?;
+        let kept = self.agents.closed.of(workspace).ok_or_else(|| nothing_to_reopen(workspace))?;
         let panes = kept.tabs.iter().flat_map(|tab| &tab.panes).filter_map(|pane| pane.closed.as_ref());
         let roles = kept.run.iter().flat_map(|kept| {
             std::iter::once(&kept.run.flow.orchestrator).chain(&kept.run.flow.roles).map(|role| role.agent.as_str())

@@ -182,6 +182,23 @@ fn with_the_orchestrators_tab_closed_the_person_is_told() {
 }
 
 #[test]
+fn a_role_brought_back_is_never_told_to_the_person_as_finished() {
+    let mut agent = Agent::new();
+    let [o, c] = team(&mut agent, &[ORCHESTRATOR, "coder"])[..] else { panic!("two panes") };
+    done(now(
+        &mut agent.app,
+        None,
+        Command::Close(wire::Close { item: Item::Pane(o), remove_worktree: false, force: false, unlock: false }),
+    ));
+    agent.app.runs.first_mut().brought_back(c, Instant::now());
+
+    reads(&mut agent, 3);
+
+    assert_eq!(sent(&agent), 0);
+    assert_eq!(toast(&agent.app), None);
+}
+
+#[test]
 fn a_role_whose_turn_ended_on_an_api_error_wakes_the_orchestrator_saying_the_work_was_not_done() {
     let mut agent = Agent::new();
     let [o, c] = team(&mut agent, &[ORCHESTRATOR, "coder"])[..] else { panic!("two panes") };

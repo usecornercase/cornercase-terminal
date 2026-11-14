@@ -927,7 +927,7 @@ the workspace stay. It refuses when closing would cut an agent's turn, when an a
 unless you pass --force; --check says what would close and closes nothing. A flow's team closes with its orchestrator \
 and the run is kept whole. `reopen` brings the tabs back after the others, each agent in its own conversation (even \
 with resume_agents off), and a flow's orchestrator last with its team's new pane ids. It also starts again, in \
-their own panes, a running flow's roles whose agent exited by itself: each in its own conversation when cornercase \
+the panes they were in, a running flow's roles whose agent exited by itself: each in its own conversation when cornercase \
 saw one, else from its role's prompt, and the orchestrator last; that needs no window. `forget` drops what was closed \
 for good, asks first on a terminal and needs --yes in a script, and ends a kept flow run. Closed agents survive a \
 restart of the server and show as `closed_agents` in `status --json`; removing the workspace forgets them.

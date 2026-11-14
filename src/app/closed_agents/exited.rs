@@ -1,9 +1,8 @@
 use std::time::Instant;
 
 use super::super::App;
-use super::super::control::conflict;
 use super::super::session::RESUME_GRACE;
-use super::reopen::{Place, Reopened, ReopenedPane, missing_refusal};
+use super::reopen::{Place, Reopened, ReopenedPane, missing_refusal, nothing_to_reopen};
 use crate::agents::AgentState;
 use crate::agents::launch::Launch;
 use crate::control::contract::Refusal;
@@ -36,7 +35,7 @@ impl App {
         let run = self.runs.of_workspace(workspace).cloned();
         let back = run.as_ref().map(|run| self.exited_panes(run, Instant::now())).unwrap_or_default();
         let Some(run) = run.filter(|_| !back.is_empty()) else {
-            return Err(conflict(format!("workspace {workspace} has no closed agents")));
+            return Err(nothing_to_reopen(workspace));
         };
         let kinds = back.iter().filter_map(|&pane| run.flow.role(run.role_of(pane)?)).map(|role| role.agent.as_str());
         self.agents_missing(kinds).map_err(|missing| missing_refusal(&missing))?;

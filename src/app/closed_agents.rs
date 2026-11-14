@@ -1,7 +1,7 @@
 use ratatui::layout::Rect;
 
 use super::App;
-use super::control::conflict;
+use super::control::{conflict, sized};
 use super::menus::MenuAction;
 use super::toast::{Toast, Undo};
 use crate::agents::activity::Status;
@@ -218,13 +218,20 @@ impl App {
         close.into_iter().chain(reopen).chain(forget).collect()
     }
 
-    pub(in crate::app) fn reopen_from_window(&mut self, workspace: u64, area: Rect) {
-        let reopened = if self.agents.closed.of(workspace).is_some() {
-            self.reopen_agents(workspace, area)
+    pub(in crate::app) fn reopen_workspace(
+        &mut self,
+        workspace: u64,
+        area: Option<Rect>,
+    ) -> Result<reopen::Reopened, Refusal> {
+        if self.agents.closed.of(workspace).is_some() {
+            self.reopen_agents(workspace, sized(area)?)
         } else {
             self.reopen_exited(workspace)
-        };
-        match reopened {
+        }
+    }
+
+    pub(in crate::app) fn reopen_from_window(&mut self, workspace: u64, area: Rect) {
+        match self.reopen_workspace(workspace, Some(area)) {
             Ok(done) => {
                 let place = self.projects.workspace_index(workspace).map(|at| self.place_name(at)).unwrap_or_default();
                 let message = format!("{} reopened in {place}", agents_label(done.panes.len()));
