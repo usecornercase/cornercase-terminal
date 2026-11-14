@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.74
+
+- **The Flow panel shows a role whose agent exited.** A flow role whose agent exited by itself (a crash, a stray `pkill`, `/exit`) no longer looks idle there: its row in **Team** and its box in the diagram read `exited`, with the cyan `▶` the workspace's row shows for it. Click that `▶` to bring it back in its pane, as the workspace's `▶` does (every exited role, the orchestrator last); a click elsewhere on the row still goes to its pane.
+
 ## 0.13.73
 
 - **A message from another machine names that machine in the command it says to run.** When `cornercase --remote vps send --pane 7 --enter -- "…"` failed with `not confirmed`, the message ended with `cornercase read --pane 7` shows where it is, and that command, run as written, read pane 7 of this computer's server. Now it says `cornercase --remote vps read --pane 7`, with `--remote-command` when you gave one and also when `CORNERCASE_REMOTE` chose the machine. Every command a message from there names gets it (`cornercase --remote vps status` lists them, `cornercase --remote vps keys --pane 7 0`): in the command's error, in each line of `requests --follow` and `input --follow`, and in the `error` of each entry with `--json`. So do the messages this command writes about that machine (`config set` with an unknown setting, `account remove`, `flow hide`, `flow runs`, `agents close`, `plugin run`). `update`, `restart`, `kill-server`, `logs` and the plugin commands that run on that machine still print that machine's own messages as they are.
