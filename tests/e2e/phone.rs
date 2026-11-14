@@ -15,6 +15,7 @@ type Socket = WebSocket<TcpStream>;
 struct Seen {
     texts: Vec<String>,
     close: Option<u16>,
+    timed_out: bool,
 }
 
 fn serving() -> (Arc<Session>, u16) {
@@ -47,14 +48,20 @@ fn connect(port: u16, path: &str, secret: Option<&str>) -> Result<Socket, u16> {
 
 fn read_all(ws: &mut Socket) -> Seen {
     let mut seen = Seen::default();
-    while let Ok(message) = ws.read() {
-        match message {
-            Message::Text(text) => seen.texts.push(text.to_string()),
-            Message::Close(frame) => seen.close = frame.map(|frame| u16::from(frame.code)),
-            _ => {}
+    loop {
+        match ws.read() {
+            Ok(Message::Text(text)) => seen.texts.push(text.to_string()),
+            Ok(Message::Close(frame)) => seen.close = frame.map(|frame| u16::from(frame.code)),
+            Ok(_) => {}
+            Err(tungstenite::Error::Io(e))
+                if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) =>
+            {
+                seen.timed_out = true;
+                return seen;
+            }
+            Err(_) => return seen,
         }
     }
-    seen
 }
 
 fn pairing(session: &Session, port: u16) -> (String, String) {
@@ -183,7 +190,7 @@ fn forgetting_the_app_disconnects_it() {
 
     assert!(removed.status.success(), "{removed:?}");
     let seen = read_all(&mut ws);
-    assert!(seen.texts.is_empty() || seen.close.is_none(), "{seen:?}");
+    assert!(!seen.timed_out && seen.texts.is_empty() && seen.close.is_none(), "{seen:?}");
     wait_until("the command is gone", || gone(&pid));
     assert_eq!(connect(port, "/cli", Some(&secret)).err(), Some(403));
 }

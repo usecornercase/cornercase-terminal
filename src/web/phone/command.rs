@@ -3,6 +3,7 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::{ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 use std::time::Instant;
@@ -53,18 +54,20 @@ pub(super) struct Queue {
     state: Mutex<State>,
     room: Condvar,
     limit: usize,
+    waits: Arc<AtomicUsize>,
 }
 
 impl Queue {
-    pub(super) fn new(limit: usize) -> Self {
+    pub(super) fn new(limit: usize, waits: Arc<AtomicUsize>) -> Self {
         let state = State { items: VecDeque::new(), bytes: 0, closed: false };
-        Self { state: Mutex::new(state), room: Condvar::new(), limit }
+        Self { state: Mutex::new(state), room: Condvar::new(), limit, waits }
     }
 
     pub(super) fn push(&self, out: Out) -> bool {
         let size = out.size();
         let mut state = self.state.lock();
         while !state.closed && state.bytes > 0 && state.bytes + size > self.limit {
+            self.waits.fetch_add(1, Ordering::SeqCst);
             self.room.wait(&mut state);
         }
         if state.closed {
@@ -176,9 +179,9 @@ pub(super) struct Running {
 }
 
 impl Running {
-    pub(super) fn start(mut command: Command, limits: Limits) -> io::Result<Self> {
+    pub(super) fn start(mut command: Command, limits: Limits, waits: &Arc<AtomicUsize>) -> io::Result<Self> {
         let mut child = Grouped::spawn(&mut command)?;
-        let queue = Arc::new(Queue::new(limits.queued_bytes));
+        let queue = Arc::new(Queue::new(limits.queued_bytes, Arc::clone(waits)));
         if let Some(stdout) = child.stdout.take() {
             spawn_reader(stdout, &queue, limits.longest_line, Output::Stdout);
         }

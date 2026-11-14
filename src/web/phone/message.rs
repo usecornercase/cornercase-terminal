@@ -21,6 +21,14 @@ pub(super) enum Input {
 }
 
 impl Input {
+    pub(super) fn len(&self) -> usize {
+        match self {
+            Self::Text(text) => text.len() + 1,
+            Self::Bytes(bytes) => bytes.len(),
+            Self::Eof => 0,
+        }
+    }
+
     pub(super) fn into_bytes(self) -> Option<Vec<u8>> {
         match self {
             Self::Text(mut text) => {

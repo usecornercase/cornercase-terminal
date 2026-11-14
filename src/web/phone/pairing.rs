@@ -38,12 +38,14 @@ pub(super) fn pair(mut stream: TcpStream, request: &Request, context: &Context) 
 
 fn exchange(ws: &mut WebSocket<TcpStream>, request: &Request, context: &Context) {
     let name = request.header("user-agent").unwrap_or_default();
-    let (held, added) = {
+    let (held, added, generation) = {
         let mut shared = context.shared.lock();
-        (shared.pairing.clone(), shared.pair_with(code_of(request), name, Instant::now()))
+        let held = shared.pairing.clone();
+        let added = shared.pair_with(code_of(request), name, Instant::now());
+        (held, added, shared.generation)
     };
     match added {
-        Some(Ok((id, secret, taken))) => deliver(ws, context, (&id, &secret, taken), (held, name)),
+        Some(Ok((id, secret, taken))) => deliver(ws, context, (&id, &secret, taken), (held, generation, name)),
         Some(Err(e)) => {
             log::error!("web", "could not save a paired phone app", error = e);
             end(ws, CloseCode::Error);
@@ -68,7 +70,7 @@ fn deliver(
     ws: &mut WebSocket<TcpStream>,
     context: &Context,
     (id, secret, taken): (&str, &str, u64),
-    (held, name): (Option<crate::web::auth::Pairing>, &str),
+    (held, generation, name): (Option<crate::web::auth::Pairing>, u64, &str),
 ) {
     let reply = serde_json::json!({ "secret": secret }).to_string();
     let delivered = ws.write(Message::text(reply)).and_then(|()| ws.flush()).is_ok();
@@ -81,6 +83,9 @@ fn deliver(
     }
     let mut shared = context.shared.lock();
     let _ = shared.devices.remove(id);
-    shared.pairing = held;
-    shared.taken = shared.taken.saturating_sub(1);
+    if shared.generation == generation {
+        shared.generation += 1;
+        shared.pairing = held;
+        shared.taken = shared.taken.saturating_sub(1);
+    }
 }

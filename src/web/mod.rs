@@ -244,9 +244,8 @@ fn spawn_counted(
 }
 
 fn read_head(mut stream: TcpStream, work: impl FnOnce(TcpStream, Request)) {
-    let _ = stream.set_read_timeout(Some(HEAD_TIMEOUT));
     let _ = stream.set_write_timeout(Some(HEAD_TIMEOUT));
-    let Ok(Some(request)) = Request::read(&mut stream) else { return };
+    let Ok(Some(request)) = Request::read_within(&mut stream, HEAD_TIMEOUT) else { return };
     work(stream, request);
 }
 

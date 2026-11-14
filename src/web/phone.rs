@@ -60,6 +60,7 @@ struct Connected {
 
 struct Shared {
     accepting: bool,
+    generation: u64,
     pairing: Option<Pairing>,
     taken: u64,
     devices: Devices,
@@ -71,6 +72,7 @@ impl Shared {
     fn pair_with(&mut self, code: &str, name: &str, now: Instant) -> Option<io::Result<(String, String, u64)>> {
         self.pairing.as_ref().filter(|pairing| pairing.accepts(code, now))?;
         let added = self.devices.add_app(name).map(|(id, secret)| {
+            self.generation += 1;
             self.pairing = None;
             self.taken += 1;
             (id, secret, self.taken)
@@ -88,6 +90,7 @@ struct Context {
     notify: Arc<dyn Fn(Event) + Send + Sync>,
     open: Arc<AtomicUsize>,
     stopping: Arc<AtomicBool>,
+    waits: Arc<AtomicUsize>,
 }
 
 impl Context {
@@ -177,6 +180,7 @@ impl Phone {
     pub(crate) fn new<E: From<Event> + Send + 'static>(apps: PathBuf, socket: PathBuf, notify: Sender<E>) -> Self {
         let shared = Shared {
             accepting: false,
+            generation: 0,
             pairing: None,
             taken: 0,
             devices: Devices::load(apps),
@@ -192,6 +196,7 @@ impl Phone {
             notify,
             open: Arc::default(),
             stopping: Arc::default(),
+            waits: Arc::default(),
         };
         Self { context, listening: None }
     }
@@ -226,6 +231,7 @@ impl Phone {
         for connected in shared.connections.drain(..) {
             let _ = connected.stream.shutdown(Shutdown::Both);
         }
+        shared.generation += 1;
         shared.pairing = None;
         context.stopping.store(false, Ordering::SeqCst);
     }
@@ -233,13 +239,16 @@ impl Phone {
     pub(crate) fn pair(&self, now: Instant) -> io::Result<(String, u64)> {
         let mut shared = self.context.shared.lock();
         let pairing = Pairing::shared(shared.pairing.take(), now)?;
+        shared.generation += 1;
         let token = pairing.token.clone();
         shared.pairing = Some(pairing);
         Ok((token, shared.taken))
     }
 
     pub(crate) fn unpair(&self) {
-        self.context.shared.lock().pairing = None;
+        let mut shared = self.context.shared.lock();
+        shared.generation += 1;
+        shared.pairing = None;
     }
 
     pub(crate) fn apps(&self) -> Vec<(String, String, u64)> {
@@ -257,6 +266,11 @@ impl Phone {
             log::info!("web", "phone app forgotten", device = id);
         }
         Ok(removed)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn waits(&self) -> usize {
+        self.context.waits.load(Ordering::SeqCst)
     }
 
     #[cfg(test)]

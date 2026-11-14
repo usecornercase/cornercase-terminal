@@ -1455,6 +1455,18 @@ The `app` key needs `phone_app` on (`config set phone_app true`): with it off th
 
 Over the socket the routes are `{"command": "app-routes"}`, which an older server refuses by name.
 
+It stays open while it waits, and its last line, the only one with `paired`, says how it ended:
+
+- `{"paired": true}` once a browser took the code, or `{"paired": true, "chat": "@ada"}` with the name of the chat that was paired, and status 0.
+- `{"paired": false, "error": "…"}` and status 1 once nothing can pair: Tailscale is not ready, remote access was turned off, the bot was removed or its token refused, or ten minutes went by without a phone. The error also goes to standard error.
+
+What cannot start at all prints nothing and exits with 1, with the reason on standard error: `remote access is off…`, `paste the bot's token first`, Tailscale not installed, the port taken, or a key that cannot be paired. Over the socket these are refusals with a code: `conflict` for what you can change, `unavailable` for what you can't from here (Tailscale not installed, the port taken), `malformed` for another key.
+
+The code is dropped when the command ends, also when whoever reads its output goes, as for every command that follows a stream. A code works once, and the address holds it, so treat the line as a secret; cornercase never writes it to its log. A command or the window's dialog that holds the same key shares that code: the same address shows in all of them, its ten minutes start again with each one that comes, a phone taking it ends them all, and it is dropped when the last one goes, so closing the dialog doesn't stop a command, nor the reverse. Once paired, the window says so as it does for its own dialog, whether or not you are looking at it.
+
+Discord has no code: the link adds the app to your account, and cornercase asks Discord for the owner while this runs or the dialog is open. With [`--remote`](../remote/#commands-for-scripts-and-agents) the address is that machine's, and the phone pairs with its cornercase.
+
+Over the socket the request is `{"command": "config-pair", "args": {"key": "browsers"}}`, and each line above comes as `{"ok": …}` on that connection, which holds one pairing. A line of [`requests --follow`](#many-commands-through-one-process) refuses it, since it keeps a connection of its own.
 ##### The command line over a WebSocket (`/cli`)
 
 For the developer of a phone app. A paired app runs commands at `ws://HOST:PORT/cli`, one WebSocket per command, with the secret in `Authorization: Bearer ID.SECRET` (without it, or with a forgotten one, the answer is `403` and nothing runs). Each message is one JSON object with exactly one key.
@@ -1470,18 +1482,6 @@ It runs `cornercase ARGV` as the command line does. `N` is the command's status 
 
 The server sends a ping every 15 seconds; after 45 seconds without hearing anything it kills the command and its process group, as it does when the app closes or the link breaks. A client that stops reading blocks the command, and the server's memory does not grow. When the server stops, or the app is forgotten or switched off, the close is 1001 and there is no `exit`.
 
-It stays open while it waits, and its last line, the only one with `paired`, says how it ended:
-
-- `{"paired": true}` once a browser took the code, or `{"paired": true, "chat": "@ada"}` with the name of the chat that was paired, and status 0.
-- `{"paired": false, "error": "…"}` and status 1 once nothing can pair: Tailscale is not ready, remote access was turned off, the bot was removed or its token refused, or ten minutes went by without a phone. The error also goes to standard error.
-
-What cannot start at all prints nothing and exits with 1, with the reason on standard error: `remote access is off…`, `paste the bot's token first`, Tailscale not installed, the port taken, or a key that cannot be paired. Over the socket these are refusals with a code: `conflict` for what you can change, `unavailable` for what you can't from here (Tailscale not installed, the port taken), `malformed` for another key.
-
-The code is dropped when the command ends, also when whoever reads its output goes, as for every command that follows a stream. A code works once, and the address holds it, so treat the line as a secret; cornercase never writes it to its log. A command or the window's dialog that holds the same key shares that code: the same address shows in all of them, its ten minutes start again with each one that comes, a phone taking it ends them all, and it is dropped when the last one goes, so closing the dialog doesn't stop a command, nor the reverse. Once paired, the window says so as it does for its own dialog, whether or not you are looking at it.
-
-Discord has no code: the link adds the app to your account, and cornercase asks Discord for the owner while this runs or the dialog is open. With [`--remote`](../remote/#commands-for-scripts-and-agents) the address is that machine's, and the phone pairs with its cornercase.
-
-Over the socket the request is `{"command": "config-pair", "args": {"key": "browsers"}}`, and each line above comes as `{"ok": …}` on that connection, which holds one pairing. A line of [`requests --follow`](#many-commands-through-one-process) refuses it, since it keeps a connection of its own.
 #### Pick the forum's server
 
 With [forum mode](../discord/#forum-mode) on and the app in several of your servers, the setup waits for you to pick one. Discord's row of [`status --app`](#follow-the-rest-of-the-app) says so and lists them, as the dialog does:

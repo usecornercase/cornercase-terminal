@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -20,6 +21,7 @@ const LINGER: Duration = Duration::from_secs(2);
 const STOP_WRITE: Duration = Duration::from_secs(1);
 const WRITES_PER_TURN: usize = 4096;
 const BUFFERED: usize = 128 * 1024;
+const BACKLOG: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 enum Ending {
@@ -128,7 +130,7 @@ fn connected(mut ws: WebSocket<TcpStream>, context: &Context, device: &str) {
         return refuse(&mut ws, &text);
     }
     let command = command::command(&context.program, &argv, &context.socket);
-    match Running::start(command, context.limits) {
+    match Running::start(command, context.limits, &context.waits) {
         Ok(running) => converse(ws, running, context, (device, &cli::command_name(&argv))),
         Err(e) => refuse(&mut ws, &format!("could not run cornercase: {e}")),
     }
@@ -193,7 +195,8 @@ fn converse(ws: WebSocket<TcpStream>, running: Running, context: &Context, (devi
     log::info!("web", "phone app command started", command = name, device = device, pid = pid);
     let _ = ws.get_ref().set_write_timeout(Some(POLL));
     let now = Instant::now();
-    let mut pump = Pump { ws, running, context, heard: now, pinged: now, flushing: false, held: None };
+    let mut pump =
+        Pump { ws, running, context, heard: now, pinged: now, flushing: false, held: VecDeque::new(), held_bytes: 0 };
     let ending = pump.drive();
     pump.conclude(&ending);
     let code = ending.code().map_or_else(|| "none".to_string(), |code| code.to_string());
@@ -207,7 +210,8 @@ struct Pump<'a> {
     heard: Instant,
     pinged: Instant,
     flushing: bool,
-    held: Option<Input>,
+    held: VecDeque<Input>,
+    held_bytes: usize,
 }
 
 impl Pump<'_> {
@@ -233,11 +237,8 @@ impl Pump<'_> {
     }
 
     fn hear(&mut self) -> Option<Ending> {
-        let blocked = self.running.blocked();
-        if !blocked && let Some(input) = self.held.take() {
-            self.deliver(Ok(input));
-        }
-        if self.held.is_some() {
+        self.release_held();
+        if self.held_bytes >= BACKLOG {
             thread::sleep(POLL);
             return None;
         }
@@ -258,10 +259,19 @@ impl Pump<'_> {
         }
     }
 
+    fn release_held(&mut self) {
+        while !self.running.blocked() {
+            let Some(input) = self.held.pop_front() else { return };
+            self.held_bytes -= input.len();
+            self.running.write(input);
+        }
+    }
+
     fn deliver(&mut self, input: Result<Input, String>) -> Option<Ending> {
         match input {
-            Ok(input) if self.running.blocked() => {
-                self.held = Some(input);
+            Ok(input) if !self.held.is_empty() || self.running.blocked() => {
+                self.held_bytes += input.len();
+                self.held.push_back(input);
                 None
             }
             Ok(input) => {

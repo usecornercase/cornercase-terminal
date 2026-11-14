@@ -65,3 +65,21 @@ fn a_response_says_its_length_and_status() {
     assert!(text.starts_with("HTTP/1.1 303 See Other\r\nContent-Length: 0\r\n"));
     assert!(text.contains("\r\nLocation: /\r\n") && text.contains("\r\nSet-Cookie: a=b\r\n"));
 }
+
+#[test]
+fn a_head_trickled_past_the_deadline_is_given_up() {
+    use std::io::Write as _;
+    use std::net::{TcpListener, TcpStream};
+    use std::time::{Duration, Instant};
+
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+    let mut client = TcpStream::connect(listener.local_addr().expect("address")).expect("connect");
+    let (mut served, _) = listener.accept().expect("accept");
+    client.write_all(b"G").expect("a byte");
+
+    let started = Instant::now();
+    let read = Request::read_within(&mut served, Duration::from_millis(300)).expect("no error");
+
+    assert_eq!(read, None);
+    assert!(started.elapsed() < Duration::from_secs(5));
+}

@@ -1,6 +1,7 @@
 use std::fmt::Write as _;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
+use std::time::{Duration, Instant};
 
 use tungstenite::WebSocket;
 use tungstenite::protocol::{Role, WebSocketConfig};
@@ -38,6 +39,27 @@ impl Request {
         Some(Self { method: request.method?.to_string(), path: path.to_string(), query, headers })
     }
 
+    pub(super) fn read_within(stream: &mut TcpStream, total: Duration) -> io::Result<Option<Self>> {
+        let deadline = Instant::now() + total;
+        let mut head = Vec::new();
+        let mut byte = [0u8; 1];
+        while !head.ends_with(b"\r\n\r\n") {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if head.len() >= MAX_HEAD || left.is_zero() {
+                return Ok(None);
+            }
+            stream.set_read_timeout(Some(left))?;
+            match stream.read(&mut byte) {
+                Ok(0) => return Ok(None),
+                Ok(_) => head.push(byte[0]),
+                Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => return Ok(None),
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(Self::parse(&head))
+    }
+
+    #[cfg(test)]
     pub(super) fn read(stream: &mut impl Read) -> io::Result<Option<Self>> {
         let mut head = Vec::new();
         let mut byte = [0u8; 1];
