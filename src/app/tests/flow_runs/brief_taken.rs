@@ -64,10 +64,10 @@ fn a_resumed_orchestrator_whose_first_enter_is_lost_still_takes_its_brief() {
     let mut run = briefed(Some("lose"), Some(Duration::from_secs(1)));
 
     run.until("the brief is recorded", |app, own| pane(app, own).context.prompted().is_some());
+    run.until("the agent works", |app, own| pane(app, own).agent.status() == Some(activity::Status::Working));
     run.until("the launch is over", |app, own| app.agents.launches.of_pane(own).next().is_none());
 
-    let status = pane(&run.app, run.own).agent.status();
-    assert_eq!((run.lost(), run.prompts(), status), (1, 1, Some(activity::Status::Working)));
+    assert_eq!((run.lost(), run.prompts()), (1, 1));
 }
 
 #[test]
