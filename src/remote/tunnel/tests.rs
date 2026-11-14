@@ -16,6 +16,13 @@ fn pid_of(running: &Running) -> i32 {
     i32::try_from(child.as_ref().expect("ssh runs").id()).expect("a pid")
 }
 
+fn runs_as_itself(running: &Running, forward: Forward) {
+    let pid = running.pid();
+    wait_until("ssh runs as itself", || {
+        !process::running(pid, None) || same_forward(&process::args(pid), "vps", forward)
+    });
+}
+
 mod the_ssh_line {
     use super::*;
 
@@ -174,7 +181,9 @@ mod the_owner {
         let report = move |watched| {
             let _ = tx.send(watched);
         };
-        (spawn_within(ssh.as_os_str(), "vps", forward, UP_WAIT, report).expect("start ssh"), rx)
+        let running = spawn_within(ssh.as_os_str(), "vps", forward, UP_WAIT, report).expect("start ssh");
+        runs_as_itself(&running, forward);
+        (running, rx)
     }
 
     #[test]
@@ -290,7 +299,9 @@ mod running {
         let report = move |watched| {
             let _ = tx.send(watched);
         };
-        (spawn_within(ssh.as_os_str(), "vps", forward, wait, report).expect("start ssh"), rx)
+        let running = spawn_within(ssh.as_os_str(), "vps", forward, wait, report).expect("start ssh");
+        runs_as_itself(&running, forward);
+        (running, rx)
     }
 
     #[test]
