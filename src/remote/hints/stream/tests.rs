@@ -131,7 +131,7 @@ mod a_split_stream {
 
         hinting.take(b"cornercase upd").expect("take");
 
-        assert!(hinting.out.is_empty());
+        assert_eq!(hinting.out, b"");
     }
 
     #[test]
