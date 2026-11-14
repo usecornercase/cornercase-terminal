@@ -628,8 +628,8 @@ mod end {
 mod panel {
     use super::*;
 
-    const WIDE: Rect = Rect::new(0, 0, 48, 70);
-    const NARROW: Rect = Rect::new(0, 0, 36, 70);
+    pub(super) const WIDE: Rect = Rect::new(0, 0, 48, 70);
+    pub(super) const NARROW: Rect = Rect::new(0, 0, 36, 70);
     const WIDER: Rect = Rect::new(0, 0, 90, 70);
 
     fn team(flow: &Flow) -> Vec<Member> {
@@ -674,7 +674,7 @@ mod panel {
         History { entries, recorded: 3 }
     }
 
-    fn full(reached: bool) -> View {
+    pub(super) fn full(reached: bool) -> View {
         let flow = full_issue();
         let start = Instant::now();
         let progress = progress(&flow, &["coder", "reviewer", "coder"], start);
@@ -704,13 +704,13 @@ mod panel {
         }
     }
 
-    fn drawn(view: &View, area: Rect) -> Terminal<TestBackend> {
+    pub(super) fn drawn(view: &View, area: Rect) -> Terminal<TestBackend> {
         let mut t = Terminal::new(TestBackend::new(area.right(), area.bottom())).expect("terminal");
         t.draw(|f| draw(f, area, view, None)).expect("draw");
         t
     }
 
-    fn at(view: &View, area: Rect, text: &str) -> Position {
+    pub(super) fn at(view: &View, area: Rect, text: &str) -> Position {
         let (x, y) = find(&drawn(view, area), text).expect("on screen");
         Position::new(x, y)
     }
@@ -922,3 +922,5 @@ mod panel {
         let _ = scrolled(WIDE, &view, 5);
     }
 }
+
+mod exited;

@@ -8,7 +8,7 @@ use super::{Diagram, Hit, Lit, Node, State, TAG_GAP};
 use crate::agents::activity::Status;
 use crate::flows::progress::Edge;
 use crate::text;
-use crate::ui::theme::{BRAND_COLOR, WAITING_COLOR, hover_colour, line_colour, status_icon};
+use crate::ui::theme::{BRAND_COLOR, WAITING_COLOR, hover_colour, line_colour};
 
 pub(super) struct Canvas<'a> {
     buf: &'a mut Buffer,
@@ -41,6 +41,10 @@ impl Canvas<'_> {
             self.buf[spot].set_style(style);
         }
     }
+}
+
+fn icon_cell(r: Rect) -> Option<At> {
+    (r.width >= 5).then(|| (r.right() - 3, r.y + 1))
 }
 
 fn glyph(dirs: u8, dashed: bool) -> &'static str {
@@ -109,7 +113,10 @@ fn local(area: Rect, scroll: u16, pos: Position) -> Option<At> {
 pub(super) fn hit(area: Rect, d: &Diagram, g: &Geometry, scroll: u16, pos: Position) -> Option<Hit> {
     let at = local(area, scroll, pos)?;
     let inside = |b: &&Placed| b.rect.contains(Position::new(at.0, at.1));
-    if let Some(node) = g.boxes.iter().find(inside).and_then(|b| d.node(b.place)) {
+    if let Some((placed, node)) = g.boxes.iter().find(inside).and_then(|b| Some((b, d.node(b.place)?))) {
+        if node.state == Some(State::Exited) && icon_cell(placed.rect) == Some(at) {
+            return Some(Hit::Reopen);
+        }
         return Some(Hit::Role(node.role.clone()));
     }
     if let Some(((x, y), tag)) = tag_cells(d, g)
@@ -155,8 +162,7 @@ pub(super) fn paint(frame: &mut Canvas, d: &Diagram, g: &Geometry, hover: Option
     paint_labels(frame, d, g, &tint);
     for placed in &g.boxes {
         if let Some(node) = d.node(placed.place) {
-            let lit = at.is_some_and(|(x, y)| placed.rect.contains(Position::new(x, y)));
-            draw_box(frame, d, node, placed, lit);
+            draw_box(frame, d, node, placed, at);
         }
     }
     draw_end(frame, d, g, at);
@@ -223,8 +229,9 @@ const LIGHT: Borders = Borders { corners: ["╭", "╮", "╰", "╯"], across: 
 
 const HEAVY: Borders = Borders { corners: ["┏", "┓", "┗", "┛"], across: "━", side: "┃", exit: "┰" };
 
-fn draw_box(frame: &mut Canvas, d: &Diagram, node: &Node, placed: &Placed, lit: bool) {
+fn draw_box(frame: &mut Canvas, d: &Diagram, node: &Node, placed: &Placed, hover: Option<At>) {
     let r = placed.rect;
+    let lit = hover.is_some_and(|(x, y)| r.contains(Position::new(x, y)));
     let focused = matches!(placed.place, Place::Role { stage, .. } if d.focus == Some(stage));
     let working = node.state == Some(State::Agent(Some(Status::Working))) || focused;
     let borders = if working { &HEAVY } else { &LIGHT };
@@ -233,7 +240,7 @@ fn draw_box(frame: &mut Canvas, d: &Diagram, node: &Node, placed: &Placed, lit: 
     frame.fill(r, bg);
     draw_outline(frame, r, borders, border, placed.exit);
     draw_name(frame, d, node, r, bg);
-    draw_words(frame, d, node, r, bg);
+    draw_words(frame, d, node, (r, hover), bg);
 }
 
 fn draw_outline(frame: &mut Canvas, r: Rect, borders: &Borders, border: Style, exit: Option<u16>) {
@@ -253,7 +260,7 @@ fn draw_outline(frame: &mut Canvas, r: Rect, borders: &Borders, border: Style, e
 
 fn draw_name(frame: &mut Canvas, d: &Diagram, node: &Node, r: Rect, bg: Style) {
     let name = text::truncate_cells(&node.role, usize::from(r.width.saturating_sub(6)));
-    let name_style = if node.state == Some(State::Closed) {
+    let name_style = if node.state.is_some_and(State::gone) {
         bg.fg(d.muted)
     } else {
         bg.fg(node.colour).add_modifier(Modifier::BOLD)
@@ -273,17 +280,15 @@ fn draw_name(frame: &mut Canvas, d: &Diagram, node: &Node, r: Rect, bg: Style) {
     }
 }
 
-fn draw_words(frame: &mut Canvas, d: &Diagram, node: &Node, r: Rect, bg: Style) {
-    let icon = match node.state {
-        Some(State::Agent(Some(status))) => Some(status_icon(d.muted, status, d.spin)),
-        Some(State::Agent(None)) => Some(status_icon(d.muted, Status::Idle, d.spin)),
-        Some(State::Closed) | None => None,
-    };
+fn draw_words(frame: &mut Canvas, d: &Diagram, node: &Node, (r, hover): (Rect, Option<At>), bg: Style) {
+    let cell = icon_cell(r);
+    let lit = cell.is_some() && hover == cell;
+    let icon = node.state.and_then(|state| state.icon(d.muted, d.spin, lit));
     let reserve = if icon.is_some() { 6 } else { 4 };
-    let words = if node.state == Some(State::Closed) { "closed" } else { node.text.as_str() };
+    let words = node.state.map_or(node.text.as_str(), |state| state.words(&node.text));
     let words = text::truncate_cells(words, usize::from(r.width.saturating_sub(reserve)));
     frame.put((r.x + 2, r.y + 1), &words, bg.fg(d.muted));
-    if let Some(icon) = icon.filter(|_| r.width >= 5) {
-        frame.put((r.right() - 3, r.y + 1), &icon.content, bg.patch(icon.style));
+    if let (Some(icon), Some(cell)) = (icon, cell) {
+        frame.put(cell, &icon.content, bg.patch(icon.style));
     }
 }

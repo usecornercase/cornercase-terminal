@@ -138,7 +138,11 @@ impl App {
 
     fn role_state(&self, run: &Run, role: &str) -> flow::State {
         let Some(pane) = run.pane_of(role) else { return flow::State::Agent(None) };
-        self.projects.pane_by(pane).map_or(flow::State::Closed, |term| flow::State::Agent(term.agent.status()))
+        match self.projects.pane_by(pane) {
+            None => flow::State::Closed,
+            Some(_) if run.exited.contains(&pane) => flow::State::Exited,
+            Some(term) => flow::State::Agent(term.agent.status()),
+        }
     }
 
     pub(super) fn flow_view(&self, now: Instant, spin: Option<u8>) -> Option<flow::View> {
@@ -211,7 +215,7 @@ impl App {
         (shown && moving).then_some(FRAME_EVERY)
     }
 
-    pub(super) fn flow_mouse(&mut self, ev: MouseEvent, pos: Position, panel: Rect) {
+    pub(super) fn flow_mouse(&mut self, ev: MouseEvent, pos: Position, panel: Rect, area: Rect) {
         let Some(view) = self.flow_view(Instant::now(), None) else { return };
         if let Some(delta) = wheel(ev.kind) {
             self.panels.flow.scroll = flow::scrolled(panel, &view, delta);
@@ -221,15 +225,16 @@ impl App {
             return;
         }
         if let Some(hit) = flow::hit(panel, &view, pos) {
-            self.flow_hit(hit, pos);
+            self.flow_hit(hit, pos, area);
         }
     }
 
-    fn flow_hit(&mut self, hit: flow::Hit, pos: Position) {
+    fn flow_hit(&mut self, hit: flow::Hit, pos: Position, area: Rect) {
         let Some(workspace) = self.shown_run().map(|run| run.workspace) else { return };
         match hit {
             flow::Hit::Close => self.show_side(None),
             flow::Hit::Role(role) => self.jump_to_role(&role),
+            flow::Hit::Reopen => self.reopen_from_window(workspace, area),
             flow::Hit::File(index) => self.open_run_file(workspace, index),
             flow::Hit::Pull => self.open_pull_request(workspace),
             flow::Hit::Edge(edge, to) => {

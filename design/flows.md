@@ -19,7 +19,7 @@ Code: `flows/`, `app/flow_runs.rs`, `app/flow_panel.rs`, `app/flows_dialog.rs`, 
 - [Commands and sharing](flows/commands-and-sharing.md): Commands: the lookup order; Sharing: export, import, risks, names.
 - [Community flows](flows/community-flows.md): the `cornercase-flow` topic, the snapshot, validation, the pages, importing by `owner/repo`.
 - [Through the server](flows/through-the-server.md): #342: the flow as JSON, saving, deleting, hiding, restoring, following runs and messages, a role whose agent exited.
-- [Recording, progress, the diagram and the Flow panel](flows/progress-and-diagram.md): Recording; Where a run stands; Not run since the last change (#782); The diagram; The Flow panel.
+- [Recording, progress, the diagram and the Flow panel](flows/progress-and-diagram.md): Recording; Where a run stands; Not run since the last change (#782); The diagram; The Flow panel; A role whose agent exited (#829).
 - [The end](flows/end.md): #372: when the end lights, the latched mark, the pull request tag, scripts.
 - [Closing a merged run's agents](flows/closing-when-merged.md): #734, #789: the opt-in, the conditions, the 3 minutes, freeing the builds, what clients see.
 - [The Flows and start dialogs](flows/dialogs.md): The Flows dialog; The preview scrolls; The start dialog; On another machine; The order and the default flow; Line breaks and display columns.

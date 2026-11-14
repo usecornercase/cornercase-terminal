@@ -12,7 +12,7 @@ import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, in
 import { type Edge, describe as describeRole, live, plan, roleColour } from './flow';
 import { RecapPanel, type Choice as RecapChoice, type Place as RecapPlace } from './recap';
 import { type PanelHit, type PanelHistory, type PanelMember, type PanelStep, type PanelView, fileAge, scrolled as flowScrolled } from './flowpanel';
-import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
+import { ORCHESTRATOR, RUN_DIR, type Run, bringBack, exitedPanes } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
 import { type FileAction, FilesPanel, size as fileSize, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
@@ -1275,6 +1275,11 @@ export class App {
     return (ws?.closed ?? []).reduce((n, t) => n + t.panes.filter((x) => paneStatus(x)).length, 0);
   }
 
+  reopenableCount(workspace: number): number {
+    const run = this.runOf(workspace);
+    return this.closedCount(workspace) + (run ? exitedPanes(this, run).length : 0);
+  }
+
   private agentTabs(ws: Workspace): Tab[] {
     return ws.tabs.filter((t) => t.panes.some((x) => paneStatus(x)));
   }
@@ -1283,7 +1288,8 @@ export class App {
     const ws = this.workspaceById(workspace)?.w;
     if (!ws || ws.removing) return [];
     const close: MenuAction[] = this.agentTabs(ws).length ? [{ kind: 'closeAgents', workspace }] : [];
-    const kept: MenuAction[] = this.closedCount(workspace) ? [{ kind: 'reopenAgents', workspace }, { kind: 'forgetAgents', workspace }] : [];
+    const reopen: MenuAction[] = this.reopenableCount(workspace) ? [{ kind: 'reopenAgents', workspace }] : [];
+    const kept: MenuAction[] = [...reopen, ...(this.closedCount(workspace) ? [{ kind: 'forgetAgents', workspace } as MenuAction] : [])];
     return [...close, ...kept];
   }
 
@@ -1308,6 +1314,11 @@ export class App {
   reopenAgents(workspace: number): void {
     const found = this.workspaceById(workspace);
     const count = this.closedCount(workspace);
+    const run = this.runOf(workspace);
+    if (found && !count && run && exitedPanes(this, run).length) {
+      const back = bringBack(this, run);
+      return this.notice(`${agentsLabel(back)} reopened in ${projectLabel(found.p)} › ${workspaceLabel(found.w)}`);
+    }
     if (!found || !count) return this.notice(NO_CLOSED_AGENTS);
     const { p, w } = found;
     w.tabs.push(...(w.closed ?? []));
@@ -1754,6 +1765,7 @@ export class App {
       const id = run.members.find((m) => m.role === role)?.pane;
       const found = id === undefined ? null : this.findPane(id);
       if (!found) return id === undefined ? 'none' : 'closed';
+      if (found.pane.shell.fg === null) return 'exited';
       return paneStatus(found.pane) ?? 'none';
     };
     const own = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
@@ -1802,7 +1814,8 @@ export class App {
   flowClick(hit: PanelHit): void {
     const run = this.shownRun();
     if (!run) return;
-    if (hit.stop) {
+    if (hit.reopen) this.reopenAgents(run.workspace);
+    else if (hit.stop) {
       const lead = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
       if (lead !== undefined) this.askCloseAgent(lead);
     } else if (hit.folder) this.bug(OPEN_IN_NEEDS);
@@ -2703,7 +2716,7 @@ export class App {
     if (a.kind === 'mergeCheck') return 'merge check';
     if (a.kind === 'showFlow') return 'show flow';
     if (a.kind === 'closeAgents') return 'close agents';
-    if (a.kind === 'reopenAgents') return `reopen ${agentsLabel(this.closedCount(a.workspace))}`;
+    if (a.kind === 'reopenAgents') return `reopen ${agentsLabel(this.reopenableCount(a.workspace))}`;
     if (a.kind === 'forgetAgents') return 'forget closed agents';
     if (a.kind === 'newWorkspace') return 'new workspace';
     if (a.kind === 'startFlow') return 'start a flow…';
