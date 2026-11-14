@@ -125,5 +125,9 @@ fn names_a_machine(after: &str) -> bool {
         .any(|word| rest.strip_prefix(word).is_some_and(|tail| !tail.chars().next().is_some_and(char::is_alphanumeric)))
 }
 
+mod stream;
+
+pub(super) use stream::{printed, status};
+
 #[cfg(test)]
 mod tests;

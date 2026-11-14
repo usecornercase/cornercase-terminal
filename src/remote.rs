@@ -371,14 +371,8 @@ impl Remote {
         let line = self.command_for(shell, args, run == Run::Tied)?;
         let mut command = Command::new(SSH);
         command.args(self.ssh_line(batched(batch), run, line));
-        if run != Run::Tied {
-            return command.status().map_err(Error::RunSsh);
-        }
-        let mut child = command.stdin(Stdio::piped()).spawn().map_err(Error::RunSsh)?;
-        let held = child.stdin.take();
-        let status = child.wait().map_err(Error::RunSsh);
-        drop(held);
-        status
+        let words: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
+        hints::status(self, command, hints::printed(&words), run == Run::Tied).map_err(Error::RunSsh)
     }
 
     fn ssh_line(&self, options: &[&str], run: Run, line: String) -> Vec<String> {

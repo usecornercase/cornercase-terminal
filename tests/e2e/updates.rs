@@ -378,3 +378,25 @@ fn update_json_through_ssh_says_what_it_did_there(#[case] by_hand: bool, #[case]
         bin.parent().and_then(|p| if by_hand { p.parent() } else { Some(p) }).expect("its folder"),
     );
 }
+
+#[test]
+fn update_check_through_ssh_names_the_machine_in_its_command() {
+    let session = Session::new();
+    let bin = installed_copy("ssh-check");
+    let command = bin.display().to_string();
+
+    let out = session
+        .cold_command()
+        .env("PATH", remote::fake_ssh(&session.dir, ""))
+        .env(update::LATEST_ENV, fake_release("99.0.7", "#!/bin/sh\necho 'cornercase 99.0.7'\n"))
+        .args(["--remote", "devbox", "--remote-command", &command, "update", "--check"])
+        .output()
+        .expect("run cornercase");
+
+    let current = version::CURRENT;
+    let expected = format!(
+        "cornercase 99.0.7 is out (you have {current}). Update it with:\ncornercase --remote devbox --remote-command {command} update\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout), expected, "{out:?}");
+    let _ = std::fs::remove_dir_all(bin.parent().expect("its folder"));
+}
