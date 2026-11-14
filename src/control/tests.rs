@@ -206,8 +206,12 @@ fn newest_commands() -> Vec<Command> {
     ]
 }
 
+fn phone_commands() -> Vec<Command> {
+    vec![Command::AppRoutes(AppRoutes::default())]
+}
+
 pub(crate) fn every_command() -> Vec<Command> {
-    [first_commands(), middle_commands(), last_commands(), newest_commands()].concat()
+    [first_commands(), middle_commands(), last_commands(), newest_commands(), phone_commands()].concat()
 }
 
 #[test]

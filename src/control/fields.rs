@@ -90,7 +90,12 @@ impl Command {
 
     fn stream_fields(&self, fields: &mut Fields) -> bool {
         match self {
-            Self::Status(_) | Self::Contract(_) | Self::Watch(_) | Self::App(_) | Self::FlowRuns(_) => {}
+            Self::Status(_)
+            | Self::Contract(_)
+            | Self::Watch(_)
+            | Self::App(_)
+            | Self::FlowRuns(_)
+            | Self::AppRoutes(_) => {}
             Self::Stats(stats) => stats.fields(fields),
             Self::Events(events) => events.fields(fields),
             Self::Surface(surface) => surface.fields(fields),

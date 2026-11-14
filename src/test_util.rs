@@ -663,6 +663,17 @@ pub(crate) fn http_get(port: u16, path: &str) -> String {
     answer
 }
 
+pub(crate) fn phone_secret(url: &str) -> String {
+    use tungstenite::client::IntoClientRequest as _;
+    let address = url.trim_start_matches("ws://").split('/').next().expect("an address").to_string();
+    let stream = std::net::TcpStream::connect(address).expect("connect");
+    let (mut ws, _) =
+        tungstenite::client::client(url.into_client_request().expect("a request"), stream).expect("a handshake");
+    let reply = ws.read().expect("a message").into_text().expect("text");
+    let reply: serde_json::Value = serde_json::from_str(&reply).expect("json");
+    reply["secret"].as_str().expect("a secret").to_string()
+}
+
 pub(crate) fn redirected(route: &'static str) -> (FakeHttp, FakeHttp) {
     let elsewhere = FakeHttp::start(vec![(route, 200, "{}".to_string())]);
     let path = route.split_once(' ').map_or(route, |(_, path)| path);

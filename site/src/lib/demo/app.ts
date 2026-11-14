@@ -114,6 +114,7 @@ const MACHINES_NEED = 'this needs cornercase on your computer: the demo has no o
 const MACHINES_HINT = 'enter edits a machine · × removes it, and its server keeps running there';
 const HERE_HINT = 'this computer runs the server you are using; it links to each machine below';
 const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor a chat app';
+const PHONE_APP_NEEDS = 'the demo cannot listen on your network: the phone app needs cornercase on your computer';
 
 const ICONS_CHOICES: [string, string][] = [
   ['auto', "where the window's terminal has them, or with the icon bar"],
@@ -3482,6 +3483,7 @@ export class App {
     if (page === PAGE.remote) {
       return [
         { id: 'remote', section: 'Browser', label: 'remote access', value: '[ ] off', note: "open this computer's cornercase from your phone over Tailscale" },
+        { id: 'phoneApp', section: 'Phone app', label: 'phone app', value: '[ ] off', note: 'use cornercase from the phone app over Wi-Fi or Tailscale' },
         { id: 'telegram', section: 'Telegram', label: 'bot', value: 'not set', note: 'make a bot with @BotFather and paste its token here' },
         { id: 'discord', section: 'Discord', label: 'bot', value: 'not set', note: 'make a Discord app with User Install and paste its bot token' },
       ];
@@ -3649,6 +3651,8 @@ export class App {
       const listed = this.listedKinds();
       const items = AGENTS.filter(([k]) => !listed.includes(k)).map(([k, bin]) => ({ value: k, note: bin }));
       o.pick = { row: row.id, title: 'Which agent do you want to set up?', items, selected: 0, filter: '' };
+    } else if (row.id === 'phoneApp') {
+      o.notice = PHONE_APP_NEEDS;
     } else if (row.id === 'remote' || row.id === 'telegram' || row.id === 'discord') {
       o.notice = REMOTE_NEEDS;
     } else if (row.id === 'iconBar') {

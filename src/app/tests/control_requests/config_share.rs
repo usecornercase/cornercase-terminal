@@ -10,8 +10,12 @@ use crate::settings::share::{self, Repository, Section, Shared};
 use crate::test_util::{git, git_repo};
 use crate::text;
 
-const FIXED: [&str; 4] =
-    ["tokens, bots, paired chats and browsers", "jira_email", "accounts and profiles", "remote access and keep awake"];
+const FIXED: [&str; 4] = [
+    "tokens, bots, paired chats, browsers and phone apps",
+    "jira_email",
+    "accounts and profiles",
+    "remote access, the phone app and keep awake",
+];
 
 fn export(s: &mut Setup) -> SetupExported {
     serde_json::from_value(ok(&mut s.app, "config-export", &json!({}))).expect("an export")

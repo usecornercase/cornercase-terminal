@@ -15,7 +15,7 @@ fn the_phone_row_shows_once_a_bot_is_set() {
     let mut s = with_bot(Via::Telegram, None);
     s.open_page(Page::Remote);
     let (telegram, discord) = (Via::Telegram, Via::Discord);
-    assert_eq!(s.rows(), [Row::Remote, Row::Bot(telegram), Row::Chat(telegram), Row::Bot(discord)]);
+    assert_eq!(s.rows(), [Row::Remote, Row::PhoneApp, Row::Bot(telegram), Row::Chat(telegram), Row::Bot(discord)]);
     assert!(!alone);
 }
 
@@ -95,7 +95,7 @@ mod forum_mode {
         let discord = Via::Discord;
         assert!(!unpaired.rows().contains(&Row::Forum(discord)));
         assert!(!telegram.rows().iter().any(|row| matches!(row, Row::Forum(_))));
-        assert_eq!(&s.rows()[2..], [Row::Bot(discord), Row::Chat(discord), Row::Forum(discord)]);
+        assert_eq!(&s.rows()[3..], [Row::Bot(discord), Row::Chat(discord), Row::Forum(discord)]);
     }
 
     #[rstest::rstest]
@@ -184,7 +184,7 @@ mod closed_workspaces {
         s.open_page(Page::Remote);
 
         assert!(!off.rows().contains(&ROW));
-        assert_eq!(&s.rows()[4..], [Row::Forum(Via::Discord), ROW]);
+        assert_eq!(&s.rows()[5..], [Row::Forum(Via::Discord), ROW]);
     }
 
     #[rstest::rstest]

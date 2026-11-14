@@ -706,6 +706,7 @@ mod merged_pull_requests;
 mod muted_text;
 mod opening;
 mod pane_footer;
+mod phone_app;
 mod picker;
 mod plugin_buttons;
 mod plugin_popup;

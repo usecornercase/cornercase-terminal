@@ -13,6 +13,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
 | `flows/` | Your [flows](../../guides/flows/#where-flows-are-kept), one TOML file each. A project's flows are in `.cornercase/flows/` in its repository. | Next to `config.json` |
 | `secrets.json` | GitLab, Shortcut, Linear, Jira, Plane and Asana tokens and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots' tokens, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
+| `apps.json` | The phone apps paired to reach cornercase [from the app](../../guides/phone/#the-phone-app): a name and a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
 | `browsers.json` | The browsers paired to open cornercase [from your phone](../../guides/phone/): a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
 | `telegram.json` | The [Telegram](../../guides/telegram/) bot's name and the chat paired with it. Readable only by you (mode `0600`). | Next to `config.json` |
 | `discord.json` | The [Discord](../../guides/discord/) bot's name and the direct message paired with it. Readable only by you (mode `0600`). | Next to `config.json` |
@@ -56,6 +57,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | Settings and tokens | `/tmp/cc-demo/config.json`, `secrets.json` |
 | Your flows | `/tmp/cc-demo/flows/` |
 | Paired browsers | `/tmp/cc-demo/browsers.json` |
+| Paired phone apps | `/tmp/cc-demo/apps.json` |
 | Telegram bot and chat | `/tmp/cc-demo/telegram.json` |
 | Discord bot and chat | `/tmp/cc-demo/discord.json` |
 | Session | `/tmp/cc-demo/server.json` |

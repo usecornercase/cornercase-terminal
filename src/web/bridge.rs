@@ -1,4 +1,3 @@
-use std::io::{self, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
@@ -7,11 +6,11 @@ use std::time::{Duration, Instant};
 use crossterm::event::Event as Input;
 use libghostty_vt::style::RgbColor;
 use serde::Deserialize;
-use tungstenite::protocol::{Role, WebSocketConfig};
+use tungstenite::protocol::WebSocketConfig;
 use tungstenite::{Message, WebSocket};
 
-use super::Context;
-use super::http::Request;
+use super::http::{self, Request, waiting};
+use super::{Context, MAX_MESSAGE, PING_EVERY, POLL, SILENT_FOR, WRITE_TIMEOUT};
 use crate::client::input::Parser;
 use crate::graphics::{Missing, Support};
 use crate::host::notify::Channel;
@@ -21,12 +20,7 @@ use crate::os::socket::UnixStream;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::version;
 
-const POLL: Duration = Duration::from_millis(10);
-const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 const HELLO_WITHIN: Duration = Duration::from_secs(10);
-const PING_EVERY: Duration = Duration::from_secs(15);
-const SILENT_FOR: Duration = Duration::from_secs(45);
-const MAX_MESSAGE: usize = 1024 * 1024;
 const MODES: &[u8] = b"\x1b[?1049h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h\x1b[?2004h";
 const THEMED: usize = 16;
 const QUEUED_FRAMES: usize = 64;
@@ -116,28 +110,10 @@ fn ping() -> Message {
     Message::text(r#"{"type":"ping"}"#)
 }
 
-fn waiting(error: &tungstenite::Error) -> bool {
-    matches!(error, tungstenite::Error::Io(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut))
-}
-
 pub(super) fn run(stream: TcpStream, request: &Request, context: &Context) {
-    let Some(key) = request.header("sec-websocket-key") else { return };
-    if request.header("sec-websocket-version") != Some("13") {
-        return;
-    }
     let Some(id) = context.register(&stream) else { return };
-    let accept = tungstenite::handshake::derive_accept_key(key.as_bytes());
-    let mut raw = stream;
-    let upgraded = raw.write_all(
-        format!(
-            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
-             Sec-WebSocket-Accept: {accept}\r\n\r\n"
-        )
-        .as_bytes(),
-    );
-    if upgraded.is_ok() {
-        let config = WebSocketConfig::default().max_message_size(Some(MAX_MESSAGE)).max_frame_size(Some(MAX_MESSAGE));
-        let mut ws = WebSocket::from_raw_socket(raw, Role::Server, Some(config));
+    let config = WebSocketConfig::default().max_message_size(Some(MAX_MESSAGE)).max_frame_size(Some(MAX_MESSAGE));
+    if let Some(mut ws) = http::upgrade(stream, request, config) {
         if let Some((cols, rows, theme)) = wait_for_hello(&mut ws) {
             attach(&mut ws, context, hello(cols, rows, &theme));
         }

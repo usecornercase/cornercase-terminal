@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
 use std::time::Duration;
@@ -7,6 +7,9 @@ const POLL: Duration = Duration::from_millis(20);
 
 pub(crate) fn run(program: &Path, args: &[String], out: &mut impl Write, err: &mut impl Write) -> i32 {
     record(program, args);
+    if program.with_extension("echo").exists() {
+        echo(std::io::stdin().lock(), out);
+    }
     copy(&program.with_extension("out"), out);
     copy(&program.with_extension("err"), err);
     let _listener = match listen(program, args) {
@@ -25,6 +28,16 @@ fn record(program: &Path, args: &[String]) {
     append(&program.with_extension("argv"), &format!("{args:?}\n"));
     let folder = std::env::current_dir().map(|dir| dir.display().to_string()).unwrap_or_default();
     append(&program.with_extension("cwd"), &format!("{folder}\n"));
+    append(&program.with_extension("pid"), &format!("{}\n", std::process::id()));
+}
+
+fn echo(mut input: impl Read, to: &mut impl Write) {
+    let mut buffer = [0u8; 4096];
+    while let Ok(read) = input.read(&mut buffer) {
+        if read == 0 || to.write_all(&buffer[..read]).and_then(|()| to.flush()).is_err() {
+            return;
+        }
+    }
 }
 
 fn append(path: &Path, line: &str) {

@@ -1,5 +1,9 @@
 use std::fmt::Write as _;
 use std::io::{self, Read, Write};
+use std::net::TcpStream;
+
+use tungstenite::WebSocket;
+use tungstenite::protocol::{Role, WebSocketConfig};
 
 const MAX_HEAD: usize = 16 * 1024;
 const MAX_HEADERS: usize = 64;
@@ -77,9 +81,38 @@ impl Request {
         ["x-forwarded-for", "x-forwarded-host", "tailscale-headers-info"].iter().any(|h| self.header(h).is_some())
     }
 
+    pub(super) fn upgradable(&self) -> bool {
+        self.header("sec-websocket-key").is_some() && self.header("sec-websocket-version") == Some("13")
+    }
+
     pub(super) fn wants_websocket(&self) -> bool {
         self.header("upgrade").is_some_and(|u| u.eq_ignore_ascii_case("websocket"))
     }
+}
+
+pub(super) fn waiting(error: &tungstenite::Error) -> bool {
+    matches!(error, tungstenite::Error::Io(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut))
+}
+
+pub(super) fn upgrade(
+    mut stream: TcpStream,
+    request: &Request,
+    config: WebSocketConfig,
+) -> Option<WebSocket<TcpStream>> {
+    if !request.upgradable() {
+        return None;
+    }
+    let accept = tungstenite::handshake::derive_accept_key(request.header("sec-websocket-key")?.as_bytes());
+    stream
+        .write_all(
+            format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+                 Sec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .ok()?;
+    Some(WebSocket::from_raw_socket(stream, Role::Server, Some(config)))
 }
 
 pub(super) struct Response {
@@ -98,6 +131,10 @@ impl Response {
             ("Referrer-Policy", "no-referrer".into()),
         ];
         Self { status, headers, body: body.into() }
+    }
+
+    pub(super) fn text(status: &'static str, body: impl Into<Vec<u8>>) -> Self {
+        Self::new(status, "text/plain; charset=utf-8", body)
     }
 
     pub(super) fn html(status: &'static str, body: impl Into<Vec<u8>>) -> Self {
