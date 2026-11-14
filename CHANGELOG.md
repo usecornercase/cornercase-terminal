@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.75
+
+- **A Claude Code agent waiting on a command it started in the background shows as working again.** Recent Claude Code versions report their own state to cornercase, and that report called the turn finished while a build, a test run or a Monitor started with `run_in_background` still ran. So the tab turned `✓` and told you it finished before the work was done, and `cornercase status` said `idle` or `done` with `background_shell: false`. `cornercase wait` and `--until idle` ended at once, `--until turn-over` said `done` instead of `shell`, and a routine with cleanup could remove its workspace under the running command. cornercase now also reads the session file Claude Code keeps, which still says when such a command runs: the tab keeps its working icon, `status`, `--panes` and `events` say `working (background shell)`, and the agent counts as finished once that command ends and its next turn is over.
+
 ## 0.13.74
 
 - **The Flow panel shows a role whose agent exited.** A flow role whose agent exited by itself (a crash, a stray `pkill`, `/exit`) no longer looks idle there: its row in **Team** and its box in the diagram read `exited`, with the cyan `▶` the workspace's row shows for it. Click that `▶` to bring it back in its pane, as the workspace's `▶` does (every exited role, the orchestrator last); a click elsewhere on the row still goes to its pane.
