@@ -3,7 +3,7 @@ use std::time::Instant;
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::Color;
 use ratatui::text::Span;
 
 pub(crate) use super::todo::close;
@@ -15,7 +15,7 @@ use crate::flows::{Flow, ORCHESTRATOR, Role, Stage};
 use crate::project::group::GROUP_STYLES;
 use crate::pull_request::Mark;
 use crate::text;
-use crate::ui::theme::{WAITING_COLOR, pull_tag, status_icon};
+use crate::ui::theme::{WAITING_COLOR, pull_tag, reopen_mark, status_icon};
 
 mod files;
 mod geometry;
@@ -52,14 +52,6 @@ pub(crate) enum State {
 
 const CLOSED: &str = "closed";
 const EXITED: &str = "exited";
-
-fn reopen_mark(lit: bool) -> Span<'static> {
-    let style = Style::default().fg(Color::Cyan);
-    Span::styled(
-        super::REOPEN_ICON,
-        if lit { style.add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else { style },
-    )
-}
 
 impl State {
     fn gone(self) -> bool {

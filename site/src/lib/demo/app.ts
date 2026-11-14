@@ -12,7 +12,7 @@ import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, in
 import { type Edge, describe as describeRole, live, plan, roleColour } from './flow';
 import { RecapPanel, type Choice as RecapChoice, type Place as RecapPlace } from './recap';
 import { type PanelHit, type PanelHistory, type PanelMember, type PanelStep, type PanelView, fileAge, scrolled as flowScrolled } from './flowpanel';
-import { ORCHESTRATOR, RUN_DIR, type Run, bringBack, exitedPanes } from './flowrun';
+import { ORCHESTRATOR, RUN_DIR, type Run, bringBack, exited, exitedPanes } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
 import { type FileAction, FilesPanel, size as fileSize, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
@@ -1765,7 +1765,7 @@ export class App {
       const id = run.members.find((m) => m.role === role)?.pane;
       const found = id === undefined ? null : this.findPane(id);
       if (!found) return id === undefined ? 'none' : 'closed';
-      if (found.pane.shell.fg === null) return 'exited';
+      if (exited(found.pane)) return 'exited';
       return paneStatus(found.pane) ?? 'none';
     };
     const own = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;

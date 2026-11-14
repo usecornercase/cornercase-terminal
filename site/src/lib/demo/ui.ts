@@ -86,6 +86,7 @@ import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, REOPEN_ICON, agentsLabel, type SettingsOverlay, type Status, type Tab, type Target, attention, highest, isModal, MAX_AGENT_DEPTH, NARROW_AGENT_DEPTH, projectAttention, projectLabel, shapeTree, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
+import { reopenSeg } from './flow';
 import { type Line, type Seg, drawLine, pad as padTo, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
 export type Drag = { kind: 'border'; border: Border } | { kind: 'divider'; tab: Tab; divider: Divider; area: Rect };
@@ -783,7 +784,7 @@ export class Painter {
     const line = [...b.lead, seg(name, style)];
     const at = status ? 2 : 0;
     const tag = !ws.removing && reopen.length && marks.segs.length > at ? rect(b.r.x + width(b.lead) + room - marks.width + at, b.r.y, 1, Math.min(b.pitch, b.r.h)) : null;
-    if (tag && this.sidebarHovered(tag)) marks.segs[at] = seg(REOPEN_ICON, { fg: 6, add: BOLD | UNDERLINE });
+    if (tag && this.sidebarHovered(tag)) marks.segs[at] = reopenSeg(true);
     pushTags(line, marks, [...name].length, room);
     this.band(b.r, line, b.bg);
     if (ws.removing) return;

@@ -1,5 +1,5 @@
 import type { App } from './app';
-import { type Edge, type Flow, type Message, Progress, TRAVEL } from './flow';
+import { type Edge, type Flow, type FlowRole, type Message, Progress, TRAVEL } from './flow';
 import { type Pane, type Project, type Workspace, markPane } from './model';
 import { Agent } from './programs';
 
@@ -82,15 +82,22 @@ function agentOf(app: App, run: Run, role: string): Agent | null {
 
 const taskFile = (app: App): RunFile => ({ name: 'task.md', at: app.now(), text: RUN_TASK, bytes: RUN_TASK.length });
 
-function startRole(app: App, p: Project, w: Workspace, pane: Pane, role: { agent: string; model?: string }): void {
+function startRole(app: App, p: Project, w: Workspace, pane: Pane, role: FlowRole): void {
   const args = [...(ARGS[role.agent] ?? []), ...(role.model ? ['--model', role.model] : [])];
   pane.shell.start(new Agent(app.host(p, w, () => pane.id), () => pane.shell.finish(), role.agent, args, { trusted: true }));
 }
 
+export const exited = (pane: Pane): boolean => pane.shell.fg === null;
+
+const exitedPane = (app: App, id: number): boolean => {
+  const found = app.findPane(id);
+  return !!found && exited(found.pane);
+};
+
 export function exitedPanes(app: App, run: Run): number[] {
   const roles = [ORCHESTRATOR, ...run.flow.roles.map((r) => r.name)];
   const ids = roles.map((role) => run.members.find((m) => m.role === role)?.pane);
-  return ids.filter((id): id is number => id !== undefined && app.findPane(id)?.pane.shell.fg === null);
+  return ids.filter((id): id is number => id !== undefined && exitedPane(app, id));
 }
 
 export function bringBack(app: App, run: Run): number {

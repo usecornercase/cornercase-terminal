@@ -3,6 +3,7 @@ import { drawPanelBorder } from './changes';
 import { type Areas, bottom, right } from './layout';
 import { REOPEN_ICON, type Status } from './model';
 import type { Painter } from './ui';
+import type { Seg } from './text';
 import { truncateRight } from './text';
 
 export const TRAVEL = 1000;
@@ -22,6 +23,10 @@ const W = 8;
 export const BRAND = 27;
 export const WAITING = 208;
 export const DARK: Style = { fg: 8 };
+
+export const reopenSeg = (lit: boolean): Seg => ({ t: REOPEN_ICON, s: lit ? { fg: 6, add: BOLD | UNDERLINE } : { fg: 6 } });
+
+export const stateWords = (state: NodeState | null, text: string): string => (state === 'closed' ? 'closed' : state === 'exited' ? 'exited' : text);
 const OWN_LONG = ' own worktree ';
 const OWN_SHORT = ' own ';
 
@@ -648,11 +653,10 @@ function drawBox(p: Painter, put: (at: At, text: string, s: Style) => void, spot
   }
   const mark: [number, number] = [right(r) - 3, r.y + 1];
   const markLit = !!local && local[0] === mark[0] && local[1] === mark[1];
-  const reopen = { t: REOPEN_ICON, s: markLit ? { fg: 6, add: BOLD | UNDERLINE } : { fg: 6 } };
   const state = node.state;
   const live = state && state !== 'closed' && state !== 'exited' ? p.statusSeg(state === 'none' ? 'idle' : state) : null;
-  const icon = exited ? reopen : live;
-  const words = closed ? 'closed' : exited ? 'exited' : node.text;
+  const icon = exited ? reopenSeg(markLit) : live;
+  const words = stateWords(node.state, node.text);
   put([r.x + 2, r.y + 1], truncateRight(words, Math.max(0, r.w - (icon ? 6 : 4))), { ...bg, fg: 8 });
   if (icon && r.w >= 5) put([right(r) - 3, r.y + 1], icon.t, { ...bg, ...icon.s });
   const top = spot([r.x, r.y]);

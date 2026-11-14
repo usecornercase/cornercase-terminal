@@ -1,8 +1,7 @@
-import { BOLD, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
+import { BOLD, type Rect, type Style, contains, rect } from '../term/grid';
 import { drawPanelBorder } from './changes';
-import { BRAND, DARK, type Diagram, type DiagramHit, HEADER, WAITING, diagramHeight, drawDiagram, len } from './flow';
+import { BRAND, DARK, type Diagram, type DiagramHit, HEADER, WAITING, diagramHeight, drawDiagram, len, reopenSeg, stateWords } from './flow';
 import { type Areas, bottom, right } from './layout';
-import { REOPEN_ICON } from './model';
 import type { Painter } from './ui';
 import { truncateRight } from './text';
 import type { NodeState } from './flow';
@@ -320,16 +319,18 @@ function teamRow(p: Painter, s: Slot, member: PanelMember, longest: number, row:
   const after = Math.max(0, s.area.w - 2 - (pane ? len(pane) + 1 : 0));
   const roleW = Math.max(Math.min(MIN_ROLE, longest), Math.min(longest, after));
   const role = truncateRight(member.role, roleW);
-  if (exited) p.span(s.area.x, y, REOPEN_ICON, p.hovered(rect(s.area.x, y, 1, 1)) ? { fg: 6, add: BOLD | UNDERLINE } : { fg: 6 });
-  else if (member.state === 'closed') p.span(s.area.x, y, '·', DARK);
-  else if (member.state !== 'exited') {
+  if (member.state === 'exited') {
+    const mark = reopenSeg(p.hovered(rect(s.area.x, y, 1, 1)));
+    p.span(s.area.x, y, mark.t, mark.s ?? {});
+  } else if (member.state === 'closed') p.span(s.area.x, y, '·', DARK);
+  else {
     const icon = p.statusSeg(member.state === 'none' ? 'idle' : member.state);
     p.span(s.area.x, y, icon.t, icon.s ?? {});
   }
   p.span(s.area.x + 2, y, role, closed || exited ? DARK : { fg: member.colour, add: BOLD });
   let left = Math.max(0, after - roleW - 2);
   let x = s.area.x + 2 + roleW + 2;
-  const said = closed ? 'closed' : exited ? 'exited' : member.agent;
+  const said = stateWords(member.state, member.agent);
   if (left >= MIN_TEXT) {
     const text = truncateRight(said, left);
     p.span(x, y, text, DARK);
