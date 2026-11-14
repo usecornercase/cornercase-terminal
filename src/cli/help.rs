@@ -9,14 +9,17 @@ start a server, except `start-server`. With --remote DESTINATION they drive the 
 machine, through ssh.";
 macro_rules! boot_commands {
     () => {
-        "account add, account login, account restart, agents close, agents
-forget, agents reopen, changes base, changes discard, changes stage,
-changes unstage, changes viewed, close, collapse, config project,
-context, expand, focus, group delete, group style, held, input,
-keys, mark, move, move-pane, new-tab, new-workspace, open,
-paste-file, plugin run, queue add, queue edit, ratio, redraw,
-rename, resize, scroll, selection, send, setup, split, start, todo
-send, view-set and worktrees free-builds"
+        "account add, account login, account restart, agents close, agents forget, agents reopen,
+changes base, changes discard, changes file, changes gap, changes list, changes merge-check,
+changes shared, changes stage, changes unstage, changes viewed, clone, close, collapse,
+config project, context, events, expand, files list, files read, files search, flow
+close-when-merged, flow default, flow delete, flow export, flow files, flow import, flow list,
+flow messages, flow order, flow run, flow save, focus, go, group delete, group style, held,
+input, issue list, issue people, issue read, issue sources, keys, link, mark, move, move-pane,
+new-tab, new-workspace, open, paste-file, plugin run, ports, processes, pull-request, queue
+add, queue edit, ratio, read, redraw, rename, resize, scroll, selection, send, setup, split,
+start, surface, todo send, view, view-set, wait, worktrees free-builds, worktrees list and
+worktrees size"
     };
 }
 
@@ -31,7 +34,7 @@ asks several sources (usage, issue list, files list, read --last-message with se
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json.
 A command given --boot (", boot_commands!(), ") exits with 4 when it names another run
-of the server, which then did nothing, and every command that sends a request exits with 5 when the cornercase --remote
+of the server, which then did and printed nothing (a stream, before its first line), and every command that sends a request exits with 5 when the cornercase --remote
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
 updates it as one JSON line. `update` exits with 6 when this cornercase cannot replace itself, after printing the command
@@ -132,7 +135,8 @@ With --last-message, repeat --pane or --tab to read several agents at once. Each
 header with its pane, agent, turn_over and written time; --json gives {\"panes\": [...]}. Panes come
 first, then tabs, in the order given, and a repeated id is read once. Errors stay with their target,
 and it exits 3 after reading them all if any failed; with no server it prints nothing and exits 1.
-One target keeps the output above. Reading the screen takes only one target.
+One target keeps the output above. Reading the screen takes only one target. With --boot, a server that
+restarted since ends it with 4 before anything is printed, with several targets too.
 
 Claude Code's feedback survey (`How is Claude doing this session? (optional)`, then
 `1: Bad  2: Fine  3: Good  0: Dismiss`) may show above its input box: it is Claude Code asking you,
@@ -142,6 +146,7 @@ Examples:
   cornercase read --pane 12
   cornercase read --pane 7 --lines 200 > build.log
   cornercase read --pane 12 --last-message
+  cornercase --remote vps read --pane 9 --last-message --boot 4242-1700000000
   cornercase read --tab 4 --last-message --json
   cornercase read --last-message --pane 12 --pane 15 --json";
 pub(super) const WAIT_HELP: &str =
@@ -233,8 +238,8 @@ pub(super) const GO_HELP: &str =
     "Does what a click on an agent's desktop notification does, or the go button of its toast: shows
 the agent's pane (the one still needing you, when the notice covered several), or its workspace once
 they are all closed, and prints the pane's id. With --view ID it moves that view (see
-`cornercase view`) instead of the window; a notice about an agent on one of your machines refuses
---view, since only the window shows that machine's workspace. TOKEN is from `cornercase events --notices`.
+`cornercase view`) instead of the window, and --boot says which run of the server the --view id is from;
+a notice about an agent on one of your machines refuses --view, since only the window shows that machine's workspace. TOKEN is from `cornercase events --notices`.
 It fails for a token this server never gave or no longer keeps (the last 64; a restart forgets them),
 and when the agent and its workspace are gone.
 
@@ -317,43 +322,6 @@ pending item can be sent.
 Examples:
   cornercase todo send 3
   cornercase todo send 3 --pane 5 --json";
-pub(super) const EVENTS_HELP: &str = "It keeps running and prints one line per event, as it happens:
-  pane 5  claude  working → waiting   an agent changed state: working, shell (its turn is over but a
-                                      background shell it started still runs), waiting, done, idle,
-                                      or none once it left the pane
-  pane 7  cargo  exited               the program in the foreground ended and the shell is back
-  tab 3  opened in workspace 2        a project, workspace, tab or pane opened, or closed
-With --notices, each notice about an agent is told too, as the window's toast and desktop notification
-say it, with the same rules (a second's wait, once per change, never for a tab seen in the window or
-in a view), and with --json its token, agent, status, place, message and panes:
-  workspace 2  notice  claude needs you in shop › main  cc-3f2a9c-4
-An agent on a linked machine tells its notices too, with the machine's name and without ids here:
-  machine vps  notice  claude on vps needs you in shop › main  cc-3f2a9c-5
-`cornercase go TOKEN` then does what a click on that notification does.
-The server's other notices come with --notices too, as the window's toast says them, with a kind and
-no token: notify (`cornercase notify`, naming the pane it ran in), queue-started, queue-failed,
-queue-missed and queue-kept (a queued agent or routine run; a one-off entry that missed its time sends
-none), setup-failed (only while nobody looks at its tab), flow-consent (a flow's member waits for your
-consent) and flow-merged (a run's agents closed once its pull request merged). With --json they have
-kind, message, panes and the workspace's ids, which queue-failed and queue-missed leave out:
-  notify  the release build is ready
-  workspace 2  flow-merged  pull request merged in fix-login: 3 agents closed · ▶ on the workspace reopens them
-With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
-  pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json
-  pane 7  bell  3 times               it rang the bell: one line a second per pane, with how many rang
-With --json, each line is a JSON object with the event, the ids, the old and new state and the time.
-
-It ends when the server stops, once every pane given with --pane has closed, or soon after what reads
-its output is gone (a closed pipe or socket, such as an ssh that ended), with status 0. Programs are looked
-at every half second while something follows events, so one that ends sooner may not show. Start it
-before what you want to follow, or read `cornercase status` once it runs, so nothing falls between.
-A reader that falls far behind loses events, and a line says how many.
-
-Examples:
-  cornercase events
-  cornercase events --pane 12 --pane 14 --json
-  cornercase events --host --json
-  cornercase events --notices --json";
 pub(super) const SURFACE_HELP: &str =
     "For programs that draw cornercase's terminals themselves, such as an editor extension or a
 GUI. It keeps running and prints the tab as one JSON object per line: first as it is now, then again
@@ -667,7 +635,7 @@ pub(super) const FRESH_HELP: &str = "Make a missing branch from the up-to-date d
 pub(super) const NO_FRESH_HELP: &str =
     "Make a missing branch from the project's HEAD, whatever settings → worktrees → new branches says";
 pub(super) const QUEUE_FRESH_HELP: &str = "Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches when the entry runs; edit keeps the entry's]";
-pub(super) const BOOT_ARG: &str = "Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]";
+pub(super) const BOOT_ARG: &str = "Go on only if the server is still this run of it, the `boot` of `status --json`; else nothing is done or printed and the exit status is 4 [default: any run]";
 
 pub(super) const CONTRACT_HELP: &str = concat!(
     "Programs that drive cornercase without this command line (an editor extension, a dashboard) ask
@@ -676,7 +644,7 @@ goes up only when one changes in a way an older client would misread, while new 
 and events are added without it. `boot` names this run of the server and changes on every restart,
 since ids last only one run; ",
     boot_commands!(),
-    " take it as --boot, and then act only in that run. Each command is listed
+    " take it as --boot, and then act or read only in that run. Each command is listed
 with whether it is available, and each stream with its version. A server without this command is older than the
 contract.
 
@@ -768,6 +736,7 @@ Examples:
 mod changes;
 mod clone;
 mod context;
+mod events;
 mod files;
 mod flow;
 mod held;
@@ -792,6 +761,7 @@ mod worktrees;
 pub(in crate::cli) use changes::{CHANGES_FILE_HELP, CHANGES_GAP_HELP};
 pub(in crate::cli) use clone::CLONE_HELP;
 pub(in crate::cli) use context::CONTEXT_HELP;
+pub(in crate::cli) use events::EVENTS_HELP;
 pub(in crate::cli) use files::FILES_HELP;
 pub(in crate::cli) use flow::{
     FLOW_CLOSE_WHEN_MERGED_HELP, FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HELP,

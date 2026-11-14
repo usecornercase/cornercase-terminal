@@ -95,6 +95,8 @@ pub(crate) struct LinkArgs {
     pub(crate) cell: Point,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }
 
 #[derive(Debug, Args)]

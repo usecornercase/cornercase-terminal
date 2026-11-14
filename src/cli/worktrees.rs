@@ -19,7 +19,7 @@ mod remove;
 pub(super) fn run(args: &WorktreesArgs) -> Result<()> {
     match &args.action {
         WorktreesAction::List(list) => run_list(list),
-        WorktreesAction::Size(target) => run_size(target),
+        WorktreesAction::Size(size) => run_size(&size.target),
         WorktreesAction::FreeBuilds(free) => run_free(free),
         WorktreesAction::Remove(remove) => remove::run(remove),
     }

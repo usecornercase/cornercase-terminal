@@ -13,8 +13,8 @@ use crate::files::search::{MAX_MATCHES, MAX_NAMES};
 
 pub(super) fn run(args: FilesArgs) -> Result<()> {
     match args.action {
-        FilesAction::List { folders, place, follow, print } => list(folders, &place, follow, print.json),
-        FilesAction::Read { path, place, follow, print } => read(path, &place, follow, print.json),
+        FilesAction::List { folders, place, follow, print, .. } => list(folders, &place, follow, print.json),
+        FilesAction::Read { path, place, follow, print, .. } => read(path, &place, follow, print.json),
         FilesAction::Search { query, names, place, print, .. } => search(query, names, &place, print.json),
     }
 }

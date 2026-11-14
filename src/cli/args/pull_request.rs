@@ -1,6 +1,6 @@
 use clap::Args;
 
-use super::{Print, branch};
+use super::{BootArg, Print, branch};
 use crate::cli::help::{BY_BRANCH, HERE_WORKSPACE};
 
 #[derive(Debug, Args)]
@@ -11,4 +11,6 @@ pub(crate) struct PullRequestArgs {
     pub(crate) worktree: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,
+    #[command(flatten)]
+    pub(crate) boot: BootArg,
 }

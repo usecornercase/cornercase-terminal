@@ -8,7 +8,7 @@ that fails leaves no folder behind, the folders it made for FOLDER included, and
 not a repository, access denied, or git's own reason. git never asks for a password: the server's
 ssh keys and git credentials must already reach the repository. With --remote, FOLDER and a
 repository's path are the other machine's (absolute, or starting with ~/), and without FOLDER the
-clone goes in that machine's home folder.
+clone goes in that machine's home folder. --boot says which run of the server the --view id is from.
 
 --file copies a file of the repository here into the new clone once git is done, such as the
 git-ignored .env a project needs to run, as the Clone on machine dialog does with the ones you
@@ -24,7 +24,7 @@ repository has, leaves the clone done and is not written: it is named on standar
 nothing: each from the repository's root with its size, and `too big to copy` over 1 MiB, then how
 many more past the 200th. With --json: {\"root\", \"files\": [{\"path\", \"size\", \"mode\", \"too_big\"}],
 \"left_out\"}. It reads this machine's folder, since the files are here even when the clone goes
-elsewhere, so it needs no server, and --remote changes nothing for it. On Windows --file and
+elsewhere, so it needs no server, and --remote changes nothing for it, and it does not go with --boot. On Windows --file and
 --list-ignored say they are not supported yet.
 
 Examples:
