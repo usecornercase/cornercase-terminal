@@ -173,7 +173,7 @@ The boundary (#856): the classifier of the writing requests (`boundary/tests.rs`
 
 ## What later issues add
 
-#846 routines (`queue add --bot`); #847 following the agents a bot starts; #848 chat apps; #849 the other agents. The rest of the boundary (the open list above) and the server-side refusal of `cornercase requests` are follow-up issues.
+#846 routines (`queue add --bot`); #847 following the agents a bot starts; #848 chat apps; #849 the other agents. The rest of the boundary (the open list above, #866) and the server-side refusal of `cornercase requests` for a restart or an update (#867) are follow-up issues.
 
 ## The window (#845)
 
