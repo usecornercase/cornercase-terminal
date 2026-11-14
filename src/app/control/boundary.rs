@@ -17,7 +17,7 @@ use crate::term::Term;
 pub(crate) const HEAD: &str = "a bot can only type into a pane that runs an agent";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Writes {
+enum Gated {
     Pane { pane: Option<u64>, tab: Option<u64> },
     Popup,
     NewShell,
@@ -64,33 +64,33 @@ fn blank(command: Option<&String>) -> bool {
     command.is_none_or(|command| command.trim().is_empty())
 }
 
-fn writes(command: &Command) -> Option<Writes> {
+fn gated(command: &Command) -> Option<Gated> {
     match command {
-        Command::Send(send) => Some(Writes::Pane { pane: send.pane, tab: send.tab }),
-        Command::Keys(keys) => Some(Writes::Pane { pane: keys.pane, tab: keys.tab }),
-        Command::TodoSend(send) => Some(Writes::Pane { pane: send.pane, tab: send.tab }),
+        Command::Send(send) => Some(Gated::Pane { pane: send.pane, tab: send.tab }),
+        Command::Keys(keys) => Some(Gated::Pane { pane: keys.pane, tab: keys.tab }),
+        Command::TodoSend(send) => Some(Gated::Pane { pane: send.pane, tab: send.tab }),
         Command::Held(held) if held.action == HeldAction::SendNow => {
-            Some(Writes::Pane { pane: held.pane, tab: held.tab })
+            Some(Gated::Pane { pane: held.pane, tab: held.tab })
         }
-        Command::Input(input) if input.popup => Some(Writes::Popup),
-        Command::Input(input) => input.pane.map(|pane| Writes::Pane { pane: Some(pane), tab: None }),
-        Command::PasteFile(paste) => paste.pane.map(|pane| Writes::Pane { pane: Some(pane), tab: None }),
-        Command::NewTab(new) if !blank(new.command.as_ref()) => Some(Writes::NewShell),
-        Command::Split(split) if !blank(split.command.as_ref()) => Some(Writes::NewShell),
+        Command::Input(input) if input.popup => Some(Gated::Popup),
+        Command::Input(input) => input.pane.map(|pane| Gated::Pane { pane: Some(pane), tab: None }),
+        Command::PasteFile(paste) => paste.pane.map(|pane| Gated::Pane { pane: Some(pane), tab: None }),
+        Command::NewTab(new) if !blank(new.command.as_ref()) => Some(Gated::NewShell),
+        Command::Split(split) if !blank(split.command.as_ref()) => Some(Gated::NewShell),
         _ => lifts(command),
     }
 }
 
-fn lifts(command: &Command) -> Option<Writes> {
+fn lifts(command: &Command) -> Option<Gated> {
     match command {
         Command::Bot(BotRequest::New(new)) => {
-            new.access.as_deref().filter(|a| !a.eq_ignore_ascii_case("cornercase")).map(|_| Writes::Access)
+            new.access.as_deref().filter(|a| Access::parse(a) != Some(Access::Cornercase)).map(|_| Gated::Access)
         }
-        Command::Bot(BotRequest::Edit(edit)) => edit.access.as_ref().map(|_| Writes::Access),
-        Command::Bot(BotRequest::Say(say)) => Some(Writes::Says(say.bot.clone())),
+        Command::Bot(BotRequest::Edit(edit)) => edit.access.as_ref().map(|_| Gated::Access),
+        Command::Bot(BotRequest::Say(say)) => Some(Gated::Says(say.bot.clone())),
         Command::Config(Configure::Get | Configure::Search(_)) => None,
-        Command::Config(_) => Some(Writes::Settings),
-        Command::ConfigImport(import) if import.apply => Some(Writes::Settings),
+        Command::Config(_) => Some(Gated::Settings),
+        Command::ConfigImport(import) if import.apply => Some(Gated::Settings),
         _ => None,
     }
 }
@@ -107,7 +107,7 @@ fn no_popup() -> Refusal {
 }
 
 fn no_access() -> Refusal {
-    Refusal::new(Code::Failed, "a bot cannot change a bot's access")
+    Refusal::new(Code::Failed, crate::bots::ACCESS_CHANGE)
 }
 
 fn no_full_bot() -> Refusal {
@@ -168,14 +168,14 @@ impl App {
         if !self.clients.bots.is_bot(client) {
             return Ok(());
         }
-        match writes(command) {
+        match gated(command) {
             None => Ok(()),
-            Some(Writes::Popup) => Err(no_popup()),
-            Some(Writes::NewShell) => Err(no_new_shell()),
-            Some(Writes::Access) => Err(no_access()),
-            Some(Writes::Settings) => Err(no_settings()),
-            Some(Writes::Says(bot)) => self.says_to(&bot),
-            Some(Writes::Pane { pane, tab }) => self.types_into(self.target(asker, pane, tab)?),
+            Some(Gated::Popup) => Err(no_popup()),
+            Some(Gated::NewShell) => Err(no_new_shell()),
+            Some(Gated::Access) => Err(no_access()),
+            Some(Gated::Settings) => Err(no_settings()),
+            Some(Gated::Says(bot)) => self.says_to(&bot),
+            Some(Gated::Pane { pane, tab }) => self.types_into(self.target(asker, pane, tab)?),
         }
     }
 

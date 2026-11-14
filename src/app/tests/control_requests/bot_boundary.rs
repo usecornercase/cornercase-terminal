@@ -6,7 +6,8 @@ use super::*;
 use crate::agents::activity::Activity;
 use crate::agents::headless::Access;
 use crate::app::control::boundary::HEAD;
-use crate::app::tests::bots::install_bot;
+use crate::app::control::boundary::fronts_agent;
+use crate::app::tests::bots::{install_bot, root_pid};
 use crate::test_util::fake_program;
 
 const OTHER: u64 = CLIENT + 1;
@@ -39,18 +40,15 @@ fn bounded() -> Bounded {
 }
 
 fn in_front(app: &App, pane: u64) -> bool {
-    crate::agents::detect(&app.config, &app.projects.pane_by(pane).expect("the pane").foreground_args()).is_some()
+    fronts_agent(&app.config, app.projects.pane_by(pane).expect("the pane"))
 }
 
 impl Bounded {
     fn connect_as_the_bot(&mut self) {
         std::fs::write(self.claude.with_extension("hold"), "").expect("hold");
         self.app.bot_say("prs", "go", false).expect("say");
-        let claude = self.claude.with_extension("pid");
-        wait_until("the bot's agent runs", || std::fs::read_to_string(&claude).is_ok_and(|pids| !pids.is_empty()));
-        let pids = std::fs::read_to_string(&claude).expect("the agent's pid");
-        let root = pids.lines().next().and_then(|pid| pid.parse().ok()).expect("a pid");
-        self.app.client_connected(CLIENT, Some(root));
+        wait_until("the bot's agent runs", || root_pid(&self.claude).is_some());
+        self.app.client_connected(CLIENT, root_pid(&self.claude));
     }
 
     fn as_you(&mut self) {
@@ -67,14 +65,18 @@ impl Bounded {
         pane_screen(&self.app, pane)
     }
 
-    fn gone_from_front(&mut self) {
+    fn release_helper(&self) {
         std::fs::remove_file(self.helper.with_extension("hold")).expect("release the helper");
+    }
+
+    fn gone_from_front(&mut self) {
+        self.release_helper();
         let (app, agent) = (&self.app, self.agent);
         wait_until("the agent's shell is in front", || !in_front(app, agent));
     }
 
     fn leaves_the_agent(&mut self) {
-        std::fs::remove_file(self.helper.with_extension("hold")).expect("release the helper");
+        self.release_helper();
         let shell_in_front = |app: &App| !in_front(app, self.agent);
         let (app, rx) = (&mut self.app, &self.rx);
         refreshing(app, rx, "the agent's shell is in front", |app| shell_in_front(app));
@@ -178,7 +180,7 @@ fn a_bots_enter_is_not_pressed_once_its_agent_is_gone() {
     let mut b = bounded();
     let agent = b.agent;
     ask(&mut b.app, None, text(agent, "echo pwned", true));
-    std::fs::remove_file(b.helper.with_extension("hold")).expect("release the helper");
+    b.release_helper();
 
     let message = error(answered(&mut b.app, &b.rx, "the bot is answered"));
 
@@ -225,6 +227,13 @@ fn a_bots_enter_is_not_pressed_when_its_client_left_before_it() {
 
     let (app, rx) = (&mut b.app, &b.rx);
     refreshing(app, rx, "the launch is over", |app| app.agents.launches.of_pane(agent).next().is_none());
+    value(&mut b.app, None, press_keys(agent, &["ctrl+c"]));
+    ask(&mut b.app, None, text(agent, "echo after", true));
+    done(answered(&mut b.app, &b.rx, "the send is answered"));
+    let (app, rx) = (&mut b.app, &b.rx);
+    refreshing(app, rx, "the shell ran what came after", |app| {
+        pane_screen(app, agent).lines().any(|l| l.trim() == "after")
+    });
 
     assert!(!b.screen(agent).lines().any(|line| line.trim() == "pwned"), "{}", b.screen(agent));
 }

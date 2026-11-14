@@ -1105,6 +1105,7 @@ cornercase bot stop prs
 - [`status --app`](#follow-the-rest-of-the-app) has a `bots` key, the same list as `bot list`, left out when there are no bots.
 - A bot's own commands run with `CORNERCASE_BOT` set: `kill-server`, `restart` and `update` exit with 2 there (`a bot cannot stop its own server`), and so does a command that would act on the pane it runs in without a `--project`, `--workspace` or `--pane` (`a bot runs in no pane`).
 - The server also refuses what a `cornercase`-access bot types into a pane that runs no agent (`send`, `todo send`, `keys`, `input`, `paste-file`, `held --send-now`, and `new-tab` or `split` with a command): exit 1, code `failed`, text starting `a bot can only type into a pane that runs an agent`. It tells a bot's commands by their process, not by `CORNERCASE_BOT` alone, and it adds no field or request to the contract. See [what a bot can see and do](../../guides/bots/#what-a-bot-can-see-and-do).
+- The server refuses three more things to a bot's connection, with exit 1 and code `failed`: `bot new` with an access other than `cornercase` and `bot edit` with an access (`a bot cannot change a bot's access`), `bot say` to a bot with `full` access (`a bot cannot write to a bot with full access`), and `config` writes (`set`, `project`, `secret`, `remove`) and `config-import` with `apply` (`a bot cannot change cornercase's settings`).
 
 ### Context
 
@@ -1403,6 +1404,8 @@ cornercase config project ~/code/web-shop --setup 'npm ci' --teardown 'rm -rf no
 cornercase config project ~/code/web-shop --builds 'node_modules .next'
 cornercase config pair browsers --json
 ```
+
+A [bot](#bots)'s connection is refused `config` writes and an applied `config-import`: they would let it change what counts as an agent.
 
 `config` lists every setting of the [Settings dialog](../../reference/configuration/), the connections (accounts and bots), each project's setup, teardown and build folders and, with `--json`, what each agent can do. A setting that the dialog shows as a row has a `key`, the name of its `config.json` key (an agent's mode and extra arguments are `agents.claude.mode` and `agents.claude.extra`, and the issue tabs are one list, `issue_tabs`; every choice of an agent's mode, `default` included, is a value that `start --mode` and `queue add --mode` take), so a program can draw a form from the answer instead of knowing each row.
 

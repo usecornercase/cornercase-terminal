@@ -341,9 +341,13 @@ fn reply_from(app: &mut App, client: u64, command: &str, args: &serde_json::Valu
 
 const NO_POPUP: &str = "no plugin popup is open";
 
+pub(in crate::app::tests) fn root_pid(claude: &Path) -> Option<i32> {
+    let pids = std::fs::read_to_string(claude.with_extension("pid")).ok()?;
+    pids.lines().next().and_then(|pid| pid.parse().ok())
+}
+
 fn root_of(c: &Chat) -> i32 {
-    let pids = std::fs::read_to_string(c.claude.with_extension("pid")).expect("the agent's pid");
-    pids.lines().next().and_then(|pid| pid.parse().ok()).expect("a pid")
+    root_pid(&c.claude).expect("the agent's pid")
 }
 
 #[test]
@@ -427,13 +431,11 @@ fn a_bots_connection_cannot_send_into_a_shell_pane_but_another_can() {
     let (_dir, _bin, claude) = install_bot(&mut app, "", Access::Cornercase);
     std::fs::write(claude.with_extension("hold"), "").expect("hold");
     app.bot_say("prs", "go", false).expect("say");
-    let pids = claude.with_extension("pid");
     wait_until("the bot's agent runs", || {
         drain(&mut app, &rx);
-        std::fs::read_to_string(&pids).is_ok_and(|text| !text.is_empty())
+        root_pid(&claude).is_some()
     });
-    let root = std::fs::read_to_string(&pids).expect("a pid").lines().next().and_then(|pid| pid.parse().ok());
-    app.client_connected(BOT, root);
+    app.client_connected(BOT, root_pid(&claude));
     let args = serde_json::json!({"pane": pane, "text": "x"});
 
     let refused = reply_from(&mut app, BOT, "send", &args).expect_err("refused");
