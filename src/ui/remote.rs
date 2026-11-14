@@ -4,6 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Widget};
 
+use super::widgets::centred;
 use super::{muted, overlay_block, soft, surface_colour};
 use crate::host::theme::HostTheme;
 use crate::text::truncate_right;
