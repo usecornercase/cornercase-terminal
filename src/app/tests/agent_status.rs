@@ -343,7 +343,9 @@ fn start_opencode(app: &mut App, rx: &Receiver<AppEvent>) -> FakeOpencode {
     let opencode = FakeOpencode::new();
     type_line(app, &opencode.command_line());
     pump_until(app, rx, "opencode runs", |a| runs(a, agents::Known::Opencode.name()));
-    tick(app);
+    watch_until(app, rx, "opencode's reader finds its database", |a| {
+        a.term().is_some_and(|t| t.context.activity("").is_some())
+    });
     opencode
 }
 
@@ -379,10 +381,21 @@ fn start_vibe(app: &mut App, rx: &Receiver<AppEvent>, tab: usize) -> Fake {
 fn start_copilot(app: &mut App, rx: &Receiver<AppEvent>, tab: usize) -> Fake {
     let copilot = FakeCopilot::new(&app.projects[0].path);
     start_fake(app, rx, &copilot.command_line(), agents::Known::Copilot);
-    watch_until(app, rx, "copilot holds its session", |a| {
-        tab_term(a, 0, tab).context.record_for(agents::Known::Copilot).is_some()
-    });
+    holds_record(app, rx, tab, agents::Known::Copilot);
     Fake::Copilot(copilot, tab)
+}
+
+fn holds_record(app: &mut App, rx: &Receiver<AppEvent>, tab: usize, agent: agents::Known) {
+    watch_until(app, rx, &format!("{} holds its record", agent.name()), |a| {
+        tab_term(a, 0, tab).context.record_for(agent).is_some()
+    });
+}
+
+fn start_cursor(app: &mut App, rx: &Receiver<AppEvent>, tab: usize) -> Fake {
+    let cursor = FakeCursor::new(&app.projects[0].path);
+    start_fake(app, rx, &cursor.command_line(), agents::Known::Cursor);
+    holds_record(app, rx, tab, agents::Known::Cursor);
+    Fake::Cursor(cursor, tab)
 }
 
 fn title_shows(app: &mut App, rx: &Receiver<AppEvent>, what: &str, tab: usize, title: &str) {
@@ -504,11 +517,7 @@ impl Watched {
                 grok.bind(app.term().and_then(Term::foreground_pid).expect("the pid of grok"));
                 Fake::Grok(grok, tab)
             }
-            agents::Known::Cursor => {
-                let cursor = FakeCursor::new(&app.projects[0].path);
-                start_fake(app, rx, &cursor.command_line(), agents::Known::Cursor);
-                Fake::Cursor(cursor, tab)
-            }
+            agents::Known::Cursor => start_cursor(app, rx, tab),
             agents::Known::Copilot => start_copilot(app, rx, tab),
             agents::Known::Vibe => start_vibe(app, rx, tab),
             agents::Known::Claude => {

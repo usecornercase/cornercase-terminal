@@ -4,15 +4,22 @@ use super::*;
 use crate::process::escalation::Outcome;
 #[cfg(unix)]
 use crate::test_util::Family;
-use crate::test_util::wait_until;
+use crate::test_util::{Running, wait_until};
 
 fn pid_of(child: &Child) -> i32 {
     i32::try_from(child.id()).expect("a pid")
 }
 
 #[cfg(unix)]
+fn shell(script: &str) -> Command {
+    let mut command = Command::new("/bin/sh");
+    command.args(["-c", script]).stdin(Stdio::null());
+    command
+}
+
+#[cfg(unix)]
 fn spawn(script: &str) -> Child {
-    Command::new("/bin/sh").args(["-c", script]).stdin(Stdio::null()).spawn().expect("spawn sh")
+    shell(script).spawn().expect("spawn sh")
 }
 
 fn gone(pid: i32) -> bool {
@@ -34,12 +41,11 @@ mod stopping {
 
     #[test]
     fn a_program_that_ignores_sigterm_is_killed() {
-        let mut child = spawn("trap '' TERM; while :; do sleep 1; done");
-        let pid = pid_of(&child);
+        let child = Running::spawn(&mut shell("trap '' TERM; while :; do sleep 1; done"));
+        let pid = child.pid();
         wait_until("the trap is set", || process::name(pid).is_some() && !process::children(pid).is_empty());
         let stopped = stop(Group::live(pid));
         assert!(matches!(&stopped[..], [(_, Ok(Outcome::Killed))]), "{stopped:?}");
-        child.wait().expect("reap");
     }
 
     #[test]
@@ -182,7 +188,7 @@ mod on_windows {
     use std::time::{Duration, Instant};
 
     use super::*;
-    use crate::test_util::{Running, wait_until_within};
+    use crate::test_util::wait_until_within;
 
     const PING: &str = r"%SystemRoot%\System32\ping.exe -n 30 127.0.0.1";
 

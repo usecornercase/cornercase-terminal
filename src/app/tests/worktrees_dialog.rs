@@ -1,7 +1,5 @@
 #![cfg(unix)]
 
-use std::cell::RefCell;
-
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -123,16 +121,24 @@ pub(super) fn remove(s: &mut Setup) {
 }
 
 pub(super) fn settle(s: &mut Setup, left: usize) -> Vec<String> {
-    let seen = RefCell::new(Vec::new());
-    pump_until(&mut s.app, &s.rx, "the removals settle", |a| {
-        if let Some(text) = toast(a)
-            && seen.borrow().last().is_none_or(|last: &String| last != text)
-        {
-            seen.borrow_mut().push(text.to_string());
+    let mut seen = Vec::new();
+    wait_until("the removals settle", || {
+        note_toast(&s.app, &mut seen);
+        while let Ok(ev) = s.rx.try_recv() {
+            s.app.handle_event(ev, AREA).expect("handle event");
+            note_toast(&s.app, &mut seen);
         }
-        a.projects[0].workspaces.len() == left && a.git.cleanup.pending.is_empty()
+        s.app.projects[0].workspaces.len() == left && s.app.git.cleanup.pending.is_empty()
     });
-    seen.into_inner()
+    seen
+}
+
+fn note_toast(app: &App, seen: &mut Vec<String>) {
+    if let Some(text) = toast(app)
+        && seen.last().is_none_or(|last| last != text)
+    {
+        seen.push(text.to_string());
+    }
 }
 
 pub(super) fn alive(app: &App, path: &Path) -> bool {

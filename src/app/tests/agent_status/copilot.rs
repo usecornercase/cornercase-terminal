@@ -5,9 +5,7 @@ use crate::agents::context::Context;
 fn start(app: &mut App, rx: &Receiver<AppEvent>, fake: &FakeCopilot) -> usize {
     type_line(app, &fake.command_line());
     let tab = app.projects[0].workspaces[0].active;
-    watch_until(app, rx, "copilot holds its session", |a| {
-        tab_term(a, 0, tab).context.record_for(Known::Copilot).is_some()
-    });
+    holds_record(app, rx, tab, Known::Copilot);
     tab
 }
 
