@@ -12,7 +12,10 @@ pub(super) fn pick(id: String, as_json: bool) -> Result<()> {
 }
 
 fn picked(server: &ForumServerInfo) -> String {
-    format!("the forum goes in {}; `cornercase status --app` says when it is ready\n", server.name)
+    crate::client::hinted(format!(
+        "the forum goes in {}; `cornercase status --app` says when it is ready\n",
+        server.name
+    ))
 }
 
 #[cfg(test)]

@@ -272,7 +272,9 @@ fn shared(at: &Where, json: bool) -> Result<()> {
     let report: Report = answer(ask("changes shared", Command::Status(Status {}))?)?;
     let id = match (at.workspace, at.worktree.as_deref()) {
         (Some(id), _) => id,
-        (None, Some(branch)) => report.workspace_on(branch).map_err(Error::WrongUsage)?,
+        (None, Some(branch)) => {
+            report.workspace_on(branch).map_err(|message| Error::WrongUsage(client::hinted(message)))?
+        }
         (None, None) => report
             .workspace_here()
             .map(|w| w.id)

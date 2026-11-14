@@ -112,7 +112,7 @@ fn the_shell_of_a_pane_cornercase_and_a_stranger_are_refused_and_keep_running() 
 
     assert_eq!(of_shell.code, "conflict");
     assert!(
-        of_shell.message.contains(&format!("close the pane instead (cornercase close --pane {pane})")),
+        of_shell.message.contains(&format!("close the pane instead (`cornercase close --pane {pane}`)")),
         "{}",
         of_shell.message
     );

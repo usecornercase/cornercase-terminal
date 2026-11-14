@@ -875,3 +875,73 @@ fn a_machine_a_program_remembered_is_asked_once() {
     click_on(&mut app, "  newbox");
     app.wait_for("the window is on newbox without asking", |s| s.contains("newbox ▴"));
 }
+
+fn pane_there(session: &Session) -> String {
+    remote_says(session, &["start-server"]);
+    remote_says(session, &["new-tab"])
+}
+
+fn read_there(pane: &str) -> String {
+    format!("`cornercase --remote devbox --remote-command {} read --pane {pane}` prints its screen", bin())
+}
+
+#[rstest]
+#[case::by_the_flag(&["--remote", "devbox"], None)]
+#[case::by_the_variable(&[], Some("devbox"))]
+fn a_message_from_there_names_the_remote_in_the_command_it_gives(#[case] flag: &[&str], #[case] var: Option<&str>) {
+    let session = Session::new();
+    let pane = pane_there(&session);
+    let mut args = flag.to_vec();
+    args.extend(["--remote-command", bin(), "read", "--pane", &pane, "--last-message"]);
+
+    let out = ran(&session, &args, var);
+
+    assert!(refused(&out, 1, &read_there(&pane)), "{out:?}");
+}
+
+#[test]
+fn each_entry_of_a_partial_answer_from_there_names_the_remote() {
+    let session = Session::new();
+    let first = pane_there(&session);
+    let second = remote_says(&session, &["new-tab"]);
+
+    let out = remotely(&session, &["read", "--pane", &first, "--pane", &second, "--last-message", "--json"])
+        .output()
+        .expect("run cornercase");
+
+    let answer: serde_json::Value = serde_json::from_slice(&out.stdout).expect("json");
+    let errors: Vec<&str> =
+        answer["panes"].as_array().expect("panes").iter().filter_map(|p| p["error"].as_str()).collect();
+    assert_eq!(out.status.code(), Some(3), "{out:?}");
+    assert!(
+        errors.len() == 2 && errors[0].contains(&read_there(&first)) && errors[1].contains(&read_there(&second)),
+        "{answer}"
+    );
+}
+
+#[test]
+fn a_line_of_requests_that_fails_there_names_the_remote() {
+    let session = Session::new();
+    let pane = pane_there(&session);
+    let mut typist = input::Typist::start(remotely(&session, &["requests", "--follow", "-"]));
+
+    let answer = typist.types(&serde_json::json!({"args": ["read", "--pane", &pane, "--last-message"]}));
+
+    assert_eq!(answer["status"], 1, "{answer}");
+    assert!(answer["error"].as_str().is_some_and(|e| e.contains(&read_there(&pane))), "{answer}");
+    assert_eq!(typist.ends().status.code(), Some(3));
+}
+
+#[test]
+fn a_hint_this_command_writes_about_the_server_there_names_the_remote() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+
+    let out = remotely(&session, &["config", "set", "no-such-setting", "1"]).output().expect("run cornercase");
+
+    let hint = format!(
+        "no setting `no-such-setting`; `cornercase --remote devbox --remote-command {} config` lists them",
+        bin()
+    );
+    assert!(refused(&out, 2, &hint), "{out:?}");
+}

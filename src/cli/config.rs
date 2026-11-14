@@ -129,7 +129,7 @@ fn converted(pairs: &[String]) -> Result<BTreeMap<String, Value>> {
             } else {
                 format!("no setting `{key}`; `cornercase config` lists them")
             };
-            return Err(Error::WrongUsage(message));
+            return Err(Error::WrongUsage(client::hinted(message)));
         };
         values.insert(key.clone(), convert(setting, &pair[1])?);
     }

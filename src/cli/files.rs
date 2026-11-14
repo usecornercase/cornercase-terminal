@@ -129,7 +129,9 @@ pub(super) fn read_text(read: &Read) -> Result<String> {
         (ReadKind::TooLarge, ..) => format!("{path}: too large to read, {bytes} bytes\n"),
         (ReadKind::Missing, ..) => return Err(Error::Control(format!("cannot read {path}: no such file"))),
         (ReadKind::Folder, ..) => {
-            return Err(Error::Control(format!("{path} is a folder; `cornercase files list {path}` lists it")));
+            return Err(Error::Control(crate::client::hinted(format!(
+                "{path} is a folder; `cornercase files list {path}` lists it"
+            ))));
         }
         _ => format!("{path}: binary, {bytes} bytes\n"),
     })

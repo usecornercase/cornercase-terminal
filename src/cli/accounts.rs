@@ -130,10 +130,10 @@ fn account_add(add: &AccountAddArgs) -> Result<()> {
 fn account_remove(remove: &AccountRemoveArgs) -> Result<()> {
     let info: AccountsInfo = answer(ask("account-list", Command::AccountList(control::AccountList::default()))?)?;
     let Some(path) = path_of(&info, &remove.provider, &remove.name) else {
-        return Err(Error::Control(format!(
+        return Err(Error::Control(client::hinted(format!(
             "there is no {} account `{}`; `cornercase account list` lists them",
             remove.provider, remove.name
-        )));
+        ))));
     };
     if !remove.yes && !confirmed_removal(remove, &path)? {
         return Ok(());

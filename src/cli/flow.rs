@@ -342,7 +342,7 @@ pub(super) fn hidden_line(removed: &FlowRemoved) -> String {
     }
     let edit =
         removed.deleted.as_ref().map(|path| format!(", and your version {}", path.display())).unwrap_or_default();
-    format!("deleted the built-in flow {name}{edit}; `cornercase flow restore {name}` brings it back\n")
+    client::hinted(format!("deleted the built-in flow {name}{edit}; `cornercase flow restore {name}` brings it back\n"))
 }
 
 pub(super) fn restored_line(removed: &FlowRemoved) -> String {
@@ -509,11 +509,9 @@ pub(super) fn listing(flows: &Flows) -> String {
     }
     if !flows.hidden.is_empty() {
         let names: Vec<String> = flows.hidden.iter().map(|flow| share::visible(&flow.name)).collect();
-        let _ = writeln!(
-            out,
-            "deleted built-in flows: {} (`cornercase flow restore NAME` brings one back)",
-            names.join(", ")
-        );
+        let line =
+            format!("deleted built-in flows: {} (`cornercase flow restore NAME` brings one back)", names.join(", "));
+        let _ = writeln!(out, "{}", client::hinted(line));
     }
     out
 }
