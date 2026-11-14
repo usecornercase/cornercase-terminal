@@ -87,7 +87,7 @@ fn reopening_brings_the_role_back_in_its_own_pane_and_conversation() {
 
     let answer = reopened(&mut agent);
 
-    assert!(answer.tabs.is_empty());
+    assert_eq!(answer.tabs, Vec::<u64>::new());
     assert_eq!(answer.run, Some(agent.app.runs.all()[0].id));
     let panes: Vec<_> =
         answer.panes.iter().map(|p| (p.pane, p.tab, p.agent.as_deref(), p.role.as_deref(), p.resumes)).collect();
@@ -97,7 +97,7 @@ fn reopening_brings_the_role_back_in_its_own_pane_and_conversation() {
     assert!(pane(&agent.app, c).resuming.is_some());
     assert!(pane(&agent.app, c).exited_agent.is_none());
     assert!(agent.app.agents.launches.of_pane(c).any(|launch| launch.resume.is_some()));
-    assert!(exited(&agent.app).is_empty());
+    assert_eq!(exited(&agent.app), Vec::<u64>::new());
     agent.app.agents.launches.drop_panes(&[c]);
 }
 

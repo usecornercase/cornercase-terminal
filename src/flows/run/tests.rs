@@ -247,7 +247,7 @@ mod brought_back {
         assert_eq!(run.due(), vec![CODER]);
         let due = run.take_due();
         assert_eq!(due, vec![Due { role: "coder".into(), pane: CODER, failed: false, back: true }]);
-        assert!(run.take_due().is_empty());
+        assert_eq!(run.take_due(), Vec::new());
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod brought_back {
         run.brought_back(CODER, Instant::now());
         run.record(message(ORCHESTRATOR, "coder", Kind::Send));
 
-        assert!(run.due().is_empty());
+        assert_eq!(run.due(), Vec::<u64>::new());
     }
 
     #[test]
@@ -265,7 +265,7 @@ mod brought_back {
         run.brought_back(CODER, Instant::now());
         run.sent_to(CODER, Instant::now());
 
-        assert!(run.due().is_empty());
+        assert_eq!(run.due(), Vec::<u64>::new());
         assert_eq!(run.sent.len(), 1);
         assert!(!run.sent[0].back);
     }

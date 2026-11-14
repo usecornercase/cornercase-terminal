@@ -16,7 +16,7 @@ impl App {
     pub(in crate::app) fn role_exited(&self, pane: u64, now: Instant) -> bool {
         let Some(term) = self.projects.pane_by(pane) else { return false };
         term.agent.status().is_none()
-            && !term.resuming.is_some_and(|until| now < until)
+            && term.resuming.is_none_or(|until| now >= until)
             && self.agents.launches.of_pane(pane).next().is_none()
             && !self.agents.closed.closing(pane)
             && term.shell_in_foreground()
@@ -39,7 +39,7 @@ impl App {
             return Err(conflict(format!("workspace {workspace} has no closed agents")));
         };
         let kinds = back.iter().filter_map(|&pane| run.flow.role(run.role_of(pane)?)).map(|role| role.agent.as_str());
-        self.agents_missing(kinds).map_err(missing_refusal)?;
+        self.agents_missing(kinds).map_err(|missing| missing_refusal(&missing))?;
         let place = Place {
             trees: self.projects.workspace(at).role_worktrees.clone(),
             path: self.projects.workspace(at).path.clone(),
@@ -125,14 +125,14 @@ impl App {
         let fresh: Vec<String> =
             info.panes.iter().filter(|pane| !pane.resumes).filter_map(|pane| pane.role.clone()).collect();
         let notes = brief::Exited { back: &back, fresh: &fresh };
-        let resumed = self.resumed_line(run, own, role);
+        let found = self.resumed_line(run, own, role);
         if let Some(term) = self.projects.pane_by_mut(own) {
             term.exited_agent = None;
         }
         let dir = run.dir.as_deref();
-        let resumes = if let Some((_, line)) = resumed {
-            let until = Instant::now() + RESUME_GRACE;
-            self.launch_briefed(run, (own, Some(until)), line, brief::exited(&run.members, dir, &notes));
+        let resumes = if let Some((_, line)) = found {
+            let grace = Instant::now() + RESUME_GRACE;
+            self.launch_briefed(run, (own, Some(grace)), line, brief::exited(&run.members, dir, &notes));
             true
         } else {
             self.launch_fresh_orchestrator(run, own, place, &brief::exited_stands(&run.members, dir, &notes));

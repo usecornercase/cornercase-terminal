@@ -63,7 +63,7 @@ struct Setup<'a> {
     area: Rect,
 }
 
-pub(super) fn missing_refusal(missing: Vec<String>) -> Refusal {
+pub(super) fn missing_refusal(missing: &[String]) -> Refusal {
     Refusal::new(
         Code::Failed,
         format!(
@@ -105,7 +105,7 @@ impl App {
         });
         let kinds: Vec<&str> =
             panes.map(|closed| closed.kind.as_str()).chain(roles).filter(|k| !k.is_empty()).collect();
-        self.agents_missing(kinds.into_iter()).map_err(missing_refusal)?;
+        self.agents_missing(kinds.into_iter()).map_err(|missing| missing_refusal(&missing))?;
         Ok(at)
     }
 
