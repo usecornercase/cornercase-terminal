@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.71
+
+- **A message from another machine names that machine in the command it says to run.** When `cornercase --remote vps send --pane 7 --enter -- "…"` failed with `not confirmed`, the message ended with `cornercase read --pane 7` shows where it is, and that command, run as written, read pane 7 of this computer's server. Now it says `cornercase --remote vps read --pane 7`, with `--remote-command` when you gave one and also when `CORNERCASE_REMOTE` chose the machine. Every command a message from there names gets it (`cornercase --remote vps status` lists them, `cornercase --remote vps keys --pane 7 0`): in the command's error, in each line of `requests --follow` and `input --follow`, and in the `error` of each entry with `--json`. So do the messages this command writes about that machine (`config set` with an unknown setting, `account remove`, `flow hide`, `plugin run`). `update`, `restart`, `kill-server`, `logs` and the plugin commands that run on that machine still print that machine's own messages as they are.
+
 ## 0.13.70
 
 - **One command frees the build folders of every merged worktree.** `cornercase worktrees free-builds --merged` deletes the git-ignored build folders (`node_modules`, `target`…) of every worktree whose branch is merged, as `free-builds` does for one, and keeps each worktree, its branch and its files. A worktree where a program runs, or whose build folder holds a git checkout, keeps its builds and is named with why, and the command then exits 3. `--check` says what would go, `--project ID` takes one project's worktrees, and `--json` gives one `free-builds` answer per worktree, so a routine can run it every hour.
