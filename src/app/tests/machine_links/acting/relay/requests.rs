@@ -144,6 +144,91 @@ mod a_start_on_a_machine {
     }
 }
 
+fn booted(mut args: Value, boot: &str) -> Value {
+    args["machine_boot"] = json!(boot);
+    args
+}
+
+mod with_the_machines_boot {
+    use super::*;
+
+    #[rstest]
+    #[case::start("start", start())]
+    #[case::start_with("start-with", json!({ "agent": "claude", "model": "opus", "project": PROJECT, "machine": "VPS" }))]
+    #[case::new_workspace("new-workspace", new_workspace())]
+    #[case::flow_run("flow-run", flow_run())]
+    fn of_its_last_snapshot_is_relayed_with_that_boot_and_without_the_field(
+        #[case] command: &str,
+        #[case] args: Value,
+    ) {
+        let mut remote = seeing(Reply::Agree);
+
+        remote.ask(command, &booted(args, BOOT)).expect("an answer");
+
+        let asked = remote.asked();
+        let [asked] = &asked[..] else { panic!("one question, not {asked:?}") };
+        assert_eq!((asked["command"].as_str(), asked["boot"].as_str()), (Some(command), Some(BOOT)));
+        assert_eq!(asked["args"].get("machine_boot"), None);
+    }
+
+    #[rstest]
+    #[case::start("start", start())]
+    #[case::start_with("start-with", json!({ "agent": "claude", "model": "opus", "project": PROJECT, "machine": "VPS" }))]
+    #[case::new_workspace("new-workspace", new_workspace())]
+    #[case::flow_run("flow-run", flow_run())]
+    fn of_another_run_is_refused_without_asking_the_machine_or_awaiting_anything(
+        #[case] command: &str,
+        #[case] args: Value,
+    ) {
+        let mut remote = seeing(Reply::Made(made));
+
+        let (code, why) = remote.ask(command, &booted(args, RESTARTED)).expect_err("a refusal");
+
+        assert_eq!(code, "stale-boot");
+        assert!(why.contains(&format!("started as {RESTARTED} on vps")), "{why}");
+        assert!(why.contains(&format!("vps last reported from the one started as {BOOT}")), "{why}");
+        assert_eq!(remote.rig.seen("ask"), 0);
+        remote.serves(2, with_new(BOOT));
+        assert_eq!(remote.selected(), None);
+    }
+
+    #[test]
+    fn of_a_machine_that_has_not_reported_yet_is_unavailable_and_asks_nothing() {
+        let mut remote = unseen(Reply::Agree);
+
+        let answer = remote.ask("new-workspace", &booted(new_workspace(), BOOT));
+
+        assert_eq!(answer, Err(("unavailable".into(), "vps has not reported yet; try again".into())));
+        assert_eq!(remote.rig.seen("ask"), 0);
+    }
+
+    #[test]
+    fn of_a_machine_that_restarted_since_its_snapshot_is_refused_by_the_machine_with_its_code() {
+        let mut remote = seeing(Reply::Restarted);
+
+        let answer = remote.ask("start", &booted(start(), BOOT));
+
+        let why = "this request is for the cornercase server started as vps-1";
+        assert_eq!(answer, Err(("stale-boot".into(), why.into())));
+    }
+
+    #[rstest]
+    #[case::another_run(RESTARTED, "stale-boot")]
+    #[case::the_same_run(BOOT, "unavailable")]
+    fn of_a_machine_that_fell_is_stale_for_another_run_and_unavailable_for_the_same(
+        #[case] boot: &str,
+        #[case] code: &str,
+    ) {
+        let mut remote = seeing(Reply::Agree);
+        remote.falls();
+
+        let (answered, _) = remote.ask("flow-run", &booted(flow_run(), boot)).expect_err("a refusal");
+
+        assert_eq!(answered, code);
+        assert_eq!(remote.rig.seen("ask"), 0);
+    }
+}
+
 mod its_focus {
     use super::*;
 

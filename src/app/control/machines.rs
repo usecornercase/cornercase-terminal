@@ -111,6 +111,7 @@ impl App {
             let message = format!("`{name}` has not sent its workspaces yet: `cornercase machines` says how it is");
             return Err(Refusal::new(Code::Unavailable, message));
         }
+        self.reported_run(&name, focus.machine_boot.as_deref())?;
         if !self.select_remote(&name, item) {
             return Err(missing(&name, item));
         }

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{ArgGroup, Args, Subcommand, ValueEnum};
+use clap::{Args, Subcommand, ValueEnum};
 
 use super::changes::Where;
 use super::{BootArg, Create, FreshArg, Print, branch};
@@ -330,7 +330,6 @@ pub(crate) struct FlowListArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(group(ArgGroup::new("one_server").args(["boot", "machine"]).multiple(false)))]
 pub(crate) struct FlowRunArgs {
     #[arg(value_name = "NAME", help = "The flow, as `cornercase flow list` names it")]
     pub(crate) name: String,

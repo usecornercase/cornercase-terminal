@@ -5,6 +5,7 @@ use super::remote::on_ssh_path;
 use super::*;
 
 const URL: &str = "https://github.com/acme/shop.git";
+const ANOTHER_RUN: &str = "1-1";
 const VIEW: &str = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"assignees":[],"author":{"login":"ana"},"updatedAt":"","url":"https://github.com/acme/shop/issues/7","body":"It breaks","comments":[]}"#;
 
 struct OnVps {
@@ -84,6 +85,18 @@ impl OnVps {
 
     fn wait_there(&self, what: &str, cond: impl Fn(&Value) -> bool) {
         wait_until(what, || self.there().iter().any(&cond));
+    }
+
+    fn boot_there(&self) -> String {
+        let status = answer(&self.here.says(&["status", "--json"]));
+        let machines = status["machines"].as_array().cloned().unwrap_or_default();
+        let vps = machines.into_iter().find(|machine| machine["name"] == VPS).unwrap_or_default();
+        vps["boot"].as_str().unwrap_or_default().to_string()
+    }
+
+    fn rows_there(&self) -> Vec<(Value, Value)> {
+        let projects = self.there();
+        projects.iter().flat_map(workspaces).map(|w| (w["id"].clone(), w["name"].clone())).collect()
     }
 
     fn window_on(&self, repo: &std::path::Path) -> Harness {
@@ -324,4 +337,64 @@ fn a_placed_start_on_a_machine_answers_while_the_agent_there_asks_and_a_plain_on
     let started = asking.placed_answers_before_a_plain_start_held_on_its_question();
 
     assert_eq!(started["machine"], VPS, "{started}");
+}
+
+fn refused_as_another_run(out: &std::process::Output, boot: &str) {
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let prefix = format!("error: this request is for the cornercase server started as {boot} on {VPS}");
+    assert_eq!(out.status.code(), Some(4), "{out:?}");
+    assert!(stderr.starts_with(&prefix), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+#[test]
+fn work_aimed_at_another_run_of_a_machine_starts_and_shows_nothing_there() {
+    let vps = on_vps();
+    let (_, project) = vps.shop_there();
+    let workspace = vps.there().iter().flat_map(workspaces).map(|w| w["id"].to_string()).next().expect("a workspace");
+    let before = vps.rows_there();
+    let aimed = ["--machine", VPS, "--boot", ANOTHER_RUN];
+
+    let asked: [Vec<&str>; 4] = [
+        ["start", "--project", &project, "--prompt", "hello"].into_iter().chain(aimed).collect(),
+        ["new-workspace", "notes", "--project", &project].into_iter().chain(aimed).collect(),
+        ["flow", "run", "Quick", "--project", &project, "--prompt", "x"].into_iter().chain(aimed).collect(),
+        ["focus", "--workspace", &workspace].into_iter().chain(aimed).collect(),
+    ];
+    for args in &asked {
+        refused_as_another_run(&vps.here.cli(args), ANOTHER_RUN);
+    }
+
+    assert_eq!(vps.rows_there(), before);
+    assert_eq!(vps.shown_tab(), None);
+    let boot = vps.boot_there();
+    let made = vps.here.says(&["new-workspace", "notes", "--machine", VPS, "--project", &project, "--boot", &boot]);
+    let made: u64 = made.parse().expect("the new workspace's id");
+    vps.wait_there("here lists the workspace under vps", |project| {
+        workspaces(project).iter().any(|w| w["name"] == "notes" && w["id"] == made)
+    });
+    let shown = vps.here.says(&["focus", "--machine", VPS, "--workspace", &workspace, "--boot", &boot, "--json"]);
+    assert_eq!(answer(&shown)["machine"], VPS, "{shown}");
+}
+
+#[test]
+fn a_workspace_aimed_before_the_machine_restarted_is_refused_after_it() {
+    let vps = on_vps();
+    let (repo, project) = vps.shop_there();
+    let old = vps.boot_there();
+
+    vps.machine.says(&["restart", "--yes"]);
+    wait_until("the machine's server is another run", || {
+        let boot = vps.boot_there();
+        !boot.is_empty() && boot != old
+    });
+
+    let args = ["new-workspace", "notes", "--machine", VPS, "--project", &project];
+    refused_as_another_run(&vps.here.cli(&[&args[..], &["--boot", &old]].concat()), &old);
+    let project = vps.machine.says(&["open", &repo.display().to_string()]);
+    let args = ["new-workspace", "notes", "--machine", VPS, "--project", &project];
+    assert!(!vps.rows_there().iter().any(|(_, name)| name == "notes"));
+    let new = vps.boot_there();
+    vps.here.says(&[&args[..], &["--boot", &new]].concat());
+    vps.wait_there("the workspace is made there", |project| workspaces(project).iter().any(|w| w["name"] == "notes"));
 }

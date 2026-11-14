@@ -47,6 +47,8 @@ impl Machines {
 pub(crate) struct FocusMachine {
     pub(crate) machine: String,
     pub(crate) item: Item,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) machine_boot: Option<String>,
 }
 
 impl FocusMachine {

@@ -10,14 +10,7 @@ use crate::control::contract::{Code, Refusal};
 use crate::control::{self, Command, Request};
 
 fn stale_boot(boot: &str) -> Refusal {
-    let current = control::server_token();
-    Refusal::new(
-        Code::StaleBoot,
-        format!(
-            "this request is for the cornercase server started as {boot}, but this one started as {current}; \
-            its ids may name other items now, so read `cornercase status` again"
-        ),
-    )
+    control::contract::stale_boot(boot, &format!("this one started as {}", control::server_token()))
 }
 
 impl App {
@@ -37,6 +30,7 @@ impl App {
         }
         let asker = Asker { caller, view: request.view };
         self.check_view(&request)?;
+        relay::lone_machine_boot(&request.command)?;
         self.settle_views();
         let noted = self.flow_steps(caller, &request.command, now);
         let handled = match self.route(Asked { client, asker, area, now }, request.command) {

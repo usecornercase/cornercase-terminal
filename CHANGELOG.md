@@ -4,9 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.69
 
-- **One command frees the build folders of every merged worktree.** `cornercase worktrees free-builds --merged` deletes the git-ignored build folders (`node_modules`, `target`…) of every worktree whose branch is merged, as `free-builds` does for one, and keeps each worktree, its branch and its files. A worktree where a program runs, or whose build folder holds a git checkout, keeps its builds and is named with why, and the command then exits 3. `--check` says what would go, `--project ID` takes one project's worktrees, and `--json` gives one `free-builds` answer per worktree, so a routine can run it every hour.
-- **`cornercase worktrees list` adds them up** on its last line, with the command that frees them: `62.0 GB of builds in 4 merged worktrees: cornercase worktrees free-builds --merged`. `worktrees list --json` has the same total as `merged_builds`, and `cornercase contract` lists the feature `merged-builds`.
-- **The Worktrees dialog** says how much of the builds belong to merged worktrees, and **free merged** opens the free builds confirmation for all of them at once.
+- **`start`, `new-workspace`, `flow run` and `focus` with `--machine` take that machine's `--boot`.** Give them the `boot` of the machine's entry in `cornercase status --json`, the one you read its ids in: when the machine's server restarted since, your server refuses with status 4 and sends nothing there, instead of starting work in, or showing, whatever took the id (`cornercase new-workspace notes --project 2 --machine vps --boot "$boot"`). A start that reaches a machine that restarted after it last reported is refused there the same way. They refused `--boot` before. `cornercase contract` lists the feature `machine-boot`; over the socket it is the `machine_boot` field of `start`, `start-with`, `new-workspace`, `flow-run` and `focus-machine`.
 
 ## 0.13.68
 

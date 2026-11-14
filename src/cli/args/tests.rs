@@ -290,9 +290,30 @@ mod boot {
     #[case::new_workspace(&["new-workspace", "x", "--machine", "vps"])]
     #[case::focus(&["focus", "--machine", "vps", "--workspace", "4"])]
     #[case::flow_run(&["flow", "run", "Pair", "--prompt", "x", "--machine", "vps"])]
-    fn is_a_usage_error_with_the_ids_of_another_machine(#[case] args: &[&str]) {
-        assert!(parsed(args).is_ok());
-        assert!(parsed(&[args, &["--boot", "1-2"]].concat()).is_err());
+    fn is_the_boot_of_that_machine_with_the_ids_of_another_machine(#[case] args: &[&str]) {
+        let with = [args, &["--boot", "1-2"]].concat();
+        let cli = parsed(&with).expect("parse");
+        let Some(Command::Control(control)) = cli.command else { panic!("not a command for scripts") };
+
+        assert_eq!((control.boot(), control.machine()), (Some("1-2"), Some("vps")));
+    }
+
+    #[rstest]
+    #[case::start(&["start"])]
+    #[case::new_workspace(&["new-workspace", "x"])]
+    #[case::focus(&["focus", "--pane", "4"])]
+    #[case::flow_run(&["flow", "run", "Pair", "--prompt", "x"])]
+    fn is_this_servers_without_a_machine(#[case] args: &[&str]) {
+        let with = [args, &["--boot", "1-2"]].concat();
+        let cli = parsed(&with).expect("parse");
+        let Some(Command::Control(control)) = cli.command else { panic!("not a command for scripts") };
+
+        assert_eq!((control.boot(), control.machine()), (Some("1-2"), None));
+    }
+
+    #[test]
+    fn is_no_flag_of_a_machine_s_focus_with_a_view() {
+        assert!(parsed(&["focus", "--machine", "vps", "--tab", "1", "--view", "41", "--boot", "1-2"]).is_err());
     }
 
     #[rstest]

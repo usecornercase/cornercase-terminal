@@ -123,6 +123,10 @@ mod opting_in {
         r#"{"contract":1,"command":"notify","args":{"text":"hi","direction":null}}"#,
         "args.direction"
     )]
+    #[case::no_machine_boot_where_nothing_is_relayed(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","machine_boot":null}}"#,
+        "args.machine_boot"
+    )]
     #[case::not_closing_when_merged_where_no_flow_runs(
         r#"{"contract":1,"command":"notify","args":{"text":"hi","close_when_merged":false}}"#,
         "args.close_when_merged"
@@ -143,6 +147,26 @@ mod opting_in {
         assert_eq!(code, Code::UnknownField);
         assert!(message.contains(&format!("`{field}`")), "{message}");
         assert_eq!(notified(&mut app), Vec::<String>::new());
+    }
+
+    #[rstest::rstest]
+    #[case::start(r#"{"contract":1,"command":"start","args":{"project":999,"machine_boot":"vps-1"}}"#)]
+    #[case::start_with(
+        r#"{"contract":1,"command":"start-with","args":{"project":999,"model":"opus","machine_boot":"vps-1"}}"#
+    )]
+    #[case::new_workspace(
+        r#"{"contract":1,"command":"new-workspace","args":{"name":"x","project":999,"machine_boot":"vps-1"}}"#
+    )]
+    #[case::flow_run(
+        r#"{"contract":1,"command":"flow-run","args":{"name":"Quick","prompt":"x","project":999,"machine_boot":"vps-1"}}"#
+    )]
+    fn the_boot_of_a_machine_without_a_machine_is_malformed(#[case] text: &str) {
+        let (mut app, _rx) = app();
+
+        let (code, message) = refused(&mut app, text);
+
+        assert_eq!(code, Code::Malformed);
+        assert!(message.contains("`machine_boot` goes with `machine`"), "{message}");
     }
 
     #[test]
@@ -185,6 +209,21 @@ mod opting_in {
     #[case::no_direction_to_open(r#"{"contract":1,"command":"tunnel-open","args":{"port":9223,"direction":null}}"#)]
     #[case::no_direction_to_hold(
         r#"{"contract":1,"command":"tunnel-hold","args":{"port":9223,"local":9222,"direction":null}}"#
+    )]
+    #[case::no_boot_of_a_machine_to_start_in(
+        r#"{"contract":1,"command":"start","args":{"project":999,"machine_boot":null}}"#
+    )]
+    #[case::no_boot_of_a_machine_to_start_with(
+        r#"{"contract":1,"command":"start-with","args":{"project":999,"model":"opus","machine_boot":null}}"#
+    )]
+    #[case::no_boot_of_a_machine_to_make_a_workspace_in(
+        r#"{"contract":1,"command":"new-workspace","args":{"name":"x","project":999,"machine_boot":null}}"#
+    )]
+    #[case::no_boot_of_a_machine_to_run_a_flow_in(
+        r#"{"contract":1,"command":"flow-run","args":{"name":"Quick","prompt":"x","project":999,"machine_boot":null}}"#
+    )]
+    #[case::no_boot_of_a_machine_to_show(
+        r#"{"contract":1,"command":"focus-machine","args":{"machine":"vps","item":{"workspace":1},"machine_boot":null}}"#
     )]
     #[case::not_closing_when_merged(
         r#"{"contract":1,"command":"flow-run","args":{"name":"Quick","prompt":"x","project":999,"close_when_merged":false}}"#

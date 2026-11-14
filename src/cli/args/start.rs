@@ -6,10 +6,7 @@ use super::{BootArg, Create, FreshArg, UntilArg, accounts, issue, machine, secon
 use crate::cli::help::{HERE_WORKSPACE, UNTIL_AFTER};
 
 #[derive(Debug, Args)]
-#[command(
-    group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).conflicts_with("workspace")),
-    group(ArgGroup::new("one_server").args(["boot", "machine"]).multiple(false))
-)]
+#[command(group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).conflicts_with("workspace")))]
 pub(crate) struct StartArgs {
     #[arg(
         value_name = "AGENT",

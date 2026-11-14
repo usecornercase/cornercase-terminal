@@ -219,8 +219,10 @@ fn run_control(command: Control) -> Result<bool> {
     if let Some(view) = command.view() {
         client::use_view(view)?;
     }
-    if let Some(boot) = command.boot() {
-        client::use_boot(boot)?;
+    match (command.boot(), command.machine()) {
+        (Some(_), Some(_)) => client::use_machine_boot()?,
+        (Some(boot), None) => client::use_boot(boot)?,
+        (None, _) => {}
     }
     let done = match control_route(command) {
         ControlFlow::Break(done) => done,
@@ -365,7 +367,9 @@ fn clone_url(url: &str, remote: Option<&Remote>) -> Result<String> {
 fn run_new_workspace(new: args::NewWorkspaceArgs) -> Result<()> {
     let (name, project, worktree, focus) = (new.name, new.project, new.worktree, new.create.focus);
     let fresh = fresh(&new.fresh)?;
-    let request = control::NewWorkspace { name, project, worktree, focus, machine: machine(new.on)?, fresh };
+    let machine_boot = machine_boot(&new.on, &new.boot);
+    let request =
+        control::NewWorkspace { name, project, worktree, focus, machine: machine(new.on)?, machine_boot, fresh };
     let value = ask("new-workspace", control::Command::NewWorkspace(request))?;
     say(value, new.create.print.json, |done| id(done.ids.workspace))
 }
@@ -470,7 +474,7 @@ fn run_focus(focus: &args::FocusArgs) -> Result<()> {
 
 fn run_focus_machine(machine: &str, focus: &args::FocusArgs) -> Result<()> {
     let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
-    let request = control::FocusMachine { machine: machine.to_string(), item };
+    let request = control::FocusMachine { machine: machine.to_string(), item, machine_boot: focus.boot.boot.clone() };
     let value = ask("focus-machine", control::Command::FocusMachine(request))?;
     if focus.print.json { print_json(&value) } else { Ok(()) }
 }
@@ -632,6 +636,10 @@ fn machine(on: args::machine::MachineArg) -> Result<Option<String>> {
     Ok(on.machine)
 }
 
+pub(super) fn machine_boot(on: &args::machine::MachineArg, boot: &args::BootArg) -> Option<String> {
+    on.machine.as_ref().and(boot.boot.clone())
+}
+
 fn placed(asked: bool) -> Result<bool> {
     if asked {
         client::use_placed_start()?;
@@ -662,6 +670,7 @@ fn run_start(start: StartArgs) -> Result<()> {
     let name = if chosen { "start-with" } else { "start" };
     issue_features(&start.issue)?;
     let (profile, accounts) = accounts::profile_arg(start.profile)?;
+    let machine_boot = machine_boot(&start.on, &start.boot);
     let request = control::Start {
         agent: start.agent,
         model: start.model,
@@ -682,6 +691,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         profile,
         accounts,
         machine: machine(start.on)?,
+        machine_boot,
         placed: placed(start.placed)?,
         fresh: fresh(&start.fresh)?,
     };

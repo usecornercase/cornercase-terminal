@@ -55,6 +55,10 @@ fn left_out(command: &str, key: &str, value: &Value) -> bool {
         "into" => value.is_null() && command == "open",
         "cached" => value == &Value::Bool(false) && command == "stats",
         "fresh" => value.is_null() && matches!(command, "start" | "start-with" | "new-workspace" | "flow-run"),
+        "machine_boot" => {
+            value.is_null()
+                && matches!(command, "start" | "start-with" | "new-workspace" | "flow-run" | "focus-machine")
+        }
         "close_when_merged" => value == &Value::Bool(false) && command == "flow-run",
         "free_builds" => value == &Value::Bool(false) && matches!(command, "flow-run" | "flow-close-when-merged"),
         "direction" => {

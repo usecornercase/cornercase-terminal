@@ -83,6 +83,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "machine-tunnels",
     "tunnel-hold-ended",
     "merged-builds",
+    "machine-boot",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +113,16 @@ impl Refusal {
     pub(crate) fn new(code: Code, message: impl Into<String>) -> Self {
         Self { code, message: message.into() }
     }
+}
+
+pub(crate) fn stale_boot(aimed_at: &str, instead: &str) -> Refusal {
+    Refusal::new(
+        Code::StaleBoot,
+        format!(
+            "this request is for the cornercase server started as {aimed_at}, but {instead}; \
+            its ids may name other items now, so read `cornercase status` again"
+        ),
+    )
 }
 
 impl From<String> for Refusal {

@@ -712,6 +712,8 @@ pub(crate) struct NewWorkspace {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) machine: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine_boot: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fresh: Option<bool>,
 }
 
@@ -758,6 +760,8 @@ pub(crate) struct Start {
     pub(crate) accounts: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) machine: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine_boot: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) placed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
