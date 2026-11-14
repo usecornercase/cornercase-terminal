@@ -14,7 +14,7 @@ fn fake_gh(session: &Session) {
     std::fs::write(session.dir.join("config.json"), config).expect("write config");
 }
 
-fn repo_on_a_branch(name: &str) -> PathBuf {
+fn repo_on_a_branch(name: &str) -> TempDir {
     let repo = temp_dir(name);
     git(&repo, &["init", "--quiet"]);
     git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
@@ -25,9 +25,9 @@ fn repo_on_a_branch(name: &str) -> PathBuf {
 
 #[test]
 fn a_workspaces_pull_request_is_read_with_every_check_and_a_failed_read_says_why() {
+    let repo = repo_on_a_branch("pull-request");
     let session = Session::new();
     fake_gh(&session);
-    let repo = repo_on_a_branch("pull-request");
     let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
     session.says(&["open", &repo.display().to_string(), "--focus"]);
@@ -50,5 +50,4 @@ fn a_workspaces_pull_request_is_read_with_every_check_and_a_failed_read_says_why
     let out = session.cli(&["pull-request"]);
     assert!(refused(&out, 1, "gh is not logged in: run gh auth login"), "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
-    let _ = std::fs::remove_dir_all(&repo);
 }

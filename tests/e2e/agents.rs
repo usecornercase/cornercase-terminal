@@ -3,14 +3,7 @@ use super::*;
 #[test]
 fn a_tab_running_claude_shows_what_it_is_doing() {
     let mut app = Harness::start();
-    let sessions = app.session.claude_dir().join("sessions");
-    std::fs::create_dir_all(&sessions).expect("create the sessions folder");
-    let bin = temp_dir("claude");
-    let claude = bin.join("claude");
-    write_executable(
-        &claude,
-        "#!/bin/sh\nprintf '{\"pid\":%s,\"status\":\"waiting\"}' $$ > \"$1/$$.json\"\nread answer\nrm -f \"$1/$$.json\"\n",
-    );
+    let (sessions, claude) = claude_waiting(&app.session, "claude-bin", "rm -f \"$1/$$.json\"\n");
     let tab = usize::from(ui::workspace_row(workspaces_list(), 1, &tab_lines(&[1]), 0, WorkspaceRow::Tab(0, 0)).y);
     let tab_row = |s: &str| s.lines().nth(tab).unwrap_or_default().to_string();
 
@@ -19,13 +12,22 @@ fn a_tab_running_claude_shows_what_it_is_doing() {
     app.send(b"\r");
 
     app.wait_for("the icon goes once claude exits", |s| !tab_row(s).contains('!'));
-    let _ = std::fs::remove_dir_all(&bin);
+}
+
+pub(super) fn claude_waiting(session: &Session, name: &str, after: &str) -> (PathBuf, PathBuf) {
+    let sessions = session.claude_dir().join("sessions");
+    std::fs::create_dir_all(&sessions).expect("create the sessions folder");
+    let claude = session.folder(name).join("claude");
+    let script =
+        format!("#!/bin/sh\nprintf '{{\"pid\":%s,\"status\":\"waiting\"}}' $$ > \"$1/$$.json\"\nread answer\n{after}");
+    write_executable(&claude, &script);
+    (sessions, claude)
 }
 
 pub(super) fn claude_asking_on_cue(session: &Session, name: &str) -> (PathBuf, PathBuf) {
     let sessions = session.claude_dir().join("sessions");
     std::fs::create_dir_all(&sessions).expect("create the sessions folder");
-    let bin = temp_dir(name);
+    let bin = session.folder(name);
     write_executable(
         &bin.join("claude"),
         "#!/bin/sh\nprintf '{\"pid\":%s,\"status\":\"busy\"}' $$ > \"$1/$$.json\"\n\
@@ -35,7 +37,7 @@ pub(super) fn claude_asking_on_cue(session: &Session, name: &str) -> (PathBuf, P
     (sessions, bin)
 }
 
-fn claude_working_in_a_hidden_tab(app: &mut Harness, name: &str) -> (PathBuf, PathBuf) {
+fn claude_working_in_a_hidden_tab(app: &mut Harness, name: &str) -> PathBuf {
     let (sessions, bin) = claude_asking_on_cue(&app.session, name);
     let claude = bin.join("claude");
     app.send(format!("{} {}\r", claude.display(), sessions.display()).as_bytes());
@@ -43,13 +45,13 @@ fn claude_working_in_a_hidden_tab(app: &mut Harness, name: &str) -> (PathBuf, Pa
     app.wait_for("the tab says claude works", |s| s.lines().nth(tab).unwrap_or_default().contains("◐"));
     app.click(workspace_row(&[1], WorkspaceRow::NewTab(0)));
     app.wait_for("the second tab is active", |s| s.contains("$ ") && !s.contains(&claude.display().to_string()));
-    (sessions, bin)
+    sessions
 }
 
 #[test]
 fn claude_asking_in_a_hidden_tab_reaches_the_desktop_through_the_outer_terminal() {
     let mut app = Harness::start();
-    let (sessions, bin) = claude_working_in_a_hidden_tab(&mut app, "claude-asks");
+    let sessions = claude_working_in_a_hidden_tab(&mut app, "claude-asks");
 
     std::fs::write(sessions.join("ask"), "").expect("ask");
 
@@ -57,7 +59,6 @@ fn claude_asking_in_a_hidden_tab_reaches_the_desktop_through_the_outer_terminal(
         raw.contains("\x1b]777;notify;cornercase;claude needs you in ")
     });
     app.wait_for("a toast says where", |s| s.contains("claude needs you in "));
-    let _ = std::fs::remove_dir_all(&bin);
 }
 
 #[test]
@@ -66,7 +67,7 @@ fn clicking_a_notification_shows_the_agent_that_sent_it() {
     std::fs::write(session.dir.join("config.json"), r#"{"desktop_notifications": "osc99"}"#).expect("write config");
     let mut app = Harness::open(session, ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
-    let (sessions, bin) = claude_working_in_a_hidden_tab(&mut app, "claude-clicked");
+    let sessions = claude_working_in_a_hidden_tab(&mut app, "claude-clicked");
     std::fs::write(sessions.join("ask"), "").expect("ask");
 
     app.wait_for_raw("kitty is asked for a notification", |raw| raw.contains("\x1b]99;i=cc-"));
@@ -85,14 +86,13 @@ fn clicking_a_notification_shows_the_agent_that_sent_it() {
     app.quit();
     let close = format!("\x1b]99;i={token}:p=close;\x1b\\");
     app.wait_for_raw("the notification is closed on the way out", |raw| raw.contains(&close));
-    let _ = std::fs::remove_dir_all(&bin);
 }
 
 #[test]
 fn an_issue_is_read_then_handed_to_its_agent_in_its_own_worktree() {
+    let repo = temp_dir_named(&format!("ccis-{}", std::process::id()));
     let session = Session::new();
     let view = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"assignees":[],"author":{"login":"ana"},"updatedAt":"","url":"u","body":"The form **breaks** after:\n\n- typing\n- waiting","comments":[{"author":{"login":"bo"},"body":"Same here","createdAt":""}]}"#;
-    let repo = std::env::temp_dir().join(format!("ccis-{}", std::process::id()));
     let (worktrees, repo_name) = fake_issue_tracker(&session, view, "", &repo);
     let mut app = Harness::open(session, ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
@@ -128,7 +128,6 @@ fn an_issue_is_read_then_handed_to_its_agent_in_its_own_worktree() {
     assert!(!got.exists(), "the prompt was sent without Enter");
     app.send(b"\r");
     wait_for_the_prompt(&got, "https://github.com/acme/shop/issues/7");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 fn wait_for_the_prompt(got: &std::path::Path, prompt: &str) {

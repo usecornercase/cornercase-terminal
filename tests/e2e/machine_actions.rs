@@ -143,7 +143,7 @@ fn a_machine_s_workspace_is_renamed_there_from_its_menu() {
 fn claude_with_a_child(machine: &Session) -> u64 {
     let sessions = machine.claude_dir().join("sessions");
     std::fs::create_dir_all(&sessions).expect("create the sessions folder");
-    let claude = temp_dir("claude-with-a-child").join("claude");
+    let claude = machine.folder("claude-with-a-child").join("claude");
     write_executable(
         &claude,
         "#!/bin/sh\nprintf '{\"pid\":%s,\"status\":\"waiting\"}' $$ > \"$1/$$.json\"\n\

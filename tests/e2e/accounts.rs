@@ -19,6 +19,7 @@ fn config_dir(env: &str) -> Option<&str> {
 
 #[test]
 fn an_account_in_the_active_profile_reaches_new_tabs_and_another_profile_is_used_once() {
+    let files = temp_dir("accounts");
     let session = Session::new();
     let started = session.cold(&["start-server"]);
     assert!(started.status.success(), "start-server failed: {started:?}");
@@ -33,7 +34,6 @@ fn an_account_in_the_active_profile_reaches_new_tabs_and_another_profile_is_used
     let used = session.says(&["profile", "use", "Work"]);
     assert!(used.contains("* Work  claude=work"), "{used}");
 
-    let files = temp_dir("accounts");
     let inherited = env_of(&session, &[], &files.join("work.env"));
     assert_eq!(config_dir(&inherited), Some(path.as_str()));
 
@@ -43,7 +43,6 @@ fn an_account_in_the_active_profile_reaches_new_tabs_and_another_profile_is_used
 
     assert_unknown_profile_refused(&session);
     assert_account_removed(&session, &path);
-    let _ = std::fs::remove_dir_all(files);
 }
 
 fn assert_unknown_profile_refused(session: &Session) {
@@ -148,10 +147,10 @@ pub(super) fn fake_login(session: &Session) -> PathBuf {
 
 #[test]
 fn an_account_logs_in_again_through_remote_and_one_that_cannot_is_refused() {
+    let folder = temp_dir("login-again");
     let session = Session::new();
     let out = fake_login(&session);
     remote::remote_says(&session, &["start-server"]);
-    let folder = temp_dir("login-again");
     remote::remote_says(&session, &["open", &folder.display().to_string()]);
     remote::remote_says(&session, &["account", "add", "claude", "work"]);
     let listed = remote::remote_says(&session, &["account", "list", "--json"]);
@@ -171,5 +170,4 @@ fn an_account_logs_in_again_through_remote_and_one_that_cannot_is_refused() {
         refused(&gemini, 1, "no login command") && refused(&gemini, 1, "--account gemini= -- gemini"),
         "{gemini:?}"
     );
-    let _ = std::fs::remove_dir_all(folder);
 }

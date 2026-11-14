@@ -116,11 +116,11 @@ while [ -d "$d" ] && [ ! -e "$d/quit" ]; do sleep 0.05; done
 
 #[test]
 fn status_and_its_streams_name_the_conversation_the_places_of_a_recap_carry() {
+    let bin = temp_dir("claude-conversation");
     let app = Harness::start();
     let (pane, _) = new_tab(&app);
     let (mut follow, mut view) = (app.session.spawn(&["status", "--follow"]), app.session.spawn(&["view"]));
     let (mut followed, mut viewed) = (Followed::of(&mut follow), Followed::of(&mut view));
-    let bin = temp_dir("claude-conversation");
     write_executable(&bin.join("claude"), WRITES_ON_CUE);
     let dir = app.session.claude_dir();
     let line = format!("{} {}", bin.join("claude").display(), dir.display());
@@ -138,7 +138,6 @@ fn status_and_its_streams_name_the_conversation_the_places_of_a_recap_carry() {
 
     let _ = (follow.kill(), view.kill());
     let _ = (follow.wait(), view.wait());
-    let _ = std::fs::remove_dir_all(&bin);
     assert_eq!((unnamed, named), (Value::Null, Value::from("c9f1")));
     assert_eq!((&place["agent"], &place["conversation"]), (&Value::from("claude"), &Value::from("c9f1")));
     assert_eq!(place["pane"].to_string(), pane);
