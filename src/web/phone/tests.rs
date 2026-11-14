@@ -102,18 +102,25 @@ impl Rig {
 struct Seen {
     texts: Vec<String>,
     close: Option<u16>,
+    timed_out: bool,
 }
 
 fn read_all(ws: &mut WebSocket<TcpStream>) -> Seen {
     let mut seen = Seen::default();
-    while let Ok(message) = ws.read() {
-        match message {
-            Message::Text(text) => seen.texts.push(text.to_string()),
-            Message::Close(frame) => seen.close = frame.map(|frame| u16::from(frame.code)),
-            _ => {}
+    loop {
+        match ws.read() {
+            Ok(Message::Text(text)) => seen.texts.push(text.to_string()),
+            Ok(Message::Close(frame)) => seen.close = frame.map(|frame| u16::from(frame.code)),
+            Ok(_) => {}
+            Err(tungstenite::Error::Io(e))
+                if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) =>
+            {
+                seen.timed_out = true;
+                return seen;
+            }
+            Err(_) => return seen,
         }
     }
-    seen
 }
 
 fn send(ws: &mut WebSocket<TcpStream>, text: &str) {
@@ -309,7 +316,7 @@ mod the_command_line {
         let mut ws = rig.cli(&secret);
         argv(&mut ws, &["events"]);
         let pid = rig.pid();
-        thread::sleep(Duration::from_millis(500));
+        wait_until("the output waits for the client", || rig.phone.waits() > 0);
         let blocked = alive(pid);
         let seen = read_all(&mut ws);
 
@@ -324,6 +331,22 @@ mod the_command_line {
             limits.ping_every = Duration::from_millis(50);
             limits.silent_for = Duration::from_millis(500);
         });
+        let secret = rig.paired();
+
+        let (mut ws, pid) = rig.holding(&secret);
+        ws.get_ref().set_write_timeout(Some(Duration::from_secs(2))).expect("a write timeout");
+        let chunk = format!(r#"{{"stdin":"{}"}}"#, "x".repeat(8 * 1024));
+        for _ in 0..40 {
+            let _ = ws.send(Message::text(chunk.clone()));
+        }
+
+        wait_until("the command to be killed", || !alive(pid));
+        drop(ws);
+    }
+
+    #[test]
+    fn a_close_is_seen_while_the_command_takes_no_stdin() {
+        let rig = Rig::new();
         let secret = rig.paired();
 
         let (mut ws, pid) = rig.holding(&secret);
@@ -400,7 +423,7 @@ mod the_command_line {
         assert_eq!(rig.phone.forget(id).ok(), Some(true));
         let seen = read_all(&mut ws);
 
-        assert!(seen.texts.is_empty() && seen.close.is_none(), "{seen:?}");
+        assert!(!seen.timed_out && seen.texts.is_empty() && seen.close.is_none(), "{seen:?}");
         wait_until("the command to be killed", || !alive(pid));
         assert_eq!(rig.connect("/cli", &[("Authorization", format!("Bearer {secret}"))]).err(), Some(403));
         assert_eq!(rig.phone.forget(id).ok(), Some(false));

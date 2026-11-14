@@ -1,6 +1,6 @@
 use std::io::Cursor;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use rstest::rstest;
 
@@ -89,13 +89,13 @@ mod the_queue {
 
     #[test]
     fn a_push_over_the_budget_waits_until_a_pop_makes_room() {
-        let queue = Arc::new(Queue::new(10));
+        let waits = Arc::new(AtomicUsize::new(0));
+        let queue = Arc::new(Queue::new(10, Arc::clone(&waits)));
         assert!(queue.push(big(8)));
         let waiting = Arc::clone(&queue);
         let pushed = thread::spawn(move || waiting.push(big(8)));
 
-        wait_until("the first line queued", || queue.bytes() == 8);
-        thread::sleep(Duration::from_millis(50));
+        wait_until("the second push waits", || waits.load(Ordering::SeqCst) > 0);
         assert!(!pushed.is_finished());
         assert_eq!(queue.pop(), Some(big(8)));
 
@@ -105,7 +105,7 @@ mod the_queue {
 
     #[test]
     fn a_line_bigger_than_the_budget_passes_when_the_queue_is_empty() {
-        let queue = Queue::new(4);
+        let queue = Queue::new(4, Arc::default());
 
         assert!(queue.push(big(100)));
         assert_eq!(queue.pop(), Some(big(100)));
@@ -114,11 +114,12 @@ mod the_queue {
 
     #[test]
     fn closing_wakes_a_waiting_push_with_false() {
-        let queue = Arc::new(Queue::new(4));
+        let waits = Arc::new(AtomicUsize::new(0));
+        let queue = Arc::new(Queue::new(4, Arc::clone(&waits)));
         assert!(queue.push(big(4)));
         let waiting = Arc::clone(&queue);
         let pushed = thread::spawn(move || waiting.push(big(4)));
-        thread::sleep(Duration::from_millis(50));
+        wait_until("the second push waits", || waits.load(Ordering::SeqCst) > 0);
 
         queue.close();
 

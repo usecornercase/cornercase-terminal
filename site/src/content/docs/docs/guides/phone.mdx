@@ -81,7 +81,7 @@ A phone app built on cornercase's commands connects without a browser, over your
 
 The code holds every address cornercase listens on, so the app reaches it on whichever network it is on. When a network comes up later, the app asks `cornercase config pair app --routes` for the current addresses without scanning again.
 
-**How it is kept private.** The code works once and for ten minutes. The app trades it for a secret of its own, which cornercase keeps only as a hash in `apps.json` next to `config.json` (readable only by you); the app sends the secret in the handshake, never in an address or in `server.log`. Over your Wi-Fi the connection is `ws://`, not encrypted, so the secret crosses the network in clear: use a network you trust, or Tailscale, which encrypts it. Only the addresses of your Wi-Fi, your LAN and Tailscale are listened on, never the internet, and only while the switch is on.
+**How it is kept private.** The code works once and for ten minutes. The app trades it for a secret of its own, which cornercase keeps only as a hash in `apps.json` next to `config.json` (readable only by you); the app sends the secret in the handshake, never in an address or in `server.log`. Over your Wi-Fi the connection is `ws://`, not encrypted, so the secret crosses the network in clear: use a network you trust, or Tailscale, which encrypts it. cornercase listens only on the addresses of your Wi-Fi, your LAN and Tailscale, and only while the switch is on.
 
 The first time, your computer's firewall may ask whether cornercase can accept connections on private networks: allow it.
 
