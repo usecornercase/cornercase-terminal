@@ -85,6 +85,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "merged-builds",
     "machine-boot",
     "flow-exited",
+    "message-failed",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

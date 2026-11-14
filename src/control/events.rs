@@ -129,6 +129,8 @@ pub(crate) enum What {
         kind: String,
         message: String,
         panes: Vec<u64>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        failed: bool,
     },
 }
 

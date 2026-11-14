@@ -99,7 +99,7 @@ pub(in crate::app) enum MessageKind {
     QueueKept,
     SetupFailed,
     FlowConsent,
-    FlowMerged,
+    FlowMerged { failed: bool },
 }
 
 impl MessageKind {
@@ -112,8 +112,12 @@ impl MessageKind {
             Self::QueueKept => "queue-kept",
             Self::SetupFailed => "setup-failed",
             Self::FlowConsent => "flow-consent",
-            Self::FlowMerged => "flow-merged",
+            Self::FlowMerged { .. } => "flow-merged",
         }
+    }
+
+    fn failed(self) -> bool {
+        matches!(self, Self::FlowMerged { failed: true })
     }
 }
 
@@ -170,8 +174,13 @@ impl App {
         };
         let at = said.workspace.and_then(|id| self.projects.workspace_index(id)).or_else(from_pane);
         let ids = at.map(|at| self.ids_of_workspace(at)).unwrap_or_default();
-        let what =
-            What::Message { kind: said.kind.id().to_string(), message: notify::clean(&said.text), panes: said.panes };
+        let failed = said.kind.failed();
+        let what = What::Message {
+            kind: said.kind.id().to_string(),
+            message: notify::clean(&said.text),
+            panes: said.panes,
+            failed,
+        };
         let time = crate::time::Stamp(std::time::SystemTime::now()).to_string();
         self.clients.events.publish(&[Event { time, what, ids }]);
     }

@@ -70,9 +70,17 @@ pub(in crate::app) fn closed_message(count: usize) -> String {
 }
 
 pub(in crate::app) fn closed_and(count: usize, and: Option<&str>) -> String {
-    let (what, them) = if count == 1 { ("agent", "it") } else { ("agents", "them") };
+    format!("{}{}", closed_words(count, and), reopen_hint(count))
+}
+
+pub(in crate::app) fn closed_words(count: usize, and: Option<&str>) -> String {
     let and = and.map(|and| format!(", {and}")).unwrap_or_default();
-    format!("{count} {what} closed{and} · {} on the workspace reopens {them}", ui::REOPEN_ICON)
+    format!("{} closed{and}", agents_label(count))
+}
+
+pub(in crate::app) fn reopen_hint(count: usize) -> String {
+    let them = if count == 1 { "it" } else { "them" };
+    format!(" · {} on the workspace reopens {them}", ui::REOPEN_ICON)
 }
 
 impl App {

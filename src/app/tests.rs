@@ -242,11 +242,17 @@ fn told<'a>(streamed: impl IntoIterator<Item = &'a Streamed>) -> Vec<(crate::con
 }
 
 fn messages(events: &[(u64, Streamed)], reader: u64) -> Vec<Heard> {
+    messages_with_failed(events, reader).into_iter().map(|(heard, _)| heard).collect()
+}
+
+fn messages_with_failed(events: &[(u64, Streamed)], reader: u64) -> Vec<(Heard, bool)> {
     let own = events.iter().filter(|(client, _)| *client == reader).map(|(_, streamed)| streamed);
     told(own)
         .into_iter()
         .filter_map(|(what, ids)| match what {
-            crate::control::What::Message { kind, message, panes } => Some((kind, message, panes, ids)),
+            crate::control::What::Message { kind, message, panes, failed } => {
+                Some(((kind, message, panes, ids), failed))
+            }
             _ => None,
         })
         .collect()
