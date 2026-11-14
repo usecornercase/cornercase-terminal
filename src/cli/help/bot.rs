@@ -30,7 +30,7 @@ Example:
 
 pub(in crate::cli) const BOT_EDIT_HELP: &str =
     "Changes what the bot uses from its next message on; a running answer is not changed. An empty
---model, --effort or --account goes back to the agent's own. The agent cannot change, because
+--model, --effort or --account goes back to the agent's own; --about writes bot.md. The agent cannot change, because
 another agent cannot continue the conversation: make another bot instead.";
 
 pub(in crate::cli) const BOT_SAY_HELP: &str =
@@ -63,7 +63,7 @@ pub(in crate::cli) const BOT_HELP: &str =
 message you write runs one turn of its agent (Claude Code or Codex) in a conversation that continues,
 and the answer lands in the chat. It can see every project and act on them through `cornercase`.
 Making a bot starts nothing; it spends tokens only when you write to it, and only while the server
-runs. Nothing is drawn in the window for it yet.
+runs. The window lists bots in its Bots section and draws each one's chat.
 
 Events: `cornercase events` reports each chat line, the bot starting or finishing a turn, and a
 bot being created, edited or removed. `cornercase status --app` carries the list as `bots`.

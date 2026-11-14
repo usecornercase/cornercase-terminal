@@ -131,6 +131,7 @@ impl App {
             Overlay::DeleteGroup { group } if self.group_projects(*group).next().is_some() => {
                 (KEEP_PROJECTS_SUBMIT, Some(CLOSE_PROJECTS_SUBMIT))
             }
+            Overlay::RemoveBot { bot } => (self.remove_bot_label(*bot), None),
             _ => (overlay.submit_label(), None),
         }
     }
@@ -165,6 +166,7 @@ impl App {
 
     pub(super) fn form_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
         match key.code {
+            _ if matches!(self.overlay, Some(Overlay::BotForm(_))) => self.bot_form_key(key, area),
             KeyCode::Esc => self.cancel_form(),
             KeyCode::Enter => self.submit_form(area)?,
             KeyCode::Tab => self.toggle_worktree(),
@@ -262,6 +264,8 @@ impl App {
             Overlay::NewGroup { input } if input.text().trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => self.submit_new_group(&input.text()),
             Overlay::NewMachine { input, .. } => self.submit_new_machine(input),
+            Overlay::RenameBot { bot, input, .. } => self.submit_rename_bot(bot, input),
+            Overlay::RemoveBot { bot } => self.submit_remove_bot(bot),
             Overlay::GroupStyle { .. }
             | Overlay::Usage
             | Overlay::Remote

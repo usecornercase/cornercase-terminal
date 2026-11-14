@@ -94,8 +94,14 @@ pub(crate) fn draw_list(f: &mut Frame, view: &View, list: Rect, combo: &Combo) {
         let r = item(list, row);
         let selected = combo.highlighted() == Some(i);
         let bg = pick_background(view, selected, r);
-        let text = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
-        let line = Line::from(vec![rail(selected, bg), Span::styled(truncate_right(&combo.options()[i], width), text)]);
+        let note = combo.note(i);
+        let text = match (selected, note) {
+            (_, Some(_)) => bg.fg(view.muted),
+            (true, None) => bg.add_modifier(Modifier::BOLD),
+            (false, None) => bg,
+        };
+        let label = note.map_or_else(|| combo.options()[i].clone(), |why| format!("{} · {why}", combo.options()[i]));
+        let line = Line::from(vec![rail(selected, bg), Span::styled(truncate_right(&label, width), text)]);
         f.render_widget(Paragraph::new(line).style(bg), r);
     }
     let dim = Style::default().fg(view.muted);

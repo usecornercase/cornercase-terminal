@@ -44,10 +44,8 @@ impl App {
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
-        if self.popup_key(key) || self.close_field_menu_on_key(key.code == KeyCode::Esc) {
-            return Ok(());
-        }
-        if key.code == KeyCode::Esc && self.stop_dragging() {
+        let esc = key.code == KeyCode::Esc;
+        if self.popup_key(key) || self.close_field_menu_on_key(esc) || (esc && self.stop_dragging()) {
             return Ok(());
         }
         match &self.overlay {
@@ -78,6 +76,7 @@ impl App {
             None if self.todo_typing() => self.todo_key(key, area),
             None if self.files_typing() => self.files_key(key, area),
             None if self.filtering() => self.filter_key(key),
+            Some(Overlay::Menu { .. }) | None if self.chat_typing() => self.chat_key(key, area),
             None if key.code == KeyCode::Esc && self.file_full_screen() => self.set_file_full_screen(false),
             None if key.code == KeyCode::Esc && self.panel_shown() => self.close_panel(),
             Some(Overlay::Menu { .. }) | None => self.forward_key(key),
@@ -87,7 +86,7 @@ impl App {
     }
 
     pub(super) fn forward_key(&mut self, key: KeyEvent) {
-        if self.machine_key(key) || self.holds_input() {
+        if self.machine_key(key) || self.holds_input() || self.bot_shown() {
             return;
         }
         let Some(term) = self.term_mut() else { return };
@@ -188,6 +187,10 @@ impl App {
         if self.button_mouse(areas, pos, left) {
             return ControlFlow::Break(Ok(()));
         }
+        if areas.bots.contains(pos) {
+            self.bots_mouse(areas, pos, ev.kind, area);
+            return ControlFlow::Break(Ok(()));
+        }
         if areas.agents.contains(pos) {
             self.agents_mouse(areas, pos, ev.kind, area);
             return ControlFlow::Break(Ok(()));
@@ -211,7 +214,11 @@ impl App {
             }
             return true;
         }
-        let navs = [(areas.back, ui::Nav::Projects), (areas.agents_button, ui::Nav::Agents)];
+        let navs = [
+            (areas.back, ui::Nav::Projects),
+            (areas.agents_button, ui::Nav::Agents),
+            (areas.bots_button, ui::Nav::Bots),
+        ];
         let Some(nav) = navs.into_iter().find_map(|(r, nav)| r.contains(pos).then_some(nav)) else { return false };
         if left {
             self.screen.nav = Some(nav);
@@ -243,6 +250,10 @@ impl App {
         }
         if areas.issues.contains(pos) {
             return ControlFlow::Break(self.issues_column_mouse(left, area));
+        }
+        if areas.workspaces.contains(pos) && self.bot_shown() {
+            self.bot_card_mouse(ev, pos, areas);
+            return ControlFlow::Break(Ok(()));
         }
         if areas.workspaces.contains(pos) {
             return ControlFlow::Break(self.workspaces_mouse(ev, pos, areas, area));
@@ -290,6 +301,10 @@ impl App {
     fn main_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> Result<()> {
         if areas.tab_bar.contains(pos) {
             return self.tab_bar_mouse(areas, pos, ev.kind, area);
+        }
+        if self.bot_shown() && areas.pane.contains(pos) {
+            self.chat_mouse(ev, pos, area);
+            return Ok(());
         }
         if self.machine_mouse(ev, pos, areas.pane) {
             return Ok(());
@@ -363,6 +378,9 @@ impl App {
         } else if areas.agents.contains(pos) {
             self.scroll.set(List::Agents, self.agent_layout(areas).scrolled(items));
             true
+        } else if areas.bots.contains(pos) {
+            self.scroll.set(List::Bots, self.bots_layout(areas).scrolled(items));
+            true
         } else if areas.sidebar.contains(pos) {
             self.scroll.set(List::Projects, self.sidebar_layout(areas).scrolled(items));
             true
@@ -383,6 +401,7 @@ impl App {
         }
         self.screen.nav = match self.screen.nav {
             Some(_) => None,
+            None if self.bot_shown() => Some(ui::Nav::Bots),
             None if self.project().is_some() => Some(ui::Nav::Workspaces),
             None => Some(ui::Nav::Projects),
         };
@@ -458,7 +477,7 @@ impl App {
             self.overlay_paste(text, area);
             return;
         }
-        if self.typing_paste(text, area) || self.machine_paste(text) || self.holds_input() {
+        if self.typing_paste(text, area) || self.machine_paste(text) || self.holds_input() || self.bot_shown() {
             return;
         }
         if let Some(term) = self.term_mut() {
@@ -483,6 +502,7 @@ impl App {
                 clean().for_each(|c| search.field.push(c));
                 self.ask_sessions(Instant::now());
             }
+            Some(Overlay::BotForm(_)) => self.bot_form_paste(text, area),
             Some(Overlay::Queue(form)) => {
                 let (focus, idle) = (form.focus, !form.busy && form.opened().is_none());
                 if let Some(editor) = form.editor(focus).filter(|_| idle) {
@@ -520,6 +540,10 @@ impl App {
         if self.filtering() {
             text.chars().filter(|c| !c.is_control()).for_each(|c| self.changes_state_mut().push_filter(c));
             self.changes_state_mut().scroll_to_top();
+            return true;
+        }
+        if self.chat_typing() {
+            self.chat_paste(text, area);
             return true;
         }
         false

@@ -7,6 +7,7 @@ use super::App;
 use super::interaction::Drag;
 use super::layout::Side;
 use super::overlay::Overlay;
+use crate::bots::form::Field as BotField;
 use crate::editor::Editor;
 use crate::machines::form::Field as MachineField;
 use crate::project::settings::Field as SettingsField;
@@ -26,6 +27,8 @@ pub(super) enum TextField {
     CloneUrl,
     SettingsFind,
     Name,
+    BotChat,
+    Bot(BotField),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +95,8 @@ impl App {
             TextField::CloneUrl => self.clone_url_text(area),
             TextField::SettingsFind => self.settings_find_text(area),
             TextField::Name => self.name_text(area),
+            TextField::BotChat => self.chat_text(area),
+            TextField::Bot(field) => self.bot_text(area, field),
         }
     }
 
@@ -110,7 +115,11 @@ impl App {
             }
             Some(Overlay::CloneOnMachine(cloning)) => (!cloning.form().cloning).then_some(TextField::CloneUrl),
             Some(Overlay::Settings(s)) => s.idle().then_some(TextField::SettingsFind),
+            Some(Overlay::BotForm(form)) => {
+                (form.opened().is_none() && form.editor_of(form.focus).is_some()).then_some(TextField::Bot(form.focus))
+            }
             Some(overlay) if overlay.takes_input() => Some(TextField::Name),
+            None if self.chat_typing() => Some(TextField::BotChat),
             None if self.tour_typing() => Some(TextField::Tour),
             None if self.todo_typing() => Some(TextField::Todo),
             Some(_) | None => None,
@@ -142,7 +151,11 @@ impl App {
             }
             Some(Overlay::CloneOnMachine(_)) => vec![TextField::CloneUrl],
             Some(Overlay::Settings(_)) => vec![TextField::SettingsFind],
+            Some(Overlay::BotForm(form)) if form.opened().is_none() => {
+                [BotField::Name, BotField::About].map(TextField::Bot).into()
+            }
             Some(overlay) if overlay.takes_input() => vec![TextField::Name],
+            None if self.chat_typing() => vec![TextField::BotChat],
             None if self.screen.side == Some(Side::Todo) => vec![TextField::Todo],
             Some(_) | None => Vec::new(),
         }

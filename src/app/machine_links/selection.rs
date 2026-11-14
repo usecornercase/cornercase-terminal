@@ -85,6 +85,7 @@ impl App {
         self.machines.awaited = None;
         self.machines.picks += 1;
         log::info!("machines", "remote selected", name = held.name, workspace = workspace.id);
+        self.panels.bots.shown = None;
         self.machines.selection = Some(selected(link, seen, project, workspace, tab));
         self.panels.files.set_full_screen(false);
         self.follow_pairing();
@@ -117,6 +118,7 @@ impl App {
     }
 
     pub(in crate::app) fn leave_remote(&mut self) {
+        self.leave_bot();
         self.machines.selection = None;
         self.machines.awaited = None;
         self.machines.picks += 1;

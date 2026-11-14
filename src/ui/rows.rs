@@ -292,6 +292,14 @@ pub(super) fn draw_more(
 }
 
 pub(super) fn draw_row_buttons(f: &mut Frame, view: &View, row: Rect, pitch: u16, bg: Style) {
+    if !sidebar_hovered(view, row) && pitch == 1 {
+        return;
+    }
+    draw_menu_in(f, view, row, pitch, bg);
+    draw_close_in(f, view, row, row_close_button(row, pitch), bg);
+}
+
+pub(super) fn draw_menu_in(f: &mut Frame, view: &View, row: Rect, pitch: u16, bg: Style) {
     let hover = sidebar_hovered(view, row);
     if !hover && pitch == 1 {
         return;
@@ -304,7 +312,6 @@ pub(super) fn draw_row_buttons(f: &mut Frame, view: &View, row: Rect, pitch: u16
         Span::styled(format!("{ROW_MENU_ICON:>width$}", width = usize::from(menu.width)), menu_style),
         menu_style,
     );
-    draw_close_in(f, view, row, row_close_button(row, pitch), bg);
 }
 
 pub(super) fn draw_close_in(f: &mut Frame, view: &View, row: Rect, close: Rect, bg: Style) {

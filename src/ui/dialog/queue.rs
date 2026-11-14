@@ -5,11 +5,12 @@ use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::{buttons_in, draw_dialog_buttons};
-use crate::editor::Editor;
 use crate::queue::form::{Control, Form, When};
 use crate::ui::View;
 use crate::ui::combo;
-use crate::ui::widgets::{overlay_block, paint_selection};
+pub(crate) use crate::ui::widgets::first_line;
+use crate::ui::widgets::overlay_block;
+use crate::ui::widgets::{EditorField, draw_editor};
 
 const LABEL: u16 = 9;
 const HEIGHT: u16 = 23;
@@ -121,11 +122,6 @@ fn note(screen: Rect) -> Rect {
     Rect::new(r.x, y, r.width, buttons - y)
 }
 
-pub(crate) fn first_line(editor: &Editor, field: Rect) -> usize {
-    let (line, _) = editor.position(usize::from(field.width.max(1)));
-    line.saturating_sub(usize::from(field.height).saturating_sub(1))
-}
-
 pub(crate) fn hit(screen: Rect, form: &Form, pos: Position) -> Option<Hit> {
     if let (Some(open), Some(list)) = (form.opened(), list(screen, form)) {
         let choice = form.combo_of(open).and_then(|combo| combo::hit(list, combo, pos));
@@ -144,48 +140,6 @@ pub(crate) fn hit(screen: Rect, form: &Form, pos: Position) -> Option<Hit> {
             Hit::Control(control, usize::from(pos.y.saturating_sub(t.y)), usize::from(pos.x.saturating_sub(t.x)))
         })
     })
-}
-
-#[derive(Clone, Copy)]
-struct EditorField<'a> {
-    field: Rect,
-    text: Rect,
-    focused: bool,
-    placeholder: &'a str,
-}
-
-fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: EditorField) {
-    let EditorField { field, text: r, focused, placeholder } = at;
-    let bg = Style::default().bg(view.surface());
-    f.render_widget(Paragraph::new("").style(bg), field);
-    let width = usize::from(r.width.max(1));
-    let (line, col) = editor.position(width);
-    let start = first_line(editor, r);
-    if editor.is_empty() && !placeholder.is_empty() {
-        f.render_widget(Paragraph::new(placeholder).style(bg.fg(view.muted)), r);
-    } else {
-        let chars: Vec<_> = editor
-            .text()
-            .chars()
-            .map(|c| match c {
-                c if c.is_control() => ' ',
-                c => c,
-            })
-            .collect();
-        let lines: Vec<_> =
-            editor.lines(width).into_iter().skip(start).map(|range| chars[range].iter().collect::<String>()).collect();
-        let text = bg.fg(if view.light { Color::Black } else { Color::White }).add_modifier(Modifier::BOLD);
-        f.render_widget(Paragraph::new(lines.join("\n")).style(text), r);
-    }
-    if focused {
-        paint_selection(f.buffer_mut(), r, start, &editor.highlight(width));
-    }
-    if focused && !r.is_empty() {
-        f.set_cursor_position(Position::new(
-            r.x + u16::try_from(col).unwrap_or_default().min(r.width.saturating_sub(1)),
-            r.y + u16::try_from(line - start).unwrap_or_default().min(r.height.saturating_sub(1)),
-        ));
-    }
 }
 
 fn hint(form: &Form) -> &'static str {

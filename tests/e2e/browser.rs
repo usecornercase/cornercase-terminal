@@ -85,3 +85,35 @@ fn a_paired_browser_types_into_the_shell_over_a_websocket() {
     }
     ui.wait_for("the window shows the browser is attached", |s| s.contains(&format!("{} ●", ui::MORE_LABEL)));
 }
+
+#[test]
+fn a_paired_browser_types_into_a_bots_chat() {
+    let session = bots::started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let (port, path) = fake_tailscale(&session, TAILSCALE_READY);
+    let mut ui = window_on(&session, &path);
+    ui.wait_for("the section lists the bot", |s| s.contains("Bots"));
+    ui.click(ui.position_of("prs"));
+    ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
+
+    let token = open_the_pairing_dialog(&mut ui);
+    let paired = http_get(port, &format!("/pair?t={token}"));
+    let cookie = paired
+        .lines()
+        .find_map(|l| l.strip_prefix("Set-Cookie: "))
+        .and_then(|c| c.split(';').next())
+        .expect("a cookie for the paired browser")
+        .to_string();
+    ui.send(b"\x1b");
+    ui.wait_for("the dialog closes", |s| !s.contains("pair?t="));
+    let mut ws = connect_socket(port, &cookie);
+    ws.send(tungstenite::Message::text(r#"{"type":"hello","cols":100,"rows":24}"#)).expect("hello");
+    ws.send(tungstenite::Message::binary(b"hi\r".to_vec())).expect("keys");
+
+    let deadline = Instant::now() + TIMEOUT;
+    while !session.says(&["bot", "history", "prs"]).contains("hello from the bot") {
+        assert!(Instant::now() < deadline, "the browser's message never reached the bot");
+        thread::sleep(Duration::from_millis(100));
+    }
+    assert!(session.says(&["bot", "history", "prs"]).contains("you · "));
+}

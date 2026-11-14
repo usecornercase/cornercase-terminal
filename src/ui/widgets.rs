@@ -5,7 +5,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph};
 
-use crate::editor::Highlight;
+use crate::editor::{Editor, Highlight};
 
 use super::View;
 
@@ -153,4 +153,51 @@ pub(super) fn draw_button(f: &mut Frame, r: Rect, indent: &str, label: &str, sty
     }
     let line = Line::from(vec![Span::raw(indent), Span::styled(format!(" {label} "), style)]);
     f.render_widget(Paragraph::new(line), middle(r));
+}
+
+pub(crate) fn first_line(editor: &Editor, field: Rect) -> usize {
+    let (line, _) = editor.position(usize::from(field.width.max(1)));
+    line.saturating_sub(usize::from(field.height).saturating_sub(1))
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct EditorField<'a> {
+    pub(crate) field: Rect,
+    pub(crate) text: Rect,
+    pub(crate) focused: bool,
+    pub(crate) placeholder: &'a str,
+}
+
+pub(crate) fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: EditorField) {
+    let EditorField { field, text: r, focused, placeholder } = at;
+    let bg = Style::default().bg(view.surface());
+    f.render_widget(Paragraph::new("").style(bg), field);
+    let width = usize::from(r.width.max(1));
+    let (line, col) = editor.position(width);
+    let start = first_line(editor, r);
+    if editor.is_empty() && !placeholder.is_empty() {
+        f.render_widget(Paragraph::new(placeholder).style(bg.fg(view.muted)), r);
+    } else {
+        let chars: Vec<_> = editor
+            .text()
+            .chars()
+            .map(|c| match c {
+                c if c.is_control() => ' ',
+                c => c,
+            })
+            .collect();
+        let lines: Vec<_> =
+            editor.lines(width).into_iter().skip(start).map(|range| chars[range].iter().collect::<String>()).collect();
+        let text = bg.fg(if view.light { Color::Black } else { Color::White }).add_modifier(Modifier::BOLD);
+        f.render_widget(Paragraph::new(lines.join("\n")).style(text), r);
+    }
+    if focused {
+        paint_selection(f.buffer_mut(), r, start, &editor.highlight(width));
+    }
+    if focused && !r.is_empty() {
+        f.set_cursor_position(Position::new(
+            r.x + u16::try_from(col).unwrap_or_default().min(r.width.saturating_sub(1)),
+            r.y + u16::try_from(line - start).unwrap_or_default().min(r.height.saturating_sub(1)),
+        ));
+    }
 }

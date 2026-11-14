@@ -1,3 +1,4 @@
+pub(crate) mod bot;
 pub(crate) mod clone_on_machine;
 pub(crate) mod context;
 pub(super) mod flows;
@@ -168,6 +169,7 @@ pub(crate) enum Overlay {
     Form(Form),
     RunOnForm(Form, RunOnRow),
     Queue(Box<crate::queue::form::Form>),
+    BotForm(Box<crate::bots::form::Form>),
     Machine(Box<crate::machines::form::Form>),
     CloneOnMachine(Box<crate::machines::clone_form::CloneForm>),
     GroupStyle(GroupEntry),
@@ -200,6 +202,7 @@ impl Overlay {
     pub(crate) fn area(&self, area: Rect) -> Option<Rect> {
         match self {
             Self::Queue(form) => Some(queue::area_with_list(area, form)),
+            Self::BotForm(form) => Some(bot::area_with_list(area, form)),
             Self::Machine(form) => Some(machine::area_with_list(area, form)),
             Self::Form(_) | Self::RunOnForm(..) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
             Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),

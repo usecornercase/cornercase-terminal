@@ -87,6 +87,8 @@ pub(crate) const FEATURES: &[&str] = &[
     "flow-exited",
     "message-failed",
     "bots",
+    "shown-bot",
+    "bot-about",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -34,6 +34,7 @@ impl App {
             state.last = Some(line.clone());
         }
         let id = state.bot.id.clone();
+        self.chat_took(at, &line);
         self.publish_bot(&id, News::Line(line.clone()));
         line
     }
@@ -96,6 +97,8 @@ impl App {
             running,
             stopping: false,
             dropped: Vec::new(),
+            started: Instant::now(),
+            steps: 0,
         });
         self.spawn_job(
             job,
@@ -121,6 +124,9 @@ impl App {
 
     fn bot_step(&mut self, bot: &str, turn: u64, step: &crate::agents::headless::Action) {
         if let Some(at) = self.running_turn(bot, turn) {
+            if let Some(running) = self.panels.bots.live[at].turn.as_mut() {
+                running.steps += 1;
+            }
             self.bot_append(at, |id, now| Line::step(id, now, &step.tool, &step.text));
         }
     }
@@ -153,8 +159,9 @@ impl App {
         let tokens = result.as_ref().map_or(0, |ran| ran.tokens.total());
         let (line, how) = self.bot_outcome(at, result, finished.stopping);
         let dropped = self.bot_dropped(at, &finished);
+        let on_screen = self.bot_on_screen(at);
         let state = &mut self.panels.bots.live[at];
-        let shown = finished.asked.iter().any(|id| state.waited.contains(id));
+        let shown = finished.asked.iter().any(|id| state.waited.contains(id)) || on_screen;
         self.bot_answer_waiters(at, &finished.asked, &line);
         if let Some(notice) = dropped {
             self.bot_answer_waiters(at, &finished.dropped, &notice);
@@ -196,6 +203,7 @@ impl App {
     fn bot_notify(&mut self, at: usize, line: &Line) {
         let state = &mut self.panels.bots.live[at];
         state.unread += 1;
+        let bot = state.bot.id.clone();
         let first = line.text.lines().find(|text| !text.trim().is_empty()).unwrap_or_default();
         let text = crate::text::truncate_right(&crate::text::one_line(first), TOAST_WIDTH);
         let message = crate::host::notify::clean(&format!("{}: {text}", state.bot.name));
@@ -204,10 +212,14 @@ impl App {
         } else {
             crate::agents::activity::Status::Done
         };
-        self.messages.toast =
-            Some(super::super::toast::Toast::new(message.clone(), crate::ui::ToastIcon::Agent(status)));
+        let token = self.messages.notices.bot_token(&bot);
+        let icon = crate::ui::ToastIcon::Agent(status);
+        self.messages.toast = Some(super::super::toast::Toast {
+            go: Some(token.clone()),
+            ..super::super::toast::Toast::new(message.clone(), icon)
+        });
         if let Some(note) = crate::host::notify::Notification::new(&message, &self.config.desktop_notifications) {
-            self.outbox.notify(Some(note));
+            self.outbox.notify(Some(crate::host::notify::Notification { token: Some(token), ..note }));
         }
     }
 
@@ -278,7 +290,16 @@ impl App {
         self.bot_idle(at, "is answering")?;
         let state = &self.panels.bots.live[at];
         folder::remove(&state.folder).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
-        Ok(self.panels.bots.live.remove(at).bot.id)
+        let removed = self.panels.bots.live.remove(at);
+        if self.panels.bots.shown.as_ref().is_some_and(|shown| shown.bot == removed.bot.id) {
+            self.leave_bot();
+        }
+        if self.overlay.as_ref().is_some_and(|overlay| overlay.names_bot(removed.key)) {
+            self.overlay = None;
+        }
+        self.clamp_bots_scroll();
+        self.publish_bot_removed(&removed.bot.id);
+        Ok(removed.bot.id)
     }
 
     pub(in crate::app) fn bot_seen(&mut self, key: &str) -> Done<()> {

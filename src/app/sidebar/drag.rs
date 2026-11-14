@@ -40,14 +40,18 @@ impl App {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                 if let Some(delta) = wheel(ev.kind) {
                     match drag.target {
-                        Grab::Row(_) | Grab::Agent(_) | Grab::Remote(_) => _ = self.scroll_column(areas, pos, delta),
                         Grab::Todo(_) => self.scroll_todo(areas.changes, delta),
+                        _ => self.scroll_listed(areas, pos, delta),
                     }
                 }
                 self.screen.drag = Some(Drag::Row(RowDrag { moved: true, area, ..drag }));
             }
             _ => self.screen.drag = None,
         }
+    }
+
+    fn scroll_listed(&mut self, areas: &ui::Areas, pos: Position, delta: isize) {
+        self.scroll_column(areas, pos, delta);
     }
 
     fn release_row(&mut self, drag: RowDrag, pos: Position, area: Rect) {
@@ -58,7 +62,8 @@ impl App {
             Grab::Row(target) => self.click_row(target),
             Grab::Todo(id) if dropped => self.drop_todo(id, pos, area),
             Grab::Todo(id) => self.click_todo(id, drag.row, pos, area),
-            Grab::Agent(_) | Grab::Remote(_) if dropped => {}
+            Grab::Agent(_) | Grab::Bot(_) | Grab::Remote(_) if dropped => {}
+            Grab::Bot(key) => self.show_bot_by_key(key),
             Grab::Agent(pane) if drag.fold => self.toggle_agent_fold(pane),
             Grab::Agent(pane) => self.jump_to_pane(pane),
             Grab::Remote(at) if drag.fold => self.fold_remote(at),
@@ -169,7 +174,7 @@ impl App {
                 }
                 return;
             }
-            Grab::Agent(_) | Grab::Remote(_) => return,
+            Grab::Agent(_) | Grab::Bot(_) | Grab::Remote(_) => return,
         };
         if matches!(target, Target::Tab(..)) && !areas.tab_bar.is_empty() {
             if let Some(delta) = self.tab_strip(&areas).edge(pos) {

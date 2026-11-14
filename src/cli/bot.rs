@@ -6,7 +6,7 @@ use super::args::bot::{BotAction, EditArgs, HistoryArgs, NewArgs, SayArgs};
 use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
-use crate::client::{answer, ask, use_bots};
+use crate::client::{answer, ask, use_bot_about, use_bots};
 use crate::control::Command;
 use crate::control::bots::{AgentInfo, BotHistory, BotInfo, BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::error::{Error, Result};
@@ -84,7 +84,11 @@ fn edited(args: &EditArgs) -> Result<bool> {
         effort: args.effort.clone(),
         account: args.account.clone(),
         access: args.access.clone(),
+        about: args.about.clone(),
     };
+    if edit.about.is_some() {
+        use_bot_about()?;
+    }
     let value = send(BotRequest::Edit(edit))?;
     if args.print.json {
         print_json(&value)?;

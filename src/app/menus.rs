@@ -3,6 +3,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::account_menu::AccountItem;
+use super::bots::BotItem;
 use super::help_menu::HelpItem;
 use super::machine_links::PaneAim;
 use super::machine_links::acting::Aim;
@@ -140,6 +141,7 @@ pub(super) enum MenuAction {
     RemoteAgentFold(PaneAim),
     MachineNote(u64),
     Machine(MachineItem),
+    Bot(u64, BotItem),
 }
 
 impl App {
@@ -147,7 +149,11 @@ impl App {
         let blocker = self.menu_blocker(actions);
         let disabled = actions
             .iter()
-            .map(|&action| Self::account_disabled(action, blocker.is_some()) || self.remote_disabled(action))
+            .map(|&action| {
+                Self::account_disabled(action, blocker.is_some())
+                    || self.remote_disabled(action)
+                    || self.bot_menu_disabled(action)
+            })
             .collect();
         ui::Overlay::Menu { at, items: self.labels_of(actions, blocker.as_deref()), disabled }
     }
@@ -181,6 +187,7 @@ impl App {
             .or_else(|| self.closed_agents_label(action))
             .or_else(|| self.remote_menu_label(action))
             .or_else(|| self.context_menu_label(action))
+            .or_else(|| Self::bot_menu_label(action))
     }
 
     fn menu_label(&self, action: MenuAction, blocker: Option<&str>) -> String {
@@ -290,6 +297,7 @@ impl App {
         let Some(action) = self.project_action(action, at, area) else { return Ok(()) };
         let Some(action) = self.agent_action(action) else { return Ok(()) };
         let Some(action) = self.remote_action(action) else { return Ok(()) };
+        let Some(action) = self.bot_action(action, at) else { return Ok(()) };
         match action {
             MenuAction::Pane(pane, action) => self.pane_action(pane, action, area),
             _ => Ok(()),

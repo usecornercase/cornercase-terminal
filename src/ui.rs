@@ -6,11 +6,13 @@ use ratatui::widgets::Clear;
 mod accounts_bar;
 mod activity;
 mod agents_section;
+pub(crate) mod bots;
 pub(crate) mod changes;
 mod chrome;
 mod code;
 pub(crate) mod combo;
 mod dialog;
+pub(crate) use dialog::bot as bot_form;
 pub(crate) use dialog::clone_on_machine;
 pub(crate) use dialog::machine as machine_form;
 pub(crate) use dialog::queue as queue_form;
@@ -47,6 +49,12 @@ pub(crate) use accounts_bar::{Pill as AccountPill, Row as AccountRow, hit as acc
 pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
+pub(crate) use bots::card::{BotCard, CardRow, card_folder};
+pub(crate) use bots::chat::{
+    ChatEntry, ChatHit, ChatRow, ChatView, EXAMPLES, RowHit, Thinking, Tone, chat_areas, chat_hit, chat_rows,
+    empty_rows, input_rows, text_width,
+};
+pub(crate) use bots::{BotEntry, BotsView, bot_menu, bot_rows, bots_fold, bots_new};
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;
 pub(crate) use chrome::{help_button, machine_button, more_button, plugin_buttons, recap_button, worktrees_button};
@@ -147,7 +155,7 @@ pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, machin
 #[cfg(test)]
 pub(crate) use star::star_buttons;
 pub(crate) use star::{StarButton, star_area, star_hit};
-pub(crate) use theme::{REOPEN_ICON, block_color, ci_icon, layer_style, muted, outcome_icon, soft};
+pub(crate) use theme::{REOPEN_ICON, block_color, ci_icon, layer_style, muted, outcome_icon, soft, surface_colour};
 #[cfg(test)]
 pub(crate) use toast::toast_area;
 pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};
@@ -202,7 +210,7 @@ use pane::{draw_no_tab, draw_tab, draw_welcome};
 use rows::{GAP, Zone, draw_more};
 use sidebar::draw_sidebar;
 use star::draw_star;
-use theme::{BRAND_COLOR, hover_colour, line_colour, surface_colour};
+use theme::{BRAND_COLOR, hover_colour, line_colour};
 use toast::draw_toast;
 use tour::{draw_pointer, draw_tour};
 use tree::draw_tree;
@@ -260,6 +268,9 @@ pub(crate) struct View<'a> {
     pub(crate) drag: Option<Drag>,
     pub(crate) tree: Option<TreeView>,
     pub(crate) agents: Option<AgentsView>,
+    pub(crate) bots: Option<BotsView>,
+    pub(crate) chat: Option<ChatView>,
+    pub(crate) bot_card: Option<BotCard>,
     pub(crate) counts: bool,
     pub(crate) icon_bar: bool,
     pub(crate) icons: bool,
@@ -385,6 +396,9 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
     } else if !areas.sidebar.is_empty() {
         draw_sidebar(f, view, areas);
     }
+    if let Some(bots) = &view.bots {
+        bots::draw_bots(f, view, bots, areas);
+    }
     if let Some(agents) = &view.agents {
         draw_agents(f, view, agents, areas);
     }
@@ -403,6 +417,10 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
 }
 
 fn draw_tab_or_empty(f: &mut Frame, view: &View, areas: &Areas) {
+    if let Some(chat) = &view.chat {
+        bots::chat::draw(f, view, chat, areas.pane, areas.pitch);
+        return;
+    }
     if remote_tab::draw_remote(f, view, areas.pane) {
         return;
     }
@@ -431,17 +449,28 @@ fn draw_chrome(f: &mut Frame, view: &View, areas: &Areas) {
     }
 }
 
-pub(crate) fn draw(f: &mut Frame, view: &View) {
+fn screen_of(view: &View) -> Screen {
     let panel = view.changes.is_some()
         || view.todo.is_some()
         || view.files.is_some()
         || view.flow.is_some()
         || view.recap.is_some();
-    let full = view.files.as_ref().is_some_and(files::View::full_screen);
-    let (agents, icon_bar) = (view.agents.is_some(), view.icon_bar);
-    let plugins = !view.plugin_buttons.is_empty();
-    let machine = view.machine.is_some();
-    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar, plugins, machine };
+    let bots = view.bots.as_ref().map_or(0, |bots| u16::try_from(bots.entries.len()).unwrap_or(u16::MAX));
+    Screen {
+        changes: panel,
+        sidebar: view.sidebar,
+        agents: view.agents.is_some(),
+        icon_bar: view.icon_bar,
+        plugins: !view.plugin_buttons.is_empty(),
+        machine: view.machine.is_some(),
+        bots,
+        bots_folded: view.bots.as_ref().is_some_and(|bots| bots.folded),
+    }
+}
+
+pub(crate) fn draw(f: &mut Frame, view: &View) {
+    let screen = screen_of(view);
+    let (panel, full) = (screen.changes, view.files.as_ref().is_some_and(files::View::full_screen));
     let areas = full_layout(f.area(), view.widths, screen)
         .with_tab_bar(view.tab_bar.is_some())
         .with_full_screen(full, f.area())
@@ -500,6 +529,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Form(form)) => draw_form(f, view, form, None),
         Some(Overlay::RunOnForm(form, run_on)) => draw_form(f, view, form, Some(run_on)),
         Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
+        Some(Overlay::BotForm(form)) => dialog::bot::draw(f, view, form),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),
         Some(Overlay::Confirm(confirm)) => draw_confirm(f, view, confirm),
         Some(Overlay::Update(update)) => draw_update(f, view, update),

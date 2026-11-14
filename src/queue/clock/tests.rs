@@ -100,3 +100,11 @@ fn a_posix_zone_keeps_its_daylight_saving_rules() {
         stamp("2026-10-20T13:00:00Z")
     );
 }
+
+const NOON: i64 = 1_794_571_200;
+
+#[test]
+fn a_time_today_is_the_hour_and_another_day_names_the_day() {
+    assert_eq!(when(NOON - 3_600, NOON, "UTC"), "11:00");
+    assert_eq!(when(NOON - 86_400 * 2, NOON, "UTC"), "Wed 11 Nov 12:00");
+}

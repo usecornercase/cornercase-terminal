@@ -23,6 +23,7 @@ pub(super) enum Subject {
     Row(u64),
     MachineRow(u64),
     Run(u64),
+    Bot(u64),
 }
 
 #[derive(Debug, Default)]
@@ -180,6 +181,7 @@ impl App {
                 Some(Place { kind: Kind::of(&path).unwrap_or(Kind::File), path, line, remote: false })
             }
             Subject::Run(workspace) => Some(folder(self.run_of(workspace)?.dir.clone()?)),
+            Subject::Bot(key) => Some(folder(self.panels.bots.live[self.panels.bots.by_key(key)?].folder.clone())),
             Subject::Row(workspace) => {
                 let path = self.workspace_path(workspace)?.join(self.opened_row(workspace)?);
                 Some(Place { kind: Kind::of(&path)?, path, line: None, remote: false })

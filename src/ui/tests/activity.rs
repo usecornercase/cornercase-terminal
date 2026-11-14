@@ -42,7 +42,15 @@ mod layout {
         let a = full_layout(
             TALL,
             Widths::default(),
-            Screen { changes: false, sidebar, agents: false, icon_bar: true, plugins: false, machine: false },
+            Screen {
+                changes: false,
+                sidebar,
+                agents: false,
+                icon_bar: true,
+                plugins: false,
+                machine: false,
+                ..Screen::default()
+            },
         );
         let footer = [a.separator, a.more_separator, a.more, a.issues, a.todo_button, a.files_button];
         assert_eq!(
@@ -63,6 +71,7 @@ mod layout {
                 icon_bar: false,
                 plugins: false,
                 machine: false,
+                ..Screen::default()
             },
         );
         let with = full_layout(
@@ -75,6 +84,7 @@ mod layout {
                 icon_bar: true,
                 plugins: false,
                 machine: false,
+                ..Screen::default()
             },
         );
         assert_eq!((without.list.bottom(), with.list.bottom()), (TALL.height - 3, TALL.height));
@@ -97,6 +107,7 @@ mod layout {
                 icon_bar: true,
                 plugins: false,
                 machine: false,
+                ..Screen::default()
             },
         );
         assert_eq!((a.activity, a.compact()), (Rect::default(), true));
@@ -240,6 +251,7 @@ mod drawing {
                 icon_bar: true,
                 plugins: false,
                 machine: false,
+                ..Screen::default()
             },
         );
         let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();
@@ -263,6 +275,7 @@ mod drawing {
                 icon_bar: true,
                 plugins: false,
                 machine: false,
+                ..Screen::default()
             },
         );
         let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();

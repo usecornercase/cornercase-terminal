@@ -1,0 +1,145 @@
+use ratatui::layout::Position;
+
+use crate::app::App;
+use crate::app::dialogs::rename_form;
+use crate::app::menus::MenuAction;
+use crate::app::opening::Subject;
+use crate::app::overlay::{Overlay, REMOVE_SUBMIT, RENAME_SUBMIT};
+use crate::app::toast::Toast;
+use crate::control::bots::EditBot;
+use crate::editor::Editor;
+use crate::ui;
+
+pub(in crate::app) const STOP_FIRST: &str = "stop it first";
+
+const RENAME_HINT: &str = "leave it empty to keep the current name";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum BotItem {
+    Rename,
+    Edit,
+    NewConversation,
+    OpenFolder,
+    Remove,
+}
+
+impl App {
+    pub(in crate::app) fn bot_menu_label(action: MenuAction) -> Option<String> {
+        let MenuAction::Bot(_, item) = action else { return None };
+        Some(
+            match item {
+                BotItem::Rename => "rename",
+                BotItem::Edit => "edit…",
+                BotItem::NewConversation => "new conversation",
+                BotItem::OpenFolder => "open folder",
+                BotItem::Remove => "remove…",
+            }
+            .to_string(),
+        )
+    }
+
+    pub(in crate::app) fn bot_menu_disabled(&self, action: MenuAction) -> bool {
+        let MenuAction::Bot(key, BotItem::NewConversation) = action else { return false };
+        self.panels.bots.by_key(key).is_some_and(|at| self.panels.bots.live[at].turn.is_some())
+    }
+
+    pub(in crate::app) fn bot_action(&mut self, action: MenuAction, at: Position) -> Option<MenuAction> {
+        let MenuAction::Bot(key, item) = action else { return Some(action) };
+        let bot = self.panels.bots.by_key(key)?;
+        match item {
+            BotItem::Rename => self.ask_rename_bot(key),
+            BotItem::Edit => self.open_bot_form(Some(key)),
+            BotItem::NewConversation => {
+                let id = self.panels.bots.live[bot].bot.id.clone();
+                self.new_conversation(&id);
+            }
+            BotItem::OpenFolder => self.open_menu_or_copy(Subject::Bot(key), at),
+            BotItem::Remove => self.overlay = Some(Overlay::RemoveBot { bot: key }),
+        }
+        None
+    }
+
+    fn ask_rename_bot(&mut self, key: u64) {
+        let Some(at) = self.panels.bots.by_key(key) else { return };
+        let input = Editor::new(&self.panels.bots.live[at].bot.name);
+        self.overlay = Some(Overlay::RenameBot { bot: key, input, error: None });
+    }
+
+    pub(in crate::app) fn rename_bot_view(input: &Editor, error: Option<&str>) -> ui::Overlay {
+        let mut view = rename_form("Rename bot", RENAME_HINT, input);
+        if let ui::Overlay::Form(form) = &mut view {
+            form.note = error.map(|text| ui::Note::Error(text.into()));
+            form.submit = RENAME_SUBMIT;
+        }
+        view
+    }
+
+    pub(in crate::app) fn bot_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::BotForm(form) => Some(ui::Overlay::BotForm(form.clone())),
+            Overlay::RenameBot { input, error, .. } => Some(Self::rename_bot_view(input, error.as_deref())),
+            Overlay::RemoveBot { bot } => self.remove_bot_view(*bot),
+            _ => None,
+        }
+    }
+
+    pub(in crate::app) fn remove_bot_label(&self, key: u64) -> &'static str {
+        let busy = self.panels.bots.by_key(key).is_some_and(|at| self.panels.bots.live[at].turn.is_some());
+        if busy { STOP_FIRST } else { REMOVE_SUBMIT }
+    }
+
+    pub(in crate::app) fn remove_bot_view(&self, key: u64) -> Option<ui::Overlay> {
+        let at = self.panels.bots.by_key(key)?;
+        let name = &self.panels.bots.live[at].bot.name;
+        let busy = self.remove_bot_label(key) == STOP_FIRST;
+        let message = format!(
+            "Remove bot {name}? Its chat, its memory and its folder are deleted. Agents it started keep running."
+        );
+        Some(ui::Overlay::Confirm(ui::Confirm {
+            title: "Remove bot",
+            message,
+            note: None,
+            submit: self.remove_bot_label(key),
+            extra: None,
+            dangerous: !busy,
+        }))
+    }
+
+    pub(in crate::app) fn submit_rename_bot(&mut self, key: u64, input: Editor) -> Option<Overlay> {
+        let text = input.text();
+        let at = self.panels.bots.by_key(key)?;
+        if text.trim().is_empty() {
+            return None;
+        }
+        let edit = EditBot { bot: self.panels.bots.live[at].bot.id.clone(), name: Some(text), ..EditBot::default() };
+        match self.bot_edit(&edit) {
+            Ok(_) => None,
+            Err(refusal) => Some(Overlay::RenameBot { bot: key, input, error: Some(refusal.message) }),
+        }
+    }
+
+    pub(in crate::app) fn submit_remove_bot(&mut self, key: u64) -> Option<Overlay> {
+        let at = self.panels.bots.by_key(key)?;
+        let id = self.panels.bots.live[at].bot.id.clone();
+        if self.panels.bots.live[at].turn.is_some() {
+            let _ = self.bot_stop(&id);
+            return Some(Overlay::RemoveBot { bot: key });
+        }
+        if let Err(refusal) = self.bot_remove(&id) {
+            self.messages.toast = Some(Toast::new(refusal.message, ui::ToastIcon::Bug));
+        }
+        None
+    }
+}
+
+impl Overlay {
+    pub(in crate::app) fn names_bot(&self, key: u64) -> bool {
+        match self {
+            Self::RenameBot { bot, .. } | Self::RemoveBot { bot } => *bot == key,
+            Self::Menu { actions, .. } => {
+                actions.iter().any(|action| matches!(action, MenuAction::Bot(found, _) if *found == key))
+            }
+            _ => false,
+        }
+    }
+}

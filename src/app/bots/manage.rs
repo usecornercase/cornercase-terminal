@@ -177,7 +177,8 @@ impl App {
         self.bot_settings(kind, &mut bot, &edit)?;
         let made =
             folder::create(&dir, &bot, &new.about).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
-        self.panels.bots.live.push(Live::new(bot, made));
+        let key = self.panels.bots.take_key();
+        self.panels.bots.live.push(Live::new(bot, made, key));
         let at = self.panels.bots.live.len() - 1;
         self.publish_bot_change(at, "created");
         Ok(at)
@@ -204,6 +205,10 @@ impl App {
             bot.access = self.bot_access(kind, edit.access.as_deref())?;
         }
         self.bot_settings(kind, &mut bot, edit)?;
+        if let Some(about) = &edit.about {
+            let written = folder::write_about(&self.panels.bots.live[at].folder, about);
+            written.map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
+        }
         let live = &mut self.panels.bots.live[at];
         live.bot = bot;
         let _ = folder::save(&live.folder, &live.bot);

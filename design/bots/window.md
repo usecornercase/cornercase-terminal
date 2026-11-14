@@ -1,0 +1,56 @@
+# Bots › The window
+
+Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
+
+#844 made bots with no face but `cornercase bot …`. The window draws a bot **as a chat** (bubbles, Markdown, what it is doing), never as the agent's interface, since #844 runs the agent without it and keeps the chat in `chat.jsonl`.
+
+## Where the chat shows, and what leaves it
+
+- **In place of the panes.** A click on a bot's row shows its chat in `Areas::pane`, and the workspaces column shows the bot's **card**. The tab bar stays above (`tabs: top`), the panes keep their size (`App::layout` does not change), and a click on a tab goes back. `App::tab_view` returns `None`, `App::visible_tab` and `App::shows` say no pane is on screen, so agents in the hidden tab notify as in any other hidden tab, and PTY output does not redraw for nothing.
+- **What leaves it**: every move to a local place calls `App::leave_remote`, which now also calls `leave_bot`: a click on a project, a workspace, a tab or an agent row, `focus`, a notification click on an agent, the keys menu's moves, the picker and the search. Picking a machine's workspace (`select_on`) leaves it too. Showing a bot leaves a machine's workspace the same way. A bot being removed leaves it and closes any dialog naming that bot.
+- **Shared by every window, not by views, and not saved.** The shown place is `App` state mirrored by every attached window (`design/client-server.md`), so the shown bot is too (`Bots::shown`). A view (`cornercase view`) keeps a selection of its own and never shows a bot. After a restart the window shows the panes, as it does for a machine's workspace (`shown_remote`).
+- **On the socket**: `Report.shown_bot` (the bot's id), left out when no chat shows, so every v1 fixture keeps its bytes (contract feature `shown-bot`). `status --json`, `watch` snapshots and `view` lines carry it, since all three carry a `Report`; the text of `status` marks nothing local `(shown)` while it is set and ends with `bot ID  (shown)`. It is not a field of `control::Ids` (which is `Copy` and is the `ids` of every event) nor of `surface` (which streams one tab's cells, and a chat is no tab). A UI that follows the window (cornercase-gpui) reads it from `status`/`watch`.
+
+## The section
+
+- **Where**: above the agents section when it is on, in every layout. Side by side it takes the bottom of the projects column, above the agents section; stacked and tree cut it from the same room `one_column` gives the agents section. "Under the projects" would put it between a project and its workspaces in the default stacked layout.
+- **Rows**: the spinner while the bot thinks, otherwise the accent `●` with the unread count (`9+`), the name, and `claude · opus` dim when the row has room (the details go first when room is short, through `Tags::fit`). ` ⋯ ` on hover, no ` × `: removing deletes a memory, so it is in the menu and asks first. Bots keep their `bot list` order, not their status: rows that move are hard to click.
+- **Height**: the title, the gap and a row per bot, plus the line above, capped at half of the room it is cut from, and never leaving the lists above fewer than their minimum. Rows that do not fit scroll (`List::Bots`, ` ↑ n more `). Folded it is the title row alone, which shows the spinner and the total unread before ` + `, so a fold hides no answer. No bots: no area, no line, and every existing snapshot is unchanged. There is no drag line: its height follows its content.
+- **The fold is saved** (`State.bots_collapsed`, a boolean left out when false, so `VERSION` stays 5), as a group's is: a fold that came back open after every restart is a nuisance. It is the sidebar's drawing, like `Widths`, so it is not on the socket.
+- **No icon in the icon bar**: it holds panels and tools, and bots are a sidebar list. ` More ▴ › new bot… ` and the keys menu's `b` open the form.
+
+## The chat
+
+- **Lines**: only the shown bot's last 1,000 lines are in memory (`Chat.lines`), read when the chat is shown and then appended by `bot_append`; `cornercase bot history` reaches older ones. A `you` line is a bubble on the surface colour, right-aligned, at most 80 % of the width, with its time or `held` while its id is in `Live.held`. A `bot` line has a dim `name · time` above its Markdown (`highlight::markdown::render`, code blocks highlighted as in the files panel). A run of steps folds to its last 3 under a ` +N steps ` that a click unfolds (kept per chat by the run's first step). An error is red with ` retry ` when it is the last line and no turn runs, which sends the last `you` text again. A notice is centred. While a turn runs the last row is the spinner, `thinking · 42s · 3 steps` and ` stop `, and `stopping…` after a stop.
+- **Rendering cost**: rows are laid out per entry from the newest, only as far as the view needs (`scroll + height`), and the Markdown of each answer is cached per line id and width (`Chat.bodies`, cleared when the width changes). A 60 fps draw never lays out the whole chat. Fences are highlighted through the block cache on first paint.
+- **The view** is anchored at the bottom; `Chat.scroll` counts the rows above it and 0 sticks. A line that arrives while it is above 0 adds its height to `scroll` so the text read stays put, and sets the ` ↓ new ` mark, which a click or reaching the bottom clears. The wheel scrolls as in a pane (`design/scrollback.md`).
+- **The empty state** says what a bot is in two lines and offers three examples; a click fills the field and sends nothing. None promises a schedule (#846 adds that example).
+- **Times** use the window's zone (`App::window_zone`, the queue form's): `HH:MM` today, else `Mon 3 Nov 14:02` (`queue::clock::when`, shared with `cornercase bot history`).
+- **` new conversation `** while a turn runs is dim, and a click says `PRs is answering: stop it first` (#844's `busy` refusal); the menu greys it.
+- **The card** (workspaces column): the name, agent, model (`the agent's own` when unset), effort and account when set, the access (`full access` in red), the folder (a click opens the open-in menu, or copies the path) and `made 2026-11-14`. The tree layout has no workspaces column, so it has no card.
+
+## Keys
+
+While a chat shows, every key goes to its input field and **never to a pane**: `chat_typing` is true when a bot shows, no compact menu or full-screen file is up, and the TODO field, the files search, the changes filter and the tour do not have the keys (they keep them). `forward_key` and `handle_paste` also return early while a bot shows, so no path can write to a hidden pane. The prefix key still opens the keys menu. `Enter` sends (any modifiers); a line break comes only from a paste (`Editor::insert_lines`), because a ` send ` button as the only way to send is clumsy (`design/text-fields.md`). `Esc` clears a draft with text; with an empty one it closes a side panel when one shows, and otherwise does nothing: going back to the last tab would give `Esc` two meanings depending on the text, and a stray `Esc` would drop the place you are reading. The field is `TextField::BotChat` in the registry, so drags, double clicks and the copy/cut/select-all menu work as in every field. Drafts are per bot and shared by windows, like every field in `App`.
+
+## Unread and ` go `
+
+- An answer or error of a bot whose chat a window shows on screen (`bot_on_screen`: shown, a window attached, no compact menu, no full-screen file) neither counts as unread nor notifies; showing a chat does what `bot seen` does. Any other keeps #844's toast and desktop notification, which now carry a token (`Notices::bot_token`, bounded like the agents' tokens): the toast's ` go ` and a click on the desktop notification show the chat, or toast `that bot is gone`. `act_on_notice` and `cornercase go` are unchanged: a bot's token is not published on `events`, whose `bot` events already carry its lines.
+
+## The form, rename and remove
+
+- **The form** (`bots/form.rs` is the model, `ui/dialog/bot.rs` the drawing): Name, Agent, Model, Effort, Account, Access and What it is for. The agent list is `bot agents`' (`bot_agent_infos`), with the agents that cannot be bots greyed with their `why` (`Combo::with_notes`: an option with a note cannot be chosen, by click or `Enter`, and the list stays open); the preselected one is `config.agent` when it can be a bot. The model is a combobox that also takes a typed name (`Combo::typed`: `Enter` on a query that matches nothing adds it), `default` meaning the agent's own. Effort shows only for an agent that takes one; Account only when the agent has accounts, as in the queue form (`AgentAccounts`), with the bot's own login preselected when editing. **Access is never chosen for the user when `cornercase` is not offered** (Codex today): ` create ` answers `choose its access` under the form without sending. The note under it has two lines, the full access one in the error colour. Server refusals (name taken, 50 bots) show under the form, which stays open; any key clears them.
+- **`edit…`** is the same form with ` save `, the agent grey and skipped by `Tab`. It sends `about` only when the text changed, through `EditBot.about` (contract feature `bot-about`; `bot edit --about TEXT` for programs, checked by the CLI before sending), which writes `bot.md`.
+- **`rename`** is the small name form (a refusal shows in red in it). **`remove…`** asks `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.`; while a turn runs its button says ` stop it first ` and stops the turn, keeping the dialog open, and reads ` remove ` again once it ended: the reading where it acts saves a trip to ` stop `.
+
+## Links
+
+A click on an `http://` or `https://` address in a bot's line **copies** it. The issue asked to open it in the browser, but `design/opening-in-other-apps.md` rules that a server (which may be on another machine) never makes a window open an arbitrary URL, and a bot's answer is agent output, the least trusted text the window shows. A fix needs a reasoned exception (a message sent only to the window that clicked, checked again by it); it is a follow-up issue.
+
+## Compact mode and the phone
+
+Below 90 columns a shown chat draws full screen in the pane area, and the projects menu lists the bots (` Bots › `, `Nav::Bots`, as `Nav::Agents`) on 3-row bands; a tap shows the chat with `Bots › prs` as the breadcrumb, and the header and ` send ` are bands. The inline marks (` retry `, ` stop `, `+N steps`, ` ↓ new `) stay one row: they are text inside the chat, not list items. The browser (`web/`) draws the window, so a phone gets the chat; typing from a phone was not checked live by anyone, and an e2e test through the browser bridge stands in for it.
+
+## What was checked, and what was left out
+
+Everything runs against fakes (`fake_program`, `FakeClaude`); no real agent ran. Left out: selecting text inside the chat (the terminal's own `Shift`+drag works), `focus --bot`, an icon-bar icon, a landing-page card, keyboard scrolling of the chat, and editing `memory.md` from the window.
