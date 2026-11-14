@@ -79,7 +79,7 @@ impl App {
         if let Some(last) = history.last {
             lines = lines.split_off(lines.len().saturating_sub(last));
         }
-        Ok(Some(json(&json!({ "bot": live.bot.id, "lines": lines }))))
+        Ok(Some(json(&json!({ "bot": live.bot.id, "name": live.bot.name, "lines": lines }))))
     }
 
     pub(in crate::app) fn bot_reply(&self, bot: &str, asked: u64) -> Option<Reply> {

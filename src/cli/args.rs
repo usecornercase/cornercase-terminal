@@ -1,6 +1,7 @@
 pub(crate) mod accounts;
 pub(crate) mod agents;
 pub(crate) mod arrange;
+pub(crate) mod bot;
 pub(crate) mod changes;
 pub(crate) mod close;
 pub(crate) mod config;
@@ -324,6 +325,11 @@ pub(crate) enum Control {
         after_help = RECAP_HELP
     )]
     Recap(recap::RecapArgs),
+    #[command(
+        about = "Make and talk to bots: agents of your own, outside any project, with a chat and a memory",
+        after_help = crate::cli::help::bot::BOT_HELP
+    )]
+    Bot(bot::BotArgs),
     #[command(
         about = "List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program",
         after_help = PROCESSES_HELP

@@ -734,6 +734,7 @@ Examples:
   cornercase changes discard src/main.rs --yes
   cornercase changes discard src/main.rs --digest 550a7a517a389403 --yes";
 
+pub(in crate::cli) mod bot;
 mod changes;
 mod clone;
 mod context;

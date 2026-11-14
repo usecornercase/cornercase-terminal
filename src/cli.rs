@@ -336,6 +336,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::PullRequest(args) => return ControlFlow::Break(pull_request::run(&args)),
         Control::Context(args) => return ControlFlow::Break(context::run(&args)),
         Control::Recap(args) => return ControlFlow::Break(recap::run(&args)),
+        Control::Bot(args) => return ControlFlow::Break(bot::run(args.action)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Machines(args) => machines::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),

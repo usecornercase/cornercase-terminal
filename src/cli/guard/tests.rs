@@ -20,6 +20,8 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::close_by_branch(&["close", "--worktree", "fix"], "a bot runs in no pane")]
 #[case::new_tab(&["new-tab"], "a bot runs in no pane")]
 #[case::changes(&["changes", "list"], "a bot runs in no pane")]
+#[case::edit_access(&["bot", "edit", "prs", "--access", "cornercase"], "a bot cannot change a bot's access")]
+#[case::new_full(&["bot", "new", "x", "--access", "full"], "a bot cannot change a bot's access")]
 #[case::kill(&["kill-server"], "a bot cannot stop its own server")]
 #[case::restart(&["restart"], "a bot cannot stop its own server")]
 #[case::update(&["update"], "a bot cannot stop its own server")]
@@ -46,6 +48,9 @@ fn the_refusal_names_the_flags_that_take_a_place() {
 #[case::recap(&["recap"])]
 #[case::worktrees(&["worktrees", "list"])]
 #[case::notify(&["notify", "hi"])]
+#[case::say(&["bot", "say", "prs", "hi"])]
+#[case::new(&["bot", "new", "x"])]
+#[case::edit(&["bot", "edit", "prs", "--name", "y"])]
 #[case::ports_all(&["ports", "--all"])]
 #[case::size_of_a_path(&["worktrees", "size", "--path", "/x"])]
 fn a_bot_may_name_its_place_or_use_what_needs_none(#[case] args: &[&str]) {
