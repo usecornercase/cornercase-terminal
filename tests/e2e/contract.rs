@@ -83,6 +83,7 @@ const OPERATIONS: &[&str] = &[
     "agent-models",
     "tunnel-orders",
     "tunnel-failed",
+    "free-merged-builds",
 ];
 
 fn assert_operations(contract: &Value) {
@@ -109,7 +110,7 @@ fn assert_features_and_streams(contract: &Value) {
         .into_iter()
         .chain(["todo-panel", "agent-folds", "changes", "close-agent-tabs", "queue-undo"])
         .chain(["focus-reveal", "files", "queue-routines", "queue-results", "tunnel-orders"])
-        .chain(["tunnel-reverse", "machine-tunnels", "tunnel-hold-ended"])
+        .chain(["tunnel-reverse", "machine-tunnels", "tunnel-hold-ended", "merged-builds"])
     {
         assert!(has_feature(contract, feature), "{feature}: {contract}");
     }

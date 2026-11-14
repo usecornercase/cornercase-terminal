@@ -97,6 +97,11 @@ mod describing {
     }
 
     #[test]
+    fn merged_builds_is_a_feature() {
+        assert!(FEATURES.contains(&"merged-builds"));
+    }
+
+    #[test]
     fn the_boot_of_a_machine_s_ids_is_a_feature() {
         assert!(FEATURES.contains(&"machine-boot"));
     }

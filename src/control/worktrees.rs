@@ -8,7 +8,10 @@ use crate::time::Stamp;
 use crate::worktrees::builds::{Folder, Freed, Size};
 use crate::worktrees::{Kind, Row};
 
+pub(crate) mod merged;
 pub(crate) mod remove;
+
+pub(crate) use merged::{FreeMergedBuilds, MergedBuildsFreed, MergedTotal, WorktreeFreed};
 
 pub(crate) use remove::{WorktreesRemove, WorktreesRemoved};
 
@@ -145,6 +148,8 @@ impl ListWorktrees {
 #[serde(default)]
 pub(crate) struct WorktreeListing {
     pub(crate) worktrees: Vec<WorktreeInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) merged_builds: Option<MergedTotal>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

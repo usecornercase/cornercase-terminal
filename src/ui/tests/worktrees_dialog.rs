@@ -80,7 +80,8 @@ fn worktrees() -> Worktrees {
         ticked: 1,
         free: 1,
         order: Order::Safe,
-        total: None,
+        merged: 0,
+        total: Vec::new(),
         note: None,
         confirm: None,
         compact: false,
@@ -277,7 +278,7 @@ fn worktrees_list_measuring() {
 fn worktrees_list_by_size() {
     let w = Worktrees {
         order: Order::Size,
-        total: Some(("3.2 GB in 5 worktrees · 2.4 GB of builds idle 7+ days".into(), "3.2 GB · 2.4 GB idle".into())),
+        total: vec!["3.2 GB in 5 worktrees · 2.4 GB of builds idle 7+ days".into(), "3.2 GB · 2.4 GB idle".into()],
         ..worktrees()
     };
     insta::assert_snapshot!(snapshot(w, BIG));
@@ -350,4 +351,90 @@ fn the_bottom_free_button_is_disabled_at_zero_and_the_tabs_set_the_order() {
     let tabs_y = area.y + 1;
     assert_eq!(hit(&none, area.right() - 4, tabs_y), Some(WorktreesHit::Order(Order::Size)));
     assert_eq!(hit(&none, area.right() - 20, tabs_y), Some(WorktreesHit::Order(Order::Safe)));
+}
+
+fn bottom_hits(w: &Worktrees, size: (u16, u16)) -> Vec<WorktreesHit> {
+    let y = buttons_y_for(size, w.compact);
+    let mut hits: Vec<WorktreesHit> = Vec::new();
+    for x in 0..size.0 {
+        let hit = worktrees_hit(screen(size), w, Position::new(x, y));
+        hits.extend(hit.filter(|hit| !hits.contains(hit)));
+    }
+    hits
+}
+
+fn buttons_y_for(size: (u16, u16), compact: bool) -> u16 {
+    let area = worktrees_area(screen(size), compact);
+    list_rows(area)[3].y
+}
+
+const FORMS: [&str; 5] = [
+    "3.2 GB in 5 worktrees · 2.4 GB of builds idle 7+ days · 1.1 GB of builds in 2 merged worktrees",
+    "3.2 GB · 2.4 GB idle · 1.1 GB of builds in 2 merged worktrees",
+    "3.2 GB · 2.4 GB idle · 1.1 GB merged",
+    "3.2 GB · 2.4 GB idle",
+    "3.2 GB",
+];
+
+fn merged_total() -> Vec<String> {
+    FORMS.iter().map(ToString::to_string).collect()
+}
+
+#[test]
+fn worktrees_list_merged_builds() {
+    let w = Worktrees { merged: 2, total: merged_total(), ..worktrees() };
+    insta::assert_snapshot!(snapshot(w, BIG));
+}
+
+#[test]
+fn free_merged_is_a_button_only_when_merged_rows_hold_builds() {
+    let with = Worktrees { merged: 1, ..worktrees() };
+    let none = worktrees();
+
+    assert!(bottom_hits(&with, BIG).contains(&WorktreesHit::FreeMerged));
+    assert!(!bottom_hits(&none, BIG).contains(&WorktreesHit::FreeMerged));
+    let confirming = Worktrees { merged: 1, confirm: Some(confirm(false, false)), ..worktrees() };
+    assert!(!bottom_hits(&confirming, BIG).contains(&WorktreesHit::FreeMerged));
+}
+
+#[test]
+fn free_merged_is_left_out_when_the_buttons_do_not_fit() {
+    let narrow = (46, 28);
+    let w = Worktrees { merged: 1, free: 2, ticked: 1, compact: true, ..worktrees() };
+
+    let hits = bottom_hits(&w, narrow);
+
+    assert!(!hits.contains(&WorktreesHit::FreeMerged), "{hits:?}");
+    for hit in [WorktreesHit::FreeTicked, WorktreesHit::Remove, WorktreesHit::Done] {
+        assert!(hits.contains(&hit), "{hit:?} in {hits:?}");
+    }
+}
+
+#[test]
+fn the_total_falls_back_to_the_form_that_fits() {
+    let room = |size: (u16, u16), w: Worktrees| {
+        let line = list_rows(worktrees_area(screen(size), w.compact))[3];
+        row_text(&render_sized(&shown(w), size.0, size.1), line)
+    };
+    let all = Worktrees { merged: 1, total: merged_total(), ..worktrees() };
+    let big = room(BIG, all);
+    assert!(big.contains("1.1 GB of builds in 2 merged worktrees"), "{big}");
+    assert!(!big.contains("in 5 worktrees"), "{big}");
+
+    let small = Worktrees { merged: 1, total: merged_total(), compact: true, ..worktrees() };
+    let line = room(SMALL, small);
+    assert!(line.contains("3.2 GB") && !line.contains("1.1 GB"), "{line}");
+
+    let fits = Worktrees { total: vec!["12 GB in 3 worktrees".into(), "12 GB".into()], ..worktrees() };
+    assert!(room(BIG, fits).contains("12 GB in 3 worktrees"));
+}
+
+#[test]
+fn free_merged_never_pushes_the_whole_total_out_of_the_row() {
+    for width in 44..=60 {
+        let w = Worktrees { merged: 1, total: merged_total(), compact: true, ..worktrees() };
+        let line = list_rows(worktrees_area(screen((width, 28)), true))[3];
+        let text = row_text(&render_sized(&shown(w), width, 28), line);
+        assert!(text.contains("3.2 GB"), "{width}: {text}");
+    }
 }

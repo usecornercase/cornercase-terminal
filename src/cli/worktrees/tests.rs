@@ -3,7 +3,9 @@ use clap::Parser;
 use super::*;
 use crate::cli::Cli;
 use crate::cli::args::{Command, Control};
+use crate::control::MergedTotal;
 use crate::control::worktrees::FailedFolder;
+use crate::remote::Remote;
 use crate::text::MB;
 use crate::time::Stamp;
 
@@ -15,6 +17,8 @@ pub(super) fn parsed(args: &[&str]) -> std::result::Result<WorktreesAction, clap
         other => panic!("not a worktrees command: {other:?}"),
     }
 }
+
+const FREE: &str = "cornercase worktrees free-builds --merged";
 
 fn sized() -> WorktreeSized {
     WorktreeSized {
@@ -105,14 +109,14 @@ fn listing() -> WorktreeListing {
         size: Some(sized(12 * MB, 0)),
         ..merged.clone()
     };
-    WorktreeListing { worktrees: vec![orphan, merged, busy] }
+    WorktreeListing { worktrees: vec![orphan, merged, busy], merged_builds: None }
 }
 
 #[test]
 fn list_says_each_worktree_its_reasons_and_the_total() {
     let now = Stamp::parse("2026-10-29T12:00:00.000Z").expect("a time");
 
-    let text = list_text(&listing(), Some(Path::new("/home/ana")), now);
+    let text = list_text(&listing(), Some(Path::new("/home/ana")), now, FREE);
 
     assert_eq!(
         text,
@@ -125,14 +129,15 @@ shop › feat/gift  ~/.cornercase/worktrees/shop/feat-gift  2h ago  1.1 GB (900 
 
 #[test]
 fn an_empty_list_says_so() {
-    assert_eq!(list_text(&WorktreeListing::default(), None, SystemTime::now()), "no worktrees\n");
+    assert_eq!(list_text(&WorktreeListing::default(), None, SystemTime::now(), FREE), "no worktrees\n");
 }
 
 #[test]
 fn a_row_not_checked_or_not_measured_is_marked_and_not_counted() {
     let now = Stamp::parse("2026-10-29T12:00:00.000Z").expect("a time");
     let failed = WorktreeInfo { size: None, size_error: Some("gave up".into()), ..listing().worktrees[1].clone() };
-    let text = list_text(&WorktreeListing { worktrees: vec![failed, listing().worktrees[2].clone()] }, None, now);
+    let rows = vec![failed, listing().worktrees[2].clone()];
+    let text = list_text(&WorktreeListing { worktrees: rows, merged_builds: None }, None, now, FREE);
     assert!(text.contains("  ?  merged"), "{text}");
     assert!(text.ends_with("1.1 GB+ in 1 worktree\n"), "{text}");
 }
@@ -143,4 +148,70 @@ fn list_takes_a_project_and_no_sizes_and_nothing_else() {
     assert!(matches!(list, WorktreesAction::List(ListArgs { project: Some(3), no_sizes: true, .. })));
     assert!(parsed(&["list", "--project", "x"]).is_err());
     assert!(parsed(&["list", "--path", "/x"]).is_err());
+}
+
+fn with_merged(bytes: u64, count: usize) -> WorktreeListing {
+    WorktreeListing { merged_builds: Some(MergedTotal { bytes, count }), ..listing() }
+}
+
+#[test]
+fn list_ends_with_the_merged_builds_and_the_command_that_frees_them() {
+    let now = Stamp::parse("2026-10-29T12:00:00.000Z").expect("a time");
+
+    let text = list_text(&with_merged(2100 * MB, 1), Some(Path::new("/home/ana")), now, FREE);
+
+    assert!(
+        text.ends_with(
+            "3.4 GB in 3 worktrees · 2.1 GB of builds idle 7+ days\n\
+2.1 GB of builds in 1 merged worktree: cornercase worktrees free-builds --merged\n"
+        ),
+        "{text}"
+    );
+    let two = list_text(&with_merged(5 * 1024 * MB, 2), None, now, FREE);
+    assert!(two.contains("5.0 GB of builds in 2 merged worktrees: "), "{two}");
+}
+
+#[test]
+fn no_merged_line_without_the_total_or_with_no_bytes() {
+    let now = Stamp::parse("2026-10-29T12:00:00.000Z").expect("a time");
+
+    for listing in [with_merged(0, 0), listing()] {
+        let text = list_text(&listing, None, now, FREE);
+        assert!(!text.contains("merged worktree"), "{text}");
+    }
+}
+
+#[test]
+fn the_merged_figure_has_a_plus_when_a_row_could_not_be_measured() {
+    let now = Stamp::parse("2026-10-29T12:00:00.000Z").expect("a time");
+    let mut listing = with_merged(2100 * MB, 1);
+    listing.worktrees[1].size = None;
+    listing.worktrees[1].size_error = Some("gave up".into());
+
+    let text = list_text(&listing, None, now, FREE);
+
+    assert!(text.contains("2.1 GB+ of builds in 1 merged worktree: "), "{text}");
+}
+
+#[test]
+fn the_command_names_the_project_and_the_machine_the_list_came_from() {
+    let remote = Remote { destination: "vps".into(), command: None, option: "--remote" };
+    let there = Remote { destination: "me@box".into(), command: Some("/opt/cornercase".into()), option: "--remote" };
+
+    assert_eq!(free_merged_line(None, None), "cornercase worktrees free-builds --merged");
+    assert_eq!(free_merged_line(Some(2), None), "cornercase worktrees free-builds --merged --project 2");
+    assert_eq!(free_merged_line(None, Some(&remote)), "cornercase --remote vps worktrees free-builds --merged");
+    assert!(free_merged_line(Some(3), Some(&there)).ends_with("worktrees free-builds --merged --project 3"));
+    assert!(free_merged_line(None, Some(&there)).contains("--remote-command"));
+}
+
+#[test]
+fn merged_stands_alone_and_project_needs_it() {
+    assert!(parsed(&["free-builds", "--merged"]).is_ok());
+    assert!(parsed(&["free-builds", "--merged", "--check", "--project", "2", "--json"]).is_ok());
+    for other in [["--path", "/x"], ["--worktree", "feat/x"], ["--workspace", "3"]] {
+        assert!(parsed(&["free-builds", "--merged", other[0], other[1]]).is_err(), "{other:?}");
+    }
+    assert!(parsed(&["free-builds", "--merged", "--force"]).is_err());
+    assert!(parsed(&["free-builds", "--project", "2"]).is_err());
 }

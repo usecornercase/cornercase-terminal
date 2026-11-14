@@ -4,16 +4,18 @@ use std::time::{Duration, SystemTime};
 
 use super::args::worktrees::{FreeArgs, ListArgs, TargetArgs, WorktreesAction, WorktreesArgs};
 use super::{home, print_json, print_out, workspace};
-use crate::client::{answer, ask};
+use crate::client::{answer, ask, used_remote};
 use crate::control::worktrees::BuildFolder;
 use crate::control::{
     BuildsFreed, Command, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
 };
 use crate::error::{Error, Result};
+use crate::remote::Remote;
 use crate::text::{display_path, plural, size};
 use crate::time::{self, Stamp};
 use crate::worktrees::IDLE_AFTER;
 
+mod merged;
 mod remove;
 
 pub(super) fn run(args: &WorktreesArgs) -> Result<()> {
@@ -37,7 +39,8 @@ fn run_list(args: &ListArgs) -> Result<()> {
     if args.print.json {
         print_json(&value)?;
     } else {
-        print_out(&list_text(&listing, home().as_deref(), SystemTime::now()))?;
+        let free = free_merged_line(args.project, used_remote());
+        print_out(&list_text(&listing, home().as_deref(), SystemTime::now(), &free))?;
     }
     let failed = listing.worktrees.iter().any(|info| info.error.is_some() || info.size_error.is_some());
     if failed { Err(Error::Partial) } else { Ok(()) }
@@ -54,6 +57,9 @@ fn run_size(args: &TargetArgs) -> Result<()> {
 }
 
 fn run_free(args: &FreeArgs) -> Result<()> {
+    if args.merged {
+        return merged::run(args);
+    }
     let (workspace, path) = target("free-builds", &args.target)?;
     let request = FreeBuilds { workspace, path, check: args.check, force: args.force };
     let value = ask("free-builds", Command::FreeBuilds(request))?;
@@ -104,7 +110,15 @@ pub(crate) fn free_text(freed: &BuildsFreed, home: Option<&Path>) -> String {
     text
 }
 
-pub(crate) fn list_text(listing: &WorktreeListing, home: Option<&Path>, now: SystemTime) -> String {
+pub(crate) fn free_merged_line(project: Option<u64>, remote: Option<&Remote>) -> String {
+    let mut action = "worktrees free-builds --merged".to_string();
+    if let Some(id) = project {
+        let _ = write!(action, " --project {id}");
+    }
+    remote.map_or_else(|| format!("cornercase {action}"), |remote| remote.line(&action))
+}
+
+pub(crate) fn list_text(listing: &WorktreeListing, home: Option<&Path>, now: SystemTime, free: &str) -> String {
     if listing.worktrees.is_empty() {
         return "no worktrees\n".to_string();
     }
@@ -121,7 +135,17 @@ pub(crate) fn list_text(listing: &WorktreeListing, home: Option<&Path>, now: Sys
     if let Some(total) = total_line(&listing.worktrees, now) {
         let _ = writeln!(text, "{total}");
     }
+    if let Some(merged) = merged_line(listing, free) {
+        let _ = writeln!(text, "{merged}");
+    }
     text
+}
+
+fn merged_line(listing: &WorktreeListing, free: &str) -> Option<String> {
+    let merged = listing.merged_builds.filter(|merged| merged.bytes > 0)?;
+    let more = if listing.worktrees.iter().any(|info| info.size_error.is_some()) { "+" } else { "" };
+    let noun = plural(merged.count, "merged worktree", "merged worktrees");
+    Some(format!("{}{more} of builds in {noun}: {free}", size(merged.bytes)))
 }
 
 fn title(info: &WorktreeInfo) -> String {

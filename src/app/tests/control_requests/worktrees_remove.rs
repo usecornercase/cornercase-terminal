@@ -39,11 +39,11 @@ trait Asks {
     }
 }
 
-struct Closed {
-    app: App,
-    rx: Receiver<AppEvent>,
-    repo: TempDir,
-    worktrees: TempDir,
+pub(super) struct Closed {
+    pub(super) app: App,
+    pub(super) rx: Receiver<AppEvent>,
+    pub(super) repo: TempDir,
+    pub(super) worktrees: TempDir,
 }
 
 impl Asks for Closed {
@@ -52,7 +52,7 @@ impl Asks for Closed {
     }
 }
 
-fn closed_repo() -> Closed {
+pub(super) fn closed_repo() -> Closed {
     let (mut app, rx) = empty_app();
     let worktrees = TempDir::new();
     app.config.worktrees_dir = worktrees.path().display().to_string();
@@ -66,17 +66,17 @@ fn with_one(branch: &str) -> (Closed, PathBuf) {
 }
 
 impl Closed {
-    fn folder(&self, slug: &str) -> PathBuf {
+    pub(super) fn folder(&self, slug: &str) -> PathBuf {
         self.worktrees.path().join(self.repo.path().file_name().expect("a name")).join(slug)
     }
 
-    fn add(&self, branch: &str) -> PathBuf {
+    pub(super) fn add(&self, branch: &str) -> PathBuf {
         let at = self.folder(&branch.replace('/', "-"));
         git(self.repo.path(), &["worktree", "add", "--quiet", "-b", branch, &at.display().to_string()]);
         at
     }
 
-    fn has_branch(&self, branch: &str) -> bool {
+    pub(super) fn has_branch(&self, branch: &str) -> bool {
         branch_exists(self.repo.path(), branch)
     }
 

@@ -172,6 +172,14 @@ impl Row {
         self.found.kind == Kind::Linked && self.tickable() && self.builds_bytes().is_some_and(|bytes| bytes > 0)
     }
 
+    pub(crate) fn merged_to_free(&self) -> bool {
+        self.merged() && self.found.kind == Kind::Linked && self.tickable()
+    }
+
+    pub(crate) fn merged_builds(&self) -> Option<u64> {
+        self.builds_bytes().filter(|bytes| *bytes > 0 && self.merged_to_free())
+    }
+
     pub(crate) fn idle(&self, now: SystemTime) -> bool {
         self.last_changed().is_some_and(|at| now.duration_since(at).is_ok_and(|age| age >= IDLE_AFTER))
     }
@@ -253,6 +261,10 @@ impl List {
         sized.fold((0, 0), |(bytes, count), more| (bytes + more, count + 1))
     }
 
+    pub(crate) fn merged_total(&self) -> (u64, usize) {
+        merged_total(&self.rows)
+    }
+
     pub(crate) fn idle_builds(&self, now: SystemTime) -> (u64, usize) {
         let idle = self.rows.iter().filter(|r| !r.gone && r.found.kind == Kind::Linked && r.idle(now));
         idle.filter_map(Row::builds_bytes).filter(|bytes| *bytes > 0).fold((0, 0), |(a, n), b| (a + b, n + 1))
@@ -289,6 +301,10 @@ impl List {
     pub(crate) fn ticked(&self) -> Vec<usize> {
         (0..self.rows.len()).filter(|&i| self.rows[i].ticked).collect()
     }
+}
+
+pub(crate) fn merged_total(rows: &[Row]) -> (u64, usize) {
+    rows.iter().filter_map(Row::merged_builds).fold((0, 0), |(bytes, count), more| (bytes + more, count + 1))
 }
 
 pub(crate) fn folders_of(rows: &[Row]) -> Vec<PathBuf> {

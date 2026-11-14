@@ -1,0 +1,7 @@
+{
+  "command": "free-merged-builds",
+  "args": {
+    "project": 2,
+    "check": true
+  }
+}

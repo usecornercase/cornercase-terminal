@@ -14,8 +14,8 @@ use super::pull_requests::Looked;
 use super::toast::Toast;
 use super::worktrees_dialog::Deleted;
 use crate::agents::launch::Launch;
-use crate::control::BuildsFreed;
 use crate::control::contract::Refusal;
+use crate::control::{BuildsFreed, MergedBuildsFreed};
 use crate::editor::Editor;
 use crate::error::{Error, Result};
 use crate::flows::run::RoleWorktree;
@@ -78,6 +78,7 @@ pub(crate) enum Measure {
 pub(crate) enum ListFor {
     Dialog(u64),
     Request { key: u64, sizes: bool },
+    FreeMerged { key: u64, check: bool },
 }
 
 #[derive(Debug)]
@@ -96,7 +97,9 @@ pub(crate) enum WorktreeEvent {
     PullRequests { project: u64, looked: Looked },
     GlabHosts(std::result::Result<Vec<Host>, String>),
     Listed { to: ListFor, found: Result<Vec<Found>> },
-    Rows { key: u64, rows: Box<Result<Vec<Row>>> },
+    Rows { key: u64, sizes: bool, rows: Box<Result<Vec<Row>>> },
+    MergedRows { key: u64, check: bool, rows: Box<Result<Vec<Row>>> },
+    MergedFreed { key: u64, keys: Vec<u64>, result: Box<Result<MergedBuildsFreed>> },
     Removal { key: u64, step: Box<RemovalStep> },
     Scanned { generation: u64, ticket: u64, path: PathBuf, scan: Box<Result<Scan>>, confirm: bool },
     Outside { generation: u64, ticket: u64, found: Result<Vec<(PathBuf, String, bool)>> },
@@ -119,6 +122,8 @@ impl WorktreeEvent {
             Self::GlabHosts(_) => "glab hosts",
             Self::Listed { .. } => "worktrees listed",
             Self::Rows { .. } => "worktree rows",
+            Self::MergedRows { .. } => "merged worktree rows",
+            Self::MergedFreed { .. } => "merged builds request",
             Self::Removal { .. } => "worktrees removal",
             Self::Scanned { .. } => "worktree scanned",
             Self::Outside { .. } => "outside processes",
@@ -158,7 +163,9 @@ impl App {
             WorktreeEvent::PullRequests { project, looked } => self.pull_requests_found(project, looked),
             WorktreeEvent::GlabHosts(listed) => self.glab_hosts_found(listed),
             WorktreeEvent::Listed { to, found } => self.worktrees_found(to, found),
-            WorktreeEvent::Rows { key, rows } => self.worktree_rows_answered(key, *rows),
+            WorktreeEvent::Rows { key, sizes, rows } => self.worktree_rows_answered(key, sizes, *rows),
+            WorktreeEvent::MergedRows { key, check, rows } => self.merged_rows_ready(key, check, *rows),
+            WorktreeEvent::MergedFreed { key, keys, result } => self.merged_builds_answered(key, &keys, *result),
             WorktreeEvent::Removal { key, step } => self.removal_step(key, *step),
             WorktreeEvent::Scanned { generation, ticket, path, scan, confirm } => {
                 self.worktree_scanned((generation, ticket), &path, *scan, confirm);

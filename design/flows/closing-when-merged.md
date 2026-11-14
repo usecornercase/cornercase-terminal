@@ -33,6 +33,6 @@ Part of [Flows](../flows.md).
   - Freeing as `--force` does: nobody reads a warning then.
   - Freeing at the merge, before the close (the agents may still build) and right at the close (the agents are still exiting).
   - A setting for it, as for the close.
-  - `worktrees list`'s sum of the builds of merged worktrees and `worktrees free-builds --merged`: it needs its own answer shape and rules for how it combines with the other targets, so it is a follow-up (#811).
+  - `worktrees list`'s sum of the builds of merged worktrees and `worktrees free-builds --merged`: shipped apart (#811, see Commands for scripts and agents › Worktrees), for runs started without `--free-builds` and worktrees made by hand; it stays out of the run's opt-in.
   - Waiting forever on agents that cannot resume: an opencode role would never let go.
   - A `closes_at` time in the JSON and a window toggle (start dialog or row menu): left for later.

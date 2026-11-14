@@ -52,17 +52,7 @@ impl TreeFreed {
         if bytes == 0 {
             return None;
         }
-        let mut why = Vec::new();
-        if !risky.running.is_empty() {
-            let verb = if risky.running.len() == 1 { "runs" } else { "run" };
-            why.push(format!("{} {verb} in it", risky.running.join(", ")));
-        }
-        for nested in &risky.size.nested {
-            let dir = nested.parent().unwrap_or(nested);
-            let dir = dir.strip_prefix(&self.path).unwrap_or(dir);
-            why.push(format!("{} is a git checkout", dir.display()));
-        }
-        Some(format!("{place} kept {} of builds: {}", text::size(bytes), why.join(", ")))
+        Some(format!("{place} kept {} of builds: {}", text::size(bytes), risky.why(&self.path)))
     }
 }
 

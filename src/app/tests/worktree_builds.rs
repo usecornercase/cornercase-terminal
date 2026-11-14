@@ -158,6 +158,32 @@ fn the_size_order_and_the_total_show_once_every_size_is_known() {
     click(&mut s.app, pos);
     let view = view(&s.app);
     assert_eq!(view.rows[0].branch, "b");
-    let (long, short) = view.total.expect("a total");
+    let (long, short) = (&view.total[0], &view.total[1]);
     assert!(long.contains("in 2 worktrees") && !short.contains("worktrees"), "{long} {short}");
+}
+
+#[test]
+fn free_merged_frees_every_merged_row_after_the_confirmation() {
+    let mut s = with(&["a", "b"]);
+    let (a, b) = (with_builds(&s, "a", "node_modules"), with_builds(&s, "b", "node_modules"));
+    crate::test_util::give_upstream(s.repo.path(), "a");
+    sized(&mut s, 2);
+    assert!(dialog(&s.app).list.rows.iter().any(crate::worktrees::Row::merged), "no merged row");
+    let total = view(&s.app).total;
+    assert!(total[0].contains("of builds in 1 merged worktree"), "{total:?}");
+    assert_eq!(view(&s.app).merged, 1);
+
+    let pos = at(&s.app, ui::WorktreesHit::FreeMerged);
+    click(&mut s.app, pos);
+
+    let crate::worktrees::Step::Free { paths } = &dialog(&s.app).step else { panic!("the free step") };
+    assert_eq!(paths, std::slice::from_ref(&a));
+    assert!(a.join("node_modules/x.js").exists());
+    pump_until(&mut s.app, &s.rx, "the processes are checked", |app| {
+        view(app).confirm.as_ref().is_some_and(|c| !c.checking)
+    });
+    confirm_free(&mut s);
+    let text = freed(&mut s);
+    assert!(text.starts_with("freed ") && text.ends_with("in 1 worktree"), "{text}");
+    assert!(!a.join("node_modules").exists() && b.join("node_modules").exists());
 }
