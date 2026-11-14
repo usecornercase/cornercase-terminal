@@ -61,7 +61,7 @@ mod a_line {
 mod a_split_stream {
     use super::*;
 
-    const MIXED: &str = "Run `cornercase update` there.\nsee `cornercase status` é→ and `cornercase keys --pane 7 0`\r\nstray ` tick\ncornercase update\nwith `cornercase update` thereafter\nlast `cornercase status`";
+    const MIXED: &str = "Run `cornercase update` there.\nsee `cornercase status` é→ and `cornercase keys --pane 7 0`\r\nstray ` tick\ncornercase update\ncornercase update\r\nwith `cornercase update` thereafter\nlast `cornercase status`";
 
     #[test]
     fn gives_what_one_piece_gives_wherever_it_is_cut() {

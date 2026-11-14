@@ -1,5 +1,5 @@
 use std::io::{self, Read, Write};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, ExitStatus};
 
 use super::{MACHINE, Remote};
 
@@ -71,7 +71,8 @@ impl<'a, W: Write> Hinting<'a, W> {
 }
 
 fn ready(partial: &[u8]) -> usize {
-    if !partial.is_empty() && UPDATE_LINE.as_bytes().starts_with(partial) {
+    let line = partial.strip_suffix(b"\r").unwrap_or(partial);
+    if !line.is_empty() && UPDATE_LINE.as_bytes().starts_with(line) {
         return 0;
     }
     let ticks: Vec<usize> = partial.iter().enumerate().filter(|(_, byte)| **byte == b'`').map(|(at, _)| at).collect();
@@ -132,28 +133,6 @@ pub(in crate::remote) fn relayed(
         }
         status
     })
-}
-
-pub(in crate::remote) fn status(
-    remote: &Remote,
-    mut command: Command,
-    printed: Printed,
-    tied: bool,
-) -> io::Result<ExitStatus> {
-    if tied {
-        command.stdin(Stdio::piped());
-    }
-    if printed != Printed::Data {
-        command.stderr(Stdio::piped());
-    }
-    if printed == Printed::Messages {
-        command.stdout(Stdio::piped());
-    }
-    let mut child = command.spawn()?;
-    let held = child.stdin.take();
-    let status = relayed(remote, &mut child, io::stdout(), io::stderr());
-    drop(held);
-    status
 }
 
 #[cfg(test)]

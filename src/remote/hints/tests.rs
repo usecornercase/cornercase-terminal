@@ -214,7 +214,7 @@ mod a_relayed_message {
     fn walk(command: &clap::Command, prefix: &str, checked: &mut Vec<String>) {
         for sub in command.get_subcommands() {
             let path = format!("{prefix}{}", sub.get_name());
-            let takes = sub.get_arguments().any(|arg| arg.get_id() == "machine");
+            let takes = sub.get_arguments().any(|arg| arg.get_long() == Some("machine"));
             let named = on_vps(&format!("`cornercase {path}`")).contains("--machine vps");
             assert_eq!(named, takes, "`cornercase {path}`");
             checked.push(path.clone());
@@ -236,7 +236,7 @@ mod a_relayed_message {
     fn focus_is_given_no_machine_next_to_what_conflicts_with_it() {
         let cli = Cli::command();
         let focus = cli.find_subcommand("focus").expect("focus");
-        let machine = focus.get_arguments().find(|arg| arg.get_id() == "machine").expect("--machine");
+        let machine = focus.get_arguments().find(|arg| arg.get_long() == Some("machine")).expect("--machine");
         let mut conflicts: Vec<String> = focus
             .get_arg_conflicts_with(machine)
             .iter()
