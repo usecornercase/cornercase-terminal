@@ -1,4 +1,5 @@
 import { App } from './app';
+import { seedBots } from './bots';
 import { FOLDERS } from './data';
 import { type Project, type Workspace, activePane, projectLabel, workspaceLabel } from './model';
 import { startRun } from './flowrun';
@@ -83,6 +84,8 @@ export function world(app: App, opts: { scripted?: boolean } = {}): App {
   inGroup(app, 'work', [shop, api, mobile, payments]);
   inGroup(app, 'personal', [blog, dotfiles, playground]);
 
+  seedBots(app);
+  if (opts.scripted) app.bots.folded = true;
   app.active = 0;
   app.widths = { ...app.widths, stack: STACK_ROWS };
   return app;

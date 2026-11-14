@@ -360,7 +360,7 @@ impl App {
         if let Some(b) = areas.border_hit(pos) {
             return border_shape(b);
         }
-        if !areas.pane.contains(pos) || (self.screen.nav.is_some() && areas.compact()) {
+        if !areas.pane.contains(pos) || (self.screen.nav.is_some() && areas.compact()) || self.bot_shown() {
             return pointer::Shape::Default;
         }
         let dir = if self.shown_remote().is_some() {
@@ -444,7 +444,9 @@ impl App {
     }
 
     fn agent_working(&self) -> bool {
-        self.projects.tabs().any(|tab| tab.status() == Some(activity::Status::Working)) || self.remote_working()
+        self.projects.tabs().any(|tab| tab.status() == Some(activity::Status::Working))
+            || self.remote_working()
+            || self.bots_thinking()
     }
 
     pub(crate) fn refresh(&mut self, now: Instant) {
@@ -532,7 +534,10 @@ impl App {
     }
 
     pub(crate) fn shows(&self, pane: u64) -> bool {
-        self.screen.nav.is_none() && !self.file_full_screen() && self.tab().is_some_and(|t| t.index_of(pane).is_some())
+        self.screen.nav.is_none()
+            && !self.file_full_screen()
+            && !self.bot_shown()
+            && self.tab().is_some_and(|t| t.index_of(pane).is_some())
     }
 
     pub(crate) fn state(&self) -> State {
@@ -565,6 +570,7 @@ impl App {
             todo: self.screen.side == Some(Side::Todo),
             files: self.screen.side == Some(Side::Files),
             flow: self.screen.side == Some(Side::Flow),
+            bots_collapsed: self.panels.bots.collapsed,
         }
     }
 
@@ -587,6 +593,7 @@ impl App {
         self.adopt_closed(&parents);
         self.adopt_saved(parents);
         self.sync_worktrees();
+        self.panels.bots.collapsed = saved.bots_collapsed;
         if saved.flow {
             self.show_flow();
         }
@@ -778,10 +785,12 @@ impl App {
         let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
         let (files, placed) = self.files_seen(sight, area, modal);
         let tab = self.tab_view(area);
+        let (chat, bot_card) = self.shown_chat(area).map_or((None, None), |shown| (Some(shown.view), Some(shown.card)));
         let (remote_card, remote_tab) = (self.remote_card(now), self.remote_screen());
         self.messages.toast = self.messages.toast.take().filter(|t| t.at.elapsed() < t.lasts());
-        let view = ui::View { remote_card, remote_tab, tab, overlay, files, ..self.lists_view(area, now) }
-            .with_icons(self.icons_in(sight));
+        let view =
+            ui::View { remote_card, remote_tab, tab, overlay, files, chat, bot_card, ..self.lists_view(area, now) }
+                .with_icons(self.icons_in(sight));
         ui::draw(f, &view);
         placed.map(|placed| images::owned(f.buffer_mut(), placed))
     }

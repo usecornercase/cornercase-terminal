@@ -59,9 +59,16 @@ export function wrap(chars: string[], width: number): Span[] {
 }
 
 export function fieldLines(f: Pick<Editable, 'chars'>, width: number): Span[] {
-  const lines = wrap(f.chars, width);
+  const lines: Span[] = [];
+  let start = 0;
+  while (start <= f.chars.length) {
+    let end = f.chars.indexOf('\n', start);
+    if (end < 0) end = f.chars.length;
+    for (const [a, b] of wrap(f.chars.slice(start, end), width)) lines.push([start + a, start + b]);
+    start = end + 1;
+  }
   const last = lines[lines.length - 1];
-  if (last[1] > last[0] && last[1] - last[0] >= Math.max(1, width)) lines.push([f.chars.length, f.chars.length]);
+  if (last[1] > last[0] && last[1] - last[0] >= Math.max(1, width) && last[1] === f.chars.length) lines.push([f.chars.length, f.chars.length]);
   return lines;
 }
 
@@ -78,7 +85,8 @@ export function cursorAt(f: Editable, width: number, line: number, col: number):
   const lines = fieldLines(f, width);
   const span = lines[line];
   if (!span) return null;
-  const room = line + 1 === lines.length ? span[1] - span[0] : Math.max(0, span[1] - span[0] - 1);
+  const hard = span[1] >= f.chars.length || f.chars[span[1]] === '\n';
+  const room = hard ? span[1] - span[0] : Math.max(0, span[1] - span[0] - 1);
   return span[0] + Math.min(col, room);
 }
 

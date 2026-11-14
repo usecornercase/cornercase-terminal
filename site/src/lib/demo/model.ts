@@ -194,7 +194,7 @@ export type MenuAction =
 
 export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'keys' | 'bug';
 
-export type MoreItem = 'settings' | 'usage' | 'processes' | 'quit';
+export type MoreItem = 'settings' | 'usage' | 'processes' | 'new bot…' | 'quit';
 
 export interface PickItem {
   value: string;
@@ -266,6 +266,7 @@ export type Overlay =
   | { kind: 'discard'; key: string; path: string; status: string; untracked: boolean; old?: string }
   | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; seq?: number; scroll: number }
   | import('./queue').QueueForm
+  | import('./botform').BotForm
   | SettingsOverlay
   | IssuesOverlay;
 

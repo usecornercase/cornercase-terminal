@@ -19,6 +19,7 @@ export interface Combo {
   options: string[];
   chosen: number | null;
   open: Open | null;
+  off?: number[];
 }
 
 export const combo = (options: string[], chosen: number | null): Combo => ({
@@ -51,6 +52,7 @@ export function openCombo(c: Combo): void {
 }
 
 export function chooseCombo(c: Combo, i: number): void {
+  if (c.off?.includes(i)) return;
   if (i >= 0 && i < c.options.length) c.chosen = i;
   c.open = null;
 }
@@ -81,6 +83,7 @@ export function comboKey(c: Combo, k: Key, rows: number): boolean {
   if (k.key === 'Escape') c.open = null;
   else if (k.key === 'Enter') {
     const chosen = comboHighlighted(c);
+    if (chosen !== null && c.off?.includes(chosen)) return false;
     const changed = chosen !== null && c.chosen !== chosen;
     if (chosen === null) c.open = null;
     else chooseCombo(c, chosen);
@@ -146,9 +149,11 @@ export function drawComboList(p: Painter, list: Rect, c: Combo, choose: (i: numb
     if (i === undefined) break;
     const r = item(list, row);
     const selected = highlighted === i;
+    const off = !!c.off?.includes(i);
     const bg: Style = selected ? { bg: p.surface } : p.hovered(r) ? { bg: p.hoverSurface } : {};
-    p.line(r, [seg(selected ? '▌' : ' ', selected ? { ...bg, fg: 6 } : bg), seg(truncateRight(c.options[i], width), selected ? { ...bg, add: BOLD } : bg)], bg);
-    p.region({ r, click: () => choose(i), cursor: 'pointer' });
+    const text: Style = off ? { ...bg, ...MUTED } : selected ? { ...bg, add: BOLD } : bg;
+    p.line(r, [seg(selected ? '▌' : ' ', selected ? { ...bg, fg: 6 } : bg), seg(truncateRight(c.options[i], width), text)], bg);
+    p.region({ r, click: () => (off ? undefined : choose(i)), cursor: off ? 'default' : 'pointer' });
   }
   const below = Math.max(0, shown.length - scroll - visible);
   for (const [count, arrow, y] of [[scroll, '↑', list.y], [below, '↓', bottom(list) - 1]] as const) {

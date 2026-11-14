@@ -1,0 +1,395 @@
+import { BOLD, type Rect, type Style, rect } from '../term/grid';
+import { DEFAULT } from '../term/palette';
+import { type Bot, EXAMPLES, type ChatLine, age, clock, details, summary } from './bots';
+import { type Areas, BOTS_LABEL, Rows, bottom, buttonWidth, closeButton, isEmpty, menuButton, right } from './layout';
+import { render as markdown } from './markdown';
+import { type Line, seg, truncateRight, width } from './text';
+import { drawSelection, fieldLines, fieldPosition, placeIn } from './todo';
+import type { Painter } from './ui';
+
+const DARK: Style = { fg: 8 };
+const CYAN: Style = { fg: 6 };
+const RED: Style = { fg: 1 };
+const SPINNER = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+const SEND = 'send';
+const NEW_CONVERSATION = 'new conversation';
+const MAX_INPUT = 6;
+const FOLD = 3;
+const MENU_LEFT_OUT = 'this needs cornercase on your computer: the demo has no bot menu';
+
+interface Act {
+  x: number;
+  w: number;
+  fn: () => void;
+}
+
+interface Row {
+  x: number;
+  w: number;
+  line: Line;
+  bg?: Style;
+  acts?: Act[];
+}
+
+export function wrapText(text: string, max: number): string[] {
+  const w = Math.max(1, max);
+  const out: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    let row = '';
+    for (const word of paragraph.split(' ')) {
+      let rest = word;
+      while ([...rest].length > w) {
+        if (row) out.push(row);
+        row = '';
+        out.push([...rest].slice(0, w).join(''));
+        rest = [...rest].slice(w).join('');
+      }
+      const joined = row ? `${row} ${rest}` : rest;
+      if ([...joined].length <= w) row = joined;
+      else {
+        out.push(row);
+        row = rest;
+      }
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+const spin = (p: Painter): string => SPINNER[Math.floor(p.app.now() / 100) % SPINNER.length];
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+const mark = (shown: boolean): Line => [seg(shown ? '▌ ' : '  ', CYAN)];
+
+function drawRow(p: Painter, r: Rect, bot: Bot, active: boolean): void {
+  const app = p.app;
+  const pitch = Math.max(1, r.h);
+  const bg = p.rowBackground(r, active);
+  const menu = menuButton(r, pitch);
+  const close = closeButton(r, pitch);
+  const flag: Line = bot.turn
+    ? [seg(spin(p), { fg: 3 }), seg(' ')]
+    : bot.unread
+      ? [seg(`●${bot.unread > 9 ? '9+' : bot.unread}`, CYAN), seg(' ')]
+      : [];
+  const lead = [...mark(active), ...flag];
+  const room = Math.max(0, r.w - width(lead) - close.w - menu.w - 1);
+  const name = truncateRight(bot.name, room);
+  const tag = summary(bot);
+  const gap = room - [...name].length - [...tag].length;
+  const line: Line = [...lead, seg(name, active ? { fg: DEFAULT, add: BOLD } : { fg: 7 })];
+  if (gap >= 2) line.push(seg(' '.repeat(gap)), seg(tag, DARK));
+  p.band(r, line, bg);
+  if (active) p.rail(r);
+  const open = (): void => app.bots.show(bot.id);
+  const side = (): void => app.notify(MENU_LEFT_OUT);
+  p.region({ r, click: open, right: side, cursor: 'pointer' });
+  if (!p.sidebarHovered(r) && pitch === 1) return;
+  const style: Style = p.sidebarHovered(r) && p.hovered(menu) ? { ...bg, fg: 6, add: BOLD } : { ...bg, fg: 8 };
+  p.band(menu, [seg('⋯'.padStart(menu.w))], style);
+  p.region({ r: menu, click: side, right: side, cursor: 'pointer' });
+}
+
+function foldedTags(p: Painter): Line {
+  const bots = p.app.bots;
+  const out: Line = [];
+  if (bots.thinking()) out.push(seg(spin(p), { fg: 3 }), seg(' '));
+  if (bots.unread()) out.push(seg(`●${bots.unread()}`, CYAN), seg(' '));
+  return out;
+}
+
+function sectionTitle(p: Painter, areas: Areas): void {
+  const app = p.app;
+  const bots = app.bots;
+  const t = areas.botsTitle;
+  const compact = areas.compact;
+  const plus = compact ? rect(right(t) - 5, t.y, 5, t.h) : rect(right(t) - 3, t.y, 3, 1);
+  if (compact) p.back(areas, 'Bots');
+  else {
+    p.line(t, [seg(bots.folded ? ' ▸ ' : ' ▾ ', DARK), seg('Bots', { fg: 8, add: BOLD })]);
+    const tags = bots.folded ? foldedTags(p) : [];
+    if (tags.length) p.line(rect(plus.x - width(tags) - 1, t.y, width(tags), 1), tags);
+    p.region({ r: t, click: () => bots.toggleFold(), cursor: 'pointer' });
+  }
+  p.button(plus, '', '+', p.buttonStyle(plus, CYAN, 6));
+  p.region({ r: plus, click: () => app.openBotForm(), cursor: 'pointer' });
+}
+
+export function drawBotsSection(p: Painter, areas: Areas): void {
+  const app = p.app;
+  const bots = app.bots;
+  if (!bots.list.length) return;
+  if (isEmpty(areas.bots)) {
+    const b = areas.botsButton;
+    if (isEmpty(b)) return;
+    p.button(b, '', BOTS_LABEL, p.buttonStyle(b, CYAN, 6));
+    p.region({ r: b, click: () => app.navTo('bots'), cursor: 'pointer' });
+    return;
+  }
+  const line = areas.botsBorder;
+  if (!isEmpty(line)) p.line(line, [seg(` ${'─'.repeat(Math.max(0, line.w - 2))}`, { fg: p.lineColour })]);
+  sectionTitle(p, areas);
+  const list = areas.botsList;
+  if (isEmpty(list) || (bots.folded && !areas.compact)) return;
+  const rows = new Rows(list, Array<number>(bots.list.length).fill(areas.pitch), 0, bots.scroll);
+  p.region({
+    r: list,
+    wheel: (dy) => {
+      const next = rows.scrolled(dy);
+      if (next === bots.scroll) return false;
+      bots.scroll = next;
+      app.dirty();
+      return true;
+    },
+  });
+  bots.list.forEach((bot, i) => {
+    const r = rows.item(i);
+    if (!isEmpty(r)) drawRow(p, r, bot, bot.id === bots.shown);
+  });
+  p.more(list, rows, bots.list, () => true);
+}
+
+function youRows(p: Painter, bot: Bot, l: ChatLine, w: number): Row[] {
+  const max = Math.max(6, Math.floor(w * 0.8));
+  const lines = wrapText(l.text, max - 2);
+  const tag = bot.held.has(l.id) ? 'held' : clock(l.at);
+  const last = [...lines[lines.length - 1]].length;
+  const inline = last + 1 + tag.length <= max - 2;
+  const longest = Math.max(...lines.map((t) => [...t].length), inline ? last + 1 + tag.length : tag.length);
+  const bw = Math.min(max, longest + 2);
+  const bg: Style = { bg: p.surface };
+  const rows: Row[] = lines.map((text) => ({ x: w - bw, w: bw, bg, line: [seg(' '), seg(text), seg(' '.repeat(Math.max(0, bw - 2 - [...text].length))), seg(' ')] }));
+  const end = rows[rows.length - 1];
+  const dim: Style = { ...DARK, bg: p.surface };
+  if (inline) end.line = [seg(' '), seg(lines[lines.length - 1]), seg(' '.repeat(bw - 2 - last - tag.length)), seg(tag, dim), seg(' ')];
+  else rows.push({ x: w - bw, w: bw, bg, line: [seg(' '.repeat(Math.max(0, bw - 1 - tag.length))), seg(tag, dim), seg(' ')] });
+  return rows;
+}
+
+function stepRows(p: Painter, bot: Bot, run: ChatLine[], w: number): Row[] {
+  const rows: Row[] = [];
+  const hidden = run.length - FOLD;
+  const folded = hidden > 0 && !bot.open.has(run[0].id);
+  if (folded) {
+    const label = `+${plural(hidden, 'step')}`;
+    rows.push({ x: 0, w, line: [seg(label, DARK)], acts: [{ x: 0, w: label.length, fn: () => { bot.open.add(run[0].id); p.app.dirty(); } }] });
+  }
+  for (const l of folded ? run.slice(hidden) : run) rows.push({ x: 0, w, line: [seg(truncateRight(`▸ ${l.text}`, w), DARK)] });
+  return rows;
+}
+
+function errorRows(p: Painter, bot: Bot, l: ChatLine, w: number, last: boolean): Row[] {
+  const rows: Row[] = wrapText(l.text, w).map((t) => ({ x: 0, w, line: [seg(t, RED)] }));
+  if (!last || bot.turn) return rows;
+  const end = rows[rows.length - 1];
+  const x = width(end.line) + 1;
+  const label = ' retry ';
+  end.line = [...end.line, seg(' '), seg(label, { ...CYAN, add: BOLD })];
+  end.acts = [{ x, w: label.length, fn: () => p.app.bots.retry(bot) }];
+  return rows;
+}
+
+function botRows(l: ChatLine, bot: Bot, w: number): Row[] {
+  const head: Row = { x: 0, w, line: [seg(`${bot.name} · ${clock(l.at)}`, DARK)] };
+  return [head, ...markdown(l.text, w).map((line): Row => ({ x: 0, w, line }))];
+}
+
+function thinkingRow(p: Painter, bot: Bot, w: number): Row {
+  const turn = bot.turn;
+  if (!turn) return { x: 0, w, line: [] };
+  if (turn.stopping) return { x: 0, w, line: [seg(spin(p), { fg: 3 }), seg(' stopping…', DARK)] };
+  const steps = turn.steps ? ` · ${plural(turn.steps, 'step')}` : '';
+  const head = ` thinking · ${age(turn.since, p.app.now())}${steps}`;
+  const label = ' stop ';
+  return {
+    x: 0,
+    w,
+    line: [seg(spin(p), { fg: 3 }), seg(head, DARK), seg('  '), seg(label, CYAN)],
+    acts: [{ x: [...head].length + 3, w: label.length, fn: () => p.app.bots.stop(bot) }],
+  };
+}
+
+function block(p: Painter, bot: Bot, l: ChatLine, w: number, last: boolean): Row[] {
+  if (l.kind === 'you') return youRows(p, bot, l, w);
+  if (l.kind === 'bot') return botRows(l, bot, w);
+  if (l.kind === 'error') return errorRows(p, bot, l, w, last);
+  const text = `── ${l.text} ──`;
+  return [{ x: Math.max(0, Math.floor((w - [...text].length) / 2)), w, line: [seg(text, DARK)] }];
+}
+
+function chatRows(p: Painter, bot: Bot, w: number): Row[] {
+  const rows: Row[] = [];
+  let previous: ChatLine['kind'] | null = null;
+  const lines = bot.lines;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (previous !== null && l.kind !== 'step') rows.push({ x: 0, w, line: [] });
+    if (l.kind === 'step') {
+      const run = [l];
+      while (lines[i + 1]?.kind === 'step') run.push(lines[++i]);
+      rows.push(...stepRows(p, bot, run, w));
+    } else rows.push(...block(p, bot, l, w, i === lines.length - 1));
+    previous = l.kind;
+  }
+  if (bot.turn) {
+    rows.push(thinkingRow(p, bot, w));
+  }
+  return rows;
+}
+
+function emptyRows(p: Painter, bot: Bot, w: number): Row[] {
+  const intro = ['A bot is an agent of your own. It belongs to no project and keeps a memory.', 'It runs only when you write to it, and answers here. Try:'];
+  const rows: Row[] = intro.flatMap((line) => wrapText(line, Math.max(1, w))).map((t) => ({ x: Math.floor((w - [...t].length) / 2), w, line: [seg(t, DARK)] }));
+  rows.push({ x: 0, w, line: [] });
+  for (const text of EXAMPLES) {
+    const shown = truncateRight(text, w);
+    const x = Math.floor((w - [...shown].length) / 2);
+    rows.push({ x, w: w - x, line: [seg(shown, CYAN)], acts: [{ x: 0, w: [...shown].length, fn: () => p.app.bots.example(bot, text) }] });
+  }
+  return rows;
+}
+
+interface Layout {
+  header: Rect;
+  rule: Rect;
+  lines: Rect;
+  input: Rect;
+  text: Rect;
+  send: Rect;
+}
+
+function chatLayout(area: Rect, pitch: number, bot: Bot): Layout {
+  const sendW = buttonWidth(SEND);
+  const tw = Math.max(1, area.w - 2 - sendW - 1);
+  const rowsNeeded = Math.max(1, Math.min(MAX_INPUT, fieldLines(bot.draft, tw).length));
+  const h = Math.max(rowsNeeded, pitch);
+  const input = rect(area.x, bottom(area) - h, area.w, h);
+  const header = rect(area.x, area.y, area.w, pitch);
+  const rule = rect(area.x, area.y + pitch, area.w, 1);
+  const top = rule.y + 1;
+  return {
+    header,
+    rule,
+    lines: rect(area.x + 1, top, Math.max(0, area.w - 2), Math.max(0, input.y - 1 - top)),
+    input,
+    text: rect(area.x + 2, input.y, tw, rowsNeeded),
+    send: rect(right(area) - sendW - 1, input.y, sendW, pitch > 1 ? h : 1),
+  };
+}
+
+function drawHeader(p: Painter, l: Layout, bot: Bot): void {
+  const app = p.app;
+  const h = l.header;
+  const menu = rect(right(h) - 4, h.y, 3, h.h);
+  const wide = buttonWidth(NEW_CONVERSATION);
+  const fresh = rect(menu.x - 1 - wide, h.y, wide, h.h);
+  const room = Math.max(0, fresh.x - h.x - 2);
+  const name = truncateRight(bot.name, room);
+  const line: Line = [seg(' '), seg(name, { add: BOLD })];
+  const rest = room - [...name].length - 2;
+  if (rest > 3) line.push(seg('  '), seg(truncateRight(details(bot), rest), DARK));
+  p.band(h, line, {});
+  p.button(fresh, '', NEW_CONVERSATION, bot.turn ? DARK : p.buttonStyle(fresh, CYAN, 6));
+  p.region({ r: fresh, click: () => app.bots.newConversation(bot), cursor: 'pointer' });
+  p.button(menu, '', '⋯', p.buttonStyle(menu, CYAN, 6));
+  p.region({ r: menu, click: () => app.notify(MENU_LEFT_OUT), cursor: 'pointer' });
+  p.span(l.rule.x, l.rule.y, '─'.repeat(l.rule.w), { fg: p.lineColour });
+}
+
+function drawLines(p: Painter, area: Rect, bot: Bot): void {
+  const app = p.app;
+  const empty = !bot.lines.length && !bot.turn;
+  const rows = empty ? emptyRows(p, bot, area.w) : chatRows(p, bot, area.w);
+  const max = Math.max(0, rows.length - area.h);
+  bot.scroll = Math.min(bot.scroll, max);
+  p.region({ r: area, wheel: (dy) => app.bots.scrollTo(bot, -dy, max) });
+  const lift = empty ? Math.floor(Math.max(0, area.h - rows.length) / 2) : 0;
+  const start = rows.length - area.h - bot.scroll;
+  for (let y = 0; y < area.h; y++) {
+    const row = rows[empty ? y - lift : start + y];
+    if (!row) continue;
+    const r = rect(area.x + row.x, area.y + y, row.w, 1);
+    p.line(r, row.line, row.bg);
+    for (const a of row.acts ?? []) p.region({ r: rect(r.x + a.x, r.y, a.w, 1), click: a.fn, cursor: 'pointer' });
+  }
+  if (bot.scroll > 0 && bot.below) {
+    const label = ' ↓ new ';
+    const r = rect(right(area) - label.length, bottom(area) - 1, label.length, 1);
+    p.span(r.x, r.y, label, { fg: 0, bg: 6, add: BOLD });
+    p.region({ r, click: () => app.bots.scrollTo(bot, -bot.scroll, max), cursor: 'pointer' });
+  }
+}
+
+function drawInput(p: Painter, l: Layout, bot: Bot): void {
+  const app = p.app;
+  const bg: Style = { bg: p.surface };
+  const t = l.text;
+  p.g.fill(l.input, bg);
+  const draft = bot.draft;
+  const lines = fieldLines(draft, t.w);
+  const [line, col] = fieldPosition(draft, t.w);
+  const start = Math.max(0, line - (t.h - 1));
+  if (!draft.chars.length) p.span(t.x, t.y, truncateRight(`Message ${bot.name}…`, t.w), { ...bg, ...DARK }, t.w);
+  else {
+    lines.slice(start, start + t.h).forEach(([a, b], i) => {
+      const text = draft.chars.slice(a, b).filter((c) => c !== '\n').join('');
+      p.span(t.x, t.y + i, text, { ...bg, fg: p.app.light ? 0 : 15 }, t.w);
+    });
+    drawSelection(p, draft, t, start, bg);
+  }
+  if (!app.overlay) p.cursor = { shape: 'block', x: t.x + Math.min(col, t.w - 1), y: t.y + Math.min(line - start, t.h - 1) };
+  p.region({
+    r: t,
+    cursor: 'text',
+    click: (x, y) => placeIn(draft, t.w, start + (y - t.y), x - t.x),
+    field: {
+      edit: (change) => change(bot.draft, t.w),
+      focused: () => true,
+      spot: (x, y) => [start + (y - t.y), Math.max(0, x - t.x)],
+    },
+  });
+  p.button(l.send, '', SEND, p.buttonStyle(l.send, CYAN, 6));
+  p.region({ r: l.send, click: () => app.bots.send(bot, draft.chars.join('')), cursor: 'pointer' });
+}
+
+export function drawChat(p: Painter, area: Rect, bot: Bot, pitch: number): void {
+  if (area.h < pitch + 4 || area.w < 12) return;
+  p.g.clear(area);
+  const l = chatLayout(area, pitch, bot);
+  drawHeader(p, l, bot);
+  drawLines(p, l.lines, bot);
+  drawInput(p, l, bot);
+}
+
+const LABEL = 8;
+const ACCESS_NOTE: Record<string, string> = { cornercase: 'through cornercase', full: 'full access' };
+
+export function drawCard(p: Painter, areas: Areas): void {
+  const app = p.app;
+  const bot = app.bots.current();
+  const list = areas.workspacesList;
+  if (!bot) return;
+  p.title(areas.workspacesTitle, 'Bot');
+  const room = Math.max(1, list.w - LABEL - 2);
+  const entries: [string, string, Style?][] = [
+    ['agent', bot.agent === 'codex' ? 'Codex' : 'Claude Code'],
+    ['model', bot.model || "the agent's own"],
+    ...(bot.effort ? [['effort', bot.effort] as [string, string]] : []),
+    ...(bot.account ? [['account', bot.account] as [string, string]] : []),
+    ['access', ACCESS_NOTE[bot.access], bot.access === 'full' ? RED : undefined],
+    ['folder', app.bots.folder(bot)],
+    ['made', new Date(bot.made).toISOString().slice(0, 10)],
+  ];
+  let y = list.y;
+  p.span(list.x + 1, y, bot.name, { fg: DEFAULT, add: BOLD }, list.w - 1);
+  y += 2;
+  for (const [label, value, style] of entries) {
+    const rows = label === 'folder' ? [truncateRight(value, room)] : wrapText(value, room);
+    rows.forEach((text, i) => {
+      if (y >= bottom(list)) return;
+      if (i === 0) p.span(list.x + 1, y, label, DARK, LABEL);
+      p.span(list.x + 1 + LABEL, y, text, style ?? {}, room);
+      if (label === 'folder') p.region({ r: rect(list.x + 1 + LABEL, y, room, 1), click: () => app.notify('copied to clipboard'), cursor: 'pointer' });
+      y += 1;
+    });
+  }
+}

@@ -1,7 +1,7 @@
 use ratatui::layout::{Position, Rect};
 
 use super::changes;
-use super::layout::{Border, STACKED_KEEP, Screen, split_agents, stack_room};
+use super::layout::{Border, STACKED_KEEP, Screen, split_agents, split_bots, stack_room};
 use crate::state::Widths;
 
 pub const SIDEBAR_WIDTH: u16 = 32;
@@ -96,6 +96,12 @@ impl Widths {
         self.agents.unwrap_or(room / 3).clamp(MIN_STACK_SECTION, room - keep)
     }
 
+    fn above_sections(self, room: Rect, screen: Screen) -> u16 {
+        let full = Rect { height: room.height + 1, ..room };
+        let full = if screen.agents { split_agents(full, self, STACKED_KEEP)[0] } else { full };
+        split_bots(full, screen, 1, STACKED_KEEP)[0].height
+    }
+
     #[must_use]
     pub(crate) fn stacked_dragged(self, border: Border, pos: Position, area: Rect, screen: Screen) -> Self {
         match border {
@@ -105,9 +111,8 @@ impl Widths {
             }
             Border::Stack => {
                 let mut room = stack_room(area, screen);
-                if screen.agents {
-                    let [rest, ..] = split_agents(Rect { height: room.height + 1, ..room }, self, STACKED_KEEP);
-                    room.height = rest.height.saturating_sub(1);
+                if screen.agents || screen.bots > 0 {
+                    room.height = self.above_sections(room, screen).saturating_sub(1);
                 }
                 let wanted = Self { stack: Some(pos.y.saturating_sub(room.y)), ..self };
                 Self { stack: Some(wanted.top_rows(room.height)), ..self }

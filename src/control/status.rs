@@ -30,6 +30,8 @@ pub struct Report {
     pub(crate) machines: Vec<MachineSeen>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) shown_remote: Option<ShownRemote>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) shown_bot: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) tunnels: Vec<TunnelInfo>,
 }

@@ -1,15 +1,15 @@
 use ratatui::Frame;
-use ratatui::layout::{Margin, Position, Rect};
+use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
-use super::{buttons_in, draw_dialog_buttons};
-use crate::editor::Editor;
+use super::{bottom_buttons, centred_in, draw_dialog_buttons, inset, padded, row_in, with_list};
 use crate::queue::form::{Control, Form, When};
 use crate::ui::View;
 use crate::ui::combo;
-use crate::ui::widgets::{overlay_block, paint_selection};
+use crate::ui::widgets::overlay_block;
+use crate::ui::widgets::{EditorField, draw_editor};
 
 const LABEL: u16 = 9;
 const HEIGHT: u16 = 23;
@@ -38,22 +38,19 @@ pub(crate) enum Hit {
 }
 
 pub(crate) fn area(screen: Rect) -> Rect {
-    let width = screen.width.saturating_sub(2).min(72);
-    let height = screen.height.min(HEIGHT);
-    Rect::new(screen.x + (screen.width - width) / 2, screen.y + (screen.height - height) / 2, width, height)
+    centred_in(screen, 72, HEIGHT)
 }
 
 pub(crate) fn area_with_list(screen: Rect, form: &Form) -> Rect {
-    list(screen, form).map_or_else(|| area(screen), |list| area(screen).union(list))
+    with_list(area(screen), list(screen, form))
 }
 
 fn inner(screen: Rect) -> Rect {
-    area(screen).inner(Margin::new(2, 1))
+    padded(area(screen))
 }
 
 fn row(screen: Rect, at: u16, height: u16) -> Rect {
-    let r = inner(screen);
-    Rect::new(r.x, r.y.saturating_add(at), r.width, height).intersection(r)
+    row_in(inner(screen), at, height)
 }
 
 fn cell(screen: Rect, at: u16, x: u16, width: u16) -> Rect {
@@ -97,11 +94,7 @@ fn clock_at(kind: When, on: bool) -> u16 {
 
 pub(crate) fn text(screen: Rect, form: &Form, control: Control) -> Rect {
     let r = rect(screen, form, control);
-    if control == Control::Prompt {
-        r
-    } else {
-        Rect { x: r.x.saturating_add(1), width: r.width.saturating_sub(1), ..r }
-    }
+    if control == Control::Prompt { r } else { inset(r) }
 }
 
 pub(crate) fn list(screen: Rect, form: &Form) -> Option<Rect> {
@@ -110,8 +103,7 @@ pub(crate) fn list(screen: Rect, form: &Form) -> Option<Rect> {
 }
 
 fn buttons(screen: Rect) -> [Rect; 2] {
-    let r = inner(screen);
-    buttons_in(Rect { y: r.bottom().saturating_sub(1), height: 1, ..r }, "schedule", "cancel")
+    bottom_buttons(inner(screen), "schedule")
 }
 
 fn note(screen: Rect) -> Rect {
@@ -121,15 +113,12 @@ fn note(screen: Rect) -> Rect {
     Rect::new(r.x, y, r.width, buttons - y)
 }
 
-pub(crate) fn first_line(editor: &Editor, field: Rect) -> usize {
-    let (line, _) = editor.position(usize::from(field.width.max(1)));
-    line.saturating_sub(usize::from(field.height).saturating_sub(1))
-}
-
 pub(crate) fn hit(screen: Rect, form: &Form, pos: Position) -> Option<Hit> {
-    if let (Some(open), Some(list)) = (form.opened(), list(screen, form)) {
-        let choice = form.combo_of(open).and_then(|combo| combo::hit(list, combo, pos));
-        return Some(choice.map_or(Hit::Close, Hit::Choose));
+    let open = form.opened().and_then(|open| form.combo_of(open));
+    match combo::open_hit(list(screen, form), open, pos) {
+        Some(combo::Choice::Item(i)) => return Some(Hit::Choose(i)),
+        Some(combo::Choice::Outside) => return Some(Hit::Close),
+        None => {}
     }
     let [submit, cancel] = buttons(screen);
     if submit.contains(pos) {
@@ -144,48 +133,6 @@ pub(crate) fn hit(screen: Rect, form: &Form, pos: Position) -> Option<Hit> {
             Hit::Control(control, usize::from(pos.y.saturating_sub(t.y)), usize::from(pos.x.saturating_sub(t.x)))
         })
     })
-}
-
-#[derive(Clone, Copy)]
-struct EditorField<'a> {
-    field: Rect,
-    text: Rect,
-    focused: bool,
-    placeholder: &'a str,
-}
-
-fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: EditorField) {
-    let EditorField { field, text: r, focused, placeholder } = at;
-    let bg = Style::default().bg(view.surface());
-    f.render_widget(Paragraph::new("").style(bg), field);
-    let width = usize::from(r.width.max(1));
-    let (line, col) = editor.position(width);
-    let start = first_line(editor, r);
-    if editor.is_empty() && !placeholder.is_empty() {
-        f.render_widget(Paragraph::new(placeholder).style(bg.fg(view.muted)), r);
-    } else {
-        let chars: Vec<_> = editor
-            .text()
-            .chars()
-            .map(|c| match c {
-                c if c.is_control() => ' ',
-                c => c,
-            })
-            .collect();
-        let lines: Vec<_> =
-            editor.lines(width).into_iter().skip(start).map(|range| chars[range].iter().collect::<String>()).collect();
-        let text = bg.fg(if view.light { Color::Black } else { Color::White }).add_modifier(Modifier::BOLD);
-        f.render_widget(Paragraph::new(lines.join("\n")).style(text), r);
-    }
-    if focused {
-        paint_selection(f.buffer_mut(), r, start, &editor.highlight(width));
-    }
-    if focused && !r.is_empty() {
-        f.set_cursor_position(Position::new(
-            r.x + u16::try_from(col).unwrap_or_default().min(r.width.saturating_sub(1)),
-            r.y + u16::try_from(line - start).unwrap_or_default().min(r.height.saturating_sub(1)),
-        ));
-    }
 }
 
 fn hint(form: &Form) -> &'static str {
@@ -303,9 +250,6 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     draw_cleanup(f, view, screen, form);
     draw_notes(f, view, screen, form);
     draw_dialog_buttons(f, view, buttons(screen), "schedule", "cancel");
-    if let (Some(open), Some(list)) = (form.opened(), list(screen, form))
-        && let Some(choices) = form.combo_of(open)
-    {
-        combo::draw_list(f, view, list, choices);
-    }
+    let open = form.opened().and_then(|open| form.combo_of(open));
+    combo::draw_open(f, view, list(screen, form), open);
 }

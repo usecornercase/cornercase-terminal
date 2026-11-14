@@ -262,7 +262,8 @@ fn a_long_message_starts_the_post_and_the_rest_follows_in_the_thread() {
     let Some(post) = posts(&got).first().copied().cloned() else { panic!("no post in {got:?}") };
     let held = sends(&got).len();
     posting.posted(&post);
-    let rest = posting.sent();
+    let mut rest = posting.waits("the rest", |order| matches!(order, Order::Send { .. }));
+    rest.extend(posting.sent());
 
     let Order::Post { text, .. } = &post else { panic!("not a post") };
     assert!(text.chars().count() <= 2000, "{}", text.chars().count());

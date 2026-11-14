@@ -7,7 +7,7 @@ const STREAM: &str = r#"{"type":"system","subtype":"init","model":"claude-opus-5
 {"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"text","text":"hello from the bot"}]}}
 {"type":"result","subtype":"success","is_error":false,"result":"hello from the bot","session_id":"s1","usage":{"input_tokens":3,"output_tokens":4}}"#;
 
-fn started() -> Arc<Session> {
+pub(super) fn with_agent() -> Arc<Session> {
     let session = Session::new();
     let claude = session.dir.join("claude-bot");
     write_executable(
@@ -16,6 +16,11 @@ fn started() -> Arc<Session> {
     );
     let config = serde_json::json!({"agent_commands": agent_commands(&[("claude", &claude)]), "agent": "claude"});
     std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");
+    session
+}
+
+pub(super) fn started() -> Arc<Session> {
+    let session = with_agent();
     let started = session.cold(&["start-server"]);
     assert!(started.status.success(), "start-server failed: {started:?}");
     session
@@ -49,4 +54,22 @@ fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped()
     let kill = session.command().env("CORNERCASE_BOT", "prs").arg("kill-server").output().expect("run");
     assert!(refused(&kill, 2, "a bot cannot stop its own server"), "{kill:?}");
     assert!(session.says(&["status", "--json"]).contains("\"projects\""));
+}
+
+#[test]
+fn a_bot_made_from_the_form_answers_in_its_chat() {
+    let session = started();
+    let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+
+    ui.pick_in_more("new bot…");
+    ui.wait_for("the form opens", |s| s.contains("New bot") && s.contains("For"));
+    ui.send(b"prs");
+    ui.click(ui.position_of("create"));
+    ui.wait_for("its empty chat shows", |s| s.contains("Message prs…"));
+    ui.send(b"which are blocked?\r");
+    ui.wait_for("its answer is drawn", |s| s.contains("hello from the bot") && s.contains("cornercase status --json"));
+
+    let history = session.says(&["bot", "history", "prs"]);
+    assert!(history.starts_with("you · ") && history.contains("which are blocked?"), "{history}");
 }

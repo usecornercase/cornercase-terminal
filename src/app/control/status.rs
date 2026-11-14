@@ -114,6 +114,7 @@ impl App {
             home: self.home.clone(),
             machines: self.machines_seen(),
             shown_remote: self.shown_remote_info(),
+            shown_bot: self.shown_bot_id(),
             tunnels: self.tunnel_infos(),
         }
     }

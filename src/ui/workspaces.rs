@@ -305,6 +305,10 @@ impl From<String> for TabEntry {
 }
 
 pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
+    if let Some(card) = &view.bot_card {
+        super::bots::card::draw_card(f, view, card, areas);
+        return;
+    }
     if areas.back.is_empty() {
         draw_title(f, view.muted, areas.workspaces_title, "Workspaces");
     } else {

@@ -378,7 +378,7 @@ mod help {
         render(&mut app, AREA);
         let more = app_areas(&app).more.as_position();
         click(&mut app, more);
-        assert_eq!(menu(&app), ["settings", "usage", "processes", "quit"]);
+        assert_eq!(menu(&app), ["new bot…", "settings", "usage", "processes", "quit"]);
     }
 
     #[test]

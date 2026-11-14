@@ -1,0 +1,28 @@
+---
+source: src/ui/tests/chat.rs
+expression: drawn(view).backend()
+---
+"  prs  claude · opus · high · home                        new conversation   ⋯  "
+" ────────────────────────────────────────────────────────────────────────────── "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"  A bot is an agent of your own. It belongs to no project and keeps a memory.   "
+"           It runs only when you write to it, and answers here. Try:            "
+"                                                                                "
+"              Which of my open pull requests are blocked, and why?              "
+"              What did my agents get done today, in every project?              "
+"           Which issues labelled bug came in today, in every project?           "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"  Message prs…                                                            send  "

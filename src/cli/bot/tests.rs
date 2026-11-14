@@ -1,4 +1,4 @@
-use super::text::{agents, chat, event_text, list, when};
+use super::text::{agents, chat, event_text, list};
 use crate::agents::headless::Used;
 use crate::bots::chat::Line;
 use crate::control::bots::{AgentInfo, BotInfo, BotLast};
@@ -8,12 +8,6 @@ const NOON: i64 = 1_794_571_200;
 
 fn line(id: u64, at: i64, make: impl FnOnce(u64, i64) -> Line) -> Line {
     make(id, at)
-}
-
-#[test]
-fn a_time_today_is_the_hour_and_another_day_names_the_day() {
-    assert_eq!(when(NOON - 3_600, NOON, ZONE), "11:00");
-    assert_eq!(when(NOON - 86_400 * 2, NOON, ZONE), "Wed 11 Nov 12:00");
 }
 
 #[test]

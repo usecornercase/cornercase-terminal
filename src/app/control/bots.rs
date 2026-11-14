@@ -32,7 +32,6 @@ impl App {
         let answer = match request {
             BotRequest::Remove(target) => {
                 let id = self.bot_remove(&target.bot)?;
-                self.publish_bot_removed(&id);
                 json!({ "bot": id })
             }
             BotRequest::Reset(target) => {

@@ -274,7 +274,7 @@ impl App {
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return None };
         let text = ui::queue_form::text(area, form, control);
         let editor = form.editor(control)?;
-        let top = ui::queue_form::first_line(editor, text);
+        let top = ui::first_line(editor, text);
         Some((FieldArea { text, width: usize::from(text.width.max(1)), top, scrolls: false }, editor))
     }
 
@@ -552,11 +552,7 @@ fn wheel_lists(form: &mut Form, delta: isize, area: Rect) {
 
 fn choose_in_list(form: &mut Form, i: usize) -> Option<Control> {
     let open = form.opened()?;
-    let changed = form.combo(open).is_some_and(|combo| {
-        let changed = combo.chosen() != Some(i);
-        combo.choose(i);
-        changed
-    });
+    let changed = form.combo(open).is_some_and(|combo| combo.pick(i));
     if !changed {
         return None;
     }
@@ -573,7 +569,7 @@ fn press_control(form: &mut Form, area: Rect, (control, row, col): (Control, usi
         return;
     }
     if let Some(editor) = form.editor(control) {
-        let line = ui::queue_form::first_line(editor, r) + row;
+        let line = ui::first_line(editor, r) + row;
         editor.place(usize::from(r.width.max(1)), line, col);
     } else if opening {
         form.combo(control).into_iter().for_each(Combo::open);

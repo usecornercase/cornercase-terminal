@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-agents machines-run-on machines-clone"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-agents machines-run-on machines-clone"
 
 pane_in() {
   cc status --json | node -e '
@@ -1386,6 +1386,52 @@ screen_queue() {
   cc_wait 'clear started'
   cc_hover 'Issues · web-shop'
   cc_shot queue
+}
+
+screen_bots() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  node -e '
+    const fs = require("fs");
+    const dir = process.argv[1];
+    const now = Math.floor(Date.now() / 1000);
+    const bots = [
+      { id: "prs", name: "prs", agent: "claude", model: "opus", effort: "high", access: "cornercase", created: now - 86400 * 3, about: "Review my open pull requests and tell me which are blocked.\n", unread: false },
+      { id: "digest", name: "digest", agent: "claude", model: "sonnet", access: "cornercase", created: now - 86400 * 2, about: "A short digest of what merged yesterday.\n", unread: true },
+    ];
+    const answer = "Two are **blocked**:\n\n- #482 waits for a review from Ana\n- #490 fails `test (macos)`\n\nTo retry the failing job:\n\n```sh\ngh run rerun --failed\n```";
+    const digest = "Yesterday in **web-shop**:\n\n- 4 pull requests merged, #476 the last\n- `feat/gift-cards` still waits for tests";
+    const chats = {
+      prs: [
+        { id: 1, at: now - 540, kind: "you", text: "which of my pull requests are blocked?" },
+        { id: 2, at: now - 500, kind: "step", text: "cornercase status --json", tool: "Bash" },
+        { id: 3, at: now - 480, kind: "step", text: "gh pr checks 490", tool: "Bash" },
+        { id: 4, at: now - 420, kind: "bot", text: answer, model: "claude-opus-5-5" },
+        { id: 5, at: now - 300, kind: "notice", text: "new conversation" },
+      ],
+      digest: [
+        { id: 1, at: now - 7200, kind: "you", text: "what merged yesterday?" },
+        { id: 2, at: now - 7180, kind: "step", text: "cornercase status --json", tool: "Bash" },
+        { id: 3, at: now - 7100, kind: "bot", text: digest, model: "claude-sonnet-5-5" },
+      ],
+    };
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    for (const { about, unread, ...bot } of bots) {
+      const folder = dir + "/" + bot.id;
+      fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(folder + "/bot.json", JSON.stringify(bot, null, 2), { mode: 0o600 });
+      fs.writeFileSync(folder + "/bot.md", about, { mode: 0o600 });
+      fs.writeFileSync(folder + "/memory.md", "", { mode: 0o600 });
+      fs.writeFileSync(folder + "/chat.jsonl", chats[bot.id].map((line) => JSON.stringify(line) + "\n").join(""), { mode: 0o600 });
+      fs.chmodSync(folder, 0o700);
+    }
+    fs.chmodSync(dir, 0o700);
+  ' "$CC_RUN/server.bots"
+  cc_start 140 38
+  cc_wait 'Bots'
+  cc_click 'prs'
+  cc_wait 'Message prs…'
+  cc_shot bots
 }
 
 screen_queue_routine() {

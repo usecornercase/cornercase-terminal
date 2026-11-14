@@ -208,7 +208,8 @@ fn an_answer_nobody_waits_for_is_unread_and_makes_a_toast_and_a_notification() {
     c.settle();
     assert_eq!(c.app.panels.bots.live[0].unread, 1);
     let toast = c.app.messages.toast.as_ref().expect("a toast");
-    assert_eq!((toast.message.as_str(), toast.go.as_deref()), ("PRs: Two are blocked.", None));
+    assert_eq!(toast.message.as_str(), "PRs: Two are blocked.");
+    assert!(toast.go.is_some());
     let notes = c.app.outbox.take_notifications();
     assert_eq!(notes.len(), 1);
     assert_eq!(notes[0].text, "PRs: Two are blocked.");
@@ -309,3 +310,21 @@ fn the_server_stopping_ends_the_turns_that_run() {
     assert!(c.app.panels.bots.live[0].turn.is_none());
     std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
 }
+
+#[test]
+fn editing_what_a_bot_is_for_writes_bot_md() {
+    let mut c = chat(ANSWER);
+    let edit = crate::control::bots::EditBot {
+        bot: "prs".into(),
+        about: Some("Review pull requests.".into()),
+        ..crate::control::bots::EditBot::default()
+    };
+    c.app.bot_edit(&edit).expect("edited");
+    let (about, _) = folder::notes(&c.app.panels.bots.live[0].folder);
+    assert_eq!(about, "Review pull requests.");
+}
+
+mod compact;
+mod form;
+mod menu;
+mod window;
