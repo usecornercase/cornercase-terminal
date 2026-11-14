@@ -30,6 +30,7 @@ new_case() {
     : >"$FAKE/runs"
     : >"$FAKE/jobs"
     : >"$FAKE/told"
+    : >"$FAKE/log"
     cat >"$FAKE/bin/gh" <<'GH'
 #!/bin/sh
 echo "gh $*" >>"$FAKE/calls"
@@ -43,7 +44,12 @@ case "$1 $2" in
         done
         ;;
     "run list") cat "$FAKE/runs" ;;
-    "run view") cat "$FAKE/jobs" ;;
+    "run view")
+        case "$*" in
+            *--log-failed*) if [ -e "$FAKE/log_fails" ]; then exit 1; fi; cat "$FAKE/log" ;;
+            *) cat "$FAKE/jobs" ;;
+        esac
+        ;;
     "issue list")
         case "$*" in
             *"--state all"*) cat "$FAKE/issues" ;;
@@ -51,7 +57,8 @@ case "$1 $2" in
         esac
         ;;
     "issue view") cat "$FAKE/told" ;;
-    "workflow run" | "run rerun" | "issue create" | "issue comment") ;;
+    "run rerun") if [ -e "$FAKE/rerun_fails" ]; then exit 1; fi ;;
+    "workflow run" | "issue create" | "issue comment") ;;
     *) exit 1 ;;
 esac
 GH
@@ -101,6 +108,14 @@ expect_no_rerun() {
     if grep -q '^gh run rerun' "$FAKE/calls"; then fail_case "the calls hold a re-run"; fi
 }
 
+expect_rerun() {
+    grep -qx 'gh run rerun 42 --failed' "$FAKE/calls" || fail_case "the calls lack the re-run of run 42"
+}
+
+expect_no_dispatch() {
+    if grep -q '^gh workflow run' "$FAKE/calls"; then fail_case "the calls hold a dispatch"; fi
+}
+
 run_script() {
     if ! sh "$script" "$@" >"$FAKE/out" 2>&1; then fail_case "the script exited with an error"; fi
 }
@@ -122,7 +137,16 @@ never_started() {
 }
 
 real_failure() {
-    printf '15 build-local-artifacts (x86_64-apple-darwin)\n0 build-local-artifacts (aarch64-apple-darwin)\n' >"$FAKE/jobs"
+    printf '15 build-local-artifacts (x86_64-apple-darwin): Build artifacts\n0 build-local-artifacts (aarch64-apple-darwin)\n' >"$FAKE/jobs"
+}
+
+host_failed_at() {
+    printf '12 host: %s\n' "$1" >"$FAKE/jobs"
+    printf 'host\t%s\t2026-11-14T10:01:17.7149943Z ##[error]%s\n' "$1" "$2" >"$FAKE/log"
+}
+
+manifest_race() {
+    host_failed_at "Download GitHub Artifacts" "Unable to download artifact(s): No artifacts found for ID: 14108639112"
 }
 
 dist_body() {
@@ -139,6 +163,7 @@ BODY
 
 no_writes() {
     expect_no_rerun
+    expect_no_dispatch
     expect_no_call "issue create"
     expect_no_call "issue comment"
 }
@@ -161,6 +186,7 @@ expect_output "needs a new version"
 new_case "a new version is tagged and released"
 run_script release
 expect_call "gh workflow run release.yml --ref v0.3.0 -f tag=v0.3.0"
+expect_call "gh workflow run release-watch.yml --ref main -f wait=50"
 git -C "$dir/origin.git" rev-parse -q --verify refs/tags/v0.3.0 >/dev/null || fail_case "v0.3.0 was not pushed"
 
 new_case "a tag with its release is left alone"
@@ -175,6 +201,7 @@ tag_released
 printf 'v0.2.0\nv0.1.0\n' >"$FAKE/releases"
 run_script release
 expect_call "gh workflow run release.yml --ref v0.3.0 -f tag=v0.3.0"
+expect_call "gh workflow run release-watch.yml --ref main -f wait=50"
 if git -C "$dir/origin.git" rev-parse -q --verify refs/tags/v0.3.0 >/dev/null; then fail_case "a tag was pushed"; fi
 
 new_case "a tag whose run has not ended waits"
@@ -298,7 +325,8 @@ tag_released
 last_run 1 failure
 never_started
 run_script watch
-expect_call "gh run rerun 42 --failed"
+expect_rerun
+expect_call "gh workflow run release-watch.yml --ref main -f wait=50"
 expect_no_call "issue create"
 expect_no_call "issue comment"
 
@@ -307,7 +335,7 @@ tag_released
 last_run 2 failure
 never_started
 run_script watch
-expect_call "gh run rerun 42 --failed"
+expect_rerun
 
 new_case "watch tells when the third attempt never started either"
 tag_released
@@ -315,6 +343,7 @@ last_run 3 failure
 never_started
 run_script watch
 expect_no_rerun
+expect_no_dispatch
 expect_call "gh issue create --title Release v0.3.0 failed"
 expect_call "never started"
 expect_call "runs/42/attempts/3"
@@ -334,6 +363,104 @@ never_started
 run_script watch
 expect_no_rerun
 expect_call "issue create"
+
+new_case "watch re-runs a host job that could not download the manifest it had just uploaded"
+tag_released
+last_run 1 failure
+manifest_race
+run_script watch
+expect_rerun
+expect_call "--log-failed"
+expect_call "gh workflow run release-watch.yml --ref main -f wait=50"
+expect_no_call "issue create"
+expect_no_call "issue comment"
+expect_output "attempt 2 of 3"
+
+new_case "watch re-runs the lost manifest again on the second attempt"
+tag_released
+last_run 2 failure
+manifest_race
+run_script watch
+expect_rerun
+
+new_case "watch tells when the third attempt lost the manifest too"
+tag_released
+last_run 3 failure
+manifest_race
+run_script watch
+expect_no_rerun
+expect_no_dispatch
+expect_call "gh issue create --title Release v0.3.0 failed"
+expect_call "No artifacts found for ID"
+expect_call "runs/42/attempts/3"
+
+new_case "watch leaves the lost manifest to a person once the tag has a release"
+tag_released
+printf 'v0.3.0\nv0.2.0\nv0.1.0\n' >"$FAKE/releases"
+last_run 1 failure
+manifest_race
+run_script watch
+expect_no_rerun
+expect_call "issue create"
+expect_call "after its GitHub Release was published"
+
+new_case "watch tells a host job that failed at another step"
+tag_released
+last_run 1 failure
+host_failed_at "Create GitHub Release" "Process completed with exit code 1."
+run_script watch
+expect_no_rerun
+expect_call "issue create"
+
+new_case "watch tells a host job that lost an artifact at another step"
+tag_released
+last_run 1 failure
+host_failed_at "Fetch artifacts" "Unable to download artifact(s): No artifacts found for ID: 14108639112"
+run_script watch
+expect_no_rerun
+expect_call "issue create"
+
+new_case "watch tells a host job that failed to download for another reason"
+tag_released
+last_run 1 failure
+host_failed_at "Download GitHub Artifacts" "Unable to download artifact(s): Failed to ListArtifacts: Unable to make request: ENOTFOUND"
+run_script watch
+expect_no_rerun
+expect_call "issue create"
+
+new_case "watch tells a lost manifest when another job failed too"
+tag_released
+last_run 1 failure
+manifest_race
+echo "15 build-local-artifacts (x86_64-apple-darwin): Build artifacts" >>"$FAKE/jobs"
+run_script watch
+expect_no_rerun
+expect_call "issue create"
+
+new_case "watch tells a lost manifest whose log cannot be read"
+tag_released
+last_run 1 failure
+manifest_race
+touch "$FAKE/log_fails"
+run_script watch
+expect_no_rerun
+expect_call "issue create"
+
+new_case "watch re-runs nothing in a cancelled run that shows a lost manifest"
+tag_released
+last_run 1 cancelled
+manifest_race
+run_script watch
+expect_no_rerun
+expect_no_dispatch
+
+new_case "watch dispatches no later watch when GitHub refuses the re-run"
+tag_released
+last_run 1 failure
+never_started
+touch "$FAKE/rerun_fails"
+run_script_failing watch
+expect_no_dispatch
 
 new_case "watch waits while a Release run of the newest tag has not ended"
 tag_released
@@ -356,7 +483,7 @@ new_case "watch tells a failure after the release was published"
 tag_released
 printf 'v0.3.0\nv0.2.0\nv0.1.0\n' >"$FAKE/releases"
 last_run 1 failure
-echo "6 publish-homebrew-formula" >"$FAKE/jobs"
+echo "6 publish-homebrew-formula: Commit formula files" >"$FAKE/jobs"
 run_script watch
 expect_call "issue create"
 expect_call "after its GitHub Release was published"
@@ -412,6 +539,7 @@ if git rev-parse -q --verify refs/tags/v0.3.0 >/dev/null; then fail_case "a tag 
 if git -C "$dir/origin.git" rev-parse -q --verify refs/tags/v0.3.0 >/dev/null; then fail_case "a tag was pushed"; fi
 expect_no_call "workflow run"
 expect_output "dry run: gh workflow run"
+expect_output "dry run: gh workflow run release-watch.yml --ref main -f wait=50"
 
 new_case "a dry run of watch re-runs nothing"
 tag_released
@@ -419,7 +547,9 @@ last_run 1 failure
 never_started
 DRY_RUN=1 run_script watch
 expect_no_rerun
+expect_no_dispatch
 expect_output "dry run: gh run rerun 42 --failed"
+expect_output "dry run: gh workflow run release-watch.yml --ref main -f wait=50"
 
 if [ "$failures" -ne 0 ]; then
     echo "$failures checks failed in $cases cases"

@@ -4,19 +4,35 @@ on:
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
-
-concurrency:
-  group: release-watch
-  cancel-in-progress: false
+    inputs:
+      wait:
+        description: Minutes to wait before watching, at most 55 (version.sh passes 50 after it dispatches or re-runs a Release run)
+        type: number
+        default: 0
 
 permissions: {}
 
 jobs:
+  wait:
+    name: wait before watching
+    if: ${{ github.ref == 'refs/heads/main' && inputs.wait > 0 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: wait
+        env:
+          WAIT: ${{ inputs.wait }}
+        run: sleep "${WAIT}m"
+
   watch:
     name: re-run, tell and complete the newest releases
-    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: wait
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    concurrency:
+      group: release-watch
+      cancel-in-progress: false
     permissions:
       actions: write
       contents: write

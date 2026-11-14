@@ -9,17 +9,26 @@ fail() {
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
 latest=$(git tag --list 'v*' --sort=-v:refname | head -n 1 | sed 's/^v//')
 attempts=3
+later=50
 
 run() { if [ -n "${DRY_RUN:-}" ]; then echo "dry run: $*"; else "$@"; fi; }
 app_changes() { git diff --name-only "$@" -- src Cargo.toml Cargo.lock rust-toolchain.toml .cargo; }
 releases() { gh release list --exclude-drafts --limit 100 --json tagName --jq '.[].tagName'; }
 listed() { printf '%s\n' "$2" | grep -qx "$1"; }
-dispatch() { run gh workflow run release.yml --ref "$1" -f tag="$1"; }
+watch_later() { run gh workflow run release-watch.yml --ref main -f wait="$later"; }
+dispatch() { run gh workflow run release.yml --ref "$1" -f tag="$1"; watch_later; }
 runs() { gh run list --workflow release.yml --branch "$1" --json databaseId,status,attempt,url,conclusion --jq '.[] | "\(.databaseId) \(.status) \(.attempt) \(.url) \(.conclusion)"'; }
 ongoing() { printf '%s\n' "$1" | awk 'NF && $2 != "completed" { found = 1 } END { exit !found }'; }
-broken_jobs() { gh run view "$1" --attempt "$2" --json jobs --jq '.jobs[] | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral") | "\(.steps | length) \(.name)"'; }
+broken_jobs() { gh run view "$1" --attempt "$2" --json jobs --jq '.jobs[] | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral") | "\(.steps | length) \(.name)\(.steps | map(select(.conclusion == "failure") | ": " + .name) | join(""))"'; }
 newest_release() { printf '%s\n' $1 | sed 's/^v//' | sort -V | tail -n 1; }
 is_tag() { git rev-parse -q --verify "refs/tags/$1" >/dev/null; }
+
+lost_manifest() {
+    [ "$4" = "host: Download GitHub Artifacts" ] || return 1
+    released=$(releases) || return 1
+    ! listed "$1" "$released" || return 1
+    gh run view "$2" --attempt "$3" --log-failed | grep -qF 'No artifacts found for ID'
+}
 
 newer() {
     [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
@@ -191,16 +200,22 @@ settle() {
     esac
     jobs=$(broken_jobs "$run_id" "$run_attempt")
     never=$(printf '%s\n' "$jobs" | awk '$1 == 0 { sub(/^0 /, ""); print }')
-    started=$(printf '%s\n' "$jobs" | awk 'NF && $1 != 0')
+    started=$(printf '%s\n' "$jobs" | awk 'NF && $1 != 0 { sub(/^[0-9]+ /, ""); print }')
+    retry=""
     why=""
     if [ "$run_conclusion" = failure ] && [ -n "$never" ] && [ -z "$started" ]; then
-        if [ "$run_attempt" -lt "$attempts" ]; then
-            run gh run rerun "$run_id" --failed
-            echo "re-running the jobs of $newest's Release run that never started (attempt $((run_attempt + 1)) of $attempts)"
-            return
-        fi
+        retry="the jobs of $newest's Release run that never started"
         names=$(printf '%s\n' "$never" | awk 'NR > 1 { printf ", " } { printf "`%s`", $0 }')
         why="Release watch stops re-running it after $run_attempt attempts in which these jobs never started (no runner took them): $names."
+    elif [ "$run_conclusion" = failure ] && [ -z "$never" ] && lost_manifest "$newest" "$run_id" "$run_attempt" "$started"; then
+        retry="the host job of $newest's Release run, which could not download the dist manifest it had just uploaded"
+        why="Release watch stops re-running it after $run_attempt attempts: in the last one, \`host\` failed at \`Download GitHub Artifacts\` with \`No artifacts found for ID\`, as GitHub listed the manifest the job had just uploaded but could not serve it yet."
+    fi
+    if [ -n "$retry" ] && [ "$run_attempt" -lt "$attempts" ]; then
+        run gh run rerun "$run_id" --failed
+        watch_later
+        echo "re-running $retry (attempt $((run_attempt + 1)) of $attempts)"
+        return
     fi
     failed "$newest" "$run_url" "$run_attempt" "$why"
 }
