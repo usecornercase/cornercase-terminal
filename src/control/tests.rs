@@ -206,8 +206,12 @@ fn newest_commands() -> Vec<Command> {
     ]
 }
 
+fn latest_commands() -> Vec<Command> {
+    vec![Command::Bot(bots::BotRequest::List)]
+}
+
 pub(crate) fn every_command() -> Vec<Command> {
-    [first_commands(), middle_commands(), last_commands(), newest_commands()].concat()
+    [first_commands(), middle_commands(), last_commands(), newest_commands(), latest_commands()].concat()
 }
 
 #[test]

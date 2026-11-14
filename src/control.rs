@@ -9,6 +9,7 @@ use serde_json::Value;
 pub(crate) mod accounts;
 mod app_state;
 pub(crate) mod arrange;
+pub(crate) mod bots;
 pub(crate) mod changes;
 pub(crate) mod clone;
 pub(crate) mod closed_agents;
@@ -287,6 +288,7 @@ pub(crate) enum Command {
     TunnelOrders(TunnelOrders),
     TunnelFailed(TunnelFailed),
     FreeMergedBuilds(FreeMergedBuilds),
+    Bot(bots::BotRequest),
 }
 
 impl Command {
@@ -491,6 +493,7 @@ impl Command {
             Self::Worktrees(_) => 112,
             Self::WorktreesRemove(_) => 123,
             Self::FreeMergedBuilds(_) => 135,
+            Self::Bot(_) => 136,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
@@ -645,6 +648,7 @@ impl Command {
         "tunnel-orders",
         "tunnel-failed",
         "free-merged-builds",
+        "bot",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

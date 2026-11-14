@@ -363,6 +363,10 @@ impl Known {
         }
     }
 
+    pub(crate) fn bot(self) -> Option<headless::BotSupport> {
+        self.headless().and_then(|spec| spec.bot)
+    }
+
     pub(crate) fn headless(self) -> Option<headless::Spec> {
         match self {
             Self::Claude => claude::HEADLESS,

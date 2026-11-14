@@ -25,10 +25,6 @@ pub(crate) enum Kind {
     Notice,
 }
 
-fn not(value: &bool) -> bool {
-    !value
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Line {
     pub(crate) id: u64,
@@ -37,7 +33,7 @@ pub(crate) struct Line {
     pub(crate) text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) tool: Option<String>,
-    #[serde(default, skip_serializing_if = "not")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) held: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) model: Option<String>,

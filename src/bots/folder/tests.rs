@@ -40,7 +40,7 @@ fn a_saved_bot_keeps_its_session_and_a_removed_one_is_gone() {
     save(&folder, &changed).expect("save");
     assert_eq!(load_all(dir.path()), vec![changed]);
     remove(&folder).expect("remove");
-    assert!(load_all(dir.path()).is_empty());
+    assert_eq!(load_all(dir.path()), Vec::new());
 }
 
 #[cfg(unix)]

@@ -161,6 +161,36 @@ fn subagents() -> Vec<Sample> {
     vec![sample!("control/events/v1/notice-subagent.json", event(what, Ids { pane: None, tab: None, ..pane() }))]
 }
 
+fn bots() -> Vec<Sample> {
+    use crate::agents::headless::Used;
+    use crate::bots::chat::{Answer, Line};
+    let bot = |line: Option<Line>, state: Option<&str>, change: Option<&str>| {
+        let (state, change) = (state.map(str::to_string), change.map(str::to_string));
+        event(What::Bot { bot: "prs".into(), line, state, change }, Ids::default())
+    };
+    let answer = Answer {
+        model: Some("claude-opus-5-5".into()),
+        tokens: Used { input: 4, output: 73, cache_read: 26364, cache_write: 5199 },
+        conversation: Some("0f3c".into()),
+    };
+    vec![
+        sample!(
+            "control/events/v1/bot-you.json",
+            bot(Some(Line::you(3, 1_794_560_100, "review my open PRs", false)), None, None)
+        ),
+        sample!(
+            "control/events/v1/bot-step.json",
+            bot(Some(Line::step(4, 1_794_560_101, "Bash", "cornercase status --json")), None, None)
+        ),
+        sample!(
+            "control/events/v1/bot-answer.json",
+            bot(Some(Line::answer(5, 1_794_560_130, "Two are blocked.", answer)), None, None)
+        ),
+        sample!("control/events/v1/bot-state.json", bot(None, Some("thinking"), None)),
+        sample!("control/events/v1/bot-created.json", bot(None, None, Some("created"))),
+    ]
+}
+
 fn messages() -> Vec<Sample> {
     let what = |kind: &str, message: &str, panes: Vec<u64>, failed: bool| What::Message {
         kind: kind.into(),
@@ -192,10 +222,19 @@ fn a_message(panes: Vec<u64>) -> Event {
 }
 
 fn samples() -> Vec<Sample> {
-    [pane_samples(), stream_samples(), rich_samples(), sound_and_accounts(), machines(), subagents(), messages()]
-        .into_iter()
-        .flatten()
-        .collect()
+    [
+        pane_samples(),
+        stream_samples(),
+        rich_samples(),
+        sound_and_accounts(),
+        machines(),
+        subagents(),
+        messages(),
+        bots(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 fn sample(name: &str) -> Sample {

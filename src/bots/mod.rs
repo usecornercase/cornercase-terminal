@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) use crate::agents::headless::Access;
 
+pub(crate) mod brief;
 pub(crate) mod chat;
 pub(crate) mod folder;
+pub(crate) mod turn;
 
 pub(crate) const MAX_BOTS: usize = 50;
 pub(crate) const NAME_MAX: usize = 40;
@@ -32,19 +34,33 @@ pub(crate) struct Bot {
     pub(crate) conversation: Option<String>,
 }
 
-pub(crate) fn name_refusal(name: &str, others: &[&Bot]) -> Option<String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum NameProblem {
+    Invalid(String),
+    Taken(String),
+}
+
+impl NameProblem {
+    pub(crate) fn message(&self) -> &str {
+        match self {
+            Self::Invalid(text) | Self::Taken(text) => text,
+        }
+    }
+}
+
+pub(crate) fn name_refusal(name: &str, others: &[&Bot]) -> Option<NameProblem> {
     let length = name.chars().count();
     if length == 0 || length > NAME_MAX {
-        return Some(format!("a bot's name takes 1 to {NAME_MAX} characters, not {length}"));
+        return Some(NameProblem::Invalid(format!("a bot's name takes 1 to {NAME_MAX} characters, not {length}")));
     }
     if name.chars().any(char::is_control) {
-        return Some(String::from("a bot's name takes no control characters"));
+        return Some(NameProblem::Invalid(String::from("a bot's name takes no control characters")));
     }
     let lower = name.to_lowercase();
     others
         .iter()
         .find(|other| other.name.to_lowercase() == lower)
-        .map(|other| format!("there is a bot called {} already", other.name))
+        .map(|other| NameProblem::Taken(format!("there is a bot called {} already", other.name)))
 }
 
 pub(crate) fn new_id(name: &str, taken: &[&Bot]) -> String {

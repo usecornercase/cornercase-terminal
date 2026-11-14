@@ -69,7 +69,11 @@ pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(cra
     no_limits: "no plan limits for this account (API key, Bedrock or Vertex)",
 });
 pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> =
-    Some(crate::agents::headless::Spec { command: headless::command, read: headless::read });
+    Some(crate::agents::headless::Spec { command: headless::command, read: headless::read, bot: Some(BOT) });
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],
+    why: None,
+};
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> =
     Some(crate::agents::breakdown::Spec { probe: breakdown::probe });
 pub(in crate::agents) const UNFOUND: &str = "Claude Code has not said yet which conversation it is in";

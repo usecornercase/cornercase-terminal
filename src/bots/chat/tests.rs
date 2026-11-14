@@ -45,12 +45,7 @@ fn only_what_is_set_is_written() {
 fn a_torn_last_line_is_skipped_and_healed_before_the_next_one() {
     let dir = TempDir::new();
     append(&chat(&dir), &you(1, false)).expect("append");
-    std::fs::OpenOptions::new()
-        .append(true)
-        .open(chat(&dir))
-        .expect("open")
-        .write_all(b"{\"id\":2,\"at\"")
-        .expect("tear");
+    OpenOptions::new().append(true).open(chat(&dir)).expect("open").write_all(b"{\"id\":2,\"at\"").expect("tear");
     assert_eq!(read(&chat(&dir)).len(), 1);
     heal(&chat(&dir)).expect("heal");
     append(&chat(&dir), &answer(2)).expect("append");
@@ -133,8 +128,8 @@ mod restart_notices {
 
     #[test]
     fn an_idle_chat_gets_nothing() {
-        assert!(texts(&[you(1, false), answer(2)]).is_empty());
-        assert!(texts(&[]).is_empty());
+        assert_eq!(texts(&[you(1, false), answer(2)]), Vec::<String>::new());
+        assert_eq!(texts(&[]), Vec::<String>::new());
     }
 
     #[test]

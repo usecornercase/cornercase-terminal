@@ -210,6 +210,7 @@ impl App {
             popup: self.popup_info(),
             machines: self.machine_infos(),
             accounts_revision: self.accounts.logins.generation(),
+            bots: self.bot_infos(),
         }
     }
 

@@ -71,6 +71,8 @@ pub struct Cli {
     pub(crate) remote_command: Option<String>,
     #[command(subcommand)]
     pub(crate) command: Option<Command>,
+    #[arg(skip)]
+    pub(crate) refused: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
