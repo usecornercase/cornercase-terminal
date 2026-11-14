@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.80
 
-- **A bot can only type into your agents.** For a bot with `cornercase` access, the default, the server now refuses its `cornercase send`, `keys`, `input`, `paste-file`, `held --send-now` and `todo send` into a pane that runs no agent (a shell, an editor, an agent that exited back to its shell), and `new-tab` or `split` with a command. Writing to an agent works as before. The server knows a bot's commands by their process, not by a variable the bot could drop.
+- **A bot can only type into your agents.** For a bot with `cornercase` access, the default, the server now refuses its `cornercase send`, `keys`, `input`, `paste-file`, `held --send-now` and `todo send` into a pane that runs no agent (a shell, an editor, an agent that exited back to its shell), and `new-tab` or `split` with a command. Writing to an agent works as before. The server knows a bot's commands by their process, not by a variable the bot could drop. It also refuses a bot's changing a bot's access, writing to a bot with `full` access and changing cornercase's settings, which would lift that limit.
 - **What a bot starts ends with its answer.** When such a bot answers, anything it left running in the background is stopped, as `cornercase bot stop` already did.
 
 ## 0.13.79
