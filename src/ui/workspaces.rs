@@ -36,8 +36,6 @@ pub(crate) const ICON_WIDTH: usize = 2;
 const BEHIND_ICON: &str = "↓";
 const SHARED_ICON: &str = "⇄";
 
-pub(crate) const REOPEN_ICON: &str = "▶";
-
 const REMOVING_LABEL: &str = "removing…";
 const SETTING_UP_LABEL: &str = "setting up…";
 

@@ -776,7 +776,7 @@ export class Painter {
     const status = badge === 'highest' ? highest(statuses) : badge === 'attention' ? attention(statuses) : null;
     const behind = app.config.fetchMinutes && ws.behind ? [seg(`↓${ws.behind}`, { fg: 3 })] : [];
     const closed = app.reopenableCount(ws.id);
-    const reopen = closed > 0 ? [seg(REOPEN_ICON, { fg: 6 })] : [];
+    const reopen = closed > 0 ? [reopenSeg(false)] : [];
     const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [statusIcon(status, spinAt(app))] : []), ...reopen, ...behind];
     const changed = ws.removing ? null : app.againstBase(project, ws);
     const marks = fitRowTags(tags, changed, workspaceLabel(ws), room);

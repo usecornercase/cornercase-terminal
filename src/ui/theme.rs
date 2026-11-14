@@ -79,12 +79,11 @@ pub(crate) fn soft(theme: &HostTheme) -> Color {
     }
 }
 
+pub(crate) const REOPEN_ICON: &str = "▶";
+
 pub(super) fn reopen_mark(lit: bool) -> Span<'static> {
     let style = Style::default().fg(Color::Cyan);
-    Span::styled(
-        super::REOPEN_ICON,
-        if lit { style.add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else { style },
-    )
+    Span::styled(REOPEN_ICON, if lit { style.add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else { style })
 }
 
 pub(super) fn status_icon(muted: Color, status: Status, frame: Option<u8>) -> Span<'static> {

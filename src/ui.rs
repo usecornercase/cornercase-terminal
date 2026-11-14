@@ -147,7 +147,7 @@ pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, machin
 #[cfg(test)]
 pub(crate) use star::star_buttons;
 pub(crate) use star::{StarButton, star_area, star_hit};
-pub(crate) use theme::{block_color, ci_icon, layer_style, muted, outcome_icon, soft};
+pub(crate) use theme::{REOPEN_ICON, block_color, ci_icon, layer_style, muted, outcome_icon, soft};
 #[cfg(test)]
 pub(crate) use toast::toast_area;
 pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};
@@ -162,8 +162,8 @@ pub use widths::SIDEBAR_WIDTH;
 #[cfg(test)]
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
 pub(crate) use workspaces::{
-    Changed, ICON_WIDTH, MachineTag, REOPEN_ICON, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit,
-    workspace_layout, workspace_rows, workspace_tag,
+    Changed, ICON_WIDTH, MachineTag, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout,
+    workspace_rows, workspace_tag,
 };
 pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
 
