@@ -353,12 +353,12 @@ fn a_machine_s_workspace_is_shown_from_the_command_line() {
     assert_eq!(status(&here)["shown_remote"], answer);
 }
 
-fn claude_working_there(machine: &Session, workspace: &str) -> (PathBuf, PathBuf) {
+fn claude_working_there(machine: &Session, workspace: &str) -> PathBuf {
     let (sessions, bin) = claude_asking_on_cue(machine, "claude-there");
     let command = format!("{} {}", bin.join("claude").display(), sessions.display());
     machine.says(&["new-tab", "--workspace", workspace, "--", &command]);
     machine.wait_for_working();
-    (sessions, bin)
+    sessions
 }
 
 #[test]
@@ -371,7 +371,7 @@ fn a_machine_s_agent_shows_under_the_local_project_and_tells_when_it_needs_you()
     machine.says(&["open", &clone_of(&machine, "web-shop", "git@github.com:acme/web-shop.git")]);
     let sent = sent_with_their_repos(&here, &["web-shop"]);
     let workspace = project_named(&sent, "web-shop")["workspaces"][0]["id"].to_string();
-    let (sessions, bin) = claude_working_there(&machine, &workspace);
+    let sessions = claude_working_there(&machine, &workspace);
     wait_until("claude works there", || status(&here)["machines"].to_string().contains(r#""status":"working""#));
     let mut app = Harness::open(Arc::clone(&here), 40, COLS);
     app.wait_for("the machine's project with no clone here", |s| s.contains("☁ vps"));
@@ -400,7 +400,6 @@ fn a_machine_s_agent_shows_under_the_local_project_and_tells_when_it_needs_you()
         (s.contains("runs on vps") && s.contains("claude is waiting for you"))
             || status(&here)["shown_remote"]["stream"] == "live"
     });
-    let _ = std::fs::remove_dir_all(&bin);
 }
 
 const PRINTED: &str = "printed-there";

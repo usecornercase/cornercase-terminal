@@ -64,6 +64,7 @@ mod settings;
 mod sidebar;
 mod socket;
 mod startup;
+mod temp_dirs;
 mod todos;
 mod tunnels;
 mod updates;
@@ -127,6 +128,12 @@ impl Session {
 
     fn claude_dir(&self) -> PathBuf {
         self.dir.join("claude")
+    }
+
+    fn folder(&self, name: &str) -> PathBuf {
+        let dir = self.dir.join(name);
+        std::fs::create_dir_all(&dir).expect("create a folder in the session's");
+        dir.canonicalize().expect("canonicalize the folder")
     }
 
     fn socket_var(&self) -> String {
@@ -615,16 +622,42 @@ fn write_executable(path: &std::path::Path, contents: &str) {
     assert!(child.wait().expect("wait for sh").success(), "failed to write {}", path.display());
 }
 
-fn temp_dir_named(name: &str) -> PathBuf {
-    let dir = temp().join(name);
-    std::fs::create_dir_all(&dir).expect("create dir");
-    dir
+#[must_use = "the folder is removed when this is dropped"]
+struct TempDir(PathBuf);
+
+impl TempDir {
+    fn at(dir: PathBuf) -> Self {
+        std::fs::create_dir_all(&dir).expect("create the temp folder");
+        Self(dir)
+    }
 }
 
-fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cornercase-e2e-{name}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("create temp dir");
-    dir.canonicalize().expect("canonicalize temp dir")
+impl std::ops::Deref for TempDir {
+    type Target = std::path::Path;
+
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl AsRef<std::path::Path> for TempDir {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn temp_dir_named(name: &str) -> TempDir {
+    TempDir::at(temp().join(name))
+}
+
+fn temp_dir(name: &str) -> TempDir {
+    temp_dir_named(&format!("cornercase-e2e-{name}-{}", std::process::id()))
 }
 
 fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {

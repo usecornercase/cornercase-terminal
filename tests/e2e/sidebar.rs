@@ -15,8 +15,8 @@ fn sidebar_shows_the_search_and_the_title() {
 
 #[test]
 fn the_project_name_stays_after_cd() {
-    let mut app = Harness::start();
     let dir = temp_dir("cd");
+    let mut app = Harness::start();
 
     app.send(format!("cd {}; echo cd-\"\"done\r", dir.display()).as_bytes());
 
@@ -26,21 +26,20 @@ fn the_project_name_stays_after_cd() {
 
 #[test]
 fn new_project_opens_the_typed_folder() {
-    let mut app = Harness::start();
     let name = format!("ccnw-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let mut app = Harness::start();
 
     app.open_project(1, &dir);
 
     app.wait_for("the project opens", |s| s.contains(&entry(&name)) && !s.contains("cancel"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn the_folder_picker_works_with_the_mouse() {
-    let mut app = Harness::start();
     let name = format!("ccpk-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let mut app = Harness::start();
     for folder in ["alpha", "beta"] {
         std::fs::create_dir_all(dir.join(folder)).expect("create folder");
     }
@@ -55,14 +54,13 @@ fn the_folder_picker_works_with_the_mouse() {
     app.click(ui::picker_buttons(picker, "open")[0].as_position());
 
     app.wait_for("the second project opens", |s| s.contains(&entry("beta")));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn close_button_removes_a_project() {
-    let mut app = Harness::start();
     let name = format!("cccl-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let mut app = Harness::start();
     app.open_project(1, &dir);
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
 
@@ -71,14 +69,13 @@ fn close_button_removes_a_project() {
     app.click(ui::form_buttons(ui::form_area(AREA), "close")[0].as_position());
 
     app.wait_for("only the second one is left", |s| s.contains(&entry(&name)) && !s.contains(&first_entry()));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn opening_an_open_folder_switches_to_it() {
-    let mut app = Harness::start();
     let name = format!("ccsw-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let mut app = Harness::start();
     app.open_project(1, &dir);
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
 
@@ -87,14 +84,13 @@ fn opening_an_open_folder_switches_to_it() {
     app.wait_for("project 1 is active again", |s| s.contains(&format!("▌{}", first_entry())) && !s.contains("cancel"));
     let third = app.row(ui::new_project_button(list(), 1, &plain(2)).y);
     assert!(third.contains(ui::NEW_BUTTON), "a third entry opened: {third:?}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn clicking_an_entry_switches_project() {
-    let mut app = Harness::start();
     let name = format!("ccen-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let mut app = Harness::start();
     app.send(b"echo in-the-first\r");
     app.wait_for("output in project 1", |s| s.contains("in-the-first"));
     app.open_project(1, &dir);
@@ -103,14 +99,13 @@ fn clicking_an_entry_switches_project() {
     app.click(Position::new(list().x + 2, list().y));
 
     app.wait_for("back to project 1", |s| s.contains("in-the-first"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn the_search_switches_project() {
-    let mut app = Harness::start();
     let name = format!("ccse-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let mut app = Harness::start();
     app.send(b"echo in-the-first\r");
     app.wait_for("output in project 1", |s| s.contains("in-the-first"));
     app.open_project(1, &dir);
@@ -122,7 +117,6 @@ fn the_search_switches_project() {
     app.send(b"\r");
 
     app.wait_for("back to project 1", |s| s.contains("in-the-first") && !s.contains("enter goes to"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -145,9 +139,9 @@ fn a_narrow_terminal_gets_a_menu_bar() {
 
 #[test]
 fn dragging_a_project_reorders_the_sidebar_and_is_saved() {
-    let mut app = Harness::start();
     let name = format!("ccdr-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let mut app = Harness::start();
     app.open_project(1, &dir);
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
     let (x, first, second) = (list().x + 4, list().y + 1, list().y + 2);
@@ -158,17 +152,15 @@ fn dragging_a_project_reorders_the_sidebar_and_is_saved() {
     app.wait_for("the new project is first", |s| above(s, &entry(&name), &first_entry()));
     let path = |dir: &std::path::Path| format!("\"path\": \"{}\"", dir.display());
     app.session.wait_for_saved("the order is saved", |saved| above(saved, &path(&dir), &path(&temp())));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn a_workspace_with_its_own_worktree_is_created_and_removed() {
+    let repo = temp_dir_named(&format!("ccwt-{}", std::process::id()));
     let session = Session::new();
     let worktrees = session.dir.join("worktrees");
     let config = format!("{{\"worktrees_dir\": \"{}\"}}", worktrees.display());
     std::fs::write(session.dir.join("config.json"), config).expect("write config");
-    let repo = std::env::temp_dir().join(format!("ccwt-{}", std::process::id()));
-    std::fs::create_dir_all(&repo).expect("create repo dir");
     let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
     git(&repo, &["init", "--quiet"]);
     std::fs::write(repo.join(".gitignore"), ".env\n").expect("write .gitignore");
@@ -201,7 +193,6 @@ fn a_workspace_with_its_own_worktree_is_created_and_removed() {
 
     app.wait_for("git removes it and says so", |s| s.contains("removed e2e/login") && !s.contains("Remove workspace"));
     assert!(!app.row(y).contains("e2e/login") && !checkout.exists(), "the row or the checkout is still there");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 #[test]
