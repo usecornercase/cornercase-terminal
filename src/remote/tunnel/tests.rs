@@ -304,16 +304,26 @@ mod running {
         (running, rx)
     }
 
+    fn up_on_a_port_of_its_own(ssh: &std::path::Path) -> (Forward, Running) {
+        let mut taken = 0;
+        loop {
+            let forward = Forward { port: 5173, local: free_port() };
+            let (running, reports) = start(ssh, forward, UP_WAIT);
+            match reports.recv_timeout(Duration::from_secs(20)) {
+                Ok(Watched::Up) => return (forward, running),
+                Ok(Watched::Ended(why)) if why.contains("Address already in use") && taken < 5 => taken += 1,
+                other => panic!("ssh did not come up: {other:?}"),
+            }
+        }
+    }
+
     #[test]
     fn is_up_once_ssh_listens_on_the_local_port() {
         let dir = TempDir::new();
         let ssh = ssh_in(&dir);
         std::fs::write(ssh.with_extension("hold"), "").expect("hold it");
-        let forward = Forward { port: 5173, local: free_port() };
+        let (forward, running) = up_on_a_port_of_its_own(&ssh);
 
-        let (running, reports) = start(&ssh, forward, UP_WAIT);
-
-        assert_eq!(reports.recv_timeout(Duration::from_secs(20)), Ok(Watched::Up));
         let listening = listen::listeners(&[pid_of(&running)]);
         assert!(listening.iter().any(|listener| listener.port == forward.local));
         assert_eq!(running.there(), None);
