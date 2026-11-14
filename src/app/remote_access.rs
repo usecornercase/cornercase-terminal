@@ -16,7 +16,7 @@ use crate::web::{self, Web};
 
 const REMOTE_OFF: &str =
     "remote access is off: turn it on in Settings › Remote or with `cornercase config set remote true`";
-const NO_CODE: &str = "could not make a code, see server.log";
+pub(super) const NO_CODE: &str = "could not make a code, see server.log";
 const STARTING: &str = "starting…";
 const FORGOTTEN: &str = "paired browsers forgotten: each one needs a new code";
 
@@ -121,7 +121,12 @@ fn work(orders: &Receiver<(Order, PathBuf)>, tx: &Sender<AppEvent>) {
 
 impl App {
     pub(super) fn remote_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
-        let done = ui::remote_done(area, &self.remote_view());
+        let view = self.remote_view();
+        self.access_done(&view, ev, pos, area);
+    }
+
+    pub(super) fn access_done(&mut self, view: &ui::RemoteAccess, ev: MouseEvent, pos: Position, area: Rect) {
+        let done = ui::remote_done(area, view);
         if ev.kind == MouseEventKind::Down(MouseButton::Left) && done.contains(pos) {
             self.overlay = None;
         }
@@ -215,6 +220,7 @@ impl App {
                 self.settings_changed();
             }
             web::Event::Browsers(n) => self.remote.browsers = n,
+            web::Event::AppPaired(taken) => self.app_paired_here(taken),
         }
         self.refresh_remote_note();
     }

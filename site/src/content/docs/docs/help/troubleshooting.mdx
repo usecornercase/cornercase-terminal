@@ -143,6 +143,15 @@ Something went wrong inside cornercase itself. It dropped only what it was doing
 
 If the message keeps coming back, or the screen stays blank, the bug happens every time cornercase checks or draws something. Your shells still run, so finish what you're doing, then restart the server with `cornercase kill-server` (it closes them) and start cornercase again, or update once a fix is out.
 
+### The phone app cannot reach the computer
+
+Check, in this order:
+
+1. **Settings › Remote › phone app** is on. Its note says `ready at …` with the addresses cornercase listens on; `waiting for a Wi-Fi, LAN or Tailscale address` means the computer has none yet, and `port … is taken` means something else uses `phone_app_port` (change it in [`config.json`](../../reference/configuration/#phone_app_port)).
+2. The phone is on the same Wi-Fi as the computer, or both are on Tailscale. `cornercase config pair app --routes` prints the addresses the app can use now; the app should be able to open one of them.
+3. The firewall lets cornercase accept connections on private networks. macOS and Windows ask once; if you said no, allow cornercase in the firewall's settings.
+4. A forgotten app needs a new code: **pair a phone app** in the settings.
+
 ### Copying doesn't reach my clipboard
 
 cornercase copies with the OSC 52 escape sequence, which your terminal has to allow:

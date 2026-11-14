@@ -88,6 +88,8 @@
   "tour": false,
   "remote": true,
   "remote_port": 47682,
+  "phone_app": false,
+  "phone_app_port": 47682,
   "discord_forum": true,
   "discord_forum_close": "delete",
   "projects": {

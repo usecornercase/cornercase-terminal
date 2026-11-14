@@ -209,6 +209,12 @@ impl Settings {
                 ["remote access is on: click Remote to connect a phone", "remote access is off"],
             ),
             Row::Browsers => Action::ForgetBrowsers,
+            Row::PhoneApp => self.flip(
+                |c| &mut c.phone_app,
+                ["the phone app's access is on: pair it in the row below", "the phone app's access is off"],
+            ),
+            Row::PhoneAppCode => Action::PairApp,
+            Row::PairedApp(id) => Action::ForgetApp(id),
             Row::Bot(_) => self.start_edit(row, String::new()),
             Row::Chat(via) => Action::Pair(via),
             Row::Forum(via) => self.forum(via),

@@ -69,3 +69,25 @@ fn what_comes_after_the_hold_is_printed_once_it_is_released() {
 
     assert_eq!(String::from_utf8_lossy(&out), "before after");
 }
+
+#[test]
+fn it_records_its_process_id_once_per_call() {
+    let dir = TempDir::new();
+    let tool = dir.path().join("cornercase");
+
+    run(&tool, &[], &mut Vec::new(), &mut Vec::new());
+    run(&tool, &[], &mut Vec::new(), &mut Vec::new());
+
+    let recorded = std::fs::read_to_string(tool.with_extension("pid")).expect("read the ids");
+    let expected = format!("{0}\n{0}\n", std::process::id());
+    assert_eq!(recorded, expected);
+}
+
+#[test]
+fn it_copies_what_it_reads_to_its_output_until_the_end_only_with_an_echo_file() {
+    let mut out = Vec::new();
+
+    echo(std::io::Cursor::new(b"hello\nhi".to_vec()), &mut out);
+
+    assert_eq!(out, b"hello\nhi");
+}

@@ -56,15 +56,17 @@ pub(crate) enum ConfigAction {
         #[arg(value_name = "KEY", help = "The connection, such as linear or telegram")]
         key: String,
     },
-    #[command(about = "Remove a token, a bot, a paired chat or the paired browsers")]
+    #[command(about = "Remove a token, a bot, a paired chat, the paired browsers or a paired phone app")]
     Remove {
-        #[arg(value_name = "KEY", help = "The connection, such as linear, telegram.chat or browsers")]
+        #[arg(value_name = "KEY", help = "The connection, such as linear, telegram.chat, browsers or app.ID")]
         key: String,
     },
     #[command(about = "Pair a phone: print the address its QR code holds, then wait for it", after_help = CONFIG_PAIR_HELP)]
     Pair {
-        #[arg(value_name = "KEY", help = "What to pair: browsers, telegram.chat or discord.chat")]
+        #[arg(value_name = "KEY", help = "What to pair: app, browsers, telegram.chat or discord.chat")]
         key: String,
+        #[arg(long, help = "With app: print the addresses the phone app reaches now, then end")]
+        routes: bool,
     },
     #[command(about = "Pick the server of the Discord forum, once the forum's setup waits for that")]
     ForumServer {
