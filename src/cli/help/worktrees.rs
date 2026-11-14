@@ -8,6 +8,7 @@ Examples:
   cornercase worktrees list
   cornercase worktrees size --worktree feat/login
   cornercase worktrees free-builds --worktree feat/login --check
+  cornercase worktrees free-builds --merged --check
   cornercase worktrees remove --path ~/.cornercase/worktrees/shop/feat-login --check";
 
 pub(in crate::cli) const WORKTREES_LIST_HELP: &str =
@@ -25,6 +26,11 @@ command exits 3 after printing the rest. With --json it prints {\"worktrees\": [
 \"last_changed\", \"changed\", \"unpushed\", \"merged\", \"no_commits\", \"upstream_gone\", \"lock\",
 \"running\", \"outside\", \"other_tabs\", \"removing\", \"run_role\", \"safe\" (removing it loses no
 uncommitted file and stops no program), \"risks\", \"error\", \"size\" and \"size_error\".
+
+With sizes, the last line adds up the build folders of the merged worktrees the Worktrees dialog
+lets you free, with the command that frees them: `cornercase worktrees free-builds --merged`
+(with --project ID when the list had one, and --remote when it came from another machine). The
+JSON has the same total as \"merged_builds\": {\"bytes\", \"count\"}, left out with --no-sizes.
 
 Examples:
   cornercase worktrees list
@@ -57,9 +63,23 @@ ignoring since the measure, are named and the command exits 3. With --json it pr
 \"check\", \"bytes\", \"folders\": [{\"path\", \"bytes\"}], \"kept\", \"failed\": [{\"path\", \"error\"}],
 \"running\"}.
 
+--merged frees the build folders of every merged worktree, the ones `worktrees list` adds up on its
+last line (a worktree the dialog lets you free: linked, not being removed or freed, not a live
+flow run's role; the unmerged ones and those with `no commits` are left alone), one after another.
+It never forces: a worktree where a program runs, or whose build folder holds a git checkout, keeps
+its builds and is named with why, and the command exits 3 after printing the rest, with --check
+too. --project ID takes one project's repository's worktrees; --check deletes nothing. It cannot be
+combined with --workspace, --worktree, --path or --force: free one worktree by itself with --path
+and --force. One line per worktree that had builds, then a summary; a merged worktree with nothing
+to free is left out, so a routine can run it every hour. With --json it prints {\"check\",
+\"bytes\", \"worktrees\": [...]}, each entry the `free-builds` answer above plus \"outcome\" (freed,
+freeable with --check, refused, failed) and \"why\".
+
 Examples:
   cornercase worktrees free-builds --worktree feat/login --check
   cornercase worktrees free-builds --worktree feat/login
+  cornercase worktrees free-builds --merged --check
+  cornercase worktrees free-builds --merged
   cornercase worktrees free-builds --path ~/.cornercase/worktrees/shop/feat-login --force";
 
 pub(in crate::cli) const WORKTREES_REMOVE_HELP: &str =

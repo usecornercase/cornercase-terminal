@@ -7,7 +7,7 @@ use crate::app::worktrees::{ListFor, Measure, WorktreeEvent};
 use crate::app::worktrees_dialog::BEING_REMOVED;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{
-    BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
+    BuildsFreed, FreeBuilds, ListWorktrees, MergedTotal, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
 };
 use crate::error::Result;
 use crate::git;
@@ -18,8 +18,9 @@ use crate::process::owners::trees;
 use crate::project::{Hierarchy, Workspace, WorkspaceAt};
 use crate::term::Term;
 use crate::worktrees::builds::{self, Size};
-use crate::worktrees::{Asks, Found, Kind, Row, discover, fill, folders_of, scan};
+use crate::worktrees::{Asks, Found, Kind, Row, discover, fill, folders_of, merged_total, scan};
 
+mod merged;
 pub(super) mod remove;
 
 struct Target {
@@ -162,6 +163,17 @@ impl App {
     }
 
     pub(in crate::app) fn worktree_rows_listed(&mut self, key: u64, sizes: bool, found: Result<Vec<Found>>) {
+        let event = move |rows| WorktreeEvent::Rows { key, sizes, rows };
+        self.rows_listed(key, sizes, found, event);
+    }
+
+    pub(super) fn rows_listed(
+        &mut self,
+        key: u64,
+        sizes: bool,
+        found: Result<Vec<Found>>,
+        event: impl FnOnce(Box<Result<Vec<Row>>>) -> WorktreeEvent + Send + 'static,
+    ) {
         let Some(pending) = self.clients.requests.take(key) else { return };
         if pending.client.is_none() {
             return;
@@ -177,10 +189,7 @@ impl App {
         self.spawn_job(
             job,
             move || Ok(fill(rows, asks)),
-            move |rows, _| {
-                let rows = Box::new(rows);
-                Some(AppEvent::Worktree(WorktreeEvent::Rows { key, rows }))
-            },
+            move |rows, _| Some(AppEvent::Worktree(event(Box::new(rows)))),
         );
         self.clients.requests.pending.push(pending);
     }
@@ -195,20 +204,29 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn worktree_rows_answered(&mut self, key: u64, rows: Result<Vec<Row>>) {
+    pub(in crate::app) fn worktree_rows_answered(&mut self, key: u64, sizes: bool, rows: Result<Vec<Row>>) {
         self.answer_read(key, |app| {
             let rows = rows.map_err(|e| Refusal::new(Code::Failed, e.to_string()))?;
-            Ok(json(&app.worktree_listing(rows)))
+            Ok(json(&app.worktree_listing(rows, sizes)))
         });
     }
 
-    fn worktree_listing(&mut self, mut rows: Vec<Row>) -> WorktreeListing {
+    pub(in crate::app) fn relive_rows(&mut self, rows: &mut [Row]) {
         self.refresh_places();
-        for row in &mut rows {
+        for row in rows {
             self.relive(row);
+            row.freeing = self.freeing_path(&row.found.path);
         }
+    }
+
+    fn worktree_listing(&mut self, mut rows: Vec<Row>, sizes: bool) -> WorktreeListing {
+        self.relive_rows(&mut rows);
         let worktrees = rows.iter().map(|row| WorktreeInfo::of(row, self.risk_list(row, row.live.as_ref(), false)));
-        WorktreeListing { worktrees: worktrees.collect() }
+        let merged_builds = sizes.then(|| {
+            let (bytes, count) = merged_total(&rows);
+            MergedTotal { bytes, count }
+        });
+        WorktreeListing { worktrees: worktrees.collect(), merged_builds }
     }
 
     fn running_in(&self, at: WorkspaceAt) -> Vec<String> {
@@ -258,9 +276,13 @@ impl Freeing {
         self.running.dedup();
     }
 
-    pub(in crate::app) fn unless_risky(mut self) -> Result<std::result::Result<BuildsFreed, Risky>> {
+    pub(in crate::app) fn unless_risky(self) -> Result<std::result::Result<BuildsFreed, Risky>> {
+        self.settle(false)
+    }
+
+    pub(in crate::app) fn settle(mut self, check: bool) -> Result<std::result::Result<BuildsFreed, Risky>> {
         self.outside();
-        free_unless_risky(&self.path, &self.names, self.running, false)
+        settle_builds(&self.path, &self.names, self.running, Mode { check, force: false })
     }
 
     fn answer(mut self, request: &FreeBuilds) -> Result<std::result::Result<BuildsFreed, Refusal>> {
@@ -269,20 +291,46 @@ impl Freeing {
             let size = builds::measure(&self.path, Kind::Linked, &self.names)?;
             return Ok(Ok(BuildsFreed::would(self.path, &size, self.running)));
         }
-        let freed = free_unless_risky(&self.path, &self.names, self.running, request.force)?;
+        let mode = Mode { check: false, force: request.force };
+        let freed = settle_builds(&self.path, &self.names, self.running, mode)?;
         Ok(freed.map_err(|risky| conflict(risks(&risky.running, &risky.size).unwrap_or_default())))
     }
 }
 
-fn free_unless_risky(
+impl Risky {
+    pub(in crate::app) fn why(&self, root: &Path) -> String {
+        let mut why = Vec::new();
+        if !self.running.is_empty() {
+            let verb = if self.running.len() == 1 { "runs" } else { "run" };
+            why.push(format!("{} {verb} in it", self.running.join(", ")));
+        }
+        for nested in &self.size.nested {
+            let dir = nested.parent().unwrap_or(nested);
+            let dir = dir.strip_prefix(root).unwrap_or(dir);
+            why.push(format!("{} is a git checkout", dir.display()));
+        }
+        why.join(", ")
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Mode {
+    check: bool,
+    force: bool,
+}
+
+fn settle_builds(
     path: &Path,
     names: &[String],
     running: Vec<String>,
-    force: bool,
+    mode: Mode,
 ) -> Result<std::result::Result<BuildsFreed, Risky>> {
     let size = builds::measure(path, Kind::Linked, names)?;
-    if !force && risks(&running, &size).is_some() {
+    if !mode.force && risks(&running, &size).is_some() {
         return Ok(Err(Risky { running, size }));
+    }
+    if mode.check {
+        return Ok(Ok(BuildsFreed::would(path.to_path_buf(), &size, running)));
     }
     let chosen: Vec<PathBuf> = size.builds.iter().map(|folder| folder.path.clone()).collect();
     let freed = builds::free(path, names, &chosen)?;

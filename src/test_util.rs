@@ -455,6 +455,16 @@ pub(crate) fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
 }
 
+pub(crate) fn give_upstream(repo: &Path, branch: &str) {
+    let url = repo.display().to_string();
+    let key = |name: &str| format!("branch.{branch}.{name}");
+    git(repo, &["config", "remote.origin.url", &url]);
+    git(repo, &["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"]);
+    git(repo, &["config", &key("remote"), "origin"]);
+    git(repo, &["config", &key("merge"), &format!("refs/heads/{branch}")]);
+    git(repo, &["update-ref", &format!("refs/remotes/origin/{branch}"), &format!("refs/heads/{branch}")]);
+}
+
 pub(crate) fn sign_head_and_show_signatures(dir: &Path) {
     let read = |args: &[&str]| {
         let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().expect("run git");

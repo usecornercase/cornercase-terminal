@@ -107,3 +107,21 @@ fn an_orphan_has_no_repository_and_a_prunable_entry_counts_commits_only() {
         ("prunable", None, Some(2), true)
     );
 }
+
+#[test]
+fn a_listing_without_the_merged_builds_writes_no_key() {
+    let listing = WorktreeListing::default();
+
+    assert_eq!(serde_json::to_value(&listing).expect("json"), json!({"worktrees": []}));
+}
+
+#[test]
+fn a_listing_with_the_merged_builds_writes_the_bytes_and_the_count() {
+    let listing =
+        WorktreeListing { merged_builds: Some(MergedTotal { bytes: 5, count: 2 }), ..WorktreeListing::default() };
+
+    assert_eq!(
+        serde_json::to_value(&listing).expect("json"),
+        json!({"worktrees": [], "merged_builds": {"bytes": 5, "count": 2}})
+    );
+}

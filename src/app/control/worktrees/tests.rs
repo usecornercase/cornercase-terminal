@@ -2,8 +2,9 @@ use std::path::Path;
 
 use super::*;
 use crate::test_util::{TempDir, git, git_repo};
+use crate::worktrees::builds::Size;
 
-fn linked_with_builds() -> (TempDir, TempDir, PathBuf) {
+pub(super) fn linked_with_builds() -> (TempDir, TempDir, PathBuf) {
     let repo = git_repo(&[(".gitignore", "node_modules/\n"), ("a.txt", "a\n")]);
     let outer = TempDir::new();
     let path = canonical(outer.path()).join("wt");
@@ -14,7 +15,7 @@ fn linked_with_builds() -> (TempDir, TempDir, PathBuf) {
     (repo, outer, path)
 }
 
-fn freeing(path: &Path, running: &[&str]) -> Freeing {
+pub(super) fn freeing(path: &Path, running: &[&str]) -> Freeing {
     let running = running.iter().map(ToString::to_string).collect();
     Freeing { path: path.to_path_buf(), names: vec!["node_modules".into()], running, shells: Vec::new() }
 }
@@ -43,5 +44,55 @@ mod freeing_unless_risky {
         assert_eq!(risky.running, ["sleep"]);
         assert!(risky.size.builds_bytes() >= 300_000);
         assert!(path.join("node_modules/x.js").exists());
+    }
+}
+
+mod settling {
+    use super::*;
+
+    #[test]
+    fn a_check_measures_and_deletes_nothing() {
+        let (_repo, _outer, path) = linked_with_builds();
+
+        let would = freeing(&path, &[]).settle(true).expect("measured").expect("not risky");
+
+        assert!(would.check && would.bytes >= 300_000, "{would:?}");
+        assert_eq!(would.folders[0].path, "node_modules");
+        assert!(path.join("node_modules/x.js").exists());
+    }
+
+    #[test]
+    fn a_check_with_a_program_running_is_risky_too() {
+        let (_repo, _outer, path) = linked_with_builds();
+
+        let risky = freeing(&path, &["sleep"]).settle(true).expect("measured").expect_err("risky");
+
+        assert_eq!(risky.running, ["sleep"]);
+        assert!(path.join("node_modules/x.js").exists());
+    }
+}
+
+mod why_it_was_kept {
+    use super::*;
+
+    fn risky(running: &[&str], nested: &[&str]) -> Risky {
+        let nested = nested.iter().map(PathBuf::from).collect();
+        let size = Size { bytes: 10, builds: Vec::new(), nested };
+        Risky { running: running.iter().map(ToString::to_string).collect(), size }
+    }
+
+    #[test]
+    fn one_program_runs_and_two_run() {
+        assert_eq!(risky(&["cargo"], &[]).why(Path::new("/wt")), "cargo runs in it");
+        assert_eq!(risky(&["cargo", "node"], &[]).why(Path::new("/wt")), "cargo, node run in it");
+    }
+
+    #[test]
+    fn a_nested_checkout_is_named_from_the_worktree() {
+        let nested = "/wt/.venv/src/foo/.git";
+
+        let why = risky(&["cargo"], &[nested]).why(Path::new("/wt"));
+
+        assert_eq!(why, "cargo runs in it, .venv/src/foo is a git checkout");
     }
 }

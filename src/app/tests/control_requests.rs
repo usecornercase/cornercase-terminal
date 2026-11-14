@@ -661,6 +661,7 @@ mod holding;
 mod issues;
 mod journal;
 mod merge_check;
+mod merged_builds;
 mod messages;
 mod one_folder;
 mod ordering;

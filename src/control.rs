@@ -105,8 +105,8 @@ pub(crate) use usage::{Plans, Stats, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 pub(crate) use worktrees::{
-    BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
-    WorktreesRemove, WorktreesRemoved,
+    BuildsFreed, FreeBuilds, FreeMergedBuilds, ListWorktrees, MergedBuildsFreed, MergedTotal, WorktreeFreed,
+    WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized, WorktreesRemove, WorktreesRemoved,
 };
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
@@ -286,6 +286,7 @@ pub(crate) enum Command {
     AgentModels(AgentModels),
     TunnelOrders(TunnelOrders),
     TunnelFailed(TunnelFailed),
+    FreeMergedBuilds(FreeMergedBuilds),
 }
 
 impl Command {
@@ -489,6 +490,7 @@ impl Command {
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
             Self::WorktreesRemove(_) => 123,
+            Self::FreeMergedBuilds(_) => 135,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
@@ -642,6 +644,7 @@ impl Command {
         "agent-models",
         "tunnel-orders",
         "tunnel-failed",
+        "free-merged-builds",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

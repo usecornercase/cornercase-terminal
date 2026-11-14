@@ -113,21 +113,28 @@ impl App {
         (waiting > 0).then(|| format!("measuring {} of {total}…", total - waiting))
     }
 
-    pub(super) fn total_text(dialog: &crate::worktrees::Dialog, now: SystemTime) -> Option<(String, String)> {
+    pub(super) fn total_text(dialog: &crate::worktrees::Dialog, now: SystemTime) -> Vec<String> {
         let (bytes, count) = dialog.list.total();
         if count == 0 {
-            return None;
+            return Vec::new();
         }
         let more = if dialog.list.sizes_pending() > 0 { "+" } else { "" };
         let all = text::size(bytes);
         let (idle, _) = dialog.list.idle_builds(now);
+        let (merged, merged_count) = dialog.list.merged_total();
         let mut long = format!("{all}{more} in {}", text::plural(count, "worktree", "worktrees"));
-        let mut short = format!("{all}{more}");
+        let mut middle = format!("{all}{more}");
         if idle > 0 {
             let idle = text::size(idle);
             long = format!("{long} · {idle} of builds idle 7+ days");
-            short = format!("{short} · {idle} idle");
+            middle = format!("{middle} · {idle} idle");
         }
-        Some((long, short))
+        if merged > 0 {
+            let (merged, noun) =
+                (text::size(merged), text::plural(merged_count, "merged worktree", "merged worktrees"));
+            long = format!("{long} · {merged} of builds in {noun}");
+            middle = format!("{middle} · {merged} merged");
+        }
+        vec![long, middle, format!("{all}{more}")]
     }
 }

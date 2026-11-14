@@ -202,6 +202,7 @@ fn newest_commands() -> Vec<Command> {
         Command::AgentModels(AgentModels { agent: "opencode".into() }),
         Command::TunnelOrders(TunnelOrders::default()),
         Command::TunnelFailed(TunnelFailed::default()),
+        Command::FreeMergedBuilds(FreeMergedBuilds::default()),
     ]
 }
 
