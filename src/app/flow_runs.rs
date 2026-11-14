@@ -794,6 +794,7 @@ impl App {
         let mut launch = Launch::new(pane, spec, Instant::now());
         launch.after = run.members.iter().map(|m| m.pane).filter(|other| *other != pane).collect();
         launch.resume = until;
+        launch.confirm = (run.flow.orchestrator.agent == agents::Known::Claude.name()).then_some(launch::CONFIRM_EVERY);
         self.agents.launches.replace(launch);
     }
 }

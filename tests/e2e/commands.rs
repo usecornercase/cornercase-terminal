@@ -42,9 +42,9 @@ fn status_panes_gives_every_pane_a_row_of_its_own() {
 
 #[test]
 fn open_adds_a_project_and_leaves_the_window_as_it_is() {
-    let mut app = Harness::start();
     let name = format!("ccop-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let mut app = Harness::start();
     let path = dir.display().to_string();
 
     let id = app.session.says(&["open", &path]);
@@ -52,7 +52,6 @@ fn open_adds_a_project_and_leaves_the_window_as_it_is() {
     app.wait_for("the project shows", |s| s.contains(&entry(&name)));
     assert!(app.text().contains(&format!("▌{}", first_entry())), "the window moved:\n{}", app.text());
     assert_eq!(app.session.says(&["open", &path]), id);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -557,11 +556,11 @@ fn the_todo_list_takes_commands() {
 
 #[test]
 fn a_worktree_made_from_the_command_line_is_removed_by_its_branch() {
+    let repo = temp_dir("cli-worktree");
     let session = Session::new();
     let worktrees = session.dir.join("worktrees");
     std::fs::write(session.dir.join("config.json"), format!("{{\"worktrees_dir\": \"{}\"}}", worktrees.display()))
         .expect("write config");
-    let repo = temp_dir("cli-worktree");
     git(&repo, &["init", "--quiet"]);
     git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
     let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
@@ -580,21 +579,13 @@ fn a_worktree_made_from_the_command_line_is_removed_by_its_branch() {
     session.says(&["close", "--worktree", "e2e/cli", "--remove-worktree"]);
 
     assert!(!checkout.exists(), "the checkout is still there");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 #[test]
 fn close_agent_checks_then_closes_an_agents_tab_and_refuses_a_shell() {
     let mut app = Harness::start();
     let shell = app.session.report().shown.pane.expect("the first pane").to_string();
-    let sessions = app.session.claude_dir().join("sessions");
-    std::fs::create_dir_all(&sessions).expect("create the sessions folder");
-    let bin = temp_dir("close-agent");
-    let claude = bin.join("claude");
-    write_executable(
-        &claude,
-        "#!/bin/sh\nprintf '{\"pid\":%s,\"status\":\"waiting\"}' $$ > \"$1/$$.json\"\nread answer\n",
-    );
+    let (sessions, claude) = agents::claude_waiting(&app.session, "close-agent", "");
     let (claude, sessions) = (claude.display().to_string(), sessions.display().to_string());
     let pane = app.session.says(&["new-tab", "--name", "helper", "--", &claude, &sessions]);
     let id: u64 = pane.parse().expect("a pane id");
@@ -615,7 +606,6 @@ fn close_agent_checks_then_closes_an_agents_tab_and_refuses_a_shell() {
     app.session.says(&["close", "--agent", "--pane", &pane]);
 
     app.wait_for("the agent's tab goes", |s| !s.contains("helper"));
-    let _ = std::fs::remove_dir_all(&bin);
 }
 
 #[test]
@@ -924,8 +914,10 @@ fn a_surface_with_patches_sends_what_changed_and_redraw_a_complete_line() {
 
 #[test]
 fn link_says_which_file_a_click_on_a_printed_path_opens() {
+    let dir = temp_dir("link-file");
     let app = Harness::start();
     let pane = app.session.says(&["new-tab"]);
+    typed(&app, &pane, &format!("cd {}", dir.display()));
     typed(&app, &pane, "printf 'a\\nb\\nc\\n' > note.md; printf '\\033[H\\033[2Jsee note.md:2\\n'");
     app.session.says(&["wait", "--pane", &pane, "--text", "^see note.md:2$", "--timeout", "10"]);
 
@@ -937,7 +929,11 @@ fn link_says_which_file_a_click_on_a_printed_path_opens() {
     assert!(text.ends_with("/note.md:2"), "{text}");
     assert_eq!(
         (&link["inside"], &link["relative"], &link["lines"]["first"]),
-        (&true.into(), &"note.md".into(), &2.into())
+        (
+            &true.into(),
+            &format!("{}/note.md", dir.file_name().and_then(|n| n.to_str()).expect("its name")).into(),
+            &2.into()
+        )
     );
     assert_eq!(nothing, "");
 }

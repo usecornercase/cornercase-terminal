@@ -8,8 +8,8 @@ fn status(app: &Harness) -> Value {
 
 #[test]
 fn the_sidebar_is_arranged_from_the_command_line() {
-    let app = Harness::start();
     let other = temp_dir("arrange-project");
+    let app = Harness::start();
     let project = app.session.says(&["open", &other.display().to_string()]);
 
     let group = app.session.says(&["group", "new", "work"]);
@@ -38,7 +38,6 @@ fn the_sidebar_is_arranged_from_the_command_line() {
     app.session.says(&["group", "delete", &group]);
     let report = status(&app);
     assert_eq!(report["groups"].as_array().map(Vec::len), Some(0));
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 #[test]

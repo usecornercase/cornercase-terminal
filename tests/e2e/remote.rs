@@ -216,7 +216,6 @@ fn older_there(name: &str, body: &str, args: &[&str]) -> (std::process::Output, 
     write_executable(&old, &format!("#!/bin/sh\n{body}\n"));
     let path = old.display().to_string();
     let out = remote_refusal(args, &path);
-    let _ = std::fs::remove_dir_all(&dir);
     (out, path)
 }
 
@@ -586,9 +585,9 @@ fn the_machines_a_window_reached_read_as_text() {
 
 #[test]
 fn the_files_of_the_other_machine_are_listed_and_read_by_absolute_path() {
+    let dir = temp_dir("remote-files");
     let session = Session::new();
     remote_says(&session, &["start-server"]);
-    let dir = temp_dir("remote-files");
     std::fs::create_dir(dir.join("sub")).expect("create a folder");
     std::fs::write(dir.join("hello.txt"), "hi there\n").expect("write a file");
     let folder = dir.display().to_string();
@@ -605,7 +604,6 @@ fn the_files_of_the_other_machine_are_listed_and_read_by_absolute_path() {
         .collect();
     assert_eq!(entries, ["sub", "hello.txt"], "{listed}");
     assert_eq!(read, "hi there");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

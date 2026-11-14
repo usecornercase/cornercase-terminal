@@ -189,11 +189,7 @@ fn clients_starting_at_once_share_one_server() {
 
 #[test]
 fn a_new_server_reopens_the_saved_projects() {
-    let mut app = Harness::start();
-    let name = format!("ccrs-{}", std::process::id());
-    let dir = temp_dir_named(&name);
-    app.open_project(1, &dir);
-    app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
+    let (_dir, name, mut app) = sidebar::with_a_second_project("ccrs");
     app.session.wait_for_saved("both projects are saved", |saved| saved.contains(name.as_str()));
 
     let out = app.session.run("kill-server");
@@ -202,7 +198,6 @@ fn a_new_server_reopens_the_saved_projects() {
     let mut again = app.attach(ROWS, COLS);
 
     again.wait_for("both projects come back", |s| s.contains(&first_entry()) && s.contains(&entry(&name)));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -286,8 +281,8 @@ fn a_bare_socket_name_is_checked_in_the_folder_it_runs_in() {
 
 #[test]
 fn a_debug_build_keeps_to_the_folders_of_its_source_tree() {
+    let home = TempDir::at(PathBuf::from(format!("/tmp/cch-{}-home", std::process::id())));
     let session = Session::new();
-    let home = PathBuf::from(format!("/tmp/cch-{}-home", std::process::id()));
     let run = session.dir.join("run");
     let own = |args: &[&str]| {
         let mut cmd = session.command();
@@ -295,7 +290,7 @@ fn a_debug_build_keeps_to_the_folders_of_its_source_tree() {
             .env_remove(SOCKET_ENV)
             .env_remove("XDG_STATE_HOME")
             .env_remove("XDG_CONFIG_HOME")
-            .env("HOME", &home)
+            .env("HOME", &*home)
             .env("XDG_RUNTIME_DIR", &run);
         cmd.output().expect("run cornercase")
     };
@@ -308,7 +303,6 @@ fn a_debug_build_keeps_to_the_folders_of_its_source_tree() {
     assert!(!status.status.success(), "{status:?}");
     assert!(String::from_utf8_lossy(&status.stderr).contains("no cornercase server is running"), "{status:?}");
     assert!(home.join(".local/state").join(own_folder()).is_dir());
-    let _ = std::fs::remove_dir_all(&home);
 }
 
 const KEEP_THE_FOLDER: &str = "Point CORNERCASE_SOCKET at a socket in a folder only you can write to";

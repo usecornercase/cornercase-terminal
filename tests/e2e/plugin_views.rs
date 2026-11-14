@@ -26,30 +26,23 @@ command = ["/bin/sh", "-c", 'read x; echo "$x $CORNERCASE_CONTEXT $CORNERCASE_WO
 
 struct Served {
     session: Arc<Session>,
-    plugin: PathBuf,
-    other: PathBuf,
+    _plugin: TempDir,
+    other: TempDir,
     workspace: u64,
 }
 
-impl Drop for Served {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.plugin);
-        let _ = std::fs::remove_dir_all(&self.other);
-    }
-}
-
 fn served(test: &str) -> Served {
+    let plugin = temp_dir_named(&format!("ccviewplug-{test}-{}", std::process::id()));
+    let other = temp_dir_named(&format!("ccviewother-{test}-{}", std::process::id()));
     let session = Session::new();
     let started = session.cold(&["start-server", "--cols", "100", "--rows", "30"]);
     assert!(started.status.success(), "{started:?}");
-    let plugin = temp_dir_named(&format!("ccviewplug-{test}-{}", std::process::id()));
     std::fs::write(plugin.join("cornercase-plugin.toml"), MANIFEST).expect("manifest");
     session.says(&["plugin", "link", &plugin.display().to_string()]);
     session.says(&["plugin", "enable", "acme.e2e"]);
-    let other = temp_dir_named(&format!("ccviewother-{test}-{}", std::process::id()));
     let opened = said(&session, &["open", &other.display().to_string(), "--json"]);
     let workspace = opened["workspace"].as_u64().expect("its workspace");
-    Served { session, plugin, other, workspace }
+    Served { session, _plugin: plugin, other, workspace }
 }
 
 fn said(session: &Session, args: &[&str]) -> Value {

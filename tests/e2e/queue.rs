@@ -98,7 +98,7 @@ fn an_expired_undo_number_cannot_restore_a_removal_from_the_next_server() {
 }
 
 fn repository_project(app: &Harness, name: &str) -> String {
-    let repo = temp_dir(name);
+    let repo = app.session.folder(name);
     git(&repo, &["init", "--quiet"]);
     std::fs::write(repo.join("README"), "hello\n").expect("write a file");
     git(&repo, &["add", "--all"]);
@@ -162,7 +162,7 @@ fn a_routine_with_a_gap_that_is_too_short_or_a_plain_folder_is_refused() {
         .output()
         .expect("wrong usage");
     assert_eq!(mixed.status.code(), Some(2), "{mixed:?}");
-    let folder = temp_dir("routine-folder");
+    let folder = app.session.folder("routine-folder");
     let plain = app.session.says(&["open", &folder.display().to_string(), "--focus"]);
     let refused = app
         .session
