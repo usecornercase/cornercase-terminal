@@ -37,9 +37,17 @@ fn inner(list: Rect) -> Rect {
     Rect { x: list.x.saturating_add(1), width: list.width.saturating_sub(1), ..list }
 }
 
+fn shown_rows(list: Rect, card: &BotCard) -> usize {
+    let room = usize::from(list.height.saturating_sub(HEADER));
+    if card.rows.len() > room { room.saturating_sub(1).max(1).min(room) } else { card.rows.len() }
+}
+
 pub(crate) fn card_folder(list: Rect, card: &BotCard) -> Rect {
     let list = inner(list);
     let at = card.rows.iter().position(|row| row.folder).unwrap_or(usize::MAX);
+    if at >= shown_rows(list, card) {
+        return Rect::default();
+    }
     let y = list.y.saturating_add(HEADER).saturating_add(u16::try_from(at).unwrap_or(u16::MAX));
     Rect { y, height: 1, ..list }.intersection(list)
 }
@@ -51,8 +59,7 @@ pub(in crate::ui) fn draw_card(f: &mut Frame, view: &View, card: &BotCard, areas
     let bold = Style::default().add_modifier(Modifier::BOLD);
     let name = Line::from(Span::styled(truncate_right(&card.name, width), bold));
     f.render_widget(Paragraph::new(name), Rect { height: 1, ..list }.intersection(list));
-    let room = usize::from(list.height.saturating_sub(HEADER));
-    let shown = if card.rows.len() > room { room.saturating_sub(1) } else { card.rows.len() };
+    let shown = shown_rows(list, card);
     for (i, row) in card.rows.iter().take(shown).enumerate() {
         f.render_widget(Paragraph::new(card_line(view, row, width)), card_row(list, i));
     }

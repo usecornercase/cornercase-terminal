@@ -191,3 +191,36 @@ fn the_card_lists_the_bot_and_its_folder_is_a_target() {
     let a = areas();
     assert_eq!(card_folder(a.workspaces_list, &card).y, a.workspaces_list.y + 1);
 }
+
+fn long_card() -> BotCard {
+    BotCard {
+        name: "prs".into(),
+        rows: vec![
+            CardRow { folder: true, ..CardRow::new("folder", "~/bots/prs") },
+            CardRow::new("agent", "Claude Code"),
+            CardRow::new("model", "opus"),
+            CardRow::new("effort", "high"),
+            CardRow { red: true, ..CardRow::new("access", "full access") },
+            CardRow::new("made", "2026-11-14"),
+        ],
+    }
+}
+
+#[test]
+fn a_card_in_a_short_column_says_how_many_rows_it_hides() {
+    let v = View { bot_card: Some(long_card()), has_project: true, ..view(&["cornercase"]) };
+    let (width, height) = (100, 12);
+    let t = render_sized(&v, width, height);
+    let text = format!("{}", t.backend());
+    assert!(text.contains("↓ 3 more") && text.contains("folder"), "{text}");
+    insta::assert_snapshot!(t.backend());
+}
+
+#[test]
+fn the_folder_target_follows_the_rows_that_are_drawn() {
+    let card = long_card();
+    let list = Rect::new(0, 3, 25, 2);
+    assert_eq!(card_folder(list, &card).y, 4);
+    let none = Rect::new(0, 3, 25, 1);
+    assert!(card_folder(none, &card).is_empty());
+}
