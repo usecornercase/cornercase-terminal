@@ -4,7 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.72
 
-- **A message from another machine names that machine in the command it says to run.** When `cornercase --remote vps send --pane 7 --enter -- "…"` failed with `not confirmed`, the message ended with `cornercase read --pane 7` shows where it is, and that command, run as written, read pane 7 of this computer's server. Now it says `cornercase --remote vps read --pane 7`, with `--remote-command` when you gave one and also when `CORNERCASE_REMOTE` chose the machine. Every command a message from there names gets it (`cornercase --remote vps status` lists them, `cornercase --remote vps keys --pane 7 0`): in the command's error, in each line of `requests --follow` and `input --follow`, and in the `error` of each entry with `--json`. So do the messages this command writes about that machine (`config set` with an unknown setting, `account remove`, `flow hide`, `flow runs`, `agents close`, `plugin run`). `update`, `restart`, `kill-server`, `logs` and the plugin commands that run on that machine still print that machine's own messages as they are.
+- **A merged run's message no longer points at the window's ▶.** The `flow-merged` message programs get from `cornercase events --notices` now reads `pull request merged in fix-login: 2 agents closed` (or `…: 5 agents closed, 15.7 GB of builds freed`), without ` · ▶ on the workspace reopens them`, which only the window can offer: a program brings the agents back with `cornercase agents reopen --workspace ID`. The window's toast still says it.
+- **A program can tell when freeing a merged run's builds failed.** When `--free-builds` could not free a worktree or a folder, the `flow-merged` message has `failed: true` in `--json` (left out otherwise), where the window's toast shows ✗, so a program no longer has to read the words. `cornercase contract` lists the feature `message-failed`.
 
 ## 0.13.71
 

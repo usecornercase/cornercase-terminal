@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use self::said::{Outcome, TreeFreed, builds_said};
 use crate::app::App;
-use crate::app::closed_agents::{Plan, closed_and, closed_message};
+use crate::app::closed_agents::{Plan, closed_and, closed_words, reopen_hint};
 use crate::app::control::worktrees::Freeing;
 use crate::app::event::AppEvent;
 use crate::app::notifications::{Message, MessageKind};
@@ -89,11 +89,11 @@ impl App {
         if free {
             return self.close_to_free(at, plan, merged, now);
         }
-        let said = format!("{merged}: {}", closed_message(plan.agents.len()));
-        self.close_agents_saying(plan, said.clone());
+        let said = format!("{merged}: {}", closed_words(plan.agents.len(), None));
+        self.close_agents_saying(plan, format!("{said}{}", reopen_hint(plan.agents.len())));
         let panes = plan.agents.clone();
         self.publish_message(Message {
-            kind: MessageKind::FlowMerged,
+            kind: MessageKind::FlowMerged { failed: false },
             text: said,
             workspace: Some(plan.place.1),
             panes,
@@ -146,15 +146,19 @@ impl App {
             Ok(trees) => builds_said(trees),
             Err(e) => (format!("could not free the builds: {e}"), true),
         };
-        let text = format!("{}: {}", entry.merged, closed_and(entry.agents.len(), Some(&clause)));
-        let mut toast = Toast::new(text.clone(), if failed { ui::ToastIcon::Bug } else { ui::ToastIcon::Check });
+        let count = entry.agents.len();
+        let text = format!("{}: {}", entry.merged, closed_words(count, Some(&clause)));
+        let mut toast = Toast::new(
+            format!("{text}{}", reopen_hint(count)),
+            if failed { ui::ToastIcon::Bug } else { ui::ToastIcon::Check },
+        );
         if self.agents.closed.has_run(entry.workspace) {
             toast.undo = Some(Undo::Agents(entry.workspace));
         }
         self.messages.toast = Some(toast);
         log::info!("flow", "builds freed after the merge", workspace = entry.workspace, failed = failed);
         let (workspace, panes) = (Some(entry.workspace), entry.agents);
-        self.publish_message(Message { kind: MessageKind::FlowMerged, text, workspace, panes });
+        self.publish_message(Message { kind: MessageKind::FlowMerged { failed }, text, workspace, panes });
     }
 }
 

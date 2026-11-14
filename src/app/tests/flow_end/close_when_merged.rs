@@ -47,7 +47,10 @@ fn a_merged_run_with_nothing_at_work_closes_its_agents_after_three_minutes() {
     let said = repo.app.messages.toast.as_ref().expect("a toast").message.clone();
     let events = repo.app.take_events();
     let ids = crate::control::Ids { project: Some(repo.app.projects[0].id), workspace: Some(id), ..Default::default() };
-    let told = vec![("flow-merged".to_string(), said, plan.agents.clone(), ids)];
+    let label = repo.app.projects[0].workspaces[1].label();
+    let words = format!("pull request merged in {label}: {} agents closed", plan.agents.len());
+    assert_eq!(said, format!("{words} · ▶ on the workspace reopens them"));
+    let told = vec![("flow-merged".to_string(), words, plan.agents.clone(), ids)];
     assert_eq!((messages(&events, 1), messages(&events, 2)), (told.clone(), told));
     let silent = messages(&events, 3);
     assert!(silent.is_empty(), "{silent:?}");
@@ -56,7 +59,6 @@ fn a_merged_run_with_nothing_at_work_closes_its_agents_after_three_minutes() {
     assert_eq!((runs.len(), runs[0].run, runs[0].state.as_deref()), (1, run, Some("closed")));
     assert!(!runs[0].close_when_merged);
     let toast = repo.app.messages.toast.as_ref().expect("a toast");
-    assert!(toast.message.contains("merged in") && toast.message.contains("agents closed"), "{}", toast.message);
     assert_eq!(toast.view().button, Some(ui::ToastButton::Reopen));
     pump_until(&mut repo.app, &repo.rx, "the tabs go", |a| a.projects[0].workspaces[1].tabs.is_empty());
     assert!(path.is_dir());

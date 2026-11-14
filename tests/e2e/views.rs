@@ -151,6 +151,7 @@ fn notify_reaches_a_program_with_no_window() {
         (&json!("notify"), &json!("the release build is ready"), &json!([]))
     );
     assert!(message.get("project").is_none() && message.get("workspace").is_none(), "{message}");
+    assert!(message.get("failed").is_none(), "{message}");
     session.says(&["notify", "again"]);
     heard.until("the second message", |line| is_message(line) && line["message"] == "again");
 }

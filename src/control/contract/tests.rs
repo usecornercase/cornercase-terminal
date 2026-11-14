@@ -112,6 +112,11 @@ mod describing {
     }
 
     #[test]
+    fn a_failed_message_is_a_feature() {
+        assert!(FEATURES.contains(&"message-failed"));
+    }
+
+    #[test]
     fn the_events_watch_surface_view_app_changes_flow_and_files_streams_are_version_one() {
         let descriptor = describe("1-2", &[]);
 

@@ -1,0 +1,1 @@
+{"time":"2026-10-16T09:30:00.123Z","event":"message","kind":"flow-merged","message":"pull request merged in fix-login: 5 agents closed, 9.8 GB of builds freed; could not free coder A's worktree: it is being removed","panes":[4,5],"failed":true,"project":1,"workspace":2}
