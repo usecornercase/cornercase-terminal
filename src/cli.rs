@@ -573,10 +573,10 @@ fn event_line(value: &Value) -> String {
             let who = (*holder, kind.as_deref(), *direction);
             tunnel_line(*port, *local, (state, error.as_deref()), who)
         }
-        (_, What::Dropped { count }) => format!(
+        (_, What::Dropped { count }) => client::hinted(format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
             if *count == 1 { "" } else { "s" }
-        ),
+        )),
         (None, _) => value.to_string(),
     }
 }

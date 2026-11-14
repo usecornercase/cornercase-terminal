@@ -159,6 +159,14 @@ fn convert(setting: &Setting, text: &str) -> Result<Value> {
     })
 }
 
+fn piped(key: &str) -> String {
+    let line = match client::used_remote() {
+        Some(remote) => remote.line(&format!("config secret {key}")),
+        None => format!("cornercase config secret {key}"),
+    };
+    format!("printf '%s' \"$TOKEN\" | {line}")
+}
+
 fn read_secret(key: &str) -> Result<String> {
     let stdin = std::io::stdin();
     let mut text = String::new();
@@ -166,7 +174,8 @@ fn read_secret(key: &str) -> Result<String> {
         let Some(hidden) = Hidden::on() else {
             return Err(Error::WrongUsage(format!(
                 "this terminal cannot hide the token as it is typed; pipe it in: \
-                 `printf '%s' \"$TOKEN\" | cornercase config secret {key}`"
+                 `{}`",
+                piped(key)
             )));
         };
         eprint!("{key} token: ");
@@ -179,9 +188,7 @@ fn read_secret(key: &str) -> Result<String> {
     }
     let token = text.trim().to_string();
     if token.is_empty() {
-        return Err(Error::WrongUsage(format!(
-            "no token on standard input: `printf '%s' \"$TOKEN\" | cornercase config secret {key}`"
-        )));
+        return Err(Error::WrongUsage(format!("no token on standard input: `{}`", piped(key))));
     }
     Ok(token)
 }

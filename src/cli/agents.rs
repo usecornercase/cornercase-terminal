@@ -39,7 +39,9 @@ pub(super) fn closed_text(closed: &AgentsClosed) -> String {
     let id = closed.workspace;
     if closed.closed {
         let count = agents(closed.agents.len());
-        return format!("closed {count} in workspace {id}; cornercase agents reopen --workspace {id} reopens them\n");
+        return client::hinted(format!(
+            "closed {count} in workspace {id}; `cornercase agents reopen --workspace {id}` reopens them\n"
+        ));
     }
     let mut text = format!("would close {} in workspace {id}:\n", agents(closed.agents.len()));
     for pane in &closed.agents {

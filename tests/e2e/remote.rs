@@ -945,3 +945,17 @@ fn a_hint_this_command_writes_about_the_server_there_names_the_remote() {
     );
     assert!(refused(&out, 2, &hint), "{out:?}");
 }
+
+#[test]
+fn a_token_hint_this_command_writes_names_the_remote() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+
+    let out = remotely(&session, &["config", "secret", "linear"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("run cornercase");
+
+    let hint = format!("| cornercase --remote devbox --remote-command {} config secret linear", bin());
+    assert!(refused(&out, 2, &hint), "{out:?}");
+}

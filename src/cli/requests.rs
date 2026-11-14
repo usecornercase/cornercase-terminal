@@ -142,11 +142,7 @@ fn checked(cli: Cli, name: &str) -> std::result::Result<Command, Answer> {
 }
 
 fn alone(name: &str) -> String {
-    let line = match client::used_remote() {
-        Some(remote) => remote.line(name),
-        None => format!("cornercase {name}"),
-    };
-    format!("`{name}` runs as a process of its own: run `{line}` on its own")
+    client::hinted(format!("`{name}` runs as a process of its own: run `cornercase {name}` on its own"))
 }
 
 fn run_line(command: Command, stdin: Option<String>, name: &str) -> Ran {
