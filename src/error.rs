@@ -125,6 +125,8 @@ pub enum Error {
     OldServer(&'static str),
     #[error("the cornercase server stopped before answering")]
     ServerGone,
+    #[error("the cornercase server stopped or restarted")]
+    ServerStopped,
     #[error(
         "the cornercase server closed the connection without stopping: it crashed, or this command stopped reading what it sends"
     )]

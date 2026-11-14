@@ -50,7 +50,7 @@ pub(super) fn start_listing(here: &Session, listed: &[(&str, &str)], reached: &[
     assert!(started.status.success(), "{started:?}");
 }
 
-fn linked_to_one() -> (Arc<Session>, Arc<Session>) {
+pub(super) fn linked_to_one() -> (Arc<Session>, Arc<Session>) {
     let machine = Session::new();
     let here = here_with(&[VPS], &[(VPS, &reach(&machine))]);
     wait_for_machine(&here, VPS, "the machine is linked", in_state("linked"));

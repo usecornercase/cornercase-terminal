@@ -3,11 +3,12 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::cli::args::tunnels::HoldArg;
 use crate::cli::quietly;
-use crate::client;
-use crate::control::{Command, Direction, TunnelFailed, TunnelHold};
+use crate::client::{self, StreamEnd};
+use crate::control::{Command, Direction, HoldEnd, HoldEnded, TunnelFailed, TunnelHold};
 use crate::error::{Error, Result};
 use crate::os::process::on_end_signal;
 use crate::remote::tunnel::{self, Forward, Reverse, Running, Watched};
@@ -19,9 +20,10 @@ const NEEDS_A_TUNNEL: &str = "`tunnel hold` needs a PORT, or --reverse LOCAL";
 enum Heard {
     Up,
     Registered,
+    Told(HoldEnd),
     Ended(String),
     Signal,
-    Stream(Result<()>),
+    Stream(Result<StreamEnd>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -119,10 +121,9 @@ fn forward(destination: &str, port: u16, wanted: Option<u16>) -> Result<bool> {
     let (tell, heard) = channel()?;
     let running = tunnel::spawn(destination, Forward { port, local }, watcher(&tell))
         .inspect_err(|error| hold.report(&error.to_string()))?;
-    let result =
-        if wait_up(&heard, hold, |reason| hold.report(reason))? { serve(&heard, tell, hold) } else { Ok(true) };
-    drop(running);
-    result
+    let ended = if wait_up(&heard, hold, |reason| hold.report(reason))? { serve(&heard, tell, hold) } else { Ok(None) };
+    running.finish();
+    said(ended)
 }
 
 fn reverse(destination: &str, local: u16, there: Option<u16>) -> Result<bool> {
@@ -131,14 +132,14 @@ fn reverse(destination: &str, local: u16, there: Option<u16>) -> Result<bool> {
     let (tell, heard) = channel()?;
     let wanted = Reverse { local, there: asked.port };
     let running = tunnel::spawn_reverse(destination, wanted, watcher(&tell))?;
-    let result = reversed(&heard, tell, &running, asked);
-    drop(running);
-    result
+    let ended = reversed(&heard, tell, &running, asked);
+    running.finish();
+    said(ended)
 }
 
-fn reversed(heard: &Receiver<Heard>, tell: Sender<Heard>, running: &Running, asked: Held) -> Result<bool> {
+fn reversed(heard: &Receiver<Heard>, tell: Sender<Heard>, running: &Running, asked: Held) -> Result<Option<HoldEnd>> {
     if !wait_up(heard, asked, |_| {})? {
-        return Ok(true);
+        return Ok(None);
     }
     let Some(port) = running.there() else {
         return Err(asked.failed("ssh did not say which port the machine listens on"));
@@ -146,19 +147,36 @@ fn reversed(heard: &Receiver<Heard>, tell: Sender<Heard>, running: &Running, ask
     serve(heard, tell, Held { port, ..asked })
 }
 
-fn serve(heard: &Receiver<Heard>, tell: Sender<Heard>, hold: Held) -> Result<bool> {
+fn heard_of(value: &Value) -> Heard {
+    match value.get("ended").and_then(|ended| serde_json::from_value(ended.clone()).ok()) {
+        Some(end) => Heard::Told(end),
+        None => Heard::Registered,
+    }
+}
+
+fn serve(heard: &Receiver<Heard>, tell: Sender<Heard>, hold: Held) -> Result<Option<HoldEnd>> {
     let registered = tell.clone();
     thread::spawn(move || {
-        let said = client::follow_all("tunnel-hold", hold.command(), |_| {
-            let _ = registered.send(Heard::Registered);
+        let said = client::follow_to_end("tunnel-hold", hold.command(), |value| {
+            let _ = registered.send(heard_of(&value));
             Ok(false)
         });
         let _ = tell.send(Heard::Stream(said));
     });
     if !wait_registered(heard, hold, |reason| hold.report(reason))? || announce(&mut io::stdout().lock(), hold)? {
-        return Ok(true);
+        return Ok(None);
     }
     held(heard, hold)
+}
+
+fn said(ended: Result<Option<HoldEnd>>) -> Result<bool> {
+    let Some(end) = ended? else { return Ok(true) };
+    say_ended(&mut io::stdout().lock(), end)?;
+    status_of(end)
+}
+
+fn status_of(end: HoldEnd) -> Result<bool> {
+    if end.server_stopped() { Err(Error::ServerStopped) } else { Ok(true) }
 }
 
 fn wait_up(heard: &Receiver<Heard>, hold: Held, report: impl FnOnce(&str)) -> Result<bool> {
@@ -170,7 +188,7 @@ fn wait_up(heard: &Receiver<Heard>, hold: Held, report: impl FnOnce(&str)) -> Re
                 report(&reason);
                 return Err(hold.failed(&reason));
             }
-            Heard::Stream(_) | Heard::Registered => {}
+            Heard::Stream(_) | Heard::Registered | Heard::Told(_) => {}
         }
     }
 }
@@ -179,21 +197,24 @@ fn wait_registered(heard: &Receiver<Heard>, hold: Held, report: impl FnOnce(&str
     loop {
         match heard.recv().unwrap_or(Heard::Signal) {
             Heard::Registered => return Ok(true),
-            Heard::Signal | Heard::Stream(Ok(())) => return Ok(false),
+            Heard::Signal | Heard::Stream(Ok(_)) => return Ok(false),
             Heard::Stream(Err(error)) => return Err(error),
             Heard::Ended(reason) => {
                 report(&reason);
                 return Err(hold.ended(&reason));
             }
-            Heard::Up => {}
+            Heard::Up | Heard::Told(_) => {}
         }
     }
 }
 
-fn held(heard: &Receiver<Heard>, hold: Held) -> Result<bool> {
+fn held(heard: &Receiver<Heard>, hold: Held) -> Result<Option<HoldEnd>> {
     loop {
         match heard.recv().unwrap_or(Heard::Signal) {
-            Heard::Signal | Heard::Stream(Ok(())) => return Ok(true),
+            Heard::Told(end) => return Ok(Some(end)),
+            Heard::Stream(Ok(StreamEnd::Stopped)) => return Ok(Some(HoldEnd::ServerStopped)),
+            Heard::Stream(Ok(StreamEnd::Restarted)) => return Ok(Some(HoldEnd::ServerRestarted)),
+            Heard::Signal | Heard::Stream(Ok(StreamEnd::Left | StreamEnd::Detached)) => return Ok(None),
             Heard::Stream(Err(error)) => return Err(error),
             Heard::Ended(reason) => return Err(hold.ended(&reason)),
             Heard::Up | Heard::Registered => {}
@@ -201,9 +222,17 @@ fn held(heard: &Receiver<Heard>, hold: Held) -> Result<bool> {
     }
 }
 
-fn announce(out: &mut impl Write, hold: Held) -> Result<bool> {
-    let text = serde_json::to_string(&hold.line()).map_err(|error| Error::Control(error.to_string()))?;
+fn write_line(out: &mut impl Write, value: &impl Serialize) -> Result<bool> {
+    let text = serde_json::to_string(value).map_err(|error| Error::Control(error.to_string()))?;
     quietly(writeln!(out, "{text}").and_then(|()| out.flush()))
+}
+
+fn announce(out: &mut impl Write, hold: Held) -> Result<bool> {
+    write_line(out, &hold.line())
+}
+
+fn say_ended(out: &mut impl Write, end: HoldEnd) -> Result<bool> {
+    write_line(out, &HoldEnded { ended: end })
 }
 
 #[cfg(test)]

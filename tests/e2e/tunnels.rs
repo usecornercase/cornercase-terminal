@@ -3,8 +3,10 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::time::Duration;
 
+use rstest::rstest;
 use serde_json::Value;
 
+use super::machines::{linked_to_one, status};
 use super::remote::{
     gone, kept_tunnels, remote_window, remotely, reverse_args, reverse_pid, tunnel_args, tunnel_pid, tunnel_pids,
 };
@@ -209,12 +211,14 @@ fn serving(app: &Harness) -> u16 {
     served_port(&app.session, pane)
 }
 
-#[test]
-fn a_program_holds_a_tunnel_without_a_window_until_it_is_closed() {
+#[rstest]
+#[case::closed("close", "closed")]
+#[case::forgotten("forget", "forgotten")]
+fn a_program_holds_a_tunnel_without_a_window_until_it_is_closed(#[case] command: &str, #[case] ended: &str) {
     let app = Harness::start();
     let port = serving(&app);
 
-    let (mut child, line, _reader) = held(&app.session, port);
+    let (mut child, line, mut reader) = held(&app.session, port);
 
     let local = line["local"].as_u64().expect("a local port");
     assert_eq!(line["port"].as_u64(), Some(u64::from(port)));
@@ -225,11 +229,28 @@ fn a_program_holds_a_tunnel_without_a_window_until_it_is_closed() {
     assert_eq!(listed(&app.session, &["tunnels", "--json"])["windows"].as_u64(), Some(0));
     let pid = tunnel_pid(&app.session, port);
 
-    app.session.says(&["tunnel", "close", &port.to_string()]);
+    app.session.says(&["tunnel", command, &port.to_string()]);
 
+    assert_eq!(next_line(&mut reader), serde_json::json!({"ended": ended}));
     assert_eq!(exit_of(&mut child), Some(0));
     wait_until("the tunnel's ssh is gone", || gone(&pid));
     assert_eq!(listed(&app.session, &["tunnels", "--json"])["tunnels"], serde_json::json!([]));
+}
+
+#[rstest]
+#[case::stopped(&["kill-server"], "server-stopped")]
+#[case::restarted(&["restart", "--yes"], "server-restarted")]
+fn a_held_tunnel_ends_with_seven_when_its_server_stops_or_restarts(#[case] command: &[&str], #[case] ended: &str) {
+    let app = Harness::start();
+    let port = serving(&app);
+    let (mut child, _line, mut reader) = held(&app.session, port);
+    let pid = tunnel_pid(&app.session, port);
+
+    app.session.says(command);
+
+    assert_eq!(next_line(&mut reader), serde_json::json!({"ended": ended}));
+    assert_eq!(exit_of(&mut child), Some(7));
+    wait_until("the tunnel's ssh is gone", || gone(&pid));
 }
 
 #[test]
@@ -298,11 +319,32 @@ fn a_held_tunnel_takes_the_local_port_it_asks_for_when_its_port_is_taken_here() 
     let port = serving(&app);
     let wanted = free_port();
 
-    let (_child, line, _reader) =
+    let (mut child, line, mut reader) =
         streaming(&app.session, &["tunnel", "hold", &port.to_string(), "--local", &wanted.to_string()]);
 
     assert_eq!(line["local"].as_u64(), Some(u64::from(wanted)), "{line}");
     assert_eq!(&read_through(wanted), b"hello");
+    app.session.says(&["tunnel", "forget", &port.to_string()]);
+    assert_eq!(next_line(&mut reader), serde_json::json!({"ended": "forgotten"}));
+    assert_eq!(exit_of(&mut child), Some(0));
+}
+
+#[test]
+fn a_linked_machine_s_holds_are_listed_under_its_entry_here() {
+    let (machine, here) = linked_to_one();
+    let port = free_port();
+    let (mut child, line, _reader) = held(&machine, port);
+    let tunnels = || status(&here)["machines"][0]["tunnels"].clone();
+
+    wait_until("the hold is listed under the machine", || tunnels()[0]["kind"] == "hold");
+
+    let tunnel = tunnels()[0].clone();
+    assert_eq!(tunnel["port"].as_u64(), Some(u64::from(port)));
+    assert_eq!(tunnel["local"], line["local"]);
+    assert_eq!(tunnel["state"], "up");
+    machine.says(&["tunnel", "close", &port.to_string()]);
+    assert_eq!(exit_of(&mut child), Some(0));
+    wait_until("the machine's entry has no tunnels", || tunnels().is_null());
 }
 
 #[test]
@@ -458,6 +500,13 @@ fn assert_reverse_line(session: &Session, local: u16) {
     }
 }
 
+fn assert_reverse_first_line(line: &Value, local: u16) {
+    let port = port_of(line);
+    assert_eq!(line["local"].as_u64(), Some(u64::from(local)));
+    assert_eq!(line["direction"].as_str(), Some("reverse"));
+    assert_eq!(line["url"].as_str(), Some(format!("http://127.0.0.1:{port}").as_str()));
+}
+
 fn assert_reverse_listed(session: &Session) {
     let list = listed(session, &["tunnels", "--json"]);
     let tunnel = &list["tunnels"][0];
@@ -469,13 +518,11 @@ fn a_program_holds_a_reverse_tunnel_until_it_is_closed() {
     let app = Harness::start();
     let local = serving_here();
 
-    let (mut child, line, _reader) = held_reverse(&app.session, local, None);
+    let (mut child, line, mut reader) = held_reverse(&app.session, local, None);
 
     let port = port_of(&line);
     assert_ne!(port, 0);
-    assert_eq!(line["local"].as_u64(), Some(u64::from(local)));
-    assert_eq!(line["direction"].as_str(), Some("reverse"));
-    assert_eq!(line["url"].as_str(), Some(format!("http://127.0.0.1:{port}").as_str()));
+    assert_reverse_first_line(&line, local);
     assert_eq!(&read_through(port), b"hello");
     assert_reverse_listed(&app.session);
     assert_reverse_line(&app.session, local);
@@ -486,6 +533,7 @@ fn a_program_holds_a_reverse_tunnel_until_it_is_closed() {
 
     app.session.says(&["tunnel", "close", "--reverse", &port.to_string()]);
 
+    assert_eq!(next_line(&mut reader), serde_json::json!({"ended": "closed"}));
     assert_eq!(exit_of(&mut child), Some(0));
     wait_until("the tunnel's ssh is gone", || gone(&pid));
     assert_eq!(listed(&app.session, &["tunnels", "--json"])["tunnels"], serde_json::json!([]));

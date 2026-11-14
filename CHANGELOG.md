@@ -4,7 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.67
 
-- Nothing changes for users: tests that failed at random on macOS are steadier, and a test that fails part-way no longer leaves running a program that ignores SIGTERM.
+- **A program that holds a tunnel learns why it ended.** `cornercase --remote vps tunnel hold 5173` (forward or `--reverse`) prints one more line when it ends: `{"ended":"closed"}` or `{"ended":"forgotten"}` after `cornercase tunnel close` or `forget` on vps, exiting 0 as before, and `{"ended":"server-stopped"}` or `{"ended":"server-restarted"}` when vps's server stops or restarts, now exiting 7 instead of 0, so the program can hold the tunnel again once the server is back instead of guessing from timings. Killed, or with its output closed, it still exits 0 with nothing more. `cornercase contract` lists the feature `tunnel-hold-ended`.
+- **Your server lists the tunnels of each machine.** Each entry of `machines` in `cornercase status --json`, `status --follow` and `view` has `tunnels`, the tunnels that machine lists (windows' and programs' holds, with their port, local port, state and holder), left out when there are none, so a program sees who else holds a tunnel to that machine without connecting there. `cornercase contract` lists the feature `machine-tunnels`.
 
 ## 0.13.66
 

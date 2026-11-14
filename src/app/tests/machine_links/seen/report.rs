@@ -1,6 +1,7 @@
 use std::time::SystemTime;
 
 use super::*;
+use crate::control::TunnelInfo;
 use crate::machines::Info;
 use crate::time::Stamp;
 
@@ -23,6 +24,30 @@ mod machines_in_status {
         let paired: Vec<_> = vps.projects.iter().map(|p| (p.name.as_str(), p.machine.as_deref(), p.paired)).collect();
         assert_eq!(paired, [("web-shop", Some("vps"), Some(Some(ours))), ("blog", Some("vps"), Some(None))]);
         assert!(vps.projects.iter().flat_map(|p| &p.workspaces).all(|w| w.machine.as_deref() == Some("vps")));
+    }
+
+    fn hold(port: u16) -> TunnelInfo {
+        TunnelInfo {
+            port,
+            local: Some(port + 1),
+            state: "up".into(),
+            error: None,
+            holder: 4,
+            kind: "hold".into(),
+            direction: None,
+        }
+    }
+
+    #[test]
+    fn list_the_tunnels_each_machine_lists() {
+        let Seeing { mut rig, mut theirs, .. } = seeing_two();
+        assert_eq!(rig.app.report(None).machines[0].tunnels, Vec::new());
+        let held = vec![hold(5173)];
+
+        serve(&mut theirs, 2, control::Report { tunnels: held.clone(), ..worked(report(&[("web-shop", None)])) });
+        rig.until("the tunnels arrive", |app| !app.report(None).machines[0].tunnels.is_empty());
+
+        assert_eq!(rig.app.report(None).machines[0].tunnels, held);
     }
 
     #[test]
@@ -154,6 +179,23 @@ mod machines_in_watch {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn a_change_of_a_machine_s_tunnels_alone_sends_a_snapshot_here() {
+        let Seeing { mut rig, mut theirs, .. } = seeing_two();
+        watch(&mut rig.app);
+        rig.app.trace();
+        snapshots(&mut rig.app);
+        let held = vec![TunnelInfo { port: 5173, state: "up".into(), ..TunnelInfo::default() }];
+        let same = worked(report(&[("web-shop", Some(SHOP)), ("blog", None)]));
+
+        serve(&mut theirs, 2, control::Report { tunnels: held.clone(), ..same });
+        rig.until("the tunnels arrive", |app| !app.report(None).machines[0].tunnels.is_empty());
+        rig.app.trace();
+
+        let got = snapshots(&mut rig.app);
+        assert_eq!(got.last().expect("a new snapshot").report.machines[0].tunnels, held);
     }
 
     #[test]

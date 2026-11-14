@@ -206,3 +206,20 @@ fn a_connection_that_holds_a_reverse_tunnel_cannot_take_orders_or_hold_again() {
     hold_reverse(&mut app, TAKER, 9225, 9222);
     assert_eq!(answer(&mut app).expect_err("taking").code, "conflict");
 }
+
+#[rstest::rstest]
+#[case::closed("tunnel-close", "closed")]
+#[case::forgotten("tunnel-forget", "forgotten")]
+fn a_reverse_end_tells_the_reverse_hold_which_and_no_other(#[case] command: &str, #[case] ended: &str) {
+    let (mut app, _rx) = app();
+    hold_reverse(&mut app, REVERSE, 9223, 9222);
+    hold_forward(&mut app, FORWARD, 9223, 5174);
+    app.take_answers();
+
+    end(&mut app, command, 9223, Some("reverse"), Instant::now());
+
+    let events = app.take_events();
+    let [(REVERSE, Streamed::Event(line)), (REVERSE, Streamed::End)] = events.as_slice() else { panic!("{events:?}") };
+    let line: Value = serde_json::from_str(line).expect("json");
+    assert_eq!(line, json!({"ok": {"ended": ended}}));
+}

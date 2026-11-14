@@ -587,7 +587,13 @@ pub(super) fn replied(text: &str) -> Option<std::result::Result<Value, Refusal>>
 }
 
 fn seen(report: control::Report) -> control::Report {
-    control::Report { boot: report.boot, home: report.home, projects: report.projects, ..control::Report::default() }
+    control::Report {
+        boot: report.boot,
+        home: report.home,
+        projects: report.projects,
+        tunnels: report.tunnels,
+        ..control::Report::default()
+    }
 }
 
 pub(super) fn listen(reader: &mut impl Read) -> Heard {

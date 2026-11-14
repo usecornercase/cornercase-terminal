@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use rstest::rstest;
+
 use super::*;
 use crate::app::events::Streamed;
 use crate::protocol::{Holding, Tunnel, TunnelOrder, TunnelState};
@@ -393,6 +395,37 @@ mod holding_for_a_program {
         app.forget(HOLD);
         app.check_requests(now);
         assert_eq!(answer(&mut app).expect("closed")["tunnels"], json!([]));
+    }
+
+    #[rstest]
+    #[case::closed("tunnel-close", "closed")]
+    #[case::forgotten("tunnel-forget", "forgotten")]
+    fn a_close_or_a_forget_tells_the_hold_which_before_its_stream_ends(#[case] command: &str, #[case] ended: &str) {
+        let (mut app, _rx) = app();
+        attached(&mut app);
+        app.tunnels_reported(WINDOW, holding(&app, vec![tunnel(5173, Some(5173), TunnelState::Up)]));
+        hold(&mut app, HOLD, 5173, 5174);
+        app.take_answers();
+        app.take_tunnel_orders();
+
+        send(&mut app, command, 5173, Instant::now());
+
+        let events: Vec<_> = app.take_events().into_iter().filter(|(client, _)| *client == HOLD).collect();
+        let [(_, Streamed::Event(line)), (_, Streamed::End)] = events.as_slice() else { panic!("{events:?}") };
+        let line: Value = serde_json::from_str(line).expect("json");
+        assert_eq!(line, json!({"ok": {"ended": ended}}));
+    }
+
+    #[test]
+    fn a_window_that_holds_the_port_is_ordered_and_told_no_line() {
+        let (mut app, _rx) = app();
+        app.tunnels_reported(WINDOW, holding(&app, vec![tunnel(5173, Some(5173), TunnelState::Up)]));
+        app.take_events();
+
+        send(&mut app, "tunnel-close", 5173, Instant::now());
+
+        assert_eq!(app.take_events(), Vec::new());
+        assert_eq!(app.take_tunnel_orders().len(), 1);
     }
 
     #[test]

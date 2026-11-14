@@ -576,6 +576,40 @@ mod watching {
     }
 
     #[test]
+    fn keeps_the_machine_s_tunnels_and_drops_its_machines() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        let mut theirs = rig.linked("vps-1");
+        let tunnel = |port, direction| control::TunnelInfo {
+            port,
+            local: Some(port + 1),
+            state: "up".into(),
+            error: None,
+            holder: 9,
+            kind: "hold".into(),
+            direction,
+        };
+        let held = vec![
+            tunnel(5173, None),
+            control::TunnelInfo {
+                error: Some("refused\u{1b}[2J\nagain".into()),
+                ..tunnel(9223, Some(control::Direction::Reverse))
+            },
+        ];
+        let report = control::Report { tunnels: held.clone(), ..shop("vps-1") };
+        let mut snapshot = serde_json::to_value(Snapshot { revision: 1, report }).expect("a snapshot");
+        snapshot["machines"] = json!([{"name": "pi", "tunnels": [{"port": 1}], "projects": []}]);
+
+        respond(&mut theirs, &Response::Ok(snapshot));
+
+        let Event::Seen(seen) = rig.event() else { panic!("not a snapshot") };
+        assert_eq!(seen.tunnels[0], held[0]);
+        assert_eq!(seen.tunnels[1].direction, Some(control::Direction::Reverse));
+        assert_eq!(seen.tunnels[1].error.as_deref(), Some("refused[2J again"));
+        assert_eq!(seen.tunnels.len(), 2);
+        assert_eq!(seen.machines, Vec::new());
+    }
+
+    #[test]
     fn cleans_and_cuts_every_text_from_the_machine_but_keeps_paths_whole() {
         let rig = Rig::new(1, &Servers::new(HERE));
         let mut theirs = rig.linked("vps-1");

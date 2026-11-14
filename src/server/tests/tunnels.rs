@@ -68,7 +68,11 @@ fn a_connection_that_holds_a_tunnel_is_detached_and_removed_when_the_tunnel_is_c
 
         request(&closer, r#"{"contract":1,"command":"tunnel-close","args":{"port":5173}}"#);
 
-        holder.received(|m| matches!(m, ServerMessage::Detached));
+        let heard = holder.received(|m| matches!(m, ServerMessage::Detached));
+        let [.., ServerMessage::Response(last), ServerMessage::Detached] = heard.as_slice() else {
+            panic!("{heard:?}")
+        };
+        assert!(last.contains("\"ended\":\"closed\""), "{last}");
         let said = closer.received(|m| matches!(m, ServerMessage::Response(_)));
         assert!(said.iter().any(|m| matches!(m, ServerMessage::Response(text) if text.contains("\"tunnels\":[]"))));
     });

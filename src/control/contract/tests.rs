@@ -91,6 +91,12 @@ mod describing {
     }
 
     #[test]
+    fn a_machine_s_tunnels_and_the_end_of_a_hold_are_features() {
+        assert!(FEATURES.contains(&"machine-tunnels"));
+        assert!(FEATURES.contains(&"tunnel-hold-ended"));
+    }
+
+    #[test]
     fn the_events_watch_surface_view_app_changes_flow_and_files_streams_are_version_one() {
         let descriptor = describe("1-2", &[]);
 

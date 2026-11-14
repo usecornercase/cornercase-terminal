@@ -35,6 +35,7 @@ impl App {
             retry_at: held.retry_at(),
             boot: seen.boot.clone(),
             projects: projects.collect(),
+            tunnels: seen.tunnels.clone(),
         })
     }
 
