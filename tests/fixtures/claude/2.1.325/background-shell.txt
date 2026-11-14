@@ -1,0 +1,5 @@
+busy state=working:app=claude-code
+shell state=done:app=claude-code
+idle state=working:app=claude-code
+busy -
+idle state=done:app=claude-code:msg=VGVzdHMgcGFzcw==

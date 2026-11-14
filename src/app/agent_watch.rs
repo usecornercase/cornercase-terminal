@@ -517,7 +517,7 @@ fn agent_in(
     remember(config, term, agent.map(|agent| (agent.name(), args.as_slice())), now);
     calibrate(term, pid, agent);
     if let Some(name) = name {
-        let activity = term.emulator.program_activity().or_else(|| term.context.activity(&title))?;
+        let activity = reported_activity(term, &title)?;
         return Some((name, activity));
     }
     let (pid, name) = term.status_agent.as_ref().filter(|_| term.shell_in_foreground())?;
@@ -525,6 +525,11 @@ fn agent_in(
         term.emulator.acknowledge_status(*pid);
     }
     term.emulator.finished_activity(*pid).map(|activity| (name.clone(), activity))
+}
+
+fn reported_activity(term: &mut Term, title: &str) -> Option<activity::Activity> {
+    let reported = term.emulator.program_activity();
+    term.context.refine(reported).or_else(|| term.context.activity(title))
 }
 
 fn calibrate(term: &mut Term, pid: Option<i32>, agent: Option<Known>) {

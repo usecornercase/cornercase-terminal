@@ -83,7 +83,7 @@ cornercase --remote devbox plugin enable my-plugin
 cornercase --remote devbox plugin logs my-plugin -f
 ```
 
-Every `plugin` command takes [`--remote`](../remote/#commands-for-scripts-and-agents) (or `CORNERCASE_REMOTE`) and acts on that machine's plugins through `ssh`, printing what it prints there and exiting with its status. Folders are that machine's: absolute, or `~/…` in quotes for its home folder; a relative one is refused. At a terminal, `install` and `update` show their preview and ask there; a program uses `--preview --json` and then `--commit`. [`plugin windows`](#window-processes) is the exception: window processes run on the machine that shows the window.
+Every `plugin` command takes [`--remote`](../remote/#commands-for-scripts-and-agents) (or `CORNERCASE_REMOTE`) and acts on that machine's plugins through `ssh`, printing what it prints there, with your `--remote` in the commands it names, and exiting with its status. Folders are that machine's: absolute, or `~/…` in quotes for its home folder; a relative one is refused. At a terminal, `install` and `update` show their preview and ask there; a program uses `--preview --json` and then `--commit`. [`plugin windows`](#window-processes) is the exception: window processes run on the machine that shows the window.
 
 ## The manifest
 

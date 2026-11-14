@@ -137,10 +137,15 @@ fn a_wait_after_a_prompt_waits_for_the_agent_to_take_it() {
     assert_eq!((early, ended.ended.is_some()), (Vec::new(), true));
 }
 
-#[test]
-fn a_turn_over_with_a_background_shell_ends_only_a_wait_for_the_turn() {
+#[rstest::rstest]
+#[case::session_file(false)]
+#[case::program_status(true)]
+fn a_turn_over_with_a_background_shell_ends_only_a_wait_for_the_turn(#[case] reports: bool) {
     let mut agent = Agent::new();
     let id = agent.start(None);
+    if reports {
+        agent.reports_its_status();
+    }
     let send = wire::SendText {
         pane: Some(id),
         text: Some("watch the tests in the background".into()),

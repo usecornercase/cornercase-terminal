@@ -398,3 +398,19 @@ fn a_workspace_aimed_before_the_machine_restarted_is_refused_after_it() {
     vps.here.says(&[&args[..], &["--boot", &new]].concat());
     vps.wait_there("the workspace is made there", |project| workspaces(project).iter().any(|w| w["name"] == "notes"));
 }
+
+#[test]
+fn a_refusal_from_a_machine_names_it_in_the_command_it_gives() {
+    let vps = on_vps();
+    let (_, project) = vps.shop_there();
+
+    let flow = ["flow", "run", "Nope", "--machine", VPS, "--project", &project, "--prompt", "x"];
+    let out = vps.here.cli(&flow);
+    assert!(refused(&out, 1, "(`cornercase flow list` there)"), "{out:?}");
+
+    let start = ["start", "--machine", VPS, "--project", "999", "--prompt", "x"];
+    let out = vps.here.cli(&start);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("`cornercase status`") && !stderr.contains("--machine vps"), "{out:?}");
+    assert!(!stderr.contains("`cornercase status` there"), "{out:?}");
+}

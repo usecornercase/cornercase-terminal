@@ -174,6 +174,19 @@ impl Reader {
         }
     }
 
+    fn refine(&mut self, reported: Option<Activity>) -> Option<Activity> {
+        match self {
+            Self::Claude(reader) => reader.refine(reported),
+            Self::Codex(_)
+            | Self::Gemini(_)
+            | Self::Opencode(_)
+            | Self::Grok(_)
+            | Self::Cursor(_)
+            | Self::Copilot(_)
+            | Self::Vibe(_) => reported,
+        }
+    }
+
     fn subagents(&self) -> usize {
         match self {
             Self::Claude(reader) => reader.subagents(),
@@ -290,6 +303,13 @@ impl Pane {
         match reader.activity(title)? {
             Activity::Idle | Activity::Shell if reader.subagents() > 0 => Some(Activity::Subagents),
             activity => Some(activity),
+        }
+    }
+
+    pub(crate) fn refine(&mut self, reported: Option<Activity>) -> Option<Activity> {
+        match self.reader.as_mut() {
+            Some(reader) => reader.refine(reported),
+            None => reported,
         }
     }
 
