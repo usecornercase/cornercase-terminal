@@ -46,6 +46,7 @@ cornercase runs natively on Windows 11 and Windows 10 from version 1809, on x64.
 | **`plugin windows` may not see its reader leave** | [`cornercase plugin windows`](../../guides/scripts-and-agents/#window-processes-beside-your-own-window) notices a program that closed its output only at the next line it can't write, which may be long after, so a program that dies without ending it leaves it and its window processes running. End it yourself, or start it in a Job object that kills it with your program. |
 | **`file://` folders in a `.code-workspace`** | In a `.code-workspace` file, folders written as `file://` URIs are skipped; plain paths work. |
 | **Some texts still look Unix** | The help of `cornercase logs` and of `cornercase flow` names Unix folders in its examples, and `cornercase status` writes a path under your user folder as `~/` followed by the rest with backslashes. |
+| **A hint's `--remote-command` is quoted for sh** | A command a message names through `--remote` quotes a `--remote-command` that holds spaces in single quotes, which Command Prompt does not group: quote it with double quotes there, or use PowerShell. |
 | **x64 only** | There is no native Arm build; Windows on Arm runs the x64 one under emulation. |
 
 ## On purpose
