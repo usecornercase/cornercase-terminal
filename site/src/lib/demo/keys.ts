@@ -37,6 +37,7 @@ export type KeysAction =
   | { kind: 'issues' }
   | { kind: 'todo' }
   | { kind: 'recap' }
+  | { kind: 'newBot' }
   | { kind: 'settings' }
   | { kind: 'usage' }
   | { kind: 'processes' }
@@ -78,6 +79,7 @@ const ROOT: KeysItem[] = [
   run('i', 'issues', { kind: 'issues' }),
   run('t', 'todo', { kind: 'todo' }),
   run('s', 'recap', { kind: 'recap' }),
+  run('b', 'new bot', { kind: 'newBot' }),
   run(',', 'settings', { kind: 'settings' }),
   run('u', 'usage', { kind: 'usage' }),
   run('k', 'processes', { kind: 'processes' }),

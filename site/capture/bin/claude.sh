@@ -11,6 +11,13 @@ dir=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 mkdir -p "$dir/sessions"
 slug=$(printf '%s' "$PWD" | tr -c 'a-zA-Z0-9' '-')
 mkdir -p "$dir/projects/$slug"
+if [ -n "${CORNERCASE_BOT:-}" ]; then
+  printf '{"type":"system","subtype":"init","model":"claude-opus-5-5","session_id":"s1"}\n'
+  printf '{"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"tool_use","name":"Bash","input":{"command":"cornercase status --json","description":"Status"}}]},"session_id":"s1"}\n'
+  printf '{"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"text","text":"Two are blocked."}]},"session_id":"s1"}\n'
+  printf '{"type":"result","subtype":"success","is_error":false,"num_turns":2,"result":"Two are blocked: #482 waits for a review and #490 fails test (macos).","session_id":"s1","usage":{"input_tokens":4,"cache_creation_input_tokens":5199,"cache_read_input_tokens":26364,"output_tokens":73}}\n'
+  exit 0
+fi
 if [ "${1:-}" = -p ] && ! printf '%s' "$*" | grep -q -- '--input-format'; then
   printf '{"type":"system","subtype":"init","model":"claude-opus-5-5"}\n'
   text=$(awk '
