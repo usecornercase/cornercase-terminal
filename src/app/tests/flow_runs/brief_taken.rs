@@ -35,6 +35,10 @@ impl Briefed {
         refreshing(&mut self.app, &self.rx, what, |app| cond(app, own));
     }
 
+    fn lost_reaches(&self, enters: usize) {
+        wait_until("the Enter reached the agent", || self.lost() >= enters);
+    }
+
     fn launching(&self) -> bool {
         self.app.agents.launches.of_pane(self.own).next().is_some()
     }
@@ -79,19 +83,23 @@ fn a_resumed_orchestrator_that_takes_its_brief_at_once_gets_one_enter() {
 
 #[test]
 fn an_orchestrator_that_never_takes_its_brief_gets_enter_a_bounded_number_of_times() {
-    let mut run = briefed(Some("deaf"), Some(Duration::from_millis(200)));
+    let mut run = briefed(Some("deaf"), None);
+    let max = usize::from(MAX_ENTERS);
 
-    run.until("the launch gives up", |app, own| app.agents.launches.of_pane(own).next().is_none());
-    let lost = run.fake.dir().join("lost");
-    wait_until("every Enter reached the agent", || {
-        std::fs::read_to_string(&lost).is_ok_and(|text| text.lines().count() >= usize::from(MAX_ENTERS))
+    run.until("the first Enter is pressed", |app, own| {
+        app.agents.launches.of_pane(own).any(|l| l.stage() == "confirm")
     });
+    let base = Instant::now();
+    run.lost_reaches(1);
+    for enters in 2..=max {
+        run.app.drive_launches(base + CONFIRM_EVERY * u32::try_from(enters - 1).expect("a small count"));
+        run.lost_reaches(enters);
+    }
+    assert!(run.launching());
+    run.app.drive_launches(base + CONFIRM_EVERY * u32::from(MAX_ENTERS));
 
     let term = pane(&run.app, run.own);
-    assert_eq!(
-        (run.lost(), term.context.prompted(), term.agent.status()),
-        (usize::from(MAX_ENTERS), None, Some(activity::Status::Idle))
-    );
+    assert_eq!((run.lost(), term.context.prompted(), term.agent.status()), (max, None, Some(activity::Status::Idle)));
     assert!(!run.launching());
 }
 
