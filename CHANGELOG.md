@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.69
+
+- **`start`, `new-workspace`, `flow run` and `focus` with `--machine` take that machine's `--boot`.** Give them the `boot` of the machine's entry in `cornercase status --json`, the one you read its ids in: when the machine's server restarted since, your server refuses with status 4 and sends nothing there, instead of starting work in, or showing, whatever took the id (`cornercase new-workspace notes --project 2 --machine vps --boot "$boot"`). A start that reaches a machine that restarted after it last reported is refused there the same way. They refused `--boot` before. `cornercase contract` lists the feature `machine-boot`; over the socket it is the `machine_boot` field of `start`, `start-with`, `new-workspace`, `flow-run` and `focus-machine`.
+
 ## 0.13.68
 
 - Nothing changes for users: tests that failed at random on macOS are steadier, and a test that fails part-way no longer leaves running a program that ignores SIGTERM.
