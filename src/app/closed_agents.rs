@@ -15,6 +15,7 @@ use crate::term::Term;
 use crate::ui;
 
 pub(super) mod dialog;
+mod exited;
 mod kept;
 pub(super) mod reopen;
 mod session;
@@ -188,7 +189,7 @@ impl App {
     pub(in crate::app) fn reopen_agents_by_key(&mut self, area: Rect) {
         let Some(workspace) = self.project().and_then(Project::workspace).map(|w| w.id) else { return };
         self.screen.nav = None;
-        if self.agents.closed.count(workspace) > 0 {
+        if self.reopenable_count(workspace) > 0 {
             self.reopen_from_window(workspace, area);
         } else {
             self.messages.toast = Some(Toast::new(NO_CLOSED_AGENTS, ui::ToastIcon::Check));
@@ -202,7 +203,7 @@ impl App {
     pub(in crate::app) fn closed_agents_label(&self, action: MenuAction) -> Option<String> {
         Some(match action {
             MenuAction::ReopenAgents(workspace) => {
-                format!("reopen {}", agents_label(self.agents.closed.count(workspace)))
+                format!("reopen {}", agents_label(self.reopenable_count(workspace)))
             }
             MenuAction::ForgetAgents(_) => "forget closed agents".to_string(),
             MenuAction::CloseAgents(_) => "close agents".to_string(),
@@ -212,13 +213,18 @@ impl App {
 
     pub(in crate::app) fn closed_agents_menu(&self, workspace: u64) -> Vec<MenuAction> {
         let close = self.agents_close_plan(workspace).is_ok().then_some(MenuAction::CloseAgents(workspace));
-        let kept = self.agents.closed.count(workspace) > 0;
-        let kept = kept.then_some([MenuAction::ReopenAgents(workspace), MenuAction::ForgetAgents(workspace)]);
-        close.into_iter().chain(kept.into_iter().flatten()).collect()
+        let reopen = (self.reopenable_count(workspace) > 0).then_some(MenuAction::ReopenAgents(workspace));
+        let forget = (self.agents.closed.count(workspace) > 0).then_some(MenuAction::ForgetAgents(workspace));
+        close.into_iter().chain(reopen).chain(forget).collect()
     }
 
     pub(in crate::app) fn reopen_from_window(&mut self, workspace: u64, area: Rect) {
-        match self.reopen_agents(workspace, area) {
+        let reopened = if self.agents.closed.of(workspace).is_some() {
+            self.reopen_agents(workspace, area)
+        } else {
+            self.reopen_exited(workspace)
+        };
+        match reopened {
             Ok(done) => {
                 let place = self.projects.workspace_index(workspace).map(|at| self.place_name(at)).unwrap_or_default();
                 let message = format!("{} reopened in {place}", agents_label(done.panes.len()));

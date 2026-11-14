@@ -82,6 +82,7 @@ pub(super) mod a_bug {
                 collapsed: false,
                 accounts: std::collections::BTreeMap::new(),
                 closed: None,
+                exited_agent: None,
             }],
             active: 0,
             layout: None,

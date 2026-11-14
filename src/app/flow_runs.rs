@@ -780,10 +780,20 @@ impl App {
             return;
         };
         let Some(line) = self.resume_line(Some(&run.flow.orchestrator), agent, run.dir.as_deref()) else { return };
+        self.launch_briefed(run, (term.id, term.resuming), line, prompt);
+    }
+
+    pub(super) fn launch_briefed(
+        &mut self,
+        run: &Run,
+        (pane, until): (u64, Option<Instant>),
+        line: String,
+        prompt: String,
+    ) {
         let spec = launch::Spec { command: line, prompt: Some(prompt), submit: true, trusted: true };
-        let mut launch = Launch::new(term.id, spec, Instant::now());
-        launch.after = run.members.iter().map(|m| m.pane).filter(|pane| *pane != term.id).collect();
-        launch.resume = term.resuming;
+        let mut launch = Launch::new(pane, spec, Instant::now());
+        launch.after = run.members.iter().map(|m| m.pane).filter(|other| *other != pane).collect();
+        launch.resume = until;
         self.agents.launches.replace(launch);
     }
 }

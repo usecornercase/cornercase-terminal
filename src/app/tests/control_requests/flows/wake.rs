@@ -6,7 +6,7 @@ use crate::app::WATCH_AGENTS_EVERY;
 use crate::control::{FlowRuns, Snapshot};
 use crate::flows::run::{Member, RETRIES, RETRY_AFTER, Run};
 
-fn team(agent: &mut Agent, roles: &[&str]) -> Vec<u64> {
+pub(super) fn team(agent: &mut Agent, roles: &[&str]) -> Vec<u64> {
     let panes: Vec<u64> = roles.iter().map(|_| agent.start(None)).collect();
     let workspace = agent.app.projects[0].workspaces[0].id;
     let mut run = Run::new(workspace, pair(), "task".into());
@@ -15,26 +15,26 @@ fn team(agent: &mut Agent, roles: &[&str]) -> Vec<u64> {
     panes
 }
 
-fn prompts_in(app: &App, id: u64) -> usize {
+pub(super) fn prompts_in(app: &App, id: u64) -> usize {
     let Some(context::Record::Claude(path)) = pane(app, id).context.record_for(Known::Claude) else { return 0 };
     std::fs::read_to_string(path).map_or(0, |text| text.matches("\"type\":\"user\"").count())
 }
 
-fn prompts(agent: &Agent, id: u64) -> usize {
+pub(super) fn prompts(agent: &Agent, id: u64) -> usize {
     prompts_in(&agent.app, id)
 }
 
-fn reads(agent: &mut Agent, count: u32) {
+pub(super) fn reads(agent: &mut Agent, count: u32) {
     let start = agent.app.agents.watched().unwrap_or_else(Instant::now);
     let until = start + WATCH_AGENTS_EVERY * count;
     agent.refreshing("the agents are read again", |app| app.agents.watched().is_some_and(|at| at >= until));
 }
 
-fn working(agent: &mut Agent, id: u64) {
+pub(super) fn working(agent: &mut Agent, id: u64) {
     agent.refreshing("the agent works", |app| pane(app, id).agent.status() == Some(activity::Status::Working));
 }
 
-fn sends(agent: &mut Agent, from: u64, to: u64, text: &str) {
+pub(super) fn sends(agent: &mut Agent, from: u64, to: u64, text: &str) {
     ask(&mut agent.app, Some(from), send_text(to, text, true, false));
     done(agent.answered("the send is confirmed"));
 }
@@ -249,7 +249,7 @@ fn an_ended_run_is_not_retried() {
     assert_eq!(prompts(&agent, o), 1);
 }
 
-fn stopped(agent: &mut Agent) -> Option<String> {
+pub(super) fn stopped(agent: &mut Agent) -> Option<String> {
     agent.app.clients.events.runs.set_every(Duration::ZERO);
     let answer = value(&mut agent.app, None, Command::FlowRuns(wire::FlowRunsWatch::default()));
     let fed: Snapshot<FlowRuns> = serde_json::from_value(answer).expect("a runs snapshot");

@@ -20,6 +20,20 @@ fn over(ended: Option<&'static str>) -> bool {
     ended.is_some_and(|ended| ended != Status::Waiting.name())
 }
 
+struct Watched {
+    id: u64,
+    ended: Option<&'static str>,
+    stopped: bool,
+    exited: Vec<u64>,
+}
+
+fn log_exited(run: &Run, exited: &[u64]) {
+    for pane in exited.iter().filter(|pane| !run.exited.contains(pane)) {
+        let role = run.role_of(*pane).unwrap_or_default();
+        log::info!("flow", "a role's agent exited", workspace = run.workspace, role = role);
+    }
+}
+
 impl App {
     pub(in crate::app) fn follow_sent_work(&mut self, now: Instant) {
         if self.agents.watched() != Some(now) {
@@ -30,7 +44,7 @@ impl App {
         self.wake_orchestrators(now);
     }
 
-    fn orchestrator_state(&self, run: &Run) -> (Option<&'static str>, bool) {
+    fn orchestrator_state(&self, run: &Run, exited: &[u64]) -> (Option<&'static str>, bool) {
         let Some(term) = run.pane_of(ORCHESTRATOR).and_then(|pane| self.projects.pane_by(pane)) else {
             return (Some(Status::Pending.name()), false);
         };
@@ -40,25 +54,29 @@ impl App {
         let working = |member: &crate::flows::run::Member| {
             self.projects.pane_by(member.pane).is_some_and(|term| term.agent.status() == Some(Status::Working))
         };
-        let resting = term.agent.status().is_some_and(|status| status != Status::Working);
+        let gone = exited.contains(&term.id);
+        let resting = gone || term.agent.status().is_some_and(|status| status != Status::Working);
         let stopped = resting && !run.members.iter().any(working) && !self.runs.waking(run.id);
         (turn_ended(&term.agent), stopped)
     }
 
     fn watch_orchestrators(&mut self, now: Instant) {
-        let seen: Vec<(u64, Option<&'static str>, bool)> = self
+        let seen: Vec<Watched> = self
             .runs
             .all()
             .iter()
             .map(|run| {
-                let (ended, stopped) = self.orchestrator_state(run);
-                (run.id, ended, stopped)
+                let exited = self.exited_panes(run, now);
+                let (ended, stopped) = self.orchestrator_state(run, &exited);
+                Watched { id: run.id, ended, stopped, exited }
             })
             .collect();
-        for (id, ended, stopped) in seen {
+        for Watched { id, ended, stopped, exited } in seen {
             let Some(run) = self.runs.run_mut(id) else { continue };
             run.retry.saw(ended, now);
             run.stopped = stopped.then(|| run.stopped.unwrap_or_else(SystemTime::now));
+            log_exited(run, &exited);
+            run.exited = exited;
         }
     }
 
@@ -137,10 +155,11 @@ impl App {
         if failed && let Some(run) = self.runs.run_mut(id) {
             run.retry.sent();
         }
-        let named = |failed: bool| -> Vec<(String, u64)> {
-            roles.iter().filter(|due| due.failed == failed).map(|due| (due.role.clone(), due.pane)).collect()
+        let named = |failed: bool, back: bool| -> Vec<(String, u64)> {
+            let same = |due: &&Due| due.back == back && (back || due.failed == failed);
+            roles.iter().filter(same).map(|due| (due.role.clone(), due.pane)).collect()
         };
-        let text = brief::woken(failed, &named(false), &named(true));
+        let text = brief::woken(failed, &named(false, false), &named(true, false), &named(false, true));
         let Some(workspace) = self.runs.all().iter().find(|run| run.id == id).map(|run| run.workspace) else { return };
         let client = CLIENTS + self.runs.next_wake();
         self.runs.start_wake(Wake { client, run: id, workspace, roles: roles.clone() });
@@ -176,7 +195,7 @@ impl App {
     fn tell_person(&mut self, workspace: u64, roles: &[Due]) {
         let Some(at) = self.projects.workspace_index(workspace) else { return };
         let project = self.projects[at.project()].id;
-        for due in roles {
+        for due in roles.iter().filter(|due| !due.back) {
             self.notify(Notice {
                 agent: &due.role,
                 status: if due.failed { Status::Failed } else { Status::Done },

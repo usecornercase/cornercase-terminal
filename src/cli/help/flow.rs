@@ -176,9 +176,14 @@ and a restart forgets what was not run.
 
 A run that closes its agents once its pull request merges says so (close_when_merged with --json), and one that frees its builds then too (free_builds).
 
-A run that has stopped moving (its orchestrator's turn is over, no agent of the team works, it has not
-ended and no wake is being sent) says `stopped moving 50 min ago: …` (stopped with --json, the UTC time it
-stopped, left out while the run moves).
+A run that has stopped moving (its orchestrator's turn is over or its agent exited, no agent of the team works,
+it has not ended and no wake is being sent) says `stopped moving 50 min ago: …` (stopped with --json, the UTC
+time it stopped, left out while the run moves).
+
+A role whose agent exited by itself while its tab is still open says `exited` (exited: true with --json) where a
+role not started yet says `-`, and the run adds `exited: coder; cornercase agents reopen --workspace 7 brings it
+back`. A run whose orchestrator's agent exited has stopped moving too: `stopped moving 5 min ago: the
+orchestrator's agent exited`.
 
 Examples:
   cornercase flow runs

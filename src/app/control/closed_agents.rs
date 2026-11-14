@@ -92,8 +92,11 @@ impl App {
         area: Option<Rect>,
     ) -> Handled {
         let workspace = self.closed_target(asker, ask.workspace)?;
-        let area = sized(area)?;
-        let done = self.reopen_agents(workspace, area)?;
+        let done = if self.agents.closed.of(workspace).is_some() {
+            self.reopen_agents(workspace, sized(area)?)?
+        } else {
+            self.reopen_exited(workspace)?
+        };
         Ok(Some(json(&reopened_answer(done))))
     }
 

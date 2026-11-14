@@ -45,9 +45,9 @@ struct Spawned {
     parents: Parents,
 }
 
-struct Place {
-    trees: Vec<RoleWorktree>,
-    path: PathBuf,
+pub(super) struct Place {
+    pub(super) trees: Vec<RoleWorktree>,
+    pub(super) path: PathBuf,
 }
 
 struct Tabs<'a> {
@@ -61,6 +61,17 @@ struct Setup<'a> {
     dir: PathBuf,
     run_dir: Option<PathBuf>,
     area: Rect,
+}
+
+pub(super) fn missing_refusal(missing: Vec<String>) -> Refusal {
+    Refusal::new(
+        Code::Failed,
+        format!(
+            "reopening needs {}, which this server cannot find on its PATH; install it, or set its command in \
+             settings → agents",
+            missing.join(", ")
+        ),
+    )
 }
 
 impl App {
@@ -94,16 +105,7 @@ impl App {
         });
         let kinds: Vec<&str> =
             panes.map(|closed| closed.kind.as_str()).chain(roles).filter(|k| !k.is_empty()).collect();
-        self.agents_missing(kinds.into_iter()).map_err(|missing| {
-            Refusal::new(
-                Code::Failed,
-                format!(
-                    "reopening needs {}, which this server cannot find on its PATH; install it, or set its command \
-                     in settings → agents",
-                    missing.join(", ")
-                ),
-            )
-        })?;
+        self.agents_missing(kinds.into_iter()).map_err(missing_refusal)?;
         Ok(at)
     }
 
@@ -268,8 +270,7 @@ impl App {
         let (place, dir) = at;
         let now = Instant::now();
         let launch = if let Some(role) = role {
-            let branch = place.trees.iter().find(|tree| tree.role == role.name).map(|tree| tree.branch.as_str());
-            Launch::new(pane, self.flow_spec(role, brief::member(role, branch, dir), dir), now)
+            self.member_launch(pane, role, (&place.trees, dir))
         } else {
             let line = agents::fresh_line(&self.config, &closed.kind, closed.mode.as_deref());
             Launch::restart(pane, line, format!("starting {}", closed.kind), now, now + RESUME_GRACE)
@@ -326,7 +327,6 @@ impl App {
     }
 
     fn seat_team(&mut self, run: &mut Run, team: &[Tab], place: &Place, info: &mut Reopened) {
-        let now = Instant::now();
         let dir = run.dir.clone();
         for tab in team {
             let (Some(role_name), Some(seat)) = (&tab.name, tab.panes.first()) else { continue };
@@ -341,9 +341,8 @@ impl App {
             let Some(role) = run.flow.role(role_name).filter(|role| role.name != flows::ORCHESTRATOR).cloned() else {
                 continue;
             };
-            let branch = place.trees.iter().find(|tree| tree.role == role.name).map(|tree| tree.branch.as_str());
-            let spec = self.flow_spec(&role, brief::member(&role, branch, dir.as_deref()), dir.as_deref());
-            self.agents.launches.add(Launch::new(seat.id, spec, now));
+            let launch = self.member_launch(seat.id, &role, (&place.trees, dir.as_deref()));
+            self.agents.launches.add(launch);
         }
     }
 
@@ -353,13 +352,29 @@ impl App {
             self.brief_again(run, term, brief::reopened(&run.members, dir, closed));
             return;
         }
+        self.launch_fresh_orchestrator(run, term.id, place, &brief::where_it_stands(&run.members, dir, closed));
+    }
+
+    pub(super) fn launch_fresh_orchestrator(&mut self, run: &Run, pane: u64, place: &Place, stands: &str) {
+        let dir = run.dir.as_deref();
         let branch = crate::git::branch(&place.path).unwrap_or_default();
         let everyone = brief::Team { members: &run.members, trees: &place.trees };
         let mut prompt = brief::brief(&run.flow, &run.task, &branch, everyone, dir);
-        prompt.push_str(&brief::where_it_stands(&run.members, dir, closed));
+        prompt.push_str(stands);
         let spec = self.flow_spec(&run.flow.orchestrator, prompt, dir);
-        let mut launch = Launch::new(term.id, spec, Instant::now());
-        launch.after = run.members.iter().map(|member| member.pane).filter(|pane| *pane != term.id).collect();
+        let mut launch = Launch::new(pane, spec, Instant::now());
+        launch.after = run.members.iter().map(|member| member.pane).filter(|other| *other != pane).collect();
         self.agents.launches.add(launch);
+    }
+
+    pub(super) fn member_launch(
+        &self,
+        pane: u64,
+        role: &Role,
+        at: (&[RoleWorktree], Option<&std::path::Path>),
+    ) -> Launch {
+        let (trees, dir) = at;
+        let branch = trees.iter().find(|tree| tree.role == role.name).map(|tree| tree.branch.as_str());
+        Launch::new(pane, self.flow_spec(role, brief::member(role, branch, dir), dir), Instant::now())
     }
 }

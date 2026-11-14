@@ -130,6 +130,17 @@ fn the_log_fields_never_carry_text() {
     assert!(shown.contains("Pair"), "{shown}");
 }
 
+#[test]
+fn a_role_says_it_exited_only_when_it_did() {
+    let quiet = serde_json::to_value(RoleState::default()).expect("json");
+    assert!(quiet.get("exited").is_none());
+
+    let gone = RoleState { role: "coder".into(), exited: true, ..RoleState::default() };
+    let sent = serde_json::to_value(&gone).expect("json");
+    assert_eq!(sent["exited"], serde_json::json!(true));
+    assert_eq!(serde_json::from_value::<RoleState>(sent).expect("back"), gone);
+}
+
 fn example_run() -> RunState {
     let role = |name: &str, pane: Option<u64>, tab: Option<u64>, status: Option<&str>, closed: bool| RoleState {
         role: name.into(),

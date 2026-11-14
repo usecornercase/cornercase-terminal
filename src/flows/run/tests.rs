@@ -124,10 +124,10 @@ mod sent {
 
     use super::*;
 
-    const CODER: u64 = 14;
+    pub(super) const CODER: u64 = 14;
     const REVIEWER: u64 = 15;
 
-    fn team() -> Run {
+    pub(super) fn team() -> Run {
         let mut run = run(End::Commits);
         run.members = vec![
             Member { role: ORCHESTRATOR.into(), pane: 13 },
@@ -137,7 +137,7 @@ mod sent {
         run
     }
 
-    fn message(from: &str, to: &str, kind: Kind) -> Message {
+    pub(super) fn message(from: &str, to: &str, kind: Kind) -> Message {
         Message {
             from: from.into(),
             to: to.into(),
@@ -235,6 +235,42 @@ mod sent {
     }
 }
 
+mod brought_back {
+    use super::sent::*;
+    use super::*;
+
+    #[test]
+    fn a_role_brought_back_is_due_once_and_told_apart() {
+        let mut run = team();
+        run.brought_back(CODER, Instant::now());
+
+        assert_eq!(run.due(), vec![CODER]);
+        let due = run.take_due();
+        assert_eq!(due, vec![Due { role: "coder".into(), pane: CODER, failed: false, back: true }]);
+        assert!(run.take_due().is_empty());
+    }
+
+    #[test]
+    fn the_orchestrator_talking_to_the_role_drops_it() {
+        let mut run = team();
+        run.brought_back(CODER, Instant::now());
+        run.record(message(ORCHESTRATOR, "coder", Kind::Send));
+
+        assert!(run.due().is_empty());
+    }
+
+    #[test]
+    fn a_send_to_the_role_replaces_it() {
+        let mut run = team();
+        run.brought_back(CODER, Instant::now());
+        run.sent_to(CODER, Instant::now());
+
+        assert!(run.due().is_empty());
+        assert_eq!(run.sent.len(), 1);
+        assert!(!run.sent[0].back);
+    }
+}
+
 mod merged {
     use pull_request::State;
 
@@ -320,7 +356,7 @@ mod failures {
         run.sent_to(14, Instant::now());
         run.settle(14, Seen { worked: true, ended: Some("failed"), ..Seen::default() });
         let due = run.take_due();
-        assert_eq!(due, vec![Due { role: "coder".into(), pane: 14, failed: true }]);
+        assert_eq!(due, vec![Due { role: "coder".into(), pane: 14, failed: true, back: false }]);
     }
 
     fn after(retry: &mut Retry, at: Instant, ended: &str) {

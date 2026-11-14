@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use super::{Closed, Team, brief, failed, finished, member, reopened, restored, where_it_stands, woken};
+use super::{
+    Closed, Exited, Team, back, brief, exited, exited_stands, failed, finished, member, reopened, restored,
+    where_it_stands, woken,
+};
 use crate::agents::Known;
 use crate::flows::run::{Member, RoleWorktree};
 use crate::flows::{Back, End, Flow, ORCHESTRATOR, Role, builtin, role_branch};
@@ -405,6 +408,37 @@ fn a_fresh_orchestrator_is_told_where_the_run_stands() {
 }
 
 #[test]
+fn a_resumed_orchestrator_is_told_its_agent_exited_and_who_starts_over() {
+    let notes = Exited { back: &names(&["coder", "tester"]), fresh: &names(&["coder"]) };
+
+    let text = exited(&members(), Some(folder()), &notes);
+
+    assert_holds(
+        &text,
+        &[
+            "Your agent exited, and cornercase started it again in your pane, in your own conversation.",
+            "coder is pane 14, reviewer is pane 15, security is pane 16, tester is pane 17, and you are pane 12.",
+            &format!("The run's folder is still {DIR}."),
+            "coder and tester exited too and were started again.",
+            "coder starts over in a new conversation with only its role.",
+            "If the plan was already done, answer `ok`",
+        ],
+    );
+}
+
+#[test]
+fn a_fresh_orchestrator_is_told_it_took_the_run_over() {
+    let notes = Exited { back: &[], fresh: &names(&["coder"]) };
+
+    let text = exited_stands(&members(), None, &notes);
+
+    assert!(text.starts_with("\n## Where the run stands\n"), "{text}");
+    assert!(text.contains("The orchestrator before you exited"), "{text}");
+    assert!(text.contains("coder starts over"), "{text}");
+    assert!(!text.contains("exited too"), "{text}");
+}
+
+#[test]
 fn a_restored_brief_names_the_folder() {
     let text = restored(&members(), Some(folder()));
     assert!(text.contains(&format!("Use these from now on. The run's folder is still {DIR}. Any wait")), "{text}");
@@ -479,23 +513,49 @@ mod waking {
 
     #[test]
     fn the_wake_joins_what_applies() {
-        assert!(woken(true, &[], &[]).starts_with("Your last turn ended on an error"));
-        assert_eq!(woken(false, &[], &coder()), failed(&coder()));
-        assert_eq!(woken(false, &coder(), &[]), finished(&coder()));
-        let mixed = woken(true, &[("reviewer".into(), 4)], &coder());
+        assert!(woken(true, &[], &[], &[]).starts_with("Your last turn ended on an error"));
+        assert_eq!(woken(false, &[], &coder(), &[]), failed(&coder()));
+        assert_eq!(woken(false, &coder(), &[], &[]), finished(&coder()));
+        let mixed = woken(true, &[("reviewer".into(), 4)], &coder(), &[]);
         assert!(mixed.starts_with("reviewer (pane 4) finished the work"), "{mixed}");
         assert!(mixed.contains(". coder (pane 3) ended its turn"), "{mixed}");
         assert!(mixed.ends_with("go on with the plan from where you stopped."), "{mixed}");
-        assert_eq!(woken(false, &[], &[]), "");
+        assert_eq!(woken(false, &[], &[], &[]), "");
+    }
+
+    #[test]
+    fn a_role_brought_back_is_named_with_its_pane() {
+        assert_eq!(
+            back(&coder()),
+            "coder (pane 3) exited, and cornercase started it again in its pane. Read what it last wrote with \
+             `cornercase read --last-message --pane 3`, then send it again any work it had not finished."
+        );
+        let two = back(&[("coder".into(), 3), ("reviewer".into(), 4)]);
+        assert!(
+            two.starts_with("coder (pane 3) and reviewer (pane 4) exited, and cornercase started them again"),
+            "{two}"
+        );
+        assert!(two.contains("`cornercase read --last-message --pane 3 --pane 4`"), "{two}");
+    }
+
+    #[test]
+    fn the_wake_names_the_roles_that_came_back_after_the_others() {
+        let text = woken(true, &[("reviewer".into(), 4)], &[], &coder());
+        assert!(text.contains(". coder (pane 3) exited, and cornercase"), "{text}");
+        assert_eq!(woken(false, &[], &[], &coder()), back(&coder()));
     }
 
     #[test]
     fn no_wake_holds_a_word_the_fake_agent_branches_on() {
         let texts = [
-            woken(true, &[], &[]),
-            woken(false, &[], &coder()),
-            woken(false, &coder(), &[]),
-            woken(true, &[("reviewer".into(), 4)], &coder()),
+            woken(true, &[], &[], &[]),
+            woken(false, &[], &coder(), &[]),
+            woken(false, &coder(), &[], &[]),
+            woken(true, &[("reviewer".into(), 4)], &coder(), &[]),
+            back(&coder()),
+            back(&[("coder".into(), 3), ("reviewer".into(), 4)]),
+            exited(&members(), Some(folder()), &Exited { back: &names(&["coder"]), fresh: &names(&["coder"]) }),
+            exited_stands(&members(), Some(folder()), &Exited { back: &names(&["coder"]), fresh: &names(&["coder"]) }),
         ];
         for text in texts {
             for word in ["ask", "panel", "survey", "questions", "subagent", "background", "api-error", "/compact"] {
