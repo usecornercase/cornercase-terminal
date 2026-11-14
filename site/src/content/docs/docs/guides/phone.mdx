@@ -71,6 +71,20 @@ A paired phone can type into every terminal, like you at your keyboard. Keep it 
 - Port 8443 of your computer's Tailscale address is used for cornercase; if something else already uses it with `tailscale serve`, cornercase replaces it.
 - The local port is 47681. If something else uses it, the note says so; set another one with [`remote_port`](../../reference/configuration/#remote_port).
 
+## The phone app
+
+A phone app built on cornercase's commands connects without a browser, over your Wi-Fi or Tailscale. It has its own switch, its own code and its own list of paired phones, apart from the browser's.
+
+1. In **Settings › Remote**, under **Phone app**, turn on **phone app**. The note under it lists the addresses cornercase listens on for the app (your LAN's and Tailscale's) and the port, 47682.
+2. Select **pair a phone app** and scan the code with the app. The dialog closes and a toast says **a phone app connected**. A program can do the same with `cornercase config pair app --json`, [for programs](../scripts-and-agents/#pair-a-phone).
+3. Each paired app has a row under **Phone app**, shown even while the switch is off. `Enter` on it forgets the app: its connections close at once and it needs a new code.
+
+The code holds every address cornercase listens on, so the app reaches it on whichever network it is on. When a network comes up later, the app asks `cornercase config pair app --routes` for the current addresses without scanning again.
+
+**How it is kept private.** The code works once and for ten minutes. The app trades it for a secret of its own, which cornercase keeps only as a hash in `apps.json` next to `config.json` (readable only by you); the app sends the secret in the handshake, never in an address or in `server.log`. Over your Wi-Fi the connection is `ws://`, not encrypted, so the secret crosses the network in clear: use a network you trust, or Tailscale, which encrypts it. Only the addresses of your Wi-Fi, your LAN and Tailscale are listened on, never the internet, and only while the switch is on.
+
+The first time, your computer's firewall may ask whether cornercase can accept connections on private networks: allow it.
+
 ## Without a browser
 
 An SSH app on your phone (Termius, Blink…) works too, with Tailscale or on your own network: connect to your computer with `ssh` (turn on **Remote Login** in macOS' Sharing settings) and run `cornercase`, which attaches to the same session in the compact layout. You then reconnect by hand when the connection drops.

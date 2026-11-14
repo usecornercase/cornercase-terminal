@@ -1,5 +1,5 @@
 use std::io;
-use std::net::{Shutdown, TcpListener, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -15,6 +15,7 @@ pub(crate) mod auth;
 mod bridge;
 mod http;
 mod page;
+pub(crate) mod phone;
 pub(crate) mod tailscale;
 
 use http::{Request, Response};
@@ -25,11 +26,17 @@ const HEAD_TIMEOUT: Duration = Duration::from_secs(10);
 const COOKIE_AGE: u64 = 365 * 24 * 60 * 60;
 const ACCEPT_POLL: Duration = Duration::from_millis(50);
 const REBIND_FOR: Duration = Duration::from_secs(1);
+const POLL: Duration = Duration::from_millis(10);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
+const PING_EVERY: Duration = Duration::from_secs(15);
+const SILENT_FOR: Duration = Duration::from_secs(45);
+const MAX_MESSAGE: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Event {
     Paired(u64),
     Browsers(usize),
+    AppPaired(u64),
 }
 
 struct Shared {
@@ -122,8 +129,7 @@ impl Web {
             return Ok(());
         }
         self.close();
-        let listener = bind(port)?;
-        listener.set_nonblocking(true)?;
+        let listener = bind(SocketAddr::from(([127, 0, 0, 1], port)))?;
         let stop = Arc::new(AtomicBool::new(false));
         let (context, stopped) = (self.context.clone(), Arc::clone(&stop));
         let thread = thread::spawn(move || accept(&listener, &context, &stopped));
@@ -186,10 +192,16 @@ impl Drop for Web {
     }
 }
 
-fn bind(port: u16) -> io::Result<TcpListener> {
+fn bind_now(address: SocketAddr) -> io::Result<TcpListener> {
+    let listener = TcpListener::bind(address)?;
+    listener.set_nonblocking(true)?;
+    Ok(listener)
+}
+
+fn bind(address: SocketAddr) -> io::Result<TcpListener> {
     let deadline = Instant::now() + REBIND_FOR;
     loop {
-        match TcpListener::bind(("127.0.0.1", port)) {
+        match bind_now(address) {
             Err(e) if e.kind() == io::ErrorKind::AddrInUse && Instant::now() < deadline => thread::sleep(ACCEPT_POLL),
             other => return other,
         }
@@ -202,33 +214,45 @@ fn accept(listener: &TcpListener, context: &Context, stop: &AtomicBool) {
             thread::sleep(ACCEPT_POLL);
             continue;
         };
-        if stream.set_nonblocking(false).is_err() {
-            continue;
-        }
-        if context.open.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
-            context.open.fetch_sub(1, Ordering::SeqCst);
-            continue;
-        }
-        let context = context.clone();
-        thread::spawn(move || {
-            serve(stream, &context);
-            context.open.fetch_sub(1, Ordering::SeqCst);
+        let served = context.clone();
+        spawn_counted(stream, &context.open, MAX_CONNECTIONS, move |mut stream, request| {
+            if let Some(response) = route(&request, &served, &stream) {
+                let _ = response.send(&mut stream);
+            }
         });
     }
 }
 
-fn serve(mut stream: TcpStream, context: &Context) {
+fn spawn_counted(
+    stream: TcpStream,
+    open: &Arc<AtomicUsize>,
+    most: usize,
+    work: impl FnOnce(TcpStream, Request) + Send + 'static,
+) {
+    if stream.set_nonblocking(false).is_err() {
+        return;
+    }
+    if open.fetch_add(1, Ordering::SeqCst) >= most {
+        open.fetch_sub(1, Ordering::SeqCst);
+        return;
+    }
+    let open = Arc::clone(open);
+    thread::spawn(move || {
+        read_head(stream, work);
+        open.fetch_sub(1, Ordering::SeqCst);
+    });
+}
+
+fn read_head(mut stream: TcpStream, work: impl FnOnce(TcpStream, Request)) {
     let _ = stream.set_read_timeout(Some(HEAD_TIMEOUT));
     let _ = stream.set_write_timeout(Some(HEAD_TIMEOUT));
     let Ok(Some(request)) = Request::read(&mut stream) else { return };
-    if let Some(response) = route(&request, context, &stream) {
-        let _ = response.send(&mut stream);
-    }
+    work(stream, request);
 }
 
 fn route(request: &Request, context: &Context, stream: &TcpStream) -> Option<Response> {
     if request.method != "GET" {
-        return Some(Response::new("405 Method Not Allowed", "text/plain; charset=utf-8", "only GET"));
+        return Some(Response::text("405 Method Not Allowed", "only GET"));
     }
     if let Some(asset) = page::asset(&request.path) {
         return Some(asset);
@@ -246,9 +270,7 @@ fn route(request: &Request, context: &Context, stream: &TcpStream) -> Option<Res
             bridge::run(stream, request, context);
             None
         }
-        "/ws" if !request.wants_websocket() => {
-            Some(Response::new("426 Upgrade Required", "text/plain; charset=utf-8", "a WebSocket is needed"))
-        }
+        "/ws" if !request.wants_websocket() => Some(Response::text("426 Upgrade Required", "a WebSocket is needed")),
         "/ws" => {
             log::warning!(
                 "web",
@@ -258,9 +280,9 @@ fn route(request: &Request, context: &Context, stream: &TcpStream) -> Option<Res
                 host = request.header("host").unwrap_or("none"),
                 forwarded = request.header("x-forwarded-host").unwrap_or("none"),
             );
-            Some(Response::new("403 Forbidden", "text/plain; charset=utf-8", "not paired"))
+            Some(Response::text("403 Forbidden", "not paired"))
         }
-        _ => Some(Response::new("404 Not Found", "text/plain; charset=utf-8", "not found")),
+        _ => Some(Response::text("404 Not Found", "not found")),
     }
 }
 

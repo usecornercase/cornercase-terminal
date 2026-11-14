@@ -24,7 +24,10 @@ impl Settings {
         let token = self.tokens.iter().any(|(s, _)| s.id() == key) || Via::ALL.iter().any(|v| v.target() == key);
         if token {
             Some(format!("`{key}` is a token: use the `secret` action (`cornercase config secret {key}`)"))
-        } else if key == "browsers" || Via::ALL.iter().any(|v| format!("{}.chat", v.target()) == key) {
+        } else if key == "browsers"
+            || key.starts_with("app.")
+            || Via::ALL.iter().any(|v| format!("{}.chat", v.target()) == key)
+        {
             Some(format!("`{key}` is a connection, not a setting: it can only be removed"))
         } else {
             None
@@ -163,7 +166,9 @@ impl Settings {
     pub(crate) fn secret(&mut self, key: &str, token: &Secret) -> Result<Action, Refused> {
         let row = match self.row_of_connection(key) {
             Some(row @ (Row::Token(_) | Row::Bot(_))) => row,
-            _ if key == "browsers" => return Err(Refused::Invalid(format!("`{key}` takes no secret"))),
+            _ if key == "browsers" || key.starts_with("app.") => {
+                return Err(Refused::Invalid(format!("`{key}` takes no secret")));
+            }
             Some(_) => return Err(Refused::Invalid(format!("`{key}` takes no secret"))),
             None => {
                 return Err(Refused::Unknown(format!(
@@ -197,6 +202,12 @@ impl Settings {
     pub(crate) fn removal_of(&self, key: &str) -> Result<Option<Action>, Refused> {
         if key == "browsers" {
             return Ok((self.browsers > 0).then_some(Action::ForgetBrowsers));
+        }
+        if let Some(id) = key.strip_prefix("app.") {
+            if self.apps.iter().any(|app| app.id == id) {
+                return Ok(Some(Action::ForgetApp(id.to_string())));
+            }
+            return Err(Refused::Unknown(format!("there is no connection `{key}`; `cornercase config` lists them")));
         }
         let Some(row) = self.row_of_connection(key) else {
             return Err(Refused::Unknown(format!("there is no connection `{key}`; `cornercase config` lists them")));

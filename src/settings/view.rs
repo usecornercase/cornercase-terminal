@@ -4,7 +4,7 @@ use crate::issues::{Source, naming};
 use crate::messenger::Via;
 use crate::shortcuts::Prefix;
 
-use super::{NO_PLUGINS, Page, Row, RowText, Settings, Status};
+use super::{NO_PLUGINS, Page, PairedApp, Row, RowText, Settings, Status};
 
 const RESUME_NOTE: &str = "Claude, Codex, Gemini, Vibe, Grok, Cursor, Copilot, in their tabs";
 
@@ -206,6 +206,14 @@ impl Settings {
         }
     }
 
+    fn paired_app_row(&self, id: &str) -> (String, String, String, bool) {
+        let app = self.apps.iter().find(|app| app.id == id);
+        let name = app.map_or("phone app", PairedApp::label);
+        let paired =
+            app.map_or_else(String::new, |app| crate::time::date(i64::try_from(app.paired).unwrap_or(0) * 1000));
+        ("paired app".into(), name.into(), format!("paired {paired} · enter forgets it"), true)
+    }
+
     fn remote_row(&self, row: &Row) -> (String, String, String, bool) {
         match row {
             Row::Remote => {
@@ -215,6 +223,14 @@ impl Settings {
             Row::Browsers => {
                 ("paired browsers".into(), self.browsers.to_string(), "enter forgets them all".into(), true)
             }
+            Row::PhoneApp => {
+                let value = if self.config.phone_app { "[x] LAN and Tailscale" } else { "[ ] off" };
+                ("phone app".into(), value.into(), self.phone_app.clone(), false)
+            }
+            Row::PhoneAppCode => {
+                ("pair a phone app".into(), String::new(), "enter shows the code to scan".into(), false)
+            }
+            Row::PairedApp(id) => self.paired_app_row(id),
             Row::Bot(via) | Row::Chat(via) => self.messenger_row(row, *via),
             Row::Forum(via) => self.forum_row(*via),
             Row::ForumClose(_) => (

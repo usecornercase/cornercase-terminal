@@ -191,6 +191,7 @@ impl ForumClose {
 
 pub(crate) const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub(crate) const DEFAULT_PORT: u16 = 47681;
+pub(crate) const DEFAULT_APP_PORT: u16 = 47682;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
 pub(crate) const DEFAULT_GH: &str = "gh";
 pub(crate) const DEFAULT_GLAB: &str = "glab";
@@ -374,6 +375,8 @@ pub(crate) struct Config {
     pub(crate) tour: bool,
     pub(crate) remote: bool,
     pub(crate) remote_port: u16,
+    pub(crate) phone_app: bool,
+    pub(crate) phone_app_port: u16,
     pub(crate) discord_forum: bool,
     pub(crate) discord_forum_close: String,
     pub(crate) projects: BTreeMap<String, ProjectSettings>,
@@ -457,6 +460,8 @@ impl Config {
         tour: false,
         remote: false,
         remote_port: 0,
+        phone_app: false,
+        phone_app_port: 0,
         discord_forum: false,
         discord_forum_close: String::new(),
         projects: BTreeMap::new(),
@@ -505,6 +510,7 @@ impl Default for Config {
             star_prompt: true,
             tour: true,
             remote_port: DEFAULT_PORT,
+            phone_app_port: DEFAULT_APP_PORT,
             discord_forum_close: ForumClose::default().id().into(),
             ..Self::BLANK
         }

@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.78
+
+- **Pair the cornercase app on your phone.** Settings › Remote has a **Phone app** section: turn on **phone app**, select **pair a phone app** and scan the code with the app. It reaches this computer on your Wi-Fi or over Tailscale, with no ssh and no browser, and the code works once, for ten minutes. Each paired app gets a row there, and `Enter` on it forgets the app and disconnects it at once. The phone app has its own switch, code and list, apart from the browser's.
+- **A program can pair it too.** `cornercase config pair app --json` prints the code's address and waits, like `config pair browsers`; `config pair app --routes --json` prints the addresses the app can use now, so an app that paired earlier can add a network that came up since; `config remove app.ID` forgets an app. `cornercase contract` lists the feature `cli-endpoint`.
+- **For app developers**: a paired app runs commands at `ws://<address>:47682/cli`, one WebSocket per command: `{"argv": …}` in, `stdout` and `stderr` lines and one `{"exit": n}` out. See *Scripts and agents* in the docs.
+
 ## 0.13.77
 
 - **Bots: agents of your own that you talk to.** `cornercase bot new prs --about "review my pull requests"` makes one, and `cornercase bot say prs "which of my PRs are blocked?" --wait` asks it. A bot belongs to no project but can see every one through `cornercase`: it answers in the same chat every time, keeps a memory of its own, and starts agents in your projects when it should. Claude Code and Codex can be bots (a Codex bot has full access only). Making a bot starts nothing and spends no tokens, a bot works only while the server runs, and the window shows bots in a later release. `cornercase bot list`, `history`, `reset`, `stop`, `edit` and `remove` do the rest, and the [Bots page](https://usecornercase.dev/docs/guides/bots/) says what each access allows.

@@ -10,7 +10,7 @@ use super::args::requests::RequestsArgs;
 use super::args::{Cli, Command};
 use super::line::{self, Printed};
 use super::lines::{self, Lines};
-use super::reach::{self, Kind};
+use super::reach::{self, Kind, Refused};
 use super::{quietly, usage};
 use crate::client;
 use crate::error::{Error, Result};
@@ -121,23 +121,25 @@ fn parsed(args: &[String]) -> std::result::Result<Cli, Answer> {
 }
 
 fn checked(cli: Cli, name: &str) -> std::result::Result<Command, Answer> {
-    if cli.remote.is_some() || cli.remote_command.is_some() {
-        return Err(Answer::refused(
-            "a line takes no --remote or --remote-command: the connection was chosen when `requests` started",
-        ));
+    match reach::checked(&cli) {
+        Ok(()) => cli.command.ok_or_else(|| Answer::refused("a line needs a command")),
+        Err(refused) => Err(Answer::refused(refusal(refused, name))),
     }
-    let Some(command) = cli.command else { return Err(Answer::refused("a line needs a command")) };
-    if matches!(command, Command::StartServer(_)) {
-        return Err(Answer::refused(client::hinted(
+}
+
+fn refusal(refused: Refused, name: &str) -> String {
+    match refused {
+        Refused::Remote => {
+            "a line takes no --remote or --remote-command: the connection was chosen when `requests` started".into()
+        }
+        Refused::NoCommand => "a line needs a command".into(),
+        Refused::StartServer => client::hinted(
             "`start-server` cannot run on a line, since `requests` needs a running server: run `cornercase start-server` first"
                 .to_string(),
-        )));
-    }
-    match reach::kind(Some(&command)) {
-        Kind::There => Ok(command),
-        Kind::Run => Err(Answer::refused(alone(name))),
-        Kind::Apart(name) => Err(Answer::refused(format!("`{name}` cannot run on a line of `cornercase requests`"))),
-        Kind::BesideTheWindow => Err(Answer::refused(KEEPS_RUNNING)),
+        ),
+        Refused::Kind(Kind::Apart(name)) => format!("`{name}` cannot run on a line of `cornercase requests`"),
+        Refused::Kind(Kind::BesideTheWindow) => KEEPS_RUNNING.into(),
+        Refused::Kind(Kind::There | Kind::Run) => alone(name),
     }
 }
 

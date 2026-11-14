@@ -149,14 +149,17 @@ Using cornercase away from the computer: in your phone's browser, or through Tel
 
 <Screen
   name="settings-remote"
-  alt="The Remote tab: under Browser, remote access off, with a note to open this computer's cornercase from your phone over Tailscale; under Telegram, the bot not set, with a note to make one with @BotFather and paste its token; under Discord, the bot not set, with a note to make an app in the Discord Developer Portal"
-  crop={[2, 1, 106, 11]}
+  alt="The Remote tab: under Browser, remote access off, with a note to open this computer's cornercase from your phone over Tailscale; under Phone app, the phone app off, with a note about using cornercase from the phone app over Wi-Fi or Tailscale; under Telegram, the bot not set, with a note to make one with @BotFather and paste its token; under Discord, the bot not set, with a note to make an app in the Discord Developer Portal"
+  crop={[2, 1, 106, 14]}
 />
 
 | Row | What it sets |
 | --- | --- |
 | **remote access** | Open this cornercase in your phone's browser over Tailscale: on, **`More ▴` › remote… › open in your phone's browser** shows a QR code to scan. The note says when it is ready, at which address, or what is missing. Off by default. See [From your phone](../../guides/phone/). |
 | **paired browsers** | How many browsers are paired, shown once there is one. `Enter` forgets them all and disconnects them. |
+| **phone app** | Under **Phone app**: let the cornercase phone app reach this computer on your Wi-Fi or over Tailscale. On, the note lists the addresses it listens on and the port; off by default. See [The phone app](../../guides/phone/#the-phone-app). |
+| **pair a phone app** | Shown while **phone app** is on. `Enter` shows a code to scan with the app. |
+| **paired app** | One row per paired phone app, with its name and the day it paired. `Enter` forgets it and disconnects it at once. |
 | **bot** | Under **Telegram**, the [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. Under **Discord**, the [Discord](../../guides/discord/) app's bot token, from the Developer Portal. The note says whether cornercase reaches it. `Backspace` removes it. |
 | **phone** | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone (for Discord, the link that adds the app to your account); `Backspace` forgets the chat. |
 | **forum mode** | Under **Discord**, once the phone is paired: a post per workspace in a forum channel of your server (see [Forum mode](../../guides/discord/#forum-mode)). `Enter` turns it on and opens the dialog that sets it up; while it is not ready, `Enter` opens the dialog again, and once it is, turns it off. The note names the server and channel, the step still left or what failed. |
@@ -222,7 +225,7 @@ The text holds five sections, each of which the other person can leave out:
 | `interface` | Every switch of the UI tab, from [`sidebar`](#sidebar) to [`tour`](#tour), with the sounds and the [prefix key](#prefix_key) |
 | `repositories` | Each project's [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree), found by the project's git remotes (such as `github.com/acme/web-shop`) rather than its folder, so it reaches the same repository wherever your colleague cloned it |
 
-It never holds a token, a chat bot, a paired chat or browser, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port), [`keep_awake`](#keep_awake), [`recap_account`](#recap_account) or your [`machines`](#machines-1). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
+It never holds a token, a chat bot, a paired chat, browser or phone app, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port), [`phone_app`](#phone_app), [`phone_app_port`](#phone_app_port), [`keep_awake`](#keep_awake), [`recap_account`](#recap_account) or your [`machines`](#machines-1). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
 
 To import one, paste it on Share (or anywhere on a settings tab, when it has several lines) and click **` preview `**. **Settings › Import** shows every setting that would change, as its value now → the shared one, grouped by section; a repository's setup and teardown are shown in full, a line at a time, in red:
 
@@ -310,6 +313,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "tour": true,
   "remote": false,
   "remote_port": 47681,
+  "phone_app": false,
+  "phone_app_port": 47682,
   "discord_forum": false,
   "discord_forum_close": "archive",
   "projects": {}
@@ -386,6 +391,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`tour`](#tour) | boolean | `true` |
 | [`remote`](#remote) | boolean | `false` |
 | [`remote_port`](#remote_port) | number | `47681` |
+| [`phone_app`](#phone_app) | boolean | `false` |
+| [`phone_app_port`](#phone_app_port) | number | `47682` |
 | [`discord_forum`](#discord_forum) | boolean | `false` |
 | [`discord_forum_close`](#discord_forum_close) | string | `"archive"` |
 | [`projects`](#projects) | object | `{}` |
@@ -679,6 +686,14 @@ Whether this cornercase can be opened in a browser over Tailscale, from a phone 
 #### `remote_port`
 
 The port cornercase listens on for browsers, on your computer only (`127.0.0.1`); `tailscale serve` passes Tailscale's port 8443 to it. Change it when something else uses 47681.
+
+#### `phone_app`
+
+Whether the cornercase phone app can reach this computer: while on, cornercase listens for it on your Wi-Fi and LAN addresses and on Tailscale's, never on the internet. Off by default. A paired app is forgotten with `cornercase config remove app.ID`. See [The phone app](../../guides/phone/#the-phone-app). It is not part of the settings you [share](#share-your-setup).
+
+#### `phone_app_port`
+
+The port cornercase listens on for the phone app, on each of those addresses. Change it when something else uses 47682. It has no row in the settings; it is not part of the settings you [share](#share-your-setup).
 
 #### `discord_forum`
 
