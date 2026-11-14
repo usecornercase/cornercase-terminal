@@ -76,6 +76,11 @@ mod a_split_stream {
     }
 
     #[test]
+    fn leaves_a_line_alone_that_only_ends_like_the_update_line() {
+        assert_eq!(text(&[b"Run ", b"cornercase update\n"]), "Run cornercase update\n");
+    }
+
+    #[test]
     fn writes_a_question_before_its_answer() {
         let remote = devbox();
         let mut hinting = Hinting::new(&remote, Vec::new());
@@ -188,4 +193,28 @@ fn both_streams_of_a_process_go_through_the_rewrite() {
         String::from_utf8_lossy(&err),
         "Error: `cornercase --remote devbox update` only updates released builds\n"
     );
+}
+
+struct Full;
+
+impl Write for Full {
+    fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+        Err(io::Error::other("no room"))
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn a_stream_that_cannot_be_written_fails_the_run_though_the_process_succeeded() {
+    let dir = TempDir::new();
+    let ssh = fake_program(dir.path(), "ssh");
+    std::fs::write(ssh.with_extension("out"), "something\n").expect("out");
+    let mut child = Command::new(&ssh).stdout(Stdio::piped()).spawn().expect("spawn");
+
+    let result = relayed(&devbox(), &mut child, Full, Vec::new());
+
+    assert_eq!(result.expect_err("a failure").to_string(), "no room");
 }

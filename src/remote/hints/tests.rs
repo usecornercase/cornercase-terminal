@@ -159,6 +159,7 @@ mod a_relayed_message {
     #[case::profile("`cornercase profile list` lists them", "`cornercase profile list` there lists them")]
     #[case::status_panes("`cornercase status --panes`", "`cornercase status --panes` there")]
     #[case::focus_with_a_pane("`cornercase focus --pane 3`", "`cornercase focus --pane 3` there")]
+    #[case::focus_with_a_pane_by_equals("`cornercase focus --pane=3`", "`cornercase focus --pane=3` there")]
     fn says_there_after_a_command_without_it(#[case] text: &str, #[case] expected: &str) {
         assert_eq!(on_vps(text), expected);
     }

@@ -25,11 +25,12 @@ struct Hinting<'a, W: Write> {
     remote: &'a Remote,
     out: W,
     held: Vec<u8>,
+    mid_line: bool,
 }
 
 impl<'a, W: Write> Hinting<'a, W> {
     fn new(remote: &'a Remote, out: W) -> Self {
-        Self { remote, out, held: Vec::new() }
+        Self { remote, out, held: Vec::new(), mid_line: false }
     }
 
     fn take(&mut self, bytes: &[u8]) -> io::Result<()> {
@@ -38,17 +39,19 @@ impl<'a, W: Write> Hinting<'a, W> {
             let lines: Vec<u8> = self.held.drain(..=end).collect();
             for line in lines.split_inclusive(|byte| *byte == b'\n') {
                 self.line(line)?;
+                self.mid_line = false;
             }
         }
         let ready = ready(&self.held);
         let partial: Vec<u8> = self.held.drain(..ready).collect();
+        self.mid_line |= !partial.is_empty();
         self.write(&self.remote.hinted(&String::from_utf8_lossy(&partial)))
     }
 
     fn line(&mut self, line: &[u8]) -> io::Result<()> {
         let text = String::from_utf8_lossy(line);
         let bare = text.trim_end_matches('\n').trim_end_matches('\r');
-        if bare == UPDATE_LINE {
+        if bare == UPDATE_LINE && !self.mid_line {
             let ending = &text[bare.len()..];
             return self.write(&format!("{}{ending}", self.remote.update_line()));
         }
@@ -99,22 +102,18 @@ fn undecided(after: &[u8]) -> bool {
     })
 }
 
-fn copy(remote: &Remote, mut from: impl Read, to: impl Write) {
+fn copy(remote: &Remote, mut from: impl Read, to: impl Write) -> io::Result<()> {
     let mut hinting = Hinting::new(remote, to);
     let mut buffer = [0; READ];
     loop {
         match from.read(&mut buffer) {
             Ok(0) => break,
-            Ok(read) => {
-                if hinting.take(&buffer[..read]).is_err() {
-                    return;
-                }
-            }
+            Ok(read) => hinting.take(&buffer[..read])?,
             Err(why) if why.kind() == io::ErrorKind::Interrupted => {}
-            Err(_) => break,
+            Err(why) => return Err(why),
         }
     }
-    let _ = hinting.finish();
+    hinting.finish().map(drop)
 }
 
 pub(in crate::remote) fn relayed(
@@ -128,10 +127,14 @@ pub(in crate::remote) fn relayed(
         let outs = stdout.map(|from| scope.spawn(|| copy(remote, from, out)));
         let errs = stderr.map(|from| scope.spawn(|| copy(remote, from, err)));
         let status = child.wait();
+        let mut failed = None;
         for copying in [outs, errs].into_iter().flatten() {
-            let _ = copying.join();
+            if let Ok(Err(why)) = copying.join() {
+                failed.get_or_insert(why);
+            }
         }
-        status
+        let status = status?;
+        failed.map_or(Ok(status), Err)
     })
 }
 

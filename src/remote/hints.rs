@@ -91,7 +91,8 @@ fn machine_hint(name: &str, action: &str, after: &str) -> Hint {
         return Hint::Kept;
     }
     for (path, refused) in ON_A_MACHINE {
-        if is(action, path) && !action.split(' ').any(|word| refused.contains(&word)) {
+        if is(action, path) && !action.split(' ').any(|word| refused.contains(&word.split('=').next().unwrap_or(word)))
+        {
             let rest = action[path.len()..].trim_start();
             let line = format!("{path} --machine {} {rest}", super::quote_word(name));
             return Hint::Becomes(format!("{HINT}{}", line.trim_end()));
