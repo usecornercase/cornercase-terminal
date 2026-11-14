@@ -233,6 +233,8 @@ pub(crate) struct PaneState {
     pub(crate) accounts: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) closed: Option<ClosedAgent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) exited_agent: Option<AgentState>,
 }
 
 impl WorkspaceState {
@@ -274,6 +276,7 @@ impl PaneState {
             collapsed: false,
             accounts: BTreeMap::new(),
             closed: None,
+            exited_agent: None,
         }
     }
 }
@@ -378,6 +381,7 @@ impl TabState {
                         collapsed: term.kept_fold(),
                         accounts: term.accounts().chosen(),
                         closed: None,
+                        exited_agent: term.exited_agent.clone(),
                     }
                 })
                 .collect(),

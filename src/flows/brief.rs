@@ -197,13 +197,37 @@ pub(crate) fn failed(roles: &[(String, u64)]) -> String {
     )
 }
 
-pub(crate) fn woken(own: bool, finished: &[(String, u64)], failed_roles: &[(String, u64)]) -> String {
+pub(crate) fn back(roles: &[(String, u64)]) -> String {
+    let named: Vec<String> = roles.iter().map(|(role, pane)| format!("{role} (pane {pane})")).collect();
+    let panes: Vec<String> = roles.iter().map(|(_, pane)| format!("--pane {pane}")).collect();
+    let (them, panes_of, wrote, had) = if roles.len() == 1 {
+        ("it", "its pane", "it last wrote", "it had")
+    } else {
+        ("them", "their panes", "they last wrote", "they had")
+    };
+    format!(
+        "{} exited, and cornercase started {them} again in {panes_of}. Read what {wrote} with `cornercase read \
+         --last-message {}`, then send {them} again any work {had} not finished.",
+        names(&named),
+        panes.join(" ")
+    )
+}
+
+pub(crate) fn woken(
+    own: bool,
+    finished: &[(String, u64)],
+    failed_roles: &[(String, u64)],
+    came_back: &[(String, u64)],
+) -> String {
     let mut parts = Vec::new();
     if !finished.is_empty() {
         parts.push(self::finished(finished));
     }
     if !failed_roles.is_empty() {
         parts.push(failed(failed_roles));
+    }
+    if !came_back.is_empty() {
+        parts.push(back(came_back));
     }
     if own {
         parts.push(OWN_FAILURE.to_string());
@@ -244,6 +268,40 @@ pub(crate) fn reopened(members: &[Member], dir: Option<&Path>, closed: &Closed) 
         ids(members),
         folder_note(dir),
         reopened_notes(closed)
+    )
+}
+
+pub(crate) struct Exited<'a> {
+    pub(crate) back: &'a [String],
+    pub(crate) fresh: &'a [String],
+}
+
+fn exited_notes(exited: &Exited) -> String {
+    let mut notes = who(exited.back, "exited too and was", "exited too and were", "started again.");
+    notes.push_str(&reopened_notes(&Closed { cut: &[], fresh: exited.fresh }));
+    notes
+}
+
+pub(crate) fn exited(members: &[Member], dir: Option<&Path>, notes: &Exited) -> String {
+    format!(
+        "Your agent exited, and cornercase started it again in your pane, in your own conversation. Your team: {}. \
+         Use these from now on.{}{} Any wait you had running ended: check what each one last answered with \
+         `cornercase read --last-message`, then go on with the plan. If the plan was already done, answer `ok` and \
+         do nothing else.",
+        ids(members),
+        folder_note(dir),
+        exited_notes(notes)
+    )
+}
+
+pub(crate) fn exited_stands(members: &[Member], dir: Option<&Path>, notes: &Exited) -> String {
+    format!(
+        "\n## Where the run stands\n\nThe orchestrator before you exited, so you take the run over where it stands. \
+         Your team has these pane ids: {}.{}{} Check what each one last answered with `cornercase read \
+         --last-message` before you go on.\n",
+        ids(members),
+        folder_note(dir),
+        exited_notes(notes)
     )
 }
 

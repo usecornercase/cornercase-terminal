@@ -162,6 +162,9 @@ impl App {
             } else if !lost && self.resume(&mut term, pane.agent.as_ref(), role, (run, reopen)) {
                 term.agent.restore(pane.done, pane.pending);
             }
+            if !apart {
+                term.exited_agent.clone_from(&pane.exited_agent);
+            }
             if let Some(old) = pane.id {
                 parents.ids.insert(old, term.id);
             }

@@ -55,6 +55,7 @@ mod file {
             collapsed: false,
             accounts: BTreeMap::new(),
             closed: None,
+            exited_agent: None,
         }
     }
 
@@ -306,6 +307,23 @@ mod file {
         let text = serde_json::to_string(&state(&["projects/team"])).expect("json");
 
         assert!(!text.contains("discord_post"));
+    }
+
+    #[test]
+    fn an_exited_agent_round_trips_through_its_own_fixture() {
+        let mut saved = state(&["projects/team"]);
+        let agent = AgentState { kind: "claude".into(), conversation: "s1".into(), mode: None, account: None };
+        saved.projects[0].workspaces[0].tabs[0].panes =
+            vec![PaneState { exited_agent: Some(agent), ..PaneState::at(Some("projects/team".into())) }];
+        let fixture = crate::test_util::fixture!("session/exited_agent.json");
+        round_trip(fixture, &saved);
+    }
+
+    #[test]
+    fn a_pane_without_an_exited_agent_writes_no_key() {
+        let text = serde_json::to_string(&state(&["projects/team"])).expect("json");
+
+        assert!(!text.contains("exited_agent"));
     }
 
     #[test]
@@ -610,6 +628,7 @@ mod mapping {
             collapsed: false,
             accounts: BTreeMap::new(),
             closed: None,
+            exited_agent: None,
         };
         TabState { name: None, panes: vec![pane; panes], active, layout: None }
     }

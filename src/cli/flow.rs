@@ -603,10 +603,11 @@ fn run_block(run: &RunState, now: SystemTime) -> String {
     let width = run.roles.iter().map(|role| role.role.chars().count()).max().unwrap_or_default();
     for role in &run.roles {
         let pane = role.pane.map_or_else(|| "-".to_string(), |pane| format!("pane {pane}"));
-        let status = match (&role.status, role.closed) {
-            (_, true) => "closed",
-            (Some(status), false) => status.as_str(),
-            (None, false) => "-",
+        let status = match (&role.status, role.closed, role.exited) {
+            (_, true, _) => "closed",
+            (_, false, true) => "exited",
+            (Some(status), false, false) => status.as_str(),
+            (None, false, false) => "-",
         };
         let _ = writeln!(out, "  {:<width$}  {pane:<9}  {status}", share::visible(&role.role));
     }
@@ -626,8 +627,14 @@ fn run_notes(run: &RunState, now: SystemTime) -> String {
     }
     if let Some(since) = run.stopped.as_deref().and_then(crate::time::Stamp::parse) {
         let ago = crate::time::ago(now.duration_since(since).unwrap_or_default());
-        let _ = writeln!(out, "  stopped moving {ago}: the orchestrator's turn is over and no agent of the team works");
+        let why = if run.roles.first().is_some_and(|role| role.exited) {
+            "the orchestrator's agent exited"
+        } else {
+            "the orchestrator's turn is over and no agent of the team works"
+        };
+        let _ = writeln!(out, "  stopped moving {ago}: {why}");
     }
+    out.push_str(&exited_note(run));
     if run.ended && !run.not_run.is_empty() {
         let _ = writeln!(out, "  ended with {} not run on the last change", stages_in_words(&run.not_run));
     } else if !run.not_run.is_empty() {
@@ -641,6 +648,20 @@ fn run_notes(run: &RunState, now: SystemTime) -> String {
         out.push_str(closes_text(run.free_builds));
     }
     out
+}
+
+fn exited_note(run: &RunState) -> String {
+    let exited: Vec<String> =
+        run.roles.iter().filter(|role| role.exited).map(|role| share::visible(&role.role)).collect();
+    let brings = if exited.len() == 1 { "it" } else { "them" };
+    if exited.is_empty() {
+        return String::new();
+    }
+    format!(
+        "  exited: {}; cornercase agents reopen --workspace {} brings {brings} back\n",
+        exited.join(", "),
+        run.workspace
+    )
 }
 
 fn closes_text(free_builds: bool) -> &'static str {

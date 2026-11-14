@@ -108,7 +108,7 @@ impl App {
             pull: self.pull_mark(w),
             removing: w.removing(),
             setting_up: w.setting_up(),
-            closed: self.agents.closed.count(w.id),
+            closed: self.reopenable_count(w.id),
             changed: self.row_changes(w),
             machine: None,
         }
@@ -152,7 +152,7 @@ impl App {
             removing: workspace.removing(),
             collapsed: workspace.collapsed,
             setting_up: workspace.setting_up(),
-            closed: self.agents.closed.count(workspace.id),
+            closed: self.reopenable_count(workspace.id),
             changed: self.row_changes(workspace),
             machine: None,
         }

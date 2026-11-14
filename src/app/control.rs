@@ -300,7 +300,7 @@ pub(in crate::app) fn json(value: &impl Serialize) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
 
-fn sized(area: Option<Rect>) -> Result<Rect, String> {
+pub(in crate::app) fn sized(area: Option<Rect>) -> Result<Rect, String> {
     area.ok_or_else(|| NO_SIZE.to_string())
 }
 

@@ -547,7 +547,18 @@ fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, 
         term.resuming = None;
     }
     if found.is_some() || term.resuming.is_none_or(|until| now >= until) {
+        keep_exited(term, agent.is_some());
         term.resume = found;
+    }
+}
+
+fn keep_exited(term: &mut Term, running: bool) {
+    if running {
+        term.exited_agent = None;
+    } else if term.resuming.is_none()
+        && let Some(gone) = term.resume.take()
+    {
+        term.exited_agent = Some(gone);
     }
 }
 

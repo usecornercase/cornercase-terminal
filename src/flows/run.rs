@@ -68,6 +68,7 @@ pub(crate) struct Sent {
     pub(crate) at: Instant,
     pub(crate) finished: bool,
     pub(crate) failed: bool,
+    pub(crate) back: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,6 +76,7 @@ pub(crate) struct Due {
     pub(crate) role: String,
     pub(crate) pane: u64,
     pub(crate) failed: bool,
+    pub(crate) back: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -143,6 +145,7 @@ pub(crate) struct Run {
     pub(crate) summary: bool,
     pub(crate) retry: Retry,
     pub(crate) stopped: Option<SystemTime>,
+    pub(crate) exited: Vec<u64>,
 }
 
 pub(crate) fn free_due(closed: Instant, now: Instant, gone: bool) -> bool {
@@ -170,6 +173,7 @@ impl Run {
             summary: false,
             retry: Retry::default(),
             stopped: None,
+            exited: Vec::new(),
         }
     }
 
@@ -205,8 +209,13 @@ impl Run {
     pub(crate) fn sent_to(&mut self, pane: u64, at: Instant) {
         self.forget_sent(pane);
         if self.role_of(pane).is_some_and(|role| role != ORCHESTRATOR) {
-            self.sent.push(Sent { pane, at, finished: false, failed: false });
+            self.sent.push(Sent { pane, at, finished: false, failed: false, back: false });
         }
+    }
+
+    pub(crate) fn brought_back(&mut self, pane: u64, at: Instant) {
+        self.forget_sent(pane);
+        self.sent.push(Sent { pane, at, finished: true, failed: false, back: true });
     }
 
     pub(crate) fn forget_sent(&mut self, pane: u64) {
@@ -244,7 +253,12 @@ impl Run {
             .iter()
             .filter(|sent| sent.finished)
             .filter_map(|sent| {
-                Some(Due { role: self.role_of(sent.pane)?.to_string(), pane: sent.pane, failed: sent.failed })
+                Some(Due {
+                    role: self.role_of(sent.pane)?.to_string(),
+                    pane: sent.pane,
+                    failed: sent.failed,
+                    back: sent.back,
+                })
             })
             .collect();
         self.sent.retain(|sent| !sent.finished);

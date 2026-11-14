@@ -266,3 +266,43 @@ fn removing_the_workspace_forgets_its_closed_agents() {
 
     refreshing(&mut app, &rx, "the closed agents are forgotten", |a| a.agents.closed.count(id) == 0);
 }
+
+mod exited_roles {
+    use super::*;
+    use crate::agents::Known;
+    use crate::app::menus::MenuAction;
+    use crate::flows::run::{Member, Run};
+    use crate::flows::{ORCHESTRATOR, builtin};
+
+    fn exited_team() -> (App, Receiver<AppEvent>, Vec<TempDir>, u64) {
+        let (mut app, rx, dirs) = app_with(1);
+        app.config.agent_commands.insert("claude".into(), "/bin/sh".into());
+        let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+        let mut run = Run::new(workspace_id(&app), flow, "task".into());
+        let pane = app.projects[0].workspaces[0].tabs[0].pane_mut().expect("a pane");
+        pane.became_shell();
+        let id = pane.id;
+        run.members = vec![Member { role: ORCHESTRATOR.into(), pane: id }];
+        run.exited = vec![id];
+        app.runs.push(run);
+        (app, rx, dirs, id)
+    }
+
+    #[test]
+    fn the_tag_the_menu_and_the_key_count_a_roles_exited_agent() {
+        let (mut app, _rx, _dirs, pane) = exited_team();
+        let workspace = workspace_id(&app);
+
+        assert_eq!(app.workspace_entry(&app.projects[0].workspaces[0]).closed, 1);
+        assert_eq!(app.closed_agents_label(MenuAction::ReopenAgents(workspace)).as_deref(), Some("reopen 1 agent"));
+        let menu = app.closed_agents_menu(workspace);
+        assert!(menu.contains(&MenuAction::ReopenAgents(workspace)));
+        assert!(!menu.contains(&MenuAction::ForgetAgents(workspace)));
+
+        app.reopen_agents_by_key(AREA);
+
+        assert!(app.agents.launches.of_pane(pane).next().is_some());
+        assert!(toast(&app).is_some_and(|toast| toast.starts_with("1 agent reopened in")), "{:?}", toast(&app));
+        assert_eq!(app.reopenable_count(workspace), 0);
+    }
+}
