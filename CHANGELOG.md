@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.77
+
+- **A flow's orchestrator takes its message after a restart.** After a restart, **reopen agents** or `cornercase agents reopen`, the orchestrator resumes its conversation and is told its team's new pane ids. When Claude Code was still finishing its resume, that message could stay in its input box, unsent, and the run stood still until you pressed `Enter` in its tab. cornercase now checks that the agent took it (it records the prompt or starts working), and when it has not, presses `Enter` again every 3 seconds, up to 4 more times. `server.log` has a `launch: enter again` line for each, and `launch: the agent did not take the prompt` when it gives up.
+
 ## 0.13.76
 
 - **A Claude Code agent waiting on a command it started in the background shows as working again.** Recent Claude Code versions report their own state to cornercase, and that report called the turn finished while a build, a test run or a Monitor started with `run_in_background` still ran. So the tab turned `✓` and told you it finished before the work was done, and `cornercase status` said `idle` or `done` with `background_shell: false`. `cornercase wait` and `--until idle` ended at once, `--until turn-over` said `done` instead of `shell`, and a routine with cleanup could remove its workspace under the running command. cornercase now also reads the session file Claude Code keeps, which still says when such a command runs: the tab keeps its working icon, `cornercase status` says `working (background shell)` again (`background_shell: true` in its JSON and in `--panes`), `events` says `shell`, and the agent counts as finished once that command ends and its next turn is over.
