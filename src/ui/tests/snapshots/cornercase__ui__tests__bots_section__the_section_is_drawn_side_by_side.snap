@@ -1,6 +1,6 @@
 ---
 source: src/ui/tests/bots_section.rs
-expression: "render_sized(&shown(sidebar, entries(), false), W, TALL.height).backend()"
+expression: drawn.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "

@@ -1,20 +1,20 @@
 ---
 source: src/ui/tests/bots_section.rs
-expression: "render_sized(&shown(sidebar, entries(), false), W, TALL.height).backend()"
+expression: drawn.backend()
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
 "                               │                                                                    "
 " Projects                      │                                                                    "
 "                               │                                                                    "
-"▌ cornercase (1)               │                                                                    "
-"  website (1)                  │                                                                    "
-"  api (1)                      │                                                                    "
 "                               │                                                                    "
-"  + New                        │                                                                    "
-" ───────────────────────────── │                                                                    "
-" Workspaces                    │                                                                    "
 "                               │                                                                    "
-"  + New                        │                                                                    "
+"                               │                                                                    "
+"                               │                                                                    "
+"                               │                                                                    "
+"                               │                                                                    "
+"                               │                                                                    "
+"                               │                                                                    "
+"                               │                                                                    "
 "                               │                                                                    "
 "                               │                             no tab open                            "
 "                               │                      + Tab opens a shell here                      "

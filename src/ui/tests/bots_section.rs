@@ -99,11 +99,12 @@ fn a_click_on_a_row_hits_that_bot() {
 }
 
 #[rstest]
-#[case::side_by_side(Sidebar::SideBySide)]
-#[case::projects_on_top(Sidebar::ProjectsOnTop)]
-#[case::tree(Sidebar::Tree)]
-fn the_section_is_drawn(#[case] sidebar: Sidebar) {
-    insta::assert_snapshot!(render_sized(&shown(sidebar, entries(), false), W, TALL.height).backend());
+#[case::side_by_side(Sidebar::SideBySide, "side_by_side")]
+#[case::projects_on_top(Sidebar::ProjectsOnTop, "projects_on_top")]
+#[case::tree(Sidebar::Tree, "tree")]
+fn the_section_is_drawn(#[case] sidebar: Sidebar, #[case] name: &str) {
+    let drawn = render_sized(&shown(sidebar, entries(), false), W, TALL.height);
+    insta::assert_snapshot!(format!("the_section_is_drawn_{name}"), drawn.backend());
 }
 
 #[test]
