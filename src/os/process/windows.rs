@@ -14,7 +14,7 @@ use windows_sys::Win32::System::Console::{
     GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleCtrlHandler,
 };
 use windows_sys::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
+    AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob, JOB_OBJECT_LIMIT, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_BASIC_LIMIT_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
     JobObjectBasicProcessIdList, JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
     TerminateJobObject,
@@ -212,6 +212,31 @@ impl Drop for Job {
     fn drop(&mut self) {
         if let Some(job) = &self.handle {
             limit(job, JOB_OBJECT_LIMIT_BREAKAWAY_OK);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct Lineage(Option<OwnedHandle>);
+
+impl Lineage {
+    pub(crate) fn spawn(command: &mut Command) -> io::Result<(Child, Self)> {
+        let child = command.spawn()?;
+        let job = create().filter(|job| limit(job, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) && assign(job, &child));
+        Ok((child, Self(job)))
+    }
+
+    pub(crate) fn holds(&self, pid: i32) -> bool {
+        let (Some(job), Ok(pid)) = (&self.0, u32::try_from(pid)) else { return false };
+        let Ok(process) = open(pid, PROCESS_QUERY_LIMITED_INFORMATION) else { return false };
+        let mut inside: BOOL = FALSE;
+        let asked = unsafe { IsProcessInJob(process.as_raw_handle(), job.as_raw_handle(), &raw mut inside) };
+        asked != FALSE && inside != FALSE
+    }
+
+    pub(crate) fn end(&self) {
+        if let Some(job) = &self.0 {
+            unsafe { TerminateJobObject(job.as_raw_handle(), KILLED) };
         }
     }
 }

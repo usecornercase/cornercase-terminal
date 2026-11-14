@@ -111,6 +111,14 @@ pub(crate) fn stop(group: Group) -> Vec<Stopped> {
     escalation::escalate(vec![group.refreshed()])
 }
 
+pub(crate) fn below(pid: i32) -> Vec<Group> {
+    process::children(pid).into_iter().map(|child| Group::live_with(child, None)).collect()
+}
+
+pub(crate) fn stop_all(groups: Vec<Group>) -> Vec<Stopped> {
+    escalation::escalate(groups.into_iter().map(Group::refreshed).collect())
+}
+
 pub(crate) fn summary(stopped: &[Stopped]) -> String {
     let Some((group, outcome)) = stopped.first() else { return "nothing to stop".into() };
     let label = group.label();

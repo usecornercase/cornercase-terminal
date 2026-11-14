@@ -1,12 +1,14 @@
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 
 use crate::error::{Error, Result};
+use crate::os::process::Lineage;
 use crate::process;
+use crate::processes::stop::{self, Group};
 
 pub(crate) enum Step<T> {
     Read,
@@ -20,6 +22,7 @@ pub(crate) struct Limits {
     pub(crate) timeout: Duration,
     pub(crate) grace: Duration,
     pub(crate) close_input: bool,
+    pub(crate) contain: bool,
 }
 
 fn gone(name: &str) -> Error {
@@ -62,6 +65,7 @@ fn converse<T>(
 struct Spawned {
     pid: Option<(i32, Option<u64>)>,
     stopped: bool,
+    lineage: Option<Lineage>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -75,14 +79,29 @@ impl Running {
             spawned.pid
         };
         let Some((pid, started)) = pid else { return false };
-        crate::processes::stop::stop(crate::processes::stop::Group::live_with(pid, started));
+        stop::stop(Group::live_with(pid, started));
+        self.end_lineage();
         true
     }
 
-    fn spawned(&self, pid: u32) -> bool {
+    pub(crate) fn holds(&self, pid: i32) -> bool {
+        let spawned = self.0.lock();
+        let (Some((root, started)), Some(lineage)) = (spawned.pid, &spawned.lineage) else { return false };
+        process::running(root, started) && (pid == root || stop::inside(pid, root) || lineage.holds(pid))
+    }
+
+    fn end_lineage(&self) {
+        let lineage = self.0.lock().lineage.take();
+        if let Some(lineage) = lineage {
+            lineage.end();
+        }
+    }
+
+    fn spawned(&self, pid: u32, lineage: Option<Lineage>) -> bool {
         let Ok(pid) = i32::try_from(pid) else { return true };
         let mut spawned = self.0.lock();
         spawned.pid = Some((pid, process::start_stamp(pid)));
+        spawned.lineage = lineage;
         !spawned.stopped
     }
 }
@@ -96,6 +115,37 @@ pub(crate) fn run<T: Send + 'static>(
     run_in(limits, command, first, &Running::default(), talk)
 }
 
+fn start(limits: Limits, command: &mut Command, running: &Running) -> Result<Child> {
+    let program = command.get_program().to_string_lossy().into_owned();
+    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+    let spawned = if limits.contain {
+        Lineage::spawn(command).map(|(child, lineage)| (child, Some(lineage)))
+    } else {
+        command.spawn().map(|child| (child, None))
+    };
+    let (child, lineage) = spawned.map_err(|e| Error::Probe(format!("could not run {program}: {e}")))?;
+    if !running.spawned(child.id(), lineage) {
+        running.stop();
+    }
+    Ok(child)
+}
+
+fn converse_apart<T: Send + 'static>(
+    child: &mut Child,
+    limits: Limits,
+    first: &str,
+    talk: impl FnMut(&str) -> Step<T> + Send + 'static,
+) -> mpsc::Receiver<Result<T>> {
+    let (tx, rx) = mpsc::channel();
+    if let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) {
+        let (first, name, close) = (first.to_string(), limits.name, limits.close_input);
+        std::thread::spawn(move || {
+            let _ = tx.send(converse(stdin, stdout, (&first, name, close), talk));
+        });
+    }
+    rx
+}
+
 pub(crate) fn run_in<T: Send + 'static>(
     limits: Limits,
     mut command: Command,
@@ -103,25 +153,8 @@ pub(crate) fn run_in<T: Send + 'static>(
     running: &Running,
     talk: impl FnMut(&str) -> Step<T> + Send + 'static,
 ) -> Result<T> {
-    let program = command.get_program().to_string_lossy().into_owned();
-    let mut child = command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| Error::Probe(format!("could not run {program}: {e}")))?;
-    if !running.spawned(child.id()) {
-        running.stop();
-    }
-    let (tx, rx) = mpsc::channel();
-    if let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) {
-        let (first, name, close) = (first.to_string(), limits.name, limits.close_input);
-        std::thread::spawn(move || {
-            let _ = tx.send(converse(stdin, stdout, (&first, name, close), talk));
-        });
-    } else {
-        drop(tx);
-    }
+    let mut child = start(limits, &mut command, running)?;
+    let rx = converse_apart(&mut child, limits, first, talk);
     let answer = match rx.recv_timeout(limits.timeout) {
         Ok(result) => result,
         Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -130,11 +163,16 @@ pub(crate) fn run_in<T: Send + 'static>(
         }
         Err(mpsc::RecvTimeoutError::Disconnected) => Err(gone(limits.name)),
     };
+    let left = if limits.contain { stop::below(i32::try_from(child.id()).unwrap_or(0)) } else { Vec::new() };
     if answer.is_ok() {
         let _ = process::wait_until(&mut child, Instant::now() + limits.grace);
     }
     let _ = child.kill();
     let _ = child.wait();
+    if limits.contain {
+        stop::stop_all(left);
+        running.end_lineage();
+    }
     answer
 }
 

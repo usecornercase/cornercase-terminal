@@ -29,6 +29,7 @@ impl App {
             self.clients.requests.callers.insert(client, caller);
         }
         let asker = Asker { caller, view: request.view };
+        self.bot_writes(client, asker, &request.command)?;
         self.check_view(&request)?;
         relay::lone_machine_boot(&request.command)?;
         self.settle_views();

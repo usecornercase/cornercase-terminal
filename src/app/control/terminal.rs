@@ -196,7 +196,14 @@ impl App {
             }
             return;
         };
-        let reply = stored.and_then(|stored| self.paste_stored(pane, stored));
+        let allowed = self.bot_still_writes(pending.client, pending.key, pane);
+        let reply = stored.and_then(|stored| match allowed {
+            Ok(()) => self.paste_stored(pane, stored),
+            Err(refusal) => {
+                self.drop_pasted(vec![stored.dir]);
+                Err(refusal)
+            }
+        });
         self.refuse_or_answer(pending.client, reply);
     }
 

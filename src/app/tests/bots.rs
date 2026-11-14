@@ -1,6 +1,8 @@
 use std::time::Duration;
 
 use super::*;
+use crate::agents::headless::Access;
+use crate::bots::Bot;
 use crate::bots::chat::{self, Line};
 use crate::bots::folder;
 use crate::bots::sample as bot;
@@ -56,19 +58,28 @@ struct Chat {
     rx: Receiver<AppEvent>,
     dir: TempDir,
     claude: PathBuf,
-    _bin: TempDir,
+    bin: TempDir,
 }
 
 fn chat(out: &str) -> Chat {
-    let (mut app, rx) = empty_app();
+    chat_with(out, Access::Cornercase)
+}
+
+pub(in crate::app::tests) fn install_bot(app: &mut App, out: &str, access: Access) -> (TempDir, TempDir, PathBuf) {
     let (dir, bin) = (TempDir::new(), TempDir::new());
     let claude = fake_program(bin.path(), "claude");
     std::fs::write(claude.with_extension("out"), out).expect("canned output");
     app.config.agent_commands.insert("claude".into(), claude.display().to_string());
-    folder::create(dir.path(), &bot("prs", "PRs"), "review my PRs").expect("create");
+    folder::create(dir.path(), &Bot { access, ..bot("prs", "PRs") }, "review my PRs").expect("create");
     app.set_bots_dir(dir.path());
     app.panels.bots.timeout = Duration::from_secs(20);
-    Chat { app, rx, dir, claude, _bin: bin }
+    (dir, bin, claude)
+}
+
+fn chat_with(out: &str, access: Access) -> Chat {
+    let (mut app, rx) = empty_app();
+    let (dir, bin, claude) = install_bot(&mut app, out, access);
+    Chat { app, rx, dir, claude, bin }
 }
 
 impl Chat {
@@ -308,4 +319,100 @@ fn the_server_stopping_ends_the_turns_that_run() {
     c.settle();
     assert!(c.app.panels.bots.live[0].turn.is_none());
     std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
+}
+
+const BOT: u64 = 41;
+
+fn popup_text() -> serde_json::Value {
+    serde_json::json!({"popup": true, "events": [{"text": "x"}]})
+}
+
+fn reply_from(app: &mut App, client: u64, command: &str, args: &serde_json::Value) -> std::result::Result<(), String> {
+    let text = serde_json::json!({"contract": 1, "command": command, "args": args}).to_string();
+    app.request(client, &text, Some(AREA), Instant::now());
+    let answers = app.take_answers();
+    let (_, reply) = answers.into_iter().find(|(who, _)| *who == client).expect("an answer");
+    let reply: serde_json::Value = serde_json::from_str(&reply).expect("a reply");
+    match reply["error"]["message"].as_str() {
+        Some(message) => Err(message.to_string()),
+        None => Ok(()),
+    }
+}
+
+const NO_POPUP: &str = "no plugin popup is open";
+
+fn root_of(c: &Chat) -> i32 {
+    let pids = std::fs::read_to_string(c.claude.with_extension("pid")).expect("the agent's pid");
+    pids.lines().next().and_then(|pid| pid.parse().ok()).expect("a pid")
+}
+
+#[test]
+fn a_bots_turn_cannot_type_into_a_popup_or_start_a_pane_with_a_command() {
+    let mut c = chat(ANSWER);
+    c.hold();
+    c.say("go");
+    c.started(1);
+    let root = root_of(&c);
+    c.app.client_connected(BOT, Some(root));
+    let own = i32::try_from(std::process::id()).expect("a pid");
+    c.app.client_connected(BOT + 1, Some(own));
+
+    let popup = reply_from(&mut c.app, BOT, "input", &popup_text()).expect_err("refused");
+    let shell = reply_from(&mut c.app, BOT, "new-tab", &serde_json::json!({"command": "ls"})).expect_err("refused");
+
+    assert!(popup.starts_with("a bot can only type into a pane that runs an agent"), "{popup}");
+    assert!(shell.contains("a new pane's command is typed into its shell"), "{shell}");
+    for other in [BOT + 1, BOT + 2] {
+        assert_eq!(reply_from(&mut c.app, other, "input", &popup_text()), Err(NO_POPUP.to_string()));
+    }
+
+    c.release(ANSWER);
+    c.settle();
+    assert!(reply_from(&mut c.app, BOT, "input", &popup_text()).is_err_and(|text| text != NO_POPUP));
+}
+
+#[test]
+fn a_command_whose_environment_names_a_bot_is_a_bots() {
+    let mut c = chat(ANSWER);
+    let full = Bot { access: Access::Full, ..bot("root", "Root") };
+    folder::create(c.dir.path(), &full, "").expect("a second bot");
+    c.app.set_bots_dir(c.dir.path());
+    let sleeper = fake_program(c.bin.path(), "sleeper");
+    std::fs::write(sleeper.with_extension("hold"), "").expect("hold");
+    let mut children = Vec::new();
+    for id in ["prs", "root"] {
+        let child = std::process::Command::new(&sleeper).env("CORNERCASE_BOT", id).spawn().expect("sleeper");
+        children.push(child);
+    }
+    let pids: Vec<i32> = children.iter().map(|child| i32::try_from(child.id()).expect("a pid")).collect();
+    wait_until("both sleepers run with their environment", || {
+        let seen = std::fs::read_to_string(sleeper.with_extension("pid")).unwrap_or_default();
+        seen.lines().count() >= 2
+    });
+    c.app.client_connected(BOT, Some(pids[0]));
+    c.app.client_connected(BOT + 1, Some(pids[1]));
+
+    assert!(reply_from(&mut c.app, BOT, "input", &popup_text()).is_err_and(|text| text != NO_POPUP));
+    assert_eq!(reply_from(&mut c.app, BOT + 1, "input", &popup_text()), Err(NO_POPUP.to_string()));
+
+    std::fs::remove_file(sleeper.with_extension("hold")).expect("release");
+    for mut child in children {
+        let _ = child.wait();
+    }
+}
+
+#[test]
+fn a_full_bots_turn_is_not_refused() {
+    let mut c = chat_with(ANSWER, Access::Full);
+    c.hold();
+    c.say("go");
+    c.started(1);
+    let root = root_of(&c);
+    c.app.client_connected(BOT, Some(root));
+
+    assert_eq!(reply_from(&mut c.app, BOT, "input", &popup_text()), Err(NO_POPUP.to_string()));
+    assert!(!c.app.panels.bots.live[0].turn.as_ref().expect("a turn").running.holds(root));
+
+    c.release(ANSWER);
+    c.settle();
 }

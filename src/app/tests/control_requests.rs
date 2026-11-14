@@ -630,6 +630,7 @@ mod agent_models;
 mod agents;
 mod api_errors;
 mod arranging;
+mod bot_boundary;
 mod bots;
 pub(in crate::app::tests) mod build_folders;
 mod changes;
