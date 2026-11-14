@@ -88,8 +88,8 @@ fn open_reads_a_relative_file_from_the_folder_it_runs_in() {
 
 #[test]
 fn open_leaves_the_window_as_it_is_until_focus_shows_the_first_project() {
-    let mut app = Harness::start();
     let folder = temp_dir("code-workspace-window");
+    let mut app = Harness::start();
     for name in ["ccimport-one", "ccimport-two"] {
         std::fs::create_dir_all(folder.join(name)).expect("create the folder");
     }
@@ -108,7 +108,6 @@ fn open_leaves_the_window_as_it_is_until_focus_shows_the_first_project() {
     let marked = |line: &str| line.contains('▌') && line.contains(&entry("ccimport-one"));
     app.wait_for("the first project shows", |s| s.lines().any(marked));
     assert_eq!(status(&app.session)["shown"]["project"], answer["projects"][0]);
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]

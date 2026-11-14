@@ -21,11 +21,11 @@ const KEEPING: &str = "keeping the plugins' window processes running until this 
 
 struct Panel {
     session: Arc<Session>,
-    folder: PathBuf,
+    folder: TempDir,
 }
 
 impl Panel {
-    fn folder(test: &str) -> PathBuf {
+    fn folder(test: &str) -> TempDir {
         let folder = temp_dir_named(&format!("ccwindows-{test}-{}", std::process::id()));
         std::fs::write(folder.join("cornercase-plugin.toml"), MANIFEST).expect("manifest");
         let script = "#!/bin/sh\necho \"$CORNERCASE_BIN\" >> \"$CORNERCASE_PLUGIN_STATE/bins\"\n\
@@ -35,7 +35,8 @@ impl Panel {
     }
 
     fn on(test: &str) -> Self {
-        let (session, folder) = (Session::new(), Self::folder(test));
+        let folder = Self::folder(test);
+        let session = Session::new();
         session.says(&["plugin", "link", &folder.display().to_string()]);
         session.says(&["plugin", "enable", "acme.panel"]);
         Self { session, folder }
@@ -71,12 +72,6 @@ impl Panel {
         let pid = i32::try_from(line["pid"].as_u64().expect("a pid")).expect("a pid");
         wait_until("the process wrote its pid", || self.pids().last() == Some(&pid));
         pid
-    }
-}
-
-impl Drop for Panel {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.folder);
     }
 }
 
@@ -220,10 +215,10 @@ fn full_pipe() -> (std::io::PipeReader, std::io::PipeWriter) {
 
 #[test]
 fn with_no_plugin_it_keeps_running_and_follows_the_plugins() {
+    let folder = Panel::folder("later");
     let session = Session::new();
     let registry = session.dir.join("plugins.json");
     std::fs::write(&registry, "{").expect("a list it cannot read");
-    let folder = Panel::folder("later");
     let link = ["plugin", "link", &folder.display().to_string()];
     assert!(refused(&session.cli(&link), 1, "will not write over it"), "the list is the one commands read");
     let panel = Panel { session, folder };

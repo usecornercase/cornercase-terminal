@@ -47,7 +47,6 @@ fn fake_release(version: &str, script: &str) -> String {
         .expect("run tar");
     assert!(tar.success(), "tar failed");
     let archive = std::fs::read(build.join("release.tar.gz")).expect("read the archive");
-    let _ = std::fs::remove_dir_all(&build);
     let digest = sha256_hex(&archive);
     let url = serve(|url| {
         let latest = serde_json::json!({"tag_name": format!("v{version}"), "assets": [
@@ -63,8 +62,8 @@ fn fake_release(version: &str, script: &str) -> String {
     format!("{url}/latest")
 }
 
-fn installed_copy(name: &str) -> PathBuf {
-    let bin = temp_dir(name).join("cornercase");
+fn installed_copy(session: &Session, name: &str) -> PathBuf {
+    let bin = session.folder(name).join("cornercase");
     std::fs::copy(env!("CARGO_BIN_EXE_cornercase"), &bin).expect("copy cornercase");
     bin
 }
@@ -198,11 +197,12 @@ fn restart_without_a_server_says_so() {
 #[case::at_once("99.0.0", &[][..])]
 #[case::once_no_agent_works("99.0.1", &["--when-idle"][..])]
 fn update_installs_the_latest_release_and_restarts_the_server(#[case] version: &str, #[case] when: &[&str]) {
-    let bin = installed_copy(&format!("update-{version}"));
-    let mut app = Harness::open_from(&bin, Session::new(), ROWS, COLS, &[]);
-    app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
     let name = format!("ccup-{version}-{}", std::process::id());
     let dir = temp_dir_named(&name);
+    let session = Session::new();
+    let bin = installed_copy(&session, &format!("update-{version}"));
+    let mut app = Harness::open_from(&bin, Arc::clone(&session), ROWS, COLS, &[]);
+    app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
     app.open_project(1, &dir);
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
     app.send(b"echo old-\"\"shell\r");
@@ -235,16 +235,14 @@ fn update_installs_the_latest_release_and_restarts_the_server(#[case] version: &
         !s.contains("old-shell") && s.contains(&first_entry()) && s.contains(&entry(&name))
     });
     assert!(marker.exists(), "the client came back without running the new binary");
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(bin.parent().expect("its folder"));
 }
 
 fn update_from(session: &Session, bin: &Path, args: &[&str], latest: String) -> std::process::Output {
     session.command_of(bin).args(args).env(update::LATEST_ENV, latest).output().expect("run update")
 }
 
-fn homebrew_copy(name: &str) -> PathBuf {
-    let bin = temp_dir(name).join("homebrew").join("cornercase");
+fn homebrew_copy(session: &Session, name: &str) -> PathBuf {
+    let bin = session.folder(name).join("homebrew").join("cornercase");
     std::fs::create_dir_all(bin.parent().expect("its folder")).expect("homebrew folder");
     std::fs::copy(env!("CARGO_BIN_EXE_cornercase"), &bin).expect("copy cornercase");
     bin
@@ -261,7 +259,7 @@ fn manual_line(latest: &str) -> serde_json::Value {
 #[case::json(&["--json"][..], format!("{{\"outcome\":\"up-to-date\",\"version\":\"{}\"}}\n", version::CURRENT))]
 fn update_leaves_an_up_to_date_install_and_its_server_alone(#[case] flags: &[&str], #[case] said: String) {
     let app = Harness::start();
-    let bin = installed_copy(&format!("up-to-date{}", flags.len()));
+    let bin = installed_copy(&app.session, &format!("up-to-date{}", flags.len()));
 
     let out =
         update_from(&app.session, &bin, &[&["update"], flags].concat(), fake_release(version::CURRENT, "#!/bin/sh\n"));
@@ -269,7 +267,6 @@ fn update_leaves_an_up_to_date_install_and_its_server_alone(#[case] flags: &[&st
     assert!(out.status.success(), "{out:?}");
     assert_eq!(String::from_utf8_lossy(&out.stdout), said);
     assert_eq!(app.session.servers(), 1);
-    let _ = std::fs::remove_dir_all(bin.parent().expect("its folder"));
 }
 
 #[test]
@@ -277,7 +274,7 @@ fn update_json_prints_one_line_and_leaves_the_server_alone() {
     let session = Session::new();
     session.says(&["start-server"]);
     let boot = remote::boot_of(&session.says(&["status", "--json"]));
-    let bin = installed_copy("update-json");
+    let bin = installed_copy(&session, "update-json");
     let new = "#!/bin/sh\necho 'cornercase 99.0.2'\n";
 
     let out = update_from(&session, &bin, &["update", "--json"], fake_release("99.0.2", new));
@@ -290,7 +287,6 @@ fn update_json_prints_one_line_and_leaves_the_server_alone() {
     assert_eq!(std::fs::read_to_string(&bin).expect("the new binary"), new);
     assert_eq!(session.servers(), 1);
     assert_eq!(remote::boot_of(&session.says(&["status", "--json"])), boot);
-    let _ = std::fs::remove_dir_all(bin.parent().expect("its folder"));
 }
 
 #[rstest]
@@ -299,7 +295,7 @@ fn update_json_prints_one_line_and_leaves_the_server_alone() {
 #[case::check_json(&["update", "--check", "--json"][..], 0)]
 fn an_install_cornercase_cannot_replace_gets_its_command(#[case] args: &[&str], #[case] status: i32) {
     let session = Session::new();
-    let bin = homebrew_copy(&format!("by-hand-{}-{status}", args.len()));
+    let bin = homebrew_copy(&session, &format!("by-hand-{}-{status}", args.len()));
     let size = std::fs::metadata(&bin).expect("its size").len();
 
     let out = update_from(&session, &bin, args, fake_release("99.0.4", "#!/bin/sh\n"));
@@ -312,13 +308,12 @@ fn an_install_cornercase_cannot_replace_gets_its_command(#[case] args: &[&str], 
         let said = format!("cornercase 99.0.4 is out (you have {}). Update it with:\n{}\n", version::CURRENT, BREW);
         assert_eq!(String::from_utf8_lossy(&out.stdout), said);
     }
-    let _ = std::fs::remove_dir_all(bin.parent().and_then(Path::parent).expect("its folder"));
 }
 
 #[test]
 fn check_json_says_where_it_would_install() {
     let session = Session::new();
-    let bin = installed_copy("check-json");
+    let bin = installed_copy(&session, "check-json");
     let size = std::fs::metadata(&bin).expect("its size").len();
 
     let out = update_from(&session, &bin, &["update", "--check", "--json"], fake_release("99.0.5", "#!/bin/sh\n"));
@@ -329,7 +324,6 @@ fn check_json_says_where_it_would_install() {
         serde_json::json!({"outcome": "available", "version": version::CURRENT, "latest": "99.0.5", "path": path});
     assert_eq!(remote::one_line_of_json(&out), expected);
     assert_eq!(std::fs::metadata(&bin).expect("its size").len(), size);
-    let _ = std::fs::remove_dir_all(bin.parent().expect("its folder"));
 }
 
 #[rstest]
@@ -350,7 +344,7 @@ fn a_development_build_refuses_to_update(#[case] args: &[&str]) {
 #[case::by_hand(true, 6)]
 fn update_json_through_ssh_says_what_it_did_there(#[case] by_hand: bool, #[case] status: i32) {
     let session = Session::new();
-    let bin = if by_hand { homebrew_copy("ssh-by-hand") } else { installed_copy("ssh-updated") };
+    let bin = if by_hand { homebrew_copy(&session, "ssh-by-hand") } else { installed_copy(&session, "ssh-updated") };
     let new = "#!/bin/sh\necho 'cornercase 99.0.6'\n";
     let command = bin.display().to_string();
 
@@ -374,15 +368,12 @@ fn update_json_through_ssh_says_what_it_did_there(#[case] by_hand: bool, #[case]
         );
         assert_eq!(std::fs::read_to_string(&bin).expect("the new binary"), new);
     }
-    let _ = std::fs::remove_dir_all(
-        bin.parent().and_then(|p| if by_hand { p.parent() } else { Some(p) }).expect("its folder"),
-    );
 }
 
 #[test]
 fn update_check_through_ssh_names_the_machine_in_its_command() {
     let session = Session::new();
-    let bin = installed_copy("ssh-check");
+    let bin = installed_copy(&session, "ssh-check");
     let command = bin.display().to_string();
 
     let out = session
@@ -399,5 +390,4 @@ fn update_check_through_ssh_names_the_machine_in_its_command() {
         "cornercase 99.0.7 is out (you have {current}). Update it with:\ncornercase --remote devbox --remote-command {shown} update\n"
     );
     assert_eq!(String::from_utf8_lossy(&out.stdout), expected, "{out:?}");
-    let _ = std::fs::remove_dir_all(bin.parent().expect("its folder"));
 }

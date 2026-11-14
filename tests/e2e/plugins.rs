@@ -31,7 +31,7 @@ contexts = ["pane"]
 command = ["/bin/sh", "-c", "exit 3"]
 "#;
 
-fn plugin_folder(name: &str) -> PathBuf {
+fn plugin_folder(name: &str) -> TempDir {
     let dir = temp_dir_named(name);
     fill_plugin(&dir);
     dir
@@ -94,8 +94,8 @@ fn assert_status_shows_the_service(session: &Session, service: i32) {
 
 #[test]
 fn a_linked_plugin_runs_once_it_is_enabled_and_stops_once_disabled() {
-    let app = Harness::start();
     let folder = plugin_folder(&format!("ccplug-{}", std::process::id()));
+    let app = Harness::start();
     let path = folder.display().to_string();
 
     let linked = app.session.says(&["plugin", "link", &path]);
@@ -117,7 +117,6 @@ fn a_linked_plugin_runs_once_it_is_enabled_and_stops_once_disabled() {
 
     app.session.says(&["plugin", "disable", "acme.e2e"]);
     wait_until("the plugin's processes stop", || !alive(service) && !alive(window));
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -184,8 +183,8 @@ fn assert_installed_and_current(session: &Session, plugin: &str, repo: &str) {
 
 #[test]
 fn a_plugin_installs_from_a_repository_after_its_preview_updates_and_goes() {
-    let app = Harness::start();
     let base = temp_dir_named(&format!("ccinstall-{}", std::process::id()));
+    let app = Harness::start();
     let (work, folder, repo) = plugin_repository(&base);
     let plugin = format!("{repo}//plugins/e2e");
 
@@ -201,7 +200,6 @@ fn a_plugin_installs_from_a_repository_after_its_preview_updates_and_goes() {
     let removed = app.session.says(&["plugin", "remove", "acme.e2e"]);
     assert!(removed.starts_with("removed acme.e2e"), "{removed}");
     assert!(!app.session.dir.join("plugins/installed/acme.e2e").exists());
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 fn assert_previewed_without_installing(session: &Session, plugin: &str) -> String {
@@ -227,8 +225,8 @@ fn assert_previewed_without_installing(session: &Session, plugin: &str) -> Strin
 
 #[test]
 fn a_program_previews_an_install_then_installs_only_the_commit_it_showed() {
-    let session = Session::new();
     let base = temp_dir_named(&format!("ccpreview-{}", std::process::id()));
+    let session = Session::new();
     let (work, folder, repo) = plugin_repository(&base);
     let plugin = format!("{repo}//plugins/e2e");
     let first = assert_previewed_without_installing(&session, &plugin);
@@ -246,13 +244,12 @@ fn a_program_previews_an_install_then_installs_only_the_commit_it_showed() {
     let listed = previewed(&session, &["plugin", "list", "--json"]);
     let source = &listed["plugins"][0]["source"];
     assert!(source["commit"] == second && source.get("ref").is_none(), "{source}");
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
 fn a_program_previews_an_update_then_updates_only_to_the_commit_it_showed() {
-    let session = Session::new();
     let base = temp_dir_named(&format!("ccupdprev-{}", std::process::id()));
+    let session = Session::new();
     let (work, folder, repo) = plugin_repository(&base);
     session.says(&["plugin", "install", &format!("{repo}//plugins/e2e"), "--yes"]);
 
@@ -278,13 +275,12 @@ fn a_program_previews_an_update_then_updates_only_to_the_commit_it_showed() {
     assert!(updated.contains("updated acme.e2e to 0.3.0, still off"), "{updated}");
     let usage = session.cli(&["plugin", "update", "--preview", "--json"]);
     assert_eq!(usage.status.code(), Some(2), "{usage:?}");
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 #[test]
 fn another_client_lists_and_runs_the_actions_as_the_menu_does() {
-    let app = Harness::start();
     let folder = plugin_folder(&format!("ccact-{}", std::process::id()));
+    let app = Harness::start();
     let path = folder.display().to_string();
     app.session.says(&["plugin", "link", &path]);
     app.session.says(&["plugin", "enable", "acme.e2e"]);
@@ -312,7 +308,6 @@ fn another_client_lists_and_runs_the_actions_as_the_menu_does() {
     let stale = app.session.cli(&["plugin", "run", "acme.e2e", "note", "--pane", &pane, "--revision", "0"]);
     assert!(!stale.status.success());
     assert!(String::from_utf8_lossy(&stale.stderr).contains("changed"), "{stale:?}");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 const POPUP_MANIFEST: &str = r#"id = "acme.popup"
@@ -332,12 +327,11 @@ height = 6
 command = ["/bin/sh", "-c", 'echo popup-""ready; read x; echo "$x" > "$CORNERCASE_PLUGIN_STATE/said"']
 "#;
 
-fn popup_plugin(session: &Session, test: &str) -> PathBuf {
-    let folder = temp_dir_named(&format!("ccpopup-{test}-{}", std::process::id()));
+fn popup_plugin(session: &Session) {
+    let folder = session.folder("popup");
     std::fs::write(folder.join("cornercase-plugin.toml"), POPUP_MANIFEST).expect("manifest");
     session.says(&["plugin", "link", &folder.display().to_string()]);
     session.says(&["plugin", "enable", "acme.popup"]);
-    folder
 }
 
 fn pane_text(app: &Harness) -> String {
@@ -345,13 +339,18 @@ fn pane_text(app: &Harness) -> String {
     (p.y..p.bottom()).map(|y| app.row(y).chars().skip(usize::from(p.x)).collect::<String>() + "\n").collect()
 }
 
-#[test]
-fn a_button_opens_its_popup_on_every_client_and_its_keys_never_reach_the_pane() {
+fn popup_over_cat() -> Harness {
     let mut app = Harness::start();
     app.send(b"echo cat-\"\"starts; cat -v\r");
     app.wait_for("cat runs in the pane", |s| s.contains("cat-starts"));
-    let folder = popup_plugin(&app.session, "every-client");
+    popup_plugin(&app.session);
     app.wait_for("the plugin's button shows", |s| s.contains("Popper"));
+    app
+}
+
+#[test]
+fn a_button_opens_its_popup_on_every_client_and_its_keys_never_reach_the_pane() {
+    let mut app = popup_over_cat();
 
     app.click(app.position_of("Popper"));
     app.wait_for("the popup shows its program", |s| s.contains("popup-ready") && s.contains("Popper: ask a line"));
@@ -368,16 +367,11 @@ fn a_button_opens_its_popup_on_every_client_and_its_keys_never_reach_the_pane() 
     app.send(b"after\r");
     app.wait_for("cat echoes what follows", |s| s.matches("after").count() == 2);
     assert!(!pane_text(&app).contains("ok"), "{}", app.text());
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
 fn a_popup_stays_open_when_the_last_client_leaves() {
-    let mut app = Harness::start();
-    app.send(b"echo cat-\"\"starts; cat -v\r");
-    app.wait_for("cat runs in the pane", |s| s.contains("cat-starts"));
-    let folder = popup_plugin(&app.session, "stays-open");
-    app.wait_for("the plugin's button shows", |s| s.contains("Popper"));
+    let mut app = popup_over_cat();
     app.click(app.position_of("Popper"));
     app.wait_for("the popup shows its program", |s| s.contains("popup-ready"));
 
@@ -387,13 +381,12 @@ fn a_popup_stays_open_when_the_last_client_leaves() {
     back.wait_for("the popup is still there", |s| s.contains("popup-ready"));
     back.send(b"ok\r");
     back.wait_for("the popup closes", |s| !s.contains("popup-ready"));
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
 fn stopping_the_server_answers_a_run_waiting_on_its_popup() {
     let mut app = Harness::start();
-    let folder = popup_plugin(&app.session, "server-stops");
+    popup_plugin(&app.session);
     app.wait_for("the plugin's button shows", |s| s.contains("Popper"));
     let waiting = app
         .session
@@ -408,7 +401,6 @@ fn stopping_the_server_answers_a_run_waiting_on_its_popup() {
     let ran = waiting.wait_with_output().expect("plugin run ends");
     let said = String::from_utf8_lossy(&ran.stdout);
     assert!(said.starts_with("ran acme.popup ask: the popup was closed"), "{ran:?}");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 mod on_another_machine {
@@ -475,8 +467,8 @@ mod on_another_machine {
 
     #[test]
     fn a_program_installs_a_plugin_on_the_other_machine_after_its_preview() {
-        let (here, machine) = (Session::new(), Session::new());
         let base = temp_dir_named(&format!("ccremoteinstall-{}", std::process::id()));
+        let (here, machine) = (Session::new(), Session::new());
         let (work, folder, repo) = plugin_repository(&base);
         let spec = format!("{repo}//plugins/e2e");
 
@@ -497,6 +489,5 @@ mod on_another_machine {
         let removed = said(&on_vps(&here, &machine, &["plugin", "remove", "acme.e2e"]));
         assert!(removed.starts_with("removed acme.e2e"), "{removed}");
         assert!(!machine.dir.join("plugins/installed/acme.e2e").exists());
-        let _ = std::fs::remove_dir_all(&base);
     }
 }

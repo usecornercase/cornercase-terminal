@@ -55,9 +55,8 @@ fn shift_left_in_a_todo_selects_and_typing_replaces() {
     app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("fix the X"));
 }
 
-fn edited_repo(prefix: &str) -> (PathBuf, String) {
-    let repo = std::env::temp_dir().join(format!("{prefix}-{}", std::process::id()));
-    std::fs::create_dir_all(&repo).expect("create repo dir");
+fn edited_repo(prefix: &str) -> (TempDir, String) {
+    let repo = temp_dir_named(&format!("{prefix}-{}", std::process::id()));
     let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
     git(&repo, &["init", "--quiet"]);
     std::fs::write(repo.join("notes.txt"), "one\ntwo\n").expect("write file");
@@ -80,10 +79,9 @@ fn the_changes_panel_shows_what_changed_in_the_repo() {
     app.wait_for("the panel shows the diff", |s| {
         s.contains("Uncommitted") && s.contains("notes.txt") && s.contains("TWO")
     });
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
-fn opened_repo(prefix: &str) -> (PathBuf, Harness) {
+fn opened_repo(prefix: &str) -> (TempDir, Harness) {
     let (repo, repo_name) = edited_repo(prefix);
     let mut app = Harness::start();
     app.open_project(1, &repo);
@@ -93,7 +91,7 @@ fn opened_repo(prefix: &str) -> (PathBuf, Harness) {
 
 #[test]
 fn each_window_draws_the_icons_its_terminal_has() {
-    let (repo, mut ghostty) = opened_repo("ccicons");
+    let (_repo, mut ghostty) = opened_repo("ccicons");
     let env = [("TERM", "xterm-256color")];
     let plain = Terminal {
         bin: std::path::Path::new(bin()),
@@ -110,7 +108,6 @@ fn each_window_draws_the_icons_its_terminal_has() {
 
     ghostty.wait_for("the row has its type icon", |s| s.contains("M \u{e64e} notes.txt"));
     other.wait_for("the row has none", |s| s.contains("M notes.txt") && !s.contains('\u{e64e}'));
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 fn listed_file(app: &Harness) -> serde_json::Value {
@@ -125,14 +122,13 @@ fn listed_digest(app: &Harness) -> String {
 
 #[test]
 fn scripts_see_the_changes_of_a_workspace() {
-    let (repo, app) = opened_repo("ccsc");
+    let (_repo, app) = opened_repo("ccsc");
 
     let listed = listed_file(&app);
     let diff = app.session.says(&["changes", "file", "notes.txt"]);
 
     assert_eq!(listed["path"], "notes.txt", "{listed}");
     assert!(diff.contains("-two") && diff.contains("+TWO"), "{diff}");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 #[test]
@@ -159,7 +155,6 @@ fn scripts_read_a_line_with_its_tab_beside_what_a_window_draws() {
     assert_eq!(of(&gap["lines"], "    gap")["raw"], "\tgap", "{gap}");
     assert_eq!(of(&gap["lines"], "#").get("raw"), None, "{gap}");
     assert!(diff.contains("+    echo bye"), "{diff}");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 #[test]
@@ -174,12 +169,11 @@ fn scripts_discard_a_file_only_when_told_to() {
 
     assert_eq!(done, "discarded the changes to notes.txt");
     assert_eq!(std::fs::read_to_string(repo.join("notes.txt")).expect("read"), "one\ntwo\n");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 #[test]
 fn scripts_list_read_and_search_a_workspace_s_files() {
-    let (repo, app) = opened_repo("ccfiles");
+    let (_repo, app) = opened_repo("ccfiles");
 
     let listed = app.session.says(&["files", "list", "--json"]);
     let read = app.session.says(&["files", "read", "notes.txt"]);
@@ -190,7 +184,6 @@ fn scripts_list_read_and_search_a_workspace_s_files() {
     assert_eq!(notes.map(|n| n["status"].clone()), Some(serde_json::json!("modified")), "{listed}");
     assert_eq!(read, "one\nTWO");
     assert_eq!(found, "notes.txt:2:TWO");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 fn git_status(repo: &std::path::Path) -> String {
@@ -218,7 +211,6 @@ fn scripts_stage_and_unstage_a_file() {
 
     assert_eq!(unstaged, "unstaged notes.txt");
     assert_eq!(git_status(&repo), " M notes.txt\n");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 fn refuses_the_old_version(app: &Harness, seen: &str) {
@@ -253,15 +245,14 @@ fn scripts_act_only_on_the_version_they_saw() {
 
     assert_eq!(done, "discarded the changes to notes.txt");
     assert_eq!(std::fs::read_to_string(repo.join("notes.txt")).expect("read"), "one\ntwo\n");
-    let _ = std::fs::remove_dir_all(&repo);
 }
 
 fn showing_an_image(reply: &[u8], name: &str) -> Harness {
     let name = format!("{name}-{}", std::process::id());
-    let dir = temp_dir_named(&name);
+    let mut app = Harness::answering(reply);
+    let dir = app.session.folder(&name);
     let pixels = image::RgbaImage::from_pixel(400, 200, image::Rgba([200, 30, 30, 255]));
     pixels.save_with_format(dir.join("logo.png"), image::ImageFormat::Png).expect("write a png");
-    let mut app = Harness::answering(reply);
     app.open_project(1, &dir);
     app.wait_for("the project opens", |s| s.contains(&entry(&name)) && !s.contains("cancel"));
     app.send(b"echo lo\"\"go.png\r");
@@ -289,10 +280,10 @@ fn an_unknown_terminal_is_told_why_it_shows_no_image() {
     assert!(!raw.contains("\x1b_G") && !raw.contains("1337;File"), "no image bytes reach it");
 }
 
-fn two_worktrees_editing_one_line(prefix: &str) -> (PathBuf, String, [PathBuf; 2]) {
+fn two_worktrees_editing_one_line(prefix: &str) -> (TempDir, String, [TempDir; 2]) {
     let (repo, repo_name) = edited_repo(prefix);
     git(&repo, &["checkout", "--quiet", "--", "notes.txt"]);
-    let trees = ["a", "b"].map(|side| std::env::temp_dir().join(format!("{prefix}-{side}-{}", std::process::id())));
+    let trees = ["a", "b"].map(|side| temp_dir_named(&format!("{prefix}-{side}-{}", std::process::id())));
     for (side, tree) in ["a", "b"].into_iter().zip(&trees) {
         git(&repo, &["worktree", "add", "--quiet", "-b", &format!("side-{side}"), &tree.display().to_string()]);
         std::fs::write(tree.join("notes.txt"), format!("one\n{}\n", side.to_uppercase())).expect("edit the worktree");
@@ -326,7 +317,4 @@ fn scripts_check_a_merge_without_touching_the_checkouts() {
     let listed: serde_json::Value = serde_json::from_str(&shared).expect("the shared files");
     assert_eq!(listed["shared"][0]["files"], serde_json::json!(["notes.txt"]), "{shared}");
     assert_eq!(trees.each_ref().map(|tree| git_status(tree)), before);
-    for dir in std::iter::once(&repo).chain(&trees) {
-        let _ = std::fs::remove_dir_all(dir);
-    }
 }
