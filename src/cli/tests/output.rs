@@ -373,18 +373,29 @@ const TAB: Ids = Ids { pane: None, ..PANE };
     "machine vps  notice  claude on vps needs you in shop › main  cc-1-2"
 )]
 #[case::a_message(
-    What::Message { kind: "notify".into(), message: "the release build is ready".into(), panes: vec![] },
+    What::Message { kind: "notify".into(), message: "the release build is ready".into(), panes: vec![], failed: false },
     Ids::default(),
     "notify  the release build is ready"
 )]
 #[case::a_message_about_a_workspace(
     What::Message {
         kind: "flow-merged".into(),
-        message: "pull request merged in fix-login: 2 agents closed · ▶ on the workspace reopens them".into(),
+        message: "pull request merged in fix-login: 2 agents closed".into(),
         panes: vec![4, 5],
+        failed: false,
     },
     Ids { project: Some(1), workspace: Some(2), ..Ids::default() },
-    "workspace 2  flow-merged  pull request merged in fix-login: 2 agents closed · ▶ on the workspace reopens them"
+    "workspace 2  flow-merged  pull request merged in fix-login: 2 agents closed"
+)]
+#[case::a_message_that_failed(
+    What::Message {
+        kind: "flow-merged".into(),
+        message: "pull request merged in fix-login: 2 agents closed, could not free the worktree: target: busy".into(),
+        panes: vec![4, 5],
+        failed: true,
+    },
+    Ids { project: Some(1), workspace: Some(2), ..Ids::default() },
+    "workspace 2  flow-merged  pull request merged in fix-login: 2 agents closed, could not free the worktree: target: busy"
 )]
 #[case::a_tunnel_held_by_a_program(
     What::Tunnel {

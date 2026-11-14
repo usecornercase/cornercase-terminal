@@ -162,29 +162,33 @@ fn subagents() -> Vec<Sample> {
 }
 
 fn messages() -> Vec<Sample> {
-    let what = |kind: &str, message: &str, panes: Vec<u64>| What::Message {
+    let what = |kind: &str, message: &str, panes: Vec<u64>, failed: bool| What::Message {
         kind: kind.into(),
         message: message.into(),
         panes,
+        failed,
     };
+    let workspace = Ids { project: Some(1), workspace: Some(2), ..Ids::default() };
     let merged = "pull request merged in fix-login: 2 agents closed · ▶ on the workspace reopens them";
+    let failed = "pull request merged in fix-login: 5 agents closed, 9.8 GB of builds freed; could not free coder A's worktree: it is being removed";
     vec![
         sample!(
             "control/events/v1/message.json",
-            event(what("notify", "the release build is ready", vec![]), Ids::default())
+            event(what("notify", "the release build is ready", vec![], false), Ids::default())
         ),
         sample!(
             "control/events/v1/message-workspace.json",
-            event(
-                what("flow-merged", merged, vec![4, 5]),
-                Ids { project: Some(1), workspace: Some(2), ..Ids::default() },
-            )
+            event(what("flow-merged", merged, vec![4, 5], false), workspace)
+        ),
+        sample!(
+            "control/events/v1/message-failed.json",
+            event(what("flow-merged", failed, vec![4, 5], true), workspace)
         ),
     ]
 }
 
 fn a_message(panes: Vec<u64>) -> Event {
-    event(What::Message { kind: "notify".into(), message: "tests pass".into(), panes }, Ids::default())
+    event(What::Message { kind: "notify".into(), message: "tests pass".into(), panes, failed: false }, Ids::default())
 }
 
 fn samples() -> Vec<Sample> {

@@ -39,6 +39,14 @@ fn merged(app: &mut App) -> Vec<Heard> {
     messages(&app.take_events(), 1)
 }
 
+fn merged_with_failed(app: &mut App) -> Vec<(Heard, bool)> {
+    messages_with_failed(&app.take_events(), 1)
+}
+
+fn toast_icon(team: &Team) -> ui::ToastIcon {
+    team.repo.app.messages.toast.as_ref().expect("a toast").icon
+}
+
 fn closed_at(team: &mut Team) -> Instant {
     let app = &mut team.repo.app;
     app.clients.events.subscribe(1, Vec::new(), false, true);
@@ -101,9 +109,12 @@ fn a_merged_run_that_frees_its_builds_frees_its_worktree_and_its_roles_and_says_
     only_the_builds_went(&team);
     let said = team.repo.app.messages.toast.as_ref().expect("a toast").message.clone();
     assert!(said.contains("agents closed, ") && said.contains("of builds freed · "), "{said}");
-    let told = merged(&mut team.repo.app);
+    assert_eq!(toast_icon(&team), ui::ToastIcon::Check);
+    let told = merged_with_failed(&mut team.repo.app);
     assert_eq!(told.len(), 1, "{told:?}");
-    assert_eq!((told[0].0.as_str(), &told[0].1), ("flow-merged", &said));
+    let ((kind, words, ..), failed) = &told[0];
+    assert!(kind == "flow-merged" && words.ends_with("of builds freed") && !failed, "{told:?}");
+    assert_eq!(said, format!("{words} · ▶ on the workspace reopens them"));
     assert!(!team.repo.app.freeing_path(&team.own) && !team.repo.app.freeing_path(&team.role));
 }
 
@@ -134,8 +145,30 @@ fn a_program_in_the_worktree_keeps_its_builds_and_the_message_says_why() {
 
     assert!(team.own.join("node_modules").exists());
     assert!(!team.role.join("node_modules").exists());
-    let told = merged(&mut team.repo.app);
-    assert!(told[0].1.contains("the worktree kept") && told[0].1.contains("sleep runs in it"), "{told:?}");
+    assert_eq!(toast_icon(&team), ui::ToastIcon::Check);
+    let told = merged_with_failed(&mut team.repo.app);
+    assert!(told[0].0.1.contains("the worktree kept") && told[0].0.1.contains("sleep runs in it"), "{told:?}");
+    assert!(!told[0].1, "{told:?}");
+}
+
+#[test]
+fn a_worktree_that_cannot_be_freed_marks_the_message_failed() {
+    let mut team = team(true);
+    let gone = team.role.join("gone");
+    let seats = &mut team.repo.app.projects[0].workspaces[1].role_worktrees;
+    seats.iter_mut().find(|seat| seat.role == "coder A").expect("the seat").path = gone;
+    let closed = closed_at(&mut team);
+
+    freed(&mut team, closed, "could not free coder A's worktree");
+
+    assert_eq!(toast_icon(&team), ui::ToastIcon::Bug);
+    let said = team.repo.app.messages.toast.as_ref().expect("a toast").message.clone();
+    let told = merged_with_failed(&mut team.repo.app);
+    assert_eq!(told.len(), 1, "{told:?}");
+    let ((kind, words, ..), failed) = &told[0];
+    assert!(kind == "flow-merged" && *failed && !words.contains('▶'), "{told:?}");
+    assert!(words.contains("of builds freed; could not free coder A's worktree: "), "{words}");
+    assert_eq!(said, format!("{words} · ▶ on the workspace reopens them"));
 }
 
 #[test]
