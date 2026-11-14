@@ -87,7 +87,7 @@ function startRole(app: App, p: Project, w: Workspace, pane: Pane, role: FlowRol
   pane.shell.start(new Agent(app.host(p, w, () => pane.id), () => pane.shell.finish(), role.agent, args, { trusted: true }));
 }
 
-export const exited = (pane: Pane): boolean => pane.shell.fg === null;
+export const exited = (pane: Pane): boolean => !pane.shell.busy;
 
 const exitedPane = (app: App, id: number): boolean => {
   const found = app.findPane(id);

@@ -458,6 +458,23 @@ test('a role whose agent exited reads exited with a ▶ in the Flow panel, and t
   app.destroy();
 });
 
+test('a pane whose shell runs a job is not an exited role', () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  const run = app.runs[0];
+  const coder = run.members.find((m) => m.role === 'coder')?.pane ?? 0;
+  const found = app.findPane(coder);
+  assert.ok(found);
+  found.pane.shell.finish();
+  assert.ok(shown(app, '▶ coder'));
+  found.pane.shell.run('npm run dev');
+  assert.ok(found.pane.shell.busy);
+  assert.ok(!shown(app, '▶ coder'));
+  assert.equal(app.reopenableCount(run.workspace), 0);
+  app.destroy();
+});
+
 test('the Flow panel lists the messages newest first, and a click opens one with copy', () => {
   const app = demo(140, 60);
   toRun(app);
