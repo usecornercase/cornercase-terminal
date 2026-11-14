@@ -66,6 +66,16 @@
           "machine": "vps",
           "paired": null
         }
+      ],
+      "tunnels": [
+        {
+          "port": 5173,
+          "local": 5174,
+          "state": "up",
+          "error": null,
+          "holder": 9,
+          "kind": "hold"
+        }
       ]
     },
     {

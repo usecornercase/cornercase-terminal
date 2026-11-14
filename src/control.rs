@@ -98,7 +98,8 @@ pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
 pub(crate) use tunnels::{
-    Direction, ListTunnels, TunnelFailed, TunnelHold, TunnelInfo, TunnelList, TunnelOrderLine, TunnelOrders, TunnelPort,
+    Direction, HoldEnd, HoldEnded, ListTunnels, TunnelFailed, TunnelHold, TunnelInfo, TunnelList, TunnelOrderLine,
+    TunnelOrders, TunnelPort,
 };
 pub(crate) use usage::{Plans, Stats, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};

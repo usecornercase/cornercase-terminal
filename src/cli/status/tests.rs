@@ -89,6 +89,7 @@ mod machines {
             retry_at: None,
             boot: "b-1".into(),
             projects,
+            tunnels: Vec::new(),
         }
     }
 

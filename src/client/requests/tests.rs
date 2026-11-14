@@ -37,6 +37,33 @@ fn a_server_older_than_requests_is_too_old() {
     assert!(matches!(error, Error::OldServer("contract")), "{error:?}");
 }
 
+mod how_a_follow_ends {
+    use rstest::rstest;
+    use serde_json::json;
+
+    use super::*;
+
+    #[rstest]
+    #[case::detached(ServerMessage::Detached, StreamEnd::Detached)]
+    #[case::shutdown(ServerMessage::Shutdown, StreamEnd::Stopped)]
+    #[case::restart(ServerMessage::Restart(std::path::PathBuf::from("cornercase")), StreamEnd::Restarted)]
+    fn says_which_message_ended_it(#[case] message: ServerMessage, #[case] expected: StreamEnd) {
+        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+        let line = serde_json::to_string(&Response::Ok(json!({ "n": 1 }))).expect("json");
+        protocol::send(&mut theirs, &ServerMessage::Response(line)).expect("a line");
+        protocol::send(&mut theirs, &message).expect("the end");
+        let mut heard = Vec::new();
+
+        let ended = follow_on(ours, None, |value| {
+            heard.push(value);
+            Ok(false)
+        });
+
+        assert_eq!(ended.expect("it ended"), expected);
+        assert_eq!(heard, [json!({ "n": 1 })]);
+    }
+}
+
 mod features {
     use super::*;
 
@@ -302,7 +329,7 @@ mod a_follow {
     struct Following {
         server: UnixStream,
         heard: mpsc::Receiver<Value>,
-        ended: mpsc::Receiver<std::result::Result<(), String>>,
+        ended: mpsc::Receiver<std::result::Result<StreamEnd, String>>,
     }
 
     impl Following {
@@ -369,7 +396,7 @@ mod a_follow {
 
         drop(reader);
 
-        assert_eq!(following.ended.recv_timeout(WAIT).expect("it ended"), Ok(()));
+        assert_eq!(following.ended.recv_timeout(WAIT).expect("it ended"), Ok(StreamEnd::Left));
         assert!(matches!(protocol::recv::<ClientMessage>(&mut following.server), Ok(None)));
     }
 
@@ -388,7 +415,7 @@ mod a_follow {
         following.say(2);
         protocol::send(&mut following.server, &ServerMessage::Shutdown).expect("the end");
 
-        assert_eq!(following.ended.recv_timeout(WAIT).expect("it ended"), Ok(()));
+        assert_eq!(following.ended.recv_timeout(WAIT).expect("it ended"), Ok(StreamEnd::Stopped));
     }
 
     const SHORT: Duration = Duration::from_millis(50);
