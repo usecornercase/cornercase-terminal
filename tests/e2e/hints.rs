@@ -1,8 +1,13 @@
 use super::remote::{fake_ssh, ran, remote_says, remotely};
 use super::*;
 
+pub(super) fn shown(path: &str) -> String {
+    let plain = path.chars().all(|c| c.is_ascii_alphanumeric() || "-_./@:,+=%".contains(c));
+    if plain { path.to_string() } else { format!("'{}'", path.replace('\'', r"'\''")) }
+}
+
 fn there(action: &str) -> String {
-    format!("cornercase --remote devbox --remote-command {} {action}", bin())
+    format!("cornercase --remote devbox --remote-command {} {action}", shown(bin()))
 }
 
 #[test]

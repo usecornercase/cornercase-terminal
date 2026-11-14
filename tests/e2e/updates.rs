@@ -394,8 +394,7 @@ fn update_check_through_ssh_names_the_machine_in_its_command() {
         .expect("run cornercase");
 
     let current = version::CURRENT;
-    let plain = command.chars().all(|c| c.is_ascii_alphanumeric() || "-_./@:,+=%".contains(c));
-    let shown = if plain { command.clone() } else { format!("'{}'", command.replace('\'', r"'\''")) };
+    let shown = hints::shown(&command);
     let expected = format!(
         "cornercase 99.0.7 is out (you have {current}). Update it with:\ncornercase --remote devbox --remote-command {shown} update\n"
     );

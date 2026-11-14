@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{TempDir, fake_program};
+use crate::test_util::{BrokenPipe, TempDir, fake_program};
 
 fn devbox() -> Remote {
     Remote { destination: "devbox".into(), command: None, option: "--remote-command" }
@@ -217,4 +217,31 @@ fn a_stream_that_cannot_be_written_fails_the_run_though_the_process_succeeded() 
     let result = relayed(&devbox(), &mut child, Full, Vec::new());
 
     assert_eq!(result.expect_err("a failure").to_string(), "no room");
+}
+
+#[test]
+fn a_reader_that_has_gone_does_not_fail_the_run() {
+    let dir = TempDir::new();
+    let ssh = fake_program(dir.path(), "ssh");
+    std::fs::write(ssh.with_extension("out"), "something\n").expect("out");
+    std::fs::write(ssh.with_extension("code"), "3").expect("code");
+    let mut child = Command::new(&ssh).stdout(Stdio::piped()).spawn().expect("spawn");
+
+    let status = relayed(&devbox(), &mut child, BrokenPipe, Vec::new()).expect("the status of ssh");
+
+    assert_eq!(status.code(), Some(3));
+}
+
+#[rstest]
+#[case::terminal_on_windows(true, true, &["update"], Printed::Data)]
+#[case::terminal_elsewhere(true, false, &["update"], Printed::Messages)]
+#[case::no_terminal_on_windows(false, true, &["update"], Printed::Messages)]
+#[case::json_in_a_terminal_on_windows(true, true, &["update", "--json"], Printed::Data)]
+fn a_terminal_run_on_windows_is_left_as_it_is(
+    #[case] terminal: bool,
+    #[case] windows: bool,
+    #[case] words: &[&str],
+    #[case] expected: Printed,
+) {
+    assert_eq!(printed_in(terminal, windows, words), expected);
 }

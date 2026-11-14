@@ -128,7 +128,7 @@ fn names_a_machine(after: &str) -> bool {
 
 mod stream;
 
-pub(super) use stream::{Printed, printed, relayed};
+pub(super) use stream::{Printed, printed_in, relayed};
 
 #[cfg(test)]
 mod tests;

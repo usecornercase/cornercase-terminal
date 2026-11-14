@@ -2,6 +2,7 @@ use std::io::{self, Read, Write};
 use std::process::{Child, ExitStatus};
 
 use super::{MACHINE, Remote};
+use crate::error::{Error, Result};
 
 const UPDATE_LINE: &str = "cornercase update";
 const READ: usize = 8192;
@@ -11,6 +12,10 @@ pub(in crate::remote) enum Printed {
     Data,
     Json,
     Messages,
+}
+
+pub(in crate::remote) fn printed_in(terminal: bool, windows: bool, words: &[&str]) -> Printed {
+    if terminal && windows { Printed::Data } else { printed(words) }
 }
 
 pub(in crate::remote) fn printed(words: &[&str]) -> Printed {
@@ -121,7 +126,7 @@ pub(in crate::remote) fn relayed(
     child: &mut Child,
     out: impl Write + Send,
     err: impl Write + Send,
-) -> io::Result<ExitStatus> {
+) -> Result<ExitStatus> {
     let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
     std::thread::scope(|scope| {
         let outs = stdout.map(|from| scope.spawn(|| copy(remote, from, out)));
@@ -129,12 +134,14 @@ pub(in crate::remote) fn relayed(
         let status = child.wait();
         let mut failed = None;
         for copying in [outs, errs].into_iter().flatten() {
-            if let Ok(Err(why)) = copying.join() {
+            if let Ok(Err(why)) = copying.join()
+                && why.kind() != io::ErrorKind::BrokenPipe
+            {
                 failed.get_or_insert(why);
             }
         }
-        let status = status?;
-        failed.map_or(Ok(status), Err)
+        let status = status.map_err(Error::RunSsh)?;
+        failed.map_or(Ok(status), |why| Err(Error::Io(why)))
     })
 }
 
