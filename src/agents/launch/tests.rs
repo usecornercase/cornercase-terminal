@@ -18,6 +18,15 @@ struct World {
     bracketed: bool,
     trust: Trust,
     screen: String,
+    reaction: Reaction,
+}
+
+fn clock() -> SystemTime {
+    SystemTime::UNIX_EPOCH + Duration::from_secs(1_000)
+}
+
+fn calm() -> Reaction {
+    Reaction { status: Some(Status::Idle), prompted: None, worked: None, clock: clock(), dialog: false }
 }
 
 fn step(launch: &mut Launch, now: Instant, world: &World) -> Step {
@@ -41,16 +50,17 @@ fn step_typing(
         trust_prompt: &trust,
         trust: world.trust,
         typed,
+        reaction: world.reaction,
     };
     launch.step(now, &mut seen)
 }
 
 fn shell() -> World {
-    World { shell: true, bracketed: false, trust: Trust::Accepted, screen: "$ ".into() }
+    World { shell: true, bracketed: false, trust: Trust::Accepted, screen: "$ ".into(), reaction: calm() }
 }
 
 fn agent(screen: &str) -> World {
-    World { shell: false, bracketed: true, trust: Trust::Accepted, screen: screen.into() }
+    World { shell: false, bracketed: true, trust: Trust::Accepted, screen: screen.into(), reaction: calm() }
 }
 
 fn asking_you(screen: &str) -> World {
@@ -380,5 +390,112 @@ mod holding {
         let start = Launch::new(1, spec(true), now);
 
         assert_eq!((resume.holds(now), resume.holds(now + 30 * MS), start.holds(now)), (true, false, false));
+    }
+}
+
+mod confirming {
+    use super::*;
+
+    const EVERY: Duration = CONFIRM_EVERY;
+
+    fn watching(reaction: Reaction) -> World {
+        World { reaction, ..agent("> ") }
+    }
+
+    fn entered() -> (Launch, Instant) {
+        let (mut launch, t) = started(true);
+        launch.confirm = Some(EVERY);
+        let pasted = step(&mut launch, t + AGENT_QUIET, &agent("> "));
+        assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
+        let at = t + AGENT_QUIET + SUBMIT_QUIET;
+        assert_eq!(step(&mut launch, at, &agent("> ")), Step::Enter(1));
+        (launch, at)
+    }
+
+    #[test]
+    fn a_confirming_launch_presses_enter_and_keeps_watching() {
+        let (launch, _) = entered();
+        assert_eq!((launch.stage(), launch.submits()), ("confirm", true));
+    }
+
+    #[test]
+    fn a_prompt_recorded_after_the_paste_ends_it_without_another_enter() {
+        let (mut launch, at) = entered();
+        let recorded = Reaction { prompted: Some(clock() + Duration::from_secs(1)), ..calm() };
+        let step = step(&mut launch, at + 100 * MS, &watching(recorded));
+        assert_eq!(step, Step::Taken { enters: 1, seen: "prompt" });
+    }
+
+    #[test]
+    fn a_prompt_recorded_before_the_paste_does_not_count() {
+        let (mut launch, at) = entered();
+        let old = Reaction { prompted: Some(clock() - Duration::from_secs(1)), ..calm() };
+        assert_eq!(step(&mut launch, at + 100 * MS, &watching(old)), Step::Wait);
+        assert_eq!(step(&mut launch, at + EVERY, &watching(old)), Step::Enter(2));
+    }
+
+    #[test]
+    fn working_after_the_first_enter_ends_it() {
+        let (mut launch, at) = entered();
+        let working = Reaction { worked: Some(at + 100 * MS), ..calm() };
+        assert_eq!(step(&mut launch, at + 200 * MS, &watching(working)), Step::Taken { enters: 1, seen: "working" });
+    }
+
+    #[test]
+    fn working_seen_only_before_the_first_enter_does_not_count() {
+        let (mut launch, at) = entered();
+        let before = Reaction { worked: Some(at.checked_sub(100 * MS).expect("an earlier instant")), ..calm() };
+        assert_eq!(step(&mut launch, at + EVERY, &watching(before)), Step::Enter(2));
+    }
+
+    #[rstest]
+    #[case::working(Status::Working, "working")]
+    #[case::waiting(Status::Waiting, "waiting")]
+    #[case::failed(Status::Failed, "failed")]
+    fn a_busy_waiting_or_failed_agent_never_gets_another_enter(#[case] status: Status, #[case] name: &'static str) {
+        let (mut launch, at) = entered();
+        let busy = Reaction { status: Some(status), ..calm() };
+        let step = step(&mut launch, at + EVERY, &watching(busy));
+        assert_eq!(step, Step::Taken { enters: 1, seen: name });
+    }
+
+    #[test]
+    fn enter_goes_again_every_interval_and_stops_at_the_bound() {
+        let (mut launch, at) = entered();
+        let idle = watching(calm());
+        for n in 2..=MAX_ENTERS {
+            assert_eq!(step(&mut launch, at + (EVERY * u32::from(n - 1)).saturating_sub(100 * MS), &idle), Step::Wait);
+            assert_eq!(step(&mut launch, at + EVERY * u32::from(n - 1), &idle), Step::Enter(n));
+        }
+        assert_eq!(step(&mut launch, at + (EVERY * u32::from(MAX_ENTERS)).saturating_sub(100 * MS), &idle), Step::Wait);
+        assert_eq!(step(&mut launch, at + EVERY * u32::from(MAX_ENTERS), &idle), Step::NotTaken(MAX_ENTERS));
+    }
+
+    #[rstest]
+    #[case::dialog(Reaction { dialog: true, ..calm() })]
+    #[case::unknown(Reaction { status: None, ..calm() })]
+    fn a_dialog_or_an_unknown_status_skips_the_enter_until_the_time_bound(#[case] reaction: Reaction) {
+        let (mut launch, at) = entered();
+        let world = watching(reaction);
+        assert_eq!(step(&mut launch, at + EVERY, &world), Step::Wait);
+        assert_eq!(step(&mut launch, at + EVERY * 4, &world), Step::Wait);
+        assert_eq!(step(&mut launch, at + EVERY * u32::from(MAX_ENTERS), &world), Step::NotTaken(1));
+    }
+
+    #[test]
+    fn the_agent_leaving_ends_it() {
+        let (mut launch, at) = entered();
+        let gone = World { shell: true, ..watching(calm()) };
+        assert_eq!(step(&mut launch, at + 100 * MS, &gone), Step::NotTaken(1));
+    }
+
+    #[test]
+    fn a_pane_without_an_agent_status_is_done_at_the_enter() {
+        let (mut launch, t) = started(true);
+        launch.confirm = Some(EVERY);
+        let blind = World { reaction: Reaction { status: None, ..calm() }, ..agent("> ") };
+        step(&mut launch, t + AGENT_QUIET, &blind);
+        let enter = step(&mut launch, t + AGENT_QUIET + SUBMIT_QUIET, &blind);
+        assert_eq!(enter, Step::Done(b"\r".to_vec()));
     }
 }

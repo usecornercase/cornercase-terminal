@@ -44,6 +44,11 @@ finished() { while [ -d "$d" ] && [ ! -e "$d/finish" ]; do sleep 0.02; done; rm 
 state idle
 n=0
 while printf '\033[H\033[2J%s\n────────────\n❯ ' "$said" && IFS= read -r line; do
+  while [ -e "$d/lose" ] || [ -e "$d/deaf" ]; do
+    rm -f "$d/lose"; printf 'x\n' >> "$d/lost"
+    printf '\033[H\033[2J%s\n────────────\n❯ %s' "$said" "$line"
+    IFS= read -r more || break; line="$line$more"
+  done
   case "$line" in *panel*) printf '\033[H\033[2J────────────\n  Shell details\n  x to stop\n'; read -r line; continue ;; esac
   case "$line" in *survey*)
     printf '\033[H\033[2J● How is Claude doing this session? (optional)\n  1: Bad    2: Fine   3: Good   0: Dismiss\n\n'
