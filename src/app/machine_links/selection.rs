@@ -2,8 +2,10 @@ use std::path::PathBuf;
 
 use super::Held;
 use crate::app::App;
+use crate::control::contract::Refusal;
 use crate::control::{self, ProjectInfo, WorkspaceInfo};
 use crate::log;
+use crate::machines::send;
 use crate::project::Hierarchy;
 
 mod awaited;
@@ -106,6 +108,12 @@ impl App {
 
     pub(in crate::app) fn sent_workspaces(&self, machine: &str) -> bool {
         self.machines.held.iter().any(|held| held.name.eq_ignore_ascii_case(machine) && held.seen.is_some())
+    }
+
+    pub(in crate::app) fn reported_run(&self, machine: &str, asked: Option<&str>) -> Result<(), Refusal> {
+        let held = self.machines.held.iter().find(|held| held.name.eq_ignore_ascii_case(machine));
+        let reported = held.and_then(|held| held.seen.as_deref()).map(|seen| seen.boot.as_str());
+        send::same_run(machine, asked, reported)
     }
 
     pub(in crate::app) fn leave_remote(&mut self) {

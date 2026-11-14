@@ -434,6 +434,80 @@ mod streams {
         never_sent_without_boot(&line(args, "old", stdin));
     }
 
+    #[rstest]
+    #[case::start(
+        r#"{"args": ["start", "claude", "--project", "4", "--machine", "vps", "--boot", "vps-1", "--json"]}"#,
+        "start"
+    )]
+    #[case::start_with(
+        r#"{"args": ["start", "claude", "--model", "opus", "--machine", "vps", "--boot", "vps-1", "--json"]}"#,
+        "start-with"
+    )]
+    #[case::new_workspace(
+        r#"{"args": ["new-workspace", "x", "--project", "4", "--machine", "vps", "--boot", "vps-1", "--json"]}"#,
+        "new-workspace"
+    )]
+    #[case::flow_run(
+        r#"{"args": ["flow", "run", "Pair", "--prompt", "x", "--machine", "vps", "--boot", "vps-1", "--json"]}"#,
+        "flow-run"
+    )]
+    #[case::focus(
+        r#"{"args": ["focus", "--machine", "vps", "--workspace", "4", "--boot", "vps-1", "--json"]}"#,
+        "focus-machine"
+    )]
+    fn the_boot_of_a_machine_goes_in_its_request_in_the_structured_mode_and_not_in_the_envelope(
+        #[case] line: &str,
+        #[case] command: &str,
+    ) {
+        let (answer, seen) = in_a_view_on(line, control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let asked: Vec<Value> = seen.iter().map(|text| serde_json::from_str(text).expect("a request")).collect();
+        assert_eq!(asked.len(), 2, "the contract, then the request: {seen:?}");
+        assert!(asked[0].get("contract").is_none() && asked[0].get("boot").is_none(), "{seen:?}");
+        let request = &asked[1];
+        assert_eq!(request["command"], command, "{request}");
+        assert_eq!(request["args"]["machine_boot"], "vps-1", "{request}");
+        assert_eq!(request["contract"], 1, "{request}");
+        assert!(request.get("boot").is_none(), "{request}");
+    }
+
+    #[test]
+    fn a_machine_without_a_boot_sends_neither_the_field_nor_the_mode() {
+        let line = r#"{"args": ["new-workspace", "x", "--project", "4", "--machine", "vps", "--json"]}"#;
+
+        let (answer, seen) = in_a_view_on(line, control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let request = seen.iter().find(|text| text.contains("new-workspace")).expect("the request");
+        assert!(!request.contains("machine_boot") && !request.contains("\"contract\""), "{request}");
+    }
+
+    #[test]
+    fn the_boot_of_a_machine_is_refused_up_front_by_a_server_that_would_drop_it() {
+        let line = r#"{"args": ["new-workspace", "x", "--machine", "vps", "--boot", "vps-1", "--json"]}"#;
+
+        let (answer, seen) = in_a_view_on(line, lacking("machine-boot"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("would ignore --boot with --machine") && error.contains("update cornercase"), "{error}");
+        assert_eq!(seen.len(), 1, "only the contract: {seen:?}");
+    }
+
+    #[test]
+    fn the_boot_of_another_run_of_a_machine_gives_status_4_and_the_next_line_runs_without_it() {
+        let refusing = |theirs| serving(theirs, control::contract::describe("boot", &[]), "\"machine_boot\":\"old\"");
+        let stale = r#"{"args": ["new-workspace", "x", "--project", "4", "--machine", "vps", "--boot", "old"]}"#;
+
+        let (answers, seen) = lines_on(refusing, &[stale, r#"{"args": ["close", "--pane", "4"]}"#]);
+
+        let (refused, next) = (&answers[0], &answers[1]);
+        assert_eq!((refused.status, refused.error.as_deref()), (4, Some("it restarted")), "{refused:?}");
+        assert_eq!(next.status, 0, "{next:?}");
+        assert!(!seen[2].contains("machine_boot") && !seen[2].contains("\"contract\""), "{seen:?}");
+    }
+
     #[test]
     fn plugin_status_json_lands_in_json_not_text() {
         let (mut answers, _) = lines_on(fake_server, &[r#"{"args": ["plugin", "status", "--json"]}"#]);

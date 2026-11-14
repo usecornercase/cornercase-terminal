@@ -97,6 +97,11 @@ mod describing {
     }
 
     #[test]
+    fn the_boot_of_a_machine_s_ids_is_a_feature() {
+        assert!(FEATURES.contains(&"machine-boot"));
+    }
+
+    #[test]
     fn an_exited_flow_role_is_a_feature() {
         assert!(FEATURES.contains(&"flow-exited"));
     }

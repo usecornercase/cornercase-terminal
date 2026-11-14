@@ -36,7 +36,6 @@ mod window;
 pub(crate) use requests::own_connection;
 #[cfg(test)]
 pub(crate) use requests::share_socket;
-pub(crate) use requests::use_boot;
 pub(crate) use requests::use_stats_cached;
 pub(crate) use requests::{
     StreamEnd, answer, ask, ask_starting, close_unused_link, connect, follow, follow_all, follow_to_end, report_now,
@@ -53,6 +52,7 @@ pub(crate) use requests::{
 };
 pub(crate) use requests::{input_ended, reader_gone_within, use_remote, used_remote, watched};
 pub(crate) use requests::{line_done, share, unshare};
+pub(crate) use requests::{use_boot, use_machine_boot};
 pub(crate) use server_process::{Found, find, find_or_start, running, wait_for_exit};
 pub(crate) use server_process::{kill_server, restart_server};
 

@@ -195,6 +195,16 @@ mod features {
     }
 
     #[test]
+    fn a_server_that_cannot_check_a_machines_boot_is_refused_before_the_request_is_sent() {
+        let lacks = "would ignore --boot with --machine";
+        let (checked, asked) = asking(&["machine-start", "boot"], "machine-boot", lacks);
+
+        let error = checked.expect_err("lacking");
+        assert!(error.to_string().contains(lacks), "{error}");
+        assert_eq!(asked.len(), 1, "only the contract: {asked:?}");
+    }
+
+    #[test]
     fn a_server_that_cannot_reveal_is_refused_before_the_focus_is_sent() {
         let (checked, asked) = asking(&["views"], "focus-reveal", "cannot reveal a search match in its pane");
 
@@ -211,7 +221,7 @@ mod the_envelope {
     use super::*;
 
     fn full() -> Envelope {
-        Envelope { view: Some(7), boot: Some("1-2".into()) }
+        Envelope { view: Some(7), boot: Some("1-2".into()), contract: Some(1) }
     }
 
     #[rstest]
@@ -254,6 +264,13 @@ mod a_request_without_a_boot {
         let boot = Envelope { boot: Some("1-2".into()), ..Envelope::default() };
 
         assert_eq!(keys_sent(boot), ["args", "boot", "caller", "command", "server"]);
+    }
+
+    #[test]
+    fn differs_from_one_in_the_structured_mode_only_by_that_key() {
+        let structured = Envelope { contract: Some(1), ..Envelope::default() };
+
+        assert_eq!(keys_sent(structured), ["args", "caller", "command", "contract", "server"]);
     }
 }
 
@@ -722,8 +739,9 @@ mod a_shared_link {
     #[rstest::rstest]
     #[case::view(|| use_view(7), "\"view\":7")]
     #[case::boot(|| use_boot("1-2"), "\"boot\":\"1-2\"")]
+    #[case::machine_boot(|| use_machine_boot(), "\"contract\":1")]
     fn what_a_line_asks_for_goes_with_that_line_only(#[case] use_it: fn() -> Result<()>, #[case] sent: &str) {
-        let server = sharing(&["views", "boot"], None);
+        let server = sharing(&["views", "boot", "machine-boot"], None);
 
         use_it().expect("offered");
         ask("status", status()).expect("an answer");

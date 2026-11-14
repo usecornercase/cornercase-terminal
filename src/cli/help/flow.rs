@@ -71,8 +71,10 @@ With --machine NAME the flow runs on that machine of `cornercase machines`, by i
 its agents and accounts are the machine's, --project and the ids printed are that machine's, as
 `status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
 window once the machine lists it, and takes no --view there. It needs a server that knows the
-`machine-start` feature. --boot does not go with --machine, whose ids are that machine's: send the
-command there with --remote and its boot.
+`machine-start` feature. With --machine, --boot BOOT is the `boot` of that machine's entry in
+`status --json`, the one --project was read in: when that machine's server restarted since, nothing is
+sent there and the exit status is 4, and so it is when it restarted after its last report. It needs
+the `machine-boot` feature.
 
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'

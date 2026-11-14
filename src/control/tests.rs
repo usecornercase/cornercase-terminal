@@ -185,7 +185,7 @@ fn newest_commands() -> Vec<Command> {
         Command::Recap(RecapAsk::default()),
         Command::Machines(Machines::default()),
         Command::Clone(CloneRepository::default()),
-        Command::FocusMachine(FocusMachine { machine: "vps".into(), item: Item::Workspace(1) }),
+        Command::FocusMachine(FocusMachine { machine: "vps".into(), item: Item::Workspace(1), machine_boot: None }),
         Command::ForumServer(ForumServer { id: "8".into() }),
         Command::Held(HeldRequest { pane: None, tab: None, action: HeldAction::SendNow }),
         Command::RunSetup(RunSetup::default()),
@@ -589,6 +589,23 @@ fn a_start_names_its_machine_only_when_it_has_one(#[case] here: Command, #[case]
     assert_eq!((sent(&here), sent(&there)), (None, Some(json!("vps"))));
     assert!(!here.fields().iter().any(|(key, _)| *key == "machine"), "{:?}", here.fields());
     assert!(there.fields().contains(&("machine", "vps".to_string())), "{:?}", there.fields());
+}
+
+#[rstest::rstest]
+#[case::start(Command::Start(Start::default()), Command::Start(Start { machine_boot: Some("vps-1".into()), ..Start::default() }))]
+#[case::new_workspace(
+    Command::NewWorkspace(NewWorkspace::default()),
+    Command::NewWorkspace(NewWorkspace { machine_boot: Some("vps-1".into()), ..NewWorkspace::default() })
+)]
+#[case::flow_run(
+    Command::FlowRun(FlowRun::default()),
+    Command::FlowRun(FlowRun { machine_boot: Some("vps-1".into()), ..FlowRun::default() })
+)]
+fn a_start_names_the_boot_of_its_machine_only_when_it_has_one(#[case] without: Command, #[case] with: Command) {
+    let sent = |command: &Command| serde_json::to_value(command).expect("json")["args"].get("machine_boot").cloned();
+
+    assert_eq!((sent(&without), sent(&with)), (None, Some(json!("vps-1"))));
+    assert!(!with.fields().iter().any(|(key, _)| *key == "machine_boot"), "{:?}", with.fields());
 }
 
 mod events_v1;

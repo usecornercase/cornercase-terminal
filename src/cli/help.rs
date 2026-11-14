@@ -34,7 +34,7 @@ asks several sources (usage, issue list, files list, read --last-message with se
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json.
 A command given --boot (", boot_commands!(), ") exits with 4 when it names another run
-of the server, which then did and printed nothing (a stream, before its first line), and every command that sends a request exits with 5 when the cornercase --remote
+of the server (with --machine, of that machine's server), which then did and printed nothing (a stream, before its first line), and every command that sends a request exits with 5 when the cornercase --remote
 reaches is older than this one (update, restart, kill-server, logs and the plugin commands that
 work on its files run there without checking), printing with --json both versions (there is null when it is too old to say) and the command that
 updates it as one JSON line. `update` exits with 6 when this cornercase cannot replace itself, after printing the command
@@ -222,8 +222,9 @@ stderr and the exit status is 0.
 take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
 since this server started. The window then shows that tab, or the workspace's active tab, streamed
 from the machine, and `status --json` reports it as `shown_remote`, with its stream's state.
---boot does not go with --machine, whose ids are that machine's: send the command there with
---remote and its boot.
+With --machine, --boot BOOT is the `boot` of that machine's entry in `status --json`, where the ids were
+read: when the machine's server restarted since, nothing is picked and the exit status is 4. It needs a
+server that knows the `machine-boot` feature.
 
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
