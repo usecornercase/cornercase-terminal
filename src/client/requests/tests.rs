@@ -54,7 +54,7 @@ mod how_a_follow_ends {
         protocol::send(&mut theirs, &message).expect("the end");
         let mut heard = Vec::new();
 
-        let ended = follow_on(ours, None, |value| {
+        let ended = follow_on(ours, None, None, |value| {
             heard.push(value);
             Ok(false)
         });
@@ -355,7 +355,7 @@ mod a_follow {
             let (told, heard) = mpsc::channel();
             let (done, ended) = mpsc::channel();
             thread::spawn(move || {
-                let followed = follow_on(ours, watched(out.as_fd()), |value| Ok(told.send(value).is_err()));
+                let followed = follow_on(ours, watched(out.as_fd()), None, |value| Ok(told.send(value).is_err()));
                 let _ = done.send(followed.map_err(|e| e.to_string()));
             });
             Self { server, heard, ended }
@@ -882,5 +882,78 @@ mod a_stream_from_an_earlier_run {
         server.join().expect("the fake server");
         assert!(matches!(followed, Err(Error::StaleBoot(_))), "{followed:?}");
         assert!(printed.is_empty(), "{printed:?}");
+    }
+}
+
+mod an_answer_through_another_machine {
+    use rstest::rstest;
+    use serde_json::json;
+
+    use super::*;
+    use crate::control::contract::{Code, Refusal, render};
+    use crate::test_util::fixture;
+
+    const NAMED: &str = "there is no pane 9; `cornercase --remote vps status` lists them";
+
+    fn vps() -> Remote {
+        Remote { destination: "vps".into(), command: None, option: "--remote-command" }
+    }
+
+    #[rstest]
+    #[case::legacy(fixture!("control/responses/legacy-error.json"))]
+    #[case::structured(fixture!("control/responses/structured-error.json"))]
+    fn names_the_remote_in_the_hints_of_a_refusal(#[case] text: &str) {
+        let error = answered_through(text, Some(&vps())).expect_err("refused");
+
+        assert!(matches!(&error, Error::Control(message) if message == NAMED), "{error:?}");
+    }
+
+    #[test]
+    fn that_says_the_boot_is_stale_keeps_its_code_and_names_the_remote() {
+        let text =
+            render(Err(Refusal::new(Code::StaleBoot, "read `cornercase status` again")), true).expect("an answer");
+
+        let error = answered_through(&text, Some(&vps())).expect_err("refused");
+
+        assert!(
+            matches!(&error, Error::StaleBoot(message) if message == "read `cornercase --remote vps status` again"),
+            "{error:?}"
+        );
+    }
+
+    #[test]
+    fn keeps_its_data_and_names_the_remote_in_its_errors() {
+        let text = r#"{"ok":{"text":"`cornercase read --pane 3`","sources":[{"error":"set `cornercase config secret linear`"}]}}"#;
+
+        let value = answered_through(text, Some(&vps())).expect("an answer");
+
+        assert_eq!(
+            value,
+            json!({
+                "text": "`cornercase read --pane 3`",
+                "sources": [{"error": "set `cornercase --remote vps config secret linear`"}]
+            })
+        );
+    }
+
+    #[rstest]
+    #[case::legacy_ok(fixture!("control/responses/legacy-ok.json"))]
+    #[case::structured_ok(fixture!("control/responses/structured-ok.json"))]
+    #[case::legacy_error(fixture!("control/responses/legacy-error.json"))]
+    #[case::structured_error(fixture!("control/responses/structured-error.json"))]
+    fn from_this_machine_reads_as_before(#[case] text: &str) {
+        assert_eq!(answered_through(text, None).map_err(|e| e.to_string()), answered(text).map_err(|e| e.to_string()));
+    }
+
+    #[test]
+    fn a_later_line_of_a_stream_names_the_remote_too() {
+        let (ours, mut server) = UnixStream::pair().expect("a socket pair");
+        let text = fixture!("control/responses/legacy-error.json").to_string();
+        protocol::send(&mut server, &ServerMessage::Response(r#"{"ok":{"n":1}}"#.into())).expect("a message");
+        protocol::send(&mut server, &ServerMessage::Response(text)).expect("a message");
+
+        let followed = follow_on(ours, None, Some(&vps()), |_| Ok(false));
+
+        assert!(matches!(&followed, Err(Error::Control(message)) if message == NAMED), "{followed:?}");
     }
 }

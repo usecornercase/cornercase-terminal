@@ -573,10 +573,10 @@ fn event_line(value: &Value) -> String {
             let who = (*holder, kind.as_deref(), *direction);
             tunnel_line(*port, *local, (state, error.as_deref()), who)
         }
-        (_, What::Dropped { count }) => format!(
+        (_, What::Dropped { count }) => client::hinted(format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
             if *count == 1 { "" } else { "s" }
-        ),
+        )),
         (None, _) => value.to_string(),
     }
 }
@@ -604,7 +604,7 @@ fn message_line(subject: Option<String>, kind: &str, message: &str) -> String {
 pub(super) fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Result<Option<u64>> {
     let Some(branch) = branch else { return Ok(id) };
     let report: Report = answer(ask(command, control::Command::Status(control::Status {}))?)?;
-    report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)
+    report.workspace_on(branch).map(Some).map_err(|message| Error::WrongUsage(client::hinted(message)))
 }
 
 fn read_prompt(prompt: Option<String>, file: Option<PathBuf>) -> Result<Option<String>> {

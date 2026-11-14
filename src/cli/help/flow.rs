@@ -183,8 +183,8 @@ it has not ended and no wake is being sent) says `stopped moving 50 min ago: …
 time it stopped, left out while the run moves).
 
 A role whose agent exited by itself while its tab is still open says `exited` (exited: true with --json) where a
-role not started yet says `-`, and the run adds `exited: coder; cornercase agents reopen --workspace 7 brings it
-back`. A run whose orchestrator's agent exited has stopped moving too: `stopped moving 5 min ago: the
+role not started yet says `-`, and the run adds the line exited: coder; `cornercase agents reopen --workspace 7` brings
+it back. A run whose orchestrator's agent exited has stopped moving too: `stopped moving 5 min ago: the
 orchestrator's agent exited`.
 
 Examples:

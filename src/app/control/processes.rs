@@ -174,7 +174,7 @@ fn refusal(places: &Places, pid: i32) -> Option<Refusal> {
     }
     if let Some(pane) = places.panes.iter().find(|pane| pane.shell == pid) {
         let message = format!(
-            "pid {pid} is the shell of pane {0}: close the pane instead (cornercase close --pane {0})",
+            "pid {pid} is the shell of pane {0}: close the pane instead (`cornercase close --pane {0}`)",
             pane.id
         );
         return Some(conflict(message));
