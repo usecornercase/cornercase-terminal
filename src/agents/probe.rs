@@ -33,15 +33,18 @@ fn send(stdin: Option<&mut std::process::ChildStdin>, text: &str) -> bool {
     stdin.is_some_and(|stdin| stdin.write_all(text.as_bytes()).and_then(|()| stdin.flush()).is_ok())
 }
 
+type Talked<T> = (Result<T>, Vec<Group>);
+
 fn converse<T>(
     stdin: std::process::ChildStdin,
     stdout: std::process::ChildStdout,
     (first, name, close): (&str, &str, bool),
     mut talk: impl FnMut(&str) -> Step<T>,
-) -> Result<T> {
+    left: impl Fn() -> Vec<Group>,
+) -> Talked<T> {
     let mut stdin = Some(stdin);
     if !send(stdin.as_mut(), first) {
-        return Err(gone(name));
+        return (Err(gone(name)), Vec::new());
     }
     if close {
         stdin = None;
@@ -52,13 +55,13 @@ fn converse<T>(
             Step::Read => {}
             Step::Write(text) => {
                 if !send(stdin.as_mut(), &text) {
-                    return Err(gone(name));
+                    return (Err(gone(name)), Vec::new());
                 }
             }
-            Step::Answer(result) => return result,
+            Step::Answer(result) => return (result, left()),
         }
     }
-    Err(gone(name))
+    (Err(gone(name)), Vec::new())
 }
 
 #[derive(Debug, Default)]
@@ -135,12 +138,14 @@ fn converse_apart<T: Send + 'static>(
     limits: Limits,
     first: &str,
     talk: impl FnMut(&str) -> Step<T> + Send + 'static,
-) -> mpsc::Receiver<Result<T>> {
+) -> mpsc::Receiver<Talked<T>> {
     let (tx, rx) = mpsc::channel();
+    let (root, contain) = (i32::try_from(child.id()).unwrap_or(0), limits.contain);
     if let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) {
         let (first, name, close) = (first.to_string(), limits.name, limits.close_input);
         std::thread::spawn(move || {
-            let _ = tx.send(converse(stdin, stdout, (&first, name, close), talk));
+            let left = || if contain { stop::below(root) } else { Vec::new() };
+            let _ = tx.send(converse(stdin, stdout, (&first, name, close), talk, left));
         });
     }
     rx
@@ -155,15 +160,14 @@ pub(crate) fn run_in<T: Send + 'static>(
 ) -> Result<T> {
     let mut child = start(limits, &mut command, running)?;
     let rx = converse_apart(&mut child, limits, first, talk);
-    let answer = match rx.recv_timeout(limits.timeout) {
-        Ok(result) => result,
+    let (answer, left) = match rx.recv_timeout(limits.timeout) {
+        Ok(talked) => talked,
         Err(mpsc::RecvTimeoutError::Timeout) => {
             running.stop();
-            Err(Error::Probe(format!("{} did not answer in time", limits.name)))
+            (Err(Error::Probe(format!("{} did not answer in time", limits.name))), Vec::new())
         }
-        Err(mpsc::RecvTimeoutError::Disconnected) => Err(gone(limits.name)),
+        Err(mpsc::RecvTimeoutError::Disconnected) => (Err(gone(limits.name)), Vec::new()),
     };
-    let left = if limits.contain { stop::below(i32::try_from(child.id()).unwrap_or(0)) } else { Vec::new() };
     if answer.is_ok() {
         let _ = process::wait_until(&mut child, Instant::now() + limits.grace);
     }
