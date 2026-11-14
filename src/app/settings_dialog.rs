@@ -113,6 +113,8 @@ impl App {
         settings.merged = self.merged_note();
         settings.remote = self.remote.note();
         settings.browsers = self.remote.paired();
+        settings.phone_app = self.phone.note();
+        settings.apps = self.phone.paired();
         for via in Via::ALL {
             *settings.messenger_mut(via) = self.messenger_settings(via);
         }
@@ -237,6 +239,18 @@ impl App {
         }
     }
 
+    fn settings_app_act(&mut self, action: settings::Action) {
+        match action {
+            settings::Action::PairApp if self.config.phone_app => self.open_phone_app_code(),
+            settings::Action::PairApp => self.settings_message("the phone app's access is off".into()),
+            settings::Action::ForgetApp(id) => {
+                let forgotten = self.forget_app(&id);
+                self.settings_message(forgotten.unwrap_or_else(|e| e));
+            }
+            _ => {}
+        }
+    }
+
     fn forum_from_settings(&mut self, via: Via, config: Option<&Config>) {
         if let Some(config) = config
             && let Err(e) = self.write_config(config)
@@ -258,6 +272,7 @@ impl App {
                 let forgotten = self.forget_browsers();
                 self.settings_message(forgotten.map_or_else(|e| e, String::from));
             }
+            settings::Action::PairApp | settings::Action::ForgetApp(_) => self.settings_app_act(action),
             settings::Action::CheckBot(via, token) => self.check_messenger(via, token),
             settings::Action::RemoveBot(via) => {
                 let removed = self.remove_messenger(via);

@@ -450,8 +450,8 @@ false for a switch, a whole number, a comma-separated list for issue_tabs, other
 
 A token is never an argument: `secret` reads it from standard input (hidden on a terminal), checks it
 with its service as the dialog does, and says which account accepted it, never the token. `remove`
-forgets a token, a bot, a paired chat or the paired browsers. `pair` connects a phone to a chat or a
-browser: `cornercase config pair --help`.
+forgets a token, a bot, a paired chat, the paired browsers or a paired phone app. `pair` connects a phone
+to a chat, a browser or the phone app: `cornercase config pair --help`.
 
 `forum-server` picks the server of the Discord forum, when forum mode waits for one and the app is in
 several: `status --app` lists them as `servers`, in Discord's `forum`, and this is a click on one in the
@@ -477,6 +477,7 @@ Examples:
   printf '%s' \"$LINEAR_API_KEY\" | cornercase config secret linear
   cornercase config remove linear
   cornercase config pair browsers --json
+  cornercase config pair app --routes --json
   cornercase config forum-server 1041234567890123459
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml

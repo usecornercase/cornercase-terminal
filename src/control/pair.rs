@@ -1,5 +1,3 @@
-use std::iter::once;
-
 use serde::{Deserialize, Serialize};
 
 use super::Fields;
@@ -20,17 +18,19 @@ impl ConfigPair {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PairKey {
     Browsers,
+    App,
     Chat(Via),
 }
 
 impl PairKey {
     pub(crate) fn of(key: &str) -> Option<Self> {
-        once(Self::Browsers).chain(Via::ALL.map(Self::Chat)).find(|known| known.name() == key)
+        [Self::Browsers, Self::App].into_iter().chain(Via::ALL.map(Self::Chat)).find(|known| known.name() == key)
     }
 
     pub(crate) fn name(self) -> String {
         match self {
             Self::Browsers => "browsers".into(),
+            Self::App => "app".into(),
             Self::Chat(via) => format!("{}.chat", via.target()),
         }
     }
@@ -38,10 +38,28 @@ impl PairKey {
     pub(crate) fn connected(self, chat: Option<&str>) -> String {
         match (self, chat.filter(|name| !name.is_empty())) {
             (Self::Browsers, _) => "a browser connected".into(),
+            (Self::App, _) => "a phone app connected".into(),
             (Self::Chat(via), Some(name)) => format!("{} connected with {name}", via.name()),
             (Self::Chat(via), None) => format!("{} connected", via.name()),
         }
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AppRoutes {}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Routes {
+    pub(crate) routes: Vec<Route>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Route {
+    pub(crate) host: String,
+    pub(crate) port: u16,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

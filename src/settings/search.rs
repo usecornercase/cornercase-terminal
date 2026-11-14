@@ -131,6 +131,7 @@ fn parent(row: &Row) -> Option<Row> {
         Row::Forum(via) => Some(Row::Chat(*via)),
         Row::ForumClose(via) => Some(Row::Forum(*via)),
         Row::Browsers => Some(Row::Remote),
+        Row::PhoneAppCode => Some(Row::PhoneApp),
         _ => None,
     }
 }
@@ -140,6 +141,7 @@ fn condition(row: &Row) -> &'static str {
         Row::Chat(_) => "a bot is set",
         Row::Forum(_) => "a phone is paired",
         Row::ForumClose(_) => "forum mode is on",
+        Row::PhoneAppCode => "the phone app is on",
         _ => "a browser is paired",
     }
 }
@@ -194,6 +196,7 @@ impl Settings {
             Row::Forum(Via::Discord),
             Row::ForumClose(Via::Discord),
             Row::Browsers,
+            Row::PhoneAppCode,
         ]);
         let hidden: Vec<Row> = children.filter(|row| !shown.contains(row)).collect();
         let mut found: Vec<Candidate> = Page::ALL.into_iter().map(tab_hit).collect();

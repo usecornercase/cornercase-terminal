@@ -31,7 +31,7 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
     match args.action {
         Some(ConfigAction::Search { text }) => search(&text.join(" "), json),
         Some(ConfigAction::Models { agent }) => models::list(agent, json),
-        Some(ConfigAction::Pair { key }) => pair::run(key, json),
+        Some(ConfigAction::Pair { key, routes }) => pair::run(key, routes, json),
         Some(ConfigAction::ForumServer { id }) => forum::pick(id, json),
         Some(ConfigAction::Export { to }) => share::export(to.as_deref(), json),
         Some(ConfigAction::Import { source, only, yes, preview }) => {

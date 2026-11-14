@@ -138,6 +138,10 @@ pub(crate) fn browsers(config: &Path) -> PathBuf {
     config.with_file_name("browsers.json")
 }
 
+pub(crate) fn apps(config: &Path) -> PathBuf {
+    config.with_file_name("apps.json")
+}
+
 pub(crate) fn telegram(config: &Path) -> PathBuf {
     config.with_file_name("telegram.json")
 }

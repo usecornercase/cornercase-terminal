@@ -185,6 +185,7 @@ pub(crate) enum ConnectionKind {
     Browsers,
     Bot,
     Chat,
+    App,
     #[serde(other)]
     Other,
 }
