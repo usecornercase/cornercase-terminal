@@ -4,7 +4,7 @@ use ratatui::style::{Color, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
-use super::{bottom_buttons, centred, draw_dialog_buttons, inset, padded, row_in, with_list};
+use super::{bottom_buttons, centred_in, draw_dialog_buttons, inset, padded, row_in, with_list};
 use crate::bots::form::{Field, Form};
 use crate::text::truncate_right;
 use crate::ui::View;
@@ -27,7 +27,7 @@ pub(crate) enum Hit {
 }
 
 pub(crate) fn area(screen: Rect) -> Rect {
-    centred(screen, 76, HEIGHT)
+    centred_in(screen, 76, HEIGHT)
 }
 
 pub(crate) fn area_with_list(screen: Rect, form: &Form) -> Rect {

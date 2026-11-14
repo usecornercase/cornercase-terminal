@@ -201,3 +201,9 @@ pub(crate) fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: Edito
         ));
     }
 }
+
+pub(super) fn centred(screen: Rect, width: u16, height: u16) -> Rect {
+    let width = width.min(screen.width);
+    let height = height.min(screen.height);
+    Rect { x: screen.x + (screen.width - width) / 2, y: screen.y + (screen.height - height) / 2, width, height }
+}

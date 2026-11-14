@@ -483,10 +483,12 @@ fn submit_text(app: &mut App, text: &str) {
     send_key(app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
+#[cfg(unix)]
 fn list() -> Rect {
     areas().list
 }
 
+#[cfg(unix)]
 fn entry_pos() -> Position {
     Position::new(list().x + 3, list().y)
 }

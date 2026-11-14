@@ -61,10 +61,8 @@ pub(super) fn form_inner(form: Rect) -> Rect {
     Block::bordered().inner(form).inner(Margin::new(FORM_PADDING, 0))
 }
 
-pub(super) fn centred(screen: Rect, wide: u16, height: u16) -> Rect {
-    let width = screen.width.saturating_sub(2).min(wide);
-    let height = screen.height.min(height);
-    Rect::new(screen.x + (screen.width - width) / 2, screen.y + (screen.height - height) / 2, width, height)
+pub(super) fn centred_in(screen: Rect, wide: u16, height: u16) -> Rect {
+    super::widgets::centred(screen, wide.min(screen.width.saturating_sub(2)), height)
 }
 
 pub(super) fn padded(area: Rect) -> Rect {

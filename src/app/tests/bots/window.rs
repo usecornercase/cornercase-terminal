@@ -277,7 +277,7 @@ fn a_key_while_a_bot_shows_but_the_chat_has_no_keys_reaches_no_pane() {
     c.app.handle_event(AppEvent::Input(Event::Paste("pasted".into())), AREA).expect("paste");
     c.app.screen.nav = None;
     click(&mut c.app, entry_pos());
-    pane_shows_nothing_of(&mut c, &["pasted", "qq"]);
+    pane_shows_nothing_of(&mut c, &["pasted", "qmarker"]);
 }
 
 #[test]

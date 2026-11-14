@@ -7,6 +7,7 @@ use ratatui::widgets::Paragraph;
 use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
 use crate::ui::layout::Areas;
+use crate::ui::rows::draw_more;
 use crate::ui::widgets::draw_title;
 
 const LABEL: usize = 9;
@@ -50,14 +51,20 @@ pub(in crate::ui) fn draw_card(f: &mut Frame, view: &View, card: &BotCard, areas
     let bold = Style::default().add_modifier(Modifier::BOLD);
     let name = Line::from(Span::styled(truncate_right(&card.name, width), bold));
     f.render_widget(Paragraph::new(name), Rect { height: 1, ..list }.intersection(list));
-    for (i, row) in card.rows.iter().enumerate() {
-        let y = list.y.saturating_add(HEADER).saturating_add(u16::try_from(i).unwrap_or(u16::MAX));
-        let r = Rect { y, height: 1, ..list }.intersection(list);
-        if r.is_empty() {
-            break;
-        }
-        f.render_widget(Paragraph::new(card_line(view, row, width)), r);
+    let room = usize::from(list.height.saturating_sub(HEADER));
+    let shown = if card.rows.len() > room { room.saturating_sub(1) } else { card.rows.len() };
+    for (i, row) in card.rows.iter().take(shown).enumerate() {
+        f.render_widget(Paragraph::new(card_line(view, row, width)), card_row(list, i));
     }
+    let hidden = card.rows.len() - shown;
+    if hidden > 0 {
+        draw_more(f, view.muted, [Rect::default(), card_row(list, shown)], None, Some(hidden));
+    }
+}
+
+fn card_row(list: Rect, i: usize) -> Rect {
+    let y = list.y.saturating_add(HEADER).saturating_add(u16::try_from(i).unwrap_or(u16::MAX));
+    Rect { y, height: 1, ..list }.intersection(list)
 }
 
 fn card_line(view: &View, row: &CardRow, width: usize) -> Line<'static> {
