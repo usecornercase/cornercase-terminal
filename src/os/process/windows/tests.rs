@@ -348,7 +348,7 @@ mod a_lineage {
         let left: Vec<i32> = started.into_iter().filter(|pid| alive(*pid)).collect();
 
         assert!(!left.is_empty() && left.iter().all(|pid| lineage.holds(*pid)), "{left:?}");
-        assert!(!lineage.holds(i32::try_from(std::process::id()).expect("a pid")));
+        assert!(!lineage.holds(i32::try_from(process::id()).expect("a pid")));
         lineage.end();
 
         wait_until("what the lineage held is gone", || all_gone(&left));
