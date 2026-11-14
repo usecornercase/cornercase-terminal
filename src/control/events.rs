@@ -100,6 +100,15 @@ pub(crate) enum What {
         agent: String,
         error: Option<String>,
     },
+    Bot {
+        bot: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        line: Option<crate::bots::chat::Line>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        state: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        change: Option<String>,
+    },
     Tunnel {
         port: u16,
         local: Option<u16>,
@@ -149,7 +158,7 @@ impl Event {
             What::Opened { kind, .. } | What::Closed { kind } => Some(*kind),
             What::Status { .. } | What::Exited { .. } | What::Clipboard { .. } | What::Bell { .. } => Some(Kind::Pane),
             What::Notice { .. } | What::Message { .. } => Some(Kind::Workspace),
-            What::Dropped { .. } | What::Recap { .. } | What::Tunnel { .. } => None,
+            What::Dropped { .. } | What::Recap { .. } | What::Bot { .. } | What::Tunnel { .. } => None,
         }
     }
 

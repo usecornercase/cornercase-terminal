@@ -24,6 +24,7 @@ mod accounts;
 mod agents;
 mod args;
 mod arrange;
+mod bot;
 mod changes;
 mod clone;
 mod config;
@@ -31,6 +32,7 @@ mod context;
 mod contract;
 mod files;
 mod flow;
+mod guard;
 mod held;
 mod help;
 mod issue;
@@ -90,7 +92,10 @@ impl WhenArgs {
     }
 }
 
-pub fn run(cli: Cli) -> Result<bool> {
+pub fn run(mut cli: Cli) -> Result<bool> {
+    if let Some(why) = cli.refused.take() {
+        return Err(Error::WrongUsage(why));
+    }
     let remote = reach::chosen(&cli, &|name| std::env::var_os(name))?;
     crate::update::remove_old_binaries();
     match (cli.command, remote) {
@@ -331,6 +336,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::PullRequest(args) => return ControlFlow::Break(pull_request::run(&args)),
         Control::Context(args) => return ControlFlow::Break(context::run(&args)),
         Control::Recap(args) => return ControlFlow::Break(recap::run(&args)),
+        Control::Bot(args) => return ControlFlow::Break(bot::run(args.action)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Machines(args) => machines::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
@@ -565,13 +571,13 @@ fn event_line(value: &Value) -> String {
             format!("machine {machine}  notice  {message}  {token}")
         }
         (subject, What::Message { kind, message, .. }) => message_line(subject, kind, message),
-        (_, What::Recap { state, range, agent, error }) => {
-            let failure = error.as_ref().map(|error| format!(": {error}")).unwrap_or_default();
-            format!("recap {range}  {state} ({agent}){failure}")
-        }
+        (_, What::Recap { state, range, agent, error }) => recap_line(range, (state, agent), error.as_deref()),
         (_, What::Tunnel { port, local, state, error, holder, kind, direction }) => {
             let who = (*holder, kind.as_deref(), *direction);
             tunnel_line(*port, *local, (state, error.as_deref()), who)
+        }
+        (_, What::Bot { bot, line, state, change }) => {
+            bot::event_text(bot, (line.as_ref(), state.as_deref(), change.as_deref()))
         }
         (_, What::Dropped { count }) => client::hinted(format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
@@ -579,6 +585,11 @@ fn event_line(value: &Value) -> String {
         )),
         (None, _) => value.to_string(),
     }
+}
+
+fn recap_line(range: &str, (state, agent): (&str, &str), error: Option<&str>) -> String {
+    let failure = error.map(|error| format!(": {error}")).unwrap_or_default();
+    format!("recap {range}  {state} ({agent}){failure}")
 }
 
 fn tunnel_line(

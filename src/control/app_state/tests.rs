@@ -82,6 +82,7 @@ fn snapshot() -> Snapshot<AppState> {
             popup: None,
             machines: Vec::new(),
             accounts_revision: 3,
+            bots: Vec::new(),
         },
     }
 }
@@ -246,4 +247,27 @@ fn a_started_entry_lists_when_it_started_and_its_result_time_but_not_its_text() 
 
     assert_eq!((value["started"].as_i64(), value["result_at"].as_i64()), (Some(1_760_000_100), Some(1_760_000_900)));
     assert!(value.get("result").is_none(), "{value}");
+}
+
+#[test]
+fn the_bots_are_there_only_when_there_are_some() {
+    use crate::control::bots::{BotInfo, BotLast};
+    let bot = BotInfo {
+        id: "prs".into(),
+        name: "PRs".into(),
+        agent: "claude".into(),
+        access: "cornercase".into(),
+        state: "idle".into(),
+        unread: 1,
+        last: Some(BotLast { kind: "bot".into(), text: "Two are blocked.".into(), at: 5 }),
+        ..BotInfo::default()
+    };
+    let none = serde_json::to_value(AppState::default()).expect("json");
+    let some = serde_json::to_value(AppState { bots: vec![bot.clone()], ..AppState::default() }).expect("json");
+
+    assert_eq!(none.get("bots"), None);
+    assert_eq!((some["bots"][0]["id"].as_str(), some["bots"][0]["unread"].as_u64()), (Some("prs"), Some(1)));
+    let read: AppState = serde_json::from_value(some).expect("an app state");
+    assert_eq!(read.bots, [bot]);
+    assert!(contract::FEATURES.contains(&"bots"));
 }

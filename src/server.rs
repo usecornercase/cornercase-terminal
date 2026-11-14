@@ -275,6 +275,7 @@ fn prepare_app(app: &mut App, path: &Path, session: &Path) -> Saver<todo::Saved>
         app.set_pane_socket(path);
     }
     app.set_issue_cache(paths::issue_cache(session));
+    app.set_bots_dir(&paths::bots(session));
     app.set_recap_places(&paths::journal(session), &paths::recap(session));
     app.set_plugin_places(crate::plugins::Places::new(&paths::config(), session));
     let todos = todo::load(&paths::todos(session));

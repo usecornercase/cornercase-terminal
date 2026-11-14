@@ -2,9 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.77
+## 0.13.78
 
 - **A flow's orchestrator takes its message after a restart.** After a restart, **reopen agents** or `cornercase agents reopen`, the orchestrator resumes its conversation and is told its team's new pane ids. When Claude Code was still finishing its resume, that message could stay in its input box, unsent, and the run stood still until you pressed `Enter` in its tab. cornercase now checks that the agent took it (it records the prompt or starts working), and when it has not, presses `Enter` again every 3 seconds, up to 4 more times. `server.log` has a `launch: enter again` line for each, and `launch: the agent did not take the prompt` when it gives up.
+
+## 0.13.77
+
+- **Bots: agents of your own that you talk to.** `cornercase bot new prs --about "review my pull requests"` makes one, and `cornercase bot say prs "which of my PRs are blocked?" --wait` asks it. A bot belongs to no project but can see every one through `cornercase`: it answers in the same chat every time, keeps a memory of its own, and starts agents in your projects when it should. Claude Code and Codex can be bots (a Codex bot has full access only). Making a bot starts nothing and spends no tokens, a bot works only while the server runs, and the window shows bots in a later release. `cornercase bot list`, `history`, `reset`, `stop`, `edit` and `remove` do the rest, and the [Bots page](https://usecornercase.dev/docs/guides/bots/) says what each access allows.
+- **Programs can follow bots.** `cornercase events` reports each line of a bot's chat, its turns starting and ending, and bots being created, edited or removed; `cornercase status --app` has the list as `bots`, and `cornercase contract` lists the feature `bots`.
+- **Commands refuse to act on "here" inside a bot.** A bot runs in no pane, so `cornercase start`, `send` and the other commands that default to the pane they run in now ask it to name the project, workspace or pane, and `kill-server`, `restart` and `update` are refused there, as is a bot writing to itself.
 
 ## 0.13.76
 

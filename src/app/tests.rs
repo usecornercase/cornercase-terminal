@@ -686,6 +686,7 @@ mod accounts;
 mod accounts_page;
 mod against_base;
 mod agent_status;
+mod bots;
 mod click_outside;
 mod close_agent;
 mod closed_agents;

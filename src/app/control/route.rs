@@ -241,6 +241,7 @@ impl App {
         let Asked { client, asker, now, .. } = asked;
         ControlFlow::Break(match command {
             Command::Config(config) => self.config_request(client, config),
+            Command::Bot(bot) => self.bot_request(client, bot),
             Command::ConfigExport(_) => self.config_export_request(),
             Command::ConfigImport(import) => self.config_import_request(&import),
             Command::AgentModels(ask) => self.agent_models_request(client, &ask),

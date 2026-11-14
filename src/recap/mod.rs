@@ -51,7 +51,7 @@ impl Choice {
     }
 }
 
-pub(crate) use crate::agents::recap::Used as Tokens;
+pub(crate) use crate::agents::headless::Used as Tokens;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Named {
