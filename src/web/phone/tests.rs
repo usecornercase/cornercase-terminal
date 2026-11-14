@@ -433,6 +433,7 @@ mod the_command_line {
     fn a_connection_accepted_before_a_close_runs_nothing_after_it() {
         let mut rig = Rig::new();
         let secret = rig.paired();
+        wait_until("the pairing connection is done", || rig.phone.open() == 0);
         let mut early = TcpStream::connect(("127.0.0.1", rig.port)).expect("connect");
         wait_until("the connection is accepted", || rig.phone.open() > 0);
 
