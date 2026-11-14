@@ -26,6 +26,30 @@ impl Used {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Access {
+    Cornercase,
+    Full,
+}
+
+impl Access {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Cornercase => "cornercase",
+            Self::Full => "full",
+        }
+    }
+
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        match text {
+            "cornercase" => Some(Self::Cornercase),
+            "full" => Some(Self::Full),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Ask {
     pub(crate) prompt: String,

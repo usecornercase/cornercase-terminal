@@ -1,0 +1,89 @@
+use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
+
+pub(crate) use crate::agents::headless::Access;
+
+pub(crate) mod chat;
+pub(crate) mod folder;
+
+pub(crate) const MAX_BOTS: usize = 50;
+pub(crate) const NAME_MAX: usize = 40;
+pub(crate) const ID_MAX: usize = 32;
+pub(crate) const MESSAGE_MAX: usize = 20_000;
+pub(crate) const NOTES_CAP: usize = 8 * 1024;
+pub(crate) const TURN_TIMEOUT: Duration = Duration::from_mins(15);
+pub(crate) const BOT_ENV: &str = "CORNERCASE_BOT";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Bot {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) agent: String,
+    #[serde(default)]
+    pub(crate) model: Option<String>,
+    #[serde(default)]
+    pub(crate) effort: Option<String>,
+    #[serde(default)]
+    pub(crate) account: Option<String>,
+    pub(crate) access: Access,
+    pub(crate) created: i64,
+    #[serde(default)]
+    pub(crate) conversation: Option<String>,
+}
+
+pub(crate) fn name_refusal(name: &str, others: &[&Bot]) -> Option<String> {
+    let length = name.chars().count();
+    if length == 0 || length > NAME_MAX {
+        return Some(format!("a bot's name takes 1 to {NAME_MAX} characters, not {length}"));
+    }
+    if name.chars().any(char::is_control) {
+        return Some(String::from("a bot's name takes no control characters"));
+    }
+    let lower = name.to_lowercase();
+    others
+        .iter()
+        .find(|other| other.name.to_lowercase() == lower)
+        .map(|other| format!("there is a bot called {} already", other.name))
+}
+
+pub(crate) fn new_id(name: &str, taken: &[&Bot]) -> String {
+    let base = match crate::issues::slug(name, ID_MAX) {
+        slug if slug.is_empty() => String::from("bot"),
+        slug => slug,
+    };
+    let used = |id: &str| taken.iter().any(|bot| bot.id == id);
+    let mut id = base.clone();
+    let mut n = 2;
+    while used(&id) {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    id
+}
+
+pub(crate) fn find<'a>(bots: &'a [&'a Bot], key: &str) -> Option<&'a Bot> {
+    let key = key.trim();
+    bots.iter()
+        .copied()
+        .find(|bot| bot.id == key)
+        .or_else(|| bots.iter().copied().find(|bot| bot.name.to_lowercase() == key.to_lowercase()))
+}
+
+#[cfg(test)]
+pub(crate) fn sample(id: &str, name: &str) -> Bot {
+    Bot {
+        id: id.to_string(),
+        name: name.to_string(),
+        agent: String::from("claude"),
+        model: None,
+        effort: None,
+        account: None,
+        access: Access::Cornercase,
+        created: 100,
+        conversation: None,
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -99,6 +99,7 @@ mod account_restart;
 mod accounts_page;
 mod actions;
 mod agent_watch;
+mod bots;
 mod changes_panel;
 mod clock;
 mod clone_on_machine;
@@ -230,6 +231,7 @@ pub(crate) struct App {
     images: images::Payloads,
     plugins: Plugins,
     machines: machine_links::Machines,
+    bots: bots::Bots,
 }
 
 impl App {
@@ -269,6 +271,7 @@ impl App {
             images: images::Payloads::default(),
             plugins: Plugins::new(crate::plugins::Places::new(config_path, config_path)),
             machines: machine_links::Machines::new(),
+            bots: bots::Bots::default(),
             config,
             config_file,
             home,
