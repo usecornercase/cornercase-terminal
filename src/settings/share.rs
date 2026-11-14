@@ -10,15 +10,21 @@ pub(crate) const VERSION: u64 = 1;
 pub(crate) const MAX_BYTES: usize = 256 * 1024;
 pub(crate) const HEADER: &str =
     "# A cornercase setup: import it with `cornercase config import <file>` or Settings → share";
-pub(crate) const NEVER_SHARED: [&str; 4] =
-    ["tokens, bots, paired chats and browsers", "jira_email", "accounts and profiles", "remote access and keep awake"];
+pub(crate) const NEVER_SHARED: [&str; 4] = [
+    "tokens, bots, paired chats, browsers and phone apps",
+    "jira_email",
+    "accounts and profiles",
+    "remote access, the phone app and keep awake",
+];
 #[cfg(test)]
-pub(crate) const LEFT_OUT: [&str; 17] = [
+pub(crate) const LEFT_OUT: [&str; 19] = [
     "jira_email",
     "discord_forum",
     "discord_forum_close",
     "remote",
     "remote_port",
+    "phone_app",
+    "phone_app_port",
     "keep_awake",
     "recap_account",
     "projects",

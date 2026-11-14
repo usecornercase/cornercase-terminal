@@ -56,6 +56,16 @@ fn percent_decoded_turns_escapes_into_utf8(#[case] text: &str, #[case] expected:
     assert_eq!(percent_decoded(text).as_deref(), expected);
 }
 
+#[rstest]
+#[case::unreserved("Az09-._~", "Az09-._~")]
+#[case::space_and_reserved("a b&c#d%e", "a%20b%26c%23d%25e")]
+#[case::accent("é", "%C3%A9")]
+#[case::emoji("🙂", "%F0%9F%99%82")]
+fn percent_encoded_escapes_every_byte_but_the_unreserved(#[case] text: &str, #[case] expected: &str) {
+    assert_eq!(percent_encoded(text), expected);
+    assert_eq!(percent_decoded(expected).as_deref(), Some(text));
+}
+
 #[test]
 fn plural_names_one_in_the_singular() {
     assert_eq!(

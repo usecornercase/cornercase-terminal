@@ -1,12 +1,16 @@
 use std::ffi::OsString;
 use std::io::{IsTerminal, stdin, stdout};
+use std::iter::once;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
+
+use clap::Parser as _;
 
 use super::args::plugin::{InstallArgs, UpdatePluginArgs};
 use super::args::{
     Cli, Command, KillServerArgs, LogsArgs, PluginAction, PluginArgs, Print, RestartArgs, UpdateArgs, WhenArgs,
 };
+use super::usage;
 use crate::client;
 use crate::error::{Error, Result};
 use crate::protocol::REMOTE_ENV;
@@ -35,6 +39,69 @@ pub(super) fn kind(command: Option<&Command>) -> Kind {
         Some(Command::Server) => Kind::Apart("server"),
         Some(Command::Proxy) => Kind::Apart("proxy"),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Refused {
+    Remote,
+    NoCommand,
+    StartServer,
+    Kind(Kind),
+}
+
+pub(super) fn checked(cli: &Cli) -> std::result::Result<(), Refused> {
+    if cli.remote.is_some() || cli.remote_command.is_some() {
+        return Err(Refused::Remote);
+    }
+    let Some(command) = &cli.command else { return Err(Refused::NoCommand) };
+    if matches!(command, Command::StartServer(_)) {
+        return Err(Refused::StartServer);
+    }
+    match kind(Some(command)) {
+        Kind::There => Ok(()),
+        other => Err(Refused::Kind(other)),
+    }
+}
+
+const NAME_CHARS: usize = 80;
+
+pub(crate) fn command_name(argv: &[String]) -> String {
+    let mut words = argv.iter().take_while(|word| !word.starts_with('-'));
+    let name = match words.next() {
+        Some(first) if first == "plugin" => {
+            [Some(first.as_str()), words.next().map(String::as_str)].into_iter().flatten().collect::<Vec<_>>().join(" ")
+        }
+        Some(first) => first.clone(),
+        None => String::new(),
+    };
+    if name.chars().count() <= NAME_CHARS {
+        return name;
+    }
+    let cut: String = name.chars().take(NAME_CHARS).collect();
+    format!("{cut}…")
+}
+
+fn forbidden(argv: &[String], flag: &str) -> bool {
+    argv.iter().any(|word| word == flag || word.strip_prefix(flag).is_some_and(|rest| rest.starts_with('=')))
+}
+
+pub(crate) fn over_cli(argv: &[String]) -> std::result::Result<(), String> {
+    for flag in ["--remote", "--remote-command"] {
+        if forbidden(argv, flag) {
+            return Err(format!("`{flag}` is not allowed through /cli: it runs commands on this computer"));
+        }
+    }
+    let parsed = Cli::try_parse_from(once("cornercase").chain(argv.iter().map(String::as_str)));
+    let cli = match parsed {
+        Ok(cli) => cli,
+        Err(e) if !e.use_stderr() => return Ok(()),
+        Err(e) => return Err(usage(&e).lines().next().unwrap_or_default().to_string()),
+    };
+    checked(&cli).map_err(|refused| match refused {
+        Refused::NoCommand => "no command: /cli does not open the window".to_string(),
+        Refused::StartServer => "`start-server` is not allowed through /cli: the server is already running".into(),
+        Refused::Kind(_) | Refused::Remote => format!("`{}` is not allowed through /cli", command_name(argv)),
+    })
 }
 
 fn refused(kind: Kind, destination: &str, variable: bool) -> Error {

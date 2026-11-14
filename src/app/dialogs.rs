@@ -269,6 +269,7 @@ impl App {
             Overlay::GroupStyle { .. }
             | Overlay::Usage
             | Overlay::Remote
+            | Overlay::PhoneAppCode
             | Overlay::Pairing(_)
             | Overlay::Forum(_)
             | Overlay::Worktrees(_)

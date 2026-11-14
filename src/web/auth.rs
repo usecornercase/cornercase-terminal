@@ -56,7 +56,10 @@ pub(super) struct Device {
     pub(crate) id: String,
     pub(crate) hash: String,
     pub(crate) paired: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub(crate) browser: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) name: String,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -87,15 +90,36 @@ impl Devices {
     }
 
     pub(super) fn add(&mut self, browser: &str) -> io::Result<(String, String)> {
+        self.enroll(|id, hash, paired| Device { id, hash, paired, browser: cleaned(browser), name: String::new() })
+    }
+
+    pub(super) fn add_app(&mut self, name: &str) -> io::Result<(String, String)> {
+        self.enroll(|id, hash, paired| Device { id, hash, paired, browser: String::new(), name: cleaned(name) })
+    }
+
+    fn enroll(&mut self, device: impl FnOnce(String, String, u64) -> Device) -> io::Result<(String, String)> {
         let id = random_hex(8)?;
         let secret = random_hex(SECRET_BYTES)?;
         let paired = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        let browser = browser.chars().filter(|c| !c.is_control()).take(120).collect();
         let mut list = self.list.clone();
-        list.push(Device { id: id.clone(), hash: digest(&secret), paired, browser });
+        list.push(device(id.clone(), digest(&secret), paired));
         save(&self.path, &Saved { version: VERSION, devices: list.clone() })?;
         self.list = list;
         Ok((id.clone(), format!("{id}.{secret}")))
+    }
+
+    pub(super) fn remove(&mut self, id: &str) -> io::Result<bool> {
+        let list: Vec<Device> = self.list.iter().filter(|d| d.id != id).cloned().collect();
+        if list.len() == self.list.len() {
+            return Ok(false);
+        }
+        save(&self.path, &Saved { version: VERSION, devices: list.clone() })?;
+        self.list = list;
+        Ok(true)
+    }
+
+    pub(super) fn list(&self) -> &[Device] {
+        &self.list
     }
 
     pub(super) fn check(&self, cookie: &str) -> Option<&str> {
@@ -109,6 +133,10 @@ impl Devices {
         self.list.clear();
         Ok(())
     }
+}
+
+fn cleaned(label: &str) -> String {
+    label.chars().filter(|c| !c.is_control()).take(120).collect()
 }
 
 fn save(path: &Path, saved: &Saved) -> io::Result<()> {

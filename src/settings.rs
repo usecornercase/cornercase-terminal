@@ -86,6 +86,9 @@ pub(crate) enum Row {
     KeepAwake,
     Remote,
     Browsers,
+    PhoneApp,
+    PhoneAppCode,
+    PairedApp(String),
     Kind(String),
     AddAgent,
     Bot(Via),
@@ -114,6 +117,7 @@ impl Row {
     pub(crate) fn section(&self) -> &'static str {
         match self {
             Self::Remote | Self::Browsers => "Browser",
+            Self::PhoneApp | Self::PhoneAppCode | Self::PairedApp(_) => "Phone app",
             Self::Bot(via) | Self::Chat(via) | Self::Forum(via) | Self::ForumClose(via) => via.name(),
             Self::Plugin(_) | Self::NoPlugins => "Installed",
             Self::Account(kind, _) | Self::AddAccount(kind) | Self::System(kind) | Self::RenameAccount(kind, _) => {
@@ -130,6 +134,21 @@ impl Row {
             Self::Recap(_) => "Recap",
             _ => "",
         }
+    }
+
+    fn in_remote(&self) -> bool {
+        matches!(
+            self,
+            Self::Remote
+                | Self::Browsers
+                | Self::PhoneApp
+                | Self::PhoneAppCode
+                | Self::PairedApp(_)
+                | Self::Bot(_)
+                | Self::Chat(_)
+                | Self::Forum(_)
+                | Self::ForumClose(_)
+        )
     }
 
     pub(crate) fn page(&self) -> Page {
@@ -160,9 +179,7 @@ impl Row {
             | Self::AsanaWorkspace
             | Self::AsanaProjects
             | Self::Tab(_) => Page::Issues,
-            Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) | Self::Forum(_) | Self::ForumClose(_) => {
-                Page::Remote
-            }
+            _ if self.in_remote() => Page::Remote,
             Self::Plugin(_) | Self::NoPlugins => Page::Plugins,
             Self::ServerTokens
             | Self::Account(..)
@@ -348,6 +365,8 @@ pub(crate) enum Action {
     CheckToken(Source, Secret),
     RemoveToken(Source),
     ForgetBrowsers,
+    PairApp,
+    ForgetApp(String),
     CheckBot(Via, Secret),
     RemoveBot(Via),
     Pair(Via),
@@ -373,6 +392,19 @@ pub(crate) struct Messenger {
     pub(crate) refused: bool,
     pub(crate) forum: String,
     pub(crate) forum_ready: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PairedApp {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) paired: u64,
+}
+
+impl PairedApp {
+    pub(crate) fn label(&self) -> &str {
+        Some(self.name.trim()).filter(|name| !name.is_empty()).unwrap_or("phone app")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -433,6 +465,8 @@ pub(crate) struct Settings {
     pub(crate) merged: String,
     pub(crate) remote: String,
     pub(crate) browsers: usize,
+    pub(crate) phone_app: String,
+    pub(crate) apps: Vec<PairedApp>,
     pub(crate) messengers: [Messenger; Via::ALL.len()],
     pub(crate) plugins: Vec<PluginRow>,
     pub(crate) accounts: Listed,
@@ -461,6 +495,8 @@ impl Settings {
             merged: String::new(),
             remote: String::new(),
             browsers: 0,
+            phone_app: String::new(),
+            apps: Vec::new(),
             messengers: Default::default(),
             plugins: Vec::new(),
             accounts: Listed::default(),
@@ -567,6 +603,11 @@ impl Settings {
         if self.browsers > 0 {
             rows.push(Row::Browsers);
         }
+        rows.push(Row::PhoneApp);
+        if self.config.phone_app {
+            rows.push(Row::PhoneAppCode);
+        }
+        rows.extend(self.apps.iter().map(|app| Row::PairedApp(app.id.clone())));
         for via in Via::ALL {
             rows.push(Row::Bot(via));
             if self.messenger(via).bot.is_some() {

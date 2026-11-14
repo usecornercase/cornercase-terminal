@@ -81,7 +81,7 @@ pub(crate) use flow::{
 pub(crate) use held::{HeldAction, HeldAnswer, HeldInfo, HeldRequest};
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use machines::{FocusMachine, MachineList, MachineSeen, MachineSet, Machines, ShownRemote, StreamState};
-pub(crate) use pair::ConfigPair;
+pub(crate) use pair::{AppRoutes, ConfigPair};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
@@ -289,6 +289,7 @@ pub(crate) enum Command {
     TunnelFailed(TunnelFailed),
     FreeMergedBuilds(FreeMergedBuilds),
     Bot(bots::BotRequest),
+    AppRoutes(AppRoutes),
 }
 
 impl Command {
@@ -494,6 +495,7 @@ impl Command {
             Self::WorktreesRemove(_) => 123,
             Self::FreeMergedBuilds(_) => 135,
             Self::Bot(_) => 136,
+            Self::AppRoutes(_) => 137,
             Self::PullRequest(_) => 113,
             Self::Context(_) => 114,
             Self::Recap(_) => 115,
@@ -649,6 +651,7 @@ impl Command {
         "tunnel-failed",
         "free-merged-builds",
         "bot",
+        "app-routes",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {
