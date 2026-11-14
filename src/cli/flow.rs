@@ -549,7 +549,7 @@ pub(super) fn closing_note(run: &RunInfo, on_machine: bool) -> String {
     let back = if on_machine {
         "the workspace's ▶ brings them back".to_string()
     } else {
-        format!("cornercase agents reopen --workspace {} brings them back", run.workspace)
+        client::hinted(format!("`cornercase agents reopen --workspace {}` brings them back", run.workspace))
     };
     let free = if run.free_builds { ", and their worktrees' build folders are freed then" } else { "" };
     format!("its agents close once its pull request merges and none of them works{free}; {back}")
