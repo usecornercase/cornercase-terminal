@@ -264,7 +264,10 @@ fn ran_text(ran: &ActionRan, item: Option<Item>) -> String {
     }
     match &ran.error {
         None => format!("{head}: exit status: 0\n"),
-        Some(error) => hinted(format!("{head}: {error}; `cornercase plugin logs {}` says more\n", name(&ran.plugin))),
+        Some(error) => {
+            let more = hinted(format!("`cornercase plugin logs {}` says more", name(&ran.plugin)));
+            format!("{head}: {error}; {more}\n")
+        }
     }
 }
 

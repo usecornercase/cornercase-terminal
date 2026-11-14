@@ -48,6 +48,7 @@ mod a_message {
 
     #[rstest]
     #[case::already_remote("restart it with `cornercase --remote gpu restart`")]
+    #[case::remote_after_the_command("run `cornercase read --pane 7 --remote gpu`")]
     #[case::the_window_alone("or open a window with `cornercase`")]
     #[case::not_a_command("see `held_sends`")]
     #[case::the_window("open one with `cornercase remote`")]

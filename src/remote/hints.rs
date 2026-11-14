@@ -48,7 +48,11 @@ impl Remote {
 }
 
 fn rewrites(action: &str, after: &str) -> bool {
-    !action.starts_with("--remote") && !stays_here(action) && !names_a_machine(after)
+    !names_a_remote(action) && !stays_here(action) && !names_a_machine(after)
+}
+
+fn names_a_remote(action: &str) -> bool {
+    action.split(' ').any(|word| word.starts_with("--remote"))
 }
 
 fn stays_here(action: &str) -> bool {
