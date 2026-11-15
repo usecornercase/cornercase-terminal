@@ -324,7 +324,7 @@ fn a_role_whose_agent_exits_is_told_and_a_send_to_it_is_refused() {
         e["event"] == "message"
             && e["kind"] == "flow-exited"
             && e["role"] == "coder"
-            && e["panes"].to_string() == format!("[{coder}]")
+            && e["panes"] == json!([coder.parse::<u64>().expect("a pane id")])
     });
     let refused = session.cli(&["send", "--pane", &coder, "--enter", "xyzzy"]);
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
