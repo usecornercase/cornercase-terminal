@@ -223,14 +223,12 @@ impl Lineage {
     pub(crate) fn spawn(command: &mut Command) -> io::Result<(Child, Self)> {
         let mut child = command.spawn()?;
         let job = create().filter(|job| limit(job, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) && assign(job, &child));
-        match job {
-            Some(job) => Ok((child, Self(job))),
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                Err(io::Error::other("the process could not be put in a job object"))
-            }
+        if let Some(job) = job {
+            return Ok((child, Self(job)));
         }
+        let _ = child.kill();
+        let _ = child.wait();
+        Err(io::Error::other("the process could not be put in a job object"))
     }
 
     pub(crate) fn holds(&self, pid: i32) -> bool {
