@@ -308,6 +308,7 @@ fn the_text_read_stays_put_when_steps_arrive_while_scrolled_up() {
     assert_eq!(row(&before), row(&after), "{before}\n{after}");
 }
 
+#[cfg(unix)]
 fn started_line(c: &Chat, pane: u64, boot: &str) -> Line {
     let agent = chat::AgentRef { kind: "claude".into(), pane, workspace: 1, project: 1, boot: boot.into() };
     let path = c.app.panels.bots.live[0].folder.join(folder::CHAT_FILE);
@@ -316,6 +317,7 @@ fn started_line(c: &Chat, pane: u64, boot: &str) -> Line {
     line
 }
 
+#[cfg(unix)]
 fn find(text: &str, needle: &str) -> Position {
     let (y, row) = text.lines().enumerate().find(|(_, row)| row.contains(needle)).expect("the text on screen");
     let x = row[..row.find(needle).expect("found")].chars().count();

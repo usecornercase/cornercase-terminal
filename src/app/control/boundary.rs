@@ -50,7 +50,7 @@ impl BotClients {
         self.clients.insert(client, bot);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(in crate::app) fn marked(&mut self, client: u64, bot: &str) {
         self.insert(client, bot.to_string());
     }
