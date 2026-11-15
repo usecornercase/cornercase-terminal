@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.88
+
+- **A bot made with what it is for sets itself up at once.** When **For** in the new bot form, or `--about` of `cornercase bot new`, says what the bot is for, making it starts its first turn: the bot schedules what that asks for, writes what its runs will need in `memory.md`, and tells you in its chat what it will do, what it scheduled and when that runs next. The chat opens with `── setting up ──`; what you send meanwhile is held for the next turn, which continues the same conversation. A bot made without it starts nothing and spends no tokens, as before.
+- ` retry ` under a setup that failed runs the setup again, and so does `cornercase bot setup prs`.
+- For programs: `bot new` answers `state: thinking` while the setup runs, a setup turn's first line is the notice `setting up`, the `bot` request has a `setup` action, and `cornercase contract` lists `bot-setup`.
+
 ## 0.13.87
 
 - **A bot can no longer stop, restart or update cornercase by any of its commands or requests.** The command line already refused `kill-server`, `restart` and `update` inside a bot. Now the server also refuses them from a `cornercase`-access bot, along with `restart-when-idle` and `update-install`, with the same message, `a bot cannot stop its own server`.
