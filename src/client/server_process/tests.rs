@@ -167,7 +167,12 @@ fn the_first_rejection_is_read_and_reading_stops_there() {
     let mut empty = Vec::new();
     protocol::send(&mut empty, &ServerMessage::Detached).expect("a frame");
 
-    assert_eq!(rejection(&mut io::Cursor::new(buf)), Some("why".to_string()));
+    let mut read = io::Cursor::new(buf);
+    assert_eq!(rejection(&mut read), Some("why".to_string()));
+    let mut rest = Vec::new();
+    protocol::send(&mut rest, &ServerMessage::Detached).expect("a frame");
+    let after = read.position();
+    assert_eq!(usize::try_from(after).expect("a position"), read.get_ref().len() - rest.len());
     assert_eq!(rejection(&mut io::Cursor::new(empty)), None);
     assert_eq!(rejection(&mut io::Cursor::new(Vec::new())), None);
 }
