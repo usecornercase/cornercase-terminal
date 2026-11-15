@@ -2,6 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.86
+
+- **Gemini CLI, opencode, Cursor CLI and GitHub Copilot CLI can be bots.** `cornercase bot agents` and the new bot form list them, and each keeps its conversation from one message to the next.
+  - Gemini CLI and GitHub Copilot CLI take both accesses. With `cornercase` access they read and write only the bot's own folder, and see your work through `cornercase`; on Windows they are `full` only for now. A Gemini CLI bot's rules are a file, `.gemini/cornercase-policy.toml` in its folder, that cornercase writes again before every turn.
+  - opencode and Cursor CLI can be bots with `full` access only: their permission rules cannot keep a bot's writes in its folder.
+  - Grok Build and Vibe CLI cannot be bots yet.
+  - Recap still uses Claude Code or Codex.
+- A bot whose agent stops with an error on its standard error (GitHub Copilot CLI, Cursor CLI) now shows the agent's own words in its chat, instead of only `exited without answering`.
+- On Windows, an agent installed with npm starts its bot turns and the Recap without going through `cmd.exe`, so a message with line breaks reaches it.
+
 ## 0.13.85
 
 - **A bot can schedule its own work.** Tell it "review my pull requests every weekday at 9" and it adds a routine (`cornercase queue add --every 'weekday 09:00'`, or `--at 'tomorrow 9:00'` for once). Each run is a new conversation that reads the bot's `bot.md` and `memory.md`, and it answers in the chat as one block: `↻ Review PRs · 09:00`, its steps folded, then its answer. The answer counts as unread and notifies with a ` go ` that shows the chat at that run. A run that fails says why and offers ` run again `. The next time you write, the bot is told what its routines answered since your last message. Routines run only while the server runs, as every routine does.
