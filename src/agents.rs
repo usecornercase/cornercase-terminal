@@ -612,6 +612,17 @@ pub(crate) fn model_refusal(kind: &str, model: Option<&str>) -> Option<String> {
     known.model_flag().is_none().then(|| format!("{kind} has no model flag; set its model in its own configuration"))
 }
 
+pub(crate) fn names_a_model(model: Option<&str>) -> bool {
+    model.map(str::trim).is_some_and(|model| !model.is_empty() && model != "auto")
+}
+
+pub(crate) fn effort_needs_model_refusal(kind: &str, model: Option<&str>, effort: Option<&str>) -> Option<String> {
+    let needs = Known::of(kind).and_then(Known::bot).is_some_and(|support| support.effort_needs_model);
+    let asked = effort.map(str::trim).is_some_and(|level| !level.is_empty());
+    (needs && asked && !names_a_model(model))
+        .then(|| format!("{kind} takes an effort only with a model you name, not auto"))
+}
+
 pub(crate) fn effort_refusal(kind: &str, level: &str) -> Option<String> {
     match effort_levels(kind) {
         None => Some(format!("{kind} has no effort switch")),

@@ -70,7 +70,7 @@ pub(crate) fn list(screen: Rect, form: &Form) -> Option<Rect> {
     let open = form.opened()?;
     let mut field = rect(screen, form, open);
     if open == Field::Access {
-        field.width = inner(screen).width.saturating_sub(LABEL);
+        field.width = inner(screen).width.saturating_sub(LABEL + 1);
     }
     Some(combo::list(field, form.combo_of(open)?, screen))
 }
@@ -168,8 +168,7 @@ fn draw_notes(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     let access = row(screen, row_of(form, Field::Access) + 1, 1);
     let x = access.x + LABEL + 1;
     let width = usize::from(access.width.saturating_sub(LABEL + 1));
-    let reads_folder = form.info().is_some_and(|info| info.reads.as_deref() == Some("folder"));
-    let first = if reads_folder { FOLDER_NOTE } else { CORNERCASE_NOTE };
+    let first = if form.reads_only_folder() { FOLDER_NOTE } else { CORNERCASE_NOTE };
     for (i, (line, colour)) in [(first, view.muted), (FULL_NOTE, Color::Red)].into_iter().enumerate() {
         let y = access.y + u16::try_from(i).unwrap_or_default();
         let r = Rect::new(x, y, access.width.saturating_sub(LABEL + 1), 1);

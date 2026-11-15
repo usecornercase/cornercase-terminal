@@ -107,7 +107,7 @@ function listArea(screen: Rect, o: BotForm): Rect | null {
   const open = opened(o);
   if (!open) return null;
   const field = controlRect(screen, open);
-  const wide = open === 'access' ? { ...field, w: Math.max(0, inner(screen.w, screen.h).w - LABEL) } : field;
+  const wide = open === 'access' ? { ...field, w: Math.max(0, inner(screen.w, screen.h).w - LABEL - 1) } : field;
   return comboList(wide, o[open], screen);
 }
 

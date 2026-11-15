@@ -28,12 +28,8 @@ fn bot_agent_names() -> String {
 }
 
 fn needs_a_model(kind: Known, bot: &Bot) -> Done<()> {
-    let named = bot.model.as_deref().is_some_and(|model| !model.is_empty() && model != "auto");
-    if bot.effort.is_some() && !named && kind.bot().is_some_and(|support| support.effort_needs_model) {
-        let text = format!("{} takes an effort only with a model you name, not auto", kind.title());
-        return Err(Refusal::new(Code::Malformed, text));
-    }
-    Ok(())
+    agents::effort_needs_model_refusal(kind.name(), bot.model.as_deref(), bot.effort.as_deref())
+        .map_or(Ok(()), |why| Err(Refusal::new(Code::Malformed, why)))
 }
 
 fn problem(problem: &NameProblem) -> Refusal {

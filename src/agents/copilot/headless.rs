@@ -42,8 +42,7 @@ fn mode_args(ask: &Ask) -> Vec<String> {
 }
 
 fn effort_of(ask: &Ask) -> Option<&str> {
-    ask.model.as_deref().map(str::trim).filter(|model| !model.is_empty() && *model != "auto")?;
-    ask.effort.as_deref()
+    agents::names_a_model(ask.model.as_deref()).then_some(ask.effort.as_deref()).flatten()
 }
 
 pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
