@@ -30,6 +30,13 @@ pub(crate) struct Context {
     pub(crate) percent: Option<u16>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionState {
+    Unwatched,
+    Pending,
+    Read,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Compaction {
     pub(crate) at: Option<SystemTime>,
@@ -325,10 +332,10 @@ impl Pane {
         self.reader.as_ref()?.conversation()
     }
 
-    pub(crate) fn session_state(&self) -> agents::launch::Session {
+    pub(crate) fn session_state(&self) -> SessionState {
         match &self.reader {
             Some(Reader::Claude(reader)) => reader.session_state(),
-            _ => agents::launch::Session::Unwatched,
+            _ => SessionState::Unwatched,
         }
     }
 

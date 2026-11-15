@@ -10,7 +10,7 @@ use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::breakdown::Target;
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::{self, Job};
-use crate::agents::context::{Compaction, Context, Look, Record};
+use crate::agents::context::{Compaction, Context, Look, Record, SessionState};
 
 pub(in crate::agents) const NAME: &str = "claude";
 pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(crate::agents::AccountHome {
@@ -289,12 +289,11 @@ impl Reader {
         Some(Record::Claude(self.transcript.as_ref()?.path.clone()))
     }
 
-    pub(in crate::agents) fn session_state(&self) -> crate::agents::launch::Session {
-        use crate::agents::launch::Session;
+    pub(in crate::agents) fn session_state(&self) -> SessionState {
         match (self.session.is_some(), self.watching) {
-            (true, _) => Session::Read,
-            (false, true) => Session::Pending,
-            (false, false) => Session::Unwatched,
+            (true, _) => SessionState::Read,
+            (false, true) => SessionState::Pending,
+            (false, false) => SessionState::Unwatched,
         }
     }
 

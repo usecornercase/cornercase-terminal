@@ -660,6 +660,10 @@ fn is_program(arg: &str, name: &str) -> bool {
     process::same_file_name(basename(arg), name)
 }
 
+pub(crate) fn names_program(command: &str, kind: Known) -> bool {
+    command.split_whitespace().map(|word| word.trim_matches(['\'', '"'])).any(|word| is_program(word, kind.command()))
+}
+
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     let names: Vec<&str> = argv.iter().take(2).map(|a| basename(a)).collect();
     let script = argv.iter().skip(1).find(|arg| !arg.starts_with('-'));

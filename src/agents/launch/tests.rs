@@ -18,7 +18,7 @@ struct World {
     shell: bool,
     bracketed: bool,
     agent: Option<Known>,
-    session: Session,
+    session: SessionState,
     trust: Trust,
     screen: String,
     reaction: Reaction,
@@ -65,7 +65,7 @@ fn shell() -> World {
         shell: true,
         bracketed: false,
         agent: None,
-        session: Session::Unwatched,
+        session: SessionState::Unwatched,
         trust: Trust::Accepted,
         screen: "$ ".into(),
         reaction: calm(),
@@ -77,7 +77,7 @@ fn agent(screen: &str) -> World {
         shell: false,
         bracketed: true,
         agent: None,
-        session: Session::Unwatched,
+        session: SessionState::Unwatched,
         trust: Trust::Accepted,
         screen: screen.into(),
         reaction: calm(),
@@ -85,7 +85,7 @@ fn agent(screen: &str) -> World {
 }
 
 fn claude(screen: &str) -> World {
-    World { agent: Some(Known::Claude), session: Session::Read, ..agent(screen) }
+    World { agent: Some(Known::Claude), session: SessionState::Read, ..agent(screen) }
 }
 
 fn asking_you(screen: &str) -> World {
@@ -541,7 +541,7 @@ mod confirming {
     #[test]
     fn claude_code_without_a_watched_session_gets_a_single_enter() {
         let (mut launch, t) = started(true);
-        let world = World { session: Session::Unwatched, ..claude(BOX) };
+        let world = World { session: SessionState::Unwatched, ..claude(BOX) };
         step(&mut launch, t + AGENT_QUIET, &world);
         let enter = step(&mut launch, t + AGENT_QUIET + SUBMIT_QUIET, &world);
         assert_eq!(enter, Step::Done(b"\r".to_vec()));
@@ -606,7 +606,7 @@ mod pasting {
     #[test]
     fn claude_code_gets_its_prompt_only_once_its_session_file_is_read() {
         let (mut launch, t) = started(true);
-        let pending = World { session: Session::Pending, ..claude(BOX) };
+        let pending = World { session: SessionState::Pending, ..claude(BOX) };
         assert_eq!(step(&mut launch, t + AGENT_QUIET, &pending), Step::Wait);
         assert_eq!(launch.stage(), "paste");
         let pasted = step(&mut launch, t + 2 * AGENT_QUIET, &claude(BOX));
@@ -616,7 +616,7 @@ mod pasting {
     #[test]
     fn a_session_file_that_never_comes_does_not_hold_the_prompt_past_the_longest_wait() {
         let (mut launch, t) = started(true);
-        let pending = World { session: Session::Pending, ..claude(BOX) };
+        let pending = World { session: SessionState::Pending, ..claude(BOX) };
         assert_eq!(step(&mut launch, t + AGENT_QUIET, &pending), Step::Wait);
         let pasted = step(&mut launch, t + AGENT_LATEST, &pending);
         assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
@@ -625,7 +625,7 @@ mod pasting {
     #[test]
     fn a_pane_whose_session_file_cornercase_cannot_look_for_is_never_held() {
         let (mut launch, t) = started(true);
-        let unwatched = off(World { session: Session::Unwatched, ..claude("Welcome") });
+        let unwatched = off(World { session: SessionState::Unwatched, ..claude("Welcome") });
         assert_eq!(step(&mut launch, t + AGENT_QUIET, &unwatched), Step::Write(b"https://x.dev/7 please".to_vec()));
     }
 

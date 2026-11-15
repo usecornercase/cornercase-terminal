@@ -1,8 +1,9 @@
 use std::time::{Duration, Instant, SystemTime};
 
-use super::Known;
 use super::activity::Status;
 use super::claude;
+use super::context::SessionState;
+use super::{Known, names_program};
 use crate::term::bracketed;
 use crate::text::one_line;
 
@@ -39,13 +40,6 @@ enum Stage {
     Agent,
     Submit,
     Confirm,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Session {
-    Unwatched,
-    Pending,
-    Read,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -103,7 +97,7 @@ pub(crate) struct Seen<'a> {
     pub(crate) shell_in_foreground: bool,
     pub(crate) bracketed_paste: bool,
     pub(crate) agent: Option<Known>,
-    pub(crate) session: Session,
+    pub(crate) session: SessionState,
     pub(crate) application_cursor: bool,
     pub(crate) screen: &'a mut dyn FnMut() -> String,
     pub(crate) trust_prompt: &'a dyn Fn(&str) -> bool,
@@ -342,18 +336,17 @@ impl Launch {
     }
 
     fn confirms(&self, seen: &Seen) -> bool {
-        seen.session != Session::Unwatched
-            && claude_program(&self.spec.command)
-            && seen.agent.is_some_and(Known::confirms_prompt)
+        let Some(agent) = seen.agent.filter(|agent| agent.confirms_prompt()) else { return false };
+        seen.session != SessionState::Unwatched && names_program(&self.spec.command, agent)
     }
 
     fn awaits_paste(&self, seen: &Seen, screen: &str, latest: bool) -> bool {
         let Some(agent) = seen.agent.filter(|agent| agent.bracketed_when_ready()) else { return false };
         !latest
             && self.spec.prompt.is_some()
-            && claude_program(&self.spec.command)
-            && seen.session != Session::Unwatched
-            && (seen.session == Session::Pending
+            && names_program(&self.spec.command, agent)
+            && seen.session != SessionState::Unwatched
+            && (seen.session == SessionState::Pending
                 || !seen.bracketed_paste
                 || agent.input_box(|| screen.to_string()) == Some(false))
     }
@@ -404,13 +397,6 @@ impl Launch {
             Step::Done(bytes.into_bytes())
         }
     }
-}
-
-fn claude_program(command: &str) -> bool {
-    command
-        .split_whitespace()
-        .map(|word| word.trim_matches(['\'', '"']))
-        .any(|word| std::path::Path::new(word).file_stem().is_some_and(|name| name == "claude"))
 }
 
 fn taken(reaction: &Reaction, pasted: Option<SystemTime>, first: Instant) -> Option<&'static str> {
