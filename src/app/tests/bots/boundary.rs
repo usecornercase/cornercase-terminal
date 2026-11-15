@@ -21,6 +21,7 @@ fn reply_from(app: &mut App, client: u64, command: &str, args: &serde_json::Valu
 const NO_POPUP: &str = "no plugin popup is open";
 
 fn root_of(c: &Chat) -> i32 {
+    wait_until("the agent's pid is written", || root_pid(&c.claude).is_some());
     root_pid(&c.claude).expect("the agent's pid")
 }
 
@@ -100,6 +101,9 @@ fn a_bots_connection_cannot_send_into_a_shell_pane_but_another_can() {
     let shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
     let folder = TempDir::new();
     let (mut app, rx) = new_app_with_shell(shell, no_config());
+    if cfg!(windows) {
+        app.config.shell.args = vec![String::from("/d")];
+    }
     app.open_project(folder.path().to_path_buf(), AREA).expect("open project");
     let pane = app.report(None).panes()[0].pane;
     let (_dir, _bin, claude) = install_bot(&mut app, "", Access::Cornercase);

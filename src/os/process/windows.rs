@@ -217,27 +217,32 @@ impl Drop for Job {
 }
 
 #[derive(Debug)]
-pub(crate) struct Lineage(Option<OwnedHandle>);
+pub(crate) struct Lineage(OwnedHandle);
 
 impl Lineage {
     pub(crate) fn spawn(command: &mut Command) -> io::Result<(Child, Self)> {
-        let child = command.spawn()?;
+        let mut child = command.spawn()?;
         let job = create().filter(|job| limit(job, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) && assign(job, &child));
-        Ok((child, Self(job)))
+        match job {
+            Some(job) => Ok((child, Self(job))),
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                Err(io::Error::other("the process could not be put in a job object"))
+            }
+        }
     }
 
     pub(crate) fn holds(&self, pid: i32) -> bool {
-        let (Some(job), Ok(pid)) = (&self.0, u32::try_from(pid)) else { return false };
+        let Ok(pid) = u32::try_from(pid) else { return false };
         let Ok(process) = open(pid, PROCESS_QUERY_LIMITED_INFORMATION) else { return false };
         let mut inside: BOOL = FALSE;
-        let asked = unsafe { IsProcessInJob(process.as_raw_handle(), job.as_raw_handle(), &raw mut inside) };
+        let asked = unsafe { IsProcessInJob(process.as_raw_handle(), self.0.as_raw_handle(), &raw mut inside) };
         asked != FALSE && inside != FALSE
     }
 
     pub(crate) fn end(&self) {
-        if let Some(job) = &self.0 {
-            unsafe { TerminateJobObject(job.as_raw_handle(), KILLED) };
-        }
+        unsafe { TerminateJobObject(self.0.as_raw_handle(), KILLED) };
     }
 }
 

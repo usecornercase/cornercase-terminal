@@ -156,6 +156,14 @@ fn converse_apart<T: Send + 'static>(
     rx
 }
 
+fn add_new(left: &mut Vec<Group>, found: Vec<Group>) {
+    for group in found {
+        if !left.iter().any(|known| known.root.pid == group.root.pid) {
+            left.push(group);
+        }
+    }
+}
+
 pub(crate) fn run_in<T: Send + 'static>(
     limits: Limits,
     mut command: Command,
@@ -173,8 +181,16 @@ pub(crate) fn run_in<T: Send + 'static>(
         }
         Err(mpsc::RecvTimeoutError::Disconnected) => (Err(gone(limits.name)), Vec::new()),
     };
+    let root = i32::try_from(child.id()).unwrap_or(0);
+    let mut left = left;
+    if limits.contain && left.is_empty() {
+        left = stop::below(root);
+    }
     if answer.is_ok() {
         let _ = process::wait_until(&mut child, Instant::now() + limits.grace);
+        if limits.contain {
+            add_new(&mut left, stop::below(root));
+        }
     }
     let _ = child.kill();
     let _ = child.wait();

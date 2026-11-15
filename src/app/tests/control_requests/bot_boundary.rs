@@ -180,7 +180,7 @@ fn a_bots_enter_is_not_pressed_once_its_agent_is_gone() {
     let mut b = bounded();
     let agent = b.agent;
     ask(&mut b.app, None, text(agent, "echo pwned", true));
-    b.release_helper();
+    b.gone_from_front();
 
     let message = error(answered(&mut b.app, &b.rx, "the bot is answered"));
 
