@@ -146,6 +146,7 @@ pub(crate) struct Run {
     pub(crate) retry: Retry,
     pub(crate) stopped: Option<SystemTime>,
     pub(crate) exited: Vec<u64>,
+    pub(crate) exits_told: Vec<String>,
 }
 
 pub(crate) fn free_due(closed: Instant, now: Instant, gone: bool) -> bool {
@@ -174,7 +175,26 @@ impl Run {
             retry: Retry::default(),
             stopped: None,
             exited: Vec::new(),
+            exits_told: Vec::new(),
         }
+    }
+
+    pub(crate) fn untold_exits(&self, exited: &[u64]) -> Vec<u64> {
+        let told = |pane: &u64| self.role_of(*pane).is_some_and(|role| self.exits_told.iter().any(|t| t == role));
+        exited.iter().copied().filter(|pane| !told(pane)).collect()
+    }
+
+    pub(crate) fn note_told(&mut self, panes: &[u64]) {
+        for &pane in panes {
+            let Some(role) = self.role_of(pane).map(str::to_string) else { continue };
+            if !self.exits_told.contains(&role) {
+                self.exits_told.push(role);
+            }
+        }
+    }
+
+    pub(crate) fn forget_told(&mut self, roles: &[String]) {
+        self.exits_told.retain(|told| !roles.contains(told));
     }
 
     pub(crate) fn role_of(&self, pane: u64) -> Option<&str> {

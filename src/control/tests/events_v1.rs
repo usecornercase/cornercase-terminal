@@ -197,6 +197,8 @@ fn messages() -> Vec<Sample> {
         message: message.into(),
         panes,
         failed,
+        run: None,
+        role: None,
     };
     let workspace = Ids { project: Some(1), workspace: Some(2), ..Ids::default() };
     let merged = "pull request merged in fix-login: 2 agents closed · ▶ on the workspace reopens them";
@@ -214,11 +216,33 @@ fn messages() -> Vec<Sample> {
             "control/events/v1/message-failed.json",
             event(what("flow-merged", failed, vec![4, 5], true), workspace)
         ),
+        sample!("control/events/v1/message-flow-exited.json", event(exited(), workspace)),
     ]
 }
 
+fn exited() -> What {
+    What::Message {
+        kind: "flow-exited".into(),
+        message: "coder's agent exited in shop › fix-login".into(),
+        panes: vec![7],
+        failed: false,
+        run: Some(12),
+        role: Some("coder".into()),
+    }
+}
+
 fn a_message(panes: Vec<u64>) -> Event {
-    event(What::Message { kind: "notify".into(), message: "tests pass".into(), panes, failed: false }, Ids::default())
+    event(
+        What::Message {
+            kind: "notify".into(),
+            message: "tests pass".into(),
+            panes,
+            failed: false,
+            run: None,
+            role: None,
+        },
+        Ids::default(),
+    )
 }
 
 fn samples() -> Vec<Sample> {

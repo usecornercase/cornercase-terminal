@@ -251,6 +251,7 @@ mod file {
                 ended: None,
                 close_when_merged: false,
                 free_builds: false,
+                exits_told: Vec::new(),
             }),
         });
         saved
@@ -276,6 +277,21 @@ mod file {
         assert!(text.contains("\"close_when_merged\":true"));
         assert!(text.contains("\"free_builds\":true"));
         assert_eq!(serde_json::from_str::<State>(&text).expect("a session"), saved);
+    }
+
+    #[test]
+    fn a_run_keeps_the_exits_it_told_in_the_session() {
+        let mut saved = closed_state();
+        assert!(!serde_json::to_string(&saved).expect("json").contains("exits_told"));
+        if let Some(run) = saved.projects[0].workspaces[0].closed.as_mut().and_then(|closed| closed.run.as_mut()) {
+            run.exits_told = vec!["coder".into()];
+        }
+        let text = serde_json::to_string(&saved).expect("json");
+        assert!(text.contains("\"exits_told\":[\"coder\"]"));
+        assert_eq!(serde_json::from_str::<State>(&text).expect("a session"), saved);
+        let mut run = Run::new(1, Flow::default(), "fix".into());
+        run.exits_told = vec!["coder".into()];
+        assert_eq!(RunState::seated(&run, Vec::new()).exits_told, ["coder"]);
     }
 
     #[test]

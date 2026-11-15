@@ -218,7 +218,10 @@ impl App {
         let panes = (server == control::server_token()).then_some(pane).into_iter().collect();
         self.panels.queued.set_state(run, State::Kept { pane, server, reason: reason.to_string() });
         let text = format!("routine {label} left changes in {workspace}: {reason}");
-        self.queue_notice(Message { kind: MessageKind::QueueKept, text, workspace: id, panes }, ui::ToastIcon::Bug);
+        self.queue_notice(
+            Message { kind: MessageKind::QueueKept, text, workspace: id, panes, run: None, role: None },
+            ui::ToastIcon::Bug,
+        );
         self.sync_queued();
     }
 }

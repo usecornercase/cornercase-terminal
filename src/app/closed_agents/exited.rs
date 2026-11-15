@@ -10,15 +10,26 @@ use crate::flows::run::Run;
 use crate::flows::{self, Role, brief};
 use crate::log::{self};
 use crate::project::Hierarchy;
+use crate::term::Term;
 
 impl App {
+    fn agent_around(&self, term: &Term, now: Instant) -> bool {
+        term.agent.status().is_some()
+            || term.resuming.is_some_and(|until| now < until)
+            || self.agents.launches.of_pane(term.id).next().is_some()
+    }
+
     pub(in crate::app) fn role_exited(&self, pane: u64, now: Instant) -> bool {
         let Some(term) = self.projects.pane_by(pane) else { return false };
-        term.agent.status().is_none()
-            && term.resuming.is_none_or(|until| now >= until)
-            && self.agents.launches.of_pane(pane).next().is_none()
-            && !self.agents.closed.closing(pane)
-            && term.shell_in_foreground()
+        !self.agent_around(term, now) && !self.agents.closed.closing(pane) && term.shell_in_foreground()
+    }
+
+    pub(in crate::app) fn agents_back(&self, run: &Run, now: Instant) -> Vec<String> {
+        let back = |role: &&String| {
+            let term = run.pane_of(role).and_then(|pane| self.projects.pane_by(pane));
+            term.is_none_or(|term| self.agent_around(term, now))
+        };
+        run.exits_told.iter().filter(back).cloned().collect()
     }
 
     pub(in crate::app) fn exited_panes(&self, run: &Run, now: Instant) -> Vec<u64> {
@@ -71,6 +82,8 @@ impl App {
         let now = Instant::now();
         let Some(run) = self.runs.of_workspace_mut(workspace) else { return };
         run.exited.retain(|pane| !back.contains(pane));
+        let roles: Vec<String> = back.iter().filter_map(|&pane| run.role_of(pane).map(str::to_string)).collect();
+        run.forget_told(&roles);
         if orchestrator {
             return;
         }

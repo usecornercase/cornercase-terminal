@@ -97,6 +97,8 @@ impl App {
             text: said,
             workspace: Some(plan.place.1),
             panes,
+            run: None,
+            role: None,
         });
     }
 
@@ -158,7 +160,14 @@ impl App {
         self.messages.toast = Some(toast);
         log::info!("flow", "builds freed after the merge", workspace = entry.workspace, failed = failed);
         let (workspace, panes) = (Some(entry.workspace), entry.agents);
-        self.publish_message(Message { kind: MessageKind::FlowMerged { failed }, text, workspace, panes });
+        self.publish_message(Message {
+            kind: MessageKind::FlowMerged { failed },
+            text,
+            workspace,
+            panes,
+            run: None,
+            role: None,
+        });
     }
 }
 
