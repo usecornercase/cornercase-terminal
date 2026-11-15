@@ -1,7 +1,8 @@
 use super::*;
 use crate::agents::launch::CONFIRM_EVERY;
 
-const QUICK: Duration = Duration::from_millis(100);
+pub(super) const GIVES_UP: Duration = Duration::from_millis(100);
+pub(super) const RETRIES: Duration = Duration::from_secs(1);
 
 fn start_with_prompt(agent: &mut Agent, wait: bool) {
     let start = wire::Start {
@@ -14,13 +15,13 @@ fn start_with_prompt(agent: &mut Agent, wait: bool) {
     ask(&mut agent.app, None, Command::Start(start));
 }
 
-pub(super) fn quicken(agent: &mut Agent) {
+pub(super) fn quicken(agent: &mut Agent, every: Duration) {
     agent.refreshing("the launch exists", |app| !app.agents.launches.list().is_empty());
     let panes: Vec<u64> = agent.app.agents.launches.list().iter().map(|launch| launch.term).collect();
     for pane in panes {
         for launch in agent.app.agents.launches.of_pane_mut(pane) {
             assert_eq!(launch.confirm, Some(CONFIRM_EVERY), "a launch with a prompt confirms by default");
-            launch.confirm = Some(QUICK);
+            launch.confirm = Some(every);
         }
     }
 }
@@ -30,7 +31,7 @@ fn a_start_whose_prompt_is_never_taken_answers_unsent_with_a_warning() {
     let mut agent = Agent::new();
     agent.fake.signal("deaf");
     start_with_prompt(&mut agent, false);
-    quicken(&mut agent);
+    quicken(&mut agent, GIVES_UP);
 
     let answer = done(agent.answered("the start answers"));
 
@@ -45,7 +46,7 @@ fn a_waiting_start_whose_prompt_is_never_taken_fails_with_that_text() {
     let mut agent = Agent::new();
     agent.fake.signal("deaf");
     start_with_prompt(&mut agent, true);
-    quicken(&mut agent);
+    quicken(&mut agent, GIVES_UP);
 
     let message = error(agent.answered("the start fails"));
 

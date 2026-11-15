@@ -1,4 +1,4 @@
-use super::super::unsent::quicken;
+use super::super::unsent::{GIVES_UP, RETRIES, quicken};
 use super::results::scheduled;
 use super::*;
 
@@ -40,7 +40,7 @@ fn a_queued_claude_code_gets_its_prompt_once_its_input_is_ready() {
 #[test]
 fn a_queued_prompt_whose_enter_is_lost_gets_enter_again() {
     let (mut agent, id) = launched("lose");
-    quicken(&mut agent);
+    quicken(&mut agent, RETRIES);
 
     let pane = started(&mut agent, id);
 
@@ -56,7 +56,7 @@ fn pane_of(app: &App, id: u64) -> &Term {
 #[test]
 fn a_queued_prompt_never_taken_says_so() {
     let (mut agent, id) = launched("deaf");
-    quicken(&mut agent);
+    quicken(&mut agent, GIVES_UP);
 
     let pane = started(&mut agent, id);
 
