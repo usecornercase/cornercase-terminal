@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.88
+
+- **A bot tells you when an agent it started finishes.** The chat gets `▶ started claude in …` when the bot starts an agent. When the agent's turn ends, `✓ claude finished in …` comes with its last message, and the bot then answers in the conversation that started it, its chat's or its routine's: what matters, or the next step. A question from the agent shows `! claude needs you in …` and starts nothing.
+- Only the first finish after each prompt from the bot counts, so talking to that agent yourself stays quiet. A bot follows up to 20 agents. `cornercase bot edit prs --follow off`, or the form's **Follow** box, turns it off.
+- In the window, `by prs` shows on the agent's tab and in the agents section, the bot's card lists the agents it started, and a click on ` show ` or on a row of the card shows them.
+- For programs: `status` has `bot` on tabs and panes. `bot list --json` has `follow` and `following`. The chat's new lines come as `bot` events. `cornercase contract` lists `bot-follow`.
+
 ## 0.13.87
 
 - **A bot can no longer stop, restart or update cornercase by any of its commands or requests.** The command line already refused `kill-server`, `restart` and `update` inside a bot. Now the server also refuses them from a `cornercase`-access bot, along with `restart-when-idle` and `update-install`, with the same message, `a bot cannot stop its own server`.
