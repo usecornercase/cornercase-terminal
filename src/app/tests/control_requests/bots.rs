@@ -2,6 +2,7 @@
 
 use super::following_the_app::follow as follow_app;
 use super::*;
+use crate::agents::Known;
 use crate::bots::chat::Kind;
 use crate::test_util::{TempDir, fake_program, fixture};
 
@@ -12,19 +13,26 @@ const ANSWER: &str = fixture!("claude/2.1.325/bot-new.jsonl");
 struct Bots {
     app: App,
     rx: Receiver<AppEvent>,
-    claude: PathBuf,
-    _dirs: (TempDir, TempDir),
+    program: PathBuf,
+    dirs: (TempDir, TempDir),
 }
 
 fn bots() -> Bots {
+    bots_of(Known::Claude, ANSWER)
+}
+
+fn bots_of(faked: Known, out: &str) -> Bots {
     let (mut app, rx) = empty_app();
     let (state, bin) = (TempDir::new(), TempDir::new());
-    let claude = fake_program(bin.path(), "claude");
-    std::fs::write(claude.with_extension("out"), ANSWER).expect("canned output");
-    app.config.agent_commands.insert("claude".into(), claude.display().to_string());
-    app.config.agent_commands.insert("codex".into(), "/nonexistent/codex".into());
+    let program = fake_program(bin.path(), faked.name());
+    std::fs::write(program.with_extension("out"), out).expect("canned output");
+    for kind in Known::ALL {
+        let command =
+            if kind == faked { program.display().to_string() } else { format!("/nonexistent/{}", kind.name()) };
+        app.config.agent_commands.insert(kind.name().into(), command);
+    }
     app.set_bots_dir(&state.path().join("bots"));
-    Bots { app, rx, claude, _dirs: (state, bin) }
+    Bots { app, rx, program, dirs: (state, bin) }
 }
 
 fn wire(args: &Value) -> Value {
@@ -51,7 +59,7 @@ impl Bots {
     }
 
     fn argvs(&self) -> Vec<String> {
-        let text = std::fs::read_to_string(self.claude.with_extension("argv")).unwrap_or_default();
+        let text = std::fs::read_to_string(self.program.with_extension("argv")).unwrap_or_default();
         text.lines().map(str::to_string).collect()
     }
 }
@@ -80,17 +88,28 @@ fn a_bot_is_made_asked_and_read_back() {
     assert_eq!(kinds_of(&after), ["bot"]);
 }
 
-#[test]
-fn a_reset_makes_the_next_message_start_a_new_session() {
-    let mut b = bots();
-    b.new_prs();
+#[rstest::rstest]
+#[case::claude(Known::Claude, fixture!("claude/2.1.325/bot-new.jsonl"), "cornercase", "--resume")]
+#[case::gemini(Known::Gemini, fixture!("gemini/0.67.0/bot-new.jsonl"), "cornercase", "--resume")]
+#[case::opencode(Known::Opencode, fixture!("opencode/1.18.35/bot-new.jsonl"), "full", "--session")]
+#[case::cursor(Known::Cursor, fixture!("cursor/2026.10.22-27dcf5f/bot-new.jsonl"), "full", "--resume")]
+#[case::copilot(Known::Copilot, fixture!("copilot/1.0.98/bot-new.jsonl"), "cornercase", "--resume=")]
+fn a_reset_makes_the_next_message_start_a_new_session(
+    #[case] agent: Known,
+    #[case] out: &str,
+    #[case] access: &str,
+    #[case] resume: &str,
+) {
+    let mut b = bots_of(agent, out);
+    b.ask("bot", &json!({"action": "new", "name": "PRs", "agent": agent.name(), "access": access}));
     b.ask("bot", &json!({"action": "say", "bot": "prs", "text": "hi", "wait": true}));
     b.ask("bot", &json!({"action": "say", "bot": "prs", "text": "and now?", "wait": true}));
-    assert!(b.argvs()[1].contains("--resume"));
+    let argvs = b.argvs();
+    assert!(!argvs[0].contains(resume) && argvs[1].contains(resume), "{argvs:?}");
     b.ask("bot", &json!({"action": "reset", "bot": "prs"}));
     b.ask("bot", &json!({"action": "say", "bot": "prs", "text": "again", "wait": true}));
     let argvs = b.argvs();
-    assert!(!argvs[2].contains("--resume") && argvs[2].contains("You are PRs"), "{}", argvs[2]);
+    assert!(!argvs[2].contains(resume) && argvs[2].contains("You are PRs"), "{}", argvs[2]);
 }
 
 #[test]
@@ -125,19 +144,37 @@ fn the_app_feed_carries_the_bots() {
     assert_eq!(state.bots[0].last.as_ref().map(|last| last.text.as_str()), Some("Two are blocked."));
 }
 
+fn every_agent_faked() -> Bots {
+    let mut b = bots();
+    for kind in [Known::Gemini, Known::Opencode, Known::Cursor, Known::Copilot] {
+        let program = fake_program(b.dirs.1.path(), kind.name());
+        b.app.config.agent_commands.insert(kind.name().into(), program.display().to_string());
+    }
+    b
+}
+
 #[test]
 fn the_agents_say_which_can_be_a_bot_and_why_not() {
-    let mut b = bots();
+    let mut b = every_agent_faked();
     let answer = b.ask("bot", &json!({"action": "agents"}));
     let find = |name: &str| {
         answer["agents"].as_array().expect("agents").iter().find(|a| a["agent"] == name).expect(name).clone()
     };
-    let claude = find("claude");
-    assert_eq!((&claude["bot"], &claude["accesses"]), (&json!(true), &json!(["cornercase", "full"])));
-    assert_eq!(claude["why"], Value::Null);
-    assert_eq!(find("gemini")["why"], "not yet");
-    let codex = find("codex");
-    assert_eq!((&codex["bot"], &codex["why"]), (&json!(false), &json!("not installed")));
+    let listed = |name: &str| {
+        let agent = find(name);
+        (agent["bot"].clone(), agent["accesses"].clone(), agent["why"].clone())
+    };
+    let both = (json!(true), json!(["cornercase", "full"]), Value::Null);
+    let full = |why: &str| (json!(true), json!(["full"]), json!(why));
+    let missing = |why: &str| (json!(false), json!([]), json!(why));
+    assert_eq!(listed("claude"), both);
+    assert_eq!(listed("gemini"), both);
+    assert_eq!(listed("copilot"), both);
+    assert_eq!(listed("opencode"), full("its rules let a command write outside its folder"));
+    assert_eq!(listed("cursor"), full("its rules cannot keep its edits in its folder"));
+    assert_eq!(listed("grok"), missing("not yet"));
+    assert_eq!(listed("vibe"), missing("not yet"));
+    assert_eq!(listed("codex"), missing("not installed"));
 }
 
 #[test]
@@ -149,6 +186,7 @@ fn what_cannot_be_asked_is_refused() {
     assert_eq!(b.refuse(&new("prs")).code, "conflict");
     assert_eq!(b.refuse(&json!({"action": "new", "name": "x"})).code, "malformed");
     assert_eq!(b.refuse(&json!({"action": "new", "name": "x", "agent": "codex"})).code, "malformed");
+    assert_eq!(b.refuse(&json!({"action": "new", "name": "x", "agent": "grok"})).code, "malformed");
     let long = "x".repeat(20_001);
     let said = b.refuse(&json!({"action": "say", "bot": "prs", "text": long}));
     assert_eq!(
@@ -162,6 +200,19 @@ fn what_cannot_be_asked_is_refused() {
         b.refuse(&json!({"action": "new", "name": "y", "agent": "claude", "model": "m", "effort": "bogus"})).code,
         "malformed"
     );
+}
+
+#[rstest::rstest]
+#[case::opencode(Known::Opencode)]
+#[case::cursor(Known::Cursor)]
+fn an_agent_with_full_access_only_is_refused_without_it(#[case] agent: Known) {
+    let mut b = every_agent_faked();
+    let name = agent.name();
+    let refused = b.refuse(&json!({"action": "new", "name": "x", "agent": name}));
+    assert_eq!(refused.code, "malformed");
+    assert!(refused.message.contains("--access full"), "{}", refused.message);
+    let made = b.ask("bot", &json!({"action": "new", "name": "x", "agent": name, "access": "full"}));
+    assert_eq!((made["agent"].as_str(), made["access"].as_str()), (Some(name), Some("full")));
 }
 
 #[test]
@@ -194,7 +245,7 @@ fn a_bot_is_edited_by_name_and_removed_by_id() {
 #[test]
 fn a_turn_that_fails_answers_with_an_error_line_a_waiting_client_can_tell() {
     let mut b = bots();
-    std::fs::write(b.claude.with_extension("out"), fixture!("claude/2.1.318/recap-failed.jsonl"))
+    std::fs::write(b.program.with_extension("out"), fixture!("claude/2.1.318/recap-failed.jsonl"))
         .expect("failing agent");
     b.new_prs();
     let said = b.ask("bot", &json!({"action": "say", "bot": "prs", "text": "hi", "wait": true}));

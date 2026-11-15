@@ -29,7 +29,19 @@ pub(in crate::agents) const LOCAL_COMMAND: bool = false;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
-pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = None;
+pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = Some(crate::agents::headless::Spec {
+    command: headless::command,
+    read: headless::read,
+    bot: Some(BOT),
+    recap: false,
+    stderr: false,
+    prepare: None,
+});
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Full],
+    why: Some("its rules let a command write outside its folder"),
+    reads_anywhere: true,
+};
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const RESUME: Option<Vec<String>> = None;
 pub(in crate::agents) const UNFOUND: &str =
@@ -92,6 +104,7 @@ impl Reader {
 }
 
 pub(in crate::agents) mod database;
+pub(in crate::agents) mod headless;
 
 #[cfg(test)]
 pub(crate) mod fake;

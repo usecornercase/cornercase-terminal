@@ -32,7 +32,26 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("allow all (dangerous)", &["--allow-all"]),
 ];
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
-pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = None;
+pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = Some(crate::agents::headless::Spec {
+    command: headless::command,
+    read: headless::read,
+    bot: Some(BOT),
+    recap: false,
+    stderr: true,
+    prepare: None,
+});
+#[cfg(not(windows))]
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],
+    why: None,
+    reads_anywhere: false,
+};
+#[cfg(windows)]
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Full],
+    why: Some("its rules are not known to hold on this system"),
+    reads_anywhere: false,
+};
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
@@ -156,6 +175,7 @@ impl Reader {
 }
 
 mod events;
+pub(in crate::agents) mod headless;
 pub(in crate::agents) mod message;
 pub(in crate::agents) mod session;
 

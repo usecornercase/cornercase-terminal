@@ -367,6 +367,10 @@ impl Known {
         self.headless().and_then(|spec| spec.bot)
     }
 
+    pub(crate) fn writes_recap(self) -> bool {
+        self.headless().is_some_and(|spec| spec.recap)
+    }
+
     pub(crate) fn headless(self) -> Option<headless::Spec> {
         match self {
             Self::Claude => claude::HEADLESS,

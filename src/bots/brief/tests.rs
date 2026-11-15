@@ -32,6 +32,18 @@ fn each_access_says_what_it_allows() {
 }
 
 #[test]
+fn a_bot_whose_agent_reads_only_its_folder_is_told_so() {
+    let gemini = Bot { agent: String::from("gemini"), ..named(Access::Cornercase) };
+    let told = brief(&gemini, Path::new("/b"));
+    assert!(told.contains("read and write only in your folder"), "{told}");
+    assert!(!told.contains("read anything"), "{told}");
+    let claude = brief(&named(Access::Cornercase), Path::new("/b"));
+    assert!(claude.contains("read anything"), "{claude}");
+    let full = Bot { access: Access::Full, ..gemini };
+    assert!(!brief(&full, Path::new("/b")).contains("only in your folder"));
+}
+
+#[test]
 fn empty_files_read_empty() {
     assert_eq!(capped("bot.md", "  \n"), "(empty)");
 }

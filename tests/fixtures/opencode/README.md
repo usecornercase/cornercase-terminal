@@ -12,3 +12,9 @@ These fixtures target **opencode 1.18.35** (`opencode --version`, the npm packag
 - `models.json`: the DeepSeek entries of the models.dev list opencode caches in `$XDG_CACHE_HOME/opencode/models.json` (5 MB for every provider), where names and `limit.context` come from.
 
 opencode's footer shows `<tokens> (<percent>)` from the newest assistant message with output: `input + output + reasoning + cache.read + cache.write` over the model's `limit.context`, rounded. cornercase shows the same. A pending permission or question is never written: the tool part already reads `running` while opencode asks, and its terminal title stays `OpenCode` or `OC | <session title>` whatever it does, so an opencode tab never shows `!`.
+
+## Bot turns (opencode 1.18.35)
+
+`bot-new.jsonl`, `bot-resumed.jsonl` and `bot-failed.*` were cut down from real `opencode run --format json -- …` runs of a first turn and one continued with `--session <id>` (Linux, 2026-11-15, an isolated folder outside every repository, `CORNERCASE*` removed and no cornercase server reachable). Replaced: the session id and the folders (`/work/bots/prs` and `/work/outside`); the user's `external_directory` rules in the permission error were cut.. `bot-new.jsonl` keeps four of the seven steps of the checked run (a bash command, a write inside, a write outside that was refused, a write of `bot.json` that was refused) and its final text. `bot-failed.jsonl` is a run with an unknown model.
+
+Files under `1.18.35/`.

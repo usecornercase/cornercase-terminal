@@ -1,6 +1,7 @@
 use super::*;
 #[cfg(unix)]
-use crate::test_util::{TempDir, write_executable};
+use crate::test_util::write_executable;
+use crate::test_util::{TempDir, fake_program};
 
 const LIMITS: Limits = Limits {
     name: "fake",
@@ -8,6 +9,7 @@ const LIMITS: Limits = Limits {
     grace: Duration::from_secs(2),
     close_input: false,
     contain: false,
+    stderr: false,
 };
 
 #[cfg(unix)]
@@ -38,6 +40,29 @@ fn a_program_that_exits_fails_at_once() {
     let (_dir, command) = fake("exit 1");
     let error = run(LIMITS, command, "hi\n", echoes).expect_err("no answer");
     assert_eq!(error.to_string(), "fake exited without answering");
+}
+
+fn failing_with(err: &str, limits: Limits) -> String {
+    let dir = TempDir::new();
+    let program = fake_program(dir.path(), "fake");
+    std::fs::write(program.with_extension("err"), err).expect("write the canned error");
+    std::fs::write(program.with_extension("code"), "1").expect("write the exit code");
+    run(limits, Command::new(&program), "", echoes).expect_err("no answer").to_string()
+}
+
+#[test]
+fn the_first_line_an_agent_writes_to_standard_error_is_its_reason() {
+    let limits = Limits { stderr: true, ..LIMITS };
+    assert_eq!(failing_with("\n  first  \nsecond\n", limits), "fake exited without answering: first");
+    let long = format!("{}\n", "x".repeat(300));
+    let reason = failing_with(&long, limits);
+    let said = reason.strip_prefix("fake exited without answering: ").expect("a reason");
+    assert_eq!(said.chars().count(), 200);
+}
+
+#[test]
+fn standard_error_is_not_read_unless_asked_for() {
+    assert_eq!(failing_with("first\n", LIMITS), "fake exited without answering");
 }
 
 #[test]

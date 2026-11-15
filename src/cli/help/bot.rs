@@ -2,7 +2,8 @@ pub(in crate::cli) const BOT_ABOUT_HELP: &str = "The bot's id or its name";
 
 pub(in crate::cli) const BOT_AGENTS_HELP: &str =
     "Prints every agent cornercase knows with whether it is installed, whether it can be a bot,
-why not (`not yet`, `not installed`) or what limits it (`its sandbox cannot reach cornercase`),
+why not (`not yet`, `not installed`) or what limits it (`its sandbox cannot reach cornercase`,
+`its rules let a command write outside its folder`),
 the accesses it supports, its efforts and the models it suggests. A window builds its form from this
 list.
 
@@ -17,12 +18,15 @@ and spends no tokens: it only runs when you write to it with `cornercase bot say
 
 --access cornercase (the default) holds the agent itself to reading anything, running `cornercase`,
 read-only git and gh, and searching the web, and to writing only in its own folder (not bot.json or
-chat.jsonl); your own Claude allow rules apply on top. The server refuses what its `cornercase`
+chat.jsonl); your own allow rules apply on top. The server refuses what its `cornercase`
 commands type into a pane that runs no agent; it can still start agents and write to them. Your own
 allow rules, an agent's own shell mode and permission prompts, flows, plugins, closing or stopping things and --remote are not
 a boundary: give it work you would give an assistant at your keyboard. --access full lets it change
-any file and run anything, unattended; it is off by default. A Codex bot can have full access only:
-its sandbox did not let it reach cornercase on Linux, and macOS and Windows were not tried.
+any file and run anything, unattended; it is off by default. A Codex, opencode or Cursor CLI bot can
+have full access only: Codex's sandbox did not let it reach cornercase on Linux, and macOS and Windows
+were not tried; opencode's and Cursor CLI's rules cannot keep its writes in its folder. A Gemini CLI or
+GitHub Copilot CLI bot with cornercase access reads only its own folder, and has full access only on
+Windows.
 
 A bot works only while the server runs. With --json it prints the bot as `bot list --json` does.
 
@@ -61,7 +65,7 @@ and conversation, and a line of a routine's run has routine, the run's queue id.
 
 pub(in crate::cli) const BOT_HELP: &str =
     "A bot is an agent of your own, outside any project: a name, a folder, a memory and a chat. Each
-message you write runs one turn of its agent (Claude Code or Codex) in a conversation that continues,
+message you write runs one turn of its agent (one `cornercase bot agents` lists as able to be a bot) in a conversation that continues,
 and the answer lands in the chat. It can see every project and act on them through `cornercase`.
 Making a bot starts nothing; it spends tokens when you write to it and when its routines run, and only while the server
 runs. The window lists bots in its Bots section and draws each one's chat.

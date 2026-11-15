@@ -58,7 +58,7 @@ pub(crate) struct NewArgs {
     #[arg(
         long,
         value_name = "AGENT",
-        help = "claude or codex [default: the agent chosen in Settings, when it can be a bot]"
+        help = "An agent that can be a bot (`cornercase bot agents` lists them) [default: the agent chosen in Settings, when it can be a bot]"
     )]
     pub(crate) agent: Option<String>,
     #[arg(long, value_name = "MODEL", help = "The model, as `start --model` takes it")]

@@ -2,7 +2,7 @@ use std::process::Command;
 
 use serde_json::Value;
 
-use crate::agents::headless::{Access, Action, Ask, Ran, Tools, Used};
+use crate::agents::headless::{Access, Action, Ask, Ran, Tools, Used, first_line};
 use crate::error::{Error, Result};
 use crate::{agents, process};
 
@@ -98,10 +98,6 @@ fn tokens(usage: &Value) -> Used {
         cache_read: count("cache_read_input_tokens"),
         cache_write: count("cache_creation_input_tokens"),
     }
-}
-
-fn first_line(text: &str) -> &str {
-    text.lines().map(str::trim).find(|line| !line.is_empty()).unwrap_or_default()
 }
 
 fn summary(name: &str, input: &Value) -> String {

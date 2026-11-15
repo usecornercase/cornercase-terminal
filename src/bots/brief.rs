@@ -1,6 +1,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
+use crate::agents::Known;
 use crate::queue::repeat::Repeat;
 
 use super::{Access, Bot, NOTES_CAP};
@@ -16,6 +17,7 @@ const ACT: &str = "How to act, through cornercase:
 - `cornercase send --pane ID` writes to an agent; `cornercase notify` sends a notice.
 - Always name the project: you run in no pane, so there is no \"here\".";
 const REACH: &str = "Your access is `cornercase`: you can read anything, run the cornercase command line, run read-only git and gh, search the web, and write only in your folder. Never change a project's files yourself; start an agent to do it.";
+const REACH_FOLDER: &str = "Your access is `cornercase`: you can run the cornercase command line, run read-only git and gh, search the web, and read and write only in your folder: see the user's work through cornercase. Never change a project's files yourself; start an agent to do it.";
 const FULL: &str = "Your access is `full`: you can change any file and run anything, unattended. Still start an agent for work on a project, unless the user asked you to do it yourself.";
 const SCHEDULE: &str = "To schedule work, run `cornercase queue add --every 'weekday 09:00' --prompt '…' --name '…'` (repeats: `30m`, `2h`, `day 09:00`, `weekday 09:00`, `monday 09:00`, `3d 10:00`; at least 30 minutes), or `--at 'tomorrow 9:00'` for once. `cornercase queue list --bot {id} --json` lists yours; `queue pause`, `resume`, `edit` and `remove` change them. Tell the user what you scheduled and when it runs next, in their time. When a routine runs you start a new conversation that has only this brief and your files, so write in `memory.md` what the next run needs.";
 const LATER: &str = "What happens when an agent you started finishes comes in a later release of cornercase.";
@@ -32,11 +34,16 @@ pub(crate) fn brief(bot: &Bot, folder: &Path) -> String {
     let who = WHO.replace("{name}", &bot.name);
     let folder = FOLDER.replace("{folder}", &folder.display().to_string());
     let access = match bot.access {
+        Access::Cornercase if reads_only_folder(bot) => REACH_FOLDER,
         Access::Cornercase => REACH,
         Access::Full => FULL,
     };
     let schedule = SCHEDULE.replace("{id}", &bot.id);
     [who.as_str(), &folder, SEE, ACT, &schedule, access, LATER].join("\n\n")
+}
+
+fn reads_only_folder(bot: &Bot) -> bool {
+    Known::of(&bot.agent).and_then(Known::bot).is_some_and(|support| !support.reads_anywhere)
 }
 
 pub(crate) fn capped(file: &str, text: &str) -> String {

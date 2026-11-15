@@ -134,10 +134,45 @@ fn a_run_that_never_ends_times_out() {
 }
 
 #[test]
-fn an_agent_without_a_recap_is_refused() {
+fn an_agent_without_a_spec_is_refused() {
     let folder = TempDir::new();
-    let error = ran(Known::Gemini, Path::new("gemini"), folder.path()).expect_err("no recap");
+    let error = ran(Known::Grok, Path::new("grok"), folder.path()).expect_err("no spec");
     assert!(error.to_string().contains("cannot run without its interface"), "{error}");
+}
+
+#[test]
+fn an_agent_that_cannot_write_a_recap_is_refused_before_anything_starts() {
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, "gemini", fixture!("gemini/0.67.0/bot-new.jsonl"));
+    let error = ran(Known::Gemini, &program, folder.path()).expect_err("no recap");
+    assert_eq!(error.to_string(), "gemini cannot write a recap");
+    assert!(!program.with_extension("argv").exists());
+}
+
+#[test]
+fn an_access_the_agent_lacks_is_refused_before_anything_starts() {
+    use crate::agents::headless::{Access, Tools};
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, "opencode", fixture!("opencode/1.18.35/bot-new.jsonl"));
+    let ask = Ask { tools: Tools::Bot(Access::Cornercase), ..ask(folder.path()) };
+    let command = program.display().to_string();
+    let error = run(&called(Known::Opencode, &command, TIMEOUT), &ask, &Arc::new(AtomicUsize::new(0)))
+        .expect_err("no cornercase access");
+    assert_eq!(error.to_string(), "opencode cannot be a bot with cornercase access");
+    assert!(!program.with_extension("argv").exists());
+}
+
+#[test]
+fn an_agent_that_does_not_ask_for_it_keeps_its_standard_error_to_itself() {
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, "claude", "");
+    std::fs::write(program.with_extension("err"), "Error: nope\n").expect("write the canned error");
+    std::fs::write(program.with_extension("code"), "1").expect("write the exit code");
+    let error = ran(Known::Claude, &program, folder.path()).expect_err("no answer");
+    assert_eq!(error.to_string(), "claude exited without answering");
 }
 
 #[test]
@@ -251,17 +286,43 @@ mod bots {
     fn a_codex_bot_runs_in_its_folder_and_resumes_before_the_prompt() {
         let folder = TempDir::new();
         let ask = bot_ask(folder.path(), Access::Cornercase, None);
-        let (argv, _dir) = argv_of(Known::Codex, "codex", fixture!("codex/0.164.0/bot-new.jsonl"), &ask);
-        let wanted = format!(
-            "[\"exec\", \"--json\", \"--skip-git-repo-check\", \"--sandbox\", \"workspace-write\", \"-C\", {:?}, \"--model\", \"opus\", \"--\", \"hi\"]",
-            folder.path().display().to_string()
-        );
-        assert_eq!(argv.trim_end(), wanted);
+        let args: Vec<String> = crate::agents::codex::headless::command("codex", &ask)
+            .get_args()
+            .map(|a| a.to_string_lossy().into())
+            .collect();
+        let wanted = [
+            "exec",
+            "--json",
+            "--skip-git-repo-check",
+            "--sandbox",
+            "workspace-write",
+            "-C",
+            &folder.path().display().to_string(),
+            "--model",
+            "opus",
+            "--",
+            "hi",
+        ];
+        assert_eq!(args, wanted);
         let ask = bot_ask(folder.path(), Access::Full, Some("t-1"));
-        let (argv, _dir) = argv_of(Known::Codex, "codex", fixture!("codex/0.164.0/bot-resumed.jsonl"), &ask);
-        assert!(argv.contains("\"--dangerously-bypass-approvals-and-sandbox\""), "{argv}");
-        assert!(argv.trim_end().ends_with("\"resume\", \"t-1\", \"--\", \"hi\"]"), "{argv}");
-        assert!(!argv.contains("--ephemeral"), "{argv}");
+        let (resumed, _dir) = argv_of(Known::Codex, "codex", fixture!("codex/0.164.0/bot-resumed.jsonl"), &ask);
+        assert!(resumed.contains("\"--dangerously-bypass-approvals-and-sandbox\""), "{resumed}");
+        assert!(resumed.trim_end().ends_with("\"resume\", \"t-1\", \"--\", \"hi\"]"), "{resumed}");
+        assert!(!resumed.contains("--ephemeral"), "{resumed}");
+    }
+
+    #[test]
+    fn an_agent_that_fails_on_its_standard_error_says_why() {
+        let dir = TempDir::new();
+        let folder = TempDir::new();
+        let words = "Error: Model \"x\" from --model flag is not available.";
+        let program = faked(&dir, "copilot", "");
+        let ask = bot_ask(folder.path(), Access::Full, None);
+        let command = program.display().to_string();
+        std::fs::write(program.with_extension("err"), format!("{words}\n")).expect("write the canned error");
+        std::fs::write(program.with_extension("code"), "1").expect("write the exit code");
+        let error = run(&called(Known::Copilot, &command, TIMEOUT), &ask, &Arc::new(AtomicUsize::new(0)));
+        assert_eq!(error.expect_err("no answer").to_string(), format!("copilot exited without answering: {words}"));
     }
 
     fn with_env(folder: &Path, env: Env) -> (Vec<String>, TempDir) {
@@ -413,5 +474,102 @@ mod bots {
             run_watched(&call, &bot_ask(folder.path(), Access::Full, None), Watch::default()).expect_err("slow");
         assert_eq!(error.to_string(), "claude did not answer in time");
         std::fs::remove_file(program.with_extension("hold")).expect("release");
+    }
+
+    #[rstest::rstest]
+    #[case::gemini(
+        Known::Gemini,
+        fixture!("gemini/0.67.0/bot-new.jsonl"),
+        fixture!("gemini/0.67.0/bot-resumed.jsonl"),
+        "\"--resume\", \"{}\"",
+        "run_shell_command"
+    )]
+    #[case::opencode(
+        Known::Opencode,
+        fixture!("opencode/1.18.35/bot-new.jsonl"),
+        fixture!("opencode/1.18.35/bot-resumed.jsonl"),
+        "\"--session\", \"{}\"",
+        "bash"
+    )]
+    #[case::cursor(
+        Known::Cursor,
+        fixture!("cursor/2026.10.22-27dcf5f/bot-new.jsonl"),
+        fixture!("cursor/2026.10.22-27dcf5f/bot-resumed.jsonl"),
+        "\"--resume\", \"{}\"",
+        "shell"
+    )]
+    #[case::copilot(
+        Known::Copilot,
+        fixture!("copilot/1.0.98/bot-new.jsonl"),
+        fixture!("copilot/1.0.98/bot-resumed.jsonl"),
+        "\"--resume={}\"",
+        "bash"
+    )]
+    fn a_full_access_bot_starts_a_session_and_continues_it(
+        #[case] agent: Known,
+        #[case] new: &str,
+        #[case] resumed: &str,
+        #[case] resume: &str,
+        #[case] first_tool: &str,
+    ) {
+        let dir = TempDir::new();
+        let folder = TempDir::new();
+        let program = faked(&dir, agent.name(), new);
+        let seen = Arc::new(Mutex::new(Vec::<Action>::new()));
+        let sink = Arc::clone(&seen);
+        let watch =
+            Watch { steps: Some(Box::new(move |step| sink.lock().expect("lock").push(step))), ..Watch::default() };
+        let command = program.display().to_string();
+        let call = called(agent, &command, TIMEOUT);
+        let first = run_watched(&call, &bot_ask(folder.path(), Access::Full, None), watch).expect("a first turn");
+        let session = first.session.clone().expect("a session");
+        assert_eq!(seen.lock().expect("lock")[0].tool, first_tool);
+        assert!(first.steps > 0 && !first.text.is_empty());
+        std::fs::write(program.with_extension("out"), resumed).expect("canned resume");
+        let ask = bot_ask(folder.path(), Access::Full, Some(&session));
+        let second = run_watched(&call, &ask, Watch::default()).expect("a resumed turn");
+        assert_eq!(second.session.as_deref(), Some(session.as_str()));
+        let argvs = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
+        assert!(!argvs.lines().next().expect("first").contains(&resume.replace("{}", &session)));
+        assert!(argvs.lines().last().expect("second").contains(&resume.replace("{}", &session)), "{argvs}");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_gemini_bot_with_cornercase_access_writes_its_rules_and_runs_with_them() {
+        let folder = TempDir::new();
+        let ask = bot_ask(folder.path(), Access::Cornercase, None);
+        let (argv, _dir) = argv_of(Known::Gemini, "gemini", fixture!("gemini/0.67.0/bot-new.jsonl"), &ask);
+        let rules = folder.path().join(".gemini").join("cornercase-policy.toml");
+        let text = std::fs::read_to_string(&rules).expect("the rules file");
+        assert!(text.contains(r"(\.gemini|bot\.json|chat\.jsonl)"), "{text}");
+        assert!(argv.contains(&format!("{:?}", rules.display().to_string())), "{argv}");
+        assert!(argv.contains("\"--approval-mode\", \"default\""), "{argv}");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_copilot_bot_with_cornercase_access_runs_with_its_rules() {
+        let folder = TempDir::new();
+        let ask = bot_ask(folder.path(), Access::Cornercase, None);
+        let (argv, _dir) = argv_of(Known::Copilot, "copilot", fixture!("copilot/1.0.98/bot-new.jsonl"), &ask);
+        assert!(argv.contains("\"--allow-tool\", \"shell(cornercase:*)\""), "{argv}");
+        assert!(argv.contains("\"--deny-tool\", \"shell(cornercase restart:*)\""), "{argv}");
+        assert!(argv.contains(&format!("write({}/bot.json)", folder.path().display())), "{argv}");
+    }
+
+    #[cfg(windows)]
+    #[rstest::rstest]
+    #[case::gemini(Known::Gemini)]
+    #[case::copilot(Known::Copilot)]
+    fn gemini_and_copilot_have_full_access_only_on_windows(#[case] agent: Known) {
+        let dir = TempDir::new();
+        let folder = TempDir::new();
+        let program = faked(&dir, agent.name(), "");
+        let ask = bot_ask(folder.path(), Access::Cornercase, None);
+        let command = program.display().to_string();
+        let error = run(&called(agent, &command, TIMEOUT), &ask, &Arc::new(AtomicUsize::new(0))).expect_err("refused");
+        assert!(error.to_string().contains("cannot be a bot with cornercase access"), "{error}");
+        assert!(!program.with_extension("argv").exists());
     }
 }

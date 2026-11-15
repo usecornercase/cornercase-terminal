@@ -19,6 +19,14 @@ fn clean(text: Option<&str>) -> Option<String> {
     text.map(str::trim).filter(|text| !text.is_empty()).map(str::to_string)
 }
 
+fn bot_agent_names() -> String {
+    let names: Vec<&str> = Known::ALL.into_iter().filter(|kind| kind.bot().is_some()).map(Known::name).collect();
+    match names.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
+        _ => names.join(""),
+    }
+}
+
 fn problem(problem: &NameProblem) -> Refusal {
     let code = if matches!(problem, NameProblem::Taken(_)) { Code::Conflict } else { Code::Malformed };
     Refusal::new(code, problem.message())
@@ -90,9 +98,9 @@ impl App {
             Some(name) => {
                 Known::of(&name).ok_or_else(|| Refusal::new(Code::Malformed, format!("{name} is not an agent")))
             }
-            None => Known::of(self.config.agent.trim())
-                .filter(|kind| self.bot_support(*kind).bot)
-                .ok_or_else(|| Refusal::new(Code::Malformed, "say which agent with --agent: claude or codex")),
+            None => Known::of(self.config.agent.trim()).filter(|kind| self.bot_support(*kind).bot).ok_or_else(|| {
+                Refusal::new(Code::Malformed, format!("say which agent with --agent: {}", bot_agent_names()))
+            }),
         }
     }
 

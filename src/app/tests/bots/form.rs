@@ -92,13 +92,13 @@ fn an_agent_that_cannot_be_a_bot_cannot_be_chosen() {
     let mut c = chat(ANSWER);
     plus(&mut c);
     let form = bot_form(&c.app);
-    let gemini = form.agents.iter().position(|info| info.agent == "gemini").expect("gemini");
-    assert!(form.agent.note(gemini).is_some());
+    let grok = form.agents.iter().position(|info| info.agent == "grok").expect("grok");
+    assert!(form.agent.note(grok).is_some());
     let area = AREA;
     let Some(Overlay::BotForm(form)) = &mut c.app.overlay else { panic!("form") };
     form.focus_on(Field::Agent);
     form.agent.open();
-    form.agent.choose(gemini);
+    form.agent.choose(grok);
     assert_eq!(form.info().map(|info| info.agent.as_str()), Some("claude"));
     let _ = area;
 }

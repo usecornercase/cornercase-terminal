@@ -14,3 +14,9 @@ The unsaved `/model` picker changed the footer without writing a model change in
 `trust.txt` preserves the question and selected options observed live: `Trust folder` is first, with no yes option. Enter accepted it and relaunched Gemini's child. No input-box/dialog check is installed: `>` occurs in picker help as well as the composer, and shell, YOLO and reverse-search inputs have other markers.
 
 `--worktree` changes the child process's cwd before constructing storage; `--include-directories` adds workspace folders without changing that root. These were checked against the installed 0.63.0 source; no model calls were needed. Association follows Gemini children and requires a single CLI family per home and folder. It intentionally omits conversation data for two independent Gemini in the same folder, and does not inject `--session-id` because `/clear` and `/resume` would still change the association.
+
+## Bot turns (Gemini CLI 0.67.0)
+
+`bot-new.jsonl`, `bot-resumed.jsonl` and `bot-failed.*` were cut down from real `gemini --skip-trust --output-format stream-json --approval-mode default --policy FILE --prompt=…` runs of a first turn and one continued with `--resume <id>` (Linux, 2026-11-15, an isolated folder outside every repository, `CORNERCASE*` removed and no cornercase server reachable). Replaced: the session id, the folder (none of the lines names one) and the version printed by `cornercase --version`; no credentials, emails or account ids were in the output.. One assistant line before the first tool use was added by hand (taken from another run's wording), since the checked run printed none, to pin that only the text after the last tool is the answer. `bot-failed.jsonl` is a run with `-m no-such-model-xyz`.
+
+Files under `0.67.0/`.

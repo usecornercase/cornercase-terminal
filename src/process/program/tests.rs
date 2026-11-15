@@ -207,3 +207,52 @@ mod for_windows {
         assert_eq!(find(true, &bare, None, &extensions(None)), Some(dir.path().join("claude.cmd")));
     }
 }
+
+mod past_cmd {
+    use std::ffi::OsString;
+
+    use super::*;
+    use crate::test_util::{NPM_SCRIPT, NPM_SHIM, npm_install, under};
+
+    fn path_of(dir: &TempDir) -> OsString {
+        dir.path().as_os_str().to_owned()
+    }
+
+    fn words(dir: &TempDir, program: &str, windows: bool) -> Vec<OsString> {
+        direct(windows, program, Some(&path_of(dir)), &extensions(None))
+    }
+
+    #[test]
+    fn an_npm_shim_starts_its_target_past_cmd() {
+        let dir = TempDir::new();
+        npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+
+        assert_eq!(
+            words(&dir, "claude", true),
+            [dir.path().join("node.exe").into_os_string(), under(dir.path(), &NPM_SCRIPT).into_os_string()]
+        );
+    }
+
+    #[test]
+    fn a_batch_file_that_is_no_npm_shim_starts_as_it_is() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("claude.cmd"), "@echo off\r\n").expect("write a batch file");
+
+        assert_eq!(words(&dir, "claude", true), [dir.path().join("claude.cmd").into_os_string()]);
+    }
+
+    #[test]
+    fn without_windows_a_program_starts_as_it_is() {
+        let dir = TempDir::new();
+        npm_install(dir.path(), NPM_SHIM, &[&NPM_SCRIPT, &["node.exe"]]);
+
+        assert_eq!(words(&dir, "claude", false), [OsString::from("claude")]);
+    }
+
+    #[test]
+    fn a_program_that_is_not_found_is_left_to_fail_by_name() {
+        let dir = TempDir::new();
+
+        assert_eq!(words(&dir, "claude", true), [OsString::from("claude")]);
+    }
+}
