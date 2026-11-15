@@ -180,6 +180,25 @@ fn a_bot_routine_run_now_answers_in_its_chat() {
 }
 
 #[test]
+fn a_bots_routine_is_paused_from_its_routines_dialog() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    session.says(&["queue", "add", "--bot", "prs", "--every", "2h", "--prompt", "check", "--name", "Review PRs"]);
+    let mut ui = Harness::open(Arc::clone(&session), ROWS, 160);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+
+    ui.click(ui.position_of("prs"));
+    ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
+    ui.click(ui.position_of("routines"));
+    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("Review PRs"));
+    ui.click(ui.position_of("pause"));
+
+    wait_until("the routine is paused", || {
+        session.says(&["queue", "list", "--bot", "prs", "--json"]).contains("\"paused\":true")
+    });
+}
+
+#[test]
 fn inside_a_bot_cornercase_writes_no_file_it_names_and_clones_nothing() {
     let session = started();
     session.says(&["bot", "new", "prs", "--agent", "claude"]);

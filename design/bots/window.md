@@ -1,6 +1,6 @@
 # Bots › The window
 
-Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
+Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`, `routines_dialog.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
 
 #844 made bots with no face but `cornercase bot …`. The window draws a bot **as a chat** (bubbles, Markdown, what it is doing), never as the agent's interface, since #844 runs the agent without it and keeps the chat in `chat.jsonl`.
 
@@ -22,8 +22,9 @@ The sidebar section, its placement, height rule, saved fold and compact page are
 - **The view** is anchored at the bottom; `Chat.scroll` counts the rows above it and 0 sticks. A line that arrives while it is above 0 adds its height to `scroll` so the text read stays put, and sets the ` ↓ new ` mark, which a click or reaching the bottom clears. The wheel scrolls as in a pane (`design/scrollback.md`).
 - **The empty state** says what a bot is in two lines and offers three examples; a click fills the field and sends nothing. None promises a schedule (#846 adds that example).
 - **Times** use the window's zone (`App::window_zone`, the queue form's): `HH:MM` today, else `Mon 3 Nov 14:02` (`queue::clock::when`, shared with `cornercase bot history`).
+- **The header** has ` routines ` one cell left of ` new conversation ` (10 cells, cyan, enabled while a turn runs); it opens the bot's routines dialog (see [Bot routines](routines.md)). It is left out when keeping it would leave the name under 12 cells, and ` ⋯ ` still offers `routines…`.
 - **` new conversation `** while a turn runs is dim, and a click says `PRs is answering: stop it first` (#844's `busy` refusal); the menu greys it.
-- **The card** (workspaces column): the name, agent, model (`the agent's own` when unset), effort and account when set, the access (`full access` in red), `made 2026-11-14`; the folder comes right after the name, since it is the card's one click target (a click opens the open-in menu, or copies the path) and the stacked layout gives the card few rows. The tree layout has no workspaces column, so it has no card.
+- **The card** (workspaces column): the name, agent, model (`the agent's own` when unset), effort and account when set, the access (`full access` in red), `made 2026-11-14`; the folder comes right after the name, since it is a click target (a click opens the open-in menu, or copies the path), and the two rows of a routine are the other (a click opens its routines dialog, selected; the value turns cyan while hovered) and the stacked layout gives the card few rows. The tree layout has no workspaces column, so it has no card.
 
 ## Routines in the window (#846)
 
