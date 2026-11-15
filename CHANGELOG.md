@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.83
+
+- **cornercase tells you when a flow role's agent exits.** When an agent of a flow's team exits by itself (a crash, a stray `kill`, `/exit`), the window shows a toast naming the role with ` reopen `, which starts it again in its pane, and a desktop notification while you are not looking at its tab. A member is told only while **notices for subagents** is on, as when it fails. It is told once: a restart does not tell it again, and it is told again only if the role comes back and exits again.
+- **`send` no longer types into the shell of a flow role whose agent exited.** `cornercase send`, `todo send`, **send now** and the orchestrator's own sends to its team refuse it, naming the pane and the role, with `cornercase agents reopen --workspace N`, which brings it back. `--force` does not lift it: the text would run as a shell command.
+- **For programs**: `cornercase events --notices` gets a `flow-exited` message for each exit, with the role's pane, `run` and `role`; `cornercase contract` lists `message-flow-exited`; the refusal's code is `conflict`.
+
 ## 0.13.82
 
 - **A bot can only type into your agents.** For a bot with `cornercase` access, the default, the server now refuses its `cornercase send`, `keys`, `input`, `paste-file`, `held --send-now` and `todo send` into a pane that runs no agent (a shell, an editor, an agent that exited back to its shell), and `new-tab` or `split` with a command. Writing to an agent works as before. The server knows a bot's commands by their process, not by a variable the bot could drop. It also refuses a bot's changing a bot's access, writing to a bot with `full` access and changing cornercase's settings, which would lift that limit.
