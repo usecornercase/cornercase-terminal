@@ -355,7 +355,7 @@ fn a_new_form_lists_no_bot_and_editing_a_bots_entry_lists_only_its_bot() {
 fn the_queue_tab_rows_leave_out_bot_entries_and_the_count_skips_runs_and_gone_bots() {
     let mut c = chat(ANSWER);
     let (id, _) = answered_run(&mut c);
-    assert!(c.app.queued_rows().is_empty());
+    assert_eq!(c.app.queued_rows().len(), 0);
     assert_eq!(c.app.bot_routine_count(), 1);
     let ghost = Task { place: Place { bot: Some("ghost".into()), ..Place::default() }, ..bot_routine(START, "2h") };
     scheduled(&mut c, ghost);

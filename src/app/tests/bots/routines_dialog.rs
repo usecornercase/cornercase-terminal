@@ -2,7 +2,7 @@ use super::routines::{START, answered_run, bot_routine, scheduled};
 use super::*;
 use crate::bots::routines::{Button, Hit};
 use crate::queue::form::{Control, When};
-use crate::queue::{self, State, Task};
+use crate::queue::{State, Task};
 
 fn show(c: &mut Chat) {
     c.app.window_attached();
@@ -20,10 +20,10 @@ fn later() -> i64 {
     crate::time::now() + 86_400
 }
 
-fn view(c: &Chat) -> Box<ui::BotRoutines> {
+fn view(c: &Chat) -> ui::BotRoutines {
     let Some(overlay) = &c.app.overlay else { panic!("no dialog") };
     let Some(ui::Overlay::BotRoutines(view)) = c.app.overlay_view(overlay, AREA) else { panic!("not the dialog") };
-    view
+    *view
 }
 
 fn opened(c: &mut Chat) {
@@ -161,7 +161,7 @@ fn remove_from_the_row_takes_the_routine_and_its_runs_with_an_undo() {
     opened(&mut c);
     let before = c.app.panels.queued.queue().entries.clone();
     press_button(&mut c, 0, Button::Remove);
-    assert!(c.app.panels.queued.queue().entries.is_empty());
+    assert_eq!(c.app.panels.queued.queue().entries, []);
     assert!(view(&c).rows.is_empty());
     let toast = c.app.messages.toast.as_ref().expect("a toast");
     assert_eq!(toast.message, format!("removed routine {id} and its 1 runs"));
@@ -223,5 +223,4 @@ fn removing_the_bot_closes_its_routines_dialog_and_its_form() {
     c.app.bot_remove("prs").expect("removed");
     assert!(c.app.overlay.is_none());
     assert!(c.app.panels.queued.back().is_none());
-    assert!(queue::Queue::default().entries.is_empty());
 }

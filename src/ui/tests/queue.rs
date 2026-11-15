@@ -238,6 +238,28 @@ fn a_flow_replaces_the_mode_and_the_account() {
     assert!(lines.iter().any(|l| l.contains("set by the flow's roles")), "{lines:#?}");
 }
 
+fn queue_issues(items: Vec<IssueRow>, hint: &str, buttons: Vec<&'static str>) -> Issues {
+    let body = IssuesBody::List {
+        filter: String::new(),
+        items,
+        selected: Some(0),
+        scroll: 0,
+        empty: String::new(),
+        tail: None,
+    };
+    Issues {
+        title: "Issues · shop".into(),
+        tabs: vec!["All", "GitHub", "Queue"],
+        tab: 2,
+        toggles: Vec::new(),
+        on: Vec::new(),
+        body,
+        note: None,
+        hint: hint.into(),
+        buttons,
+    }
+}
+
 #[test]
 fn the_queue_tab_shows_routines_their_runs_and_a_paused_one() {
     let row = |when: &str, label: &str, meta: &str, colour| IssueRow {
@@ -263,24 +285,11 @@ fn the_queue_tab_shows_routines_their_runs_and_a_paused_one() {
             Some(Color::Yellow),
         ),
     ];
-    let issues = Issues {
-        title: "Issues · shop".into(),
-        tabs: vec!["All", "GitHub", "Queue"],
-        tab: 2,
-        toggles: Vec::new(),
-        on: Vec::new(),
-        body: IssuesBody::List {
-            filter: String::new(),
-            items,
-            selected: Some(0),
-            scroll: 0,
-            empty: String::new(),
-            tail: None,
-        },
-        note: None,
-        hint: "enter edits it · start now runs it once more".into(),
-        buttons: vec!["new", "start now", "pause", "remove", "clear started", "cancel"],
-    };
+    let issues = queue_issues(
+        items,
+        "enter edits it · start now runs it once more",
+        vec!["new", "start now", "pause", "remove", "clear started", "cancel"],
+    );
     let view = View { overlay: Some(Overlay::Issues(issues)), ..view(&["shop"]) };
     insta::assert_snapshot!(render_sized(&view, 120, 24).backend());
 }

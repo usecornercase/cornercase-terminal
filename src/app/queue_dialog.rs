@@ -25,7 +25,7 @@ impl App {
     pub(super) fn new_queue_form(&mut self, id: Option<u64>) {
         let entry = id.and_then(|id| self.panels.queued.queue().entry(id)).cloned();
         let places = self.queue_places_for(entry.as_ref());
-        self.open_queue_form(entry, places);
+        self.open_queue_form(entry.as_ref(), places);
     }
 
     pub(in crate::app) fn new_bot_routine_form(&mut self, bot: &str) {
@@ -37,32 +37,29 @@ impl App {
         }
     }
 
-    fn open_queue_form(&mut self, entry: Option<queue::Entry>, places: Vec<Choice>) {
-        let id = entry.as_ref().map(|entry| entry.id);
-        let matching = matching_places(&places, entry.as_ref());
+    fn open_queue_form(&mut self, entry: Option<&queue::Entry>, places: Vec<Choice>) {
+        let id = entry.map(|entry| entry.id);
+        let matching = matching_places(&places, entry);
         let place = self.current_place(&places, &matching);
         let confirmed = if entry.is_some() { matching.len() == 1 } else { !places.is_empty() };
-        let kinds = self.queue_kinds(entry.as_ref());
-        let agent = entry
-            .as_ref()
-            .and_then(|entry| kinds.iter().position(|kind| *kind == entry.task.agent))
-            .unwrap_or_default();
-        let zone = self.queue_zone(entry.as_ref());
-        let at = entry.as_ref().map_or_else(crate::time::now, |entry| entry.task.at);
+        let kinds = self.queue_kinds(entry);
+        let agent = entry.and_then(|entry| kinds.iter().position(|kind| *kind == entry.task.agent)).unwrap_or_default();
+        let zone = self.queue_zone(entry);
+        let at = entry.map_or_else(crate::time::now, |entry| entry.task.at);
         let shown = queue::clock::display(at, &zone);
         let (date, clock) = shown.split_once(' ').unwrap_or((&shown, "09:00"));
         let flows = self.queue_flows(places.get(place).and_then(choice_project));
         let choices = Choices { places, place: confirmed.then_some(place), kinds, agent, flows };
         let mut form = Form::new(choices, zone, date);
-        if let Some(entry) = &entry {
+        if let Some(entry) = entry {
             fill_from_entry(&mut form, entry, id, clock);
         }
         self.stash_back();
         self.overlay = Some(Overlay::Queue(Box::new(form)));
         self.queue_modes();
-        self.queue_accounts(entry.as_ref().map(|entry| &entry.task.accounts));
+        self.queue_accounts(entry.map(|entry| &entry.task.accounts));
         if let Some(Overlay::Queue(form)) = &mut self.overlay
-            && let Some(entry) = &entry
+            && let Some(entry) = entry
         {
             keep_mode(form, entry.task.mode.as_deref().unwrap_or(agents::DEFAULT_MODE));
         }

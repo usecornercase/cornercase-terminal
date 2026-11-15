@@ -80,21 +80,8 @@ impl App {
             colour,
             at,
             paused: entry.task.paused,
-            buttons: self.routine_buttons(entry),
+            buttons: routine_buttons(entry),
         }
-    }
-
-    fn routine_buttons(&self, entry: &Entry) -> Vec<Button> {
-        let mut buttons = Vec::new();
-        let runnable =
-            entry.is_routine() || matches!(entry.state, State::Pending | State::Failed { .. } | State::Missed);
-        buttons.extend(runnable.then_some(Button::RunNow));
-        if entry.is_routine() {
-            buttons.push(if entry.task.paused { Button::Resume } else { Button::Pause });
-        }
-        buttons.extend(runnable.then_some(Button::Edit));
-        buttons.extend((entry.state != State::Starting).then_some(Button::Remove));
-        buttons
     }
 
     fn routine_hint(&self, entry: &Entry, name: &str) -> String {
@@ -180,6 +167,18 @@ impl App {
             Button::Remove => self.remove_queued(id),
         }
     }
+}
+
+fn routine_buttons(entry: &Entry) -> Vec<Button> {
+    let mut buttons = Vec::new();
+    let runnable = entry.is_routine() || matches!(entry.state, State::Pending | State::Failed { .. } | State::Missed);
+    buttons.extend(runnable.then_some(Button::RunNow));
+    if entry.is_routine() {
+        buttons.push(if entry.task.paused { Button::Resume } else { Button::Pause });
+    }
+    buttons.extend(runnable.then_some(Button::Edit));
+    buttons.extend((entry.state != State::Starting).then_some(Button::Remove));
+    buttons
 }
 
 fn left_a_block(state: &State) -> bool {

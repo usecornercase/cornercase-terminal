@@ -225,9 +225,8 @@ impl Overlay {
                 self.notes_name()
             }
             Self::Keys(_) => "keys",
-            Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) => self.listing_name(),
+            Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) | Self::BotRoutines(_) => self.listing_name(),
             Self::CloseAgent(_) | Self::CloseAgents(_) | Self::ForgetAgents { .. } => self.agents_name(),
-            Self::BotRoutines(_) => "bot routines",
             Self::Popup(_) => "plugin popup",
             Self::Star => "star",
         }
@@ -279,6 +278,7 @@ impl Overlay {
         match self {
             Self::Worktrees(_) => "worktrees",
             Self::Ports(_) => "ports",
+            Self::BotRoutines(_) => "bot routines",
             _ => "processes",
         }
     }
@@ -482,6 +482,16 @@ impl App {
         Ok(())
     }
 
+    fn dialog_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
+        Some(match overlay {
+            Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) => self.listing_view(overlay, area)?,
+            Overlay::BotRoutines(dialog) => self.bot_routines_view(dialog, area)?,
+            Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
+            Overlay::CloseAgents(_) | Overlay::ForgetAgents { .. } => self.closed_agents_view(overlay, area)?,
+            _ => return None,
+        })
+    }
+
     pub(super) fn overlay_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
         Some(match overlay {
             Overlay::Menu { at, actions } => self.menu_view(*at, actions),
@@ -503,10 +513,6 @@ impl App {
             Overlay::CloseTab { project, workspace, tab } => self.close_tab_view(*project, *workspace, *tab)?,
             Overlay::ClosePane { pane } => self.close_pane_view(*pane)?,
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
-            Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) => self.listing_view(overlay, area)?,
-            Overlay::BotRoutines(dialog) => self.bot_routines_view(dialog, area)?,
-            Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
-            Overlay::CloseAgents(_) | Overlay::ForgetAgents { .. } => self.closed_agents_view(overlay, area)?,
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), self.home.as_deref()),
             Overlay::Queue(form) => ui::Overlay::Queue(Self::queue_form_view(form)),
             Overlay::Issues(b) => view(b, room(area), time::now()),
@@ -523,6 +529,7 @@ impl App {
             Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
             Overlay::BotForm(_) | Overlay::RenameBot { .. } | Overlay::RemoveBot { .. } => self.bot_view(overlay)?,
             Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
+            other => return self.dialog_view(other, area),
         })
     }
 }

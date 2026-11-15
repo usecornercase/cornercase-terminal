@@ -492,7 +492,7 @@ impl App {
                 self.focus_queued(pane, area);
             }
             State::Started { .. } | State::Kept { .. } | State::Answered { .. } | State::Removed => {
-                self.open_queue_result_dialog(id)
+                self.open_queue_result_dialog(id);
             }
             State::Failed { .. } | State::Missed if entry.is_run() => self.open_queue_result_dialog(id),
             State::Starting => {}

@@ -28,16 +28,16 @@ Once you have a bot, a **Bots** section sits at the bottom of the sidebar, above
 
 - **One row per bot**, in the order you made them: a mark, its name and, dim, its agent and model, or `next 09:00` (`next Mon 09:00` on another day, a date past a week) while the bot is idle, when that fits, and has a [routine](#routines). The mark is the spinner while the bot answers, and a blue `●` with a count while it has answers you have not read. The row of the bot on screen has the cyan bar `▌`.
 - **Click the title** to fold the section into its title row, which then shows the spinner or the unread count of every bot. The fold is saved with your session. **` + `** opens the [new bot form](#make-a-bot-in-the-window).
-- **` ⋯ `** at the end of a row (it shows when you hover the row, and always, dimmed, in a [compact](../small-terminals/) layout), or a right click, opens its menu: **rename**, **edit…**, **new conversation**, **open folder** and **remove…**. A bot's row has no `×`: removing a bot deletes its memory, so it asks first. **remove…** says `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.` (with its [routines](#routines) named when it has some, and removing them too) and, while the bot answers, its button reads `stop it first` and stops the turn.
+- **` ⋯ `** at the end of a row (it shows when you hover the row, and always, dimmed, in a [compact](../small-terminals/) layout), or a right click, opens its menu: **rename**, **edit…**, **routines…**, **new conversation**, **open folder** and **remove…**. A bot's row has no `×`: removing a bot deletes its memory, so it asks first. **remove…** says `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.` (with its [routines](#routines) named when it has some, and removing them too) and, while the bot answers, its button reads `stop it first` and stops the turn.
 - **The wheel** scrolls the rows when they do not fit.
 
 ### The chat
 
-A click on a bot shows its chat **in place of the panes**, and its **card** where the workspaces were: the agent, model, effort, account and access, the folder (a click opens it, or copies its path), the day it was made and, two rows each, its [routines](#routines): the name, then `next Mon 09:00 · ↻ weekday 09:00` (or `paused`). A click on a project, a workspace or a tab goes back to the panes. Showing a bot marks its answers as read, as `cornercase bot seen` does.
+A click on a bot shows its chat **in place of the panes**, and its **card** where the workspaces were: the agent, model, effort, account and access, the folder (a click opens it, or copies its path), the day it was made and, two rows each, its [routines](#routines): the name, then `next Mon 09:00 · ↻ weekday 09:00` (or `paused`). A click on a routine opens [its routines](#a-bots-routines), with that one selected. A click on a project, a workspace or a tab goes back to the panes. Showing a bot marks its answers as read, as `cornercase bot seen` does.
 
 From top to bottom:
 
-- **The header** has the bot's name in bold, its agent, model, effort and account, dim, and, at the right, **` new conversation `** (the same as `bot reset`: a `── new conversation ──` line, and the next message starts a new one) and **` ⋯ `**, the bot's menu.
+- **The header** has the bot's name in bold, its agent, model, effort and account, dim, and, at the right, **` routines `** (the bot's [routines and reminders](#a-bots-routines); it gives way on a narrow chat, and the bot's menu still has **routines…**), **` new conversation `** (the same as `bot reset`: a `── new conversation ──` line, and the next message starts a new one) and **` ⋯ `**, the bot's menu.
 - **The lines**, newest at the bottom. The view stays at the bottom while new lines come; scrolled up, a **` ↓ new `** mark shows when something arrived, and a click on it goes back down. The wheel scrolls.
   - What you wrote is a bubble at the right, at most 80 % of the width, with the time dim after it. A message held for the next turn says `held` instead of the time until it is sent.
   - What the bot answers is at the left, under its name and the time, as Markdown: headings, bold, lists, `code`, highlighted code blocks and links.
@@ -111,10 +111,25 @@ An answer, or an error, that nobody waited for makes a toast and a desktop notif
 A bot can schedule its own work. Tell it **"review my pull requests every weekday at 9"** and it adds a routine to the [queue](../queue/), with its own destination: the bot instead of a project. Everything about time is the queue's: one-off reminders (`--at 'tomorrow 9:00'`), routines, missed runs, pause and resume, `start now`, the last 10 runs, undo, and the [30-minute minimum](../queue/#routines).
 
 - **A run is a new conversation of the bot**, never the chat's own: it reads the brief, `bot.md` and `memory.md`, then `This is your routine "Review PRs" (every weekday 09:00). …` and your prompt. That is why a bot writes in `memory.md` what its next run needs. A run and a chat turn can run at the same time. It makes no worktree and fetches nothing.
-- **It reports in the chat**: the lines of the run arrive as they happen, as one [block](#the-chat). The answer counts as unread and makes a toast, `prs · Review PRs: 3 pull requests wait…`, with a **` go `** that shows the chat at that run (and a desktop notification), unless the chat is on screen. Its entry in the Issues modal's **Queue** tab ends **`answered`**, and `Enter` on it shows the chat at the run.
+- **It reports in the chat**: the lines of the run arrive as they happen, as one [block](#the-chat). The answer counts as unread and makes a toast, `prs · Review PRs: 3 pull requests wait…`, with a **` go `** that shows the chat at that run (and a desktop notification), unless the chat is on screen. The routine's row in [its routines](#a-bots-routines) says how the last run ended, and a click on it shows the chat at that run.
 - **A run that fails says why**: the bot was removed, its agent is not installed, its account is gone, or the turn failed. It makes a toast and a notification, and the chat shows the error with **` run again `**.
 - **The next time you write, the bot knows what its routines said**: the answers that its conversation has not seen are put in front of your message, each cut to 4 KB (the newest 10), so "start an agent on the one whose checks fail" works.
-- **You can schedule one yourself**: the schedule form's **Where** lists your bots after the projects (`bot: prs`). With a bot chosen the agent, mode, account and workspace rows give way to `set by the bot`, since a run uses the bot's own agent, model and account.
+- **You can schedule one yourself** with **` + routine `** in [its routines](#a-bots-routines). The schedule form shows the bot in **Where** as fixed grey text (`bot: prs`), and the agent, mode, account and workspace rows give way to `set by the bot`, since a run uses the bot's own agent, model and account.
+### A bot's routines
+
+<Screen
+  name="bot-routines"
+  alt="The Routines › prs dialog over the window, listing the routine Review PRs with its repeat, its next run and how its last run ended, and the buttons run now, pause, edit… and remove on the selected row, with + routine and done at the bottom"
+  caption="A bot's routines, in the bot."
+/>
+
+**` routines `** in the chat's header, **routines…** in the bot's menu and a click on a routine of its card open the same dialog, **Routines › prs**. It lists the bot's routines and reminders, and nothing else lists them: the Issues modal's **Queue** tab shows the projects' entries only, with a dim line at its end saying how many bot routines there are. Each takes two lines:
+
+- the name, then the repeat and the next run (`↻ weekday 09:00 · next Mon 09:00`, `↻ weekday 09:00 · paused`, `once · Sun 16 Nov 09:00` for a reminder that has not run);
+- how its **last run** ended: `answered` in green, `failed` in red, `stopped`, `missed` in yellow, `answering…` while it runs, or `not run yet`, with when.
+
+The selected row (and the one under the pointer) shows its buttons, each only when it applies: **` run now `** (a routine, or a reminder that has not run, failed or was missed), **` pause `** or **` resume `**, **` edit… `** and **` remove `**, which takes the routine with its runs and offers **` undo `** in the notice. `↑` `↓`, `PageUp`, `PageDown`, `Home` and `End` move, `Esc` closes. `Enter`, or a click on a row, shows the chat at the last run's block and closes the dialog; a run that never started or was missed left no block, so the dialog stays and its hint says why. **` + routine `** opens the schedule form for the bot, as an **every day at 09:00** routine (the kind combo gives a reminder), and **` edit… `** opens it filled in. Saving or cancelling comes back to the dialog.
+
 - **A bot manages only its own entries.** Its commands may add, edit, pause, resume, remove and run the routines of that bot, and are refused for a project's entries and another bot's.
 - **Routines run only while the server runs**, as every routine does: a time that passes while it is stopped is a missed run (see [Known limitations](../../help/limitations/)).
 - **Removing a bot removes its routines**, with its folder.

@@ -194,7 +194,9 @@ fn a_bots_routine_is_paused_from_its_routines_dialog() {
     ui.click(ui.position_of("pause"));
 
     wait_until("the routine is paused", || {
-        session.says(&["queue", "list", "--bot", "prs", "--json"]).contains("\"paused\":true")
+        let list: Value =
+            serde_json::from_str(&session.says(&["queue", "list", "--bot", "prs", "--json"])).expect("json");
+        list["entries"][0]["paused"] == true
     });
 }
 

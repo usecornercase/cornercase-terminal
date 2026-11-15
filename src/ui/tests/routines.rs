@@ -106,7 +106,7 @@ fn overlay_area(view: &View, size: (u16, u16)) -> Rect {
 }
 
 #[test]
-fn a_click_lands_on_its_row_its_button_or_the_bottom_buttons() {
+fn a_click_lands_on_its_row_or_its_button() {
     let r = routines(rows(), false);
     let area = screen(BIG);
     let (room, list) = routines_room(area, false);
@@ -117,12 +117,16 @@ fn a_click_lands_on_its_row_its_button_or_the_bottom_buttons() {
     let resume = routine_button(area, &r, 1, Button::Resume);
     assert_eq!(routines_hit(area, &r, resume.as_position()), Some(Hit::Button(1, Button::Resume)));
     assert!(routine_button(area, &r, 1, Button::Pause).is_empty());
-    assert_eq!(routines_hit(area, &r, Position::new(list.x + 2, list.y)), Some(Hit::Row(0)));
-    assert_eq!(routines_hit(area, &r, Position::new(list.x + 2, list.y + 3)), Some(Hit::Row(1)));
-    assert_eq!(routines_hit(area, &r, Position::new(list.x + 2, list.y + 4)), Some(Hit::Row(2)));
-    let t = drawn(r, BIG);
-    let new = find(&t, "+ routine");
-    let done = find(&t, "done");
+    for (y, row) in [(0, 0), (3, 1), (4, 2)] {
+        assert_eq!(routines_hit(area, &r, Position::new(list.x + 2, list.y + y)), Some(Hit::Row(row)));
+    }
+}
+
+#[test]
+fn a_click_lands_on_the_bottom_buttons() {
+    let area = screen(BIG);
+    let t = drawn(routines(rows(), false), BIG);
+    let (new, done) = (find(&t, "+ routine"), find(&t, "done"));
     let r = routines(rows(), false);
     assert_eq!(routines_hit(area, &r, Position::new(new.x + 1, new.y)), Some(Hit::New));
     assert_eq!(routines_hit(area, &r, Position::new(done.x + 1, done.y)), Some(Hit::Done));
