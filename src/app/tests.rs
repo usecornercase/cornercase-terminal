@@ -258,8 +258,10 @@ fn messages_with_failed(events: &[(u64, Streamed)], reader: u64) -> Vec<(Heard, 
         .collect()
 }
 
+#[cfg(unix)]
 type Exit = (Vec<u64>, Option<u64>, Option<String>);
 
+#[cfg(unix)]
 fn flow_exits(events: &[(u64, Streamed)], reader: u64) -> Vec<Exit> {
     let own = events.iter().filter(|(client, _)| *client == reader).map(|(_, streamed)| streamed);
     told(own)
