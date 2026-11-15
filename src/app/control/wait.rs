@@ -8,6 +8,7 @@ use super::{Asker, Handled, Pending, Reply, STARTS_WITHIN, Stage, deadline, dura
 use crate::agents;
 use crate::agents::activity::{self, Status};
 use crate::app::App;
+use crate::app::launches::Launched;
 use crate::control::{self, Done, Ids, Until};
 use crate::project::Hierarchy;
 use crate::term::Term;
@@ -173,7 +174,7 @@ impl App {
         self.show_pending_restart(now);
     }
 
-    fn settle(&mut self, mut pending: Pending, launched: &[(u64, bool)], now: Instant) -> Option<Pending> {
+    fn settle(&mut self, mut pending: Pending, launched: &[(u64, Launched)], now: Instant) -> Option<Pending> {
         let Some(reply) = self.advance(&mut pending, launched, now) else { return Some(pending) };
         if reply.is_ok() && matches!(pending.stage, Stage::Restart { .. }) {
             self.outbox.restart();
@@ -192,7 +193,7 @@ impl App {
         }
     }
 
-    fn advance(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
+    fn advance(&self, pending: &mut Pending, launched: &[(u64, Launched)], now: Instant) -> Option<Reply> {
         let pane = pending.done.ids.pane.unwrap_or_default();
         if let Some(reply) = self.launch_reply(pending, launched, now) {
             return Some(reply);
@@ -216,14 +217,19 @@ impl App {
         (now >= at).then(|| Err(format!("timed out after {seconds}s: {}", self.waiting_on(&pending.stage, pane))))
     }
 
-    fn launch_reply(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
+    fn launch_reply(&self, pending: &mut Pending, launched: &[(u64, Launched)], now: Instant) -> Option<Reply> {
         let pane = pending.done.ids.pane.unwrap_or_default();
+        if !matches!(pending.stage, Stage::Launch { .. }) {
+            return None;
+        }
+        let &(_, outcome) = launched.iter().find(|(key, _)| *key == pending.key)?;
+        match outcome {
+            Launched::NotStarted => return Some(Err(self.not_started(pane))),
+            Launched::Unsent => return Some(unsent_reply(pending, pane)),
+            Launched::Started => {}
+        }
         let Stage::Launch { confirm, compacts, wait } = &mut pending.stage else { return None };
         let compacts = *compacts;
-        let &(_, started) = launched.iter().find(|(key, _)| *key == pending.key)?;
-        if !started {
-            return Some(Err(self.not_started(pane)));
-        }
         let (confirm, wait) = (confirm.take(), wait.take());
         let next = match confirm {
             Some(since) => {
@@ -282,7 +288,7 @@ impl App {
         }
     }
 
-    fn several_reply(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
+    fn several_reply(&self, pending: &mut Pending, launched: &[(u64, Launched)], now: Instant) -> Option<Reply> {
         let Stage::Several { all, parts } = &mut pending.stage else { return None };
         for part in parts.iter_mut().filter(|part| part.done.ended.is_none()) {
             if self.projects.pane_by(part.done.ids.pane.unwrap_or_default()).is_none() {
@@ -577,4 +583,17 @@ fn started_verdict(pane: u64, since: Instant, now: Instant) -> Verdict {
          at once, or not got the text; `cornercase read --pane {pane}` shows where it is",
         STARTS_WITHIN.as_secs()
     ))
+}
+
+fn unsent_reply(pending: &mut Pending, pane: u64) -> Reply {
+    let warning = format!(
+        "the agent in pane {pane} did not take its prompt: `cornercase read --pane {pane}` shows its input box, \
+         and `cornercase keys --pane {pane} enter` sends what is there"
+    );
+    if matches!(pending.stage, Stage::Launch { wait: Some(_), .. }) {
+        return Err(warning);
+    }
+    pending.done.unsent = Some(true);
+    pending.done.warning.get_or_insert(warning);
+    Ok(json(&pending.done))
 }

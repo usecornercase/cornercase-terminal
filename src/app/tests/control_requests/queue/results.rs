@@ -20,24 +20,29 @@ fn text_of(app: &App, id: u64) -> String {
     app.queue_shown(id).ok().and_then(|shown| shown.result).map(|result| result.text).unwrap_or_default()
 }
 
+pub(super) fn scheduled(agent: &mut Agent) -> u64 {
+    let app = &mut agent.app;
+    let project = app.projects[0].path.clone();
+    let task = Task {
+        at: crate::time::now() + 3600,
+        zone: "UTC".into(),
+        label: "fix the login".into(),
+        prompt: "fix the login".into(),
+        agent: "claude".into(),
+        command: crate::agents::command_line(&app.config, "claude"),
+        program: crate::agents::command(&app.config, "claude"),
+        submit: true,
+        place: Place { workspace: Some(app.projects[0].workspaces[0].path.clone()), project, ..Place::default() },
+        ..Task::default()
+    };
+    app.panels.queued.schedule(None, task).expect("scheduled")
+}
+
 impl Run {
     fn started() -> Self {
         let mut agent = Agent::new();
+        let id = scheduled(&mut agent);
         let app = &mut agent.app;
-        let project = app.projects[0].path.clone();
-        let task = Task {
-            at: crate::time::now() + 3600,
-            zone: "UTC".into(),
-            label: "fix the login".into(),
-            prompt: "fix the login".into(),
-            agent: "claude".into(),
-            command: crate::agents::command_line(&app.config, "claude"),
-            program: crate::agents::command(&app.config, "claude"),
-            submit: true,
-            place: Place { workspace: Some(app.projects[0].workspaces[0].path.clone()), project, ..Place::default() },
-            ..Task::default()
-        };
-        let id = app.panels.queued.schedule(None, task).expect("scheduled");
         app.set_queue_area(AREA);
         app.run_queued(id, Instant::now()).expect("starts");
         agent.refreshing("the entry starts", |a| matches!(state_of(a, id), State::Started { .. }));

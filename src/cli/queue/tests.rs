@@ -335,3 +335,15 @@ mod bots {
         assert_eq!((list.bot.as_deref(), list.print.json), (Some("prs"), true));
     }
 }
+
+#[test]
+fn lists_an_entry_whose_prompt_was_not_taken() {
+    let value = json!({"entries": [
+        {"id": 1, "at": 0, "label": "fix", "agent": "claude", "state": "started", "pane": 7, "server": "1-2", "unsent": true},
+    ]});
+
+    assert_eq!(
+        lines(&value, "UTC"),
+        "1 1970-01-01 00:00 started · pane 7 · server 1-2 · prompt not taken fix · claude\n"
+    );
+}

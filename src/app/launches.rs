@@ -19,6 +19,13 @@ use crate::ui;
 
 pub(super) const LAUNCH_EVERY: Duration = Duration::from_millis(100);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Launched {
+    Started,
+    NotStarted,
+    Unsent,
+}
+
 #[derive(Default)]
 pub(super) struct Launches {
     list: Vec<Launch>,
@@ -103,16 +110,16 @@ impl App {
                 continue;
             }
             let Some(term) = self.projects.pane_by_mut(launch.term) else {
-                finished.push((i, false));
+                finished.push((i, Launched::NotStarted));
                 continue;
             };
             if bars_enter(launch, term, &self.config, &bots) {
-                finished.push((i, false));
+                finished.push((i, Launched::NotStarted));
                 barred.extend(launch.key.map(|key| (key, term.id)));
                 continue;
             }
-            if let Some(started) = drive(launch, term, &round, &mut out) {
-                finished.push((i, started));
+            if let Some(outcome) = drive(launch, term, &round, &mut out) {
+                finished.push((i, outcome));
             }
         }
         for (pane, refusal) in out.refused {
@@ -123,15 +130,30 @@ impl App {
         for pane in out.parked {
             self.member_waits(pane);
         }
+        for pane in out.unsent {
+            self.launch_unsent(pane);
+        }
     }
 
-    fn end_launches(&mut self, finished: Vec<(usize, bool)>, barred: Vec<(u64, u64)>) {
+    fn launch_unsent(&mut self, pane: u64) {
+        if self.queue_run_unsent(pane) {
+            return;
+        }
+        let place = self
+            .projects
+            .tab_of_pane(pane)
+            .map_or_else(|| format!("pane {pane}"), |at| self.place_name(at.workspace()));
+        let text = format!("the agent in {place} did not take its prompt: press Enter in its tab");
+        self.messages.toast = Some(Toast::new(text, ui::ToastIcon::Bug));
+    }
+
+    fn end_launches(&mut self, finished: Vec<(usize, Launched)>, barred: Vec<(u64, u64)>) {
         for (key, pane) in barred {
             self.refuse_bots_enter(key, pane);
         }
-        for (i, started) in finished.into_iter().rev() {
+        for (i, outcome) in finished.into_iter().rev() {
             if let Some(key) = self.agents.launches.list.remove(i).key {
-                self.clients.requests.launched(key, started);
+                self.clients.requests.launched(key, outcome);
             }
         }
     }
@@ -165,6 +187,7 @@ struct Round<'a> {
 #[derive(Default)]
 struct Outcomes {
     parked: Vec<u64>,
+    unsent: Vec<u64>,
     refused: Vec<(u64, Refusal)>,
 }
 
@@ -173,7 +196,7 @@ fn bars_enter(launch: &Launch, term: &Term, config: &Config, bots: &HashSet<u64>
     bots_enter && !fronts_agent(config, term)
 }
 
-fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes) -> Option<bool> {
+fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes) -> Option<Launched> {
     let before = launch.stage();
     let step = step_launch(launch, term, round);
     let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
@@ -182,7 +205,11 @@ fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes
         out.parked.push(pane);
     }
     log_step(&step, (pane, kind), (before, stage));
+    log_pasted(launch);
     log_give_up(&step, (pane, kind), term);
+    if matches!(step, Step::NotTaken(_)) && launch.key.is_none() {
+        out.unsent.push(pane);
+    }
     if let Step::Refuse(refusal) = &step {
         out.refused.push((pane, refusal.clone()));
     }
@@ -192,6 +219,8 @@ fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes
 fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
     let shell_in_foreground = term.shell_in_foreground();
     let bracketed_paste = term.emulator.bracketed_paste();
+    let agent = term.agent.agent().and_then(agents::Known::of);
+    let session = term.context.session_state();
     let application_cursor = term.emulator.application_cursor();
     let shell = term.shell_pid();
     let typed = |line: &str| typed_in(line, shell);
@@ -201,6 +230,8 @@ fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
     let mut seen = launch::Seen {
         shell_in_foreground,
         bracketed_paste,
+        agent,
+        session,
         application_cursor,
         screen: &mut screen,
         trust_prompt: round.asks,
@@ -226,6 +257,26 @@ fn typed_in(line: &str, shell: Option<i32>) -> std::result::Result<String, Refus
         return Ok(line.to_string());
     }
     agents::typed_on_windows(line, PaneShell::of(shell), program::powershell_runs)
+}
+
+fn log_pasted(launch: &mut Launch) {
+    let Some(pasted) = launch.take_pasted() else { return };
+    let seen = match pasted.box_seen {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "-",
+    };
+    let (after, waited) = (pasted.after.as_millis(), pasted.waited.as_millis());
+    log::info!(
+        "launch",
+        "pasted",
+        pane = launch.term,
+        kind = launch.kind(),
+        bracketed = pasted.bracketed,
+        input_box = seen,
+        after_ms = after,
+        waited_ms = waited
+    );
 }
 
 fn log_step(step: &Step, (pane, kind): (u64, &str), (before, stage): (&str, &str)) {
@@ -277,24 +328,25 @@ fn log_give_up(step: &Step, (pane, kind): (u64, &str), term: &mut Term) {
     );
 }
 
-fn apply_step(step: Step, launch: &Launch, term: &mut Term, now: Instant) -> Option<bool> {
+fn apply_step(step: Step, launch: &Launch, term: &mut Term, now: Instant) -> Option<Launched> {
     match step {
         Step::Wait => None,
-        Step::Write(bytes) => (!written(term, &bytes)).then_some(false),
-        Step::Done(bytes) if !written(term, &bytes) => Some(false),
+        Step::Write(bytes) => (!written(term, &bytes)).then_some(Launched::NotStarted),
+        Step::Done(bytes) if !written(term, &bytes) => Some(Launched::NotStarted),
         Step::Done(_) => {
             if launch.submits() {
                 term.entered(now);
             }
-            Some(true)
+            Some(Launched::Started)
         }
-        Step::Enter(_) if !written(term, b"\r") => Some(false),
+        Step::Enter(_) if !written(term, b"\r") => Some(Launched::NotStarted),
         Step::Enter(_) => {
             term.entered(now);
             None
         }
-        Step::Taken { .. } | Step::NotTaken(_) => Some(true),
-        Step::Abandon | Step::Refuse(_) => Some(false),
+        Step::Taken { .. } => Some(Launched::Started),
+        Step::NotTaken(_) => Some(Launched::Unsent),
+        Step::Abandon | Step::Refuse(_) => Some(Launched::NotStarted),
     }
 }
 

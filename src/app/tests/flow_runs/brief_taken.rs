@@ -2,7 +2,7 @@ use super::super::flow_panel::team;
 use super::*;
 use crate::agents::Known;
 use crate::agents::claude::fake::FakeClaude;
-use crate::agents::launch::{CONFIRM_EVERY, MAX_ENTERS};
+use crate::agents::launch::{self, CONFIRM_EVERY, Launch, MAX_ENTERS};
 
 struct Briefed {
     app: App,
@@ -47,6 +47,10 @@ impl Briefed {
         std::fs::read_to_string(self.fake.dir().join("lost")).map_or(0, |text| text.lines().count())
     }
 
+    fn pastes(&self) -> String {
+        std::fs::read_to_string(self.fake.dir().join("pastes")).unwrap_or_default()
+    }
+
     fn prompts(&self) -> usize {
         let Some(context::Record::Claude(path)) = pane(&self.app, self.own).context.record_for(Known::Claude) else {
             return 0;
@@ -68,6 +72,58 @@ fn a_resumed_orchestrator_whose_first_enter_is_lost_still_takes_its_brief() {
     run.until("the launch is over", |app, own| app.agents.launches.of_pane(own).next().is_none());
 
     assert_eq!((run.lost(), run.prompts()), (1, 1));
+}
+
+#[test]
+fn a_resumed_orchestrator_waits_for_bracketed_paste_before_its_brief() {
+    let mut run = briefed(Some("late-paste"), None);
+
+    run.until("the brief is recorded", |app, own| pane(app, own).context.prompted().is_some());
+    run.until("the launch is over", |app, own| app.agents.launches.of_pane(own).next().is_none());
+
+    assert_eq!((run.lost(), run.prompts(), run.pastes().as_str()), (0, 1, "bracketed\n"));
+}
+
+#[test]
+fn a_brief_waits_until_its_agent_draws_its_input_box() {
+    let mut run = briefed(Some("late-box"), None);
+
+    run.until("the brief is recorded", |app, own| pane(app, own).context.prompted().is_some());
+    run.until("the launch is over", |app, own| app.agents.launches.of_pane(own).next().is_none());
+
+    assert_eq!((run.lost(), run.prompts(), run.pastes().as_str()), (0, 1, "bracketed\n"));
+}
+
+#[test]
+fn a_brief_waits_until_its_agent_wrote_its_session_file() {
+    let mut run = briefed(Some("late-session"), None);
+
+    run.until("the brief is recorded", |app, own| pane(app, own).context.prompted().is_some());
+    run.until("the launch is over", |app, own| app.agents.launches.of_pane(own).next().is_none());
+
+    assert_eq!((run.lost(), run.prompts(), run.pastes().as_str()), (0, 1, "bracketed\n"));
+}
+
+#[test]
+fn a_fresh_brief_whose_first_enter_is_lost_gets_enter_again() {
+    let (mut app, rx, _dir) = team();
+    let fake = FakeClaude::running(FakeClaude::CONTROL);
+    fake.signal("lose");
+    app.agents.set_claude_dir(fake.dir());
+    let run = app.runs.all()[0].clone();
+    let role = run.flow.orchestrator.clone();
+    let own = run.pane_of(ORCHESTRATOR).expect("the orchestrator");
+    let spec = launch::Spec { command: fake.command_line(""), ..app.flow_spec(&role, "build the form".into(), None) };
+    let mut launch = Launch::new(own, spec, Instant::now());
+    assert_eq!(launch.confirm, Some(CONFIRM_EVERY));
+    launch.confirm = Some(Duration::from_secs(1));
+    app.agents.launches.add(launch);
+
+    refreshing(&mut app, &rx, "the brief is recorded", |app| pane(app, own).context.prompted().is_some());
+    refreshing(&mut app, &rx, "the launch is over", |app| app.agents.launches.of_pane(own).next().is_none());
+
+    let lost = std::fs::read_to_string(fake.dir().join("lost")).map_or(0, |text| text.lines().count());
+    assert_eq!(lost, 1);
 }
 
 #[test]
@@ -102,6 +158,8 @@ fn an_orchestrator_that_never_takes_its_brief_gets_enter_a_bounded_number_of_tim
     let term = pane(&run.app, run.own);
     assert_eq!((run.lost(), term.context.prompted(), term.agent.status()), (max, None, Some(activity::Status::Idle)));
     assert!(!run.launching());
+    let toast = run.app.messages.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
+    assert!(toast.contains("did not take its prompt"), "{toast}");
 }
 
 #[test]
@@ -126,16 +184,4 @@ fn a_restored_orchestrator_confirms_its_brief_and_its_team_does_not() {
     for member in run.members.iter().filter(|m| m.pane != orchestrator) {
         assert_eq!(confirms(member.pane), Some(None), "{} is only resumed", member.role);
     }
-}
-
-#[test]
-fn an_orchestrator_that_is_not_claude_code_gets_its_brief_without_confirmation() {
-    let (mut app, _rx, _dir) = team();
-    let mut run = app.runs.all()[0].clone();
-    run.flow.orchestrator.agent = "codex".into();
-    let own = run.pane_of(ORCHESTRATOR).expect("the orchestrator");
-
-    app.launch_briefed(&run, (own, None), "codex resume c1".into(), "go on with the plan".into());
-
-    assert_eq!(app.agents.launches.of_pane(own).next().map(|launch| launch.confirm), Some(None));
 }
