@@ -2,10 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.81
+## 0.13.82
 
 - **A bot can only type into your agents.** For a bot with `cornercase` access, the default, the server now refuses its `cornercase send`, `keys`, `input`, `paste-file`, `held --send-now` and `todo send` into a pane that runs no agent (a shell, an editor, an agent that exited back to its shell), and `new-tab` or `split` with a command. Writing to an agent works as before. The server knows a bot's commands by their process, not by a variable the bot could drop. It also refuses a bot's changing a bot's access, writing to a bot with `full` access and changing cornercase's settings, which would lift that limit.
 - **What a bot starts ends with its answer.** When such a bot answers, anything it left running in the background is stopped, as `cornercase bot stop` already did.
+
+## 0.13.81
+
+- **A window that draws Settings shows the phone app's and remote access's notes as they change.** `config.revision` (in `cornercase status --json`, `status --follow` and `view`) now moves each time the note under **phone app** or **remote access** changes: ready at an address, waiting for a Wi-Fi or Tailscale address, a port another program holds, Tailscale answering, a browser connecting or leaving. A program that reads `config` again only when the revision grows no longer keeps showing an old note. `cornercase config set phone_app true` (or `false`) now answers with the note the phone app settled on, and `config set remote true` answers `starting…`, the revision moving again once Tailscale answers.
+- **The phone app hears "going away" when you switch it off or the server stops, on Windows too.** cornercase now ends the stream right after its going-away close, so the app always tells a stopped command from a dropped link. When you switch the phone app off, it also waits up to 2 seconds for the app to close its side before it lets go. On Windows, the close could be lost and the app saw the connection break instead. Switching the phone app off takes no longer than before.
 
 ## 0.13.80
 
