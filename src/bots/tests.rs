@@ -65,3 +65,14 @@ fn a_bot_is_found_by_its_id_and_by_its_name_in_any_case() {
 fn there_can_be_fifty_bots() {
     assert_eq!(MAX_BOTS, 50);
 }
+
+#[test]
+fn the_server_stops_name_the_commands_and_what_they_ask() {
+    assert_eq!(stop_commands(), ["kill-server", "restart", "update"]);
+    for asked in ["kill-server", "restart", "restart-when-idle", "update-install"] {
+        assert!(stops_server(asked), "{asked}");
+    }
+    for asked in ["update-check", "status", "account-restart", "start-server"] {
+        assert!(!stops_server(asked), "{asked}");
+    }
+}

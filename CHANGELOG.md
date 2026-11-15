@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.87
+## 0.13.88
 
 - **A prompt no longer stays unsent in Claude Code's input box.** cornercase now waits until Claude Code has written its session file, drawn its input box and turned bracketed paste on (at most 30 s) before it pastes the prompt. After the `Enter` it checks that Claude Code took the prompt, and presses `Enter` again every 3 s while it sits idle, at most 5 times. This covers queued agents and routines, `cornercase start --prompt`, the Issues dialog's start with **send the prompt** on, and a flow's briefs, for its roles and its orchestrator.
 - When a prompt is still not taken, cornercase says so instead of showing a run that worked:
@@ -11,6 +11,12 @@ Every pull request that changes the app adds a section here for its new version.
   - `cornercase start` prints a warning, and fails with `--wait`;
   - an agent started from a dialog or a flow shows a toast naming its tab.
 - For programs: `unsent: true` in `start` answers and queue entries, the `queue-unsent` notice, and the `prompt-unsent` feature. `server.log` has a `launch: pasted` line that says what the pane showed when the prompt went in.
+
+## 0.13.87
+
+- **A bot can no longer stop, restart or update cornercase by any of its commands or requests.** The command line already refused `kill-server`, `restart` and `update` inside a bot. Now the server also refuses them from a `cornercase`-access bot, along with `restart-when-idle` and `update-install`, with the same message, `a bot cannot stop its own server`.
+- **A bot can no longer have cornercase write a file where it says.** Inside a bot, `cornercase config export --to FILE` is refused (leave out `--to` and it prints them), and a `cornercase`-access bot's `cornercase clone` is refused: a clone could put files where another program runs them.
+- Inside a bot, each line of `cornercase requests --follow -` is now checked as the bot's command line is.
 
 ## 0.13.86
 

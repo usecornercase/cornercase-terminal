@@ -6,7 +6,7 @@ use rstest::rstest;
 use super::*;
 
 fn answer_of(line: &str) -> Option<Answer> {
-    match ran(line.as_bytes())? {
+    match ran(line.as_bytes(), None)? {
         Ran::Answer(answer) => Some(answer),
         Ran::Ended(error) => panic!("ended: {error}"),
     }
@@ -751,5 +751,36 @@ mod streams {
         assert_eq!(answer.status, 0, "{answer:?}");
         let [start] = &seen[..] else { panic!("not only the start: {seen:?}") };
         assert!(start.contains("\"start\"") && !start.contains("placed"), "{seen:?}");
+    }
+}
+
+mod inside_a_bot {
+    use super::*;
+
+    fn words(args: &[&str]) -> Vec<String> {
+        args.iter().map(ToString::to_string).collect()
+    }
+
+    #[rstest]
+    #[case::export_to(&["config", "export", "--to", "/x"], "a bot cannot have cornercase write to a file")]
+    #[case::start(&["start", "--prompt", "x"], "a bot runs in no pane")]
+    #[case::say_to_itself(&["bot", "say", "prs", "hi"], "a bot cannot write to itself")]
+    #[case::restart(&["restart", "--when-idle"], "a bot cannot stop its own server")]
+    fn a_line_is_checked_as_its_command_line_is(#[case] args: &[&str], #[case] why: &str) {
+        let answer = parsed(&words(args), Some("prs")).expect_err("refused");
+
+        assert_eq!(answer.status, 2, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains(why), "{error}");
+    }
+
+    #[test]
+    fn a_line_is_not_checked_outside_a_bot() {
+        assert!(parsed(&words(&["config", "export", "--to", "/x"]), None).is_ok());
+    }
+
+    #[test]
+    fn a_line_a_bot_may_run_parses() {
+        assert!(parsed(&words(&["status"]), Some("prs")).is_ok());
     }
 }

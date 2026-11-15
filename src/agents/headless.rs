@@ -72,7 +72,7 @@ pub(crate) struct Ask {
     pub(crate) conversation: Option<String>,
     pub(crate) env: Env,
     pub(crate) protected: Vec<&'static str>,
-    pub(crate) stops: &'static [&'static str],
+    pub(crate) stops: Vec<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -270,7 +270,7 @@ pub(in crate::agents) fn bot_ask(folder: &Path, tools: Tools, conversation: Opti
         tools,
         conversation: conversation.map(str::to_string),
         protected: vec!["bot.json", "chat.jsonl"],
-        stops: &["kill-server", "restart", "update"],
+        stops: vec!["kill-server", "restart", "update"],
         ..Ask::default()
     }
 }

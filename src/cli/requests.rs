@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::iter::once;
 
-use clap::Parser as _;
+use clap::{CommandFactory as _, FromArgMatches as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -60,7 +60,8 @@ pub(super) fn run(args: &RequestsArgs) -> Result<()> {
     let (mut answers, input) = isolate()?;
     let watch = client::watched(answers.as_fd()).map(|fd| fd.try_clone_to_owned()).transpose()?;
     client::share(link, watch);
-    let served = serve(&lines::read(input), &mut answers, ran);
+    let own = super::guard::own_bot();
+    let served = serve(&lines::read(input), &mut answers, |bytes| ran(bytes, own.as_deref()));
     client::unshare();
     served
 }
@@ -88,7 +89,7 @@ fn told(out: &mut impl Write, answer: &Answer) -> Result<bool> {
     quietly(writeln!(out, "{text}").and_then(|()| out.flush()))
 }
 
-fn ran(bytes: &[u8]) -> Option<Ran> {
+fn ran(bytes: &[u8], own: Option<&str>) -> Option<Ran> {
     if bytes.iter().all(u8::is_ascii_whitespace) {
         return None;
     }
@@ -100,7 +101,7 @@ fn ran(bytes: &[u8]) -> Option<Ran> {
         }
     };
     let name = name_of(&line.args);
-    Some(match parsed(&line.args).and_then(|cli| checked(cli, &name)) {
+    Some(match parsed(&line.args, own).and_then(|cli| checked(cli, &name)) {
         Ok(command) => run_line(command, line.stdin, &name),
         Err(answer) => Ran::Answer(answer),
     })
@@ -110,14 +111,22 @@ fn name_of(args: &[String]) -> String {
     args.iter().take_while(|word| !word.starts_with('-')).cloned().collect::<Vec<_>>().join(" ")
 }
 
-fn parsed(args: &[String]) -> std::result::Result<Cli, Answer> {
-    Cli::try_parse_from(once("cornercase").chain(args.iter().map(String::as_str))).map_err(|e| {
-        if e.use_stderr() {
-            Answer::refused(usage(&e))
-        } else {
-            Answer { status: u8::try_from(e.exit_code()).unwrap_or(2), text: e.to_string(), ..Answer::default() }
-        }
-    })
+fn parsed(args: &[String], own: Option<&str>) -> std::result::Result<Cli, Answer> {
+    let mut command = Cli::command();
+    let matches = command.try_get_matches_from_mut(once("cornercase").chain(args.iter().map(String::as_str)));
+    let matches = matches.map_err(|e| clap_answer(&e))?;
+    if let Some(why) = own.and_then(|own| super::guard::refusal(&command, &matches, own)) {
+        return Err(Answer::refused(why));
+    }
+    Cli::from_arg_matches(&matches).map_err(|e| clap_answer(&e.format(&mut Cli::command())))
+}
+
+fn clap_answer(e: &clap::Error) -> Answer {
+    if e.use_stderr() {
+        Answer::refused(usage(e))
+    } else {
+        Answer { status: u8::try_from(e.exit_code()).unwrap_or(2), text: e.to_string(), ..Answer::default() }
+    }
 }
 
 fn checked(cli: Cli, name: &str) -> std::result::Result<Command, Answer> {
