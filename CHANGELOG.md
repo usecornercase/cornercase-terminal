@@ -2,6 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.84
+
+- **A bot can schedule its own work.** Tell it "review my pull requests every weekday at 9" and it adds a routine (`cornercase queue add --every 'weekday 09:00'`, or `--at 'tomorrow 9:00'` for once). Each run is a new conversation that reads the bot's `bot.md` and `memory.md`, and it answers in the chat as one block: `↻ Review PRs · 09:00`, its steps folded, then its answer. The answer counts as unread and notifies with a ` go ` that shows the chat at that run. A run that fails says why and offers ` run again `. The next time you write, the bot is told what its routines answered since your last message. Routines run only while the server runs, as every routine does.
+- **In the window**: the Queue tab lists a bot's entries as `bot prs`, and an `answered` row opens the chat at that run. The schedule form's **Where** lists your bots (their agent, model and account are their own, so those rows give way to `set by the bot`). A bot's row shows `next 09:00` while it is idle, its card lists its routines, the empty chat offers a scheduling example, and removing a bot removes its routines too.
+- **For programs**:
+  - `cornercase queue add --bot ID` and `queue list --bot ID`; inside a bot, `queue add` with no place schedules for that bot.
+  - `bot list --json` has `routines` and `next`, and `bot remove` answers the removed entries and an undo number.
+  - A run's chat lines carry `routine`, its entry ends `answered`, and `cornercase contract` lists `bot-routines`.
+  - A bot can only schedule and change its own queue entries.
+  - `queue.json` is version 3 while it holds a bot's entry: an older cornercase reads it as empty and leaves it alone until you change its queue.
+
 ## 0.13.83
 
 - **A command with `--boot` reaches the server in one round trip instead of two.** A program that polls `ports`, `files list` or `changes file` with `--boot`, as a window that draws another machine does through `--remote`, no longer waits for a `contract` request before each read. The same goes for every command whose request a server from before `--boot` (0.12.108 and older) does not have: such a server refuses it by name, so nothing is done there, and the command still says that the server would ignore `--boot` (status 1). Commands such as `close`, `rename`, `send`, `read` or `events`, which such a server would carry out, still ask it first, unless a check the command makes anyway, such as `--view`'s, already showed that it knows `--boot`.
