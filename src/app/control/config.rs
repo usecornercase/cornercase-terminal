@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use super::{Asker, Handled, Pending, Stage, json, malformed};
 use crate::agents::Known;
@@ -177,6 +178,8 @@ impl App {
         if model.config != self.config {
             self.write_config(&model.config).map_err(|e| self.config_refusal(e))?;
         }
+        self.sync_remote();
+        self.sync_phone_app(Instant::now());
         Ok(Some(json(&self.described(notices))))
     }
 

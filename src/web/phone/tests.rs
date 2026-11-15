@@ -103,6 +103,7 @@ struct Seen {
     texts: Vec<String>,
     close: Option<u16>,
     timed_out: bool,
+    ended: String,
 }
 
 fn read_all(ws: &mut WebSocket<TcpStream>) -> Seen {
@@ -118,7 +119,10 @@ fn read_all(ws: &mut WebSocket<TcpStream>) -> Seen {
                 seen.timed_out = true;
                 return seen;
             }
-            Err(_) => return seen,
+            Err(e) => {
+                seen.ended = e.to_string();
+                return seen;
+            }
         }
     }
 }
@@ -466,7 +470,7 @@ mod the_command_line {
         rig.phone.close();
         let seen = read_all(&mut ws);
 
-        assert_eq!((seen.texts.len(), seen.close), (0, Some(1001)));
+        assert_eq!((seen.texts.len(), seen.close), (0, Some(1001)), "{seen:?}");
     }
 
     #[test]
@@ -478,7 +482,25 @@ mod the_command_line {
         rig.phone.close();
         let seen = read_all(&mut ws);
 
-        assert_eq!((seen.texts.is_empty(), seen.close), (true, Some(1001)));
+        assert_eq!((seen.texts.is_empty(), seen.close), (true, Some(1001)), "{seen:?}");
+        wait_until("the command to be killed", || !alive(pid));
+    }
+
+    #[test]
+    fn going_away_ends_the_stream_and_holds_the_socket_until_the_app_closes() {
+        let mut rig = Rig::with(|limits| limits.linger = READ_FOR * 2);
+        let secret = rig.paired();
+        wait_until("the pairing connection is done", || rig.phone.open() == 0);
+        let (mut ws, pid) = rig.holding(&secret);
+
+        rig.phone.close();
+        let seen = read_all(&mut ws);
+        let held = rig.phone.open();
+        drop(ws);
+
+        assert_eq!((seen.texts.is_empty(), seen.close, seen.timed_out), (true, Some(1001), false), "{seen:?}");
+        assert_eq!(held, 1, "the server let go of the socket before the app closed its side");
+        wait_until("the server lets go once the app closed", || rig.phone.open() == 0);
         wait_until("the command to be killed", || !alive(pid));
     }
 }
