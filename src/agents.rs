@@ -660,6 +660,25 @@ fn is_program(arg: &str, name: &str) -> bool {
     process::same_file_name(basename(arg), name)
 }
 
+const SHIMS: [&str; 2] = [".cmd", ".ps1"];
+
+fn is_shim(arg: &str, name: &str) -> bool {
+    let file = Path::new(arg).file_name().and_then(|n| n.to_str()).unwrap_or(arg);
+    let cut = file.len().saturating_sub(4);
+    let (stem, extension) = (file.get(..cut), file.get(cut..));
+    cfg!(windows)
+        && stem.zip(extension).is_some_and(|(stem, extension)| {
+            SHIMS.iter().any(|shim| extension.eq_ignore_ascii_case(shim)) && process::same_file_name(stem, name)
+        })
+}
+
+pub(crate) fn names_program(command: &str, kind: Known) -> bool {
+    command
+        .split_whitespace()
+        .map(|word| word.trim_matches(['\'', '"']))
+        .any(|word| is_program(word, kind.command()) || is_shim(word, kind.command()))
+}
+
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     let names: Vec<&str> = argv.iter().take(2).map(|a| basename(a)).collect();
     let script = argv.iter().skip(1).find(|arg| !arg.starts_with('-'));

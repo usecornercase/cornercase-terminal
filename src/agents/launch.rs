@@ -2,6 +2,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use super::activity::Status;
 use super::claude;
+use super::context::SessionState;
+use super::{Known, names_program};
 use crate::term::bracketed;
 use crate::text::one_line;
 
@@ -41,6 +43,14 @@ enum Stage {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub(crate) struct Pasted {
+    pub(crate) bracketed: bool,
+    pub(crate) box_seen: Option<bool>,
+    pub(crate) after: Duration,
+    pub(crate) waited: Duration,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct Entered {
     first: Instant,
     last: Instant,
@@ -69,6 +79,9 @@ pub(crate) struct Launch {
     parked: Option<Parked>,
     entered: Option<Entered>,
     pasted: Option<SystemTime>,
+    unpasted: Option<Instant>,
+    command_at: Option<Instant>,
+    report: Option<Pasted>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -83,6 +96,8 @@ pub(crate) struct Reaction {
 pub(crate) struct Seen<'a> {
     pub(crate) shell_in_foreground: bool,
     pub(crate) bracketed_paste: bool,
+    pub(crate) agent: Option<Known>,
+    pub(crate) session: SessionState,
     pub(crate) application_cursor: bool,
     pub(crate) screen: &'a mut dyn FnMut() -> String,
     pub(crate) trust_prompt: &'a dyn Fn(&str) -> bool,
@@ -117,6 +132,7 @@ pub(crate) enum Step {
 
 impl Launch {
     pub(crate) fn new(term: u64, spec: Spec, now: Instant) -> Self {
+        let confirm = (spec.submit && spec.prompt.is_some()).then_some(CONFIRM_EVERY);
         Self {
             term,
             key: None,
@@ -125,7 +141,7 @@ impl Launch {
             trust: None,
             resume: None,
             restart: None,
-            confirm: None,
+            confirm,
             spec,
             agent: true,
             stage: Stage::Shell,
@@ -138,6 +154,9 @@ impl Launch {
             parked: None,
             entered: None,
             pasted: None,
+            unpasted: None,
+            command_at: None,
+            report: None,
         }
     }
 
@@ -188,6 +207,7 @@ impl Launch {
             Stage::Agent => match self.parked {
                 Some(Parked::Consent) => "consent",
                 Some(Parked::Trust) => "trust prompt",
+                None if self.unpasted.is_some() => "paste",
                 None => "agent",
             },
             Stage::Submit => "submit",
@@ -224,6 +244,7 @@ impl Launch {
         self.since = now;
         self.output = None;
         self.undrawn = false;
+        self.unpasted = None;
     }
 
     pub(crate) fn step(&mut self, now: Instant, seen: &mut Seen) -> Step {
@@ -247,7 +268,7 @@ impl Launch {
         if self.quiet(now) < SUBMIT_QUIET && now.duration_since(self.since) < SUBMIT_LATEST {
             return Step::Wait;
         }
-        if self.confirm.is_none() || seen.reaction.status.is_none() {
+        if self.confirm.is_none() || seen.reaction.status.is_none() || !self.confirms(seen) {
             return Step::Done(b"\r".to_vec());
         }
         self.entered = Some(Entered { first: now, last: now, enters: 1 });
@@ -289,6 +310,7 @@ impl Launch {
             Err(refusal) => return Step::Refuse(refusal),
         };
         self.echo = compact(&(seen.screen)()) + &compact(&line);
+        self.command_at = Some(now);
         self.next(Stage::Agent, now);
         Step::Write(format!("{line}\r").into_bytes())
     }
@@ -306,7 +328,31 @@ impl Launch {
         if let Some(step) = self.consent_or_trust(&screen, now, seen) {
             return step;
         }
-        self.send_prompt(now, seen)
+        if self.awaits_paste(seen, &screen, latest) {
+            self.unpasted.get_or_insert(now);
+            return Step::Wait;
+        }
+        self.send_prompt(now, seen, &screen)
+    }
+
+    fn confirms(&self, seen: &Seen) -> bool {
+        let Some(agent) = seen.agent.filter(|agent| agent.confirms_prompt()) else { return false };
+        seen.session != SessionState::Unwatched && names_program(&self.spec.command, agent)
+    }
+
+    fn awaits_paste(&self, seen: &Seen, screen: &str, latest: bool) -> bool {
+        let Some(agent) = seen.agent.filter(|agent| agent.bracketed_when_ready()) else { return false };
+        !latest
+            && self.spec.prompt.is_some()
+            && names_program(&self.spec.command, agent)
+            && seen.session != SessionState::Unwatched
+            && (seen.session == SessionState::Pending
+                || !seen.bracketed_paste
+                || agent.input_box(|| screen.to_string()) == Some(false))
+    }
+
+    pub(crate) fn take_pasted(&mut self) -> Option<Pasted> {
+        self.report.take()
     }
 
     fn consent_or_trust(&mut self, screen: &str, now: Instant, seen: &mut Seen) -> Option<Step> {
@@ -333,11 +379,17 @@ impl Launch {
         None
     }
 
-    fn send_prompt(&mut self, now: Instant, seen: &Seen) -> Step {
+    fn send_prompt(&mut self, now: Instant, seen: &Seen, screen: &str) -> Step {
         let Some(prompt) = &self.spec.prompt else { return Step::Done(Vec::new()) };
         let text = if self.spec.submit && seen.bracketed_paste { prompt.clone() } else { one_line(prompt) };
         let bytes = if seen.bracketed_paste { bracketed(&text) } else { text };
         self.pasted = Some(seen.reaction.clock);
+        self.report = Some(Pasted {
+            bracketed: seen.bracketed_paste,
+            box_seen: seen.agent.and_then(|agent| agent.input_box(|| screen.to_string())),
+            after: self.command_at.map_or(Duration::ZERO, |at| now.duration_since(at)),
+            waited: self.unpasted.map_or(Duration::ZERO, |at| now.duration_since(at)),
+        });
         if self.spec.submit {
             self.next(Stage::Submit, now);
             Step::Write(bytes.into_bytes())

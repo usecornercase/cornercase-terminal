@@ -693,7 +693,7 @@ mod a_pane_that_starts_agents {
     fn from_in(folder: TempDir, account: &str) -> Caller {
         let mut s = setup_on(folder);
         let (bin, worktrees) = (TempDir::new(), TempDir::new());
-        let fake = bin.path().join("claude");
+        let fake = bin.path().join("account-agent");
         write_executable(&fake, AGENT);
         for (provider, name) in [("claude", "personal"), ("claude", "work"), ("codex", "team")] {
             s.add(provider, name);
