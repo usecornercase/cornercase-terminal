@@ -94,7 +94,7 @@ impl App {
 
     pub(super) fn stash_back(&mut self) {
         let back = match self.overlay.take() {
-            Some(back @ Overlay::Issues(_)) => Some(Box::new(back)),
+            Some(back @ (Overlay::Issues(_) | Overlay::BotRoutines(_))) => Some(Box::new(back)),
             other => {
                 self.overlay = other;
                 None

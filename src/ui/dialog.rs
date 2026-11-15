@@ -13,6 +13,7 @@ pub(super) mod ports;
 pub(super) mod processes;
 pub(super) mod project_settings;
 pub(crate) mod queue;
+pub(super) mod routines;
 pub(super) mod run_on;
 pub(super) mod search;
 pub(super) mod settings;
@@ -36,6 +37,7 @@ use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
 use super::dialog::ports::{Ports, ports_area};
 use super::dialog::processes::{Processes, processes_area};
+use super::dialog::routines::{BotRoutines, routines_area};
 use super::dialog::run_on::RunOnRow;
 use super::dialog::search::Search;
 use super::dialog::settings::{Settings, settings_area};
@@ -59,6 +61,12 @@ pub(crate) const CANCEL_LABEL: &str = "cancel";
 
 pub(super) fn form_inner(form: Rect) -> Rect {
     Block::bordered().inner(form).inner(Margin::new(FORM_PADDING, 0))
+}
+
+pub(super) fn list_note_buttons(area: Rect) -> [Rect; 3] {
+    let inner = form_inner(area);
+    let line = |up: u16| Rect { y: inner.bottom().saturating_sub(up), height: 1.min(inner.height), ..inner };
+    [Rect { height: inner.height.saturating_sub(2), ..inner }, line(2), line(1)]
 }
 
 pub(super) fn centred_in(screen: Rect, wide: u16, height: u16) -> Rect {
@@ -213,6 +221,7 @@ pub(crate) enum Overlay {
     Keys(keys::Keys),
     Worktrees(Box<Worktrees>),
     Ports(Box<Ports>),
+    BotRoutines(Box<BotRoutines>),
     Processes(Box<Processes>),
     Popup(Box<popup::Popup>),
     Star,
@@ -239,6 +248,7 @@ impl Overlay {
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
             Self::Ports(p) => Some(ports_area(area, p.compact)),
+            Self::BotRoutines(r) => Some(routines_area(area, r.compact)),
             Self::Processes(p) => Some(processes_area(area, p.compact)),
             Self::Popup(p) => Some(popup::popup_area(area, p.wanted)),
             Self::Star => Some(super::star_area(area)),

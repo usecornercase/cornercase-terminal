@@ -49,7 +49,7 @@ pub(crate) use accounts_bar::{Pill as AccountPill, Row as AccountRow, hit as acc
 pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
-pub(crate) use bots::card::{BotCard, CardRow, card_folder};
+pub(crate) use bots::card::{BotCard, CardRow, card_folder, card_routine};
 pub(crate) use bots::chat::body as chat_body;
 pub(crate) use bots::chat::{
     ChatAreas, ChatEntry, ChatHit, ChatRow, ChatView, EXAMPLES, RowHit, Thinking, Tone, chat_areas, chat_hit,
@@ -99,6 +99,9 @@ pub(crate) use dialog::project_settings::project_settings_buttons;
 pub(crate) use dialog::project_settings::{
     ProjectSettings, ProjectSettingsHit, project_settings_field, project_settings_hit,
 };
+#[cfg(test)]
+pub(crate) use dialog::routines::routine_button;
+pub(crate) use dialog::routines::{BotRoutines, RoutineRow, routines_hit, routines_room};
 pub(crate) use dialog::run_on::RunOnRow;
 #[cfg(test)]
 pub(crate) use dialog::search::result_item;
@@ -200,6 +203,7 @@ use dialog::picker::draw_picker;
 use dialog::ports::draw_ports;
 use dialog::processes::draw_processes;
 use dialog::project_settings::draw_project_settings;
+use dialog::routines::draw_routines;
 use dialog::search::draw_results;
 use dialog::settings::draw_settings;
 use dialog::share_settings::draw_share_settings;
@@ -553,6 +557,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
         Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
         Some(Overlay::Ports(ports)) => draw_ports(f, view, ports),
+        Some(Overlay::BotRoutines(routines)) => draw_routines(f, view, routines),
         Some(Overlay::Processes(processes)) => draw_processes(f, view, processes),
         Some(Overlay::Popup(popup)) => dialog::popup::draw(f, view, popup),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),

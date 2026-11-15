@@ -18,6 +18,7 @@ const RENAME_HINT: &str = "leave it empty to keep the current name";
 pub(in crate::app) enum BotItem {
     Rename,
     Edit,
+    Routines,
     NewConversation,
     OpenFolder,
     Remove,
@@ -30,6 +31,7 @@ impl App {
             match item {
                 BotItem::Rename => "rename",
                 BotItem::Edit => "edit…",
+                BotItem::Routines => "routines…",
                 BotItem::NewConversation => "new conversation",
                 BotItem::OpenFolder => "open folder",
                 BotItem::Remove => "remove…",
@@ -49,6 +51,7 @@ impl App {
         match item {
             BotItem::Rename => self.ask_rename_bot(key),
             BotItem::Edit => self.open_bot_form(Some(key)),
+            BotItem::Routines => self.open_bot_routines(key, None),
             BotItem::NewConversation => {
                 let id = self.panels.bots.live[bot].bot.id.clone();
                 self.new_conversation(&id);
@@ -159,6 +162,8 @@ impl Overlay {
         match self {
             Self::RenameBot { bot, .. } | Self::RemoveBot { bot } => *bot == key,
             Self::BotForm(form) => form.editing.as_deref() == Some(id),
+            Self::BotRoutines(dialog) => dialog.bot == key,
+            Self::Queue(form) => form.bot() == Some(id),
             Self::Menu { actions, .. } => {
                 actions.iter().any(|action| matches!(action, MenuAction::Bot(found, _) if *found == key))
             }

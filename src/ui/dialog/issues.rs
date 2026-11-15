@@ -129,10 +129,29 @@ pub(crate) struct IssueRow {
 }
 
 pub(crate) enum IssuesBody {
-    List { filter: String, items: Vec<IssueRow>, selected: Option<usize>, scroll: usize, empty: String, tail: Option<String> },
-    Token { label: &'static str, input: String, help: Vec<String> },
-    Detail { lines: Vec<Line<'static>>, scroll: usize },
-    Name { heading: String, fields: [(&'static str, String); 2], focus: usize, help: Vec<String> },
+    List {
+        filter: String,
+        items: Vec<IssueRow>,
+        selected: Option<usize>,
+        scroll: usize,
+        empty: String,
+        tail: Option<String>,
+    },
+    Token {
+        label: &'static str,
+        input: String,
+        help: Vec<String>,
+    },
+    Detail {
+        lines: Vec<Line<'static>>,
+        scroll: usize,
+    },
+    Name {
+        heading: String,
+        fields: [(&'static str, String); 2],
+        focus: usize,
+        help: Vec<String>,
+    },
 }
 
 pub(crate) struct Issues {

@@ -352,6 +352,9 @@ impl App {
         if self.overlay.as_ref().is_some_and(|overlay| overlay.names_bot(removed.key, &removed.bot.id)) {
             self.overlay = None;
         }
+        if self.panels.queued.back().is_some_and(|back| back.names_bot(removed.key, &removed.bot.id)) {
+            self.panels.queued.take_back();
+        }
         self.clamp_bots_scroll();
         self.publish_bot_removed(&removed.bot.id);
         Ok((removed.bot.id, entries))

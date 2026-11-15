@@ -111,6 +111,7 @@ impl App {
     fn chat_hit(&mut self, at: usize, hit: ChatHit, (field, pos): (Rect, Position)) {
         let id = self.panels.bots.live[at].bot.id.clone();
         match hit {
+            ChatHit::Routines => self.open_bot_routines(self.panels.bots.live[at].key, None),
             ChatHit::NewConversation => self.new_conversation(&id),
             ChatHit::Menu => self.open_bot_menu(at, pos),
             ChatHit::Send => self.send_from_chat(),
@@ -169,9 +170,11 @@ impl App {
         }
         let Some(at) = self.shown_bot() else { return };
         let card = self.bot_card(at);
+        let key = self.panels.bots.live[at].key;
         if ui::card_folder(areas.workspaces_list, &card).contains(pos) {
-            let key = self.panels.bots.live[at].key;
             self.open_menu_or_copy(Subject::Bot(key), pos);
+        } else if let Some(routine) = ui::card_routine(areas.workspaces_list, &card, pos) {
+            self.open_bot_routines(key, Some(routine));
         }
     }
 }

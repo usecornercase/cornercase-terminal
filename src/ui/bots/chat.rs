@@ -35,6 +35,9 @@ const SEND: &str = "send";
 const SEND_WIDTH: u16 = 6;
 const NEW_CONVERSATION: &str = "new conversation";
 const NEW_CONVERSATION_WIDTH: u16 = 18;
+const ROUTINES: &str = "routines";
+const ROUTINES_WIDTH: u16 = 10;
+const NAME_ROOM: u16 = 12;
 const MENU_WIDTH: u16 = 3;
 const NEWS: &str = "↓ new";
 const NEWS_WIDTH: u16 = 7;
@@ -110,6 +113,7 @@ pub(crate) struct ChatView {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ChatHit {
+    Routines,
     NewConversation,
     Menu,
     Send,
@@ -123,6 +127,7 @@ pub(crate) enum ChatHit {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct ChatAreas {
     pub(crate) header: Rect,
+    pub(crate) routines: Rect,
     pub(crate) new_conversation: Rect,
     pub(crate) menu: Rect,
     pub(crate) rule: Rect,
@@ -153,7 +158,13 @@ pub(crate) fn chat_areas(pane: Rect, input_rows: u16, pitch: u16) -> ChatAreas {
         ..header
     }
     .intersection(header);
-    ChatAreas { header, new_conversation, menu, rule, lines, input, field, input_text, send }
+    let routines_x = new_conversation.x.saturating_sub(ROUTINES_WIDTH + 1);
+    let routines = if routines_x < header.x + NAME_ROOM {
+        Rect::default()
+    } else {
+        Rect { x: routines_x, width: ROUTINES_WIDTH, ..header }.intersection(header)
+    };
+    ChatAreas { header, routines, new_conversation, menu, rule, lines, input, field, input_text, send }
 }
 
 pub(crate) fn input_rows(input: &Editor, pane: Rect) -> u16 {
@@ -349,8 +360,12 @@ fn web_address(word: &str) -> Option<String> {
 }
 
 pub(crate) fn chat_hit(areas: &ChatAreas, chat: &ChatView, pos: Position) -> Option<ChatHit> {
-    let controls =
-        [(areas.menu, ChatHit::Menu), (areas.new_conversation, ChatHit::NewConversation), (areas.send, ChatHit::Send)];
+    let controls = [
+        (areas.menu, ChatHit::Menu),
+        (areas.routines, ChatHit::Routines),
+        (areas.new_conversation, ChatHit::NewConversation),
+        (areas.send, ChatHit::Send),
+    ];
     if let Some((_, hit)) = controls.into_iter().find(|(r, _)| r.contains(pos)) {
         return Some(hit);
     }
@@ -417,7 +432,8 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, chat: &ChatView, pane: Rec
 }
 
 fn draw_header(f: &mut Frame, view: &View, chat: &ChatView, areas: &ChatAreas) {
-    let room = usize::from(areas.new_conversation.x.saturating_sub(areas.header.x));
+    let name_end = if areas.routines.is_empty() { areas.new_conversation.x } else { areas.routines.x };
+    let room = usize::from(name_end.saturating_sub(areas.header.x));
     let name = truncate_right(&chat.name, room.saturating_sub(1));
     let detail = truncate_right(&chat.detail, room.saturating_sub(name.width() + 3));
     let bold = Style::default().add_modifier(Modifier::BOLD);
@@ -427,8 +443,11 @@ fn draw_header(f: &mut Frame, view: &View, chat: &ChatView, areas: &ChatAreas) {
     }
     f.render_widget(
         Paragraph::new(Line::from(spans)),
-        middle(Rect { width: areas.new_conversation.x.saturating_sub(areas.header.x), ..areas.header }),
+        middle(Rect { width: name_end.saturating_sub(areas.header.x), ..areas.header }),
     );
+    let routines = areas.routines;
+    let cyan = Style::default().fg(Color::Cyan);
+    draw_button(f, routines, "", &format!("{ROUTINES:^8}"), button_style(view, routines, cyan, Color::Cyan));
     let new = areas.new_conversation;
     let idle = if chat.busy { Style::default().fg(view.muted) } else { Style::default().fg(Color::Cyan) };
     let style = if chat.busy { idle } else { button_style(view, new, idle, Color::Cyan) };

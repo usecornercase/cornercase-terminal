@@ -14,6 +14,7 @@ mod form;
 mod manage;
 mod menu;
 mod routines;
+mod routines_dialog;
 mod section;
 mod shown;
 mod talk;
