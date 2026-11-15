@@ -267,6 +267,7 @@ export type Overlay =
   | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; seq?: number; scroll: number }
   | import('./queue').QueueForm
   | import('./botform').BotForm
+  | import('./botroutines').BotRoutinesDialog
   | SettingsOverlay
   | IssuesOverlay;
 

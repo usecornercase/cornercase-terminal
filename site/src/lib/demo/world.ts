@@ -85,7 +85,7 @@ export function world(app: App, opts: { scripted?: boolean } = {}): App {
   inGroup(app, 'personal', [blog, dotfiles, playground]);
 
   seedBots(app);
-  if (!opts.scripted) seedBotQueue(app);
+  seedBotQueue(app);
   if (opts.scripted) app.bots.folded = true;
   app.active = 0;
   app.widths = { ...app.widths, stack: STACK_ROWS };

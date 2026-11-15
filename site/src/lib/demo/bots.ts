@@ -14,13 +14,6 @@ export interface ChatLine {
   routine?: number;
 }
 
-export interface BotRoutine {
-  id: number;
-  label: string;
-  repeat: string;
-  at: number;
-}
-
 export interface Turn {
   since: number;
   steps: number;
@@ -38,7 +31,6 @@ export interface Bot {
   about: string;
   made: number;
   lines: ChatLine[];
-  routines: BotRoutine[];
   unread: number;
   turn: Turn | null;
   held: Set<number>;
@@ -180,7 +172,6 @@ export class Bots {
       ...init,
       made: Date.now(),
       lines: [],
-      routines: [],
       unread: 0,
       turn: null,
       held: new Set(),
@@ -212,7 +203,8 @@ export class Bots {
   }
 
   nextRun(bot: Bot): number | null {
-    return bot.routines.length ? Math.min(...bot.routines.map((r) => r.at)) : null;
+    const times = this.app.botQueued.filter((e) => e.bot === bot.id && !e.routine && e.state === 'pending' && !e.paused).map((e) => e.at);
+    return times.length ? Math.min(...times) : null;
   }
 
   show(id: string, run?: number): void {
@@ -367,7 +359,6 @@ export function seedBots(app: App): void {
   const now = Date.now();
   const prs = bots.create({ name: 'prs', agent: 'claude', model: 'opus', effort: 'high', account: 'home', access: 'cornercase', about: 'Review my open pull requests and tell me which are blocked' });
   const ran = now - 30 * MINUTE;
-  prs.routines.push({ id: RUN_ROUTINE, label: 'Review PRs', repeat: '2h', at: ran + 120 * MINUTE });
   bots.add(prs, ran, 'notice', `↻ Review PRs · ${clock(ran)}`, RUN);
   bots.add(prs, ran + MINUTE, 'step', 'cornercase status --json', RUN);
   bots.add(prs, ran + MINUTE, 'step', 'gh pr list --json number,title,reviewDecision', RUN);
@@ -386,11 +377,11 @@ export function seedBots(app: App): void {
 
 export function seedBotQueue(app: App): void {
   const prs = app.bots.list.find((b) => b.id === 'prs');
-  const routine = prs?.routines[0];
-  if (!prs || !routine) return;
-  const base = { prompt: 'Review my open pull requests and tell me which are blocked.', label: routine.label, project: 0, folder: '', workspace: null, branch: '', agent: prs.agent, mode: '', command: '', bot: prs.id };
+  if (!prs) return;
+  const ran = prs.lines[0].at;
+  const base = { prompt: 'Review my open pull requests and tell me which are blocked.', label: 'Review PRs', project: 0, folder: '', workspace: null, branch: '', agent: prs.agent, mode: '', command: '', bot: prs.id };
   app.nextQueueId = RUN + 1;
-  app.queued.push({ ...base, id: RUN_ROUTINE, at: routine.at, repeat: routine.repeat, state: 'pending' });
-  app.queued.push({ ...base, id: RUN, at: prs.lines[0].at, routine: RUN_ROUTINE, state: 'answered' });
-  app.queued.sort((a, b) => a.at - b.at || a.id - b.id);
+  app.botQueued.push({ ...base, id: RUN_ROUTINE, at: ran + 120 * MINUTE, repeat: '2h', state: 'pending' });
+  app.botQueued.push({ ...base, id: RUN, at: ran, routine: RUN_ROUTINE, state: 'answered' });
+  app.botQueued.sort((a, b) => a.at - b.at || a.id - b.id);
 }

@@ -1,5 +1,6 @@
 import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
 import { botFormKey, botFormPaste, newBotForm } from './botform';
+import { botRoutinesKey, openBotRoutines } from './botroutines';
 import { Bots } from './bots';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
@@ -204,6 +205,7 @@ export interface IssuesView {
   selected: number;
   scroll: number;
   empty: string;
+  tail?: string;
   hint: string;
   buttons: string[];
   detail?: Line[];
@@ -234,7 +236,6 @@ const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', git
 const DEMO_WORKSPACE = 'Acme';
 const DEMO_WORKSPACE_ID = '1200';
 const QUEUE = 'queue';
-const BOT_ROUTINES_LEFT_OUT = 'this needs cornercase on your computer: the demo runs no bot routines';
 const KNOWN_AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'cursor', 'copilot', 'vibe'];
 const QUEUE_EVERY = "every project's scheduled agents";
 const QUEUE_COLOURS: Partial<Record<QueueEntry['state'], number>> = { failed: 1, missed: 3, started: 2, answered: 2, removed: 8, kept: 3 };
@@ -503,6 +504,7 @@ export class App {
   flowScroll = 0;
   private flowHinted = false;
   queued: QueueEntry[] = [];
+  botQueued: QueueEntry[] = [];
   private queueTimers = new Map<QueueEntry, () => void>();
   private queueBack: IssuesOverlay | null = null;
   nextQueueId = 1;
@@ -1527,6 +1529,11 @@ export class App {
     else this.quit();
   }
 
+  openBotRoutines(bot: string, selected: number | null = null): void {
+    this.overlay = openBotRoutines(bot, selected);
+    this.dirty();
+  }
+
   openBotForm(): void {
     this.nav = null;
     this.overlay = newBotForm();
@@ -2119,7 +2126,7 @@ export class App {
     this.queueTimers.delete(entry);
   }
 
-  private undoToast(text: string, undo: () => void = () => this.undoTodo()): void {
+  undoToast(text: string, undo: () => void = () => this.undoTodo()): void {
     this.toast = { text, until: this.now() + 6000, undo };
     this.after(6050, () => this.dirty());
     this.dirty();
@@ -3989,7 +3996,6 @@ export class App {
   }
 
   private queuePlace(entry: QueueEntry): string {
-    if (entry.bot) return `bot ${this.bots.list.find((b) => b.id === entry.bot)?.name ?? entry.bot}`;
     const project = this.projects.find((p) => p.id === entry.project);
     const name = project ? projectLabel(project) : entry.folder;
     const inside = entry.branch || entry.workspaceName;
@@ -4023,9 +4029,8 @@ export class App {
     const selected = Math.min(o.selected, Math.max(0, shown.length - 1));
     const sel = shown[selected];
     const opens = (sel?.state === 'started' || sel?.state === 'kept') && sel.pane !== undefined && !!this.findPane(sel.pane);
-    const said = sel?.state === 'answered';
-    const hint = !sel ? QUEUE_EVERY : said ? `enter shows its answer in the bot's chat · ${sel.routine ? 'a run of a routine' : QUEUE_EVERY}` : sel.repeat ? 'enter edits it · start now runs it once more' : sel.routine ? (opens ? 'enter opens its pane · a run of a routine' : sel.state === 'pending' ? `a run of a routine · ${QUEUE_EVERY}` : 'enter shows its result · a run of a routine') : sel.state === 'started' ? `${opens ? 'enter opens its pane' : 'enter shows its result'} · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
-    const runnable = !!sel && (sel.repeat ? true : !sel.routine && sel.state !== 'started' && !said);
+    const hint = !sel ? QUEUE_EVERY : sel.repeat ? 'enter edits it · start now runs it once more' : sel.routine ? (opens ? 'enter opens its pane · a run of a routine' : sel.state === 'pending' ? `a run of a routine · ${QUEUE_EVERY}` : 'enter shows its result · a run of a routine') : sel.state === 'started' ? `${opens ? 'enter opens its pane' : 'enter shows its result'} · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
+    const runnable = !!sel && (sel.repeat ? true : !sel.routine && sel.state !== 'started' && sel.state !== 'answered');
     const clearable = (entry: QueueEntry) => !entry.repeat && (entry.routine ? entry.state !== 'pending' : entry.state === 'started' || entry.state === 'answered');
     const buttons = [
       'new',
@@ -4035,12 +4040,14 @@ export class App {
       ...(this.queued.some(clearable) ? ['clear started'] : []),
       'cancel',
     ];
+    const botRoutines = this.botQueued.filter((entry) => !entry.routine && this.bots.list.some((bot) => bot.id === entry.bot)).length;
     return {
       tabs,
       toggles: [],
       items: shown.map((entry) => this.queueRow(entry)),
       selected,
       scroll: o.scroll,
+      tail: botRoutines ? (botRoutines === 1 ? "1 bot routine: in its bot's chat" : `${botRoutines} bot routines: in each bot's chat`) : undefined,
       empty: this.queued.length ? 'nothing matches' : 'nothing queued: new schedules a prompt, and schedule on an issue queues it',
       hint,
       buttons,
@@ -4391,7 +4398,6 @@ export class App {
     if (this.issuesSource(o) === QUEUE && !o.detail && !o.agentPick) {
       const entry = this.queueSelected(o);
       if (label === 'new') this.openQueueForm();
-      else if (label === 'start now' && entry?.bot) this.notify(BOT_ROUTINES_LEFT_OUT);
       else if (label === 'start now' && entry?.repeat) this.runQueue(this.addRun(entry, this.now(), 'pending'));
       else if (label === 'start now' && entry && !entry.routine && entry.state !== 'started') this.runQueue(entry);
       else if ((label === 'pause' || label === 'resume') && entry?.repeat) this.pauseQueued(entry, label === 'pause');
@@ -4598,10 +4604,6 @@ export class App {
   }
 
   openQueued(entry: QueueEntry): void {
-    if (entry.state === 'answered' && entry.bot) {
-      this.closeOverlay();
-      return this.bots.show(entry.bot, entry.id);
-    }
     if (entry.routine && entry.state !== 'started') return;
     if (entry.state !== 'started') return this.openQueueForm(entry);
     if (entry.pane === undefined || !this.findPane(entry.pane)) return;
@@ -5303,6 +5305,11 @@ export class App {
 
   private overlayKey(o: Overlay, k: Key): boolean {
     if (o.kind === 'queue') return this.queueKey(o, k);
+    if (o.kind === 'botroutines') {
+      botRoutinesKey(this, o, k);
+      this.dirty();
+      return true;
+    }
     if (o.kind === 'bot') {
       botFormKey(this, o, k);
       this.dirty();
