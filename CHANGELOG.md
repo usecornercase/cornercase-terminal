@@ -9,6 +9,8 @@ Every pull request that changes the app adds a section here for its new version.
   - opencode and Cursor CLI can be bots with `full` access only: their permission rules cannot keep a bot's writes in its folder.
   - Grok Build and Vibe CLI cannot be bots yet.
   - Recap still uses Claude Code or Codex.
+  - The form's note under **Access** says `reads and writes only in its folder` for those two, and the open Access list has room for the reason an agent lacks `cornercase` access. GitHub Copilot CLI takes an effort only with a model you name (not `auto`), so `bot new`, `bot edit` and the form refuse it otherwise.
+  - For programs, `bot agents` has an optional `reads` (`folder`) per agent (feature `bot-reads`).
 - A bot whose agent stops with an error on its standard error (GitHub Copilot CLI, Cursor CLI) now shows the agent's own words in its chat, instead of only `exited without answering`.
 - On Windows, an agent installed with npm starts its bot turns and the Recap without going through `cmd.exe`, so a message with line breaks reaches it.
 

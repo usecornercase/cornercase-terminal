@@ -8,7 +8,6 @@ use crate::agents::headless::{
 };
 use crate::error::{Error, Result};
 
-const TITLE: &str = "opencode";
 const TOOL_DETAILS: [&str; 6] = ["filePath", "path", "pattern", "url", "query", "description"];
 
 pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
@@ -60,7 +59,7 @@ pub(in crate::agents) fn read(line: &str, ran: &mut Ran) -> Option<Result<()>> {
         "tool_use" => heard(ran, tool_action(part)),
         "step_finish" => {
             add_tokens(ran, &part["tokens"]);
-            return (part["reason"] != "tool-calls").then(|| answered(ran, TITLE));
+            return (part["reason"] != "tool-calls").then(|| answered(ran, super::TITLE));
         }
         "error" => return Some(Err(failed(&entry))),
         _ => {}

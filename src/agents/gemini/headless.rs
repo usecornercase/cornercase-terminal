@@ -10,12 +10,13 @@ use crate::error::{Error, Result};
 use crate::persist::{self, Kind};
 use crate::{agents, os};
 
-const TITLE: &str = "Gemini CLI";
 const BASE: [&str; 3] = ["--skip-trust", "--output-format", "stream-json"];
 const TOOL_DETAILS: [&str; 6] = ["file_path", "dir_path", "pattern", "query", "url", "prompt"];
+const ESCAPED: &str = r#"'"file_path":"[^"]*[%\\]'"#;
 const WRITES: &str = r#"["write_file", "replace"]"#;
 const POLICY_DIR: &str = ".gemini";
 const POLICY_FILE: &str = "cornercase-policy.toml";
+const DOTENV: &str = ".env";
 
 fn policy_file(folder: &Path) -> PathBuf {
     folder.join(POLICY_DIR).join(POLICY_FILE)
@@ -50,10 +51,14 @@ fn quoted(words: &[String]) -> String {
 
 fn escaped(name: &str) -> String {
     name.chars().fold(String::new(), |mut text, c| {
-        if ".^$*+?()[]{}|\\".contains(c) {
-            text.push('\\');
+        if c.is_ascii_alphabetic() {
+            text.extend(['[', c.to_ascii_lowercase(), c.to_ascii_uppercase(), ']']);
+        } else {
+            if ".^$*+?()[]{}|\\".contains(c) {
+                text.push('\\');
+            }
+            text.push(c);
         }
-        text.push(c);
         text
     })
 }
@@ -68,7 +73,7 @@ fn stopped_prefixes(ask: &Ask) -> Vec<String> {
 
 fn protected_pattern(ask: &Ask) -> String {
     let protected = ask.protected.iter().map(|name| escaped(name));
-    let names: Vec<String> = std::iter::once(escaped(POLICY_DIR)).chain(protected).collect();
+    let names: Vec<String> = [POLICY_DIR, DOTENV].iter().map(|name| escaped(name)).chain(protected).collect();
     format!("'\"file_path\":\"[^\"]*({})'", names.join("|"))
 }
 
@@ -89,6 +94,7 @@ pub(in crate::agents) fn policy(ask: &Ask) -> String {
             "[[rule]]\ntoolName = {WRITES}\nargsPattern = {}\ndecision = \"deny\"\npriority = 950\n",
             protected_pattern(ask)
         ),
+        format!("[[rule]]\ntoolName = {WRITES}\nargsPattern = {ESCAPED}\ndecision = \"deny\"\npriority = 950\n"),
     ];
     rules.join("\n")
 }
@@ -99,7 +105,7 @@ pub(in crate::agents) fn prepare(ask: &Ask) -> Result<()> {
     }
     let written = os::fs::create_private_dir_all(&ask.folder.join(POLICY_DIR))
         .and_then(|()| persist::write_bytes(&policy_file(&ask.folder), policy(ask).as_bytes(), Kind::Private));
-    written.map(|_| ()).map_err(|e| Error::Probe(format!("could not write {TITLE}'s rules: {e}")))
+    written.map(|_| ()).map_err(|e| Error::Probe(format!("could not write {}'s rules: {e}", super::TITLE)))
 }
 
 fn tool_action(entry: &Value) -> Action {
@@ -129,7 +135,7 @@ fn finished(entry: &Value, ran: &mut Ran) -> Result<()> {
     if let Some(model) = main_model(stats) {
         ran.model = Some(model);
     }
-    answered(ran, TITLE)
+    answered(ran, super::TITLE)
 }
 
 fn begun(entry: &Value, ran: &mut Ran) {

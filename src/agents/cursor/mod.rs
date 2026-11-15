@@ -42,8 +42,9 @@ pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = So
 });
 const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
     accesses: &[crate::agents::headless::Access::Full],
-    why: Some("its rules cannot keep its edits in its folder"),
+    why: Some("its edits can leave its folder"),
     reads_anywhere: true,
+    effort_needs_model: false,
 };
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const UNFOUND: &str = "Cursor CLI has no conversation for this pane yet";

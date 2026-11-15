@@ -8,7 +8,6 @@ use crate::agents::headless::{
 };
 use crate::error::{Error, Result};
 
-const TITLE: &str = "Cursor CLI";
 const TOOL_DETAILS: [&str; 5] = ["path", "pattern", "globPattern", "query", "url"];
 
 pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
@@ -64,7 +63,7 @@ fn finished(entry: &Value, ran: &mut Ran) -> Result<()> {
     if ran.session.is_none() {
         ran.session = entry["session_id"].as_str().map(str::to_string);
     }
-    answered(ran, TITLE)
+    answered(ran, super::TITLE)
 }
 
 fn begun(entry: &Value, ran: &mut Ran) {

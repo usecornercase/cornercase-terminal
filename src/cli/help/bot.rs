@@ -3,12 +3,13 @@ pub(in crate::cli) const BOT_ABOUT_HELP: &str = "The bot's id or its name";
 pub(in crate::cli) const BOT_AGENTS_HELP: &str =
     "Prints every agent cornercase knows with whether it is installed, whether it can be a bot,
 why not (`not yet`, `not installed`) or what limits it (`its sandbox cannot reach cornercase`,
-`its rules let a command write outside its folder`),
-the accesses it supports, its efforts and the models it suggests. A window builds its form from this
+`a command can write outside its folder`),
+the accesses it supports, `reads` (`folder` when its `cornercase` access reads only its own folder, left
+out otherwise), its efforts and the models it suggests. A window builds its form from this
 list.
 
 With --json it prints {\"agents\": [{\"agent\", \"title\", \"installed\", \"bot\", \"why\", \"accesses\",
-\"efforts\", \"models\"}]}.";
+\"reads\", \"efforts\", \"models\"}]}.";
 
 pub(in crate::cli) const BOT_NEW_HELP: &str =
     "Makes a bot and prints its id. A bot is an agent of your own: a name, a folder (bots/<id>/ beside

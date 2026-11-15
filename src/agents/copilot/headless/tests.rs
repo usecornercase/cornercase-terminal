@@ -2,21 +2,12 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use super::*;
-use crate::agents::headless::{Used, args_of, feed, steps_of};
+use crate::agents::headless::{Used, args_of, bot_ask, feed, steps_of};
 use crate::test_util::fixture;
 
 fn ask(tools: Tools) -> Ask {
-    Ask {
-        prompt: "hi".into(),
-        model: Some("gpt-x".into()),
-        effort: Some("low".into()),
-        folder: Path::new("/work/bots/prs").to_path_buf(),
-        tools,
-        conversation: Some("s".into()),
-        protected: vec!["bot.json", "chat.jsonl"],
-        stops: &["kill-server", "restart", "update"],
-        ..Ask::default()
-    }
+    let folder = Path::new("/work/bots/prs");
+    Ask { model: Some("gpt-x".into()), effort: Some("low".into()), ..bot_ask(folder, tools, Some("s")) }
 }
 
 fn argv(ask: &Ask) -> Vec<String> {

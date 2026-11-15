@@ -42,7 +42,7 @@ fn a_program_that_exits_fails_at_once() {
     assert_eq!(error.to_string(), "fake exited without answering");
 }
 
-fn failing_with(err: &str, limits: Limits) -> String {
+fn failing_with(err: &[u8], limits: Limits) -> String {
     let dir = TempDir::new();
     let program = fake_program(dir.path(), "fake");
     std::fs::write(program.with_extension("err"), err).expect("write the canned error");
@@ -53,16 +53,24 @@ fn failing_with(err: &str, limits: Limits) -> String {
 #[test]
 fn the_first_line_an_agent_writes_to_standard_error_is_its_reason() {
     let limits = Limits { stderr: true, ..LIMITS };
-    assert_eq!(failing_with("\n  first  \nsecond\n", limits), "fake exited without answering: first");
+    assert_eq!(failing_with(b"\n  first  \nsecond\n", limits), "fake exited without answering: first");
     let long = format!("{}\n", "x".repeat(300));
-    let reason = failing_with(&long, limits);
+    let reason = failing_with(long.as_bytes(), limits);
     let said = reason.strip_prefix("fake exited without answering: ").expect("a reason");
     assert_eq!(said.chars().count(), 200);
 }
 
 #[test]
+fn a_line_that_is_not_utf8_does_not_end_the_reading() {
+    let limits = Limits { stderr: true, ..LIMITS };
+    let reason = failing_with(b"\xff\xfe\nError: x\n", limits);
+    assert_eq!(reason, "fake exited without answering: \u{fffd}\u{fffd}");
+    assert_eq!(failing_with(b"  \n\xff\n", limits), "fake exited without answering: \u{fffd}");
+}
+
+#[test]
 fn standard_error_is_not_read_unless_asked_for() {
-    assert_eq!(failing_with("first\n", LIMITS), "fake exited without answering");
+    assert_eq!(failing_with(b"first\n", LIMITS), "fake exited without answering");
 }
 
 #[test]

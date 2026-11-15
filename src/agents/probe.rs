@@ -35,17 +35,29 @@ fn gone(name: &str, reason: Option<&mpsc::Receiver<String>>) -> Error {
     }
 }
 
+fn first_reason(stderr: &mut impl BufRead) -> Option<String> {
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        if stderr.read_until(b'\n', &mut line).ok()? == 0 {
+            return None;
+        }
+        let text = String::from_utf8_lossy(&line);
+        let text = text.trim();
+        if !text.is_empty() {
+            return Some(crate::text::truncate_right(&crate::text::one_line(text), 200));
+        }
+    }
+}
+
 fn reason_of(stderr: std::process::ChildStderr) -> mpsc::Receiver<String> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let mut sent = false;
-        for line in BufReader::new(stderr).lines().map_while(std::result::Result::ok) {
-            let line = line.trim();
-            if !sent && !line.is_empty() {
-                sent = true;
-                let _ = tx.send(crate::text::truncate_right(&crate::text::one_line(line), 200));
-            }
+        let mut stderr = BufReader::new(stderr);
+        if let Some(reason) = first_reason(&mut stderr) {
+            let _ = tx.send(reason);
         }
+        let _ = std::io::copy(&mut stderr, &mut std::io::sink());
     });
     rx
 }

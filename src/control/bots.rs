@@ -101,6 +101,8 @@ pub(crate) struct AgentInfo {
     pub(crate) bot: bool,
     pub(crate) why: Option<String>,
     pub(crate) accesses: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reads: Option<String>,
     pub(crate) efforts: Vec<String>,
     pub(crate) models: Vec<String>,
 }

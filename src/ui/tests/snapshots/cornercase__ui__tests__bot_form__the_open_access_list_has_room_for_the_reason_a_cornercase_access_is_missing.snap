@@ -1,0 +1,28 @@
+---
+source: src/ui/tests/bot_form.rs
+expression: drawn(form).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects   ╭─ New bot ────────────────────────────────────────────────────────────────╮            "
+"            │ Name                                                                     │            "
+"▌ cornercase│ Agent     OPENCODE                                   ▾                   │            "
+"            │ Model     default                                    ▾                   │            "
+"  + New     │ Access    choose its access                          ▾                   │            "
+"            │         ╭───────────────────────────────────────────────────────────────╮│            "
+"            │         │▌through cornercase · a command can write outside its folder   ││            "
+"            │ For     │ full access                                                   ││            "
+"            │         ╰───────────────────────────────────────────────────────────────╯│            "
+"            │                                                                          │            "
+"            │                                                                          │            "
+"            │                                                                          │            "
+"            │                                                                          │            "
+"            │                                                                          │            "
+"            │                                                                          │            "
+"            │                                                                          │            "
+"            │                                                                          │            "
+"            │                                                         create   cancel  │            "
+"            ╰──────────────────────────────────────────────────────────────────────────╯            "
+" ───────────────────────────── │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
+"  More ▴                 Help  │                         │                                          "

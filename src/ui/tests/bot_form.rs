@@ -11,6 +11,7 @@ fn agent(name: &str, bot: bool, why: Option<&str>, accesses: &[&str], efforts: &
         installed: bot,
         bot,
         why: why.map(String::from),
+        reads: None,
         accesses: accesses.iter().map(ToString::to_string).collect(),
         efforts: efforts.iter().map(ToString::to_string).collect(),
         models: vec!["opus".into(), "sonnet".into()],
@@ -22,6 +23,8 @@ fn agents() -> Vec<AgentInfo> {
         agent("claude", true, None, &["cornercase", "full"], &["low", "high"]),
         agent("gemini", false, Some("not yet"), &[], &[]),
         agent("codex", true, Some("its sandbox cannot reach cornercase"), &["full"], &[]),
+        AgentInfo { reads: Some("folder".into()), ..agent("copilot", true, None, &["cornercase", "full"], &[]) },
+        agent("opencode", true, Some("a command can write outside its folder"), &["full"], &[]),
     ]
 }
 
@@ -36,6 +39,19 @@ fn drawn(form: Form) -> Terminal<TestBackend> {
 #[test]
 fn a_new_bot_with_claude_shows_both_access_notes() {
     insta::assert_snapshot!(drawn(Form::new(agents(), "claude")).backend());
+}
+
+#[test]
+fn an_agent_that_reads_only_its_folder_says_so_in_the_note() {
+    insta::assert_snapshot!(drawn(Form::new(agents(), "copilot")).backend());
+}
+
+#[test]
+fn the_open_access_list_has_room_for_the_reason_a_cornercase_access_is_missing() {
+    let mut form = Form::new(agents(), "opencode");
+    form.focus_on(Field::Access);
+    form.access.open();
+    insta::assert_snapshot!(drawn(form).backend());
 }
 
 #[test]

@@ -57,13 +57,14 @@ export interface AgentChoice {
   models: string[];
   accesses: Access[];
   limit: string | null;
+  reads?: 'folder';
 }
 
 export const BOT_AGENTS: AgentChoice[] = [
   { title: 'Claude Code', kind: 'claude', why: null, models: ['opus', 'sonnet', 'haiku'], accesses: ['cornercase', 'full'], limit: null },
   { title: 'Codex', kind: 'codex', why: null, models: ['gpt-5.4', 'gpt-5.4-mini'], accesses: ['full'], limit: 'its sandbox cannot reach cornercase' },
-  { title: 'Gemini CLI', kind: 'gemini', why: null, models: [], accesses: ['cornercase', 'full'], limit: null },
-  { title: 'opencode', kind: 'opencode', why: null, models: [], accesses: ['full'], limit: 'its rules let a command write outside its folder' },
+  { title: 'Gemini CLI', kind: 'gemini', why: null, models: [], accesses: ['cornercase', 'full'], limit: null, reads: 'folder' },
+  { title: 'opencode', kind: 'opencode', why: null, models: [], accesses: ['full'], limit: 'a command can write outside its folder' },
   { title: 'Grok Build', kind: 'grok', why: 'not yet', models: [], accesses: [], limit: null },
 ];
 

@@ -1,20 +1,11 @@
 use std::path::Path;
 
 use super::*;
-use crate::agents::headless::{args_of, feed, steps_of};
+use crate::agents::headless::{args_of, bot_ask, feed, steps_of};
 use crate::test_util::fixture;
 
 fn ask(tools: Tools) -> Ask {
-    Ask {
-        prompt: "hi".into(),
-        model: Some("m".into()),
-        folder: Path::new("/work/bots/prs").to_path_buf(),
-        tools,
-        conversation: Some("s".into()),
-        protected: vec!["bot.json", "chat.jsonl"],
-        stops: &["kill-server", "restart", "update"],
-        ..Ask::default()
-    }
+    Ask { model: Some("m".into()), ..bot_ask(Path::new("/work/bots/prs"), tools, Some("s")) }
 }
 
 fn argv(ask: &Ask) -> Vec<String> {
@@ -134,7 +125,13 @@ priority = 900
 
 [[rule]]
 toolName = ["write_file", "replace"]
-argsPattern = '"file_path":"[^"]*(\.gemini|bot\.json|chat\.jsonl)'
+argsPattern = '"file_path":"[^"]*(\.[gG][eE][mM][iI][nN][iI]|\.[eE][nN][vV]|[bB][oO][tT]\.[jJ][sS][oO][nN]|[cC][hH][aA][tT]\.[jJ][sS][oO][nN][lL])'
+decision = "deny"
+priority = 950
+
+[[rule]]
+toolName = ["write_file", "replace"]
+argsPattern = '"file_path":"[^"]*[%\\]'
 decision = "deny"
 priority = 950
 "#;
@@ -144,9 +141,39 @@ priority = 950
         assert_eq!(policy(&ask(Tools::Bot(Access::Cornercase))), WANTED);
     }
 
+    fn denies(path: &str) -> bool {
+        let text = policy(&ask(Tools::Bot(Access::Cornercase)));
+        let patterns = text.lines().filter_map(|line| line.strip_prefix("argsPattern = '")?.strip_suffix('\''));
+        let args = format!("{{\"file_path\":{}}}", serde_json::to_string(path).expect("a json string"));
+        patterns.into_iter().any(|pattern| regex::Regex::new(pattern).expect("a pattern").is_match(&args))
+    }
+
+    #[rstest::rstest]
+    #[case::the_settings("/work/bots/prs/.gemini/settings.json")]
+    #[case::the_bots_own_file("/work/bots/prs/bot.json")]
+    #[case::its_chat("/work/bots/prs/chat.jsonl")]
+    #[case::the_environment("/work/bots/prs/.env")]
+    #[case::a_percent_escaped_dot("/work/bots/prs/%2Egemini/settings.json")]
+    #[case::a_percent_escaped_letter("/work/bots/prs/.%67emini/settings.json")]
+    #[case::a_percent_escaped_name("/work/bots/prs/bot%2Ejson")]
+    #[case::a_quote_to_end_the_match("/work/bots/prs/\"/../.gemini/settings.json")]
+    #[case::another_case("/work/bots/prs/.Gemini/Settings.json")]
+    #[case::the_name_in_capitals("/work/bots/prs/BOT.JSON")]
+    fn a_write_that_could_reach_what_it_protects_is_denied(#[case] path: &str) {
+        assert!(denies(path), "{path}");
+    }
+
+    #[rstest::rstest]
+    #[case::notes("/work/bots/prs/notes.md")]
+    #[case::memory("/work/bots/prs/memory.md")]
+    #[case::a_subfolder("/work/bots/prs/reports/today.md")]
+    fn an_ordinary_write_is_not(#[case] path: &str) {
+        assert!(!denies(path), "{path}");
+    }
+
     #[test]
     fn a_protected_file_is_denied_with_its_dots_escaped() {
-        let ask = Ask { protected: vec!["bot.json", "chat.jsonl", "keys.txt"], ..ask(Tools::Bot(Access::Cornercase)) };
-        assert!(policy(&ask).contains(r"(\.gemini|bot\.json|chat\.jsonl|keys\.txt)"));
+        let ask = Ask { protected: vec!["bot.json", "keys.txt"], ..ask(Tools::Bot(Access::Cornercase)) };
+        assert!(policy(&ask).contains(r"[kK][eE][yY][sS]\.[tT][xX][tT]"));
     }
 }

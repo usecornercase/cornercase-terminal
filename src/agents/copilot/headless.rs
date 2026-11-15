@@ -8,7 +8,6 @@ use crate::agents::headless::{
 };
 use crate::error::{Error, Result};
 
-const TITLE: &str = "GitHub Copilot CLI";
 const BASE: [&str; 4] = ["--output-format", "json", "--no-auto-update", "--no-ask-user"];
 const BOUNDED: [&str; 3] = ["--disallow-temp-dir", "--disable-builtin-mcps", "--allow-all-urls"];
 const LOOSE_ENV: [&str; 2] = ["COPILOT_ALLOW_ALL", "COPILOT_ASSISTED_APPROVAL"];
@@ -96,7 +95,7 @@ fn said(data: &Value, ran: &mut Ran) {
 fn finished(entry: &Value, ran: &mut Ran) -> Result<()> {
     ran.session = entry["sessionId"].as_str().map(str::to_string);
     match entry["exitCode"].as_i64().unwrap_or_default() {
-        0 => answered(ran, TITLE),
+        0 => answered(ran, super::TITLE),
         code => Err(Error::Probe(format!("copilot exited with {code}"))),
     }
 }

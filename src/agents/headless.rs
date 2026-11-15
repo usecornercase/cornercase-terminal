@@ -96,6 +96,7 @@ pub(crate) struct BotSupport {
     pub(crate) accesses: &'static [Access],
     pub(crate) why: Option<&'static str>,
     pub(crate) reads_anywhere: bool,
+    pub(crate) effort_needs_model: bool,
 }
 
 pub(crate) struct Spec {
@@ -258,6 +259,20 @@ pub(in crate::agents) fn answered(ran: &mut Ran, title: &str) -> Result<()> {
     }
     ran.text = text;
     Ok(())
+}
+
+#[cfg(test)]
+pub(in crate::agents) fn bot_ask(folder: &Path, tools: Tools, conversation: Option<&str>) -> Ask {
+    Ask {
+        prompt: "hi".into(),
+        model: Some("opus".into()),
+        folder: folder.to_path_buf(),
+        tools,
+        conversation: conversation.map(str::to_string),
+        protected: vec!["bot.json", "chat.jsonl"],
+        stops: &["kill-server", "restart", "update"],
+        ..Ask::default()
+    }
 }
 
 #[cfg(test)]

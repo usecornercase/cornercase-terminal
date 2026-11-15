@@ -167,11 +167,16 @@ fn the_agents_say_which_can_be_a_bot_and_why_not() {
     let both = (json!(true), json!(["cornercase", "full"]), Value::Null);
     let full = |why: &str| (json!(true), json!(["full"]), json!(why));
     let missing = |why: &str| (json!(false), json!([]), json!(why));
+    let reads = |name: &str| find(name)["reads"].as_str().map(str::to_string);
+    assert_eq!(
+        [reads("claude"), reads("gemini"), reads("copilot")],
+        [None, Some("folder".into()), Some("folder".into())]
+    );
     assert_eq!(listed("claude"), both);
     assert_eq!(listed("gemini"), both);
     assert_eq!(listed("copilot"), both);
-    assert_eq!(listed("opencode"), full("its rules let a command write outside its folder"));
-    assert_eq!(listed("cursor"), full("its rules cannot keep its edits in its folder"));
+    assert_eq!(listed("opencode"), full("a command can write outside its folder"));
+    assert_eq!(listed("cursor"), full("its edits can leave its folder"));
     assert_eq!(listed("grok"), missing("not yet"));
     assert_eq!(listed("vibe"), missing("not yet"));
     assert_eq!(listed("codex"), missing("not installed"));
@@ -213,6 +218,27 @@ fn an_agent_with_full_access_only_is_refused_without_it(#[case] agent: Known) {
     assert!(refused.message.contains("--access full"), "{}", refused.message);
     let made = b.ask("bot", &json!({"action": "new", "name": "x", "agent": name, "access": "full"}));
     assert_eq!((made["agent"].as_str(), made["access"].as_str()), (Some(name), Some("full")));
+}
+
+#[test]
+fn an_effort_without_a_model_is_refused_for_an_agent_that_needs_one() {
+    let mut b = every_agent_faked();
+    let new = |model: Option<&str>| {
+        let mut args = json!({"action": "new", "name": "x", "agent": "copilot", "effort": "high"});
+        if let Some(model) = model {
+            args["model"] = json!(model);
+        }
+        args
+    };
+    for model in [None, Some("auto")] {
+        let refused = b.refuse(&new(model));
+        assert_eq!(refused.code, "malformed");
+        assert!(refused.message.contains("only with a model you name"), "{}", refused.message);
+    }
+    let made = b.ask("bot", &new(Some("gpt-x")));
+    assert_eq!(made["effort"], "high");
+    let edit = b.refuse(&json!({"action": "edit", "bot": "x", "model": ""}));
+    assert!(edit.message.contains("only with a model you name"), "{}", edit.message);
 }
 
 #[test]

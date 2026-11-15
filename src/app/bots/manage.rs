@@ -27,6 +27,15 @@ fn bot_agent_names() -> String {
     }
 }
 
+fn needs_a_model(kind: Known, bot: &Bot) -> Done<()> {
+    let named = bot.model.as_deref().is_some_and(|model| !model.is_empty() && model != "auto");
+    if bot.effort.is_some() && !named && kind.bot().is_some_and(|support| support.effort_needs_model) {
+        let text = format!("{} takes an effort only with a model you name, not auto", kind.title());
+        return Err(Refusal::new(Code::Malformed, text));
+    }
+    Ok(())
+}
+
 fn problem(problem: &NameProblem) -> Refusal {
     let code = if matches!(problem, NameProblem::Taken(_)) { Code::Conflict } else { Code::Malformed };
     Refusal::new(code, problem.message())
@@ -58,6 +67,7 @@ impl App {
                     bot: support.bot,
                     why: support.why,
                     accesses: support.accesses.iter().map(|access| access.name().to_string()).collect(),
+                    reads: kind.bot().filter(|bot| !bot.reads_anywhere).map(|_| String::from("folder")),
                     efforts: kind
                         .effort()
                         .map_or_else(Vec::new, |effort| effort.levels.iter().map(ToString::to_string).collect()),
@@ -148,7 +158,7 @@ impl App {
             }
             bot.account = Some(account).filter(|account| !account.is_empty());
         }
-        Ok(())
+        needs_a_model(kind, bot)
     }
 
     pub(in crate::app) fn bot_new(&mut self, new: &NewBot) -> Done<usize> {

@@ -222,16 +222,7 @@ mod bots {
     use crate::bots::BOT_ENV;
 
     fn bot_ask(folder: &Path, access: Access, conversation: Option<&str>) -> Ask {
-        Ask {
-            prompt: "hi".into(),
-            model: Some("opus".into()),
-            effort: None,
-            protected: vec!["bot.json", "chat.jsonl"],
-            stops: &["kill-server", "restart", "update"],
-            tools: Tools::Bot(access),
-            conversation: conversation.map(str::to_string),
-            ..ask(folder)
-        }
+        crate::agents::headless::bot_ask(folder, Tools::Bot(access), conversation)
     }
 
     fn argv_of(agent: Known, name: &str, out: &str, ask: &Ask) -> (String, TempDir) {
@@ -286,10 +277,7 @@ mod bots {
     fn a_codex_bot_runs_in_its_folder_and_resumes_before_the_prompt() {
         let folder = TempDir::new();
         let ask = bot_ask(folder.path(), Access::Cornercase, None);
-        let args: Vec<String> = crate::agents::codex::headless::command("codex", &ask)
-            .get_args()
-            .map(|a| a.to_string_lossy().into())
-            .collect();
+        let args = args_of(&crate::agents::codex::headless::command("codex", &ask));
         let wanted = [
             "exec",
             "--json",
@@ -311,18 +299,23 @@ mod bots {
         assert!(!resumed.contains("--ephemeral"), "{resumed}");
     }
 
-    #[test]
-    fn an_agent_that_fails_on_its_standard_error_says_why() {
+    #[rstest::rstest]
+    #[case::copilot(Known::Copilot, fixture!("copilot/1.0.98/bot-failed.txt"))]
+    #[case::cursor(Known::Cursor, fixture!("cursor/2026.10.22-27dcf5f/bot-failed.txt"))]
+    fn an_agent_that_fails_on_its_standard_error_says_why(#[case] agent: Known, #[case] said: &str) {
         let dir = TempDir::new();
         let folder = TempDir::new();
-        let words = "Error: Model \"x\" from --model flag is not available.";
-        let program = faked(&dir, "copilot", "");
+        let program = faked(&dir, agent.name(), "");
+        std::fs::write(program.with_extension("err"), said).expect("write the canned error");
+        std::fs::write(program.with_extension("code"), "1").expect("write the exit code");
         let ask = bot_ask(folder.path(), Access::Full, None);
         let command = program.display().to_string();
-        std::fs::write(program.with_extension("err"), format!("{words}\n")).expect("write the canned error");
-        std::fs::write(program.with_extension("code"), "1").expect("write the exit code");
-        let error = run(&called(Known::Copilot, &command, TIMEOUT), &ask, &Arc::new(AtomicUsize::new(0)));
-        assert_eq!(error.expect_err("no answer").to_string(), format!("copilot exited without answering: {words}"));
+        let error = run(&called(agent, &command, TIMEOUT), &ask, &Arc::new(AtomicUsize::new(0)));
+        let words = crate::text::truncate_right(said.lines().next().expect("a line").trim(), 200);
+        assert_eq!(
+            error.expect_err("no answer").to_string(),
+            format!("{} exited without answering: {words}", agent.name())
+        );
     }
 
     fn with_env(folder: &Path, env: Env) -> (Vec<String>, TempDir) {
@@ -542,7 +535,8 @@ mod bots {
         let (argv, _dir) = argv_of(Known::Gemini, "gemini", fixture!("gemini/0.67.0/bot-new.jsonl"), &ask);
         let rules = folder.path().join(".gemini").join("cornercase-policy.toml");
         let text = std::fs::read_to_string(&rules).expect("the rules file");
-        assert!(text.contains(r"(\.gemini|bot\.json|chat\.jsonl)"), "{text}");
+        assert!(text.contains(r"\.[gG][eE][mM][iI][nN][iI]"), "{text}");
+        assert!(text.contains(r"\.[eE][nN][vV]"), "{text}");
         assert!(argv.contains(&format!("{:?}", rules.display().to_string())), "{argv}");
         assert!(argv.contains("\"--approval-mode\", \"default\""), "{argv}");
     }

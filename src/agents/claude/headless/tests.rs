@@ -70,7 +70,7 @@ fn a_result_alone_names_the_session() {
 #[case::unknown("Skill", r#"{"skill":"x"}"#, "Skill")]
 fn a_tool_is_summed_up_in_one_line(#[case] tool: &str, #[case] input: &str, #[case] wanted: &str) {
     let input: Value = serde_json::from_str(input).expect("json");
-    assert_eq!(summary(tool, &input), wanted);
+    assert_eq!(action_of(tool, &input).text, wanted);
 }
 
 #[rstest::rstest]
