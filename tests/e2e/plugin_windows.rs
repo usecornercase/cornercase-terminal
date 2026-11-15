@@ -75,10 +75,6 @@ impl Panel {
     }
 }
 
-fn sent(pid: &impl ToString, name: &str) -> bool {
-    Command::new("kill").args([name, &pid.to_string()]).status().is_ok_and(|status| status.success())
-}
-
 fn signal(pid: &impl ToString, name: &str) {
     assert!(sent(pid, name), "kill {name} failed");
 }
