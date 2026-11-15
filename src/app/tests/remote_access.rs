@@ -36,13 +36,25 @@ fn with_tailscale(script: Option<&str>) -> Remote {
 }
 
 fn ready() -> Remote {
-    let mut r = with_tailscale(Some(&format!("[ \"$1\" = status ] && echo '{STATUS}'\nexit 0")));
+    let mut r = answering();
+    serving_on(&mut r);
+    r
+}
+
+fn answering() -> Remote {
+    with_tailscale(Some(&format!("[ \"$1\" = status ] && echo '{STATUS}'\nexit 0")))
+}
+
+fn serving_on(r: &mut Remote) {
     r.app.config.remote = true;
     r.app.refresh(Instant::now());
+    until_ready(r);
+}
+
+fn until_ready(r: &mut Remote) {
     pump_until(&mut r.app, &r.rx, "tailscale answers", |a| {
         matches!(a.remote.phase(), crate::app::remote_access::Phase::Ready(_))
     });
-    r
 }
 
 fn calls(r: &Remote) -> String {
@@ -227,4 +239,34 @@ fn forgetting_the_browsers_refuses_their_cookie() {
 
     assert!(before.starts_with("HTTP/1.1 200"), "{before}");
     assert!(page(r.port).starts_with("HTTP/1.1 401"));
+}
+
+fn revision(r: &Remote) -> u64 {
+    r.app.config_file.revision()
+}
+
+#[test]
+fn the_revision_moves_with_the_note_as_tailscale_answers_and_browsers_come() {
+    let mut r = answering();
+    let before = revision(&r);
+    r.app.config.remote = true;
+    r.app.refresh(Instant::now());
+    let starting = revision(&r);
+    assert!(starting > before);
+
+    until_ready(&mut r);
+    let ready = revision(&r);
+    assert!(ready > starting);
+
+    r.app.refresh(Instant::now());
+    assert_eq!(revision(&r), ready);
+
+    r.app.web_event(web::Event::Browsers(1));
+    let one = revision(&r);
+    assert!(one > ready);
+    assert!(r.app.remote.note().starts_with("1 browser connected at "));
+    r.app.web_event(web::Event::Browsers(1));
+    assert_eq!(revision(&r), one);
+    r.app.web_event(web::Event::Browsers(0));
+    assert!(revision(&r) > one);
 }

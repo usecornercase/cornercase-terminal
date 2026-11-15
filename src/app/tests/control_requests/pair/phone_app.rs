@@ -110,3 +110,24 @@ fn config_lists_the_paired_app_and_remove_forgets_it() {
     assert!(removed["notices"].to_string().contains("phone app was forgotten"), "{removed}");
     assert!(after["connections"].as_array().is_some_and(|all| all.iter().all(|c| c["key"] != key.as_str())));
 }
+
+fn set_phone_app(app: &mut App) -> crate::control::config::Described {
+    let got = ok(app, "config", &json!({"action": "set", "entry": {"phone_app": true}}));
+    serde_json::from_value(got).expect("a description")
+}
+
+#[test]
+fn a_set_of_phone_app_answers_the_note_the_listener_settled_on() {
+    let dir = TempDir::new();
+    let (mut app, _rx) = new_app(dir.path().join("config.json"));
+    app.phone.set_probe(|| vec![LOCALHOST]);
+    app.config.phone_app_port = free_port();
+
+    let got = set_phone_app(&mut app);
+    app.refresh(Instant::now());
+
+    assert_ne!(*app.phone.phase(), crate::app::phone_app::Phase::Off);
+    let note = got.settings.iter().find(|s| s.key == "phone_app").map(|s| s.note.clone());
+    assert_eq!(note, Some(app.phone.note()));
+    assert_eq!(got.revision, app.config_file.revision());
+}

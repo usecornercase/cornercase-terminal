@@ -17,6 +17,7 @@ use crate::web::{self, Web};
 const REMOTE_OFF: &str =
     "remote access is off: turn it on in Settings › Remote or with `cornercase config set remote true`";
 pub(super) const NO_CODE: &str = "could not make a code, see server.log";
+const OFF_NOTE: &str = "open this computer's cornercase from your phone over Tailscale";
 const STARTING: &str = "starting…";
 const FORGOTTEN: &str = "paired browsers forgotten: each one needs a new code";
 
@@ -37,6 +38,7 @@ enum Order {
 pub(super) struct Remote {
     web: Web,
     phase: Phase,
+    noted: String,
     tailscale: Option<PathBuf>,
     on: bool,
     browsers: usize,
@@ -70,6 +72,7 @@ impl Remote {
         Self {
             web,
             phase: Phase::Off,
+            noted: OFF_NOTE.into(),
             tailscale: None,
             on: false,
             browsers: 0,
@@ -80,9 +83,16 @@ impl Remote {
         }
     }
 
+    fn note_moved(&mut self) -> bool {
+        let note = self.note();
+        let moved = note != self.noted;
+        self.noted = note;
+        moved
+    }
+
     pub(super) fn note(&self) -> String {
         match &self.phase {
-            Phase::Off => "open this computer's cornercase from your phone over Tailscale".into(),
+            Phase::Off => OFF_NOTE.into(),
             Phase::Starting => STARTING.into(),
             Phase::Ready(node) if self.browsers > 0 => {
                 format!("{} at {}", connected_count(self.browsers), node.url())
@@ -228,6 +238,7 @@ impl App {
     fn retry_remote(&mut self) {
         if self.remote.on && matches!(self.remote.phase, Phase::Failed(_)) {
             self.start_remote();
+            self.refresh_remote_note();
         }
     }
 
@@ -283,6 +294,9 @@ impl App {
     }
 
     pub(super) fn refresh_remote_note(&mut self) {
+        if self.remote.note_moved() {
+            self.settings_changed();
+        }
         let (note, paired) = (self.remote.note(), self.remote.web.paired());
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.remote = note;

@@ -55,6 +55,10 @@ fn listening(r: &mut Rig, at: Instant) {
     });
 }
 
+fn revision(app: &App) -> u64 {
+    app.config_file.revision()
+}
+
 fn dialog(app: &App) -> Option<ui::RemoteAccess> {
     match app.overlay_view(app.overlay.as_ref()?, AREA)? {
         ui::Overlay::Remote(remote) => Some(remote),
@@ -230,4 +234,40 @@ fn enter_on_the_switch_and_on_pair_a_phone_app_open_the_code() {
 
     let url = dialog(&r.app).and_then(|view| view.url).expect("an address");
     assert!(url.contains("/?code="), "{url}");
+}
+
+#[test]
+fn the_revision_moves_each_time_the_note_changes_and_not_on_a_read_that_changes_nothing() {
+    let mut r = rig();
+    let before = revision(&r.app);
+    r.app.config.phone_app = true;
+    listening(&mut r, Instant::now());
+    let listening_at = revision(&r.app);
+    assert!(listening_at > before);
+    r.app.refresh_phone_app_note();
+    assert_eq!(revision(&r.app), listening_at);
+
+    r.at += Duration::from_secs(2);
+    r.app.refresh(r.at);
+    assert_eq!(revision(&r.app), listening_at);
+
+    let holder = TcpListener::bind(("127.0.0.1", 0)).expect("hold a port");
+    r.app.config.phone_app_port = holder.local_addr().expect("an address").port();
+    r.app.refresh(r.at);
+    let taken = revision(&r.app);
+    assert!(taken > listening_at);
+    assert!(r.app.phone.note().starts_with("not available: port"), "{}", r.app.phone.note());
+
+    drop(holder);
+    let later = r.at + Duration::from_secs(2);
+    listening(&mut r, later);
+    let again = revision(&r.app);
+    assert!(again > taken);
+
+    r.app.config.phone_app = false;
+    r.app.refresh(r.at);
+    let off = revision(&r.app);
+    assert!(off > again);
+    r.app.refresh(r.at + Duration::from_secs(4));
+    assert_eq!(revision(&r.app), off);
 }

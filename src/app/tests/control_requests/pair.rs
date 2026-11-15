@@ -308,6 +308,29 @@ mod browsers {
     }
 
     #[test]
+    fn a_set_of_remote_answers_starting_and_tailscale_moves_the_revision_again() {
+        let mut remote = with_tailscale(STATUS);
+        remote.app.remote.set_tailscale(remote.dir.path().join("missing").join("tailscale"));
+
+        let got = ok(&mut remote.app, "config", &json!({"action": "set", "entry": {"remote": true}}));
+        let got: crate::control::config::Described = serde_json::from_value(got).expect("a description");
+
+        let note = got.settings.iter().find(|s| s.key == "remote").map(|s| s.note.clone());
+        assert_eq!(note.as_deref(), Some("starting…"));
+        wait_until_within("tailscale fails", A_PROGRAM_RUNS, || {
+            drain(&mut remote.app, &remote.rx);
+            matches!(remote.app.remote.phase(), Phase::Failed(_))
+        });
+        let failed = remote.app.config_file.revision();
+        assert!(failed > got.revision);
+
+        let _ = pair(&mut remote.app, FIRST, "browsers");
+
+        assert_eq!(remote.app.remote.note(), "starting…");
+        assert!(remote.app.config_file.revision() > failed);
+    }
+
+    #[test]
     fn a_key_that_cannot_be_paired_says_which_can() {
         let mut remote = with_tailscale(STATUS);
 

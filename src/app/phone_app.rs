@@ -22,6 +22,7 @@ const READ_EVERY: Duration = Duration::from_secs(2);
 const TITLE: &str = "Phone app";
 const OFF: &str = "the phone app's access is off: turn it on in Settings › Remote or with `cornercase config set \
                    phone_app true`";
+const OFF_NOTE: &str = "use cornercase from the phone app over Wi-Fi or Tailscale";
 const FORGOTTEN: &str = "the phone app was forgotten: it needs a new code";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,7 @@ type Probe = Box<dyn FnMut() -> Vec<IpAddr> + Send>;
 pub(super) struct PhoneApp {
     listener: Phone,
     phase: Phase,
+    noted: String,
     on: bool,
     port: u16,
     token: Option<String>,
@@ -67,6 +69,7 @@ impl PhoneApp {
         Self {
             listener,
             phase: Phase::Off,
+            noted: OFF_NOTE.into(),
             on: false,
             port: 0,
             token: None,
@@ -90,7 +93,7 @@ impl PhoneApp {
 
     pub(super) fn note(&self) -> String {
         match &self.phase {
-            Phase::Off => "use cornercase from the phone app over Wi-Fi or Tailscale".into(),
+            Phase::Off => OFF_NOTE.into(),
             Phase::Listening(routes) => {
                 let port = routes.first().map_or(0, SocketAddr::port);
                 format!("ready at {} (port {port})", joined_with(routes, ", "))
@@ -98,6 +101,13 @@ impl PhoneApp {
             Phase::NoAddress => "waiting for a Wi-Fi, LAN or Tailscale address".into(),
             Phase::Failed(why) => format!("not available: {why}"),
         }
+    }
+
+    fn note_moved(&mut self) -> bool {
+        let note = self.note();
+        let moved = note != self.noted;
+        self.noted = note;
+        moved
     }
 
     pub(super) fn routes(&self) -> Vec<SocketAddr> {
@@ -291,6 +301,9 @@ impl App {
     }
 
     pub(super) fn refresh_phone_app_note(&mut self) {
+        if self.phone.note_moved() {
+            self.settings_changed();
+        }
         let (note, apps) = (self.phone.note(), self.phone.paired());
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.phone_app = note;

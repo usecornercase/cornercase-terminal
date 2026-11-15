@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
-use std::net::TcpStream;
+use std::io::{ErrorKind, Read as _};
+use std::net::{Shutdown, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -17,7 +18,6 @@ use crate::log;
 use crate::web::http::{self, Request, Response, waiting};
 use crate::web::{POLL, WRITE_TIMEOUT};
 
-const LINGER: Duration = Duration::from_secs(2);
 const STOP_WRITE: Duration = Duration::from_secs(1);
 const WRITES_PER_TURN: usize = 4096;
 const BUFFERED: usize = 128 * 1024;
@@ -85,10 +85,12 @@ pub(super) fn run(mut stream: TcpStream, request: &Request, context: &Context) {
         Ok(admitted) => admitted,
         Err(refused) => return turn_away(&mut stream, &refused),
     };
-    if let Some(ws) = http::upgrade(stream, request, config(&context.limits)) {
-        connected(ws, context, &device);
-    }
+    let leaving =
+        http::upgrade(stream, request, config(&context.limits)).and_then(|ws| connected(ws, context, &device));
     context.unregister(registered);
+    if let Some(mut ws) = leaving {
+        drain(ws.get_mut(), context.limits.linger);
+    }
 }
 
 fn refuse_handshake(stream: &mut TcpStream, request: &Request, context: &Context) {
@@ -117,22 +119,32 @@ fn turn_away(stream: &mut TcpStream, refused: &Refused) {
     }
 }
 
-fn connected(mut ws: WebSocket<TcpStream>, context: &Context, device: &str) {
+fn connected(mut ws: WebSocket<TcpStream>, context: &Context, device: &str) -> Option<WebSocket<TcpStream>> {
     let _ = ws.get_ref().set_read_timeout(Some(POLL));
     let _ = ws.get_ref().set_write_timeout(Some(WRITE_TIMEOUT));
     let argv = match first(&mut ws, &context.limits, &context.stopping) {
         First::Argv(argv) => argv,
-        First::Refused(text) => return refuse(&mut ws, &text),
-        First::Stopped => return stopped(&mut ws),
-        First::Gone => return,
+        First::Refused(text) => {
+            refuse(&mut ws, &text, context.limits.linger);
+            return None;
+        }
+        First::Stopped => {
+            stopped(&mut ws);
+            return Some(ws);
+        }
+        First::Gone => return None,
     };
     if let Err(text) = cli::over_cli(&argv) {
-        return refuse(&mut ws, &text);
+        refuse(&mut ws, &text, context.limits.linger);
+        return None;
     }
     let command = command::command(&context.program, &argv, &context.socket);
     match Running::start(command, context.limits, &context.waits) {
         Ok(running) => converse(ws, running, context, (device, &cli::command_name(&argv))),
-        Err(e) => refuse(&mut ws, &format!("could not run cornercase: {e}")),
+        Err(e) => {
+            refuse(&mut ws, &format!("could not run cornercase: {e}"), context.limits.linger);
+            None
+        }
     }
 }
 
@@ -168,8 +180,8 @@ fn finish(ws: &mut WebSocket<TcpStream>, code: CloseCode) {
     let _ = ws.flush();
 }
 
-fn linger(ws: &mut WebSocket<TcpStream>) {
-    let end = Instant::now() + LINGER;
+fn linger(ws: &mut WebSocket<TcpStream>, within: Duration) {
+    let end = Instant::now() + within;
     while Instant::now() < end {
         match ws.read() {
             Err(e) if !waiting(&e) => return,
@@ -181,16 +193,35 @@ fn linger(ws: &mut WebSocket<TcpStream>) {
 fn stopped(ws: &mut WebSocket<TcpStream>) {
     let _ = ws.get_ref().set_write_timeout(Some(STOP_WRITE));
     finish(ws, CloseCode::Away);
+    let _ = ws.get_ref().shutdown(Shutdown::Write);
 }
 
-fn refuse(ws: &mut WebSocket<TcpStream>, text: &str) {
-    if tell(ws, &Output::Stderr(message::refusal(text))) && tell(ws, &Output::Exit(2)) {
-        finish(ws, CloseCode::Normal);
-        linger(ws);
+fn drain(stream: &mut TcpStream, within: Duration) {
+    let end = Instant::now() + within;
+    let mut buffer = [0_u8; 4096];
+    while Instant::now() < end {
+        match stream.read(&mut buffer) {
+            Ok(0) => return,
+            Ok(_) => {}
+            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut | ErrorKind::Interrupted) => {}
+            Err(_) => return,
+        }
     }
 }
 
-fn converse(ws: WebSocket<TcpStream>, running: Running, context: &Context, (device, name): (&str, &str)) {
+fn refuse(ws: &mut WebSocket<TcpStream>, text: &str, within: Duration) {
+    if tell(ws, &Output::Stderr(message::refusal(text))) && tell(ws, &Output::Exit(2)) {
+        finish(ws, CloseCode::Normal);
+        linger(ws, within);
+    }
+}
+
+fn converse(
+    ws: WebSocket<TcpStream>,
+    running: Running,
+    context: &Context,
+    (device, name): (&str, &str),
+) -> Option<WebSocket<TcpStream>> {
     let pid = running.pid();
     log::info!("web", "phone app command started", command = name, device = device, pid = pid);
     let _ = ws.get_ref().set_write_timeout(Some(POLL));
@@ -201,6 +232,7 @@ fn converse(ws: WebSocket<TcpStream>, running: Running, context: &Context, (devi
     pump.conclude(&ending);
     let code = ending.code().map_or_else(|| "none".to_string(), |code| code.to_string());
     log::info!("web", "phone app command ended", command = name, code = code, why = ending.why());
+    (ending == Ending::Stopped).then_some(pump.ws)
 }
 
 struct Pump<'a> {
@@ -345,12 +377,12 @@ impl Pump<'_> {
                 let _ = self.ws.get_ref().set_write_timeout(Some(WRITE_TIMEOUT));
                 if tell(&mut self.ws, &Output::Exit(*code)) {
                     finish(&mut self.ws, CloseCode::Normal);
-                    linger(&mut self.ws);
+                    linger(&mut self.ws, self.context.limits.linger);
                 }
             }
             Ending::Refused(text) => {
                 let _ = self.ws.get_ref().set_write_timeout(Some(WRITE_TIMEOUT));
-                refuse(&mut self.ws, text);
+                refuse(&mut self.ws, text, self.context.limits.linger);
             }
             Ending::Stopped => {
                 stopped(&mut self.ws);
