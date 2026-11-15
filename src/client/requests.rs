@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 use std::sync::OnceLock;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use parking_lot::Mutex;
@@ -16,6 +17,7 @@ use crate::update::restart;
 
 use super::{Link, Source};
 
+mod boot;
 mod shared;
 mod watch;
 
@@ -51,13 +53,20 @@ pub(crate) fn use_view(view: u64) -> Result<()> {
 }
 
 pub(crate) fn use_boot(boot: &str) -> Result<()> {
-    require("boot", "would ignore --boot and act on whatever has that id now")?;
     if shared::active() {
+        shared::require("boot", boot::LACKS)?;
         shared::set_boot(boot);
     } else {
         let _ = BOOT.set(boot.to_string());
     }
     Ok(())
+}
+
+pub(crate) fn check_boot() -> Result<()> {
+    if shared::active() || BOOT.get().is_none() || boot::KNOWN.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+    require("boot", boot::LACKS)
 }
 
 pub(crate) fn use_machine_boot() -> Result<()> {
@@ -247,31 +256,46 @@ fn require(feature: &str, lacks: &str) -> Result<()> {
     Ok(())
 }
 
-fn missing(lacks: &str, remote: Option<&Remote>) -> Error {
+fn lacking(lacks: &str, remote: Option<&Remote>) -> String {
     let Some(remote) = remote else {
-        return Error::Control(format!(
+        return format!(
             "the running cornercase server {lacks}; update cornercase and restart the server (this one is {})",
             crate::version::CURRENT
-        ));
+        );
     };
-    Error::Control(format!(
+    format!(
         "the cornercase server on `{}` {lacks}; restart it there with `{}` (update it first with `{}` if needed)",
         remote.host(),
         remote.line("restart"),
         remote.update_line()
-    ))
+    )
+}
+
+fn missing(lacks: &str, remote: Option<&Remote>) -> Error {
+    Error::Control(lacking(lacks, remote))
+}
+
+fn features_on(link: &mut Link) -> Result<Vec<String>> {
+    let asked =
+        ask_with(link, "contract", control::Command::Contract(control::Contract {}), Envelope::default(), &mut None);
+    listed(asked)
+}
+
+fn listed(asked: Result<Value>) -> Result<Vec<String>> {
+    match asked {
+        Err(Error::Control(_) | Error::OldServer(_)) => Ok(Vec::new()),
+        asked => {
+            let descriptor: control::contract::Descriptor = answer(asked?)?;
+            Ok(descriptor.features)
+        }
+    }
 }
 
 fn require_on(link: Result<Link>, feature: &str, lacks: &str, remote: Option<&Remote>) -> Result<Link> {
-    let lacking = || missing(lacks, remote);
-    let asked = link.and_then(|mut link| {
-        let value = ask_on(&mut link, "contract", control::Command::Contract(control::Contract {}))?;
-        Ok((link, value))
-    });
-    let (link, value) =
-        asked.map_err(|e| if matches!(e, Error::Control(_) | Error::OldServer(_)) { lacking() } else { e })?;
-    let descriptor: control::contract::Descriptor = answer(value)?;
-    offered(&descriptor.features, feature, lacks, remote).map(|()| link)
+    let mut link = link?;
+    let features = features_on(&mut link)?;
+    boot::seen(&features, BOOT.get().is_some(), &boot::KNOWN, remote)?;
+    offered(&features, feature, lacks, remote).map(|()| link)
 }
 
 fn offered(features: &[String], feature: &str, lacks: &str, remote: Option<&Remote>) -> Result<()> {
@@ -335,7 +359,7 @@ impl Link {
 }
 
 fn ask_on(link: &mut Link, name: &'static str, command: control::Command) -> Result<Value> {
-    ask_with(link, name, command, Envelope::of_the_invocation(), &mut None)
+    boot::ask(link, name, command, Envelope::of_the_invocation(), &boot::KNOWN)
 }
 
 fn ask_with(
@@ -345,6 +369,17 @@ fn ask_with(
     envelope: Envelope,
     out: &mut Option<BorrowedFd<'_>>,
 ) -> Result<Value> {
+    let text = ask_text(link, name, command, envelope, out)?;
+    answered_through(&text, link.guard.remote.as_ref())
+}
+
+fn ask_text(
+    link: &mut Link,
+    name: &'static str,
+    command: control::Command,
+    envelope: Envelope,
+    out: &mut Option<BorrowedFd<'_>>,
+) -> Result<String> {
     if let Err(e) = send_request(&mut link.writer, command, envelope) {
         return Err(lost(link, server_left(e)));
     }
@@ -359,9 +394,9 @@ fn ask_with(
     }
 }
 
-fn received(link: &mut Link, name: &'static str) -> Option<Result<Value>> {
+fn received(link: &mut Link, name: &'static str) -> Option<Result<String>> {
     match protocol::recv::<ServerMessage>(&mut link.reader) {
-        Ok(Some(ServerMessage::Response(text))) => Some(answered_through(&text, link.guard.remote.as_ref())),
+        Ok(Some(ServerMessage::Response(text))) => Some(Ok(text)),
         Ok(Some(ServerMessage::Rejected(_))) => Some(Err(Error::OldServer(name))),
         Err(e) if e.kind() == io::ErrorKind::InvalidData => Some(Err(Error::OldServer(name))),
         Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached)) => None,
