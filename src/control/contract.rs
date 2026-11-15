@@ -68,7 +68,6 @@ pub(crate) const FEATURES: &[&str] = &[
     "fresh-branches",
     "notice-messages",
     "surface-wrapped",
-    "prompt-unsent",
     "account-login-tab",
     "config-agents",
     "tunnels",
@@ -94,6 +93,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "cli-endpoint",
     "bot-routines",
     "bot-reads",
+    "prompt-unsent",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

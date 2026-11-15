@@ -60,6 +60,8 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("skip permissions (dangerous)", &["--dangerously-skip-permissions"]),
 ];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = false;
+pub(in crate::agents) const BRACKETED_WHEN_READY: bool = true;
+pub(in crate::agents) const CONFIRMS_PROMPT: bool = true;
 const NPM_SCRIPT: [&str; 3] = ["@anthropic-ai", "claude-code", "cli.js"];
 pub(in crate::agents) const LOCAL_COMMAND: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(crate::agents::usage::Spec {
@@ -184,6 +186,7 @@ pub(in crate::agents) struct Reader {
     home: Option<(i32, Vec<String>, Option<PathBuf>)>,
     probe_model: Option<String>,
     reported: Option<Activity>,
+    watching: bool,
 }
 
 impl Reader {
@@ -195,6 +198,7 @@ impl Reader {
         ledger: &mut Ledger,
     ) -> Option<SystemTime> {
         let home = self.home(look);
+        self.watching = home.is_some();
         self.session = Session::read(home.as_deref(), look.pid);
         let found = home.as_deref().zip(self.session.as_ref()).and_then(|(dir, session)| {
             let cwd = session.cwd.as_deref()?;
@@ -285,8 +289,13 @@ impl Reader {
         Some(Record::Claude(self.transcript.as_ref()?.path.clone()))
     }
 
-    pub(in crate::agents) fn session_read(&self) -> bool {
-        self.session.is_some()
+    pub(in crate::agents) fn session_state(&self) -> crate::agents::launch::Session {
+        use crate::agents::launch::Session;
+        match (self.session.is_some(), self.watching) {
+            (true, _) => Session::Read,
+            (false, true) => Session::Pending,
+            (false, false) => Session::Unwatched,
+        }
     }
 
     pub(in crate::agents) fn conversation(&self) -> Option<&str> {

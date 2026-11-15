@@ -41,6 +41,13 @@ enum Stage {
     Confirm,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Session {
+    Unwatched,
+    Pending,
+    Read,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Pasted {
     pub(crate) bracketed: bool,
@@ -96,6 +103,7 @@ pub(crate) struct Seen<'a> {
     pub(crate) shell_in_foreground: bool,
     pub(crate) bracketed_paste: bool,
     pub(crate) agent: Option<Known>,
+    pub(crate) session: Session,
     pub(crate) application_cursor: bool,
     pub(crate) screen: &'a mut dyn FnMut() -> String,
     pub(crate) trust_prompt: &'a dyn Fn(&str) -> bool,
@@ -266,7 +274,7 @@ impl Launch {
         if self.quiet(now) < SUBMIT_QUIET && now.duration_since(self.since) < SUBMIT_LATEST {
             return Step::Wait;
         }
-        if self.confirm.is_none() || seen.reaction.status.is_none() || !seen.agent.is_some_and(Known::confirms_prompt) {
+        if self.confirm.is_none() || seen.reaction.status.is_none() || !self.confirms(seen) {
             return Step::Done(b"\r".to_vec());
         }
         self.entered = Some(Entered { first: now, last: now, enters: 1 });
@@ -333,12 +341,21 @@ impl Launch {
         self.send_prompt(now, seen, &screen)
     }
 
+    fn confirms(&self, seen: &Seen) -> bool {
+        seen.session != Session::Unwatched
+            && claude_program(&self.spec.command)
+            && seen.agent.is_some_and(Known::confirms_prompt)
+    }
+
     fn awaits_paste(&self, seen: &Seen, screen: &str, latest: bool) -> bool {
         let Some(agent) = seen.agent.filter(|agent| agent.bracketed_when_ready()) else { return false };
         !latest
             && self.spec.prompt.is_some()
-            && seen.reaction.status.is_some()
-            && (!seen.bracketed_paste || agent.input_box(|| screen.to_string()) == Some(false))
+            && claude_program(&self.spec.command)
+            && seen.session != Session::Unwatched
+            && (seen.session == Session::Pending
+                || !seen.bracketed_paste
+                || agent.input_box(|| screen.to_string()) == Some(false))
     }
 
     pub(crate) fn take_pasted(&mut self) -> Option<Pasted> {
@@ -387,6 +404,13 @@ impl Launch {
             Step::Done(bytes.into_bytes())
         }
     }
+}
+
+fn claude_program(command: &str) -> bool {
+    command
+        .split_whitespace()
+        .map(|word| word.trim_matches(['\'', '"']))
+        .any(|word| std::path::Path::new(word).file_stem().is_some_and(|name| name == "claude"))
 }
 
 fn taken(reaction: &Reaction, pasted: Option<SystemTime>, first: Instant) -> Option<&'static str> {

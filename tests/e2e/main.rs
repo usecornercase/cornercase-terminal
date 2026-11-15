@@ -777,8 +777,8 @@ state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "
 finished() { while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
 said() { n=$((n+1)); printf '{"type":"assistant","timestamp":"2026-10-08T12:00:0%s.000Z","message":{"id":"m%s","model":"claude-opus-5-5","content":[{"type":"text","text":"said: %s"}]}}\n' "$n" "$n" "$1" >> "$t/s$$.jsonl"; }
 : > "$t/s$$.jsonl"
+e=$(printf '\033'); printf '\033[?2004h────────────\n❯ '; sleep 1.5
 state idle
-e=$(printf '\033'); printf '\033[?2004h'
 while printf '────────────\n❯ ' && IFS= read -r line; do
   case "$line" in "$e[200~"*)
     line=${line#"$e[200~"}

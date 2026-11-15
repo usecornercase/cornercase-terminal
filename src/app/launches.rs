@@ -219,7 +219,8 @@ fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes
 fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
     let shell_in_foreground = term.shell_in_foreground();
     let bracketed_paste = term.emulator.bracketed_paste();
-    let agent = term.agent.agent().and_then(agents::Known::of).filter(|_| term.context.session_read());
+    let agent = term.agent.agent().and_then(agents::Known::of);
+    let session = term.context.session_state();
     let application_cursor = term.emulator.application_cursor();
     let shell = term.shell_pid();
     let typed = |line: &str| typed_in(line, shell);
@@ -230,6 +231,7 @@ fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
         shell_in_foreground,
         bracketed_paste,
         agent,
+        session,
         application_cursor,
         screen: &mut screen,
         trust_prompt: round.asks,

@@ -95,6 +95,16 @@ fn a_brief_waits_until_its_agent_draws_its_input_box() {
 }
 
 #[test]
+fn a_brief_waits_until_its_agent_wrote_its_session_file() {
+    let mut run = briefed(Some("late-session"), None);
+
+    run.until("the brief is recorded", |app, own| pane(app, own).context.prompted().is_some());
+    run.until("the launch is over", |app, own| app.agents.launches.of_pane(own).next().is_none());
+
+    assert_eq!((run.lost(), run.prompts(), run.pastes().as_str()), (0, 1, "bracketed\n"));
+}
+
+#[test]
 fn a_fresh_brief_whose_first_enter_is_lost_gets_enter_again() {
     let (mut app, rx, _dir) = team();
     let fake = FakeClaude::running(FakeClaude::CONTROL);

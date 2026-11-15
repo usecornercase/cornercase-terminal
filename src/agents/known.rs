@@ -325,11 +325,29 @@ impl Known {
     }
 
     pub(crate) fn bracketed_when_ready(self) -> bool {
-        matches!(self, Self::Claude)
+        match self {
+            Self::Claude => claude::BRACKETED_WHEN_READY,
+            Self::Codex => codex::BRACKETED_WHEN_READY,
+            Self::Gemini => gemini::BRACKETED_WHEN_READY,
+            Self::Opencode => opencode::BRACKETED_WHEN_READY,
+            Self::Grok => grok::BRACKETED_WHEN_READY,
+            Self::Cursor => cursor::BRACKETED_WHEN_READY,
+            Self::Copilot => copilot::BRACKETED_WHEN_READY,
+            Self::Vibe => vibe::BRACKETED_WHEN_READY,
+        }
     }
 
     pub(crate) fn confirms_prompt(self) -> bool {
-        matches!(self, Self::Claude)
+        match self {
+            Self::Claude => claude::CONFIRMS_PROMPT,
+            Self::Codex => codex::CONFIRMS_PROMPT,
+            Self::Gemini => gemini::CONFIRMS_PROMPT,
+            Self::Opencode => opencode::CONFIRMS_PROMPT,
+            Self::Grok => grok::CONFIRMS_PROMPT,
+            Self::Cursor => cursor::CONFIRMS_PROMPT,
+            Self::Copilot => copilot::CONFIRMS_PROMPT,
+            Self::Vibe => vibe::CONFIRMS_PROMPT,
+        }
     }
 
     pub(crate) fn local_command(self, text: &str) -> bool {

@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.87
 
-- **A prompt no longer stays unsent in Claude Code's input box.** cornercase now waits until Claude Code has drawn its input box and turned bracketed paste on (at most 30 s) before it pastes the prompt. After the `Enter` it checks that Claude Code took the prompt, and presses `Enter` again every 3 s while it sits idle, at most 5 times. This covers queued agents and routines, `cornercase start --prompt`, the Issues dialog's start with **send the prompt** on, and a flow's briefs, for its roles and its orchestrator.
+- **A prompt no longer stays unsent in Claude Code's input box.** cornercase now waits until Claude Code has written its session file, drawn its input box and turned bracketed paste on (at most 30 s) before it pastes the prompt. After the `Enter` it checks that Claude Code took the prompt, and presses `Enter` again every 3 s while it sits idle, at most 5 times. This covers queued agents and routines, `cornercase start --prompt`, the Issues dialog's start with **send the prompt** on, and a flow's briefs, for its roles and its orchestrator.
 - When a prompt is still not taken, cornercase says so instead of showing a run that worked:
   - the queue entry reads `started · pane N · prompt not taken` in yellow, and `queue show` explains it;
   - a toast and a notification say `routine <name> started, but its agent did not take the prompt`;

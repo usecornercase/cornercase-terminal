@@ -325,8 +325,11 @@ impl Pane {
         self.reader.as_ref()?.conversation()
     }
 
-    pub(crate) fn session_read(&self) -> bool {
-        matches!(&self.reader, Some(Reader::Claude(reader)) if reader.session_read())
+    pub(crate) fn session_state(&self) -> agents::launch::Session {
+        match &self.reader {
+            Some(Reader::Claude(reader)) => reader.session_state(),
+            _ => agents::launch::Session::Unwatched,
+        }
     }
 
     pub(crate) fn folder(&self) -> Option<&Path> {

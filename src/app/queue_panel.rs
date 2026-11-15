@@ -323,7 +323,9 @@ impl App {
     pub(super) fn queue_run_unsent(&mut self, pane: u64) -> bool {
         let token = control::server_token();
         let found = self.panels.queued.queue.entries.iter().find(|entry| {
-            !entry.unsent && matches!(&entry.state, State::Started { pane: p, server } if *p == pane && server == token)
+            !entry.unsent
+                && entry.result.is_none()
+                && matches!(&entry.state, State::Started { pane: p, server } if *p == pane && server == token)
         });
         let Some(id) = found.map(|entry| entry.id) else { return false };
         self.panels.queued.set_unsent(id, true);

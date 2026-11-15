@@ -44,6 +44,11 @@ finished() { while [ -d "$d" ] && [ ! -e "$d/finish" ]; do sleep 0.02; done; rm 
 e=$(printf '\033')
 trap 'exit 1' TERM HUP INT
 trap 'printf "\033[?2004l"' EXIT
+if [ -e "$d/late-session" ]; then
+  printf '\033[?2004h\033[H\033[2J\n────────────\n❯ '; sleep 1.5
+  stty -icanon min 0 time 0; early=$(dd bs=65536 count=1 2>/dev/null | wc -c | tr -d ' '); stty icanon
+  [ "$early" = 0 ] || printf 'x\n' >> "$d/lost"
+fi
 state idle
 n=0
 if [ -e "$d/late-box" ]; then

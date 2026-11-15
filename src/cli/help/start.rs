@@ -27,7 +27,8 @@ chosen there by another of the agent's modes, or drops it with --mode default,
 --model adds the agent's own model flag and --effort its effort (Claude Code, Codex, Grok Build and GitHub
 Copilot CLI take one; an older server refuses all three rather than start the agent without them). If it asks
 whether you trust the folder, the question waits for your answer unless settings → agents accept it for
-you. Once it is ready (Claude Code first turns bracketed paste on, at most 30 s), the prompt is pasted and
+you. Once it is ready (Claude Code first writes its session file, turns bracketed paste on and draws its
+input box, at most 30 s), the prompt is pasted and
 submitted; Claude Code's Enter is confirmed: the command waits until it took the prompt, pressing Enter
 again every 3 s while it sits idle, at most 5 times. It then prints the pane's id; it fails if the agent
 never shows up. When the prompt is never taken, a warning says so on stderr (`unsent: true` with
