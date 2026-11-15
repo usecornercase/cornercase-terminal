@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.82
+
+- **A command with `--boot` reaches the server in one round trip instead of two.** A program that polls `ports`, `files list` or `changes file` with `--boot`, as a window that draws another machine does through `--remote`, no longer waits for a `contract` request before each read. The same goes for every command whose request a server from before `--boot` (0.12.108 and older) does not have: such a server refuses it by name, so nothing is done there, and the command still says that the server would ignore `--boot` (status 1). Commands such as `close`, `rename`, `send`, `read` or `events`, which such a server would carry out, still ask it first, unless a check the command makes anyway, such as `--view`'s, already showed that it knows `--boot`.
+- A command with `--boot` now does its own checks before it reaches the server, as it does without the flag: `paste-file --boot` refuses an empty file before it connects, and a usage error comes before a server that is not running.
+
 ## 0.13.81
 
 - **A window that draws Settings shows the phone app's and remote access's notes as they change.** `config.revision` (in `cornercase status --json`, `status --follow` and `view`) now moves each time the note under **phone app** or **remote access** changes: ready at an address, waiting for a Wi-Fi or Tailscale address, a port another program holds, Tailscale answering, a browser connecting or leaving. A program that reads `config` again only when the revision grows no longer keeps showing an old note. `cornercase config set phone_app true` (or `false`) now answers with the note the phone app settled on, and `config set remote true` answers `starting…`, the revision moving again once Tailscale answers.
