@@ -269,8 +269,14 @@ impl App {
                 self.record_run_workspace(id, value);
                 let text = format!("started {}", self.queued_name(id));
                 let workspace = value.get("workspace").and_then(Value::as_u64);
-                let said =
-                    Message { kind: MessageKind::QueueStarted, text, workspace, panes: pane.into_iter().collect() };
+                let said = Message {
+                    kind: MessageKind::QueueStarted,
+                    text,
+                    workspace,
+                    panes: pane.into_iter().collect(),
+                    run: None,
+                    role: None,
+                };
                 self.queue_notice(said, ui::ToastIcon::Check);
             }
             Err(reason) => self.fail_queued(id, reason),
@@ -284,7 +290,8 @@ impl App {
             Some(entry) => format!("routine {} failed: {reason}", entry.task.label),
             None => format!("queued agent {id} failed: {reason}"),
         };
-        let said = Message { kind: MessageKind::QueueFailed, text, workspace: None, panes: Vec::new() };
+        let said =
+            Message { kind: MessageKind::QueueFailed, text, workspace: None, panes: Vec::new(), run: None, role: None };
         self.queue_notice(said, ui::ToastIcon::Bug);
     }
 
@@ -314,7 +321,8 @@ impl App {
             queue::clock::display(run.task.at, zone),
             queue::clock::display(routine.task.at, zone)
         );
-        let said = Message { kind: MessageKind::QueueMissed, text, workspace: None, panes: Vec::new() };
+        let said =
+            Message { kind: MessageKind::QueueMissed, text, workspace: None, panes: Vec::new(), run: None, role: None };
         self.queue_notice(said, ui::ToastIcon::Bug);
     }
 

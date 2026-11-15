@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 
 use super::held::Held;
 use super::wait::{Condition, turn_ended};
-use super::{Asker, Handled, Pending, Stage, Waits, deadline, json, none, pane_ids};
+use super::{Asker, Handled, Pending, Stage, Waits, conflict, deadline, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
 use crate::agents::context;
@@ -33,6 +33,13 @@ fn unfound(pane: u64, agent: agents::Known) -> String {
     format!(
         "cornercase has not found where the {agent} agent in pane {pane} keeps its conversation: {why}; \
          `cornercase read --pane {pane}` prints its screen"
+    )
+}
+
+fn exited_text(pane: u64, role: &str, workspace: u64) -> String {
+    format!(
+        "pane {pane} is {role} in a flow's run, and its agent exited: what you send would be typed into its shell \
+         instead; `cornercase agents reopen --workspace {workspace}` starts it again in that pane, then send again"
     )
 }
 
@@ -75,6 +82,9 @@ impl App {
             )
             .into());
         }
+        if let Some(refusal) = self.exited_role(pane) {
+            return Err(refusal);
+        }
         if !force && self.resume_holds(pane) {
             return Err(format!(
                 "pane {pane} is restarting or resuming its agent, and what you send would reach its shell or its \
@@ -99,6 +109,12 @@ impl App {
             .into());
         }
         Ok(())
+    }
+
+    fn exited_role(&self, pane: u64) -> Option<Refusal> {
+        let (run, role) = self.runs.seat(pane)?;
+        let workspace = run.workspace;
+        self.role_exited(pane, Instant::now()).then(|| conflict(exited_text(pane, role, workspace)))
     }
 
     pub(super) fn put_through(

@@ -78,7 +78,9 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 `survey` in the JSON), where a digit sent alone would answer it: dismiss it with
 `cornercase keys --pane N 0`, or pass --force. So is a pane whose agent is resuming its conversation
 after a restart (`resuming` in the JSON), where the text would reach its shell or its start-up:
-send again once it is back, or pass --force. While a person is typing in the pane the text waits for them
+send again once it is back, or pass --force. So is a pane whose flow role's agent exited (`exited` in
+`cornercase flow runs`), where the text would be typed into its shell, even with --force:
+`cornercase agents reopen --workspace ID` starts it again there. While a person is typing in the pane the text waits for them
 and goes right after their prompt (`held_sends` in the JSON); `cornercase held` acts on it from elsewhere.
 If they choose send now while they have a draft, the text is pasted after it without its Enter, and the
 command fails saying it is in their input. A Claude Code agent whose turn ended on an API error is

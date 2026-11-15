@@ -25,13 +25,7 @@ struct Watched {
     ended: Option<&'static str>,
     stopped: bool,
     exited: Vec<u64>,
-}
-
-fn log_exited(run: &Run, exited: &[u64]) {
-    for pane in exited.iter().filter(|pane| !run.exited.contains(pane)) {
-        let role = run.role_of(*pane).unwrap_or_default();
-        log::info!("flow", "a role's agent exited", workspace = run.workspace, role = role);
-    }
+    back: Vec<String>,
 }
 
 impl App {
@@ -68,15 +62,22 @@ impl App {
             .map(|run| {
                 let exited = self.exited_panes(run, now);
                 let (ended, stopped) = self.orchestrator_state(run, &exited);
-                Watched { id: run.id, ended, stopped, exited }
+                Watched { id: run.id, ended, stopped, back: self.agents_back(run, now), exited }
             })
             .collect();
-        for Watched { id, ended, stopped, exited } in seen {
+        let mut told = Vec::new();
+        for Watched { id, ended, stopped, exited, back } in seen {
             let Some(run) = self.runs.run_mut(id) else { continue };
             run.retry.saw(ended, now);
             run.stopped = stopped.then(|| run.stopped.unwrap_or_else(SystemTime::now));
-            log_exited(run, &exited);
+            run.forget_told(&back);
+            let fresh = run.untold_exits(&exited);
+            run.note_told(&fresh);
             run.exited = exited;
+            told.push((id, fresh));
+        }
+        for (id, fresh) in told.into_iter().filter(|(_, fresh)| !fresh.is_empty()) {
+            self.tell_exits(id, &fresh);
         }
     }
 

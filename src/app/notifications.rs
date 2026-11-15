@@ -114,6 +114,7 @@ pub(in crate::app) enum MessageKind {
     SetupFailed,
     FlowConsent,
     FlowMerged { failed: bool },
+    FlowExited,
 }
 
 impl MessageKind {
@@ -127,6 +128,7 @@ impl MessageKind {
             Self::SetupFailed => "setup-failed",
             Self::FlowConsent => "flow-consent",
             Self::FlowMerged { .. } => "flow-merged",
+            Self::FlowExited => "flow-exited",
         }
     }
 
@@ -140,6 +142,8 @@ pub(in crate::app) struct Message {
     pub(in crate::app) text: String,
     pub(in crate::app) workspace: Option<u64>,
     pub(in crate::app) panes: Vec<u64>,
+    pub(in crate::app) run: Option<u64>,
+    pub(in crate::app) role: Option<String>,
 }
 
 pub(super) fn wording(status: Status) -> (&'static str, sound::Kind) {
@@ -194,6 +198,8 @@ impl App {
             message: notify::clean(&said.text),
             panes: said.panes,
             failed,
+            run: said.run,
+            role: said.role,
         };
         let time = crate::time::Stamp(std::time::SystemTime::now()).to_string();
         self.clients.events.publish(&[Event { time, what, ids }]);

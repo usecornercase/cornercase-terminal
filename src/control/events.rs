@@ -140,6 +140,10 @@ pub(crate) enum What {
         panes: Vec<u64>,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         failed: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        role: Option<String>,
     },
 }
 

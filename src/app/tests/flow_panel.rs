@@ -50,6 +50,8 @@ fn ask(app: &mut App, caller: Option<u64>, command: Command) {
 }
 
 fn send(app: &mut App, from: &str, to: &str, text: &str) {
+    let target = pane(app, to);
+    app.projects.pane_by_mut(target).expect("the pane").agent.update(Some(Activity::Idle), true, Instant::now());
     let send = wire::SendText { pane: Some(pane(app, to)), text: Some(text.into()), ..wire::SendText::default() };
     ask(app, Some(pane(app, from)), Command::Send(send));
 }

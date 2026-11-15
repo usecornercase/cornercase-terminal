@@ -329,7 +329,7 @@ fn worktrees(branch: &str) -> String {
     )
 }
 
-fn names(roles: &[String]) -> String {
+pub(crate) fn names(roles: &[String]) -> String {
     match roles {
         [] => String::new(),
         [one] => one.clone(),

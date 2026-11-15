@@ -250,8 +250,25 @@ fn messages_with_failed(events: &[(u64, Streamed)], reader: u64) -> Vec<(Heard, 
     told(own)
         .into_iter()
         .filter_map(|(what, ids)| match what {
-            crate::control::What::Message { kind, message, panes, failed } => {
+            crate::control::What::Message { kind, message, panes, failed, .. } => {
                 Some(((kind, message, panes, ids), failed))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[cfg(unix)]
+type Exit = (Vec<u64>, Option<u64>, Option<String>);
+
+#[cfg(unix)]
+fn flow_exits(events: &[(u64, Streamed)], reader: u64) -> Vec<Exit> {
+    let own = events.iter().filter(|(client, _)| *client == reader).map(|(_, streamed)| streamed);
+    told(own)
+        .into_iter()
+        .filter_map(|(what, _)| match what {
+            crate::control::What::Message { kind, panes, run, role, .. } if kind == "flow-exited" => {
+                Some((panes, run, role))
             }
             _ => None,
         })
