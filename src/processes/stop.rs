@@ -116,6 +116,14 @@ pub(crate) fn below(pid: i32) -> Vec<Group> {
     process::descendants(pid).into_iter().filter_map(Member::stamped).map(alone).collect()
 }
 
+pub(crate) fn add_below(groups: &mut Vec<Group>, pid: i32) {
+    for group in below(pid) {
+        if !groups.iter().any(|known| known.root.pid == group.root.pid) {
+            groups.push(group);
+        }
+    }
+}
+
 pub(crate) fn stop_all(groups: Vec<Group>) -> Vec<Stopped> {
     escalation::escalate(groups.into_iter().map(Group::refreshed).collect())
 }

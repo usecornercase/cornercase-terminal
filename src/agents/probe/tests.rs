@@ -172,4 +172,26 @@ mod a_contained_run {
         };
         assert!(run_in(contained(), command, "", &running, talk).expect("an answer"));
     }
+
+    #[test]
+    fn stops_what_a_root_that_closed_its_output_started() {
+        let (dir, command) = fake("/bin/sleep 30 >/dev/null 2>&1 &\necho $! > \"$0.pid\"\nexec >&-\nsleep 3");
+        let error = run(contained(), command, "", echoes).expect_err("no answer");
+        assert_eq!(error.to_string(), "fake exited without answering");
+        let pid: i32 =
+            std::fs::read_to_string(dir.path().join("fake.pid")).expect("a pid").trim().parse().expect("a pid");
+        wait_until("what the root started is gone", || !process::running(pid, None));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn stops_what_a_child_left_behind_during_the_grace() {
+        let script = "/bin/sh -c 'sleep 0.5; /bin/sleep 30 >/dev/null 2>&1 & echo $! > \"$0.pid\"' \"$0\" &\necho answer\nsleep 3";
+        let (dir, command) = fake(script);
+        let limits = Limits { grace: Duration::from_millis(1500), ..contained() };
+        assert_eq!(run(limits, command, "", echoes).expect("an answer"), "answer");
+        let pid: i32 =
+            std::fs::read_to_string(dir.path().join("fake.pid")).expect("a pid").trim().parse().expect("a pid");
+        wait_until("the grandchild is gone", || !process::running(pid, None));
+    }
 }

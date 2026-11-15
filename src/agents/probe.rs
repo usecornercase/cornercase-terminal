@@ -156,14 +156,6 @@ fn converse_apart<T: Send + 'static>(
     rx
 }
 
-fn add_new(left: &mut Vec<Group>, found: Vec<Group>) {
-    for group in found {
-        if !left.iter().any(|known| known.root.pid == group.root.pid) {
-            left.push(group);
-        }
-    }
-}
-
 pub(crate) fn run_in<T: Send + 'static>(
     limits: Limits,
     mut command: Command,
@@ -187,9 +179,9 @@ pub(crate) fn run_in<T: Send + 'static>(
         left = stop::below(root);
     }
     if answer.is_ok() {
-        let _ = process::wait_until(&mut child, Instant::now() + limits.grace);
-        if limits.contain {
-            add_new(&mut left, stop::below(root));
+        let exited = process::wait_until(&mut child, Instant::now() + limits.grace);
+        if limits.contain && matches!(exited, Ok(None)) {
+            stop::add_below(&mut left, root);
         }
     }
     let _ = child.kill();
