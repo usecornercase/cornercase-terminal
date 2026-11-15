@@ -10,7 +10,6 @@ const REVIEWER: &str = "---\nname: Code Reviewer\ndescription: Reviews code.\nem
 struct Library {
     app: App,
     _rx: Receiver<AppEvent>,
-    _repo: TempDir,
     config: TempDir,
 }
 
@@ -32,9 +31,8 @@ fn following(id: &str) -> Flow {
 impl Library {
     fn new() -> Self {
         let config = TempDir::new();
-        let repo = TempDir::new();
-        let (app, rx) = app_in(repo.path(), write_config(config.path(), &Config::default()));
-        Self { app, _rx: rx, _repo: repo, config }
+        let (app, rx) = new_app(write_config(config.path(), &Config::default()));
+        Self { app, _rx: rx, config }
     }
 
     fn dir(&self) -> PathBuf {
