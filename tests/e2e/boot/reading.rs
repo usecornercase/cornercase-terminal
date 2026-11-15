@@ -157,3 +157,25 @@ fn the_boot_of_this_run_lets_the_commands_that_read_go_through() {
     let first: Value = serde_json::from_str(&first).expect("a JSON line");
     assert_eq!(first["boot"], boot.as_str(), "{first}");
 }
+
+fn logged(session: &Session, what: &str) -> usize {
+    std::fs::read_to_string(session.dir.join("server.log")).unwrap_or_default().matches(what).count()
+}
+
+#[test]
+fn a_read_with_the_boot_of_this_run_asks_no_contract_first() {
+    let Aims { session, workspace, .. } = a_machine_with_ids_to_aim_at();
+    let boot = boot(&session);
+    std::fs::write(session.dir.join("api").join("a.txt"), "changed\n").expect("write a file");
+    let (contracts, ports, ssh) =
+        (logged(&session, "command=contract"), logged(&session, "command=ports"), ssh_runs(&session));
+
+    remote_says(&session, &at(&["files", "list", "--workspace", &workspace, "--json"], &boot));
+    let changed = there(&session, &at(&["changes", "file", "a.txt", "--workspace", &workspace, "--json"], &boot));
+    assert_ne!(changed.status.code(), Some(4), "{changed:?}");
+    remote_says(&session, &at(&["ports", "--workspace", &workspace, "--json"], &boot));
+
+    session.wait_for_file("server.log", "the last read is logged", |log| log.matches("command=ports").count() > ports);
+    assert_eq!(logged(&session, "command=contract"), contracts, "no read asked the server for its contract first");
+    assert_eq!(ssh_runs(&session), ssh + 3, "each read used one ssh connection");
+}
