@@ -44,7 +44,7 @@ Press `Enter` or click **`schedule`** to save; `Esc` or **`cancel`** closes the 
 
 ## When entries run
 
-The server starts every due entry, with no concurrency limit. Entries at the same instant start in insertion order. Each uses the normal worktree, tab and agent launch path and leaves the active pane selected. A toast and desktop notification announce success or failure. Claude Code gets its prompt once its input is ready, and cornercase presses `Enter` again while it sits idle with the prompt unsent. If the agent still never takes it, the notice says `started, but its agent did not take the prompt` instead, and the entry keeps the `prompt not taken` mark until the agent works or a result is kept.
+The server starts every due entry, with no concurrency limit. Entries at the same instant start in insertion order. Each uses the normal worktree, tab and agent launch path and leaves the active pane selected. A toast and desktop notification announce success or failure. Claude Code gets its prompt once its input is ready, and cornercase presses `Enter` again while it sits idle with the prompt unsent. If the agent still never takes it, the notice says `started, but its agent did not take the prompt` instead, and the entry keeps the `prompt not taken` mark until the agent works.
 
 The server must be running, with its session opened at least once after a restart, by a window or by `cornercase start-server`. Closing the UI leaves scheduled work running. The queue does not wake a sleeping machine or start a stopped server.
 

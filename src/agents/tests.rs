@@ -890,6 +890,7 @@ mod names_program {
     #[case::a_wrapper("claude-yolo --resume x", false)]
     #[case::a_mapped_fake("/tmp/flow-agent --resume x", false)]
     #[case::an_npm_package("npx @anthropic-ai/claude-code", false)]
+    #[case::another_program_with_a_shim_name("codex.cmd resume x", false)]
     fn finds_the_program_a_kind_is_typed_as(#[case] command: &str, #[case] expected: bool) {
         assert_eq!(names_program(command, Known::Claude), expected);
     }
@@ -898,6 +899,8 @@ mod names_program {
     #[rstest]
     #[case::a_shim_call(r"& 'C:\Users\a\.local\bin\claude.exe' --resume x")]
     #[case::capitals(r"C:\Users\a\.local\bin\CLAUDE.EXE --resume x")]
+    #[case::a_cmd_shim(r"C:\tools\claude.cmd --resume x")]
+    #[case::a_ps1_shim(r"& 'C:\tools\Claude.PS1' --resume x")]
     fn finds_it_on_windows_too(#[case] command: &str) {
         assert!(names_program(command, Known::Claude));
     }

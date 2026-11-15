@@ -180,7 +180,6 @@ impl QueueRuntime {
         at: i64,
     ) -> Option<&queue::outcome::Outcome> {
         let entry = self.queue.entry_mut(id)?;
-        entry.unsent = false;
         let outcome = queue::outcome::Outcome::captured(entry.result.take(), taken, said, at);
         Some(&*entry.result.insert(outcome))
     }

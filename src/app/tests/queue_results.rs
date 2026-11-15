@@ -131,12 +131,12 @@ fn the_closing_line_is_sent_and_never_stored() {
 }
 
 #[test]
-fn a_kept_result_clears_unsent() {
+fn a_kept_result_leaves_unsent_as_it_is() {
     let (mut app, _rx, _dirs) = opened();
     let id = gone(&mut app);
     app.panels.queued.set_unsent(id, true);
 
     keep(&mut app, id, "done", None);
 
-    assert!(!app.panels.queued.queue().entry(id).expect("entry").unsent);
+    assert!(app.panels.queued.queue().entry(id).expect("entry").unsent);
 }
