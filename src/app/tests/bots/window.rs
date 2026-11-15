@@ -307,3 +307,15 @@ fn the_text_read_stays_put_when_steps_arrive_while_scrolled_up() {
     std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
     assert_eq!(row(&before), row(&after), "{before}\n{after}");
 }
+
+#[test]
+fn retry_under_a_failed_message_sends_it_again() {
+    let mut c = chat(FAILED);
+    show(&mut c);
+    c.say("hi");
+    c.retried();
+    assert_eq!(c.lines().last().map(|line| line.kind), Some(chat::Kind::Bot));
+    let argv = &c.argvs()[1];
+    assert!(argv.trim_end().ends_with("## The user says\\n\\nhi\"]"), "{argv}");
+    assert!(!argv.contains("## You were just made"), "{argv}");
+}

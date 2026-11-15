@@ -66,8 +66,8 @@ and its answers. --after LINE and --last N cut it.
 
 With --json it prints {\"bot\", \"name\", \"lines\": [{\"id\", \"at\", \"kind\", \"text\"}]}. A kind is you, bot, step,
 error or notice; a you line may be held, a step names its tool, a bot line has its model, tokens
-and conversation, and a line of a routine's run has routine, the run's queue id; a setup turn starts with the notice
-`setting up` in place of a you line.";
+and conversation, and a line of a routine's run has routine, the run's queue id; a setup turn starts
+with the notice `setting up` in place of a you line.";
 
 pub(in crate::cli) const BOT_HELP: &str =
     "A bot is an agent of your own, outside any project: a name, a folder, a memory and a chat. Each

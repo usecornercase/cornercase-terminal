@@ -3,8 +3,9 @@
 use super::following_the_app::follow as follow_app;
 use super::*;
 use crate::agents::Known;
+use crate::app::tests::bots::settle;
 use crate::bots::chat::Kind;
-use crate::test_util::{TempDir, fake_program, fixture, wait_until};
+use crate::test_util::{TempDir, fake_program, fixture};
 
 mod routines;
 
@@ -62,19 +63,16 @@ impl Bots {
         self.ask("bot", &json!({"action": "new", "name": "PRs", "agent": "claude", "about": about}))
     }
 
-    fn idle(&mut self) {
-        let Self { app, rx, .. } = self;
-        wait_until("the turn ends", || {
-            drain(app, rx);
-            app.panels.bots.live[0].turn.is_none()
-        });
+    fn settle(&mut self) {
+        settle(&mut self.app, &self.rx);
     }
 
     fn bot_events(&mut self) -> Vec<String> {
         told(&streamed(&mut self.app))
             .into_iter()
             .filter_map(|(what, _)| match what {
-                wire::What::Bot { line, state, change, .. } => {
+                wire::What::Bot { bot, line, state, change } => {
+                    assert_eq!(bot, "prs");
                     Some(line.map(|line| format!("line {:?}", line.kind)).or(state).or(change).expect("one of them"))
                 }
                 _ => None,
@@ -142,16 +140,7 @@ fn the_events_of_a_turn_come_in_order_and_the_steps_before_the_answer() {
     follow(&mut b.app, &[]);
     b.new_prs();
     b.ask("bot", &json!({"action": "say", "bot": "prs", "text": "hi", "wait": true}));
-    let seen: Vec<String> = told(&streamed(&mut b.app))
-        .into_iter()
-        .filter_map(|(what, _)| match what {
-            wire::What::Bot { bot, line, state, change } => {
-                assert_eq!(bot, "prs");
-                Some(line.map(|line| format!("line {:?}", line.kind)).or(state).or(change).expect("one of them"))
-            }
-            _ => None,
-        })
-        .collect();
+    let seen = b.bot_events();
     assert_eq!(seen, ["created", "thinking", "line You", "line Step", "line Step", "line Bot", "idle"]);
 }
 
@@ -161,7 +150,7 @@ fn the_events_of_a_setup_come_in_order() {
     follow(&mut b.app, &[]);
     let made = b.new_prs_for("review my PRs");
     assert_eq!(made["state"], "thinking");
-    b.idle();
+    b.settle();
     assert_eq!(b.bot_events(), ["created", "thinking", "line Notice", "line Step", "line Step", "line Bot", "idle"]);
 }
 
@@ -179,10 +168,10 @@ fn a_setup_is_asked_again_over_the_socket() {
     assert_eq!(b.refuse(&json!({"action": "setup", "bot": "prs"})).code, "busy");
     std::fs::write(b.program.with_extension("after"), ANSWER).expect("the answer");
     std::fs::remove_file(b.program.with_extension("hold")).expect("release");
-    b.idle();
+    b.settle();
     let again = b.ask("bot", &json!({"action": "setup", "bot": "prs"}));
     assert_eq!((again["line"]["kind"].as_str(), again["line"]["text"].as_str()), (Some("notice"), Some("setting up")));
-    b.idle();
+    b.settle();
     let history = b.ask("bot", &json!({"action": "history", "bot": "prs"}));
     let setups = history["lines"].as_array().expect("lines").iter().filter(|line| line["text"] == "setting up").count();
     assert_eq!(setups, 2);

@@ -9,6 +9,7 @@ use crate::bots::chat::{self, Line};
 use crate::bots::folder;
 use crate::bots::sample as bot;
 use crate::test_util::{BotSleepers, fake_program, fixture, wait_until};
+use crate::ui::{ChatHit, RowHit};
 
 fn chat_of(dir: &Path, id: &str) -> Vec<Line> {
     chat::read(&folder::of(dir, id).join(folder::CHAT_FILE))
@@ -69,7 +70,7 @@ fn chat(out: &str) -> Chat {
     chat_with(out, Access::Cornercase)
 }
 
-pub(in crate::app::tests) fn install_agent(app: &mut App, out: &str) -> (TempDir, TempDir, PathBuf) {
+fn install_agent(app: &mut App, out: &str) -> (TempDir, TempDir, PathBuf) {
     let (dir, bin) = (TempDir::new(), TempDir::new());
     let claude = fake_program(bin.path(), "claude");
     std::fs::write(claude.with_extension("out"), out).expect("canned output");
@@ -92,13 +93,39 @@ fn chat_with(out: &str, access: Access) -> Chat {
     Chat { app, rx, dir, claude, bin }
 }
 
+pub(in crate::app::tests) fn settle(app: &mut App, rx: &Receiver<AppEvent>) {
+    wait_until("the turn ends", || {
+        drain(app, rx);
+        app.panels.bots.live[0].turn.is_none()
+    });
+}
+
+fn retry_at(app: &mut App) -> Position {
+    render(app, AREA);
+    let areas = app.chat_geometry(AREA);
+    let shown = app.shown_chat(AREA).expect("a chat");
+    for y in areas.lines.y..areas.lines.bottom() {
+        for x in areas.lines.x..areas.lines.right() {
+            let pos = Position::new(x, y);
+            if matches!(ui::chat_hit(&areas, &shown.view, pos), Some(ChatHit::Row(RowHit::Retry(_)))) {
+                return pos;
+            }
+        }
+    }
+    panic!("no retry button");
+}
+
 impl Chat {
     fn settle(&mut self) {
-        let Self { app, rx, .. } = self;
-        wait_until("the turn ends", || {
-            drain(app, rx);
-            app.panels.bots.live[0].turn.is_none()
-        });
+        settle(&mut self.app, &self.rx);
+    }
+
+    fn retried(&mut self) {
+        self.settle();
+        std::fs::write(self.claude.with_extension("out"), ANSWER).expect("canned output");
+        let at = retry_at(&mut self.app);
+        click(&mut self.app, at);
+        self.settle();
     }
 
     fn lines(&self) -> Vec<Line> {

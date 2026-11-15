@@ -20,13 +20,13 @@ pub(crate) enum BotAction {
     #[command(about = "Make a bot: a name, a folder, a memory and a chat; with --about it sets itself up at once", after_help = BOT_NEW_HELP)]
     New(NewArgs),
     #[command(about = "Run the bot's setup turn again: it reads bot.md and schedules what it asks for", after_help = BOT_SETUP_HELP)]
-    Setup(BotPrint),
+    Setup(BotNameArgs),
     #[command(about = "List the bots with their state and unread answers")]
     List(Print),
     #[command(about = "Change a bot's name, model, effort, account or access, from its next message", after_help = BOT_EDIT_HELP)]
     Edit(EditArgs),
     #[command(about = "Delete a bot, its folder and its queue entries; refused while it answers")]
-    Remove(BotPrint),
+    Remove(BotNameArgs),
     #[command(about = "Write to a bot; it answers in its chat", after_help = BOT_SAY_HELP)]
     Say(SayArgs),
     #[command(about = "Print a bot's chat", after_help = BOT_HISTORY_HELP)]
@@ -48,7 +48,7 @@ pub(crate) struct Target {
 }
 
 #[derive(Debug, Args)]
-pub(crate) struct BotPrint {
+pub(crate) struct BotNameArgs {
     #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
     pub(crate) bot: String,
     #[command(flatten)]

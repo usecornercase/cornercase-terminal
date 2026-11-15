@@ -2,7 +2,7 @@ use std::io::Read as _;
 
 use serde_json::Value;
 
-use super::args::bot::{BotAction, BotPrint, EditArgs, HistoryArgs, NewArgs, SayArgs};
+use super::args::bot::{BotAction, BotNameArgs, EditArgs, HistoryArgs, NewArgs, SayArgs};
 use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
@@ -41,7 +41,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
     }
 }
 
-fn removed(args: BotPrint) -> Result<bool> {
+fn removed(args: BotNameArgs) -> Result<bool> {
     let value = send(BotRequest::Remove(target(args.bot)))?;
     if args.print.json {
         print_json(&value)?;
@@ -59,7 +59,7 @@ fn removed(args: BotPrint) -> Result<bool> {
     Ok(true)
 }
 
-fn set_up(args: &BotPrint) -> Result<bool> {
+fn set_up(args: &BotNameArgs) -> Result<bool> {
     use_bot_setup()?;
     let value = send(BotRequest::Setup(target(args.bot.clone())))?;
     if args.print.json {

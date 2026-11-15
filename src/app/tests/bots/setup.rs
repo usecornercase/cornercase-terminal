@@ -1,7 +1,6 @@
 use super::*;
 use crate::control::bots::{EditBot, NewBot};
 use crate::control::contract::Code;
-use crate::ui::{ChatHit, RowHit};
 
 const ABOUT: &str = "Review my open pull requests every weekday at 9";
 const SESSION: &str = "8b610e1d-23f2-4ef4-8666-258ef8b082dc";
@@ -17,21 +16,6 @@ impl Chat {
         let new = NewBot { name: "PRs".into(), agent: Some("claude".into()), about: about.into(), ..NewBot::default() };
         self.app.bot_new(&new).expect("a bot")
     }
-}
-
-fn retry_at(app: &mut App) -> Position {
-    render(app, AREA);
-    let areas = app.chat_geometry(AREA);
-    let shown = app.shown_chat(AREA).expect("a chat");
-    for y in areas.lines.y..areas.lines.bottom() {
-        for x in areas.lines.x..areas.lines.right() {
-            let pos = Position::new(x, y);
-            if matches!(ui::chat_hit(&areas, &shown.view, pos), Some(ChatHit::Row(RowHit::Retry(_)))) {
-                return pos;
-            }
-        }
-    }
-    panic!("no retry button");
 }
 
 #[test]
@@ -147,29 +131,8 @@ fn retry_under_a_failed_setup_runs_the_setup_again() {
     c.app.window_attached();
     c.make(ABOUT);
     c.app.show_bot(0);
-    c.settle();
-    std::fs::write(c.claude.with_extension("out"), ANSWER).expect("canned output");
-    let at = retry_at(&mut c.app);
-    click(&mut c.app, at);
-    c.settle();
+    c.retried();
     assert_eq!(c.kinds(), [Notice, Error, Notice, Step, Step, Bot]);
     assert!(c.argvs()[1].contains("## You were just made"));
     assert!(c.app.messages.toast.is_none());
-}
-
-#[test]
-fn retry_under_a_failed_message_sends_it_again() {
-    let mut c = chat(FAILED);
-    c.app.window_attached();
-    c.app.show_bot(0);
-    c.say("hi");
-    c.settle();
-    std::fs::write(c.claude.with_extension("out"), ANSWER).expect("canned output");
-    let at = retry_at(&mut c.app);
-    click(&mut c.app, at);
-    c.settle();
-    assert_eq!(c.lines().last().map(|line| line.kind), Some(chat::Kind::Bot));
-    let argv = &c.argvs()[1];
-    assert!(argv.trim_end().ends_with("## The user says\\n\\nhi\"]"), "{argv}");
-    assert!(!argv.contains("## You were just made"), "{argv}");
 }
