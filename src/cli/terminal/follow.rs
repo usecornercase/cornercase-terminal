@@ -18,6 +18,7 @@ const ONLY_STANDARD_INPUT: &str =
 const NEEDS_A_PANE: &str = "this line names no pane and --pane was not given: add \"pane\": ID to the line";
 
 pub(super) fn run(args: &InputArgs) -> Result<()> {
+    client::check_boot()?;
     only_standard_input(&args.events)?;
     if args.popup {
         client::use_popup_terminal()?;

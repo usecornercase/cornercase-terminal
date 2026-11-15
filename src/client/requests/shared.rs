@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 
 use serde_json::Value;
 
-use super::{Envelope, ask_with, control, offered, used_remote};
+use super::{Envelope, ask_with, control, listed, offered, used_remote};
 use crate::client::Link;
 use crate::error::{Error, Result};
 use crate::os::console::{AsFd, OwnedFd};
@@ -101,7 +101,7 @@ fn asked(shared: &mut Shared, name: &'static str, command: control::Command, env
 
 fn remembered(error: &Error) -> Option<Error> {
     Some(match error {
-        Error::Control(_) | Error::StaleBoot(_) => return None,
+        Error::Control(_) | Error::StaleBoot(_) | Error::IgnoresBoot(_) => return None,
         Error::ServerGone => Error::ServerGone,
         Error::ServerLost => Error::ServerLost,
         Error::ReaderGone => Error::ReaderGone,
@@ -119,14 +119,4 @@ pub(super) fn require(feature: &str, lacks: &str) -> Result<()> {
         }
         offered(shared.features.as_deref().unwrap_or_default(), feature, lacks, used_remote())
     })?
-}
-
-fn listed(asked: Result<Value>) -> Result<Vec<String>> {
-    match asked {
-        Err(Error::Control(_) | Error::OldServer(_)) => Ok(Vec::new()),
-        asked => {
-            let descriptor: control::contract::Descriptor = super::answer(asked?)?;
-            Ok(descriptor.features)
-        }
-    }
 }
