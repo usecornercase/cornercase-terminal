@@ -195,6 +195,19 @@ mod from_the_web {
     }
 
     #[test]
+    fn a_repository_skips_hidden_and_deep_folders_as_a_folder_does() {
+        let deep = format!("{}reviewer.md", "d/".repeat(MAX_DEPTH + 1));
+        let archive =
+            archive_of(&[("engineering/reviewer.md", REVIEWER), (".github/tester.md", TESTER), (&deep, TESTER)]);
+        let server = FakeHttp::start(vec![("GET /octo/agents/tar.gz/HEAD", 200, archive)]);
+        let source = Source::Repo { repo: "octo/agents".into(), path: String::new() };
+
+        let gathered = gather(&source, &hosts(&server)).expect("gathered");
+
+        assert_eq!(ids(&gathered), [("reviewer.md", Some("octo/agents/engineering/reviewer.md"))]);
+    }
+
+    #[test]
     fn a_folder_of_a_repository_is_read_alone() {
         let archive = archive_of(&[("engineering/reviewer.md", REVIEWER), ("testing/tester.md", TESTER)]);
         let server = FakeHttp::start(vec![("GET /octo/agents/tar.gz/HEAD", 200, archive)]);

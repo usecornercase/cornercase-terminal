@@ -278,6 +278,18 @@ mod the_personas {
     }
 
     #[test]
+    fn an_id_that_would_leave_the_folder_writes_nothing() {
+        let temp = TempDir::new();
+        let mut two = reviewer();
+        two.insert("../../escaped".into(), "out".into());
+
+        let error = ensure_personas(temp.path(), &two).expect_err("not an id");
+
+        assert!(error.to_string().contains("is not a persona id"), "{error}");
+        assert!(!temp.path().join(PERSONAS).exists());
+    }
+
+    #[test]
     fn none_make_no_folder() {
         let temp = TempDir::new();
         assert_eq!(ensure_personas(temp.path(), &BTreeMap::new()).expect("nothing"), 0);

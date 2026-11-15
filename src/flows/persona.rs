@@ -226,28 +226,46 @@ pub(crate) fn save(dir: &Path, persona: &Persona) -> Result<PathBuf> {
 }
 
 pub(crate) fn save_all(dir: &Path, personas: &[Persona]) -> std::result::Result<Vec<PathBuf>, String> {
-    let kept: Vec<Option<Vec<u8>>> =
-        personas.iter().map(|persona| std::fs::read(path(dir, &persona.id)).ok()).collect();
+    let kept = personas.iter().map(|persona| backup(dir, persona)).collect::<std::result::Result<Vec<_>, _>>()?;
     let mut saved = Vec::new();
     for persona in personas {
         match save(dir, persona) {
             Ok(path) => saved.push(path),
             Err(e) => {
-                undo(&saved, &kept);
-                return Err(format!("could not save the persona `{}`: {e}", persona.id));
+                let mut error = format!("could not save the persona `{}`: {e}", persona.id);
+                for failed in undo(&saved, &kept) {
+                    let _ = write!(error, "; {failed}");
+                }
+                return Err(error);
             }
         }
     }
     Ok(saved)
 }
 
-fn undo(saved: &[PathBuf], kept: &[Option<Vec<u8>>]) {
+fn backup(dir: &Path, persona: &Persona) -> std::result::Result<Option<Vec<u8>>, String> {
+    let path = path(dir, &persona.id);
+    let unread = |e: std::io::Error| format!("cannot read your persona `{}` to keep a copy of it: {e}", persona.id);
+    match std::fs::metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(unread(e)),
+        Ok(meta) if !meta.is_file() => Ok(None),
+        Ok(_) => std::fs::read(&path).map(Some).map_err(unread),
+    }
+}
+
+fn undo(saved: &[PathBuf], kept: &[Option<Vec<u8>>]) -> Vec<String> {
+    let mut failed = Vec::new();
     for (path, before) in saved.iter().zip(kept) {
-        let _ = match before {
+        let undone = match before {
             Some(bytes) => persist::write_bytes(path, bytes, persist::Kind::Synced).map(drop),
             None => std::fs::remove_file(path),
         };
+        if let Err(e) = undone {
+            failed.push(format!("could not put back {}: {e}", path.display()));
+        }
     }
+    failed
 }
 
 pub(crate) fn remove(dir: &Path, id: &str) -> Result<PathBuf> {

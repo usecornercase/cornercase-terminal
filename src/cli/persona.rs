@@ -71,9 +71,8 @@ fn import(args: &PersonaImportArgs) -> Result<()> {
         let preview = with_warning(preview, &source);
         return if args.print.json { print_json(&preview) } else { print_out(&checked(&answer(preview)?)) };
     }
-    if source.is_web() && !args.yes && !confirmed(&answer(preview)?, &source)? {
-        print_out("not imported\n")?;
-        return Ok(());
+    if source.is_web() && !args.yes && !confirmed(&answer(preview.clone())?, &source)? {
+        return if args.print.json { print_json(&with_warning(preview, &source)) } else { print_out("not imported\n") };
     }
     request.check = false;
     let value = ask("persona import", Command::PersonaImport(request))?;

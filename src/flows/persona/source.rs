@@ -216,7 +216,9 @@ impl Tree {
     }
 
     fn wanted(relative: &str) -> bool {
-        relative == DIVISIONS || has_extension(relative)
+        let folders: Vec<&str> = relative.rsplit_once('/').map_or(Vec::new(), |(up, _)| up.split('/').collect());
+        let reachable = folders.len() <= MAX_DEPTH && !folders.iter().any(|folder| folder.starts_with('.'));
+        reachable && (relative == DIVISIONS || has_extension(relative))
     }
 }
 

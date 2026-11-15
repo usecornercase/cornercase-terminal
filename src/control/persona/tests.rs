@@ -76,3 +76,20 @@ fn a_strict_client_may_send_a_null_source() {
 
     assert_eq!(crate::control::contract::unknown_fields(&raw, &parsed), None);
 }
+
+#[rstest::rstest]
+#[case::a_flows_source(json!({"name": "F", "source": null}), "source")]
+#[case::a_stages_persona(json!({"name": "F", "stages": [{"roles": [], "persona": null}]}), "stages.0.persona")]
+fn a_null_key_elsewhere_is_still_refused(#[case] raw: serde_json::Value, #[case] stray: &str) {
+    let parsed: crate::control::FlowSpec = serde_json::from_value(raw.clone()).expect("a spec");
+
+    assert_eq!(crate::control::contract::unknown_fields(&raw, &parsed).as_deref(), Some(stray));
+}
+
+#[test]
+fn a_null_source_beside_the_personas_is_still_refused() {
+    let raw = json!({"personas": [], "source": null});
+    let parsed: PersonaImport = serde_json::from_value(raw.clone()).expect("an import");
+
+    assert_eq!(crate::control::contract::unknown_fields(&raw, &parsed).as_deref(), Some("source"));
+}

@@ -85,6 +85,9 @@ pub(crate) fn ensure_personas(dir: &Path, personas: &BTreeMap<String, String>) -
     if personas.is_empty() {
         return Ok(0);
     }
+    if let Some(id) = personas.keys().find(|id| !crate::flows::persona::valid_id(id)) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("`{id}` is not a persona id")));
+    }
     ensure(&dir.join(PERSONAS))?;
     let mut written = 0;
     for (id, text) in personas {
