@@ -574,17 +574,31 @@ mod a_server_that_knows_no_boot {
         stream.write_all(&message).expect("an answer");
     }
 
-    fn answering(session: &Session, answer: &'static str) -> thread::JoinHandle<Vec<String>> {
+    fn answering_with(
+        session: &Session,
+        answer: impl Fn(&str) -> String + Send + 'static,
+    ) -> thread::JoinHandle<Vec<String>> {
         let listener = UnixListener::bind(session.socket()).expect("the fake server's socket");
         thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("a client");
             let mut seen = Vec::new();
             while let Some(text) = read_frame(&mut stream) {
+                write_frame(&mut stream, &answer(&text));
                 seen.push(text);
-                write_frame(&mut stream, answer);
             }
             seen
         })
+    }
+
+    fn answering(session: &Session, answer: &'static str) -> thread::JoinHandle<Vec<String>> {
+        answering_with(session, move |_| answer.to_string())
+    }
+
+    fn refusing_by_name(text: &str) -> String {
+        let name = text.split(r#""command":""#).nth(1).and_then(|rest| rest.split('"').next()).expect("a command");
+        format!(
+            r#"{{"error":"the running cornercase server (0.12.108) has no `{name}` command; update cornercase and restart the server"}}"#
+        )
     }
 
     #[rstest]
@@ -592,27 +606,15 @@ mod a_server_that_knows_no_boot {
     #[case::rename_without_the_feature(WITHOUT_THE_FEATURE, &["rename", "--workspace", "7", "x", "--boot", "1-1"])]
     #[case::close_without_a_contract(WITHOUT_A_CONTRACT, &["close", "--workspace", "7", "--boot", "1-1"])]
     #[case::mark_without_the_feature(WITHOUT_THE_FEATURE, &["mark", "--pane", "7", "--boot", "1-1"])]
-    #[case::move_pane_without_the_feature(
-        WITHOUT_THE_FEATURE,
-        &["move-pane", "--pane", "7", "--target", "8", "--place", "swap", "--boot", "1-1"]
-    )]
     #[case::account_restart_without_the_feature(
         WITHOUT_THE_FEATURE,
         &["account", "restart", "claude", "--pane", "7", "--boot", "1-1"]
     )]
-    #[case::context_without_a_contract(WITHOUT_A_CONTRACT, &["context", "--pane", "7", "--boot", "1-1"])]
     #[case::collapse_without_the_feature(WITHOUT_THE_FEATURE, &["collapse", "--pane", "7", "--boot", "1-1"])]
     #[case::expand_without_a_contract(WITHOUT_A_CONTRACT, &["expand", "--worktree", "fix/login", "--boot", "1-1"])]
     #[case::send_without_the_feature(WITHOUT_THE_FEATURE, &["send", "--pane", "7", "x", "--boot", "1-1"])]
-    #[case::input_without_a_contract(WITHOUT_A_CONTRACT, &["input", "--pane", "7", r#"{"text": "x"}"#, "--boot", "1-1"])]
-    #[case::paste_file_without_the_feature(
-        WITHOUT_THE_FEATURE,
-        &["paste-file", "--pane", "7", "shot.png", "--boot", "1-1"]
-    )]
     #[case::keys_without_the_feature(WITHOUT_THE_FEATURE, &["keys", "--pane", "7", "enter", "--boot", "1-1"])]
-    #[case::held_without_a_contract(WITHOUT_A_CONTRACT, &["held", "--pane", "7", "--send-now", "--boot", "1-1"])]
     #[case::input_follow_without_the_feature(WITHOUT_THE_FEATURE, &["input", "--pane", "7", "--follow", "-", "--boot", "1-1"])]
-    #[case::plugin_run_without_a_contract(WITHOUT_A_CONTRACT, &["plugin", "run", "p", "a", "--pane", "7", "--boot", "1-1"])]
     #[case::split_without_the_feature(WITHOUT_THE_FEATURE, &["split", "--pane", "7", "--boot", "1-1"])]
     #[case::queue_add_without_the_feature(
         WITHOUT_THE_FEATURE,
@@ -621,13 +623,9 @@ mod a_server_that_knows_no_boot {
     #[case::read_without_the_feature(WITHOUT_THE_FEATURE, &["read", "--pane", "7", "--boot", "1-1"])]
     #[case::wait_without_a_contract(WITHOUT_A_CONTRACT, &["wait", "--pane", "7", "--boot", "1-1"])]
     #[case::events_without_the_feature(WITHOUT_THE_FEATURE, &["events", "--boot", "1-1"])]
-    #[case::surface_without_a_contract(WITHOUT_A_CONTRACT, &["surface", "--tab", "7", "--cols", "80", "--rows", "24", "--boot", "1-1"])]
-    #[case::view_without_the_feature(WITHOUT_THE_FEATURE, &["view", "--boot", "1-1"])]
     #[case::changes_shared_without_a_contract(WITHOUT_A_CONTRACT, &["changes", "shared", "--workspace", "7", "--boot", "1-1"])]
     #[case::flow_run_without_the_feature(WITHOUT_THE_FEATURE, &["flow", "run", "Quick", "--prompt", "x", "--boot", "1-1"])]
-    #[case::go_without_the_feature(WITHOUT_THE_FEATURE, &["go", "cc-1-1", "--boot", "1-1"])]
-    #[case::clone_without_the_feature(WITHOUT_THE_FEATURE, &["clone", "https://x/y.git", "--boot", "1-1"])]
-    fn is_refused_by_name_and_never_gets_the_request(#[case] answer: &'static str, #[case] args: &[&str]) {
+    fn an_operation_it_runs_gets_only_the_contract(#[case] answer: &'static str, #[case] args: &[&str]) {
         let (here, far) = (Session::new(), Session::new());
         let (near, away) = (answering(&here, answer), answering(&far, answer));
 
@@ -639,6 +637,43 @@ mod a_server_that_knows_no_boot {
         for seen in [near.join().expect("the fake server"), away.join().expect("the fake server")] {
             assert_eq!(seen.len(), 1, "{seen:?}");
             assert!(seen[0].contains(r#""command":"contract""#), "{seen:?}");
+        }
+    }
+
+    #[rstest]
+    #[case::move_pane(&["move-pane", "--pane", "7", "--target", "8", "--place", "swap"], "move-pane")]
+    #[case::context(&["context", "--pane", "7"], "context")]
+    #[case::input(&["input", "--pane", "7", r#"{"text": "x"}"#], "input")]
+    #[case::held(&["held", "--pane", "7", "--send-now"], "held")]
+    #[case::surface(&["surface", "--tab", "7", "--cols", "80", "--rows", "24"], "surface")]
+    #[case::view(&["view"], "view")]
+    #[case::go(&["go", "cc-1-1"], "go")]
+    #[case::clone(&["clone", "https://x/y.git"], "clone")]
+    #[case::paste_file(&["paste-file", "--pane", "7", "FILE"], "paste-file")]
+    #[case::plugin_run(&["plugin", "run", "p", "a", "--pane", "7"], "plugin-actions")]
+    #[case::ports(&["ports", "--workspace", "7"], "ports")]
+    #[case::files_list(&["files", "list", "--workspace", "7"], "files-list")]
+    #[case::changes_file(&["changes", "file", "a.txt", "--workspace", "7"], "changes-file")]
+    fn a_newer_operation_goes_alone_and_is_refused_by_name(#[case] args: &[&str], #[case] operation: &str) {
+        let (here, far) = (Session::new(), Session::new());
+        let file = here.dir.join("shot.png");
+        std::fs::write(&file, "x").expect("write the file");
+        let file = file.display().to_string();
+        let args: Vec<&str> = args.iter().map(|arg| if *arg == "FILE" { file.as_str() } else { arg }).collect();
+        let args = [args, vec!["--boot", "1-1"]].concat();
+        let (near, away) = (answering_with(&here, refusing_by_name), answering_with(&far, refusing_by_name));
+
+        let locally = here.cold(&args);
+        let remotely = there(&far, &args);
+
+        assert!(refused(&locally, 1, "server would ignore --boot"), "{locally:?}");
+        assert!(refused(&remotely, 1, "server on `devbox` would ignore --boot"), "{remotely:?}");
+        for seen in [near.join().expect("the fake server"), away.join().expect("the fake server")] {
+            assert_eq!(seen.len(), 1, "{seen:?}");
+            assert!(
+                seen[0].contains(&format!(r#""command":"{operation}""#)) && seen[0].contains(r#""boot":"1-1""#),
+                "{seen:?}"
+            );
         }
     }
 }
