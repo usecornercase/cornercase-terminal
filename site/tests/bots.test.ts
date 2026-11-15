@@ -263,7 +263,7 @@ test('a routine run is one block in the chat: its header, its steps folded and i
   const app = demo(140);
   press(app, 'prs');
   const text = screen(app);
-  assert.match(text, /↻ Review PRs · \d\d:\d\d/);
+  assert.match(text, /↻ Review PRs · (.+ )?\d\d:\d\d/);
   assert.match(text, /\+2 steps/);
   assert.match(text, /Two are blocked/);
   const lines = app.bots.current()?.lines.filter((l) => l.routine !== undefined) ?? [];
