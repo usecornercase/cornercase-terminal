@@ -23,11 +23,17 @@ fn named(command: &Command, matches: &ArgMatches, long: &str) -> bool {
         .is_some_and(|arg| matches.value_source(arg.get_id().as_str()) == Some(ValueSource::CommandLine))
 }
 
+fn arg_says(arg: &clap::Arg, words: &str) -> bool {
+    let mentions = |text: Option<String>| text.is_some_and(|text| text.contains(words));
+    mentions(arg.get_help().map(ToString::to_string)) || mentions(arg.get_long_help().map(ToString::to_string))
+}
+
+fn says(command: &Command, words: &str) -> bool {
+    command.get_arguments().any(|arg| arg_says(arg, words))
+}
+
 fn defaults_here(command: &Command) -> bool {
-    let mentions = |text: Option<String>| text.is_some_and(|text| text.contains(crate::cli::help::HERE));
-    command.get_arguments().any(|arg| {
-        mentions(arg.get_help().map(ToString::to_string)) || mentions(arg.get_long_help().map(ToString::to_string))
-    })
+    says(command, crate::cli::help::HERE)
 }
 
 fn flags(command: &Command) -> String {
@@ -50,27 +56,50 @@ fn access_change(path: &[&str], matches: &ArgMatches) -> bool {
     }
 }
 
+fn stops(top: &str) -> Option<String> {
+    crate::bots::SERVER_STOPS.iter().any(|stop| stop.command == top).then(|| String::from(crate::bots::STOP_REFUSED))
+}
+
+fn access(path: &[&str], found: &ArgMatches) -> Option<String> {
+    access_change(path, found).then(|| String::from(crate::bots::ACCESS_CHANGE))
+}
+
+fn itself(path: &[&str], found: &ArgMatches, own: &str) -> Option<String> {
+    let said =
+        path == ["bot", "say"] && found.get_one::<String>("bot").is_some_and(|bot| bot.eq_ignore_ascii_case(own));
+    said.then(|| String::from("a bot cannot write to itself"))
+}
+
+fn writes_a_file(leaf: &Command, found: &ArgMatches) -> Option<String> {
+    let help = crate::cli::help::TO_FILE;
+    let arg = leaf.get_arguments().find(|arg| {
+        let given = found.value_source(arg.get_id().as_str()) == Some(ValueSource::CommandLine);
+        given && arg_says(arg, help)
+    })?;
+    let long = arg.get_long().unwrap_or_default();
+    Some(format!("a bot cannot have cornercase write to a file: leave out --{long} to print it instead"))
+}
+
+fn in_no_place(leaf: &Command, found: &ArgMatches) -> Option<String> {
+    let places = PLACES.iter().chain(["all"].iter());
+    if !defaults_here(leaf) || places.into_iter().any(|long| named(leaf, found, long)) {
+        return None;
+    }
+    let flags = flags(leaf);
+    Some(format!("a bot runs in no pane: name the place with {flags} (cornercase status --json lists the ids)"))
+}
+
 pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Option<String> {
     let (top, _) = matches.subcommand()?;
-    if crate::bots::SERVER_STOPS.contains(&top) {
-        return Some(String::from("a bot cannot stop its own server"));
+    if let Some(stopped) = stops(top) {
+        return Some(stopped);
     }
     let mut path = vec![top];
     let (leaf, found) = walk(command.find_subcommand(top)?, matches.subcommand()?.1, &mut path);
-    if access_change(&path, found) {
-        return Some(String::from(crate::bots::ACCESS_CHANGE));
-    }
-    if path == ["bot", "say"] && found.get_one::<String>("bot").is_some_and(|bot| bot.eq_ignore_ascii_case(own)) {
-        return Some(String::from("a bot cannot write to itself"));
-    }
-    let places = PLACES.iter().chain(["all"].iter());
-    if defaults_here(leaf) && !places.into_iter().any(|long| named(leaf, found, long)) {
-        let flags = flags(leaf);
-        return Some(format!(
-            "a bot runs in no pane: name the place with {flags} (cornercase status --json lists the ids)"
-        ));
-    }
-    None
+    access(&path, found)
+        .or_else(|| itself(&path, found, own))
+        .or_else(|| writes_a_file(leaf, found))
+        .or_else(|| in_no_place(leaf, found))
 }
 
 pub(super) fn own_bot() -> Option<String> {

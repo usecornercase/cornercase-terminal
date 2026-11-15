@@ -1,11 +1,12 @@
 use rstest::rstest;
 
-use super::{Gated, gated};
+use super::{Gated, gated, stop_name};
 use crate::control::bots::{BotRequest, BotSay, EditBot, NewBot};
 use crate::control::{
-    Command, ConfigImport, Configure, HeldAction, HeldRequest, Input, Keys, NewTab, PasteFile, SendText, Split,
-    TodoSend,
+    CloneRepository, Command, ConfigImport, Configure, HeldAction, HeldRequest, Input, Keys, NewTab, PasteFile,
+    RestartWhenIdle, SendText, Split, TodoSend, UpdateCheck, UpdateInstall,
 };
+use crate::protocol::ClientMessage;
 
 fn held(action: HeldAction) -> Command {
     Command::Held(HeldRequest { pane: Some(4), tab: None, action })
@@ -73,7 +74,21 @@ const PANE: Option<Gated> = Some(Gated::Pane { pane: Some(4), tab: None });
 #[case::removing_a_setting(Command::Config(Configure::Remove("a".into())), Some(Gated::Settings))]
 #[case::applying_an_import(import(true), Some(Gated::Settings))]
 #[case::previewing_an_import(import(false), None)]
+#[case::restart_when_idle(Command::RestartWhenIdle(RestartWhenIdle::default()), Some(Gated::ServerStop))]
+#[case::update_install(Command::UpdateInstall(UpdateInstall::default()), Some(Gated::ServerStop))]
+#[case::update_check(Command::UpdateCheck(UpdateCheck::default()), None)]
+#[case::clone(Command::Clone(CloneRepository::default()), Some(Gated::Clone))]
 #[case::status(Command::Status(crate::control::Status::default()), None)]
 fn a_request_is_classified(#[case] command: Command, #[case] expected: Option<Gated>) {
     assert_eq!(gated(&command), expected);
+}
+
+#[test]
+fn every_stop_is_a_request_or_a_message_the_server_knows() {
+    let messages = [stop_name(&ClientMessage::KillServer), stop_name(&ClientMessage::Restart)];
+    for stop in crate::bots::SERVER_STOPS {
+        for asked in stop.asks {
+            assert!(Command::NAMES.contains(asked) || messages.contains(&Some(asked)), "{asked}");
+        }
+    }
 }

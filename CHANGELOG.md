@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.87
+## 0.13.88
 
 - **Personas for a flow's roles.** A persona is how an agent works, written in Markdown with a front matter that gives its `name`, such as the ones in [agency-agents](https://github.com/msitarzewski/agency-agents). Import some with `cornercase persona import`, then give one to any role of a flow with `persona = "ID"`, on any agent: the same Code Reviewer can run on Claude Code or Codex.
   - `persona import` takes a `.md` file, a folder, `-`, an `https://` address, or a GitHub repository as `OWNER/REPO`, `OWNER/REPO/FOLDER` or `OWNER/REPO/PATH/FILE.md`, with no GitHub token. A folder or a repository imports every persona in it, in one download; a `divisions.json` that lists its folders limits it to those.
@@ -12,6 +12,12 @@ Every pull request that changes the app adds a section here for its new version.
   - A flow that names a persona you don't have cannot run: `flow list` says which, and saving or importing such a flow is refused until you import it.
   - Picking a persona in the Flows dialog comes later; for now, set it in the flow's file or with `flow save`.
 - **For programs**: the requests `persona-list`, `persona-import` (with `check`) and `persona-remove`, `persona` on the roles of `flow list --json`, `flow save` and `flow runs`, and the feature `flow-personas` in `cornercase contract`.
+
+## 0.13.87
+
+- **A bot can no longer stop, restart or update cornercase by any of its commands or requests.** The command line already refused `kill-server`, `restart` and `update` inside a bot. Now the server also refuses them from a `cornercase`-access bot, along with `restart-when-idle` and `update-install`, with the same message, `a bot cannot stop its own server`.
+- **A bot can no longer have cornercase write a file where it says.** Inside a bot, `cornercase config export --to FILE` is refused (leave out `--to` and it prints them), and a `cornercase`-access bot's `cornercase clone` is refused: a clone could put files where another program runs them.
+- Inside a bot, each line of `cornercase requests --follow -` is now checked as the bot's command line is.
 
 ## 0.13.86
 

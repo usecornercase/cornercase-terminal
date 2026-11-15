@@ -63,7 +63,7 @@ pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> As
         conversation: bot.conversation.clone().filter(|_| !input.run),
         env: environment(bot, bin, path),
         protected: vec![folder::BOT_FILE, folder::CHAT_FILE],
-        stops: &super::SERVER_STOPS,
+        stops: super::stop_commands(),
     }
 }
 

@@ -2,7 +2,7 @@ use clap::CommandFactory;
 
 use super::*;
 use crate::cli::args::Cli;
-use crate::cli::help::{BY_BRANCH, HERE, HERE_PANE, HERE_WORKSPACE, WAIT_PANE};
+use crate::cli::help::{BY_BRANCH, EXPORT_TO, HERE, HERE_PANE, HERE_WORKSPACE, TO_FILE, WAIT_PANE};
 
 fn refused(args: &[&str]) -> Option<String> {
     let command = Cli::command();
@@ -26,6 +26,7 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::kill(&["kill-server"], "a bot cannot stop its own server")]
 #[case::restart(&["restart"], "a bot cannot stop its own server")]
 #[case::update(&["update"], "a bot cannot stop its own server")]
+#[case::export_to(&["config", "export", "--to", "/x"], "a bot cannot have cornercase write to a file: leave out --to")]
 fn a_bot_is_refused(#[case] args: &[&str], #[case] why: &str) {
     let found = refused(args).unwrap_or_else(|| panic!("{args:?} was allowed"));
     assert!(found.starts_with(why), "{found}");
@@ -54,6 +55,8 @@ fn the_refusal_names_the_flags_that_take_a_place() {
 #[case::edit(&["bot", "edit", "prs", "--name", "y"])]
 #[case::ports_all(&["ports", "--all"])]
 #[case::size_of_a_path(&["worktrees", "size", "--path", "/x"])]
+#[case::export(&["config", "export"])]
+#[case::import_preview(&["config", "import", "/x", "--preview"])]
 fn a_bot_may_name_its_place_or_use_what_needs_none(#[case] args: &[&str]) {
     assert_eq!(refused(args), None, "{args:?}");
 }
@@ -63,4 +66,9 @@ fn the_defaults_that_say_where_a_command_runs_carry_the_words_the_guard_looks_fo
     for text in [HERE_PANE, HERE_WORKSPACE, BY_BRANCH, WAIT_PANE] {
         assert!(text.contains(HERE), "{text}");
     }
+}
+
+#[test]
+fn the_flags_that_write_a_file_carry_the_words_the_guard_looks_for() {
+    assert!(EXPORT_TO.contains(TO_FILE), "{EXPORT_TO}");
 }

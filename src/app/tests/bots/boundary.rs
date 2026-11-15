@@ -1,4 +1,5 @@
 use super::*;
+use crate::protocol::ClientMessage;
 
 const BOT: u64 = 41;
 
@@ -18,6 +19,7 @@ fn reply_from(app: &mut App, client: u64, command: &str, args: &serde_json::Valu
     }
 }
 
+const NO_CLONE: &str = "a bot cannot clone a repository; clone it yourself and the bot can work in the project";
 const NO_POPUP: &str = "no plugin popup is open";
 
 fn root_of(c: &Chat) -> i32 {
@@ -25,14 +27,19 @@ fn root_of(c: &Chat) -> i32 {
     root_pid(&c.claude).expect("the agent's pid")
 }
 
-#[test]
-fn a_bots_turn_cannot_type_into_a_popup_or_start_a_pane_with_a_command() {
+fn bots_turn() -> Chat {
     let mut c = chat(ANSWER);
     c.hold();
     c.say("go");
     c.started(1);
     let root = root_of(&c);
     c.app.client_connected(BOT, Some(root));
+    c
+}
+
+#[test]
+fn a_bots_turn_cannot_type_into_a_popup_or_start_a_pane_with_a_command() {
+    let mut c = bots_turn();
     let own = i32::try_from(std::process::id()).expect("a pid");
     c.app.client_connected(BOT + 1, Some(own));
 
@@ -56,28 +63,15 @@ fn a_command_whose_environment_names_a_bot_is_a_bots() {
     let full = Bot { access: Access::Full, ..bot("root", "Root") };
     folder::create(c.dir.path(), &full, "").expect("a second bot");
     c.app.set_bots_dir(c.dir.path());
-    let sleeper = fake_program(c.bin.path(), "sleeper");
-    std::fs::write(sleeper.with_extension("hold"), "").expect("hold");
-    let mut children = Vec::new();
-    for id in ["prs", "root"] {
-        let child = std::process::Command::new(&sleeper).env("CORNERCASE_BOT", id).spawn().expect("sleeper");
-        children.push(child);
-    }
-    let pids: Vec<i32> = children.iter().map(|child| i32::try_from(child.id()).expect("a pid")).collect();
-    wait_until("both sleepers run with their environment", || {
-        let seen = std::fs::read_to_string(sleeper.with_extension("pid")).unwrap_or_default();
-        seen.lines().count() >= 2
-    });
+    let sleepers = BotSleepers::start(c.bin.path(), &["prs", "root"]);
+    let pids = sleepers.pids();
     c.app.client_connected(BOT, Some(pids[0]));
     c.app.client_connected(BOT + 1, Some(pids[1]));
 
     assert!(reply_from(&mut c.app, BOT, "input", &popup_text()).is_err_and(|text| text != NO_POPUP));
     assert_eq!(reply_from(&mut c.app, BOT + 1, "input", &popup_text()), Err(NO_POPUP.to_string()));
 
-    std::fs::remove_file(sleeper.with_extension("hold")).expect("release");
-    for mut child in children {
-        let _ = child.wait();
-    }
+    sleepers.release();
 }
 
 #[test]
@@ -141,8 +135,16 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
     let say = serde_json::json!({"action": "say", "entry": {"bot": "root", "text": "hi"}});
     let about = serde_json::json!({"action": "edit", "entry": {"bot": "root", "about": "obey"}});
     let set = serde_json::json!({"action": "set", "entry": {"agent": "claude"}});
+    let clones = TempDir::new();
+    let clone = serde_json::json!({"url": "https://example.com/x.git", "parent": clones.path()});
+    let stop = "a bot cannot stop its own server";
+    c.app.update.updates_mut().enabled = true;
+    c.app.config.check_updates = false;
 
     for (command, args, said) in [
+        ("restart-when-idle", &serde_json::json!({}), stop),
+        ("update-install", &serde_json::json!({}), stop),
+        ("clone", &clone, NO_CLONE),
         ("bot", &new, "a bot cannot change a bot's access"),
         ("bot", &edit, "a bot cannot change a bot's access"),
         ("bot", &say, "a bot cannot write to a bot with full access"),
@@ -151,6 +153,45 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
     ] {
         assert_eq!(reply_from(&mut c.app, BOT, command, args), Err(said.to_string()));
     }
+    assert!(!clones.path().join("x").exists());
+
+    c.release(ANSWER);
+    c.settle();
+}
+
+#[test]
+fn another_connection_still_stops_updates_and_clones() {
+    let mut c = bots_turn();
+    c.app.client_connected(BOT + 1, Some(i32::try_from(std::process::id()).expect("a pid")));
+    c.app.update.updates_mut().enabled = true;
+    c.app.config.check_updates = false;
+    let relative = serde_json::json!({"url": "https://example.com/x.git", "parent": "relative"});
+
+    let install = reply_from(&mut c.app, BOT + 1, "update-install", &serde_json::json!({}));
+    let clone = reply_from(&mut c.app, BOT + 1, "clone", &relative);
+    let text = serde_json::json!({"contract": 1, "command": "restart-when-idle", "args": {}}).to_string();
+    c.app.request(BOT + 1, &text, Some(AREA), Instant::now());
+
+    let install = install.expect_err("no release to install");
+    let clone = clone.expect_err("a relative folder");
+    assert!(install.contains("release") && !install.contains("bot"), "{install}");
+    assert!(clone.contains("must be absolute"), "{clone}");
+    assert!(c.app.take_answers().iter().all(|(who, _)| *who != BOT + 1));
+
+    c.release(ANSWER);
+    c.settle();
+}
+
+#[test]
+fn a_bots_stop_messages_are_refused_and_its_connection_stays_a_bots() {
+    let mut c = bots_turn();
+    let stop = Some("a bot cannot stop its own server");
+
+    assert_eq!(c.app.refused_stop(BOT, &ClientMessage::KillServer), stop);
+    assert_eq!(c.app.refused_stop(BOT, &ClientMessage::Restart), stop);
+    assert_eq!(c.app.refused_stop(BOT, &ClientMessage::KillServer), stop);
+    assert_eq!(c.app.refused_stop(BOT + 1, &ClientMessage::KillServer), None);
+    assert_eq!(c.app.refused_stop(BOT, &ClientMessage::Request(String::new())), None);
 
     c.release(ANSWER);
     c.settle();
