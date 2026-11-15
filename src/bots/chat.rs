@@ -12,6 +12,15 @@ use crate::os::fs::OpenOptionsExt;
 pub(crate) const NEW_CONVERSATION: &str = "new conversation";
 pub(crate) const STOPPED: &str = "stopped";
 pub(crate) const INTERRUPTED: &str = "interrupted by a restart";
+pub(crate) const SETTING_UP: &str = "setting up";
+
+pub(crate) fn is_setup(line: &Line) -> bool {
+    line.routine.is_none() && line.kind == Kind::Notice && line.text == SETTING_UP
+}
+
+pub(crate) fn opens_turn(line: &Line) -> bool {
+    (line.routine.is_none() && line.kind == Kind::You) || is_setup(line)
+}
 
 pub(crate) fn dropped(count: usize) -> String {
     if count == 1 { String::from("1 held message dropped") } else { format!("{count} held messages dropped") }
@@ -196,6 +205,7 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
                 state.running = state.held > 0;
                 state.held = 0;
             }
+            Kind::Notice if line.text == SETTING_UP => state.running = true,
             Kind::Notice if line.text == STOPPED => {
                 state.running = false;
                 stopping = true;
@@ -235,7 +245,7 @@ pub(crate) fn restart_notices(state: &Replayed, at: i64) -> Vec<Line> {
 }
 
 pub(crate) fn unseen(lines: &[Line]) -> Vec<Told> {
-    let from = lines.iter().rposition(|line| line.kind == Kind::You).map_or(0, |at| at + 1);
+    let from = lines.iter().rposition(opens_turn).map_or(0, |at| at + 1);
     lines[from..]
         .iter()
         .filter(|line| line.kind == Kind::Bot)

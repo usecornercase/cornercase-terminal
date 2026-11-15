@@ -69,7 +69,7 @@ impl App {
             bot: state.bot.clone(),
             folder: state.folder.clone(),
             text,
-            run: false,
+            kind: turn::Kind::Chat,
             told: None,
             program: crate::agents::command(&self.config, &state.bot.agent),
             home: self.account_home(kind, state.bot.account.as_deref()),
@@ -80,7 +80,11 @@ impl App {
 
     fn bot_start(&mut self, at: usize, asked: &[(u64, String)]) {
         let texts: Vec<String> = asked.iter().map(|(_, text)| text.clone()).collect();
-        let mut input = self.bot_input(at, turn::joined(&texts));
+        let input = self.bot_input(at, turn::joined(&texts));
+        self.begin_turn(at, input, asked.iter().map(|(line, _)| *line).collect());
+    }
+
+    fn begin_turn(&mut self, at: usize, mut input: turn::Input, asked: Vec<u64>) {
         let told = std::mem::take(&mut self.panels.bots.live[at].unseen);
         input.told = brief::told(&told, &input.bot.id);
         let (id, running) = (self.panels.bots.next_turn, Running::default());
@@ -88,7 +92,7 @@ impl App {
         let state = &mut self.panels.bots.live[at];
         state.turn = Some(Turn {
             id,
-            asked: asked.iter().map(|(line, _)| *line).collect(),
+            asked,
             running: running.clone(),
             stopping: false,
             dropped: Vec::new(),
@@ -96,6 +100,30 @@ impl App {
             steps: 0,
         });
         self.spawn_bot_job(input, id, running);
+    }
+
+    pub(super) fn start_setup(&mut self, at: usize) -> Line {
+        let id = self.panels.bots.live[at].bot.id.clone();
+        log::info!("bots", "setup", bot = id);
+        self.publish_bot(&id, News::State("thinking"));
+        let line = self.bot_append(at, |id, now| Line::notice(id, now, chat::SETTING_UP));
+        let input = turn::Input { kind: turn::Kind::Setup, ..self.bot_input(at, String::new()) };
+        self.begin_turn(at, input, vec![line.id]);
+        line
+    }
+
+    pub(in crate::app) fn bot_setup(&mut self, key: &str) -> Done<(usize, Line)> {
+        let at = self.bot_at(key)?;
+        self.chat_idle(at, "is answering")?;
+        let state = &self.panels.bots.live[at];
+        if folder::notes(&state.folder).0.trim().is_empty() {
+            let id = &state.bot.id;
+            let text = format!(
+                "{id} has nothing in bot.md to set up from; say what it is for first: cornercase bot edit {id} --about TEXT"
+            );
+            return Err(Refusal::new(Code::Conflict, text));
+        }
+        Ok((at, self.start_setup(at)))
     }
 
     pub(super) fn spawn_bot_job(&mut self, input: turn::Input, turn: u64, running: Running) {

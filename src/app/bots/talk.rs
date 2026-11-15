@@ -6,7 +6,7 @@ use crate::app::input::WHEEL_ROWS;
 use crate::app::opening::Subject;
 use crate::app::text_fields::FieldArea;
 use crate::app::toast::Toast;
-use crate::bots::chat::Kind;
+use crate::bots::chat;
 use crate::control::contract::Code;
 use crate::editor::Editor;
 use crate::ui::{self, ChatHit, RowHit};
@@ -71,12 +71,16 @@ impl App {
         let Some(at) = self.shown_bot() else { return };
         let lines = self.panels.bots.shown.as_ref().map(|shown| shown.lines.as_slice()).unwrap_or_default();
         let before = lines.iter().position(|line| line.id == error).unwrap_or(lines.len());
-        let Some(text) = lines[..before].iter().rev().find(|line| line.kind == Kind::You).map(|line| line.text.clone())
-        else {
+        let Some(opener) = lines[..before].iter().rev().find(|line| chat::opens_turn(line)).cloned() else {
             return;
         };
         let id = self.panels.bots.live[at].bot.id.clone();
-        if let Err(refusal) = self.bot_say(&id, &text, false) {
+        let done = if chat::is_setup(&opener) {
+            self.bot_setup(&id).map(|_| ())
+        } else {
+            self.bot_say(&id, &opener.text, false).map(|_| ())
+        };
+        if let Err(refusal) = done {
             self.chat_toast(refusal.message);
         }
     }

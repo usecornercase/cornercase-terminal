@@ -768,6 +768,7 @@ mod worktrees;
 
 pub(in crate::cli) use bot::{
     BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HELP, BOT_HISTORY_HELP, BOT_NEW_HELP, BOT_SAY_HELP,
+    BOT_SETUP_HELP,
 };
 pub(in crate::cli) use changes::{CHANGES_FILE_HELP, CHANGES_GAP_HELP};
 pub(in crate::cli) use clone::CLONE_HELP;

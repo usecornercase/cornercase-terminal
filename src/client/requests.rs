@@ -123,6 +123,10 @@ pub(crate) fn use_bot_routines() -> Result<()> {
     require("bot-routines", "cannot schedule a bot's work")
 }
 
+pub(crate) fn use_bot_setup() -> Result<()> {
+    require("bot-setup", "cannot set a bot up")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }

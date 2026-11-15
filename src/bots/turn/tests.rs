@@ -11,7 +11,7 @@ fn input(folder: &Path, conversation: Option<&str>) -> Input {
         bot: Bot { conversation: conversation.map(str::to_string), ..sample("prs", "PRs") },
         folder: folder.to_path_buf(),
         text: String::from("hello"),
-        run: false,
+        kind: Kind::Chat,
         told: None,
         program: String::from("claude"),
         home: None,
@@ -92,7 +92,7 @@ fn a_run_opens_a_new_session_even_when_the_bot_has_a_conversation() {
     let dir = TempDir::new();
     let made = folder::create(dir.path(), &sample("prs", "PRs"), "review").expect("create");
     let run = Input {
-        run: true,
+        kind: Kind::Run,
         text: String::from("This is your routine \"x\" (every 2h). Go."),
         ..input(&made, Some("s1"))
     };
@@ -111,4 +111,15 @@ fn what_the_routines_answered_is_put_in_front_of_a_resumed_message_once_given() 
     assert!(asked.prompt.starts_with("## Since your last message"), "{}", asked.prompt);
     assert!(asked.prompt.ends_with("## The user says\n\nhello"));
     assert_eq!(asked.conversation.as_deref(), Some("s1"));
+}
+
+#[test]
+fn a_setup_opens_a_new_session_with_the_setup_section_even_when_the_bot_has_a_conversation() {
+    let dir = TempDir::new();
+    let made = folder::create(dir.path(), &sample("prs", "PRs"), "review").expect("create");
+    let setup = Input { kind: Kind::Setup, ..input(&made, Some("s1")) };
+    let asked = ask(&setup, None, None);
+    assert_eq!(asked.conversation, None);
+    assert!(asked.prompt.contains("You are PRs") && asked.prompt.contains("## You were just made"), "{}", asked.prompt);
+    assert!(!asked.prompt.contains("The user says"));
 }

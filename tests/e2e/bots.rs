@@ -38,8 +38,8 @@ fn started_running(before: &str) -> Arc<Session> {
 fn a_bot_is_made_asked_and_read_back_over_the_socket() {
     let session = started();
 
-    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude", "--about", "review my PRs"]), "prs");
-    assert!(!session.dir.join("claude-bot.args").exists(), "making a bot starts nothing");
+    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude"]), "prs");
+    assert!(!session.dir.join("claude-bot.args").exists(), "making a bot without what it is for starts nothing");
     assert_eq!(session.says(&["bot", "say", "prs", "which are blocked?", "--wait"]), "hello from the bot");
 
     let list: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
@@ -50,6 +50,22 @@ fn a_bot_is_made_asked_and_read_back_over_the_socket() {
     assert!(session.says(&["bot", "agents"]).contains("claude"));
     let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
     assert!(args.contains("--setting-sources user") && args.contains("which are blocked?"), "{args}");
+}
+
+#[test]
+fn a_bot_made_with_what_it_is_for_sets_itself_up_and_bot_setup_runs_it_again() {
+    let session = started();
+
+    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude", "--about", "review my PRs"]), "prs");
+    assert_eq!(session.says(&["bot", "say", "prs", "and now?", "--wait"]), "hello from the bot");
+    let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
+    assert!(args.contains("## You were just made") && args.contains("--resume s1"), "{args}");
+    assert!(session.says(&["bot", "history", "prs"]).starts_with("— setting up · "));
+
+    assert!(session.says(&["bot", "setup", "prs"]).parse::<u64>().is_ok());
+    session.says(&["bot", "say", "prs", "again", "--wait"]);
+    let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
+    assert_eq!(args.matches("## You were just made").count(), 2, "{args}");
 }
 
 #[test]

@@ -13,6 +13,7 @@ pub(crate) enum BotRequest {
     Reset(BotTarget),
     Seen(BotTarget),
     Stop(BotTarget),
+    Setup(BotTarget),
     Say(BotSay),
     History(BotHistory),
 }
@@ -125,6 +126,7 @@ impl BotRequest {
             Self::Reset(target) => fields.add("action", "reset").add("bot", &target.bot),
             Self::Seen(target) => fields.add("action", "seen").add("bot", &target.bot),
             Self::Stop(target) => fields.add("action", "stop").add("bot", &target.bot),
+            Self::Setup(target) => fields.add("action", "setup").add("bot", &target.bot),
             Self::Say(say) => {
                 fields.add("action", "say").add("bot", &say.bot).add("bytes", say.text.len()).add("wait", say.wait)
             }

@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use rstest::rstest;
+
 use super::*;
 use crate::agents::headless::Access;
 use crate::bots::Bot;
@@ -16,12 +18,14 @@ fn texts(lines: &[Line]) -> Vec<&str> {
     lines.iter().map(|line| line.text.as_str()).collect()
 }
 
-#[test]
-fn a_turn_that_never_ended_is_interrupted_and_what_was_held_is_dropped_once() {
+#[rstest]
+#[case::a_message(Line::you(1, 10, "first", false))]
+#[case::a_setup(Line::notice(1, 10, chat::SETTING_UP))]
+fn a_turn_that_never_ended_is_interrupted_and_what_was_held_is_dropped_once(#[case] first: Line) {
     let dir = TempDir::new();
     folder::create(dir.path(), &bot("prs", "PRs"), "").expect("create");
     let path = folder::of(dir.path(), "prs").join(folder::CHAT_FILE);
-    for line in [Line::you(1, 10, "first", false), Line::you(2, 11, "second", true)] {
+    for line in [first, Line::you(2, 11, "second", true)] {
         chat::append(&path, &line).expect("append");
     }
     let (mut app, _rx) = empty_app();
@@ -65,14 +69,20 @@ fn chat(out: &str) -> Chat {
     chat_with(out, Access::Cornercase)
 }
 
-pub(in crate::app::tests) fn install_bot(app: &mut App, out: &str, access: Access) -> (TempDir, TempDir, PathBuf) {
+pub(in crate::app::tests) fn install_agent(app: &mut App, out: &str) -> (TempDir, TempDir, PathBuf) {
     let (dir, bin) = (TempDir::new(), TempDir::new());
     let claude = fake_program(bin.path(), "claude");
     std::fs::write(claude.with_extension("out"), out).expect("canned output");
     app.config.agent_commands.insert("claude".into(), claude.display().to_string());
-    folder::create(dir.path(), &Bot { access, ..bot("prs", "PRs") }, "review my PRs").expect("create");
     app.set_bots_dir(dir.path());
     app.panels.bots.timeout = Duration::from_secs(20);
+    (dir, bin, claude)
+}
+
+pub(in crate::app::tests) fn install_bot(app: &mut App, out: &str, access: Access) -> (TempDir, TempDir, PathBuf) {
+    let (dir, bin, claude) = install_agent(app, out);
+    folder::create(dir.path(), &Bot { access, ..bot("prs", "PRs") }, "review my PRs").expect("create");
+    app.set_bots_dir(dir.path());
     (dir, bin, claude)
 }
 
@@ -345,4 +355,5 @@ mod compact;
 mod form;
 mod menu;
 mod routines;
+mod setup;
 mod window;

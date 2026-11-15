@@ -21,6 +21,7 @@ const REACH_FOLDER: &str = "Your access is `cornercase`: you can run the cornerc
 const FULL: &str = "Your access is `full`: you can change any file and run anything, unattended. Still start an agent for work on a project, unless the user asked you to do it yourself.";
 const SCHEDULE: &str = "To schedule work, run `cornercase queue add --every 'weekday 09:00' --prompt '…' --name '…'` (repeats: `30m`, `2h`, `day 09:00`, `weekday 09:00`, `monday 09:00`, `3d 10:00`; at least 30 minutes), or `--at 'tomorrow 9:00'` for once. `cornercase queue list --bot {id} --json` lists yours; `queue pause`, `resume`, `edit` and `remove` change them. Tell the user what you scheduled and when it runs next, in their time. When a routine runs you start a new conversation that has only this brief and your files, so write in `memory.md` what the next run needs.";
 const LATER: &str = "What happens when an agent you started finishes comes in a later release of cornercase.";
+const SETUP: &str = "## You were just made\n\nThe user has just made you, and `bot.md` above is what they wrote you are for. Set yourself up now, in a few steps, and do not do the work itself unless `bot.md` asks for it now. Schedule what it asks for at a time or again and again (`cornercase queue add`, as above), but first look at what is scheduled already (`cornercase queue list --bot {id} --json`): a setup that was cut short may have done some of it. Write in `memory.md` what your runs will need. Then tell the user, in a few lines, what you will do, what you scheduled and when it runs next, and what you need from them, if anything. Your runs can look commands up when they run, so do not read every `--help` now.";
 pub(crate) const TOLD_KEPT: usize = 10;
 const TOLD_CAP: usize = 16 * 1024;
 
@@ -97,9 +98,21 @@ pub(crate) fn told(answers: &[Told], bot: &str) -> Option<String> {
 }
 
 pub(crate) fn opening(bot: &Bot, folder: &Path, notes: (&str, &str), told: Option<&str>, text: &str) -> String {
+    opened(bot, folder, notes, told, format!("## The user says\n\n{text}"))
+}
+
+pub(crate) fn setup_opening(bot: &Bot, folder: &Path, notes: (&str, &str), told: Option<&str>) -> String {
+    opened(bot, folder, notes, told, setup_section(bot))
+}
+
+pub(crate) fn setup_section(bot: &Bot) -> String {
+    SETUP.replace("{id}", &bot.id)
+}
+
+fn opened(bot: &Bot, folder: &Path, notes: (&str, &str), told: Option<&str>, last: String) -> String {
     let mut parts = files(bot, folder, notes);
     parts.extend(told.map(str::to_string));
-    parts.push(format!("## The user says\n\n{text}"));
+    parts.push(last);
     parts.join("\n\n")
 }
 
