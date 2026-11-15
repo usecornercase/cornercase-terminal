@@ -19,7 +19,6 @@ Every pull request that changes the app adds a section here for its new version.
 - **`send` no longer types into the shell of a flow role whose agent exited.** `cornercase send`, `todo send`, **send now** and the orchestrator's own sends to its team refuse it, naming the pane and the role, with `cornercase agents reopen --workspace N`, which brings it back. `--force` does not lift it: the text would run as a shell command.
 - **For programs**: `cornercase events --notices` gets a `flow-exited` message for each exit whose tab is not seen, with the role's pane, `run` and `role`; `cornercase contract` lists `message-flow-exited`; the refusal's code is `conflict`.
 
-
 ## 0.13.83
 
 - **A command with `--boot` reaches the server in one round trip instead of two.** A program that polls `ports`, `files list` or `changes file` with `--boot`, as a window that draws another machine does through `--remote`, no longer waits for a `contract` request before each read. The same goes for every command whose request a server from before `--boot` (0.12.108 and older) does not have: such a server refuses it by name, so nothing is done there, and the command still says that the server would ignore `--boot` (status 1). Commands such as `close`, `rename`, `send`, `read` or `events`, which such a server would carry out, still ask it first, unless a check the command makes anyway, such as `--view`'s, already showed that it knows `--boot`.
