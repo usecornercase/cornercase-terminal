@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.88
+
+- **A bot's routines are in the bot.** ` routines ` in its chat's header, **routines…** in its menu and a click on a routine on its card list its routines and reminders: the repeat, the next run (or `paused`) and how the last run ended. ` run now `, ` pause ` or ` resume `, ` edit… ` and ` remove ` (with ` undo `) act on one, and a click on it shows the chat at its last run. ` + routine ` schedules one for the bot yourself, as an every-day-at-09:00 routine you can change.
+- **The Queue tab lists projects' entries only.** A dim line at its end says how many bot routines there are, the schedule form's **Where** no longer lists bots, and ` clear started ` leaves the bots' runs alone. Editing a bot's routine shows its bot in **Where**, fixed.
+- For programs nothing changes: `cornercase queue list` still lists every entry, `--bot` picks one bot's, and `queue clear-started` still clears every one.
+
 ## 0.13.87
 
 - **A bot can no longer stop, restart or update cornercase by any of its commands or requests.** The command line already refused `kill-server`, `restart` and `update` inside a bot. Now the server also refuses them from a `cornercase`-access bot, along with `restart-when-idle` and `update-install`, with the same message, `a bot cannot stop its own server`.
