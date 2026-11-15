@@ -484,7 +484,8 @@ fn right_click(app: &mut App, pos: Position) {
 
 #[cfg(unix)]
 fn type_line(app: &mut App, line: &str) {
-    app.handle_event(AppEvent::Input(Event::Paste(format!("{line}\r"))), AREA).expect("handle paste");
+    app.handle_event(AppEvent::Input(Event::Paste(line.to_string())), AREA).expect("handle paste");
+    send_key(app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
 #[cfg(unix)]

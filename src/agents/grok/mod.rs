@@ -32,6 +32,8 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("always approve (dangerous)", &["--always-approve"]),
 ];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
+pub(in crate::agents) const BRACKETED_WHEN_READY: bool = false;
+pub(in crate::agents) const CONFIRMS_PROMPT: bool = false;
 pub(in crate::agents) const RUNS_AS: bool = false;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;

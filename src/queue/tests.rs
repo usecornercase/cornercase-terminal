@@ -661,3 +661,22 @@ mod bot_entries {
         assert!(reason.contains("check its workspace"));
     }
 }
+
+mod unsent {
+    use super::*;
+
+    #[test]
+    fn an_entry_that_is_not_unsent_is_written_as_before() {
+        let entry = Entry::new(1, task(100), State::Pending);
+        assert!(!serde_json::to_string(&entry).expect("json").contains("unsent"));
+    }
+
+    #[test]
+    fn unsent_round_trips_and_a_listing_keeps_it() {
+        let entry = Entry { unsent: true, ..Entry::new(1, task(100), State::Started { pane: 3, server: "s".into() }) };
+        let text = serde_json::to_string(&entry).expect("json");
+        assert!(text.contains("\"unsent\":true"), "{text}");
+        let read: Entry = serde_json::from_str(&text).expect("entry");
+        assert!(read.unsent && Listed::from(&read).entry.unsent);
+    }
+}

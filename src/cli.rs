@@ -708,9 +708,11 @@ fn run_start(start: StartArgs) -> Result<()> {
         fresh: fresh(&start.fresh)?,
     };
     let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
-    say(ask(name, command)?, start.create.print.json, |done| {
-        id(done.ids.pane).into_iter().chain(ending(done)).collect()
-    })
+    let value = ask(name, command)?;
+    if !start.create.print.json {
+        warn(&value);
+    }
+    say(value, start.create.print.json, |done| id(done.ids.pane).into_iter().chain(ending(done)).collect())
 }
 
 fn run_wait(wait: WaitArgs) -> Result<()> {

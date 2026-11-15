@@ -614,6 +614,7 @@ mod queue_tab {
             state,
             kind: QueuedKind::Entry,
             live: false,
+            unsent: false,
         }
     }
 

@@ -286,7 +286,7 @@ Once the worktree exists, cornercase opens a tab in it and drives the new shell 
 
 3. If the agent asks whether you trust the folder, cornercase waits for you to answer: saying yes lets the agent use the repository's own agent settings, so it is your call. With **settings → Agents → trust prompts** turned on, cornercase answers yes for you instead.
 
-4. It pastes the prompt. By default the prompt is your issue's link, typed on one line and left at the agent's prompt for you to read and send with `Enter`. With **settings → Agents → send the prompt** turned on, it is pasted as written and sent for you.
+4. It pastes the prompt. By default the prompt is your issue's link, typed on one line and left at the agent's prompt for you to read and send with `Enter`. With **settings → Agents → send the prompt** turned on, it is pasted as written and sent for you: Claude Code gets it once its input is ready, and `Enter` is pressed again while it sits idle without taking the prompt (a toast tells you when it never does).
 
 </Steps>
 

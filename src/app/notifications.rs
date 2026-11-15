@@ -108,6 +108,7 @@ pub(super) struct Said<'a> {
 pub(in crate::app) enum MessageKind {
     Notify,
     QueueStarted,
+    QueueUnsent,
     QueueFailed,
     QueueMissed,
     QueueKept,
@@ -122,6 +123,7 @@ impl MessageKind {
         match self {
             Self::Notify => "notify",
             Self::QueueStarted => "queue-started",
+            Self::QueueUnsent => "queue-unsent",
             Self::QueueFailed => "queue-failed",
             Self::QueueMissed => "queue-missed",
             Self::QueueKept => "queue-kept",

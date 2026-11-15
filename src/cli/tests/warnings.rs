@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use super::parse;
 use crate::cli::line::{self, Printed};
-use crate::cli::{Command, Control, run_mark, run_send};
+use crate::cli::{Command, Control, run_mark, run_send, run_start};
 use crate::client;
 use crate::control::Response;
 use crate::os::socket::UnixStream;
@@ -26,6 +26,7 @@ fn ran(words: &[&str], answer: Value) -> Printed {
     let (result, printed) = line::run(None, || match cli.command {
         Some(Command::Control(Control::Send(send))) => run_send(send).map(|()| true),
         Some(Command::Control(Control::Mark(mark))) => run_mark(&mark).map(|()| true),
+        Some(Command::Control(Control::Start(start))) => run_start(*start).map(|()| true),
         _ => panic!("not send or mark"),
     });
     client::unshare();
@@ -71,4 +72,20 @@ fn an_answer_without_a_warning_prints_none() {
     let printed = ran(&["send", "--pane", "3", "hi"], json!({"pane": 3}));
 
     assert_eq!((printed.text.as_str(), printed.stderr.as_str()), ("", ""));
+}
+
+#[test]
+fn a_start_prints_the_warning_on_stderr() {
+    let printed = ran(&["start", "claude"], json!({"pane": 3, "unsent": true, "warning": WARNING}));
+
+    assert_eq!(printed.text, "3\n");
+    assert_eq!(printed.stderr, format!("warning: {WARNING}\n"));
+}
+
+#[test]
+fn a_json_start_holds_the_warning_in_its_document() {
+    let printed = ran(&["start", "claude", "--json"], json!({"pane": 3, "unsent": true, "warning": WARNING}));
+
+    assert_eq!(printed.json.expect("a document")["warning"], WARNING);
+    assert_eq!(printed.stderr, "");
 }

@@ -2,11 +2,21 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.88
+## 0.13.89
 
 - **A bot made with what it is for sets itself up at once.** When **For** in the new bot form, or `--about` of `cornercase bot new`, says what the bot is for, making it starts its first turn: the bot schedules what that asks for, writes what its runs will need in `memory.md`, and tells you in its chat what it will do, what it scheduled and when that runs next. The chat opens with `── setting up ──`; what you send meanwhile is held for the next turn, which continues the same conversation. A bot made without it starts nothing and spends no tokens, as before.
 - ` retry ` under a setup that failed runs the setup again, and so does `cornercase bot setup prs`.
 - For programs: `bot new` answers `state: thinking` while the setup runs, a setup turn's first line is the notice `setting up`, the `bot` request has a `setup` action, and `cornercase contract` lists `bot-setup`.
+
+## 0.13.88
+
+- **A prompt no longer stays unsent in Claude Code's input box.** cornercase now waits until Claude Code has written its session file, drawn its input box and turned bracketed paste on (at most 30 s) before it pastes the prompt. After the `Enter` it checks that Claude Code took the prompt, and presses `Enter` again every 3 s while it sits idle, at most 5 times. This covers queued agents and routines, `cornercase start --prompt`, the Issues dialog's start with **send the prompt** on, and a flow's briefs, for its roles and its orchestrator.
+- When a prompt is still not taken, cornercase says so instead of showing a run that worked:
+  - the queue entry reads `started · pane N · prompt not taken` in yellow, and `queue show` explains it;
+  - a toast and a notification say `routine <name> started, but its agent did not take the prompt`;
+  - `cornercase start` prints a warning, and fails with `--wait`;
+  - an agent started from a dialog or a flow shows a toast naming its tab.
+- For programs: `unsent: true` in `start` answers and queue entries, the `queue-unsent` notice, and the `prompt-unsent` feature. `server.log` has a `launch: pasted` line that says what the pane showed when the prompt went in.
 
 ## 0.13.87
 

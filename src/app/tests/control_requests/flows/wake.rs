@@ -90,7 +90,7 @@ fn a_turn_the_person_takes_in_the_role_wakes_no_one() {
     let mut agent = Agent::new();
     let (o, c) = working_coder(&mut agent);
     agent.app.show(Item::Pane(c)).expect("the role's pane shows");
-    type_line(&mut agent.app, "also the footer");
+    submit_text(&mut agent.app, "also the footer");
 
     agent.finish();
     agent.refreshing("the person's line is taken", |app| prompts_in(app, c) == 2);

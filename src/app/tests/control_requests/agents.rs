@@ -105,7 +105,7 @@ fn start_types_the_agent_and_submits_its_prompt_in_a_tab_of_its_own() {
 
     let id = agent.start(Some("fix the login"));
 
-    agent.until("the agent reads the prompt", |a| pane_screen(a, id).contains("❯ fix the login"));
+    agent.until("the agent reads the prompt", |a| pane(a, id).context.prompted().is_some());
     let tab = &agent.app.projects[0].workspaces[0].tabs[1];
     assert_eq!((tab.name.as_deref(), agent.app.focus()), (Some("fixer"), before));
     agent.finish();

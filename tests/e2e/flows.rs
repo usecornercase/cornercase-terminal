@@ -292,7 +292,7 @@ fn a_draft_with_problems_or_a_stray_key_is_refused_and_a_good_one_is_saved_from_
 fn a_role_whose_agent_exits_is_told_and_a_send_to_it_is_refused() {
     let session = Session::new();
     let repo = repository(&session.dir, "shop");
-    let agent = session.dir.join("claude");
+    let agent = session.dir.join("role-agent");
     let got = session.dir.display();
     let script = format!(
         "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\nprintf '\\033[2J\\033[Hagent ready> '\nstty -icanon 2>/dev/null\n\

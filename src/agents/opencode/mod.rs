@@ -24,6 +24,8 @@ pub(in crate::agents) const CATALOGUE: Option<fn() -> Vec<String>> = Some(databa
 pub(in crate::agents) const MODES: crate::agents::ModeTable =
     &[("plan", &["--agent", "plan"]), ("auto (dangerous)", &["--auto"])];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = false;
+pub(in crate::agents) const BRACKETED_WHEN_READY: bool = false;
+pub(in crate::agents) const CONFIRMS_PROMPT: bool = false;
 pub(in crate::agents) const RUNS_AS: bool = false;
 pub(in crate::agents) const LOCAL_COMMAND: bool = false;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
