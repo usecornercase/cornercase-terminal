@@ -114,6 +114,7 @@ pub(in crate::app) enum MessageKind {
     SetupFailed,
     FlowConsent,
     FlowMerged { failed: bool },
+    FlowExited,
 }
 
 impl MessageKind {
@@ -127,6 +128,7 @@ impl MessageKind {
             Self::SetupFailed => "setup-failed",
             Self::FlowConsent => "flow-consent",
             Self::FlowMerged { .. } => "flow-merged",
+            Self::FlowExited => "flow-exited",
         }
     }
 
@@ -183,6 +185,10 @@ impl App {
     }
 
     pub(in crate::app) fn publish_message(&mut self, said: Message) {
+        self.publish_message_of(said, None);
+    }
+
+    pub(in crate::app) fn publish_message_of(&mut self, said: Message, seat: Option<(u64, String)>) {
         let from_pane = || {
             said.panes.iter().find_map(|pane| self.projects.tab_of_pane(*pane)).map(crate::project::TabAt::workspace)
         };
@@ -194,6 +200,8 @@ impl App {
             message: notify::clean(&said.text),
             panes: said.panes,
             failed,
+            run: seat.as_ref().map(|(run, _)| *run),
+            role: seat.map(|(_, role)| role),
         };
         let time = crate::time::Stamp(std::time::SystemTime::now()).to_string();
         self.clients.events.publish(&[Event { time, what, ids }]);

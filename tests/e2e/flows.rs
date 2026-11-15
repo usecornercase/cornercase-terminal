@@ -1,5 +1,6 @@
-use serde_json::Value;
+use serde_json::{Value, json};
 
+use super::commands::Followed;
 use super::*;
 
 const FLOW: &str = r#"# shared
@@ -285,4 +286,48 @@ fn a_draft_with_problems_or_a_stray_key_is_refused_and_a_good_one_is_saved_from_
     std::fs::write(&file, DRAFT).expect("a draft file");
     let said = app.session.says(&["flow", "save", &file.display().to_string()]);
     assert!(said.starts_with("saved Mine into yours: "), "{said}");
+}
+
+#[test]
+fn a_role_whose_agent_exits_is_told_and_a_send_to_it_is_refused() {
+    let session = Session::new();
+    let repo = repository(&session.dir, "shop");
+    let agent = session.dir.join("claude");
+    let got = session.dir.display();
+    let script = format!(
+        "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\nprintf '\\033[2J\\033[Hagent ready> '\n\
+         while IFS= read -r line; do case $line in *quit-now*) exit 0;; esac; \
+         printf '%s\\n' \"$line\" >> \"{got}/got.$CORNERCASE_PANE\"; done\n"
+    );
+    write_executable(&agent, &script);
+    let config = json!({
+        "worktrees_dir": session.dir.join("worktrees"),
+        "accept_trust_prompts": true,
+        "agent_commands": agent_commands(&[("claude", &agent)]),
+    });
+    std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");
+    let started = session.cold(&["start-server"]);
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    let project = session.says(&["open", &repo.display().to_string()]);
+    let mut notices = session.spawn(&["events", "--notices", "--json"]);
+    session.wait_for_file("server.log", "it follows", |log| log.contains("command=events"));
+    let mut heard = Followed::of(&mut notices);
+
+    let run = json(&session, &["flow", "run", "Quick", "--project", &project, "--prompt", "x", "--json"]);
+
+    let members = run["members"].as_array().expect("members").clone();
+    let coder = members.iter().find(|m| m["role"] == "coder").expect("the coder")["pane"].to_string();
+    let first = session.dir.join(format!("got.{coder}"));
+    wait_until("the coder got its brief", || first.exists());
+    session.cli(&["send", "--pane", &coder, "--enter", "quit-now"]);
+    heard.until("the exit is told", |e| {
+        e["event"] == "message"
+            && e["kind"] == "flow-exited"
+            && e["role"] == "coder"
+            && e["panes"].to_string() == format!("[{coder}]")
+    });
+    let refused = session.cli(&["send", "--pane", &coder, "--enter", "xyzzy"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("agents reopen --workspace"), "{refused:?}");
+    assert!(!session.says(&["read", "--pane", &coder]).contains("xyzzy"));
 }

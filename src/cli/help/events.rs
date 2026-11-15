@@ -15,9 +15,11 @@ The server's other notices come with --notices too, as the window's toast says t
 no token: notify (`cornercase notify`, naming the pane it ran in), queue-started, queue-failed,
 queue-missed and queue-kept (a queued agent or routine run; a one-off entry that missed its time sends
 none), setup-failed (only while nobody looks at its tab), flow-consent (a flow's member waits for your
-consent) and flow-merged (a run's agents closed once its pull request merged, worded like the toast
+consent), flow-exited (a flow role's agent exited by itself, once per exit, never for a tab seen:
+cornercase agents reopen --workspace ID brings it back) and flow-merged (a run's agents closed once its pull request merged, worded like the toast
 without its ▶: cornercase agents reopen --workspace ID brings them back). With --json they have kind,
-message, panes and the workspace's ids, which queue-failed and queue-missed leave out, and failed: true on
+message, panes and the workspace's ids, which queue-failed and queue-missed leave out, run and role on a
+flow-exited, and failed: true on
 a flow-merged whose free of the builds (--free-builds) failed:
   notify  the release build is ready
   workspace 2  flow-merged  pull request merged in fix-login: 3 agents closed

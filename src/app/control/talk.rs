@@ -75,6 +75,9 @@ impl App {
             )
             .into());
         }
+        if let Some(refusal) = self.exited_role_refusal(pane) {
+            return Err(refusal);
+        }
         if !force && self.resume_holds(pane) {
             return Err(format!(
                 "pane {pane} is restarting or resuming its agent, and what you send would reach its shell or its \

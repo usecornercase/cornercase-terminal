@@ -747,9 +747,7 @@ impl App {
     ) {
         let mut run = Run::new(workspace, saved.flow.clone(), saved.task.clone());
         run.dir = dir.map(Path::to_path_buf);
-        run.ended.clone_from(&saved.ended);
-        run.close_when_merged = saved.close_when_merged;
-        run.free_builds = saved.free_builds;
+        saved.apply_to(&mut run);
         run.id = self.take_id();
         run.progress = Progress::resumed(&run.flow, saved.stage, &saved.rounds);
         for seat in &saved.members {

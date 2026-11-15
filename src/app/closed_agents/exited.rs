@@ -11,6 +11,8 @@ use crate::flows::{self, Role, brief};
 use crate::log::{self};
 use crate::project::Hierarchy;
 
+mod told;
+
 impl App {
     pub(in crate::app) fn role_exited(&self, pane: u64, now: Instant) -> bool {
         let Some(term) = self.projects.pane_by(pane) else { return false };
@@ -71,6 +73,8 @@ impl App {
         let now = Instant::now();
         let Some(run) = self.runs.of_workspace_mut(workspace) else { return };
         run.exited.retain(|pane| !back.contains(pane));
+        let roles: Vec<String> = back.iter().filter_map(|&pane| run.role_of(pane).map(str::to_string)).collect();
+        run.forget_told(&roles);
         if orchestrator {
             return;
         }

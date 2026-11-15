@@ -20,7 +20,7 @@ fn rests(agent: &mut Agent, id: u64) {
     });
 }
 
-fn exited_coder(agent: &mut Agent) -> (u64, u64, String) {
+fn settled_team(agent: &mut Agent) -> (u64, u64) {
     let [o, c] = team(agent, &[ORCHESTRATOR, "coder"])[..] else { panic!("two panes") };
     sends(agent, o, c, "build the form");
     working(agent, c);
@@ -30,6 +30,11 @@ fn exited_coder(agent: &mut Agent) -> (u64, u64, String) {
     agent.finish();
     rests(agent, o);
     rests(agent, c);
+    (o, c)
+}
+
+fn exited_coder(agent: &mut Agent) -> (u64, u64, String) {
+    let (o, c) = settled_team(agent);
     let conversation = pane(&agent.app, c).resume.clone().expect("the conversation").conversation;
     kill(agent, c);
     agent.refreshing("the coder exited", |app| exited(app) == [c]);
@@ -160,13 +165,13 @@ fn nothing_exited_leaves_reopen_refused() {
     assert!(refused.message.contains("has no closed agents"), "{}", refused.message);
 }
 
-fn kill_role(team: &Team, role: &str) {
+pub(super) fn kill_role(team: &Team, role: &str) {
     let id = team.app.runs.all()[0].pane_of(role).expect("the role");
     let pid = pane(&team.app, id).foreground_pid().expect("the agent's process");
     std::process::Command::new("kill").arg(pid.to_string()).status().expect("kill");
 }
 
-fn keep_conversation(team: &mut Team, role: &str, conversation: &str) {
+pub(super) fn keep_conversation(team: &mut Team, role: &str, conversation: &str) {
     let id = team.app.runs.all()[0].pane_of(role).expect("the role");
     let agent = AgentState { kind: "claude".into(), conversation: conversation.into(), mode: None, account: None };
     team.app.projects.pane_by_mut(id).expect("the pane").exited_agent = Some(agent);
@@ -180,7 +185,7 @@ fn empty_log(team: &Team) {
     std::fs::write(team.log.path().join("order"), "").expect("empty the log");
 }
 
-fn team_reopens(team: &mut Team) {
+pub(super) fn team_reopens(team: &mut Team) {
     let workspace = team.app.runs.all()[0].workspace;
     ok(&mut team.app, "agents-reopen", &json!({"workspace": workspace}));
 }
@@ -265,4 +270,79 @@ fn an_exited_conversation_survives_a_restart_unless_the_roles_worktree_is_gone()
     let kept = |role: &str| pane(&again, run.pane_of(role).expect("the role")).exited_agent.clone();
     assert_eq!(kept("coder").map(|agent| agent.conversation), Some("c1".to_string()));
     assert_eq!(kept("reviewer"), None, "a role whose worktree is gone does not get it back");
+}
+
+#[test]
+fn a_send_to_a_role_whose_agent_exited_is_refused_and_types_nothing() {
+    let mut agent = Agent::new();
+    let (o, c, _) = exited_coder(&mut agent);
+    let workspace = agent.app.runs.all()[0].workspace;
+    let typed = pane(&agent.app, c).input_at;
+    let sent = agent.app.runs.all()[0].sent.len();
+
+    let plain = refused(&mut agent.app, "send", &json!({"pane": c, "text": "build it again"}));
+    let entered = refused(&mut agent.app, "send", &json!({"pane": c, "text": "build it again", "enter": true}));
+    let forced = refused(&mut agent.app, "send", &json!({"pane": c, "text": "build it again", "force": true}));
+    let from_the_orchestrator = error(now(&mut agent.app, Some(o), send_text(c, "build it again", true, false)));
+
+    for refusal in [&plain, &entered, &forced] {
+        assert_eq!(refusal.code, "conflict");
+        assert!(refusal.message.contains(&format!("pane {c} is coder")), "{}", refusal.message);
+        assert!(refusal.message.contains("its agent exited"), "{}", refusal.message);
+        let command = format!("`cornercase agents reopen --workspace {workspace}`");
+        assert!(refusal.message.contains(&command), "{}", refusal.message);
+    }
+    assert!(from_the_orchestrator.contains("its agent exited"), "{from_the_orchestrator}");
+    assert_eq!(pane(&agent.app, c).input_at, typed, "nothing reached the shell");
+    assert_eq!(agent.app.runs.all()[0].sent.len(), sent, "no sent work was recorded");
+}
+
+#[test]
+fn a_role_coming_back_is_refused_as_resuming_not_as_exited() {
+    let mut agent = Agent::new();
+    let (_, c, _) = exited_coder(&mut agent);
+    reopened(&mut agent);
+
+    let refusal = refused(&mut agent.app, "send", &json!({"pane": c, "text": "go on"}));
+
+    assert!(refusal.message.contains("restarting or resuming"), "{}", refusal.message);
+    assert!(!refusal.message.contains("its agent exited"), "{}", refusal.message);
+    agent.app.agents.launches.drop_panes(&[c]);
+}
+
+#[test]
+fn a_send_held_before_the_exit_is_refused_when_it_would_go_out() {
+    let mut agent = Agent::new();
+    let (_, c) = settled_team(&mut agent);
+    agent.app.show(Item::Pane(c)).expect("show the coder");
+    agent.refreshing("the input box is seen", |app| pane(app, c).input_seen.is_some());
+    type_text(&mut agent.app, "mine");
+    agent.app.clients.set_typing_holds(Duration::from_secs(600));
+    ask(&mut agent.app, None, send_text(c, "build it again", true, false));
+    agent.app.refresh(Instant::now());
+    assert_eq!(answers(&mut agent.app), Vec::new(), "the send is held");
+    assert_eq!(agent.app.held_sends(c), 1, "the send is held");
+    let typed = pane(&agent.app, c).input_at;
+
+    kill(&agent, c);
+    agent.refreshing("the coder exited", |app| exited(app) == [c]);
+    if agent.app.held_label(c).is_some() {
+        agent.app.send_held_now(c);
+    }
+
+    let answer = error(agent.answered("the held send is answered"));
+    assert!(answer.contains("its agent exited"), "{answer}");
+    assert_eq!(pane(&agent.app, c).input_at, typed);
+}
+
+#[test]
+fn a_plain_pane_whose_agent_exited_still_takes_a_send() {
+    let mut agent = Agent::new();
+    let p = agent.start(None);
+    kill(&agent, p);
+    agent.refreshing("the agent is gone", |app| {
+        pane(app, p).agent.status().is_none() && pane(app, p).shell_in_foreground()
+    });
+
+    ok(&mut agent.app, "send", &json!({"pane": p, "text": "echo hi"}));
 }
