@@ -27,7 +27,7 @@ impl App {
             .map(|(i, state)| ui::BotEntry {
                 name: state.bot.name.clone(),
                 detail: self.bot_detail_short(i),
-                thinking: state.turn.is_some() || !state.runs.is_empty(),
+                thinking: state.answering(),
                 unread: state.unread,
                 active: shown == Some(i),
             })
@@ -37,9 +37,9 @@ impl App {
 
     fn bot_detail_short(&self, at: usize) -> String {
         let bot = &self.panels.bots.live[at].bot;
-        let idle = self.panels.bots.live[at].turn.is_none() && self.panels.bots.live[at].runs.is_empty();
+        let idle = !self.panels.bots.live[at].answering();
         if let Some(next) = self.bot_next_run(&bot.id).filter(|_| idle) {
-            return format!("next {}", crate::queue::clock::when(next, crate::time::now(), &self.window_zone()));
+            return format!("next {}", crate::queue::clock::short(next, crate::time::now(), &self.window_zone()));
         }
         match &bot.model {
             Some(model) => format!("{} · {model}", bot.agent),
@@ -87,9 +87,9 @@ impl App {
                 let next = if entry.task.paused {
                     String::from("paused")
                 } else {
-                    format!("next {}", crate::queue::clock::when(entry.task.at, now, &zone))
+                    format!("next {}", crate::queue::clock::short(entry.task.at, now, &zone))
                 };
-                Some(ui::CardRow::new("routine", format!("↻ {repeat}  {}  {next}", entry.task.label)))
+                Some(ui::CardRow::new("routine", format!("{} · {next} · ↻ {repeat}", entry.task.label)))
             })
             .collect()
     }

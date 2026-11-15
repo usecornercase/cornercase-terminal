@@ -1,6 +1,6 @@
 use super::*;
 use crate::persist;
-use crate::test_util::TempDir;
+use crate::test_util::{TempDir, fixture};
 
 const LONG: &str = "Review the open pull requests and fix the failing checks on main, then write a short summary of what changed and what is left for tomorrow.";
 
@@ -568,20 +568,16 @@ mod bot_entries {
         assert_eq!(queue.saved().version, 3);
     }
 
-    #[test]
-    fn a_file_without_a_bot_entry_is_written_back_byte_for_byte() {
+    #[rstest::rstest]
+    #[case::version_one(fixture!("queue/v1.json"), 1)]
+    #[case::version_two(fixture!("queue/v2.json"), 2)]
+    fn a_file_without_a_bot_entry_is_written_back_byte_for_byte(#[case] text: &str, #[case] version: u32) {
         let dir = TempDir::new();
-        let mut queue = Queue::default();
-        queue.add(task(START)).expect("one-off");
-        let first = bytes(&queue, &dir.path().join("one.json"));
-        assert!(String::from_utf8_lossy(&first).contains("\"version\": 1"));
-        let id = queue.add(Task { repeat: Repeat::parse("2h", "UTC", START).ok(), ..task(START) }).expect("routine");
-        queue.run_now(id, START).expect("run");
-        let two = bytes(&queue, &dir.path().join("two.json"));
-        assert!(String::from_utf8_lossy(&two).contains("\"version\": 2"));
-        let again = load(&dir.path().join("two.json"), 0);
-        assert_eq!(bytes(&again, &dir.path().join("back.json")), two);
-        assert!(!String::from_utf8_lossy(&two).contains("bot"));
+        let path = dir.path().join("queue.json");
+        std::fs::write(&path, text).expect("write");
+        let queue = load(&path, 0);
+        assert_eq!(queue.saved().version, version);
+        assert_eq!(String::from_utf8(bytes(&queue, &dir.path().join("back.json"))).expect("utf8"), text);
     }
 
     #[test]

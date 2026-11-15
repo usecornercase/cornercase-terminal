@@ -90,12 +90,14 @@ pub(crate) fn new_id(name: &str, taken: &[&Bot], on_disk: &dyn Fn(&str) -> bool)
     id
 }
 
-pub(crate) fn find<'a>(bots: &'a [&'a Bot], key: &str) -> Option<&'a Bot> {
+pub(crate) fn is_named(id: &str, name: &str, key: &str, by_name: bool) -> bool {
     let key = key.trim();
-    bots.iter()
-        .copied()
-        .find(|bot| bot.id == key)
-        .or_else(|| bots.iter().copied().find(|bot| bot.name.to_lowercase() == key.to_lowercase()))
+    if by_name { name.to_lowercase() == key.to_lowercase() } else { id == key }
+}
+
+pub(crate) fn find<'a>(bots: &'a [&'a Bot], key: &str) -> Option<&'a Bot> {
+    let found = |by_name: bool| bots.iter().copied().find(|bot| is_named(&bot.id, &bot.name, key, by_name));
+    found(false).or_else(|| found(true))
 }
 
 #[cfg(test)]

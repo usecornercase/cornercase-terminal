@@ -1,6 +1,6 @@
 import { BOLD, type Rect, type Style, rect } from '../term/grid';
 import { DEFAULT } from '../term/palette';
-import { type Bot, EXAMPLES, type ChatLine, age, clock, details, summary } from './bots';
+import { type Bot, EXAMPLES, type ChatLine, age, clock, details, shortClock, summary } from './bots';
 import { type Areas, BOTS_LABEL, Rows, bottom, buttonWidth, closeButton, isEmpty, menuButton, right } from './layout';
 import { render as markdown } from './markdown';
 import { type Line, seg, truncateRight, width } from './text';
@@ -76,7 +76,7 @@ function drawRow(p: Painter, r: Rect, bot: Bot, active: boolean): void {
   const room = Math.max(0, r.w - width(lead) - close.w - menu.w - 1);
   const name = truncateRight(bot.name, room);
   const next = p.app.bots.nextRun(bot);
-  const tag = !bot.turn && next !== null ? `next ${clock(next)}` : summary(bot);
+  const tag = !bot.turn && next !== null ? `next ${shortClock(next)}` : summary(bot);
   const gap = room - [...name].length - [...tag].length;
   const line: Line = [...lead, seg(name, active ? { fg: DEFAULT, add: BOLD } : { fg: 7 })];
   if (gap >= 2) line.push(seg(' '.repeat(gap)), seg(tag, DARK));
@@ -422,7 +422,7 @@ export function drawCard(p: Painter, areas: Areas): void {
     ['access', ACCESS_NOTE[bot.access], bot.access === 'full' ? RED : undefined],
     ['folder', app.bots.folder(bot)],
     ['made', new Date(bot.made).toISOString().slice(0, 10)],
-    ...bot.routines.map((r): [string, string] => ['routine', `↻ ${r.repeat}  ${r.label}  next ${clock(r.at)}`]),
+    ...bot.routines.map((r): [string, string] => ['routine', `${r.label} · next ${shortClock(r.at)} · ↻ ${r.repeat}`]),
   ];
   let y = list.y;
   p.span(list.x + 1, y, bot.name, { fg: DEFAULT, add: BOLD }, list.w - 1);

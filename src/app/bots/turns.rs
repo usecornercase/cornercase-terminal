@@ -21,7 +21,7 @@ impl App {
     pub(in crate::app) fn bot_at(&self, key: &str) -> Done<usize> {
         let bots: Vec<&crate::bots::Bot> = self.panels.bots.live.iter().map(|state| &state.bot).collect();
         crate::bots::find(&bots, key)
-            .and_then(|bot| self.panels.bots.live.iter().position(|state| state.bot.id == bot.id))
+            .and_then(|bot| self.panels.bots.by_id(&bot.id))
             .ok_or_else(|| Refusal::new(Code::NotFound, format!("no bot {key}; cornercase bot list shows them")))
     }
 
@@ -138,13 +138,13 @@ impl App {
     }
 
     pub(super) fn running_run(&self, bot: &str, turn: u64) -> Option<(usize, usize)> {
-        let at = self.panels.bots.live.iter().position(|state| state.bot.id == bot)?;
+        let at = self.panels.bots.by_id(bot)?;
         let run = self.panels.bots.live[at].runs.iter().position(|run| run.turn == turn)?;
         Some((at, run))
     }
 
     fn running_turn(&self, bot: &str, turn: u64) -> Option<usize> {
-        let at = self.panels.bots.live.iter().position(|state| state.bot.id == bot)?;
+        let at = self.panels.bots.by_id(bot)?;
         self.panels.bots.live[at].turn.as_ref().is_some_and(|running| running.id == turn).then_some(at)
     }
 

@@ -301,7 +301,7 @@ impl App {
 
     pub(super) fn fail_queued(&mut self, id: u64, reason: &str) {
         let bot = self.panels.queued.queue.entry(id).and_then(|entry| entry.bot().map(str::to_string));
-        if let Some(at) = bot.and_then(|bot| self.panels.bots.live.iter().position(|live| live.bot.id == bot)) {
+        if let Some(at) = bot.and_then(|bot| self.panels.bots.by_id(&bot)) {
             return self.bot_entry_failed(at, id, reason, false);
         }
         self.panels.queued.fail(id, reason);
@@ -477,7 +477,7 @@ impl App {
 
     fn open_answered(&mut self, id: u64) {
         let bot = self.panels.queued.queue.entry(id).and_then(|entry| entry.bot().map(str::to_string));
-        match bot.and_then(|bot| self.panels.bots.live.iter().position(|live| live.bot.id == bot)) {
+        match bot.and_then(|bot| self.panels.bots.by_id(&bot)) {
             Some(at) => {
                 self.overlay = None;
                 self.show_bot_at_run(at, Some(id));

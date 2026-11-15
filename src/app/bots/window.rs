@@ -13,7 +13,7 @@ impl App {
 
     pub(in crate::app) fn shown_bot(&self) -> Option<usize> {
         let id = &self.panels.bots.shown.as_ref()?.bot;
-        self.panels.bots.live.iter().position(|live| &live.bot.id == id)
+        self.panels.bots.by_id(id)
     }
 
     pub(in crate::app) fn shown_bot_id(&self) -> Option<String> {
@@ -21,7 +21,7 @@ impl App {
     }
 
     pub(in crate::app) fn bots_thinking(&self) -> bool {
-        self.panels.bots.live.iter().any(|live| live.turn.is_some() || !live.runs.is_empty())
+        self.panels.bots.live.iter().any(super::Live::answering)
     }
 
     pub(in crate::app) fn leave_bot(&mut self) {

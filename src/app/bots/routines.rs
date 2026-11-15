@@ -42,7 +42,7 @@ impl App {
 
     pub(in crate::app) fn run_bot_entry(&mut self, entry: &Entry, now: Instant) -> std::result::Result<(), String> {
         let id = entry.bot().unwrap_or_default();
-        let at = self.panels.bots.live.iter().position(|live| live.bot.id == id);
+        let at = self.panels.bots.by_id(id);
         let at = at.ok_or_else(|| format!("its bot {id} was removed"))?;
         let bot = self.panels.bots.live[at].bot.clone();
         self.bot_run_check(&bot)?;

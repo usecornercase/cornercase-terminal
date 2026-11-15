@@ -296,7 +296,7 @@ fn an_idle_bot_shows_its_next_run_and_a_running_one_does_not() {
     let mut c = chat(ANSWER);
     let id = scheduled(&mut c, bot_routine(crate::time::now() + 86_400, "2h"));
     let next = c.app.panels.queued.queue().entry(id).expect("routine").task.at;
-    let shown = queue::clock::when(next, crate::time::now(), &c.app.window_zone());
+    let shown = queue::clock::short(next, crate::time::now(), &c.app.window_zone());
     assert_eq!(c.app.bots_view().expect("the section").entries[0].detail, format!("next {shown}"));
     c.hold();
     c.say("go");
@@ -317,4 +317,47 @@ fn the_remove_dialog_names_the_bots_entries() {
     let view = c.app.remove_bot_view(key).expect("the dialog");
     let ui::Overlay::Confirm(confirm) = view else { panic!("a confirmation") };
     assert!(confirm.message.contains("its queue entries (Review PRs) are deleted"), "{}", confirm.message);
+}
+
+#[test]
+fn a_run_fails_visibly_when_the_bots_account_is_gone() {
+    let mut c = chat(ANSWER);
+    let id = scheduled(&mut c, bot_routine(START, "2h"));
+    c.app.panels.bots.live[0].bot.account = Some("gone".into());
+    c.fire(START);
+    let run = runs(&c, id).remove(0);
+    assert_eq!(run.state, State::Failed { reason: "there is no claude account `gone`".into() });
+    let lines = c.lines();
+    assert_eq!((lines[1].kind, lines[1].routine), (chat::Kind::Error, Some(run.id)));
+    let toast = c.app.messages.toast.as_ref().map(|toast| toast.message.as_str());
+    assert_eq!(toast, Some("PRs · Review PRs failed: there is no claude account `gone`"));
+}
+
+#[test]
+fn queue_run_on_an_answered_entry_is_refused_and_leaves_it_as_it_was() {
+    let mut c = chat(ANSWER);
+    let (_, run) = answered_run(&mut c);
+    let before = c.app.panels.queued.queue().entry(run).expect("run").clone();
+    let lines = c.lines().len();
+    let refusal = c.app.run_queued(run, Instant::now()).expect_err("refused");
+    assert_eq!(refusal, "this queue entry has already started");
+    assert_eq!(c.app.panels.queued.queue().entry(run), Some(&before));
+    assert_eq!(c.lines().len(), lines);
+}
+
+#[test]
+fn editing_a_bots_entry_offers_only_that_bot_in_where() {
+    let mut c = chat(ANSWER);
+    let docs = Bot { access: Access::Cornercase, ..bot("docs", "Docs") };
+    folder::create(c.dir.path(), &docs, "").expect("a second bot");
+    c.app.set_bots_dir(c.dir.path());
+    let id = scheduled(&mut c, bot_routine(START, "2h"));
+    c.app.new_queue_form(None);
+    let Some(Overlay::Queue(form)) = &c.app.overlay else { panic!("the form") };
+    assert_eq!(form.places.iter().map(|choice| choice.label.as_str()).collect::<Vec<_>>(), ["bot: Docs", "bot: PRs"]);
+    c.app.overlay = None;
+    c.app.new_queue_form(Some(id));
+    let Some(Overlay::Queue(form)) = &c.app.overlay else { panic!("the form") };
+    assert_eq!(form.places.iter().map(|choice| choice.label.as_str()).collect::<Vec<_>>(), ["bot: PRs"]);
+    assert_eq!(form.bot(), Some("prs"));
 }

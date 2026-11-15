@@ -48,8 +48,12 @@ fn removed(args: RemoveArgs) -> Result<bool> {
     }
     let count = value["entries"].as_array().map_or(0, Vec::len);
     if let (true, Some(undo)) = (count > 0, value["undo"].as_u64()) {
-        let what = if count == 1 { "its queue entry".to_string() } else { format!("its {count} queue entries") };
-        print_out(&format!("removed {what}; cornercase queue restore {undo} puts them back\n"))?;
+        let (what, back) = if count == 1 {
+            ("its queue entry".to_string(), "it")
+        } else {
+            (format!("its {count} queue entries"), "them")
+        };
+        print_out(&format!("removed {what}; cornercase queue restore {undo} puts {back} back\n"))?;
     }
     Ok(true)
 }

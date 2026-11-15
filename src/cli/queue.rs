@@ -103,14 +103,13 @@ fn bot_id(asked: &str) -> Result<String> {
     crate::client::use_bots()?;
     let value = ask("bot", control::Command::Bot(control::bots::BotRequest::List))?;
     let bots = value["bots"].as_array().cloned().unwrap_or_default();
-    let named = |field: &str, exact: bool| {
+    let named = |by_name: bool| {
         bots.iter().find_map(|bot| {
-            let text = bot[field].as_str()?;
-            let same = if exact { text == asked } else { text.to_lowercase() == asked.to_lowercase() };
-            same.then(|| bot["id"].as_str().map(str::to_string)).flatten()
+            let (id, name) = (bot["id"].as_str()?, bot["name"].as_str()?);
+            crate::bots::is_named(id, name, asked, by_name).then(|| id.to_string())
         })
     };
-    Ok(named("id", true).or_else(|| named("name", false)).unwrap_or_else(|| asked.to_string()))
+    Ok(named(false).or_else(|| named(true)).unwrap_or_else(|| asked.trim().to_string()))
 }
 
 fn list_of_bot(asked: &str, json: bool) -> Result<()> {

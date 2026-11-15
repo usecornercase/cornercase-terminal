@@ -19,7 +19,7 @@ pub(crate) const EXAMPLES: [&str; 4] = [
     "Which of my open pull requests are blocked, and why?",
     "What did my agents get done today, in every project?",
     "Which issues labelled bug came in today, in every project?",
-    "Every weekday at 9, review my open pull requests and tell me which are blocked.",
+    "Every weekday at 9, tell me which of my PRs are blocked.",
 ];
 
 pub(crate) const INTRO: [&str; 2] = [

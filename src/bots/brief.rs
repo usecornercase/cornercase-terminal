@@ -80,7 +80,11 @@ pub(crate) fn told(answers: &[Told], bot: &str) -> Option<String> {
     let left = answers.len() - kept.len();
     let mut text = format!("## Since your last message, your routines answered\n\n{}", kept.join("\n\n"));
     if left > 0 {
-        let _ = write!(text, "\n\nand {left} older answers: `cornercase bot history {bot}`");
+        let _ = write!(
+            text,
+            "\n\nand {}: `cornercase bot history {bot}`",
+            crate::text::plural(left, "older answer", "older answers")
+        );
     }
     Some(text)
 }

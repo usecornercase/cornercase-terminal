@@ -72,7 +72,7 @@ export const EXAMPLES = [
   'Which of my open pull requests are blocked, and why?',
   'What did my agents get done today, in every project?',
   'Which issues labelled bug came in today, in every project?',
-  'Every weekday at 9, review my open pull requests and tell me which are blocked.',
+  'Every weekday at 9, tell me which of my PRs are blocked.',
 ];
 const ANSWER_AFTER = [1400, 2600, 4200];
 const TICK = 500;
@@ -124,6 +124,13 @@ export function clock(at: number): string {
   if (d.toDateString() === new Date(now).toDateString()) return hm;
   const names = d.toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
   return `${names} ${hm}`;
+}
+
+export function shortClock(at: number): string {
+  const d = new Date(at);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return d.toDateString() === new Date().toDateString() ? hm : `${d.toLocaleDateString('en', { weekday: 'short' })} ${hm}`;
 }
 
 export function age(since: number, now: number): string {

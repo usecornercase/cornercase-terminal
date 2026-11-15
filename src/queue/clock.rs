@@ -36,6 +36,16 @@ pub(crate) fn when(at: i64, now: i64, name: &str) -> String {
     }
 }
 
+pub(crate) fn short(at: i64, now: i64, name: &str) -> String {
+    let Some((timestamp, zone)) = Timestamp::from_second(at).ok().zip(zone(name).ok().or(Some(TimeZone::UTC))) else {
+        return at.to_string();
+    };
+    let shown = timestamp.to_zoned(zone.clone());
+    let today = Timestamp::from_second(now).ok().map(|now| now.to_zoned(zone));
+    let format = if today.is_some_and(|today| today.date() == shown.date()) { "%H:%M" } else { "%a %H:%M" };
+    shown.strftime(format).to_string()
+}
+
 pub(crate) fn zone(name: &str) -> Result<TimeZone, String> {
     jiff::fmt::temporal::DateTimeParser::new()
         .parse_time_zone(name)

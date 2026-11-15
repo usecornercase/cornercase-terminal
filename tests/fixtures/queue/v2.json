@@ -1,0 +1,147 @@
+{
+  "version": 2,
+  "next_id": 9,
+  "entries": [
+    {
+      "id": 4,
+      "at": 1760000000,
+      "zone": "UTC",
+      "label": "morning",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "fix morning",
+      "submit": true,
+      "place": {
+        "project": "/p",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "routine": 3,
+      "state": "removed"
+    },
+    {
+      "id": 5,
+      "at": 1760000200,
+      "zone": "UTC",
+      "label": "morning",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "fix morning",
+      "submit": true,
+      "place": {
+        "project": "/p",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "routine": 3,
+      "state": "kept",
+      "pane": 4,
+      "server": "1-2",
+      "reason": "changes"
+    },
+    {
+      "id": 6,
+      "at": 1760000400,
+      "zone": "UTC",
+      "label": "morning",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "fix morning",
+      "submit": true,
+      "place": {
+        "project": "/p",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "routine": 3,
+      "state": "failed",
+      "reason": "claude is not installed"
+    },
+    {
+      "id": 7,
+      "at": 1760000600,
+      "zone": "UTC",
+      "label": "morning",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "fix morning",
+      "submit": true,
+      "place": {
+        "project": "/p",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "routine": 3,
+      "state": "missed"
+    },
+    {
+      "id": 8,
+      "at": 1760000800,
+      "zone": "UTC",
+      "label": "morning",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "fix morning",
+      "submit": true,
+      "place": {
+        "project": "/p",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "routine": 3,
+      "state": "started",
+      "pane": 5,
+      "server": "1-2",
+      "started": 1760000800
+    },
+    {
+      "id": 3,
+      "at": 1760003600,
+      "zone": "UTC",
+      "label": "morning",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "fix morning",
+      "submit": true,
+      "place": {
+        "project": "/p",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "repeat": "weekday 09:00",
+      "paused": true,
+      "state": "pending"
+    }
+  ],
+  "names": 1
+}

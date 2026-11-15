@@ -84,10 +84,7 @@ impl App {
     }
 
     pub(in crate::app) fn remove_bot_label(&self, key: u64) -> &'static str {
-        let busy =
-            self.panels.bots.by_key(key).is_some_and(|at| {
-                self.panels.bots.live[at].turn.is_some() || !self.panels.bots.live[at].runs.is_empty()
-            });
+        let busy = self.panels.bots.by_key(key).is_some_and(|at| self.panels.bots.live[at].answering());
         if busy { STOP_FIRST } else { REMOVE_SUBMIT }
     }
 
@@ -137,15 +134,16 @@ impl App {
     pub(in crate::app) fn submit_remove_bot(&mut self, key: u64) -> Option<Overlay> {
         let at = self.panels.bots.by_key(key)?;
         let (id, name) = (self.panels.bots.live[at].bot.id.clone(), self.panels.bots.live[at].bot.name.clone());
-        if self.panels.bots.live[at].turn.is_some() || !self.panels.bots.live[at].runs.is_empty() {
+        if self.panels.bots.live[at].answering() {
             let _ = self.bot_stop(&id);
             return Some(Overlay::RemoveBot { bot: key });
         }
         match self.bot_remove(&id) {
-            Ok((_, entries)) if !entries.is_empty() => {
+            Ok((_, entries)) if entries.iter().any(|entry| !entry.is_run()) => {
+                let count = entries.iter().filter(|entry| !entry.is_run()).count();
                 let message = format!(
                     "removed bot {name} and its {}",
-                    crate::text::plural(entries.len(), "queue entry", "queue entries")
+                    crate::text::plural(count, "queue entry", "queue entries")
                 );
                 self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
             }

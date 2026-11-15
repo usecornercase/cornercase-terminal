@@ -78,7 +78,9 @@ impl App {
             return Ok(Some(json!({ "id": id, "run": run })));
         }
         if let Err(reason) = self.run_queued(id, now) {
-            let unfinished = |entry: &queue::Entry| !matches!(entry.state, State::Starting | State::Started { .. });
+            let unfinished = |entry: &queue::Entry| {
+                !matches!(entry.state, State::Starting | State::Started { .. } | State::Answered { .. })
+            };
             if self.panels.queued.queue().entry(id).is_some_and(unfinished) {
                 self.fail_queued(id, &reason);
             }
@@ -142,14 +144,7 @@ impl App {
     ) -> Result<Prepared, Refusal> {
         let task = self.queue_task(caller, add, old)?;
         self.requested_accounts(None, &task.accounts)?;
-        let at = if add.at.is_empty() {
-            old.map(|entry| queue::clock::display(entry.task.at, &task.zone)).unwrap_or_default()
-        } else {
-            add.at.clone()
-        };
-        let kept_at = old
-            .filter(|entry| add.at.is_empty() || add.at == queue::clock::display(entry.task.at, &task.zone))
-            .map(|entry| entry.task.at);
+        let (at, kept_at) = queue_time(add, old, &task.zone);
         let project = self
             .projects
             .iter()
@@ -160,14 +155,18 @@ impl App {
         if issue.is_none() && task.prompt.trim().is_empty() {
             return Err("a queue entry needs --prompt or --issue".into());
         }
-        let reset = reset_agent(&at)?;
-        let probe = reset.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usages.timeout()));
+        let probe = self.queue_probe(&at)?;
         let repo_root = crate::git::is_repo_root(&task.place.project);
         let (named, follow) = (add.label.is_some(), add.worktree.is_none());
         let template = self.config.prompt.clone();
         let naming = (self.config.issue_branch.clone(), self.branch_user(Some(&task.place.project)));
         let clock = crate::time::now();
         Ok(Prepared { task, at, kept_at, issue, probe, clock, template, naming, named, follow, repo_root })
+    }
+
+    pub(super) fn queue_probe(&self, at: &str) -> Result<Option<(agents::Known, String, Duration)>, String> {
+        let reset = reset_agent(at)?;
+        Ok(reset.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usages.timeout())))
     }
 
     fn add_queue_now(&mut self, edit: Option<u64>, prepared: &mut Prepared) -> Handled {
@@ -226,7 +225,8 @@ impl App {
         if entry.is_routine() {
             return self.start_routine_now(id, now).map(drop);
         }
-        if matches!(entry.state, State::Starting | State::Started { .. }) || self.panels.queued.starting(id) {
+        let begun = matches!(entry.state, State::Starting | State::Started { .. } | State::Answered { .. });
+        if begun || self.panels.queued.starting(id) {
             return Err("this queue entry has already started".into());
         }
         if entry.is_bot() {
@@ -327,6 +327,18 @@ impl Prepared {
         };
         Ok(task)
     }
+}
+
+fn queue_time(add: &QueueAdd, old: Option<&queue::Entry>, zone: &str) -> (String, Option<i64>) {
+    let at = if add.at.is_empty() {
+        old.map(|entry| queue::clock::display(entry.task.at, zone)).unwrap_or_default()
+    } else {
+        add.at.clone()
+    };
+    let kept_at = old
+        .filter(|entry| add.at.is_empty() || add.at == queue::clock::display(entry.task.at, zone))
+        .map(|entry| entry.task.at);
+    (at, kept_at)
 }
 
 fn reset_agent(at: &str) -> Result<Option<agents::Known>, String> {

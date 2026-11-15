@@ -10,6 +10,8 @@ use crate::git;
 use crate::queue::repeat::Repeat;
 use crate::queue::{Entry, Place, Task};
 
+pub(super) const AT_AND_EVERY: &str = "--at and --every do not mix: a routine's times come from its repeat";
+
 pub(super) fn is_routine_request(add: &QueueAdd, old: Option<&Entry>) -> bool {
     add.repeat.is_some()
         || add.flow.is_some()
@@ -28,7 +30,7 @@ fn refuse_mix(add: &QueueAdd, old: Option<&Entry>) -> Result<(), String> {
         return Err("a flow is queued as a routine, and so is a cleanup: add --every".into());
     }
     let refused = [
-        (!add.at.is_empty(), "--at and --every do not mix: a routine's times come from its repeat"),
+        (!add.at.is_empty(), AT_AND_EVERY),
         (add.issue.is_some(), "a routine cannot take an issue: the same issue every time makes no sense"),
         (add.workspace.is_some(), "a routine always runs in a new worktree: it takes no workspace"),
         (add.worktree.is_some(), "a routine names its own worktrees: it takes no branch"),

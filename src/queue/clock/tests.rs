@@ -108,3 +108,11 @@ fn a_time_today_is_the_hour_and_another_day_names_the_day() {
     assert_eq!(when(NOON - 3_600, NOON, "UTC"), "11:00");
     assert_eq!(when(NOON - 86_400 * 2, NOON, "UTC"), "Wed 11 Nov 12:00");
 }
+
+#[test]
+fn the_short_form_leaves_out_the_date_and_keeps_the_weekday_for_another_day() {
+    let nine = parse("2026-11-16 09:00", "UTC", 0).expect("monday 9");
+    let before = nine - 3600;
+    assert_eq!(short(nine, before, "UTC"), "09:00");
+    assert_eq!(short(nine, before - 86_400, "UTC"), "Mon 09:00");
+}

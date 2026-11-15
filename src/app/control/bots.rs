@@ -84,7 +84,7 @@ impl App {
     }
 
     pub(in crate::app) fn bot_reply(&self, bot: &str, asked: u64) -> Option<Reply> {
-        let at = self.panels.bots.live.iter().position(|live| live.bot.id == bot)?;
+        let at = self.panels.bots.by_id(bot)?;
         let line = self.bot_answer(at, asked)?;
         Some(Ok(json(&json!({ "bot": bot, "asked": asked, "line": line }))))
     }

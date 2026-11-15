@@ -199,7 +199,10 @@ mod queue_by_a_bot {
         c.app.set_bots_dir(c.dir.path());
         c.hold();
         let own = scheduled(c, bot_routine(START, "2h"));
-        let other = Task { place: Place { bot: Some("docs".into()), ..Place::default() }, ..bot_routine(START, "2h") };
+        let other = Task {
+            place: Place { bot: Some("docs".into()), ..Place::default() },
+            ..bot_routine(START + 864_000, "2h")
+        };
         let theirs = c.app.panels.queued.schedule(None, other).expect("their routine");
         c.app.refresh_at(Instant::now(), START);
         c.started(1);
@@ -232,6 +235,23 @@ mod queue_by_a_bot {
     }
 
     #[test]
+    fn restoring_a_removal_is_for_a_bot_only_when_every_entry_is_its_own() {
+        let mut c = chat(ANSWER);
+        let (own, theirs) = marked_while_a_run_answers(&mut c);
+        let removed = |c: &mut Chat, id: u64| c.app.panels.queued.remove(id).expect("removed");
+        let theirs = removed(&mut c, theirs);
+        let theirs = c.app.panels.queued.keep_removed(theirs).expect("an undo");
+        let restore = |undo: u64| serde_json::json!({"action": "restore", "entry": undo});
+        assert!(refused(&outcome(&mut c.app, BOT, &restore(theirs))));
+        assert!(!refused(&outcome(&mut c.app, BOT + 1, &restore(theirs))));
+        c.release(ANSWER);
+        c.runs_settle();
+        let mine = c.app.panels.queued.remove(own).expect("removed");
+        let mine = c.app.panels.queued.keep_removed(mine).expect("an undo");
+        assert!(!refused(&outcome(&mut c.app, BOT, &restore(mine))));
+    }
+
+    #[test]
     fn a_bots_connection_can_change_its_own_entries_and_another_client_any() {
         let mut c = chat(ANSWER);
         let (own, theirs) = marked_while_a_run_answers(&mut c);
@@ -240,7 +260,9 @@ mod queue_by_a_bot {
             serde_json::json!({"action": "list"}),
             serde_json::json!({"action": "pause", "entry": own}),
             serde_json::json!({"action": "resume", "entry": own}),
+            serde_json::json!({"action": "run", "entry": own}),
             serde_json::json!({"action": "edit", "entry": {"id": own, "add": {"prompt": "y"}}}),
+            serde_json::json!({"action": "remove", "entry": own}),
         ] {
             assert!(!refused(&outcome(&mut c.app, BOT, &fine)), "{fine}");
         }

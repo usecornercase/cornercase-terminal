@@ -94,6 +94,10 @@ impl Bots {
         self.by_key(key).map(|at| self.live[at].folder.clone())
     }
 
+    pub(in crate::app) fn by_id(&self, id: &str) -> Option<usize> {
+        self.live.iter().position(|live| live.bot.id == id)
+    }
+
     pub(super) fn by_key(&self, key: u64) -> Option<usize> {
         self.live.iter().position(|live| live.key == key)
     }
@@ -115,6 +119,14 @@ impl BotEvent {
 }
 
 impl Live {
+    pub(in crate::app) fn answering(&self) -> bool {
+        self.turn.is_some() || !self.runs.is_empty()
+    }
+
+    pub(in crate::app) fn trees(&self) -> impl Iterator<Item = &Running> {
+        self.turn.iter().map(|turn| &turn.running).chain(self.runs.iter().map(|run| &run.running))
+    }
+
     pub(super) fn new(bot: Bot, folder: PathBuf, key: u64) -> Self {
         Self {
             key,

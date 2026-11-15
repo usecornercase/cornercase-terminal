@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use super::Asker;
 use crate::agents;
 use crate::agents::headless::Access;
+use crate::agents::probe::Running;
 use crate::app::App;
 use crate::bots::BOT_ENV;
 use crate::config::Config;
@@ -150,18 +151,12 @@ impl App {
 
     fn contained_bot(&self) -> Option<String> {
         let mut states = self.panels.bots.live.iter();
-        let contained = |state: &&crate::app::bots::Live| {
-            state.turn.as_ref().is_some_and(|turn| turn.running.contained())
-                || state.runs.iter().any(|run| run.running.contained())
-        };
+        let contained = |state: &&crate::app::bots::Live| state.trees().any(Running::contained);
         states.find(contained).map(|state| state.bot.id.clone())
     }
 
     fn bot_of_process(&self, pid: i32) -> Option<String> {
-        let holds = |state: &&crate::app::bots::Live| {
-            state.turn.as_ref().is_some_and(|turn| turn.running.holds(pid))
-                || state.runs.iter().any(|run| run.running.holds(pid))
-        };
+        let holds = |state: &&crate::app::bots::Live| state.trees().any(|tree| tree.holds(pid));
         let running = self.panels.bots.live.iter().find(holds);
         if let Some(state) = running {
             return Some(state.bot.id.clone());

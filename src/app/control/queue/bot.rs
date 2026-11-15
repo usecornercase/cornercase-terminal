@@ -3,14 +3,13 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use super::prepare::{queue_label, queue_zone};
-use super::routine::schedule;
-use super::{Prepared, reset_agent};
-use crate::agents;
+use super::routine::{AT_AND_EVERY, schedule};
+use super::{Prepared, queue_time};
 use crate::app::App;
 use crate::app::control::Handled;
 use crate::bots::Bot;
 use crate::control::QueueAdd;
-use crate::queue::{self, Entry, Place, Task};
+use crate::queue::{Entry, Place, Task};
 
 const MOVED: &str = "an entry cannot move between a bot and a project, or to another bot; add a new entry";
 
@@ -37,7 +36,7 @@ fn refuse_bot_mix(add: &QueueAdd) -> Result<(), String> {
         return Err("a bot's queue entry always sends its prompt".into());
     }
     if !add.at.is_empty() && add.repeat.is_some() {
-        return Err("--at and --every do not mix: a routine's times come from its repeat".into());
+        return Err(AT_AND_EVERY.into());
     }
     Ok(())
 }
@@ -104,16 +103,8 @@ impl App {
     }
 
     fn bot_reminder(&self, task: Task, add: &QueueAdd, old: Option<&Entry>) -> Result<Prepared, String> {
-        let at = if add.at.is_empty() {
-            old.map(|entry| queue::clock::display(entry.task.at, &task.zone)).unwrap_or_default()
-        } else {
-            add.at.clone()
-        };
-        let kept_at = old
-            .filter(|entry| add.at.is_empty() || add.at == queue::clock::display(entry.task.at, &task.zone))
-            .map(|entry| entry.task.at);
-        let probe =
-            reset_agent(&at)?.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usages.timeout()));
+        let (at, kept_at) = queue_time(add, old, &task.zone);
+        let probe = self.queue_probe(&at)?;
         Ok(Prepared {
             task,
             at,

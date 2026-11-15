@@ -24,7 +24,7 @@ use crate::ui;
 impl App {
     pub(super) fn new_queue_form(&mut self, id: Option<u64>) {
         let entry = id.and_then(|id| self.panels.queued.queue().entry(id)).cloned();
-        let places = self.queue_places();
+        let places = self.queue_places_for(entry.as_ref());
         let matching = matching_places(&places, entry.as_ref());
         let place = self.current_place(&places, &matching);
         let confirmed = if entry.is_some() { matching.len() == 1 } else { !places.is_empty() };
@@ -103,6 +103,14 @@ impl App {
             kinds.push(entry.task.agent.clone());
         }
         kinds
+    }
+
+    fn queue_places_for(&self, entry: Option<&queue::Entry>) -> Vec<Choice> {
+        let mut places = self.queue_places();
+        if let Some(entry) = entry {
+            places.retain(|choice| choice.place.bot == entry.task.place.bot);
+        }
+        places
     }
 
     fn queue_places(&self) -> Vec<Choice> {

@@ -12,7 +12,7 @@ A **bot** is an agent of your own for that: a name, a folder, a memory and a cha
 
 The window draws a bot as a chat, with bubbles, Markdown and what it is doing, not as the agent's terminal interface: see [In the window](#in-the-window). Everything the window does is also a command, so you can talk to a bot from a script with [`cornercase bot`](#talk-to-a-bot) and a program can follow it through [events](../scripts-and-agents/#bots).
 
-**Making a bot starts nothing and spends no tokens.** It runs only when you write to it, and **only while the server runs**: a turn's process does not survive `cornercase kill-server`, a reboot or an update's restart. A turn that was running then ends with `interrupted by a restart` in its chat, and the messages held for it are dropped.
+**Making a bot starts nothing and spends no tokens.** It runs when you write to it and when its [routines](#routines) run, and **only while the server runs**: a turn's process does not survive `cornercase kill-server`, a reboot or an update's restart. A turn that was running then ends with `interrupted by a restart` in its chat, and the messages held for it are dropped.
 
 ## In the window
 

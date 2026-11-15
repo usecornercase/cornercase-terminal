@@ -617,6 +617,14 @@ mod queue_tab {
         }
     }
 
+    #[test]
+    fn an_answered_entry_and_an_answered_run_are_clearable() {
+        let answered = State::Answered { session: None };
+        assert!(queued(1, "Reminder", answered.clone()).clearable());
+        assert!(Queued { kind: QueuedKind::Run, ..queued(2, "Run", answered) }.clearable());
+        assert!(!queued(3, "Reminder", State::Pending).clearable());
+    }
+
     fn on_queue() -> Browser {
         let mut b = browser();
         b.tabs = tabs(&[]);
