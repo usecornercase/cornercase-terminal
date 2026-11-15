@@ -739,6 +739,26 @@ mod panel {
     }
 }
 
+mod bot_entries {
+    use super::*;
+    use crate::agents::headless::Access;
+
+    #[test]
+    fn the_tab_lists_projects_only_and_ends_with_a_line_for_the_bots_routines() {
+        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        let (_dir, _bin, _claude) = bots::install_bot(&mut app, "", Access::Cornercase);
+        let own = Task { place: Place { bot: Some("prs".into()), ..Place::default() }, ..task(&app, time::now() + 600, None) };
+        app.panels.queued.schedule(None, own).expect("a bot entry");
+        let project = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("a project entry");
+        queue_tab(&mut app);
+        let Some(Overlay::Issues(browser)) = &app.overlay else { panic!("issues") };
+        assert_eq!(browser.queued.iter().map(|row| row.id).collect::<Vec<_>>(), [project]);
+        assert_eq!(browser.bot_routines, 1);
+        let drawn = format!("{}", render(&mut app, AREA).backend());
+        assert!(drawn.contains("1 bot routine: in its bot's chat"), "{drawn}");
+    }
+}
+
 mod lists {
     use super::*;
     use crate::queue::form::{Control, Form};

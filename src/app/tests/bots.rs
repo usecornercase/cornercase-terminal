@@ -345,4 +345,5 @@ mod compact;
 mod form;
 mod menu;
 mod routines;
+mod routines_dialog;
 mod window;
