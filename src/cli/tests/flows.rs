@@ -40,6 +40,7 @@ fn role(role: &str, agent: &str, model: Option<&str>, edits: bool) -> RoleInfo {
         agent: agent.into(),
         model: model.map(str::to_string),
         effort: None,
+        persona: None,
         edits,
         worktree: Worktree::Shared,
     }

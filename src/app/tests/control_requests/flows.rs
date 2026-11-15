@@ -967,6 +967,7 @@ mod exit_notices;
 mod exited;
 mod fresh;
 mod order;
+mod personas;
 mod run_folder;
 mod views;
 mod wake;

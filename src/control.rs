@@ -25,6 +25,7 @@ mod held;
 pub(crate) mod issues;
 pub(crate) mod machines;
 pub(crate) mod pair;
+pub(crate) mod persona;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -47,7 +48,7 @@ mod watch;
 pub(crate) mod worktrees;
 
 use fields::{Fields, chosen};
-pub(crate) use todo::{Todo, TodoSend};
+pub(crate) use todo::{Todo, TodoItem, TodoList, TodoSend};
 
 pub(crate) use accounts::{
     AccountAdd, AccountList, AccountLogin, AccountRemove, AccountRename, AccountRestart, AccountUse, AccountsInfo,
@@ -290,6 +291,9 @@ pub(crate) enum Command {
     FreeMergedBuilds(FreeMergedBuilds),
     Bot(bots::BotRequest),
     AppRoutes(AppRoutes),
+    PersonaList(persona::PersonaList),
+    PersonaImport(persona::PersonaImport),
+    PersonaRemove(persona::PersonaRemove),
 }
 
 impl Command {
@@ -438,6 +442,9 @@ impl Command {
             Self::FlowOrder(_) => 99,
             Self::FlowMessages(_) => 76,
             Self::FlowFiles(_) => 77,
+            Self::PersonaList(_) => 138,
+            Self::PersonaImport(_) => 139,
+            Self::PersonaRemove(_) => 140,
             _ => return None,
         })
     }
@@ -652,6 +659,9 @@ impl Command {
         "free-merged-builds",
         "bot",
         "app-routes",
+        "persona-list",
+        "persona-import",
+        "persona-remove",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {
@@ -963,22 +973,6 @@ pub(crate) struct Done {
     pub(crate) projection: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) group: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct TodoList {
-    pub(crate) todos: Vec<TodoItem>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) undo: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct TodoItem {
-    pub(crate) id: u64,
-    pub(crate) text: String,
-    pub(crate) done: bool,
 }
 
 pub(crate) fn unknown_command(name: &str) -> String {

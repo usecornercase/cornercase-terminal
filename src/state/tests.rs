@@ -252,6 +252,7 @@ mod file {
                 close_when_merged: false,
                 free_builds: false,
                 exits_told: Vec::new(),
+                personas: BTreeMap::new(),
             }),
         });
         saved

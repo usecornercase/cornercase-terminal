@@ -19,6 +19,7 @@ mod issues;
 pub(super) mod machines;
 mod merge_check;
 mod pair;
+mod persona;
 mod plugins;
 mod ports;
 mod processes;

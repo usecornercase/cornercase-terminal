@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs::{self, DirBuilder, Metadata};
 use std::io::{self, Write as _};
 use std::path::{Component, Path, PathBuf};
@@ -8,6 +9,7 @@ use crate::os::fs::{DirBuilderExt, set_mode};
 
 pub(crate) const ENV: &str = "CORNERCASE_RUN_DIR";
 pub(crate) const TASK: &str = "task.md";
+pub(crate) const PERSONAS: &str = "personas";
 pub(crate) const MAX_FILES: usize = 200;
 const MAX_DEPTH: usize = 3;
 const MAX_SEEN: usize = 2000;
@@ -75,7 +77,34 @@ pub(crate) fn ensure_task(dir: &Path, task: &str) -> io::Result<bool> {
     }
 }
 
-pub(crate) fn discard(dir: &Path) {
+pub(crate) fn persona(dir: &Path, id: &str) -> PathBuf {
+    dir.join(PERSONAS).join(format!("{id}.{}", crate::flows::persona::EXTENSION))
+}
+
+pub(crate) fn ensure_personas(dir: &Path, personas: &BTreeMap<String, String>) -> io::Result<usize> {
+    if personas.is_empty() {
+        return Ok(0);
+    }
+    ensure(&dir.join(PERSONAS))?;
+    let mut written = 0;
+    for (id, text) in personas {
+        match fs::OpenOptions::new().write(true).create_new(true).open(persona(dir, id)) {
+            Ok(mut file) => {
+                file.write_all(text.as_bytes())?;
+                written += 1;
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(written)
+}
+
+pub(crate) fn discard(dir: &Path, personas: &BTreeMap<String, String>) {
+    for id in personas.keys() {
+        let _ = fs::remove_file(persona(dir, id));
+    }
+    let _ = fs::remove_dir(dir.join(PERSONAS));
     let _ = fs::remove_file(dir.join(TASK));
     let _ = fs::remove_dir(dir);
 }

@@ -214,9 +214,25 @@ fn phone_commands() -> Vec<Command> {
     vec![Command::AppRoutes(AppRoutes::default())]
 }
 
+fn persona_commands() -> Vec<Command> {
+    vec![
+        Command::PersonaList(persona::PersonaList::default()),
+        Command::PersonaImport(persona::PersonaImport::default()),
+        Command::PersonaRemove(persona::PersonaRemove::default()),
+    ]
+}
+
 pub(crate) fn every_command() -> Vec<Command> {
-    [first_commands(), middle_commands(), last_commands(), newest_commands(), latest_commands(), phone_commands()]
-        .concat()
+    [
+        first_commands(),
+        middle_commands(),
+        last_commands(),
+        newest_commands(),
+        latest_commands(),
+        phone_commands(),
+        persona_commands(),
+    ]
+    .concat()
 }
 
 #[test]

@@ -10,6 +10,7 @@ pub(crate) mod brief;
 pub(crate) mod builtin;
 pub(crate) mod dialog;
 pub(crate) mod folder;
+pub(crate) mod persona;
 pub(crate) mod progress;
 pub(crate) mod registry;
 pub(crate) mod run;
@@ -68,6 +69,8 @@ pub(crate) struct Role {
     pub(crate) model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) persona: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) args: Vec<String>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -176,6 +179,17 @@ impl Flow {
 
     pub(crate) fn agents(&self) -> usize {
         self.roles.len() + 1
+    }
+
+    pub(crate) fn persona_problems(&self, known: &[String]) -> Vec<String> {
+        std::iter::once(&self.orchestrator)
+            .chain(&self.roles)
+            .filter_map(|role| Some((role.name.trim(), role.persona().filter(|id| persona::valid_id(id))?)))
+            .filter(|(_, id)| !known.iter().any(|known| known == id))
+            .map(|(name, id)| {
+                format!("`{name}` follows the persona `{id}`, which is not among your personas: import it with `cornercase persona import`")
+            })
+            .collect()
     }
 
     pub(crate) fn stage_of(&self, role: &str) -> Option<usize> {
@@ -365,6 +379,10 @@ impl Role {
         self.worktree == Worktree::Own
     }
 
+    pub(crate) fn persona(&self) -> Option<&str> {
+        chosen(self.persona.as_ref())
+    }
+
     pub(crate) fn summary(&self) -> String {
         let agent = if self.agent.trim().is_empty() { "no agent" } else { self.agent.trim() };
         std::iter::once(agent)
@@ -390,6 +408,11 @@ fn role_problems(role: &Role, name: &str) -> Vec<String> {
         chosen(role.effort.as_ref()).and_then(|level| agents::effort_refusal(&role.agent, level))
     {
         out.push(format!("`{name}`: {refusal}"));
+    }
+    if let Some(persona) = chosen(role.persona.as_ref()).filter(|id| !persona::valid_id(id)) {
+        out.push(format!(
+            "`{name}` follows `{persona}`, which is not a persona id: use lower-case letters, digits and -"
+        ));
     }
     for key in role.env.keys() {
         let valid = key.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
