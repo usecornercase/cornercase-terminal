@@ -63,3 +63,16 @@ fn a_start_answers_once_its_prompt_is_taken() {
     let pane = answer.ids.pane.expect("its pane");
     assert!(super::pane(&agent.app, pane).context.prompted().is_some());
 }
+
+#[test]
+fn a_line_typed_while_the_agent_has_bracketed_paste_on_reaches_it() {
+    let mut agent = Agent::new();
+    let id = agent.start(None);
+    agent.app.show(Item::Pane(id)).expect("the agent's pane shows");
+    agent.refreshing("the agent turns bracketed paste on", |app| pane(app, id).emulator.bracketed_paste());
+
+    type_line(&mut agent.app, "also the footer");
+
+    agent.refreshing("the line is taken", |app| pane(app, id).context.prompted().is_some());
+    agent.finish();
+}
