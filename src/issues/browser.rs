@@ -108,10 +108,15 @@ impl Queued {
     pub(crate) fn clearable(&self) -> bool {
         match self.kind {
             QueuedKind::Routine { .. } => false,
-            QueuedKind::Entry => matches!(self.state, State::Started { .. }),
+            QueuedKind::Entry => matches!(self.state, State::Started { .. } | State::Answered { .. }),
             QueuedKind::Run => matches!(
                 self.state,
-                State::Started { .. } | State::Removed | State::Kept { .. } | State::Failed { .. } | State::Missed
+                State::Started { .. }
+                    | State::Answered { .. }
+                    | State::Removed
+                    | State::Kept { .. }
+                    | State::Failed { .. }
+                    | State::Missed
             ),
         }
     }

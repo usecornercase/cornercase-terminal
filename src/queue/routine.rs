@@ -27,7 +27,11 @@ impl Queue {
     fn add_run(&mut self, routine: &Entry, at: i64, state: State) -> Result<u64, String> {
         let id = self.next_id.checked_add(1).ok_or("the queue has no ids left")?;
         self.next_id = id;
-        let place = Place { project: routine.task.place.project.clone(), ..Place::default() };
+        let place = Place {
+            project: routine.task.place.project.clone(),
+            bot: routine.task.place.bot.clone(),
+            ..Place::default()
+        };
         let task = Task { at, repeat: None, paused: false, routine: Some(routine.id), place, ..routine.task.clone() };
         self.entries.push(Entry::new(id, task, state));
         self.sort();

@@ -181,7 +181,14 @@ impl Form {
         self.place.chosen().and_then(|i| self.shown.get(i)).and_then(|i| self.places.get(*i))
     }
 
+    pub(crate) fn bot(&self) -> Option<&str> {
+        self.choice().and_then(|choice| choice.place.bot.as_deref())
+    }
+
     pub(crate) fn flow(&self) -> Option<&str> {
+        if self.bot().is_some() {
+            return None;
+        }
         let chosen = self.agent.chosen()?;
         let at = chosen.checked_sub(self.kinds.len())?;
         self.kind().repeats().then(|| self.flows.get(at)).flatten().map(String::as_str)
@@ -193,14 +200,18 @@ impl Form {
         self.shown = (0..self.places.len())
             .filter(|i| {
                 !routine
-                    || self.places.get(*i).is_some_and(|choice| choice.worktree && choice.place.workspace.is_none())
+                    || self.places.get(*i).is_some_and(|choice| {
+                        choice.place.bot.is_some() || (choice.worktree && choice.place.workspace.is_none())
+                    })
             })
             .collect();
         let labels: Vec<String> =
             self.shown.iter().filter_map(|i| self.places.get(*i)).map(|choice| choice.label.clone()).collect();
         let same_label = |(label, _): &(String, std::path::PathBuf)| labels.iter().position(|shown| shown == label);
         let same_project = |(_, project): &(String, std::path::PathBuf)| {
-            self.shown.iter().position(|i| self.places.get(*i).is_some_and(|choice| choice.place.project == *project))
+            self.shown.iter().position(|i| {
+                self.places.get(*i).is_some_and(|choice| choice.place.bot.is_none() && choice.place.project == *project)
+            })
         };
         let at = place
             .as_ref()
@@ -266,6 +277,9 @@ impl Form {
     }
 
     fn after_place(&self) -> Vec<Control> {
+        if self.bot().is_some() {
+            return Vec::new();
+        }
         let routine = self.kind().repeats();
         let mut controls = Vec::new();
         if self.can_branch() && !routine {

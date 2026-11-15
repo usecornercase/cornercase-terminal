@@ -27,7 +27,8 @@ impl App {
             .map(|(i, state)| ui::BotEntry {
                 name: state.bot.name.clone(),
                 detail: self.bot_detail_short(i),
-                thinking: state.turn.is_some(),
+                fallback: self.bot_agent_model(i),
+                thinking: state.answering(),
                 unread: state.unread,
                 active: shown == Some(i),
             })
@@ -36,6 +37,15 @@ impl App {
     }
 
     fn bot_detail_short(&self, at: usize) -> String {
+        let idle = !self.panels.bots.live[at].answering();
+        let next = self.bot_next_run(&self.panels.bots.live[at].bot.id).filter(|_| idle);
+        match next {
+            Some(next) => format!("next {}", crate::queue::clock::short(next, crate::time::now(), &self.window_zone())),
+            None => self.bot_agent_model(at),
+        }
+    }
+
+    fn bot_agent_model(&self, at: usize) -> String {
         let bot = &self.panels.bots.live[at].bot;
         match &bot.model {
             Some(model) => format!("{} · {model}", bot.agent),
@@ -70,7 +80,26 @@ impl App {
             Access::Cornercase => ui::CardRow::new("access", "through cornercase"),
         });
         rows.push(ui::CardRow::new("made", crate::queue::clock::day(bot.created, &self.window_zone())));
+        rows.extend(self.routine_rows(&bot.id));
         ui::BotCard { name: bot.name.clone(), rows }
+    }
+
+    fn routine_rows(&self, bot: &str) -> Vec<ui::CardRow> {
+        let (zone, now) = (self.window_zone(), crate::time::now());
+        let routines = self.bot_entries(bot).filter(|entry| entry.is_routine());
+        routines
+            .filter_map(|entry| {
+                let repeat = entry.task.repeat?;
+                let next = if entry.task.paused {
+                    String::from("paused")
+                } else {
+                    format!("next {}", crate::queue::clock::short(entry.task.at, now, &zone))
+                };
+                let when = ui::CardRow::new("", format!("{next} · ↻ {repeat}"));
+                Some([ui::CardRow::new("routine", entry.task.label.clone()), when])
+            })
+            .flatten()
+            .collect()
     }
 
     pub(in crate::app) fn bots_layout(&self, areas: &ui::Areas) -> ui::Rows {

@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::agents::headless::{Action, Ran};
 use crate::agents::probe::Running;
+use crate::bots::brief::{TOLD_KEPT, Told};
 use crate::bots::chat::{self, Line};
 use crate::bots::{Bot, TURN_TIMEOUT, folder};
 use crate::editor::Editor;
@@ -12,6 +13,7 @@ use crate::error::Result;
 mod form;
 mod manage;
 mod menu;
+mod routines;
 mod section;
 mod shown;
 mod talk;
@@ -31,6 +33,16 @@ pub(super) struct Turn {
     pub(super) steps: usize,
 }
 
+pub(super) struct Run {
+    pub(super) turn: u64,
+    pub(super) entry: u64,
+    pub(super) client: u64,
+    pub(super) label: String,
+    pub(super) clock: String,
+    pub(super) running: Running,
+    pub(super) stopping: bool,
+}
+
 pub(super) struct Live {
     pub(super) key: u64,
     pub(super) draft: Editor,
@@ -39,6 +51,8 @@ pub(super) struct Live {
     pub(super) next_line: u64,
     pub(super) last: Option<Line>,
     pub(super) turn: Option<Turn>,
+    pub(super) runs: Vec<Run>,
+    pub(super) unseen: Vec<Told>,
     pub(super) held: Vec<(u64, String)>,
     pub(super) unread: usize,
     pub(super) waited: HashSet<u64>,
@@ -80,6 +94,10 @@ impl Bots {
         self.by_key(key).map(|at| self.live[at].folder.clone())
     }
 
+    pub(in crate::app) fn by_id(&self, id: &str) -> Option<usize> {
+        self.live.iter().position(|live| live.bot.id == id)
+    }
+
     pub(super) fn by_key(&self, key: u64) -> Option<usize> {
         self.live.iter().position(|live| live.key == key)
     }
@@ -101,6 +119,14 @@ impl BotEvent {
 }
 
 impl Live {
+    pub(in crate::app) fn answering(&self) -> bool {
+        self.turn.is_some() || !self.runs.is_empty()
+    }
+
+    pub(in crate::app) fn trees(&self) -> impl Iterator<Item = &Running> {
+        self.turn.iter().map(|turn| &turn.running).chain(self.runs.iter().map(|run| &run.running))
+    }
+
     pub(super) fn new(bot: Bot, folder: PathBuf, key: u64) -> Self {
         Self {
             key,
@@ -110,6 +136,8 @@ impl Live {
             next_line: 1,
             last: None,
             turn: None,
+            runs: Vec::new(),
+            unseen: Vec::new(),
             held: Vec::new(),
             unread: 0,
             waited: HashSet::new(),
@@ -161,11 +189,13 @@ fn load_chat(dir: &Path, bot: Bot, key: u64) -> Live {
     let _ = chat::heal(&path);
     let mut lines = chat::read(&path);
     let state = chat::replay(&lines);
-    for notice in chat::restart_notices(state, crate::time::now()) {
+    for notice in chat::restart_notices(&state, crate::time::now()) {
         if chat::append(&path, &notice).is_ok() {
             lines.push(notice);
         }
     }
     let last = lines.iter().rev().find(|line| matches!(line.kind, chat::Kind::You | chat::Kind::Bot)).cloned();
-    Live { next_line: chat::replay(&lines).next_id, last, ..Live::new(bot, folder, key) }
+    let mut unseen = chat::unseen(&lines);
+    unseen.drain(..unseen.len().saturating_sub(TOLD_KEPT));
+    Live { next_line: chat::replay(&lines).next_id, last, unseen, ..Live::new(bot, folder, key) }
 }

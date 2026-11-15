@@ -119,6 +119,7 @@ impl App {
             workspace_name,
             workspace_id,
             server: crate::control::server_token().into(),
+            bot: None,
         })
     }
 }

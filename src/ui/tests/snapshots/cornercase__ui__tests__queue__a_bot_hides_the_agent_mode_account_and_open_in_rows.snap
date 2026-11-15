@@ -1,0 +1,28 @@
+---
+source: src/ui/tests/queue.rs
+expression: t.backend()
+---
+"  ⌕ search pro╭─ Schedule an agent ──────────────────────────────────────────────────╮              "
+"              │ Prompt                                                               │              "
+" Projects     │ Review my pull requests                                              │              "
+"              │                                                                      │              "
+"▌ shop (1)    │                                                                      │              "
+"              │                                                                      │              "
+"  + New       │ When      every weekday… ▾                                           │              "
+"              │           09:00                                                      │              "
+"              │                                                                      │              "
+"              │ Where     bot: PRs                                 ▾                 │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │ Agent     set by the bot                                             │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │ Times use Europe/Madrid. Each run is a new conversation of the bot,  │              "
+"              │ which answers in its chat.                                           │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+" ─────────────│                                                   schedule   cancel  │              "
+"  Worktrees   ╰──────────────────────────────────────────────────────────────────────╯              "
+"  More ▴                 Help  │                         │                                          "

@@ -19,13 +19,14 @@ export interface QueueEntry {
   agent: string;
   mode: string;
   command: string;
-  state: 'pending' | 'started' | 'failed' | 'missed' | 'removed' | 'kept';
+  state: 'pending' | 'started' | 'answered' | 'failed' | 'missed' | 'removed' | 'kept';
   repeat?: string;
   routine?: number;
   paused?: boolean;
   cleanup?: boolean;
   pane?: number;
   error?: string;
+  bot?: string;
 }
 
 export type QueueText = 'prompt' | 'clock' | 'date' | 'amount' | 'branch';
@@ -462,7 +463,7 @@ export function queueWhen(at: number): string {
 export const ROUTINE_GRACE = 600000;
 export const ROUTINE_RUNS = 10;
 export const ROUTINE_USE = 'use every 2h, every 3d, every day 09:00, every weekday 09:00 or every monday 09:00';
-const TOO_OFTEN = 'a routine repeats at most every 30 minutes, since each run makes a worktree';
+const TOO_OFTEN = 'a routine repeats at most every 30 minutes, since each run starts an agent';
 const TOO_RARE = 'a routine repeats at least once a year';
 const STEP: Record<string, number> = { m: 60000, h: 3600000, d: 86400000, w: 604800000 };
 

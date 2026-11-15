@@ -119,6 +119,10 @@ pub(crate) fn use_bot_about() -> Result<()> {
     require("bot-about", "cannot change what a bot is for")
 }
 
+pub(crate) fn use_bot_routines() -> Result<()> {
+    require("bot-routines", "cannot schedule a bot's work")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }

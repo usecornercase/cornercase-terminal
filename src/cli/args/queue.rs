@@ -20,7 +20,7 @@ pub(crate) enum QueueAction {
         add: QueueAdd,
     },
     #[command(about = "List scheduled, started, failed and missed entries")]
-    List(Print),
+    List(ListArgs),
     #[command(about = "Remove an entry and print the number that restore takes to put it back")]
     Remove {
         id: u64,
@@ -54,6 +54,14 @@ pub(crate) enum QueueAction {
 }
 
 #[derive(Debug, Args)]
+pub(crate) struct ListArgs {
+    #[arg(long, value_name = "BOT", help = "Only this bot's entries: its id or name")]
+    pub(crate) bot: Option<String>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
 #[command(
     group(ArgGroup::new("branch_from").args(["fresh", "no_fresh"]).conflicts_with_all(["every", "workspace"])),
     mut_arg("fresh", |arg| arg.help(QUEUE_FRESH_HELP))
@@ -68,7 +76,8 @@ pub(crate) struct QueueAdd {
         long,
         conflicts_with_all = ["at", "issue", "workspace", "worktree"],
         help = "Make a routine that repeats: 30m, 2h, 3d, 2w, 'day 09:00', 'weekday 09:00' or 'monday 09:00'. At least \
-                30 minutes apart; each run gets its own worktree from the up-to-date default branch"
+                30 minutes apart; each run gets its own worktree from the up-to-date default branch (for a bot, a new \
+                conversation)"
     )]
     pub(crate) every: Option<String>,
     #[arg(long, conflicts_with_all = ["agent", "mode"], help = "Run this flow in each run of a routine; the prompt is its task")]
@@ -85,6 +94,18 @@ pub(crate) struct QueueAdd {
                 [default: the one chosen there; edit keeps the entry's]"
     )]
     pub(crate) mode: Option<String>,
+    #[arg(
+        long,
+        value_name = "BOT",
+        conflicts_with_all = [
+            "project", "workspace", "worktree", "issue", "source", "flow", "cleanup", "no_cleanup", "agent", "mode",
+            "accounts", "fresh", "no_fresh"
+        ],
+        help = "Schedule a bot's own work instead of an agent: each run is a new conversation of that bot, which \
+                answers in its chat with its own agent, model and account [default inside a bot, with no --project, \
+                --workspace or --worktree: that bot]"
+    )]
+    pub(crate) bot: Option<String>,
     #[arg(long, conflicts_with = "issue", help = "Prompt to submit when the entry starts")]
     pub(crate) prompt: Option<String>,
     #[arg(long, help = "Issue URL or key; its prompt uses the configured template")]

@@ -1,0 +1,64 @@
+# Bot routines (#846)
+
+A bot schedules its own work with the queue and reports in its chat. The queue keeps everything about time (one-off entries, routines, the clock, missed runs, pause and resume, undo, the 10 runs of history, the requests: see [Queue](../queue.md)); a bot entry only differs in what a run does. The bot, its chat and its turn are in [Bots](../bots.md), the window's pieces in [The window](window.md).
+
+## The model
+
+- **`queue::Place` gains `bot: Option<String>`** (the bot's id, skipped when empty). A bot entry has an empty `project` and no workspace or branch. A field, not an enum: every existing file and every older client keeps reading the place as it was, so the change is additive. In the JSON it is `place.bot`; the issue's "JSON adds `bot` to the entry" is read as that.
+- **A run of a bot routine is a bot entry**: `add_run` copies `bot`, so `queue list --bot` finds the runs too.
+- **`answered` is a new state**: `{"state":"answered","session":"…"}`. A bot run is `starting` while its turn runs, then `answered` (its answer is in the chat; there is no pane) or `failed` with the reason. `missed` works as for any routine. The **session id stays on the run**, never in `bot.json` (#847 needs it to tell a run when an agent it started finishes). `result.text` holds the answer cut to 4 KiB, so `queue show` works for a bot run with no conversation record (`without_a_result` says so when none was kept).
+- **`queue.json` is version 3 only while it holds a bot entry or an `answered` state** (`Queue::saved`); version 2 stays what it was (routines, `removed`, `kept`), and a version 1 or 2 file without a bot entry is written back byte for byte. cornercase reads 1 to 3. An older release reads a version it does not know as an empty queue and never overwrites the file until an edit, the same rule as version 2.
+- **An edit cannot move an entry between a bot and a project, or to another bot** (`Queue::edit`), and cannot touch an `answered` entry.
+- **A `Starting` bot entry at load becomes `failed`**: `the server stopped while the bot answered it`.
+- **Removing a bot removes its entries** (`Queue::remove_bot`: routines, their runs, reminders), after its folder is gone (a folder that cannot be deleted keeps the bot and its entries). The request answers `entries` and `undo` as one removal, so `queue restore` puts them back (a restored entry of a missing bot fails when it runs, visibly). The window's toast offers no ` undo `: restoring a removed bot's routines would only make failing entries.
+- **The 30-minute minimum stays** (`Repeat::parse`): every run is a conversation that costs tokens. The refusal now says `since each run starts an agent`, true for both kinds.
+
+## A run
+
+- **A new conversation of the bot, never the chat's own.** Its opening message is the brief, `bot.md`, `memory.md`, then `This is your routine "<label>" (every <repeat>). <prompt>`, or `This is your reminder "<label>" (once, at <time>). <prompt>` for a one-off. `turn::Input.run` skips `--resume`, so a run never continues the chat's session and a chat turn can run at the same time (two processes, two sessions). The run is contained like a chat turn (`Tools::Bot(access)`), keeps the 15-minute limit, and never makes a worktree, fetches or cleans up.
+- **Its lines go into the chat as they happen** with `routine: <the run's queue id>`: a `notice` `↻ <label> · <time>` first (the header; a fixed format, part of the contract), the `step` lines, then a `bot` line (the answer) or an `error` line. The id is the run's own, not the routine's, so two runs of a routine never merge and `queue show` finds the entry. A one-off entry is its own run.
+- **A run's lines never touch the chat turn's state**: `chat::replay` only counts their ids and tracks which runs have no end yet. A run's `bot` line would otherwise end the chat's turn, and a run line between `stopped` and `N held messages dropped` would break their pairing. A run that has no end at load gets `interrupted by a restart` (with its `routine`), once.
+- **The answer counts as unread and notifies** like a chat answer, with the routine in front: `PRs · Review PRs: 3 pull requests wait…`, a ` go ` that shows the chat scrolled to that run's block (the token carries the run), and a desktop notification. Neither toast nor notification when a window shows the chat (`bot_on_screen`).
+- **A run fails visibly**: when its bot was removed (the plain queue failure), its agent is not installed, its account is gone, or the turn fails (`error` line with `routine`, toast, desktop notification, and the same chat-app announcement and `queue-failed` message every queue failure makes). A run that never started still gets its header, so the block exists.
+- **`bot stop` also ends the bot's runs** (`failed: stopped`, a `stopped` notice with `routine`, no toast); `bot remove` is refused while a run answers (` stop it first `); `bot reset` is not, since a run has its own session. `bot list`'s `state` stays the chat's: a run shows as its queue entry `starting`, and the window's spinner covers both. The server stopping ends the runs' trees with the turns'.
+- **Only while the server runs**, as every routine: a due time that passes while it is down is a missed run.
+- **`--at 'claude reset'` works** for a bot (the same plan probe as any entry).
+
+## What the chat is told
+
+The next time the user writes, the routine answers the chat's session has not seen are put in front of the message, under `## Since your last message, your routines answered`, each as `[<label>, <time>]` and its text cut to 4 KiB (`… (cut)`), once. This goes **only into the chat's session, not into `memory.md`**: `memory.md` is the bot's own file, which it writes and prunes, and the opening caps it at 8 KB; cornercase writing every answer there would fight its pruning, grow it with every run and duplicate the chat. The brief already tells the bot to write in `memory.md` what its next run needs. Added limits: the newest 10 answers and 16 KiB in all (older ones are named with `cornercase bot history`), so the block a message gains stays bounded (the whole prompt also holds the message, up to 20,000 characters, and, in an opening, the brief and the two files, all in the agent's argument; Windows' command line is 32 KiB). The answers are rebuilt at load from the chat file (the run answers after the last `you`), so a restart does not lose them; a turn that fails does not get them back.
+
+## Commands
+
+- **`queue add --bot ID (--every R | --at T) --prompt P [--name L]`**; `--bot` does not mix with `--project`, `--workspace`, `--worktree`, `--issue`, `--source`, `--flow`, `--cleanup`, `--agent`, `--mode`, `--account` or `--fresh` (clap, exit 2, before the server is asked; the server refuses the same mixes for other clients). The entry takes the bot's agent for display; a run uses the bot's own agent, model, effort and account as they are then.
+- **Inside a bot** (`CORNERCASE_BOT` set and not empty), a `queue add` with none of `--project`, `--workspace` or `--worktree` gets `--bot` of that bot; then any project-only flag is wrong usage with a hint to add `--project`.
+- **`queue list --bot ID`** filters in the CLI, after resolving the id or name with `bot list`, so the `list` request keeps its shape; with no match the text is kept as given, so a removed bot's restored entries can still be listed. `edit`, `pause`, `resume`, `remove`, `run`, `restore` and `clear-started` work on bot entries unchanged.
+- **`bot list --json`** has `routines` (how many routines) and `next` (UTC seconds of the next run, or `null`); `status --app`'s `bots` and `queue` carry the same.
+- **The brief** has the scheduling section (the command, the repeats, `queue list --bot <id> --json`, tell the user in their time, write what the next run needs in `memory.md`); the test that the brief names only commands that exist also checks the flags it names.
+- **Contract**: the additive feature `bot-routines` covers `bot` in `queue add` and `edit`, `place.bot`, `answered`, the lines' `routine`, `routines` and `next`, and `remove`'s `entries` and `undo`; the CLI checks it before it sends `bot`. `QueueAdd.bot` is always written (the precedent of `fresh`), so a `queue add --boot` from this CLI to a server older than this answers `unknown-field`.
+
+## The boundary
+
+A bot's connection (marked by the server, see [Bots](../bots.md)) under `cornercase` access **manages only its own bot's entries**: `add` (its `bot` must resolve to itself, so a project entry, another bot's entry or no bot is refused), `edit`, `pause`, `resume`, `remove` and `run` of an entry that is its own, and `restore` of a removal whose entries are all its own. `list` and `queue show` stay open; `clear-started` is refused (it clears every project's history). The refusal says `a bot can only schedule and change its own queue entries`. Why: a project routine would start agents with full access outside the bot's folder, on a schedule, after the turn that made it ended. An unknown id or removal is left to the handler (`not-found`). `full` bots are never marked and stay unrestricted, as elsewhere. A run's process counts as the bot's like a chat turn's (`bot_of_process`, `contained_bot`), so an unreadable peer fails closed while only a run answers. `cornercase start --project` stays allowed, as before (#866 is the rest of the boundary).
+
+## The window
+
+- **The Queue tab** lists bot entries with the place `bot PRs` and `answered` in green; `Enter` or a click on an `answered` row closes the modal and shows the chat at that run's block (the bot gone: its result dialog).
+- **The schedule form** lists `bot: PRs` in Where after the projects (also for a routine kind); with a bot chosen it hides Open in, Mode, Account and the cleanup checkbox, the Agent row reading `set by the bot`, and the notice says each run is a new conversation. It is preselected while that bot's chat shows. Still 23 rows. The simulation's form leaves bots out.
+- **The chat draws a run as one block** (`ChatEntry::Run`), placed where its header is even when a chat turn's lines come between its lines: the header in bold muted, its steps folded into one ` +N steps ` row, then the answer as a chat answer, or the error with ` run again ` (`queue run`: a run of a routine that still exists, or a failed or missed reminder), or a dim end notice, and a last dim `answering…` while it runs. `Chat.anchor` scrolls a freshly shown chat so the block's top is the view's top (` go `, the Queue tab).
+- **The section's row** shows `next 09:00` (dim) while the bot is idle, in place of `agent · model`; a run shows the spinner like a turn. When `next …` does not fit the row, `draw_bot` draws `agent · model` instead (`BotEntry.fallback`): the app sends both texts, since only the drawing knows the row's width. A fold never ends on a routine's name row while its time row is hidden. **The card** has two rows per routine: `routine  Review PRs`, then, under an empty label, `next Mon 09:00 · ↻ weekday 09:00` (or `paused · ↻ …`), so a cut at the right still keeps the time. **The empty state's** examples gain the scheduling one.
+- **The short clock** (`queue::clock::short`, at most 14 columns) is `09:00` today, `Mon 09:00` within the next 6 days and `16 Nov 09:00` beyond, so a run two weeks away does not read as this week's. The long `when` of the Queue tab is unchanged.
+- **Editing an entry** lists in Where only that entry's bot, and no bots for a project entry (`queue_places_for`): the window never offers the move that `Queue::edit` refuses.
+
+## Decisions on what the issue left open
+
+- **Grouping**: one block per run, as proposed. A run is a separate conversation, and mixing its steps in time order with a chat turn's (two sessions answering at once) makes both unreadable; the `routine` field lets every client group. The block sits at its header, since one that moved to its newest line would jump while a chat turn interleaves. The cost: a long run's answer lands above the newest chat lines; ` go ` and the Queue tab open the chat at the block, and the answer notifies. Rejected: time order mixed with the chat's lines.
+- **Context for the chat**: only into the chat's session (above). Rejected: also into `memory.md`.
+
+## Checked
+
+With fakes only (`fake_program` agents, a virtual clock through `refresh_at`); no real agent ran, and nothing was tried on macOS or Windows beyond the tests that run there.
+
+## Left for later
+
+The card's ` ⋯ ` menu on each routine (run now, pause or resume, edit…, remove) is a follow-up issue: the card lists the routines read-only, and they are managed from the Queue tab, the commands and the bot itself. What happens when an agent a bot or a run started finishes is #847 (it will use the run's `session`), chat apps are #848.

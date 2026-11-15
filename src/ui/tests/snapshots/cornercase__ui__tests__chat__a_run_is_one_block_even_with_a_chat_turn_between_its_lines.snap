@@ -1,0 +1,28 @@
+---
+source: src/ui/tests/chat.rs
+expression: t.backend()
+---
+"  prs  claude · opus · high · home                        new conversation   ⋯  "
+" ────────────────────────────────────────────────────────────────────────────── "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                      hi 09:01  "
+"                                                                                "
+" ↻ Review PRs · 09:00                                                           "
+" +2 steps                                                                       "
+" prs · 09:05                                                                    "
+" Two are blocked:                                                               "
+"                                                                                "
+" • #482 waits for a review                                                      "
+"                                                                                "
+" prs · 09:12                                                                    "
+" Fine.                                                                          "
+" ▸ ls                                                                           "
+"  Message prs…                                                            send  "

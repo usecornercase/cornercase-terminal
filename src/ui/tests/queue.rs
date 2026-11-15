@@ -270,3 +270,47 @@ fn the_queue_tab_shows_routines_their_runs_and_a_paused_one() {
     let view = View { overlay: Some(Overlay::Issues(issues)), ..view(&["shop"]) };
     insta::assert_snapshot!(render_sized(&view, 120, 24).backend());
 }
+
+#[test]
+fn a_bot_hides_the_agent_mode_account_and_open_in_rows() {
+    let mut places = vec![Choice { label: "shop · root".into(), place: Place::default(), worktree: true }];
+    places.push(Choice {
+        label: "bot: PRs".into(),
+        place: Place { bot: Some("prs".into()), ..Place::default() },
+        worktree: false,
+    });
+    let choices =
+        Choices { places, place: Some(1), kinds: vec!["auto".into(), "claude".into()], agent: 1, flows: Vec::new() };
+    let mut bot = Form::new(choices, "Europe/Madrid".into(), "2026-10-14");
+    bot.prompt = Editor::new("Review my pull requests");
+    bot.when = When::Weekdays.combo();
+    bot.focus = Control::When;
+    let t = shown(bot, 100, 24);
+    insta::assert_snapshot!(t.backend());
+    let text = lines(&t).join("\n");
+    assert!(text.contains("set by the bot") && text.contains("Each run is a new conversation"), "{text}");
+    for hidden in ["Mode", "Open in", "[ ]", "new tab", "Account"] {
+        assert!(!text.contains(hidden), "{hidden} in\n{text}");
+    }
+}
+
+#[test]
+fn the_queue_tab_shows_a_bots_routine_and_its_answered_run() {
+    let mut view = queue_tab();
+    let Some(Overlay::Issues(Issues { body: IssuesBody::List { items, .. }, .. })) = &mut view.overlay else {
+        panic!("the issues modal")
+    };
+    items.push(IssueRow {
+        key: "2026-10-15 09:00".into(),
+        title: "Review PRs".into(),
+        meta: "answered · claude · bot PRs".into(),
+        colour: Some(Color::Green),
+    });
+    let t = render_sized(&view, 120, 24);
+    let lines = lines(&t);
+    let row = lines.iter().position(|l| l.contains("Review PRs")).expect("the bot's row");
+    let x = lines[row].find("answered").expect("its state");
+    let x = u16::try_from(lines[row][..x].chars().count()).expect("column");
+    assert_eq!(t.backend().buffer()[(x, u16::try_from(row).expect("row"))].fg, Color::Green);
+    assert!(lines[row].contains("bot PRs"));
+}

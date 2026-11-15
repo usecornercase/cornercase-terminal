@@ -147,6 +147,14 @@ fn hint(form: &Form) -> &'static str {
 fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     let dim = Style::default().fg(view.muted);
     let controls = form.controls();
+    if form.bot().is_some() {
+        for (at, label) in [(0, "Prompt"), (5, "When"), (WHERE, "Where"), (AGENT, "Agent")] {
+            f.render_widget(Paragraph::new(Span::styled(label, dim)), cell(screen, at, 0, LABEL));
+        }
+        let set = cell(screen, AGENT, LABEL + 1, rest(screen, LABEL + 1));
+        f.render_widget(Paragraph::new(Span::styled("set by the bot", dim)), set);
+        return;
+    }
     for (at, label) in
         [(0, "Prompt"), (5, "When"), (WHERE, "Where"), (OPEN_IN, "Open in"), (AGENT, "Agent"), (MODE, "Mode")]
     {
@@ -167,7 +175,7 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
 }
 
 fn draw_cleanup(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
-    if !form.kind().repeats() {
+    if !form.kind().repeats() || form.bot().is_some() {
         return;
     }
     let dim = Style::default().fg(view.muted);
@@ -221,7 +229,11 @@ fn draw_notes(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     let r = row(screen, 6, 1);
     let tip = Rect::new(end.saturating_add(1), r.y, r.right().saturating_sub(end.saturating_add(1)), r.height);
     f.render_widget(Paragraph::new(Span::styled(hint(form), dim)), tip);
-    let (notice, at) = if form.kind().repeats() {
+    let (notice, at) = if form.bot().is_some() {
+        let text =
+            format!("Times use {}. Each run is a new conversation of the bot, which answers in its chat.", form.zone);
+        (text, NOTICE)
+    } else if form.kind().repeats() {
         let text = format!(
             "Times use {}. Each run gets a new worktree from the up-to-date default branch and accepts its folder trust question.",
             form.zone

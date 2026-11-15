@@ -65,6 +65,7 @@ fn task(app: &App, at: i64, branch: Option<&str>) -> Task {
             branch: branch.map(str::to_string),
             workspace_name: None,
             workspace_id: None,
+            bot: None,
             server: String::new(),
         },
         ..Task::default()

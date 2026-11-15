@@ -76,6 +76,8 @@ impl App {
             last: live.last.as_ref().map(last),
             folder: live.folder.display().to_string(),
             created: bot.created,
+            routines: self.bot_entries(&bot.id).filter(|entry| entry.is_routine()).count(),
+            next: self.bot_next_run(&bot.id),
         }
     }
 

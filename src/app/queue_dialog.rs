@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
@@ -23,7 +24,7 @@ use crate::ui;
 impl App {
     pub(super) fn new_queue_form(&mut self, id: Option<u64>) {
         let entry = id.and_then(|id| self.panels.queued.queue().entry(id)).cloned();
-        let places = self.queue_places();
+        let places = self.queue_places_for(entry.as_ref());
         let matching = matching_places(&places, entry.as_ref());
         let place = self.current_place(&places, &matching);
         let confirmed = if entry.is_some() { matching.len() == 1 } else { !places.is_empty() };
@@ -36,7 +37,7 @@ impl App {
         let at = entry.as_ref().map_or_else(crate::time::now, |entry| entry.task.at);
         let shown = queue::clock::display(at, &zone);
         let (date, clock) = shown.split_once(' ').unwrap_or((&shown, "09:00"));
-        let flows = self.queue_flows(places.get(place).map(|choice| choice.place.project.as_path()));
+        let flows = self.queue_flows(places.get(place).and_then(choice_project));
         let choices = Choices { places, place: confirmed.then_some(place), kinds, agent, flows };
         let mut form = Form::new(choices, zone, date);
         if let Some(entry) = &entry {
@@ -54,13 +55,19 @@ impl App {
         self.queue_cleanup_off();
     }
 
-    fn queue_flows(&self, project: Option<&std::path::Path>) -> Vec<String> {
+    fn queue_flows(&self, project: Option<&Path>) -> Vec<String> {
         self.flow_listing(project).flows.iter().map(|saved| saved.flow.name.clone()).collect()
     }
 
     fn current_place(&self, places: &[Choice], matching: &[usize]) -> usize {
         if let Some(&first) = matching.first() {
             return first;
+        }
+        if let Some(bot) = self.shown_bot_id() {
+            return places
+                .iter()
+                .position(|choice| choice.place.bot.as_deref() == Some(bot.as_str()))
+                .unwrap_or_default();
         }
         let Some(project) = self.project() else { return 0 };
         let workspace = project.workspace().map(|workspace| workspace.id);
@@ -98,6 +105,14 @@ impl App {
         kinds
     }
 
+    fn queue_places_for(&self, entry: Option<&queue::Entry>) -> Vec<Choice> {
+        let mut places = self.queue_places();
+        if let Some(entry) = entry {
+            places.retain(|choice| choice.place.bot == entry.task.place.bot);
+        }
+        places
+    }
+
     fn queue_places(&self) -> Vec<Choice> {
         let mut places = Vec::new();
         for project in self.projects.iter().filter(|project| !project.closing) {
@@ -110,12 +125,18 @@ impl App {
                     workspace_id: None,
                     server: String::new(),
                     branch: None,
+                    bot: None,
                 },
                 worktree: git::is_repo_root(&project.path),
             });
             let open = project.workspaces.iter().filter(|workspace| workspace.open());
             places.extend(open.map(|workspace| self.workspace_choice(project, workspace)));
         }
+        places.extend(self.panels.bots.live.iter().map(|live| Choice {
+            label: format!("bot: {}", live.bot.name),
+            place: queue::Place { bot: Some(live.bot.id.clone()), ..queue::Place::default() },
+            worktree: false,
+        }));
         places
     }
 
@@ -136,6 +157,7 @@ impl App {
                 workspace_id: Some(workspace.id),
                 server: crate::control::server_token().into(),
                 branch: None,
+                bot: None,
             },
             worktree: false,
         }
@@ -239,7 +261,7 @@ impl App {
     fn queue_refit(&mut self) {
         let (project, kept) = match &self.overlay {
             Some(Overlay::Queue(form)) => {
-                (form.choice().map(|choice| choice.place.project.clone()), form.flow().map(str::to_string))
+                (form.choice().and_then(choice_project).map(Path::to_path_buf), form.flow().map(str::to_string))
             }
             _ => return,
         };
@@ -309,6 +331,10 @@ impl App {
             return;
         }
         let id = form.id;
+        if let Some(bot) = form.bot() {
+            let add = bot_add(form, bot);
+            return self.finish_submit(id, &add);
+        }
         let add = match self.form_target(form) {
             Ok((project, workspace)) => self.queue_add(form, project, workspace),
             Err(reason) => {
@@ -316,7 +342,11 @@ impl App {
                 return;
             }
         };
-        match self.add_queue_request(None, None, id, &add) {
+        self.finish_submit(id, &add);
+    }
+
+    fn finish_submit(&mut self, id: Option<u64>, add: &QueueAdd) {
+        match self.add_queue_request(None, None, id, add) {
             Ok(Some(value)) => {
                 self.queue_form_done(value["id"].as_u64().ok_or_else(|| "the queue returned no id".into()));
             }
@@ -468,8 +498,27 @@ impl App {
     }
 }
 
+fn choice_project(choice: &Choice) -> Option<&Path> {
+    choice.place.bot.is_none().then_some(choice.place.project.as_path())
+}
+
+fn bot_add(form: &Form, bot: &str) -> QueueAdd {
+    QueueAdd {
+        at: if form.kind().repeats() { String::new() } else { form.at() },
+        zone: form.zone.clone(),
+        prompt: Some(form.prompt.text()),
+        label: form.label.clone(),
+        repeat: form.repeat(),
+        bot: Some(bot.to_string()),
+        ..QueueAdd::default()
+    }
+}
+
 fn matches_place(choice: &Choice, entry: &queue::Entry) -> bool {
     let place = &entry.task.place;
+    if choice.place.bot.is_some() || place.bot.is_some() {
+        return choice.place.bot == place.bot;
+    }
     if place.server == crate::control::server_token() && place.workspace_id.is_some() {
         choice.place.workspace_id == place.workspace_id
     } else {

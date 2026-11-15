@@ -31,8 +31,10 @@ impl App {
             |app: &App, target: &BotTarget| app.bot_at(&target.bot).map(|at| app.panels.bots.live[at].bot.id.clone());
         let answer = match request {
             BotRequest::Remove(target) => {
-                let id = self.bot_remove(&target.bot)?;
-                json!({ "bot": id })
+                let (id, entries) = self.bot_remove(&target.bot)?;
+                let mut value = self.queue_removal(entries);
+                value["bot"] = json!(id);
+                value
             }
             BotRequest::Reset(target) => {
                 self.bot_reset(&target.bot)?;
@@ -82,7 +84,7 @@ impl App {
     }
 
     pub(in crate::app) fn bot_reply(&self, bot: &str, asked: u64) -> Option<Reply> {
-        let at = self.panels.bots.live.iter().position(|live| live.bot.id == bot)?;
+        let at = self.panels.bots.by_id(bot)?;
         let line = self.bot_answer(at, asked)?;
         Some(Ok(json(&json!({ "bot": bot, "asked": asked, "line": line }))))
     }

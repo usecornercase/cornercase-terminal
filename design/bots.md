@@ -4,7 +4,7 @@ Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`), `agents
 
 A **bot** is an agent of your own: a name, a folder, a memory and a chat. It belongs to no project, but it can see all of them and act on them through the `cornercase` command line. It exists for work that belongs to no project, or to all of them ("review my open pull requests every morning", "tell me which issues labelled `bug` came in today, in every project"), which today meant opening a folder as a fake project, or keeping an agent alive in a pane whose context grows for ever.
 
-This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. The window draws them since #845 (see [The window](#the-window-845)), there are no routines (#846), no following of the agents a bot starts (#847), no chat apps (#848), and only Claude Code and Codex can be bots (#849 adds the others).
+This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. The window draws them since #845 (see [The window](#the-window-845)), routines are in [Bot routines](bots/routines.md) (#846), there is no following of the agents a bot starts (#847), no chat apps (#848), and only Claude Code and Codex can be bots (#849 adds the others).
 
 **Making one starts nothing and spends no tokens.** A bot runs only when someone writes to it, and only while the server runs: a turn's process does not survive the server.
 
@@ -31,9 +31,9 @@ At most 50 bots (`MAX_BOTS`). A folder whose `bot.json` does not parse, or whose
 | `bot` | the agent's final answer of a turn, in Markdown, with `model`, `tokens` and `conversation` |
 | `step` | one tool the agent used, as one line (`cornercase status --json`, `Read src/main.rs`), with its `tool` |
 | `error` | why a turn failed, in the agent's own words when it gave any |
-| `notice` | cornercase's own lines: `new conversation`, `stopped`, `interrupted by a restart`, `1 held message dropped` / `N held messages dropped` |
+| `notice` | cornercase's own lines: `new conversation`, `stopped`, `interrupted by a restart`, `1 held message dropped` / `N held messages dropped`, and a routine run's header `↻ <label> · <time>` |
 
-Every line has `id` (a number that increases per bot) and `at` (UTC seconds). Absent optional fields are not written. The notice texts are fixed and part of the contract.
+Every line has `id` (a number that increases per bot) and `at` (UTC seconds); a line of a routine's run has `routine` too, the run's queue id (see [Bot routines](bots/routines.md)). Absent optional fields are not written. The notice texts are fixed and part of the contract.
 
 - **A torn last line** (the server stopped mid-write) is skipped by readers, and healed at load: if the file does not end with a newline, one is appended before the next line, so the next line parses.
 - **Replay is the source of truth at load** (`chat::replay`): a `you` that is not held starts a turn that runs; held ones are counted; a `bot` or `error` ends the turn, and held messages start the next one at once; `stopped` and `interrupted by a restart` leave it idle with nothing held. No extra field is kept for the turn. A turn still running in the replay gets `interrupted by a restart`, and held messages get the dropped notice, once (a second load finds the notice and appends nothing).
@@ -51,6 +51,7 @@ A turn is one run of the agent without its interface, through the shared runner 
 - **Time limit: 15 minutes per turn** (`TURN_TIMEOUT`; the app keeps it in `Bots::timeout` so tests shorten it, as Recap does with `RECAP_TIMEOUT`). A bot acts by starting agents and returning; it does not do long work itself. The timeout ends the whole process tree, and the `error` line says `claude did not answer in time`.
 - **A restart** drops a turn's process with the server: see Replay above.
 - **A second `stop`** adds what was held since to the ones to drop and starts no second job, so a `say --wait` held in between is answered with the dropped notice. **The server stopping** (`stop_background`, so `kill-server`, `restart` and an update) ends every running turn's process tree, one thread each, so the agent does not outlive the server it reports to. A message held while a stop was in flight runs as the next turn: replay keeps `held` at `stopped`, takes off the count a following `N held messages dropped` names, and reads what is left as the turn that runs.
+- **`stop` also ends the bot's routine runs, and `remove` refuses while one answers** (`reset` does not: a run has its own session; see [Bot routines](bots/routines.md)).
 - **`reset` and `remove` refuse while a turn runs** (`stop it first`), the same way: forgetting a session a process still uses, or deleting its folder under it, would leave the chat saying something false.
 - **`reset`** (the window's ` new conversation `) forgets the session id and writes `new conversation`. `bot.md` and `memory.md` stay, so the next message starts a new session that reads them.
 - **Failures keep the agent's words** (`Not logged in`, `usage limit`). Two are worded by cornercase: `error_max_turns` becomes `claude stopped after 40 steps, its limit for one message`, and a failure whose words name the context (`prompt is too long`, `context window`, `context length`, `maximum context`, `context_length_exceeded`) gets `; start a new conversation: cornercase bot reset <id>`.
@@ -137,6 +138,8 @@ Under `cornercase` access, **the server refuses what a bot types into a pane tha
 
 **Checked live**: on Linux with Claude Code 2.1.325 (2026-11-14), every Bash command runs with `pgid = sid = ` its shell's pid, and a command sent to the background is reparented to pid 1 once that shell exits. Nothing was checked on macOS or Windows (the Job code was read against `windows-sys` 0.61.2 only), and no real turn ran: the tests use fakes.
 
+**The queue** (#846): a bot's connection may add, edit, pause, resume, remove and run only its own bot's entries; `clear-started`, and project or other bots' entries, are refused (see [Bot routines](bots/routines.md)).
+
 ## Limits and log
 
 - A message is at most 20,000 characters.
@@ -173,7 +176,7 @@ The boundary (#856): the classifier of the writing requests (`boundary/tests.rs`
 
 ## What later issues add
 
-#846 routines (`queue add --bot`); #847 following the agents a bot starts; #848 chat apps; #849 the other agents. The rest of the boundary (the open list above, #866) and the server-side refusal of `cornercase requests` for a restart or an update (#867) are follow-up issues.
+#847 following the agents a bot starts; #848 chat apps; #849 the other agents. The rest of the boundary (the open list above, #866) and the server-side refusal of `cornercase requests` for a restart or an update (#867) are follow-up issues.
 
 ## The window (#845)
 
@@ -182,3 +185,4 @@ The Bots section, the chat and the form are in [bots/window.md](bots/window.md):
 ## Topics
 
 - [The window](bots/window.md)
+- [Routines](bots/routines.md)

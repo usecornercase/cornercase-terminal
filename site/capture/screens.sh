@@ -1403,11 +1403,15 @@ screen_bots() {
     const digest = "Yesterday in **web-shop**:\n\n- 4 pull requests merged, #476 the last\n- `feat/gift-cards` still waits for tests";
     const chats = {
       prs: [
-        { id: 1, at: now - 540, kind: "you", text: "which of my pull requests are blocked?" },
-        { id: 2, at: now - 500, kind: "step", text: "cornercase status --json", tool: "Bash" },
-        { id: 3, at: now - 480, kind: "step", text: "gh pr checks 490", tool: "Bash" },
-        { id: 4, at: now - 420, kind: "bot", text: answer, model: "claude-opus-5-5" },
-        { id: 5, at: now - 300, kind: "notice", text: "new conversation" },
+        { id: 1, at: now - 1800, kind: "notice", text: "↻ Review PRs · " + new Date((now - 1800) * 1000).toISOString().slice(11, 16), routine: 12 },
+        { id: 2, at: now - 1790, kind: "step", text: "cornercase status --json", tool: "Bash", routine: 12 },
+        { id: 3, at: now - 1780, kind: "step", text: "gh pr list --json number,title", tool: "Bash", routine: 12 },
+        { id: 4, at: now - 1720, kind: "bot", text: "3 pull requests wait for review: #482, #490 and #501.", model: "claude-opus-5-5", routine: 12 },
+        { id: 5, at: now - 540, kind: "you", text: "which of my pull requests are blocked?" },
+        { id: 6, at: now - 500, kind: "step", text: "cornercase status --json", tool: "Bash" },
+        { id: 7, at: now - 480, kind: "step", text: "gh pr checks 490", tool: "Bash" },
+        { id: 8, at: now - 420, kind: "bot", text: answer, model: "claude-opus-5-5" },
+        { id: 9, at: now - 300, kind: "notice", text: "new conversation" },
       ],
       digest: [
         { id: 1, at: now - 7200, kind: "you", text: "what merged yesterday?" },
@@ -1426,7 +1430,12 @@ screen_bots() {
       fs.chmodSync(folder, 0o700);
     }
     fs.chmodSync(dir, 0o700);
-  ' "$CC_RUN/server.bots"
+    const place = { project: "", workspace: null, workspace_name: null, branch: null, bot: "prs" };
+    const task = { zone: "UTC", label: "Review PRs", agent: "claude", command: "", program: "", mode: null, prompt: "Review my open pull requests and tell me which are blocked.", submit: true, place };
+    const routine = { id: 11, at: now + 5400, ...task, repeat: "2h", state: "pending" };
+    const run = { id: 12, at: now - 1800, ...task, routine: 11, state: "answered", session: "8b610e1d-23f2-4ef4-8666-258ef8b082dc", started: now - 1800 };
+    fs.writeFileSync(process.argv[2], JSON.stringify({ version: 3, next_id: 12, entries: [run, routine] }));
+  ' "$CC_RUN/server.bots" "$CC_RUN/server.queue.json"
   cc_start 140 38
   cc_wait 'Bots'
   cc_click 'prs'

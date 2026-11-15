@@ -219,7 +219,7 @@ fn an_example_fills_the_field_and_sends_nothing() {
     let areas = ui::chat_areas(c.app.layout(AREA).pane, 1, 1);
     let y = ui::row_y(areas.lines, shown.view.rows.len(), true, shown.view.rows.len() - 1);
     click(&mut c.app, Position::new(areas.lines.x + 20, y));
-    assert_eq!(c.app.panels.bots.live[0].draft.text(), ui::EXAMPLES[2]);
+    assert_eq!(c.app.panels.bots.live[0].draft.text(), ui::EXAMPLES[3]);
     assert_eq!(c.lines(), []);
 }
 

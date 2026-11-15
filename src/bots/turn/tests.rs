@@ -11,6 +11,8 @@ fn input(folder: &Path, conversation: Option<&str>) -> Input {
         bot: Bot { conversation: conversation.map(str::to_string), ..sample("prs", "PRs") },
         folder: folder.to_path_buf(),
         text: String::from("hello"),
+        run: false,
+        told: None,
         program: String::from("claude"),
         home: None,
         socket: Some(String::from("/s")),
@@ -83,4 +85,30 @@ fn running_out_of_steps_says_so() {
 fn a_full_context_says_to_start_a_new_conversation(#[case] words: &str) {
     let text = failure("claude", &Error::Probe(words.to_string()), "prs");
     assert_eq!(text, format!("{words}; start a new conversation: cornercase bot reset prs"));
+}
+
+#[test]
+fn a_run_opens_a_new_session_even_when_the_bot_has_a_conversation() {
+    let dir = TempDir::new();
+    let made = folder::create(dir.path(), &sample("prs", "PRs"), "review").expect("create");
+    let run = Input {
+        run: true,
+        text: String::from("This is your routine \"x\" (every 2h). Go."),
+        ..input(&made, Some("s1"))
+    };
+    let asked = ask(&run, None, None);
+    assert_eq!(asked.conversation, None);
+    assert!(asked.prompt.contains("You are PRs") && asked.prompt.ends_with("Go."), "{}", asked.prompt);
+    assert!(!asked.prompt.contains("The user says"));
+}
+
+#[test]
+fn what_the_routines_answered_is_put_in_front_of_a_resumed_message_once_given() {
+    let dir = TempDir::new();
+    let made = folder::create(dir.path(), &sample("prs", "PRs"), "").expect("create");
+    let told = Some(String::from("## Since your last message, your routines answered\n\n[A, 09:00]\nx"));
+    let asked = ask(&Input { told, ..input(&made, Some("s1")) }, None, None);
+    assert!(asked.prompt.starts_with("## Since your last message"), "{}", asked.prompt);
+    assert!(asked.prompt.ends_with("## The user says\n\nhello"));
+    assert_eq!(asked.conversation.as_deref(), Some("s1"));
 }

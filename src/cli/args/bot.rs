@@ -21,8 +21,8 @@ pub(crate) enum BotAction {
     List(Print),
     #[command(about = "Change a bot's name, model, effort, account or access, from its next message", after_help = BOT_EDIT_HELP)]
     Edit(EditArgs),
-    #[command(about = "Delete a bot and its folder; refused while it answers")]
-    Remove(Target),
+    #[command(about = "Delete a bot, its folder and its queue entries; refused while it answers")]
+    Remove(RemoveArgs),
     #[command(about = "Write to a bot; it answers in its chat", after_help = BOT_SAY_HELP)]
     Say(SayArgs),
     #[command(about = "Print a bot's chat", after_help = BOT_HISTORY_HELP)]
@@ -41,6 +41,14 @@ pub(crate) enum BotAction {
 pub(crate) struct Target {
     #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
     pub(crate) bot: String,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct RemoveArgs {
+    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
+    pub(crate) bot: String,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

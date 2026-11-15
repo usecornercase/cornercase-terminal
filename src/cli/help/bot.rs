@@ -43,7 +43,7 @@ or times out (15 minutes), with the reason on standard error.
 A message sent while the bot answers is held and goes, with the others held, as the next turn. The
 first message of a conversation opens with what cornercase tells the bot about itself, then bot.md
 and memory.md. A bot runs with CORNERCASE_BOT set, so its `cornercase` commands must name the
-project: it runs in no pane.
+project: it runs in no pane (`queue add` with no place means the bot).
 
 With --json it prints {\"bot\", \"line\"} (and \"asked\" with --wait): the chat line.
 
@@ -56,14 +56,14 @@ pub(in crate::cli) const BOT_HISTORY_HELP: &str =
 and its answers. --after LINE and --last N cut it.
 
 With --json it prints {\"bot\", \"name\", \"lines\": [{\"id\", \"at\", \"kind\", \"text\"}]}. A kind is you, bot, step,
-error or notice; a you line may be held, a step names its tool, and a bot line has its model, tokens
-and conversation.";
+error or notice; a you line may be held, a step names its tool, a bot line has its model, tokens
+and conversation, and a line of a routine's run has routine, the run's queue id.";
 
 pub(in crate::cli) const BOT_HELP: &str =
     "A bot is an agent of your own, outside any project: a name, a folder, a memory and a chat. Each
 message you write runs one turn of its agent (Claude Code or Codex) in a conversation that continues,
 and the answer lands in the chat. It can see every project and act on them through `cornercase`.
-Making a bot starts nothing; it spends tokens only when you write to it, and only while the server
+Making a bot starts nothing; it spends tokens when you write to it and when its routines run, and only while the server
 runs. The window lists bots in its Bots section and draws each one's chat.
 
 Events: `cornercase events` reports each chat line, the bot starting or finishing a turn, and a

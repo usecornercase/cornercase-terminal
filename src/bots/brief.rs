@@ -1,4 +1,7 @@
+use std::fmt::Write as _;
 use std::path::Path;
+
+use crate::queue::repeat::Repeat;
 
 use super::{Access, Bot, NOTES_CAP};
 
@@ -14,8 +17,16 @@ const ACT: &str = "How to act, through cornercase:
 - Always name the project: you run in no pane, so there is no \"here\".";
 const REACH: &str = "Your access is `cornercase`: you can read anything, run the cornercase command line, run read-only git and gh, search the web, and write only in your folder. Never change a project's files yourself; start an agent to do it.";
 const FULL: &str = "Your access is `full`: you can change any file and run anything, unattended. Still start an agent for work on a project, unless the user asked you to do it yourself.";
-const LATER: &str =
-    "Routines, and what happens when an agent you started finishes, come in later releases of cornercase.";
+const SCHEDULE: &str = "To schedule work, run `cornercase queue add --every 'weekday 09:00' --prompt '…' --name '…'` (repeats: `30m`, `2h`, `day 09:00`, `weekday 09:00`, `monday 09:00`, `3d 10:00`; at least 30 minutes), or `--at 'tomorrow 9:00'` for once. `cornercase queue list --bot {id} --json` lists yours; `queue pause`, `resume`, `edit` and `remove` change them. Tell the user what you scheduled and when it runs next, in their time. When a routine runs you start a new conversation that has only this brief and your files, so write in `memory.md` what the next run needs.";
+const LATER: &str = "What happens when an agent you started finishes comes in a later release of cornercase.";
+pub(crate) const TOLD_KEPT: usize = 10;
+const TOLD_CAP: usize = 16 * 1024;
+
+pub(crate) struct Told {
+    pub(crate) label: String,
+    pub(crate) clock: String,
+    pub(crate) text: String,
+}
 
 pub(crate) fn brief(bot: &Bot, folder: &Path) -> String {
     let who = WHO.replace("{name}", &bot.name);
@@ -24,7 +35,8 @@ pub(crate) fn brief(bot: &Bot, folder: &Path) -> String {
         Access::Cornercase => REACH,
         Access::Full => FULL,
     };
-    [who.as_str(), &folder, SEE, ACT, access, LATER].join("\n\n")
+    let schedule = SCHEDULE.replace("{id}", &bot.id);
+    [who.as_str(), &folder, SEE, ACT, &schedule, access, LATER].join("\n\n")
 }
 
 pub(crate) fn capped(file: &str, text: &str) -> String {
@@ -42,15 +54,75 @@ pub(crate) fn capped(file: &str, text: &str) -> String {
     format!("{}\n… (cut at 8 KB; read {file} for the rest)", &text[..end])
 }
 
-pub(crate) fn opening(bot: &Bot, folder: &Path, notes: (&str, &str), text: &str) -> String {
+fn told_one(answer: &Told) -> String {
+    let (text, cut) = crate::queue::outcome::cap(&answer.text);
+    let tail = if cut { "\n… (cut)" } else { "" };
+    let who =
+        if answer.clock.is_empty() { answer.label.clone() } else { format!("{}, {}", answer.label, answer.clock) };
+    format!("[{who}]\n{text}{tail}")
+}
+
+pub(crate) fn told(answers: &[Told], bot: &str) -> Option<String> {
+    if answers.is_empty() {
+        return None;
+    }
+    let mut kept: Vec<String> = Vec::new();
+    let mut size = 0;
+    for answer in answers.iter().rev() {
+        let one = told_one(answer);
+        if size + one.len() > TOLD_CAP && !kept.is_empty() {
+            break;
+        }
+        size += one.len();
+        kept.push(one);
+    }
+    kept.reverse();
+    let left = answers.len() - kept.len();
+    let mut text = format!("## Since your last message, your routines answered\n\n{}", kept.join("\n\n"));
+    if left > 0 {
+        let _ = write!(
+            text,
+            "\n\nand {}: `cornercase bot history {bot}`",
+            crate::text::plural(left, "older answer", "older answers")
+        );
+    }
+    Some(text)
+}
+
+pub(crate) fn opening(bot: &Bot, folder: &Path, notes: (&str, &str), told: Option<&str>, text: &str) -> String {
+    let mut parts = files(bot, folder, notes);
+    parts.extend(told.map(str::to_string));
+    parts.push(format!("## The user says\n\n{text}"));
+    parts.join("\n\n")
+}
+
+fn files(bot: &Bot, folder: &Path, notes: (&str, &str)) -> Vec<String> {
     let (about, memory) = notes;
-    let parts = [
+    vec![
         brief(bot, folder),
         format!("## bot.md\n\n{}", capped("bot.md", about)),
         format!("## memory.md\n\n{}", capped("memory.md", memory)),
-        format!("## The user says\n\n{text}"),
-    ];
+    ]
+}
+
+pub(crate) fn resumed(told: Option<&str>, text: &str) -> String {
+    match told {
+        Some(told) => format!("{told}\n\n## The user says\n\n{text}"),
+        None => text.to_string(),
+    }
+}
+
+pub(crate) fn run_opening(bot: &Bot, folder: &Path, notes: (&str, &str), text: &str) -> String {
+    let mut parts = files(bot, folder, notes);
+    parts.push(text.to_string());
     parts.join("\n\n")
+}
+
+pub(crate) fn run_text(label: &str, repeat: Option<Repeat>, when: &str, prompt: &str) -> String {
+    match repeat {
+        Some(repeat) => format!("This is your routine \"{label}\" (every {repeat}). {prompt}"),
+        None => format!("This is your reminder \"{label}\" (once, at {when}). {prompt}"),
+    }
 }
 
 #[cfg(test)]

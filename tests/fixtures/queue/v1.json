@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "next_id": 3,
+  "entries": [
+    {
+      "id": 1,
+      "at": 1760000000,
+      "zone": "UTC",
+      "label": "login",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "fix login",
+      "submit": true,
+      "place": {
+        "project": "/p",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "state": "pending"
+    },
+    {
+      "id": 2,
+      "at": 1760000100,
+      "zone": "UTC",
+      "label": "docs",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "fix docs",
+      "submit": true,
+      "place": {
+        "project": "/p",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "state": "started",
+      "pane": 3,
+      "server": "1-2",
+      "started": 1760000100
+    }
+  ],
+  "names": 1
+}

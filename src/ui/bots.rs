@@ -14,6 +14,7 @@ use crate::agents::activity::Status;
 
 pub(crate) mod card;
 pub(crate) mod chat;
+pub(crate) mod run;
 
 pub(crate) const BOTS_LABEL: &str = "Bots ›";
 
@@ -27,6 +28,7 @@ const MIN_NAME_WIDTH: usize = 4;
 pub(crate) struct BotEntry {
     pub(crate) name: String,
     pub(crate) detail: String,
+    pub(crate) fallback: String,
     pub(crate) thinking: bool,
     pub(crate) unread: usize,
     pub(crate) active: bool,
@@ -146,8 +148,14 @@ fn draw_bot(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &BotEntry) {
     let name = crate::text::truncate_right(&entry.name, room);
     let used = name.chars().count();
     line.push(Span::styled(name, Style::default().fg(colour)));
-    let detail = vec![Span::styled(entry.detail.clone(), Style::default().fg(view.muted))];
-    let tags = Tags::fit(detail, room.saturating_sub(used.max(MIN_NAME_WIDTH)));
+    let fit = |text: &str| {
+        let detail = vec![Span::styled(text.to_string(), Style::default().fg(view.muted))];
+        Tags::fit(detail, room.saturating_sub(used.max(MIN_NAME_WIDTH)))
+    };
+    let mut tags = fit(&entry.detail);
+    if tags.is_empty() {
+        tags = fit(&entry.fallback);
+    }
     tags.push_onto(&mut line, used, room);
     draw_band(f, r, Line::from(line), bg);
     draw_menu_in(f, view, r, pitch, bg);

@@ -84,17 +84,30 @@ impl App {
     }
 
     pub(in crate::app) fn remove_bot_label(&self, key: u64) -> &'static str {
-        let busy = self.panels.bots.by_key(key).is_some_and(|at| self.panels.bots.live[at].turn.is_some());
+        let busy = self.panels.bots.by_key(key).is_some_and(|at| self.panels.bots.live[at].answering());
         if busy { STOP_FIRST } else { REMOVE_SUBMIT }
+    }
+
+    fn remove_bot_text(&self, at: usize) -> String {
+        let live = &self.panels.bots.live[at];
+        let names: Vec<&str> = self
+            .bot_entries(&live.bot.id)
+            .filter(|entry| !entry.is_run())
+            .map(|entry| entry.task.label.as_str())
+            .collect();
+        let entries = if names.is_empty() {
+            String::from("its chat, its memory and its folder")
+        } else {
+            format!("its chat, its memory, its folder and its queue entries ({})", names.join(", "))
+        };
+        let text = format!("Remove bot {}? {entries} are deleted. Agents it started keep running.", live.bot.name);
+        text.replacen("? its", "? Its", 1)
     }
 
     pub(in crate::app) fn remove_bot_view(&self, key: u64) -> Option<ui::Overlay> {
         let at = self.panels.bots.by_key(key)?;
-        let name = &self.panels.bots.live[at].bot.name;
         let busy = self.remove_bot_label(key) == STOP_FIRST;
-        let message = format!(
-            "Remove bot {name}? Its chat, its memory and its folder are deleted. Agents it started keep running."
-        );
+        let message = self.remove_bot_text(at);
         Some(ui::Overlay::Confirm(ui::Confirm {
             title: "Remove bot",
             message,
@@ -120,13 +133,22 @@ impl App {
 
     pub(in crate::app) fn submit_remove_bot(&mut self, key: u64) -> Option<Overlay> {
         let at = self.panels.bots.by_key(key)?;
-        let id = self.panels.bots.live[at].bot.id.clone();
-        if self.panels.bots.live[at].turn.is_some() {
+        let (id, name) = (self.panels.bots.live[at].bot.id.clone(), self.panels.bots.live[at].bot.name.clone());
+        if self.panels.bots.live[at].answering() {
             let _ = self.bot_stop(&id);
             return Some(Overlay::RemoveBot { bot: key });
         }
-        if let Err(refusal) = self.bot_remove(&id) {
-            self.messages.toast = Some(Toast::new(refusal.message, ui::ToastIcon::Bug));
+        match self.bot_remove(&id) {
+            Ok((_, entries)) if entries.iter().any(|entry| !entry.is_run()) => {
+                let count = entries.iter().filter(|entry| !entry.is_run()).count();
+                let message = format!(
+                    "removed bot {name} and its {}",
+                    crate::text::plural(count, "queue entry", "queue entries")
+                );
+                self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+            }
+            Ok(_) => {}
+            Err(refusal) => self.messages.toast = Some(Toast::new(refusal.message, ui::ToastIcon::Bug)),
         }
         None
     }
