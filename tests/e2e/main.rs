@@ -5,8 +5,8 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Once};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -110,6 +110,8 @@ struct Session {
 impl Session {
     fn new() -> Arc<Self> {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
+        static SWEPT: Once = Once::new();
+        SWEPT.call_once(stop_servers_left_behind);
         let dir = loop {
             let n = NEXT.fetch_add(1, Ordering::Relaxed);
             let dir = std::env::temp_dir().join(format!("cornercase-e2e-sock-{}-{n}", std::process::id()));
@@ -255,28 +257,109 @@ fn feed(mut cmd: std::process::Command, input: &str) -> std::process::Output {
 }
 
 #[cfg(target_os = "linux")]
-fn servers_with(var: &str) -> usize {
-    let Ok(procs) = std::fs::read_dir("/proc") else { return 0 };
+fn server_processes() -> Vec<(u32, Vec<String>)> {
+    let Ok(procs) = std::fs::read_dir("/proc") else { return Vec::new() };
     procs
         .flatten()
-        .filter(|entry| {
-            let cmdline = std::fs::read(entry.path().join("cmdline")).unwrap_or_default();
-            let environ = std::fs::read(entry.path().join("environ")).unwrap_or_default();
-            cmdline.split(|b| *b == 0).nth(1) == Some(b"server".as_slice())
-                && environ.split(|b| *b == 0).any(|word| word == var.as_bytes())
+        .filter_map(|entry| {
+            let pid = entry.file_name().to_str()?.parse::<u32>().ok()?;
+            let cmdline = std::fs::read(entry.path().join("cmdline")).ok()?;
+            if cmdline.split(|b| *b == 0).nth(1) != Some(b"server".as_slice()) {
+                return None;
+            }
+            let environ = std::fs::read(entry.path().join("environ")).ok()?;
+            let words = environ.split(|b| *b == 0).map(|word| String::from_utf8_lossy(word).into_owned());
+            Some((pid, words.collect()))
         })
-        .count()
+        .collect()
 }
 
 #[cfg(target_os = "macos")]
-fn servers_with(var: &str) -> usize {
-    let ps = std::process::Command::new("ps").args(["-xEww", "-o", "command="]).output().expect("run ps");
+fn server_processes() -> Vec<(u32, Vec<String>)> {
+    let Ok(ps) = std::process::Command::new("ps").args(["-xEww", "-o", "pid=,command="]).output() else {
+        return Vec::new();
+    };
     String::from_utf8_lossy(&ps.stdout)
         .lines()
-        .filter(|line| {
-            line.split_whitespace().nth(1) == Some("server") && line.split_whitespace().any(|word| word == var)
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            let pid = words.next()?.parse::<u32>().ok()?;
+            let words: Vec<String> = words.map(str::to_string).collect();
+            (words.get(1).map(String::as_str) == Some("server")).then_some((pid, words))
         })
-        .count()
+        .collect()
+}
+
+fn server_pids_with(var: &str) -> Vec<u32> {
+    server_processes()
+        .into_iter()
+        .filter(|(_, words)| words.iter().any(|word| word == var))
+        .map(|(pid, _)| pid)
+        .collect()
+}
+
+fn servers_with(var: &str) -> usize {
+    server_pids_with(var).len()
+}
+
+fn sent(pid: &impl ToString, name: &str) -> bool {
+    std::process::Command::new("kill").args([name, &pid.to_string()]).status().is_ok_and(|status| status.success())
+}
+
+fn stop_servers(what: &str, found: impl Fn() -> Vec<u32>) {
+    let pids = found();
+    if pids.is_empty() {
+        return;
+    }
+    eprintln!("e2e: stopping cornercase servers {pids:?} that {what}");
+    let started = Instant::now();
+    loop {
+        let pids = found();
+        if pids.is_empty() {
+            return;
+        }
+        if started.elapsed() > 2 * TIMEOUT {
+            eprintln!("e2e: gave up stopping cornercase servers {pids:?} that {what}");
+            return;
+        }
+        let signal = if started.elapsed() > TIMEOUT { "-KILL" } else { "-TERM" };
+        for pid in &pids {
+            sent(pid, signal);
+        }
+        thread::sleep(POLL);
+    }
+}
+
+fn stop_servers_with(var: &str) {
+    stop_servers("kill-server could not reach", || server_pids_with(var));
+}
+
+#[cfg(target_os = "linux")]
+fn seen_by(pid: u32, path: &std::path::Path) -> PathBuf {
+    let relative = path.strip_prefix("/").unwrap_or(path);
+    PathBuf::from(format!("/proc/{pid}/root")).join(relative)
+}
+
+#[cfg(target_os = "macos")]
+fn seen_by(_pid: u32, path: &std::path::Path) -> PathBuf {
+    path.to_path_buf()
+}
+
+fn folder_gone(pid: u32, word: &str) -> bool {
+    let Some(socket) = word.strip_prefix(&format!("{SOCKET_ENV}=")) else { return false };
+    let Some(folder) = std::path::Path::new(socket).parent() else { return false };
+    let named = folder.file_name().and_then(|name| name.to_str());
+    named.is_some_and(|name| name.starts_with("cornercase-e2e-sock-"))
+        && std::fs::symlink_metadata(seen_by(pid, folder)).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+}
+
+fn left_behind() -> Vec<u32> {
+    let gone = |(pid, words): (u32, Vec<String>)| words.iter().any(|word| folder_gone(pid, word)).then_some(pid);
+    server_processes().into_iter().filter_map(gone).collect()
+}
+
+fn stop_servers_left_behind() {
+    stop_servers("outlived their session's folder", left_behind);
 }
 
 fn panes(report: Report) -> impl Iterator<Item = PaneInfo> {
@@ -286,6 +369,7 @@ fn panes(report: Report) -> impl Iterator<Item = PaneInfo> {
 impl Drop for Session {
     fn drop(&mut self) {
         let _ = self.run("kill-server");
+        stop_servers_with(&self.socket_var());
         let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
@@ -444,6 +528,7 @@ impl Harness {
         self.wait_for("the new shell comes back", |text| {
             !text.contains("before-restart") && text.contains(&first_entry())
         });
+        wait_until("one server runs after the restart", || self.session.servers() == 1);
     }
 
     fn wait_for(&mut self, what: &str, cond: impl Fn(&str) -> bool) {
