@@ -42,7 +42,28 @@ const NPM_SCRIPTS: [&[&str]; 2] =
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
-pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = None;
+pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = Some(crate::agents::headless::Spec {
+    command: headless::command,
+    read: headless::read,
+    bot: Some(BOT),
+    recap: false,
+    stderr: false,
+    prepare: Some(headless::prepare),
+});
+#[cfg(not(windows))]
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],
+    why: None,
+    reads_anywhere: false,
+    effort_needs_model: false,
+};
+#[cfg(windows)]
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Full],
+    why: Some("its rules are unchecked on this system"),
+    reads_anywhere: false,
+    effort_needs_model: false,
+};
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const UNFOUND: &str =
     "Gemini has no conversation in its folder yet, or two Gemini share that home and folder";
@@ -139,6 +160,7 @@ impl Reader {
     }
 }
 
+pub(in crate::agents) mod headless;
 pub(in crate::agents) mod session;
 
 #[cfg(test)]

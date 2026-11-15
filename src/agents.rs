@@ -22,7 +22,7 @@ pub(crate) mod vibe;
 
 pub use known::Known;
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,6 @@ const TRUST_LINES: usize = 15;
 const POWERSHELL_BARE: &str = r"-_./\+=";
 const POWERSHELL_START: &str = r"-_./\";
 const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
-const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
 const BATCH_SPECIAL: [char; 8] = ['&', '|', '<', '>', '^', '%', '!', '"'];
 pub(crate) const STOP_PARSING: &str = "--%";
 const CMD_NAME_ENDS: [char; 3] = ['=', ',', ';'];
@@ -492,7 +491,7 @@ fn without_cmd(
 ) -> Result<String, Refusal> {
     let Some(program) = words.first() else { return Ok(line) };
     let target = runs(program).unwrap_or_else(|| PathBuf::from(program));
-    if !is_batch(&target) {
+    if !process::program::is_batch(&target) {
         return Ok(line);
     }
     if let Some(shim) = powershell.then(|| shim_words(&target, &runs)).flatten() {
@@ -510,13 +509,6 @@ fn without_cmd(
             target.display()
         ),
     ))
-}
-
-fn is_batch(program: &Path) -> bool {
-    program
-        .extension()
-        .and_then(OsStr::to_str)
-        .is_some_and(|extension| BATCH_EXTENSIONS.iter().any(|batch| extension.eq_ignore_ascii_case(batch)))
 }
 
 fn shim_words(shim: &Path, runs: impl Fn(&str) -> Option<PathBuf>) -> Option<Vec<String>> {
@@ -618,6 +610,17 @@ pub(crate) fn model_refusal(kind: &str, model: Option<&str>) -> Option<String> {
     model.map(str::trim).filter(|model| !model.is_empty())?;
     let known = Known::of(kind)?;
     known.model_flag().is_none().then(|| format!("{kind} has no model flag; set its model in its own configuration"))
+}
+
+pub(crate) fn names_a_model(model: Option<&str>) -> bool {
+    model.map(str::trim).is_some_and(|model| !model.is_empty() && model != "auto")
+}
+
+pub(crate) fn effort_needs_model_refusal(kind: &str, model: Option<&str>, effort: Option<&str>) -> Option<String> {
+    let needs = Known::of(kind).and_then(Known::bot).is_some_and(|support| support.effort_needs_model);
+    let asked = effort.map(str::trim).is_some_and(|level| !level.is_empty());
+    (needs && asked && !names_a_model(model))
+        .then(|| format!("{kind} takes an effort only with a model you name, not auto"))
 }
 
 pub(crate) fn effort_refusal(kind: &str, level: &str) -> Option<String> {

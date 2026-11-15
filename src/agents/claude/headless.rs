@@ -2,9 +2,9 @@ use std::process::Command;
 
 use serde_json::Value;
 
-use crate::agents::headless::{Access, Action, Ask, Ran, Tools, Used};
+use crate::agents;
+use crate::agents::headless::{Access, Action, Ask, READ_ONLY, Ran, Tools, Used, owned, shell, started, step};
 use crate::error::{Error, Result};
-use crate::{agents, process};
 
 const ARGS: [&str; 10] = [
     "-p",
@@ -24,9 +24,11 @@ const DENIED: &str = "Edit,Write,NotebookEdit,WebFetch,WebSearch,Task";
 const BOT_ARGS: [&str; 8] =
     ["-p", "--setting-sources", "user", "--output-format", "stream-json", "--verbose", "--max-turns", "40"];
 const READS: &str = "Read,Grep,Glob,WebSearch,WebFetch,Bash(cornercase:*)";
-const GIT: &str = "Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*)";
-const GH: &str =
-    "Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr checks:*),Bash(gh issue list:*),Bash(gh issue view:*)";
+
+fn read_only_rules() -> String {
+    let rules: Vec<String> = READ_ONLY.iter().map(|command| format!("Bash({command}:*)")).collect();
+    rules.join(",")
+}
 
 pub(in crate::agents) fn rule_path(folder: &str, windows: bool) -> String {
     if !windows {
@@ -46,11 +48,11 @@ fn stop_rules(ask: &Ask) -> String {
 
 fn bot_args(ask: &Ask, access: Access) -> Vec<String> {
     let stops = stop_rules(ask);
-    let mut args: Vec<String> = BOT_ARGS.iter().map(ToString::to_string).collect();
+    let mut args = owned(&BOT_ARGS);
     match access {
         Access::Cornercase => {
             let folder = rule_path(&ask.folder.display().to_string(), cfg!(windows));
-            let allowed = format!("{READS},{GIT},{GH},Edit({folder}/**)");
+            let allowed = format!("{READS},{},Edit({folder}/**)", read_only_rules());
             let files: Vec<String> = ask.protected.iter().map(|file| format!("Edit({folder}/{file})")).collect();
             let denied = format!("NotebookEdit,Task,{stops},{}", files.join(","));
             args.extend(
@@ -69,7 +71,7 @@ fn bot_args(ask: &Ask, access: Access) -> Vec<String> {
 }
 
 fn recap_args() -> Vec<String> {
-    let mut args: Vec<String> = ARGS.iter().map(ToString::to_string).collect();
+    let mut args = owned(&ARGS);
     args.extend(["--allowedTools", ALLOWED, "--disallowedTools", DENIED].map(String::from));
     args
 }
@@ -82,8 +84,7 @@ pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
     let args = agents::with_model("claude", args, ask.model.as_deref());
     let mut args = agents::with_effort("claude", args, ask.effort.as_deref());
     args.extend(["--".to_string(), ask.prompt.clone()]);
-    let mut command = process::program::command(program);
-    command.args(args);
+    let mut command = started(program, args);
     for key in super::CLAUDE_SESSION_ENV {
         command.env_remove(key);
     }
@@ -100,26 +101,22 @@ fn tokens(usage: &Value) -> Used {
     }
 }
 
-fn first_line(text: &str) -> &str {
-    text.lines().map(str::trim).find(|line| !line.is_empty()).unwrap_or_default()
-}
-
-fn summary(name: &str, input: &Value) -> String {
+fn detail_of<'a>(name: &str, input: &'a Value) -> &'a str {
     let field = |key: &str| input[key].as_str().unwrap_or_default();
-    let detail = match name {
-        "Bash" => first_line(field("command")),
+    match name {
         "Read" | "Edit" | "Write" | "NotebookEdit" => field("file_path"),
         "Grep" | "Glob" => field("pattern"),
         "WebSearch" => field("query"),
         "WebFetch" => field("url"),
         _ => "",
-    };
-    let text = match name {
-        "Bash" => detail.to_string(),
-        _ if detail.is_empty() => name.to_string(),
-        _ => format!("{name} {detail}"),
-    };
-    crate::text::truncate_right(&crate::text::one_line(&text), 200)
+    }
+}
+
+fn action_of(name: &str, input: &Value) -> Action {
+    match name {
+        "Bash" => shell(name, input["command"].as_str().unwrap_or_default()),
+        _ => step(name, detail_of(name, input)),
+    }
 }
 
 fn actions(entry: &Value) -> Vec<Action> {
@@ -128,7 +125,7 @@ fn actions(entry: &Value) -> Vec<Action> {
     tools
         .map(|item| {
             let name = item["name"].as_str().unwrap_or("tool");
-            Action { tool: name.to_string(), text: summary(name, &item["input"]) }
+            action_of(name, &item["input"])
         })
         .collect()
 }

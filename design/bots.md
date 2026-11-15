@@ -1,10 +1,10 @@
 # Bots
 
-Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`), `agents/headless.rs`, `agents/{claude,codex}/headless.rs`, `agents/probe.rs`, `bots/form.rs`, `app/bots.rs`, `app/bots/` (`turns.rs`, `manage.rs`, `shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/`, `ui/dialog/bot.rs`, `app/control/bots.rs`, `control/bots.rs`, `cli/bot.rs`, `cli/bot/`, `cli/args/bot.rs`, `cli/help/bot.rs`, `cli/guard.rs`, `paths.rs` (#844, #845), `app/control/boundary.rs`, `os/socket.rs`, `os/process.rs` (`Lineage`), `processes/stop.rs`, `app/launches.rs` (#856)
+Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`), `agents/headless.rs`, `agents/{claude,codex,gemini,opencode,cursor,copilot}/headless.rs`, `agents/probe.rs`, `bots/form.rs`, `app/bots.rs`, `app/bots/` (`turns.rs`, `manage.rs`, `shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/`, `ui/dialog/bot.rs`, `app/control/bots.rs`, `control/bots.rs`, `cli/bot.rs`, `cli/bot/`, `cli/args/bot.rs`, `cli/help/bot.rs`, `cli/guard.rs`, `paths.rs` (#844, #845), `app/control/boundary.rs`, `os/socket.rs`, `os/process.rs` (`Lineage`), `processes/stop.rs`, `app/launches.rs` (#856), `process/program.rs` (`command_without_cmd`, #849)
 
 A **bot** is an agent of your own: a name, a folder, a memory and a chat. It belongs to no project, but it can see all of them and act on them through the `cornercase` command line. It exists for work that belongs to no project, or to all of them ("review my open pull requests every morning", "tell me which issues labelled `bug` came in today, in every project"), which today meant opening a folder as a fake project, or keeping an agent alive in a pane whose context grows for ever.
 
-This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. The window draws them since #845 (see [The window](#the-window-845)), routines are in [Bot routines](bots/routines.md) (#846), there is no following of the agents a bot starts (#847), no chat apps (#848), and only Claude Code and Codex can be bots (#849 adds the others).
+This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. The window draws them since #845 (see [The window](#the-window-845)), routines are in [Bot routines](bots/routines.md) (#846), there is no following of the agents a bot starts (#847), no chat apps (#848), and Claude Code, Codex, Gemini CLI, opencode, Cursor CLI and GitHub Copilot CLI can be bots since #849 ([The agents](bots/agents.md)); Grok Build and Vibe CLI cannot yet.
 
 **Making one starts nothing and spends no tokens.** A bot runs only when someone writes to it, and only while the server runs: a turn's process does not survive the server.
 
@@ -76,7 +76,8 @@ A turn runs without its interface, so the agent cannot stop halfway to ask for p
   - Codex: `codex exec --json --skip-git-repo-check --sandbox workspace-write -C <folder> [-m M] [-c model_reasoning_effort=E] [resume S] -- <prompt>`, so it writes only in its folder. See the live checks: this access is not offered.
 - **`full`**: Claude with `--permission-mode bypassPermissions` (only the commands that stop the server are denied), Codex with `--dangerously-bypass-approvals-and-sandbox`. `bot new --access full` and the form say what it means: it can change any file and run anything, unattended. **Off by default, never chosen for the user**: an agent that supports `full` only (Codex) is refused without `--access full`, with that warning.
 - **Settings**: neither agent loads a project's settings, since there is no project. Claude loads the user's settings (`--setting-sources user`), so the user's MCP servers and `~/.claude/CLAUDE.md` work, unlike Recap's empty sources: a bot is the user's own assistant. No `--strict-mcp-config` and no `--no-session-persistence` (the session must be resumable). A Codex bot reads the user's own `~/.codex/config.toml` as it does without cornercase (no `--ignore-user-config`).
-- **What `bot agents` says**: `bot: false` with `why` (`not yet` for an agent without a headless spec, `not installed`), or `bot: true` with the `accesses` it supports and, when the access is limited, `why`: `its sandbox cannot reach cornercase` (Linux, checked) or `its sandbox is not known to reach cornercase on this system` (macOS and Windows, not checked). A UI builds its form from this list, so #849's agents appear without changes elsewhere.
+- **The other agents** (#849): Gemini CLI and GitHub Copilot CLI have both accesses, with rules that keep them to reading and writing only their folder (the brief says so); opencode and Cursor CLI are `full` only because their rules cannot keep a command's or an edit's writes in the folder. See [The agents](bots/agents.md).
+- **What `bot agents` says**: `bot: false` with `why` (`not yet` for an agent without a headless spec, `not installed`), or `bot: true` with the `accesses` it supports and, when the access is limited, `why`: `its sandbox cannot reach cornercase` (Codex, Linux, checked), `its sandbox is not known to reach cornercase on this system` (Codex on macOS and Windows, not checked), `a command can write outside its folder` (opencode), `its edits can leave its folder` (Cursor CLI) or `its rules are unchecked on this system` (Gemini CLI and GitHub Copilot CLI on Windows). A UI builds its form from this list, so an agent added later appears without changes elsewhere.
 
 ## The environment of a turn
 
@@ -93,6 +94,7 @@ A turn runs without its interface, so the agent cannot stop halfway to ask for p
 
 - `Ask::tools` (`Tools::Recap` or `Tools::Bot(Access)`) picks the arguments; `Ask::conversation` continues a session; `Ask::env` sets (`Some`) or removes (`None`) variables.
 - `Ran::session` (the session id out) and `Ran::fresh` (the tools used since the last line, which `run_watched` hands to `Watch::steps` as they arrive). `Action` is a tool and its one-line summary (Bash: the command's first line; Read, Edit and Write: the path; Grep and Glob: the pattern; WebSearch, WebFetch: the query or URL).
+- **`Spec::recap`, `Spec::stderr` and `Spec::prepare`** (#849): whether the agent can write a recap (Claude Code and Codex only), whether its standard error is read for the reason a run ended, and a step that runs before the process starts (Gemini writes its rules file). `run_watched` refuses a Recap or an access the spec does not list before anything starts. `BotSupport::reads_anywhere` is false for the agents that can read only their folder, which changes the brief. Programs start through `process::program::command_without_cmd`, which goes past `cmd.exe` for an npm shim.
 - `run_watched(call, ask, Watch)` carries the progress counter, the steps callback and a `probe::Running`. `Spec::bot` says whether the agent can be a bot, with its accesses and why they are limited (`BotSupport`).
 - **`probe::Running`** lets a bot's `stop` end a run, also before its process exists; a timeout ends the whole tree (see Plan usage › A timeout ends the whole tree).
 
@@ -176,7 +178,7 @@ The boundary (#856): the classifier of the writing requests (`boundary/tests.rs`
 
 ## What later issues add
 
-#847 following the agents a bot starts; #848 chat apps; #849 the other agents. The rest of the boundary (the open list above, #866) and the server-side refusal of `cornercase requests` for a restart or an update (#867) are follow-up issues.
+#847 following the agents a bot starts; #848 chat apps; #849 done for four of the six other agents, the follow-up issue #879 has Grok Build, Vibe CLI, `cornercase` access for opencode and Cursor CLI, and Recap on more agents. The rest of the boundary (the open list above, #866) and the server-side refusal of `cornercase requests` for a restart or an update (#867) are follow-up issues.
 
 ## The window (#845)
 
@@ -186,3 +188,4 @@ The Bots section, the chat and the form are in [bots/window.md](bots/window.md):
 
 - [The window](bots/window.md)
 - [Routines](bots/routines.md)
+- [The agents](bots/agents.md)

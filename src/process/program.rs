@@ -8,6 +8,7 @@ use crate::os::fs::PermissionsExt;
 
 const RUNNABLE: [&str; 4] = [".com", ".exe", ".bat", ".cmd"];
 const SCRIPT: &str = ".ps1";
+const BATCH_EXTENSIONS: [&str; 2] = ["cmd", "bat"];
 const POWERSHELLS: [&str; 2] = ["pwsh", "powershell"];
 
 pub(crate) fn extensions(pathext: Option<&str>) -> Vec<String> {
@@ -34,6 +35,31 @@ pub(crate) fn locate(program: &str) -> Option<PathBuf> {
 
 pub(crate) fn command(program: &str) -> Command {
     Command::new(startable(program, std::env::var_os("PATH").as_deref(), &own_extensions()))
+}
+
+pub(crate) fn command_without_cmd(program: &str) -> Command {
+    let words = direct(cfg!(windows), program, std::env::var_os("PATH").as_deref(), &own_extensions());
+    let mut command = Command::new(&words[0]);
+    command.args(&words[1..]);
+    command
+}
+
+fn direct(windows: bool, program: &str, path: Option<&OsStr>, extensions: &[String]) -> Vec<OsString> {
+    let found = (!extensions.is_empty()).then(|| find(windows, program, path, extensions)).flatten();
+    let Some(found) = found else { return vec![program.into()] };
+    let target =
+        if windows && is_batch(&found) { shim::target(&found, on_path(windows, path, extensions)) } else { None };
+    match target {
+        Some(words) => words.into_iter().map(PathBuf::into_os_string).collect(),
+        None => vec![found.into_os_string()],
+    }
+}
+
+pub(crate) fn is_batch(program: &Path) -> bool {
+    program
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| BATCH_EXTENSIONS.iter().any(|batch| extension.eq_ignore_ascii_case(batch)))
 }
 
 pub(crate) fn own_binary() -> PathBuf {

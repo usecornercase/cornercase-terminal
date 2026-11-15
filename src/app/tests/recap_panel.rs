@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::*;
+use crate::agents::Known;
 use crate::agents::context::Pointer;
 use crate::app::recap_panel::Overrides;
 use crate::recap::journal::{Entry, Event, WorkspacePlace, files};
@@ -90,6 +91,19 @@ impl Recaps {
     fn text(&self, choice: Choice) -> Option<String> {
         self.app.panels.recap.run(choice).last.as_ref().map(|recap| recap.text.clone())
     }
+}
+
+#[test]
+fn the_recap_agent_skips_one_that_cannot_write_a_recap() {
+    let (mut app, _rx) = app();
+    app.config.agent = "gemini".into();
+    app.config.recap_agent = String::new();
+    assert_eq!(app.recap_agent(None), Known::Claude);
+    assert_eq!(app.recap_agent(Some("copilot")), Known::Claude);
+    app.config.agent = "codex".into();
+    assert_eq!(app.recap_agent(None), Known::Codex);
+    app.config.recap_agent = "gemini".into();
+    assert_eq!(app.recap_agent(None), Known::Codex);
 }
 
 #[test]

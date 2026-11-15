@@ -32,7 +32,20 @@ pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
-pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = None;
+pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = Some(crate::agents::headless::Spec {
+    command: headless::command,
+    read: headless::read,
+    bot: Some(BOT),
+    recap: false,
+    stderr: true,
+    prepare: None,
+});
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Full],
+    why: Some("its edits can leave its folder"),
+    reads_anywhere: true,
+    effort_needs_model: false,
+};
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const UNFOUND: &str = "Cursor CLI has no conversation for this pane yet";
 
@@ -148,6 +161,7 @@ impl Reader {
     }
 }
 
+pub(in crate::agents) mod headless;
 mod proto;
 pub(in crate::agents) mod store;
 

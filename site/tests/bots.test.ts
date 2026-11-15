@@ -138,10 +138,33 @@ test('a not-yet agent is greyed and cannot be chosen', () => {
   const app = demo(140);
   app.openBotForm();
   inputKey(app, key('Tab'));
-  for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
+  for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
   const o = app.overlay;
   assert.equal(o?.kind, 'bot');
   if (o?.kind === 'bot') assert.equal(o.agent.chosen, 0);
+});
+
+test('opencode offers full access only, with its reason', () => {
+  const app = demo(140);
+  app.openBotForm();
+  inputKey(app, key('Tab'));
+  for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
+  const o = app.overlay;
+  assert.equal(o?.kind, 'bot');
+  if (o?.kind !== 'bot') return;
+  assert.equal(o.agent.chosen, 3);
+  assert.equal(o.access.options[0], 'through cornercase · a command can write outside its folder');
+  assert.equal(o.access.chosen, null);
+  assert.deepEqual(o.access.off, [0]);
+});
+
+test('gemini says it reads and writes only its folder, claude that it reads anything', () => {
+  const app = demo(140);
+  app.openBotForm();
+  assert.match(screen(app), /through cornercase: reads anything, writes only in its folder/);
+  inputKey(app, key('Tab'));
+  for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
+  assert.match(screen(app), /through cornercase: reads and writes only in its folder/);
 });
 
 test('an example fills the field and sends nothing', () => {

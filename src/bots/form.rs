@@ -146,6 +146,10 @@ impl Form {
         self.fit((None, None), offered.then_some("cornercase"));
     }
 
+    pub(crate) fn reads_only_folder(&self) -> bool {
+        self.info().is_some_and(|info| info.reads.as_deref() == Some("folder"))
+    }
+
     pub(crate) fn takes_effort(&self) -> bool {
         self.info().is_some_and(|info| !info.efforts.is_empty())
     }

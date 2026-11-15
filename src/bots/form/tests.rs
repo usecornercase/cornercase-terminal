@@ -10,6 +10,7 @@ fn agent(name: &str, bot: bool, accesses: &[&str], efforts: &[&str]) -> AgentInf
         bot,
         why: (!bot).then(|| String::from("not yet")),
         accesses: accesses.iter().map(ToString::to_string).collect(),
+        reads: None,
         efforts: efforts.iter().map(ToString::to_string).collect(),
         models: vec!["opus".into(), "sonnet".into()],
     }

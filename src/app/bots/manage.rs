@@ -19,6 +19,19 @@ fn clean(text: Option<&str>) -> Option<String> {
     text.map(str::trim).filter(|text| !text.is_empty()).map(str::to_string)
 }
 
+fn bot_agent_names() -> String {
+    let names: Vec<&str> = Known::ALL.into_iter().filter(|kind| kind.bot().is_some()).map(Known::name).collect();
+    match names.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
+        _ => names.join(""),
+    }
+}
+
+fn needs_a_model(kind: Known, bot: &Bot) -> Done<()> {
+    agents::effort_needs_model_refusal(kind.name(), bot.model.as_deref(), bot.effort.as_deref())
+        .map_or(Ok(()), |why| Err(Refusal::new(Code::Malformed, why)))
+}
+
 fn problem(problem: &NameProblem) -> Refusal {
     let code = if matches!(problem, NameProblem::Taken(_)) { Code::Conflict } else { Code::Malformed };
     Refusal::new(code, problem.message())
@@ -50,6 +63,7 @@ impl App {
                     bot: support.bot,
                     why: support.why,
                     accesses: support.accesses.iter().map(|access| access.name().to_string()).collect(),
+                    reads: kind.bot().filter(|bot| !bot.reads_anywhere).map(|_| String::from("folder")),
                     efforts: kind
                         .effort()
                         .map_or_else(Vec::new, |effort| effort.levels.iter().map(ToString::to_string).collect()),
@@ -90,9 +104,9 @@ impl App {
             Some(name) => {
                 Known::of(&name).ok_or_else(|| Refusal::new(Code::Malformed, format!("{name} is not an agent")))
             }
-            None => Known::of(self.config.agent.trim())
-                .filter(|kind| self.bot_support(*kind).bot)
-                .ok_or_else(|| Refusal::new(Code::Malformed, "say which agent with --agent: claude or codex")),
+            None => Known::of(self.config.agent.trim()).filter(|kind| self.bot_support(*kind).bot).ok_or_else(|| {
+                Refusal::new(Code::Malformed, format!("say which agent with --agent: {}", bot_agent_names()))
+            }),
         }
     }
 
@@ -140,7 +154,7 @@ impl App {
             }
             bot.account = Some(account).filter(|account| !account.is_empty());
         }
-        Ok(())
+        needs_a_model(kind, bot)
     }
 
     pub(in crate::app) fn bot_new(&mut self, new: &NewBot) -> Done<usize> {

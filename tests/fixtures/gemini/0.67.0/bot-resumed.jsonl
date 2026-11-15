@@ -1,0 +1,4 @@
+{"type":"init","timestamp":"2026-11-15T09:19:32.986Z","session_id":"8b2f4c1e-5d3a-4e7b-9a06-1c2d3e4f5a6b","model":"auto"}
+{"type":"message","timestamp":"2026-11-15T09:19:32.988Z","role":"user","content":"Which version did the first command print? One short sentence."}
+{"type":"message","timestamp":"2026-11-15T09:19:39.367Z","role":"assistant","content":"The first command printed version 0.13.80.","delta":true}
+{"type":"result","timestamp":"2026-11-15T09:19:39.374Z","status":"success","stats":{"total_tokens":11788,"input_tokens":11100,"output_tokens":39,"cached":0,"input":11100,"duration_ms":6406,"tool_calls":0,"models":{"gemini-3.5-flash-lite":{"total_tokens":1232,"input_tokens":632,"output_tokens":25,"cached":0,"input":632},"gemini-3.8-flash":{"total_tokens":10556,"input_tokens":10468,"output_tokens":14,"cached":0,"input":10468}}}}

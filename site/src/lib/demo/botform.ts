@@ -20,6 +20,7 @@ const LISTS = ['agent', 'model', 'access'] as const;
 const ROWS: Record<Control, number> = { name: 0, agent: 1, model: 2, access: 3, about: 6 };
 const ACCESS_LABELS: [Access, string][] = [['cornercase', 'through cornercase'], ['full', 'full access']];
 const NOTES = ['through cornercase: reads anything, writes only in its folder', 'full access: can change any file and run anything, unattended'];
+const FOLDER_NOTE = 'through cornercase: reads and writes only in its folder';
 
 export type Control = (typeof CONTROLS)[number];
 type List = (typeof LISTS)[number];
@@ -46,7 +47,7 @@ function agentCombo(): Combo {
 function refit(o: BotForm): void {
   const agent = BOT_AGENTS[o.agent.chosen ?? 0];
   o.model = combo(['default', ...agent.models], 0);
-  const options = ACCESS_LABELS.map(([kind, label]) => (agent.accesses.includes(kind) ? label : `${label} · ${NO_ACCESS_WHY}`));
+  const options = ACCESS_LABELS.map(([kind, label]) => (agent.accesses.includes(kind) ? label : `${label} · ${agent.limit ?? NO_ACCESS_WHY}`));
   const access = combo(options, null);
   access.off = ACCESS_LABELS.flatMap(([kind], i) => (agent.accesses.includes(kind) ? [] : [i]));
   if (agent.accesses.includes('cornercase')) chooseCombo(access, 0);
@@ -104,7 +105,10 @@ function chose(o: BotForm, list: List, i: number): void {
 
 function listArea(screen: Rect, o: BotForm): Rect | null {
   const open = opened(o);
-  return open ? comboList(controlRect(screen, open), o[open], screen) : null;
+  if (!open) return null;
+  const field = controlRect(screen, open);
+  const wide = open === 'access' ? { ...field, w: Math.max(0, inner(screen.w, screen.h).w - LABEL - 1) } : field;
+  return comboList(wide, o[open], screen);
 }
 
 export function botFormBounds(cols: number, rows: number, o: BotForm): Rect {
@@ -202,9 +206,10 @@ function drawField(p: Painter, r: Rect, t: Rect, f: Editable, focused: boolean, 
   if (focused && !isEmpty(t)) p.cursor = { shape: 'block', x: t.x + Math.min(col, t.w - 1), y: t.y + Math.min(line - start, t.h - 1) };
 }
 
-function drawNotes(p: Painter, screen: Rect): void {
+function drawNotes(p: Painter, screen: Rect, o: BotForm): void {
+  const notes = BOT_AGENTS[o.agent.chosen ?? 0].reads === 'folder' ? [FOLDER_NOTE, NOTES[1]] : NOTES;
   const r = inner(screen.w, screen.h);
-  NOTES.forEach((text, i) => {
+  notes.forEach((text, i) => {
     const y = r.y + ROWS.access + 1 + i;
     p.span(r.x + LABEL + 1, y, truncateRight(text, Math.max(0, r.w - LABEL - 1)), i ? { fg: 1 } : MUTED, Math.max(0, r.w - LABEL - 1));
   });
@@ -245,7 +250,7 @@ export function drawBotForm(p: Painter, o: BotForm): void {
   const r = inner(screen.w, screen.h);
   for (const [c, label] of [['name', 'Name'], ['agent', 'Agent'], ['model', 'Model'], ['access', 'Access'], ['about', 'For']] as const) p.span(r.x, r.y + ROWS[c], label, MUTED, LABEL);
   drawControls(p, o, screen, open);
-  drawNotes(p, screen);
+  drawNotes(p, screen, o);
   const buttons = bottom(r) - 1;
   if (o.error) {
     const y = buttons - 2;

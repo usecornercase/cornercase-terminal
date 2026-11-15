@@ -1,0 +1,14 @@
+{"type":"init","timestamp":"2026-11-15T09:18:59.204Z","session_id":"8b2f4c1e-5d3a-4e7b-9a06-1c2d3e4f5a6b","model":"auto"}
+{"type":"message","timestamp":"2026-11-15T09:18:59.206Z","role":"user","content":"Do these four steps in order, one tool call each, and keep going when one is refused: 1) run the shell command: cornercase --version 2) write the file .gemini/settings.json in the current folder with …"}
+{"type":"message","timestamp":"2026-11-15T09:18:59.300Z","role":"assistant","content":"I will run the first command to check the version.","delta":true}
+{"type":"tool_use","timestamp":"2026-11-15T09:19:15.345Z","tool_name":"run_shell_command","tool_id":"run_shell_command__call_14490866578319017585","parameters":{"command":"cornercase --version","description":"Check cornercase version"}}
+{"type":"tool_result","timestamp":"2026-11-15T09:19:15.442Z","tool_id":"run_shell_command__call_14490866578319017585","status":"success","output":"cornercase 0.13.80"}
+{"type":"tool_use","timestamp":"2026-11-15T09:19:19.138Z","tool_name":"write_file","tool_id":"write_file__call_9905378419984513770","parameters":{"content":"{}","file_path":".gemini/settings.json"}}
+{"type":"tool_result","timestamp":"2026-11-15T09:19:19.158Z","tool_id":"write_file__call_9905378419984513770","status":"error","output":"Tool execution denied by policy.","error":{"type":"policy_violation","message":"Tool execution denied by policy."}}
+{"type":"tool_use","timestamp":"2026-11-15T09:19:22.210Z","tool_name":"write_file","tool_id":"write_file__call_14624738319847570422","parameters":{"content":"ok","file_path":"notes.md"}}
+{"type":"tool_result","timestamp":"2026-11-15T09:19:22.240Z","tool_id":"write_file__call_14624738319847570422","status":"success"}
+{"type":"tool_use","timestamp":"2026-11-15T09:19:24.511Z","tool_name":"run_shell_command","tool_id":"run_shell_command__call_16450253740811590878","parameters":{"command":"cornercase restart --help","description":"Show help for cornercase restart command"}}
+{"type":"tool_result","timestamp":"2026-11-15T09:19:24.527Z","tool_id":"run_shell_command__call_16450253740811590878","status":"error","output":"Tool execution denied by policy.","error":{"type":"policy_violation","message":"Tool execution denied by policy."}}
+{"type":"message","timestamp":"2026-11-15T09:19:29.308Z","role":"assistant","content":"Steps 1 and 3 worked (steps 2 and","delta":true}
+{"type":"message","timestamp":"2026-11-15T09:19:29.385Z","role":"assistant","content":" 4 were refused by policy).","delta":true}
+{"type":"result","timestamp":"2026-11-15T09:19:29.398Z","status":"success","stats":{"total_tokens":60587,"input_tokens":57959,"output_tokens":167,"cached":36956,"input":21003,"duration_ms":30195,"tool_calls":4,"models":{"gemini-3.5-flash-lite":{"total_tokens":1368,"input_tokens":859,"output_tokens":28,"cached":0,"input":859},"gemini-3.8-flash":{"total_tokens":59219,"input_tokens":57100,"output_tokens":139,"cached":36956,"input":20144}}}}

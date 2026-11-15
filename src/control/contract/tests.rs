@@ -38,6 +38,7 @@ mod describing {
     #[test]
     fn bot_routines_is_a_feature() {
         assert!(FEATURES.contains(&"bot-routines"));
+        assert!(FEATURES.contains(&"bot-reads"));
     }
 
     #[test]

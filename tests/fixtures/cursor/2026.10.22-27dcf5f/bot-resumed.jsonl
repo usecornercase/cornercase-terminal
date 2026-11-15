@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","apiKeySource":"login","cwd":"/work/bots/prs","session_id":"4a7c2e91-0b3d-4f58-8e16-a9d2c5b70f34","model":"Grok 4.7 500K Extra High Fast","permissionMode":"default"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"- What did I ask you in my previous message? Answer in one short sentence."}]},"session_id":"4a7c2e91-0b3d-4f58-8e16-a9d2c5b70f34"}
+{"type":"thinking","subtype":"delta","text":"The","session_id":"4a7c2e91-0b3d-4f58-8e16-a9d2c5b70f34","timestamp_ms":1794733453779}
+{"type":"thinking","subtype":"delta","text":" user wants me to recall what they asked in their previous message.\n\nTheir previous message asked me to say hi in one short sentence.","session_id":"4a7c2e91-0b3d-4f58-8e16-a9d2c5b70f34","timestamp_ms":1794733454295}
+{"type":"thinking","subtype":"completed","session_id":"4a7c2e91-0b3d-4f58-8e16-a9d2c5b70f34","timestamp_ms":1794733454296}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"You asked me to say hi in one short sentence."}]},"session_id":"4a7c2e91-0b3d-4f58-8e16-a9d2c5b70f34"}
+{"type":"result","subtype":"success","duration_ms":2474,"duration_api_ms":2474,"is_error":false,"result":"You asked me to say hi in one short sentence.","session_id":"4a7c2e91-0b3d-4f58-8e16-a9d2c5b70f34","request_id":"6f15afdd-b1e8-4f74-ba3b-15baf5018b33","usage":{"inputTokens":221,"outputTokens":52,"cacheReadTokens":16256,"cacheWriteTokens":0}}

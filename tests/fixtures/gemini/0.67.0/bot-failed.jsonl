@@ -1,0 +1,3 @@
+{"type":"init","timestamp":"2026-11-15T08:55:37.306Z","session_id":"0f71f01e-6610-43f7-98b5-07054646b9d3","model":"no-such-model-xyz"}
+{"type":"message","timestamp":"2026-11-15T08:55:37.309Z","role":"user","content":"Say hi."}
+{"type":"result","timestamp":"2026-11-15T08:55:37.497Z","status":"error","error":{"type":"unknown","message":"[API Error: models/no-such-model-xyz is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.]"},"stats":{"total_tokens":0,"input_tokens":0,"output_tokens":0,"cached":0,"input":0,"duration_ms":0,"tool_calls":0,"models":{"no-such-model-xyz":{"total_tokens":0,"input_tokens":0,"output_tokens":0,"cached":0,"input":0}}}}

@@ -23,10 +23,43 @@ pub(crate) struct Limits {
     pub(crate) grace: Duration,
     pub(crate) close_input: bool,
     pub(crate) contain: bool,
+    pub(crate) stderr: bool,
 }
 
-fn gone(name: &str) -> Error {
-    Error::Probe(format!("{name} exited without answering"))
+const REASON_WAIT: Duration = Duration::from_millis(500);
+
+fn gone(name: &str, reason: Option<&mpsc::Receiver<String>>) -> Error {
+    match reason.and_then(|reason| reason.recv_timeout(REASON_WAIT).ok()) {
+        Some(why) => Error::Probe(format!("{name} exited without answering: {why}")),
+        None => Error::Probe(format!("{name} exited without answering")),
+    }
+}
+
+fn first_reason(stderr: &mut impl BufRead) -> Option<String> {
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        if stderr.read_until(b'\n', &mut line).ok()? == 0 {
+            return None;
+        }
+        let text = String::from_utf8_lossy(&line);
+        let text = text.trim();
+        if !text.is_empty() {
+            return Some(crate::text::truncate_right(&crate::text::one_line(text), 200));
+        }
+    }
+}
+
+fn reason_of(stderr: std::process::ChildStderr) -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut stderr = BufReader::new(stderr);
+        if let Some(reason) = first_reason(&mut stderr) {
+            let _ = tx.send(reason);
+        }
+        let _ = std::io::copy(&mut stderr, &mut std::io::sink());
+    });
+    rx
 }
 
 fn send(stdin: Option<&mut std::process::ChildStdin>, text: &str) -> bool {
@@ -35,16 +68,22 @@ fn send(stdin: Option<&mut std::process::ChildStdin>, text: &str) -> bool {
 
 type Talked<T> = (Result<T>, Vec<Group>);
 
-fn converse<T>(
+struct Pipes {
     stdin: std::process::ChildStdin,
     stdout: std::process::ChildStdout,
+    reason: Option<mpsc::Receiver<String>>,
+}
+
+fn converse<T>(
+    pipes: Pipes,
     (first, name, close): (&str, &str, bool),
     mut talk: impl FnMut(&str) -> Step<T>,
     left: impl Fn() -> Vec<Group>,
 ) -> Talked<T> {
+    let Pipes { stdin, stdout, reason } = pipes;
     let mut stdin = Some(stdin);
     if !send(stdin.as_mut(), first) {
-        return (Err(gone(name)), Vec::new());
+        return (Err(gone(name, reason.as_ref())), Vec::new());
     }
     if close {
         stdin = None;
@@ -55,13 +94,13 @@ fn converse<T>(
             Step::Read => {}
             Step::Write(text) => {
                 if !send(stdin.as_mut(), &text) {
-                    return (Err(gone(name)), Vec::new());
+                    return (Err(gone(name, reason.as_ref())), Vec::new());
                 }
             }
             Step::Answer(result) => return (result, left()),
         }
     }
-    (Err(gone(name)), Vec::new())
+    (Err(gone(name, reason.as_ref())), Vec::new())
 }
 
 #[derive(Debug, Default)]
@@ -125,7 +164,11 @@ pub(crate) fn run<T: Send + 'static>(
 
 fn start(limits: Limits, command: &mut Command, running: &Running) -> Result<Child> {
     let program = command.get_program().to_string_lossy().into_owned();
-    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(if limits.stderr {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
     let spawned = if limits.contain {
         Lineage::spawn(command).map(|(child, lineage)| (child, Some(lineage)))
     } else {
@@ -148,9 +191,11 @@ fn converse_apart<T: Send + 'static>(
     let (root, contain) = (i32::try_from(child.id()).unwrap_or(0), limits.contain);
     if let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) {
         let (first, name, close) = (first.to_string(), limits.name, limits.close_input);
+        let reason = child.stderr.take().map(reason_of);
         std::thread::spawn(move || {
             let left = || if contain { stop::below(root) } else { Vec::new() };
-            let _ = tx.send(converse(stdin, stdout, (&first, name, close), talk, left));
+            let pipes = Pipes { stdin, stdout, reason };
+            let _ = tx.send(converse(pipes, (&first, name, close), talk, left));
         });
     }
     rx
@@ -171,7 +216,7 @@ pub(crate) fn run_in<T: Send + 'static>(
             running.stop();
             (Err(Error::Probe(format!("{} did not answer in time", limits.name))), Vec::new())
         }
-        Err(mpsc::RecvTimeoutError::Disconnected) => (Err(gone(limits.name)), Vec::new()),
+        Err(mpsc::RecvTimeoutError::Disconnected) => (Err(gone(limits.name, None)), Vec::new()),
     };
     let root = i32::try_from(child.id()).unwrap_or(0);
     let mut left = left;

@@ -21,3 +21,9 @@ These files were reduced from a real `events.jsonl` that Copilot 1.0.98 wrote ag
 `trust.txt` is the folder question, reduced to a narrower box. It matches the default trust pattern (`do you trust`), and Enter picks the highlighted `1. Yes`.
 
 **Sub-agents.** `subagent.started` (`toolCallId`, `agentName`, optional `executionMode` `sync` or `background`) opens one and `subagent.completed` (with `cancelled: true` when an abort or an ancestor being killed tore it down) or `subagent.failed` closes it, both by `toolCallId`; events of the sub-agent itself carry that id as `parentToolCallId` (`data.parentToolCallId`, or `data.usage.parentToolCallId` in a `session.usage_record`). `session.start`, `session.resume` and `session.shutdown` forget them all. **`subagent-*.jsonl` were built from the 1.0.98 `session-events.schema.json` and Copilot's own code, not captured in a live run.**
+
+## Bot turns (GitHub Copilot CLI 1.0.98)
+
+`bot-new.jsonl`, `bot-resumed.jsonl` and `bot-failed.*` were cut down from real `copilot --output-format json --no-auto-update … --prompt=…` runs of a first turn and one continued with `--resume=<id>` (Linux, 2026-11-15, an isolated folder outside every repository, `CORNERCASE*` removed and no cornercase server reachable). Replaced: the session id, the folder (`/work/bots/prs`) and the home folder. Only the events the reader uses are kept (`session.auto_mode_resolved`, `assistant.message`, `tool.execution_start`, `tool.execution_complete`, `session.usage_checkpoint` and `result`), cut to fields that matter and with long strings and opaque ids shortened.. `bot-failed.txt` is the line the agent wrote to standard error for an unknown model: it has no `result` line. The `usage_checkpoint` shows the session's running token total, which is why a Copilot bot reports no tokens.
+
+Files under `1.0.98/`.

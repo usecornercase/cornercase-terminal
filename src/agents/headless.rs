@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::agents::Known;
 use crate::agents::probe::{self, Limits, Running};
@@ -94,12 +95,17 @@ pub(crate) struct Ran {
 pub(crate) struct BotSupport {
     pub(crate) accesses: &'static [Access],
     pub(crate) why: Option<&'static str>,
+    pub(crate) reads_anywhere: bool,
+    pub(crate) effort_needs_model: bool,
 }
 
 pub(crate) struct Spec {
     pub(in crate::agents) command: fn(&str, &Ask) -> Command,
     pub(in crate::agents) read: fn(&str, &mut Ran) -> Option<Result<()>>,
     pub(in crate::agents) bot: Option<BotSupport>,
+    pub(in crate::agents) recap: bool,
+    pub(in crate::agents) stderr: bool,
+    pub(in crate::agents) prepare: Option<fn(&Ask) -> Result<()>>,
 }
 
 #[derive(Clone, Copy)]
@@ -142,13 +148,41 @@ fn prepared(call: &Call<'_>, ask: &Ask, spec: &Spec) -> Command {
     command
 }
 
+fn refused(agent: Known, spec: &Spec, tools: Tools) -> Option<Error> {
+    let name = agent.name();
+    match tools {
+        Tools::Recap if !spec.recap => Some(Error::Probe(format!("{name} cannot write a recap"))),
+        Tools::Bot(access) if !spec.bot.is_some_and(|bot| bot.accesses.contains(&access)) => {
+            Some(Error::Probe(format!("{name} cannot be a bot with {} access", access.name())))
+        }
+        _ => None,
+    }
+}
+
+fn limits_of(call: &Call<'_>, ask: &Ask, spec: &Spec) -> Limits {
+    let contain = matches!(ask.tools, Tools::Bot(Access::Cornercase));
+    Limits {
+        name: call.agent.name(),
+        timeout: call.timeout,
+        grace: GRACE,
+        close_input: true,
+        contain,
+        stderr: spec.stderr,
+    }
+}
+
 pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ran> {
     let agent = call.agent;
     let spec =
         agent.headless().ok_or_else(|| Error::Probe(format!("{} cannot run without its interface", agent.name())))?;
+    if let Some(error) = refused(agent, &spec, ask.tools) {
+        return Err(error);
+    }
+    if let Some(prepare) = spec.prepare {
+        prepare(ask)?;
+    }
     let command = prepared(call, ask, &spec);
-    let contain = matches!(ask.tools, Tools::Bot(Access::Cornercase));
-    let limits = Limits { name: agent.name(), timeout: call.timeout, grace: GRACE, close_input: true, contain };
+    let limits = limits_of(call, ask, &spec);
     let Watch { progress, mut steps, running } = watch;
     let read = spec.read;
     let mut ran = Ran::default();
@@ -168,6 +202,109 @@ pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ra
             Some(Err(error)) => probe::Step::Answer(Err(error)),
         }
     })
+}
+
+pub(in crate::agents) const READ_ONLY: [&str; 9] = [
+    "git log",
+    "git show",
+    "git diff",
+    "git status",
+    "gh pr list",
+    "gh pr view",
+    "gh pr checks",
+    "gh issue list",
+    "gh issue view",
+];
+
+pub(in crate::agents) fn started(program: &str, args: Vec<String>) -> Command {
+    let mut command = crate::process::program::command_without_cmd(program);
+    command.args(args);
+    command
+}
+
+pub(in crate::agents) fn owned(args: &[&str]) -> Vec<String> {
+    args.iter().map(ToString::to_string).collect()
+}
+
+pub(in crate::agents) fn first_line(text: &str) -> &str {
+    text.lines().map(str::trim).find(|line| !line.is_empty()).unwrap_or_default()
+}
+
+pub(in crate::agents) fn action(tool: &str, text: &str) -> Action {
+    Action { tool: tool.to_string(), text: crate::text::truncate_right(&crate::text::one_line(text), 200) }
+}
+
+pub(in crate::agents) fn step(tool: &str, detail: &str) -> Action {
+    if detail.is_empty() { action(tool, tool) } else { action(tool, &format!("{tool} {detail}")) }
+}
+
+pub(in crate::agents) fn shell(tool: &str, command: &str) -> Action {
+    action(tool, first_line(command))
+}
+
+pub(in crate::agents) fn detail<'a>(input: &'a Value, keys: &[&str]) -> &'a str {
+    keys.iter().find_map(|key| input[*key].as_str().filter(|text| !text.is_empty())).unwrap_or_default()
+}
+
+pub(in crate::agents) fn heard(ran: &mut Ran, action: Action) {
+    ran.steps += 1;
+    ran.fresh.push(action);
+    ran.text.clear();
+}
+
+pub(in crate::agents) fn answered(ran: &mut Ran, title: &str) -> Result<()> {
+    let text = ran.text.trim().to_string();
+    if text.is_empty() {
+        return Err(Error::Probe(format!("{title} answered nothing")));
+    }
+    ran.text = text;
+    Ok(())
+}
+
+#[cfg(test)]
+pub(in crate::agents) fn bot_ask(folder: &Path, tools: Tools, conversation: Option<&str>) -> Ask {
+    Ask {
+        prompt: "hi".into(),
+        model: Some("opus".into()),
+        folder: folder.to_path_buf(),
+        tools,
+        conversation: conversation.map(str::to_string),
+        protected: vec!["bot.json", "chat.jsonl"],
+        stops: &["kill-server", "restart", "update"],
+        ..Ask::default()
+    }
+}
+
+#[cfg(test)]
+pub(in crate::agents) fn args_of(command: &Command) -> Vec<String> {
+    command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect()
+}
+
+#[cfg(test)]
+pub(in crate::agents) fn plain_args(
+    spec: fn(&str, &Ask) -> Command,
+    tools: Tools,
+    conversation: Option<&str>,
+) -> Vec<String> {
+    let model = Some(String::from("m"));
+    let ask =
+        Ask { prompt: "- hi".into(), model, tools, conversation: conversation.map(str::to_string), ..Ask::default() };
+    args_of(&spec("agent", &ask))
+}
+
+#[cfg(test)]
+pub(in crate::agents) fn steps_of(ran: &Ran) -> Vec<(&str, &str)> {
+    ran.fresh.iter().map(|action| (action.tool.as_str(), action.text.as_str())).collect()
+}
+
+#[cfg(test)]
+pub(in crate::agents) fn feed(read: fn(&str, &mut Ran) -> Option<Result<()>>, text: &str) -> (Ran, Option<Result<()>>) {
+    let mut ran = Ran::default();
+    let mut last = None;
+    for line in text.lines() {
+        last = read(line, &mut ran);
+    }
+    (ran, last)
 }
 
 #[cfg(test)]

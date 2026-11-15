@@ -47,14 +47,24 @@ pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
 pub(in crate::agents) const LOCAL_COMMAND: bool = false;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
-pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> =
-    Some(crate::agents::headless::Spec { command: headless::command, read: headless::read, bot: Some(BOT) });
+pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = Some(crate::agents::headless::Spec {
+    command: headless::command,
+    read: headless::read,
+    bot: Some(BOT),
+    recap: true,
+    stderr: false,
+    prepare: None,
+});
 #[cfg(target_os = "linux")]
 const BOT_WHY: &str = "its sandbox cannot reach cornercase";
 #[cfg(not(target_os = "linux"))]
 const BOT_WHY: &str = "its sandbox is not known to reach cornercase on this system";
-const BOT: crate::agents::headless::BotSupport =
-    crate::agents::headless::BotSupport { accesses: &[crate::agents::headless::Access::Full], why: Some(BOT_WHY) };
+const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
+    accesses: &[crate::agents::headless::Access::Full],
+    why: Some(BOT_WHY),
+    reads_anywhere: true,
+    effort_needs_model: false,
+};
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(crate::agents::usage::Spec {
     command: usage::command,

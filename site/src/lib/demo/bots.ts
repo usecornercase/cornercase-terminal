@@ -56,14 +56,16 @@ export interface AgentChoice {
   why: string | null;
   models: string[];
   accesses: Access[];
+  limit: string | null;
+  reads?: 'folder';
 }
 
 export const BOT_AGENTS: AgentChoice[] = [
-  { title: 'Claude Code', kind: 'claude', why: null, models: ['opus', 'sonnet', 'haiku'], accesses: ['cornercase', 'full'] },
-  { title: 'Codex', kind: 'codex', why: null, models: ['gpt-5.4', 'gpt-5.4-mini'], accesses: ['full'] },
-  { title: 'Gemini CLI', kind: 'gemini', why: 'not yet', models: [], accesses: [] },
-  { title: 'opencode', kind: 'opencode', why: 'not yet', models: [], accesses: [] },
-  { title: 'Grok Build', kind: 'grok', why: 'not installed', models: [], accesses: [] },
+  { title: 'Claude Code', kind: 'claude', why: null, models: ['opus', 'sonnet', 'haiku'], accesses: ['cornercase', 'full'], limit: null },
+  { title: 'Codex', kind: 'codex', why: null, models: ['gpt-5.4', 'gpt-5.4-mini'], accesses: ['full'], limit: 'its sandbox cannot reach cornercase' },
+  { title: 'Gemini CLI', kind: 'gemini', why: null, models: [], accesses: ['cornercase', 'full'], limit: null, reads: 'folder' },
+  { title: 'opencode', kind: 'opencode', why: null, models: [], accesses: ['full'], limit: 'a command can write outside its folder' },
+  { title: 'Grok Build', kind: 'grok', why: 'not yet', models: [], accesses: [], limit: null },
 ];
 
 export const NO_ACCESS_WHY = 'its sandbox cannot reach cornercase';
