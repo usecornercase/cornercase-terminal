@@ -64,13 +64,17 @@ fn a_server_kill_server_cannot_reach_goes_with_its_session() {
 }
 
 #[test]
-fn a_server_whose_session_folder_is_gone_is_stopped_by_the_next_session() {
+fn a_server_whose_session_folder_is_gone_is_stopped_by_the_next_test_process() {
     let moved = temp_dir("left-behind");
     let session = Session::new();
     let stray = serving(&session);
     std::fs::rename(&session.dir, &*moved).expect("a cleaning takes the session's folder away");
 
-    stop_servers_left_behind();
+    let next = std::process::Command::new(std::env::current_exe().expect("the e2e binary"))
+        .args(["--exact", "temp_dirs::a_folder_of_the_session_goes_with_it"])
+        .output()
+        .expect("run the next test process");
+    assert!(next.status.success(), "{next:?}");
 
     assert_eq!(servers_with(&stray.0), 0, "a server whose folder is gone kept running");
 }

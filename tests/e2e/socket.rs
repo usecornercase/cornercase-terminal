@@ -66,6 +66,7 @@ impl Drop for Home {
         for _ in 0..2 {
             let _ = self.command("a").arg("kill-server").output();
         }
+        stop_servers_with(&format!("XDG_STATE_HOME={}", self.state().display()));
         let _ = std::fs::remove_dir_all(&self.dir);
     }
 }

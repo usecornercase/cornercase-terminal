@@ -315,7 +315,11 @@ fn stop_servers(what: &str, found: impl Fn() -> Vec<u32>) {
     let started = Instant::now();
     loop {
         let pids = found();
-        if pids.is_empty() || started.elapsed() > 2 * TIMEOUT {
+        if pids.is_empty() {
+            return;
+        }
+        if started.elapsed() > 2 * TIMEOUT {
+            eprintln!("e2e: gave up stopping cornercase servers {pids:?} that {what}");
             return;
         }
         let signal = if started.elapsed() > TIMEOUT { "-KILL" } else { "-TERM" };
