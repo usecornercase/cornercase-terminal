@@ -1,8 +1,9 @@
-use super::a_bug::Attached;
+use super::a_bug::{Attached, hello};
 use super::*;
 use crate::bots;
 use crate::graphics::Support;
-use crate::test_util::{TempDir, released, sleeping_as_bots};
+use crate::protocol::Hello;
+use crate::test_util::{BotSleepers, TempDir};
 
 const STOP: &str = "a bot cannot stop its own server";
 
@@ -13,10 +14,9 @@ fn a_bots_kill_server_and_restart_are_rejected_and_the_server_runs_on() {
     let bin = TempDir::new();
     bots::folder::create(bots_dir.path(), &bots::sample("prs", "PRs"), "").expect("a bot");
     attached.server.app.set_bots_dir(bots_dir.path());
-    let children = sleeping_as_bots(bin.path(), &["prs"]);
+    let sleepers = BotSleepers::start(bin.path(), &["prs"]);
     let bot = attached.join(Support::default());
-    let pid = i32::try_from(children[0].id()).expect("a pid");
-    attached.server.app.client_connected(bot.id, Some(pid));
+    attached.server.app.client_connected(bot.id, Some(sleepers.pids()[0]));
 
     let restart = attached.server.handle(ServerEvent::Message(bot.id, ClientMessage::Restart));
     let kill = attached.server.handle(ServerEvent::Message(bot.id, ClientMessage::KillServer));
@@ -31,5 +31,25 @@ fn a_bots_kill_server_and_restart_are_rejected_and_the_server_runs_on() {
         seen += bot.received(refused).iter().filter(|m| refused(m)).count();
     }
     assert_eq!(seen, 2);
-    released(bin.path(), children);
+    sleepers.release();
+}
+
+#[test]
+fn a_stop_queued_behind_the_removal_of_a_bots_connection_is_not_obeyed() {
+    let mut attached = Attached::new();
+    let bots_dir = TempDir::new();
+    let bin = TempDir::new();
+    bots::folder::create(bots_dir.path(), &bots::sample("prs", "PRs"), "").expect("a bot");
+    attached.server.app.set_bots_dir(bots_dir.path());
+    let sleepers = BotSleepers::start(bin.path(), &["prs"]);
+    let bot = attached.join(Support::default());
+    attached.server.app.client_connected(bot.id, Some(sleepers.pids()[0]));
+    let other_build = Hello { version: 0, ..hello(HostTheme::default()) };
+
+    let hello = attached.server.handle(ServerEvent::Message(bot.id, ClientMessage::Hello(Box::new(other_build))));
+    let kill = attached.server.handle(ServerEvent::Message(bot.id, ClientMessage::KillServer));
+    let plain = attached.server.handle(ServerEvent::Message(1, ClientMessage::KillServer));
+
+    assert_eq!((hello, kill, plain), (ControlFlow::Continue(()), ControlFlow::Continue(()), ControlFlow::Break(())));
+    sleepers.release();
 }

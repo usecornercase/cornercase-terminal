@@ -4,8 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.87
 
-- **A bot can no longer stop, restart or update cornercase, whatever it sends.** The command line already refused `kill-server`, `restart` and `update` inside a bot. Now the server also refuses them from a `cornercase`-access bot, along with `restart-when-idle` and `update-install`, with the same `a bot cannot stop its own server`.
-- **A bot can no longer have cornercase write a file where it says.** Inside a bot, `cornercase config export --to FILE` is refused (it prints the settings instead), and a `cornercase`-access bot's `cornercase clone` is refused: a clone could put files where another program runs them.
+- **A bot can no longer stop, restart or update cornercase by any of its commands or requests.** The command line already refused `kill-server`, `restart` and `update` inside a bot. Now the server also refuses them from a `cornercase`-access bot, along with `restart-when-idle` and `update-install`, with the same message, `a bot cannot stop its own server`.
+- **A bot can no longer have cornercase write a file where it says.** Inside a bot, `cornercase config export --to FILE` is refused (leave out `--to` and it prints them), and a `cornercase`-access bot's `cornercase clone` is refused: a clone could put files where another program runs them.
 - Inside a bot, each line of `cornercase requests --follow -` is now checked as the bot's command line is.
 
 ## 0.13.86

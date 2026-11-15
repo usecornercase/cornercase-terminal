@@ -19,6 +19,7 @@ fn reply_from(app: &mut App, client: u64, command: &str, args: &serde_json::Valu
     }
 }
 
+const NO_CLONE: &str = "a bot cannot clone a repository; clone it yourself and the bot can work in the project";
 const NO_POPUP: &str = "no plugin popup is open";
 
 fn root_of(c: &Chat) -> i32 {
@@ -57,15 +58,15 @@ fn a_command_whose_environment_names_a_bot_is_a_bots() {
     let full = Bot { access: Access::Full, ..bot("root", "Root") };
     folder::create(c.dir.path(), &full, "").expect("a second bot");
     c.app.set_bots_dir(c.dir.path());
-    let children = sleeping_as_bots(c.bin.path(), &["prs", "root"]);
-    let pids: Vec<i32> = children.iter().map(|child| i32::try_from(child.id()).expect("a pid")).collect();
+    let sleepers = BotSleepers::start(c.bin.path(), &["prs", "root"]);
+    let pids = sleepers.pids();
     c.app.client_connected(BOT, Some(pids[0]));
     c.app.client_connected(BOT + 1, Some(pids[1]));
 
     assert!(reply_from(&mut c.app, BOT, "input", &popup_text()).is_err_and(|text| text != NO_POPUP));
     assert_eq!(reply_from(&mut c.app, BOT + 1, "input", &popup_text()), Err(NO_POPUP.to_string()));
 
-    released(c.bin.path(), children);
+    sleepers.release();
 }
 
 #[test]
@@ -152,8 +153,6 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
     c.release(ANSWER);
     c.settle();
 }
-
-const NO_CLONE: &str = "a bot cannot clone a repository; clone it yourself and the bot can work in the project";
 
 #[test]
 fn another_connection_still_stops_updates_and_clones() {
