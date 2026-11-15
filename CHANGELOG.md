@@ -4,8 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.82
 
-- **A command with `--boot` reaches the server in one round trip instead of two.** A program that polls `ports`, `files list` or `changes file` with `--boot`, as a window that draws another machine does through `--remote`, no longer waits for a `contract` request before each read. The same goes for every command whose request a server from before `--boot` (0.12.108 and older) does not have: such a server refuses it by name, so nothing is done there, and the command still says that the server would ignore `--boot` (status 1). Commands such as `close`, `rename`, `send`, `read` or `events`, which such a server would carry out, still ask it first, unless a check the command makes anyway, such as `--view`'s, already showed that it knows `--boot`.
-- A command with `--boot` now does its own checks before it reaches the server, as it does without the flag: `paste-file --boot` refuses an empty file before it connects, and a usage error comes before a server that is not running.
+- **A bot can only type into your agents.** For a bot with `cornercase` access, the default, the server now refuses its `cornercase send`, `keys`, `input`, `paste-file`, `held --send-now` and `todo send` into a pane that runs no agent (a shell, an editor, an agent that exited back to its shell), and `new-tab` or `split` with a command. Writing to an agent works as before. The server knows a bot's commands by their process, not by a variable the bot could drop. It also refuses a bot's changing a bot's access, writing to a bot with `full` access and changing cornercase's settings, which would lift that limit.
+- **What a bot starts ends with its answer.** When such a bot answers, anything it left running in the background is stopped, as `cornercase bot stop` already did.
 
 ## 0.13.81
 

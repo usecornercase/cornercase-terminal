@@ -111,6 +111,23 @@ pub(crate) fn stop(group: Group) -> Vec<Stopped> {
     escalation::escalate(vec![group.refreshed()])
 }
 
+pub(crate) fn below(pid: i32) -> Vec<Group> {
+    let alone = |root| Group { root, members: Vec::new() };
+    process::descendants(pid).into_iter().filter_map(Member::stamped).map(alone).collect()
+}
+
+pub(crate) fn add_below(groups: &mut Vec<Group>, pid: i32) {
+    for group in below(pid) {
+        if !groups.iter().any(|known| known.root.pid == group.root.pid) {
+            groups.push(group);
+        }
+    }
+}
+
+pub(crate) fn stop_all(groups: Vec<Group>) -> Vec<Stopped> {
+    escalation::escalate(groups.into_iter().map(Group::refreshed).collect())
+}
+
 pub(crate) fn summary(stopped: &[Stopped]) -> String {
     let Some((group, outcome)) = stopped.first() else { return "nothing to stop".into() };
     let label = group.label();

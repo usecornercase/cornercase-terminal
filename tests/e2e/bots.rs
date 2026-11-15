@@ -8,11 +8,15 @@ const STREAM: &str = r#"{"type":"system","subtype":"init","model":"claude-opus-5
 {"type":"result","subtype":"success","is_error":false,"result":"hello from the bot","session_id":"s1","usage":{"input_tokens":3,"output_tokens":4}}"#;
 
 pub(super) fn with_agent() -> Arc<Session> {
+    with_agent_running("")
+}
+
+fn with_agent_running(before: &str) -> Arc<Session> {
     let session = Session::new();
     let claude = session.dir.join("claude-bot");
     write_executable(
         &claude,
-        &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$0.args\"\ncat <<'EOF'\n{STREAM}\nEOF\n"),
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$0.args\"\n{before}\ncat <<'EOF'\n{STREAM}\nEOF\n"),
     );
     let config = serde_json::json!({"agent_commands": agent_commands(&[("claude", &claude)]), "agent": "claude"});
     std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");
@@ -20,7 +24,11 @@ pub(super) fn with_agent() -> Arc<Session> {
 }
 
 pub(super) fn started() -> Arc<Session> {
-    let session = with_agent();
+    started_running("")
+}
+
+fn started_running(before: &str) -> Arc<Session> {
+    let session = with_agent_running(before);
     let started = session.cold(&["start-server"]);
     assert!(started.status.success(), "start-server failed: {started:?}");
     session
@@ -72,4 +80,40 @@ fn a_bot_made_from_the_form_answers_in_its_chat() {
 
     let history = session.says(&["bot", "history", "prs"]);
     assert!(history.starts_with("you · ") && history.contains("which are blocked?"), "{history}");
+}
+
+const HEAD: &str = "a bot can only type into a pane that runs an agent";
+
+#[test]
+fn a_bot_cannot_type_into_a_shell_pane_but_you_can() {
+    let session = started_running(
+        "env -u CORNERCASE_BOT cornercase send --pane \"$(cat \"$0.pane\")\" --enter \"touch $0.typed\" > \"$0.out\" 2> \"$0.err\"\necho $? > \"$0.status\"",
+    );
+    let pane = held::new_shell(&session);
+    std::fs::write(session.dir.join("claude-bot.pane"), &pane).expect("the pane");
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+
+    let status = std::fs::read_to_string(session.dir.join("claude-bot.status")).expect("the command ran");
+    let stderr = std::fs::read_to_string(session.dir.join("claude-bot.err")).expect("its stderr");
+    assert_eq!(status.trim(), "1", "{stderr}");
+    assert!(stderr.contains(HEAD), "{stderr}");
+    assert!(!session.dir.join("claude-bot.typed").exists(), "the bot typed into the shell");
+
+    let yours = session.dir.join("typed-by-you");
+    session.says(&["send", "--pane", &pane, "--enter", &format!("touch {}", yours.display())]);
+    session.wait_for_file("typed-by-you", "the shell ran what you typed", |_| yours.exists());
+}
+
+#[test]
+fn a_command_whose_environment_names_a_bot_is_refused_by_the_server() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let pane = held::new_shell(&session);
+
+    let sent =
+        session.command().env("CORNERCASE_BOT", "prs").args(["send", "--pane", &pane, "x"]).output().expect("run");
+
+    assert!(refused(&sent, 1, HEAD), "{sent:?}");
 }

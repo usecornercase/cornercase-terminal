@@ -19,6 +19,7 @@ pub(crate) const TURN_TIMEOUT: Duration = Duration::from_mins(15);
 pub(crate) const SERVER_STOPS: [&str; 3] = ["kill-server", "restart", "update"];
 pub(crate) const LAST_CHARS: usize = 200;
 pub(crate) const BOT_ENV: &str = "CORNERCASE_BOT";
+pub(crate) const ACCESS_CHANGE: &str = "a bot cannot change a bot's access";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Bot {

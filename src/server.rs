@@ -772,9 +772,11 @@ impl Server {
             return;
         }
         let Ok(reader) = stream.try_clone() else { return };
+        let peer = crate::os::socket::peer_pid(&stream).ok().filter(|pid| *pid > 0);
         let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
         let id = self.next_client;
         self.next_client += 1;
+        self.app.client_connected(id, peer);
         let (tx, out_rx) = mpsc::channel();
         let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
         let writer = spawn_client_writer(stream, out_rx, Arc::clone(&out.queued));
