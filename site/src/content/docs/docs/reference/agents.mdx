@@ -170,12 +170,12 @@ Starting an agent is done by driving the shell in a new tab, the same way you wo
 | Step | Waits until | Then |
 | --- | --- | --- |
 | 1. Shell | The shell's output has been quiet for 0.3 s (at most 5 s). | Types the command line and `Enter`. |
-| 2. Agent | The agent is in the foreground, has drawn something besides the command line, and its screen has been quiet for 1 s (at most 30 s). | If it asks whether you trust the folder, waits for your answer (or answers it, when **trust prompts** is on) and waits again; otherwise pastes the prompt. |
-| 3. Send | The screen has been quiet for 0.3 s after pasting. | Presses `Enter`, only when **send the prompt** is on. |
+| 2. Agent | The agent is in the foreground, has drawn something besides the command line, and its screen has been quiet for 1 s (at most 30 s). | If it asks whether you trust the folder, waits for your answer (or answers it, when **trust prompts** is on) and waits again; otherwise pastes the prompt. Claude Code also has to turn bracketed paste on and draw its input box, which can take longer than the quiet second (the prompt waits for both, at most 30 s). |
+| 3. Send | The screen has been quiet for 0.3 s after pasting. | Presses `Enter`, only when **send the prompt** is on. For Claude Code it then checks that the prompt was taken and presses `Enter` again every 3 s while the agent sits idle, at most 5 times. |
 
 If the shell is still in the foreground 3 s after the command was typed, the agent didn't start (for example, the command doesn't exist), and cornercase stops there. The reason goes to the server log.
 
-The prompt is pasted with bracketed paste when the agent supports it. When the prompt is left for you to send, or the agent doesn't support bracketed paste, it is put on a single line first.
+The prompt is pasted with bracketed paste when the agent supports it. When the prompt is left for you to send, or the agent doesn't support bracketed paste, it is put on a single line first. A prompt that Claude Code never takes is not hidden: the queue entry reads `started · pane N · prompt not taken` in yellow, `cornercase start` prints a warning, and a toast says that the agent in its tab did not take its prompt, so you can press `Enter` there.
 
 ## Resuming after a restart
 

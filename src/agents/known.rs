@@ -324,6 +324,14 @@ impl Known {
         }
     }
 
+    pub(crate) fn bracketed_when_ready(self) -> bool {
+        matches!(self, Self::Claude)
+    }
+
+    pub(crate) fn confirms_prompt(self) -> bool {
+        matches!(self, Self::Claude)
+    }
+
     pub(crate) fn local_command(self, text: &str) -> bool {
         match self {
             Self::Claude => claude::LOCAL_COMMAND,

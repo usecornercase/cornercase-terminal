@@ -134,3 +134,10 @@ fn a_custom_agent_a_gone_record_and_a_failed_run_each_say_why() {
     assert_eq!(says(entry("claude", State::Missed, None), true), "it did not start: it was missed");
     assert!(says(entry("claude", started(), None), true).starts_with("no result was kept"));
 }
+
+#[test]
+fn a_started_entry_whose_prompt_was_never_taken_says_so() {
+    let unsent = Entry { unsent: true, ..entry("claude", started(), None) };
+    let says = note(&unsent, true).unwrap_or_default();
+    assert!(says.starts_with("no result: its agent did not take the prompt"), "{says}");
+}

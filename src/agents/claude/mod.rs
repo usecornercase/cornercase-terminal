@@ -285,6 +285,10 @@ impl Reader {
         Some(Record::Claude(self.transcript.as_ref()?.path.clone()))
     }
 
+    pub(in crate::agents) fn session_read(&self) -> bool {
+        self.session.is_some()
+    }
+
     pub(in crate::agents) fn conversation(&self) -> Option<&str> {
         self.transcript.as_ref().filter(|t| t.len > 0).and_then(|t| t.path.file_stem()?.to_str())
     }

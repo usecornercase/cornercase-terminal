@@ -127,6 +127,11 @@ fn without_a_result(entry: &Entry) -> String {
         State::Failed { reason } => format!("it did not start: {reason}"),
         State::Missed => "it did not start: it was missed".into(),
         State::Answered { .. } => "the bot answered, but no answer was kept".into(),
+        State::Started { .. } if entry.unsent => {
+            "no result: its agent did not take the prompt, so the run did nothing; press Enter in its tab if the \
+             prompt is still in its input box"
+                .into()
+        }
         State::Started { .. } | State::Kept { .. } | State::Removed => {
             "no result was kept: its agent did not finish a turn while cornercase watched it".into()
         }

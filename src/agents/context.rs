@@ -325,6 +325,10 @@ impl Pane {
         self.reader.as_ref()?.conversation()
     }
 
+    pub(crate) fn session_read(&self) -> bool {
+        matches!(&self.reader, Some(Reader::Claude(reader)) if reader.session_read())
+    }
+
     pub(crate) fn folder(&self) -> Option<&Path> {
         self.reader.as_ref()?.folder()
     }

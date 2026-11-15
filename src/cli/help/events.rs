@@ -12,9 +12,9 @@ An agent on a linked machine tells its notices too, with the machine's name and 
   machine vps  notice  claude on vps needs you in shop › main  cc-3f2a9c-5
 `cornercase go TOKEN` then does what a click on that notification does.
 The server's other notices come with --notices too, as the window's toast says them, with a kind and
-no token: notify (`cornercase notify`, naming the pane it ran in), queue-started, queue-failed,
-queue-missed and queue-kept (a queued agent or routine run; a one-off entry that missed its time sends
-none), setup-failed (only while nobody looks at its tab), flow-consent (a flow's member waits for your
+no token: notify (`cornercase notify`, naming the pane it ran in), queue-started, queue-unsent (a queued agent or routine run whose agent did not
+take its prompt), queue-failed, queue-missed and queue-kept (a queued agent or routine run; a one-off
+entry that missed its time sends none), setup-failed (only while nobody looks at its tab), flow-consent (a flow's member waits for your
 consent), flow-exited (a flow role's agent exited by itself, once per exit, never for a tab seen:
 cornercase agents reopen --workspace ID brings it back) and flow-merged (a run's agents closed once its pull request merged, worded like the toast
 without its ▶: cornercase agents reopen --workspace ID brings them back). With --json they have kind,
