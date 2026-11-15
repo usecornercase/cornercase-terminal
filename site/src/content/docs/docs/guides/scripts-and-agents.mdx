@@ -740,6 +740,8 @@ With `--json`, `sources` prints `{"project", "closed", "sources": [...], "places
 
 ### Talk to a pane
 
+A [bot](#bots) with `cornercase` access is refused here for a pane that runs no agent: `send`, `todo send`, `keys`, `input`, `paste-file`, `held --send-now`, and `new-tab` or `split` with a command exit 1 with `a bot can only type into a pane that runs an agent`.
+
 ```sh
 cornercase send --pane 12 --enter 'Now add tests for it'
 cornercase send --pane 12 --enter --wait --timeout 900 - < next-step.md
@@ -1105,6 +1107,8 @@ cornercase bot stop prs
 - [`status --app`](#follow-the-rest-of-the-app) has a `bots` key, the same list as `bot list`, left out when there are no bots.
 - `status` has `shown_bot`, the id of the bot whose chat the window shows in place of the panes (feature `shown-bot`), next to `shown_remote`. It is left out when no chat shows, and so is it in `watch` snapshots and `view` lines, which carry the same report. It is window state, shared by every attached window and not saved: after a restart the window shows the panes.
 - A bot's own commands run with `CORNERCASE_BOT` set: `kill-server`, `restart` and `update` exit with 2 there (`a bot cannot stop its own server`), and so does a command that would act on the pane it runs in without a `--project`, `--workspace` or `--pane` (`a bot runs in no pane`).
+- The server also refuses what a `cornercase`-access bot types into a pane that runs no agent (`send`, `todo send`, `keys`, `input`, `paste-file`, `held --send-now`, and `new-tab` or `split` with a command): exit 1, code `failed`, text starting `a bot can only type into a pane that runs an agent`. It tells a bot's commands by their process, not by `CORNERCASE_BOT` alone, and it adds no field or request to the contract. See [what a bot can see and do](../../guides/bots/#what-a-bot-can-see-and-do).
+- The server refuses three more things to a bot's connection, with exit 1 and code `failed`: `bot new` with an access other than `cornercase` and `bot edit` with an access (`a bot cannot change a bot's access`), `bot say` to, and any `bot edit` of, a bot with `full` access (`a bot cannot write to a bot with full access`), and `config` writes (`set`, `project`, `secret`, `remove`) and `config-import` with `apply` (`a bot cannot change cornercase's settings`).
 
 ### Context
 
@@ -1403,6 +1407,8 @@ cornercase config project ~/code/web-shop --setup 'npm ci' --teardown 'rm -rf no
 cornercase config project ~/code/web-shop --builds 'node_modules .next'
 cornercase config pair browsers --json
 ```
+
+A [bot](#bots)'s connection is refused `config` writes and an applied `config-import`: they would let it change what counts as an agent.
 
 `config` lists every setting of the [Settings dialog](../../reference/configuration/), the connections (accounts and bots), each project's setup, teardown and build folders and, with `--json`, what each agent can do. A setting that the dialog shows as a row has a `key`, the name of its `config.json` key (an agent's mode and extra arguments are `agents.claude.mode` and `agents.claude.extra`, and the issue tabs are one list, `issue_tabs`; every choice of an agent's mode, `default` included, is a value that `start --mode` and `queue add --mode` take), so a program can draw a form from the answer instead of knowing each row.
 
@@ -1940,7 +1946,7 @@ The instructions tell agents to use the commands only when you ask them to open 
 
 ## Security
 
-As before, only your own user can reach the server's socket. But whoever reaches it can type into every shell, and change your settings and tokens, so a coding agent that can run `cornercase` can run anything in any pane, and run commands outside its own sandbox through another pane. Keep the socket out of reach of agents you sandbox: run them in a container or under another user without access to it, or don't give them a shell inside cornercase.
+As before, only your own user can reach the server's socket. But whoever reaches it can type into every shell (except a [bot](../bots/#what-a-bot-can-see-and-do) with `cornercase` access, whose connection the server refuses for a pane that runs no agent), and change your settings and tokens, so a coding agent that can run `cornercase` can run anything in any pane, and run commands outside its own sandbox through another pane. Keep the socket out of reach of agents you sandbox: run them in a container or under another user without access to it, or don't give them a shell inside cornercase.
 
 ## Queue work for later
 

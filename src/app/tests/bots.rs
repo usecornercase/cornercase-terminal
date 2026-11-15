@@ -1,6 +1,8 @@
 use std::time::Duration;
 
 use super::*;
+use crate::agents::headless::Access;
+use crate::bots::Bot;
 use crate::bots::chat::{self, Line};
 use crate::bots::folder;
 use crate::bots::sample as bot;
@@ -56,19 +58,28 @@ struct Chat {
     rx: Receiver<AppEvent>,
     dir: TempDir,
     claude: PathBuf,
-    _bin: TempDir,
+    bin: TempDir,
 }
 
 fn chat(out: &str) -> Chat {
-    let (mut app, rx) = empty_app();
+    chat_with(out, Access::Cornercase)
+}
+
+pub(in crate::app::tests) fn install_bot(app: &mut App, out: &str, access: Access) -> (TempDir, TempDir, PathBuf) {
     let (dir, bin) = (TempDir::new(), TempDir::new());
     let claude = fake_program(bin.path(), "claude");
     std::fs::write(claude.with_extension("out"), out).expect("canned output");
     app.config.agent_commands.insert("claude".into(), claude.display().to_string());
-    folder::create(dir.path(), &bot("prs", "PRs"), "review my PRs").expect("create");
+    folder::create(dir.path(), &Bot { access, ..bot("prs", "PRs") }, "review my PRs").expect("create");
     app.set_bots_dir(dir.path());
     app.panels.bots.timeout = Duration::from_secs(20);
-    Chat { app, rx, dir, claude, _bin: bin }
+    (dir, bin, claude)
+}
+
+fn chat_with(out: &str, access: Access) -> Chat {
+    let (mut app, rx) = empty_app();
+    let (dir, bin, claude) = install_bot(&mut app, out, access);
+    Chat { app, rx, dir, claude, bin }
 }
 
 impl Chat {
@@ -311,6 +322,11 @@ fn the_server_stopping_ends_the_turns_that_run() {
     std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
 }
 
+pub(in crate::app::tests) fn root_pid(claude: &Path) -> Option<i32> {
+    let pids = std::fs::read_to_string(claude.with_extension("pid")).ok()?;
+    pids.lines().next().and_then(|pid| pid.parse().ok())
+}
+
 #[test]
 fn editing_what_a_bot_is_for_writes_bot_md() {
     let mut c = chat(ANSWER);
@@ -324,6 +340,7 @@ fn editing_what_a_bot_is_for_writes_bot_md() {
     assert_eq!(about, "Review pull requests.");
 }
 
+mod boundary;
 mod compact;
 mod form;
 mod menu;

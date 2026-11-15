@@ -147,7 +147,8 @@ pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ra
     let spec =
         agent.headless().ok_or_else(|| Error::Probe(format!("{} cannot run without its interface", agent.name())))?;
     let command = prepared(call, ask, &spec);
-    let limits = Limits { name: agent.name(), timeout: call.timeout, grace: GRACE, close_input: true };
+    let contain = matches!(ask.tools, Tools::Bot(Access::Cornercase));
+    let limits = Limits { name: agent.name(), timeout: call.timeout, grace: GRACE, close_input: true, contain };
     let Watch { progress, mut steps, running } = watch;
     let read = spec.read;
     let mut ran = Ran::default();

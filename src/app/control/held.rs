@@ -232,7 +232,9 @@ impl App {
         let mut held = *held;
         let over_draft = held.pressed && self.projects.pane_by(pane).is_some_and(|term| term.draft(now));
         log::info!("control", "send released", pane = pane, forced = held.force, after_draft = over_draft);
-        if let Err(refusal) = self.refuse_send(pane, held.force) {
+        let allowed =
+            self.refuse_send(pane, held.force).and_then(|()| self.bot_still_writes(pending.client, pending.key, pane));
+        if let Err(refusal) = allowed {
             self.refuse_or_answer(pending.client, Err(refusal));
             return None;
         }

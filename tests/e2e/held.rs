@@ -9,6 +9,10 @@ const TYPED: &str = r#"{"text": "half written"}"#;
 
 fn shell_pane(session: &Session) -> String {
     session.cold(&["start-server"]);
+    new_shell(session)
+}
+
+pub(super) fn new_shell(session: &Session) -> String {
     let pane = session.says(&["new-tab"]);
     wait_until("the shell's prompt", || session.says(&["read", "--pane", &pane]).contains('$'));
     pane

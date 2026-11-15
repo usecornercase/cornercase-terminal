@@ -58,7 +58,7 @@ pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Opt
     let mut path = vec![top];
     let (leaf, found) = walk(command.find_subcommand(top)?, matches.subcommand()?.1, &mut path);
     if access_change(&path, found) {
-        return Some(String::from("a bot cannot change a bot's access"));
+        return Some(String::from(crate::bots::ACCESS_CHANGE));
     }
     if path == ["bot", "say"] && found.get_one::<String>("bot").is_some_and(|bot| bot.eq_ignore_ascii_case(own)) {
         return Some(String::from("a bot cannot write to itself"));

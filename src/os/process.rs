@@ -5,7 +5,7 @@ use std::process::{Child, Command};
 #[cfg(unix)]
 pub(crate) use imp::kill_process_group;
 pub(crate) use imp::{
-    CommandExt, ExitStatusExt, Pid, Signal, alive, askable, kill_process, launch_folder, leave_launch_folder,
+    CommandExt, ExitStatusExt, Lineage, Pid, Signal, alive, askable, kill_process, launch_folder, leave_launch_folder,
     on_end_signal, on_stop_signal, setsid, spawn_detached,
 };
 
@@ -74,6 +74,37 @@ mod imp {
             self.0.is_some_and(|group| kill_process_group(group, signal).is_ok())
         }
     }
+
+    #[derive(Debug)]
+    pub(crate) struct Lineage;
+
+    impl Lineage {
+        pub(crate) fn spawn(command: &mut Command) -> io::Result<(Child, Self)> {
+            adopt_orphans(command);
+            Ok((command.spawn()?, Self))
+        }
+
+        #[expect(clippy::unused_self, reason = "it keeps the Windows signature, where a job holds processes")]
+        pub(crate) fn holds(&self, _pid: i32) -> bool {
+            false
+        }
+
+        #[expect(clippy::unused_self, reason = "it keeps the Windows signature, where ending kills the job")]
+        pub(crate) fn end(&self) {}
+    }
+
+    #[cfg(target_os = "linux")]
+    fn adopt_orphans(command: &mut Command) {
+        unsafe {
+            command.pre_exec(|| {
+                let _ = rustix::process::set_child_subreaper(Pid::from_raw(1));
+                Ok(())
+            });
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn adopt_orphans(_command: &mut Command) {}
 
     pub(crate) fn on_stop_signal(stop: impl FnOnce() + Send + 'static) -> io::Result<()> {
         on_signals(&[SIGTERM, SIGINT, SIGHUP], |signal| signal != SIGHUP, stop)
