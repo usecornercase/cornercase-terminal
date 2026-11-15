@@ -14,11 +14,11 @@ fn request(args: &str) -> Request {
 #[case::agents(r#"{"action":"agents"}"#, BotRequest::Agents)]
 #[case::list(r#"{"action":"list"}"#, BotRequest::List)]
 #[case::new(
-    r#"{"action":"new","entry":{"name":"PRs","agent":"claude","model":null,"effort":null,"account":null,"access":null,"about":"x"}}"#,
+    r#"{"action":"new","entry":{"name":"PRs","agent":"claude","model":null,"effort":null,"account":null,"access":null,"follow":null,"about":"x"}}"#,
     BotRequest::New(NewBot { name: "PRs".into(), agent: Some("claude".into()), about: "x".into(), ..NewBot::default() })
 )]
 #[case::edit(
-    r#"{"action":"edit","entry":{"bot":"prs","name":"Other","agent":null,"model":"","effort":null,"account":null,"access":null,"about":null}}"#,
+    r#"{"action":"edit","entry":{"bot":"prs","name":"Other","agent":null,"model":"","effort":null,"account":null,"access":null,"follow":null,"about":null}}"#,
     BotRequest::Edit(EditBot { bot: "prs".into(), name: Some("Other".into()), model: Some(String::new()), ..EditBot::default() })
 )]
 #[case::remove(r#"{"action":"remove","entry":{"bot":"prs"}}"#, BotRequest::Remove(BotTarget { bot: "prs".into() }))]
@@ -73,4 +73,23 @@ fn the_log_line_says_how_long_a_message_is_and_never_what_it_says() {
 #[test]
 fn the_request_is_named_bot_in_the_list_of_commands() {
     assert_eq!(Command::Bot(BotRequest::List).name(), "bot");
+}
+
+#[test]
+fn new_and_edit_serialize_follow() {
+    let new = BotRequest::New(NewBot { name: "PRs".into(), follow: Some(false), ..NewBot::default() });
+    assert_eq!(serde_json::to_value(&new).expect("json")["entry"]["follow"], Value::Bool(false));
+    let edit = BotRequest::Edit(EditBot { bot: "prs".into(), follow: Some(true), ..EditBot::default() });
+    assert_eq!(serde_json::to_value(&edit).expect("json")["entry"]["follow"], Value::Bool(true));
+    let fields = Command::Bot(edit).fields();
+    assert!(fields.contains(&("follow", "true".to_string())), "{fields:?}");
+}
+
+#[test]
+fn bot_info_has_follow_and_following() {
+    let info = BotInfo { follow: true, following: vec![4, 9], ..BotInfo::default() };
+    let value = serde_json::to_value(&info).expect("json");
+    assert_eq!((value["follow"].clone(), value["following"].clone()), (Value::Bool(true), serde_json::json!([4, 9])));
+    let old: BotInfo = serde_json::from_str(r#"{"id":"prs"}"#).expect("an old answer");
+    assert!(!old.follow && old.following.is_empty());
 }

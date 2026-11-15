@@ -224,7 +224,16 @@ impl App {
 
     pub(in crate::app) fn send_todo(&mut self, client: u64, todo: u64, pane: u64, now: Instant) {
         let command = Command::TodoSend(control::TodoSend { id: todo, pane: Some(pane), ..Default::default() });
-        let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+        let request = Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            bot: None,
+            bot_run: None,
+            command,
+        };
         self.run_request(client, Ok(request), None, now);
     }
 }

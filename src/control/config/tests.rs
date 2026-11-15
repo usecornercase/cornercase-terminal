@@ -221,6 +221,8 @@ mod models {
             contract: None,
             boot: None,
             view: None,
+            bot: None,
+            bot_run: None,
             command: Command::AgentModels(AgentModels { agent: "opencode".into() }),
         };
         let value = serde_json::to_value(&asked).expect("a request");
@@ -271,6 +273,8 @@ mod export {
             contract: None,
             boot: None,
             view: None,
+            bot: None,
+            bot_run: None,
             command: Command::ConfigExport(ConfigExport {}),
         };
         let sent = serde_json::to_value(asked).expect("json");

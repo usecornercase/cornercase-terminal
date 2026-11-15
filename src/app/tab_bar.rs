@@ -37,6 +37,7 @@ impl App {
             active: workspace.filter(|w| !w.tabs.is_empty()).map(|w| w.active),
             details: ui::Details {
                 compacted: self.shows_compaction(pane.is_some_and(|t| t.context.compaction().hides)),
+                by: pane.and_then(|t| self.started_by(t)),
                 ..self.details(
                     pane.and_then(|t| t.context.context()),
                     pane.and_then(|t| t.memory.bytes()),

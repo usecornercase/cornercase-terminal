@@ -240,12 +240,37 @@ function runRows(p: Painter, bot: Bot, lines: ChatLine[], w: number): Row[] {
   return rows;
 }
 
+const SHOW_LEFT_OUT = ' show ';
+const BODY_SHOWN = 6;
+
+function agentRows(p: Painter, bot: Bot, l: ChatLine, w: number): Row[] {
+  const glyph = [...l.text][0] ?? '';
+  const tone: Style = l.kind === 'started' ? DARK : l.text.startsWith('✗') ? { fg: 1, add: BOLD } : l.kind === 'finished' ? { fg: 2, add: BOLD } : { fg: 208, add: BOLD };
+  const room = Math.max(0, w - SHOW_LEFT_OUT.length - 1);
+  const text = truncateRight(l.text, room);
+  const rest = [...text].slice(1).join('');
+  const head: Line = [seg(glyph, tone), seg(rest, l.kind === 'started' ? DARK : {}), seg(' '), seg(SHOW_LEFT_OUT, CYAN)];
+  const rows: Row[] = [{ x: 0, w, line: head }];
+  if (l.body === undefined || l.kind === 'started') return rows;
+  const body = l.kind === 'finished' ? markdown(l.body, Math.max(1, w - 2)) : l.body.split('\n').map((t): Line => [seg(t)]);
+  const hidden = bot.open.has(l.id) ? 0 : Math.max(0, body.length - BODY_SHOWN);
+  for (const line of body.slice(0, body.length - hidden)) rows.push({ x: 0, w, line: [seg('  '), ...line.map((part) => ({ ...part, s: { ...part.s, fg: part.s?.fg ?? 8 } }))] });
+  if (hidden > 0) {
+    const label = `  +${plural(hidden, 'line')}`;
+    rows.push({ x: 0, w, line: [seg(label, DARK)], acts: [{ x: 0, w: label.length, fn: () => { bot.open.add(l.id); p.app.dirty(); } }] });
+  }
+  return rows;
+}
+
 function block(p: Painter, bot: Bot, l: ChatLine, w: number, last: boolean): Row[] {
+  if (l.kind === 'started' || l.kind === 'finished' || l.kind === 'waiting') return agentRows(p, bot, l, w);
   if (l.kind === 'you') return youRows(p, bot, l, w);
   if (l.kind === 'bot') return botRows(l, bot, w);
   if (l.kind === 'error') return errorRows(p, bot, l, w, last);
-  const text = `── ${l.text} ──`;
-  return [{ x: Math.max(0, Math.floor((w - [...text].length) / 2)), w, line: [seg(text, DARK)] }];
+  return wrapText(l.text, Math.max(1, w - 6)).map((row) => {
+    const text = truncateRight(`── ${row} ──`, w);
+    return { x: Math.max(0, Math.floor((w - [...text].length) / 2)), w, line: [seg(text, DARK)] };
+  });
 }
 
 function chatRows(p: Painter, bot: Bot, w: number): Row[] {

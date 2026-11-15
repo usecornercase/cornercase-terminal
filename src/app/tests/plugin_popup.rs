@@ -196,6 +196,8 @@ fn status_ids(app: &mut App) -> Vec<u64> {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: Command::Status(wire::Status {}),
     };
     app.request(9, &serde_json::to_string(&request).expect("json"), Some(AREA), Instant::now());

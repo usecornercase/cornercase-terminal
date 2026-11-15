@@ -558,7 +558,7 @@ pub(super) fn send(line: &mut Line, envelope: &Envelope, command: Command) -> bo
 
 fn ask(line: &mut Line, envelope: &Envelope, command: Command, lost: Ended) -> std::result::Result<(), Ended> {
     let (boot, view) = (envelope.boot.clone(), envelope.view);
-    let request = Request { caller: None, server: None, contract: None, boot, view, command };
+    let request = Request { caller: None, server: None, contract: None, boot, view, bot: None, bot_run: None, command };
     let text = serde_json::to_string(&request).map_err(|e| Ended::Refused(Down::Unreachable(e.to_string())))?;
     protocol::send(&mut line.writer, &ClientMessage::Request(text)).map_err(|_| lost)
 }

@@ -222,7 +222,16 @@ fn a_view_is_the_default_and_focus_moves_it_while_the_window_stays() {
     let window = retry.shown_tab();
     let view = retry.open_view_on(tab);
     let command = Command::RunSetup(RunSetup { workspace: None, focus: true });
-    let request = wire::Request { caller: None, server: None, contract: None, boot: None, view: Some(view), command };
+    let request = wire::Request {
+        caller: None,
+        server: None,
+        contract: None,
+        boot: None,
+        view: Some(view),
+        bot: None,
+        bot_run: None,
+        command,
+    };
 
     let asking = serde_json::to_string(&request).expect("json");
     retry.app.request(CLIENT, &asking, Some(AREA), Instant::now());

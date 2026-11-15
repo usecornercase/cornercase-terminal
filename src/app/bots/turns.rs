@@ -1,12 +1,14 @@
 use std::time::{Duration, Instant};
 
-use super::{BotEvent, News, Turn};
+use super::{BotEvent, News, Starting, Thread, Turn};
 use crate::agents::Known;
 use crate::agents::headless::{Ran, Watch};
 use crate::agents::probe::Running;
 use crate::app::App;
 use crate::app::event::AppEvent;
+use crate::bots::brief::Told;
 use crate::bots::chat::{self, Answer, Kind, Line};
+use crate::bots::turn::Session;
 use crate::bots::{brief, folder, turn};
 use crate::control::contract::{Code, Refusal};
 use crate::error::Result;
@@ -35,7 +37,7 @@ impl App {
         }
         let id = state.bot.id.clone();
         self.chat_took(at, &line);
-        self.publish_bot(&id, News::Line(line.clone()));
+        self.publish_bot(&id, News::Line(Box::new(line.clone())));
         line
     }
 
@@ -57,7 +59,7 @@ impl App {
         if busy {
             state.held.push((line.id, text.to_string()));
         } else {
-            self.bot_start(at, &[(line.id, text.to_string())]);
+            self.bot_start(at, &[(line.id, text.to_string())], Starting::chat());
         }
         Ok((at, line))
     }
@@ -69,7 +71,8 @@ impl App {
             bot: state.bot.clone(),
             folder: state.folder.clone(),
             text,
-            run: false,
+            session: Session::Chat,
+            from_cornercase: false,
             told: None,
             program: crate::agents::command(&self.config, &state.bot.agent),
             home: self.account_home(kind, state.bot.account.as_deref()),
@@ -78,16 +81,25 @@ impl App {
         }
     }
 
-    fn bot_start(&mut self, at: usize, asked: &[(u64, String)]) {
+    pub(super) fn bot_start(&mut self, at: usize, asked: &[(u64, String)], how: Starting) {
         let texts: Vec<String> = asked.iter().map(|(_, text)| text.clone()).collect();
         let mut input = self.bot_input(at, turn::joined(&texts));
-        let told = std::mem::take(&mut self.panels.bots.live[at].unseen);
-        input.told = brief::told(&told, &input.bot.id);
+        let thread = match &how.session {
+            Session::Resume { run, .. } => Thread::Run(*run),
+            Session::Chat | Session::NewRun(_) => Thread::Chat,
+        };
+        if thread == Thread::Chat {
+            let told = std::mem::take(&mut self.panels.bots.live[at].unseen);
+            input.told = brief::told(&told, &input.bot.id);
+        }
+        input.session = how.session;
+        input.from_cornercase = how.cornercase;
         let (id, running) = (self.panels.bots.next_turn, Running::default());
         self.panels.bots.next_turn += 1;
         let state = &mut self.panels.bots.live[at];
         state.turn = Some(Turn {
             id,
+            thread,
             asked: asked.iter().map(|(line, _)| *line).collect(),
             running: running.clone(),
             stopping: false,
@@ -127,6 +139,7 @@ impl App {
     pub(in crate::app) fn bot_event(&mut self, event: BotEvent) {
         match event {
             BotEvent::Step { bot, turn, step } => self.bot_step(&bot, turn, &step),
+            BotEvent::Read { bot, read } => self.bot_report_read(&bot, *read),
             BotEvent::Ended { bot, turn, result, took } => {
                 if self.running_run(&bot, turn).is_some() {
                     self.run_ended(&bot, turn, result, took);
@@ -159,24 +172,33 @@ impl App {
         }
     }
 
-    fn bot_outcome(&mut self, at: usize, result: Result<Ran>, stopping: bool) -> (Line, &'static str) {
+    fn bot_outcome(&mut self, at: usize, result: Result<Ran>, how: (Thread, bool)) -> (Line, &'static str) {
+        let (thread, stopping) = how;
+        let run = match thread {
+            Thread::Run(run) => Some(run),
+            Thread::Chat => None,
+        };
         let agent = self.panels.bots.live[at].bot.agent.clone();
         match result {
             Ok(ran) => {
                 let state = &mut self.panels.bots.live[at];
-                if ran.session.is_some() {
+                if run.is_none() && ran.session.is_some() {
                     state.bot.conversation.clone_from(&ran.session);
                     let _ = folder::save(&state.folder, &state.bot);
                 }
                 let model = ran.model.clone().or_else(|| state.bot.model.clone());
                 let answer = Answer { model, tokens: ran.tokens, conversation: ran.session };
-                (self.bot_append(at, |id, now| Line::answer(id, now, &ran.text, answer)), "answered")
+                let line = self.bot_append(at, |id, now| Line::answer(id, now, &ran.text, answer).in_run(run));
+                if let Some(run) = run {
+                    self.told_of_run(at, run, &line);
+                }
+                (line, "answered")
             }
             Err(_) if stopping => (self.bot_append(at, |id, now| Line::notice(id, now, chat::STOPPED)), "stopped"),
             Err(error) => {
                 let text = turn::failure(&agent, &error, &self.panels.bots.live[at].bot.id);
                 let how = if text.contains("did not answer in time") { "timeout" } else { "error" };
-                (self.bot_append(at, |id, now| Line::failed(id, now, &text)), how)
+                (self.bot_append(at, |id, now| Line::failed(id, now, &text).in_run(run)), how)
             }
         }
     }
@@ -185,7 +207,7 @@ impl App {
         let Some(at) = self.running_turn(bot, turn) else { return };
         let Some(finished) = self.panels.bots.live[at].turn.take() else { return };
         let tokens = result.as_ref().map_or(0, |ran| ran.tokens.total());
-        let (line, how) = self.bot_outcome(at, result, finished.stopping);
+        let (line, how) = self.bot_outcome(at, result, (finished.thread, finished.stopping));
         let dropped = self.bot_dropped(at, &finished);
         let on_screen = self.bot_on_screen(at);
         let state = &mut self.panels.bots.live[at];
@@ -210,6 +232,11 @@ impl App {
             ended = how
         );
         self.bot_next(at);
+    }
+
+    fn told_of_run(&mut self, at: usize, run: u64, line: &Line) {
+        let (label, clock) = self.run_label(run, line.at);
+        self.tell_chat(at, Told { label, clock, text: line.text.clone() });
     }
 
     fn bot_dropped(&mut self, at: usize, finished: &Turn) -> Option<Line> {
@@ -258,7 +285,7 @@ impl App {
             let id = self.panels.bots.live[at].bot.id.clone();
             self.publish_bot(&id, News::State("idle"));
         } else {
-            self.bot_start(at, &held);
+            self.bot_start(at, &held, Starting::chat());
         }
     }
 
@@ -272,6 +299,7 @@ impl App {
                 trees.push(run.running.clone());
             }
         }
+        state.reports.clear();
         let chat_running = state.turn.is_some();
         let bot = state.bot.id.clone();
         if let Some(running) = state.turn.as_mut() {
@@ -345,6 +373,7 @@ impl App {
         let state = &self.panels.bots.live[at];
         folder::remove(&state.folder).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
         let removed = self.panels.bots.live.remove(at);
+        self.forget_tags(&removed.bot.id);
         let entries = self.panels.queued.remove_bot(&removed.bot.id);
         if self.panels.bots.shown.as_ref().is_some_and(|shown| shown.bot == removed.bot.id) {
             self.leave_bot();

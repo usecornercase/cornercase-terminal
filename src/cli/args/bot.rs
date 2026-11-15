@@ -69,6 +69,13 @@ pub(crate) struct NewArgs {
     pub(crate) account: Option<String>,
     #[arg(long, value_name = "ACCESS", value_parser = ACCESS, help = "cornercase (the default) or full: it can change any file and run anything, unattended")]
     pub(crate) access: Option<String>,
+    #[arg(
+        long,
+        value_name = "ON|OFF",
+        value_parser = ["on", "off"],
+        help = "on (the default): the bot is told when an agent it starts finishes, and answers in its chat; off: it is not"
+    )]
+    pub(crate) follow: Option<String>,
     #[arg(long, value_name = "TEXT", help = "What the bot is for; it goes into bot.md")]
     pub(crate) about: Option<String>,
     #[command(flatten)]
@@ -91,6 +98,13 @@ pub(crate) struct EditArgs {
     pub(crate) account: Option<String>,
     #[arg(long, value_name = "ACCESS", value_parser = ACCESS, help = "cornercase or full")]
     pub(crate) access: Option<String>,
+    #[arg(
+        long,
+        value_name = "ON|OFF",
+        value_parser = ["on", "off"],
+        help = "on: the bot is told when an agent it starts finishes, and answers in its chat; off: it is not; from its next turn"
+    )]
+    pub(crate) follow: Option<String>,
     #[arg(long, value_name = "TEXT", help = "What the bot is for, written to bot.md; an empty one empties it")]
     pub(crate) about: Option<String>,
     #[command(flatten)]

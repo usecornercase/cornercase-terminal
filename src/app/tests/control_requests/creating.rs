@@ -33,6 +33,8 @@ fn a_pane_of_another_server_is_not_the_caller() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: status,
     })
     .expect("json");

@@ -49,7 +49,8 @@ pub(crate) use accounts_bar::{Pill as AccountPill, Row as AccountRow, hit as acc
 pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
-pub(crate) use bots::card::{BotCard, CardRow, card_folder};
+pub(crate) use bots::agent::{ChatAgentKind, ChatAgentLine};
+pub(crate) use bots::card::{BotCard, CardRow, card_folder, card_row_at};
 pub(crate) use bots::chat::body as chat_body;
 pub(crate) use bots::chat::{
     ChatAreas, ChatEntry, ChatHit, ChatRow, ChatView, EXAMPLES, RowHit, Thinking, Tone, chat_areas, chat_hit,

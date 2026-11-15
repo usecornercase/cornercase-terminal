@@ -26,6 +26,7 @@ pub(crate) struct NewBot {
     pub(crate) effort: Option<String>,
     pub(crate) account: Option<String>,
     pub(crate) access: Option<String>,
+    pub(crate) follow: Option<bool>,
     pub(crate) about: String,
 }
 
@@ -39,6 +40,7 @@ pub(crate) struct EditBot {
     pub(crate) effort: Option<String>,
     pub(crate) account: Option<String>,
     pub(crate) access: Option<String>,
+    pub(crate) follow: Option<bool>,
     pub(crate) about: Option<String>,
 }
 
@@ -82,6 +84,8 @@ pub(crate) struct BotInfo {
     pub(crate) effort: Option<String>,
     pub(crate) account: Option<String>,
     pub(crate) access: String,
+    pub(crate) follow: bool,
+    pub(crate) following: Vec<u64>,
     pub(crate) state: String,
     pub(crate) held: usize,
     pub(crate) unread: usize,
@@ -114,11 +118,12 @@ impl BotRequest {
             Self::List => fields.add("action", "list"),
             Self::New(new) => {
                 fields.add("action", "new").add("name", &new.name).maybe("agent", new.agent.as_deref());
-                fields.maybe("access", new.access.as_deref()).add("about_bytes", new.about.len())
+                fields.maybe("access", new.access.as_deref()).maybe("follow", new.follow);
+                fields.add("about_bytes", new.about.len())
             }
             Self::Edit(edit) => {
                 fields.add("action", "edit").add("bot", &edit.bot).maybe("name", edit.name.as_deref());
-                fields.maybe("access", edit.access.as_deref());
+                fields.maybe("access", edit.access.as_deref()).maybe("follow", edit.follow);
                 fields.maybe("about_bytes", edit.about.as_ref().map(String::len))
             }
             Self::Remove(target) => fields.add("action", "remove").add("bot", &target.bot),

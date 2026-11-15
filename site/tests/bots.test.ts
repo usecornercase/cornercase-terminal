@@ -90,7 +90,7 @@ test('keys never reach a pane while a chat shows, and Esc clears the field', () 
   assert.equal(app.bots.current()?.draft.chars.length, 0);
   app.paste('one\ntwo');
   assert.equal(app.bots.current()?.draft.chars.join(''), 'one\ntwo');
-  assert.equal(app.bots.current()?.lines.length, 9, 'nothing was sent');
+  assert.equal(app.bots.current()?.lines.length, 15, 'nothing was sent');
 });
 
 test('a message sent while a turn runs is held, and answered after it', () => {
@@ -262,6 +262,9 @@ test('a bot with a routine shows when it runs next, in its row and on its card',
 test('a routine run is one block in the chat: its header, its steps folded and its answer', () => {
   const app = demo(140);
   press(app, 'prs');
+  const bot = app.bots.current();
+  assert.ok(bot);
+  bot.scroll = 1000;
   const text = screen(app);
   assert.match(text, /↻ Review PRs · \d\d:\d\d/);
   assert.match(text, /\+2 steps/);
@@ -296,4 +299,21 @@ test('the Queue tab lists the bot routine and its answered run, and enter opens 
 test('the empty chat offers the scheduling example', () => {
   assert.equal(EXAMPLES.length, 4);
   assert.match(EXAMPLES[3], /^Every weekday at 9/);
+});
+
+test('the prs chat shows an agent it started and the report after it finished', () => {
+  const app = demo(140);
+  const bot = app.bots.list.find((b) => b.id === 'prs');
+  assert.ok(bot);
+  assert.deepEqual(
+    bot.lines.filter((l) => l.kind === 'started' || l.kind === 'finished').map((l) => l.kind),
+    ['started', 'finished'],
+  );
+  assert.equal(bot.lines.find((l) => l.kind === 'finished')?.agent?.kind, 'claude');
+  press(app, 'prs');
+  const text = screen(app);
+  assert.match(text, /▶ started claude in web-shop › fix\/macos-test +show/);
+  assert.match(text, /✓ claude finished in web-shop › fix\/macos-test +show/);
+  assert.match(text, /Fixed the flaky path/);
+  assert.match(text, /#490 passes `?test \(macos\)`? now/);
 });

@@ -196,6 +196,46 @@ fn bots() -> Vec<Sample> {
     ]
 }
 
+fn agent_lines() -> Vec<Sample> {
+    use crate::bots::chat::Line;
+    let bot = |line: Line| {
+        event(What::Bot { bot: "prs".into(), line: Some(line), state: None, change: None }, Ids::default())
+    };
+    let agent = || crate::bots::chat::AgentRef {
+        kind: "claude".into(),
+        pane: 4,
+        workspace: 2,
+        project: 1,
+        boot: "1794560000-42".into(),
+    };
+    vec![
+        sample!(
+            "control/events/v1/bot-started.json",
+            bot(Line::started(7, 1_794_560_140, "▶ started claude in shop › fix/ci", agent(), None))
+        ),
+        sample!(
+            "control/events/v1/bot-finished.json",
+            bot(Line::finished(
+                8,
+                1_794_560_200,
+                "✓ claude finished in shop › fix/ci",
+                (agent(), String::from("Fixed the flaky test and pushed.")),
+                Some(12)
+            ))
+        ),
+        sample!(
+            "control/events/v1/bot-waiting.json",
+            bot(Line::waiting(
+                9,
+                1_794_560_210,
+                "! claude needs you in shop › fix/ci",
+                (agent(), String::from("Allow this edit?\n1 · yes\n2 · no")),
+                None
+            ))
+        ),
+    ]
+}
+
 fn messages() -> Vec<Sample> {
     let what = |kind: &str, message: &str, panes: Vec<u64>, failed: bool| What::Message {
         kind: kind.into(),
@@ -260,6 +300,7 @@ fn samples() -> Vec<Sample> {
         subagents(),
         messages(),
         bots(),
+        agent_lines(),
     ]
     .into_iter()
     .flatten()

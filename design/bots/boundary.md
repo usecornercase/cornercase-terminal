@@ -49,3 +49,5 @@ Under `cornercase` access, **the server refuses what a bot types into a pane tha
 | `paste-file`'s stored copy, `bot new`, `account add`, `new-workspace --worktree`, `flow save`/`import` names | cornercase names the file itself, in its own folders | nothing named by the caller |
 
 **The queue** (#846): a bot's connection may add, edit, pause, resume, remove and run only its own bot's entries; `clear-started`, and project or other bots' entries, are refused (see [Bot routines](routines.md)).
+
+- **A request's `bot` and `bot_run` never widen what a connection may do** (#847): they only label the panes a request creates. A marked connection tags with its own bot whatever it names, so a `cornercase` bot cannot make a `full` bot take turns on text it controls ([Following](following.md)).

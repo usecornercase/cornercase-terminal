@@ -144,6 +144,8 @@ fn a_surface_request_travels_with_its_tab_and_size_and_logs_them() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: Command::Surface(Surface { tab: Some(12), cols: 120, rows: 40, patches: false, popup: false }),
     };
 

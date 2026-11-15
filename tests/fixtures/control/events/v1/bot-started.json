@@ -1,0 +1,1 @@
+{"time":"2026-10-16T09:30:00.123Z","event":"bot","bot":"prs","line":{"id":7,"at":1794560140,"kind":"started","text":"▶ started claude in shop › fix/ci","agent":{"kind":"claude","pane":4,"workspace":2,"project":1,"boot":"1794560000-42"}}}

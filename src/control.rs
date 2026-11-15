@@ -125,6 +125,10 @@ pub(crate) struct Request {
     pub(crate) boot: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) view: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) bot: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) bot_run: Option<u64>,
     #[serde(flatten)]
     pub(crate) command: Command,
 }

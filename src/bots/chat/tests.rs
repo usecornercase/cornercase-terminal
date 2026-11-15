@@ -63,6 +63,33 @@ fn healing_leaves_a_whole_file_and_a_missing_one_alone() {
     assert_eq!(std::fs::read(chat(&dir)).expect("read"), before);
 }
 
+fn agent() -> AgentRef {
+    AgentRef { kind: String::from("claude"), pane: 4, workspace: 2, project: 1, boot: String::from("1-2") }
+}
+
+#[test]
+fn the_new_kinds_write_their_fields_and_leave_out_the_rest() {
+    let lines = [
+        Line::started(1, 10, "▶ started claude in web", agent(), None),
+        Line::finished(2, 11, "✓ claude finished in web", (agent(), String::from("done")), Some(7)),
+        Line::waiting(3, 12, "! claude needs you in web", (agent(), String::from("ok?")), None),
+    ];
+    let dir = TempDir::new();
+    for line in &lines {
+        append(&chat(&dir), line).expect("append");
+    }
+    assert_eq!(read(&chat(&dir)), lines);
+    let started = serde_json::to_string(&lines[0]).expect("json");
+    assert!(
+        started.contains(r#""kind":"started""#) && !started.contains("body") && !started.contains("run"),
+        "{started}"
+    );
+    let finished = serde_json::to_string(&lines[1]).expect("json");
+    assert!(finished.contains(r#""body":"done""#) && finished.contains(r#""run":7"#), "{finished}");
+    let old = serde_json::to_string(&you(1, false)).expect("json");
+    assert_eq!(old, r#"{"id":1,"at":10,"kind":"you","text":"hi"}"#);
+}
+
 mod replay {
     use super::*;
 
@@ -144,6 +171,29 @@ mod replay {
         assert_eq!(state(&lines), Replayed { next_id: 7, running: true, held: 1, ..Replayed::default() });
         let notices: Vec<String> = restart_notices(&state(&lines), 99).into_iter().map(|line| line.text).collect();
         assert_eq!(notices, ["interrupted by a restart", "1 held message dropped"]);
+    }
+
+    #[test]
+    fn replay_reads_a_finished_line_as_a_turn_that_started() {
+        let report = || Line::finished(2, 1, "✓ claude finished in web", (agent(), String::from("x")), None);
+        assert!(state(&[report()]).running);
+        assert!(!state(&[report(), Line { id: 3, ..answer(3) }]).running);
+        let notices: Vec<String> = restart_notices(&state(&[report()]), 99).into_iter().map(|line| line.text).collect();
+        assert_eq!(notices, ["interrupted by a restart"]);
+        let held = Line { held: true, ..report() };
+        assert_eq!(state(&[you(1, false), held]).held, 1);
+    }
+
+    #[test]
+    fn started_and_waiting_lines_change_no_turn_state() {
+        let lines = [
+            you(1, false),
+            Line::notice(2, 1, STOPPED),
+            Line::started(3, 1, "▶ started claude in web", agent(), None),
+            Line::waiting(4, 1, "! claude needs you in web", (agent(), String::from("?")), None),
+            Line::notice(5, 1, "1 held message dropped"),
+        ];
+        assert_eq!(state(&lines), Replayed { next_id: 6, running: false, held: 0, ..Replayed::default() });
     }
 
     #[test]
@@ -245,4 +295,40 @@ mod runs {
         let titles: Vec<(&str, &str)> = told.iter().map(|one| (one.label.as_str(), one.clock.as_str())).collect();
         assert_eq!(titles, [("Review PRs", "09:00"), ("a routine", "")]);
     }
+}
+
+mod follow_ups {
+    use super::*;
+
+    fn head(run: u64) -> Line {
+        Line::notice(1, 1, &run_head("Review PRs", "09:00")).of_run(run)
+    }
+
+    #[test]
+    fn unseen_takes_a_run_follow_up_answer_and_stops_at_a_chat_report() {
+        let follow_up = Line {
+            run: Some(9),
+            ..Line::answer(
+                5,
+                1,
+                "The PR is merged.",
+                Answer { model: None, tokens: Used::default(), conversation: None },
+            )
+        };
+        let lines = [head(9), follow_up.clone()];
+        let told = unseen(&lines);
+        assert_eq!((told.len(), told[0].label.as_str(), told[0].text.as_str()), (1, "Review PRs", "The PR is merged."));
+        let report = Line::finished(6, 1, "✓ claude finished in web", (agent(), String::from("x")), None);
+        assert!(unseen(&[head(9), follow_up, report]).is_empty());
+    }
+}
+
+#[test]
+fn only_an_error_after_a_message_of_the_user_has_a_you_prompt() {
+    let report = Line::finished(2, 1, "✓ claude finished in web", (agent(), String::from("x")), None);
+    let error = |id| Line::failed(id, 1, "no");
+    let kind = |lines: &[Line], id| prompt_of(lines, id).map(|line| line.kind);
+    assert_eq!(kind(&[you(1, false), error(2)], 2), Some(Kind::You));
+    assert_eq!(kind(&[you(1, false), report.clone(), error(3)], 3), Some(Kind::Finished));
+    assert_eq!(kind(&[error(1)], 1), None);
 }

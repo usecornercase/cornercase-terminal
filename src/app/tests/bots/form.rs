@@ -2,6 +2,8 @@ use super::*;
 use crate::bots::form::Field;
 use crate::editor::Editor;
 
+use crate::ui::bot_form as dialog;
+
 fn bot_form(app: &App) -> &crate::bots::form::Form {
     match &app.overlay {
         Some(Overlay::BotForm(form)) => form,
@@ -133,10 +135,22 @@ fn the_agent_is_not_focusable_when_editing() {
 fn a_paste_into_what_it_is_for_keeps_its_line_breaks() {
     let mut c = chat(ANSWER);
     plus(&mut c);
-    for _ in 0..5 {
+    for _ in 0..6 {
         send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
     }
     assert_eq!(bot_form(&c.app).focus, Field::About);
     c.app.handle_event(AppEvent::Input(Event::Paste("a\nb".into())), AREA).expect("paste");
     assert_eq!(bot_form(&c.app).about.text(), "a\nb");
+}
+
+#[test]
+fn a_click_on_follow_toggles_it() {
+    let mut c = chat(ANSWER);
+    plus(&mut c);
+    render(&mut c.app, AREA);
+    let at = dialog::rect(AREA, bot_form(&c.app), Field::Follow);
+    click(&mut c.app, Position::new(at.x + 2, at.y));
+    assert!(!bot_form(&c.app).follow);
+    click(&mut c.app, Position::new(at.x + 2, at.y));
+    assert!(bot_form(&c.app).follow);
 }

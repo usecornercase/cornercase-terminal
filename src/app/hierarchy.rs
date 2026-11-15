@@ -11,6 +11,9 @@ use crate::project::{
     Group, Hierarchy, Phase, Project, Tab, TabAt, Workspace, WorkspaceAt, group, move_before, shift_active,
 };
 use crate::term::Term;
+use crate::text::{CRUMB_SEPARATOR, truncate_right};
+
+const PLACE: usize = 120;
 
 pub(super) type RunningPanes<'a> = HashMap<u64, Running<'a>>;
 
@@ -92,6 +95,16 @@ impl App {
 
     pub(super) fn project_label(&self, project: &Project) -> String {
         project.label(self.home.as_deref())
+    }
+
+    pub(in crate::app) fn pane_place(&self, pane: u64) -> Option<String> {
+        let at = self.projects.tab_of_pane(pane)?;
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at.workspace()));
+        let mut place = self.project_label(project);
+        if project.workspaces.len() > 1 {
+            place = format!("{place}{CRUMB_SEPARATOR}{}", workspace.label());
+        }
+        Some(truncate_right(&place, PLACE))
     }
 
     pub(super) fn place_name(&self, at: WorkspaceAt) -> String {

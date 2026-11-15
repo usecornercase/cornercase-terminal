@@ -7,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
 
+use super::agent::{ChatAgentLine, chat_agent_rows};
 use super::run::{RunBlock, run_rows};
 use crate::agents::activity::Status;
 use crate::editor::{Editor, wrap_text};
@@ -53,6 +54,7 @@ pub(crate) enum RowHit {
     Unfold(u64),
     Retry(u64),
     RunAgain(u64),
+    Show(u64),
     Example(usize),
     Link,
 }
@@ -85,6 +87,7 @@ pub(crate) enum ChatEntry {
     Error { id: u64, text: String, retry: bool },
     Notice(String),
     Run(RunBlock),
+    Agent(ChatAgentLine),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -282,9 +285,14 @@ pub(super) fn error_rows(text: &str, again: Option<(RowHit, &'static str)>, widt
 }
 
 pub(super) fn notice_rows(text: &str, width: usize, tone: Tone) -> Vec<ChatRow> {
-    let text = truncate_right(&format!("── {text} ──"), width);
-    let lead = pad(width, text.width()).len() / 2;
-    vec![ChatRow::plain(Line::from(vec![Span::raw(" ".repeat(lead)), Span::styled(text, dim(tone))]))]
+    wrap_text(text, width.saturating_sub(6).max(1))
+        .into_iter()
+        .map(|row| {
+            let row = truncate_right(&format!("── {} ──", row.trim_end()), width);
+            let lead = pad(width, row.width()).len() / 2;
+            ChatRow::plain(Line::from(vec![Span::raw(" ".repeat(lead)), Span::styled(row, dim(tone))]))
+        })
+        .collect()
 }
 
 pub(crate) fn entry_rows(entry: &ChatEntry, width: u16, tone: Tone) -> Vec<ChatRow> {
@@ -296,6 +304,7 @@ pub(crate) fn entry_rows(entry: &ChatEntry, width: u16, tone: Tone) -> Vec<ChatR
         ChatEntry::Error { id, text, retry } => error_rows(text, retry.then_some((RowHit::Retry(*id), "retry")), width),
         ChatEntry::Notice(text) => notice_rows(text, width, tone),
         ChatEntry::Run(block) => run_rows(block, width, tone),
+        ChatEntry::Agent(line) => chat_agent_rows(line, width, tone),
     }
 }
 

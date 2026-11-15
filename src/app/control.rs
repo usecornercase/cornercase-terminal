@@ -190,7 +190,7 @@ struct Pending {
 }
 
 enum Stage {
-    Worktree(Then),
+    Worktree(Box<Then>),
     Run(u64, Box<Starting>),
     Removing { force: bool, unlock: bool },
     RemovingFolders(Box<worktrees::remove::Removing>),
@@ -269,15 +269,22 @@ impl Stage {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) struct Starter {
+    pub(in crate::app) bot: u64,
+    pub(in crate::app) run: Option<u64>,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub(in crate::app) struct Asker {
     pub(in crate::app) caller: Option<u64>,
     pub(in crate::app) view: Option<u64>,
+    pub(in crate::app) bot: Option<Starter>,
 }
 
 impl From<Option<u64>> for Asker {
     fn from(caller: Option<u64>) -> Self {
-        Self { caller, view: None }
+        Self { caller, view: None, bot: None }
     }
 }
 

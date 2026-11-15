@@ -99,6 +99,11 @@ impl Tab {
             .max()
     }
 
+    pub(crate) fn bot(&self) -> Option<&str> {
+        let tagged = |term: &&Term| term.bot.is_some();
+        self.pane().filter(tagged).or_else(|| self.panes.iter().find(tagged)).and_then(|term| term.bot.as_deref())
+    }
+
     fn shown_pane(&self) -> Option<&Term> {
         let known = |t: &&Term| t.context.context().is_some() || t.context.compaction().hides;
         self.pane().filter(known).or_else(|| self.panes.iter().find(known))

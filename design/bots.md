@@ -1,10 +1,10 @@
 # Bots
 
-Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`), `agents/headless.rs`, `agents/{claude,codex,gemini,opencode,cursor,copilot}/headless.rs`, `agents/probe.rs`, `bots/form.rs`, `app/bots.rs`, `app/bots/` (`turns.rs`, `manage.rs`, `shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/`, `ui/dialog/bot.rs`, `app/control/bots.rs`, `control/bots.rs`, `cli/bot.rs`, `cli/bot/`, `cli/args/bot.rs`, `cli/help/bot.rs`, `cli/guard.rs`, `paths.rs` (#844, #845), `app/control/boundary.rs`, `os/socket.rs`, `os/process.rs` (`Lineage`), `processes/stop.rs`, `app/launches.rs` (#856), `process/program.rs` (`command_without_cmd`, #849), `client/server_process.rs`, `cli/requests.rs`, `cli/help.rs` (`TO_FILE`) (#867, #880)
+Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`), `agents/headless.rs`, `agents/{claude,codex,gemini,opencode,cursor,copilot}/headless.rs`, `agents/probe.rs`, `bots/form.rs`, `app/bots.rs`, `bots/follow.rs`, `app/bots/` (`follow.rs`, `reports.rs`, `turns.rs`, `manage.rs`, `shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/`, `ui/dialog/bot.rs`, `app/control/bots.rs`, `control/bots.rs`, `cli/bot.rs`, `cli/bot/`, `cli/args/bot.rs`, `cli/help/bot.rs`, `cli/guard.rs`, `paths.rs` (#844, #845), `app/control/boundary.rs`, `os/socket.rs`, `os/process.rs` (`Lineage`), `processes/stop.rs`, `app/launches.rs` (#856), `process/program.rs` (`command_without_cmd`, #849), `client/server_process.rs`, `cli/requests.rs`, `cli/help.rs` (`TO_FILE`) (#867, #880)
 
 A **bot** is an agent of your own: a name, a folder, a memory and a chat. It belongs to no project, but it can see all of them and act on them through the `cornercase` command line. It exists for work that belongs to no project, or to all of them ("review my open pull requests every morning", "tell me which issues labelled `bug` came in today, in every project"), which today meant opening a folder as a fake project, or keeping an agent alive in a pane whose context grows for ever.
 
-This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. The window draws them since #845 (see [The window](#the-window-845)), routines are in [Bot routines](bots/routines.md) (#846), there is no following of the agents a bot starts (#847), no chat apps (#848), and Claude Code, Codex, Gemini CLI, opencode, Cursor CLI and GitHub Copilot CLI can be bots since #849 ([The agents](bots/agents.md)); Grok Build and Vibe CLI cannot yet.
+This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. The window draws them since #845 (see [The window](#the-window-845)), routines are in [Bot routines](bots/routines.md) (#846), following the agents a bot starts is in [Following](bots/following.md) (#847), there are no chat apps (#848), and Claude Code, Codex, Gemini CLI, opencode, Cursor CLI and GitHub Copilot CLI can be bots since #849 ([The agents](bots/agents.md)); Grok Build and Vibe CLI cannot yet.
 
 **Making one starts nothing and spends no tokens.** A bot runs only when someone writes to it, and only while the server runs: a turn's process does not survive the server.
 
@@ -23,7 +23,7 @@ At most 50 bots (`MAX_BOTS`). A folder whose `bot.json` does not parse, or whose
 
 ## The chat
 
-`chat.jsonl` is cornercase's chat, not the agent's transcript. That way a routine's report (#846) and a notice about an agent the bot started (#847) can land in the same chat, and the chat survives `reset` and a change of model. One JSON object per line, never rewritten while the server appends to it (the same rule as the journal's day files, see Recap).
+`chat.jsonl` is cornercase's chat, not the agent's transcript. That way a routine's report (#846) and a line about an agent the bot started (#847) land in the same chat, and the chat survives `reset` and a change of model. One JSON object per line, never rewritten while the server appends to it (the same rule as the journal's day files, see Recap).
 
 | `kind` | what it holds |
 |---|---|
@@ -31,9 +31,10 @@ At most 50 bots (`MAX_BOTS`). A folder whose `bot.json` does not parse, or whose
 | `bot` | the agent's final answer of a turn, in Markdown, with `model`, `tokens` and `conversation` |
 | `step` | one tool the agent used, as one line (`cornercase status --json`, `Read src/main.rs`), with its `tool` |
 | `error` | why a turn failed, in the agent's own words when it gave any |
+| `started`, `finished`, `waiting` | an agent the bot started (#847, see [Following](bots/following.md)): `▶ started …`, `✓ claude finished in …` or `✗ … failed in …` with its last message as `body`, and `! … needs you in …` with the screen excerpt; each carries `agent` (kind, pane, workspace, project and the server's `boot`), and `run` when a routine run's conversation owns it |
 | `notice` | cornercase's own lines: `new conversation`, `stopped`, `interrupted by a restart`, `1 held message dropped` / `N held messages dropped`, and a routine run's header `↻ <label> · <time>` |
 
-Every line has `id` (a number that increases per bot) and `at` (UTC seconds); a line of a routine's run has `routine` too, the run's queue id (see [Bot routines](bots/routines.md)). Absent optional fields are not written. The notice texts are fixed and part of the contract.
+Every line has `id` (a number that increases per bot) and `at` (UTC seconds); a line of a routine's run has `routine` too, the run's queue id (see [Bot routines](bots/routines.md)); `agent`, `body` and `run` are only on the three new kinds and on the answer to a report turn that continued a run's session. Absent optional fields are not written. The notice texts are fixed and part of the contract.
 
 - **A torn last line** (the server stopped mid-write) is skipped by readers, and healed at load: if the file does not end with a newline, one is appended before the next line, so the next line parses.
 - **Replay is the source of truth at load** (`chat::replay`): a `you` that is not held starts a turn that runs; held ones are counted; a `bot` or `error` ends the turn, and held messages start the next one at once; `stopped` and `interrupted by a restart` leave it idle with nothing held. No extra field is kept for the turn. A turn still running in the replay gets `interrupted by a restart`, and held messages get the dropped notice, once (a second load finds the notice and appends nothing).
@@ -60,7 +61,7 @@ A turn is one run of the agent without its interface, through the shared runner 
 
 ## The brief
 
-What cornercase tells the bot about itself. The server writes it from Rust constants (`bots/brief.rs`, one per section) and sends it in the opening message of every conversation. It is never written to the bot's folder, so a new release updates every bot at its next conversation. It says who the bot is and that it answers briefly, in the user's language, in Markdown; where its folder is and what `bot.md` and `memory.md` are for; how to see the user's work (`cornercase status --json`, `search`, `recap`, `worktrees list`, `read --pane ID`, read-only `git` and `gh`); how to act (`cornercase start --project ID …`, `send --pane ID`, `notify`, and that it must always name the project, since it runs in no pane); and what its access allows. A test runs `--help` for every command the brief names, so it cannot name a command that does not exist.
+What cornercase tells the bot about itself. The server writes it from Rust constants (`bots/brief.rs`, one per section) and sends it in the opening message of every conversation. It is never written to the bot's folder, so a new release updates every bot at its next conversation. It says who the bot is and that it answers briefly, in the user's language, in Markdown; where its folder is and what `bot.md` and `memory.md` are for; how to see the user's work (`cornercase status --json`, `search`, `recap`, `worktrees list`, `read --pane ID`, read-only `git` and `gh`); how to act (`cornercase start --project ID …`, `send --pane ID`, `notify`, and that it must always name the project, since it runs in no pane); and what its access allows, and last whether it is told when an agent it started finishes (`FOLLOW`, or `NOT_FOLLOWING` when the bot's `follow` option is off, see [Following](bots/following.md)). A test runs `--help` for every command the brief names, so it cannot name a command that does not exist.
 
 Rejected:
 
@@ -123,7 +124,7 @@ A bot runs in no pane, so a command that would default to "the one this runs in,
 
 The command line's guard only prevents mistakes: what a bot's commands may type into, and what it may change about bots and settings, is enforced by the server (The boundary, below).
 
-Without `CORNERCASE_BOT` (unset or empty) the command line's guard changes nothing; the server's boundary does not depend on it. #846 uses the variable as the default for `queue add --bot`, and #847 to tag what a bot starts.
+Without `CORNERCASE_BOT` (unset or empty) the command line's guard changes nothing; the server's boundary does not depend on it. #846 uses the variable as the default for `queue add --bot`, and #847 (with `CORNERCASE_BOT_RUN`) to tag what a bot starts, in the request's envelope: it only labels, and a marked connection's own bot wins ([Following](bots/following.md)).
 
 ## The boundary (#856, #867, #880)
 
@@ -167,7 +168,7 @@ The stops and writes (#867, #880): the table of stops names the commands the age
 
 ## What later issues add
 
-#847 following the agents a bot starts; #848 chat apps; #849 done for four of the six other agents, the follow-up issue #879 has Grok Build, Vibe CLI, `cornercase` access for opencode and Cursor CLI, and Recap on more agents. The rest of the boundary (the open list in The boundary, #866) is a follow-up issue.
+#848 chat apps; #849 done for four of the six other agents, the follow-up issue #879 has Grok Build, Vibe CLI, `cornercase` access for opencode and Cursor CLI, and Recap on more agents. The rest of the boundary (the open list in The boundary, #866) is a follow-up issue.
 
 
 ## The window (#845)
@@ -178,5 +179,6 @@ The Bots section, the chat and the form are in [bots/window.md](bots/window.md):
 
 - [The window](bots/window.md)
 - [Routines](bots/routines.md)
+- [Following](bots/following.md)
 - [The agents](bots/agents.md)
 - [The boundary](bots/boundary.md)

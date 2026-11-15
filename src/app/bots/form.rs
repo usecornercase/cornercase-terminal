@@ -170,7 +170,9 @@ fn press_field(form: &mut Form, area: Rect, (field, row, col): (Field, usize, us
     let opening = form.combo_of(field).is_some_and(|combo| !combo.is_open());
     let grey = field == Field::Agent && form.editing.is_some();
     form.focus_on(field);
-    if let Some(editor) = form.editor(field) {
+    if field == Field::Follow {
+        form.follow = !form.follow;
+    } else if let Some(editor) = form.editor(field) {
         let line = ui::first_line(editor, r) + row;
         editor.place(usize::from(r.width.max(1)), line, col);
     } else if opening && !grey {

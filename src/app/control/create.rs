@@ -4,12 +4,13 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use super::wait::Condition;
-use super::{Asked, Asker, Handled, NO_PROJECT, Pending, Stage, Waits, deadline, json, name_of, none, sized};
+use super::{Asked, Asker, Handled, NO_PROJECT, Pending, Stage, Starter, Waits, deadline, json, name_of, none, sized};
 use crate::accounts::Accounts;
 use crate::agents;
 use crate::agents::launch::{self, Launch};
 use crate::agents::parent::Parent;
 use crate::app::App;
+use crate::app::bots::Started;
 use crate::app::worktrees::NewBranch;
 use crate::config;
 use crate::control::contract::Refusal;
@@ -40,6 +41,15 @@ struct Worktree<'a> {
     fresh: Option<bool>,
 }
 
+struct Making {
+    start: (launch::Spec, Option<String>),
+    wait: Option<Condition>,
+    named: Option<String>,
+    accounts: Accounts,
+    started: Started,
+    timeout: Option<(Instant, f64)>,
+}
+
 pub(super) struct Then {
     start: Option<(launch::Spec, Option<String>)>,
     wait: Option<Condition>,
@@ -49,6 +59,8 @@ pub(super) struct Then {
     named: Option<String>,
     accounts: Accounts,
     placed: bool,
+    bot: Option<Starter>,
+    started: Started,
 }
 
 const PLACED_UNWAITED: &str = "`placed` answers once the tab is open, so it takes no `wait` or `timeout`";
@@ -120,8 +132,18 @@ impl App {
             }
             let accounts = self.active_accounts();
             let (focus, view) = (new.focus, asker.view);
-            let then =
-                Then { start: None, wait: None, focus, view, parent: None, named: None, accounts, placed: false };
+            let then = Then {
+                start: None,
+                wait: None,
+                focus,
+                view,
+                parent: None,
+                named: None,
+                accounts,
+                placed: false,
+                bot: None,
+                started: Started { agent: None, arm: false },
+            };
             self.create_worktree(client, Worktree { project: p, branch: &name, fresh: new.fresh }, then, None)?;
             return Ok(None);
         }
@@ -145,6 +167,8 @@ impl App {
         let ids = self.ids_of_tab(tab);
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
+        let agent = new.command.as_deref().and_then(|command| self.command_agent(command));
+        self.tag_started(pane, asker.bot, Started { agent, arm: true });
         let projection = self.show_if(asker.view, new.focus, Item::Pane(pane))?;
         let launch = new.command.map(|command| Launch::command(pane, command, now));
         let waits =
@@ -166,6 +190,8 @@ impl App {
             self.split_pane(pane, dir, area, false).map_err(|e| e.to_string())?.ok_or_else(|| none("pane", pane))?;
         let ids = Ids { pane: Some(new), ..self.ids_of_tab(at) };
         self.adopt(new, asker.caller);
+        let agent = split.command.as_deref().and_then(|command| self.command_agent(command));
+        self.tag_started(new, asker.bot, Started { agent, arm: true });
         let projection = self.show_if(asker.view, split.focus, Item::Pane(new))?;
         let launch = split.command.map(|command| Launch::command(new, command, now));
         let waits =
@@ -206,27 +232,21 @@ impl App {
         let Within { timeout, named, accounts } = within;
         let area = sized(area)?;
         let wait = start.wait.then(|| Condition::of(start.until.clone())).transpose()?;
-        let spec = self.start_spec(client, asker, start)?;
+        let (spec, kind) = self.start_spec(client, asker, start)?;
+        let started = Started { agent: kind, arm: !start.wait };
         let name = name_of(start.name.clone());
         let at = match self.start_place(asker, start, named.as_deref())? {
             Place::Open(at) => at,
             Place::Create(p, branch) => {
-                let (focus, view, parent, placed) =
-                    (start.focus, asker.view, self.caller_link(asker.caller), start.placed);
-                let then = Then { start: Some((spec, name)), wait, focus, view, parent, named, accounts, placed };
-                self.create_worktree(
-                    client,
-                    Worktree { project: p, branch: &branch, fresh: start.fresh },
-                    then,
-                    timeout,
-                )?;
-                return Ok(None);
+                let making = Making { start: (spec, name), wait, named, accounts, started, timeout };
+                return self.start_in_new_worktree(asked, start, (p, &branch), making);
             }
         };
         let tab = self.push_tab_in(at, area, name, accounts).map_err(|e| e.to_string())?;
         let ids = self.ids_of_tab(tab);
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
+        self.tag_started(pane, asker.bot, started);
         let projection = self.show_if(asker.view, start.focus, Item::Pane(pane))?;
         let launch = Launch::new(pane, spec, now);
         let done = Done { ids, projection, ..Done::default() };
@@ -238,15 +258,42 @@ impl App {
         Ok(self.launch_within(client, Some(launch), waits))
     }
 
-    fn start_spec(&self, client: u64, asker: Asker, start: &control::Start) -> Result<launch::Spec, Refusal> {
+    fn start_in_new_worktree(
+        &mut self,
+        asked: Asked,
+        start: &control::Start,
+        (project, branch): (usize, &str),
+        making: Making,
+    ) -> Handled {
+        let Asked { client, asker, .. } = asked;
+        let Making { start: begin, wait, named, accounts, started, timeout } = making;
+        let (focus, view, parent, placed) = (start.focus, asker.view, self.caller_link(asker.caller), start.placed);
+        let (bot, start_with) = (asker.bot, Some(begin));
+        let then = Then { start: start_with, wait, focus, view, parent, named, accounts, placed, bot, started };
+        let at = Worktree { project, branch, fresh: start.fresh };
+        self.create_worktree(client, at, then, timeout)?;
+        Ok(None)
+    }
+
+    fn command_agent(&self, command: &str) -> Option<String> {
+        let words: Vec<String> = command.split_whitespace().map(str::to_string).collect();
+        agents::detect(&self.config, &words)
+    }
+
+    fn start_spec(
+        &self,
+        client: u64,
+        asker: Asker,
+        start: &control::Start,
+    ) -> Result<(launch::Spec, Option<String>), Refusal> {
         if let Some(spec) = self.queued_spec(client) {
-            return Ok(spec);
+            return Ok((spec, None));
         }
         let kind = self.agent_kind(asker, start.agent.clone())?;
         let prompt = start.prompt.clone().filter(|p| !p.trim().is_empty());
         let (mode, model, effort) = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
         let command = agents::start_line(&self.config, &kind, mode, model, effort)?;
-        Ok(launch::Spec { command, prompt, submit: true, trusted: false })
+        Ok((launch::Spec { command, prompt, submit: true, trusted: false }, Some(kind)))
     }
 
     fn start_place(&mut self, asker: Asker, start: &control::Start, named: Option<&str>) -> Result<Place, Refusal> {
@@ -335,7 +382,7 @@ impl App {
         let key = self.clients.requests.key();
         let fresh = self.fresh_within(fresh, false);
         self.spawn_worktree(p, NewBranch { name: branch.to_string(), fresh }, None, Some(key));
-        let waits = Waits { done: Done::default(), stage: Stage::Worktree(then), timeout };
+        let waits = Waits { done: Done::default(), stage: Stage::Worktree(Box::new(then)), timeout };
         self.clients.requests.push(client, key, waits);
         Ok(())
     }
@@ -351,7 +398,10 @@ impl App {
             self.clients.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
         let Some(i) = found else { return };
         let mut pending = self.clients.requests.pending.remove(i);
-        let Stage::Worktree(then) = std::mem::replace(&mut pending.stage, Stage::launch(None)) else { return };
+        let Stage::Worktree(then) = std::mem::replace(&mut pending.stage, Stage::launch(None)) else {
+            return;
+        };
+        let then = *then;
         let opened =
             self.worktree_place(project, result).and_then(|place| self.open_worktree(place, then, area, &mut pending));
         match opened {
@@ -393,6 +443,7 @@ impl App {
         let pane = pending.done.ids.pane.unwrap_or_default();
         if launch.is_some() {
             self.link(pane, then.parent);
+            self.tag_started(pane, then.bot, then.started.clone());
         }
         if then.focus {
             pending.done.projection = self.focus_in_view(then.view, pane)?;

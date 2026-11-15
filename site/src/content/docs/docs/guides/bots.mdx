@@ -33,7 +33,7 @@ Once you have a bot, a **Bots** section sits at the bottom of the sidebar, above
 
 ### The chat
 
-A click on a bot shows its chat **in place of the panes**, and its **card** where the workspaces were: the agent, model, effort, account and access, the folder (a click opens it, or copies its path), the day it was made and, two rows each, its [routines](#routines): the name, then `next Mon 09:00 · ↻ weekday 09:00` (or `paused`). A click on a project, a workspace or a tab goes back to the panes. Showing a bot marks its answers as read, as `cornercase bot seen` does.
+A click on a bot shows its chat **in place of the panes**, and its **card** where the workspaces were: the agent, model, effort, account and access, the folder (a click opens it, or copies its path), the day it was made, the agents it started that are still running (**`started`**, each with its status icon, and a click shows that tab) and, two rows each, its [routines](#routines): the name, then `next Mon 09:00 · ↻ weekday 09:00` (or `paused`). A click on a project, a workspace or a tab goes back to the panes. Showing a bot marks its answers as read, as `cornercase bot seen` does.
 
 From top to bottom:
 
@@ -43,6 +43,7 @@ From top to bottom:
   - What the bot answers is at the left, under its name and the time, as Markdown: headings, bold, lists, `code`, highlighted code blocks and links.
   - Each tool the bot uses is a dim line, `▸ cornercase status --json`. A run of more than three folds to its last three, under **`+N steps`**, which a click unfolds.
   - A [routine's run](#routines) is one block, wherever its lines came: a bold dim header `↻ Review PRs · 09:00`, its steps folded into one **`+N steps`** row, then its answer. A run that failed shows its error with **` run again `**.
+  - An [agent the bot started](#agents-it-starts) is a line of its own: `▶ started claude in web-shop › fix/ci-482`, then `✓ claude finished in …` with the agent's last message under it, or `! claude needs you in …` with its screen. A click on **` show `** shows that agent's tab.
   - An error is red, with **` retry `**, which sends your last message again, when it is the last line and no turn runs. A notice is centred and dim.
   - While a turn runs, the last line reads `⠋ thinking · 42s · 3 steps` with a **` stop `** button, which ends the turn and everything the bot started in it (`stopping…` until it has).
 - **The field** at the bottom is one row that grows to six and then scrolls, with the placeholder `Message prs…` and **` send `** at its right. **`Enter` sends**; a line break comes from a paste, which keeps its breaks. Text sent while the bot answers is held and goes as the next turn. **`Esc` clears** the field; with it empty, `Esc` does nothing. The field takes the same word moves and selection as every [text field](../../reference/keyboard-and-mouse/#text-fields), and **keys go to it, never to a pane**, while a chat shows.
@@ -62,6 +63,7 @@ An answer, or an error, that arrives while you are looking at something else mak
 - **Agent**: Claude Code, Codex, Gemini CLI, opencode, Cursor CLI or GitHub Copilot CLI. An agent that cannot be a bot is greyed, with why: `not yet`, `not installed`, or, for an access, why it has no `through cornercase` (`its sandbox cannot reach cornercase`, `a command can write outside its folder`). The form is built from what [`cornercase bot agents`](#make-a-bot) answers.
 - **Model**: the models the agent suggests, and `default`, the agent's own. Type to filter; `Enter` on a name that matches none uses it as written. **Effort** and **Account** rows show only when the agent takes efforts or you have [accounts](../accounts/) for it.
 - **Access**: `through cornercase` or `full access`, with a two-line note under it. The first line says what `through cornercase` is, and the second, in red, what `full access` lets the bot do, see [Access](#access). Codex, opencode and Cursor CLI offer `full access` only (and Gemini CLI and GitHub Copilot CLI on Windows), so nothing is chosen for you there and **create** asks you to choose.
+- **Follow**: a box, checked, that says whether the bot is told when an agent it starts [finishes](#agents-it-starts). `Space` or a click toggles it.
 - **For**: what the bot is for. It is optional, may be several lines (`Enter` breaks the line here) and becomes `bot.md`.
 
 **create** shows the new bot's chat at once, with its empty state. **edit…** in the bot's menu is the same form with **save**, with the agent grey, since another agent could not continue the conversation. **rename** asks for a new name and keeps the bot's id and folder.
@@ -80,9 +82,10 @@ cornercase bot new nightly --agent claude --model sonnet --effort low
 - **`--model`, `--effort`**: as [`start --model`](../scripts-and-agents/#start-an-agent) and `--effort` take them.
 - **`--account`**: one of the agent's [accounts](../accounts/); without it, the agent's own login.
 - **`--access`**: what the bot may do, see [Access](#access).
+- **`--follow on|off`**: whether the bot is told when an agent it starts finishes (on by default), see [Agents it starts](#agents-it-starts).
 - **`--about`**: what the bot is for. It goes into `bot.md` and may be empty.
 
-`cornercase bot edit prs --model opus` changes the name, model, effort, account or access from the bot's next message on; an empty value goes back to the agent's own. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot, its folder and its [routines](#routines) (it prints how many, and the number `cornercase queue restore` takes to put them back), and is refused while it answers, or while one of its routines does.
+`cornercase bot edit prs --model opus` changes the name, model, effort, account, access or `--follow` from the bot's next message on; an empty value goes back to the agent's own. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot, its folder and its [routines](#routines) (it prints how many, and the number `cornercase queue restore` takes to put them back), and is refused while it answers, or while one of its routines does.
 
 ## Talk to a bot
 
@@ -118,6 +121,19 @@ A bot can schedule its own work. Tell it **"review my pull requests every weekda
 - **A bot manages only its own entries.** Its commands may add, edit, pause, resume, remove and run the routines of that bot, and are refused for a project's entries and another bot's.
 - **Routines run only while the server runs**, as every routine does: a time that passes while it is stopped is a missed run (see [Known limitations](../../help/limitations/)).
 - **Removing a bot removes its routines**, with its folder.
+
+## Agents it starts
+
+When a bot starts an agent (`cornercase start`, a tab or split that runs one, or a [flow](../flows/)), cornercase remembers which bot did, tells the chat, and follows the agent.
+
+- **The tab says who started it**: `by prs` in the second line of its tab row, the tab bar and its row in the [agents section](../projects-workspaces-tabs/#the-agents-section). The chat gets `▶ started claude in web-shop › fix/ci-482` with **` show `**, which shows that tab; it reads `closed` when the agent is gone, or after a server restart.
+- **When the agent's turn ends**, the chat gets `✓ claude finished in …` (or `✗ claude failed in …`) with the agent's last message, cut to 2 KB, under it (six rows, then **`+N lines`**, which a click unfolds), and then the bot gets a turn: it says what matters, checks the pull request or starts the next step, as you asked. The turn continues the conversation that started the agent: the chat's, or, for an agent a [routine's run](#routines) started, the run's. Reports that come within 30 seconds of each other go into one turn, so the lines appear 30 seconds or more after the agent finished.
+- **When the agent asks you something**, the chat gets `! claude needs you in …` with its screen, and the bot gets no turn: answer it in the agent's tab, as always. It counts as unread, with no toast.
+- **Only the first finish after each prompt from the bot is reported.** What you type into that agent yourself changes nothing, so talking to it stays quiet; when the bot writes to it again with `cornercase send --enter`, the next finish is reported.
+- **A bot follows at most 20 agents**; a 21st drops the oldest, with a notice in the chat. The tab keeps its `by prs`.
+- **`--follow off`**, or the form's **Follow** box, turns it off: the bot is told nothing, the chat gets no lines and no turns start, and the tabs still say `by prs`. The bot's brief says which of the two it is.
+- **After a restart** the tabs keep their `by prs`, the old ` show ` links read `closed`, and the bot follows the agents again from its next `send --enter` into them.
+- **Not across machines**: an agent started with `--machine` or `--remote` is not tagged or followed.
 
 ## What a bot can see and do
 
@@ -158,7 +174,7 @@ Each bot has a folder in `bots/` next to `session.json` (`bots/<id>/`, private t
 | `bot.json` | The bot's settings and the id of its conversation. cornercase rewrites it; it does not read it again while it runs. |
 | `bot.md` | What the bot is for. You and the bot both write it: it updates it when you give it a job or change one. |
 | `memory.md` | What it keeps from one conversation to the next. It adds to it, keeps it short and prunes it. |
-| `chat.jsonl` | The chat as cornercase shows it, one JSON line per message, step, answer, error or notice. It survives `reset` and a change of model. |
+| `chat.jsonl` | The chat as cornercase shows it, one JSON line per message, step, answer, error, notice or [agent line](#agents-it-starts). It survives `reset` and a change of model. |
 
 The chat is cornercase's own, not the agent's transcript, so what other features write to a bot later lands in the same place. cornercase tells each bot about itself in the first message of a conversation and never writes it to the folder, so a new release updates every bot at its next conversation.
 
