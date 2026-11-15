@@ -141,7 +141,10 @@ fn draw_row(f: &mut Frame, view: &View, routines: &BotRoutines, (row, selected):
         0
     };
     second.extend(last_run(row, view, bg, width.saturating_sub(LEAD + taken)));
-    let lines = vec![first, Line::from(second)];
+    let mut lines = vec![first, Line::from(second)];
+    if routines.compact {
+        lines.push(Line::from(rail(selected, bg)));
+    }
     f.render_widget(Paragraph::new(lines).style(bg), rect);
     if shown {
         for (button, r) in button_rects(row, rect) {

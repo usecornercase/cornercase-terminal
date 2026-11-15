@@ -159,3 +159,16 @@ fn fit_brings_the_selection_into_view() {
     early.fit(&ids, 10);
     assert_eq!(early.scroll, 0);
 }
+
+#[test]
+fn a_wheel_scroll_stops_the_view_from_following_the_selection_until_a_move() {
+    let ids: Vec<u64> = (0..14).collect();
+    let mut dialog = Dialog::new(1, None);
+    dialog.scroll_by(3, 14, 10);
+    dialog.fit(&ids, 10);
+    assert_eq!(dialog.scroll, 3);
+    dialog.key(press(KeyCode::Down), &ids, 10);
+    dialog.fit(&ids, 10);
+    assert_eq!(dialog.scroll, 1);
+    assert_eq!(dialog.selected, Some(1));
+}

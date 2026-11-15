@@ -62,11 +62,12 @@ pub(crate) struct Dialog {
     pub(crate) bot: u64,
     pub(crate) selected: Option<u64>,
     pub(crate) scroll: usize,
+    follow: bool,
 }
 
 impl Dialog {
     pub(crate) fn new(bot: u64, selected: Option<u64>) -> Self {
-        Self { bot, selected, scroll: 0 }
+        Self { bot, selected, scroll: 0, follow: true }
     }
 
     pub(crate) fn index(&self, ids: &[u64]) -> Option<usize> {
@@ -90,18 +91,19 @@ impl Dialog {
     }
 
     pub(crate) fn fit(&mut self, ids: &[u64], rows: usize) {
-        let Some(at) = self.index(ids) else { return };
-        if at < self.scroll {
-            self.scroll = at;
-        } else if rows > 0 && at >= self.scroll + rows {
-            self.scroll = at + 1 - rows;
+        if !self.follow {
+            return;
         }
+        let mut cursor = Cursor { selected: self.index(ids), scroll: self.scroll };
+        cursor.move_by(0, ids.len(), rows);
+        self.scroll = cursor.scroll;
     }
 
     fn move_by(&mut self, delta: isize, ids: &[u64], rows: usize) -> Asked {
         let mut cursor = Cursor { selected: self.index(ids), scroll: self.scroll };
         cursor.move_by(delta, ids.len(), rows);
         self.scroll = cursor.scroll;
+        self.follow = true;
         self.selected = cursor.selected.and_then(|at| ids.get(at).copied());
         Asked::None
     }
@@ -118,6 +120,7 @@ impl Dialog {
     fn choose(&mut self, at: usize, ids: &[u64]) -> Option<u64> {
         let id = ids.get(at).copied()?;
         self.selected = Some(id);
+        self.follow = true;
         Some(id)
     }
 
@@ -125,6 +128,7 @@ impl Dialog {
         let mut cursor = Cursor { selected: None, scroll: self.scroll };
         cursor.scroll_by(delta, len, rows);
         self.scroll = cursor.scroll;
+        self.follow = false;
     }
 }
 

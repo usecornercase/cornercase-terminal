@@ -240,3 +240,22 @@ fn opening_on_a_late_routine_scrolls_it_into_view() {
     assert_eq!(view(&c).selected, Some(12));
     assert!(!ui::routine_button(AREA, &view(&c), 12, Button::Remove).is_empty());
 }
+
+#[test]
+fn the_wheel_scrolls_past_the_first_page_with_the_first_row_selected() {
+    let mut c = chat(ANSWER);
+    for i in 0..14 {
+        scheduled(&mut c, bot_routine(later() + i * 3_600, "2h"));
+    }
+    opened(&mut c);
+    let list = ui::routines_room(AREA, false).1;
+    let over = Position::new(list.x + 4, list.y + 1);
+    for _ in 0..4 {
+        mouse(&mut c.app, MouseEventKind::ScrollDown, over);
+    }
+    let shown = view(&c);
+    assert_eq!(shown.selected, Some(0));
+    assert!(shown.scroll > 0, "the list moved");
+    assert!(ui::routine_button(AREA, &shown, 0, Button::Remove).is_empty(), "the first row left the page");
+    assert!(!ui::routine_button(AREA, &shown, shown.scroll, Button::Remove).is_empty());
+}

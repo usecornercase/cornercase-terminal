@@ -142,6 +142,7 @@ function drawRow(p: Painter, o: BotRoutinesDialog, entry: QueueEntry, r: Rect, s
   p.span(r.x + 1, r.y, name, nameStyle, r.w - 1);
   p.span(right(r) - [...when].length - 1, r.y, when, { ...bg, ...MUTED });
   p.span(r.x, r.y + 1, selected ? '▌' : ' ', { ...bg, fg: 6 });
+  if (compact) p.span(r.x, r.y + 2, selected ? '▌' : ' ', { ...bg, fg: 6 });
   const buttons = buttonsOf(entry);
   const shown = compact || selected || p.hovered(r);
   const wide = buttons.reduce((sum, b) => sum + buttonWidth(b), 0) + 1;
