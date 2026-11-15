@@ -301,3 +301,24 @@ fn a_routine_takes_two_card_rows_and_its_time_survives_the_cut() {
     assert!(text.contains("routine  Review PRs") && text.contains("next Mon 09:0"), "{text}");
     assert!(text.contains("Nightly digest") && text.contains("paused"), "{text}");
 }
+
+#[test]
+fn a_fold_never_ends_on_a_routines_name_without_its_time_row() {
+    let routine = |name: &str, when: &str| [CardRow::new("routine", name), CardRow::new("", when)];
+    let rows: Vec<CardRow> = [routine("Review PRs", "next 09:00 · ↻ 2h"), routine("Nightly", "paused · ↻ day 02:00")]
+        .into_iter()
+        .flatten()
+        .collect();
+    let card = BotCard { name: "prs".into(), rows };
+    for height in 8..16 {
+        let v = View { bot_card: Some(card.clone()), has_project: true, ..view(&["cornercase"]) };
+        let t = render_sized(&v, 100, height);
+        let text: Vec<String> = (0..height).map(|y| row_text(&t, Rect::new(0, y, 100, 1))).collect();
+        for (i, line) in text.iter().enumerate() {
+            if line.contains("│ routine") || line.contains("routine  ") {
+                let below = text.get(i + 1).map_or("", String::as_str);
+                assert!(below.contains("next") || below.contains("paused"), "height {height}: {text:#?}");
+            }
+        }
+    }
+}

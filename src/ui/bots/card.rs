@@ -39,7 +39,14 @@ fn inner(list: Rect) -> Rect {
 
 fn shown_rows(list: Rect, card: &BotCard) -> usize {
     let room = usize::from(list.height.saturating_sub(HEADER));
-    if card.rows.len() > room { room.saturating_sub(1).max(1).min(room) } else { card.rows.len() }
+    if card.rows.len() <= room {
+        return card.rows.len();
+    }
+    let mut shown = room.saturating_sub(1).max(1).min(room);
+    while shown > 0 && card.rows.get(shown).is_some_and(|row| row.label.is_empty()) {
+        shown -= 1;
+    }
+    shown
 }
 
 pub(crate) fn card_folder(list: Rect, card: &BotCard) -> Rect {
