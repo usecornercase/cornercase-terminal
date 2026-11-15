@@ -601,6 +601,25 @@ mod a_server_that_knows_no_boot {
         )
     }
 
+    fn refused_both_ways(
+        args: &[&str],
+        fake: impl Fn(&Session) -> thread::JoinHandle<Vec<String>>,
+    ) -> [Vec<String>; 2] {
+        let (here, far) = (Session::new(), Session::new());
+        let (near, away) = (fake(&here), fake(&far));
+        let file = here.dir.join("shot.png");
+        std::fs::write(&file, "x").expect("write the file");
+        let file = file.display().to_string();
+        let args: Vec<&str> = args.iter().map(|arg| if *arg == "FILE" { file.as_str() } else { arg }).collect();
+
+        let locally = here.cold(&args);
+        let remotely = there(&far, &args);
+
+        assert!(refused(&locally, 1, "server would ignore --boot"), "{locally:?}");
+        assert!(refused(&remotely, 1, "server on `devbox` would ignore --boot"), "{remotely:?}");
+        [near.join().expect("the fake server"), away.join().expect("the fake server")]
+    }
+
     #[rstest]
     #[case::close_without_the_feature(WITHOUT_THE_FEATURE, &["close", "--workspace", "7", "--boot", "1-1"])]
     #[case::rename_without_the_feature(WITHOUT_THE_FEATURE, &["rename", "--workspace", "7", "x", "--boot", "1-1"])]
@@ -626,49 +645,32 @@ mod a_server_that_knows_no_boot {
     #[case::changes_shared_without_a_contract(WITHOUT_A_CONTRACT, &["changes", "shared", "--workspace", "7", "--boot", "1-1"])]
     #[case::flow_run_without_the_feature(WITHOUT_THE_FEATURE, &["flow", "run", "Quick", "--prompt", "x", "--boot", "1-1"])]
     fn an_operation_it_runs_gets_only_the_contract(#[case] answer: &'static str, #[case] args: &[&str]) {
-        let (here, far) = (Session::new(), Session::new());
-        let (near, away) = (answering(&here, answer), answering(&far, answer));
+        let frames = refused_both_ways(args, |session| answering(session, answer));
 
-        let locally = here.cold(args);
-        let remotely = there(&far, args);
-
-        assert!(refused(&locally, 1, "server would ignore --boot"), "{locally:?}");
-        assert!(refused(&remotely, 1, "server on `devbox` would ignore --boot"), "{remotely:?}");
-        for seen in [near.join().expect("the fake server"), away.join().expect("the fake server")] {
+        for seen in frames {
             assert_eq!(seen.len(), 1, "{seen:?}");
             assert!(seen[0].contains(r#""command":"contract""#), "{seen:?}");
         }
     }
 
     #[rstest]
-    #[case::move_pane(&["move-pane", "--pane", "7", "--target", "8", "--place", "swap"], "move-pane")]
-    #[case::context(&["context", "--pane", "7"], "context")]
-    #[case::input(&["input", "--pane", "7", r#"{"text": "x"}"#], "input")]
-    #[case::held(&["held", "--pane", "7", "--send-now"], "held")]
-    #[case::surface(&["surface", "--tab", "7", "--cols", "80", "--rows", "24"], "surface")]
-    #[case::view(&["view"], "view")]
-    #[case::go(&["go", "cc-1-1"], "go")]
-    #[case::clone(&["clone", "https://x/y.git"], "clone")]
-    #[case::paste_file(&["paste-file", "--pane", "7", "FILE"], "paste-file")]
-    #[case::plugin_run(&["plugin", "run", "p", "a", "--pane", "7"], "plugin-actions")]
-    #[case::ports(&["ports", "--workspace", "7"], "ports")]
-    #[case::files_list(&["files", "list", "--workspace", "7"], "files-list")]
-    #[case::changes_file(&["changes", "file", "a.txt", "--workspace", "7"], "changes-file")]
+    #[case::move_pane(&["move-pane", "--pane", "7", "--target", "8", "--place", "swap", "--boot", "1-1"], "move-pane")]
+    #[case::context(&["context", "--pane", "7", "--boot", "1-1"], "context")]
+    #[case::input(&["input", "--pane", "7", r#"{"text": "x"}"#, "--boot", "1-1"], "input")]
+    #[case::held(&["held", "--pane", "7", "--send-now", "--boot", "1-1"], "held")]
+    #[case::surface(&["surface", "--tab", "7", "--cols", "80", "--rows", "24", "--boot", "1-1"], "surface")]
+    #[case::view(&["view", "--boot", "1-1"], "view")]
+    #[case::go(&["go", "cc-1-1", "--boot", "1-1"], "go")]
+    #[case::clone(&["clone", "https://x/y.git", "--boot", "1-1"], "clone")]
+    #[case::paste_file(&["paste-file", "--pane", "7", "FILE", "--boot", "1-1"], "paste-file")]
+    #[case::plugin_run(&["plugin", "run", "p", "a", "--pane", "7", "--boot", "1-1"], "plugin-actions")]
+    #[case::ports(&["ports", "--workspace", "7", "--boot", "1-1"], "ports")]
+    #[case::files_list(&["files", "list", "--workspace", "7", "--boot", "1-1"], "files-list")]
+    #[case::changes_file(&["changes", "file", "a.txt", "--workspace", "7", "--boot", "1-1"], "changes-file")]
     fn a_newer_operation_goes_alone_and_is_refused_by_name(#[case] args: &[&str], #[case] operation: &str) {
-        let (here, far) = (Session::new(), Session::new());
-        let file = here.dir.join("shot.png");
-        std::fs::write(&file, "x").expect("write the file");
-        let file = file.display().to_string();
-        let args: Vec<&str> = args.iter().map(|arg| if *arg == "FILE" { file.as_str() } else { arg }).collect();
-        let args = [args, vec!["--boot", "1-1"]].concat();
-        let (near, away) = (answering_with(&here, refusing_by_name), answering_with(&far, refusing_by_name));
+        let frames = refused_both_ways(args, |session| answering_with(session, refusing_by_name));
 
-        let locally = here.cold(&args);
-        let remotely = there(&far, &args);
-
-        assert!(refused(&locally, 1, "server would ignore --boot"), "{locally:?}");
-        assert!(refused(&remotely, 1, "server on `devbox` would ignore --boot"), "{remotely:?}");
-        for seen in [near.join().expect("the fake server"), away.join().expect("the fake server")] {
+        for seen in frames {
             assert_eq!(seen.len(), 1, "{seen:?}");
             assert!(
                 seen[0].contains(&format!(r#""command":"{operation}""#)) && seen[0].contains(r#""boot":"1-1""#),

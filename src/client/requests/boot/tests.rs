@@ -9,6 +9,7 @@ use crate::control::contract::{Code, Refusal, render};
 use crate::control::{Response, changes, files, ports};
 use crate::os::socket::UnixStream;
 use crate::protocol::{self, ClientMessage, ServerMessage};
+use crate::remote::Remote;
 
 fn boot_envelope() -> Envelope {
     Envelope { boot: Some("1-2".into()), ..Envelope::default() }
@@ -80,43 +81,59 @@ fn a_close() -> control::Command {
     })
 }
 
-fn the_commands_that_poll() -> [control::Command; 3] {
-    [ports_of_a_workspace(), files_of_a_workspace(), a_change_of_a_workspace()]
+fn asked_of_a_server_with_boot(command: control::Command) -> Vec<String> {
+    let (answered, asked) = asking(command, boot_envelope(), &AtomicBool::new(false), with_boot(&["boot"]));
+    answered.expect("an answer");
+    asked
 }
 
 mod a_request_newer_than_boot {
     use super::*;
 
-    #[test]
-    fn goes_alone_and_proves_the_server_knows_boot() {
-        for command in the_commands_that_poll() {
-            let known = AtomicBool::new(false);
+    #[rstest]
+    #[case::ports(ports_of_a_workspace())]
+    #[case::files_list(files_of_a_workspace())]
+    #[case::changes_file(a_change_of_a_workspace())]
+    fn goes_alone_and_proves_the_server_knows_boot(#[case] command: control::Command) {
+        let known = AtomicBool::new(false);
 
-            let (answered, asked) = asking(command, boot_envelope(), &known, with_boot(&["boot"]));
+        let (answered, asked) = asking(command, boot_envelope(), &known, with_boot(&["boot"]));
 
-            answered.expect("an answer");
-            assert_eq!(asked.len(), 1, "{asked:?}");
-            assert!(asked[0].contains("\"boot\":\"1-2\"") && !asked[0].contains("\"contract\""), "{}", asked[0]);
-            assert!(known.load(Ordering::Relaxed));
-        }
+        answered.expect("an answer");
+        assert_eq!(asked.len(), 1, "{asked:?}");
+        assert!(asked[0].contains("\"boot\":\"1-2\"") && !asked[0].contains("\"contract\""), "{}", asked[0]);
+        assert!(known.load(Ordering::Relaxed));
+    }
+
+    #[rstest]
+    #[case::ports(ports_of_a_workspace())]
+    #[case::files_list(files_of_a_workspace())]
+    #[case::changes_file(a_change_of_a_workspace())]
+    fn is_refused_by_name_by_a_server_without_boot(#[case] command: control::Command) {
+        let known = AtomicBool::new(false);
+        let name = command.name();
+
+        let (answered, asked) = asking(command, boot_envelope(), &known, |_| legacy_refusal(name));
+
+        let error = answered.expect_err("refused");
+        assert!(
+            matches!(&error, Error::IgnoresBoot(m) if m.contains("would ignore --boot and act on whatever has that id now")),
+            "{error:?}"
+        );
+        assert_eq!(asked.len(), 1, "{asked:?}");
+        assert!(!known.load(Ordering::Relaxed));
     }
 
     #[test]
-    fn is_refused_by_name_by_a_server_without_boot() {
-        for command in the_commands_that_poll() {
-            let known = AtomicBool::new(false);
-            let name = command.name();
+    fn says_how_to_restart_the_server_there_when_it_is_far() {
+        let remote = Remote { destination: "devbox".into(), command: None, option: "--remote-command" };
 
-            let (answered, asked) = asking(command, boot_envelope(), &known, |_| legacy_refusal(name));
+        let error = ignored(Some(&remote)).to_string();
 
-            let error = answered.expect_err("refused");
-            assert!(
-                matches!(&error, Error::IgnoresBoot(m) if m.contains("would ignore --boot and act on whatever has that id now")),
-                "{error:?}"
-            );
-            assert_eq!(asked.len(), 1, "{asked:?}");
-            assert!(!known.load(Ordering::Relaxed));
-        }
+        assert!(
+            error.contains("`devbox`") && error.contains("would ignore --boot") && error.contains("restart it there"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -159,18 +176,15 @@ mod a_request_newer_than_boot {
 mod a_request_a_server_without_boot_would_run {
     use super::*;
 
-    #[test]
-    fn asks_the_contract_first_on_the_same_link() {
-        for command in [a_close(), control::Command::Status(control::Status {})] {
-            let known = AtomicBool::new(false);
+    #[rstest]
+    #[case::close(a_close())]
+    #[case::status(control::Command::Status(control::Status {}))]
+    fn asks_the_contract_first_on_the_same_link(#[case] command: control::Command) {
+        let asked = asked_of_a_server_with_boot(command);
 
-            let (answered, asked) = asking(command, boot_envelope(), &known, with_boot(&["boot"]));
-
-            answered.expect("an answer");
-            assert_eq!(asked.len(), 2, "{asked:?}");
-            assert!(asked[0].contains("\"contract\"") && !asked[0].contains("\"boot\""), "{}", asked[0]);
-            assert!(asked[1].contains("\"boot\":\"1-2\""), "{}", asked[1]);
-        }
+        assert_eq!(asked.len(), 2, "{asked:?}");
+        assert!(asked[0].contains("\"contract\"") && !asked[0].contains("\"boot\""), "{}", asked[0]);
+        assert!(asked[1].contains("\"boot\":\"1-2\""), "{}", asked[1]);
     }
 
     #[test]
@@ -231,7 +245,7 @@ fn seen_judges_a_descriptor(
     let known = AtomicBool::new(false);
     let features: Vec<String> = features.iter().map(ToString::to_string).collect();
 
-    let judged = seen(&features, pending, &known);
+    let judged = seen(&features, pending, &known, None);
 
     assert_eq!(judged.is_err(), refused, "{judged:?}");
     assert_eq!(known.load(Ordering::Relaxed), set);
@@ -239,10 +253,12 @@ fn seen_judges_a_descriptor(
 
 #[test]
 fn the_names_before_boot_are_operations_and_the_polled_ones_are_not_among_them() {
-    for name in BEFORE_BOOT {
-        assert!(control::Command::NAMES.contains(&name), "{name}");
+    assert_eq!(control::Command::NAMES[BEFORE_BOOT], "contract");
+    assert_eq!(control::Command::NAMES[0], "status");
+    for name in ["search", "mark", "flow-import"] {
+        assert!(known_before_boot(name), "{name}");
     }
-    for name in ["ports", "files-list", "changes-file", "surface", "input"] {
-        assert!(!BEFORE_BOOT.contains(&name), "{name}");
+    for name in ["contract", "ports", "files-list", "changes-file", "surface", "input"] {
+        assert!(!known_before_boot(name), "{name}");
     }
 }

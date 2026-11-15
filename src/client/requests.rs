@@ -290,7 +290,7 @@ fn listed(asked: Result<Value>) -> Result<Vec<String>> {
 fn require_on(link: Result<Link>, feature: &str, lacks: &str, remote: Option<&Remote>) -> Result<Link> {
     let mut link = link?;
     let features = features_on(&mut link)?;
-    boot::seen(&features, BOOT.get().is_some(), &boot::KNOWN)?;
+    boot::seen(&features, BOOT.get().is_some(), &boot::KNOWN, remote)?;
     offered(&features, feature, lacks, remote).map(|()| link)
 }
 
