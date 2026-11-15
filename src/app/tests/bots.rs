@@ -6,7 +6,7 @@ use crate::bots::Bot;
 use crate::bots::chat::{self, Line};
 use crate::bots::folder;
 use crate::bots::sample as bot;
-use crate::test_util::{fake_program, fixture, wait_until};
+use crate::test_util::{fake_program, fixture, released, sleeping_as_bots, wait_until};
 
 fn chat_of(dir: &Path, id: &str) -> Vec<Line> {
     chat::read(&folder::of(dir, id).join(folder::CHAT_FILE))

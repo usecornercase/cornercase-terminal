@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand};
 
 use super::BootArg;
-use crate::cli::help::CONFIG_PAIR_HELP;
+use crate::cli::help::{CONFIG_PAIR_HELP, EXPORT_TO};
 
 #[derive(Debug, Args)]
 pub(crate) struct ConfigArgs {
@@ -75,7 +75,7 @@ pub(crate) enum ConfigAction {
     },
     #[command(about = "Write the settings to share with a colleague, without tokens or personal ones")]
     Export {
-        #[arg(long, value_name = "FILE", help = "Write them to FILE instead of standard output")]
+        #[arg(long, value_name = "FILE", help = EXPORT_TO)]
         to: Option<PathBuf>,
     },
     #[command(about = "Import settings a colleague shared, after showing what changes")]

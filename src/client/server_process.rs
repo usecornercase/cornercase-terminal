@@ -1,5 +1,5 @@
 use std::fs::{self, OpenOptions};
-use std::io::{self};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -13,28 +13,43 @@ use crate::process::reap;
 use crate::protocol::{self, ClientMessage, Folder, ServerMessage};
 use crate::{control, log, paths};
 
+enum Stopped {
+    NoServer,
+    Stopping,
+    Rejected(String),
+}
+
 pub(crate) fn kill_server() -> Result<bool> {
-    Ok(stop_server(&ClientMessage::KillServer)?.is_some())
+    match stop_server(&ClientMessage::KillServer)? {
+        Stopped::Rejected(why) => Err(Error::Control(why)),
+        stopped => Ok(!matches!(stopped, Stopped::NoServer)),
+    }
 }
 
 pub(crate) fn restart_server() -> Result<bool> {
     match stop_server(&ClientMessage::Restart)? {
-        Some(true) => kill_server(),
-        answer => Ok(answer.is_some()),
+        Stopped::Rejected(_) => kill_server(),
+        stopped => Ok(!matches!(stopped, Stopped::NoServer)),
     }
 }
 
-fn stop_server(msg: &ClientMessage) -> Result<Option<bool>> {
-    let Some(Found { socket, mut stream }) = find()? else { return Ok(None) };
+fn stop_server(msg: &ClientMessage) -> Result<Stopped> {
+    let Some(Found { socket, mut stream }) = find()? else { return Ok(Stopped::NoServer) };
     protocol::send(&mut stream, msg)?;
-    let mut rejected = false;
-    while let Ok(Some(answer)) = protocol::recv::<ServerMessage>(&mut stream) {
-        rejected |= matches!(answer, ServerMessage::Rejected(_));
+    if let Some(why) = rejection(&mut stream) {
+        return Ok(Stopped::Rejected(why));
     }
-    if !rejected {
-        wait_for_exit(&socket);
+    wait_for_exit(&socket);
+    Ok(Stopped::Stopping)
+}
+
+fn rejection(answers: &mut impl Read) -> Option<String> {
+    while let Ok(Some(answer)) = protocol::recv::<ServerMessage>(answers) {
+        if let ServerMessage::Rejected(why) = answer {
+            return Some(why);
+        }
     }
-    Ok(Some(rejected))
+    None
 }
 
 pub(crate) fn wait_for_exit(path: &Path) {

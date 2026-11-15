@@ -628,6 +628,8 @@ pub(super) const RESTART_TIMEOUT: &str =
     "With --when-idle, give up after this many seconds and keep the server running";
 pub(super) const PANE_REQUIRED: &str = "The pane to act on; `cornercase status --panes` lists them";
 pub(super) const HERE: &str = "this runs in";
+pub(super) const TO_FILE: &str = "instead of standard output";
+pub(super) const EXPORT_TO: &str = "Write them to FILE instead of standard output";
 pub(super) const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
 pub(super) const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait on several [default: the one this runs in, else \
     the shown one]";

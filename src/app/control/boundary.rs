@@ -13,9 +13,11 @@ use crate::control::{self, Command, Configure, HeldAction};
 use crate::log;
 use crate::process;
 use crate::project::Hierarchy;
+use crate::protocol::ClientMessage;
 use crate::term::Term;
 
 pub(crate) const NOT_OWN: &str = "a bot can only schedule and change its own queue entries";
+const NO_CLONE: &str = "a bot cannot clone a repository; clone it yourself and the bot can work in the project";
 pub(crate) const HEAD: &str = "a bot can only type into a pane that runs an agent";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +28,8 @@ enum Gated {
     Access,
     Says(String),
     Settings,
+    ServerStop,
+    Clone,
 }
 
 #[derive(Default)]
@@ -71,6 +75,9 @@ fn blank(command: Option<&String>) -> bool {
 }
 
 fn gated(command: &Command) -> Option<Gated> {
+    if crate::bots::stops_server(command.name()) {
+        return Some(Gated::ServerStop);
+    }
     match command {
         Command::Send(send) => Some(Gated::Pane { pane: send.pane, tab: send.tab }),
         Command::Keys(keys) => Some(Gated::Pane { pane: keys.pane, tab: keys.tab }),
@@ -98,6 +105,15 @@ fn lifts(command: &Command) -> Option<Gated> {
         Command::Config(Configure::Get | Configure::Search(_)) => None,
         Command::Config(_) => Some(Gated::Settings),
         Command::ConfigImport(import) if import.apply => Some(Gated::Settings),
+        Command::Clone(_) => Some(Gated::Clone),
+        _ => None,
+    }
+}
+
+fn stop_name(message: &ClientMessage) -> Option<&'static str> {
+    match message {
+        ClientMessage::KillServer => Some("kill-server"),
+        ClientMessage::Restart => Some("restart"),
         _ => None,
     }
 }
@@ -183,9 +199,18 @@ impl App {
             Some(Gated::NewShell) => Err(no_new_shell()),
             Some(Gated::Access) => Err(no_access()),
             Some(Gated::Settings) => Err(no_settings()),
+            Some(Gated::ServerStop) => Err(Refusal::new(Code::Failed, crate::bots::STOP_REFUSED)),
+            Some(Gated::Clone) => Err(Refusal::new(Code::Failed, NO_CLONE)),
             Some(Gated::Says(bot)) => self.says_to(&bot),
             Some(Gated::Pane { pane, tab }) => self.types_into(self.target(asker, pane, tab)?),
         }
+    }
+
+    pub(crate) fn refused_stop(&self, client: u64, message: &ClientMessage) -> Option<&'static str> {
+        let asked = stop_name(message)?;
+        let bot = self.clients.bots.bot_of(client)?;
+        log::warning!("control", "a bot's stop refused", client = client, bot = bot, asked = asked);
+        Some(crate::bots::STOP_REFUSED)
     }
 
     fn queue_by_bot(&self, client: u64, queue: &control::Queue) -> Result<(), Refusal> {

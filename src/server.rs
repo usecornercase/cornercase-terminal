@@ -717,6 +717,12 @@ impl Server {
     }
 
     fn message(&mut self, id: u64, message: ClientMessage) -> ControlFlow<()> {
+        if let Some(why) = self.app.refused_stop(id, &message) {
+            if let Some(client) = self.client_mut(id) {
+                client.send(ServerMessage::Rejected(why.into()));
+            }
+            return ControlFlow::Continue(());
+        }
         match message {
             ClientMessage::KillServer => {
                 log::info!("server", "kill-server received", client = id);

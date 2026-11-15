@@ -335,6 +335,27 @@ impl Drop for Running {
     }
 }
 
+pub(crate) fn sleeping_as_bots(bin: &Path, ids: &[&str]) -> Vec<std::process::Child> {
+    let sleeper = fake_program(bin, "sleeper");
+    std::fs::write(sleeper.with_extension("hold"), "").expect("hold");
+    let children: Vec<std::process::Child> = ids
+        .iter()
+        .map(|id| std::process::Command::new(&sleeper).env("CORNERCASE_BOT", id).spawn().expect("sleeper"))
+        .collect();
+    wait_until("every sleeper runs with its environment", || {
+        let seen = std::fs::read_to_string(sleeper.with_extension("pid")).unwrap_or_default();
+        seen.lines().count() >= ids.len()
+    });
+    children
+}
+
+pub(crate) fn released(bin: &Path, children: Vec<std::process::Child>) {
+    std::fs::remove_file(bin.join("sleeper").with_extension("hold")).expect("release");
+    for mut child in children {
+        let _ = child.wait();
+    }
+}
+
 pub(crate) fn fake_program(dir: &Path, name: &str) -> PathBuf {
     let path = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     let built = built_program();

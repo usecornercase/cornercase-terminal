@@ -158,3 +158,16 @@ fn a_socket_path_that_cannot_be_bound_is_refused() {
     assert!(matches!(error, Error::Listen { custom: true, .. }));
     assert!(error.to_string().contains("CORNERCASE_SOCKET"));
 }
+
+#[test]
+fn the_first_rejection_is_read_and_reading_stops_there() {
+    let mut buf = Vec::new();
+    protocol::send(&mut buf, &ServerMessage::Rejected("why".into())).expect("a frame");
+    protocol::send(&mut buf, &ServerMessage::Detached).expect("a frame");
+    let mut empty = Vec::new();
+    protocol::send(&mut empty, &ServerMessage::Detached).expect("a frame");
+
+    assert_eq!(rejection(&mut io::Cursor::new(buf)), Some("why".to_string()));
+    assert_eq!(rejection(&mut io::Cursor::new(empty)), None);
+    assert_eq!(rejection(&mut io::Cursor::new(Vec::new())), None);
+}
