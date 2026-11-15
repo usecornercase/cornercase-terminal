@@ -252,12 +252,14 @@ fn seen_judges_a_descriptor(
 }
 
 #[test]
-fn the_names_before_boot_are_operations_and_the_polled_ones_are_not_among_them() {
+fn the_names_before_boot_are_pinned_and_the_polled_ones_are_not_among_them() {
     assert_eq!(control::Command::NAMES[BEFORE_BOOT], "contract");
-    assert_eq!(control::Command::NAMES[0], "status");
-    for name in ["search", "mark", "flow-import"] {
-        assert!(known_before_boot(name), "{name}");
-    }
+    assert_eq!(
+        control::Command::NAMES[..BEFORE_BOOT].join(" "),
+        "status open new-workspace new-tab split start send keys read wait close rename focus notify todo wait-several \
+         events last-message restart-when-idle stats away mark queue start-with flow-list flow-run flow-export \
+         flow-import search"
+    );
     for name in ["contract", "ports", "files-list", "changes-file", "surface", "input"] {
         assert!(!known_before_boot(name), "{name}");
     }
