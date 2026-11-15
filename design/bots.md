@@ -178,7 +178,7 @@ The boundary (#856): the classifier of the writing requests (`boundary/tests.rs`
 
 ## What later issues add
 
-#847 following the agents a bot starts; #848 chat apps; #849 done for four of the six other agents, the follow-up issue has Grok Build, Vibe CLI, `cornercase` access for opencode and Cursor CLI, and Recap on more agents. The rest of the boundary (the open list above, #866) and the server-side refusal of `cornercase requests` for a restart or an update (#867) are follow-up issues.
+#847 following the agents a bot starts; #848 chat apps; #849 done for four of the six other agents, the follow-up issue #879 has Grok Build, Vibe CLI, `cornercase` access for opencode and Cursor CLI, and Recap on more agents. The rest of the boundary (the open list above, #866) and the server-side refusal of `cornercase requests` for a restart or an update (#867) are follow-up issues.
 
 ## The window (#845)
 

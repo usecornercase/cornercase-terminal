@@ -23,7 +23,7 @@ Each agent's `headless.rs` is its spec in the shared runner (`agents/headless.rs
 | Grok Build 1.0.70 | not run: not signed in | not run | not run | `not yet` |
 | Vibe CLI | not installed, not checked | | | `not yet` |
 
-None was logged in or installed for this: an agent that was not signed in (Grok) or not installed (Vibe) stays `not yet` instead of claiming something nobody checked. The issue's sample reason, `no way to continue a conversation without its interface`, would have been a claim, so `why` says `not yet`. The follow-up issue lists them.
+None was logged in or installed for this: an agent that was not signed in (Grok) or not installed (Vibe) stays `not yet` instead of claiming something nobody checked. The issue's sample reason, `no way to continue a conversation without its interface`, would have been a claim, so `why` says `not yet`. The follow-up issue (#879) lists them.
 
 Each run was made in a fresh folder outside every repository, with `CORNERCASE*` and the Claude Code variables removed and `CORNERCASE_SOCKET` pointing at a socket that does not exist, so no agent reached the real server. The fixtures of `tests/fixtures/<agent>/<version>/bot-*.jsonl` are cut from those runs (the README of each says what was replaced).
 
