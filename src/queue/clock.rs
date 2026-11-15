@@ -4,6 +4,8 @@ use jiff::{Timestamp, ToSpan};
 
 const USE_IN: &str = "use in 30m, in 2h or in 1w";
 
+const SHORT_DAYS: i32 = 7;
+
 pub(crate) fn local_zone() -> String {
     let now = jiff::Zoned::now();
     let tz = std::env::var("TZ").ok();
@@ -23,27 +25,35 @@ fn named<const N: usize>(candidates: [Option<&str>; N]) -> Option<String> {
     })
 }
 
-pub(crate) fn when(at: i64, now: i64, name: &str) -> String {
+enum Other {
+    Full,
+    Near,
+}
+
+fn relative(at: i64, now: i64, name: &str, other: &Other) -> String {
     let Some((timestamp, zone)) = Timestamp::from_second(at).ok().zip(zone(name).ok().or(Some(TimeZone::UTC))) else {
         return at.to_string();
     };
     let shown = timestamp.to_zoned(zone.clone());
-    let today = Timestamp::from_second(now).ok().map(|now| now.to_zoned(zone));
-    if today.is_some_and(|today| today.date() == shown.date()) {
-        shown.strftime("%H:%M").to_string()
-    } else {
-        shown.strftime("%a %-d %b %H:%M").to_string()
+    let today = Timestamp::from_second(now).ok().map(|now| now.to_zoned(zone).date());
+    if today.is_some_and(|today| today == shown.date()) {
+        return shown.strftime("%H:%M").to_string();
     }
+    let near = today.and_then(|today| today.until(shown.date()).ok()).is_some_and(|span| span.get_days() < SHORT_DAYS);
+    let format = match other {
+        Other::Full => "%a %-d %b %H:%M",
+        Other::Near if near => "%a %H:%M",
+        Other::Near => "%-d %b %H:%M",
+    };
+    shown.strftime(format).to_string()
+}
+
+pub(crate) fn when(at: i64, now: i64, name: &str) -> String {
+    relative(at, now, name, &Other::Full)
 }
 
 pub(crate) fn short(at: i64, now: i64, name: &str) -> String {
-    let Some((timestamp, zone)) = Timestamp::from_second(at).ok().zip(zone(name).ok().or(Some(TimeZone::UTC))) else {
-        return at.to_string();
-    };
-    let shown = timestamp.to_zoned(zone.clone());
-    let today = Timestamp::from_second(now).ok().map(|now| now.to_zoned(zone));
-    let format = if today.is_some_and(|today| today.date() == shown.date()) { "%H:%M" } else { "%a %H:%M" };
-    shown.strftime(format).to_string()
+    relative(at, now, name, &Other::Near)
 }
 
 pub(crate) fn zone(name: &str) -> Result<TimeZone, String> {

@@ -76,8 +76,10 @@ function drawRow(p: Painter, r: Rect, bot: Bot, active: boolean): void {
   const room = Math.max(0, r.w - width(lead) - close.w - menu.w - 1);
   const name = truncateRight(bot.name, room);
   const next = p.app.bots.nextRun(bot);
-  const tag = !bot.turn && next !== null ? `next ${shortClock(next)}` : summary(bot);
-  const gap = room - [...name].length - [...tag].length;
+  const later = !bot.turn && next !== null ? `next ${shortClock(next)}` : '';
+  const spare = room - [...name].length;
+  const tag = later && spare - [...later].length >= 2 ? later : summary(bot);
+  const gap = spare - [...tag].length;
   const line: Line = [...lead, seg(name, active ? { fg: DEFAULT, add: BOLD } : { fg: 7 })];
   if (gap >= 2) line.push(seg(' '.repeat(gap)), seg(tag, DARK));
   p.band(r, line, bg);
@@ -422,13 +424,13 @@ export function drawCard(p: Painter, areas: Areas): void {
     ['access', ACCESS_NOTE[bot.access], bot.access === 'full' ? RED : undefined],
     ['folder', app.bots.folder(bot)],
     ['made', new Date(bot.made).toISOString().slice(0, 10)],
-    ...bot.routines.map((r): [string, string] => ['routine', `${r.label} · next ${shortClock(r.at)} · ↻ ${r.repeat}`]),
+    ...bot.routines.flatMap((r): [string, string][] => [['routine', r.label], ['', `next ${shortClock(r.at)} · ↻ ${r.repeat}`]]),
   ];
   let y = list.y;
   p.span(list.x + 1, y, bot.name, { fg: DEFAULT, add: BOLD }, list.w - 1);
   y += 2;
   for (const [label, value, style] of entries) {
-    const rows = label === 'folder' || label === 'routine' ? [truncateRight(value, room)] : wrapText(value, room);
+    const rows = label === 'folder' || label === 'routine' || label === '' ? [truncateRight(value, room)] : wrapText(value, room);
     rows.forEach((text, i) => {
       if (y >= bottom(list)) return;
       if (i === 0) p.span(list.x + 1, y, label, DARK, LABEL);

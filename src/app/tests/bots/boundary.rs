@@ -246,9 +246,14 @@ mod queue_by_a_bot {
         assert!(!refused(&outcome(&mut c.app, BOT + 1, &restore(theirs))));
         c.release(ANSWER);
         c.runs_settle();
-        let mine = c.app.panels.queued.remove(own).expect("removed");
-        let mine = c.app.panels.queued.keep_removed(mine).expect("an undo");
+        let mut mixed = c.app.panels.queued.remove(own).expect("removed");
+        let mine = c.app.panels.queued.keep_removed(mixed.clone()).expect("an undo");
         assert!(!refused(&outcome(&mut c.app, BOT, &restore(mine))));
+        let other = Task { place: Place { bot: Some("docs".into()), ..Place::default() }, ..bot_routine(START, "2h") };
+        let id = c.app.panels.queued.schedule(None, other).expect("their routine");
+        mixed.extend(c.app.panels.queued.remove(id).expect("removed"));
+        let both = c.app.panels.queued.keep_removed(mixed).expect("an undo");
+        assert!(refused(&outcome(&mut c.app, BOT, &restore(both))));
     }
 
     #[test]

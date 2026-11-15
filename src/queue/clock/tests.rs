@@ -115,4 +115,6 @@ fn the_short_form_leaves_out_the_date_and_keeps_the_weekday_for_another_day() {
     let before = nine - 3600;
     assert_eq!(short(nine, before, "UTC"), "09:00");
     assert_eq!(short(nine, before - 86_400, "UTC"), "Mon 09:00");
+    assert_eq!(short(nine, before - 6 * 86_400, "UTC"), "Mon 09:00");
+    assert_eq!(short(nine, before - 8 * 86_400, "UTC"), "16 Nov 09:00");
 }

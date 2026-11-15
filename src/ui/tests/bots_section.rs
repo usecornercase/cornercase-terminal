@@ -3,7 +3,14 @@ use super::*;
 const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 30 };
 
 fn entry(name: &str, detail: &str) -> BotEntry {
-    BotEntry { name: name.into(), detail: detail.into(), thinking: false, unread: 0, active: false }
+    BotEntry {
+        name: name.into(),
+        detail: detail.into(),
+        fallback: String::new(),
+        thinking: false,
+        unread: 0,
+        active: false,
+    }
 }
 
 fn entries() -> Vec<BotEntry> {
@@ -192,4 +199,15 @@ fn the_projects_menu_shows_the_bots_button() {
 #[test]
 fn the_bots_page_is_drawn() {
     insta::assert_snapshot!(render_sized(&compact_view(Some(Nav::Bots)), 80, 30).backend());
+}
+
+#[test]
+fn a_row_too_narrow_for_the_next_run_draws_agent_and_model_instead() {
+    let long = BotEntry { detail: "next 16 Nov 09:00".into(), fallback: "claude".into(), ..entry("triage-bot-x", "") };
+    let short = BotEntry { detail: "next Mon 09:00".into(), fallback: "claude".into(), ..entry("prs", "") };
+    let t = render_sized(&shown(Sidebar::SideBySide, vec![long, short], false), W, TALL.height);
+    let text: String = (0..TALL.height).map(|y| row_text(&t, Rect::new(0, y, W, 1))).collect::<Vec<_>>().join("\n");
+    assert!(text.contains("claude"), "{text}");
+    assert!(text.contains("next Mon 09:00"), "{text}");
+    assert!(!text.contains("next 16 Nov"), "{text}");
 }

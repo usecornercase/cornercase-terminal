@@ -85,15 +85,11 @@ enum Asked {
     Show(control::QueueShow, bool),
 }
 
-pub(super) fn own_bot() -> Option<String> {
-    std::env::var(crate::bots::BOT_ENV).ok().filter(|id| !id.is_empty())
-}
-
 pub(super) fn run(action: QueueAction) -> Result<()> {
     if let QueueAction::List(ListArgs { bot: Some(bot), print }) = &action {
         return list_of_bot(bot, print.json);
     }
-    match request_of(action, own_bot().as_deref())? {
+    match request_of(action, super::guard::own_bot().as_deref())? {
         Asked::Queue(command, json) => run_queue(*command, json),
         Asked::Show(show, json) => run_show(show, json),
     }

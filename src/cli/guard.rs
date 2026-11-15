@@ -73,5 +73,9 @@ pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Opt
     None
 }
 
+pub(super) fn own_bot() -> Option<String> {
+    std::env::var(crate::bots::BOT_ENV).ok().filter(|id| !id.is_empty())
+}
+
 #[cfg(test)]
 mod tests;

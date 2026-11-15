@@ -117,3 +117,19 @@ fn a_bot_without_entries_removes_with_no_undo() {
     assert_eq!(removed["entries"], json!([]));
     assert!(removed.get("undo").is_none());
 }
+
+#[test]
+fn queue_run_over_the_socket_refuses_an_answered_entry_and_leaves_it_alone() {
+    let mut b = bots();
+    b.new_prs();
+    let id = queue(&mut b, &add(&json!({"bot": "prs", "at": "in 2h", "prompt": "x"})))["id"].as_u64().expect("id");
+    b.app.panels.queued.answered(id, Some("s-1".into()), crate::queue::outcome::Outcome::default());
+    let refused = queue_refused(&mut b, &json!({"action": "run", "entry": id}));
+    assert_eq!(refused.message, "this queue entry has already started");
+    let listed = queue(&mut b, &json!({"action": "list"}));
+    assert_eq!(
+        (listed["entries"][0]["state"].as_str(), listed["entries"][0]["session"].as_str()),
+        (Some("answered"), Some("s-1"))
+    );
+    assert_eq!(b.argvs(), Vec::<String>::new());
+}

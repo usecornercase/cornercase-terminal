@@ -130,7 +130,11 @@ export function shortClock(at: number): string {
   const d = new Date(at);
   const pad = (n: number) => String(n).padStart(2, '0');
   const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return d.toDateString() === new Date().toDateString() ? hm : `${d.toLocaleDateString('en', { weekday: 'short' })} ${hm}`;
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(d) - start(new Date())) / 86400000);
+  if (days === 0) return hm;
+  if (days > 0 && days < 7) return `${d.toLocaleDateString('en', { weekday: 'short' })} ${hm}`;
+  return `${d.getDate()} ${d.toLocaleDateString('en', { month: 'short' })} ${hm}`;
 }
 
 export function age(since: number, now: number): string {

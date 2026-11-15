@@ -279,3 +279,25 @@ fn a_run_that_is_answering_says_so() {
     let text: String = rows.last().expect("a row").line.spans.iter().map(|span| span.content.as_ref()).collect();
     assert_eq!(text, "answering…");
 }
+
+#[test]
+fn a_routine_takes_two_card_rows_and_its_time_survives_the_cut() {
+    let card = BotCard {
+        name: "prs".into(),
+        rows: vec![
+            CardRow::new("agent", "Claude Code"),
+            CardRow::new("routine", "Review PRs"),
+            CardRow::new("", "next Mon 09:00 · ↻ weekday 09:00"),
+            CardRow::new("routine", "Nightly digest"),
+            CardRow::new("", "paused · ↻ day 02:00"),
+        ],
+    };
+    let v = View { bot_card: Some(card), has_project: true, ..view(&["cornercase"]) };
+    let t = render(&v);
+    let text: String = (0..t.backend().buffer().area.height)
+        .map(|y| row_text(&t, Rect::new(0, y, t.backend().buffer().area.width, 1)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(text.contains("routine  Review PRs") && text.contains("next Mon 09:0"), "{text}");
+    assert!(text.contains("Nightly digest") && text.contains("paused"), "{text}");
+}

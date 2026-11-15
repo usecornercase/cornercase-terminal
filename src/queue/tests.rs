@@ -577,7 +577,8 @@ mod bot_entries {
         std::fs::write(&path, text).expect("write");
         let queue = load(&path, 0);
         assert_eq!(queue.saved().version, version);
-        assert_eq!(String::from_utf8(bytes(&queue, &dir.path().join("back.json"))).expect("utf8"), text);
+        let written = String::from_utf8(bytes(&queue, &dir.path().join("back.json"))).expect("utf8");
+        assert_eq!(written, text.strip_suffix('\n').expect("fixture newline"));
     }
 
     #[test]

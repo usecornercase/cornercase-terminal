@@ -27,6 +27,7 @@ impl App {
             .map(|(i, state)| ui::BotEntry {
                 name: state.bot.name.clone(),
                 detail: self.bot_detail_short(i),
+                fallback: self.bot_agent_model(i),
                 thinking: state.answering(),
                 unread: state.unread,
                 active: shown == Some(i),
@@ -36,11 +37,16 @@ impl App {
     }
 
     fn bot_detail_short(&self, at: usize) -> String {
-        let bot = &self.panels.bots.live[at].bot;
         let idle = !self.panels.bots.live[at].answering();
-        if let Some(next) = self.bot_next_run(&bot.id).filter(|_| idle) {
-            return format!("next {}", crate::queue::clock::short(next, crate::time::now(), &self.window_zone()));
+        let next = self.bot_next_run(&self.panels.bots.live[at].bot.id).filter(|_| idle);
+        match next {
+            Some(next) => format!("next {}", crate::queue::clock::short(next, crate::time::now(), &self.window_zone())),
+            None => self.bot_agent_model(at),
         }
+    }
+
+    fn bot_agent_model(&self, at: usize) -> String {
+        let bot = &self.panels.bots.live[at].bot;
         match &bot.model {
             Some(model) => format!("{} · {model}", bot.agent),
             None => bot.agent.clone(),
@@ -89,8 +95,10 @@ impl App {
                 } else {
                     format!("next {}", crate::queue::clock::short(entry.task.at, now, &zone))
                 };
-                Some(ui::CardRow::new("routine", format!("{} · {next} · ↻ {repeat}", entry.task.label)))
+                let when = ui::CardRow::new("", format!("{next} · ↻ {repeat}"));
+                Some([ui::CardRow::new("routine", entry.task.label.clone()), when])
             })
+            .flatten()
             .collect()
     }
 

@@ -233,7 +233,7 @@ test('a bot with a routine shows when it runs next, in its row and on its card',
   assert.match(screen(app), /prs +next /);
   press(app, 'prs');
   app.resize(140, 60);
-  assert.match(screen(app), /routine +Review PRs · next /);
+  assert.match(screen(app), /routine +Review PRs[^\n]*\n[^\n]*next [^\n]*↻ 2h/);
 });
 
 test('a routine run is one block in the chat: its header, its steps folded and its answer', () => {
