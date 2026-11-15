@@ -26,8 +26,8 @@ a boundary: give it work you would give an assistant at your keyboard. --access 
 any file and run anything, unattended; it is off by default. A Codex, opencode or Cursor CLI bot can
 have full access only: Codex's sandbox did not let it reach cornercase on Linux, and macOS and Windows
 were not tried; opencode's and Cursor CLI's rules cannot keep its writes in its folder. A Gemini CLI or
-GitHub Copilot CLI bot with cornercase access reads only its own folder, and has full access only on
-Windows.
+GitHub Copilot CLI bot with cornercase access reads only its own folder; on Windows they support
+full access only.
 
 A bot works only while the server runs. With --json it prints the bot as `bot list --json` does.
 

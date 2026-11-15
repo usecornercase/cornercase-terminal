@@ -80,4 +80,4 @@ A headless prompt has line breaks (the brief). Rust refuses CR and LF in a batch
 
 ## Not checked
 
-macOS and Windows for all four; Grok (not signed in) and Vibe (not installed); Copilot's effort with a named model and its environment variables; Cursor's sandbox on macOS; opencode and Cursor after a newer version.
+macOS and Windows for all four; Grok (not signed in) and Vibe (not installed); Copilot's effort with a named model and its environment variables; Cursor's sandbox on macOS; opencode and Cursor after a newer version; opencode in a long resumed session, where it may compact on its own first (its summary is an assistant message that finishes with `stop`, which the reader could take for the answer: the stream was not seen with a compaction in it).
