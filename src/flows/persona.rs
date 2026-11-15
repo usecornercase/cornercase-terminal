@@ -250,6 +250,12 @@ fn backup(dir: &Path, persona: &Persona) -> std::result::Result<Option<Vec<u8>>,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(unread(e)),
         Ok(meta) if !meta.is_file() => Ok(None),
+        Ok(meta) if meta.len() > MAX_BYTES as u64 => Err(format!(
+            "your persona `{}` is larger than {} KiB, too large to keep a copy of: remove it first with `cornercase persona remove {}`",
+            persona.id,
+            MAX_BYTES / 1024,
+            persona.id
+        )),
         Ok(_) => std::fs::read(&path).map(Some).map_err(unread),
     }
 }

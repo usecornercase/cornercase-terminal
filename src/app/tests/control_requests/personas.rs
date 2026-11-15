@@ -163,6 +163,19 @@ fn a_file_of_that_id_that_cannot_be_read_is_kept_unless_replaced() {
 }
 
 #[test]
+fn an_oversized_file_of_that_id_is_never_read_whole_nor_replaced() {
+    let mut library = Library::new();
+    std::fs::create_dir_all(library.dir()).expect("the folder");
+    let big = "a".repeat(persona::MAX_BYTES + 1);
+    std::fs::write(library.dir().join("reviewer.md"), &big).expect("write");
+
+    let refused = library.refused(vec![text("reviewer.md", REVIEWER)], |import| import.replace = true);
+
+    assert!(refused.contains("too large to keep a copy of"), "{refused}");
+    assert_eq!(std::fs::read_to_string(library.dir().join("reviewer.md")).expect("kept").len(), big.len());
+}
+
+#[test]
 fn an_import_that_cannot_save_one_persona_leaves_the_library_as_it_was() {
     let mut library = Library::new();
     library.imported(vec![text("reviewer.md", REVIEWER)], |_| {});
