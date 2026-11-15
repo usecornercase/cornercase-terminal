@@ -482,3 +482,45 @@ mod skipped_stages {
         assert_eq!(full().owed(), None);
     }
 }
+
+mod exits_told {
+    use super::*;
+
+    fn seated() -> Run {
+        let mut run = run(End::Commits);
+        run.members = vec![Member { role: "coder".into(), pane: 4 }, Member { role: "reviewer".into(), pane: 5 }];
+        run
+    }
+
+    #[test]
+    fn a_told_role_is_not_untold_again() {
+        let mut run = seated();
+        assert_eq!(run.untold_exits(&[4, 5]), [4, 5]);
+        run.note_told(&[4]);
+        assert_eq!(run.untold_exits(&[4, 5]), [5]);
+    }
+
+    #[test]
+    fn a_role_is_noted_once() {
+        let mut run = seated();
+        run.note_told(&[4]);
+        run.note_told(&[4, 9]);
+        assert_eq!(run.exits_told, ["coder"]);
+    }
+
+    #[test]
+    fn forgetting_drops_only_the_named_roles() {
+        let mut run = seated();
+        run.note_told(&[4, 5]);
+        run.forget_told(&["coder".to_string()]);
+        assert_eq!(run.exits_told, ["reviewer"]);
+    }
+
+    #[test]
+    fn a_told_role_stays_told_in_a_new_pane() {
+        let mut run = seated();
+        run.note_told(&[4]);
+        run.members[0].pane = 40;
+        assert_eq!(run.untold_exits(&[40]), Vec::<u64>::new());
+    }
+}

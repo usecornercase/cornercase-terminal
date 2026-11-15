@@ -271,6 +271,8 @@ impl App {
                 text: message.clone(),
                 workspace: Some(workspace),
                 panes: vec![pane],
+                run: None,
+                role: None,
             };
             self.publish_message(said);
         }

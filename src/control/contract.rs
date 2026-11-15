@@ -86,6 +86,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "machine-boot",
     "flow-exited",
     "message-failed",
+    "message-flow-exited",
     "bots",
     "shown-bot",
     "bot-about",

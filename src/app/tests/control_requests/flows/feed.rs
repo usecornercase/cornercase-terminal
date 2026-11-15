@@ -34,7 +34,9 @@ fn pane_of(app: &App, role: &str) -> u64 {
 }
 
 fn tell(app: &mut App, from: &str, to: &str, text: &str) {
-    let send = wire::SendText { pane: Some(pane_of(app, to)), text: Some(text.into()), ..wire::SendText::default() };
+    let target = pane_of(app, to);
+    app.projects.pane_by_mut(target).expect("the pane").agent.update(Some(Activity::Idle), true, Instant::now());
+    let send = wire::SendText { pane: Some(target), text: Some(text.into()), ..wire::SendText::default() };
     ask(app, Some(pane_of(app, from)), Command::Send(send));
     assert_eq!(answers(app).len(), 1);
 }
@@ -385,7 +387,9 @@ mod files {
 }
 
 fn told_with_warning(app: &mut App, to: &str) -> Option<String> {
-    let send = wire::SendText { pane: Some(pane_of(app, to)), text: Some("go".into()), ..wire::SendText::default() };
+    let target = pane_of(app, to);
+    app.projects.pane_by_mut(target).expect("the pane").agent.update(Some(Activity::Idle), true, Instant::now());
+    let send = wire::SendText { pane: Some(target), text: Some("go".into()), ..wire::SendText::default() };
     ask(app, Some(pane_of(app, "orchestrator")), Command::Send(send));
     let mut answers = answers(app);
     assert_eq!(answers.len(), 1);

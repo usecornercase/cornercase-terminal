@@ -374,7 +374,7 @@ const TAB: Ids = Ids { pane: None, ..PANE };
     "machine vps  notice  claude on vps needs you in shop › main  cc-1-2"
 )]
 #[case::a_message(
-    What::Message { kind: "notify".into(), message: "the release build is ready".into(), panes: vec![], failed: false },
+    What::Message { kind: "notify".into(), message: "the release build is ready".into(), panes: vec![], failed: false, run: None, role: None },
     Ids::default(),
     "notify  the release build is ready"
 )]
@@ -384,6 +384,8 @@ const TAB: Ids = Ids { pane: None, ..PANE };
         message: "pull request merged in fix-login: 2 agents closed".into(),
         panes: vec![4, 5],
         failed: false,
+        run: None,
+        role: None,
     },
     Ids { project: Some(1), workspace: Some(2), ..Ids::default() },
     "workspace 2  flow-merged  pull request merged in fix-login: 2 agents closed"
@@ -394,9 +396,23 @@ const TAB: Ids = Ids { pane: None, ..PANE };
         message: "pull request merged in fix-login: 2 agents closed, could not free the worktree: target: busy".into(),
         panes: vec![4, 5],
         failed: true,
+        run: None,
+        role: None,
     },
     Ids { project: Some(1), workspace: Some(2), ..Ids::default() },
     "workspace 2  flow-merged  pull request merged in fix-login: 2 agents closed, could not free the worktree: target: busy"
+)]
+#[case::a_flow_role_that_exited(
+    What::Message {
+        kind: "flow-exited".into(),
+        message: "coder's agent exited in shop › fix-login".into(),
+        panes: vec![7],
+        failed: false,
+        run: Some(12),
+        role: Some("coder".into()),
+    },
+    Ids { project: Some(1), workspace: Some(2), ..Ids::default() },
+    "workspace 2  flow-exited  coder's agent exited in shop › fix-login"
 )]
 #[case::a_tunnel_held_by_a_program(
     What::Tunnel {

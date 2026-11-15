@@ -25,9 +25,7 @@ impl App {
         let run = saved.run.as_ref().map(|state| {
             let mut run = Run::new(workspace, state.flow.clone(), state.task.clone());
             run.dir = state.dir.as_deref().filter(|name| folder::valid(name)).map(|name| self.runs.dir().join(name));
-            run.ended.clone_from(&state.ended);
-            run.close_when_merged = state.close_when_merged;
-            run.free_builds = state.free_builds;
+            state.apply_to(&mut run);
             run.id = self.take_id();
             run.progress = Progress::resumed(&run.flow, state.stage, &state.rounds);
             KeptRun { run, seats: state.members.clone() }

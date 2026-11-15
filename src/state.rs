@@ -155,6 +155,8 @@ pub(crate) struct RunState {
     pub(crate) close_when_merged: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) free_builds: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) exits_told: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -192,7 +194,15 @@ impl RunState {
             ended: run.ended.clone(),
             close_when_merged: run.close_when_merged,
             free_builds: run.free_builds,
+            exits_told: run.exits_told.clone(),
         }
+    }
+
+    pub(crate) fn apply_to(&self, run: &mut Run) {
+        run.ended.clone_from(&self.ended);
+        run.close_when_merged = self.close_when_merged;
+        run.free_builds = self.free_builds;
+        run.exits_told.clone_from(&self.exits_told);
     }
 
     pub(crate) fn role_at(&self, tab: usize, pane: usize) -> Option<&crate::flows::Role> {
