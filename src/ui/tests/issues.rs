@@ -32,6 +32,7 @@ fn list(selected: Option<usize>) -> IssuesBody {
         selected,
         scroll: 0,
         empty: "no open issues".into(),
+        tail: None,
     }
 }
 
@@ -138,6 +139,7 @@ fn says_why_the_list_is_empty() {
         selected: None,
         scroll: 0,
         empty: "no matches".into(),
+        tail: None,
     };
     assert!(text(&with(issues(body))).contains("no matches"));
 }

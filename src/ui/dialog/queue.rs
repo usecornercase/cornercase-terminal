@@ -153,6 +153,10 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
         }
         let set = cell(screen, AGENT, LABEL + 1, rest(screen, LABEL + 1));
         f.render_widget(Paragraph::new(Span::styled("set by the bot", dim)), set);
+        if let Some(choice) = form.choice() {
+            let at = cell(screen, WHERE, LABEL + 1, rest(screen, LABEL + 1));
+            f.render_widget(Paragraph::new(Span::styled(choice.label.as_str(), dim)), at);
+        }
         return;
     }
     for (at, label) in

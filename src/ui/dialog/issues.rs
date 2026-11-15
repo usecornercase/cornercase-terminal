@@ -129,7 +129,7 @@ pub(crate) struct IssueRow {
 }
 
 pub(crate) enum IssuesBody {
-    List { filter: String, items: Vec<IssueRow>, selected: Option<usize>, scroll: usize, empty: String },
+    List { filter: String, items: Vec<IssueRow>, selected: Option<usize>, scroll: usize, empty: String, tail: Option<String> },
     Token { label: &'static str, input: String, help: Vec<String> },
     Detail { lines: Vec<Line<'static>>, scroll: usize },
     Name { heading: String, fields: [(&'static str, String); 2], focus: usize, help: Vec<String> },
@@ -161,7 +161,7 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
             f.render_widget(Paragraph::new(visible), area);
             None
         }
-        IssuesBody::List { filter, items, selected, scroll, empty } => {
+        IssuesBody::List { filter, items, selected, scroll, empty, tail } => {
             draw_issue_tabs(f, view, issues, r);
             let cursor = draw_input(f, view.muted, input, "", filter);
             if items.is_empty() {
@@ -169,6 +169,9 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
                 f.render_widget(text, list.inner(Margin::new(1, 0)));
             }
             draw_issue_rows(f, view, list, RowsShown { items, selected: *selected, scroll: *scroll });
+            if let Some(tail) = tail {
+                draw_issue_tail(f, dim, list, (items.len(), empty), tail);
+            }
             cursor
         }
         IssuesBody::Name { heading, fields, focus, help } => {
@@ -188,6 +191,17 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
     if let Some(pos) = cursor.filter(|_| !matches!(issues.note, Some(Note::Busy(_)))) {
         f.set_cursor_position(pos);
     }
+}
+
+fn draw_issue_tail(f: &mut Frame, dim: Style, list: Rect, (items, empty): (usize, &str), tail: &str) {
+    let inner = list.inner(Margin::new(1, 0));
+    let above = if items == 0 { crate::editor::wrap_text(empty, usize::from(inner.width)).len() } else { items };
+    let Ok(above) = u16::try_from(above) else { return };
+    if above >= inner.height {
+        return;
+    }
+    let row = Rect::new(inner.x, inner.y + above, inner.width, 1);
+    f.render_widget(Paragraph::new(Span::styled(truncate_right(tail, usize::from(row.width)), dim)), row);
 }
 
 fn draw_issue_name(
