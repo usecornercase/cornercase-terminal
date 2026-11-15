@@ -225,6 +225,8 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
     }
 }
 
+const SKIPPED_WHEN_NULL: [&str; 2] = ["persona", "source"];
+
 pub(crate) fn unknown_fields(raw: &Value, parsed: &impl Serialize) -> Option<String> {
     serde_json::to_value(parsed).ok().and_then(|known| stray(raw, &known))
 }
@@ -232,6 +234,7 @@ pub(crate) fn unknown_fields(raw: &Value, parsed: &impl Serialize) -> Option<Str
 fn stray(raw: &Value, known: &Value) -> Option<String> {
     match (raw, known) {
         (Value::Object(raw), Value::Object(known)) => raw.iter().find_map(|(key, value)| match known.get(key) {
+            None if value.is_null() && SKIPPED_WHEN_NULL.contains(&key.as_str()) => None,
             None => Some(key.clone()),
             Some(inner) => stray(value, inner).map(|path| format!("{key}.{path}")),
         }),

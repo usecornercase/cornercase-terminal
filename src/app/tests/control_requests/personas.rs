@@ -141,6 +141,50 @@ fn an_import_with_one_bad_persona_saves_none_and_names_it() {
 }
 
 #[test]
+fn two_personas_of_one_name_in_an_import_are_refused() {
+    let mut library = Library::new();
+
+    let refused = library.refused(vec![text("reviewer-a.md", REVIEWER), text("reviewer-b.md", REVIEWER)], |_| {});
+
+    assert!(refused.contains("two of them are named `Code Reviewer`"), "{refused}");
+    assert!(!library.dir().exists());
+}
+
+#[test]
+fn a_file_of_that_id_that_cannot_be_read_is_kept_unless_replaced() {
+    let mut library = Library::new();
+    std::fs::create_dir_all(library.dir()).expect("the folder");
+    std::fs::write(library.dir().join("reviewer.md"), "my notes").expect("write");
+
+    let refused = library.refused(vec![text("reviewer.md", REVIEWER)], |_| {});
+
+    assert!(refused.contains("you already have the persona `reviewer`"), "{refused}");
+    assert_eq!(std::fs::read_to_string(library.dir().join("reviewer.md")).expect("kept"), "my notes");
+}
+
+#[test]
+fn an_import_that_cannot_save_one_persona_leaves_the_library_as_it_was() {
+    let mut library = Library::new();
+    library.imported(vec![text("reviewer.md", REVIEWER)], |_| {});
+    let before = std::fs::read_to_string(library.dir().join("reviewer.md")).expect("the file");
+    std::fs::create_dir_all(library.dir().join("tester.md")).expect("a folder in the way");
+    let newer = REVIEWER.replace("You review code.", "You review code twice.");
+    let tester = "---\nname: Tester\n---\nTest it.\n";
+    let fresh = "---\nname: Fresh\n---\nNew.\n";
+
+    let refused = library.refused(
+        vec![text("reviewer.md", &newer), text("fresh.md", fresh), text("tester.md", tester)],
+        |import| {
+            import.replace = true;
+        },
+    );
+
+    assert!(refused.contains("could not save the persona `tester`"), "{refused}");
+    assert_eq!(std::fs::read_to_string(library.dir().join("reviewer.md")).expect("restored"), before);
+    assert!(!library.dir().join("fresh.md").exists());
+}
+
+#[test]
 fn removing_a_persona_deletes_its_file() {
     let mut library = Library::new();
     library.imported(vec![text("reviewer.md", REVIEWER)], |_| {});

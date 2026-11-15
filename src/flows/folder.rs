@@ -90,7 +90,11 @@ pub(crate) fn ensure_personas(dir: &Path, personas: &BTreeMap<String, String>) -
     for (id, text) in personas {
         match fs::OpenOptions::new().write(true).create_new(true).open(persona(dir, id)) {
             Ok(mut file) => {
-                file.write_all(text.as_bytes())?;
+                if let Err(e) = file.write_all(text.as_bytes()) {
+                    drop(file);
+                    let _ = fs::remove_file(persona(dir, id));
+                    return Err(e);
+                }
                 written += 1;
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}

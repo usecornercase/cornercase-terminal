@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::args::persona::{PersonaAction, PersonaImportArgs, PersonaRemoveArgs};
 use super::{note, print_json, print_out, read_limited};
-use crate::client::{answer, ask, confirm};
+use crate::client::{answer, ask, confirm_on_stderr};
 use crate::control::Command;
 use crate::control::persona::{
     CHECK, PersonaImport, PersonaInfo, PersonaList, PersonaRemove, PersonaRemoved, PersonaText, Personas,
@@ -104,7 +104,7 @@ fn confirmed(preview: &PersonasImported, source: &Source) -> Result<bool> {
     }
     let count = preview.personas.len();
     let them = if count == 1 { "it" } else { "them" };
-    Ok(confirm(&format!("{risks}\nImport {them} into your personas? [y/N] ")))
+    Ok(confirm_on_stderr(&format!("{risks}\nImport {them} into your personas? [y/N] ")))
 }
 
 fn persona_line(persona: &PersonaInfo) -> String {

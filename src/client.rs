@@ -113,6 +113,16 @@ pub(crate) fn remote(remote: &Remote) -> Result<()> {
 pub(crate) fn confirm(question: &str) -> bool {
     print!("{question}");
     let _ = stdout().flush();
+    answered_yes()
+}
+
+pub(crate) fn confirm_on_stderr(question: &str) -> bool {
+    eprint!("{question}");
+    let _ = io::stderr().flush();
+    answered_yes()
+}
+
+fn answered_yes() -> bool {
     let mut answer = String::new();
     stdin().lock().read_line(&mut answer).is_ok() && matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
 }

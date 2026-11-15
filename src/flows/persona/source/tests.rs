@@ -132,7 +132,7 @@ mod from_the_web {
     #[test]
     fn an_address_is_one_persona() {
         let server = FakeHttp::start(vec![("GET /p/reviewer.md", 200, REVIEWER)]);
-        let url = format!("{}/p/reviewer.md?raw=1", server.url());
+        let url = format!("{}/p/reviewer.md?next=/download#a/b", server.url());
 
         let gathered = gather(&Source::Url(url.clone()), &hosts(&server)).expect("gathered");
 

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use flate2::read::GzDecoder;
 
-use super::{EXTENSION, MAX_BYTES, MAX_IMPORT, is_persona};
+use super::{EXTENSION, MAX_BYTES, MAX_IMPORT, is_persona, read_text, too_long};
 use crate::http::{self, Service};
 
 pub(crate) const RAW_URL: &str = "https://raw.githubusercontent.com";
@@ -14,6 +14,7 @@ pub(crate) const ARCHIVE_ENV: &str = "CORNERCASE_PERSONAS_ARCHIVE_URL";
 const DIVISIONS: &str = "divisions.json";
 const MAX_ARCHIVE: u64 = 64 * 1024 * 1024;
 const MAX_ENTRIES: usize = 20_000;
+const MAX_KEPT: usize = 64 * 1024 * 1024;
 const MAX_DEPTH: usize = 8;
 const TIMEOUT: Duration = Duration::from_secs(20);
 const ARCHIVE_TIMEOUT: Duration = Duration::from_secs(120);
@@ -123,10 +124,6 @@ pub(crate) fn on_disk(path: &Path) -> Option<bool> {
     std::fs::metadata(path).ok().map(|meta| meta.is_dir())
 }
 
-fn too_long(what: &str) -> String {
-    format!("{what} is too long for a persona (at most {} KiB)", MAX_BYTES / 1024)
-}
-
 fn not_persona(what: &str) -> String {
     format!("{what} is not a persona: a persona is a .md file whose front matter (a `---` block) gives its `name`")
 }
@@ -145,14 +142,14 @@ pub(crate) fn gather(source: &Source, hosts: &Hosts) -> Result<Gathered, String>
     match source {
         Source::Stdin => Err("standard input is read by the command".into()),
         Source::File(path) => {
-            let text = read_file(path)?;
+            let text = read_text(path)?;
             let file = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
             single(file, text, Some(absolute(path)), &path.display().to_string())
         }
         Source::Folder(path) => picked(walk(path)?, &source.label()),
         Source::Url(url) => {
             let text = fetch_text(url)?;
-            let file = url.rsplit('/').next().unwrap_or_default().split(['?', '#']).next().unwrap_or_default();
+            let file = url.split(['?', '#']).next().unwrap_or_default().rsplit('/').next().unwrap_or_default();
             single(file, text, Some(url.clone()), url)
         }
         Source::Repo { repo, path } if has_extension(path) => {
@@ -170,17 +167,6 @@ fn has_extension(path: &str) -> bool {
 
 fn absolute(path: &Path) -> String {
     std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf()).display().to_string()
-}
-
-fn read_file(path: &Path) -> Result<String, String> {
-    let shown = path.display();
-    let file = std::fs::File::open(path).map_err(|e| format!("cannot read {shown}: {e}"))?;
-    let mut bytes = Vec::new();
-    file.take(MAX_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| format!("cannot read {shown}: {e}"))?;
-    if bytes.len() > MAX_BYTES {
-        return Err(too_long(&shown.to_string()));
-    }
-    String::from_utf8(bytes).map_err(|_| format!("{shown} is not text"))
 }
 
 fn fetch_text(url: &str) -> Result<String, String> {
@@ -204,19 +190,29 @@ struct Tree {
     entries: Vec<Entry>,
     divisions: Option<String>,
     skipped: usize,
+    kept: usize,
 }
 
 impl Tree {
-    fn add(&mut self, relative: String, bytes: Vec<u8>, source: String) {
+    fn add(&mut self, relative: String, bytes: Vec<u8>, source: String) -> Result<(), String> {
         let Ok(text) = String::from_utf8(bytes) else {
             self.skipped += 1;
-            return;
+            return Ok(());
         };
         if relative == DIVISIONS {
             self.divisions = Some(text);
-        } else {
-            self.entries.push(Entry { relative, text, source });
+            return Ok(());
         }
+        if !is_persona(&text) {
+            self.skipped += 1;
+            return Ok(());
+        }
+        self.kept += text.len();
+        if self.kept > MAX_KEPT {
+            return Err(format!("its personas take more than {} MiB", MAX_KEPT / 1024 / 1024));
+        }
+        self.entries.push(Entry { relative, text, source });
+        Ok(())
     }
 
     fn wanted(relative: &str) -> bool {
@@ -241,18 +237,19 @@ fn walk(root: &Path) -> Result<Tree, String> {
             if kind.is_dir() && !name.starts_with('.') && depth < MAX_DEPTH {
                 pending.push((entry.path(), format!("{relative}/"), depth + 1));
             } else if kind.is_file() && Tree::wanted(&relative) {
-                tree_file(&mut tree, &entry.path(), relative);
+                tree_file(&mut tree, &entry.path(), relative).map_err(|e| format!("{}: {e}", root.display()))?;
             }
         }
     }
     Ok(tree)
 }
 
-fn tree_file(tree: &mut Tree, path: &Path, relative: String) {
-    match read_file(path) {
-        Ok(text) => tree.add(relative, text.into_bytes(), absolute(path)),
-        Err(_) => tree.skipped += 1,
+fn tree_file(tree: &mut Tree, path: &Path, relative: String) -> Result<(), String> {
+    if let Ok(text) = read_text(path) {
+        return tree.add(relative, text.into_bytes(), absolute(path));
     }
+    tree.skipped += 1;
+    Ok(())
 }
 
 fn archive(hosts: &Hosts, repo: &str, path: &str) -> Result<Tree, String> {
@@ -293,7 +290,7 @@ fn unpacked(bytes: &[u8], repo: &str, prefix: &str) -> Result<Tree, String> {
         }
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-        tree.add(relative, bytes, format!("{repo}/{inside}"));
+        tree.add(relative, bytes, format!("{repo}/{inside}"))?;
     }
     Ok(tree)
 }
@@ -324,7 +321,7 @@ fn picked(tree: Tree, what: &str) -> Result<Gathered, String> {
     let mut entries = tree.entries;
     entries.sort_by(|a, b| a.relative.cmp(&b.relative));
     for entry in entries {
-        if in_division(&entry.relative) && is_persona(&entry.text) {
+        if in_division(&entry.relative) {
             let file = entry.relative.rsplit('/').next().unwrap_or_default().to_string();
             gathered.found.push(Found { file, text: entry.text, source: Some(entry.source) });
         } else {

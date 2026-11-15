@@ -56,3 +56,23 @@ fn a_listed_persona_leaves_out_what_it_lacks() {
         json!({"id": "r", "name": "R", "description": "", "bytes": 3})
     );
 }
+
+#[rstest::rstest]
+#[case::a_null_persona(
+    json!({"name": "F", "roles": [{"name": "reviewer", "persona": null}], "orchestrator": {"persona": null}}),
+    None
+)]
+#[case::a_stray_key(json!({"name": "F", "roles": [{"name": "reviewer", "personna": "x"}]}), Some("roles.0.personna"))]
+fn a_strict_client_may_send_a_null_persona(#[case] raw: serde_json::Value, #[case] stray: Option<&str>) {
+    let parsed: crate::control::FlowSpec = serde_json::from_value(raw.clone()).expect("a spec");
+
+    assert_eq!(crate::control::contract::unknown_fields(&raw, &parsed).as_deref(), stray);
+}
+
+#[test]
+fn a_strict_client_may_send_a_null_source() {
+    let raw = json!({"personas": [{"file": "r.md", "text": "---\nname: R\n---\n", "source": null}]});
+    let parsed: PersonaImport = serde_json::from_value(raw.clone()).expect("an import");
+
+    assert_eq!(crate::control::contract::unknown_fields(&raw, &parsed), None);
+}

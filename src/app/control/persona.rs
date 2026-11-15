@@ -60,7 +60,7 @@ impl App {
         }
         let dir = self.personas_dir();
         let incoming = incoming(&import.personas)?;
-        let replaced = collisions(&persona::list(&dir), &incoming, import.replace)?;
+        let replaced = collisions((&persona::list(&dir), &persona::ids(&dir)), &incoming, import.replace)?;
         let mut answer = PersonasImported { check: CHECK.to_string(), ..PersonasImported::default() };
         answer.personas = incoming
             .iter()
@@ -70,9 +70,8 @@ impl App {
         if import.check {
             return Ok(Some(json(&answer)));
         }
-        for (info, found) in answer.personas.iter_mut().zip(&incoming) {
-            let path =
-                persona::save(&dir, found).map_err(|e| format!("could not save the persona `{}`: {e}", found.id))?;
+        let paths = persona::save_all(&dir, &incoming)?;
+        for (info, path) in answer.personas.iter_mut().zip(paths) {
             info.path = Some(path);
         }
         let bytes: usize = incoming.iter().map(|found| found.text.len()).sum();
@@ -104,6 +103,9 @@ fn incoming(texts: &[PersonaText]) -> Result<Vec<Persona>, Refusal> {
             Ok(read) if found.iter().any(|other| other.id == read.id) => {
                 problems.push(format!("two of them would be the persona `{}`", read.id));
             }
+            Ok(read) if found.iter().any(|other| same_name(&other.name, &read.name)) => {
+                problems.push(format!("two of them are named `{}`", read.name));
+            }
             Ok(read) => found.push(read),
             Err(e) => problems.push(format!("`{shown}`: {e}")),
         }
@@ -111,21 +113,25 @@ fn incoming(texts: &[PersonaText]) -> Result<Vec<Persona>, Refusal> {
     if problems.is_empty() { Ok(found) } else { Err(malformed(problems.join("; "))) }
 }
 
-fn collisions(listing: &Listing, incoming: &[Persona], replace: bool) -> Result<Vec<bool>, Refusal> {
+fn collisions(
+    (listing, ids): (&Listing, &[String]),
+    incoming: &[Persona],
+    replace: bool,
+) -> Result<Vec<bool>, Refusal> {
     let mut problems = Vec::new();
     let mut replaced = Vec::new();
     for found in incoming {
-        let same = listing.find(&found.id);
+        let same = ids.contains(&found.id);
         let named = listing.personas.iter().find(|other| other.id != found.id && same_name(&other.name, &found.name));
         if let Some(other) = named {
             problems.push(format!(
                 "your persona `{}` is also named `{}`: remove it first with `cornercase persona remove {}`",
                 other.id, other.name, other.id
             ));
-        } else if same.is_some() && !replace {
+        } else if same && !replace {
             problems.push(format!("you already have the persona `{}`: pass --replace to overwrite it", found.id));
         }
-        replaced.push(same.is_some());
+        replaced.push(same);
     }
     if problems.is_empty() { Ok(replaced) } else { Err(Refusal::new(Code::Conflict, problems.join("; "))) }
 }

@@ -1,4 +1,5 @@
 use std::fmt::Write as _;
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
@@ -29,12 +30,6 @@ pub(crate) struct Persona {
 pub(crate) struct Listing {
     pub(crate) personas: Vec<Persona>,
     pub(crate) broken: Vec<(PathBuf, String)>,
-}
-
-impl Listing {
-    pub(crate) fn find(&self, id: &str) -> Option<&Persona> {
-        self.personas.iter().find(|persona| persona.id == id)
-    }
 }
 
 pub(crate) fn valid_id(id: &str) -> bool {
@@ -199,8 +194,22 @@ pub(crate) fn list(dir: &Path) -> Listing {
 }
 
 fn read_file(id: &str, path: &Path) -> std::result::Result<Persona, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    parse(id, &text)
+    parse(id, &read_text(path)?)
+}
+
+pub(crate) fn read_text(path: &Path) -> std::result::Result<String, String> {
+    let shown = path.display();
+    let file = std::fs::File::open(path).map_err(|e| format!("cannot read {shown}: {e}"))?;
+    let mut bytes = Vec::new();
+    file.take(MAX_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| format!("cannot read {shown}: {e}"))?;
+    if bytes.len() > MAX_BYTES {
+        return Err(too_long(&shown.to_string()));
+    }
+    String::from_utf8(bytes).map_err(|_| format!("{shown} is not text"))
+}
+
+pub(crate) fn too_long(what: &str) -> String {
+    format!("{what} is too long for a persona (at most {} KiB)", MAX_BYTES / 1024)
 }
 
 pub(crate) fn read(dir: &Path, id: &str) -> std::result::Result<Persona, String> {
@@ -214,6 +223,31 @@ pub(crate) fn save(dir: &Path, persona: &Persona) -> Result<PathBuf> {
     let path = path(dir, &persona.id);
     persist::write_bytes(&path, persona.text.as_bytes(), persist::Kind::Synced)?;
     Ok(path)
+}
+
+pub(crate) fn save_all(dir: &Path, personas: &[Persona]) -> std::result::Result<Vec<PathBuf>, String> {
+    let kept: Vec<Option<Vec<u8>>> =
+        personas.iter().map(|persona| std::fs::read(path(dir, &persona.id)).ok()).collect();
+    let mut saved = Vec::new();
+    for persona in personas {
+        match save(dir, persona) {
+            Ok(path) => saved.push(path),
+            Err(e) => {
+                undo(&saved, &kept);
+                return Err(format!("could not save the persona `{}`: {e}", persona.id));
+            }
+        }
+    }
+    Ok(saved)
+}
+
+fn undo(saved: &[PathBuf], kept: &[Option<Vec<u8>>]) {
+    for (path, before) in saved.iter().zip(kept) {
+        let _ = match before {
+            Some(bytes) => persist::write_bytes(path, bytes, persist::Kind::Synced).map(drop),
+            None => std::fs::remove_file(path),
+        };
+    }
 }
 
 pub(crate) fn remove(dir: &Path, id: &str) -> Result<PathBuf> {
