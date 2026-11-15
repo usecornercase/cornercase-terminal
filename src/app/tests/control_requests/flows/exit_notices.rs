@@ -106,8 +106,11 @@ fn an_exit_told_before_a_restart_is_not_told_again() {
 
     assert!(again.restore(&saved, AREA));
     let pane = again.runs.all()[0].pane_of("reviewer").expect("the reviewer");
+    let tab = again.projects.tab_of_pane(pane).map(|at| again.projects.tab(at).id).expect("its tab");
+    assert!(!again.seen_tabs().contains(&tab), "its exit would be told if it were new");
     refreshing(&mut again, &again_rx, "the reviewer is exited", |app| app.runs.all()[0].exited.contains(&pane));
-    refreshing(&mut again, &again_rx, "another read", |app| app.agents.watched().is_some());
+    let until = again.agents.watched().unwrap_or_else(Instant::now) + WATCH_AGENTS_EVERY * 3;
+    refreshing(&mut again, &again_rx, "more reads", |app| app.agents.watched().is_some_and(|at| at >= until));
 
     let told: Vec<Exit> = flow_exits(&again.take_events(), NOTICES);
     assert!(told.iter().all(|(panes, _, _)| panes != &vec![pane]), "{told:?}");
@@ -167,4 +170,22 @@ fn a_members_exit_is_silent_with_subagent_notices_off() {
     std::process::Command::new("kill").arg(pid.to_string()).status().expect("kill");
     agent.refreshing("the orchestrator is told", |app| app.runs.all()[0].exits_told.len() == 2);
     assert!(toast(&agent.app).is_some_and(|toast| toast.contains("orchestrator's agent exited")));
+}
+
+#[test]
+fn a_later_exit_of_the_same_run_names_every_role_that_is_exited() {
+    let (mut team, reviewer) = ready();
+    let coder = team.app.runs.all()[0].pane_of("coder").expect("the coder");
+
+    kill_role(&team, "coder");
+    refreshing(&mut team.app, &team.rx, "the coder exited", |app| app.runs.all()[0].exited == [coder]);
+    kill_role(&team, "reviewer");
+    refreshing(&mut team.app, &team.rx, "both exited", |app| app.runs.all()[0].exited.len() == 2);
+    reads(&mut team, 3);
+
+    let toast = toast(&team.app).expect("a toast").to_string();
+    assert!(toast.starts_with("2 agents exited in "), "{toast}");
+    assert!(toast.contains(": coder and reviewer"), "{toast}");
+    assert!(toast.ends_with(" · ▶ on the workspace reopens them"), "{toast}");
+    assert_eq!(team.app.runs.all()[0].pane_of("reviewer"), Some(reviewer));
 }

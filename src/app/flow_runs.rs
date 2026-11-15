@@ -32,6 +32,7 @@ use crate::term::Term;
 use crate::time;
 use crate::ui;
 
+mod exited;
 mod merged;
 pub(super) use merged::MergedBuilds;
 
@@ -669,6 +670,8 @@ impl App {
             text: message,
             workspace: Some(workspace),
             panes: vec![pane],
+            run: None,
+            role: None,
         });
     }
 

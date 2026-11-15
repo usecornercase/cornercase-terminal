@@ -88,7 +88,14 @@ impl App {
         self.outbox.notify(Notification::new(&message, &self.config.desktop_notifications));
         self.messages.toast = Some(Toast::new(message.clone(), ui::ToastIcon::Check));
         let panes = caller.filter(|pane| self.projects.pane_by(*pane).is_some()).into_iter().collect();
-        self.publish_message(Message { kind: MessageKind::Notify, text: message, workspace: None, panes });
+        self.publish_message(Message {
+            kind: MessageKind::Notify,
+            text: message,
+            workspace: None,
+            panes,
+            run: None,
+            role: None,
+        });
         Ok(Some(json(&Done::default())))
     }
 
