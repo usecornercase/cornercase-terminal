@@ -27,14 +27,19 @@ fn root_of(c: &Chat) -> i32 {
     root_pid(&c.claude).expect("the agent's pid")
 }
 
-#[test]
-fn a_bots_turn_cannot_type_into_a_popup_or_start_a_pane_with_a_command() {
+fn bots_turn() -> Chat {
     let mut c = chat(ANSWER);
     c.hold();
     c.say("go");
     c.started(1);
     let root = root_of(&c);
     c.app.client_connected(BOT, Some(root));
+    c
+}
+
+#[test]
+fn a_bots_turn_cannot_type_into_a_popup_or_start_a_pane_with_a_command() {
+    let mut c = bots_turn();
     let own = i32::try_from(std::process::id()).expect("a pid");
     c.app.client_connected(BOT + 1, Some(own));
 
@@ -156,12 +161,7 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
 
 #[test]
 fn another_connection_still_stops_updates_and_clones() {
-    let mut c = chat(ANSWER);
-    c.hold();
-    c.say("go");
-    c.started(1);
-    let root = root_of(&c);
-    c.app.client_connected(BOT, Some(root));
+    let mut c = bots_turn();
     c.app.client_connected(BOT + 1, Some(i32::try_from(std::process::id()).expect("a pid")));
     c.app.update.updates_mut().enabled = true;
     c.app.config.check_updates = false;
@@ -184,12 +184,7 @@ fn another_connection_still_stops_updates_and_clones() {
 
 #[test]
 fn a_bots_stop_messages_are_refused_and_its_connection_stays_a_bots() {
-    let mut c = chat(ANSWER);
-    c.hold();
-    c.say("go");
-    c.started(1);
-    let root = root_of(&c);
-    c.app.client_connected(BOT, Some(root));
+    let mut c = bots_turn();
     let stop = Some("a bot cannot stop its own server");
 
     assert_eq!(c.app.refused_stop(BOT, &ClientMessage::KillServer), stop);

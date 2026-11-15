@@ -1,22 +1,35 @@
-use super::a_bug::{Attached, hello};
+use super::a_bug::{Attached, Client, hello};
 use super::*;
 use crate::bots;
 use crate::graphics::Support;
 use crate::protocol::Hello;
 use crate::test_util::{BotSleepers, TempDir};
 
+struct Joined {
+    attached: Attached,
+    bot: Client,
+    sleepers: BotSleepers,
+    _dirs: [TempDir; 2],
+}
+
+impl Joined {
+    fn new() -> Self {
+        let mut attached = Attached::new();
+        let (bots_dir, bin) = (TempDir::new(), TempDir::new());
+        bots::folder::create(bots_dir.path(), &bots::sample("prs", "PRs"), "").expect("a bot");
+        attached.server.app.set_bots_dir(bots_dir.path());
+        let sleepers = BotSleepers::start(bin.path(), &["prs"]);
+        let bot = attached.join(Support::default());
+        attached.server.app.client_connected(bot.id, Some(sleepers.pids()[0]));
+        Self { attached, bot, sleepers, _dirs: [bots_dir, bin] }
+    }
+}
+
 const STOP: &str = "a bot cannot stop its own server";
 
 #[test]
 fn a_bots_kill_server_and_restart_are_rejected_and_the_server_runs_on() {
-    let mut attached = Attached::new();
-    let bots_dir = TempDir::new();
-    let bin = TempDir::new();
-    bots::folder::create(bots_dir.path(), &bots::sample("prs", "PRs"), "").expect("a bot");
-    attached.server.app.set_bots_dir(bots_dir.path());
-    let sleepers = BotSleepers::start(bin.path(), &["prs"]);
-    let bot = attached.join(Support::default());
-    attached.server.app.client_connected(bot.id, Some(sleepers.pids()[0]));
+    let Joined { mut attached, bot, sleepers, _dirs } = Joined::new();
 
     let restart = attached.server.handle(ServerEvent::Message(bot.id, ClientMessage::Restart));
     let kill = attached.server.handle(ServerEvent::Message(bot.id, ClientMessage::KillServer));
@@ -36,14 +49,7 @@ fn a_bots_kill_server_and_restart_are_rejected_and_the_server_runs_on() {
 
 #[test]
 fn a_stop_queued_behind_the_removal_of_a_bots_connection_is_not_obeyed() {
-    let mut attached = Attached::new();
-    let bots_dir = TempDir::new();
-    let bin = TempDir::new();
-    bots::folder::create(bots_dir.path(), &bots::sample("prs", "PRs"), "").expect("a bot");
-    attached.server.app.set_bots_dir(bots_dir.path());
-    let sleepers = BotSleepers::start(bin.path(), &["prs"]);
-    let bot = attached.join(Support::default());
-    attached.server.app.client_connected(bot.id, Some(sleepers.pids()[0]));
+    let Joined { mut attached, bot, sleepers, _dirs } = Joined::new();
     let other_build = Hello { version: 0, ..hello(HostTheme::default()) };
 
     let hello = attached.server.handle(ServerEvent::Message(bot.id, ClientMessage::Hello(Box::new(other_build))));

@@ -82,6 +82,14 @@ fn a_bot_made_from_the_form_answers_in_its_chat() {
     assert!(history.starts_with("you · ") && history.contains("which are blocked?"), "{history}");
 }
 
+fn turn_ran(session: &Session) -> (String, String) {
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+    let status = std::fs::read_to_string(session.dir.join("claude-bot.status")).expect("the commands ran");
+    let stderr = std::fs::read_to_string(session.dir.join("claude-bot.err")).expect("their output");
+    (status, stderr)
+}
+
 const HEAD: &str = "a bot can only type into a pane that runs an agent";
 
 #[test]
@@ -91,12 +99,7 @@ fn a_bot_cannot_type_into_a_shell_pane_but_you_can() {
     );
     let pane = held::new_shell(&session);
     std::fs::write(session.dir.join("claude-bot.pane"), &pane).expect("the pane");
-    session.says(&["bot", "new", "prs", "--agent", "claude"]);
-
-    session.says(&["bot", "say", "prs", "go", "--wait"]);
-
-    let status = std::fs::read_to_string(session.dir.join("claude-bot.status")).expect("the command ran");
-    let stderr = std::fs::read_to_string(session.dir.join("claude-bot.err")).expect("its stderr");
+    let (status, stderr) = turn_ran(&session);
     assert_eq!(status.trim(), "1", "{stderr}");
     assert!(stderr.contains(HEAD), "{stderr}");
     assert!(!session.dir.join("claude-bot.typed").exists(), "the bot typed into the shell");
@@ -221,12 +224,7 @@ fn a_bots_turn_cannot_stop_restart_or_update_the_server_even_without_its_variabl
         .concat();
     let session = started_running(&before);
     let boot = session.says(&["contract", "--json"]);
-    session.says(&["bot", "new", "prs", "--agent", "claude"]);
-
-    session.says(&["bot", "say", "prs", "go", "--wait"]);
-
-    let status = std::fs::read_to_string(session.dir.join("claude-bot.status")).expect("the commands ran");
-    let stderr = std::fs::read_to_string(session.dir.join("claude-bot.err")).expect("their output");
+    let (status, stderr) = turn_ran(&session);
     assert_eq!(status.lines().collect::<Vec<_>>(), ["1", "1", "1"], "{stderr}");
     assert_eq!(stderr.matches("a bot cannot stop its own server").count(), 3, "{stderr}");
     assert_eq!(session.says(&["contract", "--json"]), boot);
