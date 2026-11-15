@@ -8,12 +8,13 @@ use crate::bots::BOT_ENV;
 use crate::config::Config;
 use crate::control::bots::BotRequest;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{Command, Configure, HeldAction};
+use crate::control::{self, Command, Configure, HeldAction};
 use crate::log;
 use crate::process;
 use crate::project::Hierarchy;
 use crate::term::Term;
 
+pub(crate) const NOT_OWN: &str = "a bot can only schedule and change its own queue entries";
 pub(crate) const HEAD: &str = "a bot can only type into a pane that runs an agent";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +36,10 @@ pub(in crate::app) struct BotClients {
 impl BotClients {
     fn is_bot(&self, client: u64) -> bool {
         self.clients.contains_key(&client)
+    }
+
+    fn bot_of(&self, client: u64) -> Option<&str> {
+        self.clients.get(&client).map(String::as_str)
     }
 
     fn insert(&mut self, client: u64, bot: String) {
@@ -144,15 +149,20 @@ impl App {
     }
 
     fn contained_bot(&self) -> Option<String> {
-        let mut turns = self.panels.bots.live.iter();
-        turns
-            .find(|state| state.turn.as_ref().is_some_and(|turn| turn.running.contained()))
-            .map(|state| state.bot.id.clone())
+        let mut states = self.panels.bots.live.iter();
+        let contained = |state: &&crate::app::bots::Live| {
+            state.turn.as_ref().is_some_and(|turn| turn.running.contained())
+                || state.runs.iter().any(|run| run.running.contained())
+        };
+        states.find(contained).map(|state| state.bot.id.clone())
     }
 
     fn bot_of_process(&self, pid: i32) -> Option<String> {
-        let running =
-            self.panels.bots.live.iter().find(|state| state.turn.as_ref().is_some_and(|turn| turn.running.holds(pid)));
+        let holds = |state: &&crate::app::bots::Live| {
+            state.turn.as_ref().is_some_and(|turn| turn.running.holds(pid))
+                || state.runs.iter().any(|run| run.running.holds(pid))
+        };
+        let running = self.panels.bots.live.iter().find(holds);
         if let Some(state) = running {
             return Some(state.bot.id.clone());
         }
@@ -169,6 +179,9 @@ impl App {
         if !self.clients.bots.is_bot(client) {
             return Ok(());
         }
+        if let Command::Queue(queue) = command {
+            return self.queue_by_bot(client, queue);
+        }
         match gated(command) {
             None => Ok(()),
             Some(Gated::Popup) => Err(no_popup()),
@@ -178,6 +191,26 @@ impl App {
             Some(Gated::Says(bot)) => self.says_to(&bot),
             Some(Gated::Pane { pane, tab }) => self.types_into(self.target(asker, pane, tab)?),
         }
+    }
+
+    fn queue_by_bot(&self, client: u64, queue: &control::Queue) -> Result<(), Refusal> {
+        let Some(own) = self.clients.bots.bot_of(client) else { return Ok(()) };
+        let mine = |id: &u64| self.panels.queued.queue().entry(*id).is_none_or(|entry| entry.bot() == Some(own));
+        let names_own = |key: &str| self.bot_at(key).is_ok_and(|at| self.panels.bots.live[at].bot.id == own);
+        let allowed = match queue {
+            control::Queue::List => true,
+            control::Queue::ClearStarted => false,
+            control::Queue::Add(add) => add.bot.as_deref().is_some_and(names_own),
+            control::Queue::Edit { id, add } => mine(id) && add.bot.as_deref().is_none_or(names_own),
+            control::Queue::Remove(id)
+            | control::Queue::Run(id)
+            | control::Queue::Pause(id)
+            | control::Queue::Resume(id) => mine(id),
+            control::Queue::Restore(undo) => {
+                self.panels.queued.removed(*undo).is_none_or(|entries| entries.iter().all(|e| e.bot() == Some(own)))
+            }
+        };
+        if allowed { Ok(()) } else { Err(Refusal::new(Code::Failed, NOT_OWN)) }
     }
 
     fn says_to(&self, bot: &str) -> Result<(), Refusal> {

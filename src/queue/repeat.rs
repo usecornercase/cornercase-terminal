@@ -10,7 +10,7 @@ use super::clock;
 pub(crate) const MIN_GAP: i64 = 30 * 60;
 const MAX_GAP: i64 = 366 * 86_400;
 const USE: &str = "use every 2h, every 3d, every day 09:00, every weekday 09:00 or every monday 09:00";
-const TOO_OFTEN: &str = "a routine repeats at most every 30 minutes, since each run makes a worktree";
+const TOO_OFTEN: &str = "a routine repeats at most every 30 minutes, since each run starts an agent";
 const TOO_RARE: &str = "a routine repeats at least once a year";
 const DAYS: [(&str, Weekday); 7] = [
     ("monday", Weekday::Monday),

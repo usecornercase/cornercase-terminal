@@ -173,6 +173,7 @@ fn bots() -> Vec<Sample> {
         tokens: Used { input: 4, output: 73, cache_read: 26364, cache_write: 5199 },
         conversation: Some("0f3c".into()),
     };
+    let routine_answer = answer.clone();
     vec![
         sample!(
             "control/events/v1/bot-you.json",
@@ -185,6 +186,10 @@ fn bots() -> Vec<Sample> {
         sample!(
             "control/events/v1/bot-answer.json",
             bot(Some(Line::answer(5, 1_794_560_130, "Two are blocked.", answer)), None, None)
+        ),
+        sample!(
+            "control/events/v1/bot-routine.json",
+            bot(Some(Line::answer(6, 1_794_560_130, "Two are blocked.", routine_answer).of_run(12)), None, None)
         ),
         sample!("control/events/v1/bot-state.json", bot(None, Some("thinking"), None)),
         sample!("control/events/v1/bot-created.json", bot(None, None, Some("created"))),

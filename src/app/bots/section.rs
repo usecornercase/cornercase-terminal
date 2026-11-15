@@ -27,7 +27,7 @@ impl App {
             .map(|(i, state)| ui::BotEntry {
                 name: state.bot.name.clone(),
                 detail: self.bot_detail_short(i),
-                thinking: state.turn.is_some(),
+                thinking: state.turn.is_some() || !state.runs.is_empty(),
                 unread: state.unread,
                 active: shown == Some(i),
             })
@@ -37,6 +37,10 @@ impl App {
 
     fn bot_detail_short(&self, at: usize) -> String {
         let bot = &self.panels.bots.live[at].bot;
+        let idle = self.panels.bots.live[at].turn.is_none() && self.panels.bots.live[at].runs.is_empty();
+        if let Some(next) = self.bot_next_run(&bot.id).filter(|_| idle) {
+            return format!("next {}", crate::queue::clock::when(next, crate::time::now(), &self.window_zone()));
+        }
         match &bot.model {
             Some(model) => format!("{} · {model}", bot.agent),
             None => bot.agent.clone(),
@@ -70,7 +74,24 @@ impl App {
             Access::Cornercase => ui::CardRow::new("access", "through cornercase"),
         });
         rows.push(ui::CardRow::new("made", crate::queue::clock::day(bot.created, &self.window_zone())));
+        rows.extend(self.routine_rows(&bot.id));
         ui::BotCard { name: bot.name.clone(), rows }
+    }
+
+    fn routine_rows(&self, bot: &str) -> Vec<ui::CardRow> {
+        let (zone, now) = (self.window_zone(), crate::time::now());
+        let routines = self.bot_entries(bot).filter(|entry| entry.is_routine());
+        routines
+            .filter_map(|entry| {
+                let repeat = entry.task.repeat?;
+                let next = if entry.task.paused {
+                    String::from("paused")
+                } else {
+                    format!("next {}", crate::queue::clock::when(entry.task.at, now, &zone))
+                };
+                Some(ui::CardRow::new("routine", format!("↻ {repeat}  {}  {next}", entry.task.label)))
+            })
+            .collect()
     }
 
     pub(in crate::app) fn bots_layout(&self, areas: &ui::Areas) -> ui::Rows {

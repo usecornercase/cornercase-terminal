@@ -541,7 +541,7 @@ test('an interval under 30 minutes shows the error in the form', () => {
   o.amount = '20';
   pick(o.unit, 'minutes');
   app.submitQueue();
-  assert.equal(o.error, 'a routine repeats at most every 30 minutes, since each run makes a worktree');
+  assert.equal(o.error, 'a routine repeats at most every 30 minutes, since each run starts an agent');
   assert.equal(app.overlay, o);
   assert.equal(app.queued.length, 0);
   app.destroy();

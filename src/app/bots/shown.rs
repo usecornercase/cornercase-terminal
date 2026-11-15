@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 use ratatui::text::Line as Text;
 
 use crate::app::App;
-use crate::bots::chat::{Kind, Line};
+use crate::bots::chat::{self, Kind, Line};
 use crate::ui::{self, ChatEntry};
 
 pub(in crate::app) struct Chat {
@@ -15,13 +15,23 @@ pub(in crate::app) struct Chat {
     pub(in crate::app) scroll: usize,
     pub(in crate::app) news: bool,
     pub(in crate::app) unfolded: HashSet<u64>,
+    pub(in crate::app) anchor: Option<u64>,
     pub(super) width: u16,
     pub(super) bodies: HashMap<u64, Vec<Text<'static>>>,
 }
 
 impl Chat {
     pub(super) fn new(bot: String, lines: Vec<Line>) -> Self {
-        Self { bot, lines, scroll: 0, news: false, unfolded: HashSet::new(), width: 0, bodies: HashMap::new() }
+        Self {
+            bot,
+            lines,
+            scroll: 0,
+            news: false,
+            unfolded: HashSet::new(),
+            anchor: None,
+            width: 0,
+            bodies: HashMap::new(),
+        }
     }
 }
 
@@ -31,6 +41,8 @@ pub(super) struct Facts {
     zone: String,
     now: i64,
     retry: Option<u64>,
+    answering: HashSet<u64>,
+    again: HashSet<u64>,
 }
 
 pub(in crate::app) struct Shown {
@@ -38,12 +50,26 @@ pub(in crate::app) struct Shown {
     pub(in crate::app) card: ui::BotCard,
 }
 
-fn groups(lines: &[Line]) -> Vec<Range<usize>> {
-    let mut found: Vec<Range<usize>> = Vec::new();
+enum Group {
+    Chat(Range<usize>),
+    Run(u64, Vec<usize>),
+}
+
+fn groups(lines: &[Line]) -> Vec<Group> {
+    let mut found: Vec<Group> = Vec::new();
     for (i, line) in lines.iter().enumerate() {
+        if let Some(run) = line.routine {
+            match found.iter_mut().find(|group| matches!(group, Group::Run(found, _) if *found == run)) {
+                Some(Group::Run(_, members)) => members.push(i),
+                _ => found.push(Group::Run(run, vec![i])),
+            }
+            continue;
+        }
         match found.last_mut() {
-            Some(last) if line.kind == Kind::Step && lines[last.start].kind == Kind::Step => last.end = i + 1,
-            _ => found.push(i..i + 1),
+            Some(Group::Chat(last)) if line.kind == Kind::Step && lines[last.start].kind == Kind::Step => {
+                last.end = i + 1;
+            }
+            _ => found.push(Group::Chat(i..i + 1)),
         }
     }
     found
@@ -66,7 +92,40 @@ impl Chat {
             .clone()
     }
 
-    fn entry(&mut self, group: &Range<usize>, facts: &Facts, width: u16) -> ChatEntry {
+    fn run_block(&mut self, run: u64, members: &[usize], facts: &Facts, width: u16) -> ChatEntry {
+        let lines: Vec<Line> = members.iter().map(|at| self.lines[*at].clone()).collect();
+        let head = match lines.first() {
+            Some(first) if first.kind == Kind::Notice && chat::head_parts(&first.text).is_some() => first.text.clone(),
+            _ => String::from("↻ a routine"),
+        };
+        let steps: Vec<&Line> = lines.iter().filter(|line| line.kind == Kind::Step).collect();
+        let answer = lines
+            .iter()
+            .find(|line| line.kind == Kind::Bot)
+            .map(|line| (format!("{} · {}", facts.name, clock(line.at, facts)), self.body(line, width)));
+        let error = lines.iter().find(|line| line.kind == Kind::Error).map(|line| line.text.clone());
+        let ended =
+            |line: &&Line| line.kind == Kind::Notice && (line.text == chat::STOPPED || line.text == chat::INTERRUPTED);
+        let first = steps.first().copied().or(lines.first()).map_or(0, |line| line.id);
+        ChatEntry::Run(ui::RunBlock {
+            run,
+            head,
+            first,
+            steps: steps.iter().map(|line| line.text.clone()).collect(),
+            open: self.unfolded.contains(&first),
+            answer,
+            error,
+            again: facts.again.contains(&run),
+            end: lines.iter().find(ended).map(|line| line.text.clone()),
+            answering: facts.answering.contains(&run),
+        })
+    }
+
+    fn entry(&mut self, group: &Group, facts: &Facts, width: u16) -> ChatEntry {
+        let group = match group {
+            Group::Run(run, members) => return self.run_block(*run, members, facts, width),
+            Group::Chat(range) => range,
+        };
         let line = self.lines[group.start].clone();
         match line.kind {
             Kind::You => {
@@ -120,12 +179,29 @@ impl Chat {
             all[from.min(all.len())..].iter().map(|group| self.entry(group, facts, width)).collect();
         ui::chat_rows(&entries, width, tone).len()
     }
+
+    fn group_of(&self, line: u64) -> Option<usize> {
+        let at = self.lines.iter().position(|found| found.id == line)?;
+        groups(&self.lines).iter().position(|group| match group {
+            Group::Chat(range) => range.contains(&at),
+            Group::Run(_, members) => members.contains(&at),
+        })
+    }
+
+    fn run_group(&self, run: u64) -> Option<usize> {
+        groups(&self.lines).iter().position(|group| matches!(group, Group::Run(found, _) if *found == run))
+    }
 }
 
 impl App {
     fn chat_facts(&self, at: usize) -> Facts {
         let live = &self.panels.bots.live[at];
-        let last = self.panels.bots.shown.as_ref().and_then(|shown| shown.lines.last());
+        let last = self
+            .panels
+            .bots
+            .shown
+            .as_ref()
+            .and_then(|shown| shown.lines.iter().rev().find(|line| line.routine.is_none()));
         let retry = last.filter(|line| line.kind == Kind::Error && live.turn.is_none()).map(|line| line.id);
         Facts {
             name: live.bot.name.clone(),
@@ -133,7 +209,20 @@ impl App {
             zone: self.window_zone(),
             now: crate::time::now(),
             retry,
+            answering: live.runs.iter().map(|run| run.entry).collect(),
+            again: self.runs_again(),
         }
+    }
+
+    fn runs_again(&self) -> HashSet<u64> {
+        let Some(shown) = self.panels.bots.shown.as_ref() else { return HashSet::new() };
+        let queue = self.panels.queued.queue();
+        let runs: HashSet<u64> = shown.lines.iter().filter_map(|line| line.routine).collect();
+        let again = |entry: &crate::queue::Entry| match entry.task.routine {
+            Some(routine) => queue.entry(routine).is_some(),
+            None => matches!(entry.state, crate::queue::State::Failed { .. } | crate::queue::State::Missed),
+        };
+        runs.into_iter().filter(|run| queue.entry(*run).is_some_and(again)).collect()
     }
 
     fn thinking_text(&self, at: usize) -> Option<ui::Thinking> {
@@ -185,6 +274,10 @@ impl App {
 impl Chat {
     fn visible(&mut self, facts: &Facts, body: Rect, tone: ui::Tone) -> (Vec<ui::ChatRow>, bool) {
         let height = usize::from(body.height);
+        if let Some(from) = self.anchor.take().and_then(|line| self.group_of(line)) {
+            self.scroll = self.tail_height(from, facts, body.width, tone).saturating_sub(height);
+            self.news = false;
+        }
         let (rows, reached) = self.rows(facts, body.width, self.scroll + height, tone);
         let total = rows.len();
         if reached {
@@ -206,7 +299,8 @@ impl App {
         let (scrolled, width) = (shown.scroll > 0, shown.width);
         let (facts, tone) = (self.chat_facts(at), self.chat_tone());
         let Some(shown) = self.panels.bots.shown.as_mut() else { return };
-        let from = shown.tail_start();
+        let tail = shown.tail_start();
+        let from = line.routine.and_then(|run| shown.run_group(run)).map_or(tail, |at| at.min(tail));
         let before = if scrolled { shown.tail_height(from, &facts, width, tone) } else { 0 };
         shown.lines.push(line.clone());
         let height = if scrolled { shown.tail_height(from, &facts, width, tone).saturating_sub(before) } else { 0 };

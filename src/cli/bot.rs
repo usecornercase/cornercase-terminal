@@ -2,7 +2,7 @@ use std::io::Read as _;
 
 use serde_json::Value;
 
-use super::args::bot::{BotAction, EditArgs, HistoryArgs, NewArgs, SayArgs};
+use super::args::bot::{BotAction, EditArgs, HistoryArgs, NewArgs, RemoveArgs, SayArgs};
 use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
@@ -31,13 +31,27 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
         BotAction::New(args) => made(&args),
         BotAction::List(print) => list(print.json),
         BotAction::Edit(args) => edited(&args),
-        BotAction::Remove(args) => quiet(BotRequest::Remove(target(args.bot))),
+        BotAction::Remove(args) => removed(args),
         BotAction::Say(args) => said(&args),
         BotAction::History(args) => history(&args),
         BotAction::Reset(args) => quiet(BotRequest::Reset(target(args.bot))),
         BotAction::Stop(args) => stopped(args.bot),
         BotAction::Seen(args) => quiet(BotRequest::Seen(target(args.bot))),
     }
+}
+
+fn removed(args: RemoveArgs) -> Result<bool> {
+    let value = send(BotRequest::Remove(target(args.bot)))?;
+    if args.print.json {
+        print_json(&value)?;
+        return Ok(true);
+    }
+    let count = value["entries"].as_array().map_or(0, Vec::len);
+    if let (true, Some(undo)) = (count > 0, value["undo"].as_u64()) {
+        let what = if count == 1 { "its queue entry".to_string() } else { format!("its {count} queue entries") };
+        print_out(&format!("removed {what}; cornercase queue restore {undo} puts them back\n"))?;
+    }
+    Ok(true)
 }
 
 fn quiet(request: BotRequest) -> Result<bool> {

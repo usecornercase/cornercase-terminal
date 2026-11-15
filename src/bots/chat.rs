@@ -1,9 +1,11 @@
+use std::collections::BTreeSet;
 use std::fs::OpenOptions;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use super::brief::Told;
 use crate::agents::headless::Used;
 use crate::os::fs::OpenOptionsExt;
 
@@ -41,6 +43,8 @@ pub(crate) struct Line {
     pub(crate) tokens: Option<Used>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) conversation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) routine: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +56,22 @@ pub(crate) struct Answer {
 
 impl Line {
     pub(crate) fn new(id: u64, at: i64, kind: Kind, text: impl Into<String>) -> Self {
-        Self { id, at, kind, text: text.into(), tool: None, held: false, model: None, tokens: None, conversation: None }
+        Self {
+            id,
+            at,
+            kind,
+            text: text.into(),
+            tool: None,
+            held: false,
+            model: None,
+            tokens: None,
+            conversation: None,
+            routine: None,
+        }
+    }
+
+    pub(crate) fn of_run(self, run: u64) -> Self {
+        Self { routine: Some(run), ..self }
     }
 
     pub(crate) fn you(id: u64, at: i64, text: &str, held: bool) -> Self {
@@ -108,11 +127,36 @@ pub(crate) fn read(path: &Path) -> Vec<Line> {
     String::from_utf8_lossy(&bytes).lines().filter_map(|line| serde_json::from_str(line).ok()).collect()
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) fn run_head(label: &str, clock: &str) -> String {
+    format!("↻ {label} · {clock}")
+}
+
+pub(crate) fn head_parts(text: &str) -> Option<(&str, &str)> {
+    text.strip_prefix("↻ ")?.rsplit_once(" · ")
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Replayed {
     pub(crate) next_id: u64,
     pub(crate) running: bool,
     pub(crate) held: usize,
+    pub(crate) runs: BTreeSet<u64>,
+}
+
+fn ends_a_run(line: &Line) -> bool {
+    match line.kind {
+        Kind::Bot | Kind::Error => true,
+        Kind::Notice => line.text == STOPPED || line.text == INTERRUPTED,
+        Kind::You | Kind::Step => false,
+    }
+}
+
+fn track_run(state: &mut Replayed, run: u64, line: &Line) {
+    if ends_a_run(line) {
+        state.runs.remove(&run);
+    } else {
+        state.runs.insert(run);
+    }
 }
 
 fn dropped_in(text: &str) -> usize {
@@ -136,6 +180,10 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
     let mut stopping = false;
     for line in lines {
         state.next_id = state.next_id.max(line.id + 1);
+        if let Some(run) = line.routine {
+            track_run(&mut state, run, line);
+            continue;
+        }
         let dropped = line.kind == Kind::Notice && dropped_in(&line.text) > 0;
         if stopping && !dropped {
             settle(&mut state);
@@ -166,7 +214,7 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
     state
 }
 
-pub(crate) fn restart_notices(state: Replayed, at: i64) -> Vec<Line> {
+pub(crate) fn restart_notices(state: &Replayed, at: i64) -> Vec<Line> {
     let mut notices = Vec::new();
     let mut id = state.next_id;
     let mut add = |text: String| {
@@ -179,7 +227,28 @@ pub(crate) fn restart_notices(state: Replayed, at: i64) -> Vec<Line> {
     if state.held > 0 {
         add(dropped(state.held));
     }
+    for run in &state.runs {
+        notices.push(Line::notice(id, at, INTERRUPTED).of_run(*run));
+        id += 1;
+    }
     notices
+}
+
+pub(crate) fn unseen(lines: &[Line]) -> Vec<Told> {
+    let from = lines.iter().rposition(|line| line.kind == Kind::You).map_or(0, |at| at + 1);
+    lines[from..]
+        .iter()
+        .filter(|line| line.kind == Kind::Bot)
+        .filter_map(|line| {
+            let run = line.routine?;
+            let head = lines.iter().find(|head| head.routine == Some(run) && head_parts(&head.text).is_some());
+            let (label, clock) = match head.and_then(|head| head_parts(&head.text)) {
+                Some((label, clock)) => (label.to_string(), clock.to_string()),
+                None => (String::from("a routine"), String::new()),
+            };
+            Some(Told { label, clock, text: line.text.clone() })
+        })
+        .collect()
 }
 
 #[cfg(test)]

@@ -29,6 +29,7 @@ interface Row {
   line: Line;
   bg?: Style;
   acts?: Act[];
+  run?: number;
 }
 
 export function wrapText(text: string, max: number): string[] {
@@ -74,7 +75,8 @@ function drawRow(p: Painter, r: Rect, bot: Bot, active: boolean): void {
   const lead = [...mark(active), ...flag];
   const room = Math.max(0, r.w - width(lead) - close.w - menu.w - 1);
   const name = truncateRight(bot.name, room);
-  const tag = summary(bot);
+  const next = p.app.bots.nextRun(bot);
+  const tag = !bot.turn && next !== null ? `next ${clock(next)}` : summary(bot);
   const gap = room - [...name].length - [...tag].length;
   const line: Line = [...lead, seg(name, active ? { fg: DEFAULT, add: BOLD } : { fg: 7 })];
   if (gap >= 2) line.push(seg(' '.repeat(gap)), seg(tag, DARK));
@@ -208,6 +210,34 @@ function thinkingRow(p: Painter, bot: Bot, w: number): Row {
   };
 }
 
+const RUN_LEFT_OUT = 'this needs cornercase on your computer: the demo runs no bot routines';
+
+function runRows(p: Painter, bot: Bot, lines: ChatLine[], w: number): Row[] {
+  const head = lines[0].kind === 'notice' ? lines[0].text : '↻ a routine';
+  const rows: Row[] = [{ x: 0, w, run: lines[0].routine, line: [seg(truncateRight(head, w), { ...DARK, add: BOLD })] }];
+  const steps = lines.filter((l) => l.kind === 'step');
+  if (steps.length) {
+    const first = steps[0].id;
+    if (bot.open.has(first)) for (const l of steps) rows.push({ x: 0, w, line: [seg(truncateRight(`▸ ${l.text}`, w), DARK)] });
+    else {
+      const label = `+${plural(steps.length, 'step')}`;
+      rows.push({ x: 0, w, line: [seg(label, DARK)], acts: [{ x: 0, w: label.length, fn: () => { bot.open.add(first); p.app.dirty(); } }] });
+    }
+  }
+  for (const l of lines) {
+    if (l.kind === 'bot') rows.push(...botRows(l, bot, w));
+    else if (l.kind === 'error') {
+      const label = ' run again ';
+      const rest = wrapText(l.text, w).map((t) => ({ x: 0, w, line: [seg(t, RED)] }));
+      const end = rest[rest.length - 1];
+      const x = width(end.line) + 1;
+      end.line = [...end.line, seg(' '), seg(label, { ...CYAN, add: BOLD })];
+      rows.push(...rest.slice(0, -1), { ...end, acts: [{ x, w: label.length, fn: () => p.app.notify(RUN_LEFT_OUT) }] });
+    }
+  }
+  return rows;
+}
+
 function block(p: Painter, bot: Bot, l: ChatLine, w: number, last: boolean): Row[] {
   if (l.kind === 'you') return youRows(p, bot, l, w);
   if (l.kind === 'bot') return botRows(l, bot, w);
@@ -220,8 +250,17 @@ function chatRows(p: Painter, bot: Bot, w: number): Row[] {
   const rows: Row[] = [];
   let previous: ChatLine['kind'] | null = null;
   const lines = bot.lines;
+  const seen = new Set<number>();
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
+    if (l.routine !== undefined) {
+      if (seen.has(l.routine)) continue;
+      seen.add(l.routine);
+      if (previous !== null) rows.push({ x: 0, w, line: [] });
+      rows.push(...runRows(p, bot, lines.filter((m) => m.routine === l.routine), w));
+      previous = 'notice';
+      continue;
+    }
     if (previous !== null && l.kind !== 'step') rows.push({ x: 0, w, line: [] });
     if (l.kind === 'step') {
       const run = [l];
@@ -237,7 +276,7 @@ function chatRows(p: Painter, bot: Bot, w: number): Row[] {
 }
 
 function emptyRows(p: Painter, bot: Bot, w: number): Row[] {
-  const intro = ['A bot is an agent of your own. It belongs to no project and keeps a memory.', 'It runs only when you write to it, and answers here. Try:'];
+  const intro = ['A bot is an agent of your own. It belongs to no project and keeps a memory.', 'It answers here when you write to it, and on a schedule it sets itself. Try:'];
   const rows: Row[] = intro.flatMap((line) => wrapText(line, Math.max(1, w))).map((t) => ({ x: Math.floor((w - [...t].length) / 2), w, line: [seg(t, DARK)] }));
   rows.push({ x: 0, w, line: [] });
   for (const text of EXAMPLES) {
@@ -300,6 +339,11 @@ function drawLines(p: Painter, area: Rect, bot: Bot): void {
   const empty = !bot.lines.length && !bot.turn;
   const rows = empty ? emptyRows(p, bot, area.w) : chatRows(p, bot, area.w);
   const max = Math.max(0, rows.length - area.h);
+  if (bot.anchor !== null) {
+    const at = rows.findIndex((r) => r.run === bot.anchor);
+    if (at >= 0) bot.scroll = Math.max(0, Math.min(max, rows.length - area.h - at));
+    bot.anchor = null;
+  }
   bot.scroll = Math.min(bot.scroll, max);
   p.region({ r: area, wheel: (dy) => app.bots.scrollTo(bot, -dy, max) });
   const lift = empty ? Math.floor(Math.max(0, area.h - rows.length) / 2) : 0;
@@ -378,12 +422,13 @@ export function drawCard(p: Painter, areas: Areas): void {
     ['access', ACCESS_NOTE[bot.access], bot.access === 'full' ? RED : undefined],
     ['folder', app.bots.folder(bot)],
     ['made', new Date(bot.made).toISOString().slice(0, 10)],
+    ...bot.routines.map((r): [string, string] => ['routine', `↻ ${r.repeat}  ${r.label}  next ${clock(r.at)}`]),
   ];
   let y = list.y;
   p.span(list.x + 1, y, bot.name, { fg: DEFAULT, add: BOLD }, list.w - 1);
   y += 2;
   for (const [label, value, style] of entries) {
-    const rows = label === 'folder' ? [truncateRight(value, room)] : wrapText(value, room);
+    const rows = label === 'folder' || label === 'routine' ? [truncateRight(value, room)] : wrapText(value, room);
     rows.forEach((text, i) => {
       if (y >= bottom(list)) return;
       if (i === 0) p.span(list.x + 1, y, label, DARK, LABEL);

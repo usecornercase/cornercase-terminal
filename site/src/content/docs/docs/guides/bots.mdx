@@ -18,7 +18,7 @@ The window draws a bot as a chat, with bubbles, Markdown and what it is doing, n
 
 <Screen
   name="bots"
-  alt="The window with the Bots section in the sidebar listing prs and digest, and prs's chat in place of the panes: what you wrote, the steps the bot used, its Markdown answer with a list and a code block, and the message field with its send button at the bottom; the workspaces column shows the bot's card"
+  alt="The window with the Bots section in the sidebar listing prs and digest, and prs's chat in place of the panes: a routine's run as one block (its header, its steps folded and its answer), what you wrote, the steps the bot used, its Markdown answer with a list and a code block, and the message field with its send button at the bottom; the workspaces column shows the bot's card"
   caption="A bot's chat in place of the panes, and its card where the workspaces were."
 />
 
@@ -26,14 +26,14 @@ The window draws a bot as a chat, with bubbles, Markdown and what it is doing, n
 
 Once you have a bot, a **Bots** section sits at the bottom of the sidebar, above the [agents section](../projects-workspaces-tabs/#the-agents-section) when that is on. With no bots it takes no room: the way in is **More ▴ › new bot…**, or `b` in the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts) (with a prefix key).
 
-- **One row per bot**, in the order you made them: a mark, its name and, dim, its agent and model. The mark is the spinner while the bot answers, and a blue `●` with a count while it has answers you have not read. The row of the bot on screen has the cyan bar `▌`.
+- **One row per bot**, in the order you made them: a mark, its name and, dim, its agent and model, or `next 09:00` while the bot is idle and has a [routine](#routines). The mark is the spinner while the bot answers, and a blue `●` with a count while it has answers you have not read. The row of the bot on screen has the cyan bar `▌`.
 - **Click the title** to fold the section into its title row, which then shows the spinner or the unread count of every bot. The fold is saved with your session. **` + `** opens the [new bot form](#make-a-bot-in-the-window).
-- **` ⋯ `** at the end of a row (it shows when you hover the row, and always, dimmed, in a [compact](../small-terminals/) layout), or a right click, opens its menu: **rename**, **edit…**, **new conversation**, **open folder** and **remove…**. A bot's row has no `×`: removing a bot deletes its memory, so it asks first. **remove…** says `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.` and, while the bot answers, its button reads `stop it first` and stops the turn.
+- **` ⋯ `** at the end of a row (it shows when you hover the row, and always, dimmed, in a [compact](../small-terminals/) layout), or a right click, opens its menu: **rename**, **edit…**, **new conversation**, **open folder** and **remove…**. A bot's row has no `×`: removing a bot deletes its memory, so it asks first. **remove…** says `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.` (with its [routines](#routines) named when it has some, and removing them too) and, while the bot answers, its button reads `stop it first` and stops the turn.
 - **The wheel** scrolls the rows when they do not fit.
 
 ### The chat
 
-A click on a bot shows its chat **in place of the panes**, and its **card** where the workspaces were: the agent, model, effort, account and access, the folder (a click opens it, or copies its path) and the day it was made. A click on a project, a workspace or a tab goes back to the panes. Showing a bot marks its answers as read, as `cornercase bot seen` does.
+A click on a bot shows its chat **in place of the panes**, and its **card** where the workspaces were: the agent, model, effort, account and access, the folder (a click opens it, or copies its path), the day it was made and, one row each, its [routines](#routines). A click on a project, a workspace or a tab goes back to the panes. Showing a bot marks its answers as read, as `cornercase bot seen` does.
 
 From top to bottom:
 
@@ -42,10 +42,11 @@ From top to bottom:
   - What you wrote is a bubble at the right, at most 80 % of the width, with the time dim after it. A message held for the next turn says `held` instead of the time until it is sent.
   - What the bot answers is at the left, under its name and the time, as Markdown: headings, bold, lists, `code`, highlighted code blocks and links.
   - Each tool the bot uses is a dim line, `▸ cornercase status --json`. A run of more than three folds to its last three, under **`+N steps`**, which a click unfolds.
+  - A [routine's run](#routines) is one block, wherever its lines came: a bold dim header `↻ Review PRs · 09:00`, its steps folded into one **`+N steps`** row, then its answer. A run that failed shows its error with **` run again `**.
   - An error is red, with **` retry `**, which sends your last message again, when it is the last line and no turn runs. A notice is centred and dim.
   - While a turn runs, the last line reads `⠋ thinking · 42s · 3 steps` with a **` stop `** button, which ends the turn and everything the bot started in it (`stopping…` until it has).
 - **The field** at the bottom is one row that grows to six and then scrolls, with the placeholder `Message prs…` and **` send `** at its right. **`Enter` sends**; a line break comes from a paste, which keeps its breaks. Text sent while the bot answers is held and goes as the next turn. **`Esc` clears** the field; with it empty, `Esc` does nothing. The field takes the same word moves and selection as every [text field](../../reference/keyboard-and-mouse/#text-fields), and **keys go to it, never to a pane**, while a chat shows.
-- **A chat with no lines** says what a bot is, in two lines, and offers three examples. A click on one fills the field with it and sends nothing.
+- **A chat with no lines** says what a bot is, in two lines, and offers four examples, the last one asking for a routine. A click on one fills the field with it and sends nothing.
 
 A **link** in an answer is **copied**, not opened: a bot's answer is text an agent wrote, and the window never opens a program or a page for it on its own. See [Known limitations](../../help/limitations/).
 
@@ -81,7 +82,7 @@ cornercase bot new nightly --agent claude --model sonnet --effort low
 - **`--access`**: what the bot may do, see [Access](#access).
 - **`--about`**: what the bot is for. It goes into `bot.md` and may be empty.
 
-`cornercase bot edit prs --model opus` changes the name, model, effort, account or access from the bot's next message on; an empty value goes back to the agent's own. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot and its folder, and is refused while it answers.
+`cornercase bot edit prs --model opus` changes the name, model, effort, account or access from the bot's next message on; an empty value goes back to the agent's own. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot, its folder and its [routines](#routines) (it prints how many, and the number `cornercase queue restore` takes to put them back), and is refused while it answers, or while one of its routines does.
 
 ## Talk to a bot
 
@@ -100,10 +101,23 @@ cornercase bot list
 - **Steps stream.** Each tool the bot uses, such as `cornercase status --json` or `Read src/main.rs`, is written to the chat as it happens, so you see what it is doing while it works.
 - **`cornercase bot history prs`** prints the chat as you would read it: what you wrote, what the bot used and its answers, with `--last N` and `--after LINE` to cut it.
 - **`cornercase bot list`** shows each bot with its state (`idle` or `thinking`), the messages held and the answers you have not read, which `cornercase bot seen prs` marks as read.
-- **`cornercase bot reset prs`** forgets the conversation: the next message starts a new one that reads `bot.md` and `memory.md` again. Do it when the context fills up (the error says so) or the bot has lost the thread. `bot reset` and `bot remove` are refused while the bot answers: `cornercase bot stop` comes first.
-- **`cornercase bot stop prs`** ends the answer being written, and everything the bot started in it. With `cornercase` access, whatever the bot left running in the background is also stopped when an answer ends (not always: see the exceptions in [Known limitations](../../help/limitations/)). The conversation stays, so the next message continues it; the messages held are dropped.
+- **`cornercase bot reset prs`** forgets the conversation: the next message starts a new one that reads `bot.md` and `memory.md` again. Do it when the context fills up (the error says so) or the bot has lost the thread. `bot reset` and `bot remove` are refused while the bot answers (`bot remove` also while a routine's run does; `bot reset` does not mind a run, which has its own conversation): `cornercase bot stop` comes first.
+- **`cornercase bot stop prs`** ends the answer being written, the runs of its routines that are answering, and everything the bot started in them. With `cornercase` access, whatever the bot left running in the background is also stopped when an answer ends (not always: see the exceptions in [Known limitations](../../help/limitations/)). The conversation stays, so the next message continues it; the messages held are dropped.
 
 An answer, or an error, that nobody waited for makes a toast and a desktop notification (`prs: Two are blocked.`).
+
+## Routines
+
+A bot can schedule its own work. Tell it **"review my pull requests every weekday at 9"** and it adds a routine to the [queue](../queue/), with its own destination: the bot instead of a project. Everything about time is the queue's: one-off reminders (`--at 'tomorrow 9:00'`), routines, missed runs, pause and resume, `start now`, the last 10 runs, undo, and the [30-minute minimum](../queue/#routines).
+
+- **A run is a new conversation of the bot**, never the chat's own: it reads the brief, `bot.md` and `memory.md`, then `This is your routine "Review PRs" (every weekday 09:00). …` and your prompt. That is why a bot writes in `memory.md` what its next run needs. A run and a chat turn can run at the same time. It makes no worktree and fetches nothing.
+- **It reports in the chat**: the lines of the run arrive as they happen, as one [block](#the-chat). The answer counts as unread and makes a toast, `prs · Review PRs: 3 pull requests wait…`, with a **` go `** that shows the chat at that run (and a desktop notification), unless the chat is on screen. Its entry in the Issues modal's **Queue** tab ends **`answered`**, and `Enter` on it shows the chat at the run.
+- **A run that fails says why**: the bot was removed, its agent is not installed, its account is gone, or the turn failed. It makes a toast and a notification, and the chat shows the error with **` run again `**.
+- **The next time you write, the bot knows what its routines said**: the answers that its conversation has not seen are put in front of your message, each cut to 4 KB (the newest 10), so "start an agent on the one whose checks fail" works.
+- **You can schedule one yourself**: the schedule form's **Where** lists your bots after the projects (`bot: prs`). With a bot chosen the agent, mode, account and workspace rows give way to `set by the bot`, since a run uses the bot's own agent, model and account.
+- **A bot manages only its own entries.** Its commands may add, edit, pause, resume, remove and run the routines of that bot, and are refused for a project's entries and another bot's.
+- **Routines run only while the server runs**, as every routine does: a time that passes while it is stopped is a missed run (see [Known limitations](../../help/limitations/)).
+- **Removing a bot removes its routines**, with its folder.
 
 ## What a bot can see and do
 
@@ -146,4 +160,4 @@ The chat is cornercase's own, not the agent's transcript, so what other features
 
 ## For programs
 
-Everything is a request over the socket, so a window, a script or a plugin can build on it. See [Scripts and agents](../scripts-and-agents/#bots) for the `bot` request, its events and the `bots` of `status --app`.
+Everything is a request over the socket, so a window, a script or a plugin can build on it. `cornercase queue add --bot prs --every 'weekday 09:00' --prompt '…'` schedules a bot's routine, `cornercase queue list --bot prs --json` lists its entries, and inside a bot (`CORNERCASE_BOT` set) a `queue add` with no `--project`, `--workspace` or `--worktree` means that bot. See [Scripts and agents](../scripts-and-agents/#bots) for the `bot` request, its events and the `bots` of `status --app`.

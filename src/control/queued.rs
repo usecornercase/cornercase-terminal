@@ -38,6 +38,7 @@ pub(crate) struct QueueAdd {
     pub(crate) flow: Option<String>,
     pub(crate) cleanup: Option<bool>,
     pub(crate) fresh: Option<bool>,
+    pub(crate) bot: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

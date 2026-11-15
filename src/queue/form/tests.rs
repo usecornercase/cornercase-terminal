@@ -219,3 +219,45 @@ mod routines {
         assert!(!f.controls().contains(&Control::Cleanup));
     }
 }
+
+mod bots {
+    use super::*;
+
+    fn bot_form(when: When) -> Form {
+        let mut form = form(when);
+        form.places.push(Choice {
+            label: "bot: PRs".into(),
+            place: Place { bot: Some("prs".into()), ..Place::default() },
+            worktree: false,
+        });
+        form.refit();
+        let at = form.shown.iter().position(|i| form.places[*i].place.bot.is_some()).expect("the bot");
+        form.place.choose(at);
+        form
+    }
+
+    #[test]
+    fn a_bots_form_has_only_the_prompt_the_time_and_the_place() {
+        let form = bot_form(When::Weekdays);
+        assert_eq!(form.bot(), Some("prs"));
+        assert_eq!(form.controls(), [Control::Prompt, Control::When, Control::Clock, Control::Place]);
+        assert_eq!(form.flow(), None);
+    }
+
+    #[test]
+    fn a_routine_kind_keeps_the_bots_in_where_beside_the_repository_roots() {
+        let mut form = bot_form(When::At);
+        form.when = When::Daily.combo();
+        form.refit();
+        let labels: Vec<&str> = form.shown.iter().map(|i| form.places[*i].label.as_str()).collect();
+        assert_eq!(labels, ["web-shop · root", "bot: PRs"]);
+        assert_eq!(form.choice().map(|choice| choice.label.as_str()), Some("bot: PRs"));
+    }
+
+    #[test]
+    fn a_project_place_keeps_its_agent_rows() {
+        let form = form(When::At);
+        assert_eq!(form.bot(), None);
+        assert!(form.controls().contains(&Control::Agent));
+    }
+}

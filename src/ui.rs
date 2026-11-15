@@ -57,6 +57,7 @@ pub(crate) use bots::chat::{
 };
 #[cfg(test)]
 pub(crate) use bots::chat::{row_y, stop_button, thinking_row};
+pub(crate) use bots::run::RunBlock;
 pub(crate) use bots::{BotEntry, BotsView, bot_menu, bot_rows, bots_fold, bots_new};
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;

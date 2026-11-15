@@ -48,7 +48,7 @@ function screen(app: App): string {
 test('the section lists both seeded bots with their agent and an unread mark', () => {
   const text = screen(demo(140));
   assert.match(text, /▾ Bots/);
-  assert.match(text, /prs +claude · opus/);
+  assert.match(text, /prs +next /);
   assert.match(text, /●1 digest +codex/);
 });
 
@@ -90,7 +90,7 @@ test('keys never reach a pane while a chat shows, and Esc clears the field', () 
   assert.equal(app.bots.current()?.draft.chars.length, 0);
   app.paste('one\ntwo');
   assert.equal(app.bots.current()?.draft.chars.join(''), 'one\ntwo');
-  assert.equal(app.bots.current()?.lines.length, 5, 'nothing was sent');
+  assert.equal(app.bots.current()?.lines.length, 9, 'nothing was sent');
 });
 
 test('a message sent while a turn runs is held, and answered after it', () => {
@@ -107,7 +107,7 @@ test('a message sent while a turn runs is held, and answered after it', () => {
   assert.equal(app.bots.current()?.turn, null);
 });
 
-test('the new bot form creates a bot and shows its empty chat with the three examples', () => {
+test('the new bot form creates a bot and shows its empty chat with the four examples', () => {
   const app = demo(140);
   const title = app.areas().botsTitle;
   app.pointerDown(title.x + title.w - 2, title.y, 0);
@@ -193,15 +193,15 @@ test('below 90 columns Bots › opens the list and a tap shows the chat full scr
 test('a run of more than three steps folds under +N steps, and a click unfolds it', () => {
   const app = demo(140);
   const bot = app.bots.list[0];
-  for (const text of ['one', 'two', 'three', 'four', 'five']) app.bots.add(bot, Date.now(), 'step', text);
+  for (const text of ['one', 'two', 'three', 'four', 'five', 'six']) app.bots.add(bot, Date.now(), 'step', text);
   press(app, 'prs');
   const folded = screen(app);
-  assert.match(folded, /\+2 steps/);
+  assert.match(folded, /\+3 steps/);
   assert.doesNotMatch(folded, /▸ one/);
-  press(app, '+2 steps');
+  press(app, '+3 steps');
   const open = screen(app);
   assert.match(open, /▸ one/);
-  assert.doesNotMatch(open, /\+2 steps/);
+  assert.doesNotMatch(open, /\+3 steps/);
 });
 
 test('scrolling up shows ↓ new when a line arrives, and a click goes back down', () => {
@@ -226,4 +226,51 @@ test('at the landing’s 32 rows the stacked section still shows a bot to click'
   app.bots.folded = false;
   app.render();
   assert.ok(app.textAt('prs'), screen(app));
+});
+
+test('a bot with a routine shows when it runs next, in its row and on its card', () => {
+  const app = demo(140);
+  assert.match(screen(app), /prs +next /);
+  press(app, 'prs');
+  app.resize(140, 60);
+  assert.match(screen(app), /routine +↻ 2h {2}Review/);
+});
+
+test('a routine run is one block in the chat: its header, its steps folded and its answer', () => {
+  const app = demo(140);
+  press(app, 'prs');
+  const text = screen(app);
+  assert.match(text, /↻ Review PRs · \d\d:\d\d/);
+  assert.match(text, /\+2 steps/);
+  assert.match(text, /Two are blocked/);
+  const lines = app.bots.current()?.lines.filter((l) => l.routine !== undefined) ?? [];
+  assert.deepEqual(lines.map((l) => l.kind), ['notice', 'step', 'step', 'bot']);
+  press(app, '+2 steps');
+  assert.match(screen(app), /▸ gh pr list/);
+});
+
+test('the Queue tab lists the bot routine and its answered run, and enter opens the chat at the run', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(140, 38);
+  world(app);
+  app.openIssues();
+  app.advance(1000);
+  app.issuesTab(app.config.sources.length);
+  app.render();
+  const text = screen(app);
+  assert.match(text, /Review PRs/);
+  assert.match(text, /↻ every 2h · claude/);
+  assert.match(text, /answered · claude · bot prs/);
+  const run = app.queued.find((entry) => entry.state === 'answered');
+  assert.ok(run);
+  app.openQueued(run);
+  assert.equal(app.overlay, null);
+  assert.equal(app.bots.shown, 'prs');
+  assert.match(screen(app), /↻ Review PRs/);
+});
+
+test('the empty chat offers the scheduling example', () => {
+  assert.equal(EXAMPLES.length, 4);
+  assert.match(EXAMPLES[3], /^Every weekday at 9/);
 });

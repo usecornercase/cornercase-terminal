@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use repeat::Repeat;
 
-pub(crate) const VERSION: u32 = 2;
+pub(crate) const VERSION: u32 = 3;
+const ROUTINES: u32 = 2;
 pub(crate) const RUNS_KEPT: usize = 10;
 pub(crate) const GRACE: i64 = 600;
 pub(crate) const UNDOS: usize = 16;
@@ -30,6 +31,8 @@ pub(crate) struct Place {
     #[serde(default)]
     pub(crate) server: String,
     pub(crate) branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) bot: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,11 +73,24 @@ fn is_false(value: &bool) -> bool {
 pub(crate) enum State {
     Pending,
     Starting,
-    Started { pane: u64, server: String },
-    Failed { reason: String },
+    Started {
+        pane: u64,
+        server: String,
+    },
+    Answered {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session: Option<String>,
+    },
+    Failed {
+        reason: String,
+    },
     Missed,
     Removed,
-    Kept { pane: u64, server: String, reason: String },
+    Kept {
+        pane: u64,
+        server: String,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,15 +119,27 @@ impl Entry {
         self.task.routine.is_some()
     }
 
+    pub(crate) fn bot(&self) -> Option<&str> {
+        self.task.place.bot.as_deref()
+    }
+
+    pub(crate) fn is_bot(&self) -> bool {
+        self.task.place.bot.is_some()
+    }
+
     fn clearable(&self) -> bool {
         if self.is_routine() {
             return false;
         }
         match self.state {
-            State::Started { .. } => true,
+            State::Started { .. } | State::Answered { .. } => true,
             State::Removed | State::Kept { .. } | State::Failed { .. } | State::Missed => self.is_run(),
             State::Pending | State::Starting => false,
         }
+    }
+
+    fn uses_bots(&self) -> bool {
+        self.is_bot() || matches!(self.state, State::Answered { .. })
     }
 
     fn uses_routines(&self) -> bool {
@@ -174,8 +202,11 @@ impl Queue {
         if entry.is_routine() != task.repeat.is_some() {
             return Err("a one-off entry cannot become a routine, or the other way round; add a new entry".into());
         }
-        if matches!(entry.state, State::Starting | State::Started { .. }) {
+        if matches!(entry.state, State::Starting | State::Started { .. } | State::Answered { .. }) {
             return Err("this entry already started; add a new entry instead".into());
+        }
+        if entry.task.place.bot != task.place.bot {
+            return Err("an entry cannot move between a bot and a project, or to another bot; add a new entry".into());
         }
         entry.task = task;
         entry.state = State::Pending;
@@ -209,6 +240,12 @@ impl Queue {
             .partition(|entry| entry.id == id || entry.task.routine == Some(id));
         self.entries = kept;
         Ok(gone)
+    }
+
+    pub(crate) fn remove_bot(&mut self, bot: &str) -> Vec<Entry> {
+        let (gone, kept) = std::mem::take(&mut self.entries).into_iter().partition(|entry| entry.bot() == Some(bot));
+        self.entries = kept;
+        gone
     }
 
     pub(crate) fn clear_started(&mut self) -> Vec<Entry> {
@@ -256,7 +293,13 @@ impl Queue {
     }
 
     pub(crate) fn saved(&self) -> Saved {
-        let version = if self.entries.iter().any(Entry::uses_routines) { VERSION } else { 1 };
+        let version = if self.entries.iter().any(Entry::uses_bots) {
+            VERSION
+        } else if self.entries.iter().any(Entry::uses_routines) {
+            ROUTINES
+        } else {
+            1
+        };
         Saved { version, next_id: self.next_id, entries: self.entries.clone(), names: NAMES }
     }
 }
@@ -297,6 +340,13 @@ fn rename_older(task: &mut Task) {
     }
 }
 
+fn interrupted(entry: &Entry) -> String {
+    if entry.is_bot() {
+        return "the server stopped while the bot answered it".into();
+    }
+    "the server stopped while this entry was starting; check its workspace before trying again".into()
+}
+
 pub(crate) fn load(path: &Path, now: i64) -> Queue {
     let Some(saved) = read_saved(path) else { return Queue::default() };
     let older = saved.names < NAMES;
@@ -308,10 +358,7 @@ pub(crate) fn load(path: &Path, now: i64) -> Queue {
             rename_older(&mut entry.task);
         }
         if entry.state == State::Starting {
-            entry.state = State::Failed {
-                reason: "the server stopped while this entry was starting; check its workspace before trying again"
-                    .into(),
-            };
+            entry.state = State::Failed { reason: interrupted(entry) };
         }
     }
     queue.due(now);

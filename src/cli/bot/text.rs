@@ -26,7 +26,10 @@ fn line_text(line: &Line) -> String {
 pub(in crate::cli) fn event_text(bot: &str, news: (Option<&Line>, Option<&str>, Option<&str>)) -> String {
     let (line, state, change) = news;
     let what = line.map(line_text).or_else(|| state.or(change).map(str::to_string)).unwrap_or_default();
-    format!("bot {bot}  {what}")
+    match line.and_then(|line| line.routine) {
+        Some(run) => format!("bot {bot}  routine {run}  {what}"),
+        None => format!("bot {bot}  {what}"),
+    }
 }
 
 pub(super) fn agents(found: &[AgentInfo]) -> String {
@@ -85,6 +88,7 @@ struct Chat<'a> {
     zone: &'a str,
     out: String,
     open: bool,
+    run: Option<u64>,
 }
 
 impl Chat<'_> {
@@ -92,10 +96,15 @@ impl Chat<'_> {
         if !self.out.is_empty() {
             self.out.push('\n');
         }
-        let _ = writeln!(self.out, "{who} · {}{extra}", when(at, self.now, self.zone));
+        let run = self.run.map(|run| format!(" · routine {run}")).unwrap_or_default();
+        let _ = writeln!(self.out, "{who} · {}{extra}{run}", when(at, self.now, self.zone));
     }
 
     fn add(&mut self, line: &Line) {
+        if line.routine != self.run {
+            self.open = false;
+            self.run = line.routine;
+        }
         match line.kind {
             Kind::You => {
                 self.open = false;
@@ -138,7 +147,7 @@ pub(super) fn chat(name: &str, lines: &[Line], now: i64, zone: &str) -> String {
     if lines.is_empty() {
         return String::from("nothing said yet\n");
     }
-    let mut chat = Chat { name, now, zone, out: String::new(), open: false };
+    let mut chat = Chat { name, now, zone, out: String::new(), open: false, run: None };
     for line in lines {
         chat.add(line);
     }

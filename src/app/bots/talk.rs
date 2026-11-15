@@ -146,6 +146,7 @@ impl App {
                     shown.unfolded.insert(first);
                 }
             }
+            RowHit::RunAgain(run) => self.run_again(run),
             RowHit::Retry(error) => self.send_again(error),
             RowHit::Example(i) => self.panels.bots.live[at].draft = Editor::new(ui::EXAMPLES[i]),
             RowHit::Link => {}

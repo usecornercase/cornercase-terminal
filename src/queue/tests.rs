@@ -532,3 +532,135 @@ mod results {
         );
     }
 }
+
+mod bot_entries {
+    use super::*;
+    use crate::queue::repeat::Repeat;
+
+    const START: i64 = 1_700_000_000;
+
+    fn bot_task(at: i64) -> Task {
+        Task { place: Place { bot: Some("prs".into()), ..Place::default() }, ..task(at) }
+    }
+
+    fn bot_routine(at: i64) -> Task {
+        let repeat = Repeat::parse("2h", "UTC", START).expect("repeat");
+        Task { repeat: Some(repeat), ..bot_task(at) }
+    }
+
+    fn bytes(queue: &Queue, path: &Path) -> Vec<u8> {
+        persist::save(path, &queue.saved()).expect("save");
+        std::fs::read(path).expect("read")
+    }
+
+    #[test]
+    fn the_file_is_version_three_only_with_a_bot_entry_or_an_answered_state() {
+        let mut queue = Queue::default();
+        let routine =
+            queue.add(Task { repeat: Repeat::parse("2h", "UTC", START).ok(), ..task(START) }).expect("routine");
+        assert_eq!(queue.saved().version, 2);
+        let reminder = queue.add(bot_task(START)).expect("reminder");
+        assert_eq!(queue.saved().version, 3);
+        queue.remove(reminder).expect("remove");
+        assert_eq!(queue.saved().version, 2);
+        let run = queue.run_now(routine, START).expect("run");
+        queue.entry_mut(run).expect("run").state = State::Answered { session: None };
+        assert_eq!(queue.saved().version, 3);
+    }
+
+    #[test]
+    fn a_file_without_a_bot_entry_is_written_back_byte_for_byte() {
+        let dir = TempDir::new();
+        let mut queue = Queue::default();
+        queue.add(task(START)).expect("one-off");
+        let first = bytes(&queue, &dir.path().join("one.json"));
+        assert!(String::from_utf8_lossy(&first).contains("\"version\": 1"));
+        let id = queue.add(Task { repeat: Repeat::parse("2h", "UTC", START).ok(), ..task(START) }).expect("routine");
+        queue.run_now(id, START).expect("run");
+        let two = bytes(&queue, &dir.path().join("two.json"));
+        assert!(String::from_utf8_lossy(&two).contains("\"version\": 2"));
+        let again = load(&dir.path().join("two.json"), 0);
+        assert_eq!(bytes(&again, &dir.path().join("back.json")), two);
+        assert!(!String::from_utf8_lossy(&two).contains("bot"));
+    }
+
+    #[test]
+    fn version_three_reads_back() {
+        let dir = TempDir::new();
+        let mut queue = Queue::default();
+        let id = queue.add(bot_routine(START)).expect("routine");
+        let run = queue.run_now(id, START).expect("run");
+        queue.entry_mut(run).expect("run").state = State::Answered { session: Some("s-1".into()) };
+        let path = dir.path().join("queue.json");
+        let written = bytes(&queue, &path);
+        assert!(String::from_utf8_lossy(&written).contains("\"version\": 3"));
+        let read = load(&path, 0);
+        assert_eq!(read.saved(), queue.saved());
+        assert_eq!(read.entry(run).expect("run").state, State::Answered { session: Some("s-1".into()) });
+    }
+
+    #[test]
+    fn a_bot_routines_runs_are_bot_entries() {
+        let mut queue = Queue::default();
+        let id = queue.add(bot_routine(START)).expect("routine");
+        let run = queue.run_now(id, START).expect("run");
+        let run = queue.entry(run).expect("run");
+        assert_eq!(run.bot(), Some("prs"));
+        assert_eq!(run.task.routine, Some(id));
+    }
+
+    #[test]
+    fn an_answered_entry_is_cleared_and_never_edited() {
+        let mut queue = Queue::default();
+        let id = queue.add(bot_task(START)).expect("reminder");
+        queue.entry_mut(id).expect("entry").state = State::Answered { session: None };
+        assert!(queue.edit(id, bot_task(START + 10)).is_err());
+        let cleared = queue.clear_started();
+        assert_eq!(cleared.len(), 1);
+        assert!(queue.entry(id).is_none());
+    }
+
+    #[test]
+    fn an_entry_cannot_move_between_a_bot_and_a_project() {
+        let mut queue = Queue::default();
+        let project = queue.add(task(START)).expect("project");
+        let bot = queue.add(bot_task(START)).expect("bot");
+        assert!(queue.edit(project, bot_task(START)).is_err());
+        assert!(queue.edit(bot, task(START)).is_err());
+        let other = Task { place: Place { bot: Some("docs".into()), ..Place::default() }, ..task(START) };
+        assert!(queue.edit(bot, other).is_err());
+        assert!(queue.edit(bot, bot_task(START + 5)).is_ok());
+    }
+
+    #[test]
+    fn removing_a_bots_entries_takes_its_routines_runs_and_reminders() {
+        let mut queue = Queue::default();
+        let routine = queue.add(bot_routine(START)).expect("routine");
+        queue.run_now(routine, START).expect("run");
+        queue.add(bot_task(START)).expect("reminder");
+        let other = queue.add(task(START)).expect("project");
+        let gone = queue.remove_bot("prs");
+        assert_eq!(gone.len(), 3);
+        assert_eq!(queue.entries.iter().map(|entry| entry.id).collect::<Vec<_>>(), [other]);
+        queue.restore(gone);
+        assert_eq!(queue.entries.len(), 4);
+    }
+
+    #[test]
+    fn a_bot_run_left_starting_says_the_bot_was_answering_it() {
+        let dir = TempDir::new();
+        let mut queue = Queue::default();
+        let bot = queue.add(bot_task(START)).expect("bot");
+        let project = queue.add(task(START)).expect("project");
+        for id in [bot, project] {
+            queue.entry_mut(id).expect("entry").state = State::Starting;
+        }
+        let path = dir.path().join("queue.json");
+        persist::save(&path, &queue.saved()).expect("save");
+        let read = load(&path, 0);
+        let State::Failed { reason } = &read.entry(bot).expect("bot").state else { panic!("not failed") };
+        assert_eq!(reason, "the server stopped while the bot answered it");
+        let State::Failed { reason } = &read.entry(project).expect("project").state else { panic!("not failed") };
+        assert!(reason.contains("check its workspace"));
+    }
+}

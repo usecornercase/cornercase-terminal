@@ -11,6 +11,14 @@ export interface ChatLine {
   kind: LineKind;
   text: string;
   at: number;
+  routine?: number;
+}
+
+export interface BotRoutine {
+  id: number;
+  label: string;
+  repeat: string;
+  at: number;
 }
 
 export interface Turn {
@@ -30,12 +38,14 @@ export interface Bot {
   about: string;
   made: number;
   lines: ChatLine[];
+  routines: BotRoutine[];
   unread: number;
   turn: Turn | null;
   held: Set<number>;
   draft: Editable;
   scroll: number;
   below: boolean;
+  anchor: number | null;
   open: Set<number>;
   timers: (() => void)[];
 }
@@ -62,11 +72,14 @@ export const EXAMPLES = [
   'Which of my open pull requests are blocked, and why?',
   'What did my agents get done today, in every project?',
   'Which issues labelled bug came in today, in every project?',
+  'Every weekday at 9, review my open pull requests and tell me which are blocked.',
 ];
 const ANSWER_AFTER = [1400, 2600, 4200];
 const TICK = 500;
 const FOLDER = '~/.local/state/cornercase/bots';
 const MINUTE = 60000;
+const RUN_ROUTINE = 1;
+const RUN = 2;
 
 const PRS_ANSWER = [
   'Two are **blocked**:',
@@ -154,12 +167,14 @@ export class Bots {
       ...init,
       made: Date.now(),
       lines: [],
+      routines: [],
       unread: 0,
       turn: null,
       held: new Set(),
       draft: draftOf(),
       scroll: 0,
       below: false,
+      anchor: null,
       open: new Set(),
       timers: [],
     };
@@ -167,8 +182,8 @@ export class Bots {
     return bot;
   }
 
-  add(bot: Bot, at: number, kind: LineKind, text: string): ChatLine {
-    const line = { id: this.next++, kind, text, at };
+  add(bot: Bot, at: number, kind: LineKind, text: string, routine?: number): ChatLine {
+    const line: ChatLine = { id: this.next++, kind, text, at, ...(routine === undefined ? {} : { routine }) };
     bot.lines.push(line);
     if (bot.scroll > 0) bot.below = true;
     return line;
@@ -183,13 +198,18 @@ export class Bots {
     return this.list.some((b) => b.name.toLowerCase() === lower);
   }
 
-  show(id: string): void {
+  nextRun(bot: Bot): number | null {
+    return bot.routines.length ? Math.min(...bot.routines.map((r) => r.at)) : null;
+  }
+
+  show(id: string, run?: number): void {
     const bot = this.list.find((b) => b.id === id);
     if (!bot) return;
     this.shown = id;
     bot.unread = 0;
     bot.scroll = 0;
     bot.below = false;
+    bot.anchor = run ?? null;
     this.app.nav = null;
     this.app.files.full = false;
     this.app.dirty();
@@ -333,6 +353,12 @@ export function seedBots(app: App): void {
   const bots = app.bots;
   const now = Date.now();
   const prs = bots.create({ name: 'prs', agent: 'claude', model: 'opus', effort: 'high', account: 'home', access: 'cornercase', about: 'Review my open pull requests and tell me which are blocked' });
+  const ran = now - 30 * MINUTE;
+  prs.routines.push({ id: RUN_ROUTINE, label: 'Review PRs', repeat: '2h', at: ran + 120 * MINUTE });
+  bots.add(prs, ran, 'notice', `↻ Review PRs · ${clock(ran)}`, RUN);
+  bots.add(prs, ran + MINUTE, 'step', 'cornercase status --json', RUN);
+  bots.add(prs, ran + MINUTE, 'step', 'gh pr list --json number,title,reviewDecision', RUN);
+  bots.add(prs, ran + 2 * MINUTE, 'bot', PRS_ANSWER, RUN);
   bots.add(prs, now - 9 * MINUTE, 'you', 'which of my pull requests are blocked?');
   bots.add(prs, now - 8 * MINUTE, 'step', 'cornercase status --json');
   bots.add(prs, now - 8 * MINUTE, 'step', 'gh pr checks 490');
@@ -343,4 +369,15 @@ export function seedBots(app: App): void {
   bots.add(digest, now - 2 * 60 * MINUTE, 'step', 'cornercase status --json');
   bots.add(digest, now - 2 * 60 * MINUTE, 'bot', DIGEST_ANSWER);
   digest.unread = 1;
+}
+
+export function seedBotQueue(app: App): void {
+  const prs = app.bots.list.find((b) => b.id === 'prs');
+  const routine = prs?.routines[0];
+  if (!prs || !routine) return;
+  const base = { prompt: 'Review my open pull requests and tell me which are blocked.', label: routine.label, project: 0, folder: '', workspace: null, branch: '', agent: prs.agent, mode: '', command: '', bot: prs.id };
+  app.nextQueueId = RUN + 1;
+  app.queued.push({ ...base, id: RUN_ROUTINE, at: routine.at, repeat: routine.repeat, state: 'pending' });
+  app.queued.push({ ...base, id: RUN, at: prs.lines[0].at, routine: RUN_ROUTINE, state: 'answered' });
+  app.queued.sort((a, b) => a.at - b.at || a.id - b.id);
 }

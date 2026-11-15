@@ -31,8 +31,10 @@ impl App {
             |app: &App, target: &BotTarget| app.bot_at(&target.bot).map(|at| app.panels.bots.live[at].bot.id.clone());
         let answer = match request {
             BotRequest::Remove(target) => {
-                let id = self.bot_remove(&target.bot)?;
-                json!({ "bot": id })
+                let (id, entries) = self.bot_remove(&target.bot)?;
+                let mut value = self.queue_removal(entries);
+                value["bot"] = json!(id);
+                value
             }
             BotRequest::Reset(target) => {
                 self.bot_reset(&target.bot)?;

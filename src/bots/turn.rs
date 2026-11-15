@@ -15,6 +15,8 @@ pub(crate) struct Input {
     pub(crate) bot: Bot,
     pub(crate) folder: PathBuf,
     pub(crate) text: String,
+    pub(crate) run: bool,
+    pub(crate) told: Option<String>,
     pub(crate) program: String,
     pub(crate) home: Option<PathBuf>,
     pub(crate) socket: Option<String>,
@@ -41,11 +43,14 @@ fn environment(bot: &Bot, bin: Option<&Path>, path: Option<&OsStr>) -> headless:
 
 pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> Ask {
     let bot = &input.bot;
-    let prompt = if bot.conversation.is_none() {
-        let (about, memory) = folder::notes(&input.folder);
-        brief::opening(bot, &input.folder, (&about, &memory), &input.text)
+    let (about, memory) = folder::notes(&input.folder);
+    let notes = (about.as_str(), memory.as_str());
+    let prompt = if input.run {
+        brief::run_opening(bot, &input.folder, notes, &input.text)
+    } else if bot.conversation.is_none() {
+        brief::opening(bot, &input.folder, notes, input.told.as_deref(), &input.text)
     } else {
-        input.text.clone()
+        brief::resumed(input.told.as_deref(), &input.text)
     };
     let effort = bot.effort.as_deref().filter(|level| crate::agents::effort_refusal(&bot.agent, level).is_none());
     Ask {
@@ -55,7 +60,7 @@ pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> As
         folder: input.folder.clone(),
         socket: input.socket.clone(),
         tools: Tools::Bot(bot.access),
-        conversation: bot.conversation.clone(),
+        conversation: bot.conversation.clone().filter(|_| !input.run),
         env: environment(bot, bin, path),
         protected: vec![folder::BOT_FILE, folder::CHAT_FILE],
         stops: &super::SERVER_STOPS,

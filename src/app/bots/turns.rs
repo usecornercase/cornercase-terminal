@@ -7,7 +7,7 @@ use crate::agents::probe::Running;
 use crate::app::App;
 use crate::app::event::AppEvent;
 use crate::bots::chat::{self, Answer, Kind, Line};
-use crate::bots::{folder, turn};
+use crate::bots::{brief, folder, turn};
 use crate::control::contract::{Code, Refusal};
 use crate::error::Result;
 use crate::log::{self, Job, Level};
@@ -25,7 +25,7 @@ impl App {
             .ok_or_else(|| Refusal::new(Code::NotFound, format!("no bot {key}; cornercase bot list shows them")))
     }
 
-    fn bot_append(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> Line {
+    pub(super) fn bot_append(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> Line {
         let state = &mut self.panels.bots.live[at];
         let line = make(state.next_line, crate::time::now());
         state.next_line += 1;
@@ -62,13 +62,15 @@ impl App {
         Ok((at, line))
     }
 
-    fn bot_input(&self, at: usize, text: String) -> turn::Input {
+    pub(super) fn bot_input(&self, at: usize, text: String) -> turn::Input {
         let state = &self.panels.bots.live[at];
         let kind = Known::of(&state.bot.agent);
         turn::Input {
             bot: state.bot.clone(),
             folder: state.folder.clone(),
             text,
+            run: false,
+            told: None,
             program: crate::agents::command(&self.config, &state.bot.agent),
             home: self.account_home(kind, state.bot.account.as_deref()),
             socket: self.shells.pane_socket().map(str::to_string),
@@ -78,28 +80,34 @@ impl App {
 
     fn bot_start(&mut self, at: usize, asked: &[(u64, String)]) {
         let texts: Vec<String> = asked.iter().map(|(_, text)| text.clone()).collect();
-        let input = self.bot_input(at, turn::joined(&texts));
+        let mut input = self.bot_input(at, turn::joined(&texts));
+        let told = std::mem::take(&mut self.panels.bots.live[at].unseen);
+        input.told = brief::told(&told, &input.bot.id);
         let (id, running) = (self.panels.bots.next_turn, Running::default());
         self.panels.bots.next_turn += 1;
-        let bot = input.bot.id.clone();
-        let job = Job::new(Level::Info, "bots", "turn").with("bot", &bot).with("agent", &input.bot.agent);
-        let tx = self.tx.clone();
-        let (steps_bot, ended_bot, started) = (bot.clone(), bot, Instant::now());
-        let steps = Box::new(move |step| {
-            let event = BotEvent::Step { bot: steps_bot.clone(), turn: id, step };
-            let _ = tx.send(AppEvent::Bot(Box::new(event)));
-        });
-        let watch = Watch { steps: Some(steps), running: Some(running.clone()), ..Watch::default() };
         let state = &mut self.panels.bots.live[at];
         state.turn = Some(Turn {
             id,
             asked: asked.iter().map(|(line, _)| *line).collect(),
-            running,
+            running: running.clone(),
             stopping: false,
             dropped: Vec::new(),
             started: Instant::now(),
             steps: 0,
         });
+        self.spawn_bot_job(input, id, running);
+    }
+
+    pub(super) fn spawn_bot_job(&mut self, input: turn::Input, turn: u64, running: Running) {
+        let bot = input.bot.id.clone();
+        let job = Job::new(Level::Info, "bots", "turn").with("bot", &bot).with("agent", &input.bot.agent);
+        let tx = self.tx.clone();
+        let (steps_bot, ended_bot, started) = (bot.clone(), bot, Instant::now());
+        let steps = Box::new(move |step| {
+            let event = BotEvent::Step { bot: steps_bot.clone(), turn, step };
+            let _ = tx.send(AppEvent::Bot(Box::new(event)));
+        });
+        let watch = Watch { steps: Some(steps), running: Some(running), ..Watch::default() };
         self.spawn_job(
             job,
             move || {
@@ -111,7 +119,7 @@ impl App {
             },
             move |result, _| {
                 let (result, took) = (result.and_then(|inner| inner), started.elapsed());
-                Some(AppEvent::Bot(Box::new(BotEvent::Ended { bot: ended_bot, turn: id, result, took })))
+                Some(AppEvent::Bot(Box::new(BotEvent::Ended { bot: ended_bot, turn, result, took })))
             },
         );
     }
@@ -119,8 +127,20 @@ impl App {
     pub(in crate::app) fn bot_event(&mut self, event: BotEvent) {
         match event {
             BotEvent::Step { bot, turn, step } => self.bot_step(&bot, turn, &step),
-            BotEvent::Ended { bot, turn, result, took } => self.bot_ended(&bot, turn, result, took),
+            BotEvent::Ended { bot, turn, result, took } => {
+                if self.running_run(&bot, turn).is_some() {
+                    self.run_ended(&bot, turn, result, took);
+                } else {
+                    self.bot_ended(&bot, turn, result, took);
+                }
+            }
         }
+    }
+
+    pub(super) fn running_run(&self, bot: &str, turn: u64) -> Option<(usize, usize)> {
+        let at = self.panels.bots.live.iter().position(|state| state.bot.id == bot)?;
+        let run = self.panels.bots.live[at].runs.iter().position(|run| run.turn == turn)?;
+        Some((at, run))
     }
 
     fn running_turn(&self, bot: &str, turn: u64) -> Option<usize> {
@@ -129,7 +149,9 @@ impl App {
     }
 
     fn bot_step(&mut self, bot: &str, turn: u64, step: &crate::agents::headless::Action) {
-        if let Some(at) = self.running_turn(bot, turn) {
+        if let Some((at, run)) = self.running_run(bot, turn) {
+            self.run_step(at, run, step);
+        } else if let Some(at) = self.running_turn(bot, turn) {
             if let Some(running) = self.panels.bots.live[at].turn.as_mut() {
                 running.steps += 1;
             }
@@ -173,7 +195,8 @@ impl App {
             self.bot_answer_waiters(at, &finished.dropped, &notice);
         }
         if !shown && matches!(line.kind, Kind::Bot | Kind::Error) {
-            self.bot_notify(at, &line);
+            let who = self.panels.bots.live[at].bot.name.clone();
+            self.bot_notify(at, &line, &who);
         }
         let state = &self.panels.bots.live[at];
         log::info!(
@@ -206,19 +229,19 @@ impl App {
         }
     }
 
-    fn bot_notify(&mut self, at: usize, line: &Line) {
+    pub(super) fn bot_notify(&mut self, at: usize, line: &Line, who: &str) {
         let state = &mut self.panels.bots.live[at];
         state.unread += 1;
         let bot = state.bot.id.clone();
         let first = line.text.lines().find(|text| !text.trim().is_empty()).unwrap_or_default();
         let text = crate::text::truncate_right(&crate::text::one_line(first), TOAST_WIDTH);
-        let message = crate::host::notify::clean(&format!("{}: {text}", state.bot.name));
+        let message = crate::host::notify::clean(&format!("{who}: {text}"));
         let status = if line.kind == Kind::Error {
             crate::agents::activity::Status::Failed
         } else {
             crate::agents::activity::Status::Done
         };
-        let token = self.messages.notices.bot_token(&bot);
+        let token = self.messages.notices.bot_token(&bot, line.routine);
         let icon = crate::ui::ToastIcon::Agent(status);
         self.messages.toast = Some(super::super::toast::Toast {
             go: Some(token.clone()),
@@ -243,15 +266,26 @@ impl App {
         let at = self.bot_at(key)?;
         let state = &mut self.panels.bots.live[at];
         let held = std::mem::take(&mut state.held);
-        let Some(running) = state.turn.as_mut() else { return Ok(false) };
-        running.dropped.extend(held.iter().map(|(id, _)| *id));
-        if std::mem::replace(&mut running.stopping, true) {
-            return Ok(true);
+        let mut trees = Vec::new();
+        for run in &mut state.runs {
+            if !std::mem::replace(&mut run.stopping, true) {
+                trees.push(run.running.clone());
+            }
         }
-        let tree = running.running.clone();
-        let job = Job::new(Level::Info, "bots", "stop").with("bot", &state.bot.id);
-        self.spawn_job(job, move || Ok(tree.stop()), |_, _| None);
-        Ok(true)
+        let chat_running = state.turn.is_some();
+        let bot = state.bot.id.clone();
+        if let Some(running) = state.turn.as_mut() {
+            running.dropped.extend(held.iter().map(|(id, _)| *id));
+            if !std::mem::replace(&mut running.stopping, true) {
+                trees.push(running.running.clone());
+            }
+        }
+        let any = chat_running || !self.panels.bots.live[at].runs.is_empty();
+        for tree in trees {
+            let job = Job::new(Level::Info, "bots", "stop").with("bot", &bot);
+            self.spawn_job(job, move || Ok(tree.stop()), |_, _| None);
+        }
+        Ok(any)
     }
 
     pub(in crate::app) fn stop_bots(&mut self) {
@@ -260,10 +294,16 @@ impl App {
             .bots
             .live
             .iter_mut()
-            .filter_map(|state| {
-                let turn = state.turn.as_mut()?;
-                turn.stopping = true;
-                Some(turn.running.clone())
+            .flat_map(|state| {
+                let runs = state.runs.iter_mut().map(|run| {
+                    run.stopping = true;
+                    run.running.clone()
+                });
+                let turn = state.turn.as_mut().map(|turn| {
+                    turn.stopping = true;
+                    turn.running.clone()
+                });
+                runs.chain(turn).collect::<Vec<_>>()
             })
             .collect();
         let stopping: Vec<_> = trees.into_iter().map(|tree| std::thread::spawn(move || tree.stop())).collect();
@@ -274,7 +314,7 @@ impl App {
 
     pub(in crate::app) fn bot_reset(&mut self, key: &str) -> Done<()> {
         let at = self.bot_at(key)?;
-        self.bot_idle(at, "is answering")?;
+        self.chat_idle(at, "is answering")?;
         let state = &mut self.panels.bots.live[at];
         state.bot.conversation = None;
         let _ = folder::save(&state.folder, &state.bot);
@@ -283,20 +323,29 @@ impl App {
     }
 
     fn bot_idle(&self, at: usize, what: &str) -> Done<()> {
+        self.busy_refusal(at, what, !self.panels.bots.live[at].runs.is_empty())
+    }
+
+    fn chat_idle(&self, at: usize, what: &str) -> Done<()> {
+        self.busy_refusal(at, what, false)
+    }
+
+    fn busy_refusal(&self, at: usize, what: &str, extra: bool) -> Done<()> {
         let state = &self.panels.bots.live[at];
-        if state.turn.is_some() {
+        if state.turn.is_some() || extra {
             let id = &state.bot.id;
             return Err(Refusal::new(Code::Busy, format!("{id} {what}; stop it first (cornercase bot stop {id})")));
         }
         Ok(())
     }
 
-    pub(in crate::app) fn bot_remove(&mut self, key: &str) -> Done<String> {
+    pub(in crate::app) fn bot_remove(&mut self, key: &str) -> Done<(String, Vec<crate::queue::Entry>)> {
         let at = self.bot_at(key)?;
         self.bot_idle(at, "is answering")?;
         let state = &self.panels.bots.live[at];
         folder::remove(&state.folder).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
         let removed = self.panels.bots.live.remove(at);
+        let entries = self.panels.queued.remove_bot(&removed.bot.id);
         if self.panels.bots.shown.as_ref().is_some_and(|shown| shown.bot == removed.bot.id) {
             self.leave_bot();
         }
@@ -305,7 +354,7 @@ impl App {
         }
         self.clamp_bots_scroll();
         self.publish_bot_removed(&removed.bot.id);
-        Ok(removed.bot.id)
+        Ok((removed.bot.id, entries))
     }
 
     pub(in crate::app) fn bot_seen(&mut self, key: &str) -> Done<()> {

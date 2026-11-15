@@ -178,3 +178,107 @@ fn a_connection_that_cannot_be_read_while_a_turn_runs_is_a_bots() {
     c.release(ANSWER);
     c.settle();
 }
+
+mod queue_by_a_bot {
+    use super::super::routines::{START, bot_routine, scheduled};
+    use super::*;
+    use crate::app::control::boundary::NOT_OWN;
+    use crate::queue::{Place, Task};
+
+    fn outcome(app: &mut App, client: u64, args: &serde_json::Value) -> std::result::Result<(), String> {
+        reply_from(app, client, "queue", args)
+    }
+
+    fn refused(result: &std::result::Result<(), String>) -> bool {
+        result.as_ref().is_err_and(|message| message == NOT_OWN)
+    }
+
+    fn marked_while_a_run_answers(c: &mut Chat) -> (u64, u64) {
+        let docs = Bot { access: Access::Cornercase, ..bot("docs", "Docs") };
+        folder::create(c.dir.path(), &docs, "").expect("a second bot");
+        c.app.set_bots_dir(c.dir.path());
+        c.hold();
+        let own = scheduled(c, bot_routine(START, "2h"));
+        let other = Task { place: Place { bot: Some("docs".into()), ..Place::default() }, ..bot_routine(START, "2h") };
+        let theirs = c.app.panels.queued.schedule(None, other).expect("their routine");
+        c.app.refresh_at(Instant::now(), START);
+        c.started(1);
+        let root = root_of(c);
+        c.app.client_connected(BOT, Some(root));
+        c.app.client_connected(BOT + 1, Some(i32::try_from(std::process::id()).expect("a pid")));
+        (own, theirs)
+    }
+
+    #[test]
+    fn a_bots_connection_is_refused_what_is_not_its_own_entries() {
+        let mut c = chat(ANSWER);
+        let (own, theirs) = marked_while_a_run_answers(&mut c);
+        for wrong in [
+            serde_json::json!({"action": "add", "entry": {"bot": "docs", "repeat": "2h", "prompt": "x"}}),
+            serde_json::json!({"action": "add", "entry": {"project": 1, "repeat": "2h", "prompt": "x"}}),
+            serde_json::json!({"action": "add", "entry": {"repeat": "2h", "prompt": "x"}}),
+            serde_json::json!({"action": "clear-started"}),
+            serde_json::json!({"action": "remove", "entry": theirs}),
+            serde_json::json!({"action": "pause", "entry": theirs}),
+            serde_json::json!({"action": "resume", "entry": theirs}),
+            serde_json::json!({"action": "run", "entry": theirs}),
+            serde_json::json!({"action": "edit", "entry": {"id": theirs, "add": {"prompt": "y"}}}),
+            serde_json::json!({"action": "edit", "entry": {"id": own, "add": {"bot": "docs"}}}),
+        ] {
+            assert!(refused(&outcome(&mut c.app, BOT, &wrong)), "{wrong}");
+        }
+        c.release(ANSWER);
+        c.runs_settle();
+    }
+
+    #[test]
+    fn a_bots_connection_can_change_its_own_entries_and_another_client_any() {
+        let mut c = chat(ANSWER);
+        let (own, theirs) = marked_while_a_run_answers(&mut c);
+        for fine in [
+            serde_json::json!({"action": "add", "entry": {"bot": "prs", "repeat": "2h", "prompt": "x"}}),
+            serde_json::json!({"action": "list"}),
+            serde_json::json!({"action": "pause", "entry": own}),
+            serde_json::json!({"action": "resume", "entry": own}),
+            serde_json::json!({"action": "edit", "entry": {"id": own, "add": {"prompt": "y"}}}),
+        ] {
+            assert!(!refused(&outcome(&mut c.app, BOT, &fine)), "{fine}");
+        }
+        let pause = serde_json::json!({"action": "pause", "entry": theirs});
+        assert!(!refused(&outcome(&mut c.app, BOT + 1, &pause)));
+        let remove = serde_json::json!({"action": "remove", "entry": theirs});
+        assert!(!refused(&outcome(&mut c.app, BOT + 1, &remove)));
+        c.release(ANSWER);
+        c.runs_settle();
+    }
+
+    #[test]
+    fn a_runs_commands_are_its_bots() {
+        let mut c = chat(ANSWER);
+        c.hold();
+        scheduled(&mut c, bot_routine(START, "2h"));
+        c.app.refresh_at(Instant::now(), START);
+        c.started(1);
+        assert!(c.app.panels.bots.live[0].turn.is_none());
+        let root = root_of(&c);
+        c.app.client_connected(BOT, Some(root));
+        let popup = reply_from(&mut c.app, BOT, "input", &popup_text()).expect_err("refused");
+        assert!(popup.starts_with("a bot can only type into a pane that runs an agent"), "{popup}");
+        c.release(ANSWER);
+        c.runs_settle();
+    }
+
+    #[test]
+    fn an_unreadable_connection_while_only_a_run_answers_is_a_bots() {
+        let mut c = chat(ANSWER);
+        c.hold();
+        scheduled(&mut c, bot_routine(START, "2h"));
+        c.app.refresh_at(Instant::now(), START);
+        c.started(1);
+        c.app.client_connected(BOT, None);
+        let popup = reply_from(&mut c.app, BOT, "input", &popup_text()).expect_err("refused");
+        assert!(popup.starts_with("a bot can only type into a pane that runs an agent"), "{popup}");
+        c.release(ANSWER);
+        c.runs_settle();
+    }
+}

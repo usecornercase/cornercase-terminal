@@ -88,6 +88,8 @@ pub(crate) struct BotInfo {
     pub(crate) last: Option<BotLast>,
     pub(crate) folder: String,
     pub(crate) created: i64,
+    pub(crate) routines: usize,
+    pub(crate) next: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

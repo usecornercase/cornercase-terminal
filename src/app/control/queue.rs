@@ -1,3 +1,4 @@
+mod bot;
 mod prepare;
 mod routine;
 mod run;
@@ -47,7 +48,7 @@ impl App {
         Ok(Some(self.queue_removal(entries)))
     }
 
-    fn queue_removal(&mut self, entries: Vec<queue::Entry>) -> serde_json::Value {
+    pub(super) fn queue_removal(&mut self, entries: Vec<queue::Entry>) -> serde_json::Value {
         let mut value = json!({ "entries": answered(&entries) });
         if let Some(undo) = self.panels.queued.keep_removed(entries) {
             value["undo"] = json!(undo);
@@ -99,10 +100,17 @@ impl App {
         let old = edit
             .map(|id| self.panels.queued.queue().entry(id).cloned().ok_or_else(|| queue::missing(id)))
             .transpose()?;
+        if add.bot.is_some() || old.as_ref().is_some_and(queue::Entry::is_bot) {
+            return self.bot_queue_request(client, edit, add, old.as_ref());
+        }
         if routine::is_routine_request(add, old.as_ref()) {
             return self.routine_request(caller, edit, add, old.as_ref());
         }
-        let mut prepared = self.prepare_queue(caller, add, old.as_ref())?;
+        let prepared = self.prepare_queue(caller, add, old.as_ref())?;
+        self.schedule_prepared(client, edit, prepared)
+    }
+
+    fn schedule_prepared(&mut self, client: Option<u64>, edit: Option<u64>, mut prepared: Prepared) -> Handled {
         if prepared.issue.is_none() && prepared.probe.is_none() {
             return self.add_queue_now(edit, &mut prepared);
         }
@@ -221,6 +229,9 @@ impl App {
         if matches!(entry.state, State::Starting | State::Started { .. }) || self.panels.queued.starting(id) {
             return Err("this queue entry has already started".into());
         }
+        if entry.is_bot() {
+            return self.run_bot_entry(&entry, now);
+        }
         if entry.is_run() {
             return self.run_routine(&entry, now);
         }
@@ -240,7 +251,7 @@ impl App {
         self.routine_started(client, id, answer)
     }
 
-    fn mark_starting(&mut self, id: u64, now: Instant) -> Result<u64, String> {
+    pub(in crate::app) fn mark_starting(&mut self, id: u64, now: Instant) -> Result<u64, String> {
         let client = self.panels.queued.start(id, now);
         if let Err(error) = self.panels.queued.save() {
             let reason = format!("cannot save the queue before starting: {error}");

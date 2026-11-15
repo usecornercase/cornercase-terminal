@@ -49,7 +49,7 @@ fn refuse_cleanup(cleanup: bool, flow: Option<&str>, agent: &str) -> Result<(), 
     Ok(())
 }
 
-fn schedule(text: &str, zone: &str, old: Option<&Entry>, now: i64) -> Result<(Repeat, i64), String> {
+pub(super) fn schedule(text: &str, zone: &str, old: Option<&Entry>, now: i64) -> Result<(Repeat, i64), String> {
     if let Some(entry) = old
         && let Some(repeat) = entry.task.repeat
         && entry.task.zone == zone

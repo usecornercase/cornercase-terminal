@@ -177,6 +177,27 @@ impl QueueRuntime {
         Some(&*entry.result.insert(outcome))
     }
 
+    pub(super) fn removed(&self, undo: u64) -> Option<&[queue::Entry]> {
+        self.removals.iter().find(|(id, _)| *id == undo).map(|(_, entries)| entries.as_slice())
+    }
+
+    pub(super) fn set_started(&mut self, id: u64, at: i64) {
+        if let Some(entry) = self.queue.entry_mut(id) {
+            entry.started = Some(at);
+        }
+    }
+
+    pub(super) fn answered(&mut self, id: u64, session: Option<String>, outcome: queue::outcome::Outcome) {
+        if let Some(entry) = self.queue.entry_mut(id) {
+            entry.state = State::Answered { session };
+            entry.result = Some(outcome);
+        }
+    }
+
+    pub(super) fn remove_bot(&mut self, bot: &str) -> Vec<queue::Entry> {
+        self.queue.remove_bot(bot)
+    }
+
     pub(super) fn fail(&mut self, id: u64, reason: &str) {
         if let Some(entry) = self.queue.entry_mut(id) {
             entry.state = State::Failed { reason: reason.to_string() };
@@ -279,6 +300,10 @@ impl App {
     }
 
     pub(super) fn fail_queued(&mut self, id: u64, reason: &str) {
+        let bot = self.panels.queued.queue.entry(id).and_then(|entry| entry.bot().map(str::to_string));
+        if let Some(at) = bot.and_then(|bot| self.panels.bots.live.iter().position(|live| live.bot.id == bot)) {
+            return self.bot_entry_failed(at, id, reason, false);
+        }
         self.panels.queued.fail(id, reason);
         let text = match self.panels.queued.queue.entry(id).filter(|entry| entry.is_run()) {
             Some(entry) => format!("routine {} failed: {reason}", entry.task.label),
@@ -391,6 +416,7 @@ impl App {
                 format!("started · pane {pane}")
             }
             State::Started { .. } => "started · pane closed".into(),
+            State::Answered { .. } => "answered".into(),
             State::Failed { reason } => format!("failed · {reason}"),
             State::Missed => "missed".into(),
             State::Removed => "removed".into(),
@@ -399,6 +425,10 @@ impl App {
     }
 
     fn queued_place(&self, place: &queue::Place) -> String {
+        if let Some(bot) = &place.bot {
+            let live = self.panels.bots.live.iter().find(|live| live.bot.id == *bot);
+            return format!("bot {}", live.map_or(bot.as_str(), |live| live.bot.name.as_str()));
+        }
         let project = self.projects.iter().find(|project| project.path == place.project).map_or_else(
             || crate::text::folder_name(&place.project, self.home.as_deref()),
             |project| self.project_label(project),
@@ -436,11 +466,23 @@ impl App {
                 self.overlay = None;
                 self.focus_queued(pane, area);
             }
+            State::Answered { .. } => self.open_answered(id),
             State::Started { .. } | State::Kept { .. } | State::Removed => self.open_queue_result_dialog(id),
             State::Failed { .. } | State::Missed if entry.is_run() => self.open_queue_result_dialog(id),
             State::Starting => {}
             _ if entry.is_run() => {}
             _ => self.new_queue_form(Some(id)),
+        }
+    }
+
+    fn open_answered(&mut self, id: u64) {
+        let bot = self.panels.queued.queue.entry(id).and_then(|entry| entry.bot().map(str::to_string));
+        match bot.and_then(|bot| self.panels.bots.live.iter().position(|live| live.bot.id == bot)) {
+            Some(at) => {
+                self.overlay = None;
+                self.show_bot_at_run(at, Some(id));
+            }
+            None => self.open_queue_result_dialog(id),
         }
     }
 
@@ -497,7 +539,7 @@ fn queued_colour(queued: &Queued) -> Option<Color> {
         (QueuedKind::Routine { paused: true }, _) | (_, State::Removed) => Some(Color::DarkGray),
         (_, State::Failed { .. }) => Some(Color::Red),
         (_, State::Missed | State::Kept { .. }) => Some(Color::Yellow),
-        (_, State::Started { .. }) => Some(Color::Green),
+        (_, State::Started { .. } | State::Answered { .. }) => Some(Color::Green),
         (_, State::Pending | State::Starting) => None,
     }
 }
@@ -507,11 +549,15 @@ fn queue_hint(selected: Option<&Queued>) -> &'static str {
     let opens = matches!(queued.state, State::Started { .. } | State::Kept { .. }) && queued.live;
     match (queued.kind, &queued.state) {
         (QueuedKind::Routine { .. }, _) => "enter edits it · start now runs it once more",
+        (QueuedKind::Run, State::Answered { .. }) => "enter shows its answer in the bot's chat · a run of a routine",
         (QueuedKind::Run, _) if opens => "enter opens its pane · a run of a routine",
         (QueuedKind::Run, State::Pending | State::Starting) => "a run of a routine · every project's scheduled agents",
         (QueuedKind::Run, _) => "enter shows its result · a run of a routine",
         (_, State::Started { .. }) if opens => "enter opens its pane · every project's scheduled agents",
         (_, State::Started { .. }) => "enter shows its result · every project's scheduled agents",
+        (QueuedKind::Entry, State::Answered { .. }) => {
+            "enter shows its answer in the bot's chat · every project's scheduled agents"
+        }
         (_, State::Starting) => "starting… · every project's scheduled agents",
         _ => "enter edits it · start now runs it at once",
     }

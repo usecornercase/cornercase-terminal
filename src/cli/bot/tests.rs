@@ -130,3 +130,22 @@ fn nothing_to_list_or_to_read_says_so() {
     assert_eq!(list(&[], NOON, ZONE), "no bots; cornercase bot new NAME makes one\n");
     assert_eq!(chat("PRs", &[], NOON, ZONE), "nothing said yet\n");
 }
+
+#[test]
+fn an_event_of_a_routine_run_says_which_run() {
+    let answer = crate::bots::chat::Answer { model: None, tokens: Used::default(), conversation: None };
+    let line = Line::answer(9, NOON, "Two are blocked.", answer).of_run(12);
+    assert_eq!(event_text("prs", (Some(&line), None, None)), "bot prs  routine 12  answered: Two are blocked.");
+}
+
+#[test]
+fn a_chat_opens_a_header_for_each_run_and_says_its_routine() {
+    let head = Line::notice(1, NOON - 600, "↻ Review PRs · 09:00").of_run(12);
+    let step = Line::step(2, NOON - 590, "Bash", "gh pr list").of_run(12);
+    let answer = crate::bots::chat::Answer { model: None, tokens: Used::default(), conversation: None };
+    let said = Line::answer(3, NOON - 580, "Two are blocked.", answer.clone()).of_run(12);
+    let chat_turn = Line::answer(4, NOON - 500, "Hi.", answer);
+    let text = chat("PRs", &[head, step, said, chat_turn], NOON, ZONE);
+    assert!(text.contains("PRs · 11:50 · routine 12\n  ▸ gh pr list\nTwo are blocked."), "{text}");
+    assert!(text.contains("PRs · 11:51\nHi."), "{text}");
+}

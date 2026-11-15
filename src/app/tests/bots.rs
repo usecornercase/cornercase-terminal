@@ -273,7 +273,7 @@ fn a_bot_is_removed_only_when_it_is_idle() {
     c.release(ANSWER);
     c.settle();
     let folder = c.dir.path().join("prs");
-    assert_eq!(c.app.bot_remove("PRs").as_deref(), Ok("prs"));
+    assert_eq!(c.app.bot_remove("PRs").map(|(id, _)| id).as_deref(), Ok("prs"));
     assert!(!folder.exists());
     assert!(c.app.bot_at("prs").is_err());
 }
@@ -344,4 +344,5 @@ mod boundary;
 mod compact;
 mod form;
 mod menu;
+mod routines;
 mod window;

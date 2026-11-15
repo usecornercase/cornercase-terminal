@@ -25,6 +25,10 @@ The sidebar section, its placement, height rule, saved fold and compact page are
 - **` new conversation `** while a turn runs is dim, and a click says `PRs is answering: stop it first` (#844's `busy` refusal); the menu greys it.
 - **The card** (workspaces column): the name, agent, model (`the agent's own` when unset), effort and account when set, the access (`full access` in red), `made 2026-11-14`; the folder comes right after the name, since it is the card's one click target (a click opens the open-in menu, or copies the path) and the stacked layout gives the card few rows. The tree layout has no workspaces column, so it has no card.
 
+## Routines in the window (#846)
+
+A routine run's lines are drawn as one block, the section's row shows `next 09:00` while the bot is idle, the card lists the routines, the empty state has a fourth example and the remove dialog names the entries it removes: see [Bot routines](routines.md) (The window). The simulation shows a canned run block and a seeded routine, and runs none.
+
 ## Keys
 
 While a chat shows, every key goes to its input field and **never to a pane**: `chat_typing` is true when a bot shows, no compact menu or full-screen file is up, and the TODO field, the files search, the changes filter and the tour do not have the keys (they keep them). `forward_key` and `handle_paste` also return early while a bot shows, so no path can write to a hidden pane. The prefix key still opens the keys menu. `Enter` sends (any modifiers); a line break comes only from a paste (`Editor::insert_lines`); the reason is in `design/text-fields.md`. `Esc` clears a draft with text; with an empty one it closes a side panel when one shows, and otherwise does nothing: going back to the last tab would give `Esc` two meanings depending on the text, and a stray `Esc` would drop the place you are reading. The field is `TextField::BotChat` in the registry, so drags, double clicks and the copy/cut/select-all menu work as in every field. Drafts are per bot and shared by windows, like every field in `App`.

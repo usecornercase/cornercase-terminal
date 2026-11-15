@@ -11,7 +11,7 @@ fn action(args: &[&str]) -> QueueAction {
 }
 
 fn queue_command(action: QueueAction) -> Result<(control::Queue, bool)> {
-    match request_of(action)? {
+    match request_of(action, None)? {
         Asked::Queue(command, json) => Ok((*command, json)),
         Asked::Show(..) => panic!("not a queue command"),
     }
@@ -97,7 +97,7 @@ mod routines {
         else {
             panic!("not add")
         };
-        let request = queue_add(add, true).expect("request");
+        let request = queue_add(add, true, None).expect("request");
         assert_eq!(request.repeat.as_deref(), Some("day 09:00"));
         assert_eq!((request.flow.as_deref(), request.cleanup), (Some("Quick"), Some(true)));
         assert_eq!(request.at, "");
@@ -167,7 +167,8 @@ mod showing {
 
     #[test]
     fn show_takes_an_id_the_conversation_and_json() {
-        let Asked::Show(show, json) = request_of(action(&["show", "7", "--conversation", "--json"])).expect("show")
+        let Asked::Show(show, json) =
+            request_of(action(&["show", "7", "--conversation", "--json"]), None).expect("show")
         else {
             panic!("not a show")
         };
@@ -240,5 +241,97 @@ mod showing {
         assert!(text.contains("Reviewed #480 and #482.\n… only the first 4 KiB are kept\n"), "{text}");
         assert!(text.contains("Long.\n… cut at 32 KiB\n"), "{text}");
         assert!(!show::text(&removed(), "UTC").contains('…'));
+    }
+}
+
+mod bots {
+    use super::*;
+
+    fn add_of(args: &[&str]) -> QueueAdd {
+        let QueueAction::Add(add) = action(&["add"].into_iter().chain(args.iter().copied()).collect::<Vec<_>>()[..])
+        else {
+            panic!("not add")
+        };
+        add
+    }
+
+    #[test]
+    fn bot_does_not_mix_with_what_an_agent_in_a_project_takes() {
+        let others = [
+            ["--project", "1"],
+            ["--workspace", "1"],
+            ["--worktree", "x"],
+            ["--issue", "7"],
+            ["--source", "linear"],
+            ["--flow", "Quick"],
+            ["--agent", "claude"],
+            ["--mode", "plan"],
+            ["--account", "claude=home"],
+            ["--fresh", "--"],
+            ["--cleanup", "--"],
+            ["--no-cleanup", "--"],
+        ];
+        for other in others {
+            let mut args = vec!["cornercase", "queue", "add", "--bot", "prs", "--every", "2h", "--prompt", "go"];
+            args.extend(other.iter().filter(|word| **word != "--"));
+            let error = Cli::try_parse_from(args).expect_err("clap");
+            assert_eq!(error.exit_code(), 2, "{other:?}");
+        }
+    }
+
+    #[test]
+    fn inside_a_bot_a_queue_add_with_no_place_means_that_bot() {
+        let request = queue_add(add_of(&["--every", "2h", "--prompt", "go"]), true, Some("prs")).expect("request");
+        assert_eq!(request.bot.as_deref(), Some("prs"));
+        let request = queue_add(add_of(&["--every", "2h", "--prompt", "go", "--project", "3"]), true, Some("prs"))
+            .expect("request");
+        assert_eq!((request.bot, request.project), (None, Some(3)));
+        let outside = queue_add(add_of(&["--every", "2h", "--prompt", "go"]), true, None).expect("request");
+        assert_eq!(outside.bot, None);
+        let named = queue_add(add_of(&["--every", "2h", "--prompt", "go", "--bot", "docs"]), true, Some("prs"))
+            .expect("request");
+        assert_eq!(named.bot.as_deref(), Some("docs"));
+    }
+
+    #[test]
+    fn inside_a_bot_what_only_a_project_entry_takes_is_wrong_usage() {
+        for extra in [["--agent", "codex"], ["--mode", "plan"], ["--account", "claude=home"], ["--flow", "Quick"]] {
+            let mut args = vec!["--every", "2h", "--prompt", "go"];
+            args.extend(extra);
+            let error = queue_add(add_of(&args), true, Some("prs")).expect_err("wrong usage");
+            assert!(
+                matches!(&error, Error::WrongUsage(text) if text.contains("add --project ID")),
+                "{extra:?}: {error:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_bot_entry_needs_a_prompt_and_a_time() {
+        let error = queue_add(add_of(&["--bot", "prs", "--every", "2h"]), true, None).expect_err("no prompt");
+        assert!(matches!(error, Error::WrongUsage(_)));
+        let error = queue_add(add_of(&["--bot", "prs", "--prompt", "go"]), true, None).expect_err("no time");
+        assert!(matches!(error, Error::WrongUsage(_)));
+        let request = queue_add(add_of(&["--bot", "prs", "--at", "in 2h", "--prompt", "go"]), true, None).expect("ok");
+        assert_eq!((request.bot.as_deref(), request.at.as_str()), (Some("prs"), "in 2h"));
+    }
+
+    #[test]
+    fn the_list_names_the_bot_where_an_agent_would_be_and_reads_answered() {
+        let value = json!({"entries": [
+            {"id": 7, "at": 0, "label": "Review PRs", "agent": "claude", "state": "answered", "place": {"bot": "prs"}},
+            {"id": 8, "at": 0, "label": "Digest", "agent": "claude", "state": "pending", "repeat": "day 09:00", "place": {"bot": "prs"}},
+        ]});
+        assert_eq!(
+            lines(&value, "UTC"),
+            "7 1970-01-01 00:00 answered Review PRs · bot prs\n\
+             8 1970-01-01 00:00 pending Digest · bot prs · ↻ every day 09:00\n"
+        );
+    }
+
+    #[test]
+    fn queue_list_takes_a_bot_filter() {
+        let QueueAction::List(list) = action(&["list", "--bot", "prs", "--json"]) else { panic!("not list") };
+        assert_eq!((list.bot.as_deref(), list.print.json), (Some("prs"), true));
     }
 }

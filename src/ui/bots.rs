@@ -14,6 +14,7 @@ use crate::agents::activity::Status;
 
 pub(crate) mod card;
 pub(crate) mod chat;
+pub(crate) mod run;
 
 pub(crate) const BOTS_LABEL: &str = "Bots ›";
 

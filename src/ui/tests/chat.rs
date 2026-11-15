@@ -94,7 +94,7 @@ fn a_stopping_turn_shows_no_stop_button() {
 }
 
 #[test]
-fn the_empty_state_says_what_a_bot_is_and_offers_three_examples() {
+fn the_empty_state_says_what_a_bot_is_and_offers_four_examples() {
     let mut view = chat(&[]);
     view.rows = empty_rows(CHAT_W - 2, TONE);
     view.empty = true;
@@ -171,7 +171,7 @@ fn an_example_in_the_empty_state_is_hit() {
     let areas = chat_areas(pane, 1, 1);
     let top = row_y(areas.lines, view.rows.len(), true, view.rows.len() - 1);
     let hit = chat_hit(&areas, &view, Position::new(areas.lines.x + 30, top));
-    assert_eq!(hit, Some(ChatHit::Row(RowHit::Example(2))));
+    assert_eq!(hit, Some(ChatHit::Row(RowHit::Example(3))));
 }
 
 #[test]
@@ -223,4 +223,59 @@ fn the_folder_target_follows_the_rows_that_are_drawn() {
     assert_eq!(card_folder(list, &card).y, 4);
     let none = Rect::new(0, 3, 25, 1);
     assert!(card_folder(none, &card).is_empty());
+}
+
+fn run_block() -> RunBlock {
+    RunBlock {
+        run: 12,
+        head: "↻ Review PRs · 09:00".into(),
+        first: 4,
+        steps: vec!["cornercase status --json".into(), "gh pr list".into()],
+        open: false,
+        answer: Some(("prs · 09:05".into(), markdown("Two are **blocked**:\n\n- #482 waits for a review"))),
+        error: None,
+        again: false,
+        end: None,
+        answering: false,
+    }
+}
+
+#[test]
+fn a_run_is_one_block_even_with_a_chat_turn_between_its_lines() {
+    let entries = [you("hi", "09:01"), ChatEntry::Run(run_block()), bot("Fine."), steps(&["ls"], false)];
+    let t = drawn(chat(&entries));
+    insta::assert_snapshot!(t.backend());
+    let text = (0..CHAT_H).map(|y| row_text(&t, Rect::new(0, y, CHAT_W, 1))).collect::<Vec<_>>().join("\n");
+    assert!(text.contains("↻ Review PRs · 09:00") && text.contains("+2 steps"), "{text}");
+    assert!(!text.contains("▸ gh pr list"), "the run's steps are folded");
+}
+
+#[test]
+fn an_unfolded_run_shows_its_steps() {
+    let rows = entry_rows(&ChatEntry::Run(RunBlock { open: true, ..run_block() }), CHAT_W - 2, TONE);
+    let text: Vec<String> =
+        rows.iter().map(|row| row.line.spans.iter().map(|s| s.content.as_ref()).collect()).collect();
+    assert!(text.iter().any(|row| row.starts_with("▸ gh pr list")), "{text:?}");
+}
+
+#[test]
+fn a_failed_run_offers_run_again() {
+    let block = RunBlock { answer: None, error: Some("claude is not installed".into()), again: true, ..run_block() };
+    let rows = entry_rows(&ChatEntry::Run(block), CHAT_W - 2, TONE);
+    let last = rows.last().expect("a row");
+    let text: String = last.line.spans.iter().map(|span| span.content.as_ref()).collect();
+    assert!(text.ends_with(" run again "), "{text}");
+    assert_eq!(last.hit.as_ref().map(|(hit, _)| hit.clone()), Some(RowHit::RunAgain(12)));
+    let without = RunBlock { again: false, ..run_block() };
+    let rows =
+        entry_rows(&ChatEntry::Run(RunBlock { answer: None, error: Some("x".into()), ..without }), CHAT_W - 2, TONE);
+    assert!(rows.iter().all(|row| row.hit.is_none() || matches!(row.hit, Some((RowHit::Unfold(_), _)))));
+}
+
+#[test]
+fn a_run_that_is_answering_says_so() {
+    let block = RunBlock { answer: None, answering: true, ..run_block() };
+    let rows = entry_rows(&ChatEntry::Run(block), CHAT_W - 2, TONE);
+    let text: String = rows.last().expect("a row").line.spans.iter().map(|span| span.content.as_ref()).collect();
+    assert_eq!(text, "answering…");
 }

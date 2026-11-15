@@ -7,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
 
+use super::run::{RunBlock, run_rows};
 use crate::agents::activity::Status;
 use crate::editor::{Editor, wrap_text};
 use crate::text::{plural, truncate_right};
@@ -14,15 +15,16 @@ use crate::ui::View;
 use crate::ui::theme::status_icon;
 use crate::ui::widgets::{EditorField, button_style, draw_button, draw_editor, first_line, middle};
 
-pub(crate) const EXAMPLES: [&str; 3] = [
+pub(crate) const EXAMPLES: [&str; 4] = [
     "Which of my open pull requests are blocked, and why?",
     "What did my agents get done today, in every project?",
     "Which issues labelled bug came in today, in every project?",
+    "Every weekday at 9, review my open pull requests and tell me which are blocked.",
 ];
 
 pub(crate) const INTRO: [&str; 2] = [
     "A bot is an agent of your own. It belongs to no project and keeps a memory.",
-    "It runs only when you write to it, and answers here. Try:",
+    "It answers here when you write to it, and on a schedule it sets itself. Try:",
 ];
 
 pub(crate) const STEPS_SHOWN: usize = 3;
@@ -50,6 +52,7 @@ pub(crate) struct Tone {
 pub(crate) enum RowHit {
     Unfold(u64),
     Retry(u64),
+    RunAgain(u64),
     Example(usize),
     Link,
 }
@@ -61,7 +64,7 @@ pub(crate) struct ChatRow {
 }
 
 impl ChatRow {
-    fn plain(line: Line<'static>) -> Self {
+    pub(super) fn plain(line: Line<'static>) -> Self {
         Self { line, hit: None }
     }
 
@@ -81,6 +84,7 @@ pub(crate) enum ChatEntry {
     Steps { first: u64, texts: Vec<String>, open: bool },
     Error { id: u64, text: String, retry: bool },
     Notice(String),
+    Run(RunBlock),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,7 +194,7 @@ pub(crate) fn row_y(body: Rect, count: usize, empty: bool, i: usize) -> u16 {
     top.saturating_add(u16::try_from(i).unwrap_or(u16::MAX))
 }
 
-fn dim(tone: Tone) -> Style {
+pub(super) fn dim(tone: Tone) -> Style {
     Style::default().fg(tone.muted)
 }
 
@@ -235,14 +239,20 @@ fn you_rows(text: &str, stamp: &str, width: usize, tone: Tone) -> Vec<ChatRow> {
         .collect()
 }
 
-fn bot_rows(head: &str, body: &[Line<'static>], tone: Tone) -> Vec<ChatRow> {
+pub(super) fn bot_rows(head: &str, body: &[Line<'static>], tone: Tone) -> Vec<ChatRow> {
     let mut rows = vec![ChatRow::plain(Line::from(Span::styled(head.to_string(), dim(tone))))];
     rows.extend(body.iter().cloned().map(|line| ChatRow::whole(line, RowHit::Link)));
     rows
 }
 
-fn step_rows(first: u64, texts: &[String], open: bool, width: usize, tone: Tone) -> Vec<ChatRow> {
-    let hidden = if open { 0 } else { texts.len().saturating_sub(STEPS_SHOWN) };
+pub(super) fn step_rows(
+    first: u64,
+    texts: &[String],
+    (open, shown): (bool, usize),
+    width: usize,
+    tone: Tone,
+) -> Vec<ChatRow> {
+    let hidden = if open { 0 } else { texts.len().saturating_sub(shown) };
     let mut rows = Vec::new();
     if hidden > 0 {
         let label = format!("+{}", plural(hidden, "step", "steps"));
@@ -255,21 +265,23 @@ fn step_rows(first: u64, texts: &[String], open: bool, width: usize, tone: Tone)
     rows
 }
 
-fn error_rows(id: u64, text: &str, retry: bool, width: usize) -> Vec<ChatRow> {
+pub(super) fn error_rows(text: &str, again: Option<(RowHit, &'static str)>, width: usize) -> Vec<ChatRow> {
     let red = Style::default().fg(Color::Red);
     let mut rows: Vec<ChatRow> = wrap_text(text, width.max(1))
         .into_iter()
         .map(|line| ChatRow::plain(Line::from(Span::styled(line, red))))
         .collect();
-    if let (true, Some(last)) = (retry, rows.last_mut()) {
+    if let (Some((hit, label)), Some(last)) = (again, rows.last_mut()) {
         let start = u16::try_from(last.line.width() + 1).unwrap_or(u16::MAX);
-        last.line.spans.extend([Span::raw(" "), Span::styled(" retry ", Style::default().fg(Color::Cyan))]);
-        last.hit = Some((RowHit::Retry(id), start..start.saturating_add(7)));
+        let width = u16::try_from(label.width() + 2).unwrap_or(u16::MAX);
+        let shown = format!(" {label} ");
+        last.line.spans.extend([Span::raw(" "), Span::styled(shown, Style::default().fg(Color::Cyan))]);
+        last.hit = Some((hit, start..start.saturating_add(width)));
     }
     rows
 }
 
-fn notice_rows(text: &str, width: usize, tone: Tone) -> Vec<ChatRow> {
+pub(super) fn notice_rows(text: &str, width: usize, tone: Tone) -> Vec<ChatRow> {
     let text = truncate_right(&format!("── {text} ──"), width);
     let lead = pad(width, text.width()).len() / 2;
     vec![ChatRow::plain(Line::from(vec![Span::raw(" ".repeat(lead)), Span::styled(text, dim(tone))]))]
@@ -280,9 +292,10 @@ pub(crate) fn entry_rows(entry: &ChatEntry, width: u16, tone: Tone) -> Vec<ChatR
     match entry {
         ChatEntry::You { text, stamp } => you_rows(text, stamp, width, tone),
         ChatEntry::Bot { head, body } => bot_rows(head, body, tone),
-        ChatEntry::Steps { first, texts, open } => step_rows(*first, texts, *open, width, tone),
-        ChatEntry::Error { id, text, retry } => error_rows(*id, text, *retry, width),
+        ChatEntry::Steps { first, texts, open } => step_rows(*first, texts, (*open, STEPS_SHOWN), width, tone),
+        ChatEntry::Error { id, text, retry } => error_rows(text, retry.then_some((RowHit::Retry(*id), "retry")), width),
         ChatEntry::Notice(text) => notice_rows(text, width, tone),
+        ChatEntry::Run(block) => run_rows(block, width, tone),
     }
 }
 
