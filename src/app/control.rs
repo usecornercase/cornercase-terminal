@@ -2,6 +2,7 @@ mod account_restart;
 pub(in crate::app) mod accounts;
 mod arrange;
 mod bots;
+pub(in crate::app) mod boundary;
 mod changes;
 mod clone;
 mod close;
@@ -97,6 +98,7 @@ pub(super) struct Clients {
     pub(super) views: views::Views,
     pub(super) pasted: pasted_files::PastedFiles,
     pub(super) pairings: pair::Pairings,
+    pub(super) bots: boundary::BotClients,
     confirm_within: Duration,
     typing_holds: Duration,
 }
@@ -112,6 +114,7 @@ impl Default for Clients {
             views: views::Views::default(),
             pasted: pasted_files::PastedFiles::default(),
             pairings: pair::Pairings::default(),
+            bots: boundary::BotClients::default(),
             confirm_within: CONFIRM_WITHIN,
             typing_holds: INPUT_HOLDS,
         }
@@ -434,6 +437,7 @@ impl App {
     }
 
     pub(crate) fn forget(&mut self, client: u64) {
+        self.forget_bot(client);
         self.clients.requests.open.retain(|open| *open != client);
         self.clients.requests.structured.remove(&client);
         self.clients.requests.callers.remove(&client);
@@ -460,6 +464,7 @@ impl App {
             pending.client = None;
         }
         self.clients.requests.pending.retain(|p| p.client.is_some() || p.stage.outlives_its_client());
+        self.prune_bot_keys();
     }
 
     pub(in crate::app) fn answer_read(&mut self, key: u64, reply: impl FnOnce(&mut Self) -> Result<Value, Refusal>) {

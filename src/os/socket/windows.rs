@@ -242,6 +242,10 @@ pub(crate) fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
     process_uid(stream.peer_pid()?)
 }
 
+pub(crate) fn peer_pid(stream: &UnixStream) -> io::Result<i32> {
+    i32::try_from(stream.peer_pid()?).map_err(io::Error::other)
+}
+
 #[derive(Debug)]
 pub(crate) struct UnixListener(Socket);
 

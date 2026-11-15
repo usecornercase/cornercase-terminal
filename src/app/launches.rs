@@ -1,12 +1,15 @@
+use std::collections::HashSet;
 use std::time::{Duration, Instant, SystemTime};
 
 use ratatui::layout::Rect;
 
 use super::App;
+use super::control::boundary::fronts_agent;
 use super::event::Start;
 use super::toast::Toast;
 use crate::agents::launch::{self, Launch, Refusal, Step, Trust};
 use crate::agents::{self, PaneShell};
+use crate::config::Config;
 use crate::error::Result;
 use crate::log::{self};
 use crate::process::program;
@@ -65,6 +68,10 @@ impl Launches {
         }
     }
 
+    pub(super) fn keys(&self) -> impl Iterator<Item = u64> {
+        self.list.iter().filter_map(|launch| launch.key)
+    }
+
     #[cfg(test)]
     pub(super) fn list(&self) -> &[Launch] {
         &self.list
@@ -83,6 +90,7 @@ impl App {
             return;
         }
         let held = self.held_launch_panes();
+        let (bots, mut barred) = (self.bot_request_keys(), Vec::new());
         let regex = self.agents.launches.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
@@ -98,6 +106,11 @@ impl App {
                 finished.push((i, false));
                 continue;
             };
+            if bars_enter(launch, term, &self.config, &bots) {
+                finished.push((i, false));
+                barred.extend(launch.key.map(|key| (key, term.id)));
+                continue;
+            }
             if let Some(started) = drive(launch, term, &round, &mut out) {
                 finished.push((i, started));
             }
@@ -106,13 +119,20 @@ impl App {
             self.fail_pane_requests(pane, &refusal.message);
             self.messages.toast = Some(Toast::new(refusal.message, ui::ToastIcon::Bug));
         }
+        self.end_launches(finished, barred);
+        for pane in out.parked {
+            self.member_waits(pane);
+        }
+    }
+
+    fn end_launches(&mut self, finished: Vec<(usize, bool)>, barred: Vec<(u64, u64)>) {
+        for (key, pane) in barred {
+            self.refuse_bots_enter(key, pane);
+        }
         for (i, started) in finished.into_iter().rev() {
             if let Some(key) = self.agents.launches.list.remove(i).key {
                 self.clients.requests.launched(key, started);
             }
-        }
-        for pane in out.parked {
-            self.member_waits(pane);
         }
     }
 
@@ -146,6 +166,11 @@ struct Round<'a> {
 struct Outcomes {
     parked: Vec<u64>,
     refused: Vec<(u64, Refusal)>,
+}
+
+fn bars_enter(launch: &Launch, term: &Term, config: &Config, bots: &HashSet<u64>) -> bool {
+    let bots_enter = launch.kind() == "enter" && launch.key.is_some_and(|key| bots.contains(&key));
+    bots_enter && !fronts_agent(config, term)
 }
 
 fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes) -> Option<bool> {

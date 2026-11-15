@@ -330,3 +330,27 @@ mod a_job {
         unsafe { WaitForSingleObject(process.as_raw_handle(), 1000) == WAIT_TIMEOUT }
     }
 }
+
+mod a_lineage {
+    use super::*;
+
+    #[test]
+    fn holds_a_process_whose_parent_exited_and_ends_it() {
+        let line = format!("start /b {PING} & {SHORT_PING}");
+        let mut command = Command::new("cmd.exe");
+        let (mut child, lineage) =
+            Lineage::spawn(command.args(["/d", "/c", &line]).stdin(Stdio::null()).stdout(Stdio::null()))
+                .expect("spawn cmd");
+        let root = pid_of(&child);
+        wait_until_within("cmd starts its pings", STARTS_WITHIN, || pings(root).len() == 2);
+        let started = descendants(root);
+        assert!(child.wait().expect("cmd ends").success());
+        let left: Vec<i32> = started.into_iter().filter(|pid| alive(*pid)).collect();
+
+        assert!(!left.is_empty() && left.iter().all(|pid| lineage.holds(*pid)), "{left:?}");
+        assert!(!lineage.holds(i32::try_from(process::id()).expect("a pid")));
+        lineage.end();
+
+        wait_until("what the lineage held is gone", || all_gone(&left));
+    }
+}

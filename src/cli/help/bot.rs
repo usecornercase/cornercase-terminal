@@ -17,9 +17,10 @@ and spends no tokens: it only runs when you write to it with `cornercase bot say
 
 --access cornercase (the default) holds the agent itself to reading anything, running `cornercase`,
 read-only git and gh, and searching the web, and to writing only in its own folder (not bot.json or
-chat.jsonl); your own Claude allow rules apply on top. What it does through `cornercase` is as
-powerful as what that reaches: it can start agents and type into panes. The commands a bot is
-refused and those two files prevent mistakes, not a determined bot. --access full lets it change
+chat.jsonl); your own Claude allow rules apply on top. The server refuses what its `cornercase`
+commands type into a pane that runs no agent; it can still start agents and write to them. Your own
+allow rules, an agent's own shell mode and permission prompts, flows, plugins, closing or stopping things and --remote are not
+a boundary: give it work you would give an assistant at your keyboard. --access full lets it change
 any file and run anything, unattended; it is off by default. A Codex bot can have full access only:
 its sandbox did not let it reach cornercase on Linux, and macOS and Windows were not tried.
 
