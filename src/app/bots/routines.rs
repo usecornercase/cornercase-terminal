@@ -139,7 +139,14 @@ impl App {
             self.bot_notify(at, &line, &format!("{name} · {label} failed"));
         }
         self.announce(&text);
-        self.publish_message(Message { kind: MessageKind::QueueFailed, text, workspace: None, panes: Vec::new() });
+        self.publish_message(Message {
+            kind: MessageKind::QueueFailed,
+            text,
+            workspace: None,
+            panes: Vec::new(),
+            run: None,
+            role: None,
+        });
     }
 
     pub(in crate::app) fn run_again(&mut self, run: u64) {
