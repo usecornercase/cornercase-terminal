@@ -16,10 +16,29 @@ pub(crate) const ID_MAX: usize = 32;
 pub(crate) const MESSAGE_MAX: usize = 20_000;
 pub(crate) const NOTES_CAP: usize = 8 * 1024;
 pub(crate) const TURN_TIMEOUT: Duration = Duration::from_mins(15);
-pub(crate) const SERVER_STOPS: [&str; 3] = ["kill-server", "restart", "update"];
+pub(crate) const STOP_REFUSED: &str = "a bot cannot stop its own server";
 pub(crate) const LAST_CHARS: usize = 200;
 pub(crate) const BOT_ENV: &str = "CORNERCASE_BOT";
 pub(crate) const ACCESS_CHANGE: &str = "a bot cannot change a bot's access";
+
+pub(crate) struct ServerStop {
+    pub(crate) command: &'static str,
+    pub(crate) asks: &'static [&'static str],
+}
+
+pub(crate) const SERVER_STOPS: [ServerStop; 3] = [
+    ServerStop { command: "kill-server", asks: &["kill-server"] },
+    ServerStop { command: "restart", asks: &["restart", "restart-when-idle"] },
+    ServerStop { command: "update", asks: &["update-install"] },
+];
+
+pub(crate) fn stop_commands() -> Vec<&'static str> {
+    SERVER_STOPS.iter().map(|stop| stop.command).collect()
+}
+
+pub(crate) fn stops_server(asked: &str) -> bool {
+    SERVER_STOPS.iter().any(|stop| stop.asks.contains(&asked))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Bot {

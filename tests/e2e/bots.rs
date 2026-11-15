@@ -82,6 +82,14 @@ fn a_bot_made_from_the_form_answers_in_its_chat() {
     assert!(history.starts_with("you · ") && history.contains("which are blocked?"), "{history}");
 }
 
+fn turn_ran(session: &Session) -> (String, String) {
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+    let status = std::fs::read_to_string(session.dir.join("claude-bot.status")).expect("the commands ran");
+    let stderr = std::fs::read_to_string(session.dir.join("claude-bot.err")).expect("their output");
+    (status, stderr)
+}
+
 const HEAD: &str = "a bot can only type into a pane that runs an agent";
 
 #[test]
@@ -91,12 +99,7 @@ fn a_bot_cannot_type_into_a_shell_pane_but_you_can() {
     );
     let pane = held::new_shell(&session);
     std::fs::write(session.dir.join("claude-bot.pane"), &pane).expect("the pane");
-    session.says(&["bot", "new", "prs", "--agent", "claude"]);
-
-    session.says(&["bot", "say", "prs", "go", "--wait"]);
-
-    let status = std::fs::read_to_string(session.dir.join("claude-bot.status")).expect("the command ran");
-    let stderr = std::fs::read_to_string(session.dir.join("claude-bot.err")).expect("its stderr");
+    let (status, stderr) = turn_ran(&session);
     assert_eq!(status.trim(), "1", "{stderr}");
     assert!(stderr.contains(HEAD), "{stderr}");
     assert!(!session.dir.join("claude-bot.typed").exists(), "the bot typed into the shell");
@@ -174,4 +177,55 @@ fn a_bot_routine_run_now_answers_in_its_chat() {
     wait_until("its entry is answered", || {
         session.says(&["queue", "list", "--bot", "prs", "--json"]).contains("\"answered\"")
     });
+}
+
+#[test]
+fn inside_a_bot_cornercase_writes_no_file_it_names_and_clones_nothing() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let file = session.dir.join("settings.toml");
+    let file_text = file.to_str().expect("UTF-8");
+
+    let exported = session
+        .command()
+        .env("CORNERCASE_BOT", "prs")
+        .args(["config", "export", "--to", file_text])
+        .output()
+        .expect("run");
+    assert!(refused(&exported, 2, "a bot cannot have cornercase write to a file"), "{exported:?}");
+    assert!(!file.exists());
+
+    let mut command = session.cold_command();
+    command.env("CORNERCASE_BOT", "prs").args(["requests", "--follow", "-"]);
+    let mut typist = input::Typist::start(command);
+    let answer = typist.types(&serde_json::json!({"args": ["config", "export", "--to", file_text]}));
+    assert_eq!(answer["status"], 2, "{answer}");
+    assert!(answer["error"].as_str().is_some_and(|e| e.contains("a bot cannot have cornercase write")), "{answer}");
+    assert!(!file.exists());
+    let _ = typist.ends();
+
+    let origin = session.dir.join("repo");
+    let target = session.dir.join("clones");
+    let attempt = session
+        .command()
+        .env("CORNERCASE_BOT", "prs")
+        .args(["clone", origin.to_str().expect("UTF-8"), target.to_str().expect("UTF-8")])
+        .output()
+        .expect("run");
+    assert!(refused(&attempt, 1, "a bot cannot clone a repository"), "{attempt:?}");
+    assert!(!target.exists());
+}
+
+#[test]
+fn a_bots_turn_cannot_stop_restart_or_update_the_server_even_without_its_variable() {
+    let stops = ["kill-server --yes", "restart --yes", "restart --when-idle --yes"];
+    let before = stops
+        .map(|words| format!("env -u CORNERCASE_BOT cornercase {words} >> \"$0.err\" 2>&1; echo $? >> \"$0.status\"\n"))
+        .concat();
+    let session = started_running(&before);
+    let boot = session.says(&["contract", "--json"]);
+    let (status, stderr) = turn_ran(&session);
+    assert_eq!(status.lines().collect::<Vec<_>>(), ["1", "1", "1"], "{stderr}");
+    assert_eq!(stderr.matches("a bot cannot stop its own server").count(), 3, "{stderr}");
+    assert_eq!(session.says(&["contract", "--json"]), boot);
 }

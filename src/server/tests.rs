@@ -375,6 +375,7 @@ pub(super) mod a_bug {
     }
 }
 
+mod bots;
 mod machines;
 mod opening;
 mod tunnels;
