@@ -104,3 +104,58 @@ fn scroll_by_stays_inside_the_list() {
     dialog.scroll_by(-9, 4, 2);
     assert_eq!(dialog.scroll, 0);
 }
+
+mod rules {
+    use super::*;
+    use crate::queue::repeat::Repeat;
+    use crate::queue::{Entry, Place, State, Task};
+
+    fn entry(state: State, repeat: Option<&str>) -> Entry {
+        let task = Task {
+            at: 1_800_000_000,
+            zone: "UTC".into(),
+            repeat: repeat.map(|text| Repeat::parse(text, "UTC", 1_800_000_000).expect("repeat")),
+            place: Place { bot: Some("prs".into()), ..Place::default() },
+            ..Task::default()
+        };
+        Entry::new(1, task, state)
+    }
+
+    #[test]
+    fn a_routine_can_always_run_pause_edit_and_be_removed() {
+        let buttons = super::super::buttons(&entry(State::Pending, Some("2h")));
+        assert_eq!(buttons, [Button::RunNow, Button::Pause, Button::Edit, Button::Remove]);
+        let mut paused = entry(State::Pending, Some("2h"));
+        paused.task.paused = true;
+        assert_eq!(super::super::buttons(&paused)[1], Button::Resume);
+    }
+
+    #[test]
+    fn a_reminder_that_ran_can_only_be_removed_and_one_starting_nothing() {
+        let answered = entry(State::Answered { session: None }, None);
+        assert_eq!(super::super::buttons(&answered), [Button::Remove]);
+        assert_eq!(super::super::buttons(&entry(State::Missed, None)), [Button::RunNow, Button::Edit, Button::Remove]);
+        assert_eq!(super::super::buttons(&entry(State::Starting, None)), []);
+    }
+
+    #[test]
+    fn only_a_run_that_started_left_a_block_in_the_chat() {
+        assert!(super::super::left_a_block(&State::Starting));
+        assert!(super::super::left_a_block(&State::Answered { session: None }));
+        assert!(super::super::left_a_block(&State::Failed { reason: "x".into() }));
+        assert!(!super::super::left_a_block(&State::Missed));
+        assert!(!super::super::left_a_block(&State::Pending));
+    }
+}
+
+#[test]
+fn fit_brings_the_selection_into_view() {
+    let ids: Vec<u64> = (0..12).collect();
+    let mut dialog = Dialog::new(1, Some(11));
+    dialog.fit(&ids, 10);
+    assert_eq!(dialog.scroll, 2);
+    let mut early = Dialog::new(1, Some(0));
+    early.scroll = 5;
+    early.fit(&ids, 10);
+    assert_eq!(early.scroll, 0);
+}

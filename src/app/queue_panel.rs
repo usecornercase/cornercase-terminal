@@ -225,8 +225,10 @@ impl QueueRuntime {
         self.back.take()
     }
 
-    pub(super) fn back(&self) -> Option<&Overlay> {
-        self.back.as_deref()
+    pub(super) fn drop_back_where(&mut self, names: impl Fn(&Overlay) -> bool) {
+        if self.back.as_deref().is_some_and(names) {
+            self.back = None;
+        }
     }
 }
 
@@ -514,7 +516,10 @@ impl App {
         } else {
             match self.panels.queued.remove(id) {
                 Ok(entries) if entries.len() > 1 => {
-                    let message = format!("removed routine {id} and its {} runs", entries.len() - 1);
+                    let message = format!(
+                        "removed routine {id} and its {}",
+                        crate::text::plural(entries.len() - 1, "run", "runs")
+                    );
                     self.queue_removed(message, entries);
                 }
                 Ok(entries) => self.queue_removed(format!("removed queue entry {id}"), entries),

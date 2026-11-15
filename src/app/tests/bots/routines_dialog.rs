@@ -164,7 +164,7 @@ fn remove_from_the_row_takes_the_routine_and_its_runs_with_an_undo() {
     assert_eq!(c.app.panels.queued.queue().entries, []);
     assert!(view(&c).rows.is_empty());
     let toast = c.app.messages.toast.as_ref().expect("a toast");
-    assert_eq!(toast.message, format!("removed routine {id} and its 1 runs"));
+    assert_eq!(toast.message, format!("removed routine {id} and its 1 run"));
     let undo = ui::toast_button(AREA, toast.view());
     click(&mut c.app, undo.as_position());
     assert_eq!(c.app.panels.queued.queue().entries, before);
@@ -222,5 +222,21 @@ fn removing_the_bot_closes_its_routines_dialog_and_its_form() {
     assert!(matches!(c.app.overlay, Some(Overlay::Queue(_))));
     c.app.bot_remove("prs").expect("removed");
     assert!(c.app.overlay.is_none());
-    assert!(c.app.panels.queued.back().is_none());
+    assert!(c.app.panels.queued.take_back().is_none());
+}
+
+#[test]
+fn opening_on_a_late_routine_scrolls_it_into_view() {
+    let mut c = chat(ANSWER);
+    let ids: Vec<u64> = (0..14).map(|i| scheduled(&mut c, bot_routine(later() + i * 3_600, "2h"))).collect();
+    let key = c.app.panels.bots.live[0].key;
+    c.app.open_bot_routines(key, ids.last().copied());
+    render(&mut c.app, AREA);
+    let shown = view(&c);
+    assert_eq!(shown.selected, Some(13));
+    assert!(shown.scroll > 0);
+    assert!(!ui::routine_button(AREA, &shown, 13, Button::Remove).is_empty());
+    send_key(&mut c.app, KeyCode::Up, KeyModifiers::NONE);
+    assert_eq!(view(&c).selected, Some(12));
+    assert!(!ui::routine_button(AREA, &view(&c), 12, Button::Remove).is_empty());
 }

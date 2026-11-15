@@ -198,6 +198,8 @@ export interface SettingsRow {
   dangerous?: boolean;
 }
 
+export type QueueStore = 'queued' | 'botQueued';
+
 export interface IssuesView {
   tabs: string[];
   toggles: { label: string; on: boolean }[];
@@ -2058,14 +2060,14 @@ export class App {
     else this.dirty();
   }
 
-  removeQueued(match: (entry: QueueEntry) => boolean, text: string): void {
-    const removed = this.queued.filter(match);
+  removeQueued(match: (entry: QueueEntry) => boolean, text: string, store: QueueStore = 'queued'): void {
+    const removed = this[store].filter(match);
     if (!removed.length) return;
-    this.queued = this.queued.filter((entry) => !match(entry));
+    this[store] = this[store].filter((entry) => !match(entry));
     removed.forEach((entry) => this.disarmQueued(entry));
     this.undoToast(text.replace('{n}', String(removed.length)), () => {
-      this.queued = [...this.queued, ...removed].sort((a, b) => a.at - b.at || a.id - b.id);
-      removed.filter((entry) => entry.state === 'pending' && !entry.paused).forEach((entry) => this.armQueued(entry));
+      this[store] = [...this[store], ...removed].sort((a, b) => a.at - b.at || a.id - b.id);
+      if (store === 'queued') removed.filter((entry) => entry.state === 'pending' && !entry.paused).forEach((entry) => this.armQueued(entry));
       this.toast = null;
       this.dirty();
     });
@@ -2106,7 +2108,7 @@ export class App {
     this.dirty();
   }
 
-  pauseQueued(routine: QueueEntry, paused: boolean): void {
+  pauseQueued(routine: QueueEntry, paused: boolean, store: QueueStore = 'queued'): void {
     const repeat = parseRepeat(routine.repeat ?? '');
     if (typeof repeat === 'string') return;
     routine.paused = paused;
@@ -2114,8 +2116,8 @@ export class App {
     else {
       const now = this.now();
       if (routine.at <= now) routine.at = repeatWalk(repeat, routine.at, now).next;
-      this.queued.sort((a, b) => a.at - b.at || a.id - b.id);
-      this.armQueued(routine);
+      this[store].sort((a, b) => a.at - b.at || a.id - b.id);
+      if (store === 'queued') this.armQueued(routine);
     }
     this.notify(paused ? `paused routine ${routine.id}` : `resumed routine ${routine.id}, next at ${queueWhen(routine.at)}`);
     this.dirty();
@@ -4597,8 +4599,8 @@ export class App {
     });
   }
 
-  private removal(entry: QueueEntry): [(item: QueueEntry) => boolean, string] {
-    const runs = this.queued.filter((item) => item.routine === entry.id).length;
+  removal(entry: QueueEntry, store: QueueStore = 'queued'): [(item: QueueEntry) => boolean, string] {
+    const runs = this[store].filter((item) => item.routine === entry.id).length;
     const text = entry.repeat ? `removed routine ${entry.id} and its ${counted(runs, 'run')}` : `removed queue entry ${entry.id}`;
     return [(item) => item.id === entry.id || (!!entry.repeat && item.routine === entry.id), text];
   }

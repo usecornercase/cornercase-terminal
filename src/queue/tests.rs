@@ -343,6 +343,23 @@ mod routines {
     }
 
     #[test]
+    fn the_last_run_of_a_routine_is_its_newest_and_a_pending_reminder_has_none() {
+        let mut queue = Queue::default();
+        let id = queue.add(routine(START, "2h")).expect("add");
+        let old = queue.run_now(id, START).expect("old");
+        let new = queue.run_now(id, START + 5).expect("new");
+        let routine_entry = queue.entry(id).expect("routine").clone();
+        assert_eq!(queue.last_run(&routine_entry).map(|run| run.id), Some(new));
+        assert_ne!(Some(old), Some(new));
+        let reminder = queue.add(task(START + 9)).expect("reminder");
+        let pending = queue.entry(reminder).expect("entry").clone();
+        assert!(queue.last_run(&pending).is_none());
+        queue.entry_mut(reminder).expect("entry").state = State::Missed;
+        let missed = queue.entry(reminder).expect("entry").clone();
+        assert_eq!(queue.last_run(&missed).map(|run| run.id), Some(reminder));
+    }
+
+    #[test]
     fn clear_started_where_keeps_what_it_is_not_asked_for() {
         let mut queue = Queue::default();
         let bot = Task { place: Place { bot: Some("prs".into()), ..Place::default() }, ..routine(START, "2h") };

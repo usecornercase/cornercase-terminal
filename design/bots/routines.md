@@ -59,6 +59,7 @@ A bot's connection (marked by the server, see [Bots](../bots.md)) under `cornerc
 - **No "everything" view in the Queue tab** (#888): `cornercase queue list` is that view for programs, and a toggle would bring back the mix the issue removes.
 - **A click on a run means the routine's last run** (#888): the dialog lists routines and reminders, one entry each, and the issue says each shows how its last run ended; older runs are blocks higher in the chat. A row per run (up to ten per routine) would bring back the Queue tab's clutter. Rejected: listing every run; it is a follow-up if wanted.
 - **Where is fixed** (#888): text, not a combo, in both ` + routine ` and ` edit… `, and ` + routine ` starts as a daily routine since its label says routine.
+- **A compact dialog gives each row three lines** (`COMPACT_PITCH`), the buttons on the last, as Ports does: at phone widths two lines left no room for them beside how the last run ended. The dialog opens with its selection in view (`Dialog::fit`), also when the card opens it on a late routine.
 - **The header button gives way** when it would leave the bot's name under 12 cells; ` ⋯ ` always has `routines…`.
 
 ## Checked

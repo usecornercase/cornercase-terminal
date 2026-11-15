@@ -1,0 +1,28 @@
+---
+source: src/ui/tests/routines.rs
+expression: t.backend()
+---
+"╭─ Routines › prs ─────────────────────────────╮"
+"│ ▌Review PRs          ↻ weekday 09:00 · nex…  │"
+"│ ▌  last run answered · Fri 14 Nov 09:00      │"
+"│               run now  pause  edit…  remove  │"
+"│  Digest                ↻ day 18:00 · paused  │"
+"│    last run failed · Thu 13 Nov 18:00        │"
+"│              run now  resume  edit…  remove  │"
+"│  Check #482          once · Sun 16 Nov 09:…  │"
+"│    not run yet                               │"
+"│                      run now  edit…  remove  │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│                                              │"
+"│ enter shows its last run in the chat         │"
+"│                            + routine   done  │"
+"╰──────────────────────────────────────────────╯"

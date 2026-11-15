@@ -482,14 +482,31 @@ impl App {
         Ok(())
     }
 
-    fn dialog_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
-        Some(match overlay {
-            Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) => self.listing_view(overlay, area)?,
-            Overlay::BotRoutines(dialog) => self.bot_routines_view(dialog, area)?,
-            Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
-            Overlay::CloseAgents(_) | Overlay::ForgetAgents { .. } => self.closed_agents_view(overlay, area)?,
-            _ => return None,
-        })
+    fn close_confirm_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::DeleteGroup { group } => self.delete_group_view(*group),
+            Overlay::CloseProject { project } => self.close_project_view(*project),
+            Overlay::CloseWorkspace { project, workspace } => self.close_workspace_view(*project, *workspace),
+            Overlay::CloseTab { project, workspace, tab } => self.close_tab_view(*project, *workspace, *tab),
+            Overlay::ClosePane { pane } => self.close_pane_view(*pane),
+            _ => None,
+        }
+    }
+
+    fn flow_dialog_view(overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::Flows { dialog, .. } => Some(flows_view(dialog, area)),
+            Overlay::StartFlow { start, .. } => Some(start_flow_view(start, area)),
+            _ => None,
+        }
+    }
+
+    fn update_dialog_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::Update(step) => Some(self.update_view(step, area)),
+            Overlay::Restart => Some(self.restart_view(area)),
+            _ => None,
+        }
     }
 
     pub(super) fn overlay_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
@@ -502,23 +519,26 @@ impl App {
             Overlay::ShareSettings(dialog) => ui::Overlay::ShareSettings(Box::new(ui::ShareSettings::of(dialog, area))),
             Overlay::RemoveAccount { kind, name } => Self::remove_account_view(*kind, name),
             Overlay::DiscardChanges(target) => Self::discard_view(target),
-            Overlay::Flows { dialog, .. } => flows_view(dialog, area),
-            Overlay::StartFlow { start, .. } => start_flow_view(start, area),
+            Overlay::Flows { .. } | Overlay::StartFlow { .. } => Self::flow_dialog_view(overlay, area)?,
             Overlay::ProjectSettings(form) => super::project_settings_dialog::project_settings_overlay(form),
             Overlay::Rename { target, input } => Self::rename_view(*target, input),
             Overlay::RemoveWorkspace { .. } | Overlay::MachineWorkspace(_) => self.workspace_view(overlay)?,
-            Overlay::DeleteGroup { group } => self.delete_group_view(*group)?,
-            Overlay::CloseProject { project } => self.close_project_view(*project)?,
-            Overlay::CloseWorkspace { project, workspace } => self.close_workspace_view(*project, *workspace)?,
-            Overlay::CloseTab { project, workspace, tab } => self.close_tab_view(*project, *workspace, *tab)?,
-            Overlay::ClosePane { pane } => self.close_pane_view(*pane)?,
+            Overlay::DeleteGroup { .. }
+            | Overlay::CloseProject { .. }
+            | Overlay::CloseWorkspace { .. }
+            | Overlay::CloseTab { .. }
+            | Overlay::ClosePane { .. } => self.close_confirm_view(overlay)?,
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
+            Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) | Overlay::BotRoutines(_) => {
+                self.listing_view(overlay, area)?
+            }
+            Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
+            Overlay::CloseAgents(_) | Overlay::ForgetAgents { .. } => self.closed_agents_view(overlay, area)?,
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), self.home.as_deref()),
             Overlay::Queue(form) => ui::Overlay::Queue(Self::queue_form_view(form)),
             Overlay::Issues(b) => view(b, room(area), time::now()),
             Overlay::Search(search) => self.search_view(search),
-            Overlay::Update(step) => self.update_view(step, area),
-            Overlay::Restart => self.restart_view(area),
+            Overlay::Update(_) | Overlay::Restart => self.update_dialog_view(overlay, area)?,
             Overlay::Usage | Overlay::Remote | Overlay::PhoneAppCode => self.access_view(overlay),
             Overlay::Pairing(_) | Overlay::Forum(_) => self.messenger_view(overlay)?,
             Overlay::PullRequest { .. }
@@ -529,7 +549,6 @@ impl App {
             Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
             Overlay::BotForm(_) | Overlay::RenameBot { .. } | Overlay::RemoveBot { .. } => self.bot_view(overlay)?,
             Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
-            other => return self.dialog_view(other, area),
         })
     }
 }

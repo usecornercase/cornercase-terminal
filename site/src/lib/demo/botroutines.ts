@@ -3,13 +3,15 @@ import type { App } from './app';
 import { type Bot, EXAMPLES, clock, shortClock } from './bots';
 import { COMPACT_WIDTH, bottom, buttonWidth, centered, intersect, right } from './layout';
 import type { Key } from './programs';
-import { type QueueEntry, parseRepeat, queueWhen, repeatWalk } from './queue';
+import type { QueueEntry } from './queue';
 import { truncateRight } from './text';
 import type { Painter } from './ui';
 import { wrapText } from './botchat';
 
 const MUTED: Style = { fg: 8 };
 const PITCH = 2;
+const COMPACT_PITCH = 3;
+const pitchOf = (compact: boolean): number => (compact ? COMPACT_PITCH : PITCH);
 const WIDE = 100;
 const HIGH = 24;
 const NEW = '+ routine';
@@ -48,7 +50,7 @@ export const botRoutinesArea = (cols: number, rows: number): Rect =>
   cols < COMPACT_WIDTH ? rect(0, 0, cols, rows) : centered(cols, rows, Math.min(Math.max(0, cols - 2), WIDE), Math.min(rows, HIGH));
 
 function parts(area: Rect): { list: Rect; note: Rect; buttons: Rect } {
-  const inner = rect(area.x + 3, area.y + 1, Math.max(0, area.w - 6), Math.max(0, area.h - 2));
+  const inner = rect(area.x + 2, area.y + 1, Math.max(0, area.w - 4), Math.max(0, area.h - 2));
   return {
     list: rect(inner.x, inner.y, inner.w, Math.max(0, inner.h - 2)),
     note: rect(inner.x, bottom(inner) - 2, inner.w, 1),
@@ -56,8 +58,8 @@ function parts(area: Rect): { list: Rect; note: Rect; buttons: Rect } {
   };
 }
 
-const roomOf = (list: Rect): number => Math.max(1, Math.floor(list.h / PITCH));
-const first = (o: BotRoutinesDialog, len: number, list: Rect): number => Math.min(o.scroll, Math.max(0, len - roomOf(list)));
+const roomOf = (list: Rect, compact: boolean): number => Math.max(1, Math.floor(list.h / pitchOf(compact)));
+const first = (o: BotRoutinesDialog, len: number, list: Rect, compact: boolean): number => Math.min(o.scroll, Math.max(0, len - roomOf(list, compact)));
 
 function indexOf(o: BotRoutinesDialog, entries: QueueEntry[]): number | null {
   const at = entries.findIndex((entry) => entry.id === o.selected);
@@ -86,36 +88,14 @@ function pressButton(app: App, o: BotRoutinesDialog, entry: QueueEntry, button: 
   o.selected = entry.id;
   if (button === 'run now') app.notify(RUN_LEFT_OUT);
   else if (button === 'edit…') app.notify(FORM_LEFT_OUT);
-  else if (button === 'remove') removeEntry(app, entry);
-  else pause(app, entry, button === 'pause');
+  else if (button === 'remove') app.removeQueued(...app.removal(entry, 'botQueued'), 'botQueued');
+  else app.pauseQueued(entry, button === 'pause', 'botQueued');
   app.dirty();
-}
-
-function pause(app: App, entry: QueueEntry, paused: boolean): void {
-  const repeat = parseRepeat(entry.repeat ?? '');
-  if (typeof repeat === 'string') return;
-  entry.paused = paused;
-  const now = app.now();
-  if (!paused && entry.at <= now) entry.at = repeatWalk(repeat, entry.at, now).next;
-  app.botQueued.sort((a, b) => a.at - b.at || a.id - b.id);
-  app.notify(paused ? `paused routine ${entry.id}` : `resumed routine ${entry.id}, next at ${queueWhen(entry.at)}`);
-}
-
-function removeEntry(app: App, entry: QueueEntry): void {
-  const gone = app.botQueued.filter((item) => item.id === entry.id || (!!entry.repeat && item.routine === entry.id));
-  const runs = gone.length - 1;
-  app.botQueued = app.botQueued.filter((item) => !gone.includes(item));
-  const text = entry.repeat ? `removed routine ${entry.id} and its ${runs === 1 ? '1 run' : `${runs} runs`}` : `removed queue entry ${entry.id}`;
-  app.undoToast(text, () => {
-    app.botQueued = [...app.botQueued, ...gone].sort((a, b) => a.at - b.at || a.id - b.id);
-    app.toast = null;
-    app.dirty();
-  });
 }
 
 export function botRoutinesKey(app: App, o: BotRoutinesDialog, k: Key): void {
   const entries = routinesOf(app, o.bot);
-  const rows = roomOf(parts(botRoutinesArea(app.cols, app.rows)).list);
+  const rows = roomOf(parts(botRoutinesArea(app.cols, app.rows)).list, app.cols < COMPACT_WIDTH);
   const at = indexOf(o, entries);
   if (k.key === 'Escape') app.closeOverlay();
   else if (k.key === 'Enter' && at !== null) pressRow(app, o, entries[at]);
@@ -164,7 +144,8 @@ function drawRow(p: Painter, o: BotRoutinesDialog, entry: QueueEntry, r: Rect, s
   p.span(r.x, r.y + 1, selected ? '▌' : ' ', { ...bg, fg: 6 });
   const buttons = buttonsOf(entry);
   const shown = compact || selected || p.hovered(r);
-  const taken = shown ? buttons.reduce((sum, b) => sum + buttonWidth(b), 0) + 1 : 0;
+  const wide = buttons.reduce((sum, b) => sum + buttonWidth(b), 0) + 1;
+  const taken = shown && !compact ? wide : 0;
   const state = stateText(app, entry);
   const room = Math.max(0, r.w - LEAD - taken);
   if (!state) p.span(r.x + 3, r.y + 1, 'not run yet', { ...bg, ...MUTED }, room);
@@ -176,9 +157,9 @@ function drawRow(p: Painter, o: BotRoutinesDialog, entry: QueueEntry, r: Rect, s
   }
   p.region({ r, click: () => pressRow(app, o, entry), cursor: 'pointer' });
   if (!shown) return;
-  let x = right(r) - taken + 1;
+  let x = right(r) - wide + 1;
   for (const b of buttons) {
-    const rb = intersect(rect(x, r.y + 1, buttonWidth(b), 1), r);
+    const rb = intersect(rect(x, r.y + r.h - 1, buttonWidth(b), 1), r);
     p.span(rb.x, rb.y, ` ${b} `, p.hovered(rb) ? { ...bg, fg: 6, add: BOLD } : { ...bg, ...MUTED });
     p.region({ r: rb, click: () => pressButton(app, o, entry, b), cursor: 'pointer' });
     x += buttonWidth(b);
@@ -198,12 +179,12 @@ export function drawBotRoutines(p: Painter, o: BotRoutinesDialog): void {
   const entries = routinesOf(app, o.bot);
   const selected = indexOf(o, entries);
   if (!entries.length) {
-    const text = `${bot.name} has no routines yet. + routine schedules one, or ask ${bot.name} in its chat, such as "${EXAMPLES[3]}".`;
+    const text = `${bot.name} has no routines yet. + routine schedules one, or ask ${bot.name} in its chat, such as "${EXAMPLES[3]}"`;
     wrapText(text, Math.max(1, list.w - 2)).slice(0, list.h).forEach((t, i) => p.span(list.x + 1, list.y + i, t, MUTED, list.w - 1));
   }
-  const top = first(o, entries.length, list);
-  entries.slice(top, top + roomOf(list)).forEach((entry, i) => {
-    const r = rect(list.x, list.y + i * PITCH, list.w, PITCH);
+  const top = first(o, entries.length, list, compact);
+  entries.slice(top, top + roomOf(list, compact)).forEach((entry, i) => {
+    const r = rect(list.x, list.y + i * pitchOf(compact), list.w, pitchOf(compact));
     drawRow(p, o, entry, r, selected === top + i, compact);
   });
   p.span(note.x, note.y, truncateRight(hintOf(app, bot, selected === null ? undefined : entries[selected]), note.w), MUTED, note.w);
@@ -212,8 +193,9 @@ export function drawBotRoutines(p: Painter, o: BotRoutinesDialog): void {
 
 function scroll(app: App, o: BotRoutinesDialog, dy: number): boolean {
   const { list } = parts(botRoutinesArea(app.cols, app.rows));
-  const max = Math.max(0, routinesOf(app, o.bot).length - roomOf(list));
-  o.scroll = Math.max(0, Math.min(max, first(o, max + roomOf(list), list) + dy));
+  const compact = app.cols < COMPACT_WIDTH;
+  const max = Math.max(0, routinesOf(app, o.bot).length - roomOf(list, compact));
+  o.scroll = Math.max(0, Math.min(max, first(o, max + roomOf(list, compact), list, compact) + dy));
   app.dirty();
   return true;
 }

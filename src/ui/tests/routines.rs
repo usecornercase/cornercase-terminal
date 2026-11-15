@@ -88,7 +88,15 @@ fn the_dialog_lists_routines_and_reminders_with_how_their_last_run_ended() {
 
 #[test]
 fn the_empty_dialog_says_how_to_add_one() {
-    let t = drawn(routines(Vec::new(), false), BIG);
+    let empty = BotRoutines {
+        hint: "each run is a new conversation of prs, which answers in its chat".into(),
+        empty: format!(
+            "prs has no routines yet. + routine schedules one, or ask prs in its chat, such as \"{}\"",
+            EXAMPLES[3]
+        ),
+        ..routines(Vec::new(), false)
+    };
+    let t = drawn(empty, BIG);
     insta::assert_snapshot!(t.backend());
 }
 
@@ -99,6 +107,15 @@ fn compact_fills_the_screen_and_shows_every_rows_buttons() {
     let text = format!("{}", t.backend());
     assert_eq!(text.matches("run now").count(), 3, "{text}");
     assert_eq!(overlay_area(&shown(routines(rows(), true)), SMALL), screen(SMALL));
+}
+
+#[test]
+fn a_phone_wide_dialog_keeps_how_each_run_ended_clear_of_the_buttons() {
+    let t = drawn(routines(rows(), true), (48, 24));
+    insta::assert_snapshot!(t.backend());
+    let text = format!("{}", t.backend());
+    assert!(text.contains("last run answered") && text.contains("last run failed"), "{text}");
+    assert!(text.contains("not run yet"), "{text}");
 }
 
 fn overlay_area(view: &View, size: (u16, u16)) -> Rect {

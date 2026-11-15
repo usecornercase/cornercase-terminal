@@ -14,6 +14,13 @@ fn not_a_routine(id: u64) -> String {
 }
 
 impl Queue {
+    pub(crate) fn last_run<'a>(&'a self, entry: &'a Entry) -> Option<&'a Entry> {
+        if entry.is_routine() {
+            return self.runs_of(entry.id).max_by_key(|run| (run.task.at, run.id));
+        }
+        (entry.state != State::Pending).then_some(entry)
+    }
+
     pub(crate) fn runs_of(&self, routine: u64) -> impl Iterator<Item = &Entry> {
         self.entries.iter().filter(move |entry| entry.task.routine == Some(routine))
     }

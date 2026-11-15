@@ -341,6 +341,23 @@ test('pause, resume and remove in the routines dialog, and undo brings it back',
   assert.equal(app.overlay, null);
 });
 
+test('the dialog at phone width keeps how the last run ended clear of the buttons', () => {
+  const app = demo(48);
+  app.openBotRoutines('prs');
+  const text = screen(app);
+  assert.match(text, /last run answered/);
+  assert.match(text, /run now {2}pause {2}edit… {2}remove/);
+  assert.match(text, /│ ▌Review PRs/);
+});
+
+test('the empty routines dialog ends its example with one full stop', () => {
+  const app = demo(140);
+  app.botQueued = [];
+  app.openBotRoutines('prs');
+  assert.doesNotMatch(screen(app), /blocked\."\./);
+  assert.match(screen(app), /prs has no routines yet\./);
+});
+
 test('a routine on the card opens the routines dialog', () => {
   const app = demo(140);
   press(app, 'prs');

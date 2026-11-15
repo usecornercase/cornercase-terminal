@@ -10,10 +10,15 @@ use super::{
 };
 use crate::bots::routines::{Button, Hit};
 use crate::text::truncate_right;
+use crate::ui::COMPACT_PITCH;
 use crate::ui::View;
 use crate::ui::widgets::{button_width, hovered, overlay_block, rail};
 
 const PITCH: u16 = 2;
+
+fn pitch(compact: bool) -> u16 {
+    if compact { COMPACT_PITCH } else { PITCH }
+}
 
 const WIDE: u16 = 100;
 
@@ -51,7 +56,7 @@ pub(crate) fn routines_area(screen: Rect, compact: bool) -> Rect {
 
 pub(crate) fn routines_room(screen: Rect, compact: bool) -> (usize, Rect) {
     let [list, ..] = list_note_buttons(routines_area(screen, compact));
-    (usize::from(list.height / PITCH), list)
+    (usize::from(list.height / pitch(compact)), list)
 }
 
 fn button_rects(row: &RoutineRow, rect: Rect) -> Vec<(Button, Rect)> {
@@ -63,7 +68,7 @@ fn button_rects(row: &RoutineRow, rect: Rect) -> Vec<(Button, Rect)> {
 pub(crate) fn routine_button(screen: Rect, view: &BotRoutines, row: usize, button: Button) -> Rect {
     let (_, list) = routines_room(screen, view.compact);
     let Some(shown) = view.rows.get(row) else { return Rect::default() };
-    let rect = list_item_by(list, view.rows.len(), view.scroll, row, PITCH);
+    let rect = list_item_by(list, view.rows.len(), view.scroll, row, pitch(view.compact));
     if rect.is_empty() {
         return Rect::default();
     }
@@ -85,7 +90,7 @@ pub(crate) fn routines_hit(screen: Rect, view: &BotRoutines, pos: Position) -> O
         return Some(Hit::Done);
     }
     let [list, ..] = list_note_buttons(area);
-    let (i, rect) = item_at(list, (view.rows.len(), view.scroll), PITCH, pos)?;
+    let (i, rect) = item_at(list, (view.rows.len(), view.scroll), pitch(view.compact), pos)?;
     let found = button_rects(view.rows.get(i)?, rect).into_iter().find(|(_, r)| r.contains(pos));
     Some(found.map_or(Hit::Row(i), |(button, _)| Hit::Button(i, button)))
 }
@@ -101,7 +106,7 @@ pub(in crate::ui) fn draw_routines(f: &mut Frame, view: &View, routines: &BotRou
         f.render_widget(text, list.inner(Margin::new(1, 0)));
     }
     for (i, row) in routines.rows.iter().enumerate() {
-        let rect = list_item_by(list, routines.rows.len(), routines.scroll, i, PITCH);
+        let rect = list_item_by(list, routines.rows.len(), routines.scroll, i, pitch(routines.compact));
         if !rect.is_empty() {
             draw_row(f, view, routines, (row, routines.selected == Some(i)), rect);
         }
@@ -130,8 +135,11 @@ fn draw_row(f: &mut Frame, view: &View, routines: &BotRoutines, (row, selected):
     ]);
     let mut second = vec![rail(selected, bg), Span::styled("  ", bg)];
     let shown = routines.compact || selected || hovered(view, rect);
-    let taken =
-        if shown { button_rects(row, rect).iter().map(|(_, r)| usize::from(r.width)).sum::<usize>() + 1 } else { 0 };
+    let taken = if shown && !routines.compact {
+        button_rects(row, rect).iter().map(|(_, r)| usize::from(r.width)).sum::<usize>() + 1
+    } else {
+        0
+    };
     second.extend(last_run(row, view, bg, width.saturating_sub(LEAD + taken)));
     let lines = vec![first, Line::from(second)];
     f.render_widget(Paragraph::new(lines).style(bg), rect);

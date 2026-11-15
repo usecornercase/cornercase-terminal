@@ -28,7 +28,7 @@ The sidebar section, its placement, height rule, saved fold and compact page are
 
 ## Routines in the window (#846)
 
-A routine run's lines are drawn as one block, the section's row shows `next 09:00` while the bot is idle, the card lists the routines, the empty state has a fourth example and the remove dialog names the entries it removes: see [Bot routines](routines.md) (The window). The simulation shows a canned run block and a seeded routine, and runs none.
+A routine run's lines are drawn as one block, the section's row shows `next 09:00` while the bot is idle, the card lists the routines, the empty state has a fourth example and the remove dialog names the entries it removes: see [Bot routines](routines.md) (The window). The simulation shows a canned run block and a seeded routine, and runs none. Its bots' entries live in `app.botQueued`, not `app.queued`: the landing's scripted worlds and `queue.test.ts` need an empty project queue, while the card, the sidebar's `next` and the routines dialog need the bot's routine in them too. `pauseQueued`, `removeQueued` and `removal` take the store to act on, so the dialog reuses the Queue tab's code and its undo toast.
 
 ## Keys
 

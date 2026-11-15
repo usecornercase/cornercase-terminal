@@ -14,20 +14,20 @@
 [38;5;239m ─────────────────────────────[39m [38;5;239m│[39m                                                                                                            
 [1m[38;5;8m Bot[0m                           [38;5;239m│[39m                                                                                                            
                                [38;5;239m│[39m                                                                                                            
- [1mprs[0m                           [38;5;239m│[39m  [1m[38;5;8m↻ Review PRs · 21:03[0m                                                                                      
+ [1mprs[0m                           [38;5;239m│[39m  [1m[38;5;8m↻ Review PRs · 21:38[0m                                                                                      
  [38;5;8mfolder   [38;5;6m…case/server.bots/prs[38;5;239m│[39m  [38;5;8m+2 steps[39m                                                                                                  
- [38;5;8magent    [38;5;7mClaude Code[39m          [38;5;239m│[39m  [38;5;8mprs · 22:05[39m                                                                                               
+ [38;5;8magent    [38;5;7mClaude Code[39m          [38;5;239m│[39m  [38;5;8mprs · 22:39[39m                                                                                               
  [38;5;8mmodel    [38;5;7mopus[39m                 [38;5;239m│[39m  3 pull requests wait for review: [38;5;2m#482[39m, [38;5;2m#490[39m and [38;5;2m#501[39m.                                                     
  [38;5;8meffort   [38;5;7mhigh[39m                 [38;5;239m│[39m                                                                                                            
- [38;5;8maccess   [38;5;7mthrough cornercase[39m   [38;5;239m│[39m                                                             [48;5;236m which of my pull requests are blocked? [38;5;8m22:24 [39m[49m 
+ [38;5;8maccess   [38;5;7mthrough cornercase[39m   [38;5;239m│[39m                                                             [48;5;236m which of my pull requests are blocked? [38;5;8m22:59 [39m[49m 
  [38;5;8mmade     [38;5;7m2026-11-12[39m           [38;5;239m│[39m  [38;5;8m▸ cornercase status --json[39m                                                                                
  [38;5;8mroutine  [38;5;7mReview PRs[39m           [38;5;239m│[39m  [38;5;8m▸ gh pr checks 490[39m                                                                                        
- [38;5;8m         [38;5;7mnext Mon 00:03 · ↻ 2h[38;5;239m│[39m                                                                                                            
-                               [38;5;239m│[39m  [38;5;8mprs · 22:26[39m                                                                                               
+ [38;5;8m         [38;5;7mnext Mon 00:38 · ↻ 2h[38;5;239m│[39m                                                                                                            
+                               [38;5;239m│[39m  [38;5;8mprs · 23:01[39m                                                                                               
 [38;5;239m ─────────────────────────────[39m [38;5;239m│[39m  Two are [1mblocked[0m:                                                                                          
  [38;5;8m▾ [1mBots[0m                     [38;5;6m + [38;5;239m│[39m                                                                                                            
                                [38;5;239m│[39m  • [38;5;2m#482[39m waits for a review from Ana                                                                        
-[38;5;6m[48;5;236m▌ [39mprs      [38;5;8mnext Mon 00:03[39m [38;5;8m ⋯[39m   [38;5;239m[49m│[39m  • [38;5;2m#490[39m fails [38;5;3mtest[39m [38;5;3m(macos)[39m                                                                                 
+[38;5;6m[48;5;236m▌ [39mprs      [38;5;8mnext Mon 00:38[39m [38;5;8m ⋯[39m   [38;5;239m[49m│[39m  • [38;5;2m#490[39m fails [38;5;3mtest[39m [38;5;3m(macos)[39m                                                                                 
 [38;5;6m  [38;5;7mdigest[39m  [38;5;8mclaude · sonnet[39m      [38;5;239m│[39m                                                                                                            
                                [38;5;239m│[39m  To retry the failing job:                                                                                 
 [38;5;239m ─────────────────────────────[39m [38;5;239m│[39m                                                                                                            

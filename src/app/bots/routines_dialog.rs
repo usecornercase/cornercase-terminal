@@ -2,11 +2,11 @@ use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
 
-use super::super::App;
-use super::super::input::{ListPointer, list_pointer};
-use super::super::overlay::Overlay;
+use crate::app::App;
+use crate::app::input::{ListPointer, list_pointer};
+use crate::app::overlay::Overlay;
 use crate::bots::chat::STOPPED;
-use crate::bots::routines::{Asked, Button, Dialog};
+use crate::bots::routines::{Asked, Button, Dialog, buttons, left_a_block};
 use crate::queue::{self, Entry, State};
 use crate::ui;
 
@@ -28,35 +28,30 @@ impl App {
         Some((at, self.panels.bots.live[at].bot.id.clone()))
     }
 
-    fn last_run<'a>(&'a self, entry: &'a Entry) -> Option<&'a Entry> {
-        if entry.is_routine() {
-            let runs = self.panels.queued.queue().runs_of(entry.id);
-            return runs.max_by_key(|run| (run.task.at, run.id));
-        }
-        (entry.state != State::Pending).then_some(entry)
-    }
-
     pub(in crate::app) fn bot_routines_view(&self, dialog: &Dialog, area: Rect) -> Option<ui::Overlay> {
         let (at, id) = self.dialog_bot(dialog)?;
         let name = self.panels.bots.live[at].bot.name.clone();
         let entries: Vec<&Entry> = self.bot_entries(&id).filter(|entry| !entry.is_run()).collect();
         let ids: Vec<u64> = entries.iter().map(|entry| entry.id).collect();
-        let selected = dialog.index(&ids);
+        let compact = area.width < ui::COMPACT_WIDTH;
+        let mut fitted = dialog.clone();
+        fitted.fit(&ids, ui::routines_room(area, compact).0);
+        let (selected, scroll) = (fitted.index(&ids), fitted.scroll);
         let rows: Vec<ui::RoutineRow> = entries.iter().map(|entry| self.routine_row(entry)).collect();
         let hint =
             selected.map_or_else(|| HINT_NONE.replace("{bot}", &name), |at| self.routine_hint(entries[at], &name));
         let example = ui::EXAMPLES[3];
         let empty = format!(
-            "{name} has no routines yet. + routine schedules one, or ask {name} in its chat, such as \"{example}\"."
+            "{name} has no routines yet. + routine schedules one, or ask {name} in its chat, such as \"{example}\""
         );
         Some(ui::Overlay::BotRoutines(Box::new(ui::BotRoutines {
             title: format!("Routines › {name}"),
             rows,
             selected,
-            scroll: dialog.scroll,
+            scroll,
             hint,
             empty,
-            compact: area.width < ui::COMPACT_WIDTH,
+            compact,
         })))
     }
 
@@ -71,7 +66,7 @@ impl App {
             }
             None => "once".into(),
         };
-        let run = self.last_run(entry);
+        let run = self.panels.queued.queue().last_run(entry);
         let (state, colour, at) = run.map_or((None, None, String::new()), |run| run_text(run, zone, now));
         ui::RoutineRow {
             name: entry.task.label.clone(),
@@ -80,13 +75,13 @@ impl App {
             colour,
             at,
             paused: entry.task.paused,
-            buttons: routine_buttons(entry),
+            buttons: buttons(entry),
         }
     }
 
     fn routine_hint(&self, entry: &Entry, name: &str) -> String {
         let zone = self.panels.queued.display_zone();
-        let Some(run) = self.last_run(entry) else { return HINT_NONE.replace("{bot}", name) };
+        let Some(run) = self.panels.queued.queue().last_run(entry) else { return HINT_NONE.replace("{bot}", name) };
         match &run.state {
             State::Missed => {
                 let at = queue::clock::when(run.task.at, crate::time::now(), zone);
@@ -100,7 +95,18 @@ impl App {
         }
     }
 
+    fn fit_routines(&mut self, area: Rect) {
+        let rows = ui::routines_room(area, area.width < ui::COMPACT_WIDTH).0;
+        let Some(Overlay::BotRoutines(dialog)) = &self.overlay else { return };
+        let Some((_, id)) = self.dialog_bot(dialog) else { return };
+        let ids = self.routine_ids(&id);
+        if let Some(Overlay::BotRoutines(dialog)) = &mut self.overlay {
+            dialog.fit(&ids, rows);
+        }
+    }
+
     pub(in crate::app) fn bot_routines_key(&mut self, key: KeyEvent, area: Rect) {
+        self.fit_routines(area);
         let (rows, _) = ui::routines_room(area, area.width < ui::COMPACT_WIDTH);
         let Some(Overlay::BotRoutines(dialog)) = &self.overlay else { return };
         let Some((_, id)) = self.dialog_bot(dialog) else { return };
@@ -112,6 +118,7 @@ impl App {
 
     pub(in crate::app) fn bot_routines_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
         let Some(pointer) = list_pointer(ev.kind) else { return };
+        self.fit_routines(area);
         let Some(Overlay::BotRoutines(dialog)) = &self.overlay else { return };
         let Some((_, id)) = self.dialog_bot(dialog) else { return };
         let ids = self.routine_ids(&id);
@@ -149,7 +156,7 @@ impl App {
             .queued
             .queue()
             .entry(id)
-            .and_then(|entry| self.last_run(entry))
+            .and_then(|entry| self.panels.queued.queue().last_run(entry))
             .filter(|run| left_a_block(&run.state))
             .map(|run| run.id);
         if let Some(run) = run {
@@ -167,22 +174,6 @@ impl App {
             Button::Remove => self.remove_queued(id),
         }
     }
-}
-
-fn routine_buttons(entry: &Entry) -> Vec<Button> {
-    let mut buttons = Vec::new();
-    let runnable = entry.is_routine() || matches!(entry.state, State::Pending | State::Failed { .. } | State::Missed);
-    buttons.extend(runnable.then_some(Button::RunNow));
-    if entry.is_routine() {
-        buttons.push(if entry.task.paused { Button::Resume } else { Button::Pause });
-    }
-    buttons.extend(runnable.then_some(Button::Edit));
-    buttons.extend((entry.state != State::Starting).then_some(Button::Remove));
-    buttons
-}
-
-fn left_a_block(state: &State) -> bool {
-    matches!(state, State::Starting | State::Answered { .. } | State::Failed { .. })
 }
 
 fn run_text(run: &Entry, zone: &str, now: i64) -> (Option<String>, Option<Color>, String) {

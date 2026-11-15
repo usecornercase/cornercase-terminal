@@ -116,6 +116,7 @@ impl App {
             Overlay::Worktrees(dialog) => Some(ui::Overlay::Worktrees(self.worktrees_view(dialog, area))),
             Overlay::Ports(dialog) => Some(ui::Overlay::Ports(self.ports_view(dialog, area))),
             Overlay::Processes(dialog) => Some(ui::Overlay::Processes(self.processes_view(dialog, area))),
+            Overlay::BotRoutines(dialog) => self.bot_routines_view(dialog, area),
             _ => None,
         }
     }

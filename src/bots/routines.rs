@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::list::Cursor;
+use crate::queue::{Entry, State};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Button {
@@ -21,6 +22,22 @@ impl Button {
             Self::Remove => "remove",
         }
     }
+}
+
+pub(crate) fn buttons(entry: &Entry) -> Vec<Button> {
+    let runnable = entry.is_routine() || matches!(entry.state, State::Pending | State::Failed { .. } | State::Missed);
+    let mut buttons = Vec::new();
+    buttons.extend(runnable.then_some(Button::RunNow));
+    if entry.is_routine() {
+        buttons.push(if entry.task.paused { Button::Resume } else { Button::Pause });
+    }
+    buttons.extend(runnable.then_some(Button::Edit));
+    buttons.extend((entry.state != State::Starting).then_some(Button::Remove));
+    buttons
+}
+
+pub(crate) fn left_a_block(state: &State) -> bool {
+    matches!(state, State::Starting | State::Answered { .. } | State::Failed { .. })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +86,15 @@ impl Dialog {
             KeyCode::Home => self.move_by(isize::MIN, ids, rows),
             KeyCode::End => self.move_by(isize::MAX, ids, rows),
             _ => Asked::None,
+        }
+    }
+
+    pub(crate) fn fit(&mut self, ids: &[u64], rows: usize) {
+        let Some(at) = self.index(ids) else { return };
+        if at < self.scroll {
+            self.scroll = at;
+        } else if rows > 0 && at >= self.scroll + rows {
+            self.scroll = at + 1 - rows;
         }
     }
 
