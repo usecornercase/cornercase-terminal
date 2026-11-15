@@ -2,6 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.87
+
+- **Personas for a flow's roles.** A persona is how an agent works, written in Markdown with a front matter that gives its `name`, such as the ones in [agency-agents](https://github.com/msitarzewski/agency-agents). Import some with `cornercase persona import`, then give one to any role of a flow with `persona = "ID"`, on any agent: the same Code Reviewer can run on Claude Code or Codex.
+  - `persona import` takes a `.md` file, a folder, `-`, an `https://` address, or a GitHub repository as `OWNER/REPO`, `OWNER/REPO/FOLDER` or `OWNER/REPO/PATH/FILE.md`, with no GitHub token. A folder or a repository imports every persona in it, in one download; a `divisions.json` that lists its folders limits it to those.
+  - Personas are prompt text that agents follow without asking, so `--check` lists what would be imported and saves nothing, and an import from the web asks first (`--yes` without a terminal).
+  - They live in `personas/` next to `config.json`, each with a `source:` saying where it came from, so importing it again with `--replace` refreshes it. `persona list` and `persona remove ID` manage them.
+  - When a run starts, each persona its roles name is copied into the run's folder (`personas/ID.md`), and the role's prompt tells the agent to read and follow it before its first work. The run keeps its copy, so changing a persona later never changes a running team.
+  - A flow that names a persona you don't have cannot run: `flow list` says which, and saving or importing such a flow is refused until you import it.
+  - Picking a persona in the Flows dialog comes later; for now, set it in the flow's file or with `flow save`.
+- **For programs**: the requests `persona-list`, `persona-import` (with `check`) and `persona-remove`, `persona` on the roles of `flow list --json`, `flow save` and `flow runs`, and the feature `flow-personas` in `cornercase contract`.
+
 ## 0.13.86
 
 - **Gemini CLI, opencode, Cursor CLI and GitHub Copilot CLI can be bots.** `cornercase bot agents` and the new bot form list them, and each keeps its conversation from one message to the next.
