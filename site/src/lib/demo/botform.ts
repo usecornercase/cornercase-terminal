@@ -46,7 +46,7 @@ function agentCombo(): Combo {
 function refit(o: BotForm): void {
   const agent = BOT_AGENTS[o.agent.chosen ?? 0];
   o.model = combo(['default', ...agent.models], 0);
-  const options = ACCESS_LABELS.map(([kind, label]) => (agent.accesses.includes(kind) ? label : `${label} · ${NO_ACCESS_WHY}`));
+  const options = ACCESS_LABELS.map(([kind, label]) => (agent.accesses.includes(kind) ? label : `${label} · ${agent.limit ?? NO_ACCESS_WHY}`));
   const access = combo(options, null);
   access.off = ACCESS_LABELS.flatMap(([kind], i) => (agent.accesses.includes(kind) ? [] : [i]));
   if (agent.accesses.includes('cornercase')) chooseCombo(access, 0);
