@@ -129,25 +129,30 @@ fn draw_row(f: &mut Frame, view: &View, routines: &BotRoutines, (row, selected):
         Span::styled(format!("{when} "), bg.fg(view.muted)),
     ]);
     let mut second = vec![rail(selected, bg), Span::styled("  ", bg)];
-    second.extend(last_run(row, view, bg));
+    let shown = routines.compact || selected || hovered(view, rect);
+    let taken =
+        if shown { button_rects(row, rect).iter().map(|(_, r)| usize::from(r.width)).sum::<usize>() + 1 } else { 0 };
+    second.extend(last_run(row, view, bg, width.saturating_sub(LEAD + taken)));
     let lines = vec![first, Line::from(second)];
     f.render_widget(Paragraph::new(lines).style(bg), rect);
-    if routines.compact || selected || hovered(view, rect) {
+    if shown {
         for (button, r) in button_rects(row, rect) {
             draw_row_button(f, view, r, button.label(), bg);
         }
     }
 }
 
-fn last_run(row: &RoutineRow, view: &View, bg: Style) -> Vec<Span<'static>> {
+fn last_run(row: &RoutineRow, view: &View, bg: Style, room: usize) -> Vec<Span<'static>> {
     let dim = bg.fg(view.muted);
     let Some(state) = &row.state else { return vec![Span::styled("not run yet", dim)] };
     if row.at.is_empty() {
         return vec![Span::styled(state.clone(), dim)];
     }
+    let head = format!("last run {state} · ");
+    let at = truncate_right(&row.at, room.saturating_sub(head.chars().count()));
     vec![
         Span::styled("last run ", dim),
         Span::styled(state.clone(), bg.fg(row.colour.unwrap_or(view.muted))),
-        Span::styled(format!(" · {}", row.at), dim),
+        Span::styled(format!(" · {at}"), dim),
     ]
 }

@@ -747,7 +747,10 @@ mod bot_entries {
     fn the_tab_lists_projects_only_and_ends_with_a_line_for_the_bots_routines() {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
         let (_dir, _bin, _claude) = bots::install_bot(&mut app, "", Access::Cornercase);
-        let own = Task { place: Place { bot: Some("prs".into()), ..Place::default() }, ..task(&app, time::now() + 600, None) };
+        let own = Task {
+            place: Place { bot: Some("prs".into()), ..Place::default() },
+            ..task(&app, time::now() + 600, None)
+        };
         app.panels.queued.schedule(None, own).expect("a bot entry");
         let project = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("a project entry");
         queue_tab(&mut app);

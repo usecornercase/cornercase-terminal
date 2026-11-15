@@ -153,6 +153,7 @@ mod remote_card;
 mod remote_tab;
 mod reorder;
 mod resuming;
+mod routines;
 mod row_hover;
 mod scrollback;
 mod search;

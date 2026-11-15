@@ -240,8 +240,21 @@ mod bots {
     fn a_bots_form_has_only_the_prompt_the_time_and_the_place() {
         let form = bot_form(When::Weekdays);
         assert_eq!(form.bot(), Some("prs"));
-        assert_eq!(form.controls(), [Control::Prompt, Control::When, Control::Clock, Control::Place]);
+        assert_eq!(form.controls(), [Control::Prompt, Control::When, Control::Clock]);
         assert_eq!(form.flow(), None);
+    }
+
+    #[test]
+    fn a_bot_place_is_not_a_control_so_tab_skips_it() {
+        let mut form = bot_form(When::Weekdays);
+        form.focus = Control::Prompt;
+        let mut seen = Vec::new();
+        for _ in 0..6 {
+            press(&mut form, KeyCode::Tab);
+            seen.push(form.focus);
+        }
+        assert!(!seen.contains(&Control::Place), "{seen:?}");
+        assert!(seen.contains(&Control::Clock));
     }
 
     #[test]

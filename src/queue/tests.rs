@@ -343,6 +343,21 @@ mod routines {
     }
 
     #[test]
+    fn clear_started_where_keeps_what_it_is_not_asked_for() {
+        let mut queue = Queue::default();
+        let bot = Task { place: Place { bot: Some("prs".into()), ..Place::default() }, ..routine(START, "2h") };
+        let id = queue.add(bot).expect("a bot routine");
+        let answered = queue.run_now(id, START).expect("a run");
+        queue.entry_mut(answered).expect("run").state = State::Answered { session: None };
+        let project = queue.add(task(START + 5)).expect("a project entry");
+        queue.entry_mut(project).expect("entry").state = State::Started { pane: 1, server: "s".into() };
+        let cleared = queue.clear_started_where(|entry| !entry.is_bot());
+        assert_eq!(cleared.iter().map(|entry| entry.id).collect::<Vec<_>>(), [project]);
+        assert!(queue.entry(answered).is_some() && queue.entry(id).is_some());
+        assert_eq!(queue.clear_started().len(), 1, "the unfiltered clear still takes the bot's run");
+    }
+
+    #[test]
     fn a_run_cannot_be_edited_nor_a_one_off_turned_into_a_routine() {
         let mut queue = Queue::default();
         let id = queue.add(routine(START, "2h")).expect("add");
