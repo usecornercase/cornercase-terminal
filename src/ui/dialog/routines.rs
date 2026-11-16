@@ -3,6 +3,7 @@ use ratatui::layout::{Margin, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::{
     centred_in, draw_row_button, draw_secondary, draw_submit, item_at, list_item_by, list_note_buttons,
@@ -121,10 +122,10 @@ pub(in crate::ui) fn draw_routines(f: &mut Frame, view: &View, routines: &BotRou
 fn draw_row(f: &mut Frame, view: &View, routines: &BotRoutines, (row, selected): (&RoutineRow, bool), rect: Rect) {
     let bg = pick_background(view, selected, rect);
     let width = usize::from(rect.width);
-    let when = truncate_right(&row.when, width / 2);
-    let room = width.saturating_sub(LEAD + when.chars().count() + 1);
-    let name = truncate_right(&row.name, room);
-    let gap = width.saturating_sub(1 + name.chars().count() + when.chars().count() + 1);
+    let when = cut(&row.when, width / 2);
+    let room = width.saturating_sub(LEAD + when.width() + 1);
+    let name = cut(&row.name, room);
+    let gap = width.saturating_sub(1 + name.width() + when.width() + 1);
     let weight = if selected { Modifier::BOLD } else { Modifier::empty() };
     let name_style = if row.paused { bg.fg(view.muted) } else { bg.add_modifier(weight) };
     let first = Line::from(vec![
@@ -153,6 +154,23 @@ fn draw_row(f: &mut Frame, view: &View, routines: &BotRoutines, (row, selected):
     }
 }
 
+fn cut(text: &str, cells: usize) -> String {
+    if text.width() <= cells || cells < 2 {
+        return text.to_string();
+    }
+    let mut kept = String::new();
+    let mut used = 0;
+    for c in text.chars() {
+        let next = used + c.width().unwrap_or(0);
+        if next + 1 > cells {
+            break;
+        }
+        kept.push(c);
+        used = next;
+    }
+    format!("{}…", kept.trim_end_matches('…'))
+}
+
 fn last_run(row: &RoutineRow, view: &View, bg: Style, room: usize) -> Vec<Span<'static>> {
     let dim = bg.fg(view.muted);
     let Some(state) = &row.state else { return vec![Span::styled("not run yet", dim)] };
@@ -160,7 +178,7 @@ fn last_run(row: &RoutineRow, view: &View, bg: Style, room: usize) -> Vec<Span<'
         return vec![Span::styled(state.clone(), dim)];
     }
     let head = format!("last run {state} · ");
-    let at = truncate_right(&row.at, room.saturating_sub(head.chars().count()));
+    let at = cut(&row.at, room.saturating_sub(head.width()));
     vec![
         Span::styled("last run ", dim),
         Span::styled(state.clone(), bg.fg(row.colour.unwrap_or(view.muted))),

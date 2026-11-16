@@ -154,3 +154,13 @@ fn the_dialog_is_drawn_where_its_area_says() {
     let view = shown(routines(rows(), false));
     assert_eq!(corners_of_its_area(&view), (String::from("╭"), String::from("╯")));
 }
+
+#[test]
+fn a_wide_name_keeps_the_schedule_inside_the_row() {
+    let mut list = rows();
+    list[0].name = "界".repeat(60);
+    let t = drawn(routines(list, false), BIG);
+    let line = (0..BIG.1).map(|y| row_text(&t, Rect::new(0, y, BIG.0, 1))).find(|l| l.contains("界")).expect("the row");
+    assert!(line.contains("next Mon 09:00"), "{line}");
+    assert!(line.contains('…'), "{line}");
+}

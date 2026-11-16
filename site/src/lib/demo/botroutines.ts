@@ -161,7 +161,7 @@ function drawRow(p: Painter, o: BotRoutinesDialog, entry: QueueEntry, r: Rect, s
   let x = right(r) - wide + 1;
   for (const b of buttons) {
     const rb = intersect(rect(x, r.y + r.h - 1, buttonWidth(b), 1), r);
-    p.span(rb.x, rb.y, ` ${b} `, p.hovered(rb) ? { ...bg, fg: 6, add: BOLD } : { ...bg, ...MUTED });
+    p.span(rb.x, rb.y, ` ${b} `, p.hovered(rb) ? { ...bg, fg: 6, add: BOLD } : { ...bg, ...MUTED }, rb.w);
     p.region({ r: rb, click: () => pressButton(app, o, entry, b), cursor: 'pointer' });
     x += buttonWidth(b);
   }

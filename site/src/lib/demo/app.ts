@@ -1,6 +1,6 @@
 import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
 import { botFormKey, botFormPaste, newBotForm } from './botform';
-import { botRoutinesKey, openBotRoutines } from './botroutines';
+import { botRoutinesKey, openBotRoutines, routinesOf } from './botroutines';
 import { Bots } from './bots';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
@@ -1532,7 +1532,7 @@ export class App {
   }
 
   openBotRoutines(bot: string, selected: number | null = null): void {
-    this.overlay = openBotRoutines(bot, selected);
+    this.overlay = openBotRoutines(bot, selected ?? routinesOf(this, bot)[0]?.id ?? null);
     this.dirty();
   }
 

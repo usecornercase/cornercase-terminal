@@ -16,6 +16,11 @@ const HINT_NONE: &str = "each run is a new conversation of {bot}, which answers 
 
 impl App {
     pub(in crate::app) fn open_bot_routines(&mut self, key: u64, selected: Option<u64>) {
+        let first = || {
+            let at = self.panels.bots.by_key(key)?;
+            self.routine_ids(&self.panels.bots.live[at].bot.id).first().copied()
+        };
+        let selected = selected.or_else(first);
         self.overlay = Some(Overlay::BotRoutines(Box::new(Dialog::new(key, selected))));
     }
 

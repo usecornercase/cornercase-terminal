@@ -81,7 +81,7 @@ fn routines_in_the_menu_and_a_routine_on_the_card_open_it_too() {
     let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
     right_click(&mut c.app, Position::new(row.x + 3, row.y));
     pick(&mut c.app, "routines…");
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected.is_none()));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected.is_some()));
     c.app.overlay = None;
     render(&mut c.app, AREA);
     let list = c.app.layout(AREA).shown(c.app.screen.nav).workspaces_list;
@@ -258,4 +258,17 @@ fn the_wheel_scrolls_past_the_first_page_with_the_first_row_selected() {
     assert!(shown.scroll > 0, "the list moved");
     assert!(ui::routine_button(AREA, &shown, 0, Button::Remove).is_empty(), "the first row left the page");
     assert!(!ui::routine_button(AREA, &shown, shown.scroll, Button::Remove).is_empty());
+}
+
+#[test]
+fn opening_without_a_selection_pins_the_first_routine_to_its_entry() {
+    let mut c = chat(ANSWER);
+    let late = scheduled(&mut c, bot_routine(later() + 7_200, "2h"));
+    let early = scheduled(&mut c, bot_routine(later(), "2h"));
+    let key = c.app.panels.bots.live[0].key;
+    c.app.open_bot_routines(key, None);
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(early)));
+    c.app.panels.queued.pause(early, true, crate::time::now()).expect("pause");
+    assert!(c.app.panels.queued.queue().entry(late).is_some());
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(early)));
 }

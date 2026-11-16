@@ -381,6 +381,37 @@ test('the empty routines dialog ends its example with one full stop', () => {
   assert.match(screen(app), /prs has no routines yet\./);
 });
 
+test('the card never ends on a routine name without its time row', () => {
+  let seen = 0;
+  for (let rows = 38; rows < 70; rows++) {
+    const app = demo(140);
+    press(app, 'prs');
+    app.resize(140, rows);
+    const lines = screen(app).split('\n');
+    lines.forEach((line, i) => {
+      if (/^ routine +Review PRs/.test(line)) {
+        seen++;
+        assert.match(lines[i + 1] ?? '', /next |paused/, `rows ${rows}`);
+      }
+    });
+  }
+  assert.ok(seen > 0, 'no routine row found');
+});
+
+test('the dialog clips a button to its cell at a very narrow width', () => {
+  const app = demo(32);
+  app.openBotRoutines('prs');
+  const text = screen(app);
+  assert.doesNotMatch(text, /run now run now|pause {0}pause/);
+});
+
+test('opening the dialog pins the first routine to its entry', () => {
+  const app = demo(140);
+  app.openBotRoutines('prs');
+  assert.ok(app.overlay?.kind === 'botroutines');
+  assert.equal(app.overlay.selected, app.botQueued.find((e) => !e.routine)?.id);
+});
+
 test('a routine on the card opens the routines dialog', () => {
   const app = demo(140);
   press(app, 'prs');

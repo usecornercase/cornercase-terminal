@@ -474,10 +474,12 @@ export function drawCard(p: Painter, areas: Areas): void {
   }
   const laid: CardRow[] = [];
   let y = list.y + 2;
+  let cut = false;
   entries.forEach(([label, value, style], at) => {
+    if (label === 'routine' && y + 2 > bottom(list)) cut = true;
     const rows = label === 'folder' || label === 'routine' || label === '' ? [truncateRight(value, room)] : wrapText(value, room);
     rows.forEach((text, i) => {
-      if (y < bottom(list)) laid.push({ label, text, style, y, id: ids[at], head: i === 0 });
+      if (!cut && y < bottom(list)) laid.push({ label, text, style, y, id: ids[at], head: i === 0 });
       y += 1;
     });
   });
