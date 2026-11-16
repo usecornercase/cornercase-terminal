@@ -70,6 +70,30 @@ fn without_a_folder_or_with_one_that_cannot_be_made_the_binarys_folder_goes_firs
     assert_eq!(first_on_path(Some(dir.path()), Path::new("")), None);
 }
 
+struct Removed(PathBuf);
+
+impl Drop for Removed {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn a_relative_folder_is_made_absolute_so_a_child_in_another_folder_finds_the_link() {
+    let dir = TempDir::new();
+    let binary = fake_program(dir.path(), "cornercase");
+    let relative = Path::new("target").join(format!("link-test-{}", std::process::id()));
+    let here = std::env::current_dir().expect("cwd");
+    let _removed = Removed(here.join(&relative));
+    let first = first_on_path(Some(&relative), &binary).expect("a folder");
+    assert!(first.is_absolute(), "{first:?}");
+    assert_eq!(first, here.join(&relative));
+    let path = path_with(&first, None).expect("a path");
+    let extensions = if cfg!(windows) { crate::process::program::extensions(None) } else { Vec::new() };
+    let found = crate::process::program::on_path(cfg!(windows), Some(&path), &extensions)("cornercase");
+    assert_eq!(found.as_deref().and_then(Path::parent), Some(first.as_path()));
+}
+
 #[test]
 fn held_messages_are_joined_by_a_blank_line() {
     assert_eq!(joined(&[String::from("a"), String::from("b")]), "a\n\nb");
