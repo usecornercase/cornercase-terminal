@@ -152,6 +152,21 @@ mod the_rules {
     }
 }
 
+mod the_dashed_names {
+    use super::model::ask;
+    use crate::agents::headless::args_of;
+
+    #[test]
+    fn a_bot_may_not_make_a_name_starting_with_a_dash_at_the_top_of_its_folder() {
+        let args = args_of(&super::super::command("claude", &ask(&[])));
+        let denied = args.iter().position(|arg| arg == "--disallowedTools").map(|at| args[at + 1].clone());
+        let denied = denied.expect("the denied tools");
+        assert!(denied.split(',').any(|rule| rule == "Edit(//b/prs/-*)"), "{denied}");
+        let allowed = args.iter().position(|arg| arg == "--allowedTools").map(|at| args[at + 1].clone());
+        assert!(allowed.expect("the allowed tools").contains("Edit(//b/prs/**)"));
+    }
+}
+
 mod the_brief {
     use super::model::{allows, ask};
     use crate::agents::headless::Access;

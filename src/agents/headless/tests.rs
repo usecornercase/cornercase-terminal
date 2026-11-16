@@ -256,6 +256,7 @@ mod bots {
             "Bash(cornercase kill-server:*)".to_string(),
             "Bash(gh pr list:*)".to_string(),
             "Bash(git *--output*)".to_string(),
+            format!("Edit({rule}/-*)"),
             "\"--model\", \"opus\"".to_string(),
         ] {
             assert!(argv.contains(&wanted), "{wanted} in {argv}");

@@ -64,7 +64,8 @@ fn bot_args(ask: &Ask, access: Access) -> Vec<String> {
             let folder = rule_path(&ask.folder.display().to_string(), cfg!(windows));
             let allowed = format!("{READS},{},Edit({folder}/**)", read_only_rules(ask, cfg!(windows)));
             let files: Vec<String> = ask.protected.iter().map(|file| format!("Edit({folder}/{file})")).collect();
-            let denied = format!("NotebookEdit,Task,{OUTPUT},{stops},{}", files.join(","));
+            let dashed = format!("Edit({folder}/-*)");
+            let denied = format!("NotebookEdit,Task,{OUTPUT},{dashed},{stops},{}", files.join(","));
             args.extend(
                 ["--permission-mode", "dontAsk", "--allowedTools", &allowed, "--disallowedTools", &denied]
                     .map(String::from),
