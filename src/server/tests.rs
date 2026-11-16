@@ -149,9 +149,14 @@ pub(super) mod a_bug {
     }
 
     fn connect(server: &mut Server, tx: Sender<ServerEvent>, id: u64, hello: Hello) -> Client {
+        let client = accepted(server, tx, id);
+        let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
+        client
+    }
+
+    fn accepted(server: &mut Server, tx: Sender<ServerEvent>, id: u64) -> Client {
         let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
         let _ = server.handle(ServerEvent::Accepted(ours));
-        let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
         let (frames_tx, frames) = mpsc::channel();
         thread::spawn(move || {
             while let Ok(Some(msg)) = protocol::recv::<ServerMessage>(&mut theirs)
@@ -199,6 +204,11 @@ pub(super) mod a_bug {
 
         pub(super) fn join_with(&mut self, graphics: Support, pointer: Option<pointer::Terminal>) -> Client {
             self.join_hello(Hello { pointer, graphics, ..hello(HostTheme::default()) })
+        }
+
+        pub(super) fn accept(&mut self) -> Client {
+            let id = self.server.next_client;
+            accepted(&mut self.server, self.client.tx.clone(), id)
         }
 
         pub(super) fn join_hello(&mut self, hello: Hello) -> Client {

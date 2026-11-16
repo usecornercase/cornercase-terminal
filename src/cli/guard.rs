@@ -80,6 +80,16 @@ fn writes_a_file(leaf: &Command, found: &ArgMatches) -> Option<String> {
     Some(format!("a bot cannot have cornercase write to a file: leave out --{long} to print it instead"))
 }
 
+fn window(path: &[&str], found: &ArgMatches) -> Option<String> {
+    let why = match path {
+        ["proxy"] => crate::bots::WINDOW_REFUSED,
+        ["remote"] if found.get_one::<String>("destination").is_some() => crate::bots::WINDOW_REFUSED,
+        ["server"] => "a bot cannot run cornercase's server",
+        _ => return None,
+    };
+    Some(String::from(why))
+}
+
 fn in_no_place(leaf: &Command, found: &ArgMatches) -> Option<String> {
     let places = PLACES.iter().chain(["all"].iter());
     if !defaults_here(leaf) || places.into_iter().any(|long| named(leaf, found, long)) {
@@ -97,9 +107,17 @@ pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Opt
     let mut path = vec![top];
     let (leaf, found) = walk(command.find_subcommand(top)?, matches.subcommand()?.1, &mut path);
     access(&path, found)
+        .or_else(|| window(&path, found))
         .or_else(|| itself(&path, found, own))
         .or_else(|| writes_a_file(leaf, found))
         .or_else(|| in_no_place(leaf, found))
+}
+
+pub(super) fn run_refusal(command: &Command, matches: &ArgMatches, own: &str) -> Option<String> {
+    match matches.subcommand() {
+        None => Some(String::from(crate::bots::WINDOW_REFUSED)),
+        Some(_) => refusal(command, matches, own),
+    }
 }
 
 pub(super) fn own_bot() -> Option<String> {

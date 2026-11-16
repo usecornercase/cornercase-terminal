@@ -123,6 +123,19 @@ fn stop_name(message: &ClientMessage) -> Option<&'static str> {
     }
 }
 
+fn window_name(message: &ClientMessage) -> Option<&'static str> {
+    match message {
+        ClientMessage::Request(_) | ClientMessage::KillServer | ClientMessage::Restart => None,
+        ClientMessage::Hello(_) => Some("hello"),
+        ClientMessage::Event(_) => Some("input"),
+        ClientMessage::Graphics(_) => Some("graphics"),
+        ClientMessage::Activated(_) => Some("notification click"),
+        ClientMessage::OpenFailed(_) => Some("open failed"),
+        ClientMessage::Machines(_) => Some("machines"),
+        ClientMessage::Tunnels(_) => Some("tunnels"),
+    }
+}
+
 fn runs_none(pane: u64) -> Refusal {
     Refusal::new(
         Code::Failed,
@@ -220,10 +233,19 @@ impl App {
     }
 
     pub(crate) fn refused_stop(&self, client: u64, message: &ClientMessage) -> Option<&'static str> {
-        let asked = stop_name(message).filter(|name| crate::bots::stops_server(name))?;
+        let asked = stop_name(message).filter(|name| crate::bots::stops_server(name));
+        self.refused_message(client, asked, crate::bots::STOP_REFUSED)
+    }
+
+    pub(crate) fn refused_window(&self, client: u64, message: &ClientMessage) -> Option<&'static str> {
+        self.refused_message(client, window_name(message), crate::bots::WINDOW_REFUSED)
+    }
+
+    fn refused_message(&self, client: u64, asked: Option<&str>, why: &'static str) -> Option<&'static str> {
+        let asked = asked?;
         let bot = self.clients.bots.bot_of(client)?;
-        log::warning!("control", "a bot's stop refused", client = client, bot = bot, asked = asked);
-        Some(crate::bots::STOP_REFUSED)
+        log::warning!("control", "a bot's message refused", client = client, bot = bot, asked = asked);
+        Some(why)
     }
 
     fn queue_by_bot(&self, client: u64, queue: &control::Queue) -> Result<(), Refusal> {

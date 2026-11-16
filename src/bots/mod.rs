@@ -18,6 +18,7 @@ pub(crate) const MESSAGE_MAX: usize = 20_000;
 pub(crate) const NOTES_CAP: usize = 8 * 1024;
 pub(crate) const TURN_TIMEOUT: Duration = Duration::from_mins(15);
 pub(crate) const STOP_REFUSED: &str = "a bot cannot stop its own server";
+pub(crate) const WINDOW_REFUSED: &str = "a bot cannot attach as a window";
 pub(crate) const LAST_CHARS: usize = 200;
 pub(crate) const BOT_ENV: &str = "CORNERCASE_BOT";
 pub(crate) const BOT_RUN_ENV: &str = "CORNERCASE_BOT_RUN";

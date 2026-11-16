@@ -2,12 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.90
+## 0.13.91
 
 - **A bot tells you when an agent it started finishes.** The chat gets `▶ started claude in …` when the bot starts an agent. When the agent's turn ends, `✓ claude finished in …` comes with its last message, and the bot then answers in the conversation that started it, its chat's or its routine's: what matters, or the next step. A question from the agent shows `! claude needs you in …` and starts nothing.
 - Only the first finish after each prompt from the bot counts, so talking to that agent yourself stays quiet. A bot follows up to 20 agents. `cornercase bot edit prs --follow off`, or the form's **Follow** box, turns it off.
 - In the window, `by prs` shows on the agent's tab and in the agents section, the bot's card lists the agents it started, and a click on ` show ` or on a row of the card shows them.
 - For programs: `status` has `bot` on tabs and panes. `bot list --json` has `follow` and `following`. The chat's new lines come as `bot` events. `cornercase contract` lists `bot-follow`.
+
+## 0.13.90
+
+- **A bot can no longer attach to cornercase as a window.** Through `cornercase proxy`, a `cornercase`-access bot could speak to the server as a window does, and its keys and clicks reached your panes and dialogs as your own, past what the server refuses a bot. The server now closes a bot's connection on the first message only a window sends, with `a bot cannot attach as a window`, and inside a bot the command line refuses `cornercase` with no command, `cornercase remote` to a machine and `cornercase proxy` with the same message.
+- A server that a bot's command starts no longer inherits the bot's `CORNERCASE_BOT`, so its shells and the phone's window do not count as the bot's.
 
 ## 0.13.89
 
