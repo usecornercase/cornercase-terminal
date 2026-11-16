@@ -219,7 +219,7 @@ fn a_bots_routine_is_paused_from_its_routines_dialog() {
     ui.click(ui.position_of("prs"));
     ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
     ui.click(ui.position_of("routines"));
-    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("Review PRs"));
+    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("pause"));
     ui.click(ui.position_of("pause"));
 
     wait_until("the routine is paused", || {
