@@ -4,8 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.94
 
-- **A bot reads your projects' git.** A Claude Code bot with `cornercase` access can run `git -C <folder> log`, `show`, `diff` and `status` in the projects and worktrees you have open (over a hundred, far fewer on Windows, the first by folder path), and it is told how: the folder is `path` in `cornercase status --json`, and a shell loop is refused, so it runs one command at a time. Before, every `git -C` was refused and a bot never read a commit.
-- **A bot's git can no longer write or run anything.** `--output` let its read-only git write a file anywhere, and a repository it could make in its own folder let it run any program. `--output` is refused now, and git runs only in your projects, never in the bot's folder. Its `git status` and `git diff` also no longer rewrite a project's index while an agent there commits.
+- **A bot reads your projects' git.** A Claude Code bot with `cornercase` access can run `git -C <folder> log`, `show`, `diff` and `status` in the projects and worktrees you have open (many, but far fewer on Windows; past the limit, the first by folder path), and it is told how: the folder is `path` in `cornercase status --json`, and a shell loop is refused, so it runs one command at a time. Before, every `git -C` was refused and a bot never read a commit.
+- **A bot's git can no longer write or run anything.** `--output` let its read-only git write a file anywhere, and a repository it could make in its own folder let it run any program. `--output` is refused now (and a bot can no longer make a name starting with `-` at the top of its folder, which a shell glob could have turned into it), and git runs only in your projects, never in the bot's folder. Its `git status` and `git diff` also no longer rewrite a project's index while an agent there commits.
 - Gemini CLI and GitHub Copilot CLI bots with `cornercase` access no longer run git, which never reached your projects for them: Copilot's rules cannot keep it from writing, and Gemini's are not checked yet.
 
 ## 0.13.93
