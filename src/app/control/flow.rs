@@ -153,6 +153,7 @@ impl App {
             close_when_merged,
             free_builds,
             fresh,
+            bot: asker.bot,
             ..Starting::new(flow, task, branch, accounts)
         };
         self.run_flow(Some(client), self.projects[p].id, starting, area)

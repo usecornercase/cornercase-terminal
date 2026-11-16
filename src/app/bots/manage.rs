@@ -84,6 +84,8 @@ impl App {
             effort: bot.effort.clone(),
             account: bot.account.clone(),
             access: bot.access.name().to_string(),
+            follow: bot.follow,
+            following: self.following_panes(at),
             state: String::from(if live.turn.is_some() { "thinking" } else { "idle" }),
             held: live.held.len(),
             unread: live.unread,
@@ -172,7 +174,7 @@ impl App {
         let kind = self.bot_kind(new.agent.as_deref())?;
         let access = self.bot_access(kind, new.access.as_deref())?;
         let id = crate::bots::new_id(name, &others, &|id| folder::of(&dir, id).exists());
-        let blank = Bot {
+        let mut bot = Bot {
             id,
             name: name.to_string(),
             agent: kind.name().to_string(),
@@ -182,6 +184,7 @@ impl App {
             access,
             created: crate::time::now(),
             conversation: None,
+            follow: new.follow.unwrap_or(true),
         };
         let edit = EditBot {
             model: new.model.clone(),
@@ -189,15 +192,21 @@ impl App {
             account: new.account.clone(),
             ..EditBot::default()
         };
-        let mut bot = blank;
         self.bot_settings(kind, &mut bot, &edit)?;
         let made =
             folder::create(&dir, &bot, &new.about).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
+        Ok(self.bot_made(bot, made, &new.about))
+    }
+
+    fn bot_made(&mut self, bot: Bot, folder: std::path::PathBuf, about: &str) -> usize {
         let key = self.panels.bots.take_key();
-        self.panels.bots.live.push(Live::new(bot, made, key));
+        self.panels.bots.live.push(Live::new(bot, folder, key));
         let at = self.panels.bots.live.len() - 1;
         self.publish_bot_change(at, "created");
-        Ok(at)
+        if !about.trim().is_empty() {
+            self.start_setup(at);
+        }
+        at
     }
 
     pub(in crate::app) fn bot_edit(&mut self, edit: &EditBot) -> Done<usize> {
@@ -226,8 +235,11 @@ impl App {
             written.map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
         }
         let live = &mut self.panels.bots.live[at];
+        let followed = bot.follow;
+        bot.follow = edit.follow.unwrap_or(followed);
         live.bot = bot;
         let _ = folder::save(&live.folder, &live.bot);
+        self.follow_changed(at, followed);
         self.publish_bot_change(at, "edited");
         Ok(at)
     }

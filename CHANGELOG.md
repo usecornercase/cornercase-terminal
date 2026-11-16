@@ -2,11 +2,29 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.89
+## 0.13.92
 
 - **A bot's routines are in the bot.** ` routines ` in its chat's header, **routines…** in its menu and a click on a routine on its card list its routines and reminders: the repeat, the next run (or `paused`) and how the last run ended. ` run now `, ` pause ` or ` resume `, ` edit… ` and ` remove ` (with ` undo `) act on one, and a click on it shows the chat at its last run. ` + routine ` schedules one for the bot yourself, as an every-day-at-09:00 routine you can change.
 - **The Queue tab lists projects' entries only.** A dim line at its end says how many bot routines there are, the schedule form's **Where** no longer lists bots, and ` clear started ` leaves the bots' runs alone. Editing a bot's routine shows its bot in **Where**, fixed.
 - For programs nothing changes: `cornercase queue list` still lists every entry, `--bot` picks one bot's, and `queue clear-started` still clears every one.
+
+## 0.13.91
+
+- **A bot tells you when an agent it started finishes.** The chat gets `▶ started claude in …` when the bot starts an agent. When the agent's turn ends, `✓ claude finished in …` comes with its last message, and the bot then answers in the conversation that started it, its chat's or its routine's: what matters, or the next step. A question from the agent shows `! claude needs you in …` and starts nothing.
+- Only the first finish after each prompt from the bot counts, so talking to that agent yourself stays quiet. A bot follows up to 20 agents. `cornercase bot edit prs --follow off`, or the form's **Follow** box, turns it off.
+- In the window, `by prs` shows on the agent's tab and in the agents section, the bot's card lists the agents it started, and a click on ` show ` or on a row of the card shows them.
+- For programs: `status` has `bot` on tabs and panes. `bot list --json` has `follow` and `following`. The chat's new lines come as `bot` events. `cornercase contract` lists `bot-follow`.
+
+## 0.13.90
+
+- **A bot can no longer attach to cornercase as a window.** Through `cornercase proxy`, a `cornercase`-access bot could speak to the server as a window does, and its keys and clicks reached your panes and dialogs as your own, past what the server refuses a bot. The server now closes a bot's connection on the first message only a window sends, with `a bot cannot attach as a window`, and inside a bot the command line refuses `cornercase` with no command, `cornercase remote` to a machine and `cornercase proxy` with the same message.
+- A server that a bot's command starts no longer inherits the bot's `CORNERCASE_BOT`, so its shells and the phone's window do not count as the bot's.
+
+## 0.13.89
+
+- **A bot made with what it is for sets itself up at once.** When **For** in the new bot form, or `--about` of `cornercase bot new`, says what the bot is for, making it starts its first turn: the bot schedules what that asks for, writes what its runs will need in `memory.md`, and tells you in its chat what it will do, what it scheduled and when that runs next. The chat opens with `── setting up ──`; what you send meanwhile is held for the next turn, which continues the same conversation. A bot made without it starts nothing and spends no tokens, as before.
+- ` retry ` under a setup that failed runs the setup again, and so does `cornercase bot setup prs`.
+- For programs: `bot new` answers `state: thinking` while the setup runs, a setup turn's first line is the notice `setting up`, the `bot` request has a `setup` action, and `cornercase contract` lists `bot-setup`.
 
 ## 0.13.88
 

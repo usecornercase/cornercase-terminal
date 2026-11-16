@@ -41,7 +41,16 @@ impl Setup {
 
     fn wait_on(&mut self, pane: u64, until: Until) {
         let command = Command::Wait(wire::Wait { pane: Some(pane), until, ..wire::Wait::default() });
-        let request = wire::Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+        let request = wire::Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            bot: None,
+            bot_run: None,
+            command,
+        };
         self.app.request(7, &serde_json::to_string(&request).expect("json"), Some(AREA), Instant::now());
         assert_eq!(self.app.take_answers(), Vec::new());
     }

@@ -110,7 +110,7 @@ fn a_token_moves_the_asking_view_and_leaves_the_window() {
     let token = w.token().expect("a token");
     let before = w.app.view_projection(view);
 
-    let asker = Asker { caller: None, view: Some(view) };
+    let asker = Asker { caller: None, view: Some(view), bot: None };
     w.app.go_request(asker, &Go { token }).expect("go");
 
     assert_eq!(w.app.view_ids(view).tab, Some(w.app.projects[0].workspaces[0].tabs[0].id));
@@ -125,7 +125,7 @@ fn a_token_without_a_view_moves_the_window_like_a_click() {
     w.report("waiting", 6);
     let token = w.token().expect("a token");
 
-    let asker = Asker { caller: None, view: None };
+    let asker = Asker { caller: None, view: None, bot: None };
     w.app.go_request(asker, &Go { token }).expect("go");
 
     assert_eq!(active_tab(&w.app), 0);
@@ -134,7 +134,7 @@ fn a_token_without_a_view_moves_the_window_like_a_click() {
 #[test]
 fn a_token_nobody_gave_or_whose_agent_is_gone_is_not_found() {
     let mut w = Watched::start(agents::Known::Claude, true);
-    let asker = || Asker { caller: None, view: None };
+    let asker = || Asker { caller: None, view: None, bot: None };
     let unknown = w.app.go_request(asker(), &Go { token: "cc-nope-1".into() }).expect_err("unknown");
     assert_eq!(unknown.code, Code::NotFound);
 

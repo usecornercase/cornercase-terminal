@@ -18,6 +18,7 @@ pub(in crate::app) struct Held {
     pub(super) from: Option<u64>,
     pub(super) force: bool,
     pub(super) pressed: bool,
+    pub(super) bot: Option<super::Starter>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

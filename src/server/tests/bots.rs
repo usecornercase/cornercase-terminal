@@ -26,6 +26,7 @@ impl Joined {
 }
 
 const STOP: &str = "a bot cannot stop its own server";
+const WINDOW: &str = "a bot cannot attach as a window";
 
 #[test]
 fn a_bots_kill_server_and_restart_are_rejected_and_the_server_runs_on() {
@@ -57,5 +58,36 @@ fn a_stop_queued_behind_the_removal_of_a_bots_connection_is_not_obeyed() {
     let plain = attached.server.handle(ServerEvent::Message(1, ClientMessage::KillServer));
 
     assert_eq!((hello, kill, plain), (ControlFlow::Continue(()), ControlFlow::Continue(()), ControlFlow::Break(())));
+    sleepers.release();
+}
+
+#[rstest::rstest]
+#[case::hello(ClientMessage::Hello(Box::new(hello(HostTheme::default()))))]
+#[case::input(ClientMessage::Event(Event::Key(KeyCode::Char('x').into())))]
+fn a_bots_connection_that_speaks_as_a_window_is_rejected_and_closed(#[case] message: ClientMessage) {
+    let Joined { mut attached, bot: _, sleepers, _dirs } = Joined::new();
+    let raw = attached.accept();
+    attached.server.app.client_connected(raw.id, Some(sleepers.pids()[0]));
+
+    let spoke = attached.server.handle(ServerEvent::Message(raw.id, message));
+
+    assert_eq!(spoke, ControlFlow::Continue(()));
+    let refused = |m: &ServerMessage| matches!(m, ServerMessage::Rejected(why) if why == WINDOW);
+    assert!(raw.received(refused).iter().any(refused));
+    assert!(attached.server.clients.iter().all(|client| client.id != raw.id));
+    sleepers.release();
+}
+
+#[test]
+fn a_connection_that_is_no_bots_still_attaches_as_a_window() {
+    let Joined { mut attached, bot: _, sleepers, _dirs } = Joined::new();
+    let raw = attached.accept();
+
+    let _ = attached
+        .server
+        .handle(ServerEvent::Message(raw.id, ClientMessage::Hello(Box::new(hello(HostTheme::default())))));
+
+    let shown = attached.server.clients.iter().find(|client| client.id == raw.id).and_then(|client| client.size);
+    assert!(shown.is_some());
     sleepers.release();
 }

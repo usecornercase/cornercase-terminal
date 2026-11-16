@@ -512,6 +512,7 @@ fn tab_without_layout() -> TabState {
         accounts: std::collections::BTreeMap::new(),
         closed: None,
         exited_agent: None,
+        bot: None,
     };
     TabState { name: None, panes: vec![pane_state.clone(), pane_state], active: 1, layout: None }
 }

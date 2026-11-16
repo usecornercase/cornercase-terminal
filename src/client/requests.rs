@@ -123,6 +123,14 @@ pub(crate) fn use_bot_routines() -> Result<()> {
     require("bot-routines", "cannot schedule a bot's work")
 }
 
+pub(crate) fn use_bot_follow() -> Result<()> {
+    require("bot-follow", "cannot change whether a bot follows the agents it starts")
+}
+
+pub(crate) fn use_bot_setup() -> Result<()> {
+    require("bot-setup", "cannot set a bot up")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }
@@ -427,11 +435,24 @@ struct Envelope {
     view: Option<u64>,
     boot: Option<String>,
     contract: Option<u32>,
+    bot: Option<String>,
+    bot_run: Option<u64>,
+}
+
+fn bot_of(bot: Option<String>, run: Option<String>, remote: bool) -> (Option<String>, Option<u64>) {
+    let bot = bot.filter(|id| !id.is_empty() && !remote);
+    let run = run.and_then(|run| run.parse().ok()).filter(|_| bot.is_some());
+    (bot, run)
 }
 
 impl Envelope {
     fn of_the_invocation() -> Self {
-        Self { view: VIEW.get().copied(), boot: BOOT.get().cloned(), contract: STRUCTURED.get().copied() }
+        let (bot, bot_run) = bot_of(
+            std::env::var(crate::bots::BOT_ENV).ok(),
+            std::env::var(crate::bots::BOT_RUN_ENV).ok(),
+            used_remote().is_some(),
+        );
+        Self { view: VIEW.get().copied(), boot: BOOT.get().cloned(), contract: STRUCTURED.get().copied(), bot, bot_run }
     }
 
     fn for_command(self, command: &control::Command) -> Self {
@@ -442,8 +463,8 @@ impl Envelope {
 fn send_request(stream: &mut impl Write, command: control::Command, envelope: Envelope) -> Result<()> {
     let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
     let server = std::env::var(control::SERVER_ENV).ok();
-    let Envelope { view, boot, contract } = envelope.for_command(&command);
-    let request = serde_json::to_string(&Request { caller, server, contract, boot, view, command })
+    let Envelope { view, boot, contract, bot, bot_run } = envelope.for_command(&command);
+    let request = serde_json::to_string(&Request { caller, server, contract, boot, view, bot, bot_run, command })
         .map_err(|e| Error::Control(e.to_string()))?;
     protocol::send(stream, &ClientMessage::Request(request))?;
     Ok(())

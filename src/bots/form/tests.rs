@@ -143,3 +143,36 @@ fn an_empty_model_is_sent_as_an_empty_string_to_go_back_to_the_agents_own() {
     form.model.choose(0);
     assert_eq!(form.edit_bot().expect("an edit").model.as_deref(), Some(""));
 }
+
+#[test]
+fn space_toggles_follow_and_both_requests_carry_it() {
+    let mut form = Form::new(agents(), "claude");
+    form.name = Editor::new("PRs");
+    assert_eq!(form.new_bot().expect("a bot").follow, Some(true));
+    form.focus_on(Field::Follow);
+    key(&mut form, KeyCode::Char(' '));
+    assert!(!form.follow);
+    assert_eq!(form.new_bot().expect("a bot").follow, Some(false));
+    let bot = crate::bots::sample("prs", "PRs");
+    let mut editing = Form::editing(agents(), &bot, "");
+    assert_eq!(editing.edit_bot().expect("an edit").follow, Some(true));
+    editing.focus_on(Field::Follow);
+    key(&mut editing, KeyCode::Char(' '));
+    assert_eq!(editing.edit_bot().expect("an edit").follow, Some(false));
+}
+
+#[test]
+fn editing_starts_from_the_bots_follow() {
+    let off = Bot { follow: false, ..crate::bots::sample("prs", "PRs") };
+    assert!(!Form::editing(agents(), &off, "").follow);
+}
+
+#[test]
+fn tab_reaches_follow_after_access() {
+    let mut form = Form::new(agents(), "claude");
+    form.focus_on(Field::Access);
+    key(&mut form, KeyCode::Tab);
+    assert_eq!(form.focus, Field::Follow);
+    key(&mut form, KeyCode::Tab);
+    assert_eq!(form.focus, Field::About);
+}

@@ -48,6 +48,10 @@ impl App {
                 let stopped = self.bot_stop(&target.bot)?;
                 json!({ "bot": id(self, &target)?, "stopped": stopped })
             }
+            BotRequest::Setup(target) => {
+                let (at, line) = self.bot_setup(&target.bot)?;
+                json!({ "bot": self.panels.bots.live[at].bot.id, "line": line })
+            }
             _ => return Err(Refusal::new(Code::Failed, "not a bot request")),
         };
         Ok(Some(answer))

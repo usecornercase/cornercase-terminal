@@ -32,6 +32,8 @@ fn the_view_in_a_request_is_left_out_when_absent() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: Command::Status(Status {}),
     };
 

@@ -207,6 +207,8 @@ mod input_while_resuming {
             contract: None,
             boot: None,
             view: None,
+            bot: None,
+            bot_run: None,
             command: Command::Send(send),
         };
         let text = serde_json::to_string(&request).expect("json");

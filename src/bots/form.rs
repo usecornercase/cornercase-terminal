@@ -20,6 +20,7 @@ pub(crate) enum Field {
     Effort,
     Account,
     Access,
+    Follow,
     About,
 }
 
@@ -42,6 +43,7 @@ pub(crate) struct Form {
     pub(crate) effort: Combo,
     pub(crate) account: Option<AgentAccounts>,
     pub(crate) access: Combo,
+    pub(crate) follow: bool,
     pub(crate) about: Editor,
     pub(crate) focus: Field,
     pub(crate) error: Option<String>,
@@ -83,6 +85,7 @@ impl Form {
             effort: Combo::default(),
             account: None,
             access: Combo::default(),
+            follow: true,
             about: Editor::default(),
             focus: Field::Name,
             error: None,
@@ -103,6 +106,7 @@ impl Form {
             effort: Combo::default(),
             account: None,
             access: Combo::default(),
+            follow: bot.follow,
             about: Editor::new(about),
             focus: Field::Name,
             error: None,
@@ -162,7 +166,7 @@ impl Form {
         if self.account.is_some() {
             fields.push(Field::Account);
         }
-        fields.extend([Field::Access, Field::About]);
+        fields.extend([Field::Access, Field::Follow, Field::About]);
         fields
     }
 
@@ -193,7 +197,7 @@ impl Form {
             Field::Effort => Some(&self.effort),
             Field::Account => self.account.as_ref().map(|account| &account.combo),
             Field::Access => Some(&self.access),
-            Field::Name | Field::About => None,
+            Field::Name | Field::About | Field::Follow => None,
         }
     }
 
@@ -204,7 +208,7 @@ impl Form {
             Field::Effort => Some(&mut self.effort),
             Field::Account => self.account.as_mut().map(|account| &mut account.combo),
             Field::Access => Some(&mut self.access),
-            Field::Name | Field::About => None,
+            Field::Name | Field::About | Field::Follow => None,
         }
     }
 
@@ -249,6 +253,7 @@ impl Form {
             KeyCode::Esc => return Step::Cancel,
             KeyCode::Tab => self.step_focus(true),
             KeyCode::BackTab => self.step_focus(false),
+            KeyCode::Char(' ') if self.focus == Field::Follow => self.follow = !self.follow,
             KeyCode::Enter if self.focus != Field::About => return Step::Submit,
             _ => self.typed(key, width, rows),
         }
@@ -292,6 +297,7 @@ impl Form {
             effort: Self::chosen_label(&self.effort).filter(|_| self.takes_effort()),
             account: self.account_choice().filter(|account| !account.is_empty()),
             access: Some(access.to_string()),
+            follow: Some(self.follow),
             about: self.about.text(),
         })
     }
@@ -307,6 +313,7 @@ impl Form {
             effort: self.takes_effort().then(|| Self::chosen_label(&self.effort).unwrap_or_default()),
             account: self.account_choice(),
             access: Some(access.to_string()),
+            follow: Some(self.follow),
             about: (about != self.loaded_about).then_some(about),
         })
     }

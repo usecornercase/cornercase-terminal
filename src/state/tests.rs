@@ -57,6 +57,7 @@ mod file {
             accounts: BTreeMap::new(),
             closed: None,
             exited_agent: None,
+            bot: None,
         }
     }
 
@@ -335,6 +336,22 @@ mod file {
             vec![PaneState { exited_agent: Some(agent), ..PaneState::at(Some("projects/team".into())) }];
         let fixture = crate::test_util::fixture!("session/exited_agent.json");
         round_trip(fixture, &saved);
+    }
+
+    #[test]
+    fn a_pane_bot_is_saved_and_read_back() {
+        let mut saved = state(&["projects/team"]);
+        saved.projects[0].workspaces[0].tabs[0].panes =
+            vec![PaneState { bot: Some("prs".into()), ..PaneState::at(Some("projects/team".into())) }];
+        let fixture = crate::test_util::fixture!("session/bot.json");
+        round_trip(fixture, &saved);
+    }
+
+    #[test]
+    fn a_session_without_bots_writes_the_same_bytes() {
+        let text = serde_json::to_string(&state(&["projects/team"])).expect("json");
+
+        assert!(!text.contains("\"bot\""));
     }
 
     #[test]
@@ -647,6 +664,7 @@ mod mapping {
             accounts: BTreeMap::new(),
             closed: None,
             exited_agent: None,
+            bot: None,
         };
         TabState { name: None, panes: vec![pane; panes], active, layout: None }
     }

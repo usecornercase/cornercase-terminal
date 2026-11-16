@@ -7,6 +7,7 @@ use crate::agents::headless::Access;
 pub(crate) mod brief;
 pub(crate) mod chat;
 pub(crate) mod folder;
+pub(crate) mod follow;
 pub(crate) mod form;
 pub(crate) mod routines;
 pub(crate) mod turn;
@@ -18,8 +19,10 @@ pub(crate) const MESSAGE_MAX: usize = 20_000;
 pub(crate) const NOTES_CAP: usize = 8 * 1024;
 pub(crate) const TURN_TIMEOUT: Duration = Duration::from_mins(15);
 pub(crate) const STOP_REFUSED: &str = "a bot cannot stop its own server";
+pub(crate) const WINDOW_REFUSED: &str = "a bot cannot attach as a window";
 pub(crate) const LAST_CHARS: usize = 200;
 pub(crate) const BOT_ENV: &str = "CORNERCASE_BOT";
+pub(crate) const BOT_RUN_ENV: &str = "CORNERCASE_BOT_RUN";
 pub(crate) const ACCESS_CHANGE: &str = "a bot cannot change a bot's access";
 
 pub(crate) struct ServerStop {
@@ -56,6 +59,17 @@ pub(crate) struct Bot {
     pub(crate) created: i64,
     #[serde(default)]
     pub(crate) conversation: Option<String>,
+    #[serde(default = "yes", skip_serializing_if = "is_on")]
+    pub(crate) follow: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if takes a reference")]
+fn is_on(follow: &bool) -> bool {
+    *follow
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,6 +146,7 @@ pub(crate) fn sample(id: &str, name: &str) -> Bot {
         access: Access::Cornercase,
         created: 100,
         conversation: None,
+        follow: true,
     }
 }
 

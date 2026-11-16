@@ -38,8 +38,8 @@ fn started_running(before: &str) -> Arc<Session> {
 fn a_bot_is_made_asked_and_read_back_over_the_socket() {
     let session = started();
 
-    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude", "--about", "review my PRs"]), "prs");
-    assert!(!session.dir.join("claude-bot.args").exists(), "making a bot starts nothing");
+    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude"]), "prs");
+    assert!(!session.dir.join("claude-bot.args").exists(), "making a bot without what it is for starts nothing");
     assert_eq!(session.says(&["bot", "say", "prs", "which are blocked?", "--wait"]), "hello from the bot");
 
     let list: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
@@ -53,6 +53,22 @@ fn a_bot_is_made_asked_and_read_back_over_the_socket() {
 }
 
 #[test]
+fn a_bot_made_with_what_it_is_for_sets_itself_up_and_bot_setup_runs_it_again() {
+    let session = started();
+
+    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude", "--about", "review my PRs"]), "prs");
+    assert_eq!(session.says(&["bot", "say", "prs", "and now?", "--wait"]), "hello from the bot");
+    let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
+    assert!(args.contains("## You were just made") && args.contains("--resume s1"), "{args}");
+    assert!(session.says(&["bot", "history", "prs"]).starts_with("— setting up · "));
+
+    assert!(session.says(&["bot", "setup", "prs"]).parse::<u64>().is_ok());
+    session.says(&["bot", "say", "prs", "again", "--wait"]);
+    let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
+    assert_eq!(args.matches("## You were just made").count(), 2, "{args}");
+}
+
+#[test]
 fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped() {
     let session = started();
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
@@ -61,6 +77,18 @@ fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped()
     assert!(refused(&start, 2, "a bot runs in no pane"), "{start:?}");
     let kill = session.command().env("CORNERCASE_BOT", "prs").arg("kill-server").output().expect("run");
     assert!(refused(&kill, 2, "a bot cannot stop its own server"), "{kill:?}");
+    assert!(session.says(&["status", "--json"]).contains("\"projects\""));
+}
+
+#[test]
+fn inside_a_bot_cornercase_opens_no_window_and_relays_none() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+
+    for args in [&[][..], &["proxy"], &["remote", "vps"]] {
+        let opened = session.command().env("CORNERCASE_BOT", "prs").args(args).output().expect("run");
+        assert!(refused(&opened, 2, "a bot cannot attach as a window"), "{args:?}: {opened:?}");
+    }
     assert!(session.says(&["status", "--json"]).contains("\"projects\""));
 }
 
@@ -249,4 +277,35 @@ fn a_bots_turn_cannot_stop_restart_or_update_the_server_even_without_its_variabl
     assert_eq!(status.lines().collect::<Vec<_>>(), ["1", "1", "1"], "{stderr}");
     assert_eq!(stderr.matches("a bot cannot stop its own server").count(), 3, "{stderr}");
     assert_eq!(session.says(&["contract", "--json"]), boot);
+}
+
+#[test]
+fn an_agent_a_bot_starts_is_tagged_and_its_chat_says_so() {
+    let session = started_running(
+        "[ -n \"$CORNERCASE_BOT\" ] || exit 0\ncornercase start claude --project \"$(cat \"$0.project\")\" --prompt fix > \"$0.start\" 2>&1",
+    );
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("json");
+    let project = status["projects"][0]["id"].as_u64().expect("a project").to_string();
+    std::fs::write(session.dir.join("claude-bot.project"), &project).expect("the project");
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+
+    let started = std::fs::read_to_string(session.dir.join("claude-bot.start")).unwrap_or_default();
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("json");
+    let panes: Vec<&Value> = status["projects"]
+        .as_array()
+        .expect("projects")
+        .iter()
+        .flat_map(|project| project["workspaces"].as_array().into_iter().flatten())
+        .flat_map(|workspace| workspace["tabs"].as_array().into_iter().flatten())
+        .flat_map(|tab| tab["panes"].as_array().into_iter().flatten())
+        .collect();
+    assert_eq!(panes.iter().filter(|pane| pane["bot"].as_str() == Some("prs")).count(), 1, "{started}: {status}");
+    let history = session.says(&["bot", "history", "prs"]);
+    assert!(history.contains("▶ started claude in"), "{history}");
+    let listed: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    assert_eq!(listed["bots"][0]["following"].as_array().map(Vec::len), Some(1), "{listed}");
 }

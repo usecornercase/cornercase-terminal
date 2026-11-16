@@ -222,7 +222,11 @@ fn go_finds_the_machine_once_it_is_renamed() {
 fn go_for_a_view_is_refused_and_picks_nothing() {
     let (mut seeing, token) = told_waiting();
 
-    let refused = seeing.rig.app.go_request(Asker { caller: None, view: Some(1) }, &Go { token }).expect_err("refused");
+    let refused = seeing
+        .rig
+        .app
+        .go_request(Asker { caller: None, view: Some(1), bot: None }, &Go { token })
+        .expect_err("refused");
 
     assert_eq!((refused.code, picked(&seeing.rig.app)), (Code::Malformed, None));
     assert!(refused.message.contains("drop --view"), "{}", refused.message);

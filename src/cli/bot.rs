@@ -2,11 +2,11 @@ use std::io::Read as _;
 
 use serde_json::Value;
 
-use super::args::bot::{BotAction, EditArgs, HistoryArgs, NewArgs, RemoveArgs, SayArgs};
+use super::args::bot::{BotAction, BotNameArgs, EditArgs, HistoryArgs, NewArgs, SayArgs};
 use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
-use crate::client::{answer, ask, use_bot_about, use_bots};
+use crate::client::{answer, ask, use_bot_about, use_bot_follow, use_bot_setup, use_bots};
 use crate::control::Command;
 use crate::control::bots::{AgentInfo, BotHistory, BotInfo, BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::error::{Error, Result};
@@ -32,6 +32,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
         BotAction::List(print) => list(print.json),
         BotAction::Edit(args) => edited(&args),
         BotAction::Remove(args) => removed(args),
+        BotAction::Setup(args) => set_up(&args),
         BotAction::Say(args) => said(&args),
         BotAction::History(args) => history(&args),
         BotAction::Reset(args) => quiet(BotRequest::Reset(target(args.bot))),
@@ -40,7 +41,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
     }
 }
 
-fn removed(args: RemoveArgs) -> Result<bool> {
+fn removed(args: BotNameArgs) -> Result<bool> {
     let value = send(BotRequest::Remove(target(args.bot)))?;
     if args.print.json {
         print_json(&value)?;
@@ -54,6 +55,17 @@ fn removed(args: RemoveArgs) -> Result<bool> {
             (format!("its {count} queue entries"), "them")
         };
         print_out(&format!("removed {what}; cornercase queue restore {undo} puts {back} back\n"))?;
+    }
+    Ok(true)
+}
+
+fn set_up(args: &BotNameArgs) -> Result<bool> {
+    use_bot_setup()?;
+    let value = send(BotRequest::Setup(target(args.bot.clone())))?;
+    if args.print.json {
+        print_json(&value)?;
+    } else {
+        print_out(&format!("{}\n", value["line"]["id"]))?;
     }
     Ok(true)
 }
@@ -74,7 +86,19 @@ fn agents(json: bool) -> Result<bool> {
     Ok(true)
 }
 
+fn follow_value(given: Option<&str>) -> Option<bool> {
+    given.map(|given| given == "on")
+}
+
+fn follow_of(given: Option<&str>) -> Result<Option<bool>> {
+    if given.is_some() {
+        use_bot_follow()?;
+    }
+    Ok(follow_value(given))
+}
+
 fn made(args: &NewArgs) -> Result<bool> {
+    let follow = follow_of(args.follow.as_deref())?;
     let new = NewBot {
         name: args.name.clone(),
         agent: args.agent.clone(),
@@ -82,6 +106,7 @@ fn made(args: &NewArgs) -> Result<bool> {
         effort: args.effort.clone(),
         account: args.account.clone(),
         access: args.access.clone(),
+        follow,
         about: args.about.clone().unwrap_or_default(),
     };
     let value = send(BotRequest::New(new))?;
@@ -94,6 +119,7 @@ fn made(args: &NewArgs) -> Result<bool> {
 }
 
 fn edited(args: &EditArgs) -> Result<bool> {
+    let follow = follow_of(args.follow.as_deref())?;
     let edit = EditBot {
         bot: args.bot.clone(),
         name: args.name.clone(),
@@ -102,6 +128,7 @@ fn edited(args: &EditArgs) -> Result<bool> {
         effort: args.effort.clone(),
         account: args.account.clone(),
         access: args.access.clone(),
+        follow,
         about: args.about.clone(),
     };
     if edit.about.is_some() {

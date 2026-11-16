@@ -42,8 +42,18 @@ mod describing {
     }
 
     #[test]
+    fn bot_follow_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-follow"));
+    }
+
+    #[test]
     fn prompt_unsent_is_a_feature() {
         assert!(FEATURES.contains(&"prompt-unsent"));
+    }
+
+    #[test]
+    fn bot_setup_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-setup"));
     }
 
     #[test]

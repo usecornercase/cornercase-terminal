@@ -409,6 +409,8 @@ pub struct TabInfo {
     pub(crate) layout: Option<Layout>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) controller: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) bot: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -453,4 +455,6 @@ pub struct PaneInfo {
     pub(crate) memory: Option<u64>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) compacted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) bot: Option<String>,
 }

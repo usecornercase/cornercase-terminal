@@ -14,7 +14,8 @@ const B: u64 = 32;
 
 fn call(app: &mut App, client: u64, view: Option<u64>, command: Command, structured: bool) -> Value {
     let contract = structured.then_some(1);
-    let request = wire::Request { caller: None, server: None, contract, boot: None, view, command };
+    let request =
+        wire::Request { caller: None, server: None, contract, boot: None, view, bot: None, bot_run: None, command };
     app.request(client, &serde_json::to_string(&request).expect("json"), Some(AREA), Instant::now());
     let answers = app.take_answers();
     let (who, text) = answers.into_iter().find(|(who, _)| *who == client).expect("an answer");

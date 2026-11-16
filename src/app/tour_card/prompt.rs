@@ -61,7 +61,16 @@ impl App {
         let start =
             control::Start { agent: Some(agent), workspace, prompt: Some(prompt), focus: true, ..Default::default() };
         let command = Command::Start(start);
-        let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+        let request = Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            bot: None,
+            bot_run: None,
+            command,
+        };
         self.run_request(client, Ok(request), Some(area), Instant::now());
     }
 

@@ -307,3 +307,61 @@ fn the_text_read_stays_put_when_steps_arrive_while_scrolled_up() {
     std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
     assert_eq!(row(&before), row(&after), "{before}\n{after}");
 }
+
+#[cfg(unix)]
+fn started_line(c: &Chat, pane: u64, boot: &str) -> Line {
+    let agent = chat::AgentRef { kind: "claude".into(), pane, workspace: 1, project: 1, boot: boot.into() };
+    let path = c.app.panels.bots.live[0].folder.join(folder::CHAT_FILE);
+    let line = Line::started(1, 10, "▶ started claude in cornercase", agent, None);
+    chat::append(&path, &line).expect("append");
+    line
+}
+
+#[cfg(unix)]
+fn find(text: &str, needle: &str) -> Position {
+    let (y, row) = text.lines().enumerate().find(|(_, row)| row.contains(needle)).expect("the text on screen");
+    let x = row[..row.find(needle).expect("found")].chars().count();
+    Position::new(u16::try_from(x).expect("x") + 1, u16::try_from(y).expect("y"))
+}
+
+#[cfg(unix)]
+#[test]
+fn a_click_on_show_shows_that_tab_and_leaves_the_chat() {
+    let mut c = project_chat(ANSWER);
+    let pane = c.app.term().expect("a pane").id;
+    started_line(&c, pane, crate::control::server_token());
+    started_line(&c, 999, "another-boot");
+    c.app.set_bots_dir(c.dir.path());
+    show(&mut c);
+    let text = drawn(&mut c.app);
+    assert!(text.contains("▶ started claude in cornercase  show") || text.contains("show "), "{text}");
+    assert_eq!(c.app.shown_bot(), Some(0));
+    let at = find(&text, " show ");
+    click(&mut c.app, at);
+    assert_eq!(c.app.shown_bot(), None);
+    assert_eq!(c.app.term().map(|term| term.id), Some(pane));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_line_of_another_run_of_the_server_reads_closed() {
+    let mut c = project_chat(ANSWER);
+    let pane = c.app.term().expect("a pane").id;
+    started_line(&c, pane, "another-boot");
+    c.app.set_bots_dir(c.dir.path());
+    show(&mut c);
+    let text = drawn(&mut c.app);
+    assert!(text.contains("closed") && !text.contains(" show "), "{text}");
+}
+
+#[test]
+fn retry_under_a_failed_message_sends_it_again() {
+    let mut c = chat(FAILED);
+    show(&mut c);
+    c.say("hi");
+    c.retried();
+    assert_eq!(c.lines().last().map(|line| line.kind), Some(chat::Kind::Bot));
+    let argv = &c.argvs()[1];
+    assert!(argv.trim_end().ends_with("## The user says\\n\\nhi\"]"), "{argv}");
+    assert!(!argv.contains("## You were just made"), "{argv}");
+}

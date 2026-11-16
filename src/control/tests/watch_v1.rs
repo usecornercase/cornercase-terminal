@@ -96,6 +96,7 @@ fn agents_tab() -> TabInfo {
         custom_name: Some("agents".into()),
         layout: Some(split()),
         controller: None,
+        bot: None,
     }
 }
 

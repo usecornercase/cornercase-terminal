@@ -269,6 +269,8 @@ fn every_command_is_answered_by_an_area() {
             contract: None,
             boot: None,
             view: None,
+            bot: None,
+            bot_run: None,
             command,
         })
         .expect("json");

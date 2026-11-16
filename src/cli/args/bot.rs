@@ -1,7 +1,9 @@
 use clap::{Args, Subcommand};
 
 use super::Print;
-use crate::cli::help::{BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_NEW_HELP, BOT_SAY_HELP};
+use crate::cli::help::{
+    BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_NEW_HELP, BOT_SAY_HELP, BOT_SETUP_HELP,
+};
 
 const ACCESS: [&str; 2] = ["cornercase", "full"];
 
@@ -15,14 +17,16 @@ pub(crate) struct BotArgs {
 pub(crate) enum BotAction {
     #[command(about = "List the agents, which can be a bot and why not", after_help = BOT_AGENTS_HELP)]
     Agents(Print),
-    #[command(about = "Make a bot: a name, a folder, a memory and a chat; it starts nothing", after_help = BOT_NEW_HELP)]
+    #[command(about = "Make a bot: a name, a folder, a memory and a chat; with --about it sets itself up at once", after_help = BOT_NEW_HELP)]
     New(NewArgs),
+    #[command(about = "Run the bot's setup turn again: it reads bot.md and schedules what it asks for", after_help = BOT_SETUP_HELP)]
+    Setup(BotNameArgs),
     #[command(about = "List the bots with their state and unread answers")]
     List(Print),
     #[command(about = "Change a bot's name, model, effort, account or access, from its next message", after_help = BOT_EDIT_HELP)]
     Edit(EditArgs),
     #[command(about = "Delete a bot, its folder and its queue entries; refused while it answers")]
-    Remove(RemoveArgs),
+    Remove(BotNameArgs),
     #[command(about = "Write to a bot; it answers in its chat", after_help = BOT_SAY_HELP)]
     Say(SayArgs),
     #[command(about = "Print a bot's chat", after_help = BOT_HISTORY_HELP)]
@@ -44,7 +48,7 @@ pub(crate) struct Target {
 }
 
 #[derive(Debug, Args)]
-pub(crate) struct RemoveArgs {
+pub(crate) struct BotNameArgs {
     #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
     pub(crate) bot: String,
     #[command(flatten)]
@@ -69,7 +73,18 @@ pub(crate) struct NewArgs {
     pub(crate) account: Option<String>,
     #[arg(long, value_name = "ACCESS", value_parser = ACCESS, help = "cornercase (the default) or full: it can change any file and run anything, unattended")]
     pub(crate) access: Option<String>,
-    #[arg(long, value_name = "TEXT", help = "What the bot is for; it goes into bot.md")]
+    #[arg(
+        long,
+        value_name = "ON|OFF",
+        value_parser = ["on", "off"],
+        help = "on (the default): the bot is told when an agent it starts finishes, and answers in its chat; off: it is not"
+    )]
+    pub(crate) follow: Option<String>,
+    #[arg(
+        long,
+        value_name = "TEXT",
+        help = "What the bot is for; it goes into bot.md, and the bot sets itself up for it at once"
+    )]
     pub(crate) about: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,
@@ -91,6 +106,13 @@ pub(crate) struct EditArgs {
     pub(crate) account: Option<String>,
     #[arg(long, value_name = "ACCESS", value_parser = ACCESS, help = "cornercase or full")]
     pub(crate) access: Option<String>,
+    #[arg(
+        long,
+        value_name = "ON|OFF",
+        value_parser = ["on", "off"],
+        help = "on: the bot is told when an agent it starts finishes, and answers in its chat; off: it is not; from its next turn"
+    )]
+    pub(crate) follow: Option<String>,
     #[arg(long, value_name = "TEXT", help = "What the bot is for, written to bot.md; an empty one empties it")]
     pub(crate) about: Option<String>,
     #[command(flatten)]

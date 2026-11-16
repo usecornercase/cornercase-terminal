@@ -27,7 +27,15 @@ fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, de
 }
 
 fn details(model: &str, percent: Option<u16>) -> Details {
-    Details { model: Some(model.into()), percent, subagents: 0, memory: None, account: None, compacted: false }
+    Details {
+        model: Some(model.into()),
+        percent,
+        subagents: 0,
+        memory: None,
+        account: None,
+        compacted: false,
+        by: None,
+    }
 }
 
 fn entries() -> Vec<AgentEntry> {
@@ -750,4 +758,22 @@ fn a_machine_row_has_no_close_button_in_compact_mode() {
     let v = View { nav: Some(Nav::Agents), ..shown(Sidebar::ProjectsOnTop, machine_rows()) };
     let t = render_sized(&v, SMALL.width, SMALL.height);
     assert_eq!(close_symbol(&t, agent_close(row, a.pitch)).0, " ");
+}
+
+#[rstest]
+#[case::wide(40, "claude · by prs · Opus 5.5 · 23%")]
+#[case::the_model_goes_first(30, "claude · by prs · 23%")]
+fn an_agent_started_by_a_bot_says_by_its_name(#[case] width: u16, #[case] expected: &str) {
+    let r = Rect::new(0, 0, width, 2);
+    let mut t = Terminal::new(TestBackend::new(width, 2)).expect("test backend");
+    let v = shown(Sidebar::ProjectsOnTop, Vec::new());
+    let entry = agent(
+        Status::Working,
+        "claude",
+        "cornercase",
+        None,
+        Details { by: Some("prs".into()), ..details("Opus 5.5", Some(23)) },
+    );
+    t.draw(|f| draw_agent(f, &v, r, 1, &entry)).expect("draw");
+    assert_eq!(row_text(&t, Rect { y: 1, height: 1, ..r }).trim(), expected);
 }
