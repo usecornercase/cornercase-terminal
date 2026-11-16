@@ -7,7 +7,11 @@ fn rule(project: &Path) -> String {
 
 #[test]
 fn a_turn_may_read_the_git_of_each_open_project_and_none_under_the_bots_folder() {
-    let (mut app, rx, dirs) = app_with(2);
+    let (mut app, rx) = empty_app();
+    let dirs = [TempDir::new(), TempDir::new()];
+    for dir in &dirs {
+        app.open_project(dir.path().to_path_buf(), AREA).expect("open project");
+    }
     let (dir, _bin, claude) = install_bot(&mut app, ANSWER, Access::Cornercase);
     let inside = folder::of(dir.path(), "prs").join("x");
     std::fs::create_dir_all(&inside).expect("a folder in the bot's");
