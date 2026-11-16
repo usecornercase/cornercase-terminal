@@ -1,6 +1,7 @@
 import type { App } from './app';
 import type { BotsShape } from './layout';
 import type { Key } from './programs';
+import { plain } from './markdown';
 import { type Editable, editKey, removeSelection } from './todo';
 
 export type LineKind = 'you' | 'bot' | 'step' | 'error' | 'notice' | 'started' | 'finished' | 'waiting';
@@ -374,7 +375,9 @@ export class Bots {
     if (this.shown === bot.id) bot.unread = 0;
     else {
       bot.unread += 1;
-      app.notify(`${bot.name}: ${bot.lines[bot.lines.length - 1].text.split('\n')[0]}`, undefined, () => this.show(bot.id));
+      const text = bot.lines[bot.lines.length - 1].text;
+      const first = plain(text).split('\n').map((l) => l.trim()).find(Boolean) ?? text.split('\n')[0];
+      app.notify(`${bot.name}: ${first}`, undefined, () => this.show(bot.id));
     }
     const held = bot.lines.filter((l) => bot.held.has(l.id));
     bot.held.clear();

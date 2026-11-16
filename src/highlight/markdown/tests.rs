@@ -145,3 +145,43 @@ mod inline {
         assert_eq!(style_of("write to ana@x.dev", "ana@x.dev"), Style::default());
     }
 }
+
+mod plain {
+    use super::*;
+
+    fn lines(source: &str) -> Vec<String> {
+        plain(source).lines().map(crate::text::one_line).filter(|line| !line.is_empty()).collect()
+    }
+
+    #[rstest]
+    #[case::strong_and_code("**Two** are blocked: `#12` and `#14`.", &["Two are blocked: #12 and #14."])]
+    #[case::emphasis_and_strikethrough("an *important* ~~old~~ word", &["an important old word"])]
+    #[case::heading("## Summary\n\nTwo are blocked.", &["Summary", "Two are blocked."])]
+    #[case::bullets("- **#12** waits for review\n- #14 fails CI", &["#12 waits for review", "#14 fails CI"])]
+    #[case::numbers("1. First\n2. Second", &["First", "Second"])]
+    #[case::tasks("- [x] done\n- [ ] not yet", &["done", "not yet"])]
+    #[case::nested_list("- a\n  - b\n- c", &["a", "b", "c"])]
+    #[case::quote("> quoted *text*\n> more", &["quoted text", "more"])]
+    #[case::fence("```sh\ngh pr list\n```\nTwo are blocked.", &["gh pr list", "Two are blocked."])]
+    #[case::links("see [the PR](https://x.dev/12) and <https://x.dev>", &["see the PR and https://x.dev"])]
+    #[case::soft_break("first line\nsecond line", &["first line", "second line"])]
+    #[case::inline_html("Use <b>bold</b> html", &["Use bold html"])]
+    #[case::html_block("<div>\nTwo are blocked.\n</div>", &["Two are blocked."])]
+    #[case::html_block_with_attributes("<p class=\"a\">Two <b>are</b> blocked.</p>", &["Two are blocked."])]
+    #[case::comment_over_lines("<!--\nnote\n-->\n\nHello", &["Hello"])]
+    #[case::comment_with_a_greater_than("<!-- a > b -->\nHello", &["Hello"])]
+    #[case::template_then_details(
+        "<!-- template\nhint -->\n\n<details><summary>Logs</summary>\n\nshown\n</details>",
+        &["Logs", "shown"]
+    )]
+    #[case::break_in_a_paragraph("<p>a<br>b</p>", &["a", "b"])]
+    #[case::break_in_a_block("<div>\nTwo<br>are<br/>blocked\n</div>", &["Two", "are", "blocked"])]
+    #[case::html_comment("<!-- note -->\nHello", &["Hello"])]
+    #[case::rule("---\n\nAfter", &["After"])]
+    #[case::table("| a | b |\n|---|---|\n| 1 | 2 |", &["a b", "1 2"])]
+    #[case::escapes_and_entities("5 \\* 3 &amp; more", &["5 * 3 & more"])]
+    #[case::image("![shot](a.png) here", &["shot here"])]
+    fn markdown_reads_as_its_words(#[case] source: &str, #[case] expected: &[&str]) {
+        assert_eq!(lines(source), expected);
+    }
+}

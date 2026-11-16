@@ -290,8 +290,7 @@ impl App {
         let state = &mut self.panels.bots.live[at];
         state.unread += 1;
         let bot = state.bot.id.clone();
-        let first = line.text.lines().find(|text| !text.trim().is_empty()).unwrap_or_default();
-        let text = crate::text::truncate_right(&crate::text::one_line(first), TOAST_WIDTH);
+        let text = crate::text::truncate_right(&chat::preview(line), TOAST_WIDTH);
         let message = crate::host::notify::clean(&format!("{who}: {text}"));
         let status = if line.kind == Kind::Error {
             crate::agents::activity::Status::Failed

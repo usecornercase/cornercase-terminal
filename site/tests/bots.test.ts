@@ -5,6 +5,7 @@ import { App } from '../src/lib/demo/app';
 import { inputKey } from '../src/lib/demo/client';
 import { type BotForm } from '../src/lib/demo/botform';
 import { EXAMPLES, draftOf } from '../src/lib/demo/bots';
+import { plain } from '../src/lib/demo/markdown';
 import { layout } from '../src/lib/demo/layout';
 import { world } from '../src/lib/demo/world';
 
@@ -450,4 +451,22 @@ test('the prs chat shows an agent it started and the report after it finished', 
   assert.match(text, /✓ claude finished in web-shop › fix\/macos-test +show/);
   assert.match(text, /Fixed the flaky path/);
   assert.match(text, /#490 passes `?test \(macos\)`? now/);
+});
+
+test('an answer that arrives while its chat is not shown toasts its first line without Markdown', () => {
+  const app = demo(140);
+  press(app, 'prs');
+  type(app, 'and #501?');
+  inputKey(app, key('Enter'));
+  press(app, 'blog');
+  app.advance(5000);
+  assert.equal(app.toast?.text, 'prs: Two are blocked:');
+});
+
+test('the plain text of Markdown leaves a code block as it is', () => {
+  assert.equal(plain('```sh\n# rerun *all*\n```'), '# rerun *all*');
+  assert.deepEqual(
+    plain('Two are **blocked**:\n\n- #482 waits\n\n```sh\ngh run rerun\n```').split('\n').filter(Boolean),
+    ['Two are blocked:', '#482 waits', 'gh run rerun'],
+  );
 });

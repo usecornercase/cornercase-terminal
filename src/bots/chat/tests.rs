@@ -363,3 +363,33 @@ fn only_an_error_after_a_message_of_the_user_has_a_you_prompt() {
     assert_eq!(kind(&[you(1, false), report.clone(), error(3)], 3), Some(Kind::Finished));
     assert_eq!(kind(&[error(1)], 1), None);
 }
+
+mod preview {
+    use rstest::rstest;
+
+    use super::*;
+
+    fn said(text: &str) -> Line {
+        let answer = Answer { model: None, tokens: Used::default(), conversation: None };
+        Line::answer(1, 10, text, answer)
+    }
+
+    #[rstest]
+    #[case::list("- **Two** are blocked:\n- `#12` waits", "Two are blocked:")]
+    #[case::heading("## Summary\n\nTwo are blocked.", "Summary")]
+    #[case::fence("```sh\ngh pr list\n```", "gh pr list")]
+    #[case::spaces("Two   are\tblocked.", "Two are blocked.")]
+    #[case::html_block("<div>\nTwo are blocked.\n</div>", "Two are blocked.")]
+    #[case::nothing("", "")]
+    #[case::rule_only("---", "---")]
+    #[case::reference_only("[a]: https://x.dev", "[a]: https://x.dev")]
+    fn an_answer_previews_its_first_line_as_plain_text(#[case] text: &str, #[case] shown: &str) {
+        assert_eq!(preview(&said(text)), shown);
+    }
+
+    #[test]
+    fn an_error_keeps_its_text() {
+        let line = Line::failed(1, 10, "there is no claude account `gone`");
+        assert_eq!(preview(&line), "there is no claude account `gone`");
+    }
+}

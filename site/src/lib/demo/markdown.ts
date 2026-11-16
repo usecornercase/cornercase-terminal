@@ -48,6 +48,24 @@ function wrapped(segs: Seg[], width: number, first: Seg[], rest: Seg[]): Line[] 
   return lines;
 }
 
+export function plain(source: string): string {
+  const out: string[] = [];
+  let fenced = false;
+  for (const raw of source.split('\n')) {
+    if (raw.startsWith('```')) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) {
+      out.push(raw);
+      continue;
+    }
+    const rest = raw.replace(/^\s*#{1,6}\s+/, '').replace(/^\s*([-*]|\d+\.)\s+(\[( |x)\]\s+)?/, '');
+    out.push(inline(rest).map((s) => s.t).join(''));
+  }
+  return out.join('\n');
+}
+
 export function render(source: string, width: number): Line[] {
   const out: Line[] = [];
   const gap = () => {

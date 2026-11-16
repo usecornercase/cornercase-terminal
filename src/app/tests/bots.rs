@@ -256,18 +256,24 @@ fn a_turn_that_takes_too_long_ends_with_an_error() {
     assert_eq!(c.app.panels.bots.live[0].unread, 2);
 }
 
-#[test]
-fn an_answer_nobody_waits_for_is_unread_and_makes_a_toast_and_a_notification() {
-    let mut c = chat(ANSWER);
+#[rstest]
+#[case::plain_text("Two are blocked.", "PRs: Two are blocked.")]
+#[case::markdown("- **Two** are blocked:\\n- `#12` waits", "PRs: Two are blocked:")]
+fn an_answer_nobody_waits_for_is_unread_and_makes_a_toast_and_a_notification(
+    #[case] answer: &str,
+    #[case] shown: &str,
+) {
+    let mut c = chat(&ANSWER.replace("Two are blocked.", answer));
     c.say("hi");
     c.settle();
     assert_eq!(c.app.panels.bots.live[0].unread, 1);
     let toast = c.app.messages.toast.as_ref().expect("a toast");
-    assert_eq!(toast.message.as_str(), "PRs: Two are blocked.");
+    assert_eq!(toast.message.as_str(), shown);
     assert!(toast.go.is_some());
     let notes = c.app.outbox.take_notifications();
     assert_eq!(notes.len(), 1);
-    assert_eq!(notes[0].text, "PRs: Two are blocked.");
+    assert_eq!(notes[0].text, shown);
+    assert_eq!(c.lines().pop().expect("the answer").text, answer.replace("\\n", "\n"));
     c.app.bot_seen("prs").expect("seen");
     assert_eq!(c.app.panels.bots.live[0].unread, 0);
 }

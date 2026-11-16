@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.95
+
+- **A bot's toast and desktop notification show plain text.** They showed the first line of its answer with the Markdown in it (`**`, backticks, `- `); now they show the words, as the chat does.
+
 ## 0.13.94
 
 - **A bot reads your projects' git.** A Claude Code bot with `cornercase` access can run `git -C <folder> log`, `show`, `diff` and `status` in the projects and worktrees you have open (many, but far fewer on Windows; past the limit, the first by folder path), and it is told how: the folder is `path` in `cornercase status --json`, and a shell loop is refused, so it runs one command at a time. Before, every `git -C` was refused and a bot never read a commit.
