@@ -81,6 +81,18 @@ fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped()
 }
 
 #[test]
+fn inside_a_bot_cornercase_opens_no_window_and_relays_none() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+
+    for args in [&[][..], &["proxy"], &["remote", "vps"]] {
+        let opened = session.command().env("CORNERCASE_BOT", "prs").args(args).output().expect("run");
+        assert!(refused(&opened, 2, "a bot cannot attach as a window"), "{args:?}: {opened:?}");
+    }
+    assert!(session.says(&["status", "--json"]).contains("\"projects\""));
+}
+
+#[test]
 fn a_bot_made_from_the_form_answers_in_its_chat() {
     let session = started();
     let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);

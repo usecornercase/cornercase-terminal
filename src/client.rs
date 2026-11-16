@@ -67,8 +67,9 @@ pub(crate) fn run() -> Result<()> {
         return Err(Error::Nested);
     }
     match open(&Target::Local, std::env::var_os(protocol::RESTARTED_ENV).is_some()) {
-        Err(Error::Rejected(_))
-            if stdin().is_terminal()
+        Err(Error::Rejected(why))
+            if why != crate::bots::WINDOW_REFUSED
+                && stdin().is_terminal()
                 && confirm(&format!(
                     "{OTHER_BUILD}\n{}\n{RESTART}",
                     restart::confirmation(running_now().as_deref())

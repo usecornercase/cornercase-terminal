@@ -37,6 +37,7 @@ use crate::todo;
 use crate::version;
 
 mod backend;
+mod bots;
 mod images;
 mod startup;
 mod surfaces;
@@ -720,10 +721,7 @@ impl Server {
         if id < self.next_client && self.client_mut(id).is_none() {
             return ControlFlow::Continue(());
         }
-        if let Some(why) = self.app.refused_stop(id, &message) {
-            if let Some(client) = self.client_mut(id) {
-                client.send(ServerMessage::Rejected(why.into()));
-            }
+        if self.refused(id, &message) {
             return ControlFlow::Continue(());
         }
         match message {

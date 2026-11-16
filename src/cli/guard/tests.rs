@@ -1,16 +1,20 @@
-use clap::CommandFactory;
+use clap::{ArgMatches, Command, CommandFactory};
 
 use super::*;
 use crate::cli::args::Cli;
 use crate::cli::help::{BY_BRANCH, EXPORT_TO, HERE, HERE_PANE, HERE_WORKSPACE, TO_FILE, WAIT_PANE};
 
-fn refused(args: &[&str]) -> Option<String> {
+fn checked_by(guard: fn(&Command, &ArgMatches, &str) -> Option<String>, args: &[&str]) -> Option<String> {
     let command = Cli::command();
     let matches = command
         .clone()
         .try_get_matches_from(std::iter::once("cornercase").chain(args.iter().copied()))
         .unwrap_or_else(|error| panic!("{args:?}: {error}"));
-    refusal(&command, &matches, "prs")
+    guard(&command, &matches, "prs")
+}
+
+fn refused(args: &[&str]) -> Option<String> {
+    checked_by(refusal, args)
 }
 
 #[rstest::rstest]
@@ -27,9 +31,19 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::restart(&["restart"], "a bot cannot stop its own server")]
 #[case::update(&["update"], "a bot cannot stop its own server")]
 #[case::export_to(&["config", "export", "--to", "/x"], "a bot cannot have cornercase write to a file: leave out --to")]
+#[case::proxy(&["proxy"], "a bot cannot attach as a window")]
+#[case::remote_window(&["remote", "vps"], "a bot cannot attach as a window")]
 fn a_bot_is_refused(#[case] args: &[&str], #[case] why: &str) {
     let found = refused(args).unwrap_or_else(|| panic!("{args:?} was allowed"));
     assert!(found.starts_with(why), "{found}");
+}
+
+#[test]
+fn a_bot_opens_no_window_but_a_request_line_without_a_command_is_left_to_its_own_answer() {
+    assert_eq!(checked_by(run_refusal, &[]).as_deref(), Some("a bot cannot attach as a window"));
+    assert_eq!(checked_by(run_refusal, &["--remote", "vps"]).as_deref(), Some("a bot cannot attach as a window"));
+    assert_eq!(refused(&[]), None);
+    assert_eq!(checked_by(run_refusal, &["status"]), None);
 }
 
 #[test]
@@ -58,6 +72,7 @@ fn the_refusal_names_the_flags_that_take_a_place() {
 #[case::size_of_a_path(&["worktrees", "size", "--path", "/x"])]
 #[case::export(&["config", "export"])]
 #[case::import_preview(&["config", "import", "/x", "--preview"])]
+#[case::known_machines(&["remote", "--known"])]
 fn a_bot_may_name_its_place_or_use_what_needs_none(#[case] args: &[&str]) {
     assert_eq!(refused(args), None, "{args:?}");
 }
