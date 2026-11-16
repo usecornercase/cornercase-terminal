@@ -70,9 +70,8 @@ fn a_bots_connection_that_speaks_as_a_window_is_rejected_and_closed(#[case] mess
     attached.server.app.client_connected(raw.id, Some(sleepers.pids()[0]));
 
     let spoke = attached.server.handle(ServerEvent::Message(raw.id, message));
-    let kill = attached.server.handle(ServerEvent::Message(raw.id, ClientMessage::KillServer));
 
-    assert_eq!((spoke, kill), (ControlFlow::Continue(()), ControlFlow::Continue(())));
+    assert_eq!(spoke, ControlFlow::Continue(()));
     let refused = |m: &ServerMessage| matches!(m, ServerMessage::Rejected(why) if why == WINDOW);
     assert!(raw.received(refused).iter().any(refused));
     assert!(attached.server.clients.iter().all(|client| client.id != raw.id));

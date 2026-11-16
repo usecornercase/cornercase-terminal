@@ -67,8 +67,8 @@ pub(crate) fn run() -> Result<()> {
         return Err(Error::Nested);
     }
     match open(&Target::Local, std::env::var_os(protocol::RESTARTED_ENV).is_some()) {
-        Err(Error::Rejected(why))
-            if why != crate::bots::WINDOW_REFUSED
+        result
+            if from_another_build(&result)
                 && stdin().is_terminal()
                 && confirm(&format!(
                     "{OTHER_BUILD}\n{}\n{RESTART}",
@@ -82,13 +82,18 @@ pub(crate) fn run() -> Result<()> {
     }
 }
 
+fn from_another_build(result: &Result<()>) -> bool {
+    matches!(result, Err(Error::Rejected(why)) if why != crate::bots::WINDOW_REFUSED)
+}
+
 pub(crate) fn remote(remote: &Remote) -> Result<()> {
     let target = Target::Remote(remote.clone());
     let host = remote.host();
     let asks = stdin().is_terminal();
     match open(&target, false) {
-        Err(Error::Rejected(_))
-            if asks
+        result
+            if from_another_build(&result)
+                && asks
                 && confirm(&format!(
                     "The cornercase server on {host} comes from another build; cornercase was probably updated there.\n{}\n{RESTART}",
                     restart::confirmation(None)
@@ -97,7 +102,7 @@ pub(crate) fn remote(remote: &Remote) -> Result<()> {
             remote.kill_server()?;
             open(&target, false)
         }
-        Err(Error::Rejected(_)) => Err(Error::Rejected(format!(
+        result if from_another_build(&result) => Err(Error::Rejected(format!(
             "the cornercase server on `{host}` comes from another build. \
              Run `cornercase kill-server` there (it closes all its terminals) and attach again"
         ))),

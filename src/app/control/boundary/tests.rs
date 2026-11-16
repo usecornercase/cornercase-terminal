@@ -95,12 +95,15 @@ fn every_stop_is_a_request_or_a_message_the_server_knows() {
 }
 
 #[test]
-fn every_message_but_a_request_and_a_stop_is_a_windows() {
+fn every_message_but_a_request_and_a_stop_is_a_window_message() {
+    let failed = crate::host::open::Failed { opener: crate::host::open::Opener::Finder, reason: String::new() };
     let windows = [
         ClientMessage::Event(crossterm::event::Event::FocusGained),
         ClientMessage::Graphics(crate::graphics::Support::default()),
         ClientMessage::Activated("t".into()),
+        ClientMessage::OpenFailed(failed),
         ClientMessage::Machines(crate::protocol::Machines::default()),
+        ClientMessage::Tunnels(crate::protocol::Holding::default()),
     ];
     for message in &windows {
         assert!(window_name(message).is_some(), "{message:?}");

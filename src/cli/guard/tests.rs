@@ -33,6 +33,7 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::export_to(&["config", "export", "--to", "/x"], "a bot cannot have cornercase write to a file: leave out --to")]
 #[case::proxy(&["proxy"], "a bot cannot attach as a window")]
 #[case::remote_window(&["remote", "vps"], "a bot cannot attach as a window")]
+#[case::server(&["server"], "a bot cannot run cornercase's server")]
 fn a_bot_is_refused(#[case] args: &[&str], #[case] why: &str) {
     let found = refused(args).unwrap_or_else(|| panic!("{args:?} was allowed"));
     assert!(found.starts_with(why), "{found}");

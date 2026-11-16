@@ -81,12 +81,13 @@ fn writes_a_file(leaf: &Command, found: &ArgMatches) -> Option<String> {
 }
 
 fn window(path: &[&str], found: &ArgMatches) -> Option<String> {
-    let opens = match path {
-        ["proxy"] => true,
-        ["remote"] => found.get_one::<String>("destination").is_some(),
-        _ => false,
+    let why = match path {
+        ["proxy"] => crate::bots::WINDOW_REFUSED,
+        ["remote"] if found.get_one::<String>("destination").is_some() => crate::bots::WINDOW_REFUSED,
+        ["server"] => "a bot cannot run cornercase's server",
+        _ => return None,
     };
-    opens.then(|| String::from(crate::bots::WINDOW_REFUSED))
+    Some(String::from(why))
 }
 
 fn in_no_place(leaf: &Command, found: &ArgMatches) -> Option<String> {
