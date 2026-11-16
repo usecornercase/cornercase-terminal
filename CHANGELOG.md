@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.90
+
+- **A bot can no longer attach to cornercase as a window.** Through `cornercase proxy`, a `cornercase`-access bot could speak to the server as a window does, and its keys and clicks reached your panes and dialogs as your own, past what the server refuses a bot. The server now closes a bot's connection on the first message only a window sends, with `a bot cannot attach as a window`, and inside a bot the command line refuses `cornercase` with no command, `cornercase remote` to a machine and `cornercase proxy` with the same message.
+- A server that a bot's command starts no longer inherits the bot's `CORNERCASE_BOT`, so its shells and the phone's window do not count as the bot's.
+
 ## 0.13.89
 
 - **A bot made with what it is for sets itself up at once.** When **For** in the new bot form, or `--about` of `cornercase bot new`, says what the bot is for, making it starts its first turn: the bot schedules what that asks for, writes what its runs will need in `memory.md`, and tells you in its chat what it will do, what it scheduled and when that runs next. The chat opens with `── setting up ──`; what you send meanwhile is held for the next turn, which continues the same conversation. A bot made without it starts nothing and spends no tokens, as before.
