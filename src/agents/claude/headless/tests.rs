@@ -79,3 +79,96 @@ fn a_tool_is_summed_up_in_one_line(#[case] tool: &str, #[case] input: &str, #[ca
 fn the_rule_path_of_a_folder(#[case] folder: &str, #[case] windows: bool, #[case] wanted: &str) {
     assert_eq!(rule_path(folder, windows), wanted);
 }
+
+mod model {
+    use std::path::PathBuf;
+
+    use crate::agents::headless::{Access, Ask, Tools, args_of};
+
+    pub(super) fn ask(repositories: &[&str]) -> Ask {
+        Ask {
+            prompt: "hi".into(),
+            folder: PathBuf::from("/b/prs"),
+            tools: Tools::Bot(Access::Cornercase),
+            protected: vec!["bot.json", "chat.jsonl"],
+            stops: vec!["kill-server", "restart", "update"],
+            repositories: repositories.iter().map(PathBuf::from).collect(),
+            ..Ask::default()
+        }
+    }
+
+    fn rules(args: &[String], flag: &str) -> Vec<String> {
+        let at = args.iter().position(|arg| arg == flag).expect("the flag");
+        args[at + 1].split(',').map(String::from).collect()
+    }
+
+    fn glob(pattern: &str, text: &str) -> bool {
+        let Some((head, rest)) = pattern.split_once('*') else { return pattern == text };
+        let Some(tail) = text.strip_prefix(head) else { return false };
+        (0..=tail.len()).filter(|at| tail.is_char_boundary(*at)).any(|at| glob(rest, &tail[at..]))
+    }
+
+    fn matches(rule: &str, command: &str) -> bool {
+        let Some(inner) = rule.strip_prefix("Bash(").and_then(|rule| rule.strip_suffix(')')) else { return false };
+        match inner.strip_suffix(":*") {
+            Some(stem) => command == stem || command.strip_prefix(stem).is_some_and(|rest| rest.starts_with(' ')),
+            None => glob(inner, command),
+        }
+    }
+
+    pub(super) fn allows(ask: &Ask, command: &str) -> bool {
+        let args = args_of(&super::super::command("claude", ask));
+        let allowed = rules(&args, "--allowedTools").iter().any(|rule| matches(rule, command));
+        allowed && !rules(&args, "--disallowedTools").iter().any(|rule| matches(rule, command))
+    }
+}
+
+mod the_rules {
+    use super::model::{allows, ask};
+
+    #[rstest::rstest]
+    #[case::bare("git -C /w/shop log --oneline -1")]
+    #[case::single_quotes("git -C '/w/shop' diff --stat")]
+    #[case::double_quotes_and_a_space("git -C \"/w/my shop\" status --short")]
+    #[case::a_show_of_a_file("git -C '/w/my shop' show HEAD:f")]
+    #[case::gh("gh issue list -R github.com/o/r")]
+    #[case::cornercase("cornercase status --json")]
+    fn what_was_allowed_live_on_2_1_325(#[case] command: &str) {
+        assert!(allows(&ask(&["/w/shop", "/w/my shop"]), command), "{command}");
+    }
+
+    #[rstest::rstest]
+    #[case::a_config_override("git -C /w/shop -c core.fsmonitor=x status")]
+    #[case::output_joined("git -C /w/shop log -1 -p --output=/tmp/x")]
+    #[case::output_apart("git -C /w/shop diff --output /tmp/x")]
+    #[case::no_index("git diff --no-index a b")]
+    #[case::no_folder("git log --oneline")]
+    #[case::another_folder("git -C /w/other log")]
+    #[case::a_parent("git -C /w/shop/.. log")]
+    #[case::an_override_after_quotes("git -C \"/w/shop\" -c x=y log")]
+    #[case::a_git_dir("git --git-dir=/w/shop/.git log")]
+    #[case::output_after_quotes("git -C '/w/my shop' log --output x")]
+    #[case::a_stop("cornercase kill-server")]
+    fn what_was_refused_live_on_2_1_325(#[case] command: &str) {
+        assert!(!allows(&ask(&["/w/shop", "/w/my shop"]), command), "{command}");
+    }
+}
+
+mod the_brief {
+    use super::model::{allows, ask};
+    use crate::agents::headless::Access;
+    use crate::bots::{Bot, brief, sample};
+
+    #[test]
+    fn every_git_and_gh_command_the_brief_teaches_is_allowed() {
+        let bot = Bot { access: Access::Cornercase, ..sample("prs", "PRs") };
+        let text = brief::brief(&bot, std::path::Path::new("/b"));
+        let taught = brief::taught(&text, "/w/my shop");
+        assert!(taught.iter().filter(|command| command.starts_with("git -C")).count() >= 4, "{taught:?}");
+        assert!(taught.iter().any(|command| command.starts_with("gh ")), "{taught:?}");
+        let ask = ask(&["/w/my shop"]);
+        for command in taught {
+            assert!(allows(&ask, &command), "{command}");
+        }
+    }
+}

@@ -70,6 +70,8 @@ A turn is one run of the agent without its interface, through the shared runner 
 
 What cornercase tells the bot about itself. The server writes it from Rust constants (`bots/brief.rs`, one per section) and sends it in the opening message of every conversation. It is never written to the bot's folder, so a new release updates every bot at its next conversation. It says who the bot is and that it answers briefly, in the user's language, in Markdown; where its folder is and what `bot.md` and `memory.md` are for; how to see the user's work (`cornercase status --json`, `search`, `recap`, `worktrees list`, `read --pane ID`, read-only `git` and `gh`); how to act (`cornercase start --project ID …`, `send --pane ID`, `notify`, and that it must always name the project, since it runs in no pane); and what its access allows, and last whether it is told when an agent it started finishes (`FOLLOW`, or `NOT_FOLLOWING` when the bot's `follow` option is off, see [Following](bots/following.md)). A test runs `--help` for every command the brief names, so it cannot name a command that does not exist.
 
+A project's git (#893): the brief says that `cornercase status --json` gives each project's and workspace's folder (`path`) and teaches `git -C 'PATH' log …` (and `show`, `diff`, `status`) in single quotes, the one spelling that exists on every system, and `gh … -R` with a project's `repo`. The git line is left out for an agent without `BotSupport::reads_git` under `cornercase` access, which is told it cannot run git; `full` bots are taught it too. The access says to run one command per call: a loop, `$(…)` and a redirect were refused when checked.
+
 Rejected:
 
 - **Writing the brief into the folder as `AGENTS.md` or `CLAUDE.md`.** The agent would load it on its own, a second time, and an old copy would outlive an update.
@@ -79,8 +81,8 @@ Rejected:
 
 A turn runs without its interface, so the agent cannot stop halfway to ask for permission. What it may do is fixed when the bot is made (and changed by `bot edit` from the next turn; never by the bot itself, see the guard).
 
-- **`cornercase` (the default)**: it reads anything, runs the `cornercase` command line and read-only git and gh, searches the web, and writes only in its own folder.
-  - Claude: `claude -p --setting-sources user --output-format stream-json --verbose --max-turns 40 --permission-mode dontAsk --allowedTools Read,Grep,Glob,WebSearch,WebFetch,Bash(cornercase:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr checks:*),Bash(gh issue list:*),Bash(gh issue view:*),Edit(<folder>/**) --disallowedTools NotebookEdit,Task,Bash(cornercase kill-server:*),Bash(cornercase restart:*),Bash(cornercase update:*),Edit(<folder>/bot.json),Edit(<folder>/chat.jsonl) [--resume S] [--model M] [--effort E] -- <prompt>`. `--permission-mode dontAsk` denies what is not allowed instead of asking, and stops the user's own `defaultMode` (`auto`, `acceptEdits`, even `bypassPermissions`), which `--setting-sources user` loads, from applying.
+- **`cornercase` (the default)**: it reads anything, runs the `cornercase` command line, read-only git in the user's projects (Claude Code only) and gh, searches the web, and writes only in its own folder.
+  - Claude: `claude -p --setting-sources user --output-format stream-json --verbose --max-turns 40 --permission-mode dontAsk --allowedTools Read,Grep,Glob,WebSearch,WebFetch,Bash(cornercase:*),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr checks:*),Bash(gh issue list:*),Bash(gh issue view:*),Bash(git -C <folder> log|show|diff|status:*),Edit(<folder>/**) --disallowedTools NotebookEdit,Task,Bash(git * --output*),Bash(cornercase kill-server:*),Bash(cornercase restart:*),Bash(cornercase update:*),Edit(<folder>/bot.json),Edit(<folder>/chat.jsonl) [--resume S] [--model M] [--effort E] -- <prompt>`. The git rules are one per folder of `Ask::repositories` (this computer's open projects and open worktree workspaces, none under the bots' folder) and per spelling of it (bare, single and double quotes), decided at each turn's start; Gemini and Copilot run no git (see The boundary › A project's git). `--permission-mode dontAsk` denies what is not allowed instead of asking, and stops the user's own `defaultMode` (`auto`, `acceptEdits`, even `bypassPermissions`), which `--setting-sources user` loads, from applying.
   - Codex: `codex exec --json --skip-git-repo-check --sandbox workspace-write -C <folder> [-m M] [-c model_reasoning_effort=E] [resume S] -- <prompt>`, so it writes only in its folder. See the live checks: this access is not offered.
 - **`full`**: Claude with `--permission-mode bypassPermissions` (only the commands that stop the server are denied), Codex with `--dangerously-bypass-approvals-and-sandbox`. `bot new --access full` and the form say what it means: it can change any file and run anything, unattended. **Off by default, never chosen for the user**: an agent that supports `full` only (Codex) is refused without `--access full`, with that warning.
 - **Settings**: neither agent loads a project's settings, since there is no project. Claude loads the user's settings (`--setting-sources user`), so the user's MCP servers and `~/.claude/CLAUDE.md` work, unlike Recap's empty sources: a bot is the user's own assistant. No `--strict-mcp-config` and no `--no-session-persistence` (the session must be resumable). A Codex bot reads the user's own `~/.codex/config.toml` as it does without cornercase (no `--ignore-user-config`).
@@ -98,7 +100,7 @@ The folder, `CORNERCASE_BOT`, `PATH` (a link folder holding only `cornercase`, #
 - `Ask::tools` (`Tools::Recap` or `Tools::Bot(Access)`) picks the arguments; `Ask::conversation` continues a session; `Ask::env` sets (`Some`) or removes (`None`) variables.
 - `Ran::session` (the session id out) and `Ran::fresh` (the tools used since the last line, which `run_watched` hands to `Watch::steps` as they arrive). `Action` is a tool and its one-line summary (Bash: the command's first line; Read, Edit and Write: the path; Grep and Glob: the pattern; WebSearch, WebFetch: the query or URL).
 - **`Spec::recap`, `Spec::stderr` and `Spec::prepare`** (#849): whether the agent can write a recap (Claude Code and Codex only), whether its standard error is read for the reason a run ended, and a step that runs before the process starts (Gemini writes its rules file). `run_watched` refuses a Recap or an access the spec does not list before anything starts. `BotSupport::reads_anywhere` is false for the agents that can read only their folder, which changes the brief. Programs start through `process::program::command_without_cmd`, which goes past `cmd.exe` for an npm shim.
-- `run_watched(call, ask, Watch)` carries the progress counter, the steps callback and a `probe::Running`. `Spec::bot` says whether the agent can be a bot, with its accesses and why they are limited (`BotSupport`).
+- `run_watched(call, ask, Watch)` carries the progress counter, the steps callback and a `probe::Running`. `Spec::bot` says whether the agent can be a bot, with its accesses and why they are limited (`BotSupport`, whose `reads_git` says that its `cornercase` access runs `git -C <folder>`). `Ask::repositories` is what a turn may run git in (#893).
 - **`probe::Running`** lets a bot's `stop` end a run, also before its process exists; a timeout ends the whole tree (see Plan usage › A timeout ends the whole tree).
 
 ## Requests and events
@@ -142,6 +144,8 @@ What the server refuses a bot's connection, what stops or replaces the server, a
 
 ## Checked live
 
+A project's git (#893): see The boundary › A project's git (`bots/boundary.md`), checked on macOS with Claude Code 2.1.325 and git 2.50.1.
+
 The setup turn (#887) was checked with fakes only; no real agent ran it.
 
 On Linux, with Claude Code 2.1.325 and Codex 0.164.0 (macOS and Windows cannot be checked from here):
@@ -166,6 +170,8 @@ On Linux, with Claude Code 2.1.325 and Codex 0.164.0 (macOS and Windows cannot b
 - **Changing `about` later runs nothing** (`bot edit --about`, the form's ` save `): the chat is the way to change a job, and `bot setup` exists for whoever wants a new setup. There is no `--no-setup`: an empty `--about` is enough.
 
 ## Tests
+
+A project's git (#893): the spellings and `git_reads` (`agents::headless::tests::repositories`), a model of Claude's matching pinned to the live results (`agents::claude::headless::tests::the_rules`), the brief's git and gh commands run through it (`the_brief`, and one test each for Gemini and Copilot), the brief's text, the turn's environment and `turn::repositories`, and an app test of the rules a turn gets. The fake agent cannot check a rule, so no fake-agent test does.
 
 The setup (#887): the chat's replay and `unseen` of the notice, the opening and its section naming only commands that exist, the turn's kind never resuming, and, in `app::tests::bots::setup`, a bot made with and without `about`, loading starting nothing, the next message resuming the setup's session, a message held behind it, the refusals, the conversation replaced on success and kept on failure, ` retry ` of a failed setup (and, in the window's tests, of a failed message), the events in order and the socket's `setup`; e2e: `bot new --about` then `bot say --wait` and `bot setup`.
 

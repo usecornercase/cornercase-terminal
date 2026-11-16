@@ -57,6 +57,7 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
     accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],
     why: None,
     reads_anywhere: false,
+    reads_git: false,
     effort_needs_model: false,
 };
 #[cfg(windows)]
@@ -64,6 +65,7 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
     accesses: &[crate::agents::headless::Access::Full],
     why: Some("its rules are unchecked on this system"),
     reads_anywhere: false,
+    reads_git: false,
     effort_needs_model: false,
 };
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;

@@ -254,11 +254,14 @@ mod bots {
             format!("Edit({rule}/chat.jsonl)"),
             "Bash(cornercase:*)".to_string(),
             "Bash(cornercase kill-server:*)".to_string(),
+            "Bash(gh pr list:*)".to_string(),
+            "Bash(git * --output*)".to_string(),
             "\"--model\", \"opus\"".to_string(),
         ] {
             assert!(argv.contains(&wanted), "{wanted} in {argv}");
         }
-        for unwanted in ["--resume", "--no-session-persistence", "--strict-mcp-config", "bypassPermissions"] {
+        let unwanted = ["--resume", "--no-session-persistence", "--strict-mcp-config", "bypassPermissions"];
+        for unwanted in unwanted.into_iter().chain(["Bash(git log:*)", "Bash(git diff:*)", "Bash(git status:*)"]) {
             assert!(!argv.contains(unwanted), "{unwanted} in {argv}");
         }
         assert!(argv.trim_end().ends_with("\"--\", \"hi\"]"), "{argv}");
@@ -565,5 +568,56 @@ mod bots {
         let error = run(&called(agent, &command, TIMEOUT), &ask, &Arc::new(AtomicUsize::new(0))).expect_err("refused");
         assert!(error.to_string().contains("cannot be a bot with cornercase access"), "{error}");
         assert!(!program.with_extension("argv").exists());
+    }
+}
+
+mod repositories {
+    use super::*;
+
+    fn folder(path: &str) -> Ask {
+        Ask { repositories: vec![PathBuf::from(path)], ..Ask::default() }
+    }
+
+    #[rstest::rstest]
+    #[case::plain("/w/shop", &["/w/shop", "'/w/shop'", "\"/w/shop\""])]
+    #[case::a_space("/w/my shop", &["'/w/my shop'", "\"/w/my shop\""])]
+    #[case::a_dollar("/w/a$b", &[])]
+    #[case::a_quote("/w/it's", &[])]
+    #[case::a_comma("/w/a,b", &[])]
+    #[case::a_parenthesis("/w/a(b)", &[])]
+    #[case::a_star("/w/a*b", &[])]
+    #[case::a_newline("/w/a\nb", &[])]
+    #[case::nothing("", &[])]
+    fn a_folder_is_written_as_the_agent_may_type_it(#[case] path: &str, #[case] wanted: &[&str]) {
+        assert_eq!(spellings(Path::new(path)), wanted);
+    }
+
+    #[test]
+    fn a_windows_path_has_one_spelling_there_and_none_elsewhere() {
+        let wanted: &[&str] = if cfg!(windows) { &["'C:\\w\\shop'"] } else { &[] };
+        assert_eq!(spellings(Path::new("C:\\w\\shop")), wanted);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_path_that_is_not_utf8_has_no_spelling() {
+        use std::os::unix::ffi::OsStrExt;
+        assert_eq!(spellings(Path::new(std::ffi::OsStr::from_bytes(b"/w/\xff"))), Vec::<String>::new());
+    }
+
+    #[test]
+    fn each_spelling_gets_the_four_reads_in_order() {
+        let ask = Ask { repositories: vec![PathBuf::from("/a"), PathBuf::from("/b c")], ..Ask::default() };
+        let rules = git_reads(&ask);
+        assert_eq!(rules.len(), 4 * 3 + 4 * 2);
+        assert_eq!(&rules[..4], ["git -C /a log", "git -C /a show", "git -C /a diff", "git -C /a status"]);
+        assert_eq!(rules[4], "git -C '/a' log");
+        assert_eq!(rules[12], "git -C '/b c' log");
+    }
+
+    #[test]
+    fn no_folder_gives_no_rule() {
+        assert_eq!(git_reads(&Ask::default()), Vec::<String>::new());
+        assert_eq!(git_reads(&folder("/w/a$b")), Vec::<String>::new());
     }
 }

@@ -387,6 +387,7 @@ fn editing_what_a_bot_is_for_writes_bot_md() {
 mod boundary;
 mod compact;
 mod form;
+mod git;
 mod menu;
 mod routines;
 mod routines_dialog;

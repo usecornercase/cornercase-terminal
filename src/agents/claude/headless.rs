@@ -3,7 +3,9 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::agents;
-use crate::agents::headless::{Access, Action, Ask, READ_ONLY, Ran, Tools, Used, owned, shell, started, step};
+use crate::agents::headless::{
+    Access, Action, Ask, GH_READS, Ran, Tools, Used, git_reads, owned, shell, started, step,
+};
 use crate::error::{Error, Result};
 
 const ARGS: [&str; 10] = [
@@ -25,8 +27,16 @@ const BOT_ARGS: [&str; 8] =
     ["-p", "--setting-sources", "user", "--output-format", "stream-json", "--verbose", "--max-turns", "40"];
 const READS: &str = "Read,Grep,Glob,WebSearch,WebFetch,Bash(cornercase:*)";
 
-fn read_only_rules() -> String {
-    let rules: Vec<String> = READ_ONLY.iter().map(|command| format!("Bash({command}:*)")).collect();
+const OUTPUT: &str = "Bash(git * --output*)";
+
+fn read_only_rules(ask: &Ask) -> String {
+    let git = git_reads(ask);
+    let rules: Vec<String> = GH_READS
+        .iter()
+        .copied()
+        .chain(git.iter().map(String::as_str))
+        .map(|command| format!("Bash({command}:*)"))
+        .collect();
     rules.join(",")
 }
 
@@ -52,9 +62,9 @@ fn bot_args(ask: &Ask, access: Access) -> Vec<String> {
     match access {
         Access::Cornercase => {
             let folder = rule_path(&ask.folder.display().to_string(), cfg!(windows));
-            let allowed = format!("{READS},{},Edit({folder}/**)", read_only_rules());
+            let allowed = format!("{READS},{},Edit({folder}/**)", read_only_rules(ask));
             let files: Vec<String> = ask.protected.iter().map(|file| format!("Edit({folder}/{file})")).collect();
-            let denied = format!("NotebookEdit,Task,{stops},{}", files.join(","));
+            let denied = format!("NotebookEdit,Task,{OUTPUT},{stops},{}", files.join(","));
             args.extend(
                 ["--permission-mode", "dontAsk", "--allowedTools", &allowed, "--disallowedTools", &denied]
                     .map(String::from),

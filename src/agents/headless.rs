@@ -73,6 +73,7 @@ pub(crate) struct Ask {
     pub(crate) env: Env,
     pub(crate) protected: Vec<&'static str>,
     pub(crate) stops: Vec<&'static str>,
+    pub(crate) repositories: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,6 +97,7 @@ pub(crate) struct BotSupport {
     pub(crate) accesses: &'static [Access],
     pub(crate) why: Option<&'static str>,
     pub(crate) reads_anywhere: bool,
+    pub(crate) reads_git: bool,
     pub(crate) effort_needs_model: bool,
 }
 
@@ -204,17 +206,43 @@ pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ra
     })
 }
 
-pub(in crate::agents) const READ_ONLY: [&str; 9] = [
-    "git log",
-    "git show",
-    "git diff",
-    "git status",
-    "gh pr list",
-    "gh pr view",
-    "gh pr checks",
-    "gh issue list",
-    "gh issue view",
-];
+pub(in crate::agents) const GH_READS: [&str; 5] =
+    ["gh pr list", "gh pr view", "gh pr checks", "gh issue list", "gh issue view"];
+const GIT_READS: [&str; 4] = ["log", "show", "diff", "status"];
+
+fn awkward(c: char) -> bool {
+    c.is_control() || "'\"`$!,()*?".contains(c) || (c == '\\' && !cfg!(windows))
+}
+
+fn plain(c: char) -> bool {
+    c.is_alphanumeric() || "/._-+@:=%".contains(c)
+}
+
+pub(in crate::agents) fn spellings(folder: &Path) -> Vec<String> {
+    let Some(path) = folder.to_str().filter(|path| !path.is_empty() && !path.chars().any(awkward)) else {
+        return Vec::new();
+    };
+    let backslash = path.contains('\\');
+    let mut all = Vec::new();
+    if !backslash && path.chars().all(plain) {
+        all.push(path.to_string());
+    }
+    all.push(format!("'{path}'"));
+    if !backslash {
+        all.push(format!("\"{path}\""));
+    }
+    all
+}
+
+pub(in crate::agents) fn git_reads(ask: &Ask) -> Vec<String> {
+    let mut rules = Vec::new();
+    for folder in &ask.repositories {
+        for spelling in spellings(folder) {
+            rules.extend(GIT_READS.iter().map(|sub| format!("git -C {spelling} {sub}")));
+        }
+    }
+    rules
+}
 
 pub(in crate::agents) fn started(program: &str, args: Vec<String>) -> Command {
     let mut command = crate::process::program::command_without_cmd(program);

@@ -43,6 +43,7 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
     accesses: &[crate::agents::headless::Access::Full],
     why: Some("a command can write outside its folder"),
     reads_anywhere: true,
+    reads_git: false,
     effort_needs_model: false,
 };
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;

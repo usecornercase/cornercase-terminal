@@ -79,6 +79,7 @@ impl App {
             socket: self.shells.pane_socket().map(str::to_string),
             bin: self.panels.bots.bin.clone(),
             timeout: self.panels.bots.timeout,
+            repositories: turn::repositories(&self.projects, self.panels.bots.dir.as_deref()),
         }
     }
 

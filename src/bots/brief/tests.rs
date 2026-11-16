@@ -216,3 +216,37 @@ fn a_report_is_headed_cornercase_says() {
     assert_eq!(said(true, "an agent finished"), "## cornercase says\n\nan agent finished");
     assert_eq!(said(false, "hi"), "## The user says\n\nhi");
 }
+
+mod git {
+    use super::*;
+
+    fn on(agent: &str, access: Access) -> String {
+        brief(&Bot { agent: agent.to_string(), ..named(access) }, Path::new("/b"))
+    }
+
+    #[test]
+    fn the_brief_names_the_projects_path_and_teaches_git_with_it() {
+        let claude = on("claude", Access::Cornercase);
+        for wanted in ["`path`", "git -C 'PATH' log …", "-R"] {
+            assert!(claude.contains(wanted), "{wanted} in {claude}");
+        }
+        assert!(on("gemini", Access::Full).contains("git -C 'PATH' log …"));
+    }
+
+    #[test]
+    fn the_access_says_one_command_per_call_and_no_loops() {
+        for told in [REACH, REACH_FOLDER] {
+            assert!(told.contains("one command per call") || told.contains("One command per call"), "{told}");
+            assert!(told.contains("`for`"), "{told}");
+        }
+    }
+
+    #[rstest::rstest]
+    #[case::gemini("gemini")]
+    #[case::copilot("copilot")]
+    fn an_agent_that_cannot_run_git_is_not_taught_it(#[case] agent: &str) {
+        let told = on(agent, Access::Cornercase);
+        assert!(!told.contains("git -C"), "{told}");
+        assert!(told.contains("you cannot run git"), "{told}");
+    }
+}

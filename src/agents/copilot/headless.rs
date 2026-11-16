@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::agents;
 use crate::agents::headless::{
-    Access, Action, Ask, READ_ONLY, Ran, Tools, answered, detail, heard, owned, shell, started, step,
+    Access, Action, Ask, GH_READS, Ran, Tools, answered, detail, heard, owned, shell, started, step,
 };
 use crate::error::{Error, Result};
 
@@ -24,7 +24,7 @@ fn deny(rule: &str) -> [String; 2] {
 
 fn bounded(ask: &Ask) -> Vec<String> {
     let folder = ask.folder.display();
-    let reads = READ_ONLY.iter().map(|command| allow(&format!("shell({command}:*)")));
+    let reads = GH_READS.iter().map(|command| allow(&format!("shell({command}:*)")));
     let stops = ask.stops.iter().map(|name| deny(&format!("shell(cornercase {name}:*)")));
     let files = ask.protected.iter().map(|file| deny(&format!("write({folder}/{file})")));
     let mut args = owned(&BOUNDED);

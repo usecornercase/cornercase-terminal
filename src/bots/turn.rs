@@ -10,6 +10,12 @@ use crate::agents::headless::{self, Ask, Call, Ran, Tools, Watch};
 use crate::error::{Error, Result};
 
 const UNSET: [&str; 3] = [crate::control::PANE_ENV, crate::control::SERVER_ENV, crate::protocol::REMOTE_ENV];
+const QUIET_GIT: [(&str, &str); 4] = [
+    ("GIT_OPTIONAL_LOCKS", "0"),
+    ("GIT_CONFIG_COUNT", "1"),
+    ("GIT_CONFIG_KEY_0", "diff.autoRefreshIndex"),
+    ("GIT_CONFIG_VALUE_0", "false"),
+];
 const CONTEXT: [&str; 5] =
     ["prompt is too long", "context window", "context length", "maximum context", "context_length_exceeded"];
 
@@ -33,6 +39,7 @@ pub(crate) struct Input {
     pub(crate) socket: Option<String>,
     pub(crate) bin: Option<PathBuf>,
     pub(crate) timeout: Duration,
+    pub(crate) repositories: Vec<PathBuf>,
 }
 
 pub(crate) fn path_with(first: &Path, path: Option<&OsStr>) -> Option<OsString> {
@@ -54,7 +61,21 @@ fn environment(bot: &Bot, session: &Session, first: Option<&Path>, path: Option<
         env.push(("PATH", Some(path)));
     }
     env.extend(UNSET.map(|key| (key, None)));
+    env.extend(QUIET_GIT.map(|(key, value)| (key, Some(OsString::from(value)))));
     env
+}
+
+pub(crate) fn repositories(projects: &[crate::project::Project], bots: Option<&Path>) -> Vec<PathBuf> {
+    let open = projects.iter().filter(|project| !project.closing);
+    let folders = open.flat_map(|project| {
+        let worktrees = project.workspaces.iter().filter(|workspace| workspace.worktree && workspace.open());
+        std::iter::once(project.path.clone()).chain(worktrees.map(|workspace| workspace.path.clone()))
+    });
+    let mut folders: Vec<PathBuf> =
+        folders.filter(|folder| bots.is_none_or(|bots| !folder.starts_with(bots))).collect();
+    folders.sort();
+    folders.dedup();
+    folders
 }
 
 pub(crate) fn ask(input: &Input, first: Option<&Path>, path: Option<&OsStr>) -> Ask {
@@ -89,6 +110,7 @@ pub(crate) fn ask(input: &Input, first: Option<&Path>, path: Option<&OsStr>) -> 
         env: environment(bot, &input.session, first, path),
         protected: vec![folder::BOT_FILE, folder::CHAT_FILE],
         stops: super::stop_commands(),
+        repositories: input.repositories.clone(),
     }
 }
 

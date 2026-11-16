@@ -4,7 +4,7 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::agents::headless::{
-    Access, Action, Ask, READ_ONLY, Ran, Tools, Used, answered, detail, heard, owned, shell, started, step,
+    Access, Action, Ask, GH_READS, Ran, Tools, Used, answered, detail, heard, owned, shell, started, step,
 };
 use crate::error::{Error, Result};
 use crate::persist::{self, Kind};
@@ -64,7 +64,7 @@ fn escaped(name: &str) -> String {
 }
 
 fn allowed_prefixes() -> Vec<String> {
-    std::iter::once("cornercase").chain(READ_ONLY).map(String::from).collect()
+    std::iter::once("cornercase").chain(GH_READS).map(String::from).collect()
 }
 
 fn stopped_prefixes(ask: &Ask) -> Vec<String> {

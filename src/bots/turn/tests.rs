@@ -19,6 +19,7 @@ fn input(folder: &Path, conversation: Option<&str>) -> Input {
         socket: Some(String::from("/s")),
         bin: None,
         timeout: Duration::from_secs(1),
+        repositories: Vec::new(),
     }
 }
 
@@ -200,4 +201,74 @@ fn a_setup_opens_a_new_session_with_the_setup_section_even_when_the_bot_has_a_co
     assert_eq!(asked.conversation, None);
     assert!(asked.prompt.contains("You are PRs") && asked.prompt.contains("## You were just made"), "{}", asked.prompt);
     assert!(!asked.prompt.contains("The user says"));
+}
+
+mod the_git_of_a_turn {
+    use crate::project::{Phase, Project, Workspace};
+
+    use super::*;
+
+    fn project(path: &str, workspaces: Vec<Workspace>) -> Project {
+        Project { workspaces, ..Project::new(1, PathBuf::from(path), None) }
+    }
+
+    fn worktree(path: &str, phase: Phase) -> Workspace {
+        Workspace { phase, ..Workspace::new(2, PathBuf::from(path), None, true) }
+    }
+
+    #[test]
+    fn a_turns_git_leaves_the_index_alone() {
+        let made = TempDir::new();
+        let env = ask(&input(made.path(), None), None, None).env;
+        let value = |key: &str| env.iter().find(|(name, _)| *name == key).and_then(|(_, value)| value.clone());
+        assert_eq!(value("GIT_OPTIONAL_LOCKS"), Some(OsString::from("0")));
+        assert_eq!(value("GIT_CONFIG_COUNT"), Some(OsString::from("1")));
+        assert_eq!(value("GIT_CONFIG_KEY_0"), Some(OsString::from("diff.autoRefreshIndex")));
+        assert_eq!(value("GIT_CONFIG_VALUE_0"), Some(OsString::from("false")));
+    }
+
+    #[test]
+    fn the_repositories_reach_the_ask() {
+        let made = TempDir::new();
+        let input = Input { repositories: vec![PathBuf::from("/w/shop")], ..input(made.path(), None) };
+        assert_eq!(ask(&input, None, None).repositories, [PathBuf::from("/w/shop")]);
+    }
+
+    #[test]
+    fn a_project_and_its_open_worktree_are_both_taken() {
+        let projects = [project("/w/shop", vec![worktree("/w/shop-fix", Phase::Open)])];
+        assert_eq!(repositories(&projects, None), [PathBuf::from("/w/shop"), PathBuf::from("/w/shop-fix")]);
+    }
+
+    #[test]
+    fn a_plain_workspace_adds_nothing() {
+        let plain = Workspace::new(2, PathBuf::from("/w/shop/sub"), None, false);
+        assert_eq!(repositories(&[project("/w/shop", vec![plain])], None), [PathBuf::from("/w/shop")]);
+    }
+
+    #[test]
+    fn a_closing_project_is_left_out() {
+        let closing = Project { closing: true, ..project("/w/shop", vec![worktree("/w/shop-fix", Phase::Open)]) };
+        assert_eq!(repositories(&[closing], None), Vec::<PathBuf>::new());
+    }
+
+    #[rstest::rstest]
+    #[case::closing(Phase::Closing)]
+    #[case::removing(Phase::Removing(String::new()))]
+    fn a_worktree_on_its_way_out_is_left_out(#[case] phase: Phase) {
+        let projects = [project("/w/shop", vec![worktree("/w/shop-fix", phase)])];
+        assert_eq!(repositories(&projects, None), [PathBuf::from("/w/shop")]);
+    }
+
+    #[test]
+    fn a_folder_under_the_bots_folder_is_left_out() {
+        let projects = [project("/b/prs/x", vec![worktree("/b/prs/y", Phase::Open)]), project("/w/shop", Vec::new())];
+        assert_eq!(repositories(&projects, Some(Path::new("/b"))), [PathBuf::from("/w/shop")]);
+    }
+
+    #[test]
+    fn duplicates_come_once_and_sorted() {
+        let projects = [project("/w/b", Vec::new()), project("/w/a", vec![worktree("/w/b", Phase::Open)])];
+        assert_eq!(repositories(&projects, None), [PathBuf::from("/w/a"), PathBuf::from("/w/b")]);
+    }
 }
