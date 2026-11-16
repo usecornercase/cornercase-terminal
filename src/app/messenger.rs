@@ -450,8 +450,10 @@ impl App {
         let done: Done = serde_json::from_value(value.clone()).unwrap_or_default();
         let later = if self.messenger(via).away { "" } else { "\n/away to get its messages here." };
         let m = via.markup();
+        let unsent =
+            if done.unsent == Some(true) { " Its agent did not take the prompt yet: check its tab." } else { "" };
         let text = format!(
-            "Started {} in {}. Reply to this message to write to it.{later}",
+            "Started {} in {}.{unsent} Reply to this message to write to it.{later}",
             m.bold(&m.escape(agent)),
             m.escape(place)
         );

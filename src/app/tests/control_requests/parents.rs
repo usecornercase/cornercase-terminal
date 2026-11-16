@@ -42,7 +42,7 @@ fn ask_as_another_server(app: &mut App, caller: u64, command: Command) {
 fn agent_in_a_repository() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let repo = git_repo(&[("README", "hi")]);
     let (worktrees, config) = (TempDir::new(), TempDir::new());
-    let fake = config.path().join("claude");
+    let fake = config.path().join("parent-agent");
     write_executable(&fake, "#!/bin/sh\nprintf 'ready> '\nread line\n");
     let settings = Config {
         worktrees_dir: worktrees.path().display().to_string(),

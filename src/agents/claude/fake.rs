@@ -41,9 +41,32 @@ state() {
   printf '\033]7501;state=%s:app=claude-code\033\\' "$r"
 }
 finished() { while [ -d "$d" ] && [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
+e=$(printf '\033')
+trap 'exit 1' TERM HUP INT
+trap 'printf "\033[?2004l"' EXIT
+if [ -e "$d/late-session" ]; then
+  printf '\033[?2004h\033[H\033[2J\n────────────\n❯ '; sleep 1.5
+  stty -icanon min 0 time 0; early=$(dd bs=65536 count=1 2>/dev/null | wc -c | tr -d ' '); stty icanon
+  [ "$early" = 0 ] || printf 'x\n' >> "$d/lost"
+fi
 state idle
 n=0
+if [ -e "$d/late-box" ]; then
+  printf '\033[?2004h\033[H\033[2J Claude Code v2.1.325\n'; sleep 1.5
+  stty -icanon min 0 time 0; early=$(dd bs=65536 count=1 2>/dev/null | wc -c | tr -d ' '); stty icanon
+  [ "$early" = 0 ] || printf 'x\n' >> "$d/lost"
+fi
+if [ -e "$d/late-paste" ]; then
+  printf '\033[H\033[2J\n────────────\n❯ '; sleep 1.5
+fi
+printf '\033[?2004h'
 while printf '\033[H\033[2J%s\n────────────\n❯ ' "$said" && IFS= read -r line; do
+  case "$line" in "$e[200~"*)
+    line=${line#"$e[200~"}; printf 'bracketed\n' >> "$d/pastes"
+    while case "$line" in *"$e[201~") false ;; *) true ;; esac; do IFS= read -r more || break; line="$line $more"; done
+    line=${line%"$e[201~"} ;;
+  *) printf 'typed\n' >> "$d/pastes"; [ -e "$d/late-paste" ] && touch "$d/lose" ;;
+  esac
   while [ -e "$d/lose" ] || [ -e "$d/deaf" ]; do
     rm -f "$d/lose"; printf 'x\n' >> "$d/lost"
     printf '\033[H\033[2J%s\n────────────\n❯ %s' "$said" "$line"
@@ -88,6 +111,7 @@ while printf '\033[H\033[2J%s\n────────────\n❯ ' "$sai
   said="done: $line"
   state idle
 done
+printf '\033[?2004l'
 rm -f "$s"
 "#;
 

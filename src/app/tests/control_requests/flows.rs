@@ -94,7 +94,7 @@ impl Team {
     fn configured(script: &str, tweak: impl FnOnce(&mut Config, &Path)) -> Self {
         let (repo, log, config, worktrees, bin) =
             (git_repo(&[("README", "hi")]), TempDir::new(), TempDir::new(), TempDir::new(), TempDir::new());
-        let fake = bin.path().join("claude");
+        let fake = bin.path().join("flow-agent");
         let (shebang, body) = script.split_once('\n').expect("a script after its shebang");
         let script = format!("{shebang}\n{RECORD}{body}").replace("LOG", &log.path().display().to_string());
         write_executable(&fake, &script);

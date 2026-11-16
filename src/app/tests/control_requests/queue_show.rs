@@ -88,3 +88,16 @@ fn removal_answers_carry_the_result_but_never_the_agents_file() {
     assert!(entry.result.as_ref().is_some_and(|result| result.record.is_some()));
     assert!(matches!(entry.state, State::Started { .. }));
 }
+
+#[test]
+fn an_entry_whose_prompt_was_never_taken_says_so() {
+    let (mut world, id) = apart_with_entry();
+    world.app.panels.queued.set_unsent(id, true);
+
+    let shown = ok(&mut world.app, "queue-show", &json!({"id": id, "conversation": false}));
+    let listed = ok(&mut world.app, "queue", &json!({"action": "list"}));
+
+    assert_eq!(shown["unsent"], json!(true));
+    assert!(shown["note"].as_str().unwrap_or_default().contains("did not take the prompt"), "{shown}");
+    assert_eq!(listed["entries"][0]["unsent"], json!(true));
+}

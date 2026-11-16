@@ -711,6 +711,8 @@ mod todo_sending;
 mod todos;
 mod tours;
 mod tunnels;
+#[cfg(unix)]
+mod unsent;
 mod updating;
 mod usage;
 mod views;

@@ -2,12 +2,22 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.88
+## 0.13.89
 
 - **A bot tells you when an agent it started finishes.** The chat gets `▶ started claude in …` when the bot starts an agent. When the agent's turn ends, `✓ claude finished in …` comes with its last message, and the bot then answers in the conversation that started it, its chat's or its routine's: what matters, or the next step. A question from the agent shows `! claude needs you in …` and starts nothing.
 - Only the first finish after each prompt from the bot counts, so talking to that agent yourself stays quiet. A bot follows up to 20 agents. `cornercase bot edit prs --follow off`, or the form's **Follow** box, turns it off.
 - In the window, `by prs` shows on the agent's tab and in the agents section, the bot's card lists the agents it started, and a click on ` show ` or on a row of the card shows them.
 - For programs: `status` has `bot` on tabs and panes. `bot list --json` has `follow` and `following`. The chat's new lines come as `bot` events. `cornercase contract` lists `bot-follow`.
+
+## 0.13.88
+
+- **A prompt no longer stays unsent in Claude Code's input box.** cornercase now waits until Claude Code has written its session file, drawn its input box and turned bracketed paste on (at most 30 s) before it pastes the prompt. After the `Enter` it checks that Claude Code took the prompt, and presses `Enter` again every 3 s while it sits idle, at most 5 times. This covers queued agents and routines, `cornercase start --prompt`, the Issues dialog's start with **send the prompt** on, and a flow's briefs, for its roles and its orchestrator.
+- When a prompt is still not taken, cornercase says so instead of showing a run that worked:
+  - the queue entry reads `started · pane N · prompt not taken` in yellow, and `queue show` explains it;
+  - a toast and a notification say `routine <name> started, but its agent did not take the prompt`;
+  - `cornercase start` prints a warning, and fails with `--wait`;
+  - an agent started from a dialog or a flow shows a toast naming its tab.
+- For programs: `unsent: true` in `start` answers and queue entries, the `queue-unsent` notice, and the `prompt-unsent` feature. `server.log` has a `launch: pasted` line that says what the pane showed when the prompt went in.
 
 ## 0.13.87
 

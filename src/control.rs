@@ -952,6 +952,8 @@ pub(crate) struct Done {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) unconfirmed: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) unsent: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) checked: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) revealed: Option<bool>,

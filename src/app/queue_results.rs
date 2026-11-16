@@ -130,6 +130,12 @@ impl App {
         self.panels.queued.queue().entries.iter().filter_map(|e| ours(&e.state).map(|pane| (e.id, pane))).collect()
     }
 
+    pub(super) fn queue_first_look(&mut self, entry: u64, pane: u64) {
+        if let Some(look) = self.queue_look(pane) {
+            self.queue_looked(entry, look);
+        }
+    }
+
     fn queue_look(&self, pane: u64) -> Option<Look> {
         let term = self.projects.pane_by(pane)?;
         let workspace = self.projects.tab_of_pane(pane).map(|at| self.projects.workspace(at.workspace()).id);
@@ -163,6 +169,9 @@ impl App {
     }
 
     fn queue_looked(&mut self, entry: u64, look: Look) {
+        if look.status == Some(Status::Working) {
+            self.panels.queued.set_unsent(entry, false);
+        }
         if self.panels.queued.results.seen.contains_key(&entry) {
             let branch = self.workspace_branch(look.workspace);
             let seen = self.panels.queued.results.seen.get_mut(&entry);
