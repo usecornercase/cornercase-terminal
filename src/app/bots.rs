@@ -226,7 +226,7 @@ impl super::App {
     }
 
     pub(crate) fn set_bots_bin(&mut self, dir: &Path) {
-        self.panels.bots.bin = Some(dir.to_path_buf());
+        self.panels.bots.bin = Some(std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf()));
     }
 
     pub(crate) fn set_bots_dir(&mut self, dir: &Path) {

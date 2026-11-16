@@ -97,8 +97,8 @@ pub(crate) fn first_on_path(bin: Option<&Path>, binary: &Path) -> Option<PathBuf
         return None;
     }
     if let Some(folder) = bin {
-        match std::path::absolute(folder).and_then(|folder| link::ensure(&folder, binary).map(|()| folder)) {
-            Ok(folder) => return Some(folder),
+        match link::ensure(folder, binary) {
+            Ok(()) => return Some(folder.to_path_buf()),
             Err(error) => crate::log::warning!(
                 "bots",
                 "cannot keep the cornercase link, the binary's folder goes first",
