@@ -268,7 +268,13 @@ fn opening_without_a_selection_pins_the_first_routine_to_its_entry() {
     let key = c.app.panels.bots.live[0].key;
     c.app.open_bot_routines(key, None);
     assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(early)));
-    c.app.panels.queued.pause(early, true, crate::time::now()).expect("pause");
-    assert!(c.app.panels.queued.queue().entry(late).is_some());
+    let mut task = c.app.panels.queued.queue().entry(early).expect("early").task.clone();
+    task.at = later() + 20_000;
+    c.app.panels.queued.schedule(Some(early), task).expect("moved after the other");
+    render(&mut c.app, AREA);
+    let shown = view(&c);
+    assert_eq!(shown.selected, Some(1), "the highlight followed its entry down");
+    assert_eq!(shown.rows[1].name, "Review PRs");
     assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(early)));
+    assert!(c.app.panels.queued.queue().entry(late).is_some());
 }

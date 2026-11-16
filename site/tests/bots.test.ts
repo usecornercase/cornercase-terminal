@@ -398,11 +398,14 @@ test('the card never ends on a routine name without its time row', () => {
   assert.ok(seen > 0, 'no routine row found');
 });
 
-test('the dialog clips a button to its cell at a very narrow width', () => {
-  const app = demo(32);
+test('the dialog clips a button to its cell: the border survives a row narrower than its button', () => {
+  const app = demo(10);
+  app.botQueued = [{ ...app.botQueued[0], id: 90, routine: undefined, repeat: undefined, state: 'answered', at: Date.now() - 60000 }];
   app.openBotRoutines('prs');
-  const text = screen(app);
-  assert.doesNotMatch(text, /run now run now|pause {0}pause/);
+  const lines = screen(app).split('\n');
+  const at = lines.findIndex((l) => l.includes('rem'));
+  assert.ok(at >= 0, 'the remove button is drawn');
+  assert.match(lines[at], /│$/);
 });
 
 test('opening the dialog pins the first routine to its entry', () => {
@@ -414,6 +417,9 @@ test('opening the dialog pins the first routine to its entry', () => {
 
 test('a routine on the card opens the routines dialog', () => {
   const app = demo(140);
+  const first = app.botQueued.find((e) => !e.routine)!;
+  app.botQueued.push({ ...first, id: 91, label: 'Early reminder', repeat: undefined, at: first.at - 3600000, state: 'pending' });
+  app.botQueued.sort((a, b) => a.at - b.at || a.id - b.id);
   press(app, 'prs');
   app.resize(140, 60);
   press(app, 'routine', 1);
