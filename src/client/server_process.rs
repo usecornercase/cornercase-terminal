@@ -138,7 +138,13 @@ fn start_server(log: &Path) -> io::Result<Child> {
     }
     let log = OpenOptions::new().create(true).append(true).mode(log::PRIVATE).open(log)?;
     set_file_mode(&log, log::PRIVATE)?;
-    let mut server = Command::new(std::env::current_exe()?);
+    let mut server = server_command(std::env::current_exe()?);
+    server.stdin(Stdio::null()).stdout(log.try_clone()?).stderr(log);
+    spawn_detached(&mut server)
+}
+
+fn server_command(exe: PathBuf) -> Command {
+    let mut server = Command::new(exe);
     server
         .arg("server")
         .env_remove(protocol::RESTARTED_ENV)
@@ -146,10 +152,8 @@ fn start_server(log: &Path) -> io::Result<Child> {
         .env_remove(control::SERVER_ENV)
         .env_remove(protocol::REMOTE_ENV)
         .env_remove(protocol::TIED_ENV)
-        .stdin(Stdio::null())
-        .stdout(log.try_clone()?)
-        .stderr(log);
-    spawn_detached(&mut server)
+        .env_remove(crate::bots::BOT_ENV);
+    server
 }
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(5);
 const SERVER_EXIT_TIMEOUT: Duration = Duration::from_secs(5);

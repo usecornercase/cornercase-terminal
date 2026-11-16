@@ -1,6 +1,6 @@
 use rstest::rstest;
 
-use super::{Gated, gated, stop_name};
+use super::{Gated, gated, stop_name, window_name};
 use crate::control::bots::{BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::control::{
     CloneRepository, Command, ConfigImport, Configure, HeldAction, HeldRequest, Input, Keys, NewTab, PasteFile,
@@ -91,5 +91,24 @@ fn every_stop_is_a_request_or_a_message_the_server_knows() {
         for asked in stop.asks {
             assert!(Command::NAMES.contains(asked) || messages.contains(&Some(asked)), "{asked}");
         }
+    }
+}
+
+#[test]
+fn every_message_but_a_request_and_a_stop_is_a_window_message() {
+    let failed = crate::host::open::Failed { opener: crate::host::open::Opener::Finder, reason: String::new() };
+    let windows = [
+        ClientMessage::Event(crossterm::event::Event::FocusGained),
+        ClientMessage::Graphics(crate::graphics::Support::default()),
+        ClientMessage::Activated("t".into()),
+        ClientMessage::OpenFailed(failed),
+        ClientMessage::Machines(crate::protocol::Machines::default()),
+        ClientMessage::Tunnels(crate::protocol::Holding::default()),
+    ];
+    for message in &windows {
+        assert!(window_name(message).is_some(), "{message:?}");
+    }
+    for message in [ClientMessage::Request("{}".into()), ClientMessage::KillServer, ClientMessage::Restart] {
+        assert_eq!(window_name(&message), None, "{message:?}");
     }
 }
