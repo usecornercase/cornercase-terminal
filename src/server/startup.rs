@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use ratatui::layout::Rect;
 
 use super::{Graphics, OTHER_BUILD, Server};
@@ -9,10 +11,19 @@ use crate::error::Result;
 use crate::host::pointer;
 use crate::host::theme::HostTheme;
 use crate::log;
+use crate::machines::list::{self, Here};
+use crate::paths;
 use crate::persist::{self, Saver};
 use crate::protocol::{self, Hello};
 use crate::state;
 use crate::version;
+
+pub(super) fn config_file() -> PathBuf {
+    if let Err(error) = list::migrate(&Here::this_computer()) {
+        log::warning!("machines", "machines.json could not be moved into config.json", error = error);
+    }
+    paths::config()
+}
 
 pub(super) struct Opened {
     restored: bool,

@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.104
+
+- **One list of machines.** A machine is added once, in Settings › Machines or with `cornercase remote`, and the machine button offers it to open the window there. **show its work here** decides whether its workspaces and agents show next to yours; a machine that is not shown reads `not shown` in Settings. The button shows as soon as you have a machine, its menu adds one (**add machine…**) or opens Settings › Machines (**manage machines…**), and a machine is removed in Settings, so **forget…** is gone. Its label is `this computer ▴`, or `on vps ▴` once you moved.
+- The machines a window reached are moved into Settings › Machines once, not shown, and the old `machines.json` is removed. The form gains **command**, for a cornercase that is not on the `PATH` there, and `cornercase machines add` gains `--command` and `--hidden`.
+- The local computer is called "this computer" everywhere.
+
 ## 0.13.103
 
 - **GitHub Copilot CLI and opencode can write the Recap.** Pick them in **Settings → Agents → Recap**, or with `cornercase recap --agent copilot` or `--agent opencode`; `auto` takes one when it is your default agent. Both run read-only and read the dossier only (Claude Code and Codex can also read transcripts and run `cornercase search`), and each recap leaves a session in the agent's own history, since neither can run without keeping one.

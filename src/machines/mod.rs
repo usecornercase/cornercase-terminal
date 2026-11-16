@@ -3,6 +3,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
+use crate::remote::Remote;
 use crate::text;
 use crate::time::Stamp;
 use link::Down;
@@ -14,6 +15,7 @@ pub(crate) mod follow;
 pub(crate) mod form;
 pub(crate) mod heard;
 pub(crate) mod link;
+pub(crate) mod list;
 pub(crate) mod repo;
 pub(crate) mod run_on;
 pub(crate) mod send;
@@ -31,27 +33,75 @@ pub(crate) const EVERY: &str = "all";
 const UPDATING: &str = "updating…";
 pub(crate) const CONNECTING: &str = "connecting…";
 pub(crate) const NOT_SEEN: &str = "not seen yet";
+pub(crate) const NOT_SHOWN: &str = "not shown";
 const DESTINATION_MAX: usize = 255;
+const COMMAND_OPTION: &str = "--command";
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if takes a reference")]
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
+fn shown_by_default() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct Machine {
     pub(crate) name: String,
     pub(crate) icon: String,
     pub(crate) destination: String,
     pub(crate) folder: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) command: Option<String>,
+    #[serde(skip_serializing_if = "is_true")]
+    pub(crate) shown: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) unreached: bool,
+}
+
+impl Default for Machine {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            icon: String::new(),
+            destination: String::new(),
+            folder: String::new(),
+            command: None,
+            shown: true,
+            unreached: false,
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for Machine {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let entry = Value::deserialize(deserializer)?;
         let text = |key: &str| entry.get(key).and_then(Value::as_str).unwrap_or_default().to_string();
-        Ok(Self { name: text("name"), icon: text("icon"), destination: text("destination"), folder: text("folder") })
+        let command = Some(text("command").trim().to_string()).filter(|command| !command.is_empty());
+        let flag = |key: &str, otherwise: bool| entry.get(key).and_then(Value::as_bool).unwrap_or(otherwise);
+        Ok(Self {
+            name: text("name"),
+            icon: text("icon"),
+            destination: text("destination"),
+            folder: text("folder"),
+            command,
+            shown: flag("shown", true),
+            unreached: flag("unreached", false),
+        })
     }
 }
 
 impl Machine {
+    pub(crate) fn remote(&self) -> Remote {
+        Remote { destination: self.destination.clone(), command: self.command.clone(), option: COMMAND_OPTION }
+    }
+
     pub(crate) fn problem(&self, others: &[Self]) -> Option<String> {
-        let shape = valid_name(&self.name).and(valid_destination(&self.destination)).and(valid_folder(&self.folder));
+        let shape = valid_name(&self.name)
+            .and(valid_destination(&self.destination))
+            .and(valid_folder(&self.folder))
+            .and(valid_command(self.command.as_deref().unwrap_or_default()));
         match shape {
             Err(why) => Some(why.to_string()),
             Ok(()) => name_taken(others, &self.name).or_else(|| destination_taken(others, &self.destination)),
@@ -65,6 +115,10 @@ pub(crate) fn problems(machines: &[Machine]) -> Vec<Option<String>> {
 
 pub(crate) fn accepted(machines: &[Machine]) -> impl Iterator<Item = &Machine> {
     machines.iter().zip(problems(machines)).filter_map(|(machine, problem)| problem.is_none().then_some(machine))
+}
+
+pub(crate) fn linked(machines: &[Machine]) -> impl Iterator<Item = &Machine> {
+    accepted(machines).filter(|machine| machine.shown)
 }
 
 pub(crate) fn known_icon(icon: &str) -> char {
@@ -118,6 +172,13 @@ pub(crate) fn valid_folder(folder: &str) -> Result<(), &'static str> {
     }
     if !(folder.starts_with('/') || folder == "~" || folder.starts_with("~/")) {
         return Err("use an absolute path or one starting with ~/");
+    }
+    Ok(())
+}
+
+pub(crate) fn valid_command(command: &str) -> Result<(), &'static str> {
+    if command.chars().any(text::hidden) {
+        return Err("a command cannot hold control or invisible characters");
     }
     Ok(())
 }
@@ -247,6 +308,10 @@ pub(crate) struct Info {
     pub(crate) icon: String,
     pub(crate) destination: String,
     pub(crate) folder: String,
+    #[serde(default = "shown_by_default", skip_serializing_if = "is_true")]
+    pub(crate) shown: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) command: Option<String>,
     pub(crate) state: State,
     pub(crate) version: Option<String>,
     pub(crate) server_version: Option<String>,
@@ -265,12 +330,14 @@ impl Info {
         problem: Option<String>,
         error: Option<String>,
     ) -> Self {
-        let unlinked = if problem.is_some() { State::Unreachable } else { State::Connecting };
+        let unlinked = if problem.is_some() || !machine.shown { State::Unreachable } else { State::Connecting };
         Self {
             name: machine.name.clone(),
             icon: known_icon(&machine.icon).to_string(),
             destination: machine.destination.clone(),
             folder: machine.folder.clone(),
+            shown: machine.shown,
+            command: machine.command.clone(),
             state: status.map_or(unlinked, |status| status.state),
             version: status.and_then(|status| status.version.clone()),
             server_version: status.and_then(|status| status.server_version.clone()),
@@ -283,12 +350,21 @@ impl Info {
     }
 
     pub(crate) fn mark(&self) -> char {
-        if self.problem.is_some() { State::Unreachable.mark() } else { self.state.mark() }
+        if self.problem.is_some() {
+            State::Unreachable.mark()
+        } else if !self.shown {
+            State::Connecting.mark()
+        } else {
+            self.state.mark()
+        }
     }
 
     pub(crate) fn note(&self, now: SystemTime) -> String {
         if let Some(problem) = &self.problem {
             return problem.clone();
+        }
+        if !self.shown {
+            return NOT_SHOWN.into();
         }
         if self.updating {
             return UPDATING.into();
@@ -324,7 +400,7 @@ pub(crate) fn seen_ago(seen: &str, now: SystemTime) -> Option<String> {
 #[cfg(test)]
 pub(crate) fn machine(name: &str, destination: &str) -> Machine {
     let (icon, folder) = (ICONS[0].0.to_string(), DEFAULT_FOLDER.into());
-    Machine { name: name.into(), icon, destination: destination.into(), folder }
+    Machine { name: name.into(), icon, destination: destination.into(), folder, ..Machine::default() }
 }
 
 #[cfg(test)]

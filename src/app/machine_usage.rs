@@ -205,7 +205,7 @@ impl App {
 
     pub(super) fn machines_in_order(&self) -> impl Iterator<Item = &Held> {
         let held = self.machines.held();
-        let listed = machines::accepted(&self.config.machines);
+        let listed = machines::linked(&self.config.machines);
         listed.filter_map(move |machine| held.iter().find(|held| held.destination == machine.destination))
     }
 

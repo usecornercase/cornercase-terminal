@@ -14,7 +14,6 @@ pub(crate) const SWITCH_TITLE: &str = "Switch machine";
 pub(crate) const QUIT: &str = " quit ";
 pub(crate) const BACK: &str = " back ";
 pub(crate) const CONNECT: &str = " connect ";
-pub(crate) const THIS_MACHINE: &str = "this machine";
 const WIDTH: u16 = 60;
 const HEIGHT: u16 = 8;
 

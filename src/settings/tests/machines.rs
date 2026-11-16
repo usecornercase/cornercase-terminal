@@ -229,3 +229,42 @@ mod the_hint {
         assert_eq!(s.hint(), "enter edits a machine · × removes it, and its server keeps running there");
     }
 }
+
+mod a_machine_that_is_not_shown {
+    use super::*;
+
+    fn hidden() -> Machine {
+        Machine { shown: false, ..machine("devbox", "me@10.0.0.5") }
+    }
+
+    #[test]
+    fn is_grey_says_so_and_has_no_update_row() {
+        let s = with(&[(hidden(), State::Connecting)]);
+
+        assert_eq!(s.rows(), [Row::Here, Row::Machine(0), Row::AddMachine]);
+        let row = s.row_text(&Row::Machine(0));
+        assert_eq!((row.note.as_str(), row.mark, row.dangerous), ("not shown", Some(State::Connecting), false));
+    }
+
+    #[test]
+    fn has_a_hint_that_says_how_to_link_it() {
+        let mut s = with(&[(hidden(), State::Connecting)]);
+        go_to(&mut s, &Row::Machine(0));
+
+        assert_eq!(s.hint(), "not shown here: open it and tick show its work here to link it");
+    }
+}
+
+mod the_first_row_while_the_window_is_on_another_machine {
+    use super::*;
+
+    #[test]
+    fn names_the_machine_and_says_whose_list_this_is() {
+        let mut s = with(&[]);
+        s.on = Some("vps".into());
+
+        assert_eq!(text(&s, &Row::Here).0, "  ▭ vps");
+        go_to(&mut s, &Row::Here);
+        assert!(s.hint().starts_with("vps runs the server this window is on"), "{}", s.hint());
+    }
+}

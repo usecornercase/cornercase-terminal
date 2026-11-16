@@ -15,9 +15,16 @@ const NOT_READ: &str = "not read yet";
 
 pub(super) fn run(args: &MachinesArgs) -> Result<()> {
     let (request, print) = request(args);
+    if needs_shown(&request) {
+        crate::client::use_machine_shown()?;
+    }
     let value = ask("machines", Command::Machines(request))?;
     let list: MachineList = answer(value.clone())?;
     if print.json { print_json(&value) } else { print_out(&list_text(&list, SystemTime::now())) }
+}
+
+fn needs_shown(request: &Machines) -> bool {
+    matches!(request, Machines::Set(set) if set.command.is_some() || set.shown.is_some())
 }
 
 pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
@@ -29,6 +36,8 @@ pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
                 icon: add.icon.clone(),
                 destination: Some(add.destination.clone()),
                 folder: add.folder.clone(),
+                command: add.command.clone(),
+                shown: add.hidden.then_some(false),
                 create: Some(true),
                 ..MachineSet::default()
             };
@@ -41,7 +50,9 @@ pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
                 icon: edit.icon.clone(),
                 destination: edit.destination.clone(),
                 folder: edit.folder.clone(),
+                command: edit.command.clone(),
                 create: Some(false),
+                ..MachineSet::default()
             };
             (Machines::Set(set), &edit.print)
         }

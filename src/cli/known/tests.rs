@@ -5,15 +5,16 @@ use serde_json::json;
 use super::*;
 use crate::cli::args::{Command as Run, RemoteArgs};
 use crate::cli::tests::parse;
+use crate::machines::list::Here;
 use crate::remote::machines::NOT_A_DESTINATION;
 use crate::test_util::{TempDir, unwritable_file_in};
 
-fn machine(destination: &str, command: Option<&str>) -> Machine {
-    Machine { destination: destination.into(), command: command.map(Into::into), unreached: false }
+fn machine(name: &str, destination: &str, command: Option<&str>) -> Machine {
+    Machine { command: command.map(Into::into), ..machines::machine(name, destination) }
 }
 
-fn remembered_machine(destination: &str, command: Option<&str>) -> Machine {
-    Machine::never_reached(destination.into(), command.map(Into::into))
+fn not_reached(name: &str, destination: &str, command: Option<&str>) -> Machine {
+    Machine { unreached: true, ..machine(name, destination, command) }
 }
 
 fn remote(args: &[&str]) -> RemoteArgs {
@@ -120,29 +121,32 @@ mod the_list {
     use super::*;
 
     #[test]
-    fn prints_each_machine_with_its_command_or_null() {
-        let known = [machine("devbox", None), machine("me@10.0.0.5", Some("~/bin/cornercase"))];
+    fn prints_each_machine_with_its_name_and_command_or_null() {
+        let known = [machine("devbox", "devbox", None), machine("ten", "me@10.0.0.5", Some("~/bin/cornercase"))];
         assert_eq!(
             serde_json::to_value(Known::from(&known[..])).expect("json"),
             json!({"machines": [
-                {"destination": "devbox", "command": null},
-                {"destination": "me@10.0.0.5", "command": "~/bin/cornercase"},
+                {"name": "devbox", "destination": "devbox", "command": null},
+                {"name": "ten", "destination": "me@10.0.0.5", "command": "~/bin/cornercase"},
             ]})
         );
     }
 
     #[test]
     fn a_machine_no_window_reached_says_so() {
-        let known = [machine("devbox", None), remembered_machine("newbox", None)];
+        let known = [machine("devbox", "devbox", None), not_reached("newbox", "newbox", None)];
         assert_eq!(
             serde_json::to_value(Known::from(&known[..])).expect("json"),
             json!({"machines": [
-                {"destination": "devbox", "command": null},
-                {"destination": "newbox", "command": null, "unreached": true},
+                {"name": "devbox", "destination": "devbox", "command": null},
+                {"name": "newbox", "destination": "newbox", "command": null, "unreached": true},
             ]})
         );
-        let known = [remembered_machine("newbox", None), remembered_machine("gpu", Some("/opt/cc"))];
-        assert_eq!(known_text(&known), "newbox  (not reached yet)\ngpu     --command /opt/cc  (not reached yet)\n");
+        let known = [not_reached("newbox", "newbox", None), not_reached("gpu", "gpu", Some("/opt/cc"))];
+        assert_eq!(
+            known_text(&known),
+            "newbox  newbox  (not reached yet)\ngpu     gpu     --command /opt/cc  (not reached yet)\n"
+        );
     }
 
     #[test]
@@ -153,33 +157,33 @@ mod the_list {
     #[test]
     fn reads_as_a_line_per_machine_with_its_command_aligned() {
         let known = [
-            machine("devbox", None),
-            machine("me@10.0.0.5", Some("~/bin/cornercase")),
-            machine("gpu", Some("/opt/cc")),
+            machine("a", "devbox", None),
+            machine("bb", "me@10.0.0.5", Some("~/bin/cornercase")),
+            machine("c", "gpu", Some("/opt/cc")),
         ];
         assert_eq!(
             known_text(&known),
-            "devbox\nme@10.0.0.5  --command ~/bin/cornercase\ngpu          --command /opt/cc\n"
+            "a   devbox\nbb  me@10.0.0.5  --command ~/bin/cornercase\nc   gpu          --command /opt/cc\n"
         );
     }
 
     #[test]
-    fn says_when_no_machine_was_reached() {
+    fn says_when_the_list_is_empty() {
         assert_eq!(known_text(&[]), format!("{NONE}\n"));
     }
 
     #[test]
     fn hidden_characters_are_escaped_in_the_text() {
-        let known = [machine("devbox", Some("cc\u{1b}[2J"))];
-        assert_eq!(known_text(&known), "devbox  --command cc\\u{1b}[2J\n");
+        let known = [machine("devbox", "devbox", Some("cc\u{1b}[2J"))];
+        assert_eq!(known_text(&known), "devbox  devbox  --command cc\\u{1b}[2J\n");
     }
 }
 
 mod writing {
     use super::*;
 
-    fn kept_in(dir: &TempDir) -> std::path::PathBuf {
-        dir.path().join("machines.json")
+    fn here_in(dir: &TempDir) -> Here {
+        Here { config: dir.path().join("config.json"), legacy: dir.path().join("machines.json") }
     }
 
     fn not_listed(result: Result<String>) -> String {
@@ -190,68 +194,67 @@ mod writing {
     #[test]
     fn remembering_a_new_machine_says_a_window_asks() {
         let dir = TempDir::new();
-        let file = kept_in(&dir);
+        let here = here_in(&dir);
 
-        let said = remembered(&file, remembered_machine("newbox", None)).expect("written");
+        let said = remembered(&here, "newbox".into(), None).expect("written");
 
         assert_eq!(said, "remembered newbox; a window asks before it first connects there\n");
-        assert_eq!(machines::read(&file), [remembered_machine("newbox", None)]);
+        assert_eq!(list::read(&here).iter().map(|machine| machine.unreached).collect::<Vec<_>>(), [true]);
     }
 
     #[test]
     fn remembering_a_machine_a_window_reached_says_only_so() {
         let dir = TempDir::new();
-        let file = kept_in(&dir);
-        std::fs::write(&file, r#"[{"destination":"devbox"}]"#).expect("a list");
+        let here = here_in(&dir);
+        std::fs::write(
+            &here.config,
+            r#"{"machines":[{"name":"devbox","icon":"☁","destination":"devbox","folder":"~"}]}"#,
+        )
+        .expect("a list");
 
-        let said = remembered(&file, remembered_machine("devbox", Some("cc"))).expect("written");
+        let said = remembered(&here, "devbox".into(), Some("cc".into())).expect("written");
 
         assert_eq!(said, "remembered devbox\n");
-        assert_eq!(machines::read(&file), [machine("devbox", Some("cc"))]);
+        assert_eq!(list::read(&here)[0].command.as_deref(), Some("cc"));
     }
 
     #[test]
     fn forgetting_a_listed_machine_says_so() {
         let dir = TempDir::new();
-        let file = kept_in(&dir);
-        std::fs::write(&file, r#"[{"destination":"devbox"}]"#).expect("a list");
+        let here = here_in(&dir);
+        remembered(&here, "devbox".into(), None).expect("written");
 
-        assert_eq!(forgotten(&file, "devbox").expect("written"), "forgot devbox\n");
-        assert_eq!(machines::read(&file), []);
+        assert_eq!(forgotten(&here, "devbox").expect("written"), "forgot devbox\n");
+        assert_eq!(list::read(&here), []);
     }
 
     #[test]
     fn forgetting_a_machine_not_listed_fails_and_writes_nothing() {
         let dir = TempDir::new();
-        let file = kept_in(&dir);
+        let here = here_in(&dir);
 
-        assert!(not_listed(forgotten(&file, "newbox")).contains("is not on this machine's list"));
-        assert!(!file.exists());
-        let by_hand = r#"[ { "destination": "gpu-box" } ]"#;
-        std::fs::write(&file, by_hand).expect("a list");
-
-        assert!(not_listed(forgotten(&file, "newbox")).contains("is not on this machine's list"));
-        assert_eq!(std::fs::read_to_string(&file).expect("the list"), by_hand);
+        assert!(not_listed(forgotten(&here, "newbox")).contains("is not on this computer's list"));
+        assert!(!here.config.exists());
     }
 
     #[rstest]
-    #[case::broken_json("[")]
-    #[case::not_a_list(r#"{"destination":"devbox"}"#)]
-    fn a_list_it_cannot_read_is_left_as_it_is(#[case] bytes: &str) {
+    #[case::broken_json("{")]
+    #[case::not_an_object("[]")]
+    fn a_config_it_cannot_read_is_left_as_it_is(#[case] bytes: &str) {
         let dir = TempDir::new();
-        let file = kept_in(&dir);
-        std::fs::write(&file, bytes).expect("a broken list");
+        let here = here_in(&dir);
+        std::fs::write(&here.config, bytes).expect("a broken config");
 
-        assert!(not_listed(remembered(&file, remembered_machine("newbox", None))).starts_with("cannot read"));
-        assert!(not_listed(forgotten(&file, "devbox")).starts_with("cannot read"));
-        assert_eq!(std::fs::read_to_string(&file).expect("the list"), bytes);
+        assert!(not_listed(remembered(&here, "newbox".into(), None)).starts_with("cannot read or write"));
+        assert!(not_listed(forgotten(&here, "devbox")).starts_with("cannot read or write"));
+        assert_eq!(std::fs::read_to_string(&here.config).expect("the config"), bytes);
     }
 
     #[test]
-    fn a_list_it_cannot_write_says_where() {
+    fn a_config_it_cannot_write_says_where() {
         let dir = TempDir::new();
-        let file = unwritable_file_in(&dir, "machines.json");
+        let here = Here { config: unwritable_file_in(&dir, "config.json"), legacy: dir.path().join("machines.json") };
 
-        assert!(not_listed(remembered(&file, remembered_machine("devbox", None))).starts_with("cannot write"));
+        assert!(not_listed(remembered(&here, "devbox".into(), None)).starts_with("cannot read or write"));
     }
 }

@@ -39,6 +39,17 @@ pub(crate) struct AddArgs {
     pub(crate) icon: Option<String>,
     #[arg(long, value_name = "FOLDER", help = "Its folder for clones there [default: ~/code]")]
     pub(crate) folder: Option<String>,
+    #[arg(
+        long,
+        value_name = "COMMAND",
+        help = "What runs cornercase there, for a window opened there [default: cornercase]"
+    )]
+    pub(crate) command: Option<String>,
+    #[arg(
+        long,
+        help = "Add it without linking it: its work is not shown here, and the machine button still offers it"
+    )]
+    pub(crate) hidden: bool,
     #[command(flatten)]
     pub(crate) print: Print,
 }
@@ -55,6 +66,8 @@ pub(crate) struct EditArgs {
     pub(crate) icon: Option<String>,
     #[arg(long, value_name = "FOLDER", help = "Its new folder for clones there")]
     pub(crate) folder: Option<String>,
+    #[arg(long, value_name = "COMMAND", help = "Its new command there; \"\" clears it")]
+    pub(crate) command: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,
 }

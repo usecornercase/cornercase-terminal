@@ -269,10 +269,13 @@ mod the_form {
         type_text(&mut rig.app, "me@vps.lan");
         rig.press_button(ADD);
 
-        let added =
-            Machine {
-                name: "vps".into(), icon: "☁".into(), destination: "me@vps.lan".into(), folder: "~/code".into()
-            };
+        let added = Machine {
+            name: "vps".into(),
+            icon: "☁".into(),
+            destination: "me@vps.lan".into(),
+            folder: "~/code".into(),
+            ..Machine::default()
+        };
         assert_eq!(rig.saved(), [added]);
         assert_eq!((rig.selected(), rig.page().notice.as_deref()), (Row::Machine(0), Some("vps added")));
     }
@@ -367,12 +370,42 @@ mod the_form {
 
     #[test]
     fn keeps_every_field_on_a_short_window() {
-        let short = Rect { x: 0, y: 0, width: 80, height: 18 };
+        let short = Rect { x: 0, y: 0, width: 80, height: 24 };
 
         let fields = Field::ALL.map(|field| ui::machine_form::field(short, field));
 
         assert!(fields.iter().all(|field| field.height == 1), "{fields:?}");
         assert!(fields.windows(2).all(|pair| pair[0].y < pair[1].y), "{fields:?}");
+    }
+
+    #[test]
+    fn the_box_is_drawn_ticked_and_unticked() {
+        let mut rig = on_the_page(Vec::new());
+        rig.click_row(&Row::AddMachine);
+        let ticked = rig.shown(WIDE);
+
+        rig.click_field(Field::Shown);
+
+        assert!(ticked.contains("[x] show its work here") && !rig.form().shown);
+        insta::assert_snapshot!(rig.shown(WIDE));
+    }
+
+    #[test]
+    fn saving_keeps_what_the_box_and_the_command_say() {
+        let mut rig = on_the_page(Vec::new());
+        rig.click_row(&Row::AddMachine);
+        rig.click_field(Field::Name);
+        type_text(&mut rig.app, "vps");
+        rig.click_field(Field::Destination);
+        type_text(&mut rig.app, "me@vps.lan");
+        rig.click_field(Field::Command);
+        type_text(&mut rig.app, "~/bin/cc");
+        rig.click_field(Field::Shown);
+
+        rig.press_button(ADD);
+
+        let saved = rig.saved();
+        assert_eq!((saved[0].command.as_deref(), saved[0].shown, saved[0].unreached), (Some("~/bin/cc"), false, false));
     }
 
     #[test]

@@ -143,6 +143,11 @@ mod describing {
     }
 
     #[test]
+    fn a_machine_that_is_not_shown_and_has_a_command_is_a_feature() {
+        assert!(FEATURES.contains(&"machine-shown"));
+    }
+
+    #[test]
     fn merged_builds_is_a_feature() {
         assert!(FEATURES.contains(&"merged-builds"));
     }

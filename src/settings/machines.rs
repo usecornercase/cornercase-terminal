@@ -7,6 +7,7 @@ use super::{Action, Row, Settings};
 const FOLDER_WIDTH: usize = 24;
 const HINT: &str = "enter edits a machine · × removes it, and its server keeps running there";
 const HERE_HINT: &str = "this computer runs the server you are using; it links to each machine below";
+const NOT_SHOWN_HINT: &str = "not shown here: open it and tick show its work here to link it";
 const UPDATE_NOTE: &str = "installs this version there with cornercase update; nothing restarts";
 const ADD_NOTE: &str = "another computer you reach with ssh";
 
@@ -91,7 +92,10 @@ impl Settings {
 
     pub(super) fn machine_row(&self, row: &Row) -> (String, String, String, bool) {
         match row {
-            Row::Here => (format!("  {HERE_ICON} this computer"), String::new(), version::CURRENT.into(), false),
+            Row::Here => {
+                let name = self.on.as_deref().unwrap_or(machines::HERE);
+                (format!("  {HERE_ICON} {name}"), String::new(), version::CURRENT.into(), false)
+            }
             Row::Machine(at) => self.machine_text(*at),
             Row::UpdateMachine(at) => {
                 let updating = self.machine_info(*at).is_some_and(|info| info.updating);
@@ -132,7 +136,11 @@ impl Settings {
 
     pub(super) fn machine_mark(&self, row: &Row) -> Option<State> {
         let Row::Machine(at) = row else { return None };
-        self.machine_info(*at).map(|info| if info.problem.is_some() { State::Unreachable } else { info.state })
+        self.machine_info(*at).map(|info| match (info.problem.is_some(), info.shown) {
+            (true, _) => State::Unreachable,
+            (false, false) => State::Connecting,
+            (false, true) => info.state,
+        })
     }
 
     pub(super) fn activate_machine(row: &Row) -> Action {
@@ -154,9 +162,18 @@ impl Settings {
     pub(super) fn machine_hint(&self) -> String {
         match self.row() {
             Some(Row::Machine(at) | Row::UpdateMachine(at)) => {
-                self.machine_info(at).and_then(|info| info.error).unwrap_or_else(|| HINT.into())
+                let Some(info) = self.machine_info(at) else { return HINT.into() };
+                if !info.shown && info.problem.is_none() {
+                    return NOT_SHOWN_HINT.into();
+                }
+                info.error.unwrap_or_else(|| HINT.into())
             }
-            Some(Row::Here) => HERE_HINT.into(),
+            Some(Row::Here) => match &self.on {
+                Some(on) => format!(
+                    "{on} runs the server this window is on: these are its machines; the machine button lists your computer's"
+                ),
+                None => HERE_HINT.into(),
+            },
             _ => HINT.into(),
         }
     }

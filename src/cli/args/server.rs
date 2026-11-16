@@ -26,8 +26,8 @@ pub(crate) struct RemoteArgs {
     #[arg(
         long,
         conflicts_with_all = ["destination", "command", "remember", "forget"],
-        help = "Print the machines a window on this machine offers in its machine button, those it reached and those \
-                added with --remember, and open no window; it reads this machine's list, so it needs no server or ssh"
+        help = "Print the machines a window on this computer offers in its machine button, this computer's list of \
+                machines (config.json's machines), and open no window; it needs no server or ssh"
     )]
     pub(crate) known: bool,
     #[arg(
@@ -35,9 +35,9 @@ pub(crate) struct RemoteArgs {
         value_name = "DESTINATION",
         value_parser = ssh_destination,
         conflicts_with_all = ["destination", "forget"],
-        help = "Add a machine to the list --known prints, or give one already there this --command (none clears it), and open no \
-                window; a window asks before it first reaches a machine added this way. It writes this machine's \
-                list, so it needs no server or ssh"
+        help = "Add a machine, not shown, to this computer's list of machines (config.json's machines, the one \
+                Settings › Machines manages), or give one already there this --command (none clears it), and open no \
+                window; a window asks before it first reaches a machine added this way. It needs no server or ssh"
     )]
     pub(crate) remember: Option<String>,
     #[arg(
@@ -45,8 +45,8 @@ pub(crate) struct RemoteArgs {
         value_name = "DESTINATION",
         value_parser = ssh_destination,
         conflicts_with_all = ["destination", "command"],
-        help = "Take a machine off the list --known prints, as the machine button's forget… does, and open no window; it exits \
-                with 1 when the machine is not listed"
+        help = "Take a machine off this computer's list of machines, as Settings' × does (its link ends; its server keeps \
+                running there), and open no window; it exits with 1 when the machine is not listed"
     )]
     pub(crate) forget: Option<String>,
     #[arg(

@@ -1,6 +1,6 @@
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
@@ -40,7 +40,7 @@ pub(crate) fn field(area: Rect, field: Field) -> Rect {
     let wanted = match field {
         Field::Name => NAME,
         Field::Icon => ICON,
-        Field::Destination | Field::Folder => WIDE,
+        Field::Destination | Field::Folder | Field::Command | Field::Shown => WIDE,
     };
     let width = wanted.min(r.width.saturating_sub(LABEL));
     Rect::new(r.x.saturating_add(LABEL), r.y, width, r.height.min(1))
@@ -89,7 +89,9 @@ fn draw_field(f: &mut Frame, view: &View, form: &Form, field: Field) -> Option<P
     let dim = Style::default().fg(view.muted);
     let focused = form.focus == field;
     let label = if focused { Style::default().fg(Color::Cyan) } else { dim };
-    f.render_widget(Paragraph::new(Span::styled(field.label(), label)), Rect { width: LABEL, height: 1, ..r });
+    if field != Field::Shown {
+        f.render_widget(Paragraph::new(Span::styled(field.label(), label)), Rect { width: LABEL, height: 1, ..r });
+    }
     let below = note(screen, field);
     let (about, style) = match form.error(field) {
         Some(why) => (why, Style::default().fg(Color::Red)),
@@ -97,11 +99,21 @@ fn draw_field(f: &mut Frame, view: &View, form: &Form, field: Field) -> Option<P
     };
     f.render_widget(Paragraph::new(Span::styled(truncate_right(about, usize::from(below.width)), style)), below);
     let at = self::field(screen, field);
+    if field == Field::Shown {
+        draw_shown(f, at, form.shown, focused);
+        return None;
+    }
     if let Some(editor) = form.editor_of(field) {
         return draw_text(f, view, at, editor, focused && !form.icon.is_open());
     }
     combo::draw_field(f, view, at, combo::Field { combo: &form.icon, placeholder: "", focused });
     None
+}
+
+fn draw_shown(f: &mut Frame, r: Rect, shown: bool, focused: bool) {
+    let style = if focused { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
+    let text = format!("{} show its work here", if shown { "[x]" } else { "[ ]" });
+    f.render_widget(Paragraph::new(Span::styled(text, style)), r);
 }
 
 pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {

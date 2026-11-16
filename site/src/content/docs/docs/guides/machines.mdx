@@ -26,12 +26,14 @@ Click **`+ add machine`** at the end of the list. The form asks for:
 | **icon** | One of ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server or ◆ other. |
 | **destination** | Anything `ssh` takes: a `Host` of your `~/.ssh/config`, or `user@host`. Your config, keys and agent apply, and cornercase never sees a password or a key. |
 | **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, `~`, or one starting with `~/`. Nothing is made there yet. |
+| **command** | Optional. What runs cornercase there, for a window you open there with the machine button, as `cornercase remote --command` does: a path such as `~/bin/cornercase`. Leave it empty when `cornercase` is on the `PATH`. |
+| **show its work here** | On by default. The link starts and the machine's workspaces and agents show next to yours. Off: the machine stays on the list and the machine button still offers it, but nothing is linked and its row reads `◌ not shown`. |
 
 ` add ` saves it, and the link starts at once. A value the form refuses says why under its field, and nothing is saved. Click a machine, or select it and press `Enter`, to change it in the same form; its link carries on unless you change the destination.
 
 The `×` at the end of a row, or `Backspace`, removes a machine at once. The machine's server keeps running there.
 
-This list is not the one behind the machine button at the bottom of the sidebar (`devbox ▴`), which moves the window itself to a machine it reached with `cornercase remote` ([Switch machines from the window](../remote/#switch-machines-from-the-window)). The two are kept apart for now: a machine added here isn't offered there, nor the other way round.
+This is the one list of machines. The machine button at the bottom of the sidebar (`this computer ▴`) offers the same machines, to move the window itself to one ([Switch machines from the window](../remote/#switch-machines-from-the-window)), and a machine you reach with `cornercase remote` joins it, not shown. Its **`add machine…`** opens this form, and **`manage machines…`** opens this page. While the window is on another machine, the first row names whose list this is, `▭ vps`.
 
 ## What a link does
 
@@ -50,6 +52,7 @@ The link is one `ssh` connection from your cornercase server to the cornercase s
 | `● linked · 0.12.225` | Linked, with the version of cornercase installed there. When its server still runs an older one, the row adds `· its server runs 0.12.224 until it restarts there`. |
 | `○ unreachable · 8 s` | Down since that long, or `not seen yet` when it has never been up since your server started. Select the row and the line at the bottom shows why: what `ssh` said, `cornercase was not found on vps: install it there`, `that is this computer`, or `the same server as vps` when two destinations reach one machine. |
 | `◐ older · 0.0.1` | Its cornercase is older than yours, so it is not linked. |
+| `◌ not shown` | **show its work here** is off: no link, and nothing of it in your sidebar. Open it and tick the box to link it. |
 
 A link that drops is tried again after 1, 2, 4 and 8 seconds, then every 15 seconds, and every minute while something on the machine needs you: an older cornercase, a missing one, or a destination that turns out to be this computer or a machine already listed. All of them try again at once when this computer wakes up or changes network, and when you change a machine that is down. `cornercase machines retry` tries them now, and `cornercase machines --json` says when each one tries next ([`retry_at`](../scripts-and-agents/#machines)).
 
@@ -59,7 +62,7 @@ An `older` machine has an **`update…`** row under it. It runs `cornercase upda
 
 ## What you need
 
-- **cornercase on the machine**, in your version or a newer one. It is looked for on the `PATH` of a command run through `ssh`, then in `~/.local/bin` (where the [install script](../../installation/) puts it), `~/.cargo/bin` and Homebrew's folders. A machine has no `--command` as `cornercase remote` does: when it lives somewhere else, link it into one of those folders.
+- **cornercase on the machine**, in your version or a newer one. It is looked for on the `PATH` of a command run through `ssh`, then in `~/.local/bin` (where the [install script](../../installation/) puts it), `~/.cargo/bin` and Homebrew's folders. The form has a **command** for a window opened there, but the link itself never uses it: when cornercase lives somewhere else, link it into one of those folders.
 - **A key that never asks.** The link's `ssh` runs with `BatchMode=yes`: it never asks for a password, a passphrase or an unknown host key, since nobody is there to answer. Use a key in your SSH agent, or one without a passphrase, and connect once by hand to accept the host key:
 
 ```sh

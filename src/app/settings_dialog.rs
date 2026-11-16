@@ -121,6 +121,7 @@ impl App {
         settings.plugins = self.plugin_rows();
         settings.accounts = self.accounts_listed();
         settings.machines = self.machine_infos();
+        settings.on = self.window_on();
         settings.shells = self.shells_here();
         settings.now = SystemTime::now();
         settings

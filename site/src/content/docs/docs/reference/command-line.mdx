@@ -10,7 +10,7 @@ description: The cornercase command, its subcommands and the messages it can sto
 ```sh
 cornercase              # open the UI, starting the server if needed
 cornercase remote HOST  # open the UI on the server of another machine, over ssh
-cornercase remote --known  # list the machines a window here offers, for a program
+cornercase remote --known  # list this computer's machines, for a program
 cornercase --remote HOST status  # a command for scripts, on the server of another machine
 cornercase update       # install the latest release and restart the server
 cornercase restart      # restart the server; the session comes back with new shells, agents resume
@@ -55,14 +55,14 @@ Opens the window on the server of another machine, through your own `ssh` (when 
 cornercase remote devbox                                  # a host from ~/.ssh/config, or user@host
 cornercase remote devbox --command '~/tools/cornercase'   # where cornercase is on that machine
 cornercase remote winbox --command 'C:\tools\cornercase.exe'   # on a Windows machine, its path
-cornercase remote --known --json                          # the machines a window here offers
-cornercase remote --remember me@10.0.0.5 --command '~/bin/cornercase'   # add a machine to that list
+cornercase remote --known --json                          # this computer's list of machines
+cornercase remote --remember me@10.0.0.5 --command '~/bin/cornercase'   # add a machine to that list, not shown
 cornercase remote --forget devbox                         # take it off
 ```
 
 It runs `ssh devbox cornercase proxy`, which starts the server there if none is running. On a Windows machine it runs it through cmd or PowerShell, whichever that machine's OpenSSH Server uses, after finding out which on the first connection ([A Windows machine at the other end](../../guides/remote/#a-windows-machine-at-the-other-end)). If the connection drops, the window stays, says `reconnecting to devbox…` and tries again by itself; `Esc` or its ` quit ` gives up. Both machines need the same version: when they differ it says which one to update, and offers to update the other machine through `ssh` when that one is older. [Remote machines](../../guides/remote/) explains it all.
 
-`--known`, `--remember` and `--forget` open no window and need no server or `ssh`: `--known` prints the machines the [machine button](../../guides/remote/#switch-machines-from-the-window) offers, `--remember` adds one (a window asks before it first connects to it) and `--forget` takes one off.
+`--known`, `--remember` and `--forget` open no window and need no server or `ssh`: `--known` prints this computer's list of machines (`machines` in `config.json`, the one Settings › Machines manages), as the [machine button](../../guides/remote/#switch-machines-from-the-window) offers them, `--remember` adds one, not shown (a window asks before it first connects to it) and `--forget` takes one off, as Settings' `×` does.
 
 ### `--remote`
 
@@ -176,7 +176,9 @@ Lists the other computers your work can run on, as **Settings › Machines** doe
 ```sh
 cornercase machines                                    # this computer, then each machine and its state
 cornercase machines add vps ana@vps.example.com --icon server --folder '~/code'
+cornercase machines add box me@10.0.0.5 --command '~/bin/cornercase' --hidden   # on the list and the button, no link
 cornercase machines edit vps --name box --destination box.lan
+cornercase machines edit box --command ''              # no command: `cornercase` on the PATH there
 cornercase machines remove vps                         # its server keeps running there
 cornercase machines update mini                        # install your release on an older machine
 cornercase machines retry [vps]                        # try one link, or every link, now
@@ -283,9 +285,9 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | ``cornercase was not found on `<host>` …`` | The other machine has no `cornercase` where it looks; install it there, or give its path with `--command` (`--remote-command` for `--remote`). |
 | ``no cornercase server is running on `<host>` `` | A `--remote` command reached the machine, but no server runs there. |
 | ``` `plugin windows` runs on the machine that shows the window, so it takes no --remote … ``` | Window processes belong to the machine that shows the window (status 2). Run it there, without `--remote` or `CORNERCASE_REMOTE`. |
-| ``` `<host>` runs cornercase <version> and this machine <version>. Update it from here with … ``` | A `--remote` command found an older cornercase there; run the command the message gives to update it (status 5). |
+| ``` `<host>` runs cornercase <version> and this computer <version>. Update it from here with … ``` | A `--remote` command found an older cornercase there; run the command the message gives to update it (status 5). |
 | ``the cornercase on `<host>` is too old to attach to from another machine …`` | The other machine's cornercase predates `cornercase remote`. Update it there (status 5). |
-| ``` `<host>` runs cornercase <version> and this machine <version> … ``` | The two machines run different versions; the message says which one to update (status 5 when the other machine is the older one). |
+| ``` `<host>` runs cornercase <version> and this computer <version> … ``` | The two machines run different versions; the message says which one to update (status 5 when the other machine is the older one). |
 | `error: unrecognized subcommand '…'` | There is no such command; `cornercase --help` lists them. |
 | `error: unexpected argument '…' found` | The command has no such option; `cornercase COMMAND --help` lists its options. |
 

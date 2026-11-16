@@ -323,7 +323,7 @@ pub(crate) fn run() -> Result<()> {
     let (app_tx, app_rx) = mpsc::channel();
     spawn_forwarder(app_rx, tx.clone());
 
-    let mut app = App::new(shell::default(), HostTheme::default(), &paths::config(), app_tx);
+    let mut app = App::new(shell::default(), HostTheme::default(), &startup::config_file(), app_tx);
     let session = paths::session();
     log_started(&path, &session, level);
     let todo_saver = prepare_app(&mut app, &path, &session);

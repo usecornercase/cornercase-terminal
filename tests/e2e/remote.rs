@@ -481,7 +481,10 @@ fn a_program_lists_the_machine_a_window_reached_with_its_command() {
     let listed: serde_json::Value =
         serde_json::from_str(&session.says(&["remote", "--known", "--json"])).expect("the machines");
 
-    assert_eq!(listed, serde_json::json!({"machines": [{"destination": "devbox", "command": bin()}]}));
+    assert_eq!(
+        listed,
+        serde_json::json!({"machines": [{"name": "devbox", "destination": "devbox", "command": bin()}]})
+    );
 }
 
 #[test]
@@ -496,9 +499,12 @@ fn the_machines_a_window_reached_are_read_here_without_a_server_or_ssh() {
         serde_json::from_slice::<serde_json::Value>(&listed(None)).expect("json"),
         serde_json::json!({"machines": []})
     );
-    let written = r#"[{"destination":"devbox"},{"destination":"-oProxyCommand=sh"},{"destination":null},
-        {"destination":"me@10.0.0.5","command":"~/bin/cornercase"}]"#;
-    std::fs::write(session.dir.join("machines.json"), written).expect("a list written by hand");
+    let written = serde_json::json!({"machines": [
+        {"name": "devbox", "icon": "☁", "destination": "devbox", "folder": "~"},
+        {"name": "bad", "icon": "☁", "destination": "-oProxyCommand=sh", "folder": "~"},
+        {"name": "ten", "icon": "☁", "destination": "me@10.0.0.5", "folder": "~", "command": "~/bin/cornercase"},
+    ]});
+    std::fs::write(session.dir.join("config.json"), written.to_string()).expect("a list written by hand");
 
     let (here, told) = (listed(None), listed(Some("devbox")));
 
@@ -506,10 +512,32 @@ fn the_machines_a_window_reached_are_read_here_without_a_server_or_ssh() {
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&here).expect("json"),
         serde_json::json!({"machines": [
-            {"destination": "devbox", "command": null},
-            {"destination": "me@10.0.0.5", "command": "~/bin/cornercase"},
+            {"name": "devbox", "destination": "devbox", "command": null},
+            {"name": "ten", "destination": "me@10.0.0.5", "command": "~/bin/cornercase"},
         ]})
     );
+    no_server_or_ssh_ran(&session);
+}
+
+#[test]
+fn the_machines_a_window_reached_move_into_config_json_once() {
+    let session = Session::new();
+    let written = r#"[{"destination":"devbox"},{"destination":"me@10.0.0.5","command":"~/bin/cornercase"}]"#;
+    std::fs::write(session.dir.join("machines.json"), written).expect("a list written by hand");
+
+    let listed = known(&session);
+
+    assert_eq!(
+        listed,
+        serde_json::json!({"machines": [
+            {"name": "devbox", "destination": "devbox", "command": null},
+            {"name": "10.0.0.5", "destination": "me@10.0.0.5", "command": "~/bin/cornercase"},
+        ]})
+    );
+    assert!(!session.dir.join("machines.json").exists(), "the old file is gone");
+    let config: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(session.dir.join("config.json")).expect("config.json")).expect("json");
+    assert!(config["machines"].as_array().expect("a list").iter().all(|machine| machine["shown"] == false));
     no_server_or_ssh_ran(&session);
 }
 
@@ -538,14 +566,14 @@ fn a_program_remembers_a_machine_here_without_a_server_or_ssh() {
     assert_eq!(
         known(&session),
         serde_json::json!({"machines": [
-            {"destination": "me@10.0.0.5", "command": "~/bin/cornercase", "unreached": true},
-            {"destination": "devbox", "command": null, "unreached": true},
+            {"name": "10.0.0.5", "destination": "me@10.0.0.5", "command": "~/bin/cornercase", "unreached": true},
+            {"name": "devbox", "destination": "devbox", "command": null, "unreached": true},
         ]})
     );
     assert!(ran(&session, &["remote", "--remember", "me@10.0.0.5"], None).status.success());
     assert_eq!(
         known(&session)["machines"][0],
-        serde_json::json!({"destination": "me@10.0.0.5", "command": null, "unreached": true})
+        serde_json::json!({"name": "10.0.0.5", "destination": "me@10.0.0.5", "command": null, "unreached": true})
     );
     no_server_or_ssh_ran(&session);
 }
@@ -553,16 +581,23 @@ fn a_program_remembers_a_machine_here_without_a_server_or_ssh() {
 #[test]
 fn a_program_forgets_a_machine_here_only_when_it_is_listed() {
     let session = Session::new();
-    let file = session.dir.join("machines.json");
-    std::fs::write(&file, r#"[{"destination":"devbox"},{"destination":"gpu-box"}]"#).expect("a list");
+    let file = session.dir.join("config.json");
+    let written = serde_json::json!({"machines": [
+        {"name": "devbox", "icon": "☁", "destination": "devbox", "folder": "~"},
+        {"name": "gpu-box", "icon": "☁", "destination": "gpu-box", "folder": "~"},
+    ]});
+    std::fs::write(&file, written.to_string()).expect("a list");
 
     let out = ran(&session, &["remote", "--forget", "devbox"], Some("devbox"));
     assert!(out.status.success(), "{out:?}");
-    assert_eq!(known(&session), serde_json::json!({"machines": [{"destination": "gpu-box", "command": null}]}));
+    assert_eq!(
+        known(&session),
+        serde_json::json!({"machines": [{"name": "gpu-box", "destination": "gpu-box", "command": null}]})
+    );
     let bytes = std::fs::read(&file).expect("the list");
 
     let out = ran(&session, &["remote", "--forget", "devbox"], None);
-    assert!(refused(&out, 1, "is not on this machine's list"), "{out:?}");
+    assert!(refused(&out, 1, "is not on this computer's list"), "{out:?}");
     assert_eq!(std::fs::read(&file).expect("the list"), bytes);
     for args in [["remote", "--remember=dev box"], ["remote", "--forget=-oProxyCommand=sh"]] {
         let out = ran(&session, &args, None);
@@ -574,13 +609,19 @@ fn a_program_forgets_a_machine_here_only_when_it_is_listed() {
 #[test]
 fn the_machines_a_window_reached_read_as_text() {
     let session = Session::new();
-    let written = r#"[{"destination":"devbox"},{"destination":"me@10.0.0.5","command":"~/bin/cornercase"}]"#;
-    std::fs::write(session.dir.join("machines.json"), written).expect("a list written by hand");
+    let written = serde_json::json!({"machines": [
+        {"name": "devbox", "icon": "☁", "destination": "devbox", "folder": "~"},
+        {"name": "ten", "icon": "☁", "destination": "me@10.0.0.5", "folder": "~", "command": "~/bin/cornercase"},
+    ]});
+    std::fs::write(session.dir.join("config.json"), written.to_string()).expect("a list written by hand");
 
     let out = ran(&session, &["remote", "--known"], Some("devbox"));
 
     assert!(out.status.success(), "{out:?}");
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "devbox\nme@10.0.0.5  --command ~/bin/cornercase\n");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "devbox  devbox\nten     me@10.0.0.5  --command ~/bin/cornercase\n"
+    );
 }
 
 #[test]
@@ -723,7 +764,7 @@ fn remote_window_with(session: &Arc<Session>, env: &[(&str, &str)]) -> Harness {
     let env: Vec<(&str, &str)> = [("PATH", path.as_str())].into_iter().chain(env.iter().copied()).collect();
     let mut app = Harness::run(exe.as_ref(), &args, Arc::clone(session), (ROWS, COLS), &env);
     app.wait_for("the remote window names its machine", |s| {
-        s.contains(&first_entry()) && (s.contains("devbox ▴") || s.contains("devbox ⇄"))
+        s.contains(&first_entry()) && (s.contains("on devbox ▴") || s.contains("on devbox ⇄"))
     });
     app
 }
@@ -734,61 +775,87 @@ fn click_on(app: &mut Harness, text: &str) {
     app.click(at);
 }
 
+fn config_machines(session: &Session) -> Vec<serde_json::Value> {
+    let bytes = std::fs::read(session.dir.join("config.json")).expect("config.json");
+    let config: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    config["machines"].as_array().expect("the machines").clone()
+}
+
+fn to_this_computer(app: &mut Harness) {
+    click_on(app, "on devbox ▴");
+    click_on(app, "  this computer");
+    app.wait_for("the window is on this computer", |s| s.contains("this computer ▴"));
+}
+
 #[test]
-fn a_window_switches_between_this_machine_and_the_one_it_reached() {
+fn a_window_switches_between_this_computer_and_the_one_it_reached() {
     let session = Session::new();
     let mut app = remote_window(&session);
     let runs = ssh_runs(&session);
 
-    click_on(&mut app, "devbox ▴");
-    click_on(&mut app, "  this machine");
-    app.wait_for("the window is on this machine", |s| s.contains("this machine ▴"));
+    to_this_computer(&mut app);
     let local_runs = ssh_runs(&session);
-    click_on(&mut app, "this machine ▴");
+    click_on(&mut app, "this computer ▴");
     click_on(&mut app, "  devbox");
-    app.wait_for("the window is on devbox again", |s| s.contains("devbox ▴") && !s.contains("this machine ▴"));
+    app.wait_for("the window is on devbox again", |s| s.contains("on devbox ▴") && !s.contains("this computer ▴"));
 
     assert_eq!((local_runs, ssh_runs(&session)), (runs, runs + 1), "only devbox goes through ssh");
     app.send(b"echo still-\"\"here\r");
     app.wait_for("the shell answers", |s| s.contains("still-here"));
-    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
-    assert!(saved.contains("\"devbox\"") && saved.contains(env!("CARGO_BIN_EXE_cornercase")), "{saved}");
+    let machines = config_machines(&session);
+    assert_eq!(machines.len(), 1, "{machines:?}");
+    assert_eq!(
+        (machines[0]["name"].as_str(), machines[0]["command"].as_str(), machines[0]["shown"].as_bool()),
+        (Some("devbox"), Some(env!("CARGO_BIN_EXE_cornercase")), Some(false))
+    );
     assert_eq!(session.servers(), 1);
 }
 
-fn add_newbox(app: &mut Harness) {
-    click_on(app, "devbox ▴");
+fn fill_newbox_form(app: &mut Harness) {
+    click_on(app, "this computer ▴");
     click_on(app, "add machine…");
-    app.wait_for("the dialog asks for it", |s| s.contains("ssh destination"));
-    app.send(b"newbox\r");
-    app.wait_for_raw("the window asks before reaching it", |raw| raw.contains("connect to newbox?"));
+    app.wait_for("the form opens", |s| s.contains("show its work here"));
+    app.send(b"newbox\t\tnewbox\t\t\t ");
+    app.wait_for("the box is off", |s| s.contains("[ ] show its work here"));
+    app.send(b"\r");
 }
 
 #[test]
-fn a_machine_added_by_hand_is_reached_once_the_window_asks() {
+fn a_machine_added_in_the_form_is_reached_without_asking() {
     let session = Session::new();
     let mut app = remote_window(&session);
-    add_newbox(&mut app);
+    to_this_computer(&mut app);
+    fill_newbox_form(&mut app);
+    app.wait_for("the toast says it was added", |s| s.contains("newbox added"));
     let runs = ssh_runs(&session);
 
-    app.send(b"\r");
+    click_on(&mut app, "this computer ▴");
+    click_on(&mut app, "  newbox");
 
-    app.wait_for("the window is on newbox", |s| s.contains("newbox ▴"));
+    app.wait_for("the window is on newbox", |s| s.contains("on newbox ▴"));
     assert_eq!(ssh_runs(&session), runs + 1);
-    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
-    assert!(saved.contains("\"newbox\""), "{saved}");
+    let added = config_machines(&session).into_iter().find(|machine| machine["name"] == "newbox").expect("newbox");
+    assert_eq!((added["shown"].as_bool(), added["destination"].as_str()), (Some(false), Some("newbox")));
+}
+
+fn remember_newbox(session: &Session) {
+    let out = session.cold(&["remote", "--remember", "newbox", "--command", bin()]);
+    assert!(out.status.success(), "{out:?}");
 }
 
 #[test]
 fn going_back_before_connecting_keeps_the_window_where_it_was() {
     let session = Session::new();
+    remember_newbox(&session);
     let mut app = remote_window(&session);
     let runs = ssh_runs(&session);
-    add_newbox(&mut app);
+    click_on(&mut app, "on devbox ▴");
+    click_on(&mut app, "  newbox");
+    app.wait_for_raw("the window asks before reaching it", |raw| raw.contains("connect to newbox?"));
 
     app.send(b"\x1b");
 
-    app.wait_for("the screen comes back", |s| !s.contains("connect to newbox?") && s.contains("devbox ▴"));
+    app.wait_for("the screen comes back", |s| !s.contains("connect to newbox?") && s.contains("on devbox ▴"));
     app.send(b"echo back-\"\"here\r");
     app.wait_for("the same window answers", |s| s.contains("back-here"));
     assert_eq!(ssh_runs(&session), runs, "nothing was reached");
@@ -798,14 +865,14 @@ fn going_back_before_connecting_keeps_the_window_where_it_was() {
 fn a_window_inside_a_pane_of_this_machine_stays_where_it_is() {
     let session = Session::new();
     let mut app = remote_window_with(&session, &[("CORNERCASE", "1")]);
-    click_on(&mut app, "devbox ▴");
-    click_on(&mut app, "  this machine");
+    click_on(&mut app, "on devbox ▴");
+    click_on(&mut app, "  this computer");
     app.wait_for("the window says why", |s| s.contains("already running in this terminal"));
 
     app.send(b"\x1b");
 
     app.wait_for("the screen comes back", |s| {
-        !s.contains("already running in this terminal") && s.contains("devbox ▴")
+        !s.contains("already running in this terminal") && s.contains("on devbox ▴")
     });
     app.send(b"echo still-\"\"there\r");
     app.wait_for("the same window answers", |s| s.contains("still-there"));
@@ -814,6 +881,7 @@ fn a_window_inside_a_pane_of_this_machine_stays_where_it_is() {
 #[test]
 fn a_server_that_refuses_the_window_leaves_it_where_it_was() {
     let session = Session::new();
+    remember_newbox(&session);
     let mut app = remote_window(&session);
     let proxy = std::process::Command::new(env!("CARGO_BIN_EXE_cornercase"))
         .arg("proxy")
@@ -827,36 +895,35 @@ fn a_server_that_refuses_the_window_leaves_it_where_it_was() {
         &refusing,
         &format!("#!/bin/sh\necho '{banner}'\nprintf '\\006\\000\\000\\000\\000\\004nope'\ncat > /dev/null\n"),
     );
-    add_newbox(&mut app);
+    click_on(&mut app, "on devbox ▴");
+    click_on(&mut app, "  newbox");
+    app.wait_for_raw("the window asks before reaching it", |raw| raw.contains("connect to newbox?"));
 
     app.send(b"\r");
 
     app.wait_for("the window says why", |s| s.contains("could not switch to newbox") && s.contains("nope"));
     app.send(b"\x1b");
-    app.wait_for("the screen comes back", |s| !s.contains("could not switch") && s.contains("devbox ▴"));
+    app.wait_for("the screen comes back", |s| !s.contains("could not switch") && s.contains("on devbox ▴"));
     app.send(b"echo still-\"\"on-devbox\r");
     app.wait_for("the same window answers", |s| s.contains("still-on-devbox"));
-    let saved = std::fs::read_to_string(session.dir.join("machines.json")).expect("the machines it reached");
-    assert!(!saved.contains("newbox"), "{saved}");
+    let newbox = config_machines(&session).into_iter().find(|machine| machine["name"] == "newbox").expect("newbox");
+    assert_eq!(newbox["unreached"].as_bool(), Some(true), "{newbox}");
 }
 
 #[test]
 fn a_machine_a_program_remembered_is_asked_once() {
     let session = Session::new();
     let mut app = remote_window(&session);
-    let out = session.cold(&["remote", "--remember", "newbox", "--command", bin()]);
-    assert!(out.status.success(), "{out:?}");
-    click_on(&mut app, "devbox ▴");
-    click_on(&mut app, "  this machine");
-    app.wait_for("the window is on this machine", |s| s.contains("this machine ▴"));
-    click_on(&mut app, "this machine ▴");
+    remember_newbox(&session);
+    to_this_computer(&mut app);
+    click_on(&mut app, "this computer ▴");
     click_on(&mut app, "  newbox");
     app.wait_for_raw("the window asks before reaching it", |raw| raw.contains("connect to newbox?"));
     let runs = ssh_runs(&session);
 
     app.send(b"\r");
 
-    app.wait_for("the window is on newbox", |s| s.contains("newbox ▴"));
+    app.wait_for("the window is on newbox", |s| s.contains("on newbox ▴"));
     assert_eq!(ssh_runs(&session), runs + 1);
     let listed: serde_json::Value =
         serde_json::from_str(&session.says(&["remote", "--known", "--json"])).expect("the machines");
@@ -864,12 +931,12 @@ fn a_machine_a_program_remembered_is_asked_once() {
         listed["machines"]
             .as_array()
             .expect("a list")
-            .contains(&serde_json::json!({"destination": "newbox", "command": bin()}))
+            .contains(&serde_json::json!({"name": "newbox", "destination": "newbox", "command": bin()}))
     );
-    click_on(&mut app, "newbox ▴");
-    click_on(&mut app, "  this machine");
-    app.wait_for("the window is on this machine", |s| s.contains("this machine ▴"));
-    click_on(&mut app, "this machine ▴");
+    click_on(&mut app, "on newbox ▴");
+    click_on(&mut app, "  this computer");
+    app.wait_for("the window is on this computer", |s| s.contains("this computer ▴"));
+    click_on(&mut app, "this computer ▴");
     click_on(&mut app, "  newbox");
-    app.wait_for("the window is on newbox without asking", |s| s.contains("newbox ▴"));
+    app.wait_for("the window is on newbox without asking", |s| s.contains("on newbox ▴"));
 }

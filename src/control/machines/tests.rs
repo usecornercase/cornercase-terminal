@@ -15,6 +15,8 @@ fn answer() -> MachineList {
                 icon: "☁".into(),
                 destination: "miguel@vps.example.com".into(),
                 folder: "~/code".into(),
+                shown: true,
+                command: None,
                 state: State::Linked,
                 version: Some("0.12.225".into()),
                 server_version: Some("0.12.225".into()),
@@ -29,6 +31,7 @@ fn answer() -> MachineList {
                 icon: "◫".into(),
                 destination: "pi.lan".into(),
                 folder: "~/code".into(),
+                shown: true,
                 state: State::Unreachable,
                 retry_at: Some("2026-10-29T10:00:04.250Z".into()),
                 error: Some("ssh: connect to host pi.lan port 22: Connection refused".into()),
@@ -128,6 +131,51 @@ mod focusing {
             Command::FocusMachine(FocusMachine { machine: "vps".into(), item: Item::Tab(41), machine_boot: None });
 
         assert_eq!(focus.fields(), [("machine", "vps".to_string()), ("item", "tab-41".to_string())]);
+    }
+}
+
+mod a_set {
+    use super::*;
+    use crate::control::Command;
+
+    #[test]
+    fn round_trips_with_its_command_and_shown() {
+        let set = MachineSet {
+            name: "vps".into(),
+            command: Some("~/bin/cc".into()),
+            shown: Some(false),
+            ..MachineSet::default()
+        };
+
+        let text = serde_json::to_string(&Machines::Set(set.clone())).expect("json");
+
+        assert!(text.contains(r#""command":"~/bin/cc""#) && text.contains(r#""shown":false"#), "{text}");
+        assert_eq!(serde_json::from_str::<Machines>(&text).expect("a request"), Machines::Set(set));
+    }
+
+    #[test]
+    fn writes_both_keys_even_when_they_are_not_given() {
+        let text = serde_json::to_string(&MachineSet::default()).expect("json");
+
+        assert!(text.contains(r#""command":null"#) && text.contains(r#""shown":null"#), "{text}");
+    }
+
+    #[test]
+    fn names_shown_in_its_fields_only_when_given() {
+        let given = Command::Machines(Machines::Set(MachineSet { shown: Some(false), ..MachineSet::default() }));
+        let not = Command::Machines(Machines::Set(MachineSet::default()));
+
+        assert!(given.fields().contains(&("shown", "false".to_string())));
+        assert!(!not.fields().iter().any(|(key, _)| *key == "shown"));
+    }
+
+    #[test]
+    fn a_row_that_is_not_shown_writes_it_and_one_that_is_does_not() {
+        let hidden = Info { shown: false, command: Some("cc".into()), ..Info::default() };
+        let text = serde_json::to_string(&hidden).expect("json");
+
+        assert!(text.contains(r#""shown":false"#) && text.contains(r#""command":"cc""#), "{text}");
+        assert!(!serde_json::to_string(&answer()).expect("json").contains("shown"));
     }
 }
 

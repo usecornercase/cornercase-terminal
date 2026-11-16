@@ -199,6 +199,10 @@ pub(crate) fn use_fresh_branches() -> Result<()> {
     require("fresh-branches", "cannot make a new branch from the up-to-date default branch")
 }
 
+pub(crate) fn use_machine_shown() -> Result<()> {
+    require("machine-shown", "cannot give a machine a command or add one that is not shown")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }
