@@ -153,14 +153,16 @@ mod the_rules {
 }
 
 mod the_dashed_names {
+    use super::super::rule_path;
     use super::model::{ask, rules};
     use crate::agents::headless::args_of;
 
     #[test]
     fn a_bot_may_not_make_a_name_starting_with_a_dash_at_the_top_of_its_folder() {
         let args = args_of(&super::super::command("claude", &ask(&[])));
-        assert!(rules(&args, "--disallowedTools").contains(&String::from("Edit(//b/prs/-*)")));
-        assert!(rules(&args, "--allowedTools").contains(&String::from("Edit(//b/prs/**)")));
+        let folder = rule_path("/b/prs", cfg!(windows));
+        assert!(rules(&args, "--disallowedTools").contains(&format!("Edit({folder}/-*)")));
+        assert!(rules(&args, "--allowedTools").contains(&format!("Edit({folder}/**)")));
     }
 }
 
