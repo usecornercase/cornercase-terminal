@@ -27,7 +27,7 @@ const BOT_ARGS: [&str; 8] =
     ["-p", "--setting-sources", "user", "--output-format", "stream-json", "--verbose", "--max-turns", "40"];
 const READS: &str = "Read,Grep,Glob,WebSearch,WebFetch,Bash(cornercase:*)";
 
-const OUTPUT: &str = "Bash(git * --output*)";
+const OUTPUT: &str = "Bash(git *--output*)";
 
 fn read_only_rules(ask: &Ask, windows: bool) -> String {
     let git = git_reads(ask, windows, git_budget(windows));

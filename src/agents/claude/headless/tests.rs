@@ -143,6 +143,9 @@ mod the_rules {
     #[case::an_override_after_quotes("git -C \"/w/shop\" -c x=y log")]
     #[case::a_git_dir("git --git-dir=/w/shop/.git log")]
     #[case::output_after_quotes("git -C '/w/my shop' log --output x")]
+    #[case::output_quoted_single("git -C /w/shop log -1 -p '--output=/tmp/x'")]
+    #[case::output_quoted_double("git -C /w/shop diff \"--output=/tmp/x\"")]
+    #[case::output_quoted_apart("git -C /w/shop show HEAD '--output' /tmp/x")]
     #[case::a_stop("cornercase kill-server")]
     fn what_was_refused_live_on_2_1_325(#[case] command: &str) {
         assert!(!allows(&ask(&["/w/shop", "/w/my shop"]), command), "{command}");
