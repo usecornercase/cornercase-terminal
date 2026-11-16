@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.94
+
+- **A bot reads your projects' git.** A Claude Code bot with `cornercase` access can run `git -C <folder> log`, `show`, `diff` and `status` in each project and worktree you have open, and it is told how: the folder is `path` in `cornercase status --json`, and a shell loop is refused, so it runs one command at a time. Before, every `git -C` was refused and a bot never read a commit.
+- **A bot's git can no longer write or run anything.** `--output` let its read-only git write a file anywhere, and a repository it could make in its own folder let it run any program. `--output` is refused now, and git runs only in your projects, never in the bot's folder. Its `git status` and `git diff` also no longer rewrite a project's index while an agent there commits.
+- Gemini CLI and GitHub Copilot CLI bots with `cornercase` access no longer run git, which never reached your projects for them: Copilot's rules cannot keep it from writing, and Gemini's are not checked yet.
+
 ## 0.13.93
 
 - **A bot runs your own `gh`, `git` and other programs.** A bot's turn put the whole folder of cornercase's program first on its `PATH`, so with Homebrew every program in `/opt/homebrew/bin` came before yours: a `gh` in `~/bin` was skipped for Homebrew's, which may not be logged in. Only `cornercase` itself comes first now, from a link in `bin/` next to `session.json`, and everything else is found in your `PATH`'s order.
