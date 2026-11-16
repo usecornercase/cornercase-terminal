@@ -27,11 +27,11 @@ fn a_new_folder_gets_only_a_link_that_leads_to_the_binary() {
 #[test]
 fn a_link_to_another_binary_is_made_again() {
     let dir = TempDir::new();
-    let (a, b) = (binary(dir.path(), "a", "one"), binary(dir.path(), "b", "two"));
+    let (a, b) = (binary(dir.path(), "a", "one"), binary(dir.path(), "b", "second"));
     let folder = dir.path().join("bin");
     ensure(&folder, &a).expect("first");
     ensure(&folder, &b).expect("second");
-    assert_eq!(fs::read(folder.join(NAME)).expect("read"), b"two");
+    assert_eq!(fs::read(folder.join(NAME)).expect("read"), b"second");
     #[cfg(unix)]
     assert_eq!(fs::read_link(folder.join(NAME)).expect("link"), b);
 }
@@ -43,10 +43,10 @@ fn a_binary_replaced_in_place_is_what_the_link_leads_to() {
     let folder = dir.path().join("bin");
     ensure(&folder, &program).expect("first");
     let next = program.with_file_name("cornercase.new");
-    fs::write(&next, "new").expect("write");
+    fs::write(&next, "newer").expect("write");
     fs::rename(&next, &program).expect("replace");
     ensure(&folder, &program).expect("second");
-    assert_eq!(fs::read(folder.join(NAME)).expect("read"), b"new");
+    assert_eq!(fs::read(folder.join(NAME)).expect("read"), b"newer");
 }
 
 #[test]
