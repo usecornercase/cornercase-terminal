@@ -254,11 +254,15 @@ mod bots {
             format!("Edit({rule}/chat.jsonl)"),
             "Bash(cornercase:*)".to_string(),
             "Bash(cornercase kill-server:*)".to_string(),
+            "Bash(gh pr list:*)".to_string(),
+            "Bash(git *--output*)".to_string(),
+            format!("Edit({rule}/-*)"),
             "\"--model\", \"opus\"".to_string(),
         ] {
             assert!(argv.contains(&wanted), "{wanted} in {argv}");
         }
-        for unwanted in ["--resume", "--no-session-persistence", "--strict-mcp-config", "bypassPermissions"] {
+        let unwanted = ["--resume", "--no-session-persistence", "--strict-mcp-config", "bypassPermissions"];
+        for unwanted in unwanted.into_iter().chain(["Bash(git log:*)", "Bash(git diff:*)", "Bash(git status:*)"]) {
             assert!(!argv.contains(unwanted), "{unwanted} in {argv}");
         }
         assert!(argv.trim_end().ends_with("\"--\", \"hi\"]"), "{argv}");
@@ -565,5 +569,75 @@ mod bots {
         let error = run(&called(agent, &command, TIMEOUT), &ask, &Arc::new(AtomicUsize::new(0))).expect_err("refused");
         assert!(error.to_string().contains("cannot be a bot with cornercase access"), "{error}");
         assert!(!program.with_extension("argv").exists());
+    }
+}
+
+mod repositories {
+    use super::*;
+
+    const BIG: usize = 1 << 20;
+
+    fn folders(paths: &[&str]) -> Ask {
+        Ask { repositories: paths.iter().map(PathBuf::from).collect(), ..Ask::default() }
+    }
+
+    #[rstest::rstest]
+    #[case::plain("/w/shop", &["/w/shop", "'/w/shop'", "\"/w/shop\""])]
+    #[case::a_space("/w/my shop", &["'/w/my shop'", "\"/w/my shop\""])]
+    #[case::a_dollar("/w/a$b", &[])]
+    #[case::a_quote("/w/it's", &[])]
+    #[case::a_comma("/w/a,b", &[])]
+    #[case::a_parenthesis("/w/a(b)", &[])]
+    #[case::a_star("/w/a*b", &[])]
+    #[case::a_newline("/w/a\nb", &[])]
+    #[case::nothing("", &[])]
+    fn a_folder_is_written_as_the_agent_may_type_it(#[case] path: &str, #[case] wanted: &[&str]) {
+        assert_eq!(spellings(Path::new(path), false), wanted);
+        assert_eq!(spellings(Path::new(path), true), wanted);
+    }
+
+    #[rstest::rstest]
+    #[case::on_windows(true, &["'C:\\w\\shop'"])]
+    #[case::elsewhere(false, &[])]
+    fn a_path_with_backslashes_has_one_spelling_on_windows_only(#[case] windows: bool, #[case] wanted: &[&str]) {
+        assert_eq!(spellings(Path::new("C:\\w\\shop"), windows), wanted);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_path_that_is_not_utf8_has_no_spelling() {
+        use std::os::unix::ffi::OsStrExt;
+        assert_eq!(spellings(Path::new(std::ffi::OsStr::from_bytes(b"/w/\xff")), false), Vec::<String>::new());
+    }
+
+    #[test]
+    fn each_spelling_gets_the_four_reads_in_order() {
+        let rules = git_reads(&folders(&["/a", "/b c"]), false, BIG);
+        assert_eq!(rules.len(), 4 * 3 + 4 * 2);
+        assert_eq!(&rules[..4], ["git -C /a log", "git -C /a show", "git -C /a diff", "git -C /a status"]);
+        assert_eq!(rules[4], "git -C '/a' log");
+        assert_eq!(rules[12], "git -C '/b c' log");
+    }
+
+    #[test]
+    fn no_folder_gives_no_rule() {
+        assert_eq!(git_reads(&Ask::default(), false, BIG), Vec::<String>::new());
+        assert_eq!(git_reads(&folders(&["/w/a$b"]), false, BIG), Vec::<String>::new());
+    }
+
+    #[test]
+    fn past_its_budget_the_rules_keep_the_single_quoted_spelling_and_then_fewer_folders() {
+        let paths: Vec<String> = (0..40).map(|n| format!("/w/{}/{n}", "x".repeat(80))).collect();
+        let ask = folders(&paths.iter().map(String::as_str).collect::<Vec<_>>());
+        let full = git_reads(&ask, false, BIG);
+        assert_eq!(full.len(), 40 * 12);
+        let budget = size(&full) / 2;
+        let some = git_reads(&ask, false, budget);
+        assert_eq!(some.len(), 40 * 4);
+        assert!(some.iter().all(|rule| rule.starts_with("git -C '")), "{some:?}");
+        let few = git_reads(&ask, false, size(&some) / 2);
+        assert!(!few.is_empty() && few.len() < some.len(), "{}", few.len());
+        assert!(size(&few) <= size(&some) / 2);
+        assert!(size(&git_reads(&ask, true, git_budget(true))) <= git_budget(true));
     }
 }

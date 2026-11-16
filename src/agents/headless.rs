@@ -73,6 +73,7 @@ pub(crate) struct Ask {
     pub(crate) env: Env,
     pub(crate) protected: Vec<&'static str>,
     pub(crate) stops: Vec<&'static str>,
+    pub(crate) repositories: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,6 +97,7 @@ pub(crate) struct BotSupport {
     pub(crate) accesses: &'static [Access],
     pub(crate) why: Option<&'static str>,
     pub(crate) reads_anywhere: bool,
+    pub(crate) reads_git: bool,
     pub(crate) effort_needs_model: bool,
 }
 
@@ -204,17 +206,79 @@ pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ra
     })
 }
 
-pub(in crate::agents) const READ_ONLY: [&str; 9] = [
-    "git log",
-    "git show",
-    "git diff",
-    "git status",
-    "gh pr list",
-    "gh pr view",
-    "gh pr checks",
-    "gh issue list",
-    "gh issue view",
-];
+pub(in crate::agents) const GH_READS: [&str; 5] =
+    ["gh pr list", "gh pr view", "gh pr checks", "gh issue list", "gh issue view"];
+const GIT_READS: [&str; 4] = ["log", "show", "diff", "status"];
+const RULE_OVERHEAD: usize = 9;
+const GIT_BUDGET: usize = 64 * 1024;
+const WINDOWS_GIT_BUDGET: usize = 6 * 1024;
+
+fn awkward(c: char, windows: bool) -> bool {
+    c.is_control() || "'\"`$!,()*?".contains(c) || (c == '\\' && !windows)
+}
+
+fn plain(c: char) -> bool {
+    c.is_alphanumeric() || "/._-+@:=%".contains(c)
+}
+
+fn spellings(folder: &Path, windows: bool) -> Vec<String> {
+    let Some(path) = folder.to_str().filter(|path| !path.is_empty() && !path.chars().any(|c| awkward(c, windows)))
+    else {
+        return Vec::new();
+    };
+    let backslash = path.contains('\\');
+    let mut all = Vec::new();
+    if !backslash && path.chars().all(plain) {
+        all.push(path.to_string());
+    }
+    all.push(format!("'{path}'"));
+    if !backslash {
+        all.push(format!("\"{path}\""));
+    }
+    all
+}
+
+fn rules_of(spellings: &[String]) -> Vec<String> {
+    spellings.iter().flat_map(|spelling| GIT_READS.map(|sub| format!("git -C {spelling} {sub}"))).collect()
+}
+
+fn size(rules: &[String]) -> usize {
+    rules.iter().map(|rule| rule.len() + RULE_OVERHEAD).sum()
+}
+
+pub(in crate::agents) fn git_budget(windows: bool) -> usize {
+    if windows { WINDOWS_GIT_BUDGET } else { GIT_BUDGET }
+}
+
+pub(in crate::agents) fn git_reads(ask: &Ask, windows: bool, budget: usize) -> Vec<String> {
+    let folders: Vec<Vec<String>> = ask.repositories.iter().map(|folder| spellings(folder, windows)).collect();
+    let full: Vec<String> = folders.iter().flat_map(|spellings| rules_of(spellings)).collect();
+    if size(&full) <= budget {
+        return full;
+    }
+    let quoted: Vec<Vec<String>> = folders
+        .iter()
+        .filter_map(|all| all.iter().find(|spelling| spelling.starts_with('\'')).cloned())
+        .map(|one| vec![one])
+        .collect();
+    let mut kept = Vec::new();
+    let mut used = 0;
+    for spellings in &quoted {
+        let rules = rules_of(spellings);
+        used += size(&rules);
+        if used > budget {
+            break;
+        }
+        kept.extend(rules);
+    }
+    crate::log::warning!(
+        "bots",
+        "too many projects for a bot's git rules, the rest get none",
+        folders = quoted.len(),
+        kept = kept.len() / GIT_READS.len()
+    );
+    kept
+}
 
 pub(in crate::agents) fn started(program: &str, args: Vec<String>) -> Command {
     let mut command = crate::process::program::command_without_cmd(program);

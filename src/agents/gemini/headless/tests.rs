@@ -108,7 +108,7 @@ mod the_rules {
 
     const WANTED: &str = r#"[[rule]]
 toolName = "run_shell_command"
-commandPrefix = ["cornercase", "git log", "git show", "git diff", "git status", "gh pr list", "gh pr view", "gh pr checks", "gh issue list", "gh issue view"]
+commandPrefix = ["cornercase", "gh pr list", "gh pr view", "gh pr checks", "gh issue list", "gh issue view"]
 decision = "allow"
 priority = 900
 
@@ -175,5 +175,21 @@ priority = 950
     fn a_protected_file_is_denied_with_its_dots_escaped() {
         let ask = Ask { protected: vec!["bot.json", "keys.txt"], ..ask(Tools::Bot(Access::Cornercase)) };
         assert!(policy(&ask).contains(r"[kK][eE][yY][sS]\.[tT][xX][tT]"));
+    }
+}
+
+mod the_brief {
+    use crate::agents::headless::Access;
+    use crate::bots::{Bot, brief, sample};
+
+    #[test]
+    fn a_gemini_bot_is_taught_no_git_and_only_the_gh_its_policy_allows() {
+        let bot = Bot { agent: String::from("gemini"), access: Access::Cornercase, ..sample("prs", "PRs") };
+        let taught = brief::taught(&brief::brief(&bot, std::path::Path::new("/b")), "/w/shop");
+        assert!(!taught.iter().any(|command| command.starts_with("git ")), "{taught:?}");
+        let allowed = super::allowed_prefixes();
+        for command in taught {
+            assert!(allowed.iter().any(|prefix| command.starts_with(prefix.as_str())), "{command}");
+        }
     }
 }
