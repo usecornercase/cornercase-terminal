@@ -221,7 +221,13 @@ mod the_envelope {
     use super::*;
 
     fn full() -> Envelope {
-        Envelope { view: Some(7), boot: Some("1-2".into()), contract: Some(1) }
+        Envelope {
+            view: Some(7),
+            boot: Some("1-2".into()),
+            contract: Some(1),
+            bot: Some("prs".into()),
+            bot_run: Some(12),
+        }
     }
 
     #[rstest]
@@ -271,6 +277,12 @@ mod a_request_without_a_boot {
         let structured = Envelope { contract: Some(1), ..Envelope::default() };
 
         assert_eq!(keys_sent(structured), ["args", "caller", "command", "contract", "server"]);
+    }
+
+    #[test]
+    fn a_bot_envelope_writes_bot_and_bot_run() {
+        let envelope = Envelope { bot: Some("prs".into()), bot_run: Some(12), ..Envelope::default() };
+        assert_eq!(keys_sent(envelope), ["args", "bot", "bot_run", "caller", "command", "server"]);
     }
 }
 
@@ -955,5 +967,18 @@ mod an_answer_through_another_machine {
         let followed = follow_on(ours, None, Some(&vps()), |_| Ok(false));
 
         assert!(matches!(&followed, Err(Error::Control(message)) if message == NAMED), "{followed:?}");
+    }
+}
+
+mod the_bot_in_the_envelope {
+    use super::*;
+
+    #[test]
+    fn the_envelope_leaves_the_bot_out_under_remote_and_without_a_bot() {
+        assert_eq!(bot_of(Some("prs".into()), Some("12".into()), false), (Some("prs".into()), Some(12)));
+        assert_eq!(bot_of(Some("prs".into()), Some("12".into()), true), (None, None));
+        assert_eq!(bot_of(Some(String::new()), Some("12".into()), false), (None, None));
+        assert_eq!(bot_of(Some("prs".into()), Some("x".into()), false), (Some("prs".into()), None));
+        assert_eq!(bot_of(None, None, false), (None, None));
     }
 }

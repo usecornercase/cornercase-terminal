@@ -29,6 +29,7 @@ fn tab() -> TabInfo {
         custom_name: None,
         layout: None,
         controller: None,
+        bot: None,
     }
 }
 

@@ -257,3 +257,34 @@ fn a_bots_turn_cannot_stop_restart_or_update_the_server_even_without_its_variabl
     assert_eq!(stderr.matches("a bot cannot stop its own server").count(), 3, "{stderr}");
     assert_eq!(session.says(&["contract", "--json"]), boot);
 }
+
+#[test]
+fn an_agent_a_bot_starts_is_tagged_and_its_chat_says_so() {
+    let session = started_running(
+        "[ -n \"$CORNERCASE_BOT\" ] || exit 0\ncornercase start claude --project \"$(cat \"$0.project\")\" --prompt fix > \"$0.start\" 2>&1",
+    );
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("json");
+    let project = status["projects"][0]["id"].as_u64().expect("a project").to_string();
+    std::fs::write(session.dir.join("claude-bot.project"), &project).expect("the project");
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+
+    let started = std::fs::read_to_string(session.dir.join("claude-bot.start")).unwrap_or_default();
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("json");
+    let panes: Vec<&Value> = status["projects"]
+        .as_array()
+        .expect("projects")
+        .iter()
+        .flat_map(|project| project["workspaces"].as_array().into_iter().flatten())
+        .flat_map(|workspace| workspace["tabs"].as_array().into_iter().flatten())
+        .flat_map(|tab| tab["panes"].as_array().into_iter().flatten())
+        .collect();
+    assert_eq!(panes.iter().filter(|pane| pane["bot"].as_str() == Some("prs")).count(), 1, "{started}: {status}");
+    let history = session.says(&["bot", "history", "prs"]);
+    assert!(history.contains("▶ started claude in"), "{history}");
+    let listed: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    assert_eq!(listed["bots"][0]["following"].as_array().map(Vec::len), Some(1), "{listed}");
+}

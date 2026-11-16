@@ -624,6 +624,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         free_builds: false,
         fresh: None,
         summary: false,
+        bot: None,
     };
 
     let refused = team.app.open_run(workspace_at(&team.app, 0, 0), starting, AREA, false).expect_err("refused");

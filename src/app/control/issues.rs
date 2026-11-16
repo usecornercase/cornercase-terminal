@@ -528,6 +528,7 @@ impl App {
             free_builds: run.free_builds,
             fresh: run.fresh,
             summary: false,
+            bot: asker.bot,
         };
         self.run_refusal(p, &starting)?;
         starting.task = run.prompt.trim().to_string();

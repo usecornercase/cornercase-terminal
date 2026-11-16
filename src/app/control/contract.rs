@@ -10,7 +10,7 @@ pub(super) const NOT_LOOKING: &[(&str, &str)] = &[("update-check", DEVELOPMENT),
 
 const OPT_IN: [&str; 2] = ["contract", "boot"];
 
-const NULLABLE: [&str; 3] = ["contract", "boot", "view"];
+const NULLABLE: [&str; 5] = ["contract", "boot", "view", "bot", "bot_run"];
 
 const ON_A_MACHINE: [&str; 6] = ["start", "start-with", "new-workspace", "flow-run", "stats", "usage"];
 

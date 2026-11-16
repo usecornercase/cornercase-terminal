@@ -12,8 +12,13 @@ fn named(access: Access) -> Bot {
 
 #[test]
 fn the_opening_has_the_brief_the_two_files_and_then_the_text() {
-    let text =
-        opening(&named(Access::Cornercase), Path::new("/b/prs"), ("review PRs", "likes short"), None, "hi there");
+    let text = opening(
+        &named(Access::Cornercase),
+        Path::new("/b/prs"),
+        ("review PRs", "likes short"),
+        None,
+        &said(false, "hi there"),
+    );
     let at = |needle: &str| text.find(needle).unwrap_or_else(|| panic!("{needle} in {text}"));
     assert!(at("You are PRs") < at("`/b/prs`"));
     assert!(at("`/b/prs`") < at("## bot.md"));
@@ -114,7 +119,7 @@ fn the_brief_teaches_scheduling_with_the_bots_own_id() {
     assert!(text.contains("cornercase queue add --every 'weekday 09:00'"), "{text}");
     assert!(text.contains("cornercase queue list --bot prs --json"), "{text}");
     assert!(!text.contains("Routines, and what happens"), "{text}");
-    assert!(text.contains("happens when an agent you started finishes comes in a later release"));
+    assert!(text.contains("When an agent you started finishes, you get a message with its last message"), "{text}");
 }
 
 fn flags_named(text: &str) -> Vec<(Vec<String>, String)> {
@@ -179,9 +184,9 @@ fn what_the_routines_answered_goes_in_front_of_the_message_and_is_capped() {
     assert!(
         one.starts_with("## Since your last message, your routines answered\n\n[Review PRs, 09:00]\nTwo are blocked.")
     );
-    assert_eq!(resumed(Some(&one), "ok"), format!("{one}\n\n## The user says\n\nok"));
+    assert_eq!(resumed(Some(&one), &said(false, "ok")), format!("{one}\n\n## The user says\n\nok"));
     assert_eq!(resumed(None, "ok"), "ok");
-    let opened = opening(&named(Access::Cornercase), Path::new("/b"), ("a", "b"), Some(&one), "go");
+    let opened = opening(&named(Access::Cornercase), Path::new("/b"), ("a", "b"), Some(&one), &said(false, "go"));
     assert!(opened.find("## memory.md").expect("memory") < opened.find("## Since your last").expect("told"));
     assert!(opened.find("## Since your last").expect("told") < opened.find("## The user says").expect("says"));
 }
@@ -195,4 +200,19 @@ fn a_long_answer_and_a_long_list_of_answers_are_capped() {
     assert!(capped.len() <= TOLD_CAP + 400, "{}", capped.len());
     assert!(capped.contains("[Run 9, 09:00]") && !capped.contains("[Run 0, 09:00]"));
     assert!(capped.contains("older answers: `cornercase bot history prs`"), "{capped}");
+}
+
+#[test]
+fn the_brief_says_how_it_hears_of_agents_and_not_when_follow_is_off() {
+    let on = brief(&named(Access::Cornercase), Path::new("/b"));
+    assert!(on.contains("When an agent you started finishes, you get a message"), "{on}");
+    let off = brief(&Bot { follow: false, ..named(Access::Cornercase) }, Path::new("/b"));
+    assert!(off.contains("You are not told when an agent you started finishes"), "{off}");
+    assert!(!off.contains("you get a message"), "{off}");
+}
+
+#[test]
+fn a_report_is_headed_cornercase_says() {
+    assert_eq!(said(true, "an agent finished"), "## cornercase says\n\nan agent finished");
+    assert_eq!(said(false, "hi"), "## The user says\n\nhi");
 }

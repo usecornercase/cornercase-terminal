@@ -25,6 +25,7 @@ mod held;
 pub(crate) mod issues;
 pub(crate) mod machines;
 pub(crate) mod pair;
+mod panes;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -47,6 +48,7 @@ mod watch;
 pub(crate) mod worktrees;
 
 use fields::{Fields, chosen};
+pub(crate) use panes::{NewTab, Split};
 pub(crate) use todo::{Todo, TodoSend};
 
 pub(crate) use accounts::{
@@ -125,6 +127,10 @@ pub(crate) struct Request {
     pub(crate) boot: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) view: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) bot: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) bot_run: Option<u64>,
     #[serde(flatten)]
     pub(crate) command: Command,
 }
@@ -722,26 +728,6 @@ pub(crate) struct NewWorkspace {
     pub(crate) machine_boot: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fresh: Option<bool>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct NewTab {
-    pub(crate) workspace: Option<u64>,
-    pub(crate) name: Option<String>,
-    pub(crate) command: Option<String>,
-    pub(crate) focus: bool,
-    pub(crate) profile: Option<String>,
-    pub(crate) accounts: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct Split {
-    pub(crate) pane: Option<u64>,
-    pub(crate) down: bool,
-    pub(crate) command: Option<String>,
-    pub(crate) focus: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

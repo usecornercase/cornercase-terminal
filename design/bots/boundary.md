@@ -60,3 +60,5 @@ Under `cornercase` access, **the server refuses what a bot types into a pane tha
 **Rejected for #883**: refusing `Hello` alone (an `Event` before any `Hello` is ignored today, but a window's other messages change what a window sees, and an allow list of requests fails closed); keeping the connection open as a stop does (a stop's text is an answer the command line prints; a window has nothing more to say); refusing only in the guard (a process that drops `CORNERCASE_BOT` would still attach).
 
 **The queue** (#846): a bot's connection may add, edit, pause, resume, remove and run only its own bot's entries; `clear-started`, and project or other bots' entries, are refused (see [Bot routines](routines.md)).
+
+- **A request's `bot` and `bot_run` never widen what a connection may do** (#847): they only label the panes a request creates. A marked connection tags with its own bot whatever it names, so a `cornercase` bot cannot make a `full` bot take turns on text it controls ([Following](following.md)).

@@ -4,10 +4,12 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
+use crate::agents::activity::Status;
 use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
 use crate::ui::layout::Areas;
 use crate::ui::rows::draw_more;
+use crate::ui::theme::status_icon;
 use crate::ui::widgets::draw_title;
 
 const LABEL: usize = 9;
@@ -19,11 +21,13 @@ pub(crate) struct CardRow {
     pub(crate) value: String,
     pub(crate) red: bool,
     pub(crate) folder: bool,
+    pub(crate) status: Option<Status>,
+    pub(crate) pane: Option<u64>,
 }
 
 impl CardRow {
     pub(crate) fn new(label: &'static str, value: impl Into<String>) -> Self {
-        Self { label, value: value.into(), red: false, folder: false }
+        Self { label, value: value.into(), red: false, folder: false, status: None, pane: None }
     }
 }
 
@@ -55,8 +59,12 @@ pub(crate) fn card_folder(list: Rect, card: &BotCard) -> Rect {
     if at >= shown_rows(list, card) {
         return Rect::default();
     }
-    let y = list.y.saturating_add(HEADER).saturating_add(u16::try_from(at).unwrap_or(u16::MAX));
-    Rect { y, height: 1, ..list }.intersection(list)
+    card_row(list, at)
+}
+
+pub(crate) fn card_row_at(list: Rect, card: &BotCard, pos: ratatui::layout::Position) -> Option<usize> {
+    let list = inner(list);
+    (0..shown_rows(list, card)).find(|at| card_row(list, *at).contains(pos))
 }
 
 pub(in crate::ui) fn draw_card(f: &mut Frame, view: &View, card: &BotCard, areas: &Areas) {
@@ -82,7 +90,8 @@ fn card_row(list: Rect, i: usize) -> Rect {
 }
 
 fn card_line(view: &View, row: &CardRow, width: usize) -> Line<'static> {
-    let room = width.saturating_sub(LABEL);
+    let icon = row.status.map(|status| status_icon(view.muted, status, view.spin));
+    let room = width.saturating_sub(LABEL + icon.as_ref().map_or(0, |_| 2));
     let value = if row.folder { truncate_left(&row.value, room) } else { truncate_right(&row.value, room) };
     let style = if row.red {
         Style::default().fg(Color::Red)
@@ -91,8 +100,10 @@ fn card_line(view: &View, row: &CardRow, width: usize) -> Line<'static> {
     } else {
         Style::default().fg(view.soft)
     };
-    Line::from(vec![
-        Span::styled(format!("{:<LABEL$}", row.label), Style::default().fg(view.muted)),
-        Span::styled(value, style),
-    ])
+    let mut spans = vec![Span::styled(format!("{:<LABEL$}", row.label), Style::default().fg(view.muted))];
+    if let Some(icon) = icon {
+        spans.extend([icon, Span::raw(" ")]);
+    }
+    spans.push(Span::styled(value, style));
+    Line::from(spans)
 }

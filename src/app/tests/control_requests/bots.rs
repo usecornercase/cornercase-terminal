@@ -7,6 +7,7 @@ use crate::app::tests::bots::settle;
 use crate::bots::chat::Kind;
 use crate::test_util::{TempDir, fake_program, fixture};
 
+mod following;
 mod routines;
 
 const ANSWER: &str = fixture!("claude/2.1.325/bot-new.jsonl");

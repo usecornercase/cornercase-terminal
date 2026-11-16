@@ -8,6 +8,7 @@ fn opus(percent: u16) -> Details {
         memory: None,
         account: None,
         compacted: false,
+        by: None,
     }
 }
 
@@ -55,6 +56,7 @@ fn agent(name: &str, model: &str, percent: Option<u16>) -> View<'static> {
         memory: None,
         account: None,
         compacted: false,
+        by: None,
     });
     let tab = &mut view.workspaces[0].tabs[0];
     tab.name = name.into();
@@ -288,4 +290,11 @@ fn a_narrow_column_cuts_the_model_then_the_account(
     let v = View { widths: Widths { workspaces, ..Widths::default() }, ..with_details(details) };
     let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
     assert_eq!(line(&render(&v), r, 1), expected);
+}
+
+#[test]
+fn a_tab_started_by_a_bot_says_by_its_name() {
+    let details = Details { by: Some("prs".into()), ..opus(17) };
+    let text = format!("{}", render(&with_details(details)).backend());
+    assert!(text.contains("by prs · 17%"), "{text}");
 }

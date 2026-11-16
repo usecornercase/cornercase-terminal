@@ -6,7 +6,7 @@ use super::args::bot::{BotAction, BotNameArgs, EditArgs, HistoryArgs, NewArgs, S
 use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
-use crate::client::{answer, ask, use_bot_about, use_bot_setup, use_bots};
+use crate::client::{answer, ask, use_bot_about, use_bot_follow, use_bot_setup, use_bots};
 use crate::control::Command;
 use crate::control::bots::{AgentInfo, BotHistory, BotInfo, BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::error::{Error, Result};
@@ -86,7 +86,19 @@ fn agents(json: bool) -> Result<bool> {
     Ok(true)
 }
 
+fn follow_value(given: Option<&str>) -> Option<bool> {
+    given.map(|given| given == "on")
+}
+
+fn follow_of(given: Option<&str>) -> Result<Option<bool>> {
+    if given.is_some() {
+        use_bot_follow()?;
+    }
+    Ok(follow_value(given))
+}
+
 fn made(args: &NewArgs) -> Result<bool> {
+    let follow = follow_of(args.follow.as_deref())?;
     let new = NewBot {
         name: args.name.clone(),
         agent: args.agent.clone(),
@@ -94,6 +106,7 @@ fn made(args: &NewArgs) -> Result<bool> {
         effort: args.effort.clone(),
         account: args.account.clone(),
         access: args.access.clone(),
+        follow,
         about: args.about.clone().unwrap_or_default(),
     };
     let value = send(BotRequest::New(new))?;
@@ -106,6 +119,7 @@ fn made(args: &NewArgs) -> Result<bool> {
 }
 
 fn edited(args: &EditArgs) -> Result<bool> {
+    let follow = follow_of(args.follow.as_deref())?;
     let edit = EditBot {
         bot: args.bot.clone(),
         name: args.name.clone(),
@@ -114,6 +128,7 @@ fn edited(args: &EditArgs) -> Result<bool> {
         effort: args.effort.clone(),
         account: args.account.clone(),
         access: args.access.clone(),
+        follow,
         about: args.about.clone(),
     };
     if edit.about.is_some() {

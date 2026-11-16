@@ -12,6 +12,7 @@ use super::theme::{BRAND_COLOR, status_icon};
 use super::widgets::{button_style, draw_band, draw_button, draw_separator, middle};
 use crate::agents::activity::Status;
 
+pub(crate) mod agent;
 pub(crate) mod card;
 pub(crate) mod chat;
 pub(crate) mod run;

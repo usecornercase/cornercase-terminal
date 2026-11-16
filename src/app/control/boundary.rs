@@ -42,12 +42,17 @@ impl BotClients {
         self.clients.contains_key(&client)
     }
 
-    fn bot_of(&self, client: u64) -> Option<&str> {
+    pub(in crate::app) fn bot_of(&self, client: u64) -> Option<&str> {
         self.clients.get(&client).map(String::as_str)
     }
 
     fn insert(&mut self, client: u64, bot: String) {
         self.clients.insert(client, bot);
+    }
+
+    #[cfg(all(test, unix))]
+    pub(in crate::app) fn marked(&mut self, client: u64, bot: &str) {
+        self.insert(client, bot.to_string());
     }
 
     pub(in crate::app) fn forget(&mut self, client: u64, pending: impl Iterator<Item = u64>) {

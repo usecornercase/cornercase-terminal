@@ -41,6 +41,8 @@ const SETTING_UP_LABEL: &str = "setting up…";
 
 const CONTEXT_SEPARATOR: &str = " · ";
 
+const BY: &str = "by ";
+const MIN_BY_WIDTH: usize = 4;
 const MIN_MODEL_WIDTH: usize = 4;
 const MIN_ACCOUNT_WIDTH: usize = 3;
 
@@ -277,6 +279,7 @@ pub struct Details {
     pub(crate) subagents: usize,
     pub(crate) memory: Option<u64>,
     pub(crate) compacted: bool,
+    pub(crate) by: Option<String>,
 }
 
 impl Details {
@@ -287,7 +290,8 @@ impl Details {
                 || self.percent.is_some()
                 || self.subagents > 0
                 || self.memory.is_some()
-                || self.compacted,
+                || self.compacted
+                || self.by.is_some(),
         )
     }
 }
@@ -648,9 +652,11 @@ pub(super) fn draw_details(f: &mut Frame, muted: Color, line: DetailLine) {
     let free = usize::from(r.width).saturating_sub(reserved + 1);
     let indent = indent.min(free.saturating_sub(fixed_width.saturating_sub(separator)));
     let room = free.saturating_sub(indent + fixed_width);
+    let by = by_span(details.by.as_deref(), room.saturating_sub(separator), dim);
+    let room = room.saturating_sub(by.as_ref().map_or(0, |by| by.width() + separator));
     let account_width = details.account.as_ref().map_or(0, |name| name.chars().count() + separator);
     let model_room = room.saturating_sub(account_width);
-    let alone = fixed.is_empty() && lead.is_none() && details.account.is_none();
+    let alone = fixed.is_empty() && lead.is_none() && details.account.is_none() && by.is_none();
     let model = details
         .model
         .as_ref()
@@ -662,10 +668,17 @@ pub(super) fn draw_details(f: &mut Frame, muted: Color, line: DetailLine) {
         .as_ref()
         .filter(|name| account_room >= name.chars().count().min(MIN_ACCOUNT_WIDTH))
         .map(|name| Span::styled(truncate_right(name, account_room), dim));
-    let parts = lead.into_iter().chain(model).chain(account).chain(fixed);
+    let parts = lead.into_iter().chain(by).chain(model).chain(account).chain(fixed);
     let mut line = vec![Span::raw(" ".repeat(indent))];
     line.extend(parts.flat_map(|part| [Span::styled(CONTEXT_SEPARATOR, dim), part]).skip(1));
     f.render_widget(Paragraph::new(Line::from(line)), r);
+}
+
+fn by_span(name: Option<&str>, room: usize, dim: Style) -> Option<Span<'static>> {
+    let name = name?;
+    let kept = room.checked_sub(BY.chars().count())?;
+    (kept >= MIN_BY_WIDTH.min(name.chars().count()))
+        .then(|| Span::styled(format!("{BY}{}", truncate_right(name, kept)), dim))
 }
 
 fn percent_span(details: &Details, dim: Style) -> Option<Span<'static>> {

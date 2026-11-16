@@ -11,7 +11,8 @@ fn input(folder: &Path, conversation: Option<&str>) -> Input {
         bot: Bot { conversation: conversation.map(str::to_string), ..sample("prs", "PRs") },
         folder: folder.to_path_buf(),
         text: String::from("hello"),
-        kind: Kind::Chat,
+        session: Session::Chat,
+        from_cornercase: false,
         told: None,
         program: String::from("claude"),
         home: None,
@@ -92,7 +93,7 @@ fn a_run_opens_a_new_session_even_when_the_bot_has_a_conversation() {
     let dir = TempDir::new();
     let made = folder::create(dir.path(), &sample("prs", "PRs"), "review").expect("create");
     let run = Input {
-        kind: Kind::Run,
+        session: Session::NewRun(12),
         text: String::from("This is your routine \"x\" (every 2h). Go."),
         ..input(&made, Some("s1"))
     };
@@ -113,11 +114,50 @@ fn what_the_routines_answered_is_put_in_front_of_a_resumed_message_once_given() 
     assert_eq!(asked.conversation.as_deref(), Some("s1"));
 }
 
+fn variable(asked: &Ask, key: &str) -> std::result::Result<Option<OsString>, ()> {
+    asked.env.iter().find(|(name, _)| *name == key).map(|(_, value)| value.clone()).ok_or(())
+}
+
+#[test]
+fn a_run_follow_up_resumes_the_run_session_and_sets_the_run_variable() {
+    let dir = TempDir::new();
+    let made = folder::create(dir.path(), &sample("prs", "PRs"), "").expect("create");
+    let follow = Input {
+        session: Session::Resume { run: 12, session: String::from("run-s") },
+        text: String::from("The agent you started finished."),
+        ..input(&made, Some("chat-s"))
+    };
+    let asked = ask(&follow, None, None);
+    assert_eq!(asked.conversation.as_deref(), Some("run-s"));
+    assert_eq!(asked.prompt, "The agent you started finished.");
+    assert_eq!(variable(&asked, "CORNERCASE_BOT_RUN"), Ok(Some(OsString::from("12"))));
+}
+
+#[test]
+fn a_chat_turn_removes_the_run_variable() {
+    let dir = TempDir::new();
+    let made = folder::create(dir.path(), &sample("prs", "PRs"), "").expect("create");
+    let asked = ask(&input(&made, Some("s1")), None, None);
+    assert_eq!(variable(&asked, "CORNERCASE_BOT_RUN"), Ok(None));
+}
+
+#[test]
+fn a_reports_only_opening_says_cornercase_says() {
+    let dir = TempDir::new();
+    let made = folder::create(dir.path(), &sample("prs", "PRs"), "").expect("create");
+    let first = ask(&Input { from_cornercase: true, ..input(&made, None) }, None, None);
+    assert!(first.prompt.ends_with("## cornercase says\n\nhello"), "{}", first.prompt);
+    let next = ask(&Input { from_cornercase: true, ..input(&made, Some("s1")) }, None, None);
+    assert_eq!(next.prompt, "## cornercase says\n\nhello");
+    let plain = ask(&input(&made, Some("s1")), None, None);
+    assert_eq!(plain.prompt, "hello");
+}
+
 #[test]
 fn a_setup_opens_a_new_session_with_the_setup_section_even_when_the_bot_has_a_conversation() {
     let dir = TempDir::new();
     let made = folder::create(dir.path(), &sample("prs", "PRs"), "review").expect("create");
-    let setup = Input { kind: Kind::Setup, ..input(&made, Some("s1")) };
+    let setup = Input { session: Session::Setup, ..input(&made, Some("s1")) };
     let asked = ask(&setup, None, None);
     assert_eq!(asked.conversation, None);
     assert!(asked.prompt.contains("You are PRs") && asked.prompt.contains("## You were just made"), "{}", asked.prompt);

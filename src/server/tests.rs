@@ -83,6 +83,7 @@ pub(super) mod a_bug {
                 accounts: std::collections::BTreeMap::new(),
                 closed: None,
                 exited_agent: None,
+                bot: None,
             }],
             active: 0,
             layout: None,

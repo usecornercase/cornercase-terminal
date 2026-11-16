@@ -1,6 +1,6 @@
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
@@ -12,7 +12,7 @@ use crate::ui::combo;
 use crate::ui::widgets::{EditorField, draw_editor, overlay_block};
 
 const LABEL: u16 = 9;
-const HEIGHT: u16 = 19;
+const HEIGHT: u16 = 20;
 const WIDE: u16 = 46;
 const ABOUT_ROWS: u16 = 4;
 const CORNERCASE_NOTE: &str = "through cornercase: reads anything, writes only in its folder";
@@ -41,7 +41,7 @@ fn inner(screen: Rect) -> Rect {
 
 fn row_of(form: &Form, field: Field) -> u16 {
     let at = form.fields().iter().position(|shown| *shown == field).unwrap_or_default();
-    let notes = if field == Field::About { 2 } else { 0 };
+    let notes = if matches!(field, Field::Follow | Field::About) { 2 } else { 0 };
     u16::try_from(at).unwrap_or_default() + notes
 }
 
@@ -119,6 +119,7 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
         (Field::Effort, "Effort"),
         (Field::Account, "Account"),
         (Field::Access, "Access"),
+        (Field::Follow, "Follow"),
         (Field::About, "For"),
     ];
     for (field, label) in labels {
@@ -134,7 +135,9 @@ fn draw_fields(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     for field in form.fields() {
         let r = rect(screen, form, field);
         let focused = typing && form.focus == field;
-        if let Some(editor) = form.editor_of(field) {
+        if field == Field::Follow {
+            draw_follow(f, r, form.follow, focused);
+        } else if let Some(editor) = form.editor_of(field) {
             let placeholder = if field == Field::About { "optional: what the bot is for" } else { "" };
             let at = EditorField { field: r, text: text(screen, form, field), focused, placeholder };
             draw_editor(f, view, editor, at);
@@ -143,6 +146,13 @@ fn draw_fields(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
             draw_combo(f, view, r, (choices, field, focused), grey);
         }
     }
+}
+
+fn draw_follow(f: &mut Frame, r: Rect, follow: bool, focused: bool) {
+    let mark = if follow { "[x]" } else { "[ ]" };
+    let style = if focused { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
+    let text = format!("{mark} tell it when an agent it starts finishes");
+    f.render_widget(Paragraph::new(Span::styled(text, style)), Rect { x: r.x + 1, ..r }.intersection(r));
 }
 
 fn draw_combo(

@@ -29,9 +29,17 @@ const CLIENT: u64 = 9;
 
 fn request(app: &mut App, caller: Option<u64>, command: Command, area: Option<Rect>) {
     let server = caller.map(|_| wire::server_token().to_string());
-    let text =
-        serde_json::to_string(&wire::Request { caller, server, contract: None, boot: None, view: None, command })
-            .expect("json");
+    let text = serde_json::to_string(&wire::Request {
+        caller,
+        server,
+        contract: None,
+        boot: None,
+        view: None,
+        bot: None,
+        bot_run: None,
+        command,
+    })
+    .expect("json");
     app.request(CLIENT, &text, area, Instant::now());
 }
 

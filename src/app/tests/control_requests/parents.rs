@@ -31,6 +31,8 @@ fn ask_as_another_server(app: &mut App, caller: u64, command: Command) {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command,
     })
     .expect("json");

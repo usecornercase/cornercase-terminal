@@ -44,7 +44,8 @@ impl App {
             .and_then(|t| self.pane_account(t))
             .or_else(|| tab.panes.iter().find_map(|t| self.pane_account(t)));
         let details = self.details(tab.context(), tab.memory(), tab.subagents(), account);
-        ui::Details { compacted: self.shows_compaction(tab.compacted()), ..details }
+        let by = tab.bot().and_then(|id| self.bot_name_of(id));
+        ui::Details { compacted: self.shows_compaction(tab.compacted()), by, ..details }
     }
 
     pub(super) fn shows_compaction(&self, compacted: bool) -> bool {
@@ -85,6 +86,7 @@ impl App {
             subagents,
             memory: memory.filter(|_| self.config.memory),
             compacted: false,
+            by: None,
         }
     }
 

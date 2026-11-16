@@ -76,3 +76,16 @@ fn the_server_stops_name_the_commands_and_what_they_ask() {
         assert!(!stops_server(asked), "{asked}");
     }
 }
+
+#[test]
+fn a_bot_without_follow_reads_as_following_and_is_written_as_before() {
+    let text = serde_json::to_string(&sample("prs", "PRs")).expect("json");
+    assert!(!text.contains("follow"), "{text}");
+    let old = text.replace(",\"conversation\":null", "");
+    let read: Bot = serde_json::from_str(&old).expect("an old bot.json");
+    assert!(read.follow);
+    let off = serde_json::to_string(&Bot { follow: false, ..sample("prs", "PRs") }).expect("json");
+    assert!(off.contains("\"follow\":false"), "{off}");
+    let back: Bot = serde_json::from_str(&off).expect("read back");
+    assert!(!back.follow);
+}

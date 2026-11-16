@@ -16,6 +16,8 @@ fn a_request_names_its_command_next_to_its_arguments() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: read(3),
     };
 
@@ -35,7 +37,16 @@ fn fields_from_a_newer_command_are_ignored() {
 
     assert_eq!(
         request,
-        Request { caller: Some(7), server: None, contract: None, boot: None, view: None, command: read(3) }
+        Request {
+            caller: Some(7),
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            bot: None,
+            bot_run: None,
+            command: read(3)
+        }
     );
 }
 
@@ -232,6 +243,8 @@ fn every_command_is_listed_by_name() {
                 contract: None,
                 boot: None,
                 view: None,
+                bot: None,
+                bot_run: None,
                 command: command.clone(),
             };
             let sent = serde_json::to_value(request).expect("json");
@@ -305,6 +318,8 @@ fn a_search_travels_as_its_query_and_logs_only_its_size() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: Command::Search(Search { query: "checkout".into(), ..Search::default() }),
     };
     let sent = serde_json::to_string(&request).expect("json");
@@ -331,6 +346,8 @@ fn a_reveal_travels_as_its_query_and_line_and_logs_only_its_size() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: Command::Focus(Focus { item: Item::Pane(4), reveal: Some(reveal) }),
     };
     let sent = serde_json::to_string(&request).expect("json");
@@ -494,6 +511,8 @@ fn turn_over_is_spelt_as_on_the_command_line() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: wait,
     })
     .expect("json");

@@ -48,7 +48,16 @@ fn changes_of(app: &App, workspace: u64) -> Option<wire::ChangesCount> {
 }
 
 fn call(app: &mut App, client: u64, view: Option<u64>, command: Command) -> serde_json::Value {
-    let request = wire::Request { caller: None, server: None, contract: None, boot: None, view, command };
+    let request = wire::Request {
+        caller: None,
+        server: None,
+        contract: None,
+        boot: None,
+        view,
+        bot: None,
+        bot_run: None,
+        command,
+    };
     app.request(client, &serde_json::to_string(&request).expect("json"), Some(AREA), Instant::now());
     let answers = app.take_answers();
     let (_, text) = answers.into_iter().find(|(who, _)| *who == client).expect("an answer");

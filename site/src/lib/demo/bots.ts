@@ -3,7 +3,7 @@ import type { BotsShape } from './layout';
 import type { Key } from './programs';
 import { type Editable, editKey, removeSelection } from './todo';
 
-export type LineKind = 'you' | 'bot' | 'step' | 'error' | 'notice';
+export type LineKind = 'you' | 'bot' | 'step' | 'error' | 'notice' | 'started' | 'finished' | 'waiting';
 export type Access = 'cornercase' | 'full';
 
 export interface ChatLine {
@@ -12,6 +12,8 @@ export interface ChatLine {
   text: string;
   at: number;
   routine?: number;
+  agent?: { kind: string; pane: number };
+  body?: string;
 }
 
 export interface BotRoutine {
@@ -212,8 +214,16 @@ export class Bots {
     return bot;
   }
 
-  add(bot: Bot, at: number, kind: LineKind, text: string, routine?: number): ChatLine {
-    const line: ChatLine = { id: this.next++, kind, text, at, ...(routine === undefined ? {} : { routine }) };
+  add(bot: Bot, at: number, kind: LineKind, text: string, routine?: number, agent?: { line: ChatLine['agent']; body?: string }): ChatLine {
+    const line: ChatLine = {
+      id: this.next++,
+      kind,
+      text,
+      at,
+      ...(routine === undefined ? {} : { routine }),
+      ...(agent?.line ? { agent: agent.line } : {}),
+      ...(agent?.body === undefined ? {} : { body: agent.body }),
+    };
     bot.lines.push(line);
     if (bot.scroll > 0) bot.below = true;
     return line;
@@ -417,6 +427,16 @@ export function seedBots(app: App): void {
   bots.add(prs, now - 8 * MINUTE, 'step', 'gh pr checks 490');
   bots.add(prs, now - 7 * MINUTE, 'bot', PRS_ANSWER);
   bots.add(prs, now - 5 * MINUTE, 'notice', 'new conversation');
+  const fixed = { kind: 'claude', pane: 0 };
+  bots.add(prs, now - 4 * MINUTE, 'you', 'start an agent to fix the failing test of #490');
+  bots.add(prs, now - 4 * MINUTE + 5000, 'step', 'cornercase start --project 1 --worktree fix/macos-test --prompt "Fix the failing test (macos) of #490"');
+  bots.add(prs, now - 4 * MINUTE + 8000, 'started', '▶ started claude in web-shop › fix/macos-test', undefined, { line: fixed });
+  bots.add(prs, now - 4 * MINUTE + 12000, 'bot', "Started Claude Code on `fix/macos-test`. I'll tell you when it's done.");
+  bots.add(prs, now - 2 * MINUTE, 'finished', '✓ claude finished in web-shop › fix/macos-test', undefined, {
+    line: fixed,
+    body: 'Fixed the flaky path in `tests/paths.rs` and pushed `fix/macos-test`.\nAll 214 tests pass on macOS.',
+  });
+  bots.add(prs, now - 2 * MINUTE + 6000, 'bot', '#490 passes `test (macos)` now. Nothing else is blocking it: it needs one review.');
   const digest = bots.create({ name: 'digest', agent: 'codex', model: '', access: 'full', about: 'A short digest of what merged yesterday' });
   bots.add(digest, now - 2 * 60 * MINUTE, 'you', 'what merged yesterday?');
   bots.add(digest, now - 2 * 60 * MINUTE, 'step', 'cornercase status --json');

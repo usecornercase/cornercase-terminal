@@ -34,6 +34,7 @@ fn tree_workspaces() -> Vec<Vec<WorkspaceEntry>> {
         memory: None,
         account: None,
         compacted: false,
+        by: None,
     };
     let claude = TabEntry { status: Some(Status::Working), details, ..TabEntry::from("claude") };
     let finished = TabEntry { status: Some(Status::Done), ..TabEntry::from("") };

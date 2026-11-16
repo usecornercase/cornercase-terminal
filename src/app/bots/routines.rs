@@ -8,7 +8,7 @@ use crate::app::App;
 use crate::app::notifications::{Message, MessageKind};
 use crate::bots::brief::{TOLD_KEPT, Told};
 use crate::bots::chat::{self, Answer, Line};
-use crate::bots::turn;
+use crate::bots::turn::{self, Session};
 use crate::error::Result;
 use crate::log;
 use crate::queue::{self, Entry};
@@ -52,7 +52,7 @@ impl App {
         let label = entry.task.label.clone();
         self.bot_append(at, |id, now| head_line(id, now, (&label, &clock), entry.id));
         let text = crate::bots::brief::run_text(&label, self.routine_repeat(entry), &clock, &entry.task.prompt);
-        let input = turn::Input { kind: turn::Kind::Run, ..self.bot_input(at, text) };
+        let input = turn::Input { session: Session::NewRun(entry.id), ..self.bot_input(at, text) };
         let turn = self.panels.bots.next_turn;
         self.panels.bots.next_turn += 1;
         let running = Running::default();
@@ -113,9 +113,7 @@ impl App {
         let (text, cut) = queue::outcome::cap(&ran.text);
         let outcome = queue::outcome::Outcome { at: line.at, text, cut, agent: Some(agent), ..Default::default() };
         self.panels.queued.answered(run.entry, ran.session, outcome);
-        let unseen = &mut self.panels.bots.live[at].unseen;
-        unseen.push(Told { label: run.label.clone(), clock: run.clock.clone(), text: ran.text });
-        unseen.drain(..unseen.len().saturating_sub(TOLD_KEPT));
+        self.tell_chat(at, Told { label: run.label.clone(), clock: run.clock.clone(), text: ran.text });
         if !self.bot_on_screen(at) {
             let who = format!("{} · {}", self.panels.bots.live[at].bot.name, run.label);
             self.bot_notify(at, &line, &who);
@@ -123,11 +121,21 @@ impl App {
         "answered"
     }
 
-    pub(in crate::app) fn bot_entry_failed(&mut self, at: usize, entry: u64, reason: &str, headed: bool) {
-        let (label, clock) = match self.panels.queued.queue().entry(entry) {
-            Some(found) => (found.task.label.clone(), Self::run_clock(found, crate::time::now())),
+    pub(super) fn run_label(&self, entry: u64, at: i64) -> (String, String) {
+        match self.panels.queued.queue().entry(entry) {
+            Some(found) => (found.task.label.clone(), Self::run_clock(found, at)),
             None => (String::from("a routine"), String::new()),
-        };
+        }
+    }
+
+    pub(super) fn tell_chat(&mut self, at: usize, told: Told) {
+        let unseen = &mut self.panels.bots.live[at].unseen;
+        unseen.push(told);
+        unseen.drain(..unseen.len().saturating_sub(TOLD_KEPT));
+    }
+
+    pub(in crate::app) fn bot_entry_failed(&mut self, at: usize, entry: u64, reason: &str, headed: bool) {
+        let (label, clock) = self.run_label(entry, crate::time::now());
         if !headed {
             self.bot_append(at, |id, now| head_line(id, now, (&label, &clock), entry));
         }

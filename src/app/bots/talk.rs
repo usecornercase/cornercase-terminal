@@ -70,10 +70,8 @@ impl App {
     fn send_again(&mut self, error: u64) {
         let Some(at) = self.shown_bot() else { return };
         let lines = self.panels.bots.shown.as_ref().map(|shown| shown.lines.as_slice()).unwrap_or_default();
-        let before = lines.iter().position(|line| line.id == error).unwrap_or(lines.len());
-        let Some(opener) = lines[..before].iter().rev().find(|line| chat::opens_turn(line)).cloned() else {
-            return;
-        };
+        let opener = chat::prompt_of(lines, error).filter(|line| line.kind != chat::Kind::Finished).cloned();
+        let Some(opener) = opener else { return };
         let id = self.panels.bots.live[at].bot.id.clone();
         let done = if chat::is_setup(&opener) {
             self.bot_setup(&id).map(|_| ())
@@ -150,6 +148,7 @@ impl App {
                     shown.unfolded.insert(first);
                 }
             }
+            RowHit::Show(pane) => self.jump_to_pane(pane),
             RowHit::RunAgain(run) => self.run_again(run),
             RowHit::Retry(error) => self.send_again(error),
             RowHit::Example(i) => self.panels.bots.live[at].draft = Editor::new(ui::EXAMPLES[i]),
@@ -176,6 +175,10 @@ impl App {
         if ui::card_folder(areas.workspaces_list, &card).contains(pos) {
             let key = self.panels.bots.live[at].key;
             self.open_menu_or_copy(Subject::Bot(key), pos);
+        } else if let Some(pane) =
+            ui::card_row_at(areas.workspaces_list, &card, pos).and_then(|row| card.rows[row].pane)
+        {
+            self.jump_to_pane(pane);
         }
     }
 }

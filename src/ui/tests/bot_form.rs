@@ -111,3 +111,14 @@ fn a_click_on_the_buttons_and_the_fields_hits_them() {
     let corner = Position::new(area.right() - 4, area.bottom() - 2);
     assert!(matches!(form_dialog::hit(screen, &form, corner), Some(form_dialog::Hit::Cancel)));
 }
+
+#[test]
+fn the_form_has_the_follow_box() {
+    let mut form = Form::new(agents(), "claude");
+    let text = format!("{}", drawn(form.clone()).backend());
+    assert!(text.contains("Follow") && text.contains("[x] tell it when an agent it starts finishes"), "{text}");
+    form.follow = false;
+    form.focus_on(Field::Follow);
+    let off = format!("{}", drawn(form).backend());
+    assert!(off.contains("[ ] tell it when an agent it starts finishes"), "{off}");
+}

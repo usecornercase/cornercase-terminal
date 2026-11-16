@@ -20,7 +20,9 @@ const REACH: &str = "Your access is `cornercase`: you can read anything, run the
 const REACH_FOLDER: &str = "Your access is `cornercase`: you can run the cornercase command line, run read-only git and gh, search the web, and read and write only in your folder: see the user's work through cornercase. Never change a project's files yourself; start an agent to do it.";
 const FULL: &str = "Your access is `full`: you can change any file and run anything, unattended. Still start an agent for work on a project, unless the user asked you to do it yourself.";
 const SCHEDULE: &str = "To schedule work, run `cornercase queue add --every 'weekday 09:00' --prompt '…' --name '…'` (repeats: `30m`, `2h`, `day 09:00`, `weekday 09:00`, `monday 09:00`, `3d 10:00`; at least 30 minutes), or `--at 'tomorrow 9:00'` for once. `cornercase queue list --bot {id} --json` lists yours; `queue pause`, `resume`, `edit` and `remove` change them. Tell the user what you scheduled and when it runs next, in their time. When a routine runs you start a new conversation that has only this brief and your files, so write in `memory.md` what the next run needs.";
-const LATER: &str = "What happens when an agent you started finishes comes in a later release of cornercase.";
+const FOLLOW: &str = "When an agent you started finishes, you get a message with its last message. Tell the user what matters in one or two lines. If the user asked you to go on after it (open a PR, start the next step), do it.";
+const NOT_FOLLOWING: &str =
+    "You are not told when an agent you started finishes: when the user asks, look with `cornercase status --json`.";
 const SETUP: &str = "## You were just made\n\nThe user has just made you, and `bot.md` above is what they wrote you are for. Set yourself up now, in a few steps, and do not do the work itself unless `bot.md` asks for it now. Schedule what it asks for at a time or again and again (`cornercase queue add`, as above), but first look at what is scheduled already (`cornercase queue list --bot {id} --json`): a setup that was cut short may have done some of it. Write in `memory.md` what your runs will need. Then tell the user, in a few lines, what you will do, what you scheduled and when it runs next, and what you need from them, if anything. Your runs can look commands up when they run, so do not read every `--help` now.";
 pub(crate) const TOLD_KEPT: usize = 10;
 const TOLD_CAP: usize = 16 * 1024;
@@ -40,7 +42,8 @@ pub(crate) fn brief(bot: &Bot, folder: &Path) -> String {
         Access::Full => FULL,
     };
     let schedule = SCHEDULE.replace("{id}", &bot.id);
-    [who.as_str(), &folder, SEE, ACT, &schedule, access, LATER].join("\n\n")
+    let later = if bot.follow { FOLLOW } else { NOT_FOLLOWING };
+    [who.as_str(), &folder, SEE, ACT, &schedule, access, later].join("\n\n")
 }
 
 fn reads_only_folder(bot: &Bot) -> bool {
@@ -97,8 +100,13 @@ pub(crate) fn told(answers: &[Told], bot: &str) -> Option<String> {
     Some(text)
 }
 
+pub(crate) fn said(from_cornercase: bool, text: &str) -> String {
+    let who = if from_cornercase { "cornercase" } else { "The user" };
+    format!("## {who} says\n\n{text}")
+}
+
 pub(crate) fn opening(bot: &Bot, folder: &Path, notes: (&str, &str), told: Option<&str>, text: &str) -> String {
-    opened(bot, folder, notes, told, format!("## The user says\n\n{text}"))
+    opened(bot, folder, notes, told, text.to_string())
 }
 
 pub(crate) fn setup_opening(bot: &Bot, folder: &Path, notes: (&str, &str), told: Option<&str>) -> String {
@@ -127,7 +135,7 @@ fn files(bot: &Bot, folder: &Path, notes: (&str, &str)) -> Vec<String> {
 
 pub(crate) fn resumed(told: Option<&str>, text: &str) -> String {
     match told {
-        Some(told) => format!("{told}\n\n## The user says\n\n{text}"),
+        Some(told) => format!("{told}\n\n{text}"),
         None => text.to_string(),
     }
 }

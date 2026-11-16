@@ -8,6 +8,7 @@ fn with_bar() -> View<'static> {
         memory: None,
         account: None,
         compacted: false,
+        by: None,
     };
     let claude = TabEntry { status: Some(Status::Working), details: details.clone(), ..TabEntry::from("claude") };
     let tabs = vec![claude, TabEntry::from("zsh")];

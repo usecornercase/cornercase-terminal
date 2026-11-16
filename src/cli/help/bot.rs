@@ -32,15 +32,17 @@ were not tried; opencode's and Cursor CLI's rules cannot keep its writes in its 
 GitHub Copilot CLI bot with cornercase access reads only its own folder; on Windows they support
 full access only.
 
-A bot works only while the server runs. With --json it prints the bot as `bot list --json` does; its
-state is `thinking` while it sets itself up.
+A bot works only while the server runs. With --follow on (the default) it is told when an agent it
+started finishes, and answers in its chat; --follow off tells it nothing. With --json it prints the bot
+as `bot list --json` does; its state is `thinking` while it sets itself up.
 
 Example:
   cornercase bot new prs --agent claude --about \"Review my open pull requests and tell me which are blocked\"";
 
 pub(in crate::cli) const BOT_EDIT_HELP: &str =
     "Changes what the bot uses from its next message on; a running answer is not changed. An empty
---model, --effort or --account goes back to the agent's own; --about writes bot.md. The agent cannot
+--model, --effort or --account goes back to the agent's own; --about writes bot.md; --follow on|off
+sets whether the bot is told when an agent it started finishes. The agent cannot
 change, because another agent cannot continue the conversation: make another bot instead.";
 
 pub(in crate::cli) const BOT_SAY_HELP: &str =
