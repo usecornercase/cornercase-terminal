@@ -385,7 +385,7 @@ test('a routine on the card opens the routines dialog', () => {
   const app = demo(140);
   press(app, 'prs');
   app.resize(140, 60);
-  press(app, 'Review PRs');
+  press(app, 'routine');
   assert.equal(app.overlay?.kind, 'botroutines');
   assert.match(screen(app), /Routines › prs/);
 });
