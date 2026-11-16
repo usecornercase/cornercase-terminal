@@ -310,3 +310,30 @@ fn an_agent_a_bot_starts_is_tagged_and_its_chat_says_so() {
     let listed: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
     assert_eq!(listed["bots"][0]["following"].as_array().map(Vec::len), Some(1), "{listed}");
 }
+
+#[test]
+fn a_bots_turn_finds_its_servers_cornercase_first_and_your_gh_before_the_one_beside_it() {
+    let session = with_agent_running("gh > \"$0.gh\" 2>&1\ncommand -v cornercase > \"$0.which\"");
+    let server = installed_copy(&session, "shared");
+    let shared = server.parent().expect("its folder").to_path_buf();
+    write_executable(&shared.join("gh"), "#!/bin/sh\necho shared\n");
+    let yours = session.folder("yours");
+    write_executable(&yours.join("gh"), "#!/bin/sh\necho yours\n");
+    let path = std::env::join_paths([yours.as_path(), shared.as_path(), "/usr/bin".as_ref(), "/bin".as_ref()])
+        .expect("a path");
+    let started = session.cold_command_of(&server).env("PATH", path).arg("start-server").output().expect("run");
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+
+    let gh = std::fs::read_to_string(session.dir.join("claude-bot.gh")).expect("gh ran");
+    assert_eq!(gh.trim(), "yours");
+    let which = std::fs::read_to_string(session.dir.join("claude-bot.which")).expect("which ran");
+    let found = PathBuf::from(which.trim());
+    assert!(!found.starts_with(&shared), "{found:?}");
+    assert_eq!(
+        std::fs::canonicalize(&found).expect("it leads somewhere"),
+        std::fs::canonicalize(&server).expect("copy")
+    );
+}

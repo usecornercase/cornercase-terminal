@@ -4,7 +4,7 @@ use std::path::Path;
 use super::*;
 use crate::bots::folder;
 use crate::bots::sample;
-use crate::test_util::TempDir;
+use crate::test_util::{TempDir, fake_program};
 
 fn input(folder: &Path, conversation: Option<&str>) -> Input {
     Input {
@@ -17,19 +17,57 @@ fn input(folder: &Path, conversation: Option<&str>) -> Input {
         program: String::from("claude"),
         home: None,
         socket: Some(String::from("/s")),
+        bin: None,
         timeout: Duration::from_secs(1),
     }
 }
 
 #[test]
-fn the_servers_folder_goes_first_on_the_path_and_the_rest_stays() {
-    let bin = Path::new("/the/bin");
-    let rest = std::env::join_paths(["/a", "/b"]).expect("paths");
-    let path = path_with(bin, Some(&rest)).expect("a path");
+fn the_links_folder_goes_first_and_the_path_follows_unchanged() {
+    let dir = TempDir::new();
+    let server = dir.path().join("server");
+    let folder = dir.path().join("bin");
+    std::fs::create_dir_all(&server).expect("server");
+    let binary = fake_program(&server, "cornercase");
+    assert_eq!(first_on_path(Some(&folder), &binary), Some(folder.clone()));
+    let rest = std::env::join_paths([dir.path().join("a"), dir.path().join("b")]).expect("paths");
+    let path = path_with(&folder, Some(&rest)).expect("a path");
     let found: Vec<_> = std::env::split_paths(&path).collect();
-    assert_eq!(found, [Path::new("/the/bin"), Path::new("/a"), Path::new("/b")]);
-    let alone = path_with(bin, None).expect("a path");
-    assert_eq!(std::env::split_paths(&alone).collect::<Vec<_>>(), [Path::new("/the/bin")]);
+    assert_eq!(found, [folder.clone(), dir.path().join("a"), dir.path().join("b")]);
+    let alone = path_with(&folder, None).expect("a path");
+    assert_eq!(std::env::split_paths(&alone).collect::<Vec<_>>(), [folder]);
+}
+
+#[test]
+fn a_program_beside_the_servers_binary_does_not_shadow_one_earlier_on_the_path() {
+    let dir = TempDir::new();
+    let (server, yours, folder) = (dir.path().join("server"), dir.path().join("yours"), dir.path().join("bin"));
+    std::fs::create_dir_all(&server).expect("server");
+    std::fs::create_dir_all(&yours).expect("yours");
+    let binary = fake_program(&server, "cornercase");
+    fake_program(&server, "gh");
+    let own_gh = fake_program(&yours, "gh");
+    let user = std::env::join_paths([&yours, &server]).expect("paths");
+    let first = first_on_path(Some(&folder), &binary).expect("a folder");
+    let path = path_with(&first, Some(&user)).expect("a path");
+    let extensions = if cfg!(windows) { crate::process::program::extensions(None) } else { Vec::new() };
+    let find = crate::process::program::on_path(cfg!(windows), Some(&path), &extensions);
+    assert_eq!(find("gh"), Some(own_gh));
+    let ours = find("cornercase").expect("cornercase");
+    assert_eq!(ours.parent(), Some(folder.as_path()));
+    let (ours, theirs) = (crate::os::fs::stat(&ours).expect("link"), crate::os::fs::stat(&binary).expect("binary"));
+    assert!(ours.same_file(&theirs));
+}
+
+#[test]
+fn without_a_folder_or_with_one_that_cannot_be_made_the_binarys_folder_goes_first() {
+    let dir = TempDir::new();
+    let binary = fake_program(dir.path(), "cornercase");
+    assert_eq!(first_on_path(None, &binary).as_deref(), binary.parent());
+    let file = dir.path().join("file");
+    std::fs::write(&file, "x").expect("file");
+    assert_eq!(first_on_path(Some(&file.join("bin")), &binary).as_deref(), binary.parent());
+    assert_eq!(first_on_path(Some(dir.path()), Path::new("")), None);
 }
 
 #[test]

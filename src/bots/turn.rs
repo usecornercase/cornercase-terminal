@@ -1,3 +1,5 @@
+mod link;
+
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -29,32 +31,33 @@ pub(crate) struct Input {
     pub(crate) program: String,
     pub(crate) home: Option<PathBuf>,
     pub(crate) socket: Option<String>,
+    pub(crate) bin: Option<PathBuf>,
     pub(crate) timeout: Duration,
 }
 
-pub(crate) fn path_with(bin: &Path, path: Option<&OsStr>) -> Option<OsString> {
+pub(crate) fn path_with(first: &Path, path: Option<&OsStr>) -> Option<OsString> {
     let rest = path.map(std::env::split_paths).into_iter().flatten();
-    std::env::join_paths(std::iter::once(bin.to_path_buf()).chain(rest)).ok()
+    std::env::join_paths(std::iter::once(first.to_path_buf()).chain(rest)).ok()
 }
 
 pub(crate) fn joined(texts: &[String]) -> String {
     texts.join("\n\n")
 }
 
-fn environment(bot: &Bot, session: &Session, bin: Option<&Path>, path: Option<&OsStr>) -> headless::Env {
+fn environment(bot: &Bot, session: &Session, first: Option<&Path>, path: Option<&OsStr>) -> headless::Env {
     let run = match session {
         Session::Chat | Session::Setup => None,
         Session::NewRun(run) | Session::Resume { run, .. } => Some(OsString::from(run.to_string())),
     };
     let mut env: headless::Env = vec![(BOT_ENV, Some(OsString::from(&bot.id))), (BOT_RUN_ENV, run)];
-    if let Some(path) = bin.and_then(|bin| path_with(bin, path)) {
+    if let Some(path) = first.and_then(|first| path_with(first, path)) {
         env.push(("PATH", Some(path)));
     }
     env.extend(UNSET.map(|key| (key, None)));
     env
 }
 
-pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> Ask {
+pub(crate) fn ask(input: &Input, first: Option<&Path>, path: Option<&OsStr>) -> Ask {
     let bot = &input.bot;
     let (about, memory) = folder::notes(&input.folder);
     let notes = (about.as_str(), memory.as_str());
@@ -83,17 +86,34 @@ pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> As
         socket: input.socket.clone(),
         tools: Tools::Bot(bot.access),
         conversation,
-        env: environment(bot, &input.session, bin, path),
+        env: environment(bot, &input.session, first, path),
         protected: vec![folder::BOT_FILE, folder::CHAT_FILE],
         stops: super::stop_commands(),
     }
 }
 
+pub(crate) fn first_on_path(bin: Option<&Path>, binary: &Path) -> Option<PathBuf> {
+    if !binary.is_absolute() {
+        return None;
+    }
+    if let Some(folder) = bin {
+        match link::ensure(folder, binary) {
+            Ok(()) => return Some(folder.to_path_buf()),
+            Err(error) => crate::log::warning!(
+                "bots",
+                "cannot keep the cornercase link, the binary's folder goes first",
+                error = error
+            ),
+        }
+    }
+    binary.parent().map(Path::to_path_buf)
+}
+
 pub(crate) fn run(input: &Input, watch: Watch) -> Result<Ran> {
     let kind =
         Known::of(&input.bot.agent).ok_or_else(|| Error::Probe(format!("{} is not an agent", input.bot.agent)))?;
-    let bin = crate::process::program::own_binary().parent().map(Path::to_path_buf);
-    let ask = ask(input, bin.as_deref(), std::env::var_os("PATH").as_deref());
+    let first = first_on_path(input.bin.as_deref(), &crate::process::program::own_binary());
+    let ask = ask(input, first.as_deref(), std::env::var_os("PATH").as_deref());
     let call = Call { agent: kind, program: &input.program, home: input.home.as_deref(), timeout: input.timeout };
     headless::run_watched(&call, &ask, watch)
 }

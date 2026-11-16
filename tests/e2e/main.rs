@@ -191,7 +191,11 @@ impl Session {
     }
 
     fn cold_command(&self) -> std::process::Command {
-        let mut cmd = self.command();
+        self.cold_command_of(std::path::Path::new(env!("CARGO_BIN_EXE_cornercase")))
+    }
+
+    fn cold_command_of(&self, bin: &std::path::Path) -> std::process::Command {
+        let mut cmd = self.command_of(bin);
         cmd.env("SHELL", "/bin/sh").env("PS1", "$ ").env(CLAUDE_DIR_ENV, self.claude_dir());
         for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY"].into_iter().chain(TERMINAL_ENV) {
             cmd.env_remove(var);
@@ -343,6 +347,12 @@ fn seen_by(pid: u32, path: &std::path::Path) -> PathBuf {
 #[cfg(target_os = "macos")]
 fn seen_by(_pid: u32, path: &std::path::Path) -> PathBuf {
     path.to_path_buf()
+}
+
+fn installed_copy(session: &Session, name: &str) -> PathBuf {
+    let bin = session.folder(name).join("cornercase");
+    std::fs::copy(env!("CARGO_BIN_EXE_cornercase"), &bin).expect("copy cornercase");
+    bin
 }
 
 fn folder_gone(pid: u32, word: &str) -> bool {

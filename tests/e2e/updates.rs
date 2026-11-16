@@ -62,12 +62,6 @@ fn fake_release(version: &str, script: &str) -> String {
     format!("{url}/latest")
 }
 
-fn installed_copy(session: &Session, name: &str) -> PathBuf {
-    let bin = session.folder(name).join("cornercase");
-    std::fs::copy(env!("CARGO_BIN_EXE_cornercase"), &bin).expect("copy cornercase");
-    bin
-}
-
 #[test]
 fn restart_says_what_stops_and_brings_the_client_back_with_new_shells() {
     let mut app = Harness::start();

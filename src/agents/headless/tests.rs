@@ -330,15 +330,15 @@ mod bots {
     }
 
     #[test]
-    fn a_bot_turn_gets_its_id_the_socket_and_the_servers_binary_first_on_the_path() {
+    fn a_bot_turn_gets_its_id_the_socket_and_the_folder_put_first_on_its_path() {
         let folder = TempDir::new();
-        let bin = Path::new("/the/server/bin");
-        let path = crate::bots::turn::path_with(bin, std::env::var_os("PATH").as_deref()).expect("a path");
+        let first = Path::new("/the/server/bin");
+        let path = crate::bots::turn::path_with(first, std::env::var_os("PATH").as_deref()).expect("a path");
         let (lines, _dir) = with_env(folder.path(), vec![(BOT_ENV, Some(OsString::from("prs"))), ("PATH", Some(path))]);
         assert_eq!(lines[0], "CORNERCASE_BOT=prs");
         assert_eq!(lines[1], "CORNERCASE_SOCKET=/the/socket");
         let path = lines[2].strip_prefix("PATH=").expect("the path");
-        assert_eq!(std::env::split_paths(path).next().as_deref(), Some(bin));
+        assert_eq!(std::env::split_paths(path).next().as_deref(), Some(first));
     }
 
     #[test]

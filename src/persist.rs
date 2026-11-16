@@ -85,7 +85,7 @@ fn create_temporary(path: &Path, kind: Kind, next: &AtomicU64) -> io::Result<(Pa
     Err(io::Error::new(io::ErrorKind::AlreadyExists, message))
 }
 
-fn temporary(path: &Path, pid: u32, n: u64) -> io::Result<PathBuf> {
+pub(crate) fn temporary(path: &Path, pid: u32, n: u64) -> io::Result<PathBuf> {
     let Some(name) = path.file_name() else {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "a file to write needs a name"));
     };

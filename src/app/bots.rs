@@ -104,6 +104,7 @@ pub(super) struct Live {
 
 pub(super) struct Bots {
     pub(super) dir: Option<PathBuf>,
+    pub(super) bin: Option<PathBuf>,
     pub(super) live: Vec<Live>,
     pub(super) timeout: Duration,
     pub(super) batch: Duration,
@@ -117,6 +118,7 @@ impl Default for Bots {
     fn default() -> Self {
         Self {
             dir: None,
+            bin: None,
             live: Vec::new(),
             timeout: TURN_TIMEOUT,
             batch: BATCH,
@@ -221,6 +223,10 @@ impl super::App {
 
     pub(super) fn publish_bot_removed(&mut self, id: &str) {
         self.publish_bot(id, News::Change("removed"));
+    }
+
+    pub(crate) fn set_bots_bin(&mut self, dir: &Path) {
+        self.panels.bots.bin = Some(dir.to_path_buf());
     }
 
     pub(crate) fn set_bots_dir(&mut self, dir: &Path) {

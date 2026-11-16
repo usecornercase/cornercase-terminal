@@ -77,6 +77,7 @@ impl App {
             program: crate::agents::command(&self.config, &state.bot.agent),
             home: self.account_home(kind, state.bot.account.as_deref()),
             socket: self.shells.pane_socket().map(str::to_string),
+            bin: self.panels.bots.bin.clone(),
             timeout: self.panels.bots.timeout,
         }
     }

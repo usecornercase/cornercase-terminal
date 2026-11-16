@@ -181,6 +181,13 @@ fn the_bots_live_beside_the_session(#[case] session: &str, #[case] bots_dir: &st
     assert_eq!(bots(Path::new(session)), PathBuf::from(bots_dir));
 }
 
+#[rstest::rstest]
+#[case::default("/c/cornercase/session.json", "/c/cornercase/bin")]
+#[case::custom("/c/server.json", "/c/server.bin")]
+fn the_link_folder_lives_beside_the_session(#[case] session: &str, #[case] bin_dir: &str) {
+    assert_eq!(bin(Path::new(session)), PathBuf::from(bin_dir));
+}
+
 #[cfg(windows)]
 mod on_windows {
     use super::*;
