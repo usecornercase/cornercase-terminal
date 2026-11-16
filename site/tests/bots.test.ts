@@ -385,8 +385,11 @@ test('a routine on the card opens the routines dialog', () => {
   const app = demo(140);
   press(app, 'prs');
   app.resize(140, 60);
-  press(app, 'routine');
+  press(app, 'routine', 1);
   assert.equal(app.overlay?.kind, 'botroutines');
+  const shown = app.overlay;
+  assert.ok(shown?.kind === 'botroutines');
+  assert.equal(shown.selected, app.botQueued.find((e) => e.repeat)?.id);
   assert.match(screen(app), /Routines › prs/);
 });
 

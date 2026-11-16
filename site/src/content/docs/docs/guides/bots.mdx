@@ -124,19 +124,6 @@ A bot can schedule its own work. Tell it **"review my pull requests every weekda
 - **Routines run only while the server runs**, as every routine does: a time that passes while it is stopped is a missed run (see [Known limitations](../../help/limitations/)).
 - **Removing a bot removes its routines**, with its folder.
 
-## Agents it starts
-
-When a bot starts an agent (`cornercase start`, a tab or split that runs one, or a [flow](../flows/)), cornercase remembers which bot did, tells the chat, and follows the agent.
-
-- **The tab says who started it**: `by prs` in the second line of its tab row, the tab bar and its row in the [agents section](../projects-workspaces-tabs/#the-agents-section). The chat gets `▶ started claude in web-shop › fix/ci-482` with **` show `**, which shows that tab; it reads `closed` when the agent is gone, or after a server restart.
-- **When the agent's turn ends**, the chat gets `✓ claude finished in …` (or `✗ claude failed in …`) with the agent's last message, cut to 2 KB, under it (six rows, then **`+N lines`**, which a click unfolds), and then the bot gets a turn: it says what matters, checks the pull request or starts the next step, as you asked. The turn continues the conversation that started the agent: the chat's, or, for an agent a [routine's run](#routines) started, the run's. Reports that come within 30 seconds of each other go into one turn, so the lines appear 30 seconds or more after the agent finished.
-- **When the agent asks you something**, the chat gets `! claude needs you in …` with its screen, and the bot gets no turn: answer it in the agent's tab, as always. It counts as unread, with no toast.
-- **Only the first finish after each prompt from the bot is reported.** What you type into that agent yourself changes nothing, so talking to it stays quiet; when the bot writes to it again with `cornercase send --enter`, the next finish is reported.
-- **A bot follows at most 20 agents**; a 21st drops the oldest, with a notice in the chat. The tab keeps its `by prs`.
-- **`--follow off`**, or the form's **Follow** box, turns it off: the bot is told nothing, the chat gets no lines and no turns start, and the tabs still say `by prs`. The bot's brief says which of the two it is.
-- **After a restart** the tabs keep their `by prs`, the old ` show ` links read `closed`, and the bot follows the agents again from its next `send --enter` into them.
-- **Not across machines**: an agent started with `--machine` or `--remote` is not tagged or followed.
-
 ### A bot's routines
 
 <Screen
@@ -151,6 +138,19 @@ When a bot starts an agent (`cornercase start`, a tab or split that runs one, or
 - how its **last run** ended: `answered` in green, `failed` in red, `stopped`, `missed` in yellow, `answering…` while it runs, or `not run yet`, with when.
 
 The selected row (and the one under the pointer) shows its buttons, each only when it applies: **` run now `** (a routine, or a reminder that has not run, failed or was missed), **` pause `** or **` resume `**, **` edit… `** and **` remove `**, which takes the routine with its runs and offers **` undo `** in the notice. `↑` `↓`, `PageUp`, `PageDown`, `Home` and `End` move, `Esc` closes. `Enter`, or a click on a row, shows the chat at the last run's block and closes the dialog; a run that never started or was missed left no block, so the dialog stays and its hint says why. **` + routine `** opens the schedule form for the bot, as an **every day at 09:00** routine (the kind combo gives a reminder), and **` edit… `** opens it filled in. Saving or cancelling comes back to the dialog.
+
+## Agents it starts
+
+When a bot starts an agent (`cornercase start`, a tab or split that runs one, or a [flow](../flows/)), cornercase remembers which bot did, tells the chat, and follows the agent.
+
+- **The tab says who started it**: `by prs` in the second line of its tab row, the tab bar and its row in the [agents section](../projects-workspaces-tabs/#the-agents-section). The chat gets `▶ started claude in web-shop › fix/ci-482` with **` show `**, which shows that tab; it reads `closed` when the agent is gone, or after a server restart.
+- **When the agent's turn ends**, the chat gets `✓ claude finished in …` (or `✗ claude failed in …`) with the agent's last message, cut to 2 KB, under it (six rows, then **`+N lines`**, which a click unfolds), and then the bot gets a turn: it says what matters, checks the pull request or starts the next step, as you asked. The turn continues the conversation that started the agent: the chat's, or, for an agent a [routine's run](#routines) started, the run's. Reports that come within 30 seconds of each other go into one turn, so the lines appear 30 seconds or more after the agent finished.
+- **When the agent asks you something**, the chat gets `! claude needs you in …` with its screen, and the bot gets no turn: answer it in the agent's tab, as always. It counts as unread, with no toast.
+- **Only the first finish after each prompt from the bot is reported.** What you type into that agent yourself changes nothing, so talking to it stays quiet; when the bot writes to it again with `cornercase send --enter`, the next finish is reported.
+- **A bot follows at most 20 agents**; a 21st drops the oldest, with a notice in the chat. The tab keeps its `by prs`.
+- **`--follow off`**, or the form's **Follow** box, turns it off: the bot is told nothing, the chat gets no lines and no turns start, and the tabs still say `by prs`. The bot's brief says which of the two it is.
+- **After a restart** the tabs keep their `by prs`, the old ` show ` links read `closed`, and the bot follows the agents again from its next `send --enter` into them.
+- **Not across machines**: an agent started with `--machine` or `--remote` is not tagged or followed.
 
 ## What a bot can see and do
 
