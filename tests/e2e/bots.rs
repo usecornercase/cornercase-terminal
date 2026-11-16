@@ -99,8 +99,9 @@ fn a_bot_made_from_the_form_answers_in_its_chat() {
     ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
 
     ui.pick_in_more("new bot…");
-    ui.wait_for("the form opens", |s| s.contains("New bot") && s.contains("For"));
+    ui.wait_for("the form opens", |s| s.contains("New bot") && s.contains("For") && s.contains("create"));
     ui.send(b"prs");
+    ui.wait_for("the name is typed", |s| s.contains("prs"));
     ui.click(ui.position_of("create"));
     ui.wait_for("its empty chat shows", |s| s.contains("Message prs…"));
     ui.send(b"which are blocked?\r");
