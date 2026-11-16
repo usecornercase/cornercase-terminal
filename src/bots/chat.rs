@@ -14,6 +14,12 @@ pub(crate) const STOPPED: &str = "stopped";
 pub(crate) const INTERRUPTED: &str = "interrupted by a restart";
 pub(crate) const SETTING_UP: &str = "setting up";
 
+pub(crate) fn preview(line: &Line) -> String {
+    let first = |text: &str| text.lines().map(crate::text::one_line).find(|text| !text.is_empty());
+    let plain = (line.kind == Kind::Bot).then(|| crate::highlight::markdown::plain(&line.text));
+    plain.as_deref().and_then(first).or_else(|| first(&line.text)).unwrap_or_default()
+}
+
 pub(crate) fn is_setup(line: &Line) -> bool {
     line.routine.is_none() && line.kind == Kind::Notice && line.text == SETTING_UP
 }
