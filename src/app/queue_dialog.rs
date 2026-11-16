@@ -25,30 +25,41 @@ impl App {
     pub(super) fn new_queue_form(&mut self, id: Option<u64>) {
         let entry = id.and_then(|id| self.panels.queued.queue().entry(id)).cloned();
         let places = self.queue_places_for(entry.as_ref());
-        let matching = matching_places(&places, entry.as_ref());
+        self.open_queue_form(entry.as_ref(), places);
+    }
+
+    pub(in crate::app) fn new_bot_routine_form(&mut self, bot: &str) {
+        let places = self.bot_choice(bot).into_iter().collect();
+        self.open_queue_form(None, places);
+        if let Some(Overlay::Queue(form)) = &mut self.overlay {
+            form.when = When::Daily.combo();
+            form.refit();
+        }
+    }
+
+    fn open_queue_form(&mut self, entry: Option<&queue::Entry>, places: Vec<Choice>) {
+        let id = entry.map(|entry| entry.id);
+        let matching = matching_places(&places, entry);
         let place = self.current_place(&places, &matching);
         let confirmed = if entry.is_some() { matching.len() == 1 } else { !places.is_empty() };
-        let kinds = self.queue_kinds(entry.as_ref());
-        let agent = entry
-            .as_ref()
-            .and_then(|entry| kinds.iter().position(|kind| *kind == entry.task.agent))
-            .unwrap_or_default();
-        let zone = self.queue_zone(entry.as_ref());
-        let at = entry.as_ref().map_or_else(crate::time::now, |entry| entry.task.at);
+        let kinds = self.queue_kinds(entry);
+        let agent = entry.and_then(|entry| kinds.iter().position(|kind| *kind == entry.task.agent)).unwrap_or_default();
+        let zone = self.queue_zone(entry);
+        let at = entry.map_or_else(crate::time::now, |entry| entry.task.at);
         let shown = queue::clock::display(at, &zone);
         let (date, clock) = shown.split_once(' ').unwrap_or((&shown, "09:00"));
         let flows = self.queue_flows(places.get(place).and_then(choice_project));
         let choices = Choices { places, place: confirmed.then_some(place), kinds, agent, flows };
         let mut form = Form::new(choices, zone, date);
-        if let Some(entry) = &entry {
+        if let Some(entry) = entry {
             fill_from_entry(&mut form, entry, id, clock);
         }
-        self.stash_browser();
+        self.stash_back();
         self.overlay = Some(Overlay::Queue(Box::new(form)));
         self.queue_modes();
-        self.queue_accounts(entry.as_ref().map(|entry| &entry.task.accounts));
+        self.queue_accounts(entry.map(|entry| &entry.task.accounts));
         if let Some(Overlay::Queue(form)) = &mut self.overlay
-            && let Some(entry) = &entry
+            && let Some(entry) = entry
         {
             keep_mode(form, entry.task.mode.as_deref().unwrap_or(agents::DEFAULT_MODE));
         }
@@ -62,12 +73,6 @@ impl App {
     fn current_place(&self, places: &[Choice], matching: &[usize]) -> usize {
         if let Some(&first) = matching.first() {
             return first;
-        }
-        if let Some(bot) = self.shown_bot_id() {
-            return places
-                .iter()
-                .position(|choice| choice.place.bot.as_deref() == Some(bot.as_str()))
-                .unwrap_or_default();
         }
         let Some(project) = self.project() else { return 0 };
         let workspace = project.workspace().map(|workspace| workspace.id);
@@ -84,15 +89,15 @@ impl App {
         }
     }
 
-    pub(super) fn stash_browser(&mut self) {
+    pub(super) fn stash_back(&mut self) {
         let back = match self.overlay.take() {
-            Some(Overlay::Issues(browser)) => Some(browser),
+            Some(back @ (Overlay::Issues(_) | Overlay::BotRoutines(_))) => Some(Box::new(back)),
             other => {
                 self.overlay = other;
                 None
             }
         };
-        self.panels.queued.keep_browser(back);
+        self.panels.queued.keep_back(back);
     }
 
     fn queue_kinds(&self, entry: Option<&queue::Entry>) -> Vec<String> {
@@ -106,11 +111,19 @@ impl App {
     }
 
     fn queue_places_for(&self, entry: Option<&queue::Entry>) -> Vec<Choice> {
-        let mut places = self.queue_places();
-        if let Some(entry) = entry {
-            places.retain(|choice| choice.place.bot == entry.task.place.bot);
+        match entry.and_then(queue::Entry::bot) {
+            Some(bot) => self.bot_choice(bot).into_iter().collect(),
+            None => self.queue_places(),
         }
-        places
+    }
+
+    fn bot_choice(&self, bot: &str) -> Option<Choice> {
+        let live = self.panels.bots.live.iter().find(|live| live.bot.id == bot)?;
+        Some(Choice {
+            label: format!("bot: {}", live.bot.name),
+            place: queue::Place { bot: Some(live.bot.id.clone()), ..queue::Place::default() },
+            worktree: false,
+        })
     }
 
     fn queue_places(&self) -> Vec<Choice> {
@@ -132,11 +145,6 @@ impl App {
             let open = project.workspaces.iter().filter(|workspace| workspace.open());
             places.extend(open.map(|workspace| self.workspace_choice(project, workspace)));
         }
-        places.extend(self.panels.bots.live.iter().map(|live| Choice {
-            label: format!("bot: {}", live.bot.name),
-            place: queue::Place { bot: Some(live.bot.id.clone()), ..queue::Place::default() },
-            worktree: false,
-        }));
         places
     }
 
@@ -481,14 +489,17 @@ impl App {
     }
 
     pub(super) fn close_queue_form(&mut self, scheduled: bool) {
-        self.overlay = self.panels.queued.take_browser().map(|mut browser| {
-            browser.scheduling = false;
-            if scheduled {
-                browser.screen = Screen::List;
-                browser.tab_to(Tab::Queue);
-                browser.search.reset();
+        self.overlay = self.panels.queued.take_back().map(|back| match *back {
+            Overlay::Issues(mut browser) => {
+                browser.scheduling = false;
+                if scheduled {
+                    browser.screen = Screen::List;
+                    browser.tab_to(Tab::Queue);
+                    browser.search.reset();
+                }
+                Overlay::Issues(browser)
             }
-            Overlay::Issues(browser)
+            other => other,
         });
         self.sync_queued();
     }

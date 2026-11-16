@@ -43,6 +43,7 @@ fn browser() -> Browser {
         filtering: None,
         members: HashMap::new(),
         queued: Vec::new(),
+        bot_routines: 0,
         run_on: None,
         there: None,
     }

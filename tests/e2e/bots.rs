@@ -99,8 +99,9 @@ fn a_bot_made_from_the_form_answers_in_its_chat() {
     ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
 
     ui.pick_in_more("new bot…");
-    ui.wait_for("the form opens", |s| s.contains("New bot") && s.contains("For"));
+    ui.wait_for("the form opens", |s| s.contains("New bot") && s.contains("For") && s.contains("create"));
     ui.send(b"prs");
+    ui.wait_for("the name is typed", |s| s.contains("prs"));
     ui.click(ui.position_of("create"));
     ui.wait_for("its empty chat shows", |s| s.contains("Message prs…"));
     ui.send(b"which are blocked?\r");
@@ -204,6 +205,27 @@ fn a_bot_routine_run_now_answers_in_its_chat() {
     assert!(args.contains("This is your routine") && !args.contains("--resume"), "{args}");
     wait_until("its entry is answered", || {
         session.says(&["queue", "list", "--bot", "prs", "--json"]).contains("\"answered\"")
+    });
+}
+
+#[test]
+fn a_bots_routine_is_paused_from_its_routines_dialog() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    session.says(&["queue", "add", "--bot", "prs", "--every", "2h", "--prompt", "check", "--name", "Review PRs"]);
+    let mut ui = Harness::open(Arc::clone(&session), ROWS, 160);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+
+    ui.click(ui.position_of("prs"));
+    ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
+    ui.click(ui.position_of("routines"));
+    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("pause"));
+    ui.click(ui.position_of("pause"));
+
+    wait_until("the routine is paused", || {
+        let list: Value =
+            serde_json::from_str(&session.says(&["queue", "list", "--bot", "prs", "--json"])).expect("json");
+        list["entries"][0]["paused"] == true
     });
 }
 

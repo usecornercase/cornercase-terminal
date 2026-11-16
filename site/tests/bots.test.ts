@@ -139,7 +139,7 @@ test('a bot made with For filled in sets itself up in its chat', () => {
   const bot = app.bots.current();
   assert.equal(bot?.lines[bot.lines.length - 1].kind, 'bot');
   assert.match(bot?.lines[bot.lines.length - 1].text ?? '', /Set up: every day at/);
-  assert.equal(bot?.routines.length, 1);
+  assert.equal(app.botQueued.filter((e) => e.bot === bot?.id && !e.routine).length, 1);
   assert.match(screen(app), /nightly +next /);
 });
 
@@ -286,7 +286,7 @@ test('a routine run is one block in the chat: its header, its steps folded and i
   assert.ok(bot);
   bot.scroll = 1000;
   const text = screen(app);
-  assert.match(text, /↻ Review PRs · \d\d:\d\d/);
+  assert.match(text, /↻ Review PRs · (.+ )?\d\d:\d\d/);
   assert.match(text, /\+2 steps/);
   assert.match(text, /Two are blocked/);
   const lines = app.bots.current()?.lines.filter((l) => l.routine !== undefined) ?? [];
@@ -295,7 +295,12 @@ test('a routine run is one block in the chat: its header, its steps folded and i
   assert.match(screen(app), /▸ gh pr list/);
 });
 
-test('the Queue tab lists the bot routine and its answered run, and enter opens the chat at the run', () => {
+function opened(app: App): void {
+  press(app, 'prs');
+  press(app, 'routines');
+}
+
+test('the Queue tab lists no bot routine and ends with a line saying where they are', () => {
   const app = new App();
   app.virtual = true;
   app.resize(140, 38);
@@ -305,15 +310,124 @@ test('the Queue tab lists the bot routine and its answered run, and enter opens 
   app.issuesTab(app.config.sources.length);
   app.render();
   const text = screen(app);
+  assert.doesNotMatch(text, /Review PRs/);
+  assert.doesNotMatch(text, /bot prs/);
+  assert.match(text, /nothing queued/);
+  assert.match(text, /1 bot routine: in its bot's chat/);
+  assert.equal(app.queued.length, 0);
+});
+
+test('routines in the chat’s header lists the routine, and a click on it shows the chat at its run', () => {
+  const app = demo(140);
+  app.resize(140, 38);
+  opened(app);
+  const text = screen(app);
+  assert.match(text, /Routines › prs/);
   assert.match(text, /Review PRs/);
-  assert.match(text, /↻ every 2h · claude/);
-  assert.match(text, /answered · claude · bot prs/);
-  const run = app.queued.find((entry) => entry.state === 'answered');
-  assert.ok(run);
-  app.openQueued(run);
+  assert.match(text, /↻ 2h · next /);
+  assert.match(text, /last run answered/);
+  assert.match(text, /enter shows its last run in the chat/);
+  const row = app.textAt('Review PRs');
+  assert.ok(row);
+  app.pointerDown(row.x + 1, row.y, 0);
+  app.pointerUp();
+  app.render();
   assert.equal(app.overlay, null);
   assert.equal(app.bots.shown, 'prs');
   assert.match(screen(app), /↻ Review PRs/);
+});
+
+test('pause, resume and remove in the routines dialog, and undo brings it back', () => {
+  const app = demo(140);
+  app.resize(140, 38);
+  opened(app);
+  press(app, 'pause');
+  assert.match(screen(app), /↻ 2h · paused/);
+  assert.match(app.toast?.text ?? '', /paused routine/);
+  app.bots.show('prs');
+  app.render();
+  assert.doesNotMatch(screen(app), /prs +next /);
+  app.openBotRoutines('prs');
+  press(app, 'resume');
+  assert.match(screen(app), /↻ 2h · next /);
+  press(app, 'remove');
+  assert.match(screen(app), /has no routines yet/);
+  assert.equal(app.botQueued.length, 0);
+  assert.match(app.toast?.text ?? '', /removed routine 1 and its 1 run/);
+  app.toast?.undo?.();
+  app.render();
+  assert.match(screen(app), /Review PRs/);
+  assert.equal(app.botQueued.length, 2);
+  press(app, 'run now');
+  assert.match(app.toast?.text ?? '', /needs cornercase on your computer/);
+  press(app, 'done');
+  assert.equal(app.overlay, null);
+});
+
+test('the dialog at phone width keeps how the last run ended clear of the buttons', () => {
+  const app = demo(48);
+  app.openBotRoutines('prs');
+  const text = screen(app);
+  assert.match(text, /last run answered/);
+  assert.match(text, /run now {2}pause {2}edit… {2}remove/);
+  assert.match(text, /│ ▌Review PRs/);
+});
+
+test('the empty routines dialog ends its example with one full stop', () => {
+  const app = demo(140);
+  app.botQueued = [];
+  app.openBotRoutines('prs');
+  assert.doesNotMatch(screen(app), /blocked\."\./);
+  assert.match(screen(app), /prs has no routines yet\./);
+});
+
+test('the card never ends on a routine name without its time row', () => {
+  let seen = 0;
+  for (let rows = 38; rows < 70; rows++) {
+    const app = demo(140);
+    press(app, 'prs');
+    app.resize(140, rows);
+    const lines = screen(app).split('\n');
+    lines.forEach((line, i) => {
+      if (/^ routine +Review PRs/.test(line)) {
+        seen++;
+        assert.match(lines[i + 1] ?? '', /next |paused/, `rows ${rows}`);
+      }
+    });
+  }
+  assert.ok(seen > 0, 'no routine row found');
+});
+
+test('the dialog clips a button to its cell: the border survives a row narrower than its button', () => {
+  const app = demo(10);
+  app.botQueued = [{ ...app.botQueued[0], id: 90, routine: undefined, repeat: undefined, state: 'answered', at: Date.now() - 60000 }];
+  app.openBotRoutines('prs');
+  const lines = screen(app).split('\n');
+  const at = lines.findIndex((l) => l.includes('rem'));
+  assert.ok(at >= 0, 'the remove button is drawn');
+  assert.match(lines[at], /│$/);
+});
+
+test('opening the dialog pins the first routine to its entry', () => {
+  const app = demo(140);
+  app.openBotRoutines('prs');
+  assert.ok(app.overlay?.kind === 'botroutines');
+  assert.equal(app.overlay.selected, app.botQueued.find((e) => !e.routine)?.id);
+});
+
+test('a routine on the card opens the routines dialog', () => {
+  const app = demo(140);
+  const first = app.botQueued.find((e) => !e.routine)!;
+  app.botQueued.push({ ...first, id: 91, label: 'Early reminder', repeat: undefined, at: first.at - 3600000, state: 'pending' });
+  app.botQueued.sort((a, b) => a.at - b.at || a.id - b.id);
+  press(app, 'prs');
+  app.resize(140, 60);
+  press(app, 'routine', 1);
+  assert.equal(app.overlay?.kind, 'botroutines');
+  const shown = app.overlay;
+  assert.ok(shown?.kind === 'botroutines');
+  assert.equal(shown.selected, app.botQueued.find((e) => e.repeat)?.id);
+  assert.match(screen(app), /Routines › prs/);
 });
 
 test('the empty chat offers the scheduling example', () => {

@@ -30,7 +30,7 @@ pub(super) struct QueueRuntime {
     zone: String,
     area: Option<Rect>,
     path: Option<std::path::PathBuf>,
-    back: Option<Box<Browser>>,
+    back: Option<Box<Overlay>>,
     pub(super) cleanups: super::routine_cleanup::Cleanups,
     removals: VecDeque<(u64, Vec<queue::Entry>)>,
     next_undo: u64,
@@ -94,6 +94,10 @@ impl QueueRuntime {
 
     pub(super) fn clear_started(&mut self) -> Vec<queue::Entry> {
         self.queue.clear_started()
+    }
+
+    pub(super) fn clear_projects_started(&mut self) -> Vec<queue::Entry> {
+        self.queue.clear_started_where(|entry| !entry.is_bot())
     }
 
     pub(super) fn keep_removed(&mut self, entries: Vec<queue::Entry>) -> Option<u64> {
@@ -220,12 +224,18 @@ impl QueueRuntime {
         crate::persist::save(path, &self.queue.saved()).map_err(|error| error.to_string())
     }
 
-    pub(super) fn keep_browser(&mut self, back: Option<Box<Browser>>) {
+    pub(super) fn keep_back(&mut self, back: Option<Box<Overlay>>) {
         self.back = back;
     }
 
-    pub(super) fn take_browser(&mut self) -> Option<Box<Browser>> {
+    pub(super) fn take_back(&mut self) -> Option<Box<Overlay>> {
         self.back.take()
+    }
+
+    pub(super) fn drop_back_where(&mut self, names: impl Fn(&Overlay) -> bool) {
+        if self.back.as_deref().is_some_and(names) {
+            self.back = None;
+        }
     }
 }
 
@@ -409,7 +419,14 @@ impl App {
 
     pub(super) fn queued_rows(&self) -> Vec<Queued> {
         let zone = self.panels.queued.display_zone();
-        self.panels.queued.queue.entries.iter().map(|entry| self.queued_row(entry, zone)).collect()
+        let entries = self.panels.queued.queue.entries.iter().filter(|entry| !entry.is_bot());
+        entries.map(|entry| self.queued_row(entry, zone)).collect()
+    }
+
+    pub(super) fn bot_routine_count(&self) -> usize {
+        let bots = &self.panels.bots;
+        let entries = self.panels.queued.queue.entries.iter().filter(|entry| !entry.is_run());
+        entries.filter(|entry| entry.bot().is_some_and(|bot| bots.by_id(bot).is_some())).count()
     }
 
     pub(super) fn queued_row(&self, entry: &queue::Entry, zone: &str) -> Queued {
@@ -491,8 +508,10 @@ impl App {
     pub(super) fn sync_queued(&mut self) {
         if matches!(self.overlay, Some(Overlay::Issues(_))) {
             let rows = self.queued_rows();
+            let count = self.bot_routine_count();
             if let Some(Overlay::Issues(browser)) = &mut self.overlay {
                 browser.queued = rows;
+                browser.bot_routines = count;
             }
         }
     }
@@ -511,23 +530,13 @@ impl App {
                 self.overlay = None;
                 self.focus_queued(pane, area);
             }
-            State::Answered { .. } => self.open_answered(id),
-            State::Started { .. } | State::Kept { .. } | State::Removed => self.open_queue_result_dialog(id),
+            State::Started { .. } | State::Kept { .. } | State::Answered { .. } | State::Removed => {
+                self.open_queue_result_dialog(id);
+            }
             State::Failed { .. } | State::Missed if entry.is_run() => self.open_queue_result_dialog(id),
             State::Starting => {}
             _ if entry.is_run() => {}
             _ => self.new_queue_form(Some(id)),
-        }
-    }
-
-    fn open_answered(&mut self, id: u64) {
-        let bot = self.panels.queued.queue.entry(id).and_then(|entry| entry.bot().map(str::to_string));
-        match bot.and_then(|bot| self.panels.bots.by_id(&bot)) {
-            Some(at) => {
-                self.overlay = None;
-                self.show_bot_at_run(at, Some(id));
-            }
-            None => self.open_queue_result_dialog(id),
         }
     }
 
@@ -544,7 +553,10 @@ impl App {
         } else {
             match self.panels.queued.remove(id) {
                 Ok(entries) if entries.len() > 1 => {
-                    let message = format!("removed routine {id} and its {} runs", entries.len() - 1);
+                    let message = format!(
+                        "removed routine {id} and its {}",
+                        crate::text::plural(entries.len() - 1, "run", "runs")
+                    );
                     self.queue_removed(message, entries);
                 }
                 Ok(entries) => self.queue_removed(format!("removed queue entry {id}"), entries),
@@ -573,7 +585,7 @@ impl App {
     }
 
     pub(super) fn clear_queued(&mut self) {
-        let cleared = self.panels.queued.clear_started();
+        let cleared = self.panels.queued.clear_projects_started();
         self.queue_removed(format!("cleared {} started", cleared.len()), cleared);
         self.sync_queued();
     }
@@ -592,20 +604,24 @@ pub(super) fn queued_colour(queued: &Queued) -> Option<Color> {
     }
 }
 
+fn bot_routines_tail(count: usize) -> Option<String> {
+    match count {
+        0 => None,
+        1 => Some("1 bot routine: in its bot's chat".into()),
+        n => Some(format!("{n} bot routines: in each bot's chat")),
+    }
+}
+
 fn queue_hint(selected: Option<&Queued>) -> &'static str {
     let Some(queued) = selected else { return "every project's scheduled agents" };
     let opens = matches!(queued.state, State::Started { .. } | State::Kept { .. }) && queued.live;
     match (queued.kind, &queued.state) {
         (QueuedKind::Routine { .. }, _) => "enter edits it · start now runs it once more",
-        (QueuedKind::Run, State::Answered { .. }) => "enter shows its answer in the bot's chat · a run of a routine",
         (QueuedKind::Run, _) if opens => "enter opens its pane · a run of a routine",
         (QueuedKind::Run, State::Pending | State::Starting) => "a run of a routine · every project's scheduled agents",
         (QueuedKind::Run, _) => "enter shows its result · a run of a routine",
         (_, State::Started { .. }) if opens => "enter opens its pane · every project's scheduled agents",
         (_, State::Started { .. }) => "enter shows its result · every project's scheduled agents",
-        (QueuedKind::Entry, State::Answered { .. }) => {
-            "enter shows its answer in the bot's chat · every project's scheduled agents"
-        }
         (_, State::Starting) => "starting… · every project's scheduled agents",
         _ => "enter edits it · start now runs it at once",
     }
@@ -635,6 +651,7 @@ pub(super) fn queue_tab(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>,
         selected,
         scroll: browser.search.scroll(),
         empty: empty.into(),
+        tail: bot_routines_tail(browser.bot_routines),
     };
     (body, None, hint.into())
 }

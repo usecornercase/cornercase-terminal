@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.92
+
+- **A bot's routines are in the bot.** ` routines ` in its chat's header, **routines…** in its menu and a click on a routine on its card list its routines and reminders: the repeat, the next run (or `paused`) and how the last run ended. ` run now `, ` pause ` or ` resume `, ` edit… ` and ` remove ` (with ` undo `) act on one, and a click on it shows the chat at its last run. ` + routine ` schedules one for the bot yourself, as an every-day-at-09:00 routine you can change.
+- **The Queue tab lists projects' entries only.** A dim line at its end says how many bot routines there are, the schedule form's **Where** no longer lists bots, and ` clear started ` leaves the bots' runs alone. Editing a bot's routine shows its bot in **Where**, fixed.
+- For programs nothing changes: `cornercase queue list` still lists every entry, `--bot` picks one bot's, and `queue clear-started` still clears every one.
+
 ## 0.13.91
 
 - **A bot tells you when an agent it started finishes.** The chat gets `▶ started claude in …` when the bot starts an agent. When the agent's turn ends, `✓ claude finished in …` comes with its last message, and the bot then answers in the conversation that started it, its chat's or its routine's: what matters, or the next step. A question from the agent shows `! claude needs you in …` and starts nothing.

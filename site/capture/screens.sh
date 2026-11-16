@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-agents machines-run-on machines-clone"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots bot-routines flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machines-sidebar machines-agents machines-run-on machines-clone"
 
 pane_in() {
   cc status --json | node -e '
@@ -1388,9 +1388,7 @@ screen_queue() {
   cc_shot queue
 }
 
-screen_bots() {
-  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
-  cc_session "$CC_CAPTURE/sessions/s1.json"
+seed_bots() {
   node -e '
     const fs = require("fs");
     const dir = process.argv[1];
@@ -1436,11 +1434,30 @@ screen_bots() {
     const run = { id: 12, at: now - 1800, ...task, routine: 11, state: "answered", session: "8b610e1d-23f2-4ef4-8666-258ef8b082dc", started: now - 1800 };
     fs.writeFileSync(process.argv[2], JSON.stringify({ version: 3, next_id: 12, entries: [run, routine] }));
   ' "$CC_RUN/server.bots" "$CC_RUN/server.queue.json"
+}
+
+screen_bots() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  seed_bots
   cc_start 140 38
   cc_wait 'Bots'
   cc_click 'prs'
   cc_wait 'Message prs…'
   cc_shot bots
+}
+
+screen_bot_routines() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  seed_bots
+  cc_start 140 38
+  cc_wait 'Bots'
+  cc_click 'prs'
+  cc_wait 'Message prs…'
+  cc_click 'routines'
+  cc_wait 'Routines › prs'
+  cc_shot bot-routines
 }
 
 screen_queue_routine() {

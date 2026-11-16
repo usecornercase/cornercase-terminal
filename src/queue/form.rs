@@ -304,7 +304,9 @@ impl Form {
     pub(crate) fn controls(&self) -> Vec<Control> {
         let mut controls = vec![Control::Prompt, Control::When];
         controls.extend(self.values());
-        controls.push(Control::Place);
+        if self.bot().is_none() {
+            controls.push(Control::Place);
+        }
         controls.extend(self.after_place());
         controls
     }

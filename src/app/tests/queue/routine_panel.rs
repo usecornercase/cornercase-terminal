@@ -76,10 +76,7 @@ fn removing_a_routine_takes_its_runs_and_undo_brings_everything_back() {
     press_button(&mut app, "remove");
     assert_eq!(app.panels.queued.queue().entries, []);
     assert!(
-        app.messages
-            .toast
-            .as_ref()
-            .is_some_and(|toast| toast.message == format!("removed routine {id} and its 1 runs"))
+        app.messages.toast.as_ref().is_some_and(|toast| toast.message == format!("removed routine {id} and its 1 run"))
     );
     let button = ui::toast_button(AREA, app.messages.toast.as_ref().expect("undo").view());
     click(&mut app, button.as_position());

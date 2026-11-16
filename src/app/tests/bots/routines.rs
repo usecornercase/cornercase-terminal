@@ -1,4 +1,5 @@
 use super::*;
+use crate::queue::form::Control;
 use crate::queue::repeat::Repeat;
 use crate::queue::{self, Place, State, Task};
 
@@ -37,7 +38,7 @@ impl Chat {
         });
     }
 
-    fn fire(&mut self, at: i64) {
+    pub(super) fn fire(&mut self, at: i64) {
         self.app.refresh_at(Instant::now(), at);
     }
 
@@ -261,24 +262,11 @@ fn a_run_left_by_a_restart_is_closed_in_the_chat() {
     assert_eq!((lines[2].text.as_str(), lines[2].routine), ("interrupted by a restart", Some(12)));
 }
 
-fn answered_run(c: &mut Chat) -> (u64, u64) {
+pub(super) fn answered_run(c: &mut Chat) -> (u64, u64) {
     let id = scheduled(c, bot_routine(START, "2h"));
     c.fire(START);
     c.runs_settle();
     (id, runs(c, id).remove(0).id)
-}
-
-#[test]
-fn enter_on_an_answered_row_shows_the_chat_at_that_run() {
-    let mut c = chat(ANSWER);
-    c.app.window_attached();
-    let (_, run) = answered_run(&mut c);
-    c.app.open_queued(run, AREA);
-    assert!(c.app.overlay.is_none());
-    assert_eq!(c.app.shown_bot(), Some(0));
-    let anchor = c.app.panels.bots.shown.as_ref().and_then(|shown| shown.anchor);
-    let first = c.lines().iter().find(|line| line.routine == Some(run)).map(|line| line.id);
-    assert_eq!(anchor, first);
 }
 
 #[test]
@@ -346,7 +334,7 @@ fn queue_run_on_an_answered_entry_is_refused_and_leaves_it_as_it_was() {
 }
 
 #[test]
-fn editing_a_bots_entry_offers_only_that_bot_in_where() {
+fn a_new_form_lists_no_bot_and_editing_a_bots_entry_lists_only_its_bot() {
     let mut c = chat(ANSWER);
     let docs = Bot { access: Access::Cornercase, ..bot("docs", "Docs") };
     folder::create(c.dir.path(), &docs, "").expect("a second bot");
@@ -354,10 +342,33 @@ fn editing_a_bots_entry_offers_only_that_bot_in_where() {
     let id = scheduled(&mut c, bot_routine(START, "2h"));
     c.app.new_queue_form(None);
     let Some(Overlay::Queue(form)) = &c.app.overlay else { panic!("the form") };
-    assert_eq!(form.places.iter().map(|choice| choice.label.as_str()).collect::<Vec<_>>(), ["bot: Docs", "bot: PRs"]);
+    assert!(form.places.iter().all(|choice| !choice.label.starts_with("bot: ")), "{:?}", form.places);
     c.app.overlay = None;
     c.app.new_queue_form(Some(id));
     let Some(Overlay::Queue(form)) = &c.app.overlay else { panic!("the form") };
     assert_eq!(form.places.iter().map(|choice| choice.label.as_str()).collect::<Vec<_>>(), ["bot: PRs"]);
     assert_eq!(form.bot(), Some("prs"));
+    assert!(!form.controls().contains(&Control::Place));
+}
+
+#[test]
+fn the_queue_tab_rows_leave_out_bot_entries_and_the_count_skips_runs_and_gone_bots() {
+    let mut c = chat(ANSWER);
+    let (id, _) = answered_run(&mut c);
+    assert_eq!(c.app.queued_rows().len(), 0);
+    assert_eq!(c.app.bot_routine_count(), 1);
+    let ghost = Task { place: Place { bot: Some("ghost".into()), ..Place::default() }, ..bot_routine(START, "2h") };
+    scheduled(&mut c, ghost);
+    assert_eq!(c.app.bot_routine_count(), 1);
+    assert!(c.app.panels.queued.queue().entry(id).is_some());
+}
+
+#[test]
+fn clear_started_in_the_window_leaves_a_bots_answered_run() {
+    let mut c = chat(ANSWER);
+    let (_, run) = answered_run(&mut c);
+    c.app.clear_queued();
+    assert!(c.app.panels.queued.queue().entry(run).is_some());
+    let cleared = c.app.panels.queued.clear_started();
+    assert!(cleared.iter().any(|entry| entry.id == run));
 }

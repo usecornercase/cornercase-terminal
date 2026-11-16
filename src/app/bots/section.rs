@@ -109,8 +109,9 @@ impl App {
                 } else {
                     format!("next {}", crate::queue::clock::short(entry.task.at, now, &zone))
                 };
-                let when = ui::CardRow::new("", format!("{next} · ↻ {repeat}"));
-                Some([ui::CardRow::new("routine", entry.task.label.clone()), when])
+                let row =
+                    |label, value: String| ui::CardRow { routine: Some(entry.id), ..ui::CardRow::new(label, value) };
+                Some([row("routine", entry.task.label.clone()), row("", format!("{next} · ↻ {repeat}"))])
             })
             .flatten()
             .collect()
@@ -162,9 +163,15 @@ impl App {
 
     pub(in crate::app) fn open_bot_menu(&mut self, at: usize, pos: Position) {
         let key = self.panels.bots.live[at].key;
-        let actions = [BotItem::Rename, BotItem::Edit, BotItem::NewConversation, BotItem::OpenFolder, BotItem::Remove]
-            .map(|item| MenuAction::Bot(key, item))
-            .to_vec();
+        let items = [
+            BotItem::Rename,
+            BotItem::Edit,
+            BotItem::Routines,
+            BotItem::NewConversation,
+            BotItem::OpenFolder,
+            BotItem::Remove,
+        ];
+        let actions = items.map(|item| MenuAction::Bot(key, item)).to_vec();
         self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 }

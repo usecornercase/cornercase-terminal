@@ -9,6 +9,7 @@ pub(crate) mod chat;
 pub(crate) mod folder;
 pub(crate) mod follow;
 pub(crate) mod form;
+pub(crate) mod routines;
 pub(crate) mod turn;
 
 pub(crate) const MAX_BOTS: usize = 50;

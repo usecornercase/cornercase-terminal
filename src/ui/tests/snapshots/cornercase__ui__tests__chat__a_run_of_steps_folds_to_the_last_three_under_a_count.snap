@@ -2,7 +2,7 @@
 source: src/ui/tests/chat.rs
 expression: "drawn(chat(&[steps(&refs, false)])).backend()"
 ---
-"  prs  claude · opus · high · home                        new conversation   ⋯  "
+"  prs  claude · opus · high · home             routines   new conversation   ⋯  "
 " ────────────────────────────────────────────────────────────────────────────── "
 "                                                                                "
 "                                                                                "

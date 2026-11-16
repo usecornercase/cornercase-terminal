@@ -165,6 +165,7 @@ impl App {
             place: None,
             filtering: None,
             queued: self.queued_rows(),
+            bot_routines: self.bot_routine_count(),
             members: self.known_members(project.id),
             run_on: self.run_on_for(project.id),
             there: None,
@@ -681,6 +682,7 @@ fn picker_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) 
         selected,
         scroll: picker.map_or(0, |p| p.search.scroll()),
         empty: "nothing matches".into(),
+        tail: None,
     };
     let (hint, note) = picker_hint(browser);
     (body, note, hint)
@@ -737,6 +739,7 @@ fn people_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) 
         selected: browser.filtering.map(|c| c.min(rows.len().saturating_sub(1))),
         scroll: 0,
         empty: "nothing to filter here".into(),
+        tail: None,
     };
     (body, None, "enter picks a person · the filter goes into each tracker's search and is remembered".into())
 }
@@ -934,7 +937,7 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
         })
         .collect();
     let filter = browser.search.query().to_string();
-    (ui::IssuesBody::List { filter, items, selected, scroll: browser.search.scroll(), empty }, note, hint)
+    (ui::IssuesBody::List { filter, items, selected, scroll: browser.search.scroll(), empty, tail: None }, note, hint)
 }
 
 fn list_empty(browser: &Browser, busy: bool) -> String {

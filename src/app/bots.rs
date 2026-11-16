@@ -18,6 +18,7 @@ mod manage;
 mod menu;
 mod reports;
 mod routines;
+mod routines_dialog;
 mod section;
 mod shown;
 mod talk;

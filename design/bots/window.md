@@ -1,6 +1,6 @@
 # Bots › The window
 
-Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
+Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`, `routines_dialog.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
 
 #844 made bots with no face but `cornercase bot …`. The window draws a bot **as a chat** (bubbles, Markdown, what it is doing), never as the agent's interface, since #844 runs the agent without it and keeps the chat in `chat.jsonl`.
 
@@ -22,8 +22,9 @@ The sidebar section, its placement, height rule, saved fold and compact page are
 - **The view** is anchored at the bottom; `Chat.scroll` counts the rows above it and 0 sticks. A line that arrives while it is above 0 adds its height to `scroll` so the text read stays put, and sets the ` ↓ new ` mark, which a click or reaching the bottom clears. The wheel scrolls as in a pane (`design/scrollback.md`).
 - **The empty state** (a chat with no lines, which is a bot made without For: a setup's notice is a line) says what a bot is in two lines and offers three examples; a click fills the field and sends nothing. None promises a schedule (#846 adds that example).
 - **Times** use the window's zone (`App::window_zone`, the queue form's): `HH:MM` today, else `Mon 3 Nov 14:02` (`queue::clock::when`, shared with `cornercase bot history`).
+- **The header** has ` routines ` one cell left of ` new conversation ` (10 cells, cyan, enabled while a turn runs); it opens the bot's routines dialog (see [Bot routines](routines.md)). It is left out when keeping it would leave the name under 12 cells, and ` ⋯ ` still offers `routines…`.
 - **` new conversation `** while a turn runs is dim, and a click says `PRs is answering: stop it first` (#844's `busy` refusal); the menu greys it.
-- **The card** (workspaces column): the name, agent, model (`the agent's own` when unset), effort and account when set, the access (`full access` in red), `made 2026-11-14`; the folder comes right after the name, since it is the card's one click target (a click opens the open-in menu, or copies the path) and the stacked layout gives the card few rows. The tree layout has no workspaces column, so it has no card.
+- **The card** (workspaces column): the name, agent, model (`the agent's own` when unset), effort and account when set, the access (`full access` in red), `made 2026-11-14`; the agents it started that are still running (`started`, see Followed agents below); the folder comes right after the name, since the stacked layout gives the card few rows. Its click targets are the folder (a click opens the open-in menu, or copies the path), the `started` rows (a click shows that tab) and the two rows of a routine (a click opens its routines dialog, selected; the value turns cyan while hovered). The tree layout has no workspaces column, so it has no card.
 
 ## Followed agents in the window (#847)
 
@@ -31,7 +32,7 @@ The chat draws `started`, `finished` and `waiting` lines (`ui/bots/agent.rs`) as
 
 ## Routines in the window (#846)
 
-A routine run's lines are drawn as one block, the section's row shows `next 09:00` while the bot is idle, the card lists the routines, the empty state has a fourth example and the remove dialog names the entries it removes: see [Bot routines](routines.md) (The window). The simulation shows a canned run block and a seeded routine, and runs none; a bot made in its form with For filled in plays a canned setup that schedules a routine.
+A routine run's lines are drawn as one block, the section's row shows `next 09:00` while the bot is idle, the card lists the routines, the empty state has a fourth example and the remove dialog names the entries it removes: see [Bot routines](routines.md) (The window). The simulation shows a canned run block and a seeded routine, and runs none; a bot made in its form with For filled in plays a canned setup that schedules a routine. Its bots' entries live in `app.botQueued`, not `app.queued`: the landing's scripted worlds and `queue.test.ts` need an empty project queue, while the card, the sidebar's `next` and the routines dialog need the bot's routine in them too. `pauseQueued`, `removeQueued` and `removal` take the store to act on, so the dialog reuses the Queue tab's code and its undo toast.
 
 ## Keys
 

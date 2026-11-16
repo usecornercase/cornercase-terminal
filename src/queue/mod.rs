@@ -255,7 +255,12 @@ impl Queue {
     }
 
     pub(crate) fn clear_started(&mut self) -> Vec<Entry> {
-        let (started, kept) = std::mem::take(&mut self.entries).into_iter().partition(Entry::clearable);
+        self.clear_started_where(|_| true)
+    }
+
+    pub(crate) fn clear_started_where(&mut self, which: impl Fn(&Entry) -> bool) -> Vec<Entry> {
+        let (started, kept) =
+            std::mem::take(&mut self.entries).into_iter().partition(|entry| entry.clearable() && which(entry));
         self.entries = kept;
         started
     }
