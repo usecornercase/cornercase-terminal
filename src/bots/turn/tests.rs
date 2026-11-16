@@ -152,3 +152,14 @@ fn a_reports_only_opening_says_cornercase_says() {
     let plain = ask(&input(&made, Some("s1")), None, None);
     assert_eq!(plain.prompt, "hello");
 }
+
+#[test]
+fn a_setup_opens_a_new_session_with_the_setup_section_even_when_the_bot_has_a_conversation() {
+    let dir = TempDir::new();
+    let made = folder::create(dir.path(), &sample("prs", "PRs"), "review").expect("create");
+    let setup = Input { session: Session::Setup, ..input(&made, Some("s1")) };
+    let asked = ask(&setup, None, None);
+    assert_eq!(asked.conversation, None);
+    assert!(asked.prompt.contains("You are PRs") && asked.prompt.contains("## You were just made"), "{}", asked.prompt);
+    assert!(!asked.prompt.contains("The user says"));
+}

@@ -87,6 +87,7 @@ fn every_command_the_brief_names_exists() {
     let mut all = Vec::new();
     for access in [Access::Cornercase, Access::Full] {
         all.extend(commands_named(&brief(&named(access), Path::new("/b"))));
+        all.extend(commands_named(&setup_section(&named(access))));
     }
     assert!(all.len() >= 8, "{all:?}");
     for path in all {
@@ -96,6 +97,20 @@ fn every_command_the_brief_names_exists() {
         let error = crate::cli::Cli::command().try_get_matches_from(args).expect_err("help stops the parse");
         assert_eq!(error.kind(), clap::error::ErrorKind::DisplayHelp, "cornercase {}", path.join(" "));
     }
+}
+
+#[test]
+fn a_setup_opening_has_the_brief_the_two_files_and_the_setup_section_last() {
+    let bot = named(Access::Cornercase);
+    let text = setup_opening(&bot, Path::new("/b/prs"), ("review PRs", "likes short"), None);
+    let at = |needle: &str| text.find(needle).unwrap_or_else(|| panic!("{needle} in {text}"));
+    assert!(at("## bot.md\n\nreview PRs") < at("## memory.md\n\nlikes short"));
+    assert!(at("## memory.md") < at("## You were just made"));
+    assert!(text.ends_with(&setup_section(&bot)), "{text}");
+    assert!(text.contains("cornercase queue list --bot prs --json"));
+    assert!(!text.contains("## The user says"));
+    let told = setup_opening(&bot, Path::new("/b/prs"), ("a", "b"), Some("## Since your last message\nx"));
+    assert!(told.find("## Since your last message") < told.find("## You were just made"));
 }
 
 #[test]
@@ -129,7 +144,9 @@ fn flags_named(text: &str) -> Vec<(Vec<String>, String)> {
 
 #[test]
 fn every_flag_the_brief_names_exists_on_its_command() {
-    let flags = flags_named(&brief(&named(Access::Cornercase), Path::new("/b")));
+    let bot = named(Access::Cornercase);
+    let mut flags = flags_named(&brief(&bot, Path::new("/b")));
+    flags.extend(flags_named(&setup_section(&bot)));
     assert!(flags.iter().any(|(path, flag)| path == &["queue", "list"] && flag == "bot"), "{flags:?}");
     for (path, flag) in flags {
         let command = crate::cli::Cli::command();

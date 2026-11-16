@@ -233,7 +233,7 @@ impl App {
         let ended = |line: &&Line| {
             line.kind == Kind::Error
                 && live.turn.is_none()
-                && chat::prompt_of(lines, line.id).is_some_and(|prompt| prompt.kind == Kind::You)
+                && chat::prompt_of(lines, line.id).is_some_and(|prompt| prompt.kind != Kind::Finished)
         };
         let retry = last.filter(ended).map(|line| line.id);
         Facts {

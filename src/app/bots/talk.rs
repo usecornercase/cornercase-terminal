@@ -6,7 +6,7 @@ use crate::app::input::WHEEL_ROWS;
 use crate::app::opening::Subject;
 use crate::app::text_fields::FieldArea;
 use crate::app::toast::Toast;
-use crate::bots::chat::{self, Kind};
+use crate::bots::chat;
 use crate::control::contract::Code;
 use crate::editor::Editor;
 use crate::ui::{self, ChatHit, RowHit};
@@ -70,10 +70,15 @@ impl App {
     fn send_again(&mut self, error: u64) {
         let Some(at) = self.shown_bot() else { return };
         let lines = self.panels.bots.shown.as_ref().map(|shown| shown.lines.as_slice()).unwrap_or_default();
-        let prompt = chat::prompt_of(lines, error).filter(|line| line.kind == Kind::You);
-        let Some(text) = prompt.map(|line| line.text.clone()) else { return };
+        let opener = chat::prompt_of(lines, error).filter(|line| line.kind != chat::Kind::Finished).cloned();
+        let Some(opener) = opener else { return };
         let id = self.panels.bots.live[at].bot.id.clone();
-        if let Err(refusal) = self.bot_say(&id, &text, false) {
+        let done = if chat::is_setup(&opener) {
+            self.bot_setup(&id).map(|_| ())
+        } else {
+            self.bot_say(&id, &opener.text, false).map(|_| ())
+        };
+        if let Err(refusal) = done {
             self.chat_toast(refusal.message);
         }
     }

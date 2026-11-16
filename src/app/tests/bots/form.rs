@@ -59,7 +59,31 @@ fn creating_a_bot_shows_its_empty_chat_at_once() {
     assert!(c.app.overlay.is_none());
     assert_eq!(c.app.panels.bots.live.len(), 2);
     assert_eq!(c.app.shown_bot(), Some(1));
+    assert!(c.app.panels.bots.live[1].turn.is_none());
     assert!(drawn(&mut c.app).contains("Message Digest…"));
+}
+
+#[test]
+fn creating_a_bot_with_what_it_is_for_shows_it_setting_up() {
+    let mut c = chat(ANSWER);
+    c.app.window_attached();
+    plus(&mut c);
+    typed(&mut c, "Digest");
+    let Some(Overlay::BotForm(form)) = &mut c.app.overlay else { panic!("form") };
+    form.about = Editor::new("Review my PRs every weekday at 9");
+    send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(c.app.shown_bot(), Some(1));
+    assert!(c.app.panels.bots.live[1].turn.is_some());
+    let text = drawn(&mut c.app);
+    assert!(text.contains("setting up") && !text.contains(ui::EXAMPLES[0]), "{text}");
+    let Chat { app, rx, .. } = &mut c;
+    wait_until("the setup ends", || {
+        drain(app, rx);
+        app.panels.bots.live[1].turn.is_none()
+    });
+    assert!(drawn(&mut c.app).contains("Two are blocked."));
+    assert_eq!(c.app.panels.bots.live[1].unread, 0);
+    assert!(c.app.messages.toast.is_none());
 }
 
 #[test]
@@ -121,6 +145,7 @@ fn editing_saves_the_name_the_model_and_what_it_is_for() {
     assert_eq!((bot.name.as_str(), bot.model.as_deref()), ("Reviews", Some("opus")));
     let (about, _) = folder::notes(&c.app.panels.bots.live[0].folder);
     assert_eq!(about, "New purpose");
+    assert!(c.app.panels.bots.live[0].turn.is_none(), "a new For runs no setup");
 }
 
 #[test]

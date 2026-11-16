@@ -111,6 +111,25 @@ mod replay {
     }
 
     #[test]
+    fn a_setup_notice_starts_a_turn_as_a_message_does() {
+        let setup = Line::notice(1, 10, SETTING_UP);
+        assert_eq!(state(std::slice::from_ref(&setup)), Replayed { next_id: 2, running: true, ..Replayed::default() });
+        assert!(!state(&[setup.clone(), answer(2)]).running);
+        let held = state(&[setup, Line::you(2, 11, "more", true)]);
+        assert_eq!((held.running, held.held), (true, 1));
+        let texts: Vec<String> = restart_notices(&held, 99).into_iter().map(|line| line.text).collect();
+        assert_eq!(texts, ["interrupted by a restart", "1 held message dropped"]);
+    }
+
+    #[test]
+    fn opens_turn_is_a_message_or_a_setup_and_never_a_runs_line() {
+        assert!(opens_turn(&you(1, false)) && opens_turn(&you(1, true)));
+        assert!(opens_turn(&Line::notice(1, 1, SETTING_UP)));
+        assert!(!opens_turn(&Line::notice(1, 1, SETTING_UP).of_run(7)));
+        assert!(!opens_turn(&Line::notice(1, 1, NEW_CONVERSATION)) && !opens_turn(&answer(1)));
+    }
+
+    #[test]
     fn an_answer_ends_it() {
         assert!(!state(&[you(1, false), answer(2)]).running);
         assert!(!state(&[you(1, false), Line::failed(2, 1, "x")]).running);
@@ -285,6 +304,18 @@ mod runs {
         let mut after = lines.to_vec();
         after.extend(notices);
         assert_eq!(restart_notices(&replay(&after), 100), Vec::<Line>::new());
+    }
+
+    #[test]
+    fn the_answers_before_a_setup_are_not_unseen() {
+        let lines =
+            [head(1, 7), run_answer(2, 7), Line::notice(3, 1, SETTING_UP), answer(4), head(5, 8), run_answer(6, 8)];
+        let told = unseen(&lines);
+        assert_eq!(told.len(), 1);
+        assert_eq!(told[0].text, "ok");
+        assert_eq!(told[0].label, "Review PRs");
+        assert_eq!(told[0].clock, "09:00");
+        assert_eq!(unseen(&lines[..4]).len(), 0);
     }
 
     #[test]

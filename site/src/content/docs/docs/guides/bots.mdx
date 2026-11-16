@@ -12,7 +12,7 @@ A **bot** is an agent of your own for that: a name, a folder, a memory and a cha
 
 The window draws a bot as a chat, with bubbles, Markdown and what it is doing, not as the agent's terminal interface: see [In the window](#in-the-window). Everything the window does is also a command, so you can talk to a bot from a script with [`cornercase bot`](#talk-to-a-bot) and a program can follow it through [events](../scripts-and-agents/#bots).
 
-**Making a bot starts nothing and spends no tokens.** It runs when you write to it and when its [routines](#routines) run, and **only while the server runs**: a turn's process does not survive `cornercase kill-server`, a reboot or an update's restart. A turn that was running then ends with `interrupted by a restart` in its chat, and the messages held for it are dropped.
+**A bot made with what it is for sets itself up at once**: its first turn starts as soon as it is made. It reads `bot.md`, schedules what it asks for as [routines](#routines), writes what its runs will need in `memory.md`, and tells you in its chat what it will do, what it scheduled and when that runs next. **A bot made without it starts nothing and spends no tokens.** After that it runs when you write to it and when its routines run, and **only while the server runs**: a turn's process does not survive `cornercase kill-server`, a reboot or an update's restart. A turn that was running then ends with `interrupted by a restart` in its chat, and the messages held for it are dropped.
 
 ## In the window
 
@@ -44,7 +44,7 @@ From top to bottom:
   - Each tool the bot uses is a dim line, `▸ cornercase status --json`. A run of more than three folds to its last three, under **`+N steps`**, which a click unfolds.
   - A [routine's run](#routines) is one block, wherever its lines came: a bold dim header `↻ Review PRs · 09:00`, its steps folded into one **`+N steps`** row, then its answer. A run that failed shows its error with **` run again `**.
   - An [agent the bot started](#agents-it-starts) is a line of its own: `▶ started claude in web-shop › fix/ci-482`, then `✓ claude finished in …` with the agent's last message under it, or `! claude needs you in …` with its screen. A click on **` show `** shows that agent's tab.
-  - An error is red, with **` retry `**, which sends your last message again, when it is the last line and no turn runs. A notice is centred and dim.
+  - An error is red, with **` retry `**, which sends your last message again or, under a setup that failed, runs the setup again, when it is the last line and no turn runs. A notice is centred and dim.
   - While a turn runs, the last line reads `⠋ thinking · 42s · 3 steps` with a **` stop `** button, which ends the turn and everything the bot started in it (`stopping…` until it has).
 - **The field** at the bottom is one row that grows to six and then scrolls, with the placeholder `Message prs…` and **` send `** at its right. **`Enter` sends**; a line break comes from a paste, which keeps its breaks. Text sent while the bot answers is held and goes as the next turn. **`Esc` clears** the field; with it empty, `Esc` does nothing. The field takes the same word moves and selection as every [text field](../../reference/keyboard-and-mouse/#text-fields), and **keys go to it, never to a pane**, while a chat shows.
 - **A chat with no lines** says what a bot is, in two lines, and offers four examples, the last one asking for a routine. A click on one fills the field with it and sends nothing.
@@ -64,9 +64,9 @@ An answer, or an error, that arrives while you are looking at something else mak
 - **Model**: the models the agent suggests, and `default`, the agent's own. Type to filter; `Enter` on a name that matches none uses it as written. **Effort** and **Account** rows show only when the agent takes efforts or you have [accounts](../accounts/) for it.
 - **Access**: `through cornercase` or `full access`, with a two-line note under it. The first line says what `through cornercase` is, and the second, in red, what `full access` lets the bot do, see [Access](#access). Codex, opencode and Cursor CLI offer `full access` only (and Gemini CLI and GitHub Copilot CLI on Windows), so nothing is chosen for you there and **create** asks you to choose.
 - **Follow**: a box, checked, that says whether the bot is told when an agent it starts [finishes](#agents-it-starts). `Space` or a click toggles it.
-- **For**: what the bot is for. It is optional, may be several lines (`Enter` breaks the line here) and becomes `bot.md`.
+- **For**: what the bot is for. It is optional, may be several lines (`Enter` breaks the line here) and becomes `bot.md`; filled in, the bot sets itself up for it as soon as it is made.
 
-**create** shows the new bot's chat at once, with its empty state. **edit…** in the bot's menu is the same form with **save**, with the agent grey, since another agent could not continue the conversation. **rename** asks for a new name and keeps the bot's id and folder.
+**create** shows the new bot's chat at once. With **For** filled in, the bot sets itself up there: `── setting up ──`, its steps, then what it will do, what it scheduled and what it needs from you; what you send meanwhile waits for the next turn, which continues the same conversation. With **For** empty the chat shows its empty state. Changing **For** later with **edit…** runs nothing: tell the bot in its chat, or run `cornercase bot setup prs`. **edit…** in the bot's menu is the same form with **save**, with the agent grey, since another agent could not continue the conversation. **rename** asks for a new name and keeps the bot's id and folder.
 
 ## Make a bot
 
@@ -83,7 +83,7 @@ cornercase bot new nightly --agent claude --model sonnet --effort low
 - **`--account`**: one of the agent's [accounts](../accounts/); without it, the agent's own login.
 - **`--access`**: what the bot may do, see [Access](#access).
 - **`--follow on|off`**: whether the bot is told when an agent it starts finishes (on by default), see [Agents it starts](#agents-it-starts).
-- **`--about`**: what the bot is for. It goes into `bot.md` and may be empty.
+- **`--about`**: what the bot is for. It goes into `bot.md` and may be empty. When it is not, the bot sets itself up at once; `bot new` still prints only the id, and `cornercase bot setup prs` runs the setup again, after a failure or after `bot edit --about`.
 
 `cornercase bot edit prs --model opus` changes the name, model, effort, account, access or `--follow` from the bot's next message on; an empty value goes back to the agent's own. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot, its folder and its [routines](#routines) (it prints how many, and the number `cornercase queue restore` takes to put them back), and is refused while it answers, or while one of its routines does.
 
@@ -95,10 +95,12 @@ cornercase bot say prs "and the drafts?"
 echo "summarize this log" | cornercase bot say prs - --wait
 cornercase bot history prs
 cornercase bot list
+cornercase bot setup prs
 ```
 
 `bot say` writes your message and starts a turn, answering at once with the line's id. With **`--wait`** it waits and prints the bot's answer; it exits with 3 when the turn fails, is stopped or takes more than 15 minutes, with the reason on standard error. A message is at most 20,000 characters; a longer one is refused with its size, not cut.
 
+- **`bot setup`** runs the setup turn again: a new conversation that reads `bot.md` and `memory.md` and sets the bot up. It is refused while the bot answers and when `bot.md` is empty.
 - **One turn at a time.** A message sent while the bot answers is **held**, and goes with the others held as the next turn. Different bots answer at the same time.
 - **The first message of a conversation** opens with what cornercase tells the bot about itself, then its `bot.md` and `memory.md` (each cut to 8 KB), then what you wrote. Later messages continue the same session.
 - **Steps stream.** Each tool the bot uses, such as `cornercase status --json` or `Read src/main.rs`, is written to the chat as it happens, so you see what it is doing while it works.

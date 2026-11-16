@@ -95,6 +95,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "bot-reads",
     "bot-follow",
     "prompt-unsent",
+    "bot-setup",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

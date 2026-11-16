@@ -14,6 +14,7 @@ const CONTEXT: [&str; 5] =
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Session {
     Chat,
+    Setup,
     NewRun(u64),
     Resume { run: u64, session: String },
 }
@@ -42,7 +43,7 @@ pub(crate) fn joined(texts: &[String]) -> String {
 
 fn environment(bot: &Bot, session: &Session, bin: Option<&Path>, path: Option<&OsStr>) -> headless::Env {
     let run = match session {
-        Session::Chat => None,
+        Session::Chat | Session::Setup => None,
         Session::NewRun(run) | Session::Resume { run, .. } => Some(OsString::from(run.to_string())),
     };
     let mut env: headless::Env = vec![(BOT_ENV, Some(OsString::from(&bot.id))), (BOT_RUN_ENV, run)];
@@ -60,6 +61,7 @@ pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> As
     let (prompt, conversation) = match &input.session {
         Session::NewRun(_) => (brief::run_opening(bot, &input.folder, notes, &input.text), None),
         Session::Resume { session, .. } => (input.text.clone(), Some(session.clone())),
+        Session::Setup => (brief::setup_opening(bot, &input.folder, notes, input.told.as_deref()), None),
         Session::Chat => {
             let said = brief::said(input.from_cornercase, &input.text);
             let told = input.told.as_deref();

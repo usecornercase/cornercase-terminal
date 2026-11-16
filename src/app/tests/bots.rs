@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use rstest::rstest;
+
 use super::*;
 use crate::agents::headless::Access;
 use crate::bots::Bot;
@@ -7,6 +9,7 @@ use crate::bots::chat::{self, Line};
 use crate::bots::folder;
 use crate::bots::sample as bot;
 use crate::test_util::{BotSleepers, fake_program, fixture, wait_until};
+use crate::ui::{ChatHit, RowHit};
 
 fn chat_of(dir: &Path, id: &str) -> Vec<Line> {
     chat::read(&folder::of(dir, id).join(folder::CHAT_FILE))
@@ -16,12 +19,14 @@ fn texts(lines: &[Line]) -> Vec<&str> {
     lines.iter().map(|line| line.text.as_str()).collect()
 }
 
-#[test]
-fn a_turn_that_never_ended_is_interrupted_and_what_was_held_is_dropped_once() {
+#[rstest]
+#[case::a_message(Line::you(1, 10, "first", false))]
+#[case::a_setup(Line::notice(1, 10, chat::SETTING_UP))]
+fn a_turn_that_never_ended_is_interrupted_and_what_was_held_is_dropped_once(#[case] first: Line) {
     let dir = TempDir::new();
     folder::create(dir.path(), &bot("prs", "PRs"), "").expect("create");
     let path = folder::of(dir.path(), "prs").join(folder::CHAT_FILE);
-    for line in [Line::you(1, 10, "first", false), Line::you(2, 11, "second", true)] {
+    for line in [first, Line::you(2, 11, "second", true)] {
         chat::append(&path, &line).expect("append");
     }
     let (mut app, _rx) = empty_app();
@@ -65,14 +70,20 @@ fn chat(out: &str) -> Chat {
     chat_with(out, Access::Cornercase)
 }
 
-pub(in crate::app::tests) fn install_bot(app: &mut App, out: &str, access: Access) -> (TempDir, TempDir, PathBuf) {
+fn install_agent(app: &mut App, out: &str) -> (TempDir, TempDir, PathBuf) {
     let (dir, bin) = (TempDir::new(), TempDir::new());
     let claude = fake_program(bin.path(), "claude");
     std::fs::write(claude.with_extension("out"), out).expect("canned output");
     app.config.agent_commands.insert("claude".into(), claude.display().to_string());
-    folder::create(dir.path(), &Bot { access, ..bot("prs", "PRs") }, "review my PRs").expect("create");
     app.set_bots_dir(dir.path());
     app.panels.bots.timeout = Duration::from_secs(20);
+    (dir, bin, claude)
+}
+
+pub(in crate::app::tests) fn install_bot(app: &mut App, out: &str, access: Access) -> (TempDir, TempDir, PathBuf) {
+    let (dir, bin, claude) = install_agent(app, out);
+    folder::create(dir.path(), &Bot { access, ..bot("prs", "PRs") }, "review my PRs").expect("create");
+    app.set_bots_dir(dir.path());
     (dir, bin, claude)
 }
 
@@ -82,13 +93,39 @@ fn chat_with(out: &str, access: Access) -> Chat {
     Chat { app, rx, dir, claude, bin }
 }
 
+pub(in crate::app::tests) fn settle(app: &mut App, rx: &Receiver<AppEvent>) {
+    wait_until("the turn ends", || {
+        drain(app, rx);
+        app.panels.bots.live[0].turn.is_none()
+    });
+}
+
+fn retry_at(app: &mut App) -> Position {
+    render(app, AREA);
+    let areas = app.chat_geometry(AREA);
+    let shown = app.shown_chat(AREA).expect("a chat");
+    for y in areas.lines.y..areas.lines.bottom() {
+        for x in areas.lines.x..areas.lines.right() {
+            let pos = Position::new(x, y);
+            if matches!(ui::chat_hit(&areas, &shown.view, pos), Some(ChatHit::Row(RowHit::Retry(_)))) {
+                return pos;
+            }
+        }
+    }
+    panic!("no retry button");
+}
+
 impl Chat {
     fn settle(&mut self) {
-        let Self { app, rx, .. } = self;
-        wait_until("the turn ends", || {
-            drain(app, rx);
-            app.panels.bots.live[0].turn.is_none()
-        });
+        settle(&mut self.app, &self.rx);
+    }
+
+    fn retried(&mut self) {
+        self.settle();
+        std::fs::write(self.claude.with_extension("out"), ANSWER).expect("canned output");
+        let at = retry_at(&mut self.app);
+        click(&mut self.app, at);
+        self.settle();
     }
 
     fn lines(&self) -> Vec<Line> {
@@ -345,4 +382,5 @@ mod compact;
 mod form;
 mod menu;
 mod routines;
+mod setup;
 mod window;

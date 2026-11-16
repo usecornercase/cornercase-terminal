@@ -2,11 +2,11 @@ use std::io::Read as _;
 
 use serde_json::Value;
 
-use super::args::bot::{BotAction, EditArgs, HistoryArgs, NewArgs, RemoveArgs, SayArgs};
+use super::args::bot::{BotAction, BotNameArgs, EditArgs, HistoryArgs, NewArgs, SayArgs};
 use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
-use crate::client::{answer, ask, use_bot_about, use_bot_follow, use_bots};
+use crate::client::{answer, ask, use_bot_about, use_bot_follow, use_bot_setup, use_bots};
 use crate::control::Command;
 use crate::control::bots::{AgentInfo, BotHistory, BotInfo, BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::error::{Error, Result};
@@ -32,6 +32,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
         BotAction::List(print) => list(print.json),
         BotAction::Edit(args) => edited(&args),
         BotAction::Remove(args) => removed(args),
+        BotAction::Setup(args) => set_up(&args),
         BotAction::Say(args) => said(&args),
         BotAction::History(args) => history(&args),
         BotAction::Reset(args) => quiet(BotRequest::Reset(target(args.bot))),
@@ -40,7 +41,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
     }
 }
 
-fn removed(args: RemoveArgs) -> Result<bool> {
+fn removed(args: BotNameArgs) -> Result<bool> {
     let value = send(BotRequest::Remove(target(args.bot)))?;
     if args.print.json {
         print_json(&value)?;
@@ -54,6 +55,17 @@ fn removed(args: RemoveArgs) -> Result<bool> {
             (format!("its {count} queue entries"), "them")
         };
         print_out(&format!("removed {what}; cornercase queue restore {undo} puts {back} back\n"))?;
+    }
+    Ok(true)
+}
+
+fn set_up(args: &BotNameArgs) -> Result<bool> {
+    use_bot_setup()?;
+    let value = send(BotRequest::Setup(target(args.bot.clone())))?;
+    if args.print.json {
+        print_json(&value)?;
+    } else {
+        print_out(&format!("{}\n", value["line"]["id"]))?;
     }
     Ok(true)
 }
