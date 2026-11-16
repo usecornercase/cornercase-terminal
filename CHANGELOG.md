@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.93
+
+- **A bot runs your own `gh`, `git` and other programs.** A bot's turn put the whole folder of cornercase's program first on its `PATH`, so with Homebrew every program in `/opt/homebrew/bin` came before yours: a `gh` in `~/bin` was skipped for Homebrew's, which may not be logged in. Only `cornercase` itself comes first now, from a link in `bin/` next to `session.json`, and everything else is found in your `PATH`'s order.
+
 ## 0.13.92
 
 - **A bot's routines are in the bot.** ` routines ` in its chat's header, **routines…** in its menu and a click on a routine on its card list its routines and reminders: the repeat, the next run (or `paused`) and how the last run ended. ` run now `, ` pause ` or ` resume `, ` edit… ` and ` remove ` (with ` undo `) act on one, and a click on it shows the chat at its last run. ` + routine ` schedules one for the bot yourself, as an every-day-at-09:00 routine you can change.

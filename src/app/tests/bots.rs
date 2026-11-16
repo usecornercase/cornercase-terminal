@@ -165,6 +165,13 @@ impl Chat {
 }
 
 #[test]
+fn a_relative_link_folder_is_made_absolute_when_the_server_sets_it() {
+    let mut c = chat(ANSWER);
+    c.app.set_bots_bin(Path::new("relative/bin"));
+    assert_eq!(c.app.panels.bots.bin, Some(std::env::current_dir().expect("cwd").join("relative/bin")));
+}
+
+#[test]
 fn a_message_starts_a_turn_whose_steps_come_before_its_answer() {
     use chat::Kind::{Bot, Step, You};
     let mut c = chat(ANSWER);
