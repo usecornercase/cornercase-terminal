@@ -22,6 +22,7 @@ export interface BotRoutine {
 }
 
 export interface Turn {
+  setup?: boolean;
   since: number;
   steps: number;
   stopping: boolean;
@@ -76,7 +77,14 @@ export const EXAMPLES = [
   'Which issues labelled bug came in today, in every project?',
   'Every weekday at 9, tell me which of my PRs are blocked.',
 ];
+export const SETTING_UP = 'setting up';
 const ANSWER_AFTER = [1400, 2600, 4200];
+const SETUP_AFTER = [1200, 2400, 3600];
+const SETUP_STEPS = [
+  'cornercase queue list --bot {id} --json',
+  "cornercase queue add --every 'day 09:00' --name 'Daily check' --prompt 'Look through my projects and tell me what needs me.'",
+];
+const SETUP_PROMPT = 'Look through my projects and tell me what needs me.';
 const TICK = 500;
 const FOLDER = '~/.local/state/cornercase/bots';
 const MINUTE = 60000;
@@ -94,6 +102,15 @@ const PRS_ANSWER = [
   '```sh',
   'gh run rerun --failed',
   '```',
+].join('\n');
+
+const SETUP_ANSWER = [
+  'Set up: every day at **09:00** I will look through your projects and tell you here what needs you.',
+  '',
+  '- Scheduled **Daily check**, every day 09:00',
+  '- Wrote what each run needs in `memory.md`',
+  '',
+  'Nothing needed from you for now.',
 ].join('\n');
 
 const DIGEST_ANSWER = ['Yesterday in **web-shop**:', '', '- 4 pull requests merged, #476 the last', '- `feat/gift-cards` still waits for tests'].join('\n');
@@ -258,9 +275,18 @@ export class Bots {
     this.app.dirty();
   }
 
+  setup(bot: Bot): void {
+    if (bot.turn || !bot.about.trim()) return;
+    this.add(bot, Date.now(), 'notice', SETTING_UP);
+    this.start(bot, true);
+    this.app.dirty();
+  }
+
   retry(bot: Bot): void {
-    const last = [...bot.lines].reverse().find((l) => l.kind === 'you');
-    if (last && !bot.turn) this.send(bot, last.text);
+    const last = [...bot.lines].reverse().find((l) => !l.routine && (l.kind === 'you' || (l.kind === 'notice' && l.text === SETTING_UP)));
+    if (!last || bot.turn) return;
+    if (last.kind === 'notice') this.setup(bot);
+    else this.send(bot, last.text);
   }
 
   example(bot: Bot, text: string): void {
@@ -298,13 +324,14 @@ export class Bots {
     return bot.id === 'digest' ? DIGEST_ANSWER : GENERIC_ANSWER;
   }
 
-  private start(bot: Bot): void {
+  private start(bot: Bot, setup = false): void {
     const app = this.app;
-    bot.turn = { since: app.now(), steps: 0, stopping: false };
-    const steps = ['cornercase status --json', 'gh pr list --json number,title,reviewDecision'];
+    bot.turn = { since: app.now(), steps: 0, stopping: false, ...(setup ? { setup } : {}) };
+    const after = setup ? SETUP_AFTER : ANSWER_AFTER;
+    const steps = setup ? SETUP_STEPS.map((s) => s.replace('{id}', bot.id)) : ['cornercase status --json', 'gh pr list --json number,title,reviewDecision'];
     steps.forEach((text, i) => {
       bot.timers.push(
-        app.after(ANSWER_AFTER[i], () => {
+        app.after(after[i], () => {
           if (!bot.turn) return;
           bot.turn.steps += 1;
           this.add(bot, Date.now(), 'step', text);
@@ -312,9 +339,20 @@ export class Bots {
         }),
       );
     });
-    bot.timers.push(app.after(ANSWER_AFTER[2], () => this.finish(bot)));
+    bot.timers.push(app.after(after[2], () => this.finish(bot)));
     this.tick(bot);
     app.dirty();
+  }
+
+  private scheduled(bot: Bot): void {
+    const app = this.app;
+    const next = new Date();
+    next.setHours(9, 0, 0, 0);
+    if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+    const routine: BotRoutine = { id: app.nextQueueId++, label: 'Daily check', repeat: 'day 09:00', at: next.getTime() };
+    bot.routines.push(routine);
+    app.queued.push({ ...queueBase(bot, routine.label, SETUP_PROMPT), id: routine.id, at: routine.at, repeat: routine.repeat, state: 'pending' });
+    app.queued.sort((a, b) => a.at - b.at || a.id - b.id);
   }
 
   private tick(bot: Bot): void {
@@ -327,9 +365,11 @@ export class Bots {
 
   private finish(bot: Bot): void {
     const app = this.app;
+    const setup = bot.turn?.setup ?? false;
     bot.turn = null;
     bot.timers = [];
-    this.add(bot, Date.now(), 'bot', this.answer(bot));
+    if (setup) this.scheduled(bot);
+    this.add(bot, Date.now(), 'bot', setup ? SETUP_ANSWER : this.answer(bot));
     if (this.shown === bot.id) bot.unread = 0;
     else {
       bot.unread += 1;
@@ -384,11 +424,15 @@ export function seedBots(app: App): void {
   digest.unread = 1;
 }
 
+function queueBase(bot: Bot, label: string, prompt: string) {
+  return { prompt, label, project: 0, folder: '', workspace: null, branch: '', agent: bot.agent, mode: '', command: '', bot: bot.id };
+}
+
 export function seedBotQueue(app: App): void {
   const prs = app.bots.list.find((b) => b.id === 'prs');
   const routine = prs?.routines[0];
   if (!prs || !routine) return;
-  const base = { prompt: 'Review my open pull requests and tell me which are blocked.', label: routine.label, project: 0, folder: '', workspace: null, branch: '', agent: prs.agent, mode: '', command: '', bot: prs.id };
+  const base = queueBase(prs, routine.label, 'Review my open pull requests and tell me which are blocked.');
   app.nextQueueId = RUN + 1;
   app.queued.push({ ...base, id: RUN_ROUTINE, at: routine.at, repeat: routine.repeat, state: 'pending' });
   app.queued.push({ ...base, id: RUN, at: prs.lines[0].at, routine: RUN_ROUTINE, state: 'answered' });

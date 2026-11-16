@@ -14,8 +14,10 @@ With --json it prints {\"agents\": [{\"agent\", \"title\", \"installed\", \"bot\
 pub(in crate::cli) const BOT_NEW_HELP: &str =
     "Makes a bot and prints its id. A bot is an agent of your own: a name, a folder (bots/<id>/ beside
 the session: bot.json, bot.md, memory.md and chat.jsonl), a memory and a chat. It belongs to no
-project but can see all of them through the `cornercase` command line. Making one starts nothing
-and spends no tokens: it only runs when you write to it with `cornercase bot say`.
+project but can see all of them through the `cornercase` command line. With --about, making it
+starts its first turn at once: the bot reads what it is for, schedules what that asks for and says in
+its chat what it will do (`cornercase bot setup` runs it again). Without --about it starts nothing
+and spends no tokens until you write to it with `cornercase bot say`.
 
 --access cornercase (the default) holds the agent itself to reading anything, running `cornercase`,
 read-only git and gh, and searching the web, and to writing only in its own folder (not bot.json or
@@ -30,7 +32,8 @@ were not tried; opencode's and Cursor CLI's rules cannot keep its writes in its 
 GitHub Copilot CLI bot with cornercase access reads only its own folder; on Windows they support
 full access only.
 
-A bot works only while the server runs. With --json it prints the bot as `bot list --json` does.
+A bot works only while the server runs. With --json it prints the bot as `bot list --json` does; its
+state is `thinking` while it sets itself up.
 
 Example:
   cornercase bot new prs --agent claude --about \"Review my open pull requests and tell me which are blocked\"";
@@ -63,14 +66,15 @@ and its answers. --after LINE and --last N cut it.
 
 With --json it prints {\"bot\", \"name\", \"lines\": [{\"id\", \"at\", \"kind\", \"text\"}]}. A kind is you, bot, step,
 error or notice; a you line may be held, a step names its tool, a bot line has its model, tokens
-and conversation, and a line of a routine's run has routine, the run's queue id.";
+and conversation, and a line of a routine's run has routine, the run's queue id; a setup turn starts
+with the notice `setting up` in place of a you line.";
 
 pub(in crate::cli) const BOT_HELP: &str =
     "A bot is an agent of your own, outside any project: a name, a folder, a memory and a chat. Each
 message you write runs one turn of its agent (one `cornercase bot agents` lists as able to be a bot) in a conversation that continues,
 and the answer lands in the chat. It can see every project and act on them through `cornercase`.
-Making a bot starts nothing; it spends tokens when you write to it and when its routines run, and only while the server
-runs. The window lists bots in its Bots section and draws each one's chat.
+A bot made with --about sets itself up at once; after that it spends tokens when you write to it and when its
+routines run, and only while the server runs. The window lists bots in its Bots section and draws each one's chat.
 
 Events: `cornercase events` reports each chat line, the bot starting or finishing a turn, and a
 bot being created, edited or removed. `cornercase status --app` carries the list as `bots`.
@@ -79,3 +83,13 @@ Example:
   cornercase bot new prs --about \"Review my open pull requests\"
   cornercase bot say prs \"which of my PRs are blocked?\" --wait
   cornercase bot history prs";
+
+pub(in crate::cli) const BOT_SETUP_HELP: &str =
+    "Runs the bot's setup turn again, as `bot new --about` runs it when it makes the bot: a new
+conversation that opens with what cornercase tells the bot about itself, bot.md and memory.md, and
+asks it to schedule what bot.md asks for and say what it will do. Its chat shows `setting up` as the
+turn's first line, and the next message continues that conversation. Use it after a setup failed or
+was stopped, or after changing bot.md with `bot edit --about`, which runs nothing by itself.
+
+It answers at once with the id of the `setting up` line. It is refused while the bot answers, and
+when bot.md is empty. With --json it prints {\"bot\", \"line\"}.";

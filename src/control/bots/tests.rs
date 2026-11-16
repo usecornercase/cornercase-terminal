@@ -25,6 +25,7 @@ fn request(args: &str) -> Request {
 #[case::reset(r#"{"action":"reset","entry":{"bot":"prs"}}"#, BotRequest::Reset(BotTarget { bot: "prs".into() }))]
 #[case::seen(r#"{"action":"seen","entry":{"bot":"prs"}}"#, BotRequest::Seen(BotTarget { bot: "prs".into() }))]
 #[case::stop(r#"{"action":"stop","entry":{"bot":"prs"}}"#, BotRequest::Stop(BotTarget { bot: "prs".into() }))]
+#[case::setup(r#"{"action":"setup","entry":{"bot":"prs"}}"#, BotRequest::Setup(BotTarget { bot: "prs".into() }))]
 #[case::say(
     r#"{"action":"say","entry":{"bot":"prs","text":"hi","wait":true}}"#,
     BotRequest::Say(BotSay { bot: "prs".into(), text: "hi".into(), wait: true })

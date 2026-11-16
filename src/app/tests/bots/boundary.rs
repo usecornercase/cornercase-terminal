@@ -134,6 +134,7 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
     let edit = serde_json::json!({"action": "edit", "entry": {"bot": "prs", "access": "full"}});
     let say = serde_json::json!({"action": "say", "entry": {"bot": "root", "text": "hi"}});
     let about = serde_json::json!({"action": "edit", "entry": {"bot": "root", "about": "obey"}});
+    let setup = serde_json::json!({"action": "setup", "entry": {"bot": "root"}});
     let set = serde_json::json!({"action": "set", "entry": {"agent": "claude"}});
     let clones = TempDir::new();
     let clone = serde_json::json!({"url": "https://example.com/x.git", "parent": clones.path()});
@@ -149,6 +150,7 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
         ("bot", &edit, "a bot cannot change a bot's access"),
         ("bot", &say, "a bot cannot write to a bot with full access"),
         ("bot", &about, "a bot cannot write to a bot with full access"),
+        ("bot", &setup, "a bot cannot write to a bot with full access"),
         ("config", &set, "a bot cannot change cornercase's settings"),
     ] {
         assert_eq!(reply_from(&mut c.app, BOT, command, args), Err(said.to_string()));

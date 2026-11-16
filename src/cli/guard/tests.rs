@@ -40,6 +40,7 @@ fn the_refusal_names_the_flags_that_take_a_place() {
 }
 
 #[rstest::rstest]
+#[case::setup(&["bot", "setup", "other"])]
 #[case::start(&["start", "--project", "3", "--prompt", "x"])]
 #[case::send(&["send", "--pane", "4", "hi"])]
 #[case::read(&["read", "--pane", "4"])]

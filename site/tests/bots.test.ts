@@ -3,7 +3,8 @@ import { test } from 'node:test';
 
 import { App } from '../src/lib/demo/app';
 import { inputKey } from '../src/lib/demo/client';
-import { EXAMPLES } from '../src/lib/demo/bots';
+import { type BotForm } from '../src/lib/demo/botform';
+import { EXAMPLES, draftOf } from '../src/lib/demo/bots';
 import { layout } from '../src/lib/demo/layout';
 import { world } from '../src/lib/demo/world';
 
@@ -121,6 +122,25 @@ test('the new bot form creates a bot and shows its empty chat with the four exam
   assert.match(text, /Message nightly…/);
   for (const example of EXAMPLES) assert.ok(text.includes(example), example);
   assert.match(text, /▾ Bots/);
+});
+
+test('a bot made with For filled in sets itself up in its chat', () => {
+  const app = demo(140);
+  app.openBotForm();
+  type(app, 'nightly');
+  (app.overlay as BotForm).about = draftOf('Look for bugs every day');
+  inputKey(app, key('Enter'));
+  assert.equal(app.overlay, null);
+  const text = screen(app);
+  assert.match(text, /── setting up ──/);
+  assert.match(text, /thinking/);
+  for (const example of EXAMPLES) assert.ok(!text.includes(example), example);
+  app.advance(6000);
+  const bot = app.bots.current();
+  assert.equal(bot?.lines[bot.lines.length - 1].kind, 'bot');
+  assert.match(bot?.lines[bot.lines.length - 1].text ?? '', /Set up: every day at/);
+  assert.equal(bot?.routines.length, 1);
+  assert.match(screen(app), /nightly +next /);
 });
 
 test('the form refuses a name in use and a missing name', () => {

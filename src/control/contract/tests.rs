@@ -47,6 +47,11 @@ mod describing {
     }
 
     #[test]
+    fn bot_setup_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-setup"));
+    }
+
+    #[test]
     fn it_lists_the_feature_of_a_run_that_stopped_moving() {
         assert!(FEATURES.contains(&"flow-stopped"));
     }

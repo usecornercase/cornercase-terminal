@@ -6,7 +6,7 @@ A **bot** is an agent of your own: a name, a folder, a memory and a chat. It bel
 
 This is the base of the bots series (#844 to #849). It holds the model, the folders, the conversation, the shared runner, the commands, the requests and the events. The window draws them since #845 (see [The window](#the-window-845)), routines are in [Bot routines](bots/routines.md) (#846), there is no following of the agents a bot starts (#847), no chat apps (#848), and Claude Code, Codex, Gemini CLI, opencode, Cursor CLI and GitHub Copilot CLI can be bots since #849 ([The agents](bots/agents.md)); Grok Build and Vibe CLI cannot yet.
 
-**Making one starts nothing and spends no tokens.** A bot runs only when someone writes to it, and only while the server runs: a turn's process does not survive the server.
+**A bot made with what it is for sets itself up at once** (#887): `bot new` with an `about` that is not blank starts its first turn (see A turn); a bot made without one starts nothing and spends no tokens. After that a bot runs only when someone writes to it, when its routines run or on `bot setup`, and only while the server runs: a turn's process does not survive the server.
 
 ## Folders and files
 
@@ -31,18 +31,25 @@ At most 50 bots (`MAX_BOTS`). A folder whose `bot.json` does not parse, or whose
 | `bot` | the agent's final answer of a turn, in Markdown, with `model`, `tokens` and `conversation` |
 | `step` | one tool the agent used, as one line (`cornercase status --json`, `Read src/main.rs`), with its `tool` |
 | `error` | why a turn failed, in the agent's own words when it gave any |
-| `notice` | cornercase's own lines: `new conversation`, `stopped`, `interrupted by a restart`, `1 held message dropped` / `N held messages dropped`, and a routine run's header `↻ <label> · <time>` |
+| `notice` | cornercase's own lines: `new conversation`, `setting up` (the first line of a setup turn, in place of a `you` line), `stopped`, `interrupted by a restart`, `1 held message dropped` / `N held messages dropped`, and a routine run's header `↻ <label> · <time>` |
 
 Every line has `id` (a number that increases per bot) and `at` (UTC seconds); a line of a routine's run has `routine` too, the run's queue id (see [Bot routines](bots/routines.md)). Absent optional fields are not written. The notice texts are fixed and part of the contract.
 
 - **A torn last line** (the server stopped mid-write) is skipped by readers, and healed at load: if the file does not end with a newline, one is appended before the next line, so the next line parses.
-- **Replay is the source of truth at load** (`chat::replay`): a `you` that is not held starts a turn that runs; held ones are counted; a `bot` or `error` ends the turn, and held messages start the next one at once; `stopped` and `interrupted by a restart` leave it idle with nothing held. No extra field is kept for the turn. A turn still running in the replay gets `interrupted by a restart`, and held messages get the dropped notice, once (a second load finds the notice and appends nothing).
+- **Replay is the source of truth at load** (`chat::replay`): a `you` that is not held, or a `setting up` notice, starts a turn that runs; held ones are counted; a `bot` or `error` ends the turn, and held messages start the next one at once; `stopped` and `interrupted by a restart` leave it idle with nothing held. No extra field is kept for the turn. A turn still running in the replay gets `interrupted by a restart`, and held messages get the dropped notice, once (a second load finds the notice and appends nothing).
 
 ## A turn
 
 A turn is one run of the agent without its interface, through the shared runner (below), in a conversation that continues.
 
 - **The first message of a conversation starts a new session.** Its opening message is the brief, then `bot.md`, then `memory.md` (each cut to 8 KB on a character boundary, saying it was cut; an empty file reads `(empty)`), then what the user wrote. Later messages send the text alone and continue the session: Claude with `--resume <session>`, Codex with `codex exec … resume <session>`. The session id comes from the run's own output (Claude's `system/init` and `result` lines carry `session_id`; Codex's `thread.started` carries `thread_id`) and goes into `bot.json`.
+- **A setup turn (#887)** ends with its own section instead of the user's text.
+  - **Who starts it.** `bot new` with an `about` that is not blank, from any source (the window's form, `bot new --about`, the `bot` request). A blank one starts nothing, and loading the bots at server start never starts a turn.
+  - **Its opening** is the brief, `bot.md`, `memory.md`, the routines' answers not yet told, then `## You were just made`. The section asks the bot to set itself up in a few steps without doing the work itself, to schedule what `bot.md` asks for, to write in `memory.md` what its runs will need, and to tell the user what it will do, what it scheduled and what it needs. It says not to read every `--help` (the runs look commands up when they run; the first live setup used 39 of the 40 steps) and to look at `cornercase queue list --bot <id> --json` first, so a setup cut short at the step limit and run again does not schedule the same routine twice. The brief tests check that every command and flag the section names exists.
+  - **The notice `setting up`** is the turn's first line, written after the `thinking` event. It stands in for a `you` line: replay and `unseen` count it as the line that opens a turn, so a restart during the setup appends `interrupted by a restart` once, and the answers it already carried are not told again.
+  - **Otherwise an ordinary chat turn**: one at a time (a message sent meanwhile is held and goes next), steps stream, `stop` and the 15-minute limit work, and its answer is unread with a toast and a notification when the chat is not on screen.
+  - **It never resumes.** `bot setup` and ` retry ` open a new session even when the bot has one; on success it replaces `conversation`, and on failure the old one is kept (a new bot's stays empty). No `new conversation` notice is written: `setting up` marks the cut.
+  - **Refusals** of `bot setup`: `busy` while a chat turn runs (a routine's run does not block it), and `conflict` when `bot.md` is empty.
 - **The session id is kept only on success.** A first turn that fails, is stopped or times out leaves `conversation` empty, so the next message opens with the brief again; a later one that fails keeps the session, so the next message continues it.
 - **One turn at a time per bot.** A message sent while a turn runs is held and goes as the next turn, joined with the others held by a blank line. Its `you` line is written at once with `held: true`. Different bots run at the same time.
 - **Steps stream.** Each tool use read from the run's output is written as a `step` line and published as it happens, before the `bot` line.
@@ -100,9 +107,10 @@ A turn runs without its interface, so the agent cannot stop halfway to ask for p
 
 ## Requests and events
 
-One operation, **`bot`**, whose `args` are `{"action", "entry"}` (`entry` is the action's fields, left out for `agents` and `list`) (`agents`, `new`, `list`, `edit`, `remove`, `reset`, `seen`, `stop`, `say`, `history`), adjacently tagged as `config`, `machines` and `queue` are (`{"command":"bot","args":{"action":"say","entry":{"bot":"prs","text":"hi","wait":true}}}`). `src/control.rs` was 989 lines and `tests/layers.rs` fails a file over 1,000, so ten request names with their lists did not fit; one name needs four lines, and every type lives in `control/bots.rs`. An older server refuses `bot` by name. All of it is behind the contract feature **`bots`**, which the CLI checks before any `bot` command (`the running cornercase server has no bots`). Request structs have no `skip_serializing_if`, so a strict client's unknown-field check works.
+One operation, **`bot`**, whose `args` are `{"action", "entry"}` (`entry` is the action's fields, left out for `agents` and `list`) (`agents`, `new`, `list`, `edit`, `remove`, `reset`, `seen`, `stop`, `setup`, `say`, `history`), adjacently tagged as `config`, `machines` and `queue` are (`{"command":"bot","args":{"action":"say","entry":{"bot":"prs","text":"hi","wait":true}}}`). `src/control.rs` was 989 lines and `tests/layers.rs` fails a file over 1,000, so ten request names with their lists did not fit; one name needs four lines, and every type lives in `control/bots.rs`. An older server refuses `bot` by name. All of it is behind the contract feature **`bots`**, which the CLI checks before any `bot` command (`the running cornercase server has no bots`). Request structs have no `skip_serializing_if`, so a strict client's unknown-field check works.
 
 - `bot` names a bot by id, else by name ignoring case; an unknown one is `not-found`. Validation errors are `malformed` (a name that is empty, over 40 characters or has a control character; an unknown agent, model, effort, account or access; a message empty or over 20,000 characters, refused with its size rather than cut), `conflict` (a name taken; the 51st bot) or `busy` (`reset`, `remove` while a turn runs).
+- `new` with a non-empty `about` answers `state: thinking` and the events come in this order: `created`, `thinking`, the `setting up` line, the steps, the `bot` or `error` line, `idle`. `setup` (`{bot}`) runs the setup turn again and answers `{bot, line}` with the `setting up` line; the contract lists the additive feature **`bot-setup`**, which `cornercase bot setup` checks.
 - `say` answers at once with the `you` line. With `wait` it answers when that message's turn ends with the `bot`, `error` or `notice` line (`Stage::Bot`, which does not outlive its client; the answers are kept per bot for the waited ids only, at most 32). The CLI exits 3 unless the line is a `bot` line.
 - `edit` cannot change the agent (`a bot keeps its agent: another agent cannot continue its conversation; make another bot`); an empty `model`, `effort` or `account` clears it; a change applies from the next turn and publishes `change: edited`.
 - **Events** (`cornercase events`): `{"event":"bot","bot":ID,"line":{…}}` for each chat line, steps included; `{"event":"bot","bot":ID,"state":"thinking|idle"}`; `{"event":"bot","bot":ID,"change":"created|edited|removed"}`. Exactly one of the three keys is set. They go to every reader that did not filter by `--pane` (`Event::kind()` is `None`), as Recap's do. A client that shows a chat reads `history` once and follows the events. The lines appended at load are not published: no reader is connected yet.
@@ -132,10 +140,12 @@ What the server refuses a bot's connection, what stops or replaces the server, a
 ## Limits and log
 
 - A message is at most 20,000 characters.
-- **Texts are never logged** (see Log): the log says `bot say bot=prs bytes=120` (and `about_bytes` for `new`), then, for a connection that is a bot's, `a bot's client` (`client`, `bot`), then the turn's agent, model, tokens, duration and how it ended (`answered`, `error`, `stopped`, `timeout`) under the target `bots`. The turn's job returns `Ok` whatever the agent said, so the job never logs an agent's text as its error.
+- **Texts are never logged** (see Log): the log says `bot say bot=prs bytes=120` (and `about_bytes` for `new`), `setup bot=prs` when a setup turn starts, then, for a connection that is a bot's, `a bot's client` (`client`, `bot`), then the turn's agent, model, tokens, duration and how it ended (`answered`, `error`, `stopped`, `timeout`) under the target `bots`. The turn's job returns `Ok` whatever the agent said, so the job never logs an agent's text as its error.
 - Not counted in Stats: the turn is no pane's agent, as with Recap.
 
 ## Checked live
+
+The setup turn (#887) was checked with fakes only; no real agent ran it.
 
 On Linux, with Claude Code 2.1.325 and Codex 0.164.0 (macOS and Windows cannot be checked from here):
 
@@ -156,8 +166,11 @@ On Linux, with Claude Code 2.1.325 and Codex 0.164.0 (macOS and Windows cannot b
 - **Stats**: bot turns do not count.
 - **`stop` drops held messages; `reset` and `remove` refuse while a turn runs.**
 - **A waited turn counts as shown.**
+- **Changing `about` later runs nothing** (`bot edit --about`, the form's ` save `): the chat is the way to change a job, and `bot setup` exists for whoever wants a new setup. There is no `--no-setup`: an empty `--about` is enough.
 
 ## Tests
+
+The setup (#887): the chat's replay and `unseen` of the notice, the opening and its section naming only commands that exist, the turn's kind never resuming, and, in `app::tests::bots::setup`, a bot made with and without `about`, loading starting nothing, the next message resuming the setup's session, a message held behind it, the refusals, the conversation replaced on success and kept on failure, ` retry ` of a failed setup (and, in the window's tests, of a failed message), the events in order and the socket's `setup`; e2e: `bot new --about` then `bot say --wait` and `bot setup`.
 
 All use `test_util::fake_program` fakes (canned output, recorded argv, folder and environment), so they run on Linux, macOS and Windows (the pane tests of The boundary, `bot_boundary.rs` and the e2e ones, run on Unix only; one pane refusal test, the classifier and the `Lineage` test run on Windows too); no real agent runs. The fake gained `<name>.vars` (names of variables to record in `<name>.env`, a name alone when unset) and `<name>.after` (printed once `<name>.hold` is gone, so a turn can answer only when released). Unit: the chat's appending, healing and replay; the opening message and its caps; the argv of each agent, access and new or resumed session; the session id from both streams; steps; held messages; stop (also of a process tree), timeout and a restart; unread; the 50-bot limit and the name rules; the guard; `PATH` first; and the brief naming only commands that exist. `app::tests::control_requests::bots` drives `bot new` → `say --wait` → `history` → `reset`, the events in order and `status --app`. The e2e tests run the real binary against a fake `claude` first in the config.
 

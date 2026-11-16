@@ -52,7 +52,7 @@ impl App {
         let label = entry.task.label.clone();
         self.bot_append(at, |id, now| head_line(id, now, (&label, &clock), entry.id));
         let text = crate::bots::brief::run_text(&label, self.routine_repeat(entry), &clock, &entry.task.prompt);
-        let input = turn::Input { run: true, ..self.bot_input(at, text) };
+        let input = turn::Input { kind: turn::Kind::Run, ..self.bot_input(at, text) };
         let turn = self.panels.bots.next_turn;
         self.panels.bots.next_turn += 1;
         let running = Running::default();

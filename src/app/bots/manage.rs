@@ -193,11 +193,18 @@ impl App {
         self.bot_settings(kind, &mut bot, &edit)?;
         let made =
             folder::create(&dir, &bot, &new.about).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
+        Ok(self.bot_made(bot, made, &new.about))
+    }
+
+    fn bot_made(&mut self, bot: Bot, folder: std::path::PathBuf, about: &str) -> usize {
         let key = self.panels.bots.take_key();
-        self.panels.bots.live.push(Live::new(bot, made, key));
+        self.panels.bots.live.push(Live::new(bot, folder, key));
         let at = self.panels.bots.live.len() - 1;
         self.publish_bot_change(at, "created");
-        Ok(at)
+        if !about.trim().is_empty() {
+            self.start_setup(at);
+        }
+        at
     }
 
     pub(in crate::app) fn bot_edit(&mut self, edit: &EditBot) -> Done<usize> {

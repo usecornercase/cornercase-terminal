@@ -11,11 +11,18 @@ const UNSET: [&str; 3] = [crate::control::PANE_ENV, crate::control::SERVER_ENV, 
 const CONTEXT: [&str; 5] =
     ["prompt is too long", "context window", "context length", "maximum context", "context_length_exceeded"];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Kind {
+    Chat,
+    Run,
+    Setup,
+}
+
 pub(crate) struct Input {
     pub(crate) bot: Bot,
     pub(crate) folder: PathBuf,
     pub(crate) text: String,
-    pub(crate) run: bool,
+    pub(crate) kind: Kind,
     pub(crate) told: Option<String>,
     pub(crate) program: String,
     pub(crate) home: Option<PathBuf>,
@@ -45,12 +52,13 @@ pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> As
     let bot = &input.bot;
     let (about, memory) = folder::notes(&input.folder);
     let notes = (about.as_str(), memory.as_str());
-    let prompt = if input.run {
-        brief::run_opening(bot, &input.folder, notes, &input.text)
-    } else if bot.conversation.is_none() {
-        brief::opening(bot, &input.folder, notes, input.told.as_deref(), &input.text)
-    } else {
-        brief::resumed(input.told.as_deref(), &input.text)
+    let prompt = match input.kind {
+        Kind::Run => brief::run_opening(bot, &input.folder, notes, &input.text),
+        Kind::Setup => brief::setup_opening(bot, &input.folder, notes, input.told.as_deref()),
+        Kind::Chat if bot.conversation.is_none() => {
+            brief::opening(bot, &input.folder, notes, input.told.as_deref(), &input.text)
+        }
+        Kind::Chat => brief::resumed(input.told.as_deref(), &input.text),
     };
     let effort = bot.effort.as_deref().filter(|level| crate::agents::effort_refusal(&bot.agent, level).is_none());
     Ask {
@@ -60,7 +68,7 @@ pub(crate) fn ask(input: &Input, bin: Option<&Path>, path: Option<&OsStr>) -> As
         folder: input.folder.clone(),
         socket: input.socket.clone(),
         tools: Tools::Bot(bot.access),
-        conversation: bot.conversation.clone().filter(|_| !input.run),
+        conversation: bot.conversation.clone().filter(|_| input.kind == Kind::Chat),
         env: environment(bot, bin, path),
         protected: vec![folder::BOT_FILE, folder::CHAT_FILE],
         stops: super::stop_commands(),
