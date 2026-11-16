@@ -574,8 +574,10 @@ mod bots {
 mod repositories {
     use super::*;
 
-    fn folder(path: &str) -> Ask {
-        Ask { repositories: vec![PathBuf::from(path)], ..Ask::default() }
+    const BIG: usize = 1 << 20;
+
+    fn folders(paths: &[&str]) -> Ask {
+        Ask { repositories: paths.iter().map(PathBuf::from).collect(), ..Ask::default() }
     }
 
     #[rstest::rstest]
@@ -589,26 +591,27 @@ mod repositories {
     #[case::a_newline("/w/a\nb", &[])]
     #[case::nothing("", &[])]
     fn a_folder_is_written_as_the_agent_may_type_it(#[case] path: &str, #[case] wanted: &[&str]) {
-        assert_eq!(spellings(Path::new(path)), wanted);
+        assert_eq!(spellings(Path::new(path), false), wanted);
+        assert_eq!(spellings(Path::new(path), true), wanted);
     }
 
-    #[test]
-    fn a_windows_path_has_one_spelling_there_and_none_elsewhere() {
-        let wanted: &[&str] = if cfg!(windows) { &["'C:\\w\\shop'"] } else { &[] };
-        assert_eq!(spellings(Path::new("C:\\w\\shop")), wanted);
+    #[rstest::rstest]
+    #[case::on_windows(true, &["'C:\\w\\shop'"])]
+    #[case::elsewhere(false, &[])]
+    fn a_path_with_backslashes_has_one_spelling_on_windows_only(#[case] windows: bool, #[case] wanted: &[&str]) {
+        assert_eq!(spellings(Path::new("C:\\w\\shop"), windows), wanted);
     }
 
     #[cfg(unix)]
     #[test]
     fn a_path_that_is_not_utf8_has_no_spelling() {
         use std::os::unix::ffi::OsStrExt;
-        assert_eq!(spellings(Path::new(std::ffi::OsStr::from_bytes(b"/w/\xff"))), Vec::<String>::new());
+        assert_eq!(spellings(Path::new(std::ffi::OsStr::from_bytes(b"/w/\xff")), false), Vec::<String>::new());
     }
 
     #[test]
     fn each_spelling_gets_the_four_reads_in_order() {
-        let ask = Ask { repositories: vec![PathBuf::from("/a"), PathBuf::from("/b c")], ..Ask::default() };
-        let rules = git_reads(&ask);
+        let rules = git_reads(&folders(&["/a", "/b c"]), false, BIG);
         assert_eq!(rules.len(), 4 * 3 + 4 * 2);
         assert_eq!(&rules[..4], ["git -C /a log", "git -C /a show", "git -C /a diff", "git -C /a status"]);
         assert_eq!(rules[4], "git -C '/a' log");
@@ -617,7 +620,23 @@ mod repositories {
 
     #[test]
     fn no_folder_gives_no_rule() {
-        assert_eq!(git_reads(&Ask::default()), Vec::<String>::new());
-        assert_eq!(git_reads(&folder("/w/a$b")), Vec::<String>::new());
+        assert_eq!(git_reads(&Ask::default(), false, BIG), Vec::<String>::new());
+        assert_eq!(git_reads(&folders(&["/w/a$b"]), false, BIG), Vec::<String>::new());
+    }
+
+    #[test]
+    fn past_its_budget_the_rules_keep_the_single_quoted_spelling_and_then_fewer_folders() {
+        let paths: Vec<String> = (0..40).map(|n| format!("/w/{}/{n}", "x".repeat(80))).collect();
+        let ask = folders(&paths.iter().map(String::as_str).collect::<Vec<_>>());
+        let full = git_reads(&ask, false, BIG);
+        assert_eq!(full.len(), 40 * 12);
+        let budget = size(&full) / 2;
+        let some = git_reads(&ask, false, budget);
+        assert_eq!(some.len(), 40 * 4);
+        assert!(some.iter().all(|rule| rule.starts_with("git -C '")), "{some:?}");
+        let few = git_reads(&ask, false, size(&some) / 2);
+        assert!(!few.is_empty() && few.len() < some.len(), "{}", few.len());
+        assert!(size(&few) <= size(&some) / 2);
+        assert!(size(&git_reads(&ask, true, git_budget(true))) <= git_budget(true));
     }
 }

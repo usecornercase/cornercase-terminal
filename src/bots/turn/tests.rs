@@ -271,4 +271,16 @@ mod the_git_of_a_turn {
         let projects = [project("/w/b", Vec::new()), project("/w/a", vec![worktree("/w/b", Phase::Open)])];
         assert_eq!(repositories(&projects, None), [PathBuf::from("/w/a"), PathBuf::from("/w/b")]);
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_project_in_the_bots_folder_is_left_out_when_that_folder_is_reached_through_a_link() {
+        let dir = TempDir::new();
+        let real = dir.path().join("real");
+        std::fs::create_dir_all(real.join("prs/x")).expect("a project in the bots folder");
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).expect("a link");
+        let projects = [project(&real.join("prs/x").display().to_string(), Vec::new()), project("/w/shop", Vec::new())];
+        assert_eq!(repositories(&projects, Some(&link)), [PathBuf::from("/w/shop")]);
+    }
 }

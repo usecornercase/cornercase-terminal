@@ -81,19 +81,14 @@ fn the_rule_path_of_a_folder(#[case] folder: &str, #[case] windows: bool, #[case
 }
 
 mod model {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
-    use crate::agents::headless::{Access, Ask, Tools, args_of};
+    use crate::agents::headless::{Access, Ask, Tools, args_of, bot_ask};
 
     pub(super) fn ask(repositories: &[&str]) -> Ask {
         Ask {
-            prompt: "hi".into(),
-            folder: PathBuf::from("/b/prs"),
-            tools: Tools::Bot(Access::Cornercase),
-            protected: vec!["bot.json", "chat.jsonl"],
-            stops: vec!["kill-server", "restart", "update"],
             repositories: repositories.iter().map(PathBuf::from).collect(),
-            ..Ask::default()
+            ..bot_ask(Path::new("/b/prs"), Tools::Bot(Access::Cornercase), None)
         }
     }
 

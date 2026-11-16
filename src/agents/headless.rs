@@ -209,17 +209,21 @@ pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ra
 pub(in crate::agents) const GH_READS: [&str; 5] =
     ["gh pr list", "gh pr view", "gh pr checks", "gh issue list", "gh issue view"];
 const GIT_READS: [&str; 4] = ["log", "show", "diff", "status"];
+const RULE_OVERHEAD: usize = 9;
+const GIT_BUDGET: usize = 64 * 1024;
+const WINDOWS_GIT_BUDGET: usize = 6 * 1024;
 
-fn awkward(c: char) -> bool {
-    c.is_control() || "'\"`$!,()*?".contains(c) || (c == '\\' && !cfg!(windows))
+fn awkward(c: char, windows: bool) -> bool {
+    c.is_control() || "'\"`$!,()*?".contains(c) || (c == '\\' && !windows)
 }
 
 fn plain(c: char) -> bool {
     c.is_alphanumeric() || "/._-+@:=%".contains(c)
 }
 
-pub(in crate::agents) fn spellings(folder: &Path) -> Vec<String> {
-    let Some(path) = folder.to_str().filter(|path| !path.is_empty() && !path.chars().any(awkward)) else {
+fn spellings(folder: &Path, windows: bool) -> Vec<String> {
+    let Some(path) = folder.to_str().filter(|path| !path.is_empty() && !path.chars().any(|c| awkward(c, windows)))
+    else {
         return Vec::new();
     };
     let backslash = path.contains('\\');
@@ -234,14 +238,46 @@ pub(in crate::agents) fn spellings(folder: &Path) -> Vec<String> {
     all
 }
 
-pub(in crate::agents) fn git_reads(ask: &Ask) -> Vec<String> {
-    let mut rules = Vec::new();
-    for folder in &ask.repositories {
-        for spelling in spellings(folder) {
-            rules.extend(GIT_READS.iter().map(|sub| format!("git -C {spelling} {sub}")));
-        }
+fn rules_of(spellings: &[String]) -> Vec<String> {
+    spellings.iter().flat_map(|spelling| GIT_READS.map(|sub| format!("git -C {spelling} {sub}"))).collect()
+}
+
+fn size(rules: &[String]) -> usize {
+    rules.iter().map(|rule| rule.len() + RULE_OVERHEAD).sum()
+}
+
+pub(in crate::agents) fn git_budget(windows: bool) -> usize {
+    if windows { WINDOWS_GIT_BUDGET } else { GIT_BUDGET }
+}
+
+pub(in crate::agents) fn git_reads(ask: &Ask, windows: bool, budget: usize) -> Vec<String> {
+    let folders: Vec<Vec<String>> = ask.repositories.iter().map(|folder| spellings(folder, windows)).collect();
+    let full: Vec<String> = folders.iter().flat_map(|spellings| rules_of(spellings)).collect();
+    if size(&full) <= budget {
+        return full;
     }
-    rules
+    let quoted: Vec<Vec<String>> = folders
+        .iter()
+        .filter_map(|all| all.iter().find(|spelling| spelling.starts_with('\'')).cloned())
+        .map(|one| vec![one])
+        .collect();
+    let mut kept = Vec::new();
+    let mut used = 0;
+    for spellings in &quoted {
+        let rules = rules_of(spellings);
+        used += size(&rules);
+        if used > budget {
+            break;
+        }
+        kept.extend(rules);
+    }
+    crate::log::warning!(
+        "bots",
+        "too many projects for a bot's git rules, the rest get none",
+        folders = quoted.len(),
+        kept = kept.len() / GIT_READS.len()
+    );
+    kept
 }
 
 pub(in crate::agents) fn started(program: &str, args: Vec<String>) -> Command {
