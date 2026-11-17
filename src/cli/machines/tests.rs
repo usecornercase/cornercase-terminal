@@ -124,6 +124,7 @@ mod the_text {
                     state: State::Linked,
                     version: Some("0.12.225".into()),
                     server_version: Some("0.12.224".into()),
+                    shown: true,
                     ..Info::default()
                 },
                 Info {
@@ -134,6 +135,7 @@ mod the_text {
                     state: State::Unreachable,
                     seen: Some("2026-10-29T10:00:00.000Z".into()),
                     error: Some("ssh: connect to host pi.lan port 22: Connection refused".into()),
+                    shown: true,
                     ..Info::default()
                 },
             ],

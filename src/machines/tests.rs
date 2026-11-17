@@ -216,6 +216,7 @@ mod info {
             version: Some("0.12.225".into()),
             server_version: Some("0.12.225".into()),
             seen: Some("2026-10-29T10:00:00.000Z".into()),
+            shown: true,
             ..Info::default()
         };
         let expected = json!({

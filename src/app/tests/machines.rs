@@ -214,9 +214,8 @@ mod tunnels {
         mixed(&mut app);
 
         let expected = [
-            "  this machine",
+            "  this computer",
             "✓ devbox",
-            "add machine…",
             "⇄ 3000  closed",
             "⇄ 5173 → localhost:5174  up",
             "⇄ 8080  down",
@@ -230,7 +229,7 @@ mod tunnels {
         reaches(&mut app, Some("devbox"), &[]);
         holding(&mut app, true, &[]);
 
-        assert_eq!(open_menu(&mut app), ["  this machine", "✓ devbox", "add machine…"]);
+        assert_eq!(open_menu(&mut app), ["  this computer", "✓ devbox"]);
     }
 
     #[test]

@@ -239,7 +239,7 @@ mod writing {
 
     #[rstest]
     #[case::broken_json("{")]
-    #[case::not_an_object("[]")]
+    #[case::not_an_object("\"text\"")]
     fn a_config_it_cannot_read_is_left_as_it_is(#[case] bytes: &str) {
         let dir = TempDir::new();
         let here = here_in(&dir);
