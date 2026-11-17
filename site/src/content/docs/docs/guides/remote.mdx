@@ -144,6 +144,12 @@ Once your list holds a machine ([Settings › Machines](../machines/), or a wind
 - **add machine…** opens the form of Settings › Machines, and **manage machines…** opens that page. Both show only while the window is on this computer: on another machine the menu lists your computer's machines and nothing else to change them.
 - The tunnels the window holds, one row each, with what you can do to them: see [Remembered per machine](#remembered-per-machine). The button then shows their count, `on devbox ⇄2 ▴`.
 
+<Screen
+  name="machine-menu"
+  alt="The machine menu over the bottom of the sidebar: a check by this computer, then vps, add machine… and manage machines…"
+  crop={[0, 22, 34, 38]}
+/>
+
 There is no **forget…**: a machine is removed in Settings › Machines, where its link ends too.
 
 The shells and agents of the machine you leave keep running there, and when you come back the window shows them as they are now. Until the other machine answers, the window says where it's going and stays where it was: **back** (or `Esc`) returns at once. If the switch fails, for instance because `ssh` refused the key or the other machine runs another version, the window says why and you stay where you were.
