@@ -5,10 +5,6 @@ use crate::control::bots::{AgentInfo, BotInfo};
 use crate::queue::clock::when;
 use crate::text;
 
-pub(super) fn about(text: &str) -> String {
-    if text.is_empty() || text.ends_with('\n') { text.to_string() } else { format!("{text}\n") }
-}
-
 const WIDTH: usize = 120;
 const LAST: usize = 60;
 
@@ -37,6 +33,10 @@ pub(in crate::cli) fn event_text(bot: &str, news: (Option<&Line>, Option<&str>, 
         Some(run) => format!("bot {bot}  routine {run}  {what}"),
         None => format!("bot {bot}  {what}"),
     }
+}
+
+pub(super) fn about(text: &str) -> String {
+    if text.is_empty() || text.ends_with('\n') { text.to_string() } else { format!("{text}\n") }
 }
 
 pub(super) fn agents(found: &[AgentInfo]) -> String {

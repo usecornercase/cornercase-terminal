@@ -31,7 +31,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
         BotAction::New(args) => made(&args),
         BotAction::List(print) => list(print.json),
         BotAction::Edit(args) => edited(&args),
-        BotAction::About(args) => read_about(&args),
+        BotAction::About(args) => about(&args),
         BotAction::Remove(args) => removed(args),
         BotAction::Setup(args) => set_up(&args),
         BotAction::Say(args) => said(&args),
@@ -60,7 +60,7 @@ fn removed(args: BotNameArgs) -> Result<bool> {
     Ok(true)
 }
 
-fn read_about(args: &BotNameArgs) -> Result<bool> {
+fn about(args: &BotNameArgs) -> Result<bool> {
     use_bot_about_read()?;
     let value = send(BotRequest::About(target(args.bot.clone())))?;
     if args.print.json {

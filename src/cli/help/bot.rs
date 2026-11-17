@@ -50,8 +50,8 @@ edit` only when the person changed it.";
 
 pub(in crate::cli) const BOT_EDIT_HELP: &str =
     "Changes what the bot uses from its next message on; a running answer is not changed. An empty
---model, --effort or --account goes back to the agent's own; --about writes bot.md (`bot about` prints it); --follow on|off
-sets whether the bot is told when an agent it started finishes. The agent cannot
+--model, --effort or --account goes back to the agent's own; --about writes bot.md (`bot about` prints
+it); --follow on|off sets whether the bot is told when an agent it started finishes. The agent cannot
 change, because another agent cannot continue the conversation: make another bot instead.";
 
 pub(in crate::cli) const BOT_SAY_HELP: &str =

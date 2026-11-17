@@ -22,10 +22,6 @@ impl App {
             }
             BotRequest::Say(say) => self.bot_say_request(client, &say),
             BotRequest::History(history) => self.bot_history_request(&history),
-            BotRequest::About(target) => {
-                let (bot, about) = self.bot_about(&target.bot)?;
-                Ok(Some(json(&json!({ "bot": bot, "about": about }))))
-            }
             other => self.bot_target_request(other),
         }
     }
@@ -55,6 +51,10 @@ impl App {
             BotRequest::Setup(target) => {
                 let (at, line) = self.bot_setup(&target.bot)?;
                 json!({ "bot": self.panels.bots.live[at].bot.id, "line": line })
+            }
+            BotRequest::About(target) => {
+                let (bot, about) = self.bot_about(&target.bot)?;
+                json!({ "bot": bot, "about": about })
             }
             _ => return Err(Refusal::new(Code::Failed, "not a bot request")),
         };
