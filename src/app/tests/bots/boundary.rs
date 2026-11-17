@@ -38,6 +38,22 @@ fn bots_turn() -> Chat {
 }
 
 #[test]
+fn a_bots_turn_cannot_say_a_view_shows_a_chat() {
+    let mut c = bots_turn();
+    let own = i32::try_from(std::process::id()).expect("a pid");
+    c.app.client_connected(BOT + 1, Some(own));
+
+    let named = reply_from(&mut c.app, BOT, "view", &serde_json::json!({"bot": "prs"}));
+    let by_another = reply_from(&mut c.app, BOT + 1, "view", &serde_json::json!({"bot": "prs"}));
+    let none = reply_from(&mut c.app, BOT, "view", &serde_json::json!({}));
+
+    assert_eq!(named, Err("a bot cannot show a bot's chat in a view".to_string()));
+    assert_eq!((by_another, none), (Ok(()), Ok(())));
+    c.release(ANSWER);
+    c.settle();
+}
+
+#[test]
 fn a_bots_turn_cannot_type_into_a_popup_or_start_a_pane_with_a_command() {
     let mut c = bots_turn();
     let own = i32::try_from(std::process::id()).expect("a pid");

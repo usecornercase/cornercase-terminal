@@ -13,9 +13,13 @@ pub(super) fn open(args: &ViewArgs) -> Result<()> {
         workspace: args.workspace,
         project: args.project,
         visible: args.hidden.then_some(false),
+        bot: args.bot.clone(),
     };
     if args.hidden {
         client::use_notices()?;
+    }
+    if args.bot.is_some() {
+        client::use_view_bot()?;
     }
     open.size().map_err(crate::error::Error::WrongUsage)?;
     stream_json("view", control::Command::View(open))
@@ -39,7 +43,17 @@ pub(super) fn set(args: &ViewSetArgs) -> Result<()> {
     if visible.is_some() {
         client::use_notices()?;
     }
-    let set = control::SetView { cols: args.cols, rows: args.rows, active, claim: args.claim, visible };
+    if args.bot.is_some() {
+        client::use_view_bot()?;
+    }
+    let set = control::SetView {
+        cols: args.cols,
+        rows: args.rows,
+        active,
+        claim: args.claim,
+        visible,
+        bot: args.bot.clone(),
+    };
     let value = ask("view-set", control::Command::ViewSet(set))?;
     if args.print.json {
         return print_json(&value);
@@ -59,5 +73,6 @@ pub(super) fn describe(view: &ViewInfo) -> String {
         (true, false) => "does not size its tab",
     };
     let hidden = if view.visible { "" } else { "  hidden" };
-    format!("view {}  {tab}  {size}  {state}{hidden}", view.id)
+    let bot = view.bot.as_ref().map_or_else(String::new, |bot| format!("  bot {bot}"));
+    format!("view {}  {tab}  {size}  {state}{hidden}{bot}", view.id)
 }

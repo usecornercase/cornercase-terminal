@@ -135,6 +135,10 @@ pub(crate) fn use_bot_about_read() -> Result<()> {
     require("bot-about-read", "cannot print what a bot is for")
 }
 
+pub(crate) fn use_view_bot() -> Result<()> {
+    require("view-bot", "cannot tell which bot's chat a view shows")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }

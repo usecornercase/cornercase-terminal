@@ -32,7 +32,20 @@ fn log_opened(view: &View) {
         cols = view.size.map_or(0, |s| s.0),
         rows = view.size.map_or(0, |s| s.1),
         active = view.active,
-        visible = view.visible
+        visible = view.visible,
+        bot = view.bot.as_deref().unwrap_or("")
+    );
+}
+
+fn log_changed(id: u64, set: &SetView, bot: Option<&str>) {
+    log::info!(
+        "control",
+        "view changed",
+        view = id,
+        active = set.active.unwrap_or(false),
+        claim = set.claim,
+        visible = set.visible.unwrap_or(true),
+        bot = bot.unwrap_or("")
     );
 }
 
@@ -42,6 +55,7 @@ pub(super) struct View {
     pub(super) size: Option<(u16, u16)>,
     pub(super) active: bool,
     visible: bool,
+    bot: Option<String>,
     pub(super) shown: Shown,
     pub(super) projection: u64,
     claimed: u64,
@@ -59,7 +73,7 @@ impl View {
     }
 
     fn sees(&self) -> Option<u64> {
-        self.eligible().filter(|_| self.visible)
+        self.eligible().filter(|_| self.visible && self.bot.is_none())
     }
 
     pub(super) fn area(&self) -> Option<Rect> {
@@ -128,6 +142,21 @@ impl Views {
         self.changed
     }
 
+    fn shows_bot(&self, bot: &str) -> bool {
+        self.list.iter().any(|view| view.visible && view.bot.as_deref() == Some(bot))
+    }
+
+    fn leave_bot(&mut self, bot: &str) {
+        let mut left = false;
+        for view in self.list.iter_mut().filter(|view| view.bot.as_deref() == Some(bot)) {
+            view.bot = None;
+            left = true;
+        }
+        if left {
+            self.changed = true;
+        }
+    }
+
     fn claim(&mut self, id: u64) {
         self.seq += 1;
         let seq = self.seq;
@@ -168,6 +197,36 @@ impl App {
         Shown::place(&self.projects, self.active, workspace.map(|_| project.active), workspace.map(|w| w.active))
     }
 
+    fn view_bot(&self, key: &str) -> Result<Option<String>, Refusal> {
+        if key.trim().is_empty() {
+            return Ok(None);
+        }
+        let at = self.bot_at(key)?;
+        Ok(Some(self.panels.bots.live[at].bot.id.clone()))
+    }
+
+    fn bot_after(&self, current: Option<String>, asked: Option<&str>) -> Result<Option<String>, Refusal> {
+        match asked {
+            None => Ok(current),
+            Some(key) => self.view_bot(key),
+        }
+    }
+
+    fn see_view_bot(&mut self, view: u64) {
+        let named = self.clients.views.get(view).filter(|view| view.visible).and_then(|view| view.bot.clone());
+        if let Some(bot) = named {
+            let _ = self.bot_seen(&bot);
+        }
+    }
+
+    pub(in crate::app) fn view_shows_bot(&self, bot: &str) -> bool {
+        self.clients.views.shows_bot(bot)
+    }
+
+    pub(in crate::app) fn views_leave_bot(&mut self, bot: &str) {
+        self.clients.views.leave_bot(bot);
+    }
+
     pub(super) fn tab_controller(&self, tab: u64) -> Option<u64> {
         self.clients.views.controller(tab, self.focus().tab)
     }
@@ -188,6 +247,7 @@ impl App {
             shown: self.tab_ids(&view.shown),
             controls,
             visible: view.visible,
+            bot: view.bot.clone(),
         }
     }
 
@@ -210,17 +270,19 @@ impl App {
             return Err(Refusal::from("this connection already holds a view; open another connection for another"));
         }
         let shown = self.requested_shown(open)?;
+        let bot = self.view_bot(open.bot.as_deref().unwrap_or_default())?;
         let id = self.take_id();
         let active = open.active.unwrap_or(true);
         let visible = open.visible.unwrap_or(true);
         let view =
-            View { id, client, size, active, visible, shown, projection: 1, claimed: 0, revision: 0, sent: None };
+            View { id, client, size, active, visible, bot, shown, projection: 1, claimed: 0, revision: 0, sent: None };
         let eligible = view.eligible().is_some();
         log_opened(&view);
         self.clients.views.list.push(view);
         if eligible {
             self.clients.views.claim(id);
         }
+        self.see_view_bot(id);
         self.size_tabs(area);
         let report = self.view_report(id).ok_or_else(|| Refusal::from("the view closed"))?;
         let view = self.clients.views.get_mut(id).ok_or_else(|| Refusal::from("the view closed"))?;
@@ -250,6 +312,10 @@ impl App {
         now: Instant,
     ) -> Handled {
         let size = control::view::size(set.cols, set.rows).map_err(|message| Refusal::new(Code::Malformed, message))?;
+        let Some(current) = self.clients.views.get(id).map(|view| view.bot.clone()) else {
+            return Err(none("view", id));
+        };
+        let bot = self.bot_after(current, set.bot.as_deref())?;
         let Some(view) = self.clients.views.get_mut(id) else { return Err(none("view", id)) };
         let was = view.eligible().is_some();
         let (new_size, new_active) = (size.or(view.size), set.active.unwrap_or(view.active));
@@ -262,19 +328,14 @@ impl App {
             view.projection += 1;
         }
         (view.size, view.active) = (new_size, new_active);
+        view.bot.clone_from(&bot);
         let back = view.set_visible(set.visible);
         if eligible && (!was || set.claim) {
             self.clients.views.claim(id);
         }
         self.clients.views.changed = true;
-        log::info!(
-            "control",
-            "view changed",
-            view = id,
-            active = set.active.unwrap_or(false),
-            claim = set.claim,
-            visible = set.visible.unwrap_or(true)
-        );
+        log_changed(id, set, bot.as_deref());
+        self.see_view_bot(id);
         self.size_tabs(area);
         self.size_popup(None);
         if back {

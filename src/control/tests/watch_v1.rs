@@ -184,6 +184,7 @@ fn viewed() -> Snapshot {
         shown,
         controls: true,
         visible: true,
+        bot: None,
     });
     snapshot
 }

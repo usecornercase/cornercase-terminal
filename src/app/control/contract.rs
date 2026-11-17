@@ -55,6 +55,7 @@ fn left_out(command: &str, key: &str, value: &Value) -> bool {
         "into" => value.is_null() && command == "open",
         "cached" => value == &Value::Bool(false) && command == "stats",
         "fresh" => value.is_null() && matches!(command, "start" | "start-with" | "new-workspace" | "flow-run"),
+        "bot" => value.is_null() && matches!(command, "view" | "view-set"),
         "machine_boot" => {
             value.is_null()
                 && matches!(command, "start" | "start-with" | "new-workspace" | "flow-run" | "focus-machine")

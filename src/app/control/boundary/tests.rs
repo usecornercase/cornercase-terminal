@@ -3,8 +3,8 @@ use rstest::rstest;
 use super::{Gated, gated, stop_name, window_name};
 use crate::control::bots::{BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::control::{
-    CloneRepository, Command, ConfigImport, Configure, HeldAction, HeldRequest, Input, Keys, NewTab, PasteFile,
-    RestartWhenIdle, SendText, Split, TodoSend, UpdateCheck, UpdateInstall,
+    CloneRepository, Command, ConfigImport, Configure, HeldAction, HeldRequest, Input, Keys, NewTab, OpenView,
+    PasteFile, RestartWhenIdle, SendText, SetView, Split, TodoSend, UpdateCheck, UpdateInstall,
 };
 use crate::protocol::ClientMessage;
 
@@ -70,6 +70,10 @@ const PANE: Option<Gated> = Some(Gated::Pane { pane: Some(4), tab: None });
 #[case::reading_what_a_bot_is_for(Command::Bot(BotRequest::About(BotTarget { bot: "x".into() })), None)]
 #[case::setting_a_bot_up(Command::Bot(BotRequest::Setup(BotTarget { bot: "x".into() })), Some(Gated::Says("x".into())))]
 #[case::saying_to_a_bot(Command::Bot(BotRequest::Say(BotSay { bot: "x".into(), ..BotSay::default() })), Some(Gated::Says("x".into())))]
+#[case::a_view_that_shows_a_bot(Command::View(OpenView { bot: Some("x".into()), ..OpenView::default() }), Some(Gated::ShowsChat))]
+#[case::a_view_with_no_bot(Command::View(OpenView::default()), None)]
+#[case::a_view_set_to_a_bot(Command::ViewSet(SetView { bot: Some("x".into()), ..SetView::default() }), Some(Gated::ShowsChat))]
+#[case::a_view_set_to_no_bot(Command::ViewSet(SetView { bot: Some(String::new()), ..SetView::default() }), None)]
 #[case::reading_the_settings(Command::Config(Configure::Get), None)]
 #[case::searching_the_settings(Command::Config(Configure::Search("a".into())), None)]
 #[case::setting_a_setting(Command::Config(Configure::Set(std::collections::BTreeMap::new())), Some(Gated::Settings))]

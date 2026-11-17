@@ -26,6 +26,11 @@ mod describing {
     }
 
     #[test]
+    fn showing_a_bot_in_a_view_is_a_feature() {
+        assert!(FEATURES.contains(&"view-bot"));
+    }
+
+    #[test]
     fn it_lists_the_feature_of_a_runs_not_run() {
         assert!(FEATURES.contains(&"flow-not-run"));
     }

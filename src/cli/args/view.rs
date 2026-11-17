@@ -23,6 +23,12 @@ pub(crate) struct ViewArgs {
     pub(crate) project: Option<u64>,
     #[arg(long, help = "Start hidden: the tab it shows does not count as seen until `view-set --visible`")]
     pub(crate) hidden: bool,
+    #[arg(
+        long,
+        value_name = "ID",
+        help = "Start showing this bot's chat in place of its tab: its answers count as read and do not notify"
+    )]
+    pub(crate) bot: Option<String>,
     #[command(flatten)]
     pub(crate) boot: BootArg,
 }
@@ -50,6 +56,12 @@ pub(crate) struct ViewSetArgs {
     pub(crate) visible: bool,
     #[arg(long, help = "Its window is hidden or minimised: agents in the tab it shows notify again")]
     pub(crate) hidden: bool,
+    #[arg(
+        long,
+        value_name = "ID",
+        help = "It shows this bot's chat in place of its tab; an empty one says it shows none"
+    )]
+    pub(crate) bot: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,
     #[command(flatten)]

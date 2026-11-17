@@ -407,6 +407,7 @@ impl App {
         if self.panels.bots.shown.as_ref().is_some_and(|shown| shown.bot == removed.bot.id) {
             self.leave_bot();
         }
+        self.views_leave_bot(&removed.bot.id);
         if self.overlay.as_ref().is_some_and(|overlay| overlay.names_bot(removed.key, &removed.bot.id)) {
             self.overlay = None;
         }

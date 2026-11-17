@@ -413,4 +413,5 @@ mod menu;
 mod routines;
 mod routines_dialog;
 mod setup;
+mod views;
 mod window;

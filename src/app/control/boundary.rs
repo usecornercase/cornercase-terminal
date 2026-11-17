@@ -29,6 +29,7 @@ enum Gated {
     Settings,
     ServerStop,
     Clone,
+    ShowsChat,
 }
 
 #[derive(Default)]
@@ -78,6 +79,10 @@ fn blank(command: Option<&String>) -> bool {
     command.is_none_or(|command| command.trim().is_empty())
 }
 
+fn names_a_bot(bot: Option<&String>) -> bool {
+    !blank(bot)
+}
+
 fn gated(command: &Command) -> Option<Gated> {
     if crate::bots::stops_server(command.name()) {
         return Some(Gated::ServerStop);
@@ -108,6 +113,8 @@ fn lifts(command: &Command) -> Option<Gated> {
         Command::Bot(BotRequest::Edit(edit)) => Some(Gated::Says(edit.bot.clone())),
         Command::Bot(BotRequest::Say(say)) => Some(Gated::Says(say.bot.clone())),
         Command::Bot(BotRequest::Setup(target)) => Some(Gated::Says(target.bot.clone())),
+        Command::View(open) if names_a_bot(open.bot.as_ref()) => Some(Gated::ShowsChat),
+        Command::ViewSet(set) if names_a_bot(set.bot.as_ref()) => Some(Gated::ShowsChat),
         Command::Config(Configure::Get | Configure::Search(_)) => None,
         Command::Config(_) => Some(Gated::Settings),
         Command::ConfigImport(import) if import.apply => Some(Gated::Settings),
@@ -161,6 +168,10 @@ fn no_settings() -> Refusal {
 
 fn no_stop() -> Refusal {
     Refusal::new(Code::Failed, crate::bots::STOP_REFUSED)
+}
+
+fn no_chat_view() -> Refusal {
+    Refusal::new(Code::Failed, "a bot cannot show a bot's chat in a view")
 }
 
 fn no_clone() -> Refusal {
@@ -227,6 +238,7 @@ impl App {
             Some(Gated::Settings) => Err(no_settings()),
             Some(Gated::ServerStop) => Err(no_stop()),
             Some(Gated::Clone) => Err(no_clone()),
+            Some(Gated::ShowsChat) => Err(no_chat_view()),
             Some(Gated::Says(bot)) => self.says_to(&bot),
             Some(Gated::Pane { pane, tab }) => self.types_into(self.target(asker, pane, tab)?),
         }
