@@ -74,7 +74,7 @@ mod switching {
 
     #[test]
     fn says_why_it_could_not_switch() {
-        let failed = switch(Step::Failed("`devbox` runs cornercase 0.11.9 and this machine 0.12.0"));
+        let failed = switch(Step::Failed("`devbox` runs cornercase 0.11.9 and this computer 0.12.0"));
 
         insta::assert_snapshot!(drawn(70, 12, &failed).backend());
     }

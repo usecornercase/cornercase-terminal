@@ -11,6 +11,7 @@ pub(crate) const ADD: &str = "add";
 pub(crate) const SAVE: &str = "save";
 
 const HINT: &str = "tab moves to the next field · enter saves · esc goes back to the machines";
+const WINDOW_HINT: &str = "tab moves to the next field · enter saves · esc closes the form";
 const LIST_HINT: &str = "enter picks · type to filter · esc closes the list";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,7 +134,11 @@ impl Form {
     }
 
     pub(crate) fn hint(&self) -> &'static str {
-        if self.icon.is_open() { LIST_HINT } else { HINT }
+        match (self.icon.is_open(), self.back_to_settings) {
+            (true, _) => LIST_HINT,
+            (false, true) => HINT,
+            (false, false) => WINDOW_HINT,
+        }
     }
 
     pub(crate) fn error(&self, field: Field) -> Option<&str> {

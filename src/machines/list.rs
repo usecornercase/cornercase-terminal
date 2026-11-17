@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ICONS, Machine, name_taken, valid_destination};
+use super::{ICONS, Machine, name_taken, valid_command, valid_destination};
 use crate::remote::Remote;
 use crate::remote::machines::valid;
 use crate::{config, paths, persist};
@@ -86,7 +86,9 @@ fn pushed(list: &mut Vec<Machine>, destination: String, command: Option<String>,
 }
 
 pub(crate) fn reached(here: &Here, remote: &Remote) -> io::Result<()> {
-    if valid_destination(&remote.destination).is_err() {
+    if valid_destination(&remote.destination).is_err()
+        || valid_command(remote.command.as_deref().unwrap_or_default()).is_err()
+    {
         return Ok(());
     }
     change(here, |list| {
@@ -103,6 +105,8 @@ pub(crate) fn reached(here: &Here, remote: &Remote) -> io::Result<()> {
 }
 
 pub(crate) fn remembered(here: &Here, destination: String, command: Option<String>) -> io::Result<Machine> {
+    valid_destination(&destination).map_err(io::Error::other)?;
+    valid_command(command.as_deref().unwrap_or_default()).map_err(io::Error::other)?;
     change(here, |list| {
         if let Some(machine) = list.iter_mut().find(|machine| machine.destination == destination) {
             machine.command = command;
@@ -146,14 +150,14 @@ fn base_name(destination: &str) -> String {
     if name.is_empty() || name.eq_ignore_ascii_case(super::EVERY) { FALLBACK_NAME.into() } else { name }
 }
 
-fn legacy_machines(file: &Path) -> Vec<Legacy> {
-    let Ok(bytes) = std::fs::read(file) else { return Vec::new() };
-    let entries: Vec<Value> = serde_json::from_slice(&bytes).unwrap_or_default();
-    entries
+fn legacy_machines(file: &Path) -> io::Result<Vec<Legacy>> {
+    let bytes = std::fs::read(file)?;
+    let entries: Vec<Value> = serde_json::from_slice(&bytes).map_err(io::Error::from)?;
+    Ok(entries
         .into_iter()
         .filter_map(|entry| serde_json::from_value::<Legacy>(entry).ok())
         .filter(|machine| valid(&machine.destination))
-        .collect()
+        .collect())
 }
 
 fn merge(list: &mut Vec<Machine>, old: Legacy) {
@@ -173,7 +177,7 @@ pub(crate) fn migrate(here: &Here) -> io::Result<()> {
     if !here.legacy.exists() {
         return Ok(());
     }
-    let legacy = legacy_machines(&here.legacy);
+    let legacy = legacy_machines(&here.legacy)?;
     edit_config(&here.config, |list| legacy.into_iter().for_each(|old| merge(list, old)))?;
     match std::fs::remove_file(&here.legacy) {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),

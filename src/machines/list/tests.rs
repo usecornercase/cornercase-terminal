@@ -132,6 +132,17 @@ mod reaching {
     use super::*;
 
     #[test]
+    fn a_command_with_a_control_character_leaves_the_list_as_it_is() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        change(&here, |list| list.push(machine("vps", "vps.lan"))).expect("written");
+
+        reached(&here, &remote("vps.lan", Some("a\tb"))).expect("fine");
+
+        assert_eq!(read(&here), [machine("vps", "vps.lan")]);
+    }
+
+    #[test]
     fn a_new_machine_is_not_shown_and_gets_a_name_and_the_home_folder() {
         let dir = TempDir::new();
 
@@ -178,6 +189,16 @@ mod reaching {
 
 mod remembering {
     use super::*;
+
+    #[test]
+    fn an_invisible_destination_or_a_command_with_a_tab_is_refused_and_nothing_is_written() {
+        let dir = TempDir::new();
+
+        assert!(remembered(&here_in(&dir), "box\u{200b}".into(), None).is_err());
+        assert!(remembered(&here_in(&dir), "box".into(), Some("a\tb".into())).is_err());
+
+        assert!(!here_in(&dir).config.exists());
+    }
 
     #[test]
     fn a_new_machine_waits_for_a_window() {
@@ -279,6 +300,18 @@ mod migrating {
         std::fs::write(&here.legacy, old).expect("written");
 
         assert_eq!(names(&read(&here)), ["devbox"]);
+    }
+
+    #[test]
+    fn an_old_file_that_is_not_an_array_stays_byte_for_byte() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        std::fs::write(&here.legacy, r#"[{"destination":"devbox"},"#).expect("written");
+
+        assert!(migrate(&here).is_err());
+
+        assert_eq!(text(&here.legacy), r#"[{"destination":"devbox"},"#);
+        assert!(!here.config.exists());
     }
 
     #[test]
