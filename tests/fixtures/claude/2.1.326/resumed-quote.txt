@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.326
+▝▜██████▀  Sonnet 5.5 · API Usage Billing
+ ▝▝   ▝▝   ~/projects/shop
+
+
+❯ show me the dialog
+
+● Here is the dialog you asked about:
+
+   Adding a new directory:
+   This session hasn't worked here before. Is this a directory you created or one you trust?
+   ❯ No, exit
+     Yes, add it
+   Enter to confirm · Esc to cancel
+
+✻ Baked for 0s · done 11:31 AM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                ◐ medium · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents

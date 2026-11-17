@@ -148,6 +148,10 @@ pub(crate) fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+pub(crate) fn without_whitespace(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Needle(Regex);
 

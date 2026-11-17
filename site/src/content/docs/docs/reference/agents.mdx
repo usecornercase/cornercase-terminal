@@ -218,12 +218,14 @@ Many agents ask whether you trust a folder the first time they run in it, and a 
 
 By default the question is left to you. cornercase recognises it and waits: the prompt is pasted only once you have answered and the agent's screen is quiet again. If you answer no, the agent exits and nothing is typed.
 
-It recognises the question with `trust_prompt_pattern`, a regular expression matched without regard to case against the last 15 non-blank lines of the agent's screen, where agents draw it. The default matches phrases like *trust the files*, *trust this folder*, *do you trust* and *yes, proceed*. An invalid pattern never matches.
+It recognises the question with `trust_prompt_pattern`, a regular expression matched without regard to case against the last 15 non-blank lines of the agent's screen, where agents draw it. The default matches phrases like *trust the files*, *trust this folder*, *do you trust*, *yes, proceed* and *yes, add it*. An invalid pattern never matches. While Claude Code's input box is on screen the pattern is not looked at, since the agent is past its questions.
+
+Claude Code's question about a folder given with `--add-dir` (*Adding a new directory*, since Claude Code 2.1.326, asked again on every resume) is recognised whatever the pattern says, so a `config.json` saved with an older default still sees it.
 
 With **trust prompts** on (`accept_trust_prompts`), cornercase answers yes for you:
 
-- If the screen shows a menu, marked with `❯`, `›`, `>`, `▸` or `→`, and the marked option isn't the *yes* one, cornercase moves the selection to the nearest option containing the word *yes* with the arrow keys, then presses `Enter`. Some agents highlight *No* by default, which is why.
-- It answers at most four times per launch, and never the same screen twice.
+- If the screen shows a menu, marked with `❯`, `›`, `>`, `▸` or `→` (the last marked line on the screen, since a shell prompt such as `❯` can still show above the question), and the marked option isn't the *yes* one, cornercase moves the selection to the nearest option containing the word *yes* with the arrow keys, then presses `Enter`. Some agents highlight *No* by default, which is why.
+- It answers at most eight times per launch (a menu takes two: the arrow, then `Enter`), and never the same screen twice.
 
 <Aside type="caution">
 A trust prompt protects you from running a repository's agent configuration before you have looked at it. With **trust prompts** on, a repository with hostile agent settings runs them as soon as you start an issue in it, without you seeing the question. Turn it on only if you trust every repository you start agents in.

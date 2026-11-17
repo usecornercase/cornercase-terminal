@@ -22,6 +22,21 @@ struct World {
     trust: Trust,
     screen: String,
     reaction: Reaction,
+    asks: fn(&str) -> bool,
+}
+
+const OLD_DEFAULT: &str =
+    "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
+const ADD_DIR: &str = crate::test_util::fixture!("claude/2.1.326/add-dir.txt");
+const FOLDER_TRUST: &str = crate::test_util::fixture!("claude/2.1.326/folder-trust.txt");
+const RESUMED_QUOTE: &str = crate::test_util::fixture!("claude/2.1.326/resumed-quote.txt");
+
+fn saved_default(screen: &str) -> bool {
+    crate::agents::tests::trust::asks(OLD_DEFAULT, screen)
+}
+
+fn contains_trust(screen: &str) -> bool {
+    screen.contains("trust")
 }
 
 fn clock() -> SystemTime {
@@ -44,7 +59,7 @@ fn step_typing(
 ) -> Step {
     let screen = world.screen.clone();
     let mut read = move || screen.clone();
-    let trust = |s: &str| s.contains("trust");
+    let trust = world.asks;
     let mut seen = Seen {
         shell_in_foreground: world.shell,
         bracketed_paste: world.bracketed,
@@ -69,6 +84,7 @@ fn shell() -> World {
         trust: Trust::Accepted,
         screen: "$ ".into(),
         reaction: calm(),
+        asks: contains_trust,
     }
 }
 
@@ -81,6 +97,7 @@ fn agent(screen: &str) -> World {
         trust: Trust::Accepted,
         screen: screen.into(),
         reaction: calm(),
+        asks: contains_trust,
     }
 }
 
@@ -93,8 +110,12 @@ fn asking_you(screen: &str) -> World {
 }
 
 fn started(submit: bool) -> (Launch, Instant) {
+    started_with(spec(submit))
+}
+
+fn started_with(spec: Spec) -> (Launch, Instant) {
     let t0 = Instant::now();
-    let mut launch = Launch::new(1, spec(submit), t0);
+    let mut launch = Launch::new(1, spec, t0);
     launch.output(t0);
     assert_eq!(step(&mut launch, t0 + 300 * MS, &shell()), Step::Write(b"claude --permission-mode plan\r".to_vec()));
     (launch, t0 + 300 * MS)
@@ -221,6 +242,79 @@ fn gemini_trust_waits_for_the_user_or_accepts_the_highlighted_folder() {
 const CLAUDE_TRUST: &str = "│ Quick safety check: Is this a project you created or one you trust?\n\
         │ Claude Code'll be able to read, edit, and execute files here.\n│\n\
         │ ❯ No, exit\n│   Yes, I trust this folder\n│\n│ Enter to confirm · Esc to cancel";
+
+#[test]
+fn the_menu_is_the_last_marked_line_under_a_shell_prompt_starting_with_one() {
+    let screen = format!("❯ echo hi\nhi\n❯ claude --add-dir /x\n{ADD_DIR}");
+    assert_eq!(answer_keys(&screen, false), b"\x1b[B");
+}
+
+mod added_folder {
+    use super::*;
+
+    fn with_yes_marked(screen: &str, yes: &str) -> String {
+        screen.replace("❯ No, exit", "  No, exit").replace(&format!("  {yes}"), &format!("❯ {yes}"))
+    }
+
+    fn answer(launch: &mut Launch, t: Instant, screen: &str, yes: &str) -> Instant {
+        let world = World { trust: Trust::LeftToYou, asks: saved_default, ..claude(screen) };
+        assert_eq!(step(launch, t + AGENT_QUIET, &world), Step::Write(b"\x1b[B".to_vec()));
+        let world = World { screen: with_yes_marked(screen, yes), ..world };
+        assert_eq!(step(launch, t + 2 * AGENT_QUIET, &world), Step::Write(b"\r".to_vec()));
+        t + 2 * AGENT_QUIET
+    }
+
+    fn flow() -> Spec {
+        Spec { trusted: true, ..spec(true) }
+    }
+
+    fn pastes(launch: &mut Launch, t: Instant) {
+        let world = World { trust: Trust::LeftToYou, asks: saved_default, ..claude(BOX) };
+        let pasted = step(launch, t + AGENT_QUIET, &world);
+        assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
+    }
+
+    #[test]
+    fn a_flow_launch_answers_it_with_down_then_enter_then_pastes_the_prompt() {
+        let (mut launch, t) = started_with(flow());
+        let t = answer(&mut launch, t, ADD_DIR, "Yes, add it");
+        pastes(&mut launch, t);
+    }
+
+    #[test]
+    fn a_launch_whose_trust_prompts_are_accepted_answers_it_too() {
+        let (mut launch, t) = started_with(spec(true));
+        let world = World { asks: saved_default, ..claude(ADD_DIR) };
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &world), Step::Write(b"\x1b[B".to_vec()));
+    }
+
+    #[test]
+    fn a_launch_left_to_you_parks_on_it_and_never_types_into_it() {
+        let (mut launch, t) = started_with(spec(true));
+        let world = World { trust: Trust::LeftToYou, asks: saved_default, ..claude(ADD_DIR) };
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &world), Step::Wait);
+        assert_eq!((launch.waits_for_you(), launch.stage()), (true, "trust prompt"));
+        assert_eq!(step(&mut launch, t + AGENT_LATEST, &world), Step::Wait);
+    }
+
+    #[test]
+    fn the_folder_question_then_two_added_folders_are_each_answered_before_the_prompt() {
+        let (mut launch, t) = started_with(flow());
+        let t = answer(&mut launch, t, FOLDER_TRUST, "Yes, I trust this folder");
+        let t = answer(&mut launch, t, ADD_DIR, "Yes, add it");
+        let other = ADD_DIR.replace("fix-the-login-form", "fix-the-signup-form");
+        let t = answer(&mut launch, t, &other, "Yes, add it");
+        pastes(&mut launch, t);
+    }
+
+    #[test]
+    fn a_resumed_conversation_showing_the_patterns_words_is_not_a_question() {
+        let (mut launch, t) = started_with(flow());
+        let world = World { trust: Trust::LeftToYou, ..claude(RESUMED_QUOTE) };
+        let pasted = step(&mut launch, t + AGENT_QUIET, &world);
+        assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
+    }
+}
 
 #[test]
 fn a_menu_that_defaults_to_no_is_moved_to_yes_first() {

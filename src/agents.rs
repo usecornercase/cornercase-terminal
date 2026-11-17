@@ -44,7 +44,7 @@ pub(crate) struct AgentState {
 pub(crate) const AUTO: &str = "auto";
 pub(crate) const DEFAULT_MODE: &str = "default";
 pub(crate) const DEFAULT_TRUST_PROMPT: &str =
-    "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
+    "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed|yes, add it";
 const TRUST_LINES: usize = 15;
 const POWERSHELL_BARE: &str = r"-_./\+=";
 const POWERSHELL_START: &str = r"-_./\";

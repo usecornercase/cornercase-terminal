@@ -806,16 +806,22 @@ mod choosing {
     }
 }
 
-mod trust {
+pub(in crate::agents) mod trust {
     use super::*;
 
-    fn asks(pattern: &str, screen: &str) -> bool {
+    pub(in crate::agents) fn asks(pattern: &str, screen: &str) -> bool {
         TrustPrompt::default().regex(pattern).is_some_and(|re| asks_trust(re, screen))
     }
 
     #[test]
     fn recognises_claudes_folder_question() {
         assert!(asks(DEFAULT_TRUST_PROMPT, "Do you trust the files in this folder?\n❯ 1. Yes, proceed"));
+    }
+
+    #[test]
+    fn recognises_claude_codes_questions_of_2_1_326() {
+        assert!(asks(DEFAULT_TRUST_PROMPT, crate::test_util::fixture!("claude/2.1.326/add-dir.txt")));
+        assert!(asks(DEFAULT_TRUST_PROMPT, crate::test_util::fixture!("claude/2.1.326/folder-trust.txt")));
     }
 
     #[test]
