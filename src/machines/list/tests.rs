@@ -96,6 +96,18 @@ mod changing {
     use super::*;
 
     #[test]
+    fn a_migration_that_cannot_finish_stops_the_change() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        std::fs::write(&here.legacy, "[nope").expect("written");
+
+        assert!(forget(&here, "vps.lan").is_err());
+        assert!(change(&here, |list| list.push(machine("vps", "vps.lan"))).is_err());
+
+        assert!(!here.config.exists());
+    }
+
+    #[test]
     fn a_missing_file_gets_only_the_machines() {
         let dir = TempDir::new();
 

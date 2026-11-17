@@ -46,7 +46,7 @@ pub(crate) fn read(here: &Here) -> Vec<Machine> {
 }
 
 pub(crate) fn change<R>(here: &Here, edit: impl FnOnce(&mut Vec<Machine>) -> R) -> io::Result<R> {
-    let _ = migrate(here);
+    migrate(here)?;
     edit_config(&here.config, edit)
 }
 

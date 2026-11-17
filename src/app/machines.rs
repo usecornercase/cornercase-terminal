@@ -75,7 +75,7 @@ impl App {
         let shown = self.opening.machines.shown.as_ref()?;
         match &shown.here {
             Some(here) => Some(format!("on {here}")),
-            None => (!self.menu_machines().is_empty()).then(|| machines::HERE.into()),
+            None => (!self.config.machines.is_empty()).then(|| machines::HERE.into()),
         }
     }
 

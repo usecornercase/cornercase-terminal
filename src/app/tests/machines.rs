@@ -55,6 +55,15 @@ mod button {
     }
 
     #[test]
+    fn shows_for_a_list_whose_only_entry_is_refused_so_it_can_be_repaired() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &[]);
+        app.config.machines = vec![machine("devbox", "-oProxyCommand=sh")];
+
+        assert_eq!(app.machine_label(), Some("this computer".into()));
+    }
+
+    #[test]
     fn is_hidden_for_a_window_that_cannot_switch() {
         let (mut app, _rx) = app();
         app.set_machines(WINDOW, None);
