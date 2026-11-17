@@ -9,6 +9,7 @@ pub(crate) enum BotRequest {
     New(NewBot),
     List,
     Edit(EditBot),
+    About(BotTarget),
     Remove(BotTarget),
     Reset(BotTarget),
     Seen(BotTarget),
@@ -122,6 +123,7 @@ impl BotRequest {
                 fields.maybe("access", new.access.as_deref()).maybe("follow", new.follow);
                 fields.add("about_bytes", new.about.len())
             }
+            Self::About(target) => fields.add("action", "about").add("bot", &target.bot),
             Self::Edit(edit) => {
                 fields.add("action", "edit").add("bot", &edit.bot).maybe("name", edit.name.as_deref());
                 fields.maybe("access", edit.access.as_deref()).maybe("follow", edit.follow);

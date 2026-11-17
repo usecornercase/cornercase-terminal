@@ -101,6 +101,14 @@ impl App {
         (0..self.panels.bots.live.len()).map(|at| self.bot_info(at)).collect()
     }
 
+    pub(in crate::app) fn bot_about(&self, key: &str) -> Done<(String, String)> {
+        let at = self.bot_at(key)?;
+        let live = &self.panels.bots.live[at];
+        let about = folder::about(&live.folder)
+            .map_err(|error| Refusal::new(Code::Failed, format!("cannot read {}'s bot.md: {error}", live.bot.id)))?;
+        Ok((live.bot.id.clone(), about))
+    }
+
     fn bot_kind(&self, asked: Option<&str>) -> Done<Known> {
         match clean(asked) {
             Some(name) => {

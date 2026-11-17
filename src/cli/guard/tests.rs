@@ -69,6 +69,7 @@ fn the_refusal_names_the_flags_that_take_a_place() {
 #[case::say_to_another(&["bot", "say", "other", "hi"])]
 #[case::new(&["bot", "new", "x"])]
 #[case::edit(&["bot", "edit", "prs", "--name", "y"])]
+#[case::about(&["bot", "about", "other", "--json"])]
 #[case::ports_all(&["ports", "--all"])]
 #[case::size_of_a_path(&["worktrees", "size", "--path", "/x"])]
 #[case::export(&["config", "export"])]

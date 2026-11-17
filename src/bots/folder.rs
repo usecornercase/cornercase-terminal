@@ -48,6 +48,13 @@ fn load(folder: &Path) -> Option<Bot> {
     (folder.file_name()?.to_str()? == bot.id).then_some(bot)
 }
 
+pub(crate) fn about(folder: &Path) -> io::Result<String> {
+    match std::fs::read_to_string(folder.join(ABOUT_FILE)) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(String::new()),
+        read => read,
+    }
+}
+
 pub(crate) fn notes(folder: &Path) -> (String, String) {
     let read = |name: &str| std::fs::read_to_string(folder.join(name)).unwrap_or_default();
     (read(ABOUT_FILE), read(MEMORY_FILE))

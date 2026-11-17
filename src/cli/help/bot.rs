@@ -1,4 +1,4 @@
-pub(in crate::cli) const BOT_ABOUT_HELP: &str = "The bot's id or its name";
+pub(in crate::cli) const BOT_ID_HELP: &str = "The bot's id or its name";
 
 pub(in crate::cli) const BOT_AGENTS_HELP: &str =
     "Prints every agent cornercase knows with whether it is installed, whether it can be a bot,
@@ -40,9 +40,17 @@ as `bot list --json` does; its state is `thinking` while it sets itself up.
 Example:
   cornercase bot new prs --agent claude --about \"Review my open pull requests and tell me which are blocked\"";
 
+pub(in crate::cli) const BOT_ABOUT_HELP: &str =
+    "Prints what the bot is for: the text of its bot.md, as `bot new --about`, `bot edit --about` and the
+window's form write it. The bot changes it too, when you give it a job or change one, so it is read
+when you ask. An empty or missing bot.md prints nothing; one that cannot be read is an error.
+
+With --json it prints {\"bot\", \"about\"}. A program's edit form shows `about`, and sends it with `bot
+edit` only when the person changed it.";
+
 pub(in crate::cli) const BOT_EDIT_HELP: &str =
     "Changes what the bot uses from its next message on; a running answer is not changed. An empty
---model, --effort or --account goes back to the agent's own; --about writes bot.md; --follow on|off
+--model, --effort or --account goes back to the agent's own; --about writes bot.md (`bot about` prints it); --follow on|off
 sets whether the bot is told when an agent it started finishes. The agent cannot
 change, because another agent cannot continue the conversation: make another bot instead.";
 

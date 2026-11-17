@@ -2,7 +2,8 @@ use clap::{Args, Subcommand};
 
 use super::Print;
 use crate::cli::help::{
-    BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_NEW_HELP, BOT_SAY_HELP, BOT_SETUP_HELP,
+    BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_ID_HELP, BOT_NEW_HELP, BOT_SAY_HELP,
+    BOT_SETUP_HELP,
 };
 
 const ACCESS: [&str; 2] = ["cornercase", "full"];
@@ -25,6 +26,8 @@ pub(crate) enum BotAction {
     List(Print),
     #[command(about = "Change a bot's name, model, effort, account or access, from its next message", after_help = BOT_EDIT_HELP)]
     Edit(EditArgs),
+    #[command(about = "Print what a bot is for: the text of its bot.md", after_help = BOT_ABOUT_HELP)]
+    About(BotNameArgs),
     #[command(about = "Delete a bot, its folder and its queue entries; refused while it answers")]
     Remove(BotNameArgs),
     #[command(about = "Write to a bot; it answers in its chat", after_help = BOT_SAY_HELP)]
@@ -43,13 +46,13 @@ pub(crate) enum BotAction {
 
 #[derive(Debug, Args)]
 pub(crate) struct Target {
-    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
     pub(crate) bot: String,
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct BotNameArgs {
-    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
     pub(crate) bot: String,
     #[command(flatten)]
     pub(crate) print: Print,
@@ -92,7 +95,7 @@ pub(crate) struct NewArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct EditArgs {
-    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
     pub(crate) bot: String,
     #[arg(long, value_name = "NAME", help = "The new name; the id stays")]
     pub(crate) name: Option<String>,
@@ -121,7 +124,7 @@ pub(crate) struct EditArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct SayArgs {
-    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
     pub(crate) bot: String,
     #[arg(value_name = "TEXT", help = "The message, at most 20,000 characters; - reads it from standard input")]
     pub(crate) text: Option<String>,
@@ -140,7 +143,7 @@ pub(crate) struct SayArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct HistoryArgs {
-    #[arg(value_name = "BOT", help = BOT_ABOUT_HELP)]
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
     pub(crate) bot: String,
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize), help = "Only the last N lines")]
     pub(crate) last: Option<usize>,

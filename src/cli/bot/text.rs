@@ -5,6 +5,10 @@ use crate::control::bots::{AgentInfo, BotInfo};
 use crate::queue::clock::when;
 use crate::text;
 
+pub(super) fn about(text: &str) -> String {
+    if text.is_empty() || text.ends_with('\n') { text.to_string() } else { format!("{text}\n") }
+}
+
 const WIDTH: usize = 120;
 const LAST: usize = 60;
 

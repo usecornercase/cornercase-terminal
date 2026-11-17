@@ -16,6 +16,20 @@ fn a_new_bot_gets_its_four_files() {
 }
 
 #[test]
+fn what_a_bot_is_for_reads_as_it_is_or_empty_when_missing_and_fails_when_unreadable() {
+    let dir = TempDir::new();
+    let folder = create(dir.path(), &bot("prs", "PRs"), "review my PRs\n").expect("create");
+    assert_eq!(about(&folder).expect("read"), "review my PRs\n");
+    std::fs::remove_file(folder.join(ABOUT_FILE)).expect("remove");
+    assert_eq!(about(&folder).expect("missing"), "");
+    std::fs::write(folder.join(ABOUT_FILE), [0xff, 0xfe]).expect("bytes");
+    assert_eq!(about(&folder).expect_err("not utf-8").kind(), io::ErrorKind::InvalidData);
+    std::fs::remove_file(folder.join(ABOUT_FILE)).expect("remove");
+    std::fs::create_dir(folder.join(ABOUT_FILE)).expect("folder");
+    assert_ne!(about(&folder).expect_err("a folder").kind(), io::ErrorKind::NotFound);
+}
+
+#[test]
 fn bots_load_by_when_they_were_made_and_odd_folders_are_skipped() {
     let dir = TempDir::new();
     let mut later = bot("later", "Later");
