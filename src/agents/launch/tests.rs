@@ -32,7 +32,7 @@ const FOLDER_TRUST: &str = crate::test_util::fixture!("claude/2.1.326/folder-tru
 const RESUMED_QUOTE: &str = crate::test_util::fixture!("claude/2.1.326/resumed-quote.txt");
 
 fn saved_default(screen: &str) -> bool {
-    crate::agents::TrustPrompt::default().regex(OLD_DEFAULT).is_some_and(|re| crate::agents::asks_trust(re, screen))
+    crate::agents::tests::trust::asks(OLD_DEFAULT, screen)
 }
 
 fn contains_trust(screen: &str) -> bool {

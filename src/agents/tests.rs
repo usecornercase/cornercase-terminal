@@ -806,10 +806,10 @@ mod choosing {
     }
 }
 
-mod trust {
+pub(in crate::agents) mod trust {
     use super::*;
 
-    fn asks(pattern: &str, screen: &str) -> bool {
+    pub(in crate::agents) fn asks(pattern: &str, screen: &str) -> bool {
         TrustPrompt::default().regex(pattern).is_some_and(|re| asks_trust(re, screen))
     }
 

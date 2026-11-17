@@ -5,7 +5,7 @@ use super::claude;
 use super::context::SessionState;
 use super::{Known, names_program};
 use crate::term::bracketed;
-use crate::text::one_line;
+use crate::text::{one_line, without_whitespace};
 
 const SHELL_QUIET: Duration = Duration::from_millis(300);
 const SHELL_LATEST: Duration = Duration::from_secs(5);
@@ -309,7 +309,7 @@ impl Launch {
             Ok(line) => line,
             Err(refusal) => return Step::Refuse(refusal),
         };
-        self.echo = compact(&(seen.screen)()) + &compact(&line);
+        self.echo = without_whitespace(&(seen.screen)()) + &without_whitespace(&line);
         self.command_at = Some(now);
         self.next(Stage::Agent, now);
         Step::Write(format!("{line}\r").into_bytes())
@@ -414,12 +414,8 @@ fn asks_to_trust(screen: &str, seen: &Seen) -> bool {
     claude::screen::adds_directory(screen) || (!past_questions && (seen.trust_prompt)(screen))
 }
 
-fn compact(text: &str) -> String {
-    text.chars().filter(|c| !c.is_whitespace()).collect()
-}
-
 fn only_echo(screen: &str, echo: &str) -> bool {
-    let shown = compact(screen);
+    let shown = without_whitespace(screen);
     echo.starts_with(&shown) || echo.ends_with(&shown)
 }
 

@@ -1,3 +1,5 @@
+use crate::text::without_whitespace;
+
 const INPUT_MARK: char = '❯';
 const ADD_DIR_TITLE: &str = "Addinganewdirectory:";
 const ADD_DIR_CUT_OFF: &str = "Adding:";
@@ -28,7 +30,7 @@ pub(in crate::agents) fn draft(lines: &[(String, String)]) -> Option<bool> {
 }
 
 pub(in crate::agents) fn bypass_consent(screen: &str) -> bool {
-    let compact = compact(screen);
+    let compact = without_whitespace(screen);
     compact.contains("BypassPermissionsmode") && compact.contains("Yes,Iaccept")
 }
 
@@ -38,13 +40,9 @@ pub(in crate::agents) fn adds_directory(screen: &str) -> bool {
     else {
         return false;
     };
-    let titled =
-        compact(screen).contains(ADD_DIR_TITLE) || lines.iter().any(|l| l.trim_start().starts_with(ADD_DIR_CUT_OFF));
+    let titled = without_whitespace(screen).contains(ADD_DIR_TITLE)
+        || lines.iter().any(|l| l.trim_start().starts_with(ADD_DIR_CUT_OFF));
     titled && box_rule(&lines[yes..]).is_none()
-}
-
-fn compact(screen: &str) -> String {
-    screen.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
 pub(in crate::agents) fn survey(screen: &str) -> bool {

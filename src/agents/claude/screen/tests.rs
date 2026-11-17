@@ -111,6 +111,8 @@ mod survey {
 mod adds_directory {
     use rstest::rstest;
 
+    use super::bypass_consent::CONSENT;
+
     const ADD_DIR: &str = crate::test_util::fixture!("claude/2.1.326/add-dir.txt");
     const CUT_OFF: &str = crate::test_util::fixture!("claude/2.1.326/add-dir-cut-off.txt");
     const FOLDER: &str = crate::test_util::fixture!("claude/2.1.326/folder-trust.txt");
@@ -140,7 +142,7 @@ mod adds_directory {
 
     #[rstest]
     #[case::folder_question(FOLDER.to_string())]
-    #[case::bypass_consent(crate::agents::claude::screen::tests::bypass_consent::CONSENT.to_string())]
+    #[case::bypass_consent(CONSENT.to_string())]
     #[case::quoted_above_the_box(QUOTED.to_string())]
     #[case::options_alone("❯ No, exit\n  Yes, add it\n Enter to confirm · Esc to cancel".to_string())]
     fn is_nothing_else(#[case] screen: String) {
