@@ -22,7 +22,7 @@ expression: rig.shown(WIDE)
 "  │ command                                                                                                                                  │  "
 "  │                optional: what runs cornercase there, for a window you open there                                                         │  "
 "  │                                                                                                                                          │  "
-"  │               [ ] show its work here                                                                                                     │  "
+"  │                [ ] show its work here                                                                                                    │  "
 "  │                link it and show its workspaces and agents next to yours                                                                  │  "
 "  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "
