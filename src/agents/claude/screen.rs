@@ -1,4 +1,7 @@
 const INPUT_MARK: char = '❯';
+const ADD_DIR_TITLE: &str = "Addinganewdirectory:";
+const ADD_DIR_CUT_OFF: &str = "Adding:";
+const ADD_DIR_YES: &str = "Yes, add it";
 const RULE: char = '─';
 const RULE_MIN: usize = 8;
 const SURVEY_OPTIONS: [&str; 2] =
@@ -25,8 +28,23 @@ pub(in crate::agents) fn draft(lines: &[(String, String)]) -> Option<bool> {
 }
 
 pub(in crate::agents) fn bypass_consent(screen: &str) -> bool {
-    let compact: String = screen.chars().filter(|c| !c.is_whitespace()).collect();
+    let compact = compact(screen);
     compact.contains("BypassPermissionsmode") && compact.contains("Yes,Iaccept")
+}
+
+pub(in crate::agents) fn adds_directory(screen: &str) -> bool {
+    let lines: Vec<&str> = screen.lines().collect();
+    let Some(yes) = lines.iter().rposition(|line| line.trim().trim_start_matches(INPUT_MARK).trim() == ADD_DIR_YES)
+    else {
+        return false;
+    };
+    let titled =
+        compact(screen).contains(ADD_DIR_TITLE) || lines.iter().any(|l| l.trim_start().starts_with(ADD_DIR_CUT_OFF));
+    titled && box_rule(&lines[yes..]).is_none()
+}
+
+fn compact(screen: &str) -> String {
+    screen.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
 pub(in crate::agents) fn survey(screen: &str) -> bool {

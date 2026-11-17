@@ -819,6 +819,12 @@ mod trust {
     }
 
     #[test]
+    fn recognises_claude_codes_questions_of_2_1_326() {
+        assert!(asks(DEFAULT_TRUST_PROMPT, crate::test_util::fixture!("claude/2.1.326/add-dir.txt")));
+        assert!(asks(DEFAULT_TRUST_PROMPT, crate::test_util::fixture!("claude/2.1.326/folder-trust.txt")));
+    }
+
+    #[test]
     fn ignores_other_screens() {
         assert!(!asks(DEFAULT_TRUST_PROMPT, "> How can I help?"));
     }

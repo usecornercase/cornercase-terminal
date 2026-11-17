@@ -16,7 +16,7 @@ const SUBMIT_QUIET: Duration = Duration::from_millis(300);
 const SUBMIT_LATEST: Duration = Duration::from_secs(3);
 pub(crate) const CONFIRM_EVERY: Duration = Duration::from_secs(3);
 pub(crate) const MAX_ENTERS: u8 = 5;
-const MAX_TRUSTS: u8 = 4;
+const MAX_TRUSTS: u8 = 8;
 const MARKERS: [&str; 5] = ["❯", "›", ">", "▸", "→"];
 const MENU_REACH: usize = 6;
 
@@ -361,7 +361,7 @@ impl Launch {
             self.parked = Some(Parked::Consent);
             return Some(Step::Wait);
         }
-        if !(seen.trust_prompt)(screen) {
+        if !asks_to_trust(screen, seen) {
             return None;
         }
         if seen.trust == Trust::LeftToYou && !self.spec.trusted {
@@ -409,6 +409,11 @@ fn taken(reaction: &Reaction, pasted: Option<SystemTime>, first: Instant) -> Opt
     reaction.status.filter(|status| !matches!(status, Status::Idle | Status::Done | Status::Pending)).map(Status::name)
 }
 
+fn asks_to_trust(screen: &str, seen: &Seen) -> bool {
+    let past_questions = seen.agent.is_some_and(|agent| agent.input_box(|| screen.to_string()) == Some(true));
+    claude::screen::adds_directory(screen) || (!past_questions && (seen.trust_prompt)(screen))
+}
+
 fn compact(text: &str) -> String {
     text.chars().filter(|c| !c.is_whitespace()).collect()
 }
@@ -424,7 +429,7 @@ fn option_text(line: &str) -> &str {
 
 pub(crate) fn answer_keys(screen: &str, application_cursor: bool) -> Vec<u8> {
     let lines: Vec<&str> = screen.lines().map(option_text).collect();
-    let Some(marked) = lines.iter().position(|l| MARKERS.iter().any(|m| l.starts_with(m))) else {
+    let Some(marked) = lines.iter().rposition(|l| MARKERS.iter().any(|m| l.starts_with(m))) else {
         return b"\r".to_vec();
     };
     let near = marked.saturating_sub(MENU_REACH)..(marked + MENU_REACH + 1).min(lines.len());

@@ -43,7 +43,7 @@
   "hidden_flows": [],
   "default_flow": "",
   "flow_order": [],
-  "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
+  "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed|yes, add it",
   "gh": "gh",
   "glab": "glab",
   "sidebar": "projects_on_top",

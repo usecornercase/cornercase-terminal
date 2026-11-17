@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.97
+
+- **Flows start on their own again with Claude Code 2.1.326.** It asks whether to trust each folder given with `--add-dir`, and every role of a flow gets the run's folder that way. So each agent stopped at that question until you answered it in its tab, and then did not take its prompt. A flow's agents answer it now, also after a restart, whatever `trust_prompt_pattern` says. Other launches leave it to you while **trust prompts** is off, as with the folder question.
+- **Answering a trust question no longer picks "No, exit" under a `❯` prompt.** With a shell prompt starting with `❯` (starship, pure), cornercase could take that prompt for the question's menu and press `Enter` on Claude Code's highlighted **No, exit**; it now moves to **Yes** first.
+- `trust_prompt_pattern`'s default also matches *yes, add it*. While Claude Code's input box is on screen the pattern is not looked at, so a resumed conversation showing those words is not taken for a question.
+
 ## 0.13.96
 
 - **Programs can read what a bot is for.** `cornercase bot about prs` prints the bot's `bot.md`, and with `--json` gives `{"bot", "about"}`, so a window of your own (or one reached through `--remote`) can show that text in its edit form before you change it. `cornercase contract` lists `bot-about-read`.

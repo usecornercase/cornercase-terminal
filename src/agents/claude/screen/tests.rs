@@ -108,8 +108,48 @@ mod survey {
     }
 }
 
+mod adds_directory {
+    use rstest::rstest;
+
+    const ADD_DIR: &str = crate::test_util::fixture!("claude/2.1.326/add-dir.txt");
+    const CUT_OFF: &str = crate::test_util::fixture!("claude/2.1.326/add-dir-cut-off.txt");
+    const FOLDER: &str = crate::test_util::fixture!("claude/2.1.326/folder-trust.txt");
+    const QUOTED: &str = crate::test_util::fixture!("claude/2.1.326/resumed-quote.txt");
+
+    fn yes_marked() -> String {
+        ADD_DIR.replace("❯ No, exit", "  No, exit").replace("  Yes, add it", "❯ Yes, add it")
+    }
+
+    fn wrapped() -> String {
+        ADD_DIR.replace("Adding a new directory:", "Adding a new\n directory:")
+    }
+
+    fn under_a_prompt() -> String {
+        format!("❯ claude --add-dir /x\n{ADD_DIR}")
+    }
+
+    #[rstest]
+    #[case::as_is(ADD_DIR.to_string())]
+    #[case::yes_marked(yes_marked())]
+    #[case::title_wrapped(wrapped())]
+    #[case::cut_off(CUT_OFF.to_string())]
+    #[case::under_a_shell_prompt(under_a_prompt())]
+    fn is_the_question_about_an_added_folder(#[case] screen: String) {
+        assert!(super::super::adds_directory(&screen));
+    }
+
+    #[rstest]
+    #[case::folder_question(FOLDER.to_string())]
+    #[case::bypass_consent(crate::agents::claude::screen::tests::bypass_consent::CONSENT.to_string())]
+    #[case::quoted_above_the_box(QUOTED.to_string())]
+    #[case::options_alone("❯ No, exit\n  Yes, add it\n Enter to confirm · Esc to cancel".to_string())]
+    fn is_nothing_else(#[case] screen: String) {
+        assert!(!super::super::adds_directory(&screen));
+    }
+}
+
 mod bypass_consent {
-    const CONSENT: &str = "  WARNING: Claude Code running in Bypass Permissions mode\n\n  In Bypass Permissions mode, Claude \
+    pub(super) const CONSENT: &str = "  WARNING: Claude Code running in Bypass Permissions mode\n\n  In Bypass Permissions mode, Claude \
         Code will not ask for your approval before running potentially dangerous commands.\n\n  ❯ 1. No, exit\n    2. \
         Yes, I accept\n\n  Enter to confirm · Esc to cancel";
 
