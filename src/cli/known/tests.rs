@@ -257,4 +257,14 @@ mod writing {
 
         assert!(not_listed(remembered(&here, "devbox".into(), None)).starts_with("cannot read or write"));
     }
+
+    #[test]
+    fn a_refused_command_names_the_command_not_the_file() {
+        let dir = TempDir::new();
+        let here = Here { config: dir.path().join("config.json"), legacy: dir.path().join("machines.json") };
+
+        let said = not_listed(remembered(&here, "devbox".into(), Some("a\tb".into())));
+
+        assert!(said.contains("command") && !said.contains("config.json"), "{said}");
+    }
 }

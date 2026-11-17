@@ -369,8 +369,22 @@ mod the_form {
     }
 
     #[test]
+    fn a_refusal_on_a_short_window_is_said_in_the_hint_row() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        rig.click_row(&Row::AddMachine);
+        type_text(&mut rig.app, "pi");
+        rig.click_field(Field::Destination);
+        type_text(&mut rig.app, "vps.lan");
+
+        rig.press_button(ADD);
+
+        let drawn = rig.shown(Rect { x: 0, y: 0, width: 120, height: 18 });
+        assert!(drawn.contains("the machine `vps` already uses this destination"), "{drawn}");
+    }
+
+    #[test]
     fn keeps_every_field_on_a_short_window() {
-        let short = Rect { x: 0, y: 0, width: 80, height: 24 };
+        let short = Rect { x: 0, y: 0, width: 80, height: 18 };
 
         let fields = Field::ALL.map(|field| ui::machine_form::field(short, field));
 

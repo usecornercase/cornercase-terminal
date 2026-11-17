@@ -139,7 +139,8 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     let dim = Style::default().fg(view.muted);
     f.render_widget(Paragraph::new(Span::styled(INTRO, dim)).wrap(Wrap { trim: true }), intro);
     let cursor = Field::ALL.into_iter().fold(None, |cursor, field| draw_field(f, view, form, field).or(cursor));
-    let notice = form.notice.clone().map(Note::Error);
+    let refusal = (pitch(rows(screen)[1]) == 1).then(|| form.errors.first().map(|(_, why)| why.clone())).flatten();
+    let notice = form.notice.clone().or(refusal).map(Note::Error);
     draw_hint(f, view, notice.as_ref(), form.hint(), hint);
     let labels = form.buttons();
     draw_buttons(f, view, &buttons(screen, &labels), &labels, form.submit());

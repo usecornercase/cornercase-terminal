@@ -104,9 +104,13 @@ pub(crate) fn reached(here: &Here, remote: &Remote) -> io::Result<()> {
     })
 }
 
+fn refused(why: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, why)
+}
+
 pub(crate) fn remembered(here: &Here, destination: String, command: Option<String>) -> io::Result<Machine> {
-    valid_destination(&destination).map_err(io::Error::other)?;
-    valid_command(command.as_deref().unwrap_or_default()).map_err(io::Error::other)?;
+    valid_destination(&destination).map_err(refused)?;
+    valid_command(command.as_deref().unwrap_or_default()).map_err(refused)?;
     change(here, |list| {
         if let Some(machine) = list.iter_mut().find(|machine| machine.destination == destination) {
             machine.command = command;

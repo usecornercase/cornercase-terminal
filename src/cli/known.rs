@@ -83,7 +83,7 @@ pub(super) fn forget(destination: &str) -> Result<()> {
 
 fn remembered(here: &Here, destination: String, command: Option<String>) -> Result<String> {
     let shown = escape_hidden(&destination);
-    let kept = list::remembered(here, destination, command).map_err(|error| unwritten(here, &error))?;
+    let kept = list::remembered(here, destination, command).map_err(|error| refusal(here, &error))?;
     Ok(if kept.unreached {
         format!("remembered {shown}; a window asks before it first connects there\n")
     } else {
@@ -99,6 +99,13 @@ fn forgotten(here: &Here, destination: &str) -> Result<String> {
     Err(Error::Control(format!(
         "`{shown}` is not on this computer's list; `cornercase remote --known` prints the list"
     )))
+}
+
+fn refusal(here: &Here, error: &io::Error) -> Error {
+    if error.kind() == io::ErrorKind::InvalidInput {
+        return Error::Control(error.to_string());
+    }
+    unwritten(here, error)
 }
 
 fn unwritten(here: &Here, error: &io::Error) -> Error {
