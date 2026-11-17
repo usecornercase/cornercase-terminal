@@ -213,13 +213,7 @@ mod tunnels {
         let (mut app, _rx) = app();
         mixed(&mut app);
 
-        let expected = [
-            "  this computer",
-            "✓ devbox",
-            "⇄ 3000  closed",
-            "⇄ 5173 → localhost:5174  up",
-            "⇄ 8080  down",
-        ];
+        let expected = ["  this computer", "✓ devbox", "⇄ 3000  closed", "⇄ 5173 → localhost:5174  up", "⇄ 8080  down"];
         assert_eq!(open_menu(&mut app), expected);
     }
 
