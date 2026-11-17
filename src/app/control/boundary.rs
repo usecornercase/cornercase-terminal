@@ -79,10 +79,6 @@ fn blank(command: Option<&String>) -> bool {
     command.is_none_or(|command| command.trim().is_empty())
 }
 
-fn names_a_bot(bot: Option<&String>) -> bool {
-    !blank(bot)
-}
-
 fn gated(command: &Command) -> Option<Gated> {
     if crate::bots::stops_server(command.name()) {
         return Some(Gated::ServerStop);
@@ -113,8 +109,8 @@ fn lifts(command: &Command) -> Option<Gated> {
         Command::Bot(BotRequest::Edit(edit)) => Some(Gated::Says(edit.bot.clone())),
         Command::Bot(BotRequest::Say(say)) => Some(Gated::Says(say.bot.clone())),
         Command::Bot(BotRequest::Setup(target)) => Some(Gated::Says(target.bot.clone())),
-        Command::View(open) if names_a_bot(open.bot.as_ref()) => Some(Gated::ShowsChat),
-        Command::ViewSet(set) if names_a_bot(set.bot.as_ref()) => Some(Gated::ShowsChat),
+        Command::View(open) if !blank(open.bot.as_ref()) => Some(Gated::ShowsChat),
+        Command::ViewSet(set) if !blank(set.bot.as_ref()) => Some(Gated::ShowsChat),
         Command::Config(Configure::Get | Configure::Search(_)) => None,
         Command::Config(_) => Some(Gated::Settings),
         Command::ConfigImport(import) if import.apply => Some(Gated::Settings),

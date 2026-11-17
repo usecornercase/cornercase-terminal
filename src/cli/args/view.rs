@@ -25,8 +25,8 @@ pub(crate) struct ViewArgs {
     pub(crate) hidden: bool,
     #[arg(
         long,
-        value_name = "ID",
-        help = "Start showing this bot's chat in place of its tab: its answers count as read and do not notify"
+        value_name = "BOT",
+        help = "Start showing this bot's chat (its id or name) in place of its tab: its answers count as read and do not notify"
     )]
     pub(crate) bot: Option<String>,
     #[command(flatten)]
@@ -58,8 +58,8 @@ pub(crate) struct ViewSetArgs {
     pub(crate) hidden: bool,
     #[arg(
         long,
-        value_name = "ID",
-        help = "It shows this bot's chat in place of its tab; an empty one says it shows none"
+        value_name = "BOT",
+        help = "It shows this bot's chat (its id or name) in place of its tab; an empty one says it shows none"
     )]
     pub(crate) bot: Option<String>,
     #[command(flatten)]

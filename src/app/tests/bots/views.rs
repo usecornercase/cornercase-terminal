@@ -76,8 +76,8 @@ fn an_unknown_bot_is_not_found_and_opens_no_view() {
 #[test]
 fn view_set_names_clears_and_sees_the_bot() {
     let mut c = chat(ANSWER);
-    let id = open(&mut c, &OpenView { visible: Some(false), ..named("prs") });
     c.app.panels.bots.live[0].unread = 2;
+    let id = open(&mut c, &OpenView { visible: Some(false), ..named("prs") });
     assert_eq!(c.app.panels.bots.live[0].unread, 2);
 
     let unknown = c.app.view_set_request(id, &bot_set("nobody"), Some(AREA), Instant::now()).expect_err("refused");

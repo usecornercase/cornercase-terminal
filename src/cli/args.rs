@@ -223,7 +223,7 @@ pub(crate) enum Control {
         after_help = VIEW_HELP
     )]
     View(view::ViewArgs),
-    #[command(about = "Change a view: its size, whether it is active, or take back the tab it shows", after_help = VIEW_SET_HELP)]
+    #[command(about = "Change a view: its size, whether it is active, take back the tab it shows, or say which bot's chat it shows", after_help = VIEW_SET_HELP)]
     ViewSet(view::ViewSetArgs),
     #[command(
         about = "Type keys, text, pastes and mouse events into a pane, for programs that draw its terminal",

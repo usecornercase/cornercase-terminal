@@ -824,7 +824,7 @@ window's: an agent there gets no done mark, toast or desktop notification. --hid
 agents in its tab then notify again. While a view is open, the window's tab counts as seen only while
 a window is attached.
 
---bot ID says it shows that bot's chat in place of its tab, as the window does when you click a
+--bot BOT says it shows that bot's chat in place of its tab, as the window does when you click a
 bot: while the view is not hidden, the bot's answers count as read and make no toast or desktop
 notification, and the tab behind the chat no longer counts as seen. `view-set --bot` changes it
 (an empty one: no chat), and it ends with the view; its lines then carry `bot`.
@@ -844,7 +844,7 @@ size nothing and stream no terminals (its tabs go to whoever claimed them before
 --active turns it back on and claims its tab, and --claim takes its tab back from the window or
 another view. --hidden says its window is hidden or minimised, so agents in its tab notify again, and
 --visible says it is back, which also reads the open pull requests again (not those read in the last
-10 seconds). --bot ID says it shows that bot's chat in place of its tab, and --bot '' that it shows
+10 seconds). --bot BOT says it shows that bot's chat in place of its tab, and --bot '' that it shows
 none. It prints the view as it is now.
 
 Examples:

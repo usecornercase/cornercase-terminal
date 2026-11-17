@@ -81,6 +81,7 @@ fn a_view_that_shows_a_bot_keeps_its_answers_read() {
     let cleared = session.says(&["view-set", "--view", &id, "--bot", ""]);
     let told = answered(&session);
     let _ = view.kill();
+    let _ = view.wait();
 
     assert_eq!(shown["unread"], 0);
     assert!(!cleared.ends_with("bot prs"), "{cleared}");
