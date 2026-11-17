@@ -957,8 +957,6 @@ screen_machines_agents() {
   cc_s1_at 110 44
   vps_paired
   cc_wait '◐ web-shop › fix/l… ☁ vps' 30
-  cc_click '▾! web-shop › feat/dark'
-  cc_wait '! +2'
   cc_wait '· 12%' 30
   cc_hover 'Workspaces'
   cc_shot machines-agents
