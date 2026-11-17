@@ -843,6 +843,12 @@ fn remember_newbox(session: &Session) {
     assert!(out.status.success(), "{out:?}");
 }
 
+fn wait_until_the_server_lists_newbox(session: &Session) {
+    wait_until("the server rereads config.json and lists newbox", || {
+        session.says(&["machines", "--json"]).contains("\"newbox\"")
+    });
+}
+
 #[test]
 fn going_back_before_connecting_keeps_the_window_where_it_was() {
     let session = Session::new();
@@ -881,7 +887,8 @@ fn a_window_inside_a_pane_of_this_machine_stays_where_it_is() {
 #[test]
 fn a_server_that_refuses_the_window_leaves_it_where_it_was() {
     let session = Session::new();
-    remember_newbox(&session);
+    let out = session.cold(&["remote", "--remember", "newbox"]);
+    assert!(out.status.success(), "{out:?}");
     let mut app = remote_window(&session);
     let proxy = std::process::Command::new(env!("CARGO_BIN_EXE_cornercase"))
         .arg("proxy")
@@ -915,6 +922,7 @@ fn a_machine_a_program_remembered_is_asked_once() {
     let session = Session::new();
     let mut app = remote_window(&session);
     remember_newbox(&session);
+    wait_until_the_server_lists_newbox(&session);
     to_this_computer(&mut app);
     click_on(&mut app, "this computer ▴");
     click_on(&mut app, "  newbox");
