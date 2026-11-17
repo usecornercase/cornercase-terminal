@@ -85,7 +85,7 @@ cornercase bot new nightly --agent claude --model sonnet --effort low
 - **`--follow on|off`**: whether the bot is told when an agent it starts finishes (on by default), see [Agents it starts](#agents-it-starts).
 - **`--about`**: what the bot is for. It goes into `bot.md` and may be empty. When it is not, the bot sets itself up at once; `bot new` still prints only the id, and `cornercase bot setup prs` runs the setup again, after a failure or after `bot edit --about`.
 
-`cornercase bot edit prs --model opus` changes the name, model, effort, account, access or `--follow` from the bot's next message on; an empty value goes back to the agent's own. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot, its folder and its [routines](#routines) (it prints how many, and the number `cornercase queue restore` takes to put them back), and is refused while it answers, or while one of its routines does.
+`cornercase bot edit prs --model opus` changes the name, model, effort, account, access or `--follow` from the bot's next message on; an empty value goes back to the agent's own. `cornercase bot about prs` prints what the bot is for, its `bot.md`. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot, its folder and its [routines](#routines) (it prints how many, and the number `cornercase queue restore` takes to put them back), and is refused while it answers, or while one of its routines does.
 
 ## Talk to a bot
 
@@ -191,7 +191,7 @@ Each bot has a folder in `bots/` next to `session.json` (`bots/<id>/`, private t
 | File | What it holds |
 | --- | --- |
 | `bot.json` | The bot's settings and the id of its conversation. cornercase rewrites it; it does not read it again while it runs. |
-| `bot.md` | What the bot is for. You and the bot both write it: it updates it when you give it a job or change one. |
+| `bot.md` | What the bot is for. You and the bot both write it: it updates it when you give it a job or change one. `cornercase bot about` prints it. |
 | `memory.md` | What it keeps from one conversation to the next. It adds to it, keeps it short and prunes it. |
 | `chat.jsonl` | The chat as cornercase shows it, one JSON line per message, step, answer, error, notice or [agent line](#agents-it-starts). It survives `reset` and a change of model. |
 
@@ -199,4 +199,4 @@ The chat is cornercase's own, not the agent's transcript, so what other features
 
 ## For programs
 
-Everything is a request over the socket, so a window, a script or a plugin can build on it. `cornercase queue add --bot prs --every 'weekday 09:00' --prompt '…'` schedules a bot's routine, `cornercase queue list --bot prs --json` lists its entries, and inside a bot (`CORNERCASE_BOT` set) a `queue add` with no `--project`, `--workspace` or `--worktree` means that bot. See [Scripts and agents](../scripts-and-agents/#bots) for the `bot` request, its events and the `bots` of `status --app`.
+Everything is a request over the socket, so a window, a script or a plugin can build on it. `cornercase queue add --bot prs --every 'weekday 09:00' --prompt '…'` schedules a bot's routine, `cornercase queue list --bot prs --json` lists its entries, and inside a bot (`CORNERCASE_BOT` set) a `queue add` with no `--project`, `--workspace` or `--worktree` means that bot. `cornercase bot about prs --json` gives a program the text of `bot.md`, so its edit form shows what the person is about to change. See [Scripts and agents](../scripts-and-agents/#bots) for the `bot` request, its events and the `bots` of `status --app`.
