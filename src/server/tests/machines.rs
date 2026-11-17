@@ -71,7 +71,7 @@ fn add_machine_opens_the_form_of_settings() {
 
 #[test]
 fn the_button_shows_from_the_servers_own_list() {
-    let mut attached = listing(&["devbox"]);
+    let attached = listing(&["devbox"]);
     attached.serve(Server::step, |client| client.shows(BUTTON));
 }
 
