@@ -35,6 +35,10 @@ pub(in crate::cli) fn event_text(bot: &str, news: (Option<&Line>, Option<&str>, 
     }
 }
 
+pub(super) fn about(text: &str) -> String {
+    if text.is_empty() || text.ends_with('\n') { text.to_string() } else { format!("{text}\n") }
+}
+
 pub(super) fn agents(found: &[AgentInfo]) -> String {
     let mut out = String::new();
     let title = found.iter().map(|agent| agent.title.chars().count()).max().unwrap_or_default() + 2;

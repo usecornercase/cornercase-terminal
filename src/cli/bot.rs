@@ -6,7 +6,7 @@ use super::args::bot::{BotAction, BotNameArgs, EditArgs, HistoryArgs, NewArgs, S
 use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
-use crate::client::{answer, ask, use_bot_about, use_bot_follow, use_bot_setup, use_bots};
+use crate::client::{answer, ask, use_bot_about, use_bot_about_read, use_bot_follow, use_bot_setup, use_bots};
 use crate::control::Command;
 use crate::control::bots::{AgentInfo, BotHistory, BotInfo, BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::error::{Error, Result};
@@ -31,6 +31,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
         BotAction::New(args) => made(&args),
         BotAction::List(print) => list(print.json),
         BotAction::Edit(args) => edited(&args),
+        BotAction::About(args) => about(&args),
         BotAction::Remove(args) => removed(args),
         BotAction::Setup(args) => set_up(&args),
         BotAction::Say(args) => said(&args),
@@ -55,6 +56,17 @@ fn removed(args: BotNameArgs) -> Result<bool> {
             (format!("its {count} queue entries"), "them")
         };
         print_out(&format!("removed {what}; cornercase queue restore {undo} puts {back} back\n"))?;
+    }
+    Ok(true)
+}
+
+fn about(args: &BotNameArgs) -> Result<bool> {
+    use_bot_about_read()?;
+    let value = send(BotRequest::About(target(args.bot.clone())))?;
+    if args.print.json {
+        print_json(&value)?;
+    } else {
+        print_out(&text::about(value["about"].as_str().unwrap_or_default()))?;
     }
     Ok(true)
 }

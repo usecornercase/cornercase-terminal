@@ -131,6 +131,10 @@ pub(crate) fn use_bot_setup() -> Result<()> {
     require("bot-setup", "cannot set a bot up")
 }
 
+pub(crate) fn use_bot_about_read() -> Result<()> {
+    require("bot-about-read", "cannot print what a bot is for")
+}
+
 pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }

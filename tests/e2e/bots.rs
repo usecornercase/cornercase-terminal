@@ -62,6 +62,10 @@ fn a_bot_made_with_what_it_is_for_sets_itself_up_and_bot_setup_runs_it_again() {
     assert!(args.contains("## You were just made") && args.contains("--resume s1"), "{args}");
     assert!(session.says(&["bot", "history", "prs"]).starts_with("— setting up · "));
 
+    assert_eq!(String::from_utf8_lossy(&session.cli(&["bot", "about", "prs"]).stdout), "review my PRs\n");
+    let about: Value = serde_json::from_str(&session.says(&["bot", "about", "prs", "--json"])).expect("json");
+    assert_eq!(about, serde_json::json!({"bot": "prs", "about": "review my PRs"}));
+
     assert!(session.says(&["bot", "setup", "prs"]).parse::<u64>().is_ok());
     session.says(&["bot", "say", "prs", "again", "--wait"]);
     let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");

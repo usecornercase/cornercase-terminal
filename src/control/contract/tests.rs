@@ -52,6 +52,11 @@ mod describing {
     }
 
     #[test]
+    fn reading_what_a_bot_is_for_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-about-read"));
+    }
+
+    #[test]
     fn bot_setup_is_a_feature() {
         assert!(FEATURES.contains(&"bot-setup"));
     }

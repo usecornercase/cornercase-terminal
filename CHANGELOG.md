@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.96
+
+- **Programs can read what a bot is for.** `cornercase bot about prs` prints the bot's `bot.md`, and with `--json` gives `{"bot", "about"}`, so a window of your own (or one reached through `--remote`) can show that text in its edit form before you change it. `cornercase contract` lists `bot-about-read`.
+
 ## 0.13.95
 
 - **A bot's toast and desktop notification show plain text.** They showed the first line of its answer with the Markdown in it (`**`, backticks, `- `); now they show the words, as the chat does.

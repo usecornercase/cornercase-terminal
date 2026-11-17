@@ -156,6 +156,20 @@ fn the_events_of_a_setup_come_in_order() {
 }
 
 #[test]
+fn what_a_bot_is_for_is_read_over_the_socket() {
+    let mut b = bots();
+    b.new_prs();
+    assert_eq!(b.ask("bot", &json!({"action": "about", "bot": "prs"})), json!({"bot": "prs", "about": ""}));
+    b.ask("bot", &json!({"action": "edit", "bot": "prs", "about": "review my PRs\n"}));
+    assert_eq!(
+        b.ask("bot", &json!({"action": "about", "bot": "PRs"})),
+        json!({"bot": "prs", "about": "review my PRs\n"})
+    );
+    assert_eq!(b.refuse(&json!({"action": "about", "bot": "nobody"})).code, "not-found");
+    assert!(b.argvs().is_empty(), "reading and editing what a bot is for starts nothing");
+}
+
+#[test]
 fn a_setup_is_asked_again_over_the_socket() {
     let mut b = bots();
     b.new_prs();

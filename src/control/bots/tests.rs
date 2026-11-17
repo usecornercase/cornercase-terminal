@@ -26,6 +26,7 @@ fn request(args: &str) -> Request {
 #[case::seen(r#"{"action":"seen","entry":{"bot":"prs"}}"#, BotRequest::Seen(BotTarget { bot: "prs".into() }))]
 #[case::stop(r#"{"action":"stop","entry":{"bot":"prs"}}"#, BotRequest::Stop(BotTarget { bot: "prs".into() }))]
 #[case::setup(r#"{"action":"setup","entry":{"bot":"prs"}}"#, BotRequest::Setup(BotTarget { bot: "prs".into() }))]
+#[case::about(r#"{"action":"about","entry":{"bot":"prs"}}"#, BotRequest::About(BotTarget { bot: "prs".into() }))]
 #[case::say(
     r#"{"action":"say","entry":{"bot":"prs","text":"hi","wait":true}}"#,
     BotRequest::Say(BotSay { bot: "prs".into(), text: "hi".into(), wait: true })
@@ -69,6 +70,12 @@ fn the_log_line_says_how_long_a_message_is_and_never_what_it_says() {
         Command::Bot(BotRequest::New(NewBot { name: "PRs".into(), about: "private".into(), ..NewBot::default() }));
     let text = format!("{:?}", new.fields());
     assert!(text.contains("about_bytes") && !text.contains("private"), "{text}");
+}
+
+#[test]
+fn reading_what_a_bot_is_for_logs_the_bot_and_no_text() {
+    let fields = Command::Bot(BotRequest::About(BotTarget { bot: "prs".into() })).fields();
+    assert_eq!(fields, [("action", "about".to_string()), ("bot", "prs".to_string())]);
 }
 
 #[test]

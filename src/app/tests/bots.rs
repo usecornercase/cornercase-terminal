@@ -390,6 +390,21 @@ fn editing_what_a_bot_is_for_writes_bot_md() {
     assert_eq!(about, "Review pull requests.");
 }
 
+#[test]
+fn what_a_bot_is_for_is_read_when_asked_and_never_given_empty_in_place_of_a_text_it_cannot_read() {
+    use crate::control::contract::Code;
+    let c = chat(ANSWER);
+    assert_eq!(c.app.bot_about("PRs"), Ok(("prs".into(), "review my PRs".into())));
+    let path = c.app.panels.bots.live[0].folder.join(folder::ABOUT_FILE);
+    std::fs::write(&path, "written by the bot").expect("write");
+    assert_eq!(c.app.bot_about("prs").expect("read").1, "written by the bot");
+    std::fs::remove_file(&path).expect("remove");
+    assert_eq!(c.app.bot_about("prs").expect("read").1, "");
+    std::fs::create_dir(&path).expect("folder");
+    assert_eq!(c.app.bot_about("prs").expect_err("unreadable").code, Code::Failed);
+    assert_eq!(c.app.bot_about("nobody").expect_err("no bot").code, Code::NotFound);
+}
+
 mod boundary;
 mod compact;
 mod form;

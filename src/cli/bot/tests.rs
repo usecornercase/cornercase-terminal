@@ -1,5 +1,5 @@
 use super::follow_value;
-use super::text::{agents, chat, event_text, list};
+use super::text::{about, agents, chat, event_text, list};
 use crate::agents::headless::Used;
 use crate::bots::chat::Line;
 use crate::control::bots::{AgentInfo, BotInfo, BotLast};
@@ -196,4 +196,11 @@ fn edit_maps_follow_on_and_off() {
     }
     assert!(Cli::try_parse_from(["cornercase", "bot", "edit", "prs", "--follow", "maybe"]).is_err());
     assert!(Cli::try_parse_from(["cornercase", "bot", "new", "prs", "--follow", "off"]).is_ok());
+}
+
+#[test]
+fn what_a_bot_is_for_prints_as_it_is_with_one_final_newline() {
+    assert_eq!(about(""), "");
+    assert_eq!(about("a\nb"), "a\nb\n");
+    assert_eq!(about("a\n"), "a\n");
 }
