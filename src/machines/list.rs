@@ -181,12 +181,17 @@ pub(crate) fn migrate(here: &Here) -> io::Result<()> {
     if !here.legacy.exists() {
         return Ok(());
     }
-    let legacy = legacy_machines(&here.legacy)?;
+    let legacy = legacy_machines(&here.legacy).map_err(|error| stuck(here, &error))?;
     edit_config(&here.config, |list| legacy.into_iter().for_each(|old| merge(list, old)))?;
     match std::fs::remove_file(&here.legacy) {
-        Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
+        Err(error) if error.kind() != io::ErrorKind::NotFound => Err(stuck(here, &error)),
         _ => Ok(()),
     }
+}
+
+fn stuck(here: &Here, error: &io::Error) -> io::Error {
+    let file = here.legacy.display();
+    refused(&format!("cannot move `{file}` into config.json: {error}; it is left as it is, fix or remove it"))
 }
 
 #[cfg(test)]

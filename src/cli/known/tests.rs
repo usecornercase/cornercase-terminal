@@ -267,4 +267,15 @@ mod writing {
 
         assert!(said.contains("command") && !said.contains("config.json"), "{said}");
     }
+
+    #[test]
+    fn a_broken_old_file_is_named_and_the_config_is_not() {
+        let dir = TempDir::new();
+        let here = Here { config: dir.path().join("config.json"), legacy: dir.path().join("machines.json") };
+        std::fs::write(&here.legacy, "[nope").expect("written");
+
+        let said = not_listed(forgotten(&here, "devbox"));
+
+        assert!(said.contains("machines.json") && !said.contains("cannot read or write"), "{said}");
+    }
 }

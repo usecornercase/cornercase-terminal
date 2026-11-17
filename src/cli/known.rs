@@ -93,7 +93,7 @@ fn remembered(here: &Here, destination: String, command: Option<String>) -> Resu
 
 fn forgotten(here: &Here, destination: &str) -> Result<String> {
     let shown = escape_hidden(destination);
-    if list::forget(here, destination).map_err(|error| unwritten(here, &error))? {
+    if list::forget(here, destination).map_err(|error| refusal(here, &error))? {
         return Ok(format!("forgot {shown}\n"));
     }
     Err(Error::Control(format!(
