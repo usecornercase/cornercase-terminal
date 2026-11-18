@@ -188,3 +188,16 @@ fn nothing_shows_a_value_or_a_key_in_debug() {
     let shown = format!("{entry:?} {kept:?} {:?} {:?}", key(), KeyState::Ready(key()));
     assert!(!shown.contains(MARKER) && !shown.contains('7'));
 }
+
+#[cfg(unix)]
+#[test]
+fn a_filesystem_that_refuses_hard_links_still_gets_a_key() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = TempDir::new();
+    let path = dir.path().join("k.key");
+    create_in_place(&path, &[5u8; KEY_LEN]).expect("created in place");
+    assert_eq!(std::fs::read(&path).expect("key"), [5u8; KEY_LEN]);
+    assert_eq!(std::fs::metadata(&path).expect("meta").permissions().mode() & 0o777, 0o600);
+    assert_eq!(create_in_place(&path, &[6u8; KEY_LEN]).expect_err("kept").kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(std::fs::read(&path).expect("key"), [5u8; KEY_LEN]);
+}

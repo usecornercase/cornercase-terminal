@@ -221,9 +221,10 @@ mod the_file {
         k.set("pw", "another-long-value").expect("replace");
         k.app.bot_secret_remove(None, "campus", (Some("pw"), false)).expect("remove");
         let at = k.app.panels.bots.by_id("campus").expect("campus");
-        let line = Line::new(1, 1, chat::Kind::Bot, format!("{VALUE} and another-long-value"));
-        let state = &k.app.panels.bots.live[at];
-        assert_eq!(state.secrets.redacted(&state.retired, line).text, "[secret pw] and [secret pw]");
+        k.app.bot_entry_failed(at, 99, &format!("{VALUE} and another-long-value"), true);
+        let written = chat::read(&k.file("campus").with_file_name(folder::CHAT_FILE));
+        let texts: Vec<&str> = written.iter().map(|line| line.text.as_str()).collect();
+        assert_eq!(texts, ["[secret pw] and [secret pw]"]);
         k.app.panels.bots.live[at].turn = None;
         k.app.bot_settled(at);
         assert_eq!(k.app.panels.bots.live[at].retired, Vec::new());

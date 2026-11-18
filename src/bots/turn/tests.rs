@@ -286,6 +286,15 @@ mod the_git_of_a_turn {
 }
 
 #[test]
+fn run_refuses_a_comma_path_before_it_starts_anything() {
+    let made = TempDir::new();
+    let found = input(&made.path().join("a,b"), None);
+    let watch = Watch { progress: std::sync::Arc::default(), steps: None, running: None };
+    let error = run(&found, watch).expect_err("refused");
+    assert!(error.to_string().contains("holds a comma"), "{error}");
+}
+
+#[test]
 fn a_comma_in_a_path_claude_names_in_its_rules_stops_the_turn() {
     let made = TempDir::new();
     let mut found = input(&made.path().join("a,b"), None);

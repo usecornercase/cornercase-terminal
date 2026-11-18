@@ -219,7 +219,23 @@ fn install(temp: &Path, path: &Path, bytes: &[u8]) -> io::Result<()> {
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
-    std::fs::hard_link(temp, path)
+    match std::fs::hard_link(temp, path) {
+        Err(error) if error.kind() != io::ErrorKind::AlreadyExists => create_in_place(path, bytes),
+        linked => linked,
+    }
+}
+
+fn create_in_place(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)?;
+    #[cfg(windows)]
+    crate::os::fs::make_private(path)?;
+    let written =
+        crate::os::fs::set_file_mode(&file, 0o600).and_then(|()| file.write_all(bytes)).and_then(|()| file.sync_all());
+    if written.is_err() {
+        drop(file);
+        let _ = std::fs::remove_file(path);
+    }
+    written
 }
 
 fn cipher(key: &Key) -> io::Result<LessSafeKey> {
