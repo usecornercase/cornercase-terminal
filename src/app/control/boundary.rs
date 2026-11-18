@@ -226,6 +226,13 @@ impl App {
         if let Command::Queue(queue) = command {
             return self.queue_by_bot(client, queue);
         }
+        if let Command::ViewSet(set) = command
+            && set.bot.is_none()
+            && set.visible == Some(true)
+            && asker.view.is_some_and(|view| self.view_names_a_bot(view))
+        {
+            return Err(no_chat_view());
+        }
         match gated(command) {
             None => Ok(()),
             Some(Gated::Popup) => Err(no_popup()),

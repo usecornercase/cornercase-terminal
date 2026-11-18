@@ -219,6 +219,10 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn view_names_a_bot(&self, view: u64) -> bool {
+        self.clients.views.get(view).is_some_and(|view| view.bot.is_some())
+    }
+
     pub(in crate::app) fn view_shows_bot(&self, bot: &str) -> bool {
         self.clients.views.shows_bot(bot)
     }

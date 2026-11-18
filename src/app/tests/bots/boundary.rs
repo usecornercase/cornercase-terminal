@@ -54,6 +54,30 @@ fn a_bots_turn_cannot_say_a_view_shows_a_chat() {
 }
 
 #[test]
+fn a_bots_turn_cannot_make_visible_a_view_that_names_a_bot_but_can_clear_it() {
+    let mut c = bots_turn();
+    let hidden = crate::control::OpenView { bot: Some("prs".into()), visible: Some(false), ..Default::default() };
+    let opened = c.app.view_request(BOT + 1, &hidden, Some(AREA)).expect("open").expect("a snapshot");
+    let view = opened["view"]["id"].as_u64().expect("a view id");
+    let set = |c: &mut Chat, args: serde_json::Value| {
+        let text = serde_json::json!({"contract": 1, "view": view, "command": "view-set", "args": args}).to_string();
+        c.app.request(BOT, &text, Some(AREA), Instant::now());
+        let answers = c.app.take_answers();
+        let (_, reply) = answers.into_iter().find(|(who, _)| *who == BOT).expect("an answer");
+        let reply: serde_json::Value = serde_json::from_str(&reply).expect("a reply");
+        reply["error"]["message"].as_str().map(str::to_string)
+    };
+
+    let shown = set(&mut c, serde_json::json!({"visible": true}));
+    let cleared = set(&mut c, serde_json::json!({"visible": true, "bot": ""}));
+
+    assert_eq!(shown.as_deref(), Some("a bot cannot show a bot's chat in a view"));
+    assert_eq!(cleared, None);
+    c.release(ANSWER);
+    c.settle();
+}
+
+#[test]
 fn a_bots_turn_cannot_type_into_a_popup_or_start_a_pane_with_a_command() {
     let mut c = bots_turn();
     let own = i32::try_from(std::process::id()).expect("a pid");
