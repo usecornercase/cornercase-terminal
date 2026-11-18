@@ -151,6 +151,30 @@ fn name_field<'a>(fields: &'a mut Fields, name: &str) -> &'a mut Fields {
 }
 
 impl BotRequest {
+    fn secret_fields<'a>(&self, fields: &'a mut Fields) -> &'a mut Fields {
+        match self {
+            Self::SecretSet(set) => {
+                fields.add("action", "secret-set").add("bot", &set.bot);
+                if set.name == set.value.0 {
+                    fields.add("name_bytes", set.name.len());
+                } else {
+                    name_field(fields, &set.name);
+                }
+                fields.add("bytes", set.value.0.len())
+            }
+            Self::SecretList(target) => fields.add("action", "secret-list").add("bot", &target.bot),
+            Self::SecretRemove(remove) => {
+                fields.add("action", "secret-remove").add("bot", &remove.bot);
+                if let Some(name) = &remove.name {
+                    name_field(fields, name);
+                }
+                fields.add("all", remove.all)
+            }
+            Self::SecretGet(get) => name_field(fields.add("action", "secret-get"), &get.name),
+            _ => fields,
+        }
+    }
+
     pub(super) fn fields(&self, fields: &mut Fields) {
         match self {
             Self::Agents => fields.add("action", "agents"),
@@ -178,19 +202,9 @@ impl BotRequest {
                 fields.add("action", "history").add("bot", &history.bot).maybe("last", history.last);
                 fields.maybe("after", history.after)
             }
-            Self::SecretSet(set) => {
-                fields.add("action", "secret-set").add("bot", &set.bot);
-                name_field(fields, &set.name).add("bytes", set.value.0.len())
+            Self::SecretSet(_) | Self::SecretList(_) | Self::SecretRemove(_) | Self::SecretGet(_) => {
+                self.secret_fields(fields)
             }
-            Self::SecretList(target) => fields.add("action", "secret-list").add("bot", &target.bot),
-            Self::SecretRemove(remove) => {
-                fields.add("action", "secret-remove").add("bot", &remove.bot);
-                if let Some(name) = &remove.name {
-                    name_field(fields, name);
-                }
-                fields.add("all", remove.all)
-            }
-            Self::SecretGet(get) => name_field(fields.add("action", "secret-get"), &get.name),
         };
     }
 }

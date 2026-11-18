@@ -95,6 +95,7 @@ impl App {
             ms = took.as_millis(),
             ended = how
         );
+        self.bot_settled(at);
     }
 
     fn run_stopped(&mut self, at: usize, run: &Run) -> &'static str {

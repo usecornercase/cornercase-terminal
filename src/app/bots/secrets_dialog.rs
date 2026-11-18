@@ -44,7 +44,14 @@ pub(in crate::app) struct SecretEntry {
 pub(in crate::app) struct SecretRemoval {
     bot: u64,
     name: Option<String>,
+    seen: Fingerprint,
     back: Box<Overlay>,
+}
+
+type Fingerprint = (bool, Vec<(String, i64)>);
+
+fn fingerprint(kept: &Kept) -> Fingerprint {
+    (kept.is_unreadable(), kept.entries().iter().map(|entry| (entry.name.clone(), entry.saved)).collect())
 }
 
 impl Secrets {
@@ -218,7 +225,8 @@ impl App {
 
     fn ask_secret_removal(&mut self, key: u64, name: Option<String>) {
         let Some(list) = self.overlay.take() else { return };
-        let removal = SecretRemoval { bot: key, name, back: Box::new(list) };
+        let seen = self.panels.bots.by_key(key).map(|at| fingerprint(&self.panels.bots.live[at].secrets));
+        let removal = SecretRemoval { bot: key, name, seen: seen.unwrap_or_default(), back: Box::new(list) };
         self.overlay = Some(Overlay::BotSecrets(Box::new(Secrets::Removal(removal))));
     }
 
@@ -302,13 +310,38 @@ impl App {
     }
 
     fn submit_secret_removal(&mut self, removal: SecretRemoval) -> Box<Overlay> {
-        let id = self.panels.bots.by_key(removal.bot).map(|at| self.panels.bots.live[at].bot.id.clone());
-        let done = id.map(|id| self.bot_secret_remove(None, &id, (removal.name.as_deref(), removal.name.is_none())));
+        let at = self.panels.bots.by_key(removal.bot);
+        let stale = removal.name.is_none()
+            && at.is_some_and(|at| fingerprint(&self.panels.bots.live[at].secrets) != removal.seen);
+        let id = at.map(|at| self.panels.bots.live[at].bot.id.clone());
+        let done = id.map(|id| {
+            if stale {
+                return Err(crate::control::contract::Refusal::new(
+                    crate::control::contract::Code::Conflict,
+                    "the secrets changed since you asked: look at the list and ask again",
+                ));
+            }
+            self.bot_secret_remove(None, &id, (removal.name.as_deref(), removal.name.is_none()))
+        });
         if let Some(Err(refusal)) = done {
             let toast = crate::app::toast::Toast::new(refusal.message, ui::ToastIcon::Bug);
             self.messages.toast = Some(toast);
         }
         removal.back
+    }
+}
+
+impl Overlay {
+    pub(in crate::app) fn refuses_paste(&mut self, text: &str) -> bool {
+        let Self::BotSecrets(secrets) = self else { return false };
+        let Secrets::Entry(entry) = &mut **secrets else { return false };
+        if !matches!(entry.asking, Asking::Value(_)) || !pasted(text).chars().any(char::is_control) {
+            return false;
+        }
+        entry.error = Some(String::from(
+            "this field takes one line of text with no tab: pipe the value in with cornercase bot secret set",
+        ));
+        true
     }
 }
 

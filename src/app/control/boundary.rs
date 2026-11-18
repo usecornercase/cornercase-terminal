@@ -49,6 +49,10 @@ impl BotClients {
         self.clients.get(&client).map(String::as_str)
     }
 
+    pub(in crate::app) fn revoke_owners(&mut self, bot: &str) {
+        self.owners.retain(|_, owner| owner != bot);
+    }
+
     pub(in crate::app) fn owner_of(&self, client: u64) -> Option<&str> {
         self.owners.get(&client).map(String::as_str)
     }

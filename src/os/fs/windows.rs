@@ -125,6 +125,10 @@ fn written(meta: &Metadata) -> Duration {
 }
 
 #[expect(clippy::unnecessary_wraps, reason = "setting a mode can fail on Unix, so every caller handles an error")]
+pub(crate) fn sync_dir(_dir: &Path) -> io::Result<()> {
+    Ok(())
+}
+
 pub(crate) fn set_mode(_path: impl AsRef<Path>, _mode: u32) -> io::Result<()> {
     Ok(())
 }

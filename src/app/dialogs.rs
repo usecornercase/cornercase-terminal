@@ -211,6 +211,9 @@ impl App {
     }
 
     pub(super) fn name_paste(&mut self, text: &str, area: Rect) {
+        if self.overlay.as_mut().is_some_and(|overlay| overlay.refuses_paste(text)) {
+            return;
+        }
         let hidden = self.overlay.as_ref().is_some_and(Overlay::hides_text);
         let Some((_, input)) = self.name_text(area) else { return };
         input.insert(if hidden { super::bots::pasted(text) } else { text });

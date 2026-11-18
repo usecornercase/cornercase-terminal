@@ -340,8 +340,22 @@ fn bind(path: &Path) -> Result<(UnixListener, File)> {
         |cause| Error::Listen { path: path.to_path_buf(), cause, custom: Folder::current() == Folder::Given };
     protocol::check_socket_dir(path, Folder::current())?;
     let lock = lock(path)?;
+    if holds_a_file(path) {
+        let cause = io::Error::other("a file that is not a socket is there; it is not removed");
+        return Err(listen_error(cause));
+    }
     let _ = std::fs::remove_file(path);
     Ok((UnixListener::bind(path).map_err(listen_error)?, lock))
+}
+
+#[cfg(unix)]
+fn holds_a_file(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file())
+}
+
+#[cfg(windows)]
+fn holds_a_file(_path: &Path) -> bool {
+    false
 }
 
 fn lock(path: &Path) -> Result<File> {

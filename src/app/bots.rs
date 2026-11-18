@@ -105,6 +105,7 @@ pub(super) struct Live {
     pub(super) following: Vec<Followed>,
     pub(super) reports: Vec<Report>,
     pub(super) secrets: Kept,
+    pub(super) retired: Vec<crate::bots::secrets::Entry>,
 }
 
 pub(super) struct Bots {
@@ -203,6 +204,7 @@ impl Live {
             following: Vec::new(),
             reports: Vec::new(),
             secrets: Kept::default(),
+            retired: Vec::new(),
         }
     }
 }

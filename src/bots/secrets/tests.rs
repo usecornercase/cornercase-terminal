@@ -92,6 +92,18 @@ mod on_disk {
     }
 
     #[test]
+    fn a_key_is_made_only_where_there_is_none() {
+        let dir = TempDir::new();
+        let path = dir.path().join("k.key");
+        std::fs::write(&path, b"somebody else's").expect("write");
+        let error = make_key(&path).expect_err("refused");
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&path).expect("kept"), b"somebody else's");
+        let leftovers = std::fs::read_dir(dir.path()).expect("list").count();
+        assert_eq!(leftovers, 1, "no temporary file stays");
+    }
+
+    #[test]
     fn the_key_is_missing_ready_or_broken() {
         let dir = TempDir::new();
         let path = dir.path().join("k.key");
@@ -142,6 +154,15 @@ mod redacting {
     }
 
     #[test]
+    fn never_scans_what_it_wrote_so_names_that_hold_values_do_not_multiply() {
+        let entries = [entry("bbbbbb", "aaaaaa"), entry("aaaaaa", "bbbbbb")];
+        assert_eq!(redact("aaaaaa bbbbbb", &entries), "[secret bbbbbb] [secret aaaaaa]");
+        let many: Vec<Entry> = (0..13).map(|n| entry(&"x".repeat(30), &format!("value{n:02}"))).collect();
+        let text = many.iter().map(|e| e.value.0.clone()).collect::<Vec<_>>().join(" ");
+        assert!(redact(&text, &many).len() < 1000);
+    }
+
+    #[test]
     fn leaves_short_values_alone() {
         assert_eq!(redact("abc abcde", &[entry("pin", "abc"), entry("five", "abcde")]), "abc abcde");
     }
@@ -151,12 +172,12 @@ mod redacting {
         let kept = Kept::Open(vec![entry("pw", MARKER)]);
         let text = format!("uses {MARKER}");
         for kind in [Kind::Step, Kind::Bot, Kind::Error, Kind::Started, Kind::Finished, Kind::Waiting] {
-            assert_eq!(kept.redacted(Line::new(1, 1, kind, text.clone())).text, "uses [secret pw]");
+            assert_eq!(kept.redacted(&[], Line::new(1, 1, kind, text.clone())).text, "uses [secret pw]");
         }
-        assert_eq!(kept.redacted(Line::new(1, 1, Kind::You, text.clone())).text, text);
+        assert_eq!(kept.redacted(&[], Line::new(1, 1, Kind::You, text.clone())).text, text);
         let mut with_body = Line::new(1, 1, Kind::Finished, "done");
         with_body.body = Some(format!("{MARKER}!"));
-        assert_eq!(kept.redacted(with_body).body.as_deref(), Some("[secret pw]!"));
+        assert_eq!(kept.redacted(&[], with_body).body.as_deref(), Some("[secret pw]!"));
     }
 }
 

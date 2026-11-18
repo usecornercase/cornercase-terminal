@@ -199,3 +199,30 @@ fn the_card_says_how_many_secrets_and_when_they_cannot_be_read() {
     c.app.panels.bots.live[0].secrets = Kept::Unreadable;
     assert_eq!(row(&c).map(|row| (row.value, row.red)), Some((String::from("cannot be read"), true)));
 }
+
+#[test]
+fn a_remove_all_that_was_asked_before_a_secret_was_saved_is_refused() {
+    let mut c = chat(ANSWER);
+    std::fs::write(c.dir.path().join("prs").join(folder::SECRETS_FILE), b"garbage").expect("write");
+    c.app.set_bots_dir(c.dir.path());
+    open_from_menu(&mut c);
+    press_button(&mut c, 0, Button::RemoveAll);
+    c.app.bot_secret_remove(None, "prs", (None, true)).expect("another client starts again");
+    c.app.bot_secret_set(None, "prs", ("new", "saved-meanwhile")).expect("and saves one");
+    enter(&mut c);
+    assert_eq!(c.app.panels.bots.live[0].secrets.count(), 1, "the new secret is kept");
+    assert!(c.app.messages.toast.as_ref().is_some_and(|toast| toast.message.contains("changed since you asked")));
+}
+
+#[test]
+fn a_paste_with_a_tab_is_refused_not_changed() {
+    let mut c = chat(ANSWER);
+    open_from_menu(&mut c);
+    new_secret(&mut c);
+    type_in(&mut c, "pw");
+    enter(&mut c);
+    c.app.handle_event(AppEvent::Input(Event::Paste(String::from("pass\tword-long"))), AREA).expect("paste");
+    assert!(matches!(form_view(&c).note, Some(ui::Note::Error(_))));
+    enter(&mut c);
+    assert!(c.app.panels.bots.live[0].secrets.find("pw").is_none());
+}

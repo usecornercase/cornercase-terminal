@@ -23,10 +23,25 @@ fn keeper() -> Kept2 {
     }
     let (mut app, rx) = empty_app();
     app.set_bots_dir(&bots);
+    let at = app.panels.bots.by_id("campus").expect("campus");
+    app.panels.bots.live[at].turn = Some(turn());
     app.clients.bots.owned(OWNER, "campus");
     app.clients.bots.marked(OWNER, "campus");
     app.clients.bots.marked(BOUND, "campus");
     Kept2 { app, _rx: rx, dir }
+}
+
+fn turn() -> crate::app::bots::Turn {
+    crate::app::bots::Turn {
+        id: 1,
+        thread: crate::app::bots::Thread::Chat,
+        asked: Vec::new(),
+        running: agents::probe::Running::default(),
+        stopping: false,
+        dropped: Vec::new(),
+        started: Instant::now(),
+        steps: 0,
+    }
 }
 
 fn refusal(result: std::result::Result<Value, Refusal>) -> (Code, String) {
@@ -84,6 +99,24 @@ mod who_reads {
             assert!(code == Code::NotFound && !message.contains(wrong), "{message}");
         }
         assert!(refusal(k.app.bot_secret_get(Some(OWNER), "other")).1.contains("no secret other in campus"));
+    }
+
+    #[test]
+    fn a_grant_ends_with_the_turn_that_made_it() {
+        let mut k = keeper();
+        k.set("pw", VALUE).expect("set");
+        assert!(k.app.bot_secret_get(Some(OWNER), "pw").is_ok());
+        let at = k.app.panels.bots.by_id("campus").expect("campus");
+        k.app.panels.bots.live[at].turn = None;
+        assert_eq!(refusal(k.app.bot_secret_get(Some(OWNER), "pw")).1, secrets::ONLY_ITSELF);
+        k.app.panels.bots.live[at].turn = Some(turn());
+        k.app.bot_settled(at);
+        assert!(k.app.clients.bots.owner_of(OWNER).is_some(), "a turn still runs");
+        k.app.panels.bots.live[at].turn = None;
+        k.app.bot_settled(at);
+        assert!(k.app.clients.bots.owner_of(OWNER).is_none());
+        k.app.panels.bots.live[at].turn = Some(turn());
+        assert_eq!(refusal(k.app.bot_secret_get(Some(OWNER), "pw")).1, secrets::ONLY_ITSELF);
     }
 
     #[test]
@@ -159,6 +192,42 @@ mod the_limits {
 
 mod the_file {
     use super::*;
+
+    #[test]
+    fn a_file_that_stops_opening_after_the_start_is_not_saved_over_or_erased() {
+        let mut k = keeper();
+        k.set("pw", VALUE).expect("set");
+        std::fs::write(k.file("campus"), b"damaged").expect("write");
+        assert!(refusal(k.set("other", VALUE)).1.contains("changed on disk"));
+        assert!(refusal(k.app.bot_secret_remove(None, "campus", (Some("pw"), false))).1.contains("changed on disk"));
+        assert_eq!(std::fs::read(k.file("campus")).expect("kept"), b"damaged");
+        assert!(k.app.bot_secret_remove(None, "campus", (None, true)).is_ok());
+    }
+
+    #[test]
+    fn a_key_that_appears_while_running_is_never_replaced() {
+        let mut k = keeper();
+        let path = k.app.panels.bots.key_path.clone().expect("a key path");
+        std::fs::write(&path, [9u8; 32]).expect("write");
+        assert!(refusal(k.set("pw", VALUE)).1.contains("restart cornercase"));
+        assert_eq!(std::fs::read(&path).expect("kept"), [9u8; 32]);
+        assert!(!k.file("campus").exists());
+    }
+
+    #[test]
+    fn a_value_a_turn_already_has_stays_redacted_after_it_is_replaced_or_removed() {
+        let mut k = keeper();
+        k.set("pw", VALUE).expect("set");
+        k.set("pw", "another-long-value").expect("replace");
+        k.app.bot_secret_remove(None, "campus", (Some("pw"), false)).expect("remove");
+        let at = k.app.panels.bots.by_id("campus").expect("campus");
+        let line = Line::new(1, 1, chat::Kind::Bot, format!("{VALUE} and another-long-value"));
+        let state = &k.app.panels.bots.live[at];
+        assert_eq!(state.secrets.redacted(&state.retired, line).text, "[secret pw] and [secret pw]");
+        k.app.panels.bots.live[at].turn = None;
+        k.app.bot_settled(at);
+        assert_eq!(k.app.panels.bots.live[at].retired, Vec::new());
+    }
 
     #[test]
     fn it_survives_a_restart_and_never_holds_the_value() {

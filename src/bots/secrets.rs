@@ -1,6 +1,7 @@
-use std::fmt;
-use std::io::{self, Read as _};
+use std::fmt::{self, Write as _};
+use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use ring::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
 use serde::{Deserialize, Serialize};
@@ -119,20 +120,17 @@ impl Kept {
         self.entries().iter().filter(|entry| entry.name != name).cloned().collect()
     }
 
-    pub(crate) fn redact(&self, text: &str) -> String {
-        redact(text, self.entries())
-    }
-
-    pub(crate) fn redacted(&self, mut line: Line) -> Line {
-        if self.entries().iter().all(|entry| entry.value.0.len() < REDACT_MIN) {
+    pub(crate) fn redacted(&self, retired: &[Entry], mut line: Line) -> Line {
+        let all: Vec<Entry> = self.entries().iter().chain(retired).cloned().collect();
+        if all.iter().all(|entry| entry.value.0.len() < REDACT_MIN) {
             return line;
         }
         let kinds = [Kind::Step, Kind::Bot, Kind::Error, Kind::Started, Kind::Finished, Kind::Waiting];
         if !kinds.contains(&line.kind) {
             return line;
         }
-        line.text = self.redact(&line.text);
-        line.body = line.body.map(|body| self.redact(&body));
+        line.text = redact(&line.text, &all);
+        line.body = line.body.map(|body| redact(&body, &all));
         line
     }
 }
@@ -140,11 +138,25 @@ impl Kept {
 pub(crate) fn redact(text: &str, entries: &[Entry]) -> String {
     let mut values: Vec<&Entry> = entries.iter().filter(|entry| entry.value.0.len() >= REDACT_MIN).collect();
     values.sort_by_key(|entry| std::cmp::Reverse(entry.value.0.len()));
-    let mut text = text.to_string();
+    let mut taken: Vec<(usize, usize, &str)> = Vec::new();
     for entry in values {
-        text = text.replace(&entry.value.0, &format!("[secret {}]", entry.name));
+        for (start, found) in text.match_indices(entry.value.0.as_str()) {
+            let end = start + found.len();
+            if !taken.iter().any(|(from, to, _)| start < *to && *from < end) {
+                taken.push((start, end, entry.name.as_str()));
+            }
+        }
     }
-    text
+    taken.sort_unstable_by_key(|(start, ..)| *start);
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    for (start, end, name) in taken {
+        out.push_str(&text[at..start]);
+        let _ = write!(out, "[secret {name}]");
+        at = end;
+    }
+    out.push_str(&text[at..]);
+    out
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -186,10 +198,28 @@ pub(crate) fn read_key(path: &Path) -> KeyState {
 }
 
 pub(crate) fn make_key(path: &Path) -> io::Result<Key> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     let mut bytes = [0u8; KEY_LEN];
     crate::os::random::fill(&mut bytes)?;
-    persist::write_bytes(path, &bytes, Write::Private)?;
+    let dir = path.parent().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
+    std::fs::create_dir_all(dir)?;
+    let temp = persist::temporary(path, std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed))?;
+    let made = install(&temp, path, &bytes);
+    let _ = std::fs::remove_file(&temp);
+    made?;
+    crate::os::fs::sync_dir(dir)?;
     Ok(Key(bytes))
+}
+
+fn install(temp: &Path, path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(temp)?;
+    #[cfg(windows)]
+    crate::os::fs::make_private(temp)?;
+    crate::os::fs::set_file_mode(&file, 0o600)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::hard_link(temp, path)
 }
 
 fn cipher(key: &Key) -> io::Result<LessSafeKey> {

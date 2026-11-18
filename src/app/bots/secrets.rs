@@ -49,23 +49,59 @@ impl App {
     }
 
     fn secrets_key(&mut self) -> Done<Key> {
+        let path = self.panels.bots.key_path.clone().ok_or_else(|| failed("this server keeps no bots"))?;
+        if self.panels.bots.key == KeyState::Missing {
+            match keeping::make_key(&path) {
+                Ok(key) => self.panels.bots.key = KeyState::Ready(key),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    self.panels.bots.key = keeping::read_key(&path);
+                    return Err(failed(format!(
+                        "a key appeared at {} since cornercase started; restart cornercase so the bots' secrets are read with it",
+                        path.display()
+                    )));
+                }
+                Err(error) => return Err(failed(format!("cannot make the key: {error}"))),
+            }
+        }
         match &self.panels.bots.key {
             KeyState::Ready(key) => Ok(key.clone()),
-            KeyState::Broken => {
-                let path = self.panels.bots.key_path.clone().unwrap_or_default();
-                Err(failed(format!("the key of the bots' secrets cannot be read: {}", path.display())))
-            }
-            KeyState::Missing => {
-                let path = self.panels.bots.key_path.clone().ok_or_else(|| failed("this server keeps no bots"))?;
-                let key = keeping::make_key(&path).map_err(|error| failed(format!("cannot make the key: {error}")))?;
-                self.panels.bots.key = KeyState::Ready(key.clone());
-                Ok(key)
-            }
+            _ => Err(failed(format!("the key of the bots' secrets cannot be read: {}", path.display()))),
         }
     }
 
+    fn secrets_unchanged(&self, at: usize) -> Done<()> {
+        let live = &self.panels.bots.live[at];
+        if keeping::load(&live.folder, &live.bot.id, &self.panels.bots.key) == live.secrets {
+            return Ok(());
+        }
+        let id = &live.bot.id;
+        Err(failed(format!(
+            "the secrets of {id} changed on disk since cornercase read them: restart cornercase to read them, or cornercase bot secret remove {id} --all starts again"
+        )))
+    }
+
+    fn secrets_retire(&mut self, at: usize, kept: &[keeping::Entry]) {
+        let live = &mut self.panels.bots.live[at];
+        if live.answering() {
+            let gone = live.secrets.entries().iter().filter(|old| !kept.contains(old)).cloned();
+            live.retired.extend(gone);
+        }
+    }
+
+    pub(in crate::app) fn bot_settled(&mut self, at: usize) {
+        let live = &mut self.panels.bots.live[at];
+        if live.answering() {
+            return;
+        }
+        live.retired.clear();
+        let id = live.bot.id.clone();
+        self.clients.bots.revoke_owners(&id);
+    }
+
     fn secrets_keep(&mut self, at: usize, entries: Vec<keeping::Entry>) -> Done<()> {
+        self.secrets_unchanged(at)?;
         let key = self.secrets_key()?;
+        self.secrets_retire(at, &entries);
         let live = &mut self.panels.bots.live[at];
         keeping::save(&live.folder, &live.bot.id, &key, &entries)
             .map_err(|error| failed(format!("cannot save the secrets of {}: {error}", live.bot.id)))?;
@@ -98,7 +134,8 @@ impl App {
         let saved = crate::time::now();
         let entries = live.secrets.with(name, value, saved);
         self.secrets_keep(at, entries)?;
-        log::info!("bots", "secret set", bot = id, name = name, bytes = value.len(), replaced = replaced);
+        let name_logged = if name == value { "a value" } else { name };
+        log::info!("bots", "secret set", bot = id, name = name_logged, bytes = value.len(), replaced = replaced);
         Ok(json!({ "bot": id, "name": name, "saved": saved }))
     }
 
@@ -141,6 +178,7 @@ impl App {
     }
 
     fn secrets_remove_all(&mut self, at: usize) -> Done<Value> {
+        self.secrets_retire(at, &[]);
         let live = &mut self.panels.bots.live[at];
         keeping::erase(&live.folder).map_err(|error| failed(format!("cannot remove the secrets: {error}")))?;
         let (id, removed) = (live.bot.id.clone(), live.secrets.count());
@@ -156,6 +194,9 @@ impl App {
         };
         let at = self.panels.bots.by_id(&id).ok_or_else(|| Refusal::new(Code::NotFound, format!("no bot {id}")))?;
         let live = &self.panels.bots.live[at];
+        if !live.answering() {
+            return Err(failed(keeping::ONLY_ITSELF));
+        }
         if live.secrets.is_unreadable() {
             return Err(failed(keeping::unreadable(&id)));
         }

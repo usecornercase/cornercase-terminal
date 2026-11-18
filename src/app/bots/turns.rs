@@ -29,7 +29,7 @@ impl App {
 
     pub(super) fn bot_append(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> Line {
         let state = &mut self.panels.bots.live[at];
-        let line = state.secrets.redacted(make(state.next_line, crate::time::now()));
+        let line = state.secrets.redacted(&state.retired, make(state.next_line, crate::time::now()));
         state.next_line += 1;
         let _ = chat::append(&state.folder.join(folder::CHAT_FILE), &line);
         if matches!(line.kind, Kind::You | Kind::Bot) {
@@ -262,6 +262,7 @@ impl App {
             ms = took.as_millis(),
             ended = how
         );
+        self.bot_settled(at);
         self.bot_next(at);
     }
 

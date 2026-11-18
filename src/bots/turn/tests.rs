@@ -284,3 +284,18 @@ mod the_git_of_a_turn {
         assert_eq!(repositories(&projects, Some(&link)), [PathBuf::from("/w/shop")]);
     }
 }
+
+#[test]
+fn a_comma_in_a_path_claude_names_in_its_rules_stops_the_turn() {
+    let made = TempDir::new();
+    let mut found = input(&made.path().join("a,b"), None);
+    assert!(comma_in_rules(&found).is_some());
+    found.folder = made.path().join("prs");
+    found.key = Some(made.path().join("k,ey"));
+    assert!(comma_in_rules(&found).is_some());
+    found.bot.agent = String::from("gemini");
+    assert!(comma_in_rules(&found).is_none());
+    found.bot.agent = String::from("claude");
+    found.key = None;
+    assert!(comma_in_rules(&found).is_none());
+}
