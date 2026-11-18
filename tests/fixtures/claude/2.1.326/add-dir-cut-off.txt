@@ -1,0 +1,11 @@
+ execute files here. Its skills, commands,
+ and agents load and can run commands, and
+ so can the git settings of its repository.
+ Your answer holds for this session.
+ Security guide
+ ❯ No, exit
+   Yes, add it
+ Enter to confirm · Esc to cancel
+ Adding:
+/home/user/.local/state/cornercase/runs/2026-
+11-17-fix-the-login-form

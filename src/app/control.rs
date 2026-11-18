@@ -52,6 +52,7 @@ use crate::agents;
 use crate::agents::launch::Launch;
 use crate::app::App;
 use crate::app::flow_runs::Starting;
+use crate::app::launches::Launched;
 use crate::app::messenger::CLIENTS as MESSENGER_CLIENTS;
 use crate::app::{changes_panel, events, files_panel, pasted_files, surfaces, views};
 use crate::control::contract::{Code, Refusal};
@@ -142,7 +143,7 @@ pub(super) struct Requests {
     callers: HashMap<u64, u64>,
     structured: HashSet<u64>,
     answers: Vec<(u64, String)>,
-    launched: Vec<(u64, bool)>,
+    launched: Vec<(u64, Launched)>,
     todo_sends: HashMap<u64, Sending>,
     queued: HashMap<u64, u64>,
     restarting: HashMap<u64, account_restart::Batch>,
@@ -156,8 +157,8 @@ struct Sending {
 }
 
 impl Requests {
-    pub(super) fn launched(&mut self, key: u64, started: bool) {
-        self.launched.push((key, started));
+    pub(super) fn launched(&mut self, key: u64, outcome: Launched) {
+        self.launched.push((key, outcome));
     }
 
     pub(in crate::app) fn key(&mut self) -> u64 {
@@ -191,7 +192,7 @@ struct Pending {
 }
 
 enum Stage {
-    Worktree(Then),
+    Worktree(Box<Then>),
     Run(u64, Box<Starting>),
     Removing { force: bool, unlock: bool },
     RemovingFolders(Box<worktrees::remove::Removing>),
@@ -270,15 +271,22 @@ impl Stage {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) struct Starter {
+    pub(in crate::app) bot: u64,
+    pub(in crate::app) run: Option<u64>,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub(in crate::app) struct Asker {
     pub(in crate::app) caller: Option<u64>,
     pub(in crate::app) view: Option<u64>,
+    pub(in crate::app) bot: Option<Starter>,
 }
 
 impl From<Option<u64>> for Asker {
     fn from(caller: Option<u64>) -> Self {
-        Self { caller, view: None }
+        Self { caller, view: None, bot: None }
     }
 }
 

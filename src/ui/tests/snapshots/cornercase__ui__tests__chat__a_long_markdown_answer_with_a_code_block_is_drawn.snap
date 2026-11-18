@@ -2,7 +2,7 @@
 source: src/ui/tests/chat.rs
 expression: "drawn(chat(&[you(\"how do I check?\", \"09:12\"), bot(answer)])).backend()"
 ---
-"  prs  claude · opus · high · home                        new conversation   ⋯  "
+"  prs  claude · opus · high · home             routines   new conversation   ⋯  "
 " ────────────────────────────────────────────────────────────────────────────── "
 "                                                                                "
 "                                                                                "

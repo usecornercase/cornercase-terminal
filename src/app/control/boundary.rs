@@ -29,6 +29,8 @@ enum Gated {
     Settings,
     ServerStop,
     Clone,
+    ShowsChat,
+    Reveals,
 }
 
 #[derive(Default)]
@@ -42,12 +44,17 @@ impl BotClients {
         self.clients.contains_key(&client)
     }
 
-    fn bot_of(&self, client: u64) -> Option<&str> {
+    pub(in crate::app) fn bot_of(&self, client: u64) -> Option<&str> {
         self.clients.get(&client).map(String::as_str)
     }
 
     fn insert(&mut self, client: u64, bot: String) {
         self.clients.insert(client, bot);
+    }
+
+    #[cfg(all(test, unix))]
+    pub(in crate::app) fn marked(&mut self, client: u64, bot: &str) {
+        self.insert(client, bot.to_string());
     }
 
     pub(in crate::app) fn forget(&mut self, client: u64, pending: impl Iterator<Item = u64>) {
@@ -102,6 +109,10 @@ fn lifts(command: &Command) -> Option<Gated> {
         Command::Bot(BotRequest::Edit(edit)) if edit.access.is_some() => Some(Gated::Access),
         Command::Bot(BotRequest::Edit(edit)) => Some(Gated::Says(edit.bot.clone())),
         Command::Bot(BotRequest::Say(say)) => Some(Gated::Says(say.bot.clone())),
+        Command::Bot(BotRequest::Setup(target)) => Some(Gated::Says(target.bot.clone())),
+        Command::View(open) if !blank(open.bot.as_ref()) => Some(Gated::ShowsChat),
+        Command::ViewSet(set) if !blank(set.bot.as_ref()) => Some(Gated::ShowsChat),
+        Command::ViewSet(set) if set.bot.is_none() && set.visible == Some(true) => Some(Gated::Reveals),
         Command::Config(Configure::Get | Configure::Search(_)) => None,
         Command::Config(_) => Some(Gated::Settings),
         Command::ConfigImport(import) if import.apply => Some(Gated::Settings),
@@ -114,6 +125,19 @@ fn stop_name(message: &ClientMessage) -> Option<&'static str> {
         ClientMessage::KillServer => Some("kill-server"),
         ClientMessage::Restart => Some("restart"),
         _ => None,
+    }
+}
+
+fn window_name(message: &ClientMessage) -> Option<&'static str> {
+    match message {
+        ClientMessage::Request(_) | ClientMessage::KillServer | ClientMessage::Restart => None,
+        ClientMessage::Hello(_) => Some("hello"),
+        ClientMessage::Event(_) => Some("input"),
+        ClientMessage::Graphics(_) => Some("graphics"),
+        ClientMessage::Activated(_) => Some("notification click"),
+        ClientMessage::OpenFailed(_) => Some("open failed"),
+        ClientMessage::Machines(_) => Some("machines"),
+        ClientMessage::Tunnels(_) => Some("tunnels"),
     }
 }
 
@@ -142,6 +166,10 @@ fn no_settings() -> Refusal {
 
 fn no_stop() -> Refusal {
     Refusal::new(Code::Failed, crate::bots::STOP_REFUSED)
+}
+
+fn no_chat_view() -> Refusal {
+    Refusal::new(Code::Failed, "a bot cannot show a bot's chat in a view")
 }
 
 fn no_clone() -> Refusal {
@@ -208,16 +236,27 @@ impl App {
             Some(Gated::Settings) => Err(no_settings()),
             Some(Gated::ServerStop) => Err(no_stop()),
             Some(Gated::Clone) => Err(no_clone()),
+            Some(Gated::ShowsChat) => Err(no_chat_view()),
+            Some(Gated::Reveals) => self.reveals_chat(asker),
             Some(Gated::Says(bot)) => self.says_to(&bot),
             Some(Gated::Pane { pane, tab }) => self.types_into(self.target(asker, pane, tab)?),
         }
     }
 
     pub(crate) fn refused_stop(&self, client: u64, message: &ClientMessage) -> Option<&'static str> {
-        let asked = stop_name(message).filter(|name| crate::bots::stops_server(name))?;
+        let asked = stop_name(message).filter(|name| crate::bots::stops_server(name));
+        self.refused_message(client, asked, crate::bots::STOP_REFUSED)
+    }
+
+    pub(crate) fn refused_window(&self, client: u64, message: &ClientMessage) -> Option<&'static str> {
+        self.refused_message(client, window_name(message), crate::bots::WINDOW_REFUSED)
+    }
+
+    fn refused_message(&self, client: u64, asked: Option<&str>, why: &'static str) -> Option<&'static str> {
+        let asked = asked?;
         let bot = self.clients.bots.bot_of(client)?;
-        log::warning!("control", "a bot's stop refused", client = client, bot = bot, asked = asked);
-        Some(crate::bots::STOP_REFUSED)
+        log::warning!("control", "a bot's message refused", client = client, bot = bot, asked = asked);
+        Some(why)
     }
 
     fn queue_by_bot(&self, client: u64, queue: &control::Queue) -> Result<(), Refusal> {
@@ -238,6 +277,13 @@ impl App {
             }
         };
         if allowed { Ok(()) } else { Err(Refusal::new(Code::Failed, NOT_OWN)) }
+    }
+
+    fn reveals_chat(&self, asker: Asker) -> Result<(), Refusal> {
+        match asker.view {
+            Some(view) if self.view_names_a_bot(view) => Err(no_chat_view()),
+            _ => Ok(()),
+        }
     }
 
     fn says_to(&self, bot: &str) -> Result<(), Refusal> {

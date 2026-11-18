@@ -12,6 +12,25 @@ use crate::os::fs::OpenOptionsExt;
 pub(crate) const NEW_CONVERSATION: &str = "new conversation";
 pub(crate) const STOPPED: &str = "stopped";
 pub(crate) const INTERRUPTED: &str = "interrupted by a restart";
+pub(crate) const SETTING_UP: &str = "setting up";
+
+pub(crate) fn preview(line: &Line) -> String {
+    let first = |text: &str| text.lines().map(crate::text::one_line).find(|text| !text.is_empty());
+    let plain = (line.kind == Kind::Bot).then(|| crate::highlight::markdown::plain(&line.text));
+    plain.as_deref().and_then(first).or_else(|| first(&line.text)).unwrap_or_default()
+}
+
+pub(crate) fn is_setup(line: &Line) -> bool {
+    line.routine.is_none() && line.kind == Kind::Notice && line.text == SETTING_UP
+}
+
+pub(crate) fn opens_turn(line: &Line) -> bool {
+    (line.routine.is_none() && line.kind == Kind::You) || is_setup(line)
+}
+
+fn opens_unseen(line: &Line) -> bool {
+    opens_turn(line) || (line.kind == Kind::Finished && line.run.is_none())
+}
 
 pub(crate) fn dropped(count: usize) -> String {
     if count == 1 { String::from("1 held message dropped") } else { format!("{count} held messages dropped") }
@@ -25,6 +44,18 @@ pub(crate) enum Kind {
     Step,
     Error,
     Notice,
+    Started,
+    Finished,
+    Waiting,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct AgentRef {
+    pub(crate) kind: String,
+    pub(crate) pane: u64,
+    pub(crate) workspace: u64,
+    pub(crate) project: u64,
+    pub(crate) boot: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +76,12 @@ pub(crate) struct Line {
     pub(crate) conversation: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) routine: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) agent: Option<AgentRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) body: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) run: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -67,7 +104,30 @@ impl Line {
             tokens: None,
             conversation: None,
             routine: None,
+            agent: None,
+            body: None,
+            run: None,
         }
+    }
+
+    pub(crate) fn of_agent(self, agent: AgentRef, body: Option<String>, run: Option<u64>) -> Self {
+        Self { agent: Some(agent), body, run, ..self }
+    }
+
+    pub(crate) fn in_run(self, run: Option<u64>) -> Self {
+        Self { run, ..self }
+    }
+
+    pub(crate) fn started(id: u64, at: i64, text: &str, agent: AgentRef, run: Option<u64>) -> Self {
+        Self::new(id, at, Kind::Started, text).of_agent(agent, None, run)
+    }
+
+    pub(crate) fn finished(id: u64, at: i64, text: &str, (agent, body): (AgentRef, String), run: Option<u64>) -> Self {
+        Self::new(id, at, Kind::Finished, text).of_agent(agent, Some(body), run)
+    }
+
+    pub(crate) fn waiting(id: u64, at: i64, text: &str, (agent, body): (AgentRef, String), run: Option<u64>) -> Self {
+        Self::new(id, at, Kind::Waiting, text).of_agent(agent, Some(body), run)
     }
 
     pub(crate) fn of_run(self, run: u64) -> Self {
@@ -147,7 +207,7 @@ fn ends_a_run(line: &Line) -> bool {
     match line.kind {
         Kind::Bot | Kind::Error => true,
         Kind::Notice => line.text == STOPPED || line.text == INTERRUPTED,
-        Kind::You | Kind::Step => false,
+        Kind::You | Kind::Step | Kind::Started | Kind::Finished | Kind::Waiting => false,
     }
 }
 
@@ -190,12 +250,13 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
             stopping = false;
         }
         match line.kind {
-            Kind::You if line.held => state.held += 1,
-            Kind::You => state.running = true,
+            Kind::You | Kind::Finished if line.held => state.held += 1,
+            Kind::You | Kind::Finished => state.running = true,
             Kind::Bot | Kind::Error => {
                 state.running = state.held > 0;
                 state.held = 0;
             }
+            Kind::Notice if line.text == SETTING_UP => state.running = true,
             Kind::Notice if line.text == STOPPED => {
                 state.running = false;
                 stopping = true;
@@ -205,7 +266,7 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
                 state.held = 0;
             }
             Kind::Notice => state.held = state.held.saturating_sub(dropped_in(&line.text)),
-            Kind::Step => {}
+            Kind::Step | Kind::Started | Kind::Waiting => {}
         }
     }
     if stopping {
@@ -234,13 +295,18 @@ pub(crate) fn restart_notices(state: &Replayed, at: i64) -> Vec<Line> {
     notices
 }
 
+pub(crate) fn prompt_of(lines: &[Line], error: u64) -> Option<&Line> {
+    let before = lines.iter().position(|line| line.id == error).unwrap_or(lines.len());
+    lines[..before].iter().rev().find(|line| opens_turn(line) || line.kind == Kind::Finished)
+}
+
 pub(crate) fn unseen(lines: &[Line]) -> Vec<Told> {
-    let from = lines.iter().rposition(|line| line.kind == Kind::You).map_or(0, |at| at + 1);
+    let from = lines.iter().rposition(opens_unseen).map_or(0, |at| at + 1);
     lines[from..]
         .iter()
         .filter(|line| line.kind == Kind::Bot)
         .filter_map(|line| {
-            let run = line.routine?;
+            let run = line.routine.or(line.run)?;
             let head = lines.iter().find(|head| head.routine == Some(run) && head_parts(&head.text).is_some());
             let (label, clock) = match head.and_then(|head| head_parts(&head.text)) {
                 Some((label, clock)) => (label.to_string(), clock.to_string()),

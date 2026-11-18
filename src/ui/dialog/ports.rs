@@ -6,8 +6,8 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use super::settings::settings_area;
 use super::{
-    Note, draw_note, draw_row_button, draw_secondary, draw_submit, draw_waiting, form_inner, item_at, list_item_by,
-    pick_background, right_aligned, row_button_rects,
+    Note, draw_note, draw_row_button, draw_secondary, draw_submit, draw_waiting, item_at, list_item_by,
+    list_note_buttons, pick_background, right_aligned, row_button_rects,
 };
 use crate::text::truncate_right;
 use crate::ui::View;
@@ -122,9 +122,7 @@ pub(crate) fn ports_room(screen: Rect, compact: bool) -> (usize, Rect) {
 }
 
 fn rows(area: Rect) -> [Rect; 3] {
-    let inner = form_inner(area);
-    let line = |up: u16| Rect { y: inner.bottom().saturating_sub(up), height: 1.min(inner.height), ..inner };
-    [Rect { height: inner.height.saturating_sub(2), ..inner }, line(2), line(1)]
+    list_note_buttons(area)
 }
 
 fn pitch(compact: bool) -> u16 {

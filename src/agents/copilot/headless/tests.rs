@@ -80,10 +80,10 @@ mod the_command {
             .filter(|pair| pair[0] == "--allow-tool" || pair[0] == "--deny-tool")
             .map(|pair| pair[1].as_str())
             .collect();
-        assert_eq!(rules.len(), 16);
+        assert_eq!(rules.len(), 12);
         for wanted in [
             "shell(cornercase:*)",
-            "shell(git log:*)",
+            "shell(gh pr list:*)",
             "shell(gh issue view:*)",
             "write",
             "shell(cornercase kill-server:*)",
@@ -93,6 +93,7 @@ mod the_command {
         ] {
             assert!(rules.contains(&wanted), "{wanted} in {rules:?}");
         }
+        assert!(rules.iter().all(|rule| !rule.starts_with("shell(git")), "{rules:?}");
         assert!(!args.iter().any(|arg| arg == "--allow-all"), "{args:?}");
         assert_eq!(args.last().map(String::as_str), Some("--prompt=hi"));
         assert!(args.contains(&String::from("--resume=s")), "{args:?}");
@@ -125,5 +126,24 @@ mod the_command {
         for name in ["COPILOT_ALLOW_ALL", "COPILOT_ASSISTED_APPROVAL", "COPILOT_CLI"] {
             assert!(removed.contains(&OsString::from(name)), "{name} in {removed:?}");
         }
+    }
+}
+
+mod the_brief {
+    use super::*;
+    use crate::bots::{Bot, brief, sample};
+
+    #[test]
+    fn a_copilot_bot_is_taught_no_git_and_only_the_gh_its_rules_allow() {
+        let bot = Bot { agent: String::from("copilot"), access: Access::Cornercase, ..sample("prs", "PRs") };
+        let told = brief::brief(&bot, Path::new("/b"));
+        let args = argv(&ask(Tools::Bot(Access::Cornercase)));
+        let stems: Vec<&str> = args.iter().filter_map(|arg| arg.strip_prefix("shell(")?.strip_suffix(":*)")).collect();
+        let taught = brief::taught(&told, "/w/shop");
+        assert!(taught.iter().all(|command| !command.starts_with("git ")), "{taught:?}");
+        let allowed = |command: &String| {
+            stems.iter().any(|stem| command == stem || command.strip_prefix(stem).is_some_and(|r| r.starts_with(' ')))
+        };
+        assert!(taught.iter().all(allowed), "{taught:?} against {stems:?}");
     }
 }

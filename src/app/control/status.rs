@@ -193,6 +193,7 @@ impl App {
             custom_name: tab.name.clone(),
             layout: Some(control::Layout::from(&tab.layout)),
             controller: self.tab_controller(tab.id),
+            bot: tab.bot().map(str::to_string),
         }
     }
 
@@ -280,6 +281,7 @@ impl App {
         term.emulator.title().hash(hash);
         term.account().hash(hash);
         term.accounts().chosen().hash(hash);
+        term.bot.hash(hash);
     }
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &RunningPanes<'_>) -> PaneInfo {
@@ -317,6 +319,7 @@ impl App {
             pid: term.shell_pid(),
             memory: term.memory.bytes().filter(|_| self.config.memory),
             compacted: term.context.compaction().hides,
+            bot: term.bot.clone(),
         }
     }
 

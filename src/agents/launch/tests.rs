@@ -3,6 +3,7 @@ use rstest::rstest;
 use super::*;
 
 const MS: Duration = Duration::from_millis(1);
+const BOX: &str = "────────────\n❯\u{a0}";
 
 fn spec(submit: bool) -> Spec {
     Spec {
@@ -16,9 +17,26 @@ fn spec(submit: bool) -> Spec {
 struct World {
     shell: bool,
     bracketed: bool,
+    agent: Option<Known>,
+    session: SessionState,
     trust: Trust,
     screen: String,
     reaction: Reaction,
+    asks: fn(&str) -> bool,
+}
+
+const OLD_DEFAULT: &str =
+    "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
+const ADD_DIR: &str = crate::test_util::fixture!("claude/2.1.326/add-dir.txt");
+const FOLDER_TRUST: &str = crate::test_util::fixture!("claude/2.1.326/folder-trust.txt");
+const RESUMED_QUOTE: &str = crate::test_util::fixture!("claude/2.1.326/resumed-quote.txt");
+
+fn saved_default(screen: &str) -> bool {
+    crate::agents::tests::trust::asks(OLD_DEFAULT, screen)
+}
+
+fn contains_trust(screen: &str) -> bool {
+    screen.contains("trust")
 }
 
 fn clock() -> SystemTime {
@@ -41,10 +59,12 @@ fn step_typing(
 ) -> Step {
     let screen = world.screen.clone();
     let mut read = move || screen.clone();
-    let trust = |s: &str| s.contains("trust");
+    let trust = world.asks;
     let mut seen = Seen {
         shell_in_foreground: world.shell,
         bracketed_paste: world.bracketed,
+        agent: world.agent,
+        session: world.session,
         application_cursor: false,
         screen: &mut read,
         trust_prompt: &trust,
@@ -56,11 +76,33 @@ fn step_typing(
 }
 
 fn shell() -> World {
-    World { shell: true, bracketed: false, trust: Trust::Accepted, screen: "$ ".into(), reaction: calm() }
+    World {
+        shell: true,
+        bracketed: false,
+        agent: None,
+        session: SessionState::Unwatched,
+        trust: Trust::Accepted,
+        screen: "$ ".into(),
+        reaction: calm(),
+        asks: contains_trust,
+    }
 }
 
 fn agent(screen: &str) -> World {
-    World { shell: false, bracketed: true, trust: Trust::Accepted, screen: screen.into(), reaction: calm() }
+    World {
+        shell: false,
+        bracketed: true,
+        agent: None,
+        session: SessionState::Unwatched,
+        trust: Trust::Accepted,
+        screen: screen.into(),
+        reaction: calm(),
+        asks: contains_trust,
+    }
+}
+
+fn claude(screen: &str) -> World {
+    World { agent: Some(Known::Claude), session: SessionState::Read, ..agent(screen) }
 }
 
 fn asking_you(screen: &str) -> World {
@@ -68,8 +110,12 @@ fn asking_you(screen: &str) -> World {
 }
 
 fn started(submit: bool) -> (Launch, Instant) {
+    started_with(spec(submit))
+}
+
+fn started_with(spec: Spec) -> (Launch, Instant) {
     let t0 = Instant::now();
-    let mut launch = Launch::new(1, spec(submit), t0);
+    let mut launch = Launch::new(1, spec, t0);
     launch.output(t0);
     assert_eq!(step(&mut launch, t0 + 300 * MS, &shell()), Step::Write(b"claude --permission-mode plan\r".to_vec()));
     (launch, t0 + 300 * MS)
@@ -196,6 +242,79 @@ fn gemini_trust_waits_for_the_user_or_accepts_the_highlighted_folder() {
 const CLAUDE_TRUST: &str = "│ Quick safety check: Is this a project you created or one you trust?\n\
         │ Claude Code'll be able to read, edit, and execute files here.\n│\n\
         │ ❯ No, exit\n│   Yes, I trust this folder\n│\n│ Enter to confirm · Esc to cancel";
+
+#[test]
+fn the_menu_is_the_last_marked_line_under_a_shell_prompt_starting_with_one() {
+    let screen = format!("❯ echo hi\nhi\n❯ claude --add-dir /x\n{ADD_DIR}");
+    assert_eq!(answer_keys(&screen, false), b"\x1b[B");
+}
+
+mod added_folder {
+    use super::*;
+
+    fn with_yes_marked(screen: &str, yes: &str) -> String {
+        screen.replace("❯ No, exit", "  No, exit").replace(&format!("  {yes}"), &format!("❯ {yes}"))
+    }
+
+    fn answer(launch: &mut Launch, t: Instant, screen: &str, yes: &str) -> Instant {
+        let world = World { trust: Trust::LeftToYou, asks: saved_default, ..claude(screen) };
+        assert_eq!(step(launch, t + AGENT_QUIET, &world), Step::Write(b"\x1b[B".to_vec()));
+        let world = World { screen: with_yes_marked(screen, yes), ..world };
+        assert_eq!(step(launch, t + 2 * AGENT_QUIET, &world), Step::Write(b"\r".to_vec()));
+        t + 2 * AGENT_QUIET
+    }
+
+    fn flow() -> Spec {
+        Spec { trusted: true, ..spec(true) }
+    }
+
+    fn pastes(launch: &mut Launch, t: Instant) {
+        let world = World { trust: Trust::LeftToYou, asks: saved_default, ..claude(BOX) };
+        let pasted = step(launch, t + AGENT_QUIET, &world);
+        assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
+    }
+
+    #[test]
+    fn a_flow_launch_answers_it_with_down_then_enter_then_pastes_the_prompt() {
+        let (mut launch, t) = started_with(flow());
+        let t = answer(&mut launch, t, ADD_DIR, "Yes, add it");
+        pastes(&mut launch, t);
+    }
+
+    #[test]
+    fn a_launch_whose_trust_prompts_are_accepted_answers_it_too() {
+        let (mut launch, t) = started_with(spec(true));
+        let world = World { asks: saved_default, ..claude(ADD_DIR) };
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &world), Step::Write(b"\x1b[B".to_vec()));
+    }
+
+    #[test]
+    fn a_launch_left_to_you_parks_on_it_and_never_types_into_it() {
+        let (mut launch, t) = started_with(spec(true));
+        let world = World { trust: Trust::LeftToYou, asks: saved_default, ..claude(ADD_DIR) };
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &world), Step::Wait);
+        assert_eq!((launch.waits_for_you(), launch.stage()), (true, "trust prompt"));
+        assert_eq!(step(&mut launch, t + AGENT_LATEST, &world), Step::Wait);
+    }
+
+    #[test]
+    fn the_folder_question_then_two_added_folders_are_each_answered_before_the_prompt() {
+        let (mut launch, t) = started_with(flow());
+        let t = answer(&mut launch, t, FOLDER_TRUST, "Yes, I trust this folder");
+        let t = answer(&mut launch, t, ADD_DIR, "Yes, add it");
+        let other = ADD_DIR.replace("fix-the-login-form", "fix-the-signup-form");
+        let t = answer(&mut launch, t, &other, "Yes, add it");
+        pastes(&mut launch, t);
+    }
+
+    #[test]
+    fn a_resumed_conversation_showing_the_patterns_words_is_not_a_question() {
+        let (mut launch, t) = started_with(flow());
+        let world = World { trust: Trust::LeftToYou, ..claude(RESUMED_QUOTE) };
+        let pasted = step(&mut launch, t + AGENT_QUIET, &world);
+        assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
+    }
+}
 
 #[test]
 fn a_menu_that_defaults_to_no_is_moved_to_yes_first() {
@@ -399,16 +518,16 @@ mod confirming {
     const EVERY: Duration = CONFIRM_EVERY;
 
     fn watching(reaction: Reaction) -> World {
-        World { reaction, ..agent("> ") }
+        World { reaction, ..claude(BOX) }
     }
 
     fn entered() -> (Launch, Instant) {
         let (mut launch, t) = started(true);
         launch.confirm = Some(EVERY);
-        let pasted = step(&mut launch, t + AGENT_QUIET, &agent("> "));
+        let pasted = step(&mut launch, t + AGENT_QUIET, &claude(BOX));
         assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
         let at = t + AGENT_QUIET + SUBMIT_QUIET;
-        assert_eq!(step(&mut launch, at, &agent("> ")), Step::Enter(1));
+        assert_eq!(step(&mut launch, at, &claude(BOX)), Step::Enter(1));
         (launch, at)
     }
 
@@ -489,13 +608,128 @@ mod confirming {
         assert_eq!(step(&mut launch, at + 100 * MS, &gone), Step::NotTaken(1));
     }
 
+    #[rstest]
+    #[case::fully_set(true, true, Some(CONFIRM_EVERY))]
+    #[case::a_draft(false, true, None)]
+    #[case::no_prompt(true, false, None)]
+    fn a_launch_confirms_only_a_prompt_it_submits(
+        #[case] submit: bool,
+        #[case] with_prompt: bool,
+        #[case] confirm: Option<Duration>,
+    ) {
+        let spec = Spec { prompt: with_prompt.then(|| "hi".to_string()), ..spec(submit) };
+        assert_eq!(Launch::new(1, spec, Instant::now()).confirm, confirm);
+    }
+
+    #[rstest]
+    #[case::codex(Some(Known::Codex))]
+    #[case::unread(None)]
+    fn an_agent_other_than_claude_code_gets_a_single_enter(#[case] agent: Option<Known>) {
+        let (mut launch, t) = started(true);
+        let world = World { agent, ..agent_world() };
+        step(&mut launch, t + AGENT_QUIET, &world);
+        let enter = step(&mut launch, t + AGENT_QUIET + SUBMIT_QUIET, &world);
+        assert_eq!(enter, Step::Done(b"\r".to_vec()));
+    }
+
+    #[test]
+    fn claude_code_without_a_watched_session_gets_a_single_enter() {
+        let (mut launch, t) = started(true);
+        let world = World { session: SessionState::Unwatched, ..claude(BOX) };
+        step(&mut launch, t + AGENT_QUIET, &world);
+        let enter = step(&mut launch, t + AGENT_QUIET + SUBMIT_QUIET, &world);
+        assert_eq!(enter, Step::Done(b"\r".to_vec()));
+    }
+
+    fn agent_world() -> World {
+        agent("> ")
+    }
+
     #[test]
     fn a_pane_without_an_agent_status_is_done_at_the_enter() {
         let (mut launch, t) = started(true);
         launch.confirm = Some(EVERY);
-        let blind = World { reaction: Reaction { status: None, ..calm() }, ..agent("> ") };
+        let blind = World { reaction: Reaction { status: None, ..calm() }, ..claude(BOX) };
         step(&mut launch, t + AGENT_QUIET, &blind);
         let enter = step(&mut launch, t + AGENT_QUIET + SUBMIT_QUIET, &blind);
         assert_eq!(enter, Step::Done(b"\r".to_vec()));
+    }
+}
+
+mod pasting {
+    use super::*;
+
+    fn off(world: World) -> World {
+        World { bracketed: false, ..world }
+    }
+
+    #[test]
+    fn claude_code_gets_its_prompt_only_once_it_turns_bracketed_paste_on() {
+        let (mut launch, t) = started(true);
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &off(claude(BOX))), Step::Wait);
+        assert_eq!(launch.stage(), "paste");
+        launch.output(t + 2 * AGENT_QUIET);
+        let pasted = step(&mut launch, t + 3 * AGENT_QUIET, &claude(BOX));
+        assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
+    }
+
+    #[test]
+    fn a_claude_code_that_never_turns_it_on_gets_the_prompt_on_one_line_at_the_longest_wait() {
+        let (mut launch, t) = started(true);
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &off(claude(BOX))), Step::Wait);
+        let line = step(&mut launch, t + AGENT_LATEST, &off(claude(BOX)));
+        assert_eq!(line, Step::Write(b"https://x.dev/7 please".to_vec()));
+    }
+
+    #[rstest]
+    #[case::none(None)]
+    #[case::codex(Some(Known::Codex))]
+    fn an_agent_cornercase_does_not_know_to_wait_for_is_never_held(#[case] kind: Option<Known>) {
+        let (mut launch, t) = started(true);
+        let world = off(World { agent: kind, ..agent("> ") });
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &world), Step::Write(b"https://x.dev/7 please".to_vec()));
+    }
+
+    #[test]
+    fn the_trust_question_is_answered_before_bracketed_paste_is_on() {
+        let (mut launch, t) = started(true);
+        let asking = off(claude("Do you trust the files?"));
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &asking), Step::Write(b"\r".to_vec()));
+    }
+
+    #[test]
+    fn claude_code_gets_its_prompt_only_once_its_session_file_is_read() {
+        let (mut launch, t) = started(true);
+        let pending = World { session: SessionState::Pending, ..claude(BOX) };
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &pending), Step::Wait);
+        assert_eq!(launch.stage(), "paste");
+        let pasted = step(&mut launch, t + 2 * AGENT_QUIET, &claude(BOX));
+        assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
+    }
+
+    #[test]
+    fn a_session_file_that_never_comes_does_not_hold_the_prompt_past_the_longest_wait() {
+        let (mut launch, t) = started(true);
+        let pending = World { session: SessionState::Pending, ..claude(BOX) };
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &pending), Step::Wait);
+        let pasted = step(&mut launch, t + AGENT_LATEST, &pending);
+        assert_eq!(pasted, Step::Write(b"\x1b[200~https://x.dev/7\nplease\x1b[201~".to_vec()));
+    }
+
+    #[test]
+    fn a_pane_whose_session_file_cornercase_cannot_look_for_is_never_held() {
+        let (mut launch, t) = started(true);
+        let unwatched = off(World { session: SessionState::Unwatched, ..claude("Welcome") });
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &unwatched), Step::Write(b"https://x.dev/7 please".to_vec()));
+    }
+
+    #[test]
+    fn a_launch_without_a_prompt_does_not_wait_for_it() {
+        let t0 = Instant::now();
+        let mut launch = Launch::new(1, Spec { prompt: None, ..spec(true) }, t0);
+        launch.output(t0);
+        step(&mut launch, t0 + 300 * MS, &shell());
+        let world = off(claude(BOX));
+        assert_eq!(step(&mut launch, t0 + 300 * MS + AGENT_QUIET, &world), Step::Done(Vec::new()));
     }
 }

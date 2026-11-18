@@ -31,6 +31,8 @@ pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = 
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
+pub(in crate::agents) const BRACKETED_WHEN_READY: bool = false;
+pub(in crate::agents) const CONFIRMS_PROMPT: bool = false;
 pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
 pub(in crate::agents) const RECORD_BY_FOLDER: bool = false;
 

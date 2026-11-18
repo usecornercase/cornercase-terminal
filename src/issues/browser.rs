@@ -87,6 +87,7 @@ pub(crate) struct Queued {
     pub(crate) state: State,
     pub(crate) kind: QueuedKind,
     pub(crate) live: bool,
+    pub(crate) unsent: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -385,6 +386,7 @@ pub(crate) struct Browser {
     pub(crate) filtering: Option<usize>,
     pub(crate) members: HashMap<Source, Result<Vec<Person>, String>>,
     pub(crate) queued: Vec<Queued>,
+    pub(crate) bot_routines: usize,
     pub(crate) run_on: Option<RunOn>,
     pub(crate) there: Option<There>,
 }

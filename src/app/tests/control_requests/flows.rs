@@ -94,7 +94,7 @@ impl Team {
     fn configured(script: &str, tweak: impl FnOnce(&mut Config, &Path)) -> Self {
         let (repo, log, config, worktrees, bin) =
             (git_repo(&[("README", "hi")]), TempDir::new(), TempDir::new(), TempDir::new(), TempDir::new());
-        let fake = bin.path().join("claude");
+        let fake = bin.path().join("flow-agent");
         let (shebang, body) = script.split_once('\n').expect("a script after its shebang");
         let script = format!("{shebang}\n{RECORD}{body}").replace("LOG", &log.path().display().to_string());
         write_executable(&fake, &script);
@@ -624,6 +624,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         free_builds: false,
         fresh: None,
         summary: false,
+        bot: None,
     };
 
     let refused = team.app.open_run(workspace_at(&team.app, 0, 0), starting, AREA, false).expect_err("refused");

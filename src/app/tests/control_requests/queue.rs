@@ -81,6 +81,22 @@ fn clear_started_removes_only_started_entries_and_restores_the_batch() {
 }
 
 #[test]
+fn the_request_still_clears_a_bots_started_run_that_the_window_leaves() {
+    let (mut app, _rx) = app();
+    let place = crate::queue::Place { bot: Some("prs".into()), ..Default::default() };
+    let task = Task { at: crate::time::now() + 3600, zone: "UTC".into(), place, ..Task::default() };
+    let id = app.panels.queued.schedule(None, task).expect("a bot entry");
+    app.panels.queued.set_state(id, State::Answered { session: None });
+    app.clear_queued();
+    assert!(app.panels.queued.queue().entry(id).is_some(), "the window leaves it");
+
+    let cleared = ok(&mut app, "queue", &json!({"action": "clear-started"}));
+
+    assert_eq!(cleared["entries"][0]["id"], id);
+    assert!(app.panels.queued.queue().entry(id).is_none());
+}
+
+#[test]
 fn clearing_nothing_returns_no_undo_and_does_not_evict_a_removal() {
     let (mut app, _rx) = app();
     let before = seed(&mut app, &[State::Pending]);
@@ -148,3 +164,4 @@ fn removing_an_entry_while_it_starts_leaves_it_and_creates_no_undo() {
 mod fresh;
 mod results;
 mod routines;
+mod unsent;

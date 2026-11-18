@@ -5,26 +5,67 @@ use std::time::{Duration, Instant};
 use crate::agents::headless::{Action, Ran};
 use crate::agents::probe::Running;
 use crate::bots::brief::{TOLD_KEPT, Told};
-use crate::bots::chat::{self, Line};
+use crate::bots::chat::{self, AgentRef, Line};
+use crate::bots::follow::BATCH;
+use crate::bots::turn::Session;
 use crate::bots::{Bot, TURN_TIMEOUT, folder};
 use crate::editor::Editor;
 use crate::error::Result;
 
+mod follow;
 mod form;
 mod manage;
 mod menu;
+mod reports;
 mod routines;
+mod routines_dialog;
 mod section;
 mod shown;
 mod talk;
 mod turns;
 mod window;
 
+pub(super) use follow::{Read, Started};
 pub(super) use menu::BotItem;
 pub(super) use shown::Chat;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Thread {
+    Chat,
+    Run(u64),
+}
+
+pub(super) struct Starting {
+    pub(super) session: Session,
+    pub(super) cornercase: bool,
+}
+
+impl Starting {
+    pub(super) fn chat() -> Self {
+        Self { session: Session::Chat, cornercase: false }
+    }
+}
+
+pub(super) struct Followed {
+    pub(super) pane: u64,
+    pub(super) kind: String,
+    pub(super) run: Option<u64>,
+    pub(super) armed: bool,
+    pub(super) watch: Option<super::settle::Watch>,
+}
+
+pub(super) struct Report {
+    pub(super) run: Option<u64>,
+    pub(super) agent: AgentRef,
+    pub(super) header: String,
+    pub(super) body: String,
+    pub(super) text: String,
+    pub(super) at: Instant,
+}
+
 pub(super) struct Turn {
     pub(super) id: u64,
+    pub(super) thread: Thread,
     pub(super) asked: Vec<u64>,
     pub(super) running: Running,
     pub(super) stopping: bool,
@@ -57,12 +98,16 @@ pub(super) struct Live {
     pub(super) unread: usize,
     pub(super) waited: HashSet<u64>,
     pub(super) answers: VecDeque<(u64, Line)>,
+    pub(super) following: Vec<Followed>,
+    pub(super) reports: Vec<Report>,
 }
 
 pub(super) struct Bots {
     pub(super) dir: Option<PathBuf>,
+    pub(super) bin: Option<PathBuf>,
     pub(super) live: Vec<Live>,
     pub(super) timeout: Duration,
+    pub(super) batch: Duration,
     pub(super) next_turn: u64,
     pub(super) next_key: u64,
     pub(super) shown: Option<Chat>,
@@ -73,8 +118,10 @@ impl Default for Bots {
     fn default() -> Self {
         Self {
             dir: None,
+            bin: None,
             live: Vec::new(),
             timeout: TURN_TIMEOUT,
+            batch: BATCH,
             next_turn: 1,
             next_key: 1,
             shown: None,
@@ -107,6 +154,7 @@ impl Bots {
 pub(crate) enum BotEvent {
     Step { bot: String, turn: u64, step: Action },
     Ended { bot: String, turn: u64, result: Result<Ran>, took: Duration },
+    Read { bot: String, read: Box<Read> },
 }
 
 impl BotEvent {
@@ -114,6 +162,7 @@ impl BotEvent {
         match self {
             Self::Step { .. } => "bot step",
             Self::Ended { .. } => "bot turn",
+            Self::Read { .. } => "bot read",
         }
     }
 }
@@ -142,12 +191,14 @@ impl Live {
             unread: 0,
             waited: HashSet::new(),
             answers: VecDeque::new(),
+            following: Vec::new(),
+            reports: Vec::new(),
         }
     }
 }
 
 pub(super) enum News {
-    Line(Line),
+    Line(Box<Line>),
     State(&'static str),
     Change(&'static str),
 }
@@ -156,7 +207,7 @@ impl super::App {
     pub(super) fn publish_bot(&mut self, bot: &str, news: News) {
         let (mut line, mut state, mut change) = (None, None, None);
         match news {
-            News::Line(found) => line = Some(found),
+            News::Line(found) => line = Some(*found),
             News::State(text) => state = Some(text.to_string()),
             News::Change(text) => change = Some(text.to_string()),
         }
@@ -172,6 +223,10 @@ impl super::App {
 
     pub(super) fn publish_bot_removed(&mut self, id: &str) {
         self.publish_bot(id, News::Change("removed"));
+    }
+
+    pub(crate) fn set_bots_bin(&mut self, dir: &Path) {
+        self.panels.bots.bin = Some(std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf()));
     }
 
     pub(crate) fn set_bots_dir(&mut self, dir: &Path) {

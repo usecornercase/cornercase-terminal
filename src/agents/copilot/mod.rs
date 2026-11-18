@@ -45,6 +45,7 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
     accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],
     why: None,
     reads_anywhere: false,
+    reads_git: false,
     effort_needs_model: true,
 };
 #[cfg(windows)]
@@ -52,12 +53,15 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
     accesses: &[crate::agents::headless::Access::Full],
     why: Some("its rules are unchecked on this system"),
     reads_anywhere: false,
+    reads_git: false,
     effort_needs_model: true,
 };
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
+pub(in crate::agents) const BRACKETED_WHEN_READY: bool = false;
+pub(in crate::agents) const CONFIRMS_PROMPT: bool = false;
 pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
 pub(in crate::agents) const RECORD_BY_FOLDER: bool = false;
 

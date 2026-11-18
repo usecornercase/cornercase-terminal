@@ -15,10 +15,13 @@ const CELL_SEPARATOR: &str = " │ ";
 
 type Segment = (String, Style);
 
+fn options() -> Options {
+    Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS
+}
+
 pub(crate) fn render(source: &str, width: usize) -> Vec<Line<'static>> {
-    let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
     let mut renderer = Renderer::new(width.max(MIN_WIDTH));
-    for event in Parser::new_ext(source, options) {
+    for event in Parser::new_ext(source, options()) {
         renderer.event(event);
     }
     renderer.finish()
@@ -44,6 +47,30 @@ pub(crate) fn warm(source: &str) {
     }
 }
 
+pub(crate) fn plain(source: &str) -> String {
+    let mut out = String::new();
+    let mut html = HtmlText::default();
+    for event in Parser::new_ext(source, options()) {
+        match event {
+            Event::Text(text) | Event::Code(text) => out.push_str(&text),
+            Event::Html(text) | Event::InlineHtml(text) => out.push_str(&html.strip(&text)),
+            Event::End(TagEnd::TableCell) => out.push(' '),
+            Event::Start(
+                Tag::Emphasis
+                | Tag::Strong
+                | Tag::Strikethrough
+                | Tag::Link { .. }
+                | Tag::Image { .. }
+                | Tag::TableCell,
+            )
+            | Event::End(TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link | TagEnd::Image)
+            | Event::TaskListMarker(_) => {}
+            _ => out.push('\n'),
+        }
+    }
+    out
+}
+
 pub(crate) fn wrap_text(text: &str, style: Style, width: usize) -> Vec<Line<'static>> {
     wrap_segments(&[(text.to_string(), style)], width)
 }
@@ -63,6 +90,54 @@ struct Table {
     header_rows: usize,
 }
 
+#[derive(Default)]
+struct HtmlText {
+    in_comment: bool,
+}
+
+impl HtmlText {
+    fn strip(&mut self, html: &str) -> String {
+        let mut out = String::new();
+        let mut rest = html;
+        loop {
+            if self.in_comment {
+                match self.end_comment(rest) {
+                    Some(after) => rest = after,
+                    None => return out,
+                }
+            }
+            let Some(start) = rest.find('<') else {
+                out.push_str(rest);
+                return out;
+            };
+            out.push_str(&rest[..start]);
+            rest = &rest[start..];
+            if let Some(after) = rest.strip_prefix("<!--") {
+                self.in_comment = true;
+                rest = after;
+                continue;
+            }
+            let Some(end) = rest.find('>') else {
+                out.push_str(rest);
+                return out;
+            };
+            let tag = rest[1..end].trim().to_lowercase();
+            if tag.starts_with("br") {
+                out.push('\n');
+            } else if tag.starts_with("img") {
+                out.push_str("[image]");
+            }
+            rest = &rest[end + 1..];
+        }
+    }
+
+    fn end_comment<'a>(&mut self, rest: &'a str) -> Option<&'a str> {
+        let end = rest.find("-->")?;
+        self.in_comment = false;
+        Some(&rest[end + 3..])
+    }
+}
+
 struct Renderer {
     width: usize,
     lines: Vec<Line<'static>>,
@@ -74,7 +149,7 @@ struct Renderer {
     code: Option<(String, String)>,
     links: Vec<(usize, String)>,
     table: Option<Table>,
-    in_comment: bool,
+    html: HtmlText,
 }
 
 impl Renderer {
@@ -90,7 +165,7 @@ impl Renderer {
             code: None,
             links: Vec::new(),
             table: None,
-            in_comment: false,
+            html: HtmlText::default(),
         }
     }
 
@@ -109,7 +184,7 @@ impl Renderer {
             Event::Text(text) => self.text(&text),
             Event::Code(code) => self.push(code.to_string(), self.style().patch(CODE)),
             Event::Html(html) | Event::InlineHtml(html) => {
-                let text = self.strip_html(&html);
+                let text = self.html.strip(&html);
                 self.text(&text);
             }
             Event::SoftBreak | Event::HardBreak => self.push("\n".into(), Style::default()),
@@ -401,47 +476,6 @@ impl Renderer {
                 self.lines.push(Line::from(spans));
             }
         }
-    }
-
-    fn strip_html(&mut self, html: &str) -> String {
-        let mut out = String::new();
-        let mut rest = html;
-        loop {
-            if self.in_comment {
-                match self.end_comment(rest) {
-                    Some(after) => rest = after,
-                    None => return out,
-                }
-            }
-            let Some(start) = rest.find('<') else {
-                out.push_str(rest);
-                return out;
-            };
-            out.push_str(&rest[..start]);
-            rest = &rest[start..];
-            if let Some(after) = rest.strip_prefix("<!--") {
-                self.in_comment = true;
-                rest = after;
-                continue;
-            }
-            let Some(end) = rest.find('>') else {
-                out.push_str(rest);
-                return out;
-            };
-            let tag = rest[1..end].trim().to_lowercase();
-            if tag.starts_with("br") {
-                out.push('\n');
-            } else if tag.starts_with("img") {
-                out.push_str("[image]");
-            }
-            rest = &rest[end + 1..];
-        }
-    }
-
-    fn end_comment<'a>(&mut self, rest: &'a str) -> Option<&'a str> {
-        let end = rest.find("-->")?;
-        self.in_comment = false;
-        Some(&rest[end + 3..])
     }
 
     fn finish(mut self) -> Vec<Line<'static>> {

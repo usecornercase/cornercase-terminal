@@ -1,10 +1,10 @@
 use rstest::rstest;
 
-use super::{Gated, gated, stop_name};
-use crate::control::bots::{BotRequest, BotSay, EditBot, NewBot};
+use super::{Gated, gated, stop_name, window_name};
+use crate::control::bots::{BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::control::{
-    CloneRepository, Command, ConfigImport, Configure, HeldAction, HeldRequest, Input, Keys, NewTab, PasteFile,
-    RestartWhenIdle, SendText, Split, TodoSend, UpdateCheck, UpdateInstall,
+    CloneRepository, Command, ConfigImport, Configure, HeldAction, HeldRequest, Input, Keys, NewTab, OpenView,
+    PasteFile, RestartWhenIdle, SendText, SetView, Split, TodoSend, UpdateCheck, UpdateInstall,
 };
 use crate::protocol::ClientMessage;
 
@@ -67,7 +67,16 @@ const PANE: Option<Gated> = Some(Gated::Pane { pane: Some(4), tab: None });
 #[case::a_new_bot_by_default(new_bot(None), None)]
 #[case::editing_the_access(edit_bot(Some("cornercase")), Some(Gated::Access))]
 #[case::editing_something_else(edit_bot(None), Some(Gated::Says("x".into())))]
+#[case::reading_what_a_bot_is_for(Command::Bot(BotRequest::About(BotTarget { bot: "x".into() })), None)]
+#[case::setting_a_bot_up(Command::Bot(BotRequest::Setup(BotTarget { bot: "x".into() })), Some(Gated::Says("x".into())))]
 #[case::saying_to_a_bot(Command::Bot(BotRequest::Say(BotSay { bot: "x".into(), ..BotSay::default() })), Some(Gated::Says("x".into())))]
+#[case::a_view_that_shows_a_bot(Command::View(OpenView { bot: Some("x".into()), ..OpenView::default() }), Some(Gated::ShowsChat))]
+#[case::a_view_with_no_bot(Command::View(OpenView::default()), None)]
+#[case::a_view_set_to_a_bot(Command::ViewSet(SetView { bot: Some("x".into()), ..SetView::default() }), Some(Gated::ShowsChat))]
+#[case::a_view_set_to_no_bot(Command::ViewSet(SetView { bot: Some(String::new()), ..SetView::default() }), None)]
+#[case::a_view_set_made_visible(Command::ViewSet(SetView { visible: Some(true), ..SetView::default() }), Some(Gated::Reveals))]
+#[case::a_view_set_made_visible_with_no_bot(Command::ViewSet(SetView { visible: Some(true), bot: Some(String::new()), ..SetView::default() }), None)]
+#[case::a_view_set_made_hidden(Command::ViewSet(SetView { visible: Some(false), ..SetView::default() }), None)]
 #[case::reading_the_settings(Command::Config(Configure::Get), None)]
 #[case::searching_the_settings(Command::Config(Configure::Search("a".into())), None)]
 #[case::setting_a_setting(Command::Config(Configure::Set(std::collections::BTreeMap::new())), Some(Gated::Settings))]
@@ -90,5 +99,24 @@ fn every_stop_is_a_request_or_a_message_the_server_knows() {
         for asked in stop.asks {
             assert!(Command::NAMES.contains(asked) || messages.contains(&Some(asked)), "{asked}");
         }
+    }
+}
+
+#[test]
+fn every_message_but_a_request_and_a_stop_is_a_window_message() {
+    let failed = crate::host::open::Failed { opener: crate::host::open::Opener::Finder, reason: String::new() };
+    let windows = [
+        ClientMessage::Event(crossterm::event::Event::FocusGained),
+        ClientMessage::Graphics(crate::graphics::Support::default()),
+        ClientMessage::Activated("t".into()),
+        ClientMessage::OpenFailed(failed),
+        ClientMessage::Machines(crate::protocol::Machines::default()),
+        ClientMessage::Tunnels(crate::protocol::Holding::default()),
+    ];
+    for message in &windows {
+        assert!(window_name(message).is_some(), "{message:?}");
+    }
+    for message in [ClientMessage::Request("{}".into()), ClientMessage::KillServer, ClientMessage::Restart] {
+        assert_eq!(window_name(&message), None, "{message:?}");
     }
 }

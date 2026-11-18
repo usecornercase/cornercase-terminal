@@ -74,6 +74,15 @@ fn plural_names_one_in_the_singular() {
     );
 }
 
+mod without_whitespace {
+    use super::*;
+
+    #[test]
+    fn drops_every_kind_of_whitespace() {
+        assert_eq!(without_whitespace(" Adding a\n new\u{a0}dir\t:"), "Addinganewdir:");
+    }
+}
+
 mod within_bytes {
     use super::*;
 

@@ -162,6 +162,7 @@ mod routine_cleanup;
 mod search_dialog;
 mod session;
 mod settings_dialog;
+mod settle;
 mod share_settings;
 mod share_settings_dialog;
 mod shortcuts;
@@ -437,6 +438,7 @@ impl App {
             self.popup_wake(now),
             self.card_wake(now),
             self.typed_wake(now),
+            self.bot_reports_wake(now),
         ]
         .into_iter()
         .flatten()
@@ -478,6 +480,8 @@ impl App {
         self.watch_agents(now);
         self.drive_cleanups(now);
         self.follow_sent_work(now);
+        self.follow_bot_agents(now);
+        self.drive_bot_reports(now);
         self.drive_restarts(now);
         self.keep_awake(now);
         self.offer_star(now, clock);
@@ -594,6 +598,7 @@ impl App {
         self.adopt_saved(parents);
         self.sync_worktrees();
         self.panels.bots.collapsed = saved.bots_collapsed;
+        self.follow_restored();
         if saved.flow {
             self.show_flow();
         }

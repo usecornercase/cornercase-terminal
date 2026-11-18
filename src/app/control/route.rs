@@ -28,7 +28,8 @@ impl App {
         if let Some(caller) = caller {
             self.clients.requests.callers.insert(client, caller);
         }
-        let asker = Asker { caller, view: request.view };
+        let bot = self.starter(client, request.bot.as_deref(), request.bot_run);
+        let asker = Asker { caller, view: request.view, bot };
         self.bot_writes(client, asker, &request.command)?;
         self.check_view(&request)?;
         relay::lone_machine_boot(&request.command)?;

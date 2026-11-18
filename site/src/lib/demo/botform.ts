@@ -141,6 +141,7 @@ export function submitBotForm(app: App, o: BotForm): void {
     about: o.about.chars.join(''),
   });
   app.closeOverlay();
+  app.bots.setup(bot);
   app.bots.show(bot.id);
 }
 

@@ -15,7 +15,7 @@ fn team(setup: &str, teardown: &str) -> Team {
     let repo = git_repo(&[("README", "hi"), (".worktreeinclude", ".env\n"), (".gitignore", ".env\n")]);
     std::fs::write(repo.path().join(".env"), "SECRET=1").expect("write the env");
     let (worktrees, config) = (TempDir::new(), TempDir::new());
-    let fake = config.path().join("claude");
+    let fake = config.path().join("setup-agent");
     let marker = config.path().join("marker");
     write_executable(
         &fake,

@@ -6,7 +6,7 @@ use crate::app::input::WHEEL_ROWS;
 use crate::app::opening::Subject;
 use crate::app::text_fields::FieldArea;
 use crate::app::toast::Toast;
-use crate::bots::chat::Kind;
+use crate::bots::chat;
 use crate::control::contract::Code;
 use crate::editor::Editor;
 use crate::ui::{self, ChatHit, RowHit};
@@ -70,13 +70,15 @@ impl App {
     fn send_again(&mut self, error: u64) {
         let Some(at) = self.shown_bot() else { return };
         let lines = self.panels.bots.shown.as_ref().map(|shown| shown.lines.as_slice()).unwrap_or_default();
-        let before = lines.iter().position(|line| line.id == error).unwrap_or(lines.len());
-        let Some(text) = lines[..before].iter().rev().find(|line| line.kind == Kind::You).map(|line| line.text.clone())
-        else {
-            return;
-        };
+        let opener = chat::prompt_of(lines, error).filter(|line| line.kind != chat::Kind::Finished).cloned();
+        let Some(opener) = opener else { return };
         let id = self.panels.bots.live[at].bot.id.clone();
-        if let Err(refusal) = self.bot_say(&id, &text, false) {
+        let done = if chat::is_setup(&opener) {
+            self.bot_setup(&id).map(|_| ())
+        } else {
+            self.bot_say(&id, &opener.text, false).map(|_| ())
+        };
+        if let Err(refusal) = done {
             self.chat_toast(refusal.message);
         }
     }
@@ -111,6 +113,7 @@ impl App {
     fn chat_hit(&mut self, at: usize, hit: ChatHit, (field, pos): (Rect, Position)) {
         let id = self.panels.bots.live[at].bot.id.clone();
         match hit {
+            ChatHit::Routines => self.open_bot_routines(self.panels.bots.live[at].key, None),
             ChatHit::NewConversation => self.new_conversation(&id),
             ChatHit::Menu => self.open_bot_menu(at, pos),
             ChatHit::Send => self.send_from_chat(),
@@ -146,6 +149,7 @@ impl App {
                     shown.unfolded.insert(first);
                 }
             }
+            RowHit::Show(pane) => self.jump_to_pane(pane),
             RowHit::RunAgain(run) => self.run_again(run),
             RowHit::Retry(error) => self.send_again(error),
             RowHit::Example(i) => self.panels.bots.live[at].draft = Editor::new(ui::EXAMPLES[i]),
@@ -169,9 +173,15 @@ impl App {
         }
         let Some(at) = self.shown_bot() else { return };
         let card = self.bot_card(at);
+        let key = self.panels.bots.live[at].key;
         if ui::card_folder(areas.workspaces_list, &card).contains(pos) {
-            let key = self.panels.bots.live[at].key;
             self.open_menu_or_copy(Subject::Bot(key), pos);
+        } else if let Some(row) = ui::card_row_at(areas.workspaces_list, &card, pos) {
+            if let Some(routine) = card.rows[row].routine {
+                self.open_bot_routines(key, Some(routine));
+            } else if let Some(pane) = card.rows[row].pane {
+                self.jump_to_pane(pane);
+            }
         }
     }
 }

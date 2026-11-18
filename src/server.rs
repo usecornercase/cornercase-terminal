@@ -37,6 +37,7 @@ use crate::todo;
 use crate::version;
 
 mod backend;
+mod bots;
 mod images;
 mod startup;
 mod surfaces;
@@ -276,6 +277,7 @@ fn prepare_app(app: &mut App, path: &Path, session: &Path) -> Saver<todo::Saved>
     }
     app.set_issue_cache(paths::issue_cache(session));
     app.set_bots_dir(&paths::bots(session));
+    app.set_bots_bin(&paths::bin(session));
     app.set_recap_places(&paths::journal(session), &paths::recap(session));
     app.set_plugin_places(crate::plugins::Places::new(&paths::config(), session));
     let todos = todo::load(&paths::todos(session));
@@ -720,10 +722,7 @@ impl Server {
         if id < self.next_client && self.client_mut(id).is_none() {
             return ControlFlow::Continue(());
         }
-        if let Some(why) = self.app.refused_stop(id, &message) {
-            if let Some(client) = self.client_mut(id) {
-                client.send(ServerMessage::Rejected(why.into()));
-            }
+        if self.refused(id, &message) {
             return ControlFlow::Continue(());
         }
         match message {

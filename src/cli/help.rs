@@ -768,7 +768,8 @@ mod tunnels;
 mod worktrees;
 
 pub(in crate::cli) use bot::{
-    BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HELP, BOT_HISTORY_HELP, BOT_NEW_HELP, BOT_SAY_HELP,
+    BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HELP, BOT_HISTORY_HELP, BOT_ID_HELP, BOT_NEW_HELP,
+    BOT_SAY_HELP, BOT_SETUP_HELP,
 };
 pub(in crate::cli) use changes::{CHANGES_FILE_HELP, CHANGES_GAP_HELP};
 pub(in crate::cli) use clone::CLONE_HELP;
@@ -825,6 +826,11 @@ window's: an agent there gets no done mark, toast or desktop notification. --hid
 agents in its tab then notify again. While a view is open, the window's tab counts as seen only while
 a window is attached.
 
+--bot BOT says it shows that bot's chat in place of its tab, as the window does when you click a
+bot: while the view is not hidden, the bot's answers count as read and make no toast or desktop
+notification, and the tab behind the chat no longer counts as seen. `view-set --bot` changes it
+(an empty one: no chat), and it ends with the view; its lines then carry `bot`.
+
 A tab's terminals take the size of the window or the view that claimed it last, without the
 window's sidebar and panels: a view claims the tab it shows when it opens, moves there or turns
 active, and using the window takes back the tab it shows. Only that one resizes them. Without
@@ -840,12 +846,14 @@ size nothing and stream no terminals (its tabs go to whoever claimed them before
 --active turns it back on and claims its tab, and --claim takes its tab back from the window or
 another view. --hidden says its window is hidden or minimised, so agents in its tab notify again, and
 --visible says it is back, which also reads the open pull requests again (not those read in the last
-10 seconds). It prints the view as it is now.
+10 seconds). --bot BOT says it shows that bot's chat in place of its tab, and --bot '' that it shows
+none. It prints the view as it is now.
 
 Examples:
   cornercase view-set --view 41 --cols 100 --rows 30
   cornercase view-set --view 41 --claim
-  cornercase view-set --view 41 --hidden";
+  cornercase view-set --view 41 --hidden
+  cornercase view-set --view 41 --bot prs";
 pub(super) const TOUR_HELP: &str =
     "Shows the guided tour in the window: a card that points at a part of the screen and moves on
 when you do what it asks. Without an action it starts the core tour where it stopped. A new

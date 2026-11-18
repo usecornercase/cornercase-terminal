@@ -157,6 +157,7 @@ impl App {
             let run = role.and(run);
             let (accounts, gone) = self.saved_accounts(pane);
             let mut term = self.spawn_in(area, cwd, run, accounts)?;
+            term.bot = pane.bot.clone().filter(|id| self.panels.bots.by_id(id).is_some());
             term.fold =
                 pane.agent.as_ref().filter(|_| pane.collapsed).map(|agent| By::Conversation(Conversation::of(agent)));
             let lost = self.account_gone(term.id, pane.agent.as_ref(), &gone);

@@ -343,6 +343,38 @@ mod routines {
     }
 
     #[test]
+    fn the_last_run_of_a_routine_is_its_newest_and_a_pending_reminder_has_none() {
+        let mut queue = Queue::default();
+        let id = queue.add(routine(START, "2h")).expect("add");
+        let old = queue.run_now(id, START).expect("old");
+        let new = queue.run_now(id, START + 5).expect("new");
+        let routine_entry = queue.entry(id).expect("routine").clone();
+        assert_eq!(queue.last_run(&routine_entry).map(|run| run.id), Some(new));
+        assert_ne!(Some(old), Some(new));
+        let reminder = queue.add(task(START + 9)).expect("reminder");
+        let pending = queue.entry(reminder).expect("entry").clone();
+        assert!(queue.last_run(&pending).is_none());
+        queue.entry_mut(reminder).expect("entry").state = State::Missed;
+        let missed = queue.entry(reminder).expect("entry").clone();
+        assert_eq!(queue.last_run(&missed).map(|run| run.id), Some(reminder));
+    }
+
+    #[test]
+    fn clear_started_where_keeps_what_it_is_not_asked_for() {
+        let mut queue = Queue::default();
+        let bot = Task { place: Place { bot: Some("prs".into()), ..Place::default() }, ..routine(START, "2h") };
+        let id = queue.add(bot).expect("a bot routine");
+        let answered = queue.run_now(id, START).expect("a run");
+        queue.entry_mut(answered).expect("run").state = State::Answered { session: None };
+        let project = queue.add(task(START + 5)).expect("a project entry");
+        queue.entry_mut(project).expect("entry").state = State::Started { pane: 1, server: "s".into() };
+        let cleared = queue.clear_started_where(|entry| !entry.is_bot());
+        assert_eq!(cleared.iter().map(|entry| entry.id).collect::<Vec<_>>(), [project]);
+        assert!(queue.entry(answered).is_some() && queue.entry(id).is_some());
+        assert_eq!(queue.clear_started().len(), 1, "the unfiltered clear still takes the bot's run");
+    }
+
+    #[test]
     fn a_run_cannot_be_edited_nor_a_one_off_turned_into_a_routine() {
         let mut queue = Queue::default();
         let id = queue.add(routine(START, "2h")).expect("add");
@@ -659,5 +691,24 @@ mod bot_entries {
         assert_eq!(reason, "the server stopped while the bot answered it");
         let State::Failed { reason } = &read.entry(project).expect("project").state else { panic!("not failed") };
         assert!(reason.contains("check its workspace"));
+    }
+}
+
+mod unsent {
+    use super::*;
+
+    #[test]
+    fn an_entry_that_is_not_unsent_is_written_as_before() {
+        let entry = Entry::new(1, task(100), State::Pending);
+        assert!(!serde_json::to_string(&entry).expect("json").contains("unsent"));
+    }
+
+    #[test]
+    fn unsent_round_trips_and_a_listing_keeps_it() {
+        let entry = Entry { unsent: true, ..Entry::new(1, task(100), State::Started { pane: 3, server: "s".into() }) };
+        let text = serde_json::to_string(&entry).expect("json");
+        assert!(text.contains("\"unsent\":true"), "{text}");
+        let read: Entry = serde_json::from_str(&text).expect("entry");
+        assert!(read.unsent && Listed::from(&read).entry.unsent);
     }
 }

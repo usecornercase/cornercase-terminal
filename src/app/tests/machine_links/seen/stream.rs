@@ -321,7 +321,16 @@ mod in_status {
     fn watch(app: &mut App) -> Option<StreamState> {
         app.clients.events.snapshots.set_every(Duration::ZERO);
         let command = Command::Watch(Watch::default());
-        let asked = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+        let asked = Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            bot: None,
+            bot_run: None,
+            command,
+        };
         app.request(1, &serde_json::to_string(&asked).expect("a request"), None, Instant::now());
         let answers = app.take_answers();
         let Some(Ok(Response::Ok(first))) = answers.first().map(|(_, text)| serde_json::from_str(text)) else {

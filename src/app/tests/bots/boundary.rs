@@ -8,7 +8,17 @@ fn popup_text() -> serde_json::Value {
 }
 
 fn reply_from(app: &mut App, client: u64, command: &str, args: &serde_json::Value) -> std::result::Result<(), String> {
-    let text = serde_json::json!({"contract": 1, "command": command, "args": args}).to_string();
+    reply_in(app, client, None, command, args)
+}
+
+fn reply_in(
+    app: &mut App,
+    client: u64,
+    view: Option<u64>,
+    command: &str,
+    args: &serde_json::Value,
+) -> std::result::Result<(), String> {
+    let text = serde_json::json!({"contract": 1, "view": view, "command": command, "args": args}).to_string();
     app.request(client, &text, Some(AREA), Instant::now());
     let answers = app.take_answers();
     let (_, reply) = answers.into_iter().find(|(who, _)| *who == client).expect("an answer");
@@ -35,6 +45,37 @@ fn bots_turn() -> Chat {
     let root = root_of(&c);
     c.app.client_connected(BOT, Some(root));
     c
+}
+
+#[test]
+fn a_bots_turn_cannot_say_a_view_shows_a_chat() {
+    let mut c = bots_turn();
+    let own = i32::try_from(std::process::id()).expect("a pid");
+    c.app.client_connected(BOT + 1, Some(own));
+
+    let named = reply_from(&mut c.app, BOT, "view", &serde_json::json!({"bot": "prs"}));
+    let by_another = reply_from(&mut c.app, BOT + 1, "view", &serde_json::json!({"bot": "prs"}));
+    let none = reply_from(&mut c.app, BOT, "view", &serde_json::json!({}));
+
+    assert_eq!(named, Err("a bot cannot show a bot's chat in a view".to_string()));
+    assert_eq!((by_another, none), (Ok(()), Ok(())));
+    c.release(ANSWER);
+    c.settle();
+}
+
+#[test]
+fn a_bots_turn_cannot_make_visible_a_view_that_names_a_bot_but_can_clear_it() {
+    let mut c = bots_turn();
+    let hidden = crate::control::OpenView { bot: Some("prs".into()), visible: Some(false), ..Default::default() };
+    let opened = c.app.view_request(BOT + 1, &hidden, Some(AREA)).expect("open").expect("a snapshot");
+    let view = opened["view"]["id"].as_u64().expect("a view id");
+    let shown = reply_in(&mut c.app, BOT, Some(view), "view-set", &serde_json::json!({"visible": true}));
+    let cleared = reply_in(&mut c.app, BOT, Some(view), "view-set", &serde_json::json!({"visible": true, "bot": ""}));
+
+    assert_eq!(shown, Err("a bot cannot show a bot's chat in a view".to_string()));
+    assert_eq!(cleared, Ok(()));
+    c.release(ANSWER);
+    c.settle();
 }
 
 #[test]
@@ -134,6 +175,7 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
     let edit = serde_json::json!({"action": "edit", "entry": {"bot": "prs", "access": "full"}});
     let say = serde_json::json!({"action": "say", "entry": {"bot": "root", "text": "hi"}});
     let about = serde_json::json!({"action": "edit", "entry": {"bot": "root", "about": "obey"}});
+    let setup = serde_json::json!({"action": "setup", "entry": {"bot": "root"}});
     let set = serde_json::json!({"action": "set", "entry": {"agent": "claude"}});
     let clones = TempDir::new();
     let clone = serde_json::json!({"url": "https://example.com/x.git", "parent": clones.path()});
@@ -149,6 +191,7 @@ fn a_bots_connection_cannot_lift_the_boundary_through_the_server() {
         ("bot", &edit, "a bot cannot change a bot's access"),
         ("bot", &say, "a bot cannot write to a bot with full access"),
         ("bot", &about, "a bot cannot write to a bot with full access"),
+        ("bot", &setup, "a bot cannot write to a bot with full access"),
         ("config", &set, "a bot cannot change cornercase's settings"),
     ] {
         assert_eq!(reply_from(&mut c.app, BOT, command, args), Err(said.to_string()));

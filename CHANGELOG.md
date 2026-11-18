@@ -2,16 +2,67 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.98
+
+- **A window of your own can say which bot's chat it shows.** `cornercase view-set --view ID --bot prs` (or `cornercase view --bot prs`) tells cornercase that a program drawing it shows that chat in place of a tab. While it does and its window is not hidden, the bot's answers no longer count as unread or make cornercase's toast and desktop notification, as when cornercase's own window shows the chat, and the tab behind the chat notifies again. `--bot ''` or closing the view ends it. `cornercase contract` lists `view-bot`.
+
+## 0.13.97
+
+- **Flows start on their own again with Claude Code 2.1.326.** It asks whether to trust each folder given with `--add-dir`, and every role of a flow gets the run's folder that way. So each agent stopped at that question until you answered it in its tab, and then did not take its prompt. A flow's agents answer it now, also after a restart, whatever `trust_prompt_pattern` says. Other launches leave it to you while **trust prompts** is off, as with the folder question.
+- **Answering a trust question no longer picks "No, exit" under a `❯` prompt.** With a shell prompt starting with `❯` (starship, pure), cornercase could take that prompt for the question's menu and press `Enter` on Claude Code's highlighted **No, exit**; it now moves to **Yes** first.
+- `trust_prompt_pattern`'s default also matches *yes, add it*. While Claude Code's input box is on screen the pattern is not looked at, so a resumed conversation showing those words is not taken for a question.
+
+## 0.13.96
+
+- **Programs can read what a bot is for.** `cornercase bot about prs` prints the bot's `bot.md`, and with `--json` gives `{"bot", "about"}`, so a window of your own (or one reached through `--remote`) can show that text in its edit form before you change it. `cornercase contract` lists `bot-about-read`.
+
+## 0.13.95
+
+- **A bot's toast and desktop notification show plain text.** They showed the first line of its answer with the Markdown in it (`**`, backticks, `- `); now they show the words, as the chat does.
+
+## 0.13.94
+
+- **A bot reads your projects' git.** A Claude Code bot with `cornercase` access can run `git -C <folder> log`, `show`, `diff` and `status` in the projects and worktrees you have open (many, but far fewer on Windows; past the limit, the first by folder path), and it is told how: the folder is `path` in `cornercase status --json`, and a shell loop is refused, so it runs one command at a time. Before, every `git -C` was refused and a bot never read a commit.
+- **A bot's git can no longer write or run anything.** `--output` let its read-only git write a file anywhere, and a repository it could make in its own folder let it run any program. `--output` is refused now (and a bot can no longer make a name starting with `-` at the top of its folder, which a shell glob could have turned into it), and git runs only in your projects, never in the bot's folder. Its `git status` and `git diff` also no longer rewrite a project's index while an agent there commits.
+- Gemini CLI and GitHub Copilot CLI bots with `cornercase` access no longer run git, which never reached your projects for them: Copilot's rules cannot keep it from writing, and Gemini's are not checked yet.
+
+## 0.13.93
+
+- **A bot runs your own `gh`, `git` and other programs.** A bot's turn put the whole folder of cornercase's program first on its `PATH`, so with Homebrew every program in `/opt/homebrew/bin` came before yours: a `gh` in `~/bin` was skipped for Homebrew's, which may not be logged in. Only `cornercase` itself comes first now, from a link in `bin/` next to `session.json`, and everything else is found in your `PATH`'s order.
+
+## 0.13.92
+
+- **A bot's routines are in the bot.** ` routines ` in its chat's header, **routines…** in its menu and a click on a routine on its card list its routines and reminders: the repeat, the next run (or `paused`) and how the last run ended. ` run now `, ` pause ` or ` resume `, ` edit… ` and ` remove ` (with ` undo `) act on one, and a click on it shows the chat at its last run. ` + routine ` schedules one for the bot yourself, as an every-day-at-09:00 routine you can change.
+- **The Queue tab lists projects' entries only.** A dim line at its end says how many bot routines there are, the schedule form's **Where** no longer lists bots, and ` clear started ` leaves the bots' runs alone. Editing a bot's routine shows its bot in **Where**, fixed.
+- For programs nothing changes: `cornercase queue list` still lists every entry, `--bot` picks one bot's, and `queue clear-started` still clears every one.
+
+## 0.13.91
+
+- **A bot tells you when an agent it started finishes.** The chat gets `▶ started claude in …` when the bot starts an agent. When the agent's turn ends, `✓ claude finished in …` comes with its last message, and the bot then answers in the conversation that started it, its chat's or its routine's: what matters, or the next step. A question from the agent shows `! claude needs you in …` and starts nothing.
+- Only the first finish after each prompt from the bot counts, so talking to that agent yourself stays quiet. A bot follows up to 20 agents. `cornercase bot edit prs --follow off`, or the form's **Follow** box, turns it off.
+- In the window, `by prs` shows on the agent's tab and in the agents section, the bot's card lists the agents it started, and a click on ` show ` or on a row of the card shows them.
+- For programs: `status` has `bot` on tabs and panes. `bot list --json` has `follow` and `following`. The chat's new lines come as `bot` events. `cornercase contract` lists `bot-follow`.
+
+## 0.13.90
+
+- **A bot can no longer attach to cornercase as a window.** Through `cornercase proxy`, a `cornercase`-access bot could speak to the server as a window does, and its keys and clicks reached your panes and dialogs as your own, past what the server refuses a bot. The server now closes a bot's connection on the first message only a window sends, with `a bot cannot attach as a window`, and inside a bot the command line refuses `cornercase` with no command, `cornercase remote` to a machine and `cornercase proxy` with the same message.
+- A server that a bot's command starts no longer inherits the bot's `CORNERCASE_BOT`, so its shells and the phone's window do not count as the bot's.
+
+## 0.13.89
+
+- **A bot made with what it is for sets itself up at once.** When **For** in the new bot form, or `--about` of `cornercase bot new`, says what the bot is for, making it starts its first turn: the bot schedules what that asks for, writes what its runs will need in `memory.md`, and tells you in its chat what it will do, what it scheduled and when that runs next. The chat opens with `── setting up ──`; what you send meanwhile is held for the next turn, which continues the same conversation. A bot made without it starts nothing and spends no tokens, as before.
+- ` retry ` under a setup that failed runs the setup again, and so does `cornercase bot setup prs`.
+- For programs: `bot new` answers `state: thinking` while the setup runs, a setup turn's first line is the notice `setting up`, the `bot` request has a `setup` action, and `cornercase contract` lists `bot-setup`.
+
 ## 0.13.88
 
-- **Personas for a flow's roles.** A persona is how an agent works, written in Markdown with a front matter that gives its `name`, such as the ones in [agency-agents](https://github.com/msitarzewski/agency-agents). Import some with `cornercase persona import`, then give one to any role of a flow with `persona = "ID"`, on any agent: the same Code Reviewer can run on Claude Code or Codex.
-  - `persona import` takes a `.md` file, a folder, `-`, an `https://` address, or a GitHub repository as `OWNER/REPO`, `OWNER/REPO/FOLDER` or `OWNER/REPO/PATH/FILE.md`, with no GitHub token. A folder or a repository imports every persona in it, in one download; a `divisions.json` that lists its folders limits it to those.
-  - Personas are prompt text that agents follow without asking, so `--check` lists what would be imported and saves nothing, and an import from the web asks first (`--yes` without a terminal).
-  - They live in `personas/` next to `config.json`, each with a `source:` saying where it came from, so importing it again with `--replace` refreshes it. `persona list` and `persona remove ID` manage them.
-  - When a run starts, each persona its roles name is copied into the run's folder (`personas/ID.md`), and the role's prompt tells the agent to read and follow it before its first work. The run keeps its copy, so changing a persona later never changes a running team.
-  - A flow that names a persona you don't have cannot run: `flow list` says which, and saving or importing such a flow is refused until you import it.
-  - Picking a persona in the Flows dialog comes later; for now, set it in the flow's file or with `flow save`.
-- **For programs**: the requests `persona-list`, `persona-import` (with `check`) and `persona-remove`, `persona` on the roles of `flow list --json`, `flow save` and `flow runs`, and the feature `flow-personas` in `cornercase contract`.
+- **A prompt no longer stays unsent in Claude Code's input box.** cornercase now waits until Claude Code has written its session file, drawn its input box and turned bracketed paste on (at most 30 s) before it pastes the prompt. After the `Enter` it checks that Claude Code took the prompt, and presses `Enter` again every 3 s while it sits idle, at most 5 times. This covers queued agents and routines, `cornercase start --prompt`, the Issues dialog's start with **send the prompt** on, and a flow's briefs, for its roles and its orchestrator.
+- When a prompt is still not taken, cornercase says so instead of showing a run that worked:
+  - the queue entry reads `started · pane N · prompt not taken` in yellow, and `queue show` explains it;
+  - a toast and a notification say `routine <name> started, but its agent did not take the prompt`;
+  - `cornercase start` prints a warning, and fails with `--wait`;
+  - an agent started from a dialog or a flow shows a toast naming its tab.
+- For programs: `unsent: true` in `start` answers and queue entries, the `queue-unsent` notice, and the `prompt-unsent` feature. `server.log` has a `launch: pasted` line that says what the pane showed when the prompt went in.
 
 ## 0.13.87
 

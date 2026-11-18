@@ -60,7 +60,15 @@ impl App {
         if text.is_none() && !send.enter {
             return Err("nothing to send: give a text, - to read it from stdin, or --enter".into());
         }
-        let held = Held { text, enter: send.enter, wait, from: asker.caller, force: send.force, pressed: false };
+        let held = Held {
+            text,
+            enter: send.enter,
+            wait,
+            from: asker.caller,
+            force: send.force,
+            pressed: false,
+            bot: asker.bot,
+        };
         if (!send.force && self.holding_back(pane, now).is_some()) || (send.force && self.sending(pane)) {
             let waits = Waits { done: pane_ids(pane), stage: Stage::Held(Box::new(held)), timeout };
             return Ok(self.hold(client, pane, waits, now));
@@ -135,6 +143,7 @@ impl App {
         }
         if held.enter {
             self.runs.prompted(held.from, pane, now);
+            self.bot_prompted(held.bot.filter(|_| held.wait.is_none()), pane);
         }
         Ok(held.enter.then(|| (Launch::enter(pane, now), Stage::Launch { confirm, compacts, wait: held.wait })))
     }

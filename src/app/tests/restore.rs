@@ -91,6 +91,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                 accounts: std::collections::BTreeMap::new(),
                 closed: None,
                 exited_agent: None,
+                bot: None,
             },
             PaneState {
                 cwd: Some(paths[3].clone()),
@@ -105,6 +106,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                 accounts: std::collections::BTreeMap::new(),
                 closed: None,
                 exited_agent: None,
+                bot: None,
             },
         ],
         active: 1,
@@ -152,6 +154,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                                         accounts: std::collections::BTreeMap::new(),
                                         closed: None,
                                         exited_agent: None,
+                                        bot: None,
                                     }],
                                     active: 0,
                                     layout: None,
@@ -280,6 +283,7 @@ fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
         accounts: std::collections::BTreeMap::new(),
         closed: None,
         exited_agent: None,
+        bot: None,
     });
     ws
 }

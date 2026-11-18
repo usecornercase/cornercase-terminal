@@ -322,3 +322,140 @@ fn a_fold_never_ends_on_a_routines_name_without_its_time_row() {
         }
     }
 }
+
+#[test]
+fn the_header_has_routines_left_of_new_conversation() {
+    let t = drawn(chat(&[]));
+    let header = row_text(&t, Rect::new(0, 0, CHAT_W, 1));
+    let (routines, new) = (header.find(" routines ").expect("routines"), header.find("new conversation").expect("new"));
+    assert!(routines + " routines ".len() < new, "{header}");
+    let areas = chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1);
+    assert_eq!((areas.routines.width, areas.routines.right() + 1), (10, areas.new_conversation.x));
+}
+
+#[test]
+fn a_narrow_header_leaves_routines_to_the_menu() {
+    let narrow = chat_areas(Rect::new(0, 0, 40, 10), 1, 1);
+    assert!(narrow.routines.is_empty(), "{narrow:?}");
+    assert!(!narrow.new_conversation.is_empty());
+    let wide = chat_areas(Rect::new(0, 0, 60, 10), 1, 1);
+    assert!(wide.routines.x >= wide.header.x + 12, "the name keeps its room: {wide:?}");
+    let t = drawn_in(chat(&[]), Rect::new(0, 0, 40, 10));
+    assert!(!row_text(&t, Rect::new(0, 0, 40, 1)).contains("routines"));
+}
+
+fn drawn_in(chat: ChatView, area: Rect) -> Terminal<TestBackend> {
+    let view = View { chat: Some(chat), ..view(&[]) };
+    let mut t = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
+    t.draw(|f| bots::chat::draw(f, &view, view.chat.as_ref().expect("a chat"), area, 1)).expect("draw");
+    t
+}
+
+#[test]
+fn chat_hit_finds_routines() {
+    let view = chat(&all_lines());
+    let areas = chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1);
+    let at = Position::new(areas.routines.x + 1, areas.routines.y);
+    assert_eq!(chat_hit(&areas, &view, at), Some(ChatHit::Routines));
+    let none = chat_areas(Rect::new(0, 0, 40, 10), 1, 1);
+    assert_ne!(chat_hit(&none, &view, Position::new(0, 0)), Some(ChatHit::Routines));
+}
+
+#[test]
+fn a_routine_row_of_the_card_is_a_target_on_both_its_rows() {
+    let routine = |label, text: &str| CardRow { routine: Some(7), ..CardRow::new(label, text) };
+    let card = BotCard {
+        name: "prs".into(),
+        rows: vec![
+            CardRow::new("agent", "Claude Code"),
+            routine("routine", "Review PRs"),
+            routine("", "next Mon 09:00 · ↻ weekday 09:00"),
+        ],
+    };
+    let list = Rect::new(0, 3, 25, 6);
+    let at = |row: u16| Position::new(list.x + 3, list.y + 1 + row);
+    assert_eq!(card_routine(list, &card, at(0)), None);
+    assert_eq!(card_routine(list, &card, at(1)), Some(7));
+    assert_eq!(card_routine(list, &card, at(2)), Some(7));
+    assert_eq!(card_routine(list, &card, at(3)), None);
+    let short = Rect::new(0, 3, 25, 3);
+    assert_eq!(card_routine(short, &card, Position::new(3, 6)), None, "a hidden row is not a target");
+    let a = areas();
+    let hover = Position::new(a.workspaces_list.x + 4, a.workspaces_list.y + 2);
+    let make = |hover| View { bot_card: Some(card.clone()), has_project: true, hover, ..view(&["cornercase"]) };
+    let colour = |view: &View, pos: Position| render(view).backend().buffer()[pos].fg;
+    let value = Position::new(a.workspaces_list.x + 1 + 9, a.workspaces_list.y + 2);
+    assert_eq!(colour(&make(Some(hover)), value), Color::Cyan);
+    assert_ne!(colour(&make(None), value), Color::Cyan);
+}
+
+fn agent_line(kind: ChatAgentKind, text: &str, body: Vec<Text<'static>>, link: Option<u64>) -> ChatEntry {
+    ChatEntry::Agent(ChatAgentLine { id: 40, state: kind, text: text.into(), body, open: false, link })
+}
+
+fn agent_entries() -> Vec<ChatEntry> {
+    let long: Vec<Text<'static>> = (1..=9).map(|n| Text::from(format!("line {n}"))).collect();
+    vec![
+        agent_line(ChatAgentKind::Started, "▶ started claude in web-shop › fix/ci-482", Vec::new(), Some(4)),
+        agent_line(
+            ChatAgentKind::Finished { failed: false },
+            "✓ claude finished in web-shop › fix/ci-482",
+            long,
+            Some(4),
+        ),
+        agent_line(
+            ChatAgentKind::Waiting,
+            "! claude needs you in web-shop › fix/ci-482",
+            vec![Text::from("Allow this edit?")],
+            Some(4),
+        ),
+        agent_line(ChatAgentKind::Started, "▶ started claude in web-shop › old", Vec::new(), None),
+    ]
+}
+
+#[test]
+fn an_agent_the_bot_started_is_drawn_with_its_link_or_closed() {
+    let rows = chat_rows(&agent_entries(), CHAT_W - 2, TONE);
+    let text: Vec<String> =
+        rows.iter().map(|row| row.line.spans.iter().map(|span| span.content.as_ref()).collect()).collect();
+    assert!(text[0].ends_with("fix/ci-482  show ") || text[0].ends_with(" show "), "{text:?}");
+    assert!(text.iter().any(|row| row.trim() == "+3 lines"), "{text:?}");
+    assert!(text.iter().all(|row| !row.contains("line 7")), "{text:?}");
+    assert!(text.last().is_some_and(|row| row.ends_with("closed")), "{text:?}");
+    let show = rows[0].hit.as_ref().expect("a link");
+    assert_eq!(show.0, RowHit::Show(4));
+    assert!(rows.last().expect("a row").hit.is_none());
+    insta::assert_snapshot!(drawn(chat(&agent_entries())).backend());
+}
+
+#[test]
+fn a_card_lists_the_agents_the_bot_started() {
+    let started = |label, value: &str, pane| CardRow {
+        status: Some(Status::Working),
+        pane: Some(pane),
+        ..CardRow::new(label, value)
+    };
+    let card = BotCard {
+        name: "prs".into(),
+        rows: vec![
+            CardRow { folder: true, ..CardRow::new("folder", "~/bots/prs") },
+            CardRow::new("agent", "Claude Code"),
+            started("started", "claude · web-shop › fix/ci", 4),
+            started("", "claude · api", 7),
+        ],
+    };
+    let v = View { bot_card: Some(card.clone()), has_project: true, ..view(&["cornercase"]) };
+    insta::assert_snapshot!(render(&v).backend());
+    let a = areas();
+    let at = card_row_at(a.workspaces_list, &card, Position::new(a.workspaces_list.x + 3, a.workspaces_list.y + 3));
+    assert_eq!(at, Some(2));
+}
+
+#[test]
+fn a_long_notice_wraps_and_keeps_its_reason() {
+    let text = "no longer following claude in web-shop › fix/ci-482: a bot follows at most 20 agents";
+    let rows = chat_rows(&[ChatEntry::Notice(text.into())], 40, TONE);
+    let joined: String =
+        rows.iter().map(|row| row.line.spans.iter().map(|s| s.content.as_ref()).collect::<String>()).collect();
+    assert!(rows.len() > 1 && joined.contains("20 agents"), "{joined}");
+}

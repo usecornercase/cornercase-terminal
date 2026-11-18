@@ -7,6 +7,8 @@ use ratatui::text::Line as Text;
 
 use crate::app::App;
 use crate::bots::chat::{self, Kind, Line};
+use crate::bots::follow;
+use crate::project::Hierarchy;
 use crate::ui::{self, ChatEntry};
 
 pub(in crate::app) struct Chat {
@@ -43,6 +45,8 @@ pub(super) struct Facts {
     retry: Option<u64>,
     answering: HashSet<u64>,
     again: HashSet<u64>,
+    panes: HashSet<u64>,
+    boot: String,
 }
 
 pub(in crate::app) struct Shown {
@@ -86,10 +90,32 @@ fn duration(took: Duration) -> String {
 
 impl Chat {
     fn body(&mut self, line: &Line, width: u16) -> Vec<Text<'static>> {
+        self.markdown(line.id, &line.text, width)
+    }
+
+    fn markdown(&mut self, id: u64, text: &str, width: u16) -> Vec<Text<'static>> {
         self.bodies
-            .entry(line.id)
-            .or_insert_with(|| crate::highlight::markdown::render(&line.text, usize::from(width.max(1))))
+            .entry(id)
+            .or_insert_with(|| crate::highlight::markdown::render(text, usize::from(width.max(1))))
             .clone()
+    }
+
+    fn agent_entry(&mut self, line: &Line, facts: &Facts, width: u16) -> ChatEntry {
+        let kind = match line.kind {
+            Kind::Started => ui::ChatAgentKind::Started,
+            Kind::Finished => ui::ChatAgentKind::Finished { failed: follow::failed(&line.text) },
+            _ => ui::ChatAgentKind::Waiting,
+        };
+        let shown = |agent: &&chat::AgentRef| agent.boot == facts.boot && facts.panes.contains(&agent.pane);
+        let at = line.agent.as_ref().filter(shown).map(|agent| agent.pane);
+        let text = line.body.as_deref().unwrap_or_default();
+        let body = match kind {
+            ui::ChatAgentKind::Finished { .. } => self.markdown(line.id, text, width.saturating_sub(2)),
+            ui::ChatAgentKind::Waiting => text.lines().map(|row| Text::from(row.to_string())).collect(),
+            ui::ChatAgentKind::Started => Vec::new(),
+        };
+        let open = self.unfolded.contains(&line.id);
+        ChatEntry::Agent(ui::ChatAgentLine { id: line.id, state: kind, text: line.text.clone(), body, open, link: at })
     }
 
     fn run_block(&mut self, run: u64, members: &[usize], facts: &Facts, width: u16) -> ChatEntry {
@@ -143,6 +169,7 @@ impl Chat {
             }
             Kind::Error => ChatEntry::Error { id: line.id, text: line.text, retry: facts.retry == Some(line.id) },
             Kind::Notice => ChatEntry::Notice(line.text),
+            Kind::Started | Kind::Finished | Kind::Waiting => self.agent_entry(&line, facts, width),
         }
     }
 
@@ -202,7 +229,13 @@ impl App {
             .shown
             .as_ref()
             .and_then(|shown| shown.lines.iter().rev().find(|line| line.routine.is_none()));
-        let retry = last.filter(|line| line.kind == Kind::Error && live.turn.is_none()).map(|line| line.id);
+        let lines = self.panels.bots.shown.as_ref().map(|shown| shown.lines.as_slice()).unwrap_or_default();
+        let ended = |line: &&Line| {
+            line.kind == Kind::Error
+                && live.turn.is_none()
+                && chat::prompt_of(lines, line.id).is_some_and(|prompt| prompt.kind != Kind::Finished)
+        };
+        let retry = last.filter(ended).map(|line| line.id);
         Facts {
             name: live.bot.name.clone(),
             held: live.held.iter().map(|(id, _)| *id).collect(),
@@ -211,6 +244,8 @@ impl App {
             retry,
             answering: live.runs.iter().map(|run| run.entry).collect(),
             again: self.runs_again(),
+            panes: self.projects.terms().map(|term| term.id).collect(),
+            boot: crate::control::server_token().to_string(),
         }
     }
 

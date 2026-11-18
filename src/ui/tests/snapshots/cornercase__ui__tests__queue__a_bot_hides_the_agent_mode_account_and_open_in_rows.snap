@@ -11,7 +11,7 @@ expression: t.backend()
 "  + New       │ When      every weekday… ▾                                           │              "
 "              │           09:00                                                      │              "
 "              │                                                                      │              "
-"              │ Where     bot: PRs                                 ▾                 │              "
+"              │ Where     bot: PRs                                                   │              "
 "              │                                                                      │              "
 "              │                                                                      │              "
 "              │                                                                      │              "

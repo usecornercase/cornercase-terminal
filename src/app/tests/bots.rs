@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use rstest::rstest;
+
 use super::*;
 use crate::agents::headless::Access;
 use crate::bots::Bot;
@@ -7,6 +9,7 @@ use crate::bots::chat::{self, Line};
 use crate::bots::folder;
 use crate::bots::sample as bot;
 use crate::test_util::{BotSleepers, fake_program, fixture, wait_until};
+use crate::ui::{ChatHit, RowHit};
 
 fn chat_of(dir: &Path, id: &str) -> Vec<Line> {
     chat::read(&folder::of(dir, id).join(folder::CHAT_FILE))
@@ -16,12 +19,14 @@ fn texts(lines: &[Line]) -> Vec<&str> {
     lines.iter().map(|line| line.text.as_str()).collect()
 }
 
-#[test]
-fn a_turn_that_never_ended_is_interrupted_and_what_was_held_is_dropped_once() {
+#[rstest]
+#[case::a_message(Line::you(1, 10, "first", false))]
+#[case::a_setup(Line::notice(1, 10, chat::SETTING_UP))]
+fn a_turn_that_never_ended_is_interrupted_and_what_was_held_is_dropped_once(#[case] first: Line) {
     let dir = TempDir::new();
     folder::create(dir.path(), &bot("prs", "PRs"), "").expect("create");
     let path = folder::of(dir.path(), "prs").join(folder::CHAT_FILE);
-    for line in [Line::you(1, 10, "first", false), Line::you(2, 11, "second", true)] {
+    for line in [first, Line::you(2, 11, "second", true)] {
         chat::append(&path, &line).expect("append");
     }
     let (mut app, _rx) = empty_app();
@@ -65,14 +70,20 @@ fn chat(out: &str) -> Chat {
     chat_with(out, Access::Cornercase)
 }
 
-pub(in crate::app::tests) fn install_bot(app: &mut App, out: &str, access: Access) -> (TempDir, TempDir, PathBuf) {
+fn install_agent(app: &mut App, out: &str) -> (TempDir, TempDir, PathBuf) {
     let (dir, bin) = (TempDir::new(), TempDir::new());
     let claude = fake_program(bin.path(), "claude");
     std::fs::write(claude.with_extension("out"), out).expect("canned output");
     app.config.agent_commands.insert("claude".into(), claude.display().to_string());
-    folder::create(dir.path(), &Bot { access, ..bot("prs", "PRs") }, "review my PRs").expect("create");
     app.set_bots_dir(dir.path());
     app.panels.bots.timeout = Duration::from_secs(20);
+    (dir, bin, claude)
+}
+
+pub(in crate::app::tests) fn install_bot(app: &mut App, out: &str, access: Access) -> (TempDir, TempDir, PathBuf) {
+    let (dir, bin, claude) = install_agent(app, out);
+    folder::create(dir.path(), &Bot { access, ..bot("prs", "PRs") }, "review my PRs").expect("create");
+    app.set_bots_dir(dir.path());
     (dir, bin, claude)
 }
 
@@ -82,13 +93,39 @@ fn chat_with(out: &str, access: Access) -> Chat {
     Chat { app, rx, dir, claude, bin }
 }
 
+pub(in crate::app::tests) fn settle(app: &mut App, rx: &Receiver<AppEvent>) {
+    wait_until("the turn ends", || {
+        drain(app, rx);
+        app.panels.bots.live[0].turn.is_none()
+    });
+}
+
+fn retry_at(app: &mut App) -> Position {
+    render(app, AREA);
+    let areas = app.chat_geometry(AREA);
+    let shown = app.shown_chat(AREA).expect("a chat");
+    for y in areas.lines.y..areas.lines.bottom() {
+        for x in areas.lines.x..areas.lines.right() {
+            let pos = Position::new(x, y);
+            if matches!(ui::chat_hit(&areas, &shown.view, pos), Some(ChatHit::Row(RowHit::Retry(_)))) {
+                return pos;
+            }
+        }
+    }
+    panic!("no retry button");
+}
+
 impl Chat {
     fn settle(&mut self) {
-        let Self { app, rx, .. } = self;
-        wait_until("the turn ends", || {
-            drain(app, rx);
-            app.panels.bots.live[0].turn.is_none()
-        });
+        settle(&mut self.app, &self.rx);
+    }
+
+    fn retried(&mut self) {
+        self.settle();
+        std::fs::write(self.claude.with_extension("out"), ANSWER).expect("canned output");
+        let at = retry_at(&mut self.app);
+        click(&mut self.app, at);
+        self.settle();
     }
 
     fn lines(&self) -> Vec<Line> {
@@ -125,6 +162,13 @@ impl Chat {
         std::fs::write(self.claude.with_extension("after"), answer).expect("the answer");
         std::fs::remove_file(self.claude.with_extension("hold")).expect("release");
     }
+}
+
+#[test]
+fn a_relative_link_folder_is_made_absolute_when_the_server_sets_it() {
+    let mut c = chat(ANSWER);
+    c.app.set_bots_bin(Path::new("relative/bin"));
+    assert_eq!(c.app.panels.bots.bin, Some(std::env::current_dir().expect("cwd").join("relative/bin")));
 }
 
 #[test]
@@ -212,18 +256,24 @@ fn a_turn_that_takes_too_long_ends_with_an_error() {
     assert_eq!(c.app.panels.bots.live[0].unread, 2);
 }
 
-#[test]
-fn an_answer_nobody_waits_for_is_unread_and_makes_a_toast_and_a_notification() {
-    let mut c = chat(ANSWER);
+#[rstest]
+#[case::plain_text("Two are blocked.", "PRs: Two are blocked.")]
+#[case::markdown("- **Two** are blocked:\\n- `#12` waits", "PRs: Two are blocked:")]
+fn an_answer_nobody_waits_for_is_unread_and_makes_a_toast_and_a_notification(
+    #[case] answer: &str,
+    #[case] shown: &str,
+) {
+    let mut c = chat(&ANSWER.replace("Two are blocked.", answer));
     c.say("hi");
     c.settle();
     assert_eq!(c.app.panels.bots.live[0].unread, 1);
     let toast = c.app.messages.toast.as_ref().expect("a toast");
-    assert_eq!(toast.message.as_str(), "PRs: Two are blocked.");
+    assert_eq!(toast.message.as_str(), shown);
     assert!(toast.go.is_some());
     let notes = c.app.outbox.take_notifications();
     assert_eq!(notes.len(), 1);
-    assert_eq!(notes[0].text, "PRs: Two are blocked.");
+    assert_eq!(notes[0].text, shown);
+    assert_eq!(c.lines().pop().expect("the answer").text, answer.replace("\\n", "\n"));
     c.app.bot_seen("prs").expect("seen");
     assert_eq!(c.app.panels.bots.live[0].unread, 0);
 }
@@ -340,9 +390,28 @@ fn editing_what_a_bot_is_for_writes_bot_md() {
     assert_eq!(about, "Review pull requests.");
 }
 
+#[test]
+fn what_a_bot_is_for_is_read_when_asked_and_never_given_empty_in_place_of_a_text_it_cannot_read() {
+    use crate::control::contract::Code;
+    let c = chat(ANSWER);
+    assert_eq!(c.app.bot_about("PRs"), Ok(("prs".into(), "review my PRs".into())));
+    let path = c.app.panels.bots.live[0].folder.join(folder::ABOUT_FILE);
+    std::fs::write(&path, "written by the bot").expect("write");
+    assert_eq!(c.app.bot_about("prs").expect("read").1, "written by the bot");
+    std::fs::remove_file(&path).expect("remove");
+    assert_eq!(c.app.bot_about("prs").expect("read").1, "");
+    std::fs::create_dir(&path).expect("folder");
+    assert_eq!(c.app.bot_about("prs").expect_err("unreadable").code, Code::Failed);
+    assert_eq!(c.app.bot_about("nobody").expect_err("no bot").code, Code::NotFound);
+}
+
 mod boundary;
 mod compact;
 mod form;
+mod git;
 mod menu;
 mod routines;
+mod routines_dialog;
+mod setup;
+mod views;
 mod window;

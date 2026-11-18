@@ -1,9 +1,10 @@
 import type { App } from './app';
 import type { BotsShape } from './layout';
 import type { Key } from './programs';
+import { plain } from './markdown';
 import { type Editable, editKey, removeSelection } from './todo';
 
-export type LineKind = 'you' | 'bot' | 'step' | 'error' | 'notice';
+export type LineKind = 'you' | 'bot' | 'step' | 'error' | 'notice' | 'started' | 'finished' | 'waiting';
 export type Access = 'cornercase' | 'full';
 
 export interface ChatLine {
@@ -12,16 +13,12 @@ export interface ChatLine {
   text: string;
   at: number;
   routine?: number;
-}
-
-export interface BotRoutine {
-  id: number;
-  label: string;
-  repeat: string;
-  at: number;
+  agent?: { kind: string; pane: number };
+  body?: string;
 }
 
 export interface Turn {
+  setup?: boolean;
   since: number;
   steps: number;
   stopping: boolean;
@@ -38,7 +35,6 @@ export interface Bot {
   about: string;
   made: number;
   lines: ChatLine[];
-  routines: BotRoutine[];
   unread: number;
   turn: Turn | null;
   held: Set<number>;
@@ -76,7 +72,14 @@ export const EXAMPLES = [
   'Which issues labelled bug came in today, in every project?',
   'Every weekday at 9, tell me which of my PRs are blocked.',
 ];
+export const SETTING_UP = 'setting up';
 const ANSWER_AFTER = [1400, 2600, 4200];
+const SETUP_AFTER = [1200, 2400, 3600];
+const SETUP_STEPS = [
+  'cornercase queue list --bot {id} --json',
+  "cornercase queue add --every 'day 09:00' --name 'Daily check' --prompt 'Look through my projects and tell me what needs me.'",
+];
+const SETUP_PROMPT = 'Look through my projects and tell me what needs me.';
 const TICK = 500;
 const FOLDER = '~/.local/state/cornercase/bots';
 const MINUTE = 60000;
@@ -94,6 +97,15 @@ const PRS_ANSWER = [
   '```sh',
   'gh run rerun --failed',
   '```',
+].join('\n');
+
+const SETUP_ANSWER = [
+  'Set up: every day at **09:00** I will look through your projects and tell you here what needs you.',
+  '',
+  '- Scheduled **Daily check**, every day 09:00',
+  '- Wrote what each run needs in `memory.md`',
+  '',
+  'Nothing needed from you for now.',
 ].join('\n');
 
 const DIGEST_ANSWER = ['Yesterday in **web-shop**:', '', '- 4 pull requests merged, #476 the last', '- `feat/gift-cards` still waits for tests'].join('\n');
@@ -180,7 +192,6 @@ export class Bots {
       ...init,
       made: Date.now(),
       lines: [],
-      routines: [],
       unread: 0,
       turn: null,
       held: new Set(),
@@ -195,8 +206,16 @@ export class Bots {
     return bot;
   }
 
-  add(bot: Bot, at: number, kind: LineKind, text: string, routine?: number): ChatLine {
-    const line: ChatLine = { id: this.next++, kind, text, at, ...(routine === undefined ? {} : { routine }) };
+  add(bot: Bot, at: number, kind: LineKind, text: string, routine?: number, agent?: { line: ChatLine['agent']; body?: string }): ChatLine {
+    const line: ChatLine = {
+      id: this.next++,
+      kind,
+      text,
+      at,
+      ...(routine === undefined ? {} : { routine }),
+      ...(agent?.line ? { agent: agent.line } : {}),
+      ...(agent?.body === undefined ? {} : { body: agent.body }),
+    };
     bot.lines.push(line);
     if (bot.scroll > 0) bot.below = true;
     return line;
@@ -212,7 +231,8 @@ export class Bots {
   }
 
   nextRun(bot: Bot): number | null {
-    return bot.routines.length ? Math.min(...bot.routines.map((r) => r.at)) : null;
+    const times = this.app.botQueued.filter((e) => e.bot === bot.id && !e.routine && e.state === 'pending' && !e.paused).map((e) => e.at);
+    return times.length ? Math.min(...times) : null;
   }
 
   show(id: string, run?: number): void {
@@ -258,9 +278,18 @@ export class Bots {
     this.app.dirty();
   }
 
+  setup(bot: Bot): void {
+    if (bot.turn || !bot.about.trim()) return;
+    this.add(bot, Date.now(), 'notice', SETTING_UP);
+    this.start(bot, true);
+    this.app.dirty();
+  }
+
   retry(bot: Bot): void {
-    const last = [...bot.lines].reverse().find((l) => l.kind === 'you');
-    if (last && !bot.turn) this.send(bot, last.text);
+    const last = [...bot.lines].reverse().find((l) => !l.routine && (l.kind === 'you' || (l.kind === 'notice' && l.text === SETTING_UP)));
+    if (!last || bot.turn) return;
+    if (last.kind === 'notice') this.setup(bot);
+    else this.send(bot, last.text);
   }
 
   example(bot: Bot, text: string): void {
@@ -298,13 +327,14 @@ export class Bots {
     return bot.id === 'digest' ? DIGEST_ANSWER : GENERIC_ANSWER;
   }
 
-  private start(bot: Bot): void {
+  private start(bot: Bot, setup = false): void {
     const app = this.app;
-    bot.turn = { since: app.now(), steps: 0, stopping: false };
-    const steps = ['cornercase status --json', 'gh pr list --json number,title,reviewDecision'];
+    bot.turn = { since: app.now(), steps: 0, stopping: false, ...(setup ? { setup } : {}) };
+    const after = setup ? SETUP_AFTER : ANSWER_AFTER;
+    const steps = setup ? SETUP_STEPS.map((s) => s.replace('{id}', bot.id)) : ['cornercase status --json', 'gh pr list --json number,title,reviewDecision'];
     steps.forEach((text, i) => {
       bot.timers.push(
-        app.after(ANSWER_AFTER[i], () => {
+        app.after(after[i], () => {
           if (!bot.turn) return;
           bot.turn.steps += 1;
           this.add(bot, Date.now(), 'step', text);
@@ -312,9 +342,19 @@ export class Bots {
         }),
       );
     });
-    bot.timers.push(app.after(ANSWER_AFTER[2], () => this.finish(bot)));
+    bot.timers.push(app.after(after[2], () => this.finish(bot)));
     this.tick(bot);
     app.dirty();
+  }
+
+  private scheduled(bot: Bot): void {
+    const app = this.app;
+    const next = new Date();
+    next.setHours(9, 0, 0, 0);
+    if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+    const base = queueBase(bot, 'Daily check', SETUP_PROMPT);
+    app.botQueued.push({ ...base, id: app.nextQueueId++, at: next.getTime(), repeat: 'day 09:00', state: 'pending' });
+    app.botQueued.sort((a, b) => a.at - b.at || a.id - b.id);
   }
 
   private tick(bot: Bot): void {
@@ -327,13 +367,17 @@ export class Bots {
 
   private finish(bot: Bot): void {
     const app = this.app;
+    const setup = bot.turn?.setup ?? false;
     bot.turn = null;
     bot.timers = [];
-    this.add(bot, Date.now(), 'bot', this.answer(bot));
+    if (setup) this.scheduled(bot);
+    this.add(bot, Date.now(), 'bot', setup ? SETUP_ANSWER : this.answer(bot));
     if (this.shown === bot.id) bot.unread = 0;
     else {
       bot.unread += 1;
-      app.notify(`${bot.name}: ${bot.lines[bot.lines.length - 1].text.split('\n')[0]}`, undefined, () => this.show(bot.id));
+      const text = bot.lines[bot.lines.length - 1].text;
+      const first = plain(text).split('\n').map((l) => l.trim()).find(Boolean) ?? text.split('\n')[0];
+      app.notify(`${bot.name}: ${first}`, undefined, () => this.show(bot.id));
     }
     const held = bot.lines.filter((l) => bot.held.has(l.id));
     bot.held.clear();
@@ -367,7 +411,6 @@ export function seedBots(app: App): void {
   const now = Date.now();
   const prs = bots.create({ name: 'prs', agent: 'claude', model: 'opus', effort: 'high', account: 'home', access: 'cornercase', about: 'Review my open pull requests and tell me which are blocked' });
   const ran = now - 30 * MINUTE;
-  prs.routines.push({ id: RUN_ROUTINE, label: 'Review PRs', repeat: '2h', at: ran + 120 * MINUTE });
   bots.add(prs, ran, 'notice', `↻ Review PRs · ${clock(ran)}`, RUN);
   bots.add(prs, ran + MINUTE, 'step', 'cornercase status --json', RUN);
   bots.add(prs, ran + MINUTE, 'step', 'gh pr list --json number,title,reviewDecision', RUN);
@@ -377,6 +420,16 @@ export function seedBots(app: App): void {
   bots.add(prs, now - 8 * MINUTE, 'step', 'gh pr checks 490');
   bots.add(prs, now - 7 * MINUTE, 'bot', PRS_ANSWER);
   bots.add(prs, now - 5 * MINUTE, 'notice', 'new conversation');
+  const fixed = { kind: 'claude', pane: 0 };
+  bots.add(prs, now - 4 * MINUTE, 'you', 'start an agent to fix the failing test of #490');
+  bots.add(prs, now - 4 * MINUTE + 5000, 'step', 'cornercase start --project 1 --worktree fix/macos-test --prompt "Fix the failing test (macos) of #490"');
+  bots.add(prs, now - 4 * MINUTE + 8000, 'started', '▶ started claude in web-shop › fix/macos-test', undefined, { line: fixed });
+  bots.add(prs, now - 4 * MINUTE + 12000, 'bot', "Started Claude Code on `fix/macos-test`. I'll tell you when it's done.");
+  bots.add(prs, now - 2 * MINUTE, 'finished', '✓ claude finished in web-shop › fix/macos-test', undefined, {
+    line: fixed,
+    body: 'Fixed the flaky path in `tests/paths.rs` and pushed `fix/macos-test`.\nAll 214 tests pass on macOS.',
+  });
+  bots.add(prs, now - 2 * MINUTE + 6000, 'bot', '#490 passes `test (macos)` now. Nothing else is blocking it: it needs one review.');
   const digest = bots.create({ name: 'digest', agent: 'codex', model: '', access: 'full', about: 'A short digest of what merged yesterday' });
   bots.add(digest, now - 2 * 60 * MINUTE, 'you', 'what merged yesterday?');
   bots.add(digest, now - 2 * 60 * MINUTE, 'step', 'cornercase status --json');
@@ -384,13 +437,17 @@ export function seedBots(app: App): void {
   digest.unread = 1;
 }
 
+function queueBase(bot: Bot, label: string, prompt: string) {
+  return { prompt, label, project: 0, folder: '', workspace: null, branch: '', agent: bot.agent, mode: '', command: '', bot: bot.id };
+}
+
 export function seedBotQueue(app: App): void {
   const prs = app.bots.list.find((b) => b.id === 'prs');
-  const routine = prs?.routines[0];
-  if (!prs || !routine) return;
-  const base = { prompt: 'Review my open pull requests and tell me which are blocked.', label: routine.label, project: 0, folder: '', workspace: null, branch: '', agent: prs.agent, mode: '', command: '', bot: prs.id };
+  if (!prs) return;
+  const ran = prs.lines[0].at;
+  const base = queueBase(prs, 'Review PRs', 'Review my open pull requests and tell me which are blocked.');
   app.nextQueueId = RUN + 1;
-  app.queued.push({ ...base, id: RUN_ROUTINE, at: routine.at, repeat: routine.repeat, state: 'pending' });
-  app.queued.push({ ...base, id: RUN, at: prs.lines[0].at, routine: RUN_ROUTINE, state: 'answered' });
-  app.queued.sort((a, b) => a.at - b.at || a.id - b.id);
+  app.botQueued.push({ ...base, id: RUN_ROUTINE, at: ran + 120 * MINUTE, repeat: '2h', state: 'pending' });
+  app.botQueued.push({ ...base, id: RUN, at: ran, routine: RUN_ROUTINE, state: 'answered' });
+  app.botQueued.sort((a, b) => a.at - b.at || a.id - b.id);
 }

@@ -1,7 +1,8 @@
-use std::io;
+use std::io::{self, Read as _};
 use std::path::{Path, PathBuf};
 
 use super::Bot;
+use crate::os::fs::{NONBLOCK, OpenOptionsExt};
 use crate::persist::{self, Kind};
 
 pub(crate) const BOT_FILE: &str = "bot.json";
@@ -46,6 +47,21 @@ fn load(folder: &Path) -> Option<Bot> {
     let bytes = std::fs::read(folder.join(BOT_FILE)).ok()?;
     let bot: Bot = serde_json::from_slice(&bytes).ok()?;
     (folder.file_name()?.to_str()? == bot.id).then_some(bot)
+}
+
+pub(crate) fn about(folder: &Path) -> io::Result<String> {
+    let opened = std::fs::OpenOptions::new().read(true).custom_flags(NONBLOCK).open(folder.join(ABOUT_FILE));
+    let mut file = match opened {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(String::new()),
+        Err(error) => return Err(error),
+    };
+    if !file.metadata()?.is_file() {
+        return Err(io::Error::other("it is not a regular file"));
+    }
+    let mut text = String::new();
+    file.read_to_string(&mut text)?;
+    Ok(text)
 }
 
 pub(crate) fn notes(folder: &Path) -> (String, String) {

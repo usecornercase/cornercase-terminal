@@ -23,7 +23,14 @@ fn queue_tab() -> View<'static> {
         tab: 2,
         toggles: Vec::new(),
         on: Vec::new(),
-        body: IssuesBody::List { filter: String::new(), items, selected: Some(0), scroll: 0, empty: String::new() },
+        body: IssuesBody::List {
+            filter: String::new(),
+            items,
+            selected: Some(0),
+            scroll: 0,
+            empty: String::new(),
+            tail: None,
+        },
         note: None,
         hint: "enter edits it · start now runs it at once".into(),
         buttons: vec!["new", "start now", "remove", "clear started", "cancel"],
@@ -231,6 +238,28 @@ fn a_flow_replaces_the_mode_and_the_account() {
     assert!(lines.iter().any(|l| l.contains("set by the flow's roles")), "{lines:#?}");
 }
 
+fn queue_issues(items: Vec<IssueRow>, hint: &str, buttons: Vec<&'static str>) -> Issues {
+    let body = IssuesBody::List {
+        filter: String::new(),
+        items,
+        selected: Some(0),
+        scroll: 0,
+        empty: String::new(),
+        tail: None,
+    };
+    Issues {
+        title: "Issues · shop".into(),
+        tabs: vec!["All", "GitHub", "Queue"],
+        tab: 2,
+        toggles: Vec::new(),
+        on: Vec::new(),
+        body,
+        note: None,
+        hint: hint.into(),
+        buttons,
+    }
+}
+
 #[test]
 fn the_queue_tab_shows_routines_their_runs_and_a_paused_one() {
     let row = |when: &str, label: &str, meta: &str, colour| IssueRow {
@@ -256,31 +285,24 @@ fn the_queue_tab_shows_routines_their_runs_and_a_paused_one() {
             Some(Color::Yellow),
         ),
     ];
-    let issues = Issues {
-        title: "Issues · shop".into(),
-        tabs: vec!["All", "GitHub", "Queue"],
-        tab: 2,
-        toggles: Vec::new(),
-        on: Vec::new(),
-        body: IssuesBody::List { filter: String::new(), items, selected: Some(0), scroll: 0, empty: String::new() },
-        note: None,
-        hint: "enter edits it · start now runs it once more".into(),
-        buttons: vec!["new", "start now", "pause", "remove", "clear started", "cancel"],
-    };
+    let issues = queue_issues(
+        items,
+        "enter edits it · start now runs it once more",
+        vec!["new", "start now", "pause", "remove", "clear started", "cancel"],
+    );
     let view = View { overlay: Some(Overlay::Issues(issues)), ..view(&["shop"]) };
     insta::assert_snapshot!(render_sized(&view, 120, 24).backend());
 }
 
 #[test]
 fn a_bot_hides_the_agent_mode_account_and_open_in_rows() {
-    let mut places = vec![Choice { label: "shop · root".into(), place: Place::default(), worktree: true }];
-    places.push(Choice {
+    let places = vec![Choice {
         label: "bot: PRs".into(),
         place: Place { bot: Some("prs".into()), ..Place::default() },
         worktree: false,
-    });
+    }];
     let choices =
-        Choices { places, place: Some(1), kinds: vec!["auto".into(), "claude".into()], agent: 1, flows: Vec::new() };
+        Choices { places, place: Some(0), kinds: vec!["auto".into(), "claude".into()], agent: 1, flows: Vec::new() };
     let mut bot = Form::new(choices, "Europe/Madrid".into(), "2026-10-14");
     bot.prompt = Editor::new("Review my pull requests");
     bot.when = When::Weekdays.combo();
@@ -289,28 +311,63 @@ fn a_bot_hides_the_agent_mode_account_and_open_in_rows() {
     insta::assert_snapshot!(t.backend());
     let text = lines(&t).join("\n");
     assert!(text.contains("set by the bot") && text.contains("Each run is a new conversation"), "{text}");
+    let at = lines(&t).iter().position(|l| l.contains("Where")).expect("the Where row");
+    assert!(!lines(&t)[at].contains('▾'), "Where is fixed text: {text}");
+    let x = lines(&t)[at].find("bot: PRs").expect("Where shows the bot");
+    let x = u16::try_from(lines(&t)[at][..x].chars().count()).expect("column");
+    assert_eq!(t.backend().buffer()[(x, u16::try_from(at).expect("row"))].fg, Color::DarkGray);
     for hidden in ["Mode", "Open in", "[ ]", "new tab", "Account"] {
         assert!(!text.contains(hidden), "{hidden} in\n{text}");
     }
 }
 
+fn with_tail(mut view: View<'static>, tail: &str, empty: bool) -> View<'static> {
+    let Some(Overlay::Issues(Issues { body: IssuesBody::List { items, tail: slot, empty: text, .. }, .. })) =
+        &mut view.overlay
+    else {
+        panic!("the issues modal")
+    };
+    *slot = Some(tail.into());
+    if empty {
+        items.clear();
+        *text = "nothing queued: new schedules a prompt, and schedule on an issue queues it".into();
+    }
+    view
+}
+
 #[test]
-fn the_queue_tab_shows_a_bots_routine_and_its_answered_run() {
+fn the_queue_tab_ends_with_a_dim_line_naming_the_bot_routines() {
+    let t = render_sized(&with_tail(queue_tab(), "2 bot routines: in each bot's chat", false), 120, 24);
+    let lines = lines(&t);
+    let last = lines.iter().position(|l| l.contains("Review the tests")).expect("the last row");
+    assert!(lines[last + 1].contains("2 bot routines: in each bot's chat"), "{lines:#?}");
+    let x = lines[last + 1].find("2 bot").expect("the tail");
+    let x = u16::try_from(lines[last + 1][..x].chars().count()).expect("column");
+    let cell = &t.backend().buffer()[(x, u16::try_from(last + 1).expect("row"))];
+    assert_eq!(cell.fg, Color::DarkGray);
+}
+
+#[test]
+fn the_bot_routines_line_goes_under_the_empty_text() {
+    let t = render_sized(&with_tail(queue_tab(), "1 bot routine: in its bot's chat", true), 120, 24);
+    let lines = lines(&t);
+    let empty = lines.iter().position(|l| l.contains("nothing queued")).expect("the empty text");
+    assert!(lines[empty + 1].contains("1 bot routine: in its bot's chat"), "{lines:#?}");
+}
+
+#[test]
+fn the_bot_routines_line_is_left_out_when_the_rows_fill_the_list() {
     let mut view = queue_tab();
     let Some(Overlay::Issues(Issues { body: IssuesBody::List { items, .. }, .. })) = &mut view.overlay else {
         panic!("the issues modal")
     };
-    items.push(IssueRow {
-        key: "2026-10-15 09:00".into(),
-        title: "Review PRs".into(),
-        meta: "answered · claude · bot PRs".into(),
-        colour: Some(Color::Green),
-    });
-    let t = render_sized(&view, 120, 24);
-    let lines = lines(&t);
-    let row = lines.iter().position(|l| l.contains("Review PRs")).expect("the bot's row");
-    let x = lines[row].find("answered").expect("its state");
-    let x = u16::try_from(lines[row][..x].chars().count()).expect("column");
-    assert_eq!(t.backend().buffer()[(x, u16::try_from(row).expect("row"))].fg, Color::Green);
-    assert!(lines[row].contains("bot PRs"));
+    let (key, title, meta) = (items[0].key.clone(), items[0].title.clone(), items[0].meta.clone());
+    items.extend((0..40).map(|_| IssueRow {
+        key: key.clone(),
+        title: title.clone(),
+        meta: meta.clone(),
+        colour: None,
+    }));
+    let t = render_sized(&with_tail(view, "9 bot routines: in each bot's chat", false), 120, 24);
+    assert!(!lines(&t).join("\n").contains("bot routines"));
 }

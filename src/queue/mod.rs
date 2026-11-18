@@ -104,11 +104,13 @@ pub(crate) struct Entry {
     pub(crate) started: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) result: Option<outcome::Outcome>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) unsent: bool,
 }
 
 impl Entry {
     pub(crate) fn new(id: u64, task: Task, state: State) -> Self {
-        Self { id, task, state, started: None, result: None }
+        Self { id, task, state, started: None, result: None, unsent: false }
     }
 
     pub(crate) fn is_routine(&self) -> bool {
@@ -165,7 +167,11 @@ impl From<&Entry> for Listed {
     fn from(entry: &Entry) -> Self {
         let next = (entry.is_routine() && !entry.task.paused).then_some(entry.task.at);
         let result_at = entry.result.as_ref().map(|result| result.at);
-        let listed = Entry { started: entry.started, ..Entry::new(entry.id, entry.task.clone(), entry.state.clone()) };
+        let listed = Entry {
+            started: entry.started,
+            unsent: entry.unsent,
+            ..Entry::new(entry.id, entry.task.clone(), entry.state.clone())
+        };
         Self { entry: listed, next, result_at }
     }
 }
@@ -249,7 +255,12 @@ impl Queue {
     }
 
     pub(crate) fn clear_started(&mut self) -> Vec<Entry> {
-        let (started, kept) = std::mem::take(&mut self.entries).into_iter().partition(Entry::clearable);
+        self.clear_started_where(|_| true)
+    }
+
+    pub(crate) fn clear_started_where(&mut self, which: impl Fn(&Entry) -> bool) -> Vec<Entry> {
+        let (started, kept) =
+            std::mem::take(&mut self.entries).into_iter().partition(|entry| entry.clearable() && which(entry));
         self.entries = kept;
         started
     }

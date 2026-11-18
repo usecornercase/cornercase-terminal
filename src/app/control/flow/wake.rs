@@ -171,6 +171,8 @@ impl App {
             contract: None,
             boot: None,
             view: None,
+            bot: None,
+            bot_run: None,
             command: Command::Send(send),
         };
         log::info!("flow", "orchestrator woken", workspace = workspace, roles = roles.len());

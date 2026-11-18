@@ -48,12 +48,16 @@ fn home(report: &Report) -> Option<PathBuf> {
     std::env::var_os(crate::paths::HOME_VAR).map(PathBuf::from)
 }
 
+fn marked(view: &control::ViewInfo) -> control::Ids {
+    if view.bot.is_some() { control::Ids::default() } else { view.shown }
+}
+
 pub(crate) fn render(report: &Report, home: Option<&Path>, now: SystemTime) -> String {
     let mut lines = Vec::new();
     lines.extend(report.view.as_ref().map(super::view::describe));
     let away = report.shown_remote.is_some() || report.shown_bot.is_some();
     let window = if away { control::Ids::default() } else { report.shown };
-    let shown = report.view.as_ref().map_or(window, |view| view.shown);
+    let shown = report.view.as_ref().map_or(window, marked);
     let marks = Marks { shown, word: if report.view.is_some() { "view" } else { "shown" } };
     for project in report.loose() {
         project_lines(&mut lines, project, 0, home, &marks);

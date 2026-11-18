@@ -1,4 +1,5 @@
-use super::text::{agents, chat, event_text, list};
+use super::follow_value;
+use super::text::{about, agents, chat, event_text, list};
 use crate::agents::headless::Used;
 use crate::bots::chat::Line;
 use crate::control::bots::{AgentInfo, BotInfo, BotLast};
@@ -148,4 +149,58 @@ fn a_chat_opens_a_header_for_each_run_and_says_its_routine() {
     let text = chat("PRs", &[head, step, said, chat_turn], NOON, ZONE);
     assert!(text.contains("PRs · 11:50 · routine 12\n  ▸ gh pr list\nTwo are blocked."), "{text}");
     assert!(text.contains("PRs · 11:51\nHi."), "{text}");
+}
+
+fn agent() -> crate::bots::chat::AgentRef {
+    crate::bots::chat::AgentRef { kind: "claude".into(), pane: 4, workspace: 2, project: 1, boot: "1-2".into() }
+}
+
+#[test]
+fn history_prints_started_finished_and_waiting() {
+    let lines = [
+        Line::started(1, NOON - 300, "▶ started claude in shop", agent(), None),
+        Line::finished(2, NOON - 200, "✓ claude finished in shop", (agent(), "Fixed it.\nPushed.".into()), Some(9)),
+        Line::waiting(3, NOON - 100, "! claude needs you in shop", (agent(), "Allow?".into()), None),
+    ];
+    let text = chat("PRs", &lines, NOON, ZONE);
+    assert_eq!(
+        text,
+        "▶ started claude in shop · 11:55\n\n\
+         ✓ claude finished in shop · 11:56 · routine 9\n  Fixed it.\n  Pushed.\n\n\
+         ! claude needs you in shop · 11:58\n  Allow?\n"
+    );
+}
+
+#[test]
+fn event_text_names_the_new_kinds() {
+    let started = Line::started(1, 0, "▶ started claude in shop", agent(), None);
+    assert_eq!(event_text("prs", (Some(&started), None, None)), "bot prs  started: ▶ started claude in shop");
+    let finished = Line::finished(2, 0, "✓ claude finished in shop", (agent(), "Done.".into()), None);
+    assert_eq!(event_text("prs", (Some(&finished), None, None)), "bot prs  finished: ✓ claude finished in shop");
+    let waiting = Line::waiting(3, 0, "! claude needs you in shop", (agent(), "?".into()), None);
+    assert_eq!(event_text("prs", (Some(&waiting), None, None)), "bot prs  waiting: ! claude needs you in shop");
+}
+
+#[test]
+fn edit_maps_follow_on_and_off() {
+    use clap::Parser;
+
+    use crate::cli::args::Cli;
+    assert_eq!(
+        (follow_value(Some("on")), follow_value(Some("off")), follow_value(None)),
+        (Some(true), Some(false), None)
+    );
+    for given in ["on", "off"] {
+        let cli = Cli::try_parse_from(["cornercase", "bot", "edit", "prs", "--follow", given]).expect("parses");
+        assert!(format!("{cli:?}").contains(&format!("follow: Some(\"{given}\")")), "{cli:?}");
+    }
+    assert!(Cli::try_parse_from(["cornercase", "bot", "edit", "prs", "--follow", "maybe"]).is_err());
+    assert!(Cli::try_parse_from(["cornercase", "bot", "new", "prs", "--follow", "off"]).is_ok());
+}
+
+#[test]
+fn what_a_bot_is_for_prints_as_it_is_with_one_final_newline() {
+    assert_eq!(about(""), "");
+    assert_eq!(about("a\nb"), "a\nb\n");
+    assert_eq!(about("a\n"), "a\n");
 }

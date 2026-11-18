@@ -175,6 +175,7 @@ pub(super) enum Overlay {
     Keys(Option<KeysGroup>),
     Worktrees(Box<crate::worktrees::Dialog>),
     Ports(Box<crate::ports::dialog::Dialog>),
+    BotRoutines(Box<crate::bots::routines::Dialog>),
     Processes(Box<crate::processes::dialog::Dialog>),
     CloseAgent(Box<CloseAgent>),
     CloseAgents(Box<CloseAgents>),
@@ -224,7 +225,7 @@ impl Overlay {
                 self.notes_name()
             }
             Self::Keys(_) => "keys",
-            Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) => self.listing_name(),
+            Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) | Self::BotRoutines(_) => self.listing_name(),
             Self::CloseAgent(_) | Self::CloseAgents(_) | Self::ForgetAgents { .. } => self.agents_name(),
             Self::Popup(_) => "plugin popup",
             Self::Star => "star",
@@ -277,6 +278,7 @@ impl Overlay {
         match self {
             Self::Worktrees(_) => "worktrees",
             Self::Ports(_) => "ports",
+            Self::BotRoutines(_) => "bot routines",
             _ => "processes",
         }
     }
@@ -469,6 +471,7 @@ impl App {
             Some(Overlay::Keys(group)) => return self.keys_mouse(*group, ev, pos, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_mouse(ev, pos, area),
             Some(Overlay::Ports(_)) => self.ports_mouse(ev, pos, area),
+            Some(Overlay::BotRoutines(_)) => self.bot_routines_mouse(ev, pos, area),
             Some(Overlay::Processes(_)) => self.processes_mouse(ev, pos, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_mouse(ev, pos, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_mouse(ev, pos, area),
@@ -477,6 +480,33 @@ impl App {
             _ => (),
         }
         Ok(())
+    }
+
+    fn close_confirm_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::DeleteGroup { group } => self.delete_group_view(*group),
+            Overlay::CloseProject { project } => self.close_project_view(*project),
+            Overlay::CloseWorkspace { project, workspace } => self.close_workspace_view(*project, *workspace),
+            Overlay::CloseTab { project, workspace, tab } => self.close_tab_view(*project, *workspace, *tab),
+            Overlay::ClosePane { pane } => self.close_pane_view(*pane),
+            _ => None,
+        }
+    }
+
+    fn flow_dialog_view(overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::Flows { dialog, .. } => Some(flows_view(dialog, area)),
+            Overlay::StartFlow { start, .. } => Some(start_flow_view(start, area)),
+            _ => None,
+        }
+    }
+
+    fn update_dialog_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::Update(step) => Some(self.update_view(step, area)),
+            Overlay::Restart => Some(self.restart_view(area)),
+            _ => None,
+        }
     }
 
     pub(super) fn overlay_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
@@ -489,26 +519,26 @@ impl App {
             Overlay::ShareSettings(dialog) => ui::Overlay::ShareSettings(Box::new(ui::ShareSettings::of(dialog, area))),
             Overlay::RemoveAccount { kind, name } => Self::remove_account_view(*kind, name),
             Overlay::DiscardChanges(target) => Self::discard_view(target),
-            Overlay::Flows { dialog, .. } => flows_view(dialog, area),
-            Overlay::StartFlow { start, .. } => start_flow_view(start, area),
+            Overlay::Flows { .. } | Overlay::StartFlow { .. } => Self::flow_dialog_view(overlay, area)?,
             Overlay::ProjectSettings(form) => super::project_settings_dialog::project_settings_overlay(form),
             Overlay::Rename { target, input } => Self::rename_view(*target, input),
             Overlay::RemoveWorkspace { .. } | Overlay::MachineWorkspace(_) => self.workspace_view(overlay)?,
-            Overlay::DeleteGroup { group } => self.delete_group_view(*group)?,
-            Overlay::CloseProject { project } => self.close_project_view(*project)?,
-            Overlay::CloseWorkspace { project, workspace } => self.close_workspace_view(*project, *workspace)?,
-            Overlay::CloseTab { project, workspace, tab } => self.close_tab_view(*project, *workspace, *tab)?,
-            Overlay::ClosePane { pane } => self.close_pane_view(*pane)?,
+            Overlay::DeleteGroup { .. }
+            | Overlay::CloseProject { .. }
+            | Overlay::CloseWorkspace { .. }
+            | Overlay::CloseTab { .. }
+            | Overlay::ClosePane { .. } => self.close_confirm_view(overlay)?,
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
-            Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) => self.listing_view(overlay, area)?,
+            Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) | Overlay::BotRoutines(_) => {
+                self.listing_view(overlay, area)?
+            }
             Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
             Overlay::CloseAgents(_) | Overlay::ForgetAgents { .. } => self.closed_agents_view(overlay, area)?,
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), self.home.as_deref()),
             Overlay::Queue(form) => ui::Overlay::Queue(Self::queue_form_view(form)),
             Overlay::Issues(b) => view(b, room(area), time::now()),
             Overlay::Search(search) => self.search_view(search),
-            Overlay::Update(step) => self.update_view(step, area),
-            Overlay::Restart => self.restart_view(area),
+            Overlay::Update(_) | Overlay::Restart => self.update_dialog_view(overlay, area)?,
             Overlay::Usage | Overlay::Remote | Overlay::PhoneAppCode => self.access_view(overlay),
             Overlay::Pairing(_) | Overlay::Forum(_) => self.messenger_view(overlay)?,
             Overlay::PullRequest { .. }

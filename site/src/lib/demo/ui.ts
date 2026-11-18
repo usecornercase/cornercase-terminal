@@ -1,4 +1,5 @@
 import { drawBotForm, botFormBounds } from './botform';
+import { botRoutinesBounds, drawBotRoutines } from './botroutines';
 import { drawBotsSection, drawCard, drawChat } from './botchat';
 import { drawQueueForm, queueBounds } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
@@ -1143,6 +1144,7 @@ export class Painter {
     if (o.kind === 'usage') return this.usage();
     if (o.kind === 'queue') { this.dialogBackdrop(queueBounds(this.app.cols, this.app.rows, o)); return drawQueueForm(this, o); }
     if (o.kind === 'bot') { this.dialogBackdrop(botFormBounds(this.app.cols, this.app.rows, o)); return drawBotForm(this, o); }
+    if (o.kind === 'botroutines') { this.dialogBackdrop(botRoutinesBounds(this.app.cols, this.app.rows)); return drawBotRoutines(this, o); }
     if (o.kind === 'issues') return this.issues(o);
     if (o.kind === 'search') return this.results(areas);
   }
@@ -1612,6 +1614,7 @@ export class Painter {
           this.span(right(row) - meta.length - 1, row.y, meta, { ...bg, fg: item.colour ?? 8 });
           this.region({ r: row, click: () => app.issuesClick(i), cursor: 'pointer' });
         });
+        if (view.tail && items.length < list.h) this.span(list.x + 1, list.y + Math.max(1, items.length), truncateRight(view.tail, Math.max(0, list.w - 2)), DARK);
         this.region({ r: list, wheel: (dy) => app.issuesScroll(dy) });
       }
     }

@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use super::commands::Followed;
 use super::*;
 
 const STREAM: &str = r#"{"type":"system","subtype":"init","model":"claude-opus-5-5","session_id":"s1"}
@@ -38,8 +39,8 @@ fn started_running(before: &str) -> Arc<Session> {
 fn a_bot_is_made_asked_and_read_back_over_the_socket() {
     let session = started();
 
-    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude", "--about", "review my PRs"]), "prs");
-    assert!(!session.dir.join("claude-bot.args").exists(), "making a bot starts nothing");
+    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude"]), "prs");
+    assert!(!session.dir.join("claude-bot.args").exists(), "making a bot without what it is for starts nothing");
     assert_eq!(session.says(&["bot", "say", "prs", "which are blocked?", "--wait"]), "hello from the bot");
 
     let list: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
@@ -50,6 +51,61 @@ fn a_bot_is_made_asked_and_read_back_over_the_socket() {
     assert!(session.says(&["bot", "agents"]).contains("claude"));
     let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
     assert!(args.contains("--setting-sources user") && args.contains("which are blocked?"), "{args}");
+}
+
+fn bot_state(session: &Session) -> Value {
+    let list: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    list["bots"][0].clone()
+}
+
+fn answered(session: &Session) -> Value {
+    session.says(&["bot", "say", "prs", "hi"]);
+    wait_until("the bot answered", || {
+        let bot = bot_state(session);
+        bot["state"] == "idle" && bot["last"]["kind"] == "bot"
+    });
+    bot_state(session)
+}
+
+#[test]
+fn a_view_that_shows_a_bot_keeps_its_answers_read() {
+    let session = started();
+    session.says(&["bot", "new", "PRs", "--agent", "claude"]);
+    let mut view = session.spawn(&["view", "--bot", "prs"]);
+    let mut followed = Followed::of(&mut view);
+    followed.until("the first frame", |frame| frame["revision"] == 1);
+    assert_eq!(followed.seen[0]["view"]["bot"], "prs");
+    let id = followed.seen[0]["view"]["id"].as_u64().expect("a view id").to_string();
+
+    let shown = answered(&session);
+    let cleared = session.says(&["view-set", "--view", &id, "--bot", ""]);
+    let told = answered(&session);
+    let _ = view.kill();
+    let _ = view.wait();
+
+    assert_eq!(shown["unread"], 0);
+    assert!(!cleared.ends_with("bot prs"), "{cleared}");
+    assert_eq!(told["unread"], 1);
+}
+
+#[test]
+fn a_bot_made_with_what_it_is_for_sets_itself_up_and_bot_setup_runs_it_again() {
+    let session = started();
+
+    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude", "--about", "review my PRs"]), "prs");
+    assert_eq!(session.says(&["bot", "say", "prs", "and now?", "--wait"]), "hello from the bot");
+    let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
+    assert!(args.contains("## You were just made") && args.contains("--resume s1"), "{args}");
+    assert!(session.says(&["bot", "history", "prs"]).starts_with("— setting up · "));
+
+    assert_eq!(String::from_utf8_lossy(&session.cli(&["bot", "about", "prs"]).stdout), "review my PRs\n");
+    let about: Value = serde_json::from_str(&session.says(&["bot", "about", "prs", "--json"])).expect("json");
+    assert_eq!(about, serde_json::json!({"bot": "prs", "about": "review my PRs"}));
+
+    assert!(session.says(&["bot", "setup", "prs"]).parse::<u64>().is_ok());
+    session.says(&["bot", "say", "prs", "again", "--wait"]);
+    let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
+    assert_eq!(args.matches("## You were just made").count(), 2, "{args}");
 }
 
 #[test]
@@ -65,14 +121,27 @@ fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped()
 }
 
 #[test]
+fn inside_a_bot_cornercase_opens_no_window_and_relays_none() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+
+    for args in [&[][..], &["proxy"], &["remote", "vps"]] {
+        let opened = session.command().env("CORNERCASE_BOT", "prs").args(args).output().expect("run");
+        assert!(refused(&opened, 2, "a bot cannot attach as a window"), "{args:?}: {opened:?}");
+    }
+    assert!(session.says(&["status", "--json"]).contains("\"projects\""));
+}
+
+#[test]
 fn a_bot_made_from_the_form_answers_in_its_chat() {
     let session = started();
     let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);
     ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
 
     ui.pick_in_more("new bot…");
-    ui.wait_for("the form opens", |s| s.contains("New bot") && s.contains("For"));
+    ui.wait_for("the form opens", |s| s.contains("New bot") && s.contains("For") && s.contains("create"));
     ui.send(b"prs");
+    ui.wait_for("the name is typed", |s| s.contains("prs"));
     ui.click(ui.position_of("create"));
     ui.wait_for("its empty chat shows", |s| s.contains("Message prs…"));
     ui.send(b"which are blocked?\r");
@@ -180,6 +249,27 @@ fn a_bot_routine_run_now_answers_in_its_chat() {
 }
 
 #[test]
+fn a_bots_routine_is_paused_from_its_routines_dialog() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    session.says(&["queue", "add", "--bot", "prs", "--every", "2h", "--prompt", "check", "--name", "Review PRs"]);
+    let mut ui = Harness::open(Arc::clone(&session), ROWS, 160);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+
+    ui.click(ui.position_of("prs"));
+    ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
+    ui.click(ui.position_of("routines"));
+    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("pause"));
+    ui.click(ui.position_of("pause"));
+
+    wait_until("the routine is paused", || {
+        let list: Value =
+            serde_json::from_str(&session.says(&["queue", "list", "--bot", "prs", "--json"])).expect("json");
+        list["entries"][0]["paused"] == true
+    });
+}
+
+#[test]
 fn inside_a_bot_cornercase_writes_no_file_it_names_and_clones_nothing() {
     let session = started();
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
@@ -228,4 +318,62 @@ fn a_bots_turn_cannot_stop_restart_or_update_the_server_even_without_its_variabl
     assert_eq!(status.lines().collect::<Vec<_>>(), ["1", "1", "1"], "{stderr}");
     assert_eq!(stderr.matches("a bot cannot stop its own server").count(), 3, "{stderr}");
     assert_eq!(session.says(&["contract", "--json"]), boot);
+}
+
+#[test]
+fn an_agent_a_bot_starts_is_tagged_and_its_chat_says_so() {
+    let session = started_running(
+        "[ -n \"$CORNERCASE_BOT\" ] || exit 0\ncornercase start claude --project \"$(cat \"$0.project\")\" --prompt fix > \"$0.start\" 2>&1",
+    );
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("json");
+    let project = status["projects"][0]["id"].as_u64().expect("a project").to_string();
+    std::fs::write(session.dir.join("claude-bot.project"), &project).expect("the project");
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+
+    let started = std::fs::read_to_string(session.dir.join("claude-bot.start")).unwrap_or_default();
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("json");
+    let panes: Vec<&Value> = status["projects"]
+        .as_array()
+        .expect("projects")
+        .iter()
+        .flat_map(|project| project["workspaces"].as_array().into_iter().flatten())
+        .flat_map(|workspace| workspace["tabs"].as_array().into_iter().flatten())
+        .flat_map(|tab| tab["panes"].as_array().into_iter().flatten())
+        .collect();
+    assert_eq!(panes.iter().filter(|pane| pane["bot"].as_str() == Some("prs")).count(), 1, "{started}: {status}");
+    let history = session.says(&["bot", "history", "prs"]);
+    assert!(history.contains("▶ started claude in"), "{history}");
+    let listed: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    assert_eq!(listed["bots"][0]["following"].as_array().map(Vec::len), Some(1), "{listed}");
+}
+
+#[test]
+fn a_bots_turn_finds_its_servers_cornercase_first_and_your_gh_before_the_one_beside_it() {
+    let session = with_agent_running("gh > \"$0.gh\" 2>&1\ncommand -v cornercase > \"$0.which\"");
+    let server = installed_copy(&session, "shared");
+    let shared = server.parent().expect("its folder").to_path_buf();
+    write_executable(&shared.join("gh"), "#!/bin/sh\necho shared\n");
+    let yours = session.folder("yours");
+    write_executable(&yours.join("gh"), "#!/bin/sh\necho yours\n");
+    let path = std::env::join_paths([yours.as_path(), shared.as_path(), "/usr/bin".as_ref(), "/bin".as_ref()])
+        .expect("a path");
+    let started = session.cold_command_of(&server).env("PATH", path).arg("start-server").output().expect("run");
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+
+    let gh = std::fs::read_to_string(session.dir.join("claude-bot.gh")).expect("gh ran");
+    assert_eq!(gh.trim(), "yours");
+    let which = std::fs::read_to_string(session.dir.join("claude-bot.which")).expect("which ran");
+    let found = PathBuf::from(which.trim());
+    assert!(!found.starts_with(&shared), "{found:?}");
+    assert_eq!(
+        std::fs::canonicalize(&found).expect("it leads somewhere"),
+        std::fs::canonicalize(&server).expect("copy")
+    );
 }

@@ -213,6 +213,10 @@ pub(crate) fn bots(session: &Path) -> PathBuf {
     beside_session(session, "bots")
 }
 
+pub(crate) fn bin(session: &Path) -> PathBuf {
+    beside_session(session, "bin")
+}
+
 pub(crate) fn recap(session: &Path) -> PathBuf {
     beside_session(session, "recap")
 }

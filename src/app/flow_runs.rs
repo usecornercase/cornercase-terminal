@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use ratatui::layout::Rect;
 
 use super::App;
+use super::bots::Started;
 use super::event::AppEvent;
 use super::notifications::{Message, MessageKind};
 use super::toast::Toast;
@@ -54,6 +55,12 @@ pub(super) struct Wake {
 }
 
 impl Runs {
+    pub(super) fn standing(&self, pane: u64) -> Option<crate::bots::follow::Standing> {
+        let run = self.list.iter().find(|run| run.pane_of(flows::ORCHESTRATOR) == Some(pane))?;
+        let still = run.stopped.and_then(|since| SystemTime::now().duration_since(since).ok());
+        Some(crate::bots::follow::Standing { ended: run.ended.is_some(), still })
+    }
+
     pub(super) fn new(config_path: &Path) -> Self {
         Self {
             list: Vec::new(),
@@ -193,6 +200,7 @@ pub(super) struct Starting {
     pub(super) free_builds: bool,
     pub(super) fresh: Option<bool>,
     pub(super) summary: bool,
+    pub(super) bot: Option<super::control::Starter>,
 }
 
 impl Starting {
@@ -212,6 +220,7 @@ impl Starting {
             free_builds: false,
             fresh: None,
             summary: false,
+            bot: None,
         }
     }
 }
@@ -520,6 +529,8 @@ impl App {
     ) -> Result<RunInfo, String> {
         let id = self.open_check(place)?;
         let Starting { flow, task, branch, focus, view, note, trees, parent, accounts, name, .. } = starting;
+        let named = Some(flow.orchestrator.agent.as_str()).filter(|agent| !agent.trim().is_empty());
+        let orchestrator = agents::resolve(&self.config, named, None);
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let personas = self.run_personas(&flow)?;
         let mut run = self.new_run(id, (flow, task), (starting.close_when_merged, starting.summary));
@@ -548,6 +559,7 @@ impl App {
         (run.members, info.members) = self.seat_members(place, &roles, terms, &seats);
         self.remember_role_trees(place, &seats);
         self.adopt_members(&run, parent);
+        self.tag_started(run.members[0].pane, starting.bot, Started { agent: orchestrator, arm: true });
         self.launch_run(&run, &roles, &seats, &info.branch);
         self.runs.list.push(run);
         if focus {
@@ -810,7 +822,6 @@ impl App {
         let mut launch = Launch::new(pane, spec, Instant::now());
         launch.after = run.members.iter().map(|m| m.pane).filter(|other| *other != pane).collect();
         launch.resume = until;
-        launch.confirm = (run.flow.orchestrator.agent == agents::Known::Claude.name()).then_some(launch::CONFIRM_EVERY);
         self.agents.launches.replace(launch);
     }
 }

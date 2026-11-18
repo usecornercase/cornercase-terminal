@@ -20,6 +20,9 @@ fn line_text(line: &Line) -> String {
         Kind::Bot => format!("answered: {}", first(&line.text)),
         Kind::Error => format!("error: {}", first(&line.text)),
         Kind::Notice => format!("notice: {}", first(&line.text)),
+        Kind::Started => format!("started: {}", first(&line.text)),
+        Kind::Finished => format!("finished: {}", first(&line.text)),
+        Kind::Waiting => format!("waiting: {}", first(&line.text)),
     }
 }
 
@@ -30,6 +33,10 @@ pub(in crate::cli) fn event_text(bot: &str, news: (Option<&Line>, Option<&str>, 
         Some(run) => format!("bot {bot}  routine {run}  {what}"),
         None => format!("bot {bot}  {what}"),
     }
+}
+
+pub(super) fn about(text: &str) -> String {
+    if text.is_empty() || text.ends_with('\n') { text.to_string() } else { format!("{text}\n") }
 }
 
 pub(super) fn agents(found: &[AgentInfo]) -> String {
@@ -125,6 +132,7 @@ impl Chat<'_> {
                 self.header(self.name, line.at, " · error");
                 let _ = writeln!(self.out, "{}", line.text);
             }
+            Kind::Started | Kind::Finished | Kind::Waiting => self.agent_line(line),
             Kind::Notice => {
                 self.open = false;
                 if !self.out.is_empty() {
@@ -132,6 +140,15 @@ impl Chat<'_> {
                 }
                 let _ = writeln!(self.out, "— {} · {} —", line.text, when(line.at, self.now, self.zone));
             }
+        }
+    }
+
+    fn agent_line(&mut self, line: &Line) {
+        self.open = false;
+        self.run = line.run;
+        self.header(&line.text, line.at, "");
+        for row in line.body.iter().flat_map(|body| body.lines()) {
+            let _ = writeln!(self.out, "  {row}");
         }
     }
 

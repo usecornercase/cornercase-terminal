@@ -176,3 +176,12 @@ fn the_first_rejection_is_read_and_reading_stops_there() {
     assert_eq!(rejection(&mut io::Cursor::new(empty)), None);
     assert_eq!(rejection(&mut io::Cursor::new(Vec::new())), None);
 }
+
+#[test]
+fn a_server_started_by_a_bots_command_does_not_take_its_variable() {
+    let server = server_command(PathBuf::from("cornercase"));
+
+    let removed: Vec<_> = server.get_envs().filter(|(_, value)| value.is_none()).map(|(name, _)| name).collect();
+
+    assert!(removed.contains(&std::ffi::OsStr::new(crate::bots::BOT_ENV)), "{removed:?}");
+}

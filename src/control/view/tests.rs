@@ -32,6 +32,8 @@ fn the_view_in_a_request_is_left_out_when_absent() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: Command::Status(Status {}),
     };
 
@@ -79,11 +81,34 @@ fn a_view_that_is_skipped_by_a_reader_reads_back_whole() {
         shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
         controls: true,
         visible: false,
+        bot: Some("prs".into()),
     };
 
     let written = serde_json::to_string_pretty(&info).expect("json");
 
     assert_eq!(serde_json::from_str::<ViewInfo>(&written).expect("a view"), info);
+}
+
+fn text<T: Serialize>(value: &T) -> String {
+    serde_json::to_string(value).expect("json")
+}
+
+#[test]
+fn requests_and_views_leave_out_a_bot_they_do_not_name() {
+    use crate::control::{OpenView, SetView};
+
+    let named = Some("prs".to_string());
+    for none in [text(&OpenView::default()), text(&SetView::default()), text(&ViewInfo::default())] {
+        assert!(!none.contains("\"bot\""), "{none}");
+    }
+    for some in [
+        text(&OpenView { bot: named.clone(), ..OpenView::default() }),
+        text(&SetView { bot: named.clone(), ..SetView::default() }),
+        text(&ViewInfo { bot: named, ..ViewInfo::default() }),
+    ] {
+        assert!(some.contains("\"bot\":\"prs\""), "{some}");
+    }
+    assert!(text(&SetView { bot: Some(String::new()), ..SetView::default() }).contains("\"bot\":\"\""));
 }
 
 #[test]

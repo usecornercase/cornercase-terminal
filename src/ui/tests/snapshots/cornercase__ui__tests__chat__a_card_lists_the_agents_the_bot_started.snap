@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/chat.rs
+expression: render(&v).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Bot                     │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)               │ prs                     │                                          "
+"                               │ folder   ~/bots/prs     │                                          "
+"  + New                        │ agent    Claude Code    │                                          "
+"                               │ started  ◐ claude · web…│                                          "
+"                               │          ◐ claude · api │                no tab open               "
+"                               │                         │         + Tab opens a shell here         "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Worktrees      Recap         │                         │                                          "
+"  More ▴                 Help  │  Files       TODO       │                                          "

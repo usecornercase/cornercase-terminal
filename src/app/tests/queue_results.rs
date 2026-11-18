@@ -129,3 +129,14 @@ fn the_closing_line_is_sent_and_never_stored() {
     assert_eq!(app.panels.queued.queue().entry(id).expect("entry").task.prompt, "fix the login");
     assert!(!serde_json::to_string(&app.queue_saved()).expect("saved").contains(CLOSING));
 }
+
+#[test]
+fn a_kept_result_leaves_unsent_as_it_is() {
+    let (mut app, _rx, _dirs) = opened();
+    let id = gone(&mut app);
+    app.panels.queued.set_unsent(id, true);
+
+    keep(&mut app, id, "done", None);
+
+    assert!(app.panels.queued.queue().entry(id).expect("entry").unsent);
+}

@@ -612,7 +612,16 @@ mod proxy {
     }
 
     fn request(command: control::Command) -> ClientMessage {
-        let request = control::Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+        let request = control::Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            bot: None,
+            bot_run: None,
+            command,
+        };
         ClientMessage::Request(serde_json::to_string(&request).expect("json"))
     }
 

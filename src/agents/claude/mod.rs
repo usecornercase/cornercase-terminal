@@ -10,7 +10,7 @@ use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::breakdown::Target;
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::{self, Job};
-use crate::agents::context::{Compaction, Context, Look, Record};
+use crate::agents::context::{Compaction, Context, Look, Record, SessionState};
 
 pub(in crate::agents) const NAME: &str = "claude";
 pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(crate::agents::AccountHome {
@@ -60,6 +60,8 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("skip permissions (dangerous)", &["--dangerously-skip-permissions"]),
 ];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = false;
+pub(in crate::agents) const BRACKETED_WHEN_READY: bool = true;
+pub(in crate::agents) const CONFIRMS_PROMPT: bool = true;
 const NPM_SCRIPT: [&str; 3] = ["@anthropic-ai", "claude-code", "cli.js"];
 pub(in crate::agents) const LOCAL_COMMAND: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(crate::agents::usage::Spec {
@@ -80,6 +82,7 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
     accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],
     why: None,
     reads_anywhere: true,
+    reads_git: true,
     effort_needs_model: false,
 };
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> =
@@ -184,6 +187,7 @@ pub(in crate::agents) struct Reader {
     home: Option<(i32, Vec<String>, Option<PathBuf>)>,
     probe_model: Option<String>,
     reported: Option<Activity>,
+    watching: bool,
 }
 
 impl Reader {
@@ -195,6 +199,7 @@ impl Reader {
         ledger: &mut Ledger,
     ) -> Option<SystemTime> {
         let home = self.home(look);
+        self.watching = home.is_some();
         self.session = Session::read(home.as_deref(), look.pid);
         let found = home.as_deref().zip(self.session.as_ref()).and_then(|(dir, session)| {
             let cwd = session.cwd.as_deref()?;
@@ -283,6 +288,14 @@ impl Reader {
 
     pub(in crate::agents) fn record(&self) -> Option<Record> {
         Some(Record::Claude(self.transcript.as_ref()?.path.clone()))
+    }
+
+    pub(in crate::agents) fn session_state(&self) -> SessionState {
+        match (self.session.is_some(), self.watching) {
+            (true, _) => SessionState::Read,
+            (false, true) => SessionState::Pending,
+            (false, false) => SessionState::Unwatched,
+        }
     }
 
     pub(in crate::agents) fn conversation(&self) -> Option<&str> {

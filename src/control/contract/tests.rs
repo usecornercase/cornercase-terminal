@@ -26,6 +26,11 @@ mod describing {
     }
 
     #[test]
+    fn showing_a_bot_in_a_view_is_a_feature() {
+        assert!(FEATURES.contains(&"view-bot"));
+    }
+
+    #[test]
     fn it_lists_the_feature_of_a_runs_not_run() {
         assert!(FEATURES.contains(&"flow-not-run"));
     }
@@ -39,6 +44,26 @@ mod describing {
     fn bot_routines_is_a_feature() {
         assert!(FEATURES.contains(&"bot-routines"));
         assert!(FEATURES.contains(&"bot-reads"));
+    }
+
+    #[test]
+    fn bot_follow_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-follow"));
+    }
+
+    #[test]
+    fn prompt_unsent_is_a_feature() {
+        assert!(FEATURES.contains(&"prompt-unsent"));
+    }
+
+    #[test]
+    fn reading_what_a_bot_is_for_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-about-read"));
+    }
+
+    #[test]
+    fn bot_setup_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-setup"));
     }
 
     #[test]

@@ -192,7 +192,11 @@ impl Session {
     }
 
     fn cold_command(&self) -> std::process::Command {
-        let mut cmd = self.command();
+        self.cold_command_of(std::path::Path::new(env!("CARGO_BIN_EXE_cornercase")))
+    }
+
+    fn cold_command_of(&self, bin: &std::path::Path) -> std::process::Command {
+        let mut cmd = self.command_of(bin);
         cmd.env("SHELL", "/bin/sh").env("PS1", "$ ").env(CLAUDE_DIR_ENV, self.claude_dir());
         for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY"].into_iter().chain(TERMINAL_ENV) {
             cmd.env_remove(var);
@@ -344,6 +348,12 @@ fn seen_by(pid: u32, path: &std::path::Path) -> PathBuf {
 #[cfg(target_os = "macos")]
 fn seen_by(_pid: u32, path: &std::path::Path) -> PathBuf {
     path.to_path_buf()
+}
+
+fn installed_copy(session: &Session, name: &str) -> PathBuf {
+    let bin = session.folder(name).join("cornercase");
+    std::fs::copy(env!("CARGO_BIN_EXE_cornercase"), &bin).expect("copy cornercase");
+    bin
 }
 
 fn folder_gone(pid: u32, word: &str) -> bool {
@@ -778,8 +788,14 @@ state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "
 finished() { while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
 said() { n=$((n+1)); printf '{"type":"assistant","timestamp":"2026-10-08T12:00:0%s.000Z","message":{"id":"m%s","model":"claude-opus-5-5","content":[{"type":"text","text":"said: %s"}]}}\n' "$n" "$n" "$1" >> "$t/s$$.jsonl"; }
 : > "$t/s$$.jsonl"
+e=$(printf '\033'); printf '\033[?2004h────────────\n❯ '; sleep 1.5
 state idle
-while printf 'agent> ' && IFS= read -r line; do
+while printf '────────────\n❯ ' && IFS= read -r line; do
+  case "$line" in "$e[200~"*)
+    line=${line#"$e[200~"}
+    while case "$line" in *"$e[201~") false ;; *) true ;; esac; do IFS= read -r more || break; line="$line $more"; done
+    line=${line%"$e[201~"} ;;
+  esac
   case "$line" in *panel*) printf 'Shell details\n'; read -r line; continue ;; esac
   printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
   state busy; finished; said "$line"

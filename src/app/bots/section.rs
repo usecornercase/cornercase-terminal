@@ -80,8 +80,22 @@ impl App {
             Access::Cornercase => ui::CardRow::new("access", "through cornercase"),
         });
         rows.push(ui::CardRow::new("made", crate::queue::clock::day(bot.created, &self.window_zone())));
+        rows.extend(self.started_rows(&bot.id));
         rows.extend(self.routine_rows(&bot.id));
         ui::BotCard { name: bot.name.clone(), rows }
+    }
+
+    fn started_rows(&self, bot: &str) -> Vec<ui::CardRow> {
+        let mut rows: Vec<ui::CardRow> = Vec::new();
+        for place in self.agent_places() {
+            let term = self.placed(place);
+            let Some(status) = term.agent.status().filter(|_| term.bot.as_deref() == Some(bot)) else { continue };
+            let kind = term.agent.agent().unwrap_or_default();
+            let value = format!("{kind} · {}", self.pane_place(term.id).unwrap_or_default());
+            let label = if rows.is_empty() { "started" } else { "" };
+            rows.push(ui::CardRow { status: Some(status), pane: Some(term.id), ..ui::CardRow::new(label, value) });
+        }
+        rows
     }
 
     fn routine_rows(&self, bot: &str) -> Vec<ui::CardRow> {
@@ -95,8 +109,9 @@ impl App {
                 } else {
                     format!("next {}", crate::queue::clock::short(entry.task.at, now, &zone))
                 };
-                let when = ui::CardRow::new("", format!("{next} · ↻ {repeat}"));
-                Some([ui::CardRow::new("routine", entry.task.label.clone()), when])
+                let row =
+                    |label, value: String| ui::CardRow { routine: Some(entry.id), ..ui::CardRow::new(label, value) };
+                Some([row("routine", entry.task.label.clone()), row("", format!("{next} · ↻ {repeat}"))])
             })
             .flatten()
             .collect()
@@ -148,9 +163,15 @@ impl App {
 
     pub(in crate::app) fn open_bot_menu(&mut self, at: usize, pos: Position) {
         let key = self.panels.bots.live[at].key;
-        let actions = [BotItem::Rename, BotItem::Edit, BotItem::NewConversation, BotItem::OpenFolder, BotItem::Remove]
-            .map(|item| MenuAction::Bot(key, item))
-            .to_vec();
+        let items = [
+            BotItem::Rename,
+            BotItem::Edit,
+            BotItem::Routines,
+            BotItem::NewConversation,
+            BotItem::OpenFolder,
+            BotItem::Remove,
+        ];
+        let actions = items.map(|item| MenuAction::Bot(key, item)).to_vec();
         self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 }

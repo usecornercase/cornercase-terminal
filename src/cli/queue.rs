@@ -30,6 +30,7 @@ struct Listed {
     routine: Option<u64>,
     next: Option<i64>,
     started: Option<i64>,
+    unsent: bool,
     place: ListedPlace,
 }
 
@@ -47,7 +48,9 @@ impl Listed {
         match (self.state.as_str(), self.pane, &self.reason) {
             ("kept", _, Some(reason)) => format!("kept: {reason}"),
             ("started", Some(pane), _) => {
-                format!("started · pane {pane} · server {}", self.server.as_deref().unwrap_or_default())
+                let server = self.server.as_deref().unwrap_or_default();
+                let unsent = if self.unsent { " · prompt not taken" } else { "" };
+                format!("started · pane {pane} · server {server}{unsent}")
             }
             ("failed", _, Some(reason)) => format!("failed: {reason}"),
             (state, ..) => state.to_string(),

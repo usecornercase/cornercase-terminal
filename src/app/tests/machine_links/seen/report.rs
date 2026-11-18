@@ -162,6 +162,8 @@ mod machines_in_watch {
             contract: None,
             boot: None,
             view: None,
+            bot: None,
+            bot_run: None,
             command: Command::Watch(Watch {}),
         };
         app.request(CLIENT, &serde_json::to_string(&request).expect("json"), None, Instant::now());

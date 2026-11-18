@@ -96,6 +96,7 @@ fn agents_tab() -> TabInfo {
         custom_name: Some("agents".into()),
         layout: Some(split()),
         controller: None,
+        bot: None,
     }
 }
 
@@ -183,6 +184,7 @@ fn viewed() -> Snapshot {
         shown,
         controls: true,
         visible: true,
+        bot: None,
     });
     snapshot
 }

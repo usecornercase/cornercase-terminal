@@ -135,6 +135,10 @@ mod opting_in {
         r#"{"contract":1,"command":"free-merged-builds","args":{"project":null,"check":true,"force":true}}"#,
         "args.force"
     )]
+    #[case::no_bot_where_no_view_shows_one(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","bot":null}}"#,
+        "args.bot"
+    )]
     #[case::not_freeing_builds_where_no_flow_runs(
         r#"{"contract":1,"command":"notify","args":{"text":"hi","free_builds":false}}"#,
         "args.free_builds"
@@ -231,6 +235,13 @@ mod opting_in {
     #[case::not_freeing_builds(
         r#"{"contract":1,"command":"flow-run","args":{"name":"Quick","prompt":"x","project":999,"close_when_merged":false,"free_builds":false}}"#
     )]
+    #[case::a_null_bot_in_the_envelope(
+        r#"{"contract":1,"bot":null,"bot_run":null,"command":"notify","args":{"text":"hi"}}"#
+    )]
+    #[case::no_bot_for_a_new_view(r#"{"contract":1,"command":"view","args":{"bot":null}}"#)]
+    #[case::no_bot_for_a_view_set(
+        r#"{"contract":1,"view":999,"command":"view-set","args":{"claim":false,"bot":null}}"#
+    )]
     #[case::not_freeing_builds_when_merged(
         r#"{"contract":1,"command":"flow-close-when-merged","args":{"workspace":9999,"off":false,"free_builds":false}}"#
     )]
@@ -240,6 +251,18 @@ mod opting_in {
         let answer = raw(&mut app, text);
 
         assert!(!answer.contains("unknown-field"), "{answer}");
+    }
+
+    #[test]
+    fn an_unknown_envelope_key_is_still_refused_beside_a_null_bot() {
+        let (mut app, _rx) = app();
+
+        let refusal = refused(
+            &mut app,
+            r#"{"contract":1,"bot":null,"bot_run":null,"loud":true,"command":"notify","args":{"text":"hi"}}"#,
+        );
+
+        assert_eq!(refusal.0, Code::UnknownField, "{refusal:?}");
     }
 
     #[test]
@@ -293,8 +316,17 @@ struct Header<'a> {
 fn sent(app: &mut App, header: Header, command: Command) -> String {
     let Header { caller, server, contract, boot } = header;
     let (server, boot) = (server.map(str::to_string), boot.map(str::to_string));
-    let text =
-        serde_json::to_string(&wire::Request { caller, server, contract, boot, view: None, command }).expect("json");
+    let text = serde_json::to_string(&wire::Request {
+        caller,
+        server,
+        contract,
+        boot,
+        view: None,
+        bot: None,
+        bot_run: None,
+        command,
+    })
+    .expect("json");
     raw(app, &text)
 }
 

@@ -29,6 +29,8 @@ pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("run everything (dangerous)", &["--force"]),
 ];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = true;
+pub(in crate::agents) const BRACKETED_WHEN_READY: bool = false;
+pub(in crate::agents) const CONFIRMS_PROMPT: bool = false;
 pub(in crate::agents) const INPUT_BOX: Option<bool> = None;
 pub(in crate::agents) const SURVEY: bool = false;
 pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = None;
@@ -44,6 +46,7 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
     accesses: &[crate::agents::headless::Access::Full],
     why: Some("its edits can leave its folder"),
     reads_anywhere: true,
+    reads_git: false,
     effort_needs_model: false,
 };
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;

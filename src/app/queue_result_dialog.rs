@@ -44,7 +44,7 @@ enum Showing {
 
 impl App {
     pub(super) fn open_queue_result_dialog(&mut self, id: u64) {
-        self.stash_browser();
+        self.stash_back();
         self.overlay = Some(Overlay::QueueResult(Box::new(Dialog { entry: id, scroll: 0, showing: Showing::Result })));
     }
 
@@ -214,7 +214,7 @@ impl App {
     }
 
     pub(super) fn close_queue_result_dialog(&mut self) {
-        self.overlay = self.panels.queued.take_browser().map(Overlay::Issues);
+        self.overlay = self.panels.queued.take_back().map(|back| *back);
         self.sync_queued();
     }
 

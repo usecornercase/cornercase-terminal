@@ -56,6 +56,8 @@ fn an_older_server_refuses_close_agent_by_name() {
         contract: None,
         boot: None,
         view: None,
+        bot: None,
+        bot_run: None,
         command: Command::CloseAgent(CloseAgent { pane: 4, ..CloseAgent::default() }),
     };
     let sent = serde_json::to_value(asked).expect("json");

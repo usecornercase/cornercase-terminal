@@ -68,7 +68,9 @@ impl App {
     }
 
     pub(in crate::app) fn bot_on_screen(&self, at: usize) -> bool {
-        self.shown_bot() == Some(at) && self.has_window() && self.screen.nav.is_none() && !self.file_full_screen()
+        let window =
+            self.shown_bot() == Some(at) && self.has_window() && self.screen.nav.is_none() && !self.file_full_screen();
+        window || self.view_shows_bot(&self.panels.bots.live[at].bot.id)
     }
 
     pub(in crate::app) fn chat_typing(&self) -> bool {

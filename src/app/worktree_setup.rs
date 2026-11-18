@@ -5,6 +5,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use super::App;
+use super::launches::Launched;
 use super::notifications::{Message, MessageKind};
 use super::tabs::Spawning;
 use super::toast::Toast;
@@ -212,7 +213,7 @@ impl App {
         panes.extend(gone);
         let dropped = self.agents.launches.drop_panes(&panes);
         for key in dropped.iter().flatten() {
-            self.clients.requests.launched(*key, false);
+            self.clients.requests.launched(*key, Launched::NotStarted);
         }
         let ended = self.runs.end_in(workspace);
         if ended > 0 {

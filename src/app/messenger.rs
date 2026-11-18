@@ -130,7 +130,7 @@ pub(super) struct Messenger {
     open_ask: Option<(Route, Instant)>,
     asked: HashMap<u64, Asked>,
     next_client: u64,
-    watches: HashMap<u64, notices::Watch>,
+    watches: HashMap<u64, crate::app::settle::Watch>,
     held: VecDeque<(u32, String, i64)>,
     next_held: u32,
     drafts: VecDeque<drafts::Draft>,
@@ -400,7 +400,16 @@ impl App {
         let offset = CLIENTS_PER_VIA * u64::try_from(via.index()).unwrap_or_default();
         let client = CLIENTS + offset + messenger.next_client;
         messenger.asked.insert(client, asked);
-        let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+        let request = Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            bot: None,
+            bot_run: None,
+            command,
+        };
         self.run_request(client, Ok(request), area, Instant::now());
     }
 
@@ -441,8 +450,10 @@ impl App {
         let done: Done = serde_json::from_value(value.clone()).unwrap_or_default();
         let later = if self.messenger(via).away { "" } else { "\n/away to get its messages here." };
         let m = via.markup();
+        let unsent =
+            if done.unsent == Some(true) { " Its agent did not take the prompt yet: check its tab." } else { "" };
         let text = format!(
-            "Started {} in {}. Reply to this message to write to it.{later}",
+            "Started {} in {}.{unsent} Reply to this message to write to it.{later}",
             m.bold(&m.escape(agent)),
             m.escape(place)
         );

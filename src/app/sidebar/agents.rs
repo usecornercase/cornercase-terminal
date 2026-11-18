@@ -113,6 +113,7 @@ impl App {
             seat: self.seated(term, node.depth),
             details: ui::Details {
                 compacted: self.shows_compaction(term.context.compaction().hides),
+                by: self.started_by(term),
                 ..self.details(term.context.context(), None, term.context.subagents(), self.pane_account(term))
             },
             collapsed: term.collapsed(),
