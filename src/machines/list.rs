@@ -15,7 +15,7 @@ use crate::{config, paths, persist};
 const NAME_MAX: usize = 20;
 const FALLBACK_NAME: &str = "machine";
 const HOME: &str = "~";
-const LOCK_WAIT: Duration = if cfg!(test) { Duration::from_millis(200) } else { Duration::from_secs(5) };
+const LOCK_WAIT: Duration = Duration::from_secs(5);
 const LOCK_STEP: Duration = Duration::from_millis(20);
 
 pub(crate) struct Here {
@@ -66,7 +66,7 @@ fn lock_file(path: &Path) -> io::Result<File> {
 
 fn take_lock(path: &Path) -> io::Result<File> {
     let file = lock_file(path)?;
-    let deadline = Instant::now() + LOCK_WAIT;
+    let deadline = Instant::now() + lock_wait();
     while !try_lock(&file, Lock::Exclusive)? {
         if Instant::now() >= deadline {
             let why = "another cornercase is changing the list of machines; try again";
@@ -75,6 +75,26 @@ fn take_lock(path: &Path) -> io::Result<File> {
         std::thread::sleep(LOCK_STEP);
     }
     Ok(file)
+}
+
+#[cfg(not(test))]
+fn lock_wait() -> Duration {
+    LOCK_WAIT
+}
+
+#[cfg(test)]
+thread_local! {
+    static SHORT_WAIT: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+fn lock_wait() -> Duration {
+    SHORT_WAIT.with(std::cell::Cell::get).unwrap_or(LOCK_WAIT)
+}
+
+#[cfg(test)]
+pub(crate) fn wait_briefly() {
+    SHORT_WAIT.with(|wait| wait.set(Some(Duration::from_millis(200))));
 }
 
 #[cfg(test)]

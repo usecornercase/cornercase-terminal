@@ -111,6 +111,7 @@ mod changing {
         let dir = TempDir::new();
         let here = here_in(&dir);
         let held = take_lock(&here.config).expect("taken");
+        wait_briefly();
 
         let error = change(&here, |list| list.push(machine("vps", "vps.lan"))).expect_err("waited");
 

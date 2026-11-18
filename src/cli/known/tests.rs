@@ -284,6 +284,7 @@ mod writing {
         let dir = TempDir::new();
         let here = Here { config: dir.path().join("config.json"), legacy: dir.path().join("machines.json") };
         let held = list::hold(&here.config).expect("held");
+        list::wait_briefly();
 
         let said = not_listed(forgotten(&here, "devbox"));
 
