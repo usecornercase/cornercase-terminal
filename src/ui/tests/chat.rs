@@ -432,6 +432,18 @@ fn a_hovered_routine_shows_its_menu_button_at_the_end_of_its_first_row() {
 }
 
 #[test]
+fn the_button_is_where_the_view_draws_it_and_nowhere_else() {
+    let card = two_routines("Review PRs");
+    let list = areas().workspaces_list;
+    let menu = card_menu(list, &card, 7);
+    let second = Position::new(list.x + 4, list.y + 3);
+    assert_eq!(card_button(&card_view(&card, Some(second), None), list), menu);
+    assert!(card_button(&card_view(&card, None, None), list).is_empty());
+    let covered = Overlay::Menu { at: second, items: vec!["pause".into()], disabled: Vec::new() };
+    assert!(card_button(&card_view(&card, Some(second), Some(covered)), list).is_empty());
+}
+
+#[test]
 fn a_hovered_routine_cuts_its_name_before_its_menu_button() {
     let card = two_routines(&"x".repeat(40));
     let a = areas();

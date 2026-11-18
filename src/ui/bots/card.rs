@@ -80,30 +80,27 @@ fn routine_span(list: Rect, card: &BotCard, routine: u64) -> Rect {
         .unwrap_or_default()
 }
 
+#[cfg(test)]
 pub(crate) fn card_menu(list: Rect, card: &BotCard, routine: u64) -> Rect {
     let span = routine_span(inner(list), card, routine);
     if span.is_empty() { Rect::default() } else { row_menu_button(span, 1) }
 }
 
-pub(crate) fn card_button(list: Rect, card: &BotCard, hover: Position) -> Rect {
-    card_routine(list, card, hover).map_or_else(Rect::default, |routine| card_menu(list, card, routine))
+pub(crate) fn card_button(view: &View, list: Rect) -> Rect {
+    let Some(card) = &view.bot_card else { return Rect::default() };
+    let Some(routine) = view.hover.and_then(|pos| card_routine(list, card, pos)) else { return Rect::default() };
+    let span = routine_span(inner(list), card, routine);
+    if sidebar_hovered(view, span) { row_menu_button(span, 1) } else { Rect::default() }
 }
 
-fn row_width(view: &View, card: &BotCard, list: Rect, i: usize, width: usize) -> usize {
+fn row_width(button: Rect, card: &BotCard, list: Rect, i: usize, width: usize) -> usize {
     let routine = card.rows[i].routine;
     let first = routine.is_some() && (i == 0 || card.rows[i - 1].routine != routine);
-    if !first {
+    let row = card_row(list, i);
+    if !first || button.is_empty() || button.y != row.y {
         return width;
     }
-    let span = routine_span(list, card, routine.unwrap_or_default());
-    if !sidebar_hovered(view, span) {
-        return width;
-    }
-    let menu = row_menu_button(span, 1);
-    if menu.is_empty() {
-        return width;
-    }
-    usize::from(menu.x.saturating_sub(card_row(list, i).x)).saturating_sub(1)
+    usize::from(button.x.saturating_sub(row.x)).saturating_sub(1)
 }
 
 pub(in crate::ui) fn draw_card(f: &mut Frame, view: &View, card: &BotCard, areas: &Areas) {
@@ -115,12 +112,13 @@ pub(in crate::ui) fn draw_card(f: &mut Frame, view: &View, card: &BotCard, areas
     f.render_widget(Paragraph::new(name), Rect { height: 1, ..list }.intersection(list));
     let shown = shown_rows(list, card);
     let under = view.hover.and_then(|pos| card_routine(areas.workspaces_list, card, pos));
+    let button = card_button(view, areas.workspaces_list);
     for (i, row) in card.rows.iter().take(shown).enumerate() {
         let target = row.routine.is_some() && row.routine == under;
-        let line = card_line(view, row, row_width(view, card, list, i, width), target);
+        let line = card_line(view, row, row_width(button, card, list, i, width), target);
         f.render_widget(Paragraph::new(line), card_row(list, i));
     }
-    if let Some(routine) = under {
+    if let Some(routine) = under.filter(|_| !button.is_empty()) {
         draw_menu_in(f, view, routine_span(list, card, routine), 1, Style::default());
     }
     let hidden = card.rows.len() - shown;

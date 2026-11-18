@@ -518,22 +518,6 @@ test('a card menu item that no longer applies does nothing', () => {
   assert.equal(entry.paused, false);
 });
 
-test('a card menu item does nothing once another bot is shown', () => {
-  const app = demo(140);
-  press(app, 'prs');
-  app.resize(140, 60);
-  const at = cardRoutine(app);
-  app.pointerDown(at.x, at.y, 2);
-  app.pointerUp();
-  app.render();
-  const other = app.bots.list.find((b) => b.id !== 'prs')!;
-  app.bots.shown = other.id;
-  app.toast = null;
-  app.chooseMenu(1);
-  assert.equal(app.toast, null);
-  assert.equal(app.botQueued.find((e) => e.repeat)?.paused ?? false, false);
-});
-
 test('the empty chat offers the scheduling example', () => {
   assert.equal(EXAMPLES.length, 4);
   assert.match(EXAMPLES[3], /^Every weekday at 9/);

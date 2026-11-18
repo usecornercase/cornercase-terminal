@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKin
 use ratatui::layout::{Position, Rect};
 
 use crate::app::App;
-use crate::app::groups::DrawnCard;
+use crate::app::bots::shown::DrawnCard;
 use crate::app::input::WHEEL_ROWS;
 use crate::app::opening::Subject;
 use crate::app::text_fields::FieldArea;
@@ -168,14 +168,10 @@ impl App {
         Some((FieldArea { text, width: usize::from(text.width.max(1)), top, scrolls: true }, editor))
     }
 
-    pub(in crate::app) fn note_drawn_card(&mut self, area: Rect, card: Option<&ui::BotCard>) {
-        let key = self.shown_bot().map(|at| self.panels.bots.live[at].key);
-        self.screen.card = key.zip(card).map(|(key, card)| {
-            let list = self.layout(area).shown(self.screen.nav).workspaces_list;
-            let hover = self.screen.hover.filter(|_| self.overlay.is_none() && self.screen.drag.is_none());
-            let button = hover.map_or_else(Rect::default, |pos| ui::card_button(list, card, pos));
-            DrawnCard { key, card: card.clone(), button }
-        });
+    pub(in crate::app) fn note_drawn_card(&mut self, card: Option<ui::BotCard>, button: Rect) {
+        if let Some(shown) = &mut self.panels.bots.shown {
+            shown.card = card.map(|card| DrawnCard { card, button });
+        }
     }
 
     pub(in crate::app) fn bot_card_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas) {
@@ -183,28 +179,26 @@ impl App {
         if !left && ev.kind != MouseEventKind::Down(MouseButton::Right) {
             return;
         }
-        let Some(drawn) = self.screen.card.clone() else { return };
-        let key = drawn.key;
-        if self.shown_bot().and_then(|at| self.panels.bots.live.get(at)).is_none_or(|live| live.key != key) {
-            return;
-        }
+        let Some(at) = self.shown_bot() else { return };
+        let Some(drawn) = self.panels.bots.shown.as_ref().and_then(|shown| shown.card.clone()) else { return };
+        let key = self.panels.bots.live[at].key;
         let list = areas.workspaces_list;
         if left {
-            self.press_card(&drawn, list, pos);
+            self.press_card(key, &drawn, list, pos);
         } else if let Some(routine) = ui::card_routine(list, &drawn.card, pos) {
             self.open_routine_menu(key, routine, pos);
         }
     }
 
-    fn press_card(&mut self, drawn: &DrawnCard, list: Rect, pos: Position) {
-        let DrawnCard { key, card, button } = drawn;
+    fn press_card(&mut self, key: u64, drawn: &DrawnCard, list: Rect, pos: Position) {
+        let DrawnCard { card, button } = drawn;
         if ui::card_folder(list, card).contains(pos) {
-            self.open_menu_or_copy(Subject::Bot(*key), pos);
+            self.open_menu_or_copy(Subject::Bot(key), pos);
             return;
         }
         let Some(row) = ui::card_row_at(list, card, pos) else { return };
         match (card.rows[row].routine, card.rows[row].pane) {
-            (Some(routine), _) => self.press_card_routine_row(*key, routine, button.contains(pos), pos),
+            (Some(routine), _) => self.press_card_routine_row(key, routine, button.contains(pos), pos),
             (None, Some(pane)) => self.jump_to_pane(pane),
             (None, None) => {}
         }

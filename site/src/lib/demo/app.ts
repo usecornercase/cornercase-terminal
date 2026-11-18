@@ -2840,7 +2840,7 @@ export class App {
     else if (a.kind === 'ports') this.bug(PORTS_NEED);
     else if (a.kind === 'routine') {
       const entry = this.routineOf(a.bot, a.entry);
-      if (entry && this.bots.current()?.id === a.bot && buttonsOf(entry).includes(a.button)) actOnRoutine(this, entry, a.button);
+      if (entry && buttonsOf(entry).includes(a.button)) actOnRoutine(this, entry, a.button);
     } else this.paneAction(a.pane, a.action);
     this.dirty();
   }
