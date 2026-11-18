@@ -133,6 +133,7 @@ mod changing {
         let (release_tx, release_rx) = channel::<()>();
 
         std::thread::scope(|scope| {
+            let release = release_tx;
             let first = &here;
             scope.spawn(move || add_when_released(first, &inside_tx, &release_rx));
             inside_rx.recv().expect("inside");
@@ -141,7 +142,7 @@ mod changing {
                 scope.spawn(move || add(here, i));
             }
             wait_until("a writer waits for the lock", || contention::seen(&here.config));
-            release_tx.send(()).expect("sent");
+            release.send(()).expect("sent");
         });
 
         assert_eq!(read(&here).len(), 8);
