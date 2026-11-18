@@ -480,6 +480,7 @@ mod parsing {
     #[case::rename(&["rename", "--view", "41", "x"])]
     #[case::surface(&["surface", "--view", "41"])]
     #[case::view_set(&["view-set", "--view", "41", "--claim"])]
+    #[case::view_set_a_bot(&["view-set", "--view", "41", "--bot", "prs"])]
     #[case::go(&["go", "cc-1-2", "--view", "41"])]
     #[case::clone(&["clone", "/srv/git/shop", "--view", "41"])]
     #[case::flow_run(&["flow", "run", "Pair", "--prompt", "x", "--focus", "--view", "41"])]

@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.98
+
+- **A window of your own can say which bot's chat it shows.** `cornercase view-set --view ID --bot prs` (or `cornercase view --bot prs`) tells cornercase that a program drawing it shows that chat in place of a tab. While it does and its window is not hidden, the bot's answers no longer count as unread or make cornercase's toast and desktop notification, as when cornercase's own window shows the chat, and the tab behind the chat notifies again. `--bot ''` or closing the view ends it. `cornercase contract` lists `view-bot`.
+
 ## 0.13.97
 
 - **Flows start on their own again with Claude Code 2.1.326.** It asks whether to trust each folder given with `--add-dir`, and every role of a flow gets the run's folder that way. So each agent stopped at that question until you answered it in its tab, and then did not take its prompt. A flow's agents answer it now, also after a restart, whatever `trust_prompt_pattern` says. Other launches leave it to you while **trust prompts** is off, as with the folder question.

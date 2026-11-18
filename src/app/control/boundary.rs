@@ -29,6 +29,8 @@ enum Gated {
     Settings,
     ServerStop,
     Clone,
+    ShowsChat,
+    Reveals,
 }
 
 #[derive(Default)]
@@ -108,6 +110,9 @@ fn lifts(command: &Command) -> Option<Gated> {
         Command::Bot(BotRequest::Edit(edit)) => Some(Gated::Says(edit.bot.clone())),
         Command::Bot(BotRequest::Say(say)) => Some(Gated::Says(say.bot.clone())),
         Command::Bot(BotRequest::Setup(target)) => Some(Gated::Says(target.bot.clone())),
+        Command::View(open) if !blank(open.bot.as_ref()) => Some(Gated::ShowsChat),
+        Command::ViewSet(set) if !blank(set.bot.as_ref()) => Some(Gated::ShowsChat),
+        Command::ViewSet(set) if set.bot.is_none() && set.visible == Some(true) => Some(Gated::Reveals),
         Command::Config(Configure::Get | Configure::Search(_)) => None,
         Command::Config(_) => Some(Gated::Settings),
         Command::ConfigImport(import) if import.apply => Some(Gated::Settings),
@@ -161,6 +166,10 @@ fn no_settings() -> Refusal {
 
 fn no_stop() -> Refusal {
     Refusal::new(Code::Failed, crate::bots::STOP_REFUSED)
+}
+
+fn no_chat_view() -> Refusal {
+    Refusal::new(Code::Failed, "a bot cannot show a bot's chat in a view")
 }
 
 fn no_clone() -> Refusal {
@@ -227,6 +236,8 @@ impl App {
             Some(Gated::Settings) => Err(no_settings()),
             Some(Gated::ServerStop) => Err(no_stop()),
             Some(Gated::Clone) => Err(no_clone()),
+            Some(Gated::ShowsChat) => Err(no_chat_view()),
+            Some(Gated::Reveals) => self.reveals_chat(asker),
             Some(Gated::Says(bot)) => self.says_to(&bot),
             Some(Gated::Pane { pane, tab }) => self.types_into(self.target(asker, pane, tab)?),
         }
@@ -266,6 +277,13 @@ impl App {
             }
         };
         if allowed { Ok(()) } else { Err(Refusal::new(Code::Failed, NOT_OWN)) }
+    }
+
+    fn reveals_chat(&self, asker: Asker) -> Result<(), Refusal> {
+        match asker.view {
+            Some(view) if self.view_names_a_bot(view) => Err(no_chat_view()),
+            _ => Ok(()),
+        }
     }
 
     fn says_to(&self, bot: &str) -> Result<(), Refusal> {

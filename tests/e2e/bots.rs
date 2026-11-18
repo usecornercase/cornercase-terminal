@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use super::commands::Followed;
 use super::*;
 
 const STREAM: &str = r#"{"type":"system","subtype":"init","model":"claude-opus-5-5","session_id":"s1"}
@@ -50,6 +51,41 @@ fn a_bot_is_made_asked_and_read_back_over_the_socket() {
     assert!(session.says(&["bot", "agents"]).contains("claude"));
     let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
     assert!(args.contains("--setting-sources user") && args.contains("which are blocked?"), "{args}");
+}
+
+fn bot_state(session: &Session) -> Value {
+    let list: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    list["bots"][0].clone()
+}
+
+fn answered(session: &Session) -> Value {
+    session.says(&["bot", "say", "prs", "hi"]);
+    wait_until("the bot answered", || {
+        let bot = bot_state(session);
+        bot["state"] == "idle" && bot["last"]["kind"] == "bot"
+    });
+    bot_state(session)
+}
+
+#[test]
+fn a_view_that_shows_a_bot_keeps_its_answers_read() {
+    let session = started();
+    session.says(&["bot", "new", "PRs", "--agent", "claude"]);
+    let mut view = session.spawn(&["view", "--bot", "prs"]);
+    let mut followed = Followed::of(&mut view);
+    followed.until("the first frame", |frame| frame["revision"] == 1);
+    assert_eq!(followed.seen[0]["view"]["bot"], "prs");
+    let id = followed.seen[0]["view"]["id"].as_u64().expect("a view id").to_string();
+
+    let shown = answered(&session);
+    let cleared = session.says(&["view-set", "--view", &id, "--bot", ""]);
+    let told = answered(&session);
+    let _ = view.kill();
+    let _ = view.wait();
+
+    assert_eq!(shown["unread"], 0);
+    assert!(!cleared.ends_with("bot prs"), "{cleared}");
+    assert_eq!(told["unread"], 1);
 }
 
 #[test]

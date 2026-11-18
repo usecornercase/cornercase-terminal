@@ -40,7 +40,7 @@ While a chat shows, every key goes to its input field and **never to a pane**: `
 
 ## Unread and ` go `
 
-- An answer or error of a bot whose chat a window shows on screen (`bot_on_screen`: shown, a window attached, no compact menu, no full-screen file) neither counts as unread nor notifies; showing a chat does what `bot seen` does. Any other keeps #844's toast and desktop notification, which now carry a token (`Notices::bot_token`, bounded like the agents' tokens): the toast's ` go ` and a click on the desktop notification show the chat, or toast `that bot is gone`. `act_on_notice` and `cornercase go` are unchanged: a bot's token is not published on `events`, whose `bot` events already carry its lines.
+- An answer or error of a bot whose chat a window shows on screen (`bot_on_screen`: shown, a window attached, no compact menu, no full-screen file, or a visible view that names the bot: `view --bot`, #869, see Commands for scripts and agents › Views) neither counts as unread nor notifies; showing a chat does what `bot seen` does. Any other keeps #844's toast and desktop notification, which now carry a token (`Notices::bot_token`, bounded like the agents' tokens): the toast's ` go ` and a click on the desktop notification show the chat, or toast `that bot is gone`. `act_on_notice` and `cornercase go` are unchanged: a bot's token is not published on `events`, whose `bot` events already carry its lines.
 
 ## The form, rename and remove
 

@@ -109,7 +109,7 @@ cornercase bot setup prs
 - **`cornercase bot reset prs`** forgets the conversation: the next message starts a new one that reads `bot.md` and `memory.md` again. Do it when the context fills up (the error says so) or the bot has lost the thread. `bot reset` and `bot remove` are refused while the bot answers (`bot remove` also while a routine's run does; `bot reset` does not mind a run, which has its own conversation): `cornercase bot stop` comes first.
 - **`cornercase bot stop prs`** ends the answer being written, the runs of its routines that are answering, and everything the bot started in them. With `cornercase` access, whatever the bot left running in the background is also stopped when an answer ends (not always: see the exceptions in [Known limitations](../../help/limitations/)). The conversation stays, so the next message continues it; the messages held are dropped.
 
-An answer, or an error, that nobody waited for makes a toast and a desktop notification (`prs: Two are blocked.`).
+An answer, or an error, that nobody waited for makes a toast and a desktop notification (`prs: Two are blocked.`), unless a window shows its chat: cornercase's own, or a program's that [says so with `view-set --bot`](../scripts-and-agents/#a-view-of-your-own).
 
 ## Routines
 

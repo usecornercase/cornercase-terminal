@@ -132,6 +132,20 @@ mod machines {
     }
 
     #[test]
+    fn a_view_that_shows_a_bot_names_it_and_marks_no_tab() {
+        let local = ProjectInfo { id: 3, name: "shop".into(), path: "/Users/me/shop".into(), ..ProjectInfo::default() };
+        let shown = control::Ids { project: Some(3), ..control::Ids::default() };
+        let bot = Some("prs".to_string());
+        let view = control::ViewInfo { id: 7, active: true, shown, visible: true, bot, ..Default::default() };
+        let report = Report { projects: vec![local], shown, view: Some(view), ..Report::default() };
+
+        let text = render(&report, Some(Path::new("/Users/me")), Stamp::parse(SEEN).expect("a stamp"));
+
+        assert!(text.lines().next().is_some_and(|line| line.ends_with("  bot prs")), "{text}");
+        assert!(!text.contains("(view)"), "{text}");
+    }
+
+    #[test]
     fn one_that_is_down_says_when_it_was_seen() {
         let pi = seen("pi", State::Unreachable, Vec::new());
 
