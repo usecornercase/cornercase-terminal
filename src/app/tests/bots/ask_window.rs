@@ -1,5 +1,6 @@
 use super::asks::{asking, giving};
 use super::secrets::{OWNER, VALUE, turn};
+use super::secrets_window::type_in;
 use super::*;
 use crate::app::overlay::Overlay;
 use crate::bots::asks::{self, Hit};
@@ -41,12 +42,6 @@ fn spot(c: &Chat, wanted: Hit) -> Position {
         },
     );
     found.expect("the spot")
-}
-
-fn type_in(c: &mut Chat, text: &str) {
-    for ch in text.chars() {
-        send_key(&mut c.app, KeyCode::Char(ch), KeyModifiers::NONE);
-    }
 }
 
 fn give_at(app: &mut App) -> Option<Position> {

@@ -31,7 +31,7 @@ fn enter(c: &mut Chat) {
     send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
-fn type_in(c: &mut Chat, text: &str) {
+pub(super) fn type_in(c: &mut Chat, text: &str) {
     for ch in text.chars() {
         send_key(&mut c.app, KeyCode::Char(ch), KeyModifiers::NONE);
     }
