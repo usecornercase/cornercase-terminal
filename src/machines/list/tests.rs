@@ -2,7 +2,7 @@ use rstest::rstest;
 
 use super::*;
 use crate::machines::machine;
-use crate::test_util::TempDir;
+use crate::test_util::{TempDir, wait_until};
 
 fn here_in(dir: &TempDir) -> Here {
     Here { config: dir.path().join("config.json"), legacy: dir.path().join("machines.json") }
@@ -93,15 +93,19 @@ mod reading {
 }
 
 mod changing {
-    use std::thread::sleep;
-    use std::time::Duration;
+    use std::sync::mpsc::{Receiver, Sender, channel};
 
     use super::*;
 
-    fn slow_add(here: &Here, i: usize) {
+    fn add(here: &Here, i: usize) {
+        change(here, |list| list.push(machine(&format!("m{i}"), &format!("m{i}.lan")))).expect("written");
+    }
+
+    fn add_when_released(here: &Here, inside: &Sender<()>, release: &Receiver<()>) {
         change(here, |list| {
-            sleep(Duration::from_millis(15));
-            list.push(machine(&format!("m{i}"), &format!("m{i}.lan")));
+            inside.send(()).expect("sent");
+            release.recv().expect("released");
+            list.push(machine("first", "first.lan"));
         })
         .expect("written");
     }
@@ -125,16 +129,22 @@ mod changing {
     fn writers_at_once_lose_none() {
         let dir = TempDir::new();
         let here = here_in(&dir);
-        let writers = 8;
+        let (inside_tx, inside_rx) = channel();
+        let (release_tx, release_rx) = channel::<()>();
 
         std::thread::scope(|scope| {
-            for i in 0..writers {
+            let first = &here;
+            scope.spawn(move || add_when_released(first, &inside_tx, &release_rx));
+            inside_rx.recv().expect("inside");
+            for i in 0..7 {
                 let here = &here;
-                scope.spawn(move || slow_add(here, i));
+                scope.spawn(move || add(here, i));
             }
+            wait_until("a writer waits for the lock", || contention::seen(&here.config));
+            release_tx.send(()).expect("sent");
         });
 
-        assert_eq!(read(&here).len(), writers);
+        assert_eq!(read(&here).len(), 8);
     }
 
     #[test]
@@ -191,7 +201,7 @@ mod reaching {
         let here = here_in(&dir);
         change(&here, |list| list.push(machine("vps", "vps.lan"))).expect("written");
 
-        reached(&here, &remote("vps.lan", Some("a\tb"))).expect("fine");
+        reached(&here, &remote("vps.lan", Some("a\tb")), false).expect("fine");
 
         assert_eq!(read(&here), [machine("vps", "vps.lan")]);
     }
@@ -200,7 +210,7 @@ mod reaching {
     fn a_new_machine_is_not_shown_and_gets_a_name_and_the_home_folder() {
         let dir = TempDir::new();
 
-        reached(&here_in(&dir), &remote("me@devbox:22", Some("/opt/cc"))).expect("written");
+        reached(&here_in(&dir), &remote("me@devbox:22", Some("/opt/cc")), false).expect("written");
 
         let list = read(&here_in(&dir));
         assert_eq!(names(&list), ["devbox"]);
@@ -209,34 +219,47 @@ mod reaching {
     }
 
     #[test]
-    fn a_known_one_loses_its_mark_and_keeps_the_command_it_has() {
+    fn a_first_connection_takes_the_last_command_and_loses_its_mark() {
         let dir = TempDir::new();
         remembered(&here_in(&dir), "devbox".into(), Some("/opt/cc".into())).expect("written");
 
-        reached(&here_in(&dir), &remote("devbox", Some("/old/cc"))).expect("written");
+        reached(&here_in(&dir), &remote("devbox", Some("/new/cc")), false).expect("written");
+        assert_eq!(read(&here_in(&dir))[0].command.as_deref(), Some("/new/cc"));
+        reached(&here_in(&dir), &remote("devbox", None), false).expect("written");
+
+        let list = read(&here_in(&dir));
+        assert_eq!((list.len(), list[0].command.clone(), list[0].unreached), (1, None, false));
+    }
+
+    #[test]
+    fn a_reconnect_keeps_the_command_the_list_has_and_loses_the_mark() {
+        let dir = TempDir::new();
+        remembered(&here_in(&dir), "devbox".into(), Some("/opt/cc".into())).expect("written");
+
+        reached(&here_in(&dir), &remote("devbox", Some("/old/cc")), true).expect("written");
 
         let list = read(&here_in(&dir));
         assert_eq!((list.len(), list[0].command.as_deref(), list[0].unreached), (1, Some("/opt/cc"), false));
     }
 
     #[test]
-    fn a_known_one_without_a_command_takes_the_one_it_was_reached_with() {
+    fn a_reconnect_never_gives_an_entry_the_command_it_was_started_with() {
         let dir = TempDir::new();
         remembered(&here_in(&dir), "devbox".into(), None).expect("written");
 
-        reached(&here_in(&dir), &remote("devbox", Some("/opt/cc"))).expect("written");
+        reached(&here_in(&dir), &remote("devbox", Some("/opt/cc")), true).expect("written");
 
-        assert_eq!(read(&here_in(&dir))[0].command.as_deref(), Some("/opt/cc"));
+        assert_eq!(read(&here_in(&dir))[0].command, None);
     }
 
     #[test]
     fn the_same_link_again_writes_nothing() {
         let dir = TempDir::new();
-        reached(&here_in(&dir), &remote("devbox", None)).expect("written");
+        reached(&here_in(&dir), &remote("devbox", None), false).expect("written");
         let by_hand = text(&here_in(&dir).config).replace(',', ", ");
         std::fs::write(&here_in(&dir).config, &by_hand).expect("rewritten");
 
-        reached(&here_in(&dir), &remote("devbox", None)).expect("fine");
+        reached(&here_in(&dir), &remote("devbox", None), false).expect("fine");
 
         assert_eq!(text(&here_in(&dir).config), by_hand);
     }
@@ -245,7 +268,7 @@ mod reaching {
     fn a_destination_ssh_would_take_for_an_option_writes_nothing() {
         let dir = TempDir::new();
 
-        reached(&here_in(&dir), &remote("-oProxyCommand=sh", None)).expect("fine");
+        reached(&here_in(&dir), &remote("-oProxyCommand=sh", None), false).expect("fine");
 
         assert!(!here_in(&dir).config.exists());
     }
@@ -288,7 +311,7 @@ mod remembering {
     #[test]
     fn a_machine_a_window_reached_is_not_marked() {
         let dir = TempDir::new();
-        reached(&here_in(&dir), &remote("devbox", None)).expect("written");
+        reached(&here_in(&dir), &remote("devbox", None), false).expect("written");
 
         let kept = remembered(&here_in(&dir), "devbox".into(), Some("/opt/cc".into())).expect("written");
 
@@ -309,8 +332,6 @@ mod remembering {
 }
 
 mod migrating {
-    use std::time::Duration;
-
     use super::*;
 
     const LEGACY: &str =
@@ -399,7 +420,7 @@ mod migrating {
             let here = Here { config: here.config.clone(), legacy: here.legacy.clone() };
             move || migrate(&here)
         });
-        std::thread::sleep(Duration::from_millis(150));
+        wait_until("the late one waits for the lock", || contention::seen(&here.config));
         std::fs::remove_file(&here.legacy).expect("migrated by the other");
         drop(held);
 

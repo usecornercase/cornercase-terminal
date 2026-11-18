@@ -122,9 +122,9 @@ impl Window<'_> {
         machines_of(&list::read(&Here::this_computer()), here)
     }
 
-    pub(super) fn remember(&self) {
+    pub(super) fn remember(&self, reconnecting: bool) {
         if let Target::Remote(remote) = &self.target {
-            let _ = list::reached(&Here::this_computer(), remote);
+            let _ = list::reached(&Here::this_computer(), remote, reconnecting);
         }
     }
 
@@ -213,7 +213,7 @@ impl Window<'_> {
         self.openers = pending.openers;
         self.sync_plugins();
         self.tunnels.sync(self.target.machine(), Instant::now());
-        self.remember();
+        self.remember(false);
         self.send_out(ClientMessage::Machines(Self::machines_at(&self.target)));
         self.report_tunnels();
         self.lost = None;

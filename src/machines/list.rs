@@ -73,6 +73,8 @@ fn take_lock(path: &Path) -> io::Result<File> {
             let why = "another cornercase is changing the list of machines; try again";
             return Err(io::Error::new(io::ErrorKind::TimedOut, why));
         }
+        #[cfg(test)]
+        contention::note(path);
         std::thread::sleep(LOCK_STEP);
     }
     Ok(file)
@@ -96,6 +98,23 @@ fn lock_wait() -> Duration {
 #[cfg(test)]
 pub(crate) fn wait_briefly() {
     SHORT_WAIT.with(|wait| wait.set(Some(Duration::from_millis(200))));
+}
+
+#[cfg(test)]
+mod contention {
+    use std::path::{Path, PathBuf};
+
+    use parking_lot::Mutex;
+
+    static SEEN: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+    pub(super) fn note(path: &Path) {
+        SEEN.lock().push(path.to_path_buf());
+    }
+
+    pub(crate) fn seen(path: &Path) -> bool {
+        SEEN.lock().iter().any(|noted| noted == path)
+    }
 }
 
 #[cfg(test)]
@@ -138,7 +157,7 @@ fn pushed(list: &mut Vec<Machine>, destination: String, command: Option<String>,
     machine
 }
 
-pub(crate) fn reached(here: &Here, remote: &Remote) -> io::Result<()> {
+pub(crate) fn reached(here: &Here, remote: &Remote, keep_command: bool) -> io::Result<()> {
     if valid_destination(&remote.destination).is_err()
         || valid_command(remote.command.as_deref().unwrap_or_default()).is_err()
     {
@@ -147,7 +166,7 @@ pub(crate) fn reached(here: &Here, remote: &Remote) -> io::Result<()> {
     change(here, |list| {
         let mut found = false;
         for machine in list.iter_mut().filter(|machine| machine.destination == remote.destination) {
-            if machine.command.is_none() {
+            if !keep_command {
                 machine.command.clone_from(&remote.command);
             }
             machine.unreached = false;
