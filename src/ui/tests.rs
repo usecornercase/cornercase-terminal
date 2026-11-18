@@ -124,6 +124,7 @@ mod activity;
 mod agent_status;
 mod agents_section;
 mod borders;
+mod bot_ask;
 mod bot_form;
 mod bots_section;
 mod buttons;

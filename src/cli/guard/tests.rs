@@ -34,6 +34,8 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::proxy(&["proxy"], "a bot cannot attach as a window")]
 #[case::remote_window(&["remote", "vps"], "a bot cannot attach as a window")]
 #[case::server(&["server"], "a bot cannot run cornercase's server")]
+#[case::give(&["bot", "secret", "give", "prs", "3"], "a bot cannot give or decline what a bot asks for")]
+#[case::decline(&["bot", "secret", "decline", "prs", "3"], "a bot cannot give or decline what a bot asks for")]
 fn a_bot_is_refused(#[case] args: &[&str], #[case] why: &str) {
     let found = refused(args).unwrap_or_else(|| panic!("{args:?} was allowed"));
     assert!(found.starts_with(why), "{found}");
@@ -75,6 +77,7 @@ fn the_refusal_names_the_flags_that_take_a_place() {
 #[case::export(&["config", "export"])]
 #[case::import_preview(&["config", "import", "/x", "--preview"])]
 #[case::known_machines(&["remote", "--known"])]
+#[case::ask(&["bot", "secret", "ask", "pw", "--about", "to log in"])]
 fn a_bot_may_name_its_place_or_use_what_needs_none(#[case] args: &[&str]) {
     assert_eq!(refused(args), None, "{args:?}");
 }

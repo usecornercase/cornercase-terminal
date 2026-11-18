@@ -63,18 +63,21 @@ fn rows_of(inner: Rect, y: &mut u16, texts: Vec<String>) -> Vec<(Rect, String)> 
 struct Room {
     head: bool,
     says: usize,
+    gap: bool,
     what: usize,
     pitch: u16,
 }
 
 fn room(height: usize, fields: usize, about: usize, what: usize) -> Room {
-    let pitch = if height >= fields * 3 { 3 } else { 2 };
+    let pitch = if height >= fields * 3 + 2 { 3 } else { 2 };
     let mut left = height.saturating_sub(fields * usize::from(pitch));
     let head = left >= 2;
     left = left.saturating_sub(if head { 2 } else { 0 });
-    let says = (about + 1).min(left.saturating_sub(1));
-    left = left.saturating_sub(says + usize::from(says > 0));
-    Room { head, says, what: what.min(left), pitch }
+    let says = if left >= 2 { (about + 1).min(left) } else { 0 };
+    left = left.saturating_sub(says);
+    let gap = usize::from(says > 0 && left > 0);
+    left = left.saturating_sub(gap);
+    Room { head, says, gap: gap > 0, what: what.min(left), pitch }
 }
 
 fn geometry(area: Rect, view: &BotAsk) -> Geometry {
@@ -93,7 +96,7 @@ fn geometry(area: Rect, view: &BotAsk) -> Geometry {
         says_texts.extend(about.into_iter().take(room.says - 1));
     }
     let says = rows_of(inner, &mut y, says_texts);
-    y = y.saturating_add(u16::from(!says.is_empty()));
+    y = y.saturating_add(u16::from(room.gap));
     let field_width = inner.width.min(FIELD_WIDTH);
     let fields = (0..view.fields.len())
         .map(|_| {

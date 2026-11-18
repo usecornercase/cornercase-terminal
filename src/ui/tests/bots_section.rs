@@ -212,3 +212,25 @@ fn a_row_too_narrow_for_the_next_run_draws_agent_and_model_instead() {
     assert!(text.contains("next Mon 09:00"), "{text}");
     assert!(!text.contains("next 16 Nov"), "{text}");
 }
+
+#[test]
+fn a_bot_that_asks_for_a_secret_says_so_in_the_waiting_colour() {
+    let asking = BotEntry { asking: true, fallback: "claude".into(), ..entry("campus", "asks for a secret") };
+    let wide = Widths { projects: 44, ..Widths::default() };
+    let view = View { widths: wide, ..shown(Sidebar::SideBySide, vec![asking, entry("prs", "claude")], false) };
+    let t = render_sized(&view, W, TALL.height);
+    let buffer = t.backend().buffer();
+    let found = (0..TALL.height).find_map(|y| {
+        let text = row_text(&t, Rect::new(0, y, W, 1));
+        let x = text.find("asks")?;
+        Some(Position::new(u16::try_from(text[..x].chars().count()).ok()?, y))
+    });
+    let at = found.expect("the detail is drawn");
+    assert_eq!(buffer[at].fg, WAITING_COLOR);
+    let plain = (0..TALL.height).find_map(|y| {
+        let text = row_text(&t, Rect::new(0, y, W, 1));
+        let x = text.rfind("claude")?;
+        Some(Position::new(u16::try_from(text[..x].chars().count()).ok()?, y))
+    });
+    assert_ne!(buffer[plain.expect("the other detail")].fg, WAITING_COLOR);
+}

@@ -405,6 +405,8 @@ fn what_a_bot_is_for_is_read_when_asked_and_never_given_empty_in_place_of_a_text
     assert_eq!(c.app.bot_about("nobody").expect_err("no bot").code, Code::NotFound);
 }
 
+mod ask_window;
+mod asks;
 mod boundary;
 mod card_menu;
 mod compact;
@@ -413,7 +415,7 @@ mod git;
 mod menu;
 mod routines;
 mod routines_dialog;
-mod secrets;
+pub(in crate::app::tests) mod secrets;
 mod secrets_window;
 mod setup;
 mod views;
