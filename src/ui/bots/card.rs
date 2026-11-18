@@ -85,6 +85,10 @@ pub(crate) fn card_menu(list: Rect, card: &BotCard, routine: u64) -> Rect {
     if span.is_empty() { Rect::default() } else { row_menu_button(span, 1) }
 }
 
+pub(crate) fn card_button(list: Rect, card: &BotCard, hover: Position) -> Rect {
+    card_routine(list, card, hover).map_or_else(Rect::default, |routine| card_menu(list, card, routine))
+}
+
 fn row_width(view: &View, card: &BotCard, list: Rect, i: usize, width: usize) -> usize {
     let routine = card.rows[i].routine;
     let first = routine.is_some() && (i == 0 || card.rows[i - 1].routine != routine);

@@ -30,6 +30,11 @@ fn button_of(c: &Chat, routine: u64) -> Position {
     ui::card_menu(card_list(c), &c.app.bot_card(0), routine).as_position()
 }
 
+fn hover_on(c: &mut Chat, pos: Position) {
+    mouse(&mut c.app, MouseEventKind::Moved, pos);
+    render(&mut c.app, AREA);
+}
+
 fn later() -> i64 {
     crate::time::now() + 86_400
 }
@@ -65,6 +70,10 @@ fn its_menu_button_opens_the_same_menu_and_a_click_beside_it_opens_the_dialog() 
     let mut c = chat(ANSWER);
     let id = routine(&mut c);
     let button = button_of(&c, id);
+    click(&mut c.app, button);
+    assert!(matches!(c.app.overlay, Some(Overlay::BotRoutines(_))), "a button that is not drawn is not a target");
+    c.app.overlay = None;
+    hover_on(&mut c, button);
     click(&mut c.app, button);
     assert_eq!(menu_labels(&c.app), ["run now", "pause", "edit…", "remove"]);
     send_key(&mut c.app, KeyCode::Esc, KeyModifiers::NONE);
@@ -174,4 +183,32 @@ fn an_item_of_a_routine_removed_meanwhile_does_nothing() {
     c.app.panels.queued.remove(b).expect("removed");
     pick(&mut c.app, "edit…");
     assert!(c.app.overlay.is_none());
+}
+
+#[test]
+fn an_item_that_no_longer_applies_does_nothing() {
+    let mut c = chat(ANSWER);
+    let id = routine(&mut c);
+    menu_on(&mut c, id);
+    pick(&mut c.app, "pause");
+    menu_on(&mut c, id);
+    assert!(menu_labels(&c.app).contains(&"resume".to_string()));
+    c.app.pause_queued(id, false);
+    c.app.messages.toast = None;
+    pick(&mut c.app, "resume");
+    assert!(c.app.messages.toast.is_none());
+}
+
+#[test]
+fn a_press_on_a_routine_removed_since_the_last_draw_opens_nothing_for_the_one_that_took_its_row() {
+    let mut c = chat(ANSWER);
+    let first = routine(&mut c);
+    let second = scheduled(&mut c, bot_routine(later() + 60, "3h"));
+    render(&mut c.app, AREA);
+    let pos = card_rows_of(&c, first)[0];
+    c.app.panels.queued.remove(first).expect("removed");
+    right_click(&mut c.app, pos);
+    assert!(c.app.overlay.is_none());
+    click(&mut c.app, pos);
+    assert!(c.app.overlay.is_none(), "{second} must not take the pressed row");
 }

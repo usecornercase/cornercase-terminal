@@ -68,12 +68,9 @@ impl App {
 
     fn press_card_routine(&mut self, at: usize, entry: u64, button: Button) {
         let id = &self.panels.bots.live[at].bot.id;
-        let yours = self
-            .panels
-            .queued
-            .queue()
-            .entry(entry)
-            .is_some_and(|found| found.is_routine() && found.bot() == Some(id.as_str()));
+        let yours = self.panels.queued.queue().entry(entry).is_some_and(|found| {
+            found.is_routine() && found.bot() == Some(id.as_str()) && buttons(found).contains(&button)
+        });
         if yours {
             self.press_routine(entry, button);
         }

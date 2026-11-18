@@ -20,8 +20,16 @@ use super::worktrees::Upstream;
 use super::worktrees_dialog::{Cleanup, Frees, Scans};
 use super::{flow_panel, merged_pull_requests, ports_dialog, processes_dialog, pull_requests, recap_panel};
 
+#[derive(Debug, Clone)]
+pub(super) struct DrawnCard {
+    pub(super) key: u64,
+    pub(super) card: ui::BotCard,
+    pub(super) button: ratatui::layout::Rect,
+}
+
 #[derive(Default)]
 pub(super) struct Screen {
+    pub(super) card: Option<DrawnCard>,
     pub(super) drawn: ui::Areas,
     pub(super) nav: Option<ui::Nav>,
     pub(super) side: Option<Side>,

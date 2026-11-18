@@ -791,6 +791,7 @@ impl App {
         let (files, placed) = self.files_seen(sight, area, modal);
         let tab = self.tab_view(area);
         let (chat, bot_card) = self.shown_chat(area).map_or((None, None), |shown| (Some(shown.view), Some(shown.card)));
+        self.note_drawn_card(area, bot_card.as_ref());
         let (remote_card, remote_tab) = (self.remote_card(now), self.remote_screen());
         self.messages.toast = self.messages.toast.take().filter(|t| t.at.elapsed() < t.lasts());
         let view =

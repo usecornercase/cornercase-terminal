@@ -476,6 +476,7 @@ test('the ⋯ on a routine of the card opens its menu: pause, resume and remove 
   assert.equal(app.overlay?.kind, 'menu');
   assert.match(screen(app), /resume/);
   press(app, 'resume');
+  assert.match(screen(app).split('\n')[at.y + 1].slice(list.x, list.x + list.w), /next/);
   app.pointerDown(at.x, at.y, 2);
   app.pointerUp();
   app.render();
@@ -497,6 +498,40 @@ test('the ⋯ on a routine of the card opens its menu: pause, resume and remove 
   app.toast = null;
   press(app, 'edit…');
   assert.match((app.toast as App['toast'])?.text ?? '', /schedule form lists no bots/);
+});
+
+test('a card menu item that no longer applies does nothing', () => {
+  const app = demo(140);
+  press(app, 'prs');
+  app.resize(140, 60);
+  const at = cardRoutine(app);
+  const entry = app.botQueued.find((e) => e.repeat)!;
+  app.pauseQueued(entry, true, 'botQueued');
+  app.pointerDown(at.x, at.y, 2);
+  app.pointerUp();
+  app.render();
+  assert.match(screen(app), /resume/);
+  app.pauseQueued(entry, false, 'botQueued');
+  app.toast = null;
+  press(app, 'resume');
+  assert.equal(app.toast, null);
+  assert.equal(entry.paused, false);
+});
+
+test('a card menu item does nothing once another bot is shown', () => {
+  const app = demo(140);
+  press(app, 'prs');
+  app.resize(140, 60);
+  const at = cardRoutine(app);
+  app.pointerDown(at.x, at.y, 2);
+  app.pointerUp();
+  app.render();
+  const other = app.bots.list.find((b) => b.id !== 'prs')!;
+  app.bots.shown = other.id;
+  app.toast = null;
+  app.chooseMenu(1);
+  assert.equal(app.toast, null);
+  assert.equal(app.botQueued.find((e) => e.repeat)?.paused ?? false, false);
 });
 
 test('the empty chat offers the scheduling example', () => {
