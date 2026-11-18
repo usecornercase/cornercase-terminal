@@ -468,6 +468,8 @@ test('the ⋯ on a routine of the card opens its menu: pause, resume and remove 
   for (const label of ['run now', 'pause', 'edit…', 'remove']) assert.match(screen(app), new RegExp(label));
   press(app, 'pause');
   assert.match(app.toast?.text ?? '', /paused routine/);
+  const list = app.areas().workspacesList;
+  assert.match(screen(app).split('\n')[at.y + 1].slice(list.x, list.x + list.w), /paused/);
   app.pointerDown(at.x, at.y + 1, 2);
   app.pointerUp();
   app.render();
@@ -492,8 +494,9 @@ test('the ⋯ on a routine of the card opens its menu: pause, resume and remove 
   app.pointerDown(at.x, at.y, 2);
   app.pointerUp();
   app.render();
+  app.toast = null;
   press(app, 'edit…');
-  assert.ok(app.toast);
+  assert.match((app.toast as App['toast'])?.text ?? '', /schedule form lists no bots/);
 });
 
 test('the empty chat offers the scheduling example', () => {

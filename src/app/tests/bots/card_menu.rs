@@ -69,7 +69,11 @@ fn its_menu_button_opens_the_same_menu_and_a_click_beside_it_opens_the_dialog() 
     assert_eq!(menu_labels(&c.app), ["run now", "pause", "edit…", "remove"]);
     send_key(&mut c.app, KeyCode::Esc, KeyModifiers::NONE);
     assert!(c.app.overlay.is_none());
-    let pos = card_rows_of(&c, id)[0];
+    assert_a_card_click_opens_its_routines(&mut c, id);
+}
+
+pub(super) fn assert_a_card_click_opens_its_routines(c: &mut Chat, id: u64) {
+    let pos = card_rows_of(c, id)[0];
     click(&mut c.app, pos);
     assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(id)));
 }

@@ -1,4 +1,4 @@
-use super::card_menu::card_rows_of;
+use super::card_menu::assert_a_card_click_opens_its_routines;
 use super::routines::{START, answered_run, bot_routine, scheduled};
 use super::*;
 use crate::bots::routines::{Button, Hit};
@@ -85,9 +85,7 @@ fn routines_in_the_menu_and_a_routine_on_the_card_open_it_too() {
     assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected.is_some()));
     c.app.overlay = None;
     render(&mut c.app, AREA);
-    let pos = card_rows_of(&c, id)[0];
-    click(&mut c.app, pos);
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(id)));
+    assert_a_card_click_opens_its_routines(&mut c, id);
 }
 
 #[test]
