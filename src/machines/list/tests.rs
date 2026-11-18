@@ -93,7 +93,18 @@ mod reading {
 }
 
 mod changing {
+    use std::thread::sleep;
+    use std::time::Duration;
+
     use super::*;
+
+    fn slow_add(here: &Here, i: usize) {
+        change(here, |list| {
+            sleep(Duration::from_millis(15));
+            list.push(machine(&format!("m{i}"), &format!("m{i}.lan")));
+        })
+        .expect("written");
+    }
 
     #[test]
     fn writers_at_once_lose_none() {
@@ -104,13 +115,7 @@ mod changing {
         std::thread::scope(|scope| {
             for i in 0..writers {
                 let here = &here;
-                scope.spawn(move || {
-                    change(here, |list| {
-                        std::thread::sleep(std::time::Duration::from_millis(15));
-                        list.push(machine(&format!("m{i}"), &format!("m{i}.lan")));
-                    })
-                    .expect("written");
-                });
+                scope.spawn(move || slow_add(here, i));
             }
         });
 
