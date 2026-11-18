@@ -394,3 +394,122 @@ fn a_bots_turn_finds_its_servers_cornercase_first_and_your_gh_before_the_one_bes
         std::fs::canonicalize(&server).expect("copy")
     );
 }
+
+const VALUE: &str = "hunter2-marker-value";
+const READ: &str = "cornercase bot secret get pw > \"$0.$CORNERCASE_BOT.got\" 2>&1\necho $? > \"$0.$CORNERCASE_BOT.status\"\nenv -u CORNERCASE_BOT cornercase bot secret list a > \"$0.$CORNERCASE_BOT.list\" 2>&1";
+
+fn read_by(session: &Session, bot: &str, what: &str) -> String {
+    std::fs::read_to_string(session.dir.join(format!("claude-bot.{bot}.{what}"))).expect("what the turn wrote")
+}
+
+fn saved(session: &Session, bot: &str) {
+    let out = session.fed(&["bot", "secret", "set", bot, "pw"], &format!("{VALUE}\n"));
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "pw");
+}
+
+fn counted(session: &Session) -> u64 {
+    let json: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    json["bots"][0]["secrets"].as_u64().expect("a count")
+}
+
+#[test]
+fn a_secret_is_read_back_by_its_bots_own_turn_and_by_nothing_else() {
+    let session = started_running(READ);
+    for args in [&["bot", "new", "a", "--agent", "claude"][..], &["bot", "new", "b", "--agent", "claude"]] {
+        session.says(args);
+    }
+    saved(&session, "a");
+
+    let listed = session.says(&["bot", "secret", "list", "a"]);
+    assert!(listed.starts_with("pw\tsaved ") && listed.ends_with("key: file"), "{listed}");
+    assert!(!listed.contains(VALUE));
+    assert_eq!(counted(&session), 1);
+
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+    assert_eq!(read_by(&session, "a", "got"), format!("{VALUE}\n"));
+    assert_eq!(read_by(&session, "a", "status").trim(), "0");
+
+    let plain = session.cli(&["bot", "secret", "get", "pw"]);
+    assert!(refused(&plain, 1, "only the bot itself reads its secrets"), "{plain:?}");
+
+    another_bots_turn_gets_nothing(&session);
+}
+
+fn another_bots_turn_gets_nothing(session: &Session) {
+    session.says(&["bot", "say", "b", "go", "--wait"]);
+    assert!(read_by(session, "b", "got").contains("no secret pw in b"), "{}", read_by(session, "b", "got"));
+    assert_eq!(read_by(session, "b", "status").trim(), "1");
+    assert!(read_by(session, "b", "list").contains("a bot reads only its own secrets"));
+}
+
+#[test]
+fn a_full_access_bot_reads_its_own_secret_too() {
+    let session = started_running(READ);
+    session.says(&["bot", "new", "a", "--agent", "claude", "--access", "full"]);
+    saved(&session, "a");
+
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+
+    assert_eq!(read_by(&session, "a", "got"), format!("{VALUE}\n"));
+}
+
+#[test]
+fn a_bot_cannot_save_or_remove_secrets_and_wrong_usage_is_refused() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+
+    for args in [&["bot", "secret", "set", "prs", "pw"][..], &["bot", "secret", "remove", "prs", "--all"]] {
+        let out = session.command().env("CORNERCASE_BOT", "prs").args(args).output().expect("run");
+        assert!(refused(&out, 2, "a bot cannot save or remove secrets"), "{args:?}: {out:?}");
+    }
+    let other = session.command().env("CORNERCASE_BOT", "prs").args(["bot", "secret", "list", "other"]).output();
+    assert!(refused(&other.expect("run"), 2, "a bot reads only its own secrets"));
+    let value_as_argument = session.cli(&["bot", "secret", "set", "prs", "pw", VALUE]);
+    assert_eq!(value_as_argument.status.code(), Some(2), "{value_as_argument:?}");
+    let empty = session.fed(&["bot", "secret", "set", "prs", "pw"], "\n");
+    assert!(String::from_utf8_lossy(&empty.stderr).contains("the value is empty"), "{empty:?}");
+    let big = session.fed(&["bot", "secret", "set", "prs", "pw"], &"a".repeat(8193));
+    assert!(String::from_utf8_lossy(&big.stderr).contains("8193"), "{big:?}");
+}
+
+#[test]
+fn the_value_is_in_no_file_and_no_log_line_and_one_line_break_is_dropped() {
+    let session = with_agent_running(READ);
+    let started = session.cold_command().env("CORNERCASE_LOG", "debug").arg("start-server").output().expect("run");
+    assert!(started.status.success(), "{started:?}");
+    session.says(&["bot", "new", "a", "--agent", "claude"]);
+    let out = session.fed(&["bot", "secret", "set", "a", "pw"], &format!("{VALUE}\n\n"));
+    assert!(out.status.success(), "{out:?}");
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+    assert_eq!(read_by(&session, "a", "got"), format!("{VALUE}\n\n"));
+    session.says(&["bot", "secret", "list", "a", "--json"]);
+    session.says(&["bot", "secret", "remove", "a", "pw"]);
+
+    let log = session.says(&["logs", "-n", "1000"]);
+    assert!(log.contains("name=pw") && log.contains("bytes=21"), "{log}");
+    assert!(!log.contains(VALUE), "{log}");
+    saved(&session, "a");
+    let found = std::process::Command::new("grep")
+        .args(["-rl", VALUE])
+        .arg(session.dir.join("server.bots"))
+        .output()
+        .expect("grep");
+    assert!(found.stdout.is_empty(), "{found:?}");
+    assert!(session.dir.join("server.bots").join("a").join("secrets").exists());
+}
+
+#[test]
+fn removing_a_bot_removes_its_secrets_and_remove_all_starts_again() {
+    let session = started();
+    session.says(&["bot", "new", "a", "--agent", "claude"]);
+    saved(&session, "a");
+    let file = session.dir.join("server.bots").join("a").join("secrets");
+    assert!(file.exists());
+    session.says(&["bot", "secret", "remove", "a", "--all"]);
+    assert!(!file.exists());
+    assert!(session.says(&["bot", "secret", "list", "a"]).contains("a has no secrets"));
+    saved(&session, "a");
+    session.says(&["bot", "remove", "a"]);
+    assert!(!file.exists());
+}

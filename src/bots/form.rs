@@ -21,6 +21,7 @@ pub(crate) enum Field {
     Account,
     Access,
     Follow,
+    Secrets,
     About,
 }
 
@@ -30,6 +31,7 @@ pub(crate) enum Step {
     Submit,
     Cancel,
     Chose(Field),
+    Manage,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +49,7 @@ pub(crate) struct Form {
     pub(crate) about: Editor,
     pub(crate) focus: Field,
     pub(crate) error: Option<String>,
+    pub(crate) secrets: String,
 }
 
 fn agent_combo(agents: &[AgentInfo], chosen: usize) -> Combo {
@@ -89,6 +92,7 @@ impl Form {
             about: Editor::default(),
             focus: Field::Name,
             error: None,
+            secrets: String::new(),
         };
         form.refit_agent();
         form
@@ -110,6 +114,7 @@ impl Form {
             about: Editor::new(about),
             focus: Field::Name,
             error: None,
+            secrets: String::new(),
         };
         form.fit((bot.model.as_deref(), bot.effort.as_deref()), Some(bot.access.name()));
         form
@@ -166,7 +171,9 @@ impl Form {
         if self.account.is_some() {
             fields.push(Field::Account);
         }
-        fields.extend([Field::Access, Field::Follow, Field::About]);
+        fields.extend([Field::Access, Field::Follow]);
+        fields.extend(self.editing.is_some().then_some(Field::Secrets));
+        fields.push(Field::About);
         fields
     }
 
@@ -197,7 +204,7 @@ impl Form {
             Field::Effort => Some(&self.effort),
             Field::Account => self.account.as_ref().map(|account| &account.combo),
             Field::Access => Some(&self.access),
-            Field::Name | Field::About | Field::Follow => None,
+            Field::Name | Field::About | Field::Follow | Field::Secrets => None,
         }
     }
 
@@ -208,7 +215,7 @@ impl Form {
             Field::Effort => Some(&mut self.effort),
             Field::Account => self.account.as_mut().map(|account| &mut account.combo),
             Field::Access => Some(&mut self.access),
-            Field::Name | Field::About | Field::Follow => None,
+            Field::Name | Field::About | Field::Follow | Field::Secrets => None,
         }
     }
 
@@ -254,6 +261,7 @@ impl Form {
             KeyCode::Tab => self.step_focus(true),
             KeyCode::BackTab => self.step_focus(false),
             KeyCode::Char(' ') if self.focus == Field::Follow => self.follow = !self.follow,
+            KeyCode::Enter if self.focus == Field::Secrets => return Step::Manage,
             KeyCode::Enter if self.focus != Field::About => return Step::Submit,
             _ => self.typed(key, width, rows),
         }

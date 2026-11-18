@@ -58,6 +58,7 @@ impl App {
             Step::Submit => self.submit_bot_form(),
             Step::Cancel => self.overlay = None,
             Step::Chose(field) => self.bot_chose(field),
+            Step::Manage => self.manage_secrets(),
             Step::None => {}
         }
     }
@@ -103,8 +104,17 @@ impl App {
                     self.bot_chose(open);
                 }
             }
+            Some(bot_form::Hit::Field(Field::Secrets, ..)) => self.manage_secrets(),
             Some(bot_form::Hit::Field(field, row, col)) => press_field(form, area, (field, row, col)),
         }
+    }
+
+    fn manage_secrets(&mut self) {
+        let Some(Overlay::BotForm(form)) = &self.overlay else { return };
+        let Some(key) = form.editing.as_deref().and_then(|id| self.panels.bots.by_id(id)) else { return };
+        let key = self.panels.bots.live[key].key;
+        let Some(form) = self.overlay.take() else { return };
+        self.open_bot_secrets(key, Some(Box::new(form)));
     }
 
     pub(in crate::app) fn bot_text(&mut self, area: Rect, field: Field) -> Option<(FieldArea, &mut Editor)> {

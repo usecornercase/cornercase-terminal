@@ -10,6 +10,8 @@ pub(crate) enum Button {
     Resume,
     Edit,
     Remove,
+    Replace,
+    RemoveAll,
 }
 
 impl Button {
@@ -20,6 +22,8 @@ impl Button {
             Self::Resume => "resume",
             Self::Edit => "edit…",
             Self::Remove => "remove",
+            Self::Replace => "replace…",
+            Self::RemoveAll => "remove all",
         }
     }
 }

@@ -21,6 +21,7 @@ mod reports;
 mod routines;
 mod routines_dialog;
 mod secrets;
+mod secrets_dialog;
 mod section;
 mod shown;
 mod talk;
@@ -29,6 +30,7 @@ mod window;
 
 pub(super) use follow::{Read, Started};
 pub(super) use menu::BotItem;
+pub(super) use secrets_dialog::{Secrets, pasted};
 pub(super) use shown::Chat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

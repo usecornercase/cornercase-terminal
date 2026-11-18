@@ -12,7 +12,7 @@ use crate::ui::combo;
 use crate::ui::widgets::{EditorField, draw_editor, overlay_block};
 
 const LABEL: u16 = 9;
-const HEIGHT: u16 = 20;
+const HEIGHT: u16 = 21;
 const WIDE: u16 = 46;
 const ABOUT_ROWS: u16 = 4;
 const CORNERCASE_NOTE: &str = "through cornercase: reads anything, writes only in its folder";
@@ -41,7 +41,7 @@ fn inner(screen: Rect) -> Rect {
 
 fn row_of(form: &Form, field: Field) -> u16 {
     let at = form.fields().iter().position(|shown| *shown == field).unwrap_or_default();
-    let notes = if matches!(field, Field::Follow | Field::About) { 2 } else { 0 };
+    let notes = if matches!(field, Field::Follow | Field::Secrets | Field::About) { 2 } else { 0 };
     u16::try_from(at).unwrap_or_default() + notes
 }
 
@@ -120,6 +120,7 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
         (Field::Account, "Account"),
         (Field::Access, "Access"),
         (Field::Follow, "Follow"),
+        (Field::Secrets, "Secrets"),
         (Field::About, "For"),
     ];
     for (field, label) in labels {
@@ -137,6 +138,8 @@ fn draw_fields(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
         let focused = typing && form.focus == field;
         if field == Field::Follow {
             draw_follow(f, r, form.follow, focused);
+        } else if field == Field::Secrets {
+            draw_secrets(f, view, r, (&form.secrets, focused));
         } else if let Some(editor) = form.editor_of(field) {
             let placeholder = if field == Field::About { "optional: what the bot is for" } else { "" };
             let at = EditorField { field: r, text: text(screen, form, field), focused, placeholder };
@@ -153,6 +156,17 @@ fn draw_follow(f: &mut Frame, r: Rect, follow: bool, focused: bool) {
     let style = if focused { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
     let text = format!("{mark} tell it when an agent it starts finishes");
     f.render_widget(Paragraph::new(Span::styled(text, style)), Rect { x: r.x + 1, ..r }.intersection(r));
+}
+
+fn draw_secrets(f: &mut Frame, view: &View, r: Rect, (summary, focused): (&str, bool)) {
+    let button = " manage… ";
+    let room = usize::from(r.width).saturating_sub(button.chars().count() + 2);
+    let style = if focused { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
+    let text = Span::styled(truncate_right(summary, room), style);
+    f.render_widget(Paragraph::new(text), Rect { x: r.x + 1, ..r }.intersection(r));
+    let width = u16::try_from(button.chars().count()).unwrap_or_default().min(r.width);
+    let at = Rect { x: r.right().saturating_sub(width), width, ..r };
+    f.render_widget(Paragraph::new(Span::styled(button, Style::default().fg(view.muted))), at);
 }
 
 fn draw_combo(
