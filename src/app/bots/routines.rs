@@ -110,10 +110,10 @@ impl App {
         };
         let answer = Answer { model, tokens: ran.tokens, conversation: ran.session.clone() };
         let line = self.bot_append(at, |id, now| Line::answer(id, now, &ran.text, answer).of_run(run.entry));
-        let (text, cut) = queue::outcome::cap(&ran.text);
+        let (text, cut) = queue::outcome::cap(&line.text);
         let outcome = queue::outcome::Outcome { at: line.at, text, cut, agent: Some(agent), ..Default::default() };
         self.panels.queued.answered(run.entry, ran.session, outcome);
-        self.tell_chat(at, Told { label: run.label.clone(), clock: run.clock.clone(), text: ran.text });
+        self.tell_chat(at, Told { label: run.label.clone(), clock: run.clock.clone(), text: line.text.clone() });
         if !self.bot_on_screen(at) {
             let who = format!("{} · {}", self.panels.bots.live[at].bot.name, run.label);
             self.bot_notify(at, &line, &who);
@@ -140,6 +140,7 @@ impl App {
             self.bot_append(at, |id, now| head_line(id, now, (&label, &clock), entry));
         }
         let line = self.bot_append(at, |id, now| Line::failed(id, now, reason).of_run(entry));
+        let reason = line.text.as_str();
         self.panels.queued.fail(entry, reason);
         let name = self.panels.bots.live[at].bot.name.clone();
         let text = format!("{name} · {label} failed: {reason}");

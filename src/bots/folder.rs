@@ -9,6 +9,7 @@ pub(crate) const BOT_FILE: &str = "bot.json";
 pub(crate) const ABOUT_FILE: &str = "bot.md";
 pub(crate) const MEMORY_FILE: &str = "memory.md";
 pub(crate) const CHAT_FILE: &str = "chat.jsonl";
+pub(crate) const SECRETS_FILE: &str = "secrets";
 
 pub(crate) fn of(dir: &Path, id: &str) -> PathBuf {
     dir.join(id)

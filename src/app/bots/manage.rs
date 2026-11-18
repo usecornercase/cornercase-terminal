@@ -94,6 +94,7 @@ impl App {
             created: bot.created,
             routines: self.bot_entries(&bot.id).filter(|entry| entry.is_routine()).count(),
             next: self.bot_next_run(&bot.id),
+            secrets: live.secrets.count(),
         }
     }
 

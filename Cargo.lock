@@ -1164,6 +1164,7 @@ dependencies = [
  "ratatui",
  "ratatui-textarea",
  "regex",
+ "ring",
  "rstest",
  "rusqlite",
  "rustix",

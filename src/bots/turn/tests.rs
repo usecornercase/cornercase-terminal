@@ -20,6 +20,7 @@ fn input(folder: &Path, conversation: Option<&str>) -> Input {
         bin: None,
         timeout: Duration::from_secs(1),
         repositories: Vec::new(),
+        key: None,
     }
 }
 

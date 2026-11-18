@@ -40,6 +40,7 @@ pub(crate) struct Input {
     pub(crate) bin: Option<PathBuf>,
     pub(crate) timeout: Duration,
     pub(crate) repositories: Vec<PathBuf>,
+    pub(crate) key: Option<PathBuf>,
 }
 
 pub(crate) fn path_with(first: &Path, path: Option<&OsStr>) -> Option<OsString> {
@@ -110,7 +111,8 @@ pub(crate) fn ask(input: &Input, first: Option<&Path>, path: Option<&OsStr>) -> 
         tools: Tools::Bot(bot.access),
         conversation,
         env: environment(bot, &input.session, first, path),
-        protected: vec![folder::BOT_FILE, folder::CHAT_FILE],
+        protected: vec![folder::BOT_FILE, folder::CHAT_FILE, folder::SECRETS_FILE],
+        unreadable: input.key.iter().cloned().collect(),
         stops: super::stop_commands(),
         repositories: input.repositories.clone(),
     }

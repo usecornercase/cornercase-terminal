@@ -125,7 +125,7 @@ priority = 900
 
 [[rule]]
 toolName = ["write_file", "replace"]
-argsPattern = '"file_path":"[^"]*(\.[gG][eE][mM][iI][nN][iI]|\.[eE][nN][vV]|[bB][oO][tT]\.[jJ][sS][oO][nN]|[cC][hH][aA][tT]\.[jJ][sS][oO][nN][lL])'
+argsPattern = '"file_path":"[^"]*(\.[gG][eE][mM][iI][nN][iI]|\.[eE][nN][vV]|[bB][oO][tT]\.[jJ][sS][oO][nN]|[cC][hH][aA][tT]\.[jJ][sS][oO][nN][lL]|[sS][eE][cC][rR][eE][tT][sS])'
 decision = "deny"
 priority = 950
 
@@ -152,6 +152,8 @@ priority = 950
     #[case::the_settings("/work/bots/prs/.gemini/settings.json")]
     #[case::the_bots_own_file("/work/bots/prs/bot.json")]
     #[case::its_chat("/work/bots/prs/chat.jsonl")]
+    #[case::its_secrets("/work/bots/prs/secrets")]
+    #[case::its_secrets_in_capitals("/work/bots/prs/SECRETS")]
     #[case::the_environment("/work/bots/prs/.env")]
     #[case::a_percent_escaped_dot("/work/bots/prs/%2Egemini/settings.json")]
     #[case::a_percent_escaped_letter("/work/bots/prs/.%67emini/settings.json")]

@@ -63,7 +63,9 @@ fn bot_args(ask: &Ask, access: Access) -> Vec<String> {
         Access::Cornercase => {
             let folder = rule_path(&ask.folder.display().to_string(), cfg!(windows));
             let allowed = format!("{READS},{},Edit({folder}/**)", read_only_rules(ask, cfg!(windows)));
-            let files: Vec<String> = ask.protected.iter().map(|file| format!("Edit({folder}/{file})")).collect();
+            let mut files: Vec<String> = ask.protected.iter().map(|file| format!("Edit({folder}/{file})")).collect();
+            let keys = ask.unreadable.iter().map(|key| rule_path(&key.display().to_string(), cfg!(windows)));
+            files.extend(keys.map(|key| format!("Read({key})")));
             let dashed = format!("Edit({folder}/-*)");
             let denied = format!("NotebookEdit,Task,{OUTPUT},{dashed},{stops},{}", files.join(","));
             args.extend(

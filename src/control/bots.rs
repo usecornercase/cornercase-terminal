@@ -17,6 +17,32 @@ pub(crate) enum BotRequest {
     Setup(BotTarget),
     Say(BotSay),
     History(BotHistory),
+    SecretSet(SecretSet),
+    SecretList(BotTarget),
+    SecretRemove(SecretRemove),
+    SecretGet(SecretGet),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretSet {
+    pub(crate) bot: String,
+    pub(crate) name: String,
+    pub(crate) value: crate::issues::Secret,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretRemove {
+    pub(crate) bot: String,
+    pub(crate) name: Option<String>,
+    pub(crate) all: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretGet {
+    pub(crate) name: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,6 +122,7 @@ pub(crate) struct BotInfo {
     pub(crate) created: i64,
     pub(crate) routines: usize,
     pub(crate) next: Option<i64>,
+    pub(crate) secrets: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,6 +168,16 @@ impl BotRequest {
                 fields.add("action", "history").add("bot", &history.bot).maybe("last", history.last);
                 fields.maybe("after", history.after)
             }
+            Self::SecretSet(set) => {
+                fields.add("action", "secret-set").add("bot", &set.bot).add("name", &set.name);
+                fields.add("bytes", set.value.0.len())
+            }
+            Self::SecretList(target) => fields.add("action", "secret-list").add("bot", &target.bot),
+            Self::SecretRemove(remove) => {
+                fields.add("action", "secret-remove").add("bot", &remove.bot).maybe("name", remove.name.as_deref());
+                fields.add("all", remove.all)
+            }
+            Self::SecretGet(get) => fields.add("action", "secret-get").add("name", &get.name),
         };
     }
 }

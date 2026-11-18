@@ -36,6 +36,7 @@ enum Gated {
 #[derive(Default)]
 pub(in crate::app) struct BotClients {
     clients: HashMap<u64, String>,
+    owners: HashMap<u64, String>,
     keys: HashSet<u64>,
 }
 
@@ -48,16 +49,30 @@ impl BotClients {
         self.clients.get(&client).map(String::as_str)
     }
 
+    pub(in crate::app) fn owner_of(&self, client: u64) -> Option<&str> {
+        self.owners.get(&client).map(String::as_str)
+    }
+
+    fn own(&mut self, client: u64, bot: String) {
+        self.owners.insert(client, bot);
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn owned(&mut self, client: u64, bot: &str) {
+        self.own(client, bot.to_string());
+    }
+
     fn insert(&mut self, client: u64, bot: String) {
         self.clients.insert(client, bot);
     }
 
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     pub(in crate::app) fn marked(&mut self, client: u64, bot: &str) {
         self.insert(client, bot.to_string());
     }
 
     pub(in crate::app) fn forget(&mut self, client: u64, pending: impl Iterator<Item = u64>) {
+        self.owners.remove(&client);
         if self.clients.remove(&client).is_some() {
             self.keys.extend(pending);
         }
@@ -190,6 +205,10 @@ impl App {
         if self.panels.bots.live.is_empty() {
             return;
         }
+        if let Some(owner) = peer.and_then(|pid| self.owner_of_process(pid)) {
+            log::info!("control", "a bot's own client", client = client, bot = owner);
+            self.clients.bots.own(client, owner);
+        }
         let bot = match peer {
             Some(pid) => self.bot_of_process(pid),
             None => self.contained_bot(),
@@ -204,6 +223,11 @@ impl App {
         let mut states = self.panels.bots.live.iter();
         let contained = |state: &&crate::app::bots::Live| state.trees().any(Running::contained);
         states.find(contained).map(|state| state.bot.id.clone())
+    }
+
+    fn owner_of_process(&self, pid: i32) -> Option<String> {
+        let owns = |state: &&crate::app::bots::Live| state.trees().any(|tree| tree.owns(pid));
+        self.panels.bots.live.iter().find(owns).map(|state| state.bot.id.clone())
     }
 
     fn bot_of_process(&self, pid: i32) -> Option<String> {
