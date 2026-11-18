@@ -985,7 +985,7 @@ mod source_file {
 fn a_regular_file_where_the_socket_goes_is_never_removed() {
     let dir = TempDir::new();
     let file = dir.path().join("bots.key");
-    assert!(!holds_a_file(&file));
+    assert!(!protocol::holds_a_file(&file));
     std::fs::write(&file, b"a key").expect("write");
-    assert!(holds_a_file(&file));
+    assert!(protocol::holds_a_file(&file));
 }
