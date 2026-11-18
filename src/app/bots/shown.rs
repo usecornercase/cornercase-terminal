@@ -20,6 +20,14 @@ pub(in crate::app) struct Chat {
     pub(in crate::app) anchor: Option<u64>,
     pub(super) width: u16,
     pub(super) bodies: HashMap<u64, Vec<Text<'static>>>,
+    pub(super) card: Option<DrawnCard>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct DrawnCard {
+    pub(super) card: ui::BotCard,
+    pub(super) list: Rect,
+    pub(super) buttons: Vec<(u64, Rect)>,
 }
 
 impl Chat {
@@ -33,6 +41,7 @@ impl Chat {
             anchor: None,
             width: 0,
             bodies: HashMap::new(),
+            card: None,
         }
     }
 }

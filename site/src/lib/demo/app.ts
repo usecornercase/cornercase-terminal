@@ -1,6 +1,6 @@
 import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
 import { botFormKey, botFormPaste, newBotForm } from './botform';
-import { botRoutinesKey, openBotRoutines, routinesOf } from './botroutines';
+import { actOnRoutine, botRoutinesKey, buttonsOf, openBotRoutines, routinesOf } from './botroutines';
 import { Bots } from './bots';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
@@ -1536,6 +1536,17 @@ export class App {
     this.dirty();
   }
 
+  private routineOf(bot: string, id: number): QueueEntry | undefined {
+    return this.botQueued.find((e) => e.id === id && e.bot === bot);
+  }
+
+  openRoutineMenu(at: Pos, bot: string, id: number): void {
+    const entry = this.routineOf(bot, id);
+    if (!entry) return;
+    this.overlay = { kind: 'menu', at, actions: buttonsOf(entry).map((button) => ({ kind: 'routine', bot, entry: id, button })) };
+    this.dirty();
+  }
+
   openBotForm(): void {
     this.nav = null;
     this.overlay = newBotForm();
@@ -2720,6 +2731,7 @@ export class App {
   }
 
   menuLabel(a: MenuAction): string {
+    if (a.kind === 'routine') return a.button;
     if (a.kind === 'rename') return this.renameLabel(a.target);
     if (a.kind === 'moveToGroup') return 'move to group';
     if (a.kind === 'setGroup') {
@@ -2826,7 +2838,10 @@ export class App {
     else if (a.kind === 'more') this.moreAction(a.item);
     else if (a.kind === 'worktrees') this.bug(WORKTREES_NEED);
     else if (a.kind === 'ports') this.bug(PORTS_NEED);
-    else this.paneAction(a.pane, a.action);
+    else if (a.kind === 'routine') {
+      const entry = this.routineOf(a.bot, a.entry);
+      if (entry && buttonsOf(entry).includes(a.button)) actOnRoutine(this, entry, a.button);
+    } else this.paneAction(a.pane, a.action);
     this.dirty();
   }
 

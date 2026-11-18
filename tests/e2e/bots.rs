@@ -248,25 +248,42 @@ fn a_bot_routine_run_now_answers_in_its_chat() {
     });
 }
 
-#[test]
-fn a_bots_routine_is_paused_from_its_routines_dialog() {
+fn a_bot_with_a_routine_shown() -> (Arc<Session>, Harness) {
     let session = started();
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
     session.says(&["queue", "add", "--bot", "prs", "--every", "2h", "--prompt", "check", "--name", "Review PRs"]);
-    let mut ui = Harness::open(Arc::clone(&session), ROWS, 160);
+    let mut ui = Harness::open(Arc::clone(&session), ROWS * 2, 160);
     ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
-
     ui.click(ui.position_of("prs"));
     ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
-    ui.click(ui.position_of("routines"));
-    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("pause"));
-    ui.click(ui.position_of("pause"));
+    (session, ui)
+}
 
+fn wait_paused(session: &Session) {
     wait_until("the routine is paused", || {
         let list: Value =
             serde_json::from_str(&session.says(&["queue", "list", "--bot", "prs", "--json"])).expect("json");
         list["entries"][0]["paused"] == true
     });
+}
+
+#[test]
+fn a_bots_routine_is_paused_from_its_routines_dialog() {
+    let (session, mut ui) = a_bot_with_a_routine_shown();
+    ui.click(ui.position_of("routines"));
+    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("pause"));
+    ui.click(ui.position_of("pause"));
+    wait_paused(&session);
+}
+
+#[test]
+fn a_bots_routine_is_paused_from_the_menu_on_its_card() {
+    let (session, mut ui) = a_bot_with_a_routine_shown();
+    ui.wait_for("its routine is on the card", |s| s.contains("Review PRs"));
+    ui.right_click(ui.position_of("Review PRs"));
+    ui.wait_for("its menu opens", |s| s.contains("run now") && s.contains("edit…"));
+    ui.click(ui.position_of("pause"));
+    wait_paused(&session);
 }
 
 #[test]

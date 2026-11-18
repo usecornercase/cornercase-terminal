@@ -431,6 +431,95 @@ test('a routine on the card opens the routines dialog', () => {
   assert.match(screen(app), /Routines › prs/);
 });
 
+function cardRoutine(app: App): { x: number; y: number } {
+  app.render();
+  const list = app.areas().workspacesList;
+  for (let n = 0; n < 8; n++) {
+    const at = app.textAt('Review PRs', n);
+    if (!at) break;
+    if (at.x >= list.x && at.x < list.x + list.w) return at;
+  }
+  assert.fail('no routine on the card');
+}
+
+function cardButton(app: App, y: number): { x: number; y: number } | undefined {
+  const list = app.areas().workspacesList;
+  const { grid } = app.render();
+  for (let x = list.x; x < list.x + list.w; x++) if (grid.at(x, y)?.ch === '⋯') return { x, y };
+  return undefined;
+}
+
+test('the ⋯ on a routine of the card opens its menu: pause, resume and remove act, run now and edit… say so', () => {
+  const app = demo(140);
+  press(app, 'prs');
+  app.resize(140, 60);
+  const at = cardRoutine(app);
+  app.pointerMove(120, 2, 0);
+  app.render();
+  assert.equal(cardButton(app, at.y), undefined);
+  app.pointerMove(at.x, at.y, 0);
+  app.render();
+  const button = cardButton(app, at.y);
+  assert.ok(button, 'the ⋯ shows while the routine is hovered');
+  app.pointerDown(button.x, button.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.equal(app.overlay?.kind, 'menu');
+  for (const label of ['run now', 'pause', 'edit…', 'remove']) assert.match(screen(app), new RegExp(label));
+  press(app, 'pause');
+  assert.match(app.toast?.text ?? '', /paused routine/);
+  const list = app.areas().workspacesList;
+  assert.match(screen(app).split('\n')[at.y + 1].slice(list.x, list.x + list.w), /paused/);
+  app.pointerDown(at.x, at.y + 1, 2);
+  app.pointerUp();
+  app.render();
+  assert.equal(app.overlay?.kind, 'menu');
+  assert.match(screen(app), /resume/);
+  press(app, 'resume');
+  assert.match(screen(app).split('\n')[at.y + 1].slice(list.x, list.x + list.w), /next/);
+  app.pointerDown(at.x, at.y, 2);
+  app.pointerUp();
+  app.render();
+  const before = app.botQueued.length;
+  press(app, 'remove');
+  assert.match(app.toast?.text ?? '', /removed routine 1 and its 1 run/);
+  assert.equal(app.botQueued.length, 0);
+  app.toast?.undo?.();
+  assert.equal(app.botQueued.length, before);
+  app.render();
+  app.pointerDown(at.x, at.y, 2);
+  app.pointerUp();
+  app.render();
+  press(app, 'run now');
+  assert.match(app.toast?.text ?? '', /needs cornercase on your computer/);
+  app.pointerDown(at.x, at.y, 2);
+  app.pointerUp();
+  app.render();
+  app.toast = null;
+  press(app, 'edit…');
+  assert.match((app.toast as App['toast'])?.text ?? '', /schedule form lists no bots/);
+});
+
+test('a card menu item that no longer applies does nothing', () => {
+  const app = demo(140);
+  press(app, 'prs');
+  app.resize(140, 60);
+  const at = cardRoutine(app);
+  const entry = app.botQueued.find((e) => e.repeat)!;
+  app.pauseQueued(entry, true, 'botQueued');
+  app.pointerDown(at.x, at.y, 2);
+  app.pointerUp();
+  app.render();
+  assert.match(screen(app), /resume/);
+  app.pauseQueued(entry, false, 'botQueued');
+  app.toast = null;
+  assert.equal(app.overlay?.kind, 'menu');
+  press(app, 'resume');
+  assert.equal(app.overlay, null);
+  assert.equal(app.toast, null);
+  assert.equal(entry.paused, false);
+});
+
 test('the empty chat offers the scheduling example', () => {
   assert.equal(EXAMPLES.length, 4);
   assert.match(EXAMPLES[3], /^Every weekday at 9/);

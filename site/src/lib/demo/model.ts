@@ -1,3 +1,4 @@
+import type { Button as RoutineButton } from './botroutines';
 import type { Tree } from './data';
 import type { KeysGroup } from './keys';
 import type { Context, Place, Shell } from './programs';
@@ -163,6 +164,7 @@ export type Target =
 export type PaneAction = 'split right' | 'split down' | 'send right-clicks to the pane' | 'use this menu on right-click' | 'close pane';
 
 export type MenuAction =
+  | { kind: 'routine'; bot: string; entry: number; button: RoutineButton }
   | { kind: 'rename'; target: Target }
   | { kind: 'moveToGroup'; project: number }
   | { kind: 'setGroup'; project: number; group: number | null }

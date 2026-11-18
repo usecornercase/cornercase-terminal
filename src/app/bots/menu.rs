@@ -6,6 +6,7 @@ use crate::app::menus::MenuAction;
 use crate::app::opening::Subject;
 use crate::app::overlay::{Overlay, REMOVE_SUBMIT, RENAME_SUBMIT};
 use crate::app::toast::Toast;
+use crate::bots::routines::{Button, buttons};
 use crate::control::bots::EditBot;
 use crate::editor::Editor;
 use crate::ui;
@@ -22,6 +23,7 @@ pub(in crate::app) enum BotItem {
     NewConversation,
     OpenFolder,
     Remove,
+    Routine(u64, Button),
 }
 
 impl App {
@@ -29,6 +31,7 @@ impl App {
         let MenuAction::Bot(_, item) = action else { return None };
         Some(
             match item {
+                BotItem::Routine(_, button) => button.label(),
                 BotItem::Rename => "rename",
                 BotItem::Edit => "edit…",
                 BotItem::Routines => "routines…",
@@ -58,8 +61,26 @@ impl App {
             }
             BotItem::OpenFolder => self.open_menu_or_copy(Subject::Bot(key), at),
             BotItem::Remove => self.overlay = Some(Overlay::RemoveBot { bot: key }),
+            BotItem::Routine(entry, button) => self.press_card_routine(bot, entry, button),
         }
         None
+    }
+
+    fn press_card_routine(&mut self, at: usize, entry: u64, button: Button) {
+        let id = &self.panels.bots.live[at].bot.id;
+        let yours = self.panels.queued.queue().entry(entry).is_some_and(|found| {
+            found.is_routine() && found.bot() == Some(id.as_str()) && buttons(found).contains(&button)
+        });
+        if yours {
+            self.press_routine(entry, button);
+        }
+    }
+
+    pub(in crate::app) fn open_routine_menu(&mut self, key: u64, routine: u64, pos: Position) {
+        let Some(entry) = self.panels.queued.queue().entry(routine) else { return };
+        let actions =
+            buttons(entry).into_iter().map(|button| MenuAction::Bot(key, BotItem::Routine(routine, button))).collect();
+        self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 
     fn ask_rename_bot(&mut self, key: u64) {

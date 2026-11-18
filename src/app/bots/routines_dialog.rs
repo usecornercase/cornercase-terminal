@@ -170,7 +170,7 @@ impl App {
         }
     }
 
-    fn press_routine(&mut self, id: u64, button: Button) {
+    pub(super) fn press_routine(&mut self, id: u64, button: Button) {
         match button {
             Button::RunNow => self.run_queued_now(id),
             Button::Pause => self.pause_queued(id, true),

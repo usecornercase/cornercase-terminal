@@ -406,6 +406,7 @@ fn what_a_bot_is_for_is_read_when_asked_and_never_given_empty_in_place_of_a_text
 }
 
 mod boundary;
+mod card_menu;
 mod compact;
 mod form;
 mod git;

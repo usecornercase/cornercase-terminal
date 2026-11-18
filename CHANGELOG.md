@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.99
+
+- **Each routine on a bot's card has a menu.** Its ` ⋯ `, which shows while you hover the routine, or a right click on it offers **run now**, **pause** or **resume**, **edit…** and **remove** (with ` undo `), the buttons of the bot's routines dialog without opening it. A click elsewhere on the routine still opens the dialog with it selected.
+
 ## 0.13.98
 
 - **A window of your own can say which bot's chat it shows.** `cornercase view-set --view ID --bot prs` (or `cornercase view --bot prs`) tells cornercase that a program drawing it shows that chat in place of a tab. While it does and its window is not hidden, the bot's answers no longer count as unread or make cornercase's toast and desktop notification, as when cornercase's own window shows the chat, and the tab behind the chat notifies again. `--bot ''` or closing the view ends it. `cornercase contract` lists `view-bot`.
