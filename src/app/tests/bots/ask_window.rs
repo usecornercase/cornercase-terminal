@@ -178,7 +178,7 @@ mod answering {
         send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
         assert!(asks_open(&c));
         let error = view(&c).error.expect("an error");
-        assert!(error.contains("the most there can be"), "{error}");
+        assert_eq!(error, "prs has 20 secrets and 1 more would pass 20, the most there can be");
     }
 
     #[test]

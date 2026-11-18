@@ -104,6 +104,23 @@ mod asking {
     }
 
     #[test]
+    fn refuses_a_name_that_holds_a_saved_value_and_keeps_it_out_of_the_bots_and_the_events() {
+        let mut k = keeper();
+        k.set("pw", VALUE).expect("set");
+        k.app.clients.events.subscribe(30, Vec::new(), false, true);
+        let refused = refusal(k.ask(&["user", VALUE]));
+        assert_eq!(refused, (Code::Malformed, asks::NAME_HOLDS_VALUE.to_string()));
+        assert_eq!(k.waiting(), Vec::<u64>::new());
+        let infos = serde_json::to_string(&k.app.bot_infos()).expect("json");
+        let events = format!("{:?}", k.app.take_events());
+        let file = std::fs::read_to_string(k.dir.path().join("bots").join("campus").join(folder::CHAT_FILE))
+            .unwrap_or_default();
+        for text in [infos, events, file] {
+            assert!(!text.contains(VALUE), "{text}");
+        }
+    }
+
+    #[test]
     fn the_same_names_again_are_already_asked_and_a_fifth_ask_is_refused() {
         let mut k = keeper();
         let first = ask_id(&k.ask(&["a", "b"]).expect("asked"));

@@ -25,6 +25,16 @@ fn conflict(text: impl Into<String>) -> Refusal {
     Refusal::new(Code::Conflict, text)
 }
 
+fn too_many(id: &str, count: usize, new: usize) -> Done<()> {
+    let most = keeping::SECRETS_MAX;
+    if count + new > most {
+        return Err(conflict(format!(
+            "{id} has {count} secrets and {new} more would pass {most}, the most there can be"
+        )));
+    }
+    Ok(())
+}
+
 impl App {
     pub(in crate::app) fn ask_run(&self, client: u64, starter: Option<Starter>) -> Option<u64> {
         let owner = self.clients.bots.owner_of(client)?;
@@ -46,8 +56,12 @@ impl App {
         }
         let live = &self.panels.bots.live[at];
         let id = &live.bot.id;
-        if keeping::redact(&ask.about, live.secrets.entries()) != ask.about {
-            return Err(malformed("--about holds the value of a saved secret: say why without a secret's value"));
+        let holds = |text: &str| keeping::redact(text, live.secrets.entries()) != text;
+        if ask.names.iter().any(|name| holds(name)) {
+            return Err(malformed(asks::NAME_HOLDS_VALUE));
+        }
+        if holds(&ask.about) {
+            return Err(malformed(asks::ABOUT_HOLDS_VALUE));
         }
         if live.secrets.is_unreadable() {
             return Err(failed(keeping::unreadable(id)));
@@ -72,13 +86,7 @@ impl App {
             )));
         }
         let new = ask.names.iter().filter(|name| !saved(name)).count();
-        if live.secrets.count() + new > keeping::SECRETS_MAX {
-            let (count, most) = (live.secrets.count(), keeping::SECRETS_MAX);
-            return Err(conflict(format!(
-                "{id} has {count} secrets and {new} more would pass {most}, the most there can be"
-            )));
-        }
-        Ok(())
+        too_many(id, live.secrets.count(), new)
     }
 
     pub(in crate::app) fn bot_secret_ask(
@@ -169,15 +177,7 @@ impl App {
             return Err(failed(keeping::unreadable(&live.bot.id)));
         }
         let new = give.values.keys().filter(|name| live.secrets.find(name).is_none()).count();
-        if live.secrets.count() + new > keeping::SECRETS_MAX {
-            let text = format!(
-                "{} has {} secrets, the most there can be; remove one first",
-                live.bot.id,
-                keeping::SECRETS_MAX
-            );
-            return Err(conflict(text));
-        }
-        Ok(())
+        too_many(&live.bot.id, live.secrets.count(), new)
     }
 
     pub(in crate::app) fn bot_secret_give(&mut self, client: Option<u64>, give: &SecretGive) -> Done<Value> {

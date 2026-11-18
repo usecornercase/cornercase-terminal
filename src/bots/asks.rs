@@ -14,6 +14,9 @@ pub(crate) const ASKS: &str = "asks for a secret: ";
 pub(crate) const SAVED: &str = "secret saved: ";
 pub(crate) const NOT_GIVEN: &str = "secret not given: ";
 pub(crate) const ONLY_ITSELF: &str = "only the bot itself asks for a secret, from its own turn";
+pub(crate) const NAME_HOLDS_VALUE: &str = "a secret's name holds the value of a saved secret: ask by its name";
+pub(crate) const ABOUT_HOLDS_VALUE: &str =
+    "--about holds the value of a saved secret: say why without a secret's value";
 pub(crate) const NO_ANSWER: &str = "a bot cannot give or decline what a bot asks for";
 pub(crate) const WHAT_HAPPENS: &str =
     "The bot will read these values. They are kept encrypted on this computer, for this bot only.";
