@@ -25,6 +25,8 @@ const NEW_WIDTH: u16 = 3;
 
 const MIN_NAME_WIDTH: usize = 4;
 
+const ASKS: &str = "asks";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BotEntry {
     pub(crate) name: String,
@@ -132,6 +134,25 @@ fn folded_tags(view: &View, bots: &BotsView) -> Vec<Span<'static>> {
     tags
 }
 
+fn name_room(entry: &BotEntry, room: usize) -> usize {
+    let kept = room.saturating_sub(ASKS.len() + 2);
+    if entry.asking && kept >= MIN_NAME_WIDTH { kept } else { room }
+}
+
+fn detail_tags(view: &View, entry: &BotEntry, room: usize) -> Tags {
+    let waiting = if entry.asking { WAITING_COLOR } else { view.muted };
+    let mut steps = vec![(entry.detail.as_str(), waiting)];
+    if entry.asking {
+        steps.push((ASKS, WAITING_COLOR));
+    }
+    steps.push((entry.fallback.as_str(), view.muted));
+    steps
+        .into_iter()
+        .map(|(text, colour)| Tags::fit(vec![Span::styled(text.to_string(), Style::default().fg(colour))], room))
+        .find(|tags| !tags.is_empty())
+        .unwrap_or_else(|| Tags::fit(Vec::new(), room))
+}
+
 fn draw_bot(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &BotEntry) {
     let bg = view.row_background(r, entry.active);
     let mut line = vec![marker(entry.active)];
@@ -147,17 +168,10 @@ fn draw_bot(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &BotEntry) {
     let reserved = r.right().saturating_sub(row_menu_button(r, pitch).x);
     let room = usize::from(r.width).saturating_sub(indent + usize::from(reserved) + 1);
     let colour = if entry.active { Color::Reset } else { view.soft };
-    let name = crate::text::truncate_right(&entry.name, room);
+    let name = crate::text::truncate_right(&entry.name, name_room(entry, room));
     let used = name.chars().count();
     line.push(Span::styled(name, Style::default().fg(colour)));
-    let fit = |text: &str, colour: Color| {
-        let detail = vec![Span::styled(text.to_string(), Style::default().fg(colour))];
-        Tags::fit(detail, room.saturating_sub(used.max(MIN_NAME_WIDTH)))
-    };
-    let mut tags = fit(&entry.detail, if entry.asking { WAITING_COLOR } else { view.muted });
-    if tags.is_empty() {
-        tags = fit(&entry.fallback, view.muted);
-    }
+    let tags = detail_tags(view, entry, room.saturating_sub(used.max(MIN_NAME_WIDTH)));
     tags.push_onto(&mut line, used, room);
     draw_band(f, r, Line::from(line), bg);
     draw_menu_in(f, view, r, pitch, bg);

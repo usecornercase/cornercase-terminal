@@ -234,3 +234,46 @@ fn a_bot_that_asks_for_a_secret_says_so_in_the_waiting_colour() {
     });
     assert_ne!(buffer[plain.expect("the other detail")].fg, WAITING_COLOR);
 }
+
+fn row_with(t: &Terminal<TestBackend>, needle: &str) -> Option<(String, Position)> {
+    (0..TALL.height).find_map(|y| {
+        let text = row_text(t, Rect::new(0, y, W, 1));
+        let x = u16::try_from(text[..text.find(needle)?].chars().count()).ok()?;
+        Some((text, Position::new(x, y)))
+    })
+}
+
+fn sidebar_row(t: &Terminal<TestBackend>, name: &str) -> String {
+    let projects = usize::from(Widths::default().projects);
+    let (text, _) = row_with(t, name).expect("the bot's row");
+    text.chars().take(projects).collect()
+}
+
+#[test]
+fn a_row_too_narrow_for_the_whole_ask_says_asks_in_the_waiting_colour() {
+    let asking =
+        BotEntry { asking: true, unread: 1, fallback: "claude".into(), ..entry("campus", "asks for a secret") };
+    let t = render_sized(&shown(Sidebar::SideBySide, vec![asking], false), W, TALL.height);
+    let row = sidebar_row(&t, "campus");
+    assert!(row.contains("asks"), "{row}");
+    assert!(!row.contains("for a secret"), "{row}");
+    assert!(!row.contains("claude"), "{row}");
+    let (_, at) = row_with(&t, "asks").expect("asks is drawn");
+    assert_eq!(t.backend().buffer()[at].fg, WAITING_COLOR);
+}
+
+#[test]
+fn an_asking_row_cuts_a_long_name_so_asks_still_fits() {
+    let name = "a-bot-with-a-very-long-name-of-forty-chr";
+    let asking = BotEntry { asking: true, unread: 1, fallback: "claude".into(), ..entry(name, "asks for a secret") };
+    let plain = BotEntry { asking: false, ..asking.clone() };
+    let drawn = |entry: BotEntry| {
+        let t = render_sized(&shown(Sidebar::SideBySide, vec![entry], false), W, TALL.height);
+        sidebar_row(&t, "a-bot")
+    };
+    let (asked, quiet) = (drawn(asking), drawn(plain));
+    assert!(asked.contains('…'), "{asked}");
+    assert!(asked.contains("asks"), "{asked}");
+    let shown_of = |row: &str| row.split('…').next().map_or(0, |kept| kept.trim_end().chars().count());
+    assert!(shown_of(&quiet) > shown_of(&asked), "{quiet}\n{asked}");
+}
