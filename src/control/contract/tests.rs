@@ -62,6 +62,11 @@ mod describing {
     }
 
     #[test]
+    fn keeping_a_bots_secrets_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-secrets"));
+    }
+
+    #[test]
     fn bot_setup_is_a_feature() {
         assert!(FEATURES.contains(&"bot-setup"));
     }

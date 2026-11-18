@@ -174,6 +174,21 @@ mod a_contained_run {
     }
 
     #[test]
+    fn a_plain_run_is_owned_but_not_held() {
+        let (_dir, command) = fake(r"/bin/sh -c '/bin/sleep 30 & echo child $!; wait'");
+        let running = Running::default();
+        let seen = running.clone();
+        let own = i32::try_from(std::process::id()).expect("a pid");
+        let talk = move |line: &str| match pid_of(line) {
+            Some(pid) => Step::Answer(Ok((seen.owns(pid), seen.holds(pid), seen.owns(own)))),
+            None => Step::Read,
+        };
+        let limits = Limits { grace: Duration::from_millis(100), ..LIMITS };
+        let found = run_in(limits, command, "", &running, talk).expect("an answer");
+        assert_eq!(found, (true, false, false));
+    }
+
+    #[test]
     fn stops_what_it_left_behind() {
         let (_dir, command) = fake("/bin/sleep 30 &\necho child $!\nread x");
         let (pid, stamp) = run(contained(), command, "", stamped).expect("an answer");

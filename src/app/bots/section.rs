@@ -79,6 +79,7 @@ impl App {
             Access::Full => ui::CardRow { red: true, ..ui::CardRow::new("access", "full access") },
             Access::Cornercase => ui::CardRow::new("access", "through cornercase"),
         });
+        rows.extend(Self::secrets_row(&live.secrets));
         rows.push(ui::CardRow::new("made", crate::queue::clock::day(bot.created, &self.window_zone())));
         rows.extend(self.started_rows(&bot.id));
         rows.extend(self.routine_rows(&bot.id));
@@ -167,6 +168,7 @@ impl App {
             BotItem::Rename,
             BotItem::Edit,
             BotItem::Routines,
+            BotItem::Secrets,
             BotItem::NewConversation,
             BotItem::OpenFolder,
             BotItem::Remove,

@@ -17,6 +17,32 @@ pub(crate) enum BotRequest {
     Setup(BotTarget),
     Say(BotSay),
     History(BotHistory),
+    SecretSet(SecretSet),
+    SecretList(BotTarget),
+    SecretRemove(SecretRemove),
+    SecretGet(SecretGet),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretSet {
+    pub(crate) bot: String,
+    pub(crate) name: String,
+    pub(crate) value: crate::issues::Secret,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretRemove {
+    pub(crate) bot: String,
+    pub(crate) name: Option<String>,
+    pub(crate) all: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretGet {
+    pub(crate) name: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,6 +122,9 @@ pub(crate) struct BotInfo {
     pub(crate) created: i64,
     pub(crate) routines: usize,
     pub(crate) next: Option<i64>,
+    pub(crate) secrets: usize,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) secrets_unreadable: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,7 +142,39 @@ pub(crate) struct AgentInfo {
     pub(crate) models: Vec<String>,
 }
 
+fn name_field<'a>(fields: &'a mut Fields, name: &str) -> &'a mut Fields {
+    if crate::bots::secrets::name_refusal(name).is_none() {
+        fields.add("name", name)
+    } else {
+        fields.add("name_bytes", name.len())
+    }
+}
+
 impl BotRequest {
+    fn secret_fields<'a>(&self, fields: &'a mut Fields) -> &'a mut Fields {
+        match self {
+            Self::SecretSet(set) => {
+                fields.add("action", "secret-set").add("bot", &set.bot);
+                if set.name == set.value.0 {
+                    fields.add("name_bytes", set.name.len());
+                } else {
+                    name_field(fields, &set.name);
+                }
+                fields.add("bytes", set.value.0.len())
+            }
+            Self::SecretList(target) => fields.add("action", "secret-list").add("bot", &target.bot),
+            Self::SecretRemove(remove) => {
+                fields.add("action", "secret-remove").add("bot", &remove.bot);
+                if let Some(name) = &remove.name {
+                    name_field(fields, name);
+                }
+                fields.add("all", remove.all)
+            }
+            Self::SecretGet(get) => name_field(fields.add("action", "secret-get"), &get.name),
+            _ => fields,
+        }
+    }
+
     pub(super) fn fields(&self, fields: &mut Fields) {
         match self {
             Self::Agents => fields.add("action", "agents"),
@@ -140,6 +201,9 @@ impl BotRequest {
             Self::History(history) => {
                 fields.add("action", "history").add("bot", &history.bot).maybe("last", history.last);
                 fields.maybe("after", history.after)
+            }
+            Self::SecretSet(_) | Self::SecretList(_) | Self::SecretRemove(_) | Self::SecretGet(_) => {
+                self.secret_fields(fields)
             }
         };
     }

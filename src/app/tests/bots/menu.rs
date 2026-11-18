@@ -1,6 +1,6 @@
 use super::*;
 
-fn open_menu(c: &mut Chat) {
+pub(super) fn open_menu(c: &mut Chat) {
     render(&mut c.app, AREA);
     let a = c.app.layout(AREA);
     let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
@@ -12,10 +12,13 @@ fn drawn(app: &mut App) -> String {
 }
 
 #[test]
-fn a_right_click_opens_the_menu_with_its_six_items() {
+fn a_right_click_opens_the_menu_with_its_seven_items() {
     let mut c = chat(ANSWER);
     open_menu(&mut c);
-    assert_eq!(menu_labels(&c.app), ["rename", "edit…", "routines…", "new conversation", "open folder", "remove…"]);
+    assert_eq!(
+        menu_labels(&c.app),
+        ["rename", "edit…", "routines…", "secrets…", "new conversation", "open folder", "remove…"]
+    );
 }
 
 #[test]
@@ -25,7 +28,7 @@ fn new_conversation_is_greyed_while_a_turn_runs() {
     c.say("long job");
     c.started(1);
     open_menu(&mut c);
-    assert_eq!(menu_disabled(&c.app), [false, false, false, true, false, false]);
+    assert_eq!(menu_disabled(&c.app), [false, false, false, false, true, false, false]);
     std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
 }
 
@@ -38,7 +41,7 @@ fn the_menu_button_of_a_row_opens_the_same_menu() {
     let button = ui::bot_menu(row, a.pitch);
     assert!(!button.is_empty());
     click(&mut c.app, button.as_position());
-    assert_eq!(menu_labels(&c.app).len(), 6);
+    assert_eq!(menu_labels(&c.app).len(), 7);
 }
 
 #[test]

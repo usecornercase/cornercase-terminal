@@ -211,8 +211,12 @@ impl App {
     }
 
     pub(super) fn name_paste(&mut self, text: &str, area: Rect) {
+        if self.overlay.as_mut().is_some_and(|overlay| overlay.refuses_paste(text)) {
+            return;
+        }
+        let hidden = self.overlay.as_ref().is_some_and(Overlay::hides_text);
         let Some((_, input)) = self.name_text(area) else { return };
-        input.insert(text);
+        input.insert(if hidden { super::bots::pasted(text) } else { text });
         self.clear_form_error();
     }
 
@@ -275,6 +279,7 @@ impl App {
             Some(Overlay::Star) => self.answer_star(None),
             Some(Overlay::RemoveAccount { .. }) => self.open_settings(),
             Some(Overlay::CloneOnMachine(_)) => self.clone_back(),
+            Some(Overlay::BotSecrets(_)) => self.secrets_back(),
             _ => self.overlay = None,
         }
     }
@@ -286,11 +291,11 @@ impl App {
                 self.submit_new_workspace(Asked { project, input, worktree, run_on }, area)?
             }
             Overlay::Rename { target, input } => self.submit_rename(target, &input.text()),
-            Overlay::NewGroup { input } if input.text().trim().is_empty() => Some(Overlay::NewGroup { input }),
-            Overlay::NewGroup { input } => self.submit_new_group(&input.text()),
+            Overlay::NewGroup { input } => self.submit_new_group(input),
             Overlay::NewMachine { input, .. } => self.submit_new_machine(input),
             Overlay::RenameBot { bot, input, .. } => self.submit_rename_bot(bot, input),
             Overlay::RemoveBot { bot } => self.submit_remove_bot(bot),
+            Overlay::BotSecrets(secrets) => Some(self.submit_secrets(*secrets)),
             Overlay::GroupStyle { .. }
             | Overlay::Usage
             | Overlay::Remote
@@ -349,8 +354,11 @@ impl App {
         None
     }
 
-    fn submit_new_group(&mut self, input: &str) -> Option<Overlay> {
-        self.add_group(input.trim().to_string());
+    fn submit_new_group(&mut self, input: Editor) -> Option<Overlay> {
+        if input.text().trim().is_empty() {
+            return Some(Overlay::NewGroup { input });
+        }
+        self.add_group(input.text().trim().to_string());
         None
     }
 

@@ -28,7 +28,7 @@ Once you have a bot, a **Bots** section sits at the bottom of the sidebar, above
 
 - **One row per bot**, in the order you made them: a mark, its name and, dim, its agent and model, or `next 09:00` (`next Mon 09:00` on another day, a date past a week) while the bot is idle, when that fits, and has a [routine](#routines). The mark is the spinner while the bot answers, and a blue `●` with a count while it has answers you have not read. The row of the bot on screen has the cyan bar `▌`.
 - **Click the title** to fold the section into its title row, which then shows the spinner or the unread count of every bot. The fold is saved with your session. **` + `** opens the [new bot form](#make-a-bot-in-the-window).
-- **` ⋯ `** at the end of a row (it shows when you hover the row, and always, dimmed, in a [compact](../small-terminals/) layout), or a right click, opens its menu: **rename**, **edit…**, **routines…**, **new conversation**, **open folder** and **remove…**. A bot's row has no `×`: removing a bot deletes its memory, so it asks first. **remove…** says `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.` (with its [routines](#routines) named when it has some, and removing them too) and, while the bot answers, its button reads `stop it first` and stops the turn.
+- **` ⋯ `** at the end of a row (it shows when you hover the row, and always, dimmed, in a [compact](../small-terminals/) layout), or a right click, opens its menu: **rename**, **edit…**, **routines…**, **secrets…**, **new conversation**, **open folder** and **remove…**. A bot's row has no `×`: removing a bot deletes its memory, so it asks first. **remove…** says `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.` (with its [routines](#routines) named when it has some, and removing them too) and, while the bot answers, its button reads `stop it first` and stops the turn.
 - **The wheel** scrolls the rows when they do not fit.
 
 ### The chat
@@ -64,6 +64,7 @@ An answer, or an error, that arrives while you are looking at something else mak
 - **Model**: the models the agent suggests, and `default`, the agent's own. Type to filter; `Enter` on a name that matches none uses it as written. **Effort** and **Account** rows show only when the agent takes efforts or you have [accounts](../accounts/) for it.
 - **Access**: `through cornercase` or `full access`, with a two-line note under it. The first line says what `through cornercase` is, and the second, in red, what `full access` lets the bot do, see [Access](#access). Codex, opencode and Cursor CLI offer `full access` only (and Gemini CLI and GitHub Copilot CLI on Windows), so nothing is chosen for you there and **create** asks you to choose.
 - **Follow**: a box, checked, that says whether the bot is told when an agent it starts [finishes](#agents-it-starts). `Space` or a click toggles it.
+- **Secrets** (editing only): the names of the [secrets](#secrets) saved for the bot, such as `2 saved: campus-user, campus-password`, and **manage…**, which opens the Secrets dialog and gets back to the form, with what you changed in it, when you close it.
 - **For**: what the bot is for. It is optional, may be several lines (`Enter` breaks the line here) and becomes `bot.md`; filled in, the bot sets itself up for it as soon as it is made.
 
 **create** shows the new bot's chat at once. With **For** filled in, the bot sets itself up there: `── setting up ──`, its steps, then what it will do, what it scheduled and what it needs from you; what you send meanwhile waits for the next turn, which continues the same conversation. With **For** empty the chat shows its empty state. Changing **For** later with **edit…** runs nothing: tell the bot in its chat, or run `cornercase bot setup prs`. **edit…** in the bot's menu is the same form with **save**, with the agent grey, since another agent could not continue the conversation. **rename** asks for a new name and keeps the bot's id and folder.
@@ -184,6 +185,22 @@ A turn runs without its window, so the agent cannot stop halfway to ask you for 
 A bot with `full` access can change any file and run any command, with nobody to ask. Give it only to a bot you would trust with an open shell.
 </Aside>
 
+## Secrets
+
+A bot that works behind a login needs a password or a token. Saving it in `bot.md` or `memory.md`, or typing it in the chat, leaves it in plain text that every agent of yours can read, so each bot has **secrets**: named values you save for that bot, kept encrypted, which only that bot's own turn reads.
+
+- A secret is a name (1 to 40 characters of `a-z`, `0-9`, `-` and `_`, such as `campus-password`) and a value of 1 to 8,192 bytes. A bot keeps at most 20. A login is two secrets (`campus-user` and `campus-password`), or put the user name in `bot.md`.
+- **In the window**, **secrets…** in the bot's menu, or **manage…** in its edit form, opens **Secrets › prs**: the names with when each was saved, **replace…** and **remove** on the selected one (**remove** asks first) and **+ secret**. The value goes into a field that shows dots, is never shown or copied again, and has no copy or cut. The bot's card says `2 secrets`.
+- **From the command line**: `printf '%s' "$PASSWORD" | cornercase bot secret set prs campus-password` reads the value from standard input (never from an argument) and replaces a saved one; one line break at the end is dropped. `cornercase bot secret list [BOT] [--json]` prints the names and dates, never a value, `cornercase bot secret remove BOT NAME` (or `--all`) removes, and `cornercase bot secret get NAME` prints a value, **only to the bot itself**: from its own turn, as the brief teaches it. Your own shell, a program and another bot's turn are refused (`only the bot itself reads its secrets`), and so is a bot that tries to save, remove or list another bot's secrets.
+- **What cornercase writes**: before a line goes to the chat file, to [`cornercase events`](../scripts-and-agents/), to a toast or a notification, or into a queue entry's result, every value of that bot of 6 bytes or more is replaced by `[secret campus-password]` in its steps, answers and errors (and in the lines about agents it started). This is a convenience, not a guarantee: a value the bot encodes or splits passes, and a value you remove while the bot still holds it is no longer replaced.
+- **The file does not open** (another key, a damaged file): the list says `the secrets of prs cannot be read`, nothing is overwritten, and only **remove all** (or `bot secret remove prs --all`) starts again. That removes the bot's secrets, not the key: if `bots.key` itself is damaged or lost, restore it and restart cornercase, and know that deleting it makes a new key and leaves every bot's old secrets unreadable.
+- **A secret saved by another client meanwhile is never lost to a stale confirmation**: **remove all** refuses if the list changed since you asked.
+- **The limits**:
+  - **The bot reads the value.** It goes to the agent's provider with the conversation, and stays in plain text in the agent's own session file on this computer.
+  - **A page or a message the bot reads can tell it to send the value somewhere else.** Give a bot what you would give an assistant, and prefer a token with a narrow scope to a password.
+  - **The encryption protects copies**, such as a backup, a synced folder or an agent that searches your disk and reads the file by accident. The key is a file next to the session (`bots.key`, readable only by you), so it does not stop another program of yours that reads both files, a bot with `full` access, or a `cornercase`-access bot that goes looking for the key.
+  - On macOS, a command the bot sends to the background whose shell exits is no longer seen as the bot's, and is refused the secret.
+
 ## What is in a bot's folder
 
 Each bot has a folder in `bots/` next to `session.json` (`bots/<id>/`, private to you, `0700`):
@@ -193,6 +210,7 @@ Each bot has a folder in `bots/` next to `session.json` (`bots/<id>/`, private t
 | `bot.json` | The bot's settings and the id of its conversation. cornercase rewrites it; it does not read it again while it runs. |
 | `bot.md` | What the bot is for. You and the bot both write it: it updates it when you give it a job or change one. `cornercase bot about` prints it. |
 | `memory.md` | What it keeps from one conversation to the next. It adds to it, keeps it short and prunes it. |
+| `secrets` | The bot's [secrets](#secrets), encrypted, readable only by you; there only while the bot has one. The key is `bots.key` next to `session.json`, not in this folder. |
 | `chat.jsonl` | The chat as cornercase shows it, one JSON line per message, step, answer, error, notice or [agent line](#agents-it-starts). It survives `reset` and a change of model. |
 
 The chat is cornercase's own, not the agent's transcript, so what other features write to a bot later lands in the same place. cornercase tells each bot about itself in the first message of a conversation and never writes it to the folder, so a new release updates every bot at its next conversation.

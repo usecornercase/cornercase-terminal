@@ -33,18 +33,26 @@ fn opened(c: &mut Chat) {
     render(&mut c.app, AREA);
 }
 
-fn spot(c: &Chat, wanted: Hit) -> Position {
-    let view = view(c);
+pub(super) fn spot_in(view: &ui::BotRoutines, wanted: Hit) -> Position {
     (0..AREA.height)
         .flat_map(|y| (0..AREA.width).map(move |x| Position::new(x, y)))
-        .find(|pos| ui::routines_hit(AREA, &view, *pos) == Some(wanted))
+        .find(|pos| ui::routines_hit(AREA, view, *pos) == Some(wanted))
         .unwrap_or_else(|| panic!("nothing at {wanted:?}"))
 }
 
-fn press_button(c: &mut Chat, row: usize, button: Button) {
-    let rect = ui::routine_button(AREA, &view(c), row, button);
+pub(super) fn press_in(c: &mut Chat, view: &ui::BotRoutines, (row, button): (usize, Button)) {
+    let rect = ui::routine_button(AREA, view, row, button);
     assert!(!rect.is_empty(), "no {button:?} on row {row}");
     click(&mut c.app, rect.as_position());
+}
+
+fn spot(c: &Chat, wanted: Hit) -> Position {
+    spot_in(&view(c), wanted)
+}
+
+fn press_button(c: &mut Chat, row: usize, button: Button) {
+    let view = view(c);
+    press_in(c, &view, (row, button));
 }
 
 fn names(view: &ui::BotRoutines) -> Vec<&str> {

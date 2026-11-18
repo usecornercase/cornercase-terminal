@@ -218,6 +218,16 @@ fn socket_folder(socket: &Path) -> io::Result<PathBuf> {
     }
 }
 
+#[cfg(unix)]
+pub(crate) fn holds_a_file(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file())
+}
+
+#[cfg(windows)]
+pub(crate) fn holds_a_file(_path: &Path) -> bool {
+    false
+}
+
 pub(crate) fn check_socket_dir(socket: &Path, folder: Folder) -> Result<(), Error> {
     let length = socket.as_os_str().len();
     if length > MAX_SOCKET_PATH {

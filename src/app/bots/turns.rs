@@ -29,7 +29,7 @@ impl App {
 
     pub(super) fn bot_append(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> Line {
         let state = &mut self.panels.bots.live[at];
-        let line = make(state.next_line, crate::time::now());
+        let line = state.secrets.redacted(&state.retired, make(state.next_line, crate::time::now()));
         state.next_line += 1;
         let _ = chat::append(&state.folder.join(folder::CHAT_FILE), &line);
         if matches!(line.kind, Kind::You | Kind::Bot) {
@@ -80,6 +80,7 @@ impl App {
             bin: self.panels.bots.bin.clone(),
             timeout: self.panels.bots.timeout,
             repositories: turn::repositories(&self.projects, self.panels.bots.dir.as_deref()),
+            key: self.panels.bots.key_path.clone(),
         }
     }
 
@@ -261,6 +262,7 @@ impl App {
             ms = took.as_millis(),
             ended = how
         );
+        self.bot_settled(at);
         self.bot_next(at);
     }
 

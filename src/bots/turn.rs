@@ -40,6 +40,7 @@ pub(crate) struct Input {
     pub(crate) bin: Option<PathBuf>,
     pub(crate) timeout: Duration,
     pub(crate) repositories: Vec<PathBuf>,
+    pub(crate) key: Option<PathBuf>,
 }
 
 pub(crate) fn path_with(first: &Path, path: Option<&OsStr>) -> Option<OsString> {
@@ -110,7 +111,8 @@ pub(crate) fn ask(input: &Input, first: Option<&Path>, path: Option<&OsStr>) -> 
         tools: Tools::Bot(bot.access),
         conversation,
         env: environment(bot, &input.session, first, path),
-        protected: vec![folder::BOT_FILE, folder::CHAT_FILE],
+        protected: vec![folder::BOT_FILE, folder::CHAT_FILE, folder::SECRETS_FILE],
+        unreadable: input.key.iter().cloned().collect(),
         stops: super::stop_commands(),
         repositories: input.repositories.clone(),
     }
@@ -133,7 +135,20 @@ pub(crate) fn first_on_path(bin: Option<&Path>, binary: &Path) -> Option<PathBuf
     binary.parent().map(Path::to_path_buf)
 }
 
+fn comma_in_rules(input: &Input) -> Option<&Path> {
+    let claude = input.bot.agent == "claude" && input.bot.access == headless::Access::Cornercase;
+    let paths = std::iter::once(&input.folder).chain(input.key.as_ref());
+    paths.map(PathBuf::as_path).find(|path| claude && path.to_string_lossy().contains(','))
+}
+
 pub(crate) fn run(input: &Input, watch: Watch) -> Result<Ran> {
+    if let Some(path) = comma_in_rules(input) {
+        let text = format!(
+            "{} holds a comma, which Claude Code's comma-separated permission rules cannot keep",
+            path.display()
+        );
+        return Err(Error::Probe(text));
+    }
     let kind =
         Known::of(&input.bot.agent).ok_or_else(|| Error::Probe(format!("{} is not an agent", input.bot.agent)))?;
     let first = first_on_path(input.bin.as_deref(), &crate::process::program::own_binary());

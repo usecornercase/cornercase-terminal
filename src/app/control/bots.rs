@@ -22,6 +22,16 @@ impl App {
             }
             BotRequest::Say(say) => self.bot_say_request(client, &say),
             BotRequest::History(history) => self.bot_history_request(&history),
+            BotRequest::SecretSet(set) => {
+                let answer = self.bot_secret_set(Some(client), &set.bot, (&set.name, &set.value.0))?;
+                Ok(Some(json(&answer)))
+            }
+            BotRequest::SecretList(target) => Ok(Some(json(&self.bot_secret_list(Some(client), &target.bot)?))),
+            BotRequest::SecretRemove(remove) => {
+                let answer = self.bot_secret_remove(Some(client), &remove.bot, (remove.name.as_deref(), remove.all))?;
+                Ok(Some(json(&answer)))
+            }
+            BotRequest::SecretGet(get) => Ok(Some(json(&self.bot_secret_get(Some(client), &get.name)?))),
             other => self.bot_target_request(other),
         }
     }

@@ -560,7 +560,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
         Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
         Some(Overlay::Ports(ports)) => draw_ports(f, view, ports),
-        Some(Overlay::BotRoutines(routines)) => draw_routines(f, view, routines),
+        Some(Overlay::BotRoutines(routines) | Overlay::BotSecrets(routines)) => draw_routines(f, view, routines),
         Some(Overlay::Processes(processes)) => draw_processes(f, view, processes),
         Some(Overlay::Popup(popup)) => dialog::popup::draw(f, view, popup),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),

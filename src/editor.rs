@@ -36,6 +36,16 @@ impl Editor {
         Self { area: Box::new(area), scroll: 0 }
     }
 
+    pub(crate) fn masked(&self) -> Self {
+        let mut hidden = Self::new(&"•".repeat(self.chars().len()));
+        hidden.scroll = self.scroll;
+        hidden.jump(self.offset());
+        if let Some(range) = self.selection() {
+            hidden.select(range);
+        }
+        hidden
+    }
+
     pub(crate) fn text(&self) -> String {
         self.area.lines().join("\n")
     }

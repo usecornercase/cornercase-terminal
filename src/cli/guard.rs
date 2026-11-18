@@ -70,6 +70,17 @@ fn itself(path: &[&str], found: &ArgMatches, own: &str) -> Option<String> {
     said.then(|| String::from("a bot cannot write to itself"))
 }
 
+fn secrets(path: &[&str], found: &ArgMatches, own: &str) -> Option<String> {
+    match path {
+        ["bot", "secret", "set" | "remove"] => Some(String::from(crate::bots::secrets::NO_CHANGE)),
+        ["bot", "secret", "list"] => {
+            let other = found.get_one::<String>("bot").filter(|bot| !bot.eq_ignore_ascii_case(own));
+            other.map(|_| String::from(crate::bots::secrets::OWN_ONLY))
+        }
+        _ => None,
+    }
+}
+
 fn writes_a_file(leaf: &Command, found: &ArgMatches) -> Option<String> {
     let help = crate::cli::help::TO_FILE;
     let arg = leaf.get_arguments().find(|arg| {
@@ -109,6 +120,7 @@ pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Opt
     access(&path, found)
         .or_else(|| window(&path, found))
         .or_else(|| itself(&path, found, own))
+        .or_else(|| secrets(&path, found, own))
         .or_else(|| writes_a_file(leaf, found))
         .or_else(|| in_no_place(leaf, found))
 }

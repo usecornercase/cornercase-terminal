@@ -92,6 +92,16 @@ fn editing_shows_save_and_the_agent_in_grey() {
 }
 
 #[test]
+fn editing_lists_the_secrets_by_name_with_a_manage_button_and_a_new_bot_has_no_row() {
+    let bot = crate::bots::sample("prs", "PRs");
+    let mut form = Form::editing(agents(), &bot, "Review my pull requests.");
+    form.secrets = String::from("2 saved: campus-user, campus-password");
+    insta::assert_snapshot!(drawn(form).backend());
+    let fresh = format!("{}", drawn(Form::new(agents(), "claude")).backend());
+    assert!(!fresh.contains("Secrets") && !fresh.contains("manage…"), "{fresh}");
+}
+
+#[test]
 fn the_border_is_drawn_at_the_corners_of_its_area() {
     let v = shown(Form::new(agents(), "claude"));
     let (top_left, bottom_right) = corners_of_its_area(&v);

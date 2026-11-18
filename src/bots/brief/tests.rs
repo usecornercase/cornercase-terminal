@@ -36,6 +36,22 @@ fn each_access_says_what_it_allows() {
     assert!(!full.contains("write only in your folder"));
 }
 
+#[rstest::rstest]
+#[case::cornercase(Access::Cornercase)]
+#[case::full(Access::Full)]
+fn every_opening_teaches_the_secrets_for_each_access(#[case] access: Access) {
+    let bot = named(access);
+    let folder = Path::new("/b/prs");
+    let notes = ("", "");
+    for text in [
+        opening(&bot, folder, notes, None, &said(false, "hi")),
+        setup_opening(&bot, folder, notes, None),
+        run_opening(&bot, folder, notes, "go"),
+    ] {
+        assert!(text.contains(SECRETS), "{text}");
+    }
+}
+
 #[test]
 fn a_bot_whose_agent_reads_only_its_folder_is_told_so() {
     let gemini = Bot { agent: String::from("gemini"), ..named(Access::Cornercase) };

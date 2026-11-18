@@ -104,3 +104,35 @@ was stopped, or after changing bot.md with `bot edit --about`, which runs nothin
 
 It answers at once with the id of the `setting up` line. It is refused while the bot answers, and
 when bot.md is empty. With --json it prints {\"bot\", \"line\"}.";
+
+pub(in crate::cli) const BOT_SECRET_HELP: &str =
+    "A bot's secrets are named values, a password or a token, that cornercase keeps encrypted for that bot
+and that only that bot's own turn reads, with `cornercase bot secret get NAME`. A name takes 1 to 40
+characters of a-z, 0-9, - and _; a value 1 to 8,192 bytes; a bot keeps at most 20.";
+
+pub(in crate::cli) const BOT_SECRET_SET_HELP: &str =
+    "The bot reads this value: it reaches the bot's agent and stays in that agent's own records on this computer.
+
+Reads the value from standard input, never from an argument, and replaces a saved one; one line break at
+the end is dropped, the rest is kept as given. On a terminal it asks for the value without showing it.
+It prints the name. With --json it prints {\"bot\", \"name\", \"saved\"}. A bot cannot run it.
+
+Example:
+  printf '%s' \"$PASSWORD\" | cornercase bot secret set campus campus-password";
+
+pub(in crate::cli) const BOT_SECRET_LIST_HELP: &str =
+    "Prints the names and when each was saved, never a value, and where the key is kept (`key: file`).
+Inside a bot, BOT is that bot by default, and a bot lists only its own.
+
+With --json it prints {\"bot\", \"key\", \"secrets\": [{\"name\", \"saved\"}]}. When the file does not
+open (another key, a damaged file) it says so and changes nothing: only `bot secret remove BOT --all`
+starts again.";
+
+pub(in crate::cli) const BOT_SECRET_REMOVE_HELP: &str =
+    "Removes one secret, or with --all every secret of the bot, even a file that does not open. A bot
+cannot run it. With --json it prints {\"bot\", \"removed\"}.";
+
+pub(in crate::cli) const BOT_SECRET_GET_HELP: &str =
+    "Prints the value and a line break. Only the bot itself may run it, from its own turn: every other
+client, the user's own shell too, is refused. Never write the value in an answer, in bot.md or in
+memory.md. With --json it prints {\"bot\", \"name\", \"value\"}.";

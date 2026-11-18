@@ -127,9 +127,15 @@ impl Running {
     }
 
     pub(crate) fn holds(&self, pid: i32) -> bool {
+        let contained = self.0.lock().lineage.is_some();
+        contained && self.owns(pid)
+    }
+
+    pub(crate) fn owns(&self, pid: i32) -> bool {
         let spawned = self.0.lock();
-        let (Some((root, started)), Some(lineage)) = (spawned.pid, &spawned.lineage) else { return false };
-        process::running(root, started) && (pid == root || stop::inside(pid, root) || lineage.holds(pid))
+        let Some((root, started)) = spawned.pid else { return false };
+        let held = || spawned.lineage.as_ref().is_some_and(|lineage| lineage.holds(pid));
+        process::running(root, started) && (pid == root || stop::inside(pid, root) || held())
     }
 
     pub(crate) fn contained(&self) -> bool {

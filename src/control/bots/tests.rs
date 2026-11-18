@@ -101,3 +101,49 @@ fn bot_info_has_follow_and_following() {
     let old: BotInfo = serde_json::from_str(r#"{"id":"prs"}"#).expect("an old answer");
     assert!(!old.follow && old.following.is_empty());
 }
+
+#[rstest]
+#[case::set(r#"{"action":"secret-set","entry":{"bot":"prs","name":"pw","value":"hunter2-value"}}"#)]
+#[case::list(r#"{"action":"secret-list","entry":{"bot":"prs"}}"#)]
+#[case::remove_one(r#"{"action":"secret-remove","entry":{"bot":"prs","name":"pw","all":false}}"#)]
+#[case::remove_all(r#"{"action":"secret-remove","entry":{"bot":"prs","name":null,"all":true}}"#)]
+#[case::get(r#"{"action":"secret-get","entry":{"name":"pw"}}"#)]
+fn each_secret_action_round_trips(#[case] args: &str) {
+    let Command::Bot(parsed) = request(args).command else { panic!("not a bot request") };
+    let again = serde_json::to_value(&parsed).expect("serialize");
+    assert_eq!(again, serde_json::from_str::<Value>(args).expect("json"));
+}
+
+#[test]
+fn the_log_line_of_a_secret_request_never_holds_a_value_or_a_name_that_is_not_one() {
+    let set = BotRequest::SecretSet(SecretSet {
+        bot: "prs".into(),
+        name: "pw".into(),
+        value: crate::issues::Secret("hunter2-value".into()),
+    });
+    let text = format!("{:?} {:?}", Command::Bot(set.clone()).fields(), set);
+    assert!(
+        text.contains("\"bytes\", \"13\"") && text.contains("\"name\", \"pw\"") && !text.contains("hunter2"),
+        "{text}"
+    );
+    let mistaken = "hunter2-value-with-Capitals";
+    for request in [
+        BotRequest::SecretGet(SecretGet { name: mistaken.into() }),
+        BotRequest::SecretRemove(SecretRemove { bot: "prs".into(), name: Some(mistaken.into()), all: false }),
+        BotRequest::SecretSet(SecretSet { bot: "prs".into(), name: mistaken.into(), ..SecretSet::default() }),
+    ] {
+        let text = format!("{:?}", Command::Bot(request).fields());
+        assert!(text.contains("name_bytes") && !text.contains("hunter2"), "{text}");
+    }
+}
+
+#[test]
+fn a_name_equal_to_its_value_is_not_logged() {
+    let same = BotRequest::SecretSet(SecretSet {
+        bot: "prs".into(),
+        name: "hunter2-value".into(),
+        value: crate::issues::Secret("hunter2-value".into()),
+    });
+    let text = format!("{:?}", Command::Bot(same).fields());
+    assert!(text.contains("name_bytes") && !text.contains("hunter2"), "{text}");
+}

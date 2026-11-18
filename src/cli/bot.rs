@@ -14,6 +14,7 @@ use crate::queue::clock;
 
 pub(super) use text::event_text;
 
+mod secret;
 mod text;
 
 fn target(bot: String) -> BotTarget {
@@ -39,6 +40,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
         BotAction::Reset(args) => quiet(BotRequest::Reset(target(args.bot))),
         BotAction::Stop(args) => stopped(args.bot),
         BotAction::Seen(args) => quiet(BotRequest::Seen(target(args.bot))),
+        BotAction::Secret(args) => secret::run(args.action),
     }
 }
 

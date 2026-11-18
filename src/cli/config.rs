@@ -167,25 +167,28 @@ fn piped(key: &str) -> String {
     format!("printf '%s' \"$TOKEN\" | {line}")
 }
 
-fn read_secret(key: &str) -> Result<String> {
+pub(super) fn read_hidden(what: &str, prompt: &str, (piped, cap): (&str, u64)) -> Result<String> {
     let stdin = std::io::stdin();
     let mut text = String::new();
     if stdin.is_terminal() {
         let Some(hidden) = Hidden::on() else {
             return Err(Error::WrongUsage(format!(
-                "this terminal cannot hide the token as it is typed; pipe it in: \
-                 `{}`",
-                piped(key)
+                "this terminal cannot hide the {what} as it is typed; pipe it in: `{piped}`"
             )));
         };
-        eprint!("{key} token: ");
+        eprint!("{prompt}");
         let read = stdin.read_line(&mut text);
         drop(hidden);
         eprintln!();
         read?;
     } else {
-        line::input().take(1 << 16).read_to_string(&mut text)?;
+        line::input().take(cap).read_to_string(&mut text)?;
     }
+    Ok(text)
+}
+
+fn read_secret(key: &str) -> Result<String> {
+    let text = read_hidden("token", &format!("{key} token: "), (&piped(key), 1 << 16))?;
     let token = text.trim().to_string();
     if token.is_empty() {
         return Err(Error::WrongUsage(format!("no token on standard input: `{}`", piped(key))));

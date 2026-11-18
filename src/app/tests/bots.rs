@@ -413,6 +413,8 @@ mod git;
 mod menu;
 mod routines;
 mod routines_dialog;
+mod secrets;
+mod secrets_window;
 mod setup;
 mod views;
 mod window;

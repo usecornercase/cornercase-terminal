@@ -176,6 +176,7 @@ pub(super) enum Overlay {
     Worktrees(Box<crate::worktrees::Dialog>),
     Ports(Box<crate::ports::dialog::Dialog>),
     BotRoutines(Box<crate::bots::routines::Dialog>),
+    BotSecrets(Box<super::bots::Secrets>),
     Processes(Box<crate::processes::dialog::Dialog>),
     CloseAgent(Box<CloseAgent>),
     CloseAgents(Box<CloseAgents>),
@@ -224,11 +225,18 @@ impl Overlay {
             Self::PullRequest { .. } | Self::MergeCheck { .. } | Self::FlowMessage { .. } | Self::Context { .. } => {
                 self.notes_name()
             }
-            Self::Keys(_) => "keys",
             Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) | Self::BotRoutines(_) => self.listing_name(),
             Self::CloseAgent(_) | Self::CloseAgents(_) | Self::ForgetAgents { .. } => self.agents_name(),
+            Self::Popup(_) | Self::Star | Self::Keys(_) | Self::BotSecrets(_) => self.misc_name(),
+        }
+    }
+
+    fn misc_name(&self) -> &'static str {
+        match self {
             Self::Popup(_) => "plugin popup",
             Self::Star => "star",
+            Self::Keys(_) => "keys",
+            _ => "bot secrets",
         }
     }
 
@@ -350,7 +358,7 @@ impl Overlay {
                 | Overlay::MachineWorkspace(_)
                 | Overlay::RenameBot { .. }
                 | Overlay::RemoveBot { .. }
-        )
+        ) || matches!(self, Overlay::BotSecrets(secrets) if secrets.is_form())
     }
 
     pub(super) fn submit_label(&self) -> &'static str {
@@ -360,6 +368,7 @@ impl Overlay {
             Self::RemoveWorkspace { check, lock, .. } => removal_submit(*check, lock.is_some()),
             Self::MachineWorkspace(dialog) => dialog.submit_label(),
             Self::RemoveAccount { .. } | Self::RemoveBot { .. } => REMOVE_SUBMIT,
+            Self::BotSecrets(secrets) => secrets.submit_label(),
             Self::DiscardChanges(_) => DISCARD_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseAgents(_) => CLOSE_AGENTS_SUBMIT,
@@ -400,6 +409,7 @@ impl Overlay {
             | Self::NewGroup { input }
             | Self::RenameBot { input, .. }
             | Self::NewMachine { input, .. } => Some(input),
+            Self::BotSecrets(secrets) => secrets.input(),
             Self::MachineWorkspace(dialog) => dialog.input(),
             _ => None,
         }
@@ -409,6 +419,9 @@ impl Overlay {
         if let Self::NewWorkspace { error, .. } | Self::NewMachine { error, .. } | Self::RenameBot { error, .. } = self
         {
             *error = None;
+        }
+        if let Self::BotSecrets(secrets) = self {
+            secrets.clear_error();
         }
     }
 
@@ -421,6 +434,7 @@ impl Overlay {
                 | Self::RenameBot { .. }
                 | Self::NewMachine { .. }
         ) || matches!(self, Self::MachineWorkspace(dialog) if dialog.takes_input())
+            || matches!(self, Self::BotSecrets(secrets) if secrets.takes_input())
     }
 
     pub(super) fn lists_running(&self) -> bool {
@@ -471,7 +485,8 @@ impl App {
             Some(Overlay::Keys(group)) => return self.keys_mouse(*group, ev, pos, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_mouse(ev, pos, area),
             Some(Overlay::Ports(_)) => self.ports_mouse(ev, pos, area),
-            Some(Overlay::BotRoutines(_)) => self.bot_routines_mouse(ev, pos, area),
+            Some(Overlay::BotRoutines(_)) => self.bot_list_mouse(ev, pos, area),
+            Some(Overlay::BotSecrets(secrets)) if secrets.list().is_some() => self.bot_list_mouse(ev, pos, area),
             Some(Overlay::Processes(_)) => self.processes_mouse(ev, pos, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_mouse(ev, pos, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_mouse(ev, pos, area),
@@ -548,12 +563,19 @@ impl App {
             | Overlay::QueueResult(_) => self.notes_view(overlay, area)?,
             Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
             Overlay::BotForm(_) | Overlay::RenameBot { .. } | Overlay::RemoveBot { .. } => self.bot_view(overlay)?,
-            Overlay::Machine(_) | Overlay::CloneOnMachine(_) => Self::machine_dialog_view(overlay)?,
+            Overlay::Machine(_) | Overlay::CloneOnMachine(_) | Overlay::BotSecrets(_) => self.aside(overlay, area)?,
         })
     }
 }
 
 impl App {
+    fn aside(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::BotSecrets(secrets) => self.secrets_view(secrets, area),
+            _ => Self::machine_dialog_view(overlay),
+        }
+    }
+
     fn own_view(overlay: &Overlay) -> Option<ui::Overlay> {
         match overlay {
             Overlay::Popup(popup) => Some(super::plugin_popup::popup_view(popup)),

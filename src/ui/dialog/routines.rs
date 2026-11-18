@@ -24,8 +24,6 @@ const WIDE: u16 = 100;
 
 const HIGH: u16 = 24;
 
-const NEW_LABEL: &str = "+ routine";
-
 const DONE_LABEL: &str = "done";
 
 const LEAD: usize = 4;
@@ -38,6 +36,7 @@ pub(crate) struct BotRoutines {
     pub(crate) hint: String,
     pub(crate) empty: String,
     pub(crate) compact: bool,
+    pub(crate) new: &'static str,
 }
 
 pub(crate) struct RoutineRow {
@@ -48,6 +47,7 @@ pub(crate) struct RoutineRow {
     pub(crate) at: String,
     pub(crate) paused: bool,
     pub(crate) buttons: Vec<Button>,
+    pub(crate) detail: Option<String>,
 }
 
 pub(crate) fn routines_area(screen: Rect, compact: bool) -> Rect {
@@ -75,14 +75,14 @@ pub(crate) fn routine_button(screen: Rect, view: &BotRoutines, row: usize, butto
     button_rects(shown, rect).into_iter().find(|(b, _)| *b == button).map_or_else(Rect::default, |(_, r)| r)
 }
 
-fn bottom(area: Rect) -> Vec<Rect> {
+fn bottom(area: Rect, new: &str) -> Vec<Rect> {
     let [.., row] = list_note_buttons(area);
-    right_aligned(row, &[NEW_LABEL, DONE_LABEL], button_width, 1)
+    right_aligned(row, &[new, DONE_LABEL], button_width, 1)
 }
 
 pub(crate) fn routines_hit(screen: Rect, view: &BotRoutines, pos: Position) -> Option<Hit> {
     let area = routines_area(screen, view.compact);
-    let rects = bottom(area);
+    let rects = bottom(area, view.new);
     if rects[0].contains(pos) {
         return Some(Hit::New);
     }
@@ -113,8 +113,8 @@ pub(in crate::ui) fn draw_routines(f: &mut Frame, view: &View, routines: &BotRou
     }
     let hint = truncate_right(&routines.hint, usize::from(note.width));
     f.render_widget(Paragraph::new(Span::styled(hint, dim)), note);
-    let rects = bottom(area);
-    draw_submit(f, view, rects[0], NEW_LABEL);
+    let rects = bottom(area, routines.new);
+    draw_submit(f, view, rects[0], routines.new);
     draw_secondary(f, view, rects[1], DONE_LABEL);
 }
 
@@ -155,6 +155,9 @@ fn draw_row(f: &mut Frame, view: &View, routines: &BotRoutines, (row, selected):
 
 fn last_run(row: &RoutineRow, view: &View, bg: Style, room: usize) -> Vec<Span<'static>> {
     let dim = bg.fg(view.muted);
+    if let Some(detail) = &row.detail {
+        return vec![Span::styled(truncate_cells(detail, room), dim)];
+    }
     let Some(state) = &row.state else { return vec![Span::styled("not run yet", dim)] };
     if row.at.is_empty() {
         return vec![Span::styled(state.clone(), dim)];
