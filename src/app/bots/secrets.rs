@@ -25,7 +25,7 @@ impl App {
     pub(in crate::app) fn secrets_caller(&self, client: Option<u64>) -> Caller {
         let bots = &self.clients.bots;
         match client {
-            Some(client) => match (bots.owner_of(client), bots.bot_of(client)) {
+            Some(client) => match (bots.owner_of(client), bots.bot_of(client).or_else(|| bots.former_of(client))) {
                 (Some(id), _) => Caller::Bot { id: id.to_string(), own: true },
                 (None, Some(id)) => Caller::Bot { id: id.to_string(), own: false },
                 (None, None) => Caller::Person,

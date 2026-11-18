@@ -163,6 +163,15 @@ mod redacting {
     }
 
     #[test]
+    fn a_big_answer_full_of_matches_is_not_quadratic() {
+        let text = "secret".repeat(200_000);
+        let started = std::time::Instant::now();
+        let out = redact(&text, &[entry("pw", "secret")]);
+        assert_eq!(out.len(), "[secret pw]".len() * 200_000);
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    #[test]
     fn leaves_short_values_alone() {
         assert_eq!(redact("abc abcde", &[entry("pin", "abc"), entry("five", "abcde")]), "abc abcde");
     }

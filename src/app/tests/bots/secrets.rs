@@ -120,6 +120,22 @@ mod who_reads {
     }
 
     #[test]
+    fn a_full_bots_process_stays_that_bot_and_never_the_user_after_its_turn() {
+        const FULL: u64 = 11;
+        let mut k = keeper();
+        k.app.clients.bots.owned(FULL, "campus");
+        let at = k.app.panels.bots.by_id("campus").expect("campus");
+        k.app.panels.bots.live[at].turn = None;
+        k.app.bot_settled(at);
+        let no = (Code::Failed, secrets::NO_CHANGE.to_string());
+        assert_eq!(refusal(k.app.bot_secret_set(Some(FULL), "prs", ("x", VALUE))), no);
+        assert_eq!(refusal(k.app.bot_secret_remove(Some(FULL), "prs", (None, true))), no);
+        assert_eq!(refusal(k.app.bot_secret_list(Some(FULL), "prs")).1, secrets::OWN_ONLY);
+        k.app.panels.bots.live[at].turn = Some(turn());
+        assert_eq!(refusal(k.app.bot_secret_get(Some(FULL), "pw")).1, secrets::ONLY_ITSELF);
+    }
+
+    #[test]
     fn a_bot_lists_only_its_own() {
         let mut k = keeper();
         k.set("pw", VALUE).expect("set");

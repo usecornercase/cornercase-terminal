@@ -988,4 +988,7 @@ fn a_regular_file_where_the_socket_goes_is_never_removed() {
     assert!(!protocol::holds_a_file(&file));
     std::fs::write(&file, b"a key").expect("write");
     assert!(protocol::holds_a_file(&file));
+    let refused = bind(&file).err().map(|error| error.to_string()).unwrap_or_default();
+    assert!(refused.contains("not a socket"), "{refused}");
+    assert_eq!(std::fs::read(&file).expect("kept"), b"a key");
 }

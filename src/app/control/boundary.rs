@@ -37,6 +37,7 @@ enum Gated {
 pub(in crate::app) struct BotClients {
     clients: HashMap<u64, String>,
     owners: HashMap<u64, String>,
+    former: HashMap<u64, String>,
     keys: HashSet<u64>,
 }
 
@@ -50,7 +51,16 @@ impl BotClients {
     }
 
     pub(in crate::app) fn revoke_owners(&mut self, bot: &str) {
-        self.owners.retain(|_, owner| owner != bot);
+        let gone: Vec<u64> = self.owners.iter().filter(|(_, owner)| *owner == bot).map(|(client, _)| *client).collect();
+        for client in gone {
+            if let Some(owner) = self.owners.remove(&client) {
+                self.former.insert(client, owner);
+            }
+        }
+    }
+
+    pub(in crate::app) fn former_of(&self, client: u64) -> Option<&str> {
+        self.former.get(&client).map(String::as_str)
     }
 
     pub(in crate::app) fn owner_of(&self, client: u64) -> Option<&str> {
@@ -77,6 +87,7 @@ impl BotClients {
 
     pub(in crate::app) fn forget(&mut self, client: u64, pending: impl Iterator<Item = u64>) {
         self.owners.remove(&client);
+        self.former.remove(&client);
         if self.clients.remove(&client).is_some() {
             self.keys.extend(pending);
         }

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
 use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -138,19 +139,20 @@ impl Kept {
 pub(crate) fn redact(text: &str, entries: &[Entry]) -> String {
     let mut values: Vec<&Entry> = entries.iter().filter(|entry| entry.value.0.len() >= REDACT_MIN).collect();
     values.sort_by_key(|entry| std::cmp::Reverse(entry.value.0.len()));
-    let mut taken: Vec<(usize, usize, &str)> = Vec::new();
+    let mut taken: BTreeMap<usize, (usize, &str)> = BTreeMap::new();
     for entry in values {
         for (start, found) in text.match_indices(entry.value.0.as_str()) {
             let end = start + found.len();
-            if !taken.iter().any(|(from, to, _)| start < *to && *from < end) {
-                taken.push((start, end, entry.name.as_str()));
+            let before = taken.range(..end).next_back().is_some_and(|(_, (to, _))| *to > start);
+            let after = taken.range(start..end).next().is_some();
+            if !before && !after {
+                taken.insert(start, (end, entry.name.as_str()));
             }
         }
     }
-    taken.sort_unstable_by_key(|(start, ..)| *start);
     let mut out = String::with_capacity(text.len());
     let mut at = 0;
-    for (start, end, name) in taken {
+    for (start, (end, name)) in taken {
         out.push_str(&text[at..start]);
         let _ = write!(out, "[secret {name}]");
         at = end;
