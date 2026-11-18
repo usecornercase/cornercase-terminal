@@ -8,12 +8,12 @@ fn shown(c: &mut Chat) {
     render(&mut c.app, AREA);
 }
 
-fn card_list(c: &Chat) -> Rect {
-    c.app.layout(AREA).shown(c.app.screen.nav).workspaces_list
+fn card_list(c: &Chat, area: Rect) -> Rect {
+    c.app.layout(area).shown(c.app.screen.nav).workspaces_list
 }
 
-pub(super) fn card_rows_of(c: &Chat, routine: u64) -> Vec<Position> {
-    let list = card_list(c);
+fn rows_in(c: &Chat, routine: u64, area: Rect) -> Vec<Position> {
+    let list = card_list(c, area);
     let card = c.app.bot_card(0);
     (list.y..list.bottom())
         .map(|y| Position::new(list.x + 3, y))
@@ -21,13 +21,21 @@ pub(super) fn card_rows_of(c: &Chat, routine: u64) -> Vec<Position> {
         .collect()
 }
 
+pub(super) fn card_rows_of(c: &Chat, routine: u64) -> Vec<Position> {
+    rows_in(c, routine, AREA)
+}
+
 fn menu_on(c: &mut Chat, routine: u64) {
     let pos = card_rows_of(c, routine)[0];
     right_click(&mut c.app, pos);
 }
 
+fn button_in(c: &Chat, routine: u64, area: Rect, pitch: u16) -> Position {
+    ui::card_menu(card_list(c, area), &c.app.bot_card(0), routine, pitch).as_position()
+}
+
 fn button_of(c: &Chat, routine: u64) -> Position {
-    ui::card_menu(card_list(c), &c.app.bot_card(0), routine).as_position()
+    button_in(c, routine, AREA, 1)
 }
 
 fn hover_on(c: &mut Chat, pos: Position) {
@@ -60,7 +68,7 @@ fn a_right_click_on_either_row_of_a_routine_opens_its_menu() {
         assert_eq!(menu_labels(&c.app), ["run now", "pause", "edit…", "remove"]);
         c.app.overlay = None;
     }
-    let list = card_list(&c);
+    let list = card_list(&c, AREA);
     right_click(&mut c.app, Position::new(list.x + 3, list.y + 1));
     assert!(c.app.overlay.is_none());
 }
@@ -89,7 +97,7 @@ pub(super) fn assert_a_card_click_opens_its_routines(c: &mut Chat, id: u64) {
 
 fn second_row_value(c: &mut Chat, id: u64) -> String {
     let card = c.app.bot_card(0);
-    let list = card_list(c);
+    let list = card_list(c, AREA);
     let pos = card_rows_of(c, id)[1];
     let at = ui::card_row_at(list, &card, pos).expect("a row");
     card.rows[at].value.clone()
@@ -215,31 +223,19 @@ fn a_press_on_a_routine_removed_since_the_last_draw_opens_nothing_for_the_one_th
 
 const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 30 };
 
-fn a_press_opens_a_menu_somewhere_on(c: &mut Chat, row: Position, list: Rect, area: Rect) -> bool {
-    (list.x + 10..list.right()).rev().any(|x| {
-        click_in(&mut c.app, Position::new(x, row.y), area);
-        let opened = matches!(c.app.overlay, Some(Overlay::Menu { .. }));
-        c.app.overlay = None;
-        opened
-    })
-}
-
 #[test]
 fn a_compact_card_has_its_menu_button_without_hover_and_a_wide_one_does_not() {
     let mut c = chat(ANSWER);
     let id = routine(&mut c);
-    let wide = card_list(&c);
-    let row = card_rows_of(&c, id)[0];
-    assert!(!a_press_opens_a_menu_somewhere_on(&mut c, row, wide, AREA));
+    let wide = button_of(&c, id);
+    click(&mut c.app, wide);
+    assert!(matches!(c.app.overlay, Some(Overlay::BotRoutines(_))), "no hover, no button in a wide card");
+    c.app.overlay = None;
     c.app.screen.nav = Some(ui::Nav::Workspaces);
     render(&mut c.app, SMALL);
-    let list = c.app.layout(SMALL).shown(c.app.screen.nav).workspaces_list;
-    let card = c.app.bot_card(0);
-    let row = (list.y..list.bottom())
-        .map(|y| Position::new(list.x + 3, y))
-        .find(|pos| ui::card_routine(list, &card, *pos) == Some(id))
-        .expect("a routine row");
-    assert!(a_press_opens_a_menu_somewhere_on(&mut c, row, list, SMALL));
+    let compact = button_in(&c, id, SMALL, 2);
+    click_in(&mut c.app, compact, SMALL);
+    assert_eq!(menu_labels(&c.app), ["run now", "pause", "edit…", "remove"]);
 }
 
 #[test]

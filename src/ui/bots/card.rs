@@ -8,9 +8,9 @@ use crate::agents::activity::Status;
 use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
 use crate::ui::layout::Areas;
-use crate::ui::rows::{draw_menu_in, draw_more, row_menu_button};
+use crate::ui::rows::{draw_menu_in, draw_more, menu_shown, row_menu_button};
 use crate::ui::theme::status_icon;
-use crate::ui::widgets::{draw_title, sidebar_hovered};
+use crate::ui::widgets::draw_title;
 
 const LABEL: usize = 9;
 const HEADER: u16 = 1;
@@ -86,8 +86,8 @@ fn menu_of(list: Rect, card: &BotCard, routine: u64, pitch: u16) -> Rect {
 }
 
 #[cfg(test)]
-pub(crate) fn card_menu(list: Rect, card: &BotCard, routine: u64) -> Rect {
-    menu_of(list, card, routine, 1)
+pub(crate) fn card_menu(list: Rect, card: &BotCard, routine: u64, pitch: u16) -> Rect {
+    menu_of(list, card, routine, pitch)
 }
 
 pub(crate) fn card_buttons(view: &View, list: Rect, pitch: u16) -> Vec<(u64, Rect)> {
@@ -95,11 +95,7 @@ pub(crate) fn card_buttons(view: &View, list: Rect, pitch: u16) -> Vec<(u64, Rec
     let inner = inner(list);
     let mut routines: Vec<u64> = (0..shown_rows(inner, card)).filter_map(|at| card.rows[at].routine).collect();
     routines.dedup();
-    if pitch == 1 {
-        let under = view.hover.and_then(|pos| card_routine(list, card, pos));
-        routines
-            .retain(|routine| Some(*routine) == under && sidebar_hovered(view, routine_span(inner, card, *routine)));
-    }
+    routines.retain(|routine| menu_shown(view, routine_span(inner, card, *routine), pitch));
     routines
         .into_iter()
         .map(|routine| (routine, menu_of(list, card, routine, pitch)))

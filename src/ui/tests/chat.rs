@@ -412,7 +412,7 @@ fn a_hovered_routine_shows_its_menu_button_at_the_end_of_its_first_row() {
     let card = two_routines("Review PRs");
     let a = areas();
     let list = a.workspaces_list;
-    let menu = card_menu(list, &card, 7);
+    let menu = card_menu(list, &card, 7, 1);
     assert_eq!(menu.y, list.y + 2);
     assert_eq!(menu, row_menu_button(Rect::new(list.x + 1, menu.y, list.width - 1, 1), 1));
     let glyph = Position::new(menu.right() - 1, menu.y);
@@ -428,14 +428,14 @@ fn a_hovered_routine_shows_its_menu_button_at_the_end_of_its_first_row() {
     let menu_overlay = Overlay::Menu { at: second, items: vec!["pause".into()], disabled: Vec::new() };
     assert_eq!(cell(&card_view(&card, Some(second), Some(menu_overlay)), glyph).symbol(), " ");
     let short = Rect::new(list.x, list.y, list.width, 3);
-    assert!(card_menu(short, &card, 7).is_empty());
+    assert!(card_menu(short, &card, 7, 1).is_empty());
 }
 
 #[test]
 fn the_button_is_where_the_view_draws_it_and_nowhere_else() {
     let card = two_routines("Review PRs");
     let list = areas().workspaces_list;
-    let menu = card_menu(list, &card, 7);
+    let menu = card_menu(list, &card, 7, 1);
     let second = Position::new(list.x + 4, list.y + 3);
     assert_eq!(card_buttons(&card_view(&card, Some(second), None), list, 1), [(7, menu)]);
     assert_eq!(card_buttons(&card_view(&card, None, None), list, 1).len(), 0);
@@ -476,7 +476,7 @@ fn a_hovered_routine_cuts_its_name_before_its_menu_button_and_no_other_does() {
     };
     let a = areas();
     let list = a.workspaces_list;
-    let menu = card_menu(list, &card, 7);
+    let menu = card_menu(list, &card, 7, 1);
     let hover = Position::new(list.x + 4, list.y + 3);
     let at = |x: u16, y: u16| {
         render(&card_view(&card, Some(hover), None)).backend().buffer()[Position::new(x, y)].symbol().to_string()
