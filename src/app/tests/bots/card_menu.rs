@@ -212,3 +212,42 @@ fn a_press_on_a_routine_removed_since_the_last_draw_opens_nothing_for_the_one_th
     click(&mut c.app, pos);
     assert!(c.app.overlay.is_none(), "{second} must not take the pressed row");
 }
+
+const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 30 };
+
+fn a_press_opens_a_menu_somewhere_on(c: &mut Chat, row: Position, list: Rect, area: Rect) -> bool {
+    (list.x + 10..list.right()).rev().any(|x| {
+        click_in(&mut c.app, Position::new(x, row.y), area);
+        let opened = matches!(c.app.overlay, Some(Overlay::Menu { .. }));
+        c.app.overlay = None;
+        opened
+    })
+}
+
+#[test]
+fn a_compact_card_has_its_menu_button_without_hover_and_a_wide_one_does_not() {
+    let mut c = chat(ANSWER);
+    let id = routine(&mut c);
+    let wide = card_list(&c);
+    let row = card_rows_of(&c, id)[0];
+    assert!(!a_press_opens_a_menu_somewhere_on(&mut c, row, wide, AREA));
+    c.app.screen.nav = Some(ui::Nav::Workspaces);
+    render(&mut c.app, SMALL);
+    let list = c.app.layout(SMALL).shown(c.app.screen.nav).workspaces_list;
+    let card = c.app.bot_card(0);
+    let row = (list.y..list.bottom())
+        .map(|y| Position::new(list.x + 3, y))
+        .find(|pos| ui::card_routine(list, &card, *pos) == Some(id))
+        .expect("a routine row");
+    assert!(a_press_opens_a_menu_somewhere_on(&mut c, row, list, SMALL));
+}
+
+#[test]
+fn a_press_uses_the_list_of_the_frame_that_was_drawn() {
+    let mut c = chat(ANSWER);
+    let id = routine(&mut c);
+    let pos = card_rows_of(&c, id)[0];
+    c.app.screen.nav = Some(ui::Nav::Workspaces);
+    click_in(&mut c.app, pos, SMALL);
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(id)));
+}

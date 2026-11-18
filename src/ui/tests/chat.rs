@@ -437,24 +437,55 @@ fn the_button_is_where_the_view_draws_it_and_nowhere_else() {
     let list = areas().workspaces_list;
     let menu = card_menu(list, &card, 7);
     let second = Position::new(list.x + 4, list.y + 3);
-    assert_eq!(card_button(&card_view(&card, Some(second), None), list), menu);
-    assert!(card_button(&card_view(&card, None, None), list).is_empty());
+    assert_eq!(card_buttons(&card_view(&card, Some(second), None), list, 1), [(7, menu)]);
+    assert_eq!(card_buttons(&card_view(&card, None, None), list, 1).len(), 0);
     let covered = Overlay::Menu { at: second, items: vec!["pause".into()], disabled: Vec::new() };
-    assert!(card_button(&card_view(&card, Some(second), Some(covered)), list).is_empty());
+    assert_eq!(card_buttons(&card_view(&card, Some(second), Some(covered)), list, 1).len(), 0);
 }
 
 #[test]
-fn a_hovered_routine_cuts_its_name_before_its_menu_button() {
+fn a_compact_card_shows_every_routines_menu_button_without_hover() {
+    let routine = |id, label, text: &str| CardRow { routine: Some(id), ..CardRow::new(label, text) };
+    let card = BotCard {
+        name: "prs".into(),
+        rows: vec![
+            routine(7, "routine", &"x".repeat(40)),
+            routine(7, "", "next Mon 09:00"),
+            routine(8, "routine", "Nightly"),
+            routine(8, "", "next Tue 09:00"),
+        ],
+    };
+    let list = Rect::new(0, 3, 60, 8);
+    let view = card_view(&card, None, None);
+    let buttons = card_buttons(&view, list, 2);
+    assert_eq!(buttons.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [7, 8]);
+    assert!(buttons.iter().all(|(_, rect)| !rect.is_empty() && rect.height == 2));
+    assert_eq!(card_buttons(&view, list, 1).len(), 0, "a wide card still shows it only under the pointer");
+}
+
+#[test]
+fn a_hovered_routine_cuts_its_name_before_its_menu_button_and_no_other_does() {
     let card = two_routines(&"x".repeat(40));
+    let card = BotCard {
+        rows: card
+            .rows
+            .into_iter()
+            .map(|row| if row.value == "Nightly" { CardRow { value: "y".repeat(40), ..row } } else { row })
+            .collect(),
+        ..card
+    };
     let a = areas();
     let list = a.workspaces_list;
     let menu = card_menu(list, &card, 7);
     let hover = Position::new(list.x + 4, list.y + 3);
-    let text = |view: &View, x: u16| render(view).backend().buffer()[Position::new(x, menu.y)].symbol().to_string();
-    let hovered = card_view(&card, Some(hover), None);
-    assert_eq!([text(&hovered, menu.x - 2), text(&hovered, menu.x - 1)], ["…", " "]);
-    let resting = card_view(&card, None, None);
-    assert_ne!(text(&resting, menu.x), " ");
+    let at = |x: u16, y: u16| {
+        render(&card_view(&card, Some(hover), None)).backend().buffer()[Position::new(x, y)].symbol().to_string()
+    };
+    assert_eq!([at(menu.x - 2, menu.y), at(menu.x - 1, menu.y)], ["…", " "]);
+    let other = list.y + 4;
+    assert_eq!([at(menu.x - 2, other), at(menu.x, other)], ["y", "y"], "the other routine's name is not cut");
+    let resting = render(&card_view(&card, None, None));
+    assert_ne!(resting.backend().buffer()[Position::new(menu.x, menu.y)].symbol(), " ");
 }
 
 fn agent_line(kind: ChatAgentKind, text: &str, body: Vec<Text<'static>>, link: Option<u64>) -> ChatEntry {

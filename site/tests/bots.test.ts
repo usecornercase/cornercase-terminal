@@ -513,7 +513,9 @@ test('a card menu item that no longer applies does nothing', () => {
   assert.match(screen(app), /resume/);
   app.pauseQueued(entry, false, 'botQueued');
   app.toast = null;
+  assert.equal(app.overlay?.kind, 'menu');
   press(app, 'resume');
+  assert.equal(app.overlay, null);
   assert.equal(app.toast, null);
   assert.equal(entry.paused, false);
 });

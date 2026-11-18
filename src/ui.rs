@@ -52,7 +52,7 @@ pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold,
 pub(crate) use bots::agent::{ChatAgentKind, ChatAgentLine};
 #[cfg(test)]
 pub(crate) use bots::card::card_menu;
-pub(crate) use bots::card::{BotCard, CardRow, card_button, card_folder, card_routine, card_row_at};
+pub(crate) use bots::card::{BotCard, CardRow, card_buttons, card_folder, card_routine, card_row_at};
 pub(crate) use bots::chat::body as chat_body;
 pub(crate) use bots::chat::{
     ChatAreas, ChatEntry, ChatHit, ChatRow, ChatView, EXAMPLES, RowHit, Thinking, Tone, chat_areas, chat_hit,

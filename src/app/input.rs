@@ -248,7 +248,7 @@ impl App {
             return ControlFlow::Break(self.issues_column_mouse(left, area));
         }
         if areas.workspaces.contains(pos) && self.bot_shown() {
-            self.bot_card_mouse(ev, pos, areas);
+            self.bot_card_mouse(ev, pos);
             return ControlFlow::Break(Ok(()));
         }
         if areas.workspaces.contains(pos) {

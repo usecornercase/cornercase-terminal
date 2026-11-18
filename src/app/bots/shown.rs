@@ -26,7 +26,8 @@ pub(in crate::app) struct Chat {
 #[derive(Debug, Clone)]
 pub(super) struct DrawnCard {
     pub(super) card: ui::BotCard,
-    pub(super) button: Rect,
+    pub(super) list: Rect,
+    pub(super) buttons: Vec<(u64, Rect)>,
 }
 
 impl Chat {
