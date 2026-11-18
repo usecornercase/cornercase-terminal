@@ -28,9 +28,30 @@ pub(crate) fn member(role: &Role, branch: Option<&str>, dir: Option<&Path>) -> S
         ),
     };
     if let Some(dir) = dir {
+        told.push_str(&persona(role, dir));
         told.push_str(&answers(role, dir));
     }
     if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told} {WAIT_FIRST}") }
+}
+
+fn persona(role: &Role, dir: &Path) -> String {
+    role.persona().map_or_else(String::new, |id| {
+        format!(
+            " Before you start on the first work you are sent, read the persona `{}` and follow it in how you work, \
+             and read it again if your context is compacted. This role and the orchestrator's messages come first \
+             where they differ.",
+            super::folder::persona(dir, id).display()
+        )
+    })
+}
+
+fn own_persona(role: &Role, dir: Option<&Path>) -> String {
+    let (Some(id), Some(dir)) = (role.persona(), dir) else { return String::new() };
+    format!(
+        "\n## Persona\n\nBefore your first step, read the persona `{}` and follow it in how you work, and read it \
+         again if your context is compacted. The plan and the rules below come first where they differ.\n",
+        super::folder::persona(dir, id).display()
+    )
 }
 
 fn answers(role: &Role, dir: &Path) -> String {
@@ -106,6 +127,7 @@ pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, team: Team, dir: Opti
     if !notes.is_empty() {
         let _ = write!(out, "\n## Notes\n\n{}\n", notes.join("\n\n"));
     }
+    out.push_str(&own_persona(&flow.orchestrator, dir));
     if let Some(dir) = dir {
         out.push_str(&files(dir));
     }
@@ -126,7 +148,8 @@ fn team_line(role: &Role, pane: Option<u64>, trees: &[RoleWorktree]) -> String {
             format!(", compacts with `{}` {keeps}", compact.command)
         },
     );
-    format!("- {} ({at}): {}, {edits}{place}{compact}\n", role.name, role.summary())
+    let persona = role.persona().map_or_else(String::new, |id| format!(", follows the persona {id}"));
+    format!("- {} ({at}): {}, {edits}{persona}{place}{compact}\n", role.name, role.summary())
 }
 
 fn ids(members: &[Member]) -> String {

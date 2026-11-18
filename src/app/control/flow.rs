@@ -33,7 +33,7 @@ impl App {
             None => self.here(caller).project,
         };
         let listing = self.flow_listing(p.map(|p| self.projects[p].path.as_path()));
-        let (flows, hidden) = manage::info_listing(&listing);
+        let (flows, hidden) = manage::info_listing(&listing, &self.persona_ids());
         let builtins = listing.builtins;
         let broken = listing.broken.into_iter().map(|(path, error)| BrokenFlow { path, error }).collect();
         Ok(Some(json(&Flows { flows, broken, hidden, builtins })))
@@ -64,7 +64,8 @@ impl App {
         if let Some(name) = &import.name {
             flow.name = name.trim().to_string();
         }
-        let problems = flow.problems();
+        let mut problems = flow.problems();
+        problems.extend(flow.persona_problems(&self.persona_ids()));
         if !problems.is_empty() {
             return Err(format!("the flow cannot run: {}", problems.join("; ")).into());
         }

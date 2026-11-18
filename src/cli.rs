@@ -42,6 +42,7 @@ mod lines;
 mod machines;
 mod older;
 mod open;
+mod persona;
 mod plugin;
 mod ports;
 mod processes;
@@ -338,6 +339,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Context(args) => return ControlFlow::Break(context::run(&args)),
         Control::Recap(args) => return ControlFlow::Break(recap::run(&args)),
         Control::Bot(args) => return ControlFlow::Break(bot::run(args.action)),
+        Control::Persona(args) => persona::run(args.action).map(|()| true),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Machines(args) => machines::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),

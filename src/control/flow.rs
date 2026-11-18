@@ -85,6 +85,8 @@ pub(crate) struct RoleSpec {
     pub(crate) agent: String,
     pub(crate) model: Option<String>,
     pub(crate) effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) persona: Option<String>,
     pub(crate) args: Vec<String>,
     pub(crate) env: BTreeMap<String, String>,
     pub(crate) edits: bool,
@@ -114,6 +116,7 @@ impl From<&Role> for RoleSpec {
             agent: role.agent.clone(),
             model: role.model.clone(),
             effort: role.effort.clone(),
+            persona: role.persona.clone(),
             args: role.args.clone(),
             env: role.env.clone(),
             edits: role.edits,
@@ -152,6 +155,7 @@ impl RoleSpec {
             agent: self.agent,
             model: self.model,
             effort: self.effort,
+            persona: self.persona,
             args: self.args,
             env: self.env,
             edits: self.edits,
@@ -189,6 +193,8 @@ pub(crate) struct RoleInfo {
     pub(crate) agent: String,
     pub(crate) model: Option<String>,
     pub(crate) effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) persona: Option<String>,
     pub(crate) edits: bool,
     #[serde(skip_serializing_if = "Worktree::is_shared")]
     pub(crate) worktree: Worktree,
@@ -201,6 +207,7 @@ impl RoleInfo {
             agent: role.agent.clone(),
             model: role.model.clone(),
             effort: role.effort.clone(),
+            persona: role.persona.clone(),
             edits: role.edits,
             worktree: role.worktree,
         };

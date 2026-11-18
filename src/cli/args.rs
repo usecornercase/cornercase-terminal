@@ -13,6 +13,7 @@ pub(crate) mod held;
 pub(crate) mod issue;
 pub(crate) mod machine;
 pub(crate) mod machines;
+pub(crate) mod persona;
 pub(crate) mod plugin;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -330,6 +331,11 @@ pub(crate) enum Control {
         after_help = crate::cli::help::BOT_HELP
     )]
     Bot(bot::BotArgs),
+    #[command(
+        about = "Import, list and remove personas: how an agent works, given to a flow's roles",
+        after_help = crate::cli::help::PERSONA_HELP
+    )]
+    Persona(persona::PersonaArgs),
     #[command(
         about = "List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program",
         after_help = PROCESSES_HELP

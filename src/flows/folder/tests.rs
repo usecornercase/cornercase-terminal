@@ -9,7 +9,9 @@ use rstest::rstest;
 
 #[cfg(unix)]
 use super::{MAX_FILES, ensure, list, remove, valid};
-use super::{TASK, discard, ensure_task, make, write_task};
+use std::collections::BTreeMap;
+
+use super::{PERSONAS, TASK, discard, ensure_personas, ensure_task, make, persona, write_task};
 use crate::test_util::TempDir;
 
 #[cfg(unix)]
@@ -222,14 +224,14 @@ mod the_task {
         let alone = temp.path().join("alone");
         fs::create_dir(&alone).expect("dir");
         write_task(&alone, "x").expect("write");
-        discard(&alone);
+        discard(&alone, &BTreeMap::new());
         assert!(!alone.exists());
 
         let busy = temp.path().join("busy");
         fs::create_dir(&busy).expect("dir");
         write_task(&busy, "x").expect("write");
         fs::write(busy.join("coder-1.md"), "answer").expect("answer");
-        discard(&busy);
+        discard(&busy, &BTreeMap::new());
         assert!(!busy.join(TASK).exists());
         assert!(busy.join("coder-1.md").exists());
     }
@@ -245,5 +247,63 @@ mod the_task {
         symlink(&outside, dir.join(TASK)).expect("link");
         assert!(!ensure_task(&dir, "the task").expect("ensure"));
         assert_eq!(fs::read_to_string(&outside).expect("read"), "outside");
+    }
+}
+
+mod the_personas {
+    use super::*;
+
+    fn reviewer() -> BTreeMap<String, String> {
+        [("reviewer".to_string(), "---\nname: Reviewer\n---\nReview it.\n".to_string())].into()
+    }
+
+    #[test]
+    fn are_written_in_a_folder_of_their_own_by_id() {
+        let temp = TempDir::new();
+        assert_eq!(ensure_personas(temp.path(), &reviewer()).expect("written"), 1);
+        let file = persona(temp.path(), "reviewer");
+        assert_eq!(file, temp.path().join(PERSONAS).join("reviewer.md"));
+        assert_eq!(fs::read_to_string(file).expect("read"), "---\nname: Reviewer\n---\nReview it.\n");
+    }
+
+    #[test]
+    fn are_never_overwritten_and_only_missing_ones_are_written_again() {
+        let temp = TempDir::new();
+        ensure_personas(temp.path(), &reviewer()).expect("written");
+        fs::write(persona(temp.path(), "reviewer"), "edited").expect("write");
+        let mut two = reviewer();
+        two.insert("tester".into(), "test".into());
+        assert_eq!(ensure_personas(temp.path(), &two).expect("written"), 1);
+        assert_eq!(fs::read_to_string(persona(temp.path(), "reviewer")).expect("read"), "edited");
+    }
+
+    #[test]
+    fn an_id_that_would_leave_the_folder_writes_nothing() {
+        let temp = TempDir::new();
+        let mut two = reviewer();
+        two.insert("../../escaped".into(), "out".into());
+
+        let error = ensure_personas(temp.path(), &two).expect_err("not an id");
+
+        assert!(error.to_string().contains("is not a persona id"), "{error}");
+        assert!(!temp.path().join(PERSONAS).exists());
+    }
+
+    #[test]
+    fn none_make_no_folder() {
+        let temp = TempDir::new();
+        assert_eq!(ensure_personas(temp.path(), &BTreeMap::new()).expect("nothing"), 0);
+        assert!(!temp.path().join(PERSONAS).exists());
+    }
+
+    #[test]
+    fn go_with_a_discarded_run() {
+        let temp = TempDir::new();
+        let dir = temp.path().join("run");
+        fs::create_dir(&dir).expect("dir");
+        write_task(&dir, "x").expect("write");
+        ensure_personas(&dir, &reviewer()).expect("written");
+        discard(&dir, &reviewer());
+        assert!(!dir.exists());
     }
 }

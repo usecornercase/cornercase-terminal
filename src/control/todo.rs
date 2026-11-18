@@ -54,3 +54,19 @@ impl TodoSend {
         fields.add("force", self.force);
     }
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct TodoList {
+    pub(crate) todos: Vec<TodoItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) undo: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct TodoItem {
+    pub(crate) id: u64,
+    pub(crate) text: String,
+    pub(crate) done: bool,
+}

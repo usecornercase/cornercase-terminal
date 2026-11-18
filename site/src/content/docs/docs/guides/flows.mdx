@@ -17,7 +17,7 @@ A **flow** is a team of coding agents and the plan they follow, saved as a templ
 ## What a flow is
 
 - **An orchestrator**: an agent (Claude Code, Codex…) that reads what the others answer and decides what comes next. cornercase never parses a verdict out of an agent's text: the orchestrator does, the way you would.
-- **Roles**: a name (`coder`, `reviewer`…), an agent, optionally a model and an effort, extra arguments and environment variables, whether it may edit files, whether it works [in the run's worktree or in one of its own](#a-worktree-of-its-own), and its prompt. Each role gets a tab of its own.
+- **Roles**: a name (`coder`, `reviewer`…), an agent, optionally a model, an effort and a [persona](#personas), extra arguments and environment variables, whether it may edit files, whether it works [in the run's worktree or in one of its own](#a-worktree-of-its-own), and its prompt. Each role gets a tab of its own.
 - **Stages**: the plan, in order. A stage holds one role, or several working in parallel (`reviewer + security`). A stage can send the work **back** to an earlier one when there are problems, at most a number of times (`findings → 1 · at most 3`).
 - **The end**: open a pull request, or leave the commits on the branch.
 - **Notes**: free text the orchestrator gets with its plan, such as *do not change the public API without asking*.
@@ -159,11 +159,40 @@ A shell you opened in one of the team's tabs, or an agent of your own that canno
 Every run gets a folder for its files, so long reports don't pile up in the orchestrator's context and the run leaves a record of what each role produced. It is outside the worktree, so nothing in it is ever committed, and every pane of the team has its path in **`$CORNERCASE_RUN_DIR`**.
 
 - **The task, whole.** Before any agent starts, cornercase writes the task to `task.md` there, exactly as it was given (the `task` of `flow runs --json`), whether it came from the prompt, `--prompt-file`, an issue or a routine; a run on a [machine](../machines/) writes it in that machine's folder. Every role's prompt names it, and the orchestrator gives each role its path and what the stage adds instead of retelling the task, so a careful task reaches every role whole.
+- **The personas.** A role that follows a [persona](#personas) finds it in `personas/<id>.md` there, copied from yours when the run started; its prompt tells it to read and follow it before its first work.
 - **One file per answer.** Each role writes every answer to a file named after it and the next free number (`reviewer-1.md`, then `reviewer-2.md`) and replies with the file's path and a few lines. The orchestrator passes work on by path instead of pasting text, and writes its own decisions there too (`orchestrator-1.md`: what it asked, what came back, what it decided and why). Scratch files, logs and scripts a role needs go there as well, never in the worktree.
 - **Where it is.** In `runs/` next to the [saved session](../sessions/) (`~/.local/state/cornercase/runs/` by default; with `CORNERCASE_SOCKET`, `<session name>.runs/` next to the socket, so separate servers never share one), named by your local day (the one `queue list` and the window show) and the workspace (`2026-10-17-fix-login`, with `-2` when that day already has one). It and `runs/` are readable only by you (mode `0700`).
 - **Who can reach it.** Claude Code, Codex, Cursor CLI, Vibe CLI and GitHub Copilot CLI start with `--add-dir` for it, so their file tools can write there. Gemini CLI, opencode and Grok Build have no flag cornercase uses for it, and write through their shell, which the prompt tells them to do when their file tools can't reach it.
 - **The Flow panel lists it.** Under the diagram, **Files · n** shows the folder's files, newest first, with their size and age; click one to read it in the [files panel](../files/), and **`‹`** brings you back to the Flow panel where you left it. **` open folder `** on its title opens the folder through the same **open in…** menu as the files panel (your file manager or an editor), or copies its path when the window can open nothing. The list is read every two seconds while the panel shows, at most 200 files.
 - **How long it stays.** The folder survives the end of the run and a restart (a folder you deleted is made again), and goes with its workspace: removing the workspace (which removes its worktree), closing the project, or closing a plain workspace removes it, once the workspace's shells have exited. `cornercase close --workspace` on a worktree, without `--remove-worktree`, only stops its shells: the workspace and the folder stay. `cornercase flow run` prints the folder on stderr, with `run_dir` in `--json`, and `cornercase status --json` gives each workspace's `run_dir`, so a script finds the files of a run that ended.
+
+## Personas
+
+A persona is how an agent works, written once and given to any role, on any agent: the same Code Reviewer can run on Claude Code in one flow and on Codex in another. It is a Markdown file with a front matter that gives its `name` (and often a `description`, an `emoji` and a `color`), then the instructions, the format of collections such as [agency-agents](https://github.com/msitarzewski/agency-agents).
+
+```sh
+cornercase persona import msitarzewski/agency-agents/engineering/engineering-code-reviewer.md
+cornercase persona import msitarzewski/agency-agents/engineering
+cornercase persona import msitarzewski/agency-agents --check
+cornercase persona import ./my-reviewer.md
+cornercase persona list
+cornercase persona remove engineering-code-reviewer
+```
+
+- **Import** takes a `.md` file, a folder, `-` for standard input, an `https://` address, or a GitHub repository as `OWNER/REPO`, `OWNER/REPO/FOLDER` or `OWNER/REPO/PATH/FILE.md`, read from its default branch with no GitHub token (a repository or a folder of one is a single download). A folder or a repository imports every `.md` file whose front matter gives a `name` and skips the rest; when it holds a `divisions.json` that lists its folders, only those are read. At most 500 personas at once.
+- **Where they are kept.** In `personas/` next to [`config.json`](../../reference/files-and-environment/) (`~/.config/cornercase/personas/`), one file each, named after its id: the file's name (`engineering-code-reviewer`). The file is kept as it came, plus a `source:` line in its front matter saying where it came from, so importing that source again with `--replace` refreshes it.
+- **Names.** A persona whose id you already have is refused unless you pass `--replace`; one with the name of a persona you have under another id is refused, so remove that one first. An import that has one persona it cannot read, or one collision, imports none of them.
+- **Check before you import.** A persona is prompt text that an agent running without permission prompts reads and follows. `--check` lists what would be imported (id, name, size, description, whether it replaces yours) and saves nothing. From an address or a repository, `persona import` shows the same list and asks `[y/N]`, with the page to read them at; without a terminal (or with its messages sent to a file, where you would not see the question) it refuses unless you pass `--yes`.
+- **Give one to a role** with `persona = "ID"` in the flow's file (or `persona` in [`flow save`](../scripts-and-agents/#manage-flows)'s JSON). A flow that names a persona you don't have, or one whose file cannot be read, cannot run, and `flow list` says which: import it first. Any role can have one, the orchestrator too.
+- **What the agent gets.** When a run starts, cornercase copies each persona its roles name into the [run's folder](#the-runs-folder), and the role's prompt tells the agent to read it before the first work it is sent, to follow it in how it works, and to read it again after a compaction; its role and the orchestrator's messages come first where they differ. The orchestrator's brief says which persona each role follows. The run keeps its copy, also across a restart, so editing or removing a persona later never changes a team that is running.
+
+```toml title="~/.config/cornercase/flows/reviewed.toml"
+[[role]]
+name = "reviewer"
+agent = "codex"
+persona = "engineering-code-reviewer"
+prompt = "Review the changes on this branch."
+```
 
 ## A worktree of its own
 
@@ -311,6 +340,7 @@ cornercase flow export Quick > quick.toml
 cornercase flow import quick.toml
 cornercase flow save draft.json --check
 cornercase flow hide Quick
+cornercase persona import msitarzewski/agency-agents/engineering
 ```
 
 `flow export` and `flow import` [share a flow](#share-a-flow). `flow save`, `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with `flow save` (the `flow-save` request). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
@@ -323,4 +353,5 @@ cornercase flow hide Quick
 - Flows that span several projects.
 - Scheduling a flow: the [queue](../queue/) starts single agents.
 - Message events in [`cornercase events`](../scripts-and-agents/#follow-events): a run's messages are their own stream, [`cornercase flow messages`](../scripts-and-agents/#follow-a-flow-run).
+- Picking a persona in the Flows dialog, and browsing a repository's personas in the window: give a role one in its flow's file or with `flow save` for now. A run on another [machine](../machines/) uses that machine's personas.
 - Agents cornercase doesn't know: a role runs Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI.

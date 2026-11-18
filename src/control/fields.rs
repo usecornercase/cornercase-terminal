@@ -183,6 +183,8 @@ impl Command {
             Self::FlowOrder(order) => order.fields(fields),
             Self::FlowMessages(messages) => messages.fields(fields),
             Self::FlowFiles(files) => files.fields(fields),
+            Self::PersonaImport(import) => import.fields(fields),
+            Self::PersonaRemove(remove) => remove.fields(fields),
             _ => return false,
         }
         true

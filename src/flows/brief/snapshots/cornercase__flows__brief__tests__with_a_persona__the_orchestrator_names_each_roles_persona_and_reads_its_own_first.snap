@@ -1,0 +1,8 @@
+---
+source: src/flows/brief/tests.rs
+expression: shown(persona)
+---
+
+## Persona
+
+Before your first step, read the persona `/s/runs/2026-10-17-api/personas/specialized-agents-orchestrator.md` and follow it in how you work, and read it again if your context is compacted. The plan and the rules below come first where they differ.

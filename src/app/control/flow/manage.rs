@@ -27,7 +27,8 @@ impl App {
         let dir = self.save_dir(to, project.as_deref());
         let target = save_target(&dir, &flow, previous.as_deref());
         let origin = if to == To::Yours { Origin::User(target) } else { Origin::Project(target) };
-        let (problems, own) = save_problems(&flow, &listing, &origin, previous.as_deref());
+        let known = self.persona_ids();
+        let (problems, own) = save_problems(&flow, &listing, &origin, (previous.as_deref(), &known));
         let check = (to == To::Project).then(|| project_risks(&flow)).flatten();
         let mut saved = FlowSaved {
             name: flow.name.clone(),
@@ -123,9 +124,15 @@ fn save_target(dir: &Path, flow: &Flow, previous: Option<&Path>) -> PathBuf {
     }
 }
 
-fn save_problems(flow: &Flow, listing: &Listing, origin: &Origin, previous: Option<&Path>) -> (Vec<String>, usize) {
+fn save_problems(
+    flow: &Flow,
+    listing: &Listing,
+    origin: &Origin,
+    (previous, known): (Option<&Path>, &[String]),
+) -> (Vec<String>, usize) {
     let others: Vec<Saved> = listing.flows.iter().filter(|saved| saved.origin.path() != previous).cloned().collect();
     let mut problems = flow.problems();
+    problems.extend(flow.persona_problems(known));
     let own = problems.len();
     problems.extend(store::conflict(&others, &listing.builtins, &Saved { flow: flow.clone(), origin: origin.clone() }));
     (problems, own)
@@ -313,12 +320,13 @@ fn edited(listing: &Listing, name: &str) -> Option<PathBuf> {
         .and_then(|saved| saved.origin.path().map(PathBuf::from))
 }
 
-pub(super) fn info_listing(listing: &Listing) -> (Vec<control::FlowInfo>, Vec<control::FlowInfo>) {
+pub(super) fn info_listing(listing: &Listing, known: &[String]) -> (Vec<control::FlowInfo>, Vec<control::FlowInfo>) {
     let shown = listing
         .flows
         .iter()
         .map(|saved| {
             let mut info = super::flow_info(&saved.flow, &saved.origin);
+            info.problems.extend(saved.flow.persona_problems(known));
             info.problems.extend(listing.conflict(saved));
             info.edited = store::edits_builtin(&listing.builtins, saved);
             info.default = listing.is_default(saved);

@@ -685,6 +685,7 @@ mod pane_moves;
 mod parents;
 #[cfg(unix)]
 mod pasting;
+mod personas;
 #[cfg(unix)]
 mod placed;
 mod plugin_views;

@@ -134,6 +134,10 @@ pub(crate) fn flows(config: &Path) -> PathBuf {
     config.with_file_name("flows")
 }
 
+pub(crate) fn personas(config: &Path) -> PathBuf {
+    config.with_file_name("personas")
+}
+
 pub(crate) fn browsers(config: &Path) -> PathBuf {
     config.with_file_name("browsers.json")
 }
