@@ -1,6 +1,6 @@
 # Bot secrets (#877)
 
-A bot works for the user behind logins, so it needs a password or a token somewhere better than `bot.md`, `memory.md` or the chat (all plain text, all read by every agent of the user). Each bot has **secrets**: named values the user saves for it, kept encrypted, readable only by that bot's own turn through `cornercase bot secret get NAME`. Code: `bots/secrets.rs` (the file, the key, the cipher, the rules, the redaction), `app/bots/secrets.rs` (the operations), `app/bots/secrets_dialog.rs` (the window), `cli/bot/secret.rs`, the four actions of `control/bots.rs`.
+A bot works for the user behind logins, so it needs a password or a token somewhere better than `bot.md`, `memory.md` or the chat (all plain text, all read by every agent of the user). Each bot has **secrets**: named values the user saves for it, kept encrypted, readable only by that bot's own turn through `cornercase bot secret get NAME`. A bot that lacks one asks the user for it (#878, see [Asks](asks.md)). Code: `bots/secrets.rs` (the file, the key, the cipher, the rules, the redaction), `app/bots/secrets.rs` (the operations), `app/bots/secrets_dialog.rs` (the window), `cli/bot/secret.rs`, the four actions of `control/bots.rs`.
 
 ## The model
 

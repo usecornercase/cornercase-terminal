@@ -1,0 +1,71 @@
+# A bot asks for a secret (#878)
+
+A bot that needs a password or a token it does not have asks the user for it, and the value never goes through the chat. Code: `bots/asks.rs` (the model, the rules, the texts, the dialog's model), `app/bots/asks.rs` (the operations), `app/bots/ask_dialog.rs` (the window), `ui/dialog/bot_ask.rs`, the three actions of `control/bots.rs`, `cli/bot/secret.rs`. It builds on [Secrets](secrets.md) (#877): a value given here is saved exactly as `bot secret set` saves it.
+
+## The model
+
+- `cornercase bot secret ask NAME… --about TEXT [--replace]` (the `secret-ask` action, `{names, about, replace}` → `{bot, ask, names, already}`) **never waits**: the server answers at once, writes a notice in the chat, tells the user and keeps the ask in memory. The brief tells the bot to say what it asked for and end its answer; it is written to when the values are saved. `ask --wait` was left out: a turn that waits holds the bot's one turn slot and its 15-minute limit for as long as the person takes.
+- An ask (`Live.asks`) is an `id`, its `names` (1 to 4, each a valid secret name, none twice), `about` (why, 1 to 200 characters), `replace`, the `run` that asked (or none for the chat) and `given`, the names saved since it was asked. Ids come from one counter for the server (`Bots::next_ask`), so an id never names two bots' asks. **At most 4 wait per bot**; the fifth is `conflict`.
+- **Asks live in memory only: a restart forgets them.** Their notices stay in `chat.jsonl`, without the ` give… ` button, and the bot asks again when it needs the value. Keeping them on disk would need a file the agents may not write (`Ask::protected`) for a rare case.
+- **The same names again** (as a set, in any order) answer the waiting ask's id with `already: true` and do nothing else: no line, no notice, no event. A bot that asks at each run does not flood the user.
+- **A name already saved is `conflict` without `--replace`** (`<name> is already saved: read it with cornercase bot secret get <name>`): the bot reads it rather than asking. The names not saved yet must fit under 20 secrets, so the user never fills a dialog that cannot save.
+- **`--about` over 200 characters is refused with its size, never cut** (the issue says both "cut at 200" and "1 to 200"; cornercase refuses rather than cuts elsewhere). Control characters (line breaks, tabs, ESC) and the direction marks (`U+200E`, `U+200F`, `U+061C`, `U+202A`–`U+202E`, `U+2066`–`U+2069`) are refused, since the text is shown in the dialog as the bot's words and must not reorder or recolour cornercase's own. An `about` that holds one of the bot's saved values is refused too: it goes to `status --app` and the dialog as it is. A refusal never echoes the text, and a name that is not a name is never echoed either (a bot may pass a value by mistake).
+
+## Who may ask, give and decline
+
+- **Only the bot itself asks, from its own turn**: the caller must be an *owner* (`Caller::Bot { own: true }`, as for `secret get`) and the bot must be answering. The user's shell, the window, a bound-only client, a former owner and another bot are `failed`, `only the bot itself asks for a secret, from its own turn`. There is no BOT argument, so a bot asks only for itself.
+- **`give` and `decline` are the person's**: any bot connection (owner, bound or former) is `failed`, `a bot cannot give or decline what a bot asks for`, also for its own ask. `cli/guard.rs` says the same under `CORNERCASE_BOT`; `ask` is left to the server, as `get` is. All three refusals of who may act are `failed` (strict clients read `Code` as an enum, #856).
+- **`secret-give`** (`{bot, ask, values: {name: value}}` → `{bot, ask, saved}`) takes a value for every name still missing and may hold names already given (they are replaced); any other name, or a missing one, is `malformed`, naming only the ask's names. Every value passes `value_refusal`, then the whole list is written **once** (`secrets_keep`): all the names or none. `cornercase bot secret give BOT ASK` reads one JSON object from standard input (256 KiB at most), refuses a terminal and anything that is not an object of strings without echoing it. **`secret-decline`** (`{bot, ask}` → `{bot, ask}`) ends it with nothing saved. An ask that ended is `not-found`.
+- **A secret saved any other way counts**: `bot secret set` (a shell, the Secrets dialog) adds the name to each waiting ask that lists it, and the ask ends as saved once nothing is missing (`asks_saved`). A removed secret leaves `given` again (`asks_unsaved`). An ask with `--replace` therefore ends only when every name was saved since it was asked.
+- Removing the bot drops its asks and closes its dialog.
+
+## The chat
+
+Three notices, each with `ask` (the ask's id) and, when a routine's run asked, that run's `routine`:
+
+| text | when |
+|---|---|
+| `asks for a secret: a, b` | the ask; while it waits the window draws ` give… ` after it |
+| `secret saved: a, b` | every name was saved |
+| `secret not given: a, b` | the user chose ` never ` or `decline` |
+
+- **A line with `ask` that does not open a turn is skipped by `replay`**: the ask's notice written after its run ended would read as a run with no end (and get `interrupted by a restart` at the next load), and none of them is part of the stop/dropped pairing. **In the window a line with `ask` is never put in a run's block** (`groups`, `chat_took`), since the block draws only its header, steps, answer and end, and the notice and its button would vanish; it is drawn in the chat between the blocks. `chat_facts` skips them when it looks for the last line, so they hide no ` retry `.
+- **A chat ask saved starts the chat's next turn** (the issue's proposal): the `secret saved` notice (`chat::tells_saved`: no `routine`, with `ask`) is that turn's opener, as `setting up` opens a setup (#887), with `cornercase says` and `The user saved the secrets you asked for: a, b.`. When a turn runs it is written `held` and goes with the next held messages; `bot stop` drops it like any held message (the secret stays saved). ` retry ` never sends it again (`chat::retries`: a `you` line or a setup). The rejected alternative, telling the chat at the user's next message as for a decline, is one branch in `ask_ended`; it was not chosen because the bot said it would carry on once the user saves.
+- **A routine's ask starts nothing**: a run's conversation has ended by the time the user answers, so its `secret saved` notice carries `routine` and the chat's session is told at the user's next message.
+- **What the chat is told** (`Live.notes`, rebuilt at load by `chat::noted` from the notices after the last opener, kept to 10): `The user did not give: a, b.` for a decline, `The user saved the secrets you asked for: a, b.` for a routine's ask saved. They go in front of the next chat turn's message under `## Since your last message`, after the routines' block (`brief::noted`, `brief::joined_told`), and are told once.
+- **Which conversation asked** comes from the request's envelope (`bot_run`, from `CORNERCASE_BOT_RUN`), kept only when that queue entry exists and is this bot's (`App::starter`, as #847 does for started agents) and the asking owner is that bot. It only decides whether a turn starts, so a bot that lies about it gains nothing. A report turn that resumed a run's session counts as the run's.
+
+## How the user hears of it
+
+- **A window that shows that bot's chat opens the dialog by itself**, but only when no other dialog is open and the chat's draft is empty (the issue's proposal, narrowed): a person halfway through a message would otherwise type it into a masked field. Then there is no toast and no unread, since the line with ` give… ` is on screen.
+- A visible view that names the bot (`view --bot`) is told nothing more.
+- Elsewhere: unread +1, a toast `<bot> asks for a secret: a, b` with ` go ` and the agents' "needs you" icon (`Status::Waiting`), and the desktop notification with the same token. ` go ` (and the notification's click) shows the chat and opens the dialog (`BotGoal::Ask` in the notices' tokens; `BotGoal::Chat(run)` is the old ` go `). No sound is played, as for a bot's answer.
+- **The chat apps** get `<bot> asks for a secret: a, b; open cornercase to give it` through `announce`, so only in away mode with a paired chat, as a bot's failed routine is; a value is never taken from a chat app. #848 (a bot's chat in the chat apps) is not built yet.
+- The bot's row says `asks for a secret` in the waiting colour while an ask waits (before `next …`; when the row is too narrow it falls back to the agent and model, as the next run does), and its card has an `asks` row per ask, with the waiting icon. The row is text, not a button.
+
+## The dialog
+
+`Overlay::BotAsk(Form)`, a form dialog in the settings area:
+
+- **What is cornercase's and what is the bot's**: the title `<bot> asks for a secret`, the agent and the access (`full access` in red, the card's words), and the sentence under the fields (`The bot will read these values. They are kept encrypted on this computer, for this bot only.`) are cornercase's; `It says:` introduces the bot's `about`, drawn as plain text behind a muted `│ `, with no Markdown and no links, so it cannot pass for cornercase's own words. When the window is short the fields, the hint row and the buttons keep their rows and the texts give theirs up, the bot's line last.
+- One masked field per name still missing (`Editor::masked`), never filled beforehand; `replaces the saved one` after a name that `--replace` asked for and that is saved. ` never ` declines, ` not now ` (and `Esc`, and a click outside) closes it and the ask waits, ` save ` gives every value. A refusal (20 secrets meanwhile, a value too long) shows under the form, which stays open.
+- **`Enter` saves only when every field has a value**; otherwise it moves to the first empty one. The dialog can open by itself while the user types elsewhere, so `Enter` must not save a half-typed form.
+- A paste drops one line break at the end, and a paste that still holds a control character is refused with the Secrets dialog's sentence (`secrets_dialog::ONE_LINE`), never saved changed.
+- **The fields are not in the text-field registry** (`text_fields.rs`), as Settings' token rows are not: no right-click menu exists on them, so nothing can be copied or cut out. The form's `Debug` prints the names only.
+- An ask that ends anywhere (another client's `give`, a `set` from a shell) closes the dialog that shows it.
+
+## For programs
+
+- `bots[].asks` in `status --app` and `bot list --json` (`[{id, names, about, replace, routine}]`, `routine` is `null` for a chat ask; left out when empty, so the fixtures keep their bytes); `ask` on the chat lines (`bot history --json`, the `bot` event's line). Each ask, give and decline publishes `change: edited`.
+- The feature **`bot-asks`** in `cornercase contract`; `ask`, `give` and `decline` check it after `bot-secrets`.
+- The log: `secret asked bot=… ask=… names=… replace=… run=…` (the names are validated by then), `secret set` per name given, `secret ask ended bot=… ask=… how=saved|declined`. `about` and the values are never logged; the request log has `names` and `values` as counts and `about_bytes`.
+
+## Rejected
+
+- **A secret's value from the chat or a chat app**: the chat is a plain file every agent of the user can read, and a chat app keeps its own copy. The brief tells the bot never to ask there, and to tell a user who writes one there that it is now in the chat's file.
+- **The system's keychain**: see [Secrets](secrets.md).
+- **An ask for another bot, or from a pane's agent that is not a bot**: nothing would draw it or start a turn.
+
+## What was checked
+
+Only with the fakes (`test_util::fake_program` as the bot's agent, the e2e `claude-bot` script): no real agent ran. Tests: `bots/asks/tests.rs` (rules, the form's keys, `Debug`), `bots/chat/tests.rs` (the `ask` field, `replay`, the saved notice as an opener, `noted`), `bots/brief/tests.rs`, `control/bots/tests.rs` (shapes, the log's fields), `app/tests/bots/asks.rs` (who may act, the limits, all or none, the turn the saved notice starts and the held one, a routine's ask, a decline told once, `set` and `remove`, a restart, no value anywhere), `app/tests/bots/ask_window.rs` (the dialog opening by itself or not, the toast and ` go `, ` give… `, the buttons, `Enter`, a refusal, a paste, the row and the card, no ` retry `), `ui/tests/bot_ask.rs` (snapshots, the red access, bullets, hits), `ui/tests/chat.rs`, `ui/tests/bots_section.rs`, `app/tests/control_requests/bots/asks.rs` (the envelope's run, `status --app`, the event's `ask`), `cli/bot/secret/tests.rs`, `cli/guard/tests.rs`, and e2e (`ask` from a turn, `give` from a pipe and the next turn reading the value, the second ask refused as saved, `decline`, the refusals, the value in no file, log, `status --app` or event).
