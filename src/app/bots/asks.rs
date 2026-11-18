@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use super::secrets::{Caller, failed};
-use super::{News, Starting};
+use super::{News, Starting, Thread};
 use crate::app::App;
 use crate::app::control::Starter;
 use crate::app::notifications::BotGoal;
@@ -36,10 +36,17 @@ fn too_many(id: &str, count: usize, new: usize) -> Done<()> {
 }
 
 impl App {
-    pub(in crate::app) fn ask_run(&self, client: u64, starter: Option<Starter>) -> Option<u64> {
-        let owner = self.clients.bots.owner_of(client)?;
-        let key = self.panels.bots.live[self.panels.bots.by_id(owner)?].key;
-        starter.filter(|starter| starter.bot == key).and_then(|starter| starter.run)
+    pub(in crate::app) fn ask_run(&self, client: u64, starter: Option<Starter>) -> Done<Option<u64>> {
+        let only = || failed(asks::ONLY_ITSELF);
+        let owner = self.clients.bots.owner_of(client).ok_or_else(only)?;
+        let live = &self.panels.bots.live[self.panels.bots.by_id(owner).ok_or_else(only)?];
+        let thread = live.turn.as_ref().map(|turn| turn.thread);
+        let running = |run: u64| thread == Some(Thread::Run(run)) || live.runs.iter().any(|found| found.entry == run);
+        match starter.filter(|starter| starter.bot == live.key).and_then(|starter| starter.run) {
+            Some(run) if running(run) => Ok(Some(run)),
+            None if thread == Some(Thread::Chat) => Ok(None),
+            _ => Err(only()),
+        }
     }
 
     fn asking_bot(&self, client: Option<u64>) -> Done<usize> {
@@ -56,7 +63,8 @@ impl App {
         }
         let live = &self.panels.bots.live[at];
         let id = &live.bot.id;
-        let holds = |text: &str| keeping::redact(text, live.secrets.entries()) != text;
+        let known: Vec<keeping::Entry> = live.secrets.entries().iter().chain(&live.retired).cloned().collect();
+        let holds = |text: &str| keeping::redact(text, &known) != text;
         if ask.names.iter().any(|name| holds(name)) {
             return Err(malformed(asks::NAME_HOLDS_VALUE));
         }
@@ -98,6 +106,7 @@ impl App {
         let at = self.asking_bot(client)?;
         let id = self.panels.bots.live[at].bot.id.clone();
         if let Some(already) = self.ask_checked(at, ask)? {
+            self.ask_joined(at, already, run);
             return Ok(json!({ "bot": id, "ask": already, "names": ask.names, "already": true }));
         }
         let made = Ask {
@@ -110,8 +119,12 @@ impl App {
         };
         self.panels.bots.next_ask += 1;
         let (text, ask_id, joined) = (asks::asks_text(&made.joined()), made.id, made.joined());
-        self.bot_append(at, |line, now| Line::notice(line, now, &text).asked(ask_id).in_routine(run));
         self.panels.bots.live[at].asks.push(made);
+        let written = self.bot_try_append(at, |line, now| Line::notice(line, now, &text).asked(ask_id).in_routine(run));
+        if let Err(error) = written {
+            self.panels.bots.live[at].asks.retain(|found| found.id != ask_id);
+            return Err(failed(format!("cannot write the chat of {id}: {error}")));
+        }
         self.publish_bot_change(at, "edited");
         self.ask_told(at, ask_id);
         log::info!(
@@ -124,6 +137,15 @@ impl App {
             run = run.unwrap_or_default()
         );
         Ok(json!({ "bot": id, "ask": ask_id, "names": ask.names, "already": false }))
+    }
+
+    fn ask_joined(&mut self, at: usize, ask: u64, run: Option<u64>) {
+        let live = &mut self.panels.bots.live[at];
+        let Some(found) = live.asks.iter_mut().find(|found| found.id == ask && found.run.is_some()) else { return };
+        if run.is_none() {
+            found.run = None;
+            self.publish_bot_change(at, "edited");
+        }
     }
 
     fn ask_told(&mut self, at: usize, ask: u64) {
@@ -224,8 +246,14 @@ impl App {
     }
 
     pub(super) fn asks_unsaved(&mut self, at: usize, name: Option<&str>) {
-        for ask in &mut self.panels.bots.live[at].asks {
+        let live = &mut self.panels.bots.live[at];
+        for ask in &mut live.asks {
             ask.given.retain(|given| name.is_some_and(|name| name != given));
+        }
+        if let Some(Overlay::BotAsk(form)) = &mut self.overlay
+            && let Some(ask) = live.asks.iter().find(|ask| ask.id == form.ask && form.bot == live.key)
+        {
+            form.refresh(ask);
         }
     }
 
@@ -275,6 +303,7 @@ impl App {
                 about: ask.about.clone(),
                 replace: ask.replace,
                 routine: ask.run,
+                missing: ask.missing().into_iter().map(String::from).collect(),
             })
             .collect()
     }

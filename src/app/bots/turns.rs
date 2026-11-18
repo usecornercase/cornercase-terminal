@@ -30,17 +30,34 @@ impl App {
     }
 
     pub(super) fn bot_append(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> Line {
+        let (line, _) = self.bot_written(at, make);
+        self.bot_appended(at, &line);
+        line
+    }
+
+    pub(super) fn bot_try_append(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> std::io::Result<Line> {
+        let (line, written) = self.bot_written(at, make);
+        written?;
+        self.bot_appended(at, &line);
+        Ok(line)
+    }
+
+    fn bot_written(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> (Line, std::io::Result<()>) {
         let state = &mut self.panels.bots.live[at];
         let line = state.secrets.redacted(&state.retired, make(state.next_line, crate::time::now()));
         state.next_line += 1;
-        let _ = chat::append(&state.folder.join(folder::CHAT_FILE), &line);
+        let written = chat::append(&state.folder.join(folder::CHAT_FILE), &line);
+        (line, written)
+    }
+
+    fn bot_appended(&mut self, at: usize, line: &Line) {
+        let state = &mut self.panels.bots.live[at];
         if matches!(line.kind, Kind::You | Kind::Bot) {
             state.last = Some(line.clone());
         }
         let id = state.bot.id.clone();
-        self.chat_took(at, &line);
+        self.chat_took(at, line);
         self.publish_bot(&id, News::Line(Box::new(line.clone())));
-        line
     }
 
     pub(in crate::app) fn bot_say(&mut self, key: &str, text: &str, wait: bool) -> Done<(usize, Line)> {

@@ -277,3 +277,17 @@ fn an_asking_row_cuts_a_long_name_so_asks_still_fits() {
     let shown_of = |row: &str| row.split('…').next().map_or(0, |kept| kept.trim_end().chars().count());
     assert!(shown_of(&quiet) > shown_of(&asked), "{quiet}\n{asked}");
 }
+
+#[test]
+fn an_asking_row_cuts_a_wide_name_by_its_cells_so_asks_does_not_cover_it() {
+    let name = "日本語の名前のとても長いボット";
+    let asking = BotEntry { asking: true, unread: 1, fallback: "claude".into(), ..entry(name, "asks for a secret") };
+    let t = render_sized(&shown(Sidebar::SideBySide, vec![asking], false), W, TALL.height);
+    let (_, at) = row_with(&t, "asks").expect("asks is drawn");
+    let buffer = t.backend().buffer();
+    assert_eq!(buffer[at].fg, WAITING_COLOR);
+    let before = Position::new(at.x - 1, at.y);
+    assert_eq!(buffer[before].symbol(), " ");
+    let row = sidebar_row(&t, "日");
+    assert!(row.contains('…'), "{row}");
+}

@@ -17,6 +17,12 @@ fn owned(b: &mut Bots) {
     b.app.clients.bots.marked(CLIENT, "prs");
 }
 
+fn owned_in_run(b: &mut Bots, run: u64) {
+    owned(b);
+    let turn = crate::app::bots::Turn { thread: crate::app::bots::Thread::Run(run), ..turn() };
+    b.app.panels.bots.live[0].turn = Some(turn);
+}
+
 fn entry_of(b: &mut Bots, bot: &str) -> u64 {
     let added = b.ask("queue", &json!({"action": "add", "bot": bot, "at": "in 2h", "prompt": "check"}));
     added["id"].as_u64().expect("an entry")
@@ -33,7 +39,7 @@ fn an_ask_from_a_run_of_the_bot_carries_the_run_and_is_listed_with_the_bot() {
     let mut b = bots();
     b.new_prs();
     let entry = entry_of(&mut b, "prs");
-    owned(&mut b);
+    owned_in_run(&mut b, entry);
     follow(&mut b.app, &[]);
     let answer = asking(&mut b, Some(entry));
     let ask = answer["ask"].as_u64().expect("an ask");
@@ -78,4 +84,18 @@ fn an_ask_given_cannot_be_declined() {
     assert_eq!(given["saved"], json!(["pw"]));
     let refused = b.refuse(&json!({"action": "secret-decline", "bot": "prs", "ask": ask}));
     assert_eq!(refused.code, "not-found");
+}
+
+#[test]
+fn a_run_that_is_not_running_cannot_ask_even_while_the_chat_answers() {
+    let mut b = bots();
+    b.new_prs();
+    let entry = entry_of(&mut b, "prs");
+    owned(&mut b);
+    let args = wire(&json!({"action": "secret-ask", "names": ["pw"], "about": "to log in", "replace": false}));
+    let head = json!({"bot": "prs", "bot_run": entry});
+    let mut answers = send_headed(&mut b.app, &b.rx, &head, "bot", &args);
+    let refused = reply_of(&answers.remove(0).1).expect_err("refused");
+    assert_eq!((refused.code.as_str(), refused.message.as_str()), ("failed", crate::bots::asks::ONLY_ITSELF));
+    assert_eq!(b.app.panels.bots.live[0].asks.len(), 0);
 }

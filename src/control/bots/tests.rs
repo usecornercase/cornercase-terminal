@@ -172,8 +172,10 @@ fn the_log_line_of_an_ask_or_a_give_holds_counts_only() {
 fn bot_info_leaves_out_asks_when_there_are_none() {
     let value = serde_json::to_value(BotInfo::default()).expect("json");
     assert!(value.get("asks").is_none(), "{value}");
-    let ask = AskInfo { id: 3, names: vec!["pw".into()], about: "to log in".into(), replace: false, routine: None };
+    let names = vec![String::from("pw"), String::from("user")];
+    let ask = AskInfo { id: 3, names, about: "to log in".into(), missing: vec!["user".into()], ..AskInfo::default() };
     let value = serde_json::to_value(BotInfo { asks: vec![ask], ..BotInfo::default() }).expect("json");
     assert_eq!(value["asks"][0]["routine"], Value::Null);
     assert_eq!(value["asks"][0]["id"], serde_json::json!(3));
+    assert_eq!(value["asks"][0]["missing"], serde_json::json!(["user"]));
 }

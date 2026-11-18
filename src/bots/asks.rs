@@ -158,6 +158,23 @@ impl Form {
         Self { bot, ask: ask.id, fields, focus: 0, error: None }
     }
 
+    pub(crate) fn refresh(&mut self, ask: &Ask) {
+        let focused = self.fields.get(self.focus).map(|field| field.name.clone());
+        let mut old = std::mem::take(&mut self.fields);
+        let missing = ask.missing();
+        for name in &ask.names {
+            match old.iter().position(|field| &field.name == name) {
+                Some(at) => self.fields.push(old.swap_remove(at)),
+                None if missing.contains(&name.as_str()) => {
+                    self.fields.push(Field { name: name.clone(), value: Editor::default() });
+                }
+                None => {}
+            }
+        }
+        let at = self.fields.iter().position(|field| Some(&field.name) == focused.as_ref());
+        self.focus = at.unwrap_or(0);
+    }
+
     pub(crate) fn buttons() -> [&'static str; 3] {
         [NEVER, LATER, SAVE]
     }

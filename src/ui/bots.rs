@@ -168,8 +168,8 @@ fn draw_bot(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &BotEntry) {
     let reserved = r.right().saturating_sub(row_menu_button(r, pitch).x);
     let room = usize::from(r.width).saturating_sub(indent + usize::from(reserved) + 1);
     let colour = if entry.active { Color::Reset } else { view.soft };
-    let name = crate::text::truncate_right(&entry.name, name_room(entry, room));
-    let used = name.chars().count();
+    let name = crate::text::truncate_cells(&entry.name, name_room(entry, room));
+    let used = crate::text::cells(&name);
     line.push(Span::styled(name, Style::default().fg(colour)));
     let tags = detail_tags(view, entry, room.saturating_sub(used.max(MIN_NAME_WIDTH)));
     tags.push_onto(&mut line, used, room);

@@ -161,4 +161,18 @@ mod the_form {
         assert!(!shown.contains(TYPED), "{shown}");
         assert!(shown.contains('a'), "{shown}");
     }
+
+    #[test]
+    fn refreshed_keeps_what_was_typed_and_adds_what_is_missing_again() {
+        let mut asked = ask(&["a", "b", "c"]);
+        asked.given = names(&["b"]);
+        let mut form = Form::new(1, &asked);
+        press(&mut form, KeyCode::Tab);
+        typed(&mut form, "three");
+        asked.given.clear();
+        form.refresh(&asked);
+        assert_eq!(form.fields.iter().map(|field| field.name.as_str()).collect::<Vec<_>>(), vec!["a", "b", "c"]);
+        assert_eq!((form.focus, form.fields[2].value.text()), (2, String::from("three")));
+        assert!(form.fields[1].value.is_empty());
+    }
 }

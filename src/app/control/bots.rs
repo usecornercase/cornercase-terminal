@@ -42,7 +42,7 @@ impl App {
             }
             BotRequest::SecretGet(get) => self.bot_secret_get(Some(client), &get.name)?,
             BotRequest::SecretAsk(ask) => {
-                let run = self.ask_run(client, asker.bot);
+                let run = self.ask_run(client, asker.bot)?;
                 self.bot_secret_ask(Some(client), run, &ask)?
             }
             BotRequest::SecretGive(give) => self.bot_secret_give(Some(client), &give)?,

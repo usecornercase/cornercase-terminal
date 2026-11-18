@@ -256,13 +256,16 @@ impl super::App {
         self.panels.bots.dir = Some(dir.to_path_buf());
         let bots = folder::load_all(dir);
         let key = self.panels.bots.key.clone();
-        let live = bots.into_iter().map(|bot| load_chat(dir, bot, self.panels.bots.take_key(), &key)).collect();
-        self.panels.bots.live = live;
+        let loaded: Vec<(Live, u64)> =
+            bots.into_iter().map(|bot| load_chat(dir, bot, self.panels.bots.take_key(), &key)).collect();
+        let after = loaded.iter().map(|(_, last)| last + 1).max().unwrap_or(1);
+        self.panels.bots.next_ask = self.panels.bots.next_ask.max(after);
+        self.panels.bots.live = loaded.into_iter().map(|(live, _)| live).collect();
         self.panels.bots.shown = None;
     }
 }
 
-fn load_chat(dir: &Path, bot: Bot, key: u64, secret_key: &KeyState) -> Live {
+fn load_chat(dir: &Path, bot: Bot, key: u64, secret_key: &KeyState) -> (Live, u64) {
     let folder = folder::of(dir, &bot.id);
     let path = folder.join(folder::CHAT_FILE);
     let _ = chat::heal(&path);
@@ -282,5 +285,8 @@ fn load_chat(dir: &Path, bot: Bot, key: u64, secret_key: &KeyState) -> Live {
     if secrets.is_unreadable() {
         crate::log::warning!("bots", "secrets unreadable", bot = bot.id);
     }
-    Live { next_line: chat::replay(&lines).next_id, last, unseen, notes, secrets, ..Live::new(bot, folder, key) }
+    let last_ask = lines.iter().filter_map(|line| line.ask).max().unwrap_or(0);
+    let live =
+        Live { next_line: chat::replay(&lines).next_id, last, unseen, notes, secrets, ..Live::new(bot, folder, key) };
+    (live, last_ask)
 }

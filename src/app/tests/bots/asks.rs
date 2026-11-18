@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::secrets::{BOUND, Kept2, OWNER, STRANGER, VALUE, keeper, refusal};
+use super::secrets::{BOUND, Kept2, OWNER, STRANGER, VALUE, keeper, refusal, turn};
 use super::*;
 use crate::app::overlay::Overlay;
 use crate::bots::asks;
@@ -118,6 +118,54 @@ mod asking {
         for text in [infos, events, file] {
             assert!(!text.contains(VALUE), "{text}");
         }
+    }
+
+    #[test]
+    fn refuses_an_about_that_holds_a_value_replaced_during_the_turn() {
+        let mut k = keeper();
+        k.set("pw", VALUE).expect("set");
+        k.set("pw", "another-long-value").expect("replaced");
+        assert_eq!(k.app.panels.bots.live[k.at()].retired.len(), 1);
+        let about = SecretAsk { about: format!("it was {VALUE}"), ..asking(&["user"]) };
+        let refused = refusal(k.app.bot_secret_ask(Some(OWNER), None, &about));
+        assert_eq!(refused, (Code::Malformed, asks::ABOUT_HOLDS_VALUE.to_string()));
+        assert!(k.ask(&["user"]).is_ok());
+    }
+
+    #[test]
+    fn an_ask_whose_notice_cannot_be_written_is_refused_and_can_be_asked_again() {
+        let mut k = keeper();
+        let path = k.dir.path().join("bots").join("campus").join(folder::CHAT_FILE);
+        let _ = std::fs::remove_file(&path);
+        std::fs::create_dir(&path).expect("a folder in the chat's place");
+        assert_eq!(refusal(k.ask(&["pw"])).0, Code::Failed);
+        assert_eq!(k.waiting(), Vec::<u64>::new());
+        std::fs::remove_dir(&path).expect("the folder goes");
+        assert_eq!(k.ask(&["pw"]).expect("asked")["already"].as_bool(), Some(false));
+        assert_eq!(k.chat().len(), 1);
+    }
+
+    #[test]
+    fn a_restart_numbers_new_asks_after_those_in_the_chat() {
+        let mut k = keeper();
+        let old = ask_id(&k.ask(&["pw"]).expect("asked"));
+        k.app.panels.bots.next_ask = 1;
+        k.reload();
+        let at = k.at();
+        k.app.panels.bots.live[at].turn = Some(turn());
+        let new = ask_id(&k.ask(&["user"]).expect("asked"));
+        assert!(new > old, "{new} after {old}");
+        assert_eq!(refusal(k.give(old, &[("user", "me")])).0, Code::NotFound);
+    }
+
+    #[test]
+    fn the_bots_list_what_an_ask_still_misses() {
+        let mut k = keeper();
+        k.ask(&["user", "pw"]).expect("asked");
+        k.set("user", "me").expect("set");
+        let info = k.app.bot_info(k.at());
+        assert_eq!(info.asks[0].names, ["user", "pw"]);
+        assert_eq!(info.asks[0].missing, ["pw"]);
     }
 
     #[test]
@@ -299,6 +347,30 @@ mod turns {
         c.say("next");
         c.settle();
         assert!(c.argvs()[1].contains("The user saved the secrets you asked for: pw."), "{:?}", c.argvs());
+    }
+
+    #[test]
+    fn the_chat_asking_what_a_routine_asked_is_carried_on_in_the_chat_once_saved() {
+        let mut c = chat(ANSWER);
+        running(&mut c);
+        let first = ask(&mut c, Some(41));
+        assert_eq!(ask(&mut c, None), first);
+        assert_eq!(c.app.panels.bots.live[0].asks[0].run, None);
+        c.release(ANSWER);
+        c.settle();
+        c.app.bot_secret_give(None, &giving("prs", first, &[("pw", VALUE)])).expect("given");
+        let saved = c.lines().into_iter().find(|line| line.text == "secret saved: pw").expect("the notice");
+        assert_eq!(saved.routine, None);
+        assert!(c.app.panels.bots.live[0].turn.is_some());
+    }
+
+    #[test]
+    fn a_routine_asking_what_the_chat_asked_leaves_it_the_chats() {
+        let mut c = chat(ANSWER);
+        running(&mut c);
+        let first = ask(&mut c, None);
+        assert_eq!(ask(&mut c, Some(41)), first);
+        assert_eq!(c.app.panels.bots.live[0].asks[0].run, None);
     }
 
     #[test]

@@ -59,6 +59,7 @@ pub(crate) struct AskInfo {
     pub(crate) about: String,
     pub(crate) replace: bool,
     pub(crate) routine: Option<u64>,
+    pub(crate) missing: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -54,8 +54,44 @@ fn give_at(app: &mut App) -> Option<Position> {
         .find(|pos| matches!(ui::chat_hit(&areas, &shown.view, *pos), Some(ChatHit::Row(RowHit::Give(_)))))
 }
 
+fn drawn(app: &mut App) -> String {
+    format!("{}", render(app, AREA).backend())
+}
+
+fn names_of(ask: usize, length: usize) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut left = length;
+    while left > 0 {
+        let size = left.min(crate::bots::secrets::NAME_MAX);
+        let letter = char::from(b'a' + u8::try_from(ask * 4 + names.len()).expect("a letter"));
+        names.push(letter.to_string().repeat(size));
+        left = left.saturating_sub(size + 2);
+    }
+    names
+}
+
 mod opening {
     use super::*;
+
+    #[test]
+    fn a_new_ask_keeps_the_text_read_in_place_while_scrolled_up() {
+        let mut c = asking_chat();
+        questions(&mut c, 30);
+        shown(&mut c);
+        c.app.panels.bots.live[0].draft = Editor::new("typing");
+        drawn(&mut c.app);
+        let width = c.app.chat_geometry(AREA).lines.width;
+        c.app.panels.bots.shown.as_mut().expect("shown").scroll = 6;
+        let row = |text: &str| text.lines().position(|line| line.contains("question 24"));
+        for (n, short) in [3, 5, 7, 9].into_iter().enumerate() {
+            let before = drawn(&mut c.app);
+            let names = names_of(n, usize::from(width).saturating_sub(short + asks::ASKS.len()));
+            let names: Vec<&str> = names.iter().map(String::as_str).collect();
+            c.app.bot_secret_ask(Some(OWNER), None, &asking(&names)).expect("asked");
+            let after = drawn(&mut c.app);
+            assert_eq!(row(&before), row(&after), "{before}\n{after}");
+        }
+    }
 
     #[test]
     fn a_window_showing_the_chat_opens_the_dialog_without_a_toast() {
@@ -131,6 +167,30 @@ mod opening {
 mod answering {
     use super::*;
 
+    #[test]
+    fn a_secret_removed_while_the_dialog_is_open_gets_its_field_back() {
+        let mut c = asking_chat();
+        let ask = ask(&mut c, &["user", "pw"]);
+        c.app.bot_secret_set(None, "prs", ("pw", "old-value")).expect("set");
+        shown(&mut c);
+        let key = c.app.panels.bots.live[0].key;
+        c.app.open_bot_ask(key, ask);
+        let names = |c: &Chat| view(c).fields.into_iter().map(|field| field.name).collect::<Vec<_>>();
+        assert_eq!(names(&c), ["user"]);
+        type_in(&mut c, "me");
+        c.app.bot_secret_remove(None, "prs", (Some("pw"), false)).expect("removed");
+        assert_eq!((names(&c), view(&c).focus), (vec![String::from("user"), String::from("pw")], 0));
+        send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
+        saves_both(&mut c);
+    }
+
+    fn saves_both(c: &mut Chat) {
+        type_in(c, VALUE);
+        send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
+        assert!(c.app.overlay.is_none());
+        assert_eq!(c.app.panels.bots.live[0].secrets.count(), 2);
+    }
+
     fn open(c: &mut Chat, names: &[&str]) -> u64 {
         shown(c);
         let ask = ask(c, names);
@@ -161,10 +221,7 @@ mod answering {
         send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
         assert!(asks_open(&c));
         assert_eq!(view(&c).focus, 1);
-        type_in(&mut c, VALUE);
-        send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
-        assert!(c.app.overlay.is_none());
-        assert_eq!(c.app.panels.bots.live[0].secrets.count(), 2);
+        saves_both(&mut c);
     }
 
     #[test]

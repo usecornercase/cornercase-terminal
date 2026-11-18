@@ -66,6 +66,15 @@ struct Chat {
     bin: TempDir,
 }
 
+fn questions(c: &mut Chat, count: usize) {
+    let path = c.app.panels.bots.live[0].folder.join(folder::CHAT_FILE);
+    for n in 0..count {
+        let id = c.app.panels.bots.live[0].next_line;
+        chat::append(&path, &Line::you(id, 100, &format!("question {n}"), false)).expect("append");
+        c.app.panels.bots.live[0].next_line += 1;
+    }
+}
+
 fn chat(out: &str) -> Chat {
     chat_with(out, Access::Cornercase)
 }
