@@ -278,4 +278,16 @@ mod writing {
 
         assert!(said.contains("machines.json") && !said.contains("cannot read or write"), "{said}");
     }
+
+    #[test]
+    fn a_held_lock_is_said_as_it_is_and_the_config_is_not_blamed() {
+        let dir = TempDir::new();
+        let here = Here { config: dir.path().join("config.json"), legacy: dir.path().join("machines.json") };
+        let held = crate::machines::list::hold(&here.config).expect("held");
+
+        let said = not_listed(forgotten(&here, "devbox"));
+
+        assert!(said.contains("try again") && !said.contains("cannot read or write"), "{said}");
+        drop(held);
+    }
 }

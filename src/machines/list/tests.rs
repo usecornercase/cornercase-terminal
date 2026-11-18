@@ -107,6 +107,20 @@ mod changing {
     }
 
     #[test]
+    fn a_held_lock_makes_the_change_fail_with_its_own_message_and_write_nothing() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        let held = take_lock(&here.config).expect("taken");
+
+        let error = change(&here, |list| list.push(machine("vps", "vps.lan"))).expect_err("waited");
+
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        assert!(error.to_string().contains("another cornercase is changing the list of machines"), "{error}");
+        drop(held);
+        assert!(!here.config.exists());
+    }
+
+    #[test]
     fn writers_at_once_lose_none() {
         let dir = TempDir::new();
         let here = here_in(&dir);

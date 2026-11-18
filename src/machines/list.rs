@@ -15,7 +15,7 @@ use crate::{config, paths, persist};
 const NAME_MAX: usize = 20;
 const FALLBACK_NAME: &str = "machine";
 const HOME: &str = "~";
-const LOCK_WAIT: Duration = Duration::from_secs(5);
+const LOCK_WAIT: Duration = if cfg!(test) { Duration::from_millis(200) } else { Duration::from_secs(5) };
 const LOCK_STEP: Duration = Duration::from_millis(20);
 
 pub(crate) struct Here {
@@ -75,6 +75,11 @@ fn take_lock(path: &Path) -> io::Result<File> {
         std::thread::sleep(LOCK_STEP);
     }
     Ok(file)
+}
+
+#[cfg(test)]
+pub(crate) fn hold(path: &Path) -> io::Result<File> {
+    take_lock(path)
 }
 
 fn edit_config<R>(path: &Path, edit: impl FnOnce(&mut Vec<Machine>) -> R) -> io::Result<R> {

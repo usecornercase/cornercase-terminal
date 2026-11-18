@@ -102,7 +102,7 @@ fn forgotten(here: &Here, destination: &str) -> Result<String> {
 }
 
 fn refusal(here: &Here, error: &io::Error) -> Error {
-    if error.kind() == io::ErrorKind::InvalidInput {
+    if matches!(error.kind(), io::ErrorKind::InvalidInput | io::ErrorKind::TimedOut) {
         return Error::Control(error.to_string());
     }
     unwritten(here, error)
