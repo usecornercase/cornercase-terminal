@@ -10,6 +10,7 @@ fn entry(name: &str, detail: &str) -> BotEntry {
         thinking: false,
         unread: 0,
         active: false,
+        asking: false,
     }
 }
 

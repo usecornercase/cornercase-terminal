@@ -67,10 +67,26 @@ impl App {
         log::info!("activity", "notification clicked", to = "bot");
     }
 
+    pub(in crate::app) fn go_to_ask(&mut self, id: &str, ask: u64) {
+        match self.bot_at(id) {
+            Ok(at) => {
+                self.show_bot(at);
+                let key = self.panels.bots.live[at].key;
+                self.open_bot_ask(key, ask);
+            }
+            Err(_) => {
+                self.messages.toast = Some(Toast::new("that bot is gone", crate::ui::ToastIcon::Check));
+            }
+        }
+        log::info!("activity", "notification clicked", to = "bot ask");
+    }
+
+    pub(in crate::app) fn bot_in_window(&self, at: usize) -> bool {
+        self.shown_bot() == Some(at) && self.has_window() && self.screen.nav.is_none() && !self.file_full_screen()
+    }
+
     pub(in crate::app) fn bot_on_screen(&self, at: usize) -> bool {
-        let window =
-            self.shown_bot() == Some(at) && self.has_window() && self.screen.nav.is_none() && !self.file_full_screen();
-        window || self.view_shows_bot(&self.panels.bots.live[at].bot.id)
+        self.bot_in_window(at) || self.view_shows_bot(&self.panels.bots.live[at].bot.id)
     }
 
     pub(in crate::app) fn chat_typing(&self) -> bool {

@@ -6,6 +6,7 @@ use ratatui::layout::Rect;
 use ratatui::text::Line as Text;
 
 use crate::app::App;
+use crate::bots::asks;
 use crate::bots::chat::{self, Kind, Line};
 use crate::bots::follow;
 use crate::project::Hierarchy;
@@ -56,6 +57,7 @@ pub(super) struct Facts {
     again: HashSet<u64>,
     panes: HashSet<u64>,
     boot: String,
+    asks: HashSet<u64>,
 }
 
 pub(in crate::app) struct Shown {
@@ -71,7 +73,7 @@ enum Group {
 fn groups(lines: &[Line]) -> Vec<Group> {
     let mut found: Vec<Group> = Vec::new();
     for (i, line) in lines.iter().enumerate() {
-        if let Some(run) = line.routine {
+        if let Some(run) = line.routine.filter(|_| line.ask.is_none()) {
             match found.iter_mut().find(|group| matches!(group, Group::Run(found, _) if *found == run)) {
                 Some(Group::Run(_, members)) => members.push(i),
                 _ => found.push(Group::Run(run, vec![i])),
@@ -177,7 +179,12 @@ impl Chat {
                 ChatEntry::Steps { first: line.id, texts, open: self.unfolded.contains(&line.id) }
             }
             Kind::Error => ChatEntry::Error { id: line.id, text: line.text, retry: facts.retry == Some(line.id) },
-            Kind::Notice => ChatEntry::Notice(line.text),
+            Kind::Notice => {
+                match line.ask.filter(|ask| facts.asks.contains(ask) && line.text.starts_with(asks::ASKS)) {
+                    Some(ask) => ChatEntry::Asking { text: line.text, ask },
+                    None => ChatEntry::Notice(line.text),
+                }
+            }
             Kind::Started | Kind::Finished | Kind::Waiting => self.agent_entry(&line, facts, width),
         }
     }
@@ -237,12 +244,12 @@ impl App {
             .bots
             .shown
             .as_ref()
-            .and_then(|shown| shown.lines.iter().rev().find(|line| line.routine.is_none()));
+            .and_then(|shown| shown.lines.iter().rev().find(|line| line.routine.is_none() && line.ask.is_none()));
         let lines = self.panels.bots.shown.as_ref().map(|shown| shown.lines.as_slice()).unwrap_or_default();
         let ended = |line: &&Line| {
             line.kind == Kind::Error
                 && live.turn.is_none()
-                && chat::prompt_of(lines, line.id).is_some_and(|prompt| prompt.kind != Kind::Finished)
+                && chat::prompt_of(lines, line.id).is_some_and(chat::retries)
         };
         let retry = last.filter(ended).map(|line| line.id);
         Facts {
@@ -255,6 +262,7 @@ impl App {
             again: self.runs_again(),
             panes: self.projects.terms().map(|term| term.id).collect(),
             boot: crate::control::server_token().to_string(),
+            asks: live.asks.iter().map(|ask| ask.id).collect(),
         }
     }
 
@@ -344,7 +352,8 @@ impl App {
         let (facts, tone) = (self.chat_facts(at), self.chat_tone());
         let Some(shown) = self.panels.bots.shown.as_mut() else { return };
         let tail = shown.tail_start();
-        let from = line.routine.and_then(|run| shown.run_group(run)).map_or(tail, |at| at.min(tail));
+        let run = line.routine.filter(|_| line.ask.is_none());
+        let from = run.and_then(|run| shown.run_group(run)).map_or(tail, |at| at.min(tail));
         let before = if scrolled { shown.tail_height(from, &facts, width, tone) } else { 0 };
         shown.lines.push(line.clone());
         let height = if scrolled { shown.tail_height(from, &facts, width, tone).saturating_sub(before) } else { 0 };

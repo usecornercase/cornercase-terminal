@@ -17,7 +17,7 @@ fn shown(name: &str) -> String {
     if keeping::name_refusal(name).is_none() { name.to_string() } else { String::from("of that name") }
 }
 
-fn failed(text: impl Into<String>) -> Refusal {
+pub(super) fn failed(text: impl Into<String>) -> Refusal {
     Refusal::new(Code::Failed, text)
 }
 
@@ -98,7 +98,7 @@ impl App {
         self.clients.bots.revoke_owners(&id);
     }
 
-    fn secrets_keep(&mut self, at: usize, entries: Vec<keeping::Entry>) -> Done<()> {
+    pub(super) fn secrets_keep(&mut self, at: usize, entries: Vec<keeping::Entry>) -> Done<()> {
         self.secrets_unchanged(at)?;
         let key = self.secrets_key()?;
         self.secrets_retire(at, &entries);
@@ -136,6 +136,7 @@ impl App {
         self.secrets_keep(at, entries)?;
         let name_logged = if name == value { "a value" } else { name };
         log::info!("bots", "secret set", bot = id, name = name_logged, bytes = value.len(), replaced = replaced);
+        self.asks_saved(at, &[name.to_string()]);
         Ok(json!({ "bot": id, "name": name, "saved": saved }))
     }
 
@@ -174,6 +175,7 @@ impl App {
         let entries = live.secrets.without(name);
         self.secrets_keep(at, entries)?;
         log::info!("bots", "secret removed", bot = id, name = name);
+        self.asks_unsaved(at, Some(name));
         Ok(json!({ "bot": id, "removed": 1 }))
     }
 
@@ -185,6 +187,7 @@ impl App {
         live.secrets = Kept::default();
         self.publish_bot_change(at, "edited");
         log::info!("bots", "secret removed", bot = id, name = "all", count = removed);
+        self.asks_unsaved(at, None);
         Ok(json!({ "bot": id, "removed": removed }))
     }
 

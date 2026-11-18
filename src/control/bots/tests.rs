@@ -108,6 +108,9 @@ fn bot_info_has_follow_and_following() {
 #[case::remove_one(r#"{"action":"secret-remove","entry":{"bot":"prs","name":"pw","all":false}}"#)]
 #[case::remove_all(r#"{"action":"secret-remove","entry":{"bot":"prs","name":null,"all":true}}"#)]
 #[case::get(r#"{"action":"secret-get","entry":{"name":"pw"}}"#)]
+#[case::ask(r#"{"action":"secret-ask","entry":{"names":["user","pw"],"about":"to log in","replace":false}}"#)]
+#[case::give(r#"{"action":"secret-give","entry":{"bot":"prs","ask":3,"values":{"pw":"hunter2-value"}}}"#)]
+#[case::decline(r#"{"action":"secret-decline","entry":{"bot":"prs","ask":3}}"#)]
 fn each_secret_action_round_trips(#[case] args: &str) {
     let Command::Bot(parsed) = request(args).command else { panic!("not a bot request") };
     let again = serde_json::to_value(&parsed).expect("serialize");
@@ -146,4 +149,31 @@ fn a_name_equal_to_its_value_is_not_logged() {
     });
     let text = format!("{:?}", Command::Bot(same).fields());
     assert!(text.contains("name_bytes") && !text.contains("hunter2"), "{text}");
+}
+
+#[test]
+fn the_log_line_of_an_ask_or_a_give_holds_counts_only() {
+    let mistaken = "hunter2-value-as-a-key";
+    let values = [(mistaken.to_string(), crate::issues::Secret("hunter2-value".into()))].into_iter().collect();
+    let give = BotRequest::SecretGive(SecretGive { bot: "prs".into(), ask: 3, values });
+    let text = format!("{:?}", Command::Bot(give).fields());
+    assert!(text.contains("\"values\", \"1\"") && text.contains("\"ask\", \"3\""), "{text}");
+    assert!(!text.contains("hunter2"), "{text}");
+    let ask = BotRequest::SecretAsk(SecretAsk {
+        names: vec!["a".into(), "b".into()],
+        about: "hunter2 about".into(),
+        replace: true,
+    });
+    let text = format!("{:?}", Command::Bot(ask).fields());
+    assert!(text.contains("\"names\", \"2\"") && text.contains("about_bytes") && !text.contains("hunter2"), "{text}");
+}
+
+#[test]
+fn bot_info_leaves_out_asks_when_there_are_none() {
+    let value = serde_json::to_value(BotInfo::default()).expect("json");
+    assert!(value.get("asks").is_none(), "{value}");
+    let ask = AskInfo { id: 3, names: vec!["pw".into()], about: "to log in".into(), replace: false, routine: None };
+    let value = serde_json::to_value(BotInfo { asks: vec![ask], ..BotInfo::default() }).expect("json");
+    assert_eq!(value["asks"][0]["routine"], Value::Null);
+    assert_eq!(value["asks"][0]["id"], serde_json::json!(3));
 }

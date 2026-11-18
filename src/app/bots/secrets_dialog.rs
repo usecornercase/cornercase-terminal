@@ -11,6 +11,8 @@ use crate::ui;
 const NAME_HINT: &str = "a-z, 0-9, - and _, such as campus-password";
 const SAVE_SUBMIT: &str = "save";
 const NEXT_SUBMIT: &str = "next";
+pub(super) const ONE_LINE: &str =
+    "this field takes one line of text with no tab: pipe the value in with cornercase bot secret set";
 
 #[derive(Debug)]
 pub(in crate::app) enum Secrets {
@@ -338,9 +340,7 @@ impl Overlay {
         if !matches!(entry.asking, Asking::Value(_)) || !pasted(text).chars().any(char::is_control) {
             return false;
         }
-        entry.error = Some(String::from(
-            "this field takes one line of text with no tab: pipe the value in with cornercase bot secret set",
-        ));
+        entry.error = Some(String::from(ONE_LINE));
         true
     }
 }

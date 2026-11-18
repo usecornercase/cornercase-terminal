@@ -8,7 +8,7 @@ use super::View;
 use super::chrome::draw_back;
 use super::layout::Areas;
 use super::rows::{Rows, Tags, arrow, draw_hidden, draw_menu_in, draw_rail, marker, row_menu_button};
-use super::theme::{BRAND_COLOR, status_icon};
+use super::theme::{BRAND_COLOR, WAITING_COLOR, status_icon};
 use super::widgets::{button_style, draw_band, draw_button, draw_separator, middle};
 use crate::agents::activity::Status;
 
@@ -33,6 +33,7 @@ pub(crate) struct BotEntry {
     pub(crate) thinking: bool,
     pub(crate) unread: usize,
     pub(crate) active: bool,
+    pub(crate) asking: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -149,13 +150,13 @@ fn draw_bot(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &BotEntry) {
     let name = crate::text::truncate_right(&entry.name, room);
     let used = name.chars().count();
     line.push(Span::styled(name, Style::default().fg(colour)));
-    let fit = |text: &str| {
-        let detail = vec![Span::styled(text.to_string(), Style::default().fg(view.muted))];
+    let fit = |text: &str, colour: Color| {
+        let detail = vec![Span::styled(text.to_string(), Style::default().fg(colour))];
         Tags::fit(detail, room.saturating_sub(used.max(MIN_NAME_WIDTH)))
     };
-    let mut tags = fit(&entry.detail);
+    let mut tags = fit(&entry.detail, if entry.asking { WAITING_COLOR } else { view.muted });
     if tags.is_empty() {
-        tags = fit(&entry.fallback);
+        tags = fit(&entry.fallback, view.muted);
     }
     tags.push_onto(&mut line, used, room);
     draw_band(f, r, Line::from(line), bg);

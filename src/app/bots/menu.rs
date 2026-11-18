@@ -188,6 +188,7 @@ impl Overlay {
             Self::BotForm(form) => form.editing.as_deref() == Some(id),
             Self::BotRoutines(dialog) => dialog.bot == key,
             Self::BotSecrets(secrets) => secrets.bot() == key,
+            Self::BotAsk(form) => form.bot == key,
             Self::Queue(form) => form.bot() == Some(id),
             Self::Menu { actions, .. } => {
                 actions.iter().any(|action| matches!(action, MenuAction::Bot(found, _) if *found == key))

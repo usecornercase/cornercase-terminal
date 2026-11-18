@@ -44,12 +44,18 @@ struct Window {
     missed: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum BotGoal {
+    Chat(Option<u64>),
+    Ask(u64),
+}
+
 #[derive(Debug)]
 pub(super) struct Notices {
     run: String,
     next: u64,
     sent: VecDeque<Notice>,
-    bots: VecDeque<(String, String, Option<u64>)>,
+    bots: VecDeque<(String, String, BotGoal)>,
     windows: HashMap<u64, Window>,
 }
 
@@ -73,17 +79,17 @@ impl Notices {
         token
     }
 
-    pub(super) fn bot_token(&mut self, bot: &str, line: Option<u64>) -> String {
+    pub(super) fn bot_token(&mut self, bot: &str, goal: BotGoal) -> String {
         let token = self.next_token();
         if self.bots.len() >= notify::KEPT {
             self.bots.pop_front();
         }
-        self.bots.push_back((token.clone(), bot.to_string(), line));
+        self.bots.push_back((token.clone(), bot.to_string(), goal));
         token
     }
 
-    fn bot_of(&self, token: &str) -> Option<(&str, Option<u64>)> {
-        self.bots.iter().find(|(found, ..)| found == token).map(|(_, bot, line)| (bot.as_str(), *line))
+    fn bot_of(&self, token: &str) -> Option<(&str, BotGoal)> {
+        self.bots.iter().find(|(found, ..)| found == token).map(|(_, bot, goal)| (bot.as_str(), *goal))
     }
 
     fn find(&self, token: &str) -> Option<&Notice> {
@@ -249,8 +255,11 @@ impl App {
     }
 
     pub(crate) fn notification_clicked(&mut self, token: &str) {
-        if let Some((bot, line)) = self.messages.notices.bot_of(token).map(|(bot, line)| (bot.to_string(), line)) {
-            self.go_to_bot(&bot, line);
+        if let Some((bot, goal)) = self.messages.notices.bot_of(token).map(|(bot, goal)| (bot.to_string(), goal)) {
+            match goal {
+                BotGoal::Chat(run) => self.go_to_bot(&bot, run),
+                BotGoal::Ask(ask) => self.go_to_ask(&bot, ask),
+            }
             return;
         }
         let Some(went) = self.act_on_notice(token) else { return };

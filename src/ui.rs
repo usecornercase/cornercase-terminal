@@ -13,6 +13,7 @@ mod code;
 pub(crate) mod combo;
 mod dialog;
 pub(crate) use dialog::bot as bot_form;
+pub(crate) use dialog::bot_ask;
 pub(crate) use dialog::clone_on_machine;
 pub(crate) use dialog::machine as machine_form;
 pub(crate) use dialog::queue as queue_form;
@@ -542,6 +543,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::RunOnForm(form, run_on)) => draw_form(f, view, form, Some(run_on)),
         Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
         Some(Overlay::BotForm(form)) => dialog::bot::draw(f, view, form),
+        Some(Overlay::BotAsk(ask)) => bot_ask::draw(f, view, ask),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),
         Some(Overlay::Confirm(confirm)) => draw_confirm(f, view, confirm),
         Some(Overlay::Update(update)) => draw_update(f, view, update),

@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::{Handled, Pending, Reply, Stage, json};
+use super::{Asker, Handled, Pending, Reply, Stage, json};
 use crate::app::App;
 use crate::bots::chat::Line;
 use crate::control::Done;
@@ -8,7 +8,7 @@ use crate::control::bots::{BotHistory, BotRequest, BotSay, BotTarget};
 use crate::control::contract::{Code, Refusal};
 
 impl App {
-    pub(super) fn bot_request(&mut self, client: u64, request: BotRequest) -> Handled {
+    pub(super) fn bot_request(&mut self, client: u64, asker: Asker, request: BotRequest) -> Handled {
         match request {
             BotRequest::Agents => Ok(Some(json(&json!({ "agents": self.bot_agent_infos() })))),
             BotRequest::List => Ok(Some(json(&json!({ "bots": self.bot_infos() })))),
@@ -22,18 +22,34 @@ impl App {
             }
             BotRequest::Say(say) => self.bot_say_request(client, &say),
             BotRequest::History(history) => self.bot_history_request(&history),
-            BotRequest::SecretSet(set) => {
-                let answer = self.bot_secret_set(Some(client), &set.bot, (&set.name, &set.value.0))?;
-                Ok(Some(json(&answer)))
-            }
-            BotRequest::SecretList(target) => Ok(Some(json(&self.bot_secret_list(Some(client), &target.bot)?))),
-            BotRequest::SecretRemove(remove) => {
-                let answer = self.bot_secret_remove(Some(client), &remove.bot, (remove.name.as_deref(), remove.all))?;
-                Ok(Some(json(&answer)))
-            }
-            BotRequest::SecretGet(get) => Ok(Some(json(&self.bot_secret_get(Some(client), &get.name)?))),
+            BotRequest::SecretSet(_)
+            | BotRequest::SecretList(_)
+            | BotRequest::SecretRemove(_)
+            | BotRequest::SecretGet(_)
+            | BotRequest::SecretAsk(_)
+            | BotRequest::SecretGive(_)
+            | BotRequest::SecretDecline(_) => self.bot_secret_request(client, asker, request),
             other => self.bot_target_request(other),
         }
+    }
+
+    fn bot_secret_request(&mut self, client: u64, asker: Asker, request: BotRequest) -> Handled {
+        let answer = match request {
+            BotRequest::SecretSet(set) => self.bot_secret_set(Some(client), &set.bot, (&set.name, &set.value.0))?,
+            BotRequest::SecretList(target) => self.bot_secret_list(Some(client), &target.bot)?,
+            BotRequest::SecretRemove(remove) => {
+                self.bot_secret_remove(Some(client), &remove.bot, (remove.name.as_deref(), remove.all))?
+            }
+            BotRequest::SecretGet(get) => self.bot_secret_get(Some(client), &get.name)?,
+            BotRequest::SecretAsk(ask) => {
+                let run = self.ask_run(client, asker.bot);
+                self.bot_secret_ask(Some(client), run, &ask)?
+            }
+            BotRequest::SecretGive(give) => self.bot_secret_give(Some(client), &give)?,
+            BotRequest::SecretDecline(answer) => self.bot_secret_decline(Some(client), &answer)?,
+            _ => return Err(Refusal::new(Code::Failed, "not a secret request")),
+        };
+        Ok(Some(json(&answer)))
     }
 
     fn bot_target_request(&mut self, request: BotRequest) -> Handled {

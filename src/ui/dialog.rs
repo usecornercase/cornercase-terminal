@@ -1,4 +1,5 @@
 pub(crate) mod bot;
+pub(crate) mod bot_ask;
 pub(crate) mod clone_on_machine;
 pub(crate) mod context;
 pub(super) mod flows;
@@ -202,6 +203,7 @@ pub(crate) enum Overlay {
     RunOnForm(Form, RunOnRow),
     Queue(Box<crate::queue::form::Form>),
     BotForm(Box<crate::bots::form::Form>),
+    BotAsk(Box<bot_ask::BotAsk>),
     Machine(Box<crate::machines::form::Form>),
     CloneOnMachine(Box<crate::machines::clone_form::CloneForm>),
     GroupStyle(GroupEntry),
@@ -244,7 +246,9 @@ impl Overlay {
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Forum(setup) => Some(super::forum::area(area, setup)),
             Self::Issues(_) => Some(issues_area(area)),
-            Self::Settings(_) | Self::ShareSettings(_) | Self::CloneOnMachine(_) => Some(settings_area(area)),
+            Self::Settings(_) | Self::ShareSettings(_) | Self::CloneOnMachine(_) | Self::BotAsk(_) => {
+                Some(settings_area(area))
+            }
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),

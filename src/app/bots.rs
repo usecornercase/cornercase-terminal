@@ -13,6 +13,8 @@ use crate::bots::{Bot, TURN_TIMEOUT, folder};
 use crate::editor::Editor;
 use crate::error::Result;
 
+mod ask_dialog;
+mod asks;
 mod follow;
 mod form;
 mod manage;
@@ -106,6 +108,8 @@ pub(super) struct Live {
     pub(super) reports: Vec<Report>,
     pub(super) secrets: Kept,
     pub(super) retired: Vec<crate::bots::secrets::Entry>,
+    pub(super) asks: Vec<crate::bots::asks::Ask>,
+    pub(super) notes: Vec<String>,
 }
 
 pub(super) struct Bots {
@@ -118,6 +122,7 @@ pub(super) struct Bots {
     pub(super) batch: Duration,
     pub(super) next_turn: u64,
     pub(super) next_key: u64,
+    pub(super) next_ask: u64,
     pub(super) shown: Option<Chat>,
     pub(super) collapsed: bool,
 }
@@ -134,6 +139,7 @@ impl Default for Bots {
             batch: BATCH,
             next_turn: 1,
             next_key: 1,
+            next_ask: 1,
             shown: None,
             collapsed: false,
         }
@@ -205,6 +211,8 @@ impl Live {
             reports: Vec::new(),
             secrets: Kept::default(),
             retired: Vec::new(),
+            asks: Vec::new(),
+            notes: Vec::new(),
         }
     }
 }
@@ -268,9 +276,11 @@ fn load_chat(dir: &Path, bot: Bot, key: u64, secret_key: &KeyState) -> Live {
     let last = lines.iter().rev().find(|line| matches!(line.kind, chat::Kind::You | chat::Kind::Bot)).cloned();
     let mut unseen = chat::unseen(&lines);
     unseen.drain(..unseen.len().saturating_sub(TOLD_KEPT));
+    let mut notes = chat::noted(&lines);
+    notes.drain(..notes.len().saturating_sub(TOLD_KEPT));
     let secrets = keeping::load(&folder, &bot.id, secret_key);
     if secrets.is_unreadable() {
         crate::log::warning!("bots", "secrets unreadable", bot = bot.id);
     }
-    Live { next_line: chat::replay(&lines).next_id, last, unseen, secrets, ..Live::new(bot, folder, key) }
+    Live { next_line: chat::replay(&lines).next_id, last, unseen, notes, secrets, ..Live::new(bot, folder, key) }
 }

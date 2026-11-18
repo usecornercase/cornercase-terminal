@@ -59,6 +59,7 @@ pub(crate) enum RowHit {
     RunAgain(u64),
     Show(u64),
     Example(usize),
+    Give(u64),
     Link,
 }
 
@@ -89,6 +90,7 @@ pub(crate) enum ChatEntry {
     Steps { first: u64, texts: Vec<String>, open: bool },
     Error { id: u64, text: String, retry: bool },
     Notice(String),
+    Asking { text: String, ask: u64 },
     Run(RunBlock),
     Agent(ChatAgentLine),
 }
@@ -285,14 +287,20 @@ pub(super) fn error_rows(text: &str, again: Option<(RowHit, &'static str)>, widt
         .into_iter()
         .map(|line| ChatRow::plain(Line::from(Span::styled(line, red))))
         .collect();
-    if let (Some((hit, label)), Some(last)) = (again, rows.last_mut()) {
+    if let Some((hit, label)) = again {
+        with_button(&mut rows, hit, label);
+    }
+    rows
+}
+
+fn with_button(rows: &mut [ChatRow], hit: RowHit, label: &str) {
+    if let Some(last) = rows.last_mut() {
         let start = u16::try_from(last.line.width() + 1).unwrap_or(u16::MAX);
         let width = u16::try_from(label.width() + 2).unwrap_or(u16::MAX);
         let shown = format!(" {label} ");
         last.line.spans.extend([Span::raw(" "), Span::styled(shown, Style::default().fg(Color::Cyan))]);
         last.hit = Some((hit, start..start.saturating_add(width)));
     }
-    rows
 }
 
 pub(super) fn notice_rows(text: &str, width: usize, tone: Tone) -> Vec<ChatRow> {
@@ -306,6 +314,13 @@ pub(super) fn notice_rows(text: &str, width: usize, tone: Tone) -> Vec<ChatRow> 
         .collect()
 }
 
+fn asking_rows(text: &str, ask: u64, width: usize, tone: Tone) -> Vec<ChatRow> {
+    const GIVE: &str = "give…";
+    let mut rows = notice_rows(text, width.saturating_sub(GIVE.width() + 3), tone);
+    with_button(&mut rows, RowHit::Give(ask), GIVE);
+    rows
+}
+
 pub(crate) fn entry_rows(entry: &ChatEntry, width: u16, tone: Tone) -> Vec<ChatRow> {
     let width = usize::from(width);
     match entry {
@@ -314,6 +329,7 @@ pub(crate) fn entry_rows(entry: &ChatEntry, width: u16, tone: Tone) -> Vec<ChatR
         ChatEntry::Steps { first, texts, open } => step_rows(*first, texts, (*open, STEPS_SHOWN), width, tone),
         ChatEntry::Error { id, text, retry } => error_rows(text, retry.then_some((RowHit::Retry(*id), "retry")), width),
         ChatEntry::Notice(text) => notice_rows(text, width, tone),
+        ChatEntry::Asking { text, ask } => asking_rows(text, *ask, width, tone),
         ChatEntry::Run(block) => run_rows(block, width, tone),
         ChatEntry::Agent(line) => chat_agent_rows(line, width, tone),
     }

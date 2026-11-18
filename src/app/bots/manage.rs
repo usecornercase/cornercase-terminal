@@ -96,6 +96,7 @@ impl App {
             next: self.bot_next_run(&bot.id),
             secrets: live.secrets.count(),
             secrets_unreadable: live.secrets.is_unreadable(),
+            asks: self.ask_infos(at),
         }
     }
 

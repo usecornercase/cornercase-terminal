@@ -25,7 +25,7 @@ const SCHEDULE: &str = "To schedule work, run `cornercase queue add --every 'wee
 const FOLLOW: &str = "When an agent you started finishes, you get a message with its last message. Tell the user what matters in one or two lines. If the user asked you to go on after it (open a PR, start the next step), do it.";
 const NOT_FOLLOWING: &str =
     "You are not told when an agent you started finishes: when the user asks, look with `cornercase status --json`.";
-pub(crate) const SECRETS: &str = "When a site or a tool asks for a password or a token, run `cornercase bot secret list` to see the names the user saved for you, and `cornercase bot secret get NAME` to read one. Use it only where it is needed. Never write a secret's value in your answer, in `bot.md` or in `memory.md`: write its name and where it is used.";
+pub(crate) const SECRETS: &str = "When a site or a tool asks for a password or a token, run `cornercase bot secret list` to see the names the user saved for you, and `cornercase bot secret get NAME` to read one. Use it only where it is needed. Never write a secret's value in your answer, in `bot.md` or in `memory.md`: write its name and where it is used. If the secret you need is not saved, run `cornercase bot secret ask NAME --about 'why you need it'`, tell the user what you asked for, and end your answer: you are written to when they save it. Never ask for a password or a token in the chat. If the user writes one there, do not use it: tell them it is now in the chat's file, and to give it in the dialog instead.";
 const SETUP: &str = "## You were just made\n\nThe user has just made you, and `bot.md` above is what they wrote you are for. Set yourself up now, in a few steps, and do not do the work itself unless `bot.md` asks for it now. Schedule what it asks for at a time or again and again (`cornercase queue add`, as above), but first look at what is scheduled already (`cornercase queue list --bot {id} --json`): a setup that was cut short may have done some of it. Write in `memory.md` what your runs will need. Then tell the user, in a few lines, what you will do, what you scheduled and when it runs next, and what you need from them, if anything. Your runs can look commands up when they run, so do not read every `--help` now.";
 pub(crate) const TOLD_KEPT: usize = 10;
 const TOLD_CAP: usize = 16 * 1024;
@@ -118,6 +118,21 @@ pub(crate) fn told(answers: &[Told], bot: &str) -> Option<String> {
         );
     }
     Some(text)
+}
+
+pub(crate) fn noted(notes: &[String]) -> Option<String> {
+    if notes.is_empty() {
+        return None;
+    }
+    let lines: Vec<String> = notes.iter().map(|note| format!("- {note}")).collect();
+    Some(format!("## Since your last message\n\n{}", lines.join("\n")))
+}
+
+pub(crate) fn joined_told(told: Option<String>, noted: Option<String>) -> Option<String> {
+    match (told, noted) {
+        (Some(told), Some(noted)) => Some(format!("{told}\n\n{noted}")),
+        (told, noted) => told.or(noted),
+    }
 }
 
 pub(crate) fn said(from_cornercase: bool, text: &str) -> String {

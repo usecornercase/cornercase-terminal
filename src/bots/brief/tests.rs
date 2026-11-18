@@ -266,3 +266,35 @@ mod git {
         assert!(told.contains("you cannot run git"), "{told}");
     }
 }
+
+mod notes {
+    use super::*;
+
+    #[test]
+    fn are_one_line_each_under_their_heading() {
+        let notes =
+            [String::from("The user did not give: a."), String::from("The user saved the secrets you asked for: b.")];
+        assert_eq!(
+            noted(&notes).as_deref(),
+            Some(
+                "## Since your last message\n\n- The user did not give: a.\n- The user saved the secrets you asked for: b."
+            )
+        );
+        assert_eq!(noted(&[]), None);
+    }
+
+    #[test]
+    fn join_the_routines_block_with_a_blank_line() {
+        let both = joined_told(Some(String::from("routines")), Some(String::from("notes")));
+        assert_eq!(both.as_deref(), Some("routines\n\nnotes"));
+        assert_eq!(joined_told(None, Some(String::from("notes"))).as_deref(), Some("notes"));
+        assert_eq!(joined_told(None, None), None);
+    }
+
+    #[test]
+    fn the_brief_teaches_asking_for_a_secret() {
+        let text = brief(&named(Access::Cornercase), Path::new("/b"));
+        assert!(text.contains("cornercase bot secret ask NAME --about"), "{text}");
+        assert!(flags_named(&text).iter().any(|(path, flag)| path == &["bot", "secret", "ask"] && flag == "about"));
+    }
+}

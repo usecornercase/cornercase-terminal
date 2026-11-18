@@ -108,7 +108,8 @@ when bot.md is empty. With --json it prints {\"bot\", \"line\"}.";
 pub(in crate::cli) const BOT_SECRET_HELP: &str =
     "A bot's secrets are named values, a password or a token, that cornercase keeps encrypted for that bot
 and that only that bot's own turn reads, with `cornercase bot secret get NAME`. A name takes 1 to 40
-characters of a-z, 0-9, - and _; a value 1 to 8,192 bytes; a bot keeps at most 20.";
+characters of a-z, 0-9, - and _; a value 1 to 8,192 bytes; a bot keeps at most 20. A bot that lacks one
+asks the user for it with `cornercase bot secret ask NAME --about TEXT`.";
 
 pub(in crate::cli) const BOT_SECRET_SET_HELP: &str =
     "The bot reads this value: it reaches the bot's agent and stays in that agent's own records on this computer.
@@ -136,3 +137,27 @@ pub(in crate::cli) const BOT_SECRET_GET_HELP: &str =
     "Prints the value and a line break. Only the bot itself may run it, from its own turn: every other
 client, the user's own shell too, is refused. Never write the value in an answer, in bot.md or in
 memory.md. With --json it prints {\"bot\", \"name\", \"value\"}.";
+
+pub(in crate::cli) const BOT_SECRET_ASK_HELP: &str =
+    "Only the bot itself may run it, from its own turn. It never waits: the user sees `asks for a secret` in
+the bot's chat, a dialog with a masked field for each name (or a notice with ` go `), and types the
+values there; the bot is written to once they are saved. A value never goes through the chat.
+
+1 to 4 names; --about is why, in one line of 1 to 200 characters, shown to the user as the bot's words.
+A name already saved is refused without --replace, the same names asked again answer `already`, and a
+bot has at most 4 asks waiting. A restart forgets the asks. With --json it prints
+{\"bot\", \"ask\", \"names\", \"already\"}.
+
+Example:
+  cornercase bot secret ask campus-user campus-password --about 'to read your grades on the campus site'";
+
+pub(in crate::cli) const BOT_SECRET_GIVE_HELP: &str =
+    "Reads one JSON object from standard input, each name the bot asked for to its value, and saves them all
+or none. A bot cannot run it. It prints the saved names. With --json it prints {\"bot\", \"ask\", \"saved\"}.
+
+Example:
+  printf '%s' '{\"campus-user\":\"…\",\"campus-password\":\"…\"}' | cornercase bot secret give campus 3";
+
+pub(in crate::cli) const BOT_SECRET_DECLINE_HELP: &str =
+    "Ends the ask without saving anything; the bot is told at the next message in its chat. A bot cannot run it.
+With --json it prints {\"bot\", \"ask\"}.";
