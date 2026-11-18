@@ -96,6 +96,28 @@ mod changing {
     use super::*;
 
     #[test]
+    fn writers_at_once_lose_none() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        let writers = 8;
+
+        std::thread::scope(|scope| {
+            for i in 0..writers {
+                let here = &here;
+                scope.spawn(move || {
+                    change(here, |list| {
+                        std::thread::sleep(std::time::Duration::from_millis(15));
+                        list.push(machine(&format!("m{i}"), &format!("m{i}.lan")));
+                    })
+                    .expect("written");
+                });
+            }
+        });
+
+        assert_eq!(read(&here).len(), writers);
+    }
+
+    #[test]
     fn a_migration_that_cannot_finish_stops_the_change() {
         let dir = TempDir::new();
         let here = here_in(&dir);

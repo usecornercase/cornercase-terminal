@@ -1,10 +1,13 @@
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{ICONS, Machine, name_taken, valid_command, valid_destination};
+use crate::os::fs::{Lock, try_lock};
 use crate::remote::Remote;
 use crate::remote::machines::valid;
 use crate::{config, paths, persist};
@@ -12,6 +15,8 @@ use crate::{config, paths, persist};
 const NAME_MAX: usize = 20;
 const FALLBACK_NAME: &str = "machine";
 const HOME: &str = "~";
+const LOCK_WAIT: Duration = Duration::from_secs(5);
+const LOCK_STEP: Duration = Duration::from_millis(20);
 
 pub(crate) struct Here {
     pub(crate) config: PathBuf,
@@ -50,7 +55,30 @@ pub(crate) fn change<R>(here: &Here, edit: impl FnOnce(&mut Vec<Machine>) -> R) 
     edit_config(&here.config, edit)
 }
 
+fn lock_file(path: &Path) -> io::Result<File> {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".lock");
+    if let Some(folder) = path.parent() {
+        std::fs::create_dir_all(folder)?;
+    }
+    OpenOptions::new().create(true).write(true).truncate(false).open(name)
+}
+
+fn take_lock(path: &Path) -> io::Result<File> {
+    let file = lock_file(path)?;
+    let deadline = Instant::now() + LOCK_WAIT;
+    while !try_lock(&file, Lock::Exclusive)? {
+        if Instant::now() >= deadline {
+            let why = "another cornercase is changing the list of machines; try again";
+            return Err(io::Error::new(io::ErrorKind::TimedOut, why));
+        }
+        std::thread::sleep(LOCK_STEP);
+    }
+    Ok(file)
+}
+
 fn edit_config<R>(path: &Path, edit: impl FnOnce(&mut Vec<Machine>) -> R) -> io::Result<R> {
+    let _lock = take_lock(path)?;
     match config::read(path).map_err(io::Error::other)? {
         None => {
             let mut machines = Vec::new();
