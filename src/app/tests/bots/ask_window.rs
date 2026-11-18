@@ -5,6 +5,7 @@ use super::*;
 use crate::app::overlay::Overlay;
 use crate::bots::asks::{self, Hit};
 use crate::control::bots::SecretAnswer;
+use crate::editor::Editor;
 
 fn asking_chat() -> Chat {
     let mut c = chat(ANSWER);
