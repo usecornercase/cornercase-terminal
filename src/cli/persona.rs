@@ -98,7 +98,7 @@ fn with_warning(mut value: serde_json::Value, source: &Source) -> serde_json::Va
 fn confirmed(preview: &PersonasImported, source: &Source) -> Result<bool> {
     note(&lines(&preview.personas));
     let risks = warning(source, &preview.check);
-    if !std::io::stdin().is_terminal() {
+    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
         return Err(Error::Control(format!("{risks}; pass --yes to import them")));
     }
     let count = preview.personas.len();

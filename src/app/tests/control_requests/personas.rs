@@ -244,5 +244,31 @@ fn a_flow_with_a_persona_you_lack_is_neither_imported_nor_saved() {
 
     assert!(matches!(imported, Response::Error(message) if message.contains("not among your personas")));
     assert!(matches!(saved, Response::Error(message) if message.contains("not among your personas")));
-    assert_eq!(persona::ids(&library.dir()), Vec::<String>::new());
+    assert_eq!(persona::list(&library.dir()).personas, Vec::new());
+}
+
+#[test]
+fn a_check_says_when_a_file_it_would_replace_is_too_large_to_keep() {
+    let mut library = Library::new();
+    std::fs::create_dir_all(library.dir()).expect("the folder");
+    std::fs::write(library.dir().join("reviewer.md"), "a".repeat(persona::MAX_BYTES + 1)).expect("write");
+
+    let refused = library.refused(vec![text("reviewer.md", REVIEWER)], |import| {
+        import.replace = true;
+        import.check = true;
+    });
+
+    assert!(refused.contains("too large to keep a copy of"), "{refused}");
+}
+
+#[test]
+fn a_flow_that_follows_a_persona_file_it_cannot_read_is_not_saved() {
+    let mut library = Library::new();
+    std::fs::create_dir_all(library.dir()).expect("the folder");
+    std::fs::write(library.dir().join("reviewer.md"), "my notes").expect("write");
+    let save = FlowSave { flow: FlowSpec::from(&following("reviewer")), ..FlowSave::default() };
+
+    let saved = now(&mut library.app, None, Command::FlowSave(save));
+
+    assert!(matches!(&saved, Response::Error(message) if message.contains("cannot be read")), "{saved:?}");
 }

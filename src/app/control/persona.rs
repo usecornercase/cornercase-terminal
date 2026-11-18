@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{Handled, json, malformed};
 use crate::app::App;
@@ -21,7 +21,7 @@ impl App {
     }
 
     pub(in crate::app) fn persona_ids(&self) -> Vec<String> {
-        persona::ids(&self.personas_dir())
+        persona::list(&self.personas_dir()).personas.into_iter().map(|found| found.id).collect()
     }
 
     pub(in crate::app) fn run_personas(&self, flow: &Flow) -> Result<BTreeMap<String, String>, String> {
@@ -60,7 +60,8 @@ impl App {
         }
         let dir = self.personas_dir();
         let incoming = incoming(&import.personas)?;
-        let replaced = collisions((&persona::list(&dir), &persona::ids(&dir)), &incoming, import.replace)?;
+        let replaced = collisions((&persona::list(&dir), &dir), &incoming, import.replace)?;
+        persona::keepable(&dir, &incoming)?;
         let mut answer = PersonasImported { check: CHECK.to_string(), ..PersonasImported::default() };
         answer.personas = incoming
             .iter()
@@ -113,15 +114,11 @@ fn incoming(texts: &[PersonaText]) -> Result<Vec<Persona>, Refusal> {
     if problems.is_empty() { Ok(found) } else { Err(malformed(problems.join("; "))) }
 }
 
-fn collisions(
-    (listing, ids): (&Listing, &[String]),
-    incoming: &[Persona],
-    replace: bool,
-) -> Result<Vec<bool>, Refusal> {
+fn collisions((listing, dir): (&Listing, &Path), incoming: &[Persona], replace: bool) -> Result<Vec<bool>, Refusal> {
     let mut problems = Vec::new();
     let mut replaced = Vec::new();
     for found in incoming {
-        let same = ids.contains(&found.id);
+        let same = persona::taken(dir, &found.id);
         let named = listing.personas.iter().find(|other| other.id != found.id && same_name(&other.name, &found.name));
         if let Some(other) = named {
             problems.push(format!(

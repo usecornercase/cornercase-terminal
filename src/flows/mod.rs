@@ -187,7 +187,7 @@ impl Flow {
             .filter_map(|role| Some((role.name.trim(), role.persona().filter(|id| persona::valid_id(id))?)))
             .filter(|(_, id)| !known.iter().any(|known| known == id))
             .map(|(name, id)| {
-                format!("`{name}` follows the persona `{id}`, which is not among your personas: import it with `cornercase persona import`")
+                format!("`{name}` follows the persona `{id}`, which is not among your personas or cannot be read: import it with `cornercase persona import`, and `cornercase persona list` says why one cannot be read")
             })
             .collect()
     }

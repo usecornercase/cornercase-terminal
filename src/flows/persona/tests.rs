@@ -84,6 +84,10 @@ mod ids {
     #[case("trail-", false)]
     #[case("dots.md", false)]
     #[case("../up", false)]
+    #[case::a_device("nul", false)]
+    #[case::a_numbered_device("com1", false)]
+    #[case::a_printer("lpt9", false)]
+    #[case::longer_than_a_device("console", true)]
     fn are_lower_case_letters_digits_and_dashes(#[case] id: &str, #[case] valid: bool) {
         assert_eq!(valid_id(id), valid);
     }
@@ -93,6 +97,7 @@ mod ids {
     #[case::from_a_messy_file("My Reviewer (v2).MD", "x", "my-reviewer-v2")]
     #[case::from_the_name("", "Code Reviewer", "code-reviewer")]
     #[case::fallback("", "👁️", "persona")]
+    #[case::past_a_device("nul.md", "Null Persona", "null-persona")]
     fn come_from_the_file_name_then_the_name(#[case] file: &str, #[case] name: &str, #[case] id: &str) {
         assert_eq!(id_of(file, name), id);
     }
@@ -129,6 +134,19 @@ mod sources {
     }
 
     #[test]
+    fn replace_a_block_before_with_its_lines() {
+        let text = "---\nname: R\ndescription: |\n  Reviews.\nsource: |\n  old/place\n  more\n---\nbody\n";
+
+        let replaced = with_source(text, "new/place");
+
+        let persona = parse("r", &replaced).expect("a persona");
+        assert_eq!(persona.source.as_deref(), Some("new/place"));
+        assert_eq!(persona.description, "Reviews.");
+        assert!(!replaced.contains("old/place") && !replaced.contains("more"), "{replaced}");
+        assert!(replaced.ends_with("---\nbody\n"), "{replaced}");
+    }
+
+    #[test]
     fn an_import_takes_its_id_from_the_file_and_its_source() {
         let persona = imported("reviewer.md", REVIEWER, Some("/home/me/reviewer.md")).expect("a persona");
 
@@ -159,7 +177,7 @@ mod the_library {
         assert_eq!(names, [("zed", "Alpha"), ("abe", "Beta")]);
         assert_eq!(listing.broken.len(), 1);
         assert!(listing.broken[0].0.ends_with("broken.md"), "{:?}", listing.broken);
-        assert_eq!(ids(dir.path()), ["abe", "broken", "zed"]);
+        assert!(taken(dir.path(), "broken") && !taken(dir.path(), "gone"));
     }
 
     #[test]
@@ -178,6 +196,27 @@ mod the_library {
     fn a_missing_folder_lists_nothing() {
         let dir = TempDir::new();
         assert_eq!(list(&dir.path().join("personas")), Listing::default());
-        assert_eq!(ids(&dir.path().join("personas")), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_folder_it_cannot_read_is_named_as_broken() {
+        let dir = TempDir::new();
+        let file = dir.path().join("personas");
+        std::fs::write(&file, "not a folder").expect("write");
+
+        let listing = list(&file);
+
+        assert_eq!(listing.personas, Vec::new());
+        assert_eq!(listing.broken.len(), 1);
+        assert!(listing.broken[0].1.starts_with("cannot read"), "{:?}", listing.broken);
+    }
+
+    #[test]
+    fn a_file_of_another_case_takes_the_id_where_the_disk_ignores_case() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("Reviewer.md"), REVIEWER).expect("write");
+        let ignores_case = dir.path().join("REVIEWER.MD").exists();
+
+        assert_eq!(taken(dir.path(), "reviewer"), ignores_case);
     }
 }

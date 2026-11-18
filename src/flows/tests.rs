@@ -964,8 +964,8 @@ mod personas {
         assert_eq!(
             flow.persona_problems(&[]),
             [
-                "`reviewer` follows the persona `engineering-code-reviewer`, which is not among your personas: import it \
-              with `cornercase persona import`"
+                "`reviewer` follows the persona `engineering-code-reviewer`, which is not among your personas or cannot be \
+              read: import it with `cornercase persona import`, and `cornercase persona list` says why one cannot be read"
             ]
         );
     }

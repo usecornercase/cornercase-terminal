@@ -38,11 +38,18 @@ pub(crate) fn valid_id(id: &str) -> bool {
         && !id.starts_with('-')
         && !id.ends_with('-')
         && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !names_a_device(id)
+}
+
+fn names_a_device(id: &str) -> bool {
+    let numbered =
+        |prefix: &str| id.strip_prefix(prefix).is_some_and(|n| n.len() == 1 && n.as_bytes()[0].is_ascii_digit());
+    matches!(id, "con" | "prn" | "aux" | "nul") || numbered("com") || numbered("lpt")
 }
 
 pub(crate) fn id_of(file: &str, name: &str) -> String {
     let stem = Path::new(file).file_stem().and_then(|stem| stem.to_str()).unwrap_or_default();
-    [stem, name].into_iter().map(|text| slug(text, MAX_ID)).find(|id| !id.is_empty()).unwrap_or(FALLBACK.into())
+    [stem, name].into_iter().map(|text| slug(text, MAX_ID)).find(|id| valid_id(id)).unwrap_or(FALLBACK.into())
 }
 
 struct Front<'a> {
@@ -152,7 +159,7 @@ pub(crate) fn with_source(text: &str, source: &str) -> String {
     let Some(front) = front(text) else { return text.to_string() };
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let mut out = format!("{FENCE}{newline}");
-    for line in front.lines.iter().filter(|line| line.split_once(':').is_none_or(|(k, _)| k != "source")) {
+    for line in without_source(&front) {
         out.push_str(line);
         out.push_str(newline);
     }
@@ -161,29 +168,54 @@ pub(crate) fn with_source(text: &str, source: &str) -> String {
     out
 }
 
+fn without_source<'a>(front: &Front<'a>) -> Vec<&'a str> {
+    let mut in_source = false;
+    let mut kept = Vec::new();
+    for line in &front.lines {
+        if in_source && (line.is_empty() || line.starts_with([' ', '\t'])) {
+            continue;
+        }
+        in_source = line.split_once(':').is_some_and(|(key, _)| key == "source");
+        if !in_source {
+            kept.push(*line);
+        }
+    }
+    kept
+}
+
 pub(crate) fn path(dir: &Path, id: &str) -> PathBuf {
     dir.join(format!("{id}.{EXTENSION}"))
 }
 
-fn files(dir: &Path) -> Vec<(String, PathBuf)> {
-    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
-    let mut found: Vec<(String, PathBuf)> = entries
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+pub(crate) fn taken(dir: &Path, id: &str) -> bool {
+    std::fs::symlink_metadata(path(dir, id)).is_ok()
+}
+
+fn files(dir: &Path) -> std::result::Result<Vec<(String, PathBuf)>, String> {
+    let unread = |e: std::io::Error| format!("cannot read {}: {e}", dir.display());
+    let entries = match std::fs::read_dir(dir) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        entries => entries.map_err(unread)?,
+    };
+    let paths = entries.map(|entry| entry.map(|entry| entry.path())).collect::<std::io::Result<Vec<_>>>();
+    let mut found: Vec<(String, PathBuf)> = paths
+        .map_err(unread)?
+        .into_iter()
         .filter(|path| path.extension().is_some_and(|ext| ext == EXTENSION) && path.is_file())
         .filter_map(|path| Some((path.file_stem()?.to_str()?.to_string(), path)))
         .filter(|(id, _)| valid_id(id))
         .collect();
     found.sort();
-    found
-}
-
-pub(crate) fn ids(dir: &Path) -> Vec<String> {
-    files(dir).into_iter().map(|(id, _)| id).collect()
+    Ok(found)
 }
 
 pub(crate) fn list(dir: &Path) -> Listing {
     let mut listing = Listing::default();
-    for (id, path) in files(dir) {
+    let found = files(dir).unwrap_or_else(|reason| {
+        listing.broken.push((dir.to_path_buf(), reason));
+        Vec::new()
+    });
+    for (id, path) in found {
         match read_file(&id, &path) {
             Ok(persona) => listing.personas.push(persona),
             Err(reason) => listing.broken.push((path, reason)),
@@ -241,6 +273,10 @@ pub(crate) fn save_all(dir: &Path, personas: &[Persona]) -> std::result::Result<
         }
     }
     Ok(saved)
+}
+
+pub(crate) fn keepable(dir: &Path, personas: &[Persona]) -> std::result::Result<(), String> {
+    personas.iter().try_for_each(|persona| backup(dir, persona).map(drop))
 }
 
 fn backup(dir: &Path, persona: &Persona) -> std::result::Result<Option<Vec<u8>>, String> {
