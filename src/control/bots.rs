@@ -123,6 +123,8 @@ pub(crate) struct BotInfo {
     pub(crate) routines: usize,
     pub(crate) next: Option<i64>,
     pub(crate) secrets: usize,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) secrets_unreadable: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -138,6 +140,14 @@ pub(crate) struct AgentInfo {
     pub(crate) reads: Option<String>,
     pub(crate) efforts: Vec<String>,
     pub(crate) models: Vec<String>,
+}
+
+fn name_field<'a>(fields: &'a mut Fields, name: &str) -> &'a mut Fields {
+    if crate::bots::secrets::name_refusal(name).is_none() {
+        fields.add("name", name)
+    } else {
+        fields.add("name_bytes", name.len())
+    }
 }
 
 impl BotRequest {
@@ -169,15 +179,18 @@ impl BotRequest {
                 fields.maybe("after", history.after)
             }
             Self::SecretSet(set) => {
-                fields.add("action", "secret-set").add("bot", &set.bot).add("name", &set.name);
-                fields.add("bytes", set.value.0.len())
+                fields.add("action", "secret-set").add("bot", &set.bot);
+                name_field(fields, &set.name).add("bytes", set.value.0.len())
             }
             Self::SecretList(target) => fields.add("action", "secret-list").add("bot", &target.bot),
             Self::SecretRemove(remove) => {
-                fields.add("action", "secret-remove").add("bot", &remove.bot).maybe("name", remove.name.as_deref());
+                fields.add("action", "secret-remove").add("bot", &remove.bot);
+                if let Some(name) = &remove.name {
+                    name_field(fields, name);
+                }
                 fields.add("all", remove.all)
             }
-            Self::SecretGet(get) => fields.add("action", "secret-get").add("name", &get.name),
+            Self::SecretGet(get) => name_field(fields.add("action", "secret-get"), &get.name),
         };
     }
 }

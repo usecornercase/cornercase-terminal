@@ -5,6 +5,8 @@ A bot works for the user behind logins, so it needs a password or a token somewh
 ## The model
 
 - A secret is a `name` (1 to 40 characters of `a-z`, `0-9`, `-` and `_`, unique in its bot), a value (1 to 8,192 bytes of UTF-8, kept as given, but for the one line break at the end of what `set` reads from standard input or a window's paste) and `saved` (UTC seconds). At most 20 per bot; the 21st is `conflict`, a replacement at 20 is not. A value is refused with its size, never cut. One value per secret: a login is two (`campus-user`, `campus-password`), or the user name goes in `bot.md`.
+- **A name is logged only when it is one.** `get` carries free text before any validation, so a bot that passes a value for the name would have it in the request log and in the `not-found` text. `BotRequest::fields` logs `name` only when `name_refusal` passes and `name_bytes` otherwise, and `not-found` says `of that name` for what is not a name.
+- **`secrets_unreadable`** (additive, under `bot-secrets`): `BotInfo.secrets` is 0 for an unreadable file, so `secrets_unreadable: true` tells a program that draws cornercase it is not "none".
 - The value is `issues::Secret` end to end: its `Debug` prints `Secret(..)`, so no `{:?}` of an entry, a request or a list shows it (`Entry`, `Kept` and `Key` print by hand, and a test checks them). It is never in `bot.json`, `bot list`, `status --app`, an event or the log.
 
 ## The file and the key

@@ -13,6 +13,10 @@ pub(in crate::app) enum Caller {
     Bot { id: String, own: bool },
 }
 
+fn shown(name: &str) -> String {
+    if keeping::name_refusal(name).is_none() { name.to_string() } else { String::from("of that name") }
+}
+
 fn failed(text: impl Into<String>) -> Refusal {
     Refusal::new(Code::Failed, text)
 }
@@ -128,7 +132,7 @@ impl App {
             return Err(failed(keeping::unreadable_hint(&id)));
         }
         if live.secrets.find(name).is_none() {
-            return Err(Refusal::new(Code::NotFound, format!("{id} has no secret {name}")));
+            return Err(Refusal::new(Code::NotFound, format!("{id} has no secret {}", shown(name))));
         }
         let entries = live.secrets.without(name);
         self.secrets_keep(at, entries)?;
@@ -157,7 +161,8 @@ impl App {
         }
         let hint = "cornercase bot secret list shows them";
         let found = live.secrets.find(name);
-        let found = found.ok_or_else(|| Refusal::new(Code::NotFound, format!("no secret {name} in {id}; {hint}")))?;
+        let missing = || Refusal::new(Code::NotFound, format!("no secret {} in {id}; {hint}", shown(name)));
+        let found = found.ok_or_else(missing)?;
         log::info!("bots", "secret get", bot = id, name = name);
         Ok(json!({ "bot": id, "name": name, "value": found.value.0 }))
     }

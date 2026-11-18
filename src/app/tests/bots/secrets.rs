@@ -74,6 +74,19 @@ mod who_reads {
     }
 
     #[test]
+    fn a_name_that_is_not_one_is_never_echoed_back() {
+        let mut k = keeper();
+        k.set("pw", VALUE).expect("set");
+        let wrong = "Hunter2-Mistaken-Value";
+        let got = refusal(k.app.bot_secret_get(Some(OWNER), wrong));
+        let removed = refusal(k.app.bot_secret_remove(None, "campus", (Some(wrong), false)));
+        for (code, message) in [got, removed] {
+            assert!(code == Code::NotFound && !message.contains(wrong), "{message}");
+        }
+        assert!(refusal(k.app.bot_secret_get(Some(OWNER), "other")).1.contains("no secret other in campus"));
+    }
+
+    #[test]
     fn a_bot_lists_only_its_own() {
         let mut k = keeper();
         k.set("pw", VALUE).expect("set");
@@ -129,6 +142,18 @@ mod the_limits {
         let mut k = keeper();
         k.set("pw", VALUE).expect("set");
         assert_eq!(k.app.bot_infos().iter().map(|info| info.secrets).collect::<Vec<_>>(), [1, 0]);
+    }
+
+    #[test]
+    fn an_unreadable_file_is_not_the_same_as_none() {
+        let mut k = keeper();
+        std::fs::write(k.file("campus"), b"garbage").expect("write");
+        k.reload();
+        let infos = k.app.bot_infos();
+        assert_eq!((infos[0].secrets, infos[0].secrets_unreadable), (0, true));
+        assert_eq!(serde_json::to_value(&infos[0]).expect("json")["secrets_unreadable"], true);
+        let fine = serde_json::to_value(&infos[1]).expect("json");
+        assert!(fine.get("secrets_unreadable").is_none() && fine["secrets"] == 0, "{fine}");
     }
 }
 
