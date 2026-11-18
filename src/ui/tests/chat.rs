@@ -389,6 +389,62 @@ fn a_routine_row_of_the_card_is_a_target_on_both_its_rows() {
     assert_ne!(colour(&make(None), value), Color::Cyan);
 }
 
+fn two_routines(first: &str) -> BotCard {
+    let routine = |id, label, text: &str| CardRow { routine: Some(id), ..CardRow::new(label, text) };
+    BotCard {
+        name: "prs".into(),
+        rows: vec![
+            CardRow::new("agent", "Claude Code"),
+            routine(7, "routine", first),
+            routine(7, "", "next Mon 09:00"),
+            routine(8, "routine", "Nightly"),
+            routine(8, "", "next Tue 09:00"),
+        ],
+    }
+}
+
+fn card_view(card: &BotCard, hover: Option<Position>, overlay: Option<Overlay>) -> View<'_> {
+    View { bot_card: Some(card.clone()), has_project: true, hover, overlay, ..view(&["cornercase"]) }
+}
+
+#[test]
+fn a_hovered_routine_shows_its_menu_button_at_the_end_of_its_first_row() {
+    let card = two_routines("Review PRs");
+    let a = areas();
+    let list = a.workspaces_list;
+    let menu = card_menu(list, &card, 7);
+    assert_eq!(menu.y, list.y + 2);
+    assert_eq!(menu, row_menu_button(Rect::new(list.x + 1, menu.y, list.width - 1, 1), 1));
+    let glyph = Position::new(menu.right() - 1, menu.y);
+    let cell = |view: &View, pos: Position| render(view).backend().buffer()[pos].clone();
+    assert_eq!(cell(&card_view(&card, None, None), glyph).symbol(), " ");
+    let second = Position::new(list.x + 4, list.y + 3);
+    let shown = cell(&card_view(&card, Some(second), None), glyph);
+    assert_eq!((shown.symbol(), shown.fg), (ROW_MENU_ICON, Color::DarkGray));
+    let on = cell(&card_view(&card, Some(glyph), None), glyph);
+    assert_eq!((on.symbol(), on.fg), (ROW_MENU_ICON, Color::Cyan));
+    let other = Position::new(menu.right() - 1, list.y + 4);
+    assert_eq!(cell(&card_view(&card, Some(second), None), other).symbol(), " ");
+    let menu_overlay = Overlay::Menu { at: second, items: vec!["pause".into()], disabled: Vec::new() };
+    assert_eq!(cell(&card_view(&card, Some(second), Some(menu_overlay)), glyph).symbol(), " ");
+    let short = Rect::new(list.x, list.y, list.width, 3);
+    assert!(card_menu(short, &card, 7).is_empty());
+}
+
+#[test]
+fn a_hovered_routine_cuts_its_name_before_its_menu_button() {
+    let card = two_routines(&"x".repeat(40));
+    let a = areas();
+    let list = a.workspaces_list;
+    let menu = card_menu(list, &card, 7);
+    let hover = Position::new(list.x + 4, list.y + 3);
+    let text = |view: &View, x: u16| render(view).backend().buffer()[Position::new(x, menu.y)].symbol().to_string();
+    let hovered = card_view(&card, Some(hover), None);
+    assert_eq!([text(&hovered, menu.x - 2), text(&hovered, menu.x - 1)], ["…", " "]);
+    let resting = card_view(&card, None, None);
+    assert_ne!(text(&resting, menu.x), " ");
+}
+
 fn agent_line(kind: ChatAgentKind, text: &str, body: Vec<Text<'static>>, link: Option<u64>) -> ChatEntry {
     ChatEntry::Agent(ChatAgentLine { id: 40, state: kind, text: text.into(), body, open: false, link })
 }

@@ -168,20 +168,35 @@ impl App {
     }
 
     pub(in crate::app) fn bot_card_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas) {
-        if ev.kind != MouseEventKind::Down(MouseButton::Left) {
+        let left = ev.kind == MouseEventKind::Down(MouseButton::Left);
+        if !left && ev.kind != MouseEventKind::Down(MouseButton::Right) {
             return;
         }
         let Some(at) = self.shown_bot() else { return };
         let card = self.bot_card(at);
         let key = self.panels.bots.live[at].key;
-        if ui::card_folder(areas.workspaces_list, &card).contains(pos) {
+        let list = areas.workspaces_list;
+        if left {
+            self.press_card(key, &card, list, pos);
+        } else if let Some(routine) = ui::card_routine(list, &card, pos) {
+            self.open_routine_menu(key, routine, pos);
+        }
+    }
+
+    fn press_card(&mut self, key: u64, card: &ui::BotCard, list: Rect, pos: Position) {
+        if ui::card_folder(list, card).contains(pos) {
             self.open_menu_or_copy(Subject::Bot(key), pos);
-        } else if let Some(row) = ui::card_row_at(areas.workspaces_list, &card, pos) {
-            if let Some(routine) = card.rows[row].routine {
+            return;
+        }
+        let Some(row) = ui::card_row_at(list, card, pos) else { return };
+        if let Some(routine) = card.rows[row].routine {
+            if ui::card_menu(list, card, routine).contains(pos) {
+                self.open_routine_menu(key, routine, pos);
+            } else {
                 self.open_bot_routines(key, Some(routine));
-            } else if let Some(pane) = card.rows[row].pane {
-                self.jump_to_pane(pane);
             }
+        } else if let Some(pane) = card.rows[row].pane {
+            self.jump_to_pane(pane);
         }
     }
 }

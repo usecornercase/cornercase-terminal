@@ -41,7 +41,7 @@ function lastRun(app: App, entry: QueueEntry): QueueEntry | undefined {
 
 const leftBlock = (run: QueueEntry): boolean => run.state === 'answered' || run.state === 'failed' || run.state === 'started';
 
-function buttonsOf(entry: QueueEntry): Button[] {
+export function buttonsOf(entry: QueueEntry): Button[] {
   const runnable = !!entry.repeat || entry.state === 'pending' || entry.state === 'failed' || entry.state === 'missed';
   return [...(runnable ? ['run now' as const] : []), ...(entry.repeat ? [entry.paused ? ('resume' as const) : ('pause' as const)] : []), ...(runnable ? ['edit…' as const] : []), 'remove'];
 }
@@ -84,13 +84,17 @@ function pressRow(app: App, o: BotRoutinesDialog, entry: QueueEntry): void {
   } else app.dirty();
 }
 
-function pressButton(app: App, o: BotRoutinesDialog, entry: QueueEntry, button: Button): void {
-  o.selected = entry.id;
+export function actOnRoutine(app: App, entry: QueueEntry, button: Button): void {
   if (button === 'run now') app.notify(RUN_LEFT_OUT);
   else if (button === 'edit…') app.notify(FORM_LEFT_OUT);
   else if (button === 'remove') app.removeQueued(...app.removal(entry, 'botQueued'), 'botQueued');
   else app.pauseQueued(entry, button === 'pause', 'botQueued');
   app.dirty();
+}
+
+function pressButton(app: App, o: BotRoutinesDialog, entry: QueueEntry, button: Button): void {
+  o.selected = entry.id;
+  actOnRoutine(app, entry, button);
 }
 
 export function botRoutinesKey(app: App, o: BotRoutinesDialog, k: Key): void {

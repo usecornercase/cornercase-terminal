@@ -8,9 +8,9 @@ use crate::agents::activity::Status;
 use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
 use crate::ui::layout::Areas;
-use crate::ui::rows::draw_more;
+use crate::ui::rows::{draw_menu_in, draw_more, row_menu_button};
 use crate::ui::theme::status_icon;
-use crate::ui::widgets::draw_title;
+use crate::ui::widgets::{draw_title, sidebar_hovered};
 
 const LABEL: usize = 9;
 const HEADER: u16 = 1;
@@ -72,6 +72,36 @@ pub(crate) fn card_routine(list: Rect, card: &BotCard, pos: Position) -> Option<
     card.rows[card_row_at(list, card, pos)?].routine
 }
 
+fn routine_span(list: Rect, card: &BotCard, routine: u64) -> Rect {
+    (0..shown_rows(list, card))
+        .filter(|at| card.rows[*at].routine == Some(routine))
+        .map(|at| card_row(list, at))
+        .reduce(Rect::union)
+        .unwrap_or_default()
+}
+
+pub(crate) fn card_menu(list: Rect, card: &BotCard, routine: u64) -> Rect {
+    let span = routine_span(inner(list), card, routine);
+    if span.is_empty() { Rect::default() } else { row_menu_button(span, 1) }
+}
+
+fn row_width(view: &View, card: &BotCard, list: Rect, i: usize, width: usize) -> usize {
+    let routine = card.rows[i].routine;
+    let first = routine.is_some() && (i == 0 || card.rows[i - 1].routine != routine);
+    if !first {
+        return width;
+    }
+    let span = routine_span(list, card, routine.unwrap_or_default());
+    if !sidebar_hovered(view, span) {
+        return width;
+    }
+    let menu = row_menu_button(span, 1);
+    if menu.is_empty() {
+        return width;
+    }
+    usize::from(menu.x.saturating_sub(card_row(list, i).x)).saturating_sub(1)
+}
+
 pub(in crate::ui) fn draw_card(f: &mut Frame, view: &View, card: &BotCard, areas: &Areas) {
     draw_title(f, view.muted, areas.workspaces_title, "Bot");
     let list = inner(areas.workspaces_list);
@@ -83,7 +113,11 @@ pub(in crate::ui) fn draw_card(f: &mut Frame, view: &View, card: &BotCard, areas
     let under = view.hover.and_then(|pos| card_routine(areas.workspaces_list, card, pos));
     for (i, row) in card.rows.iter().take(shown).enumerate() {
         let target = row.routine.is_some() && row.routine == under;
-        f.render_widget(Paragraph::new(card_line(view, row, width, target)), card_row(list, i));
+        let line = card_line(view, row, row_width(view, card, list, i, width), target);
+        f.render_widget(Paragraph::new(line), card_row(list, i));
+    }
+    if let Some(routine) = under {
+        draw_menu_in(f, view, routine_span(list, card, routine), 1, Style::default());
     }
     let hidden = card.rows.len() - shown;
     if hidden > 0 {
