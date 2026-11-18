@@ -209,14 +209,24 @@ mod reaching {
     }
 
     #[test]
-    fn a_known_one_takes_the_last_command_and_loses_its_mark() {
+    fn a_known_one_loses_its_mark_and_keeps_the_command_it_has() {
         let dir = TempDir::new();
         remembered(&here_in(&dir), "devbox".into(), Some("/opt/cc".into())).expect("written");
 
-        reached(&here_in(&dir), &remote("devbox", None)).expect("written");
+        reached(&here_in(&dir), &remote("devbox", Some("/old/cc"))).expect("written");
 
         let list = read(&here_in(&dir));
-        assert_eq!((list.len(), list[0].command.clone(), list[0].unreached), (1, None, false));
+        assert_eq!((list.len(), list[0].command.as_deref(), list[0].unreached), (1, Some("/opt/cc"), false));
+    }
+
+    #[test]
+    fn a_known_one_without_a_command_takes_the_one_it_was_reached_with() {
+        let dir = TempDir::new();
+        remembered(&here_in(&dir), "devbox".into(), None).expect("written");
+
+        reached(&here_in(&dir), &remote("devbox", Some("/opt/cc"))).expect("written");
+
+        assert_eq!(read(&here_in(&dir))[0].command.as_deref(), Some("/opt/cc"));
     }
 
     #[test]
@@ -299,6 +309,8 @@ mod remembering {
 }
 
 mod migrating {
+    use std::time::Duration;
+
     use super::*;
 
     const LEGACY: &str =
@@ -375,5 +387,39 @@ mod migrating {
         migrate(&here_in(&dir)).expect("fine");
 
         assert!(!here_in(&dir).config.exists());
+    }
+
+    #[test]
+    fn a_second_process_that_migrated_and_forgot_is_not_undone_by_a_stale_snapshot() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        std::fs::write(&here.legacy, LEGACY).expect("written");
+        let held = hold(&here.config).expect("held");
+        let late = std::thread::spawn({
+            let here = Here { config: here.config.clone(), legacy: here.legacy.clone() };
+            move || migrate(&here)
+        });
+        std::thread::sleep(Duration::from_millis(150));
+        std::fs::remove_file(&here.legacy).expect("migrated by the other");
+        drop(held);
+
+        late.join().expect("joined").expect("migrated");
+
+        assert_eq!(names(&read(&here)), Vec::<&str>::new());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_old_file_that_cannot_be_looked_up_names_itself_not_the_config() {
+        let dir = TempDir::new();
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, "").expect("written");
+        let here = Here { config: dir.path().join("config.json"), legacy: blocker.join("machines.json") };
+
+        let error = change(&here, |_| ()).expect_err("refused");
+
+        let message = error.to_string();
+        assert!(message.contains(&here.legacy.display().to_string()), "{message}");
+        assert!(!message.contains("cannot read or write"), "{message}");
     }
 }

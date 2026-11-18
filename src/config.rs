@@ -619,7 +619,7 @@ pub(crate) fn load(path: &Path) -> Config {
 
 const MAX_BYTES: u64 = 4 << 20;
 
-pub(crate) fn read(path: &Path) -> Result<Option<Config>, String> {
+pub(crate) fn read_text(path: &Path) -> Result<Option<String>, String> {
     let file = match std::fs::OpenOptions::new().read(true).custom_flags(NONBLOCK).open(path) {
         Ok(file) => file,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -634,6 +634,11 @@ pub(crate) fn read(path: &Path) -> Result<Option<Config>, String> {
     if text.len() as u64 > MAX_BYTES {
         return Err("it is too large".into());
     }
+    Ok(Some(text))
+}
+
+pub(crate) fn read(path: &Path) -> Result<Option<Config>, String> {
+    let Some(text) = read_text(path)? else { return Ok(None) };
     let mut value: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     if let Value::Object(keys) = &mut value {
         migrate(keys);

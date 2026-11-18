@@ -44,15 +44,16 @@ struct Legacy {
 
 pub(crate) fn read(here: &Here) -> Vec<Machine> {
     let _ = migrate(here);
-    let Ok(bytes) = std::fs::read(&here.config) else { return Vec::new() };
-    let Ok(Value::Object(mut keys)) = serde_json::from_slice::<Value>(&bytes) else { return Vec::new() };
+    let Ok(Some(text)) = config::read_text(&here.config) else { return Vec::new() };
+    let Ok(Value::Object(mut keys)) = serde_json::from_str::<Value>(&text) else { return Vec::new() };
     let Some(Value::Array(entries)) = keys.remove("machines") else { return Vec::new() };
     entries.into_iter().filter_map(|entry| serde_json::from_value(entry).ok()).collect()
 }
 
 pub(crate) fn change<R>(here: &Here, edit: impl FnOnce(&mut Vec<Machine>) -> R) -> io::Result<R> {
-    migrate(here)?;
-    edit_config(&here.config, edit)
+    let _lock = take_lock(&here.config)?;
+    migrate_locked(here)?;
+    edit_locked(&here.config, edit)
 }
 
 fn lock_file(path: &Path) -> io::Result<File> {
@@ -102,8 +103,7 @@ pub(crate) fn hold(path: &Path) -> io::Result<File> {
     take_lock(path)
 }
 
-fn edit_config<R>(path: &Path, edit: impl FnOnce(&mut Vec<Machine>) -> R) -> io::Result<R> {
-    let _lock = take_lock(path)?;
+fn edit_locked<R>(path: &Path, edit: impl FnOnce(&mut Vec<Machine>) -> R) -> io::Result<R> {
     match config::read(path).map_err(io::Error::other)? {
         None => {
             let mut machines = Vec::new();
@@ -147,7 +147,9 @@ pub(crate) fn reached(here: &Here, remote: &Remote) -> io::Result<()> {
     change(here, |list| {
         let mut found = false;
         for machine in list.iter_mut().filter(|machine| machine.destination == remote.destination) {
-            machine.command.clone_from(&remote.command);
+            if machine.command.is_none() {
+                machine.command.clone_from(&remote.command);
+            }
             machine.unreached = false;
             found = true;
         }
@@ -230,12 +232,24 @@ fn merge(list: &mut Vec<Machine>, old: Legacy) {
     }
 }
 
+fn legacy_present(here: &Here) -> io::Result<bool> {
+    here.legacy.try_exists().map_err(|error| stuck(here, &error))
+}
+
 pub(crate) fn migrate(here: &Here) -> io::Result<()> {
-    if !here.legacy.exists() {
+    if !legacy_present(here)? {
+        return Ok(());
+    }
+    let _lock = take_lock(&here.config)?;
+    migrate_locked(here)
+}
+
+fn migrate_locked(here: &Here) -> io::Result<()> {
+    if !legacy_present(here)? {
         return Ok(());
     }
     let legacy = legacy_machines(&here.legacy).map_err(|error| stuck(here, &error))?;
-    edit_config(&here.config, |list| legacy.into_iter().for_each(|old| merge(list, old)))?;
+    edit_locked(&here.config, |list| legacy.into_iter().for_each(|old| merge(list, old)))?;
     match std::fs::remove_file(&here.legacy) {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(stuck(here, &error)),
         _ => Ok(()),
