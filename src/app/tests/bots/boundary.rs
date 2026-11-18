@@ -8,7 +8,17 @@ fn popup_text() -> serde_json::Value {
 }
 
 fn reply_from(app: &mut App, client: u64, command: &str, args: &serde_json::Value) -> std::result::Result<(), String> {
-    let text = serde_json::json!({"contract": 1, "command": command, "args": args}).to_string();
+    reply_in(app, client, None, command, args)
+}
+
+fn reply_in(
+    app: &mut App,
+    client: u64,
+    view: Option<u64>,
+    command: &str,
+    args: &serde_json::Value,
+) -> std::result::Result<(), String> {
+    let text = serde_json::json!({"contract": 1, "view": view, "command": command, "args": args}).to_string();
     app.request(client, &text, Some(AREA), Instant::now());
     let answers = app.take_answers();
     let (_, reply) = answers.into_iter().find(|(who, _)| *who == client).expect("an answer");
@@ -59,20 +69,11 @@ fn a_bots_turn_cannot_make_visible_a_view_that_names_a_bot_but_can_clear_it() {
     let hidden = crate::control::OpenView { bot: Some("prs".into()), visible: Some(false), ..Default::default() };
     let opened = c.app.view_request(BOT + 1, &hidden, Some(AREA)).expect("open").expect("a snapshot");
     let view = opened["view"]["id"].as_u64().expect("a view id");
-    let set = |c: &mut Chat, args: serde_json::Value| {
-        let text = serde_json::json!({"contract": 1, "view": view, "command": "view-set", "args": args}).to_string();
-        c.app.request(BOT, &text, Some(AREA), Instant::now());
-        let answers = c.app.take_answers();
-        let (_, reply) = answers.into_iter().find(|(who, _)| *who == BOT).expect("an answer");
-        let reply: serde_json::Value = serde_json::from_str(&reply).expect("a reply");
-        reply["error"]["message"].as_str().map(str::to_string)
-    };
+    let shown = reply_in(&mut c.app, BOT, Some(view), "view-set", &serde_json::json!({"visible": true}));
+    let cleared = reply_in(&mut c.app, BOT, Some(view), "view-set", &serde_json::json!({"visible": true, "bot": ""}));
 
-    let shown = set(&mut c, serde_json::json!({"visible": true}));
-    let cleared = set(&mut c, serde_json::json!({"visible": true, "bot": ""}));
-
-    assert_eq!(shown.as_deref(), Some("a bot cannot show a bot's chat in a view"));
-    assert_eq!(cleared, None);
+    assert_eq!(shown, Err("a bot cannot show a bot's chat in a view".to_string()));
+    assert_eq!(cleared, Ok(()));
     c.release(ANSWER);
     c.settle();
 }
