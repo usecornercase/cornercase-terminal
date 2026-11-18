@@ -1,6 +1,6 @@
 use super::*;
 
-fn open_menu(c: &mut Chat) {
+pub(super) fn open_menu(c: &mut Chat) {
     render(&mut c.app, AREA);
     let a = c.app.layout(AREA);
     let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);

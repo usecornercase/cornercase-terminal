@@ -1,15 +1,10 @@
+use super::menu::open_menu;
+use super::routines_dialog::{press_in, spot_in};
 use super::*;
 use crate::bots::routines::{Button, Hit};
 use crate::bots::secrets::Kept;
 
 const PASSWORD: &str = "p4ss-word-long";
-
-fn menu_open(c: &mut Chat) {
-    render(&mut c.app, AREA);
-    let a = c.app.layout(AREA);
-    let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
-    right_click(&mut c.app, Position::new(row.x + 3, row.y));
-}
 
 fn list_view(c: &Chat) -> ui::BotRoutines {
     let Some(overlay) = &c.app.overlay else { panic!("no dialog") };
@@ -24,17 +19,12 @@ fn form_view(c: &Chat) -> ui::Form {
 }
 
 fn spot(c: &Chat, wanted: Hit) -> Position {
-    let view = list_view(c);
-    (0..AREA.height)
-        .flat_map(|y| (0..AREA.width).map(move |x| Position::new(x, y)))
-        .find(|pos| ui::routines_hit(AREA, &view, *pos) == Some(wanted))
-        .unwrap_or_else(|| panic!("nothing at {wanted:?}"))
+    spot_in(&list_view(c), wanted)
 }
 
 fn press_button(c: &mut Chat, row: usize, button: Button) {
-    let rect = ui::routine_button(AREA, &list_view(c), row, button);
-    assert!(!rect.is_empty(), "no {button:?} on row {row}");
-    click(&mut c.app, rect.as_position());
+    let view = list_view(c);
+    press_in(c, &view, (row, button));
 }
 
 fn enter(c: &mut Chat) {
@@ -53,7 +43,7 @@ fn new_secret(c: &mut Chat) {
 }
 
 fn open_from_menu(c: &mut Chat) {
-    menu_open(c);
+    open_menu(c);
     pick(&mut c.app, "secrets…");
     render(&mut c.app, AREA);
 }

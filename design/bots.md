@@ -1,6 +1,6 @@
 # Bots
 
-Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`, `turn/link.rs`), `agents/headless.rs`, `agents/{claude,codex,gemini,opencode,cursor,copilot}/headless.rs`, `agents/probe.rs`, `bots/form.rs`, `app/bots.rs`, `bots/follow.rs`, `app/bots/` (`follow.rs`, `reports.rs`, `turns.rs`, `manage.rs`, `shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/`, `ui/dialog/bot.rs`, `app/control/bots.rs`, `control/bots.rs`, `cli/bot.rs`, `cli/bot/`, `cli/args/bot.rs`, `cli/help/bot.rs`, `cli/guard.rs`, `paths.rs` (#844, #845; `bin`, #892), `app/control/boundary.rs`, `os/socket.rs`, `os/process.rs` (`Lineage`), `processes/stop.rs`, `app/launches.rs` (#856), `process/program.rs` (`command_without_cmd`, #849), `client/server_process.rs`, `cli/requests.rs`, `cli/help.rs` (`TO_FILE`) (#867, #880), `server/bots.rs` (#883)
+Code: `bots/` (`mod.rs`, `brief.rs`, `chat.rs`, `folder.rs`, `turn.rs`, `turn/link.rs`, `secrets.rs`), `agents/headless.rs`, `agents/{claude,codex,gemini,opencode,cursor,copilot}/headless.rs`, `agents/probe.rs`, `bots/form.rs`, `app/bots.rs`, `bots/follow.rs`, `app/bots/` (`secrets.rs`, `secrets_dialog.rs`, `follow.rs`, `reports.rs`, `turns.rs`, `manage.rs`, `shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`), `ui/bots.rs`, `ui/bots/`, `ui/dialog/bot.rs`, `app/control/bots.rs`, `control/bots.rs`, `cli/bot.rs`, `cli/bot/`, `cli/bot/secret.rs`, `cli/args/bot.rs`, `cli/help/bot.rs`, `cli/guard.rs`, `paths.rs` (#844, #845; `bin`, #892), `app/control/boundary.rs`, `os/socket.rs`, `os/process.rs` (`Lineage`), `processes/stop.rs`, `app/launches.rs` (#856), `process/program.rs` (`command_without_cmd`, #849), `client/server_process.rs`, `cli/requests.rs`, `cli/help.rs` (`TO_FILE`) (#867, #880), `server/bots.rs` (#883)
 
 A **bot** is an agent of your own: a name, a folder, a memory and a chat. It belongs to no project, but it can see all of them and act on them through the `cornercase` command line. It exists for work that belongs to no project, or to all of them ("review my open pull requests every morning", "tell me which issues labelled `bug` came in today, in every project"), which today meant opening a folder as a fake project, or keeping an agent alive in a pane whose context grows for ever.
 
@@ -16,10 +16,11 @@ This is the base of the bots series (#844 to #849). It holds the model, the fold
 - `bot.md` (0600): what the bot is for. Created from `--about` (may be empty); the user and the bot both write it, and the brief tells the bot to keep it up to date.
 - `memory.md` (0600): what it keeps from one conversation to the next. Created empty; the bot adds to it, keeps it short and prunes it.
 - `chat.jsonl` (0600): the chat, append-only.
+- `secrets` (0600): the bot's encrypted secrets, made with the first one and deleted with the last (see [Secrets](bots/secrets.md)); the key is `bots.key` beside the session, not in the folder.
 
 At most 50 bots (`MAX_BOTS`). A folder whose `bot.json` does not parse, or whose `id` is not the folder's name, is skipped when loading, but its name still counts as taken for a new bot's id, so a new bot never overwrites it. `remove` deletes the folder before it forgets the bot, so a folder that cannot be deleted leaves the bot where it was.
 
-**The server never re-reads `bot.json` while it runs**: memory is the truth, and the server rewrites the file when it changes a bot. A bot's access lets it write in its own folder, and `bot.json` holds its `access`, so re-reading it would let a bot give itself full access. Claude's denied list also names `bot.json` and `chat.jsonl` (see Access). Codex's sandbox cannot exclude one file, so a Codex bot could rewrite `bot.json` for the next server start; this is not a real boundary, since a `cornercase` access already lets a bot start agents with `cornercase start`, and Codex bots are `full` only today anyway.
+**The server never re-reads `bot.json` while it runs**: memory is the truth, and the server rewrites the file when it changes a bot. A bot's access lets it write in its own folder, and `bot.json` holds its `access`, so re-reading it would let a bot give itself full access. Claude's denied list also names `bot.json`, `chat.jsonl` and `secrets` (see Access). Codex's sandbox cannot exclude one file, so a Codex bot could rewrite `bot.json` for the next server start; this is not a real boundary, since a `cornercase` access already lets a bot start agents with `cornercase start`, and Codex bots are `full` only today anyway.
 
 ## The chat
 
@@ -105,8 +106,9 @@ The folder, `CORNERCASE_BOT`, `PATH` (a link folder holding only `cornercase`, #
 
 ## Requests and events
 
-One operation, **`bot`**, whose `args` are `{"action", "entry"}` (`entry` is the action's fields, left out for `agents` and `list`) (`agents`, `new`, `list`, `edit`, `about`, `remove`, `reset`, `seen`, `stop`, `setup`, `say`, `history`), adjacently tagged as `config`, `machines` and `queue` are (`{"command":"bot","args":{"action":"say","entry":{"bot":"prs","text":"hi","wait":true}}}`). `src/control.rs` was 989 lines and `tests/layers.rs` fails a file over 1,000, so ten request names with their lists did not fit; one name needs four lines, and every type lives in `control/bots.rs`. An older server refuses `bot` by name. All of it is behind the contract feature **`bots`**, which the CLI checks before any `bot` command (`the running cornercase server has no bots`). Request structs have no `skip_serializing_if`, so a strict client's unknown-field check works.
+One operation, **`bot`**, whose `args` are `{"action", "entry"}` (`entry` is the action's fields, left out for `agents` and `list`) (`agents`, `new`, `list`, `edit`, `about`, `remove`, `reset`, `seen`, `stop`, `setup`, `say`, `history`, `secret-set`, `secret-list`, `secret-remove`, `secret-get`), adjacently tagged as `config`, `machines` and `queue` are (`{"command":"bot","args":{"action":"say","entry":{"bot":"prs","text":"hi","wait":true}}}`). `src/control.rs` was 989 lines and `tests/layers.rs` fails a file over 1,000, so ten request names with their lists did not fit; one name needs four lines, and every type lives in `control/bots.rs`. An older server refuses `bot` by name. All of it is behind the contract feature **`bots`**, which the CLI checks before any `bot` command (`the running cornercase server has no bots`). Request structs have no `skip_serializing_if`, so a strict client's unknown-field check works.
 
+- **The four `secret-*` actions** (#877, behind the additive feature **`bot-secrets`**, which `cornercase bot secret` checks first): `secret-set` (`{bot, name, value}` → `{bot, name, saved}`), `secret-list` (`{bot}` → `{bot, key, secrets: [{name, saved}]}`), `secret-remove` (`{bot, name}` or `{bot, all}` → `{bot, removed}`) and `secret-get` (`{name}` → `{bot, name, value}`, for the bot that asks). `BotInfo.secrets` counts them (0 when the file cannot be read), in `bot list --json` and `status --app`. Saving and removing publish `change: edited`. Their rules, the key and the redaction are in [Secrets](bots/secrets.md).
 - `bot` names a bot by id, else by name ignoring case; an unknown one is `not-found`. Validation errors are `malformed` (a name that is empty, over 40 characters or has a control character; an unknown agent, model, effort, account or access; a message empty or over 20,000 characters, refused with its size rather than cut), `conflict` (a name taken; the 51st bot) or `busy` (`reset`, `remove` while a turn runs).
 - `new` with a non-empty `about` answers `state: thinking` and the events come in this order: `created`, `thinking`, the `setting up` line, the steps, the `bot` or `error` line, `idle`. `setup` (`{bot}`) runs the setup turn again and answers `{bot, line}` with the `setting up` line; the contract lists the additive feature **`bot-setup`**, which `cornercase bot setup` checks.
 - `about` (`{bot}`) answers `{bot, about}`, the text of `bot.md` read when asked. A missing file reads as `""`; one that cannot be read is `failed`, never an empty text a form could save over the real one. `folder::about` opens it non-blocking and refuses what is not a regular file (as `config::read` does), so a FIFO named `bot.md` cannot hang the server loop, which reads it. The text is never logged. It is behind the additive feature **`bot-about-read`**, which `cornercase bot about` checks.
@@ -128,6 +130,8 @@ A bot runs in no pane, so a command that would default to "the one this runs in,
 5. An argument whose help says `instead of standard output` (`help::TO_FILE`; today only `config export --to`), given on the command line: `a bot cannot have cornercase write to a file: leave out --to to print it instead` (#880). It is generic as rule 2 is, and a test pins the marker.
 6. A window: `cornercase` with no command (here, or on another machine with `--remote`), `cornercase remote DESTINATION` and `cornercase proxy`: `a bot cannot attach as a window` (#883). `remote --known` stays allowed. The hidden `cornercase server` is refused too (`a bot cannot run cornercase's server`): it would run the server in the bot's own process, with `CORNERCASE_BOT` in its environment (see Bots › The boundary, A window). A line of `requests --follow -` without a command keeps its own answer (`a line needs a command`), so the first case is `guard::run_refusal`, which `cli::parse` calls, and not `refusal`.
 
+7. `bot secret set` and `remove`: `a bot cannot save or remove secrets`; `bot secret list BOT` with a BOT that is not the bot running it (ignoring ASCII case, as rule 4): `a bot reads only its own secrets` (#877). A bot listing itself by its name rather than its id is refused too (a known false positive: the brief teaches `list` without BOT); `get` is left to the server.
+
 **Each line of `cornercase requests --follow -` goes through the same guard** (#867): before, a line skipped it. The server repeats the stops (`kill-server`, `restart` and `update`'s restart, as requests and messages), rule 3 (access changes) and rule 6 (a window's messages), and none of the others; what that leaves to the guard is in Bots › The boundary. A raw client (`cornercase proxy`, a program speaking the protocol) meets only the server's refusals.
 
 The command line's guard only prevents mistakes: what a bot's commands may type into, and what it may change about bots and settings, is enforced by the server (The boundary, below).
@@ -142,6 +146,7 @@ What the server refuses a bot's connection, what stops or replaces the server, a
 
 - A message is at most 20,000 characters.
 - **Texts are never logged** (see Log): the log says `bot say bot=prs bytes=120` (and `about_bytes` for `new`), `setup bot=prs` when a setup turn starts, then, for a connection that is a bot's, `a bot's client` (`client`, `bot`), then the turn's agent, model, tokens, duration and how it ended (`answered`, `error`, `stopped`, `timeout`) under the target `bots`. The turn's job returns `Ok` whatever the agent said, so the job never logs an agent's text as its error.
+- A secret's value is never logged: `secret set` logs `bot`, `name`, `bytes` and `replaced`, `secret get` and `secret removed` the bot and the name, and a request's fields carry the name and the size only.
 - Not counted in Stats: the turn is no pane's agent, as with Recap.
 
 ## Checked live
@@ -184,6 +189,8 @@ The boundary (#856): the classifier of the writing requests (`boundary/tests.rs`
 
 The stops and writes (#867, #880): the table of stops names the commands the agents deny and what each asks the server; the classifier of `ServerStop` and `Clone` and every `asks` name being a request or a message; `refused_stop` and a bot's connection staying a bot's; a bot's connection refused `restart-when-idle`, `update-install` and `clone`, another connection not; the server answering `Rejected` to a bot's `KillServer` and `Restart` and running on; `rejection` reading the first `Rejected`; the guard refusing `config export --to` and each line of `requests`; e2e: no file written, nothing cloned, and a turn whose `cornercase kill-server`, `restart` and `restart --when-idle` fail with the server unchanged.
 
+Secrets (#877): see [Secrets › Tests](bots/secrets.md#tests).
+
 ## What later issues add
 
 #848 chat apps; #849 done for four of the six other agents, the follow-up issue #879 has Grok Build, Vibe CLI, `cornercase` access for opencode and Cursor CLI, and Recap on more agents. The rest of the boundary (the open list in The boundary, #866) is a follow-up issue.
@@ -198,6 +205,7 @@ The Bots section, the chat and the form are in [bots/window.md](bots/window.md):
 - [The window](bots/window.md)
 - [Routines](bots/routines.md)
 - [Following](bots/following.md)
+- [Secrets](bots/secrets.md)
 - [The agents](bots/agents.md)
 - [The boundary](bots/boundary.md)
 - [The environment of a turn](bots/environment.md)
