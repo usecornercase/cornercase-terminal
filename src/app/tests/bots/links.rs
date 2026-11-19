@@ -6,11 +6,17 @@ const DOCS: &str = "https://example.com/docs";
 const NOTHING: [(u64, Link); 0] = [];
 
 fn answered(text: &str) -> Chat {
+    answered_all(&[text])
+}
+
+fn answered_all(texts: &[&str]) -> Chat {
     let mut c = chat(ANSWER);
     let path = c.app.panels.bots.live[0].folder.join(folder::CHAT_FILE);
-    let id = c.app.panels.bots.live[0].next_line;
-    chat::append(&path, &Line::new(id, 100, chat::Kind::Bot, text)).expect("append");
-    c.app.panels.bots.live[0].next_line += 1;
+    for text in texts {
+        let id = c.app.panels.bots.live[0].next_line;
+        chat::append(&path, &Line::new(id, 100, chat::Kind::Bot, *text)).expect("append");
+        c.app.panels.bots.live[0].next_line += 1;
+    }
     c.app.window_attached();
     let row = {
         let a = c.app.layout(AREA);
@@ -22,8 +28,8 @@ fn answered(text: &str) -> Chat {
 }
 
 fn link_at(app: &mut App) -> (Position, String) {
-    match chat_spot(app, |hit| matches!(hit, ChatHit::Link(_))) {
-        Some((pos, ChatHit::Link(url))) => (pos, url),
+    match chat_spot(app, |hit| matches!(hit, ChatHit::Link(..))) {
+        Some((pos, ChatHit::Link(_, url))) => (pos, url),
         _ => panic!("no link in the chat"),
     }
 }
@@ -189,4 +195,16 @@ fn a_narrow_window_still_shows_where_a_long_address_is_cut() {
     let (pos, _) = link_at(&mut c.app);
     click(&mut c.app, pos);
     insta::assert_snapshot!(drawn_dialog_in(&mut c.app, Rect::new(0, 0, 40, 20)));
+}
+
+#[test]
+fn a_cut_address_opens_from_the_answer_that_was_clicked_even_when_a_newer_one_starts_the_same() {
+    let base = format!("https://example.com/{}", "a".repeat(50));
+    let (older, newer) = (format!("{base}/older"), format!("{base}/newer"));
+    let mut c = answered_all(&[&older, &newer]);
+    c.app.set_window(7, &[Opener::Default]);
+    let (pos, drawn) = link_at(&mut c.app);
+    assert!(older.starts_with(&drawn) && newer.starts_with(&drawn) && drawn.len() < older.len(), "{drawn}");
+    click(&mut c.app, pos);
+    assert_eq!(dialog(&mut c), Some(older));
 }

@@ -267,6 +267,7 @@ mod running {
         assert!(rx.recv().is_err());
     }
 
+    #[cfg(unix)]
     fn with_launcher(launcher: PathBuf) -> Openers {
         Openers { found: vec![(Opener::Default, Reach::Launcher)], launcher: Some(launcher), ..Openers::default() }
     }

@@ -16,7 +16,7 @@ fn you(text: &str, stamp: &str) -> ChatEntry {
 }
 
 fn bot(text: &str) -> ChatEntry {
-    ChatEntry::Bot { head: "prs · 09:12".into(), body: markdown(text) }
+    ChatEntry::Bot { id: 9, head: "prs · 09:12".into(), body: markdown(text) }
 }
 
 fn steps(texts: &[&str], open: bool) -> ChatEntry {
@@ -152,18 +152,29 @@ mod whole_address {
 
     #[test]
     fn an_address_drawn_whole_is_kept_even_when_a_longer_one_starts_with_it() {
-        assert_eq!(whole_address(SHORT, [LONG, &format!("see {SHORT}.")]), SHORT);
+        assert_eq!(whole_address(SHORT, [LONG, &format!("see {SHORT}.")]).as_deref(), Some(SHORT));
     }
 
     #[test]
     fn a_piece_cut_by_the_wrap_gives_the_newest_answer_that_holds_it_whole() {
         let older = "https://example.com/a/older";
-        assert_eq!(whole_address("https://example.com/a/", [&format!("([docs]({LONG}))") as &str, older]), LONG);
+        let found = whole_address("https://example.com/a/", [&format!("([docs]({LONG}))") as &str, older]);
+        assert_eq!(found.as_deref(), Some(LONG));
     }
 
     #[test]
-    fn a_piece_no_answer_holds_is_given_as_it_is() {
-        assert_eq!(whole_address("https://other.dev/x", [LONG]), "https://other.dev/x");
+    fn a_piece_no_answer_holds_finds_nothing() {
+        assert_eq!(whole_address("https://other.dev/x", [LONG]), None);
+    }
+
+    #[rstest]
+    #[case::bold("**https://example.com/a**", SHORT)]
+    #[case::italic_then_a_full_stop("_https://example.com/a_.", SHORT)]
+    #[case::bold_italic("***https://example.com/a***", SHORT)]
+    #[case::strikethrough("~~https://example.com/a~~", SHORT)]
+    #[case::an_asterisk_of_the_address_itself("https://example.com/a*", "https://example.com/a*")]
+    fn emphasis_around_an_address_is_not_part_of_it(#[case] word: &str, #[case] expected: &str) {
+        assert_eq!(whole_address(SHORT, [word]).as_deref(), Some(expected));
     }
 }
 
@@ -255,7 +266,7 @@ fn run_block() -> RunBlock {
         first: 4,
         steps: vec!["cornercase status --json".into(), "gh pr list".into()],
         open: false,
-        answer: Some(("prs · 09:05".into(), markdown("Two are **blocked**:\n\n- #482 waits for a review"))),
+        answer: Some((5, "prs · 09:05".into(), markdown("Two are **blocked**:\n\n- #482 waits for a review"))),
         error: None,
         again: false,
         end: None,

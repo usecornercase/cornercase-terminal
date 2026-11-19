@@ -121,7 +121,7 @@ impl App {
             ChatHit::Stop => _ = self.bot_stop(&id),
             ChatHit::News => self.scroll_to_end(),
             ChatHit::Row(row) => self.chat_row(at, &row),
-            ChatHit::Link(url) => self.press_link(at, &url),
+            ChatHit::Link(line, url) => self.press_link(at, line, &url),
             ChatHit::Input(line, col) => {
                 let width = usize::from(field.width.max(1));
                 self.panels.bots.live[at].draft.place(width, line, col);
@@ -155,7 +155,7 @@ impl App {
             RowHit::Retry(error) => self.send_again(error),
             RowHit::Example(i) => self.panels.bots.live[at].draft = Editor::new(ui::EXAMPLES[i]),
             RowHit::Give(ask) => self.open_bot_ask(self.panels.bots.live[at].key, ask),
-            RowHit::Link => {}
+            RowHit::Link(_) => {}
         }
     }
 }

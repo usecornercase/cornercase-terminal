@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,7 +26,21 @@ pub(crate) fn host(url: &str) -> Result<&str, &'static str> {
         return Err("it carries a user name");
     }
     let host = without_port(authority);
-    if bracketed(host) || named(host) { Ok(host) } else { Err("it has no host") }
+    if !bracketed(host) && !named(host) {
+        return Err("it has no host");
+    }
+    if spelled_as_a_number(host) {
+        return Err("it spells an IP address a browser reads another way");
+    }
+    Ok(host)
+}
+
+fn spelled_as_a_number(host: &str) -> bool {
+    let last = host.strip_suffix('.').unwrap_or(host).rsplit('.').next().unwrap_or_default();
+    let hex = last.get(..2).is_some_and(|prefix| prefix.eq_ignore_ascii_case("0x"))
+        && last.bytes().skip(2).all(|byte| byte.is_ascii_hexdigit());
+    let number = !last.is_empty() && (last.bytes().all(|byte| byte.is_ascii_digit()) || hex);
+    number && host.parse::<Ipv4Addr>().is_err()
 }
 
 fn without_port(authority: &str) -> &str {

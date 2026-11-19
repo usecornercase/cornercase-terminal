@@ -11,7 +11,7 @@ pub(crate) struct RunBlock {
     pub(crate) first: u64,
     pub(crate) steps: Vec<String>,
     pub(crate) open: bool,
-    pub(crate) answer: Option<(String, Vec<Line<'static>>)>,
+    pub(crate) answer: Option<(u64, String, Vec<Line<'static>>)>,
     pub(crate) error: Option<String>,
     pub(crate) again: bool,
     pub(crate) end: Option<String>,
@@ -23,8 +23,8 @@ pub(super) fn run_rows(block: &RunBlock, width: usize, tone: Tone) -> Vec<ChatRo
     let bold = dim(tone).add_modifier(Modifier::BOLD);
     let mut rows = vec![ChatRow::plain(Line::from(Span::styled(head, bold)))];
     rows.extend(step_rows(block.first, &block.steps, (block.open, 0), width, tone));
-    if let Some((head, body)) = &block.answer {
-        rows.extend(bot_rows(head, body, tone));
+    if let Some((id, head, body)) = &block.answer {
+        rows.extend(bot_rows(*id, head, body, tone));
     }
     if let Some(error) = &block.error {
         let again = block.again.then_some((RowHit::RunAgain(block.run), "run again"));

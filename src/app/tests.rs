@@ -32,9 +32,9 @@ use super::panes::pane_cell;
 use super::picker_dialog::PICKER_SUBMIT;
 #[cfg(unix)]
 use super::session::RESUME_GRACE;
-use super::toast::BUG_FOR;
+use super::toast::{BUG_FOR, COPIED};
 #[cfg(unix)]
-use super::toast::{COPIED, NOT_READING, TOAST_FOR, UNDO_FOR};
+use super::toast::{NOT_READING, TOAST_FOR, UNDO_FOR};
 use super::update_dialog::RESTART_LABEL;
 use super::update_dialog::UPDATE_AVAILABLE;
 use super::update_dialog::UpdateStep;

@@ -13,8 +13,8 @@ const ADDRESS_ROWS: usize = 3;
 const ASKS: &str = " wrote this address. Open it in your browser?";
 
 impl App {
-    pub(in crate::app) fn press_link(&mut self, at: usize, drawn: &str) {
-        let url = self.whole_address(drawn);
+    pub(in crate::app) fn press_link(&mut self, at: usize, line: u64, drawn: &str) {
+        let url = self.whole_address(line, drawn);
         if !self.can_browse() {
             return self.copy(&url);
         }
@@ -24,10 +24,12 @@ impl App {
         self.overlay = Some(Overlay::OpenLink { bot: self.panels.bots.live[at].key, url });
     }
 
-    fn whole_address(&self, drawn: &str) -> String {
+    fn whole_address(&self, clicked: u64, drawn: &str) -> String {
         let Some(shown) = &self.panels.bots.shown else { return drawn.to_string() };
-        let answers = shown.lines.iter().rev().filter(|line| line.kind == Kind::Bot).map(|line| line.text.as_str());
-        ui::whole_address(drawn, answers)
+        let answers = || shown.lines.iter().rev().filter(|line| line.kind == Kind::Bot);
+        let own = answers().filter(|line| line.id == clicked).map(|line| line.text.as_str());
+        let others = answers().filter(|line| line.id != clicked).map(|line| line.text.as_str());
+        ui::whole_address(drawn, own).or_else(|| ui::whole_address(drawn, others)).unwrap_or_else(|| drawn.to_string())
     }
 
     fn copy_refused(&mut self, url: &str, reason: &str) {

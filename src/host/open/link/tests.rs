@@ -5,6 +5,7 @@ use super::*;
 const NOT_WEB: &str = "it is not an http or https address";
 const CHARACTER: &str = "it holds a character a web address cannot have";
 const NO_HOST: &str = "it has no host";
+const NUMBER: &str = "it spells an IP address a browser reads another way";
 
 #[rstest]
 #[case::plain_https("https://example.com", "example.com")]
@@ -13,6 +14,9 @@ const NO_HOST: &str = "it has no host";
 #[case::a_query_and_a_fragment("https://docs.rs/x?q=a&b=c#part", "docs.rs")]
 #[case::an_ipv6_address_with_a_port("http://[::1]:8080/", "[::1]")]
 #[case::a_query_right_after_the_host("https://example.com?q=1", "example.com")]
+#[case::a_plain_ipv4_address("http://192.168.1.20:8080/", "192.168.1.20")]
+#[case::a_name_that_ends_in_letters_after_digits("https://1password.com/", "1password.com")]
+#[case::a_label_that_starts_with_0x_but_is_not_hex("https://0xdeadbeefcafe.dev/", "0xdeadbeefcafe.dev")]
 fn an_address_a_window_may_open_gives_its_host(#[case] url: &str, #[case] expected: &str) {
     assert_eq!(host(url), Ok(expected));
 }
@@ -34,6 +38,12 @@ fn an_address_a_window_may_open_gives_its_host(#[case] url: &str, #[case] expect
 #[case::a_port_that_is_not_a_number("https://x.dev:http/", NO_HOST)]
 #[case::a_host_that_starts_with_a_dot("https://.x.dev/", NO_HOST)]
 #[case::empty_brackets("https://[]/", NO_HOST)]
+#[case::a_hex_ipv4("http://0x7f000001/", NUMBER)]
+#[case::a_decimal_ipv4("http://2130706433/", NUMBER)]
+#[case::a_short_ipv4("http://127.1/", NUMBER)]
+#[case::an_octal_ipv4("http://0177.0.0.1/", NUMBER)]
+#[case::an_ipv4_with_a_trailing_dot("http://127.0.0.1./", NUMBER)]
+#[case::a_name_whose_last_label_is_a_number("http://example.42/", NUMBER)]
 fn an_address_a_window_must_not_open_says_why(#[case] url: &str, #[case] reason: &str) {
     assert_eq!(host(url), Err(reason));
 }

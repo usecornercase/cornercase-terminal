@@ -60,7 +60,7 @@ pub(crate) enum RowHit {
     Show(u64),
     Example(usize),
     Give(u64),
-    Link,
+    Link(u64),
 }
 
 #[derive(Debug, Clone)]
@@ -86,7 +86,7 @@ impl ChatRow {
 #[derive(Debug, Clone)]
 pub(crate) enum ChatEntry {
     You { text: String, stamp: String },
-    Bot { head: String, body: Vec<Line<'static>> },
+    Bot { id: u64, head: String, body: Vec<Line<'static>> },
     Steps { first: u64, texts: Vec<String>, open: bool },
     Error { id: u64, text: String, retry: bool },
     Notice(String),
@@ -125,7 +125,7 @@ pub(crate) enum ChatHit {
     Stop,
     News,
     Row(RowHit),
-    Link(String),
+    Link(u64, String),
     Input(usize, usize),
 }
 
@@ -255,9 +255,9 @@ fn you_rows(text: &str, stamp: &str, width: usize, tone: Tone) -> Vec<ChatRow> {
         .collect()
 }
 
-pub(super) fn bot_rows(head: &str, body: &[Line<'static>], tone: Tone) -> Vec<ChatRow> {
+pub(super) fn bot_rows(id: u64, head: &str, body: &[Line<'static>], tone: Tone) -> Vec<ChatRow> {
     let mut rows = vec![ChatRow::plain(Line::from(Span::styled(head.to_string(), dim(tone))))];
-    rows.extend(body.iter().cloned().map(|line| ChatRow::whole(line, RowHit::Link)));
+    rows.extend(body.iter().cloned().map(|line| ChatRow::whole(line, RowHit::Link(id))));
     rows
 }
 
@@ -325,7 +325,7 @@ pub(crate) fn entry_rows(entry: &ChatEntry, width: u16, tone: Tone) -> Vec<ChatR
     let width = usize::from(width);
     match entry {
         ChatEntry::You { text, stamp } => you_rows(text, stamp, width, tone),
-        ChatEntry::Bot { head, body } => bot_rows(head, body, tone),
+        ChatEntry::Bot { id, head, body } => bot_rows(*id, head, body, tone),
         ChatEntry::Steps { first, texts, open } => step_rows(*first, texts, (*open, STEPS_SHOWN), width, tone),
         ChatEntry::Error { id, text, retry } => error_rows(text, retry.then_some((RowHit::Retry(*id), "retry")), width),
         ChatEntry::Notice(text) => notice_rows(text, width, tone),
@@ -378,22 +378,26 @@ pub(crate) fn link_at(row: &ChatRow, col: usize) -> Option<String> {
     None
 }
 
-pub(crate) fn whole_address<'a>(drawn: &str, sources: impl IntoIterator<Item = &'a str>) -> String {
+pub(crate) fn whole_address<'a>(drawn: &str, sources: impl IntoIterator<Item = &'a str>) -> Option<String> {
     let mut longer = None;
     for address in sources.into_iter().flat_map(str::split_whitespace).filter_map(web_address) {
         if address == drawn {
-            return address;
+            return Some(address);
         }
         if longer.is_none() && address.starts_with(drawn) {
             longer = Some(address);
         }
     }
-    longer.unwrap_or_else(|| drawn.to_string())
+    longer
 }
+
+const PUNCTUATION: [char; 11] = [')', '.', ',', ';', ':', '!', '?', '>', ']', '"', '\''];
 
 fn web_address(word: &str) -> Option<String> {
     let at = word.find("http://").or_else(|| word.find("https://"))?;
-    let url = word[at..].trim_end_matches([')', '.', ',', ';', ':', '!', '?', '>', ']', '"', '\'']);
+    let closing: String = word[..at].chars().rev().take_while(|c| matches!(c, '*' | '_' | '~')).collect();
+    let url = word[at..].trim_end_matches(PUNCTUATION);
+    let url = url.strip_suffix(closing.as_str()).map_or(url, |url| url.trim_end_matches(PUNCTUATION));
     (url.len() > "https://".len() - 1).then(|| url.to_string())
 }
 
@@ -440,7 +444,7 @@ fn row_hit(body: Rect, chat: &ChatView, pos: Position) -> Option<ChatHit> {
         return None;
     }
     match hit {
-        RowHit::Link => link_at(row, usize::from(col)).map(ChatHit::Link),
+        RowHit::Link(line) => link_at(row, usize::from(col)).map(|url| ChatHit::Link(*line, url)),
         other => Some(ChatHit::Row(other.clone())),
     }
 }
