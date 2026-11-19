@@ -164,6 +164,13 @@ impl Known {
         }
     }
 
+    pub(crate) fn never_asking(self) -> ModeTable {
+        match self {
+            Self::Claude => claude::NEVER_ASKS,
+            Self::Codex | Self::Gemini | Self::Opencode | Self::Grok | Self::Cursor | Self::Copilot | Self::Vibe => &[],
+        }
+    }
+
     pub(crate) fn unattended(self) -> &'static [&'static str] {
         match self {
             Self::Claude => claude::UNATTENDED,

@@ -69,7 +69,7 @@ A turn is one run of the agent without its interface, through the shared runner 
 
 ## The brief
 
-What cornercase tells the bot about itself. The server writes it from Rust constants (`bots/brief.rs`, one per section) and sends it in the opening message of every conversation. It is never written to the bot's folder, so a new release updates every bot at its next conversation. It says who the bot is and that it answers briefly, in the user's language, in Markdown; where its folder is and what `bot.md` and `memory.md` are for; how to see the user's work (`cornercase status --json`, `search`, `recap`, `worktrees list`, `read --pane ID`, read-only `git` and `gh`); how to act (`cornercase start --project ID …`, `send --pane ID`, `notify`, and that it must always name the project, since it runs in no pane); and what its access allows, and last whether it is told when an agent it started finishes (`FOLLOW`, or `NOT_FOLLOWING` when the bot's `follow` option is off, see [Following](bots/following.md)). A test runs `--help` for every command the brief names, so it cannot name a command that does not exist.
+What cornercase tells the bot about itself. The server writes it from Rust constants (`bots/brief.rs`, one per section) and sends it in the opening message of every conversation. It is never written to the bot's folder, so a new release updates every bot at its next conversation. It says who the bot is and that it answers briefly, in the user's language, in Markdown; where its folder is and what `bot.md` and `memory.md` are for; how to see the user's work (`cornercase status --json`, `search`, `recap`, `worktrees list`, `read --pane ID`, read-only `git` and `gh`); how to act (`cornercase start --project ID …`, `send --pane ID`, `notify`, and that it must always name the project, since it runs in no pane); and what its access allows (for `cornercase` access, also one sentence on what cornercase refuses it, `BOUNDED`, #866), and last whether it is told when an agent it started finishes (`FOLLOW`, or `NOT_FOLLOWING` when the bot's `follow` option is off, see [Following](bots/following.md)). A test runs `--help` for every command the brief names, so it cannot name a command that does not exist.
 
 A project's git (#893): the brief says that `cornercase status --json` gives each project's and workspace's folder (`path`) and teaches `git -C 'PATH' log …` (and `show`, `diff`, `status`) in single quotes, the one spelling that exists on every system, and `gh … -R` with a project's `repo`. The git line is left out for an agent without `BotSupport::reads_git` under `cornercase` access, which is told it cannot run git; `full` bots are taught it too. The access says to run one command per call: a loop, `$(…)` and a redirect were refused when checked.
 
@@ -133,13 +133,18 @@ A bot runs in no pane, so a command that would default to "the one this runs in,
 
 7. `bot secret set` and `remove`: `a bot cannot save or remove secrets`; `bot secret list BOT` with a BOT that is not the bot running it (ignoring ASCII case, as rule 4): `a bot reads only its own secrets` (#877). A bot listing itself by its name rather than its id is refused too (a known false positive: the brief teaches `list` without BOT); `get` is left to the server. `bot secret give` and `decline`: `a bot cannot give or decline what a bot asks for` (#878); `ask` is left to the server.
 
+8. `plugin` other than `list`, `status`, `actions` and `logs` (an allow list, so a new subcommand is refused until decided): `a bot cannot run or change cornercase's plugins`; `machines add`, `edit`, `remove` and `update`: `a bot cannot change cornercase's machines`; every `tunnel` subcommand: `a bot cannot open or close a tunnel` (#866). The texts are `bots::NO_PLUGINS`, `NO_MACHINES` and `NO_TUNNELS`, shared with the server. Plugins write their files from the command line's process, which the server never sees, so the guard is all that stops them.
+9. `--remote` or `CORNERCASE_REMOTE`, on any command: `a bot works on this computer only: it cannot act on another machine` (`bots::ELSEWHERE`, #866). `cli::run` checks it right after `reach::chosen`, since the far server sees an ssh process and cannot tell a bot; the window forms are refused earlier by rule 6 with their own text, and `remote --known`, which takes no `--remote`, stays allowed.
+
+Every rule applies to a `full` bot too: `CORNERCASE_BOT` carries no access, and the guard asks nothing of the server. The `full` brief says which commands are refused (#866); a `full` bot may run them without the variable, which only prevents mistakes.
+
 **Each line of `cornercase requests --follow -` goes through the same guard** (#867): before, a line skipped it. The server repeats the stops (`kill-server`, `restart` and `update`'s restart, as requests and messages), rule 3 (access changes) and rule 6 (a window's messages), and none of the others; what that leaves to the guard is in Bots › The boundary. A raw client (`cornercase proxy`, a program speaking the protocol) meets only the server's refusals.
 
 The command line's guard only prevents mistakes: what a bot's commands may type into, and what it may change about bots and settings, is enforced by the server (The boundary, below).
 
 Without `CORNERCASE_BOT` (unset or empty) the command line's guard changes nothing; the server's boundary does not depend on it. #846 uses the variable as the default for `queue add --bot`, and #847 (with `CORNERCASE_BOT_RUN`) to tag what a bot starts, in the request's envelope: it only labels, and a marked connection's own bot wins ([Following](bots/following.md)).
 
-## The boundary (#856, #867, #880)
+## The boundary (#856, #866, #867, #880)
 
 What the server refuses a bot's connection, what stops or replaces the server, and what a bot may not have cornercase write is in [The boundary](bots/boundary.md).
 
@@ -190,11 +195,13 @@ The boundary (#856): the classifier of the writing requests (`boundary/tests.rs`
 
 The stops and writes (#867, #880): the table of stops names the commands the agents deny and what each asks the server; the classifier of `ServerStop` and `Clone` and every `asks` name being a request or a message; `refused_stop` and a bot's connection staying a bot's; a bot's connection refused `restart-when-idle`, `update-install` and `clone`, another connection not; the server answering `Rejected` to a bot's `KillServer` and `Restart` and running on; `rejection` reading the first `Rejected`; the guard refusing `config export --to` and each line of `requests`; e2e: no file written, nothing cloned, and a turn whose `cornercase kill-server`, `restart` and `restart --when-idle` fail with the server unchanged.
 
+The rest (#866): every name of `Command::NAMES` in exactly one of the table's lists (`every_request_is_decided_once`), a text per closed group, the classifier of the new fields, `not_a_prompt`; `agents::never_asks` by name, by Settings' arguments, by a renamed mode, for an unknown agent, and every agent's `UNATTENDED` run caught; pane-free (every OS, `app::tests::bots::boundary::marked`): a marked connection refused one request of each closed group, flow writes, closing agents, a workspace or a project, a machine's removal, `start --machine`, `open` of the bots' folder, of a folder in it and of a `.code-workspace`, `worktrees size` there, a never-asking `start` (named or from Settings) and a `start` whose prompt is a command, while another connection is not; with real panes: `keys` and `input` refused into an agent, `/exit`, `!…` and a bare Enter refused, a waiting agent refused every typing request even with `--force` while the user's `keys` work, the Enter not pressed once the agent asks, closing only what the bot started; the guard's new refusals and what it still allows; the brief's sentence; e2e: `--remote` and `CORNERCASE_REMOTE` refused (exit 2), `keys` and `close --project` refused (exit 1) while yours work.
+
 Secrets (#877): see [Secrets › Tests](bots/secrets.md#tests). Asks (#878): see [Asks › What was checked](bots/asks.md#what-was-checked).
 
 ## What later issues add
 
-#848 chat apps; #849 done for four of the six other agents, the follow-up issue #879 has Grok Build, Vibe CLI, `cornercase` access for opencode and Cursor CLI, and Recap on more agents. The rest of the boundary (the open list in The boundary, #866) is a follow-up issue.
+#848 chat apps; #849 done for four of the six other agents, the follow-up issue #879 has Grok Build, Vibe CLI, `cornercase` access for opencode and Cursor CLI, and Recap on more agents. #866 closed the rest of the boundary it could; what is left is listed in [The boundary](bots/boundary.md) (What is still not a boundary).
 
 
 ## The window (#845)

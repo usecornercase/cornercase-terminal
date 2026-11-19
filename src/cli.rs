@@ -98,6 +98,9 @@ pub fn run(mut cli: Cli) -> Result<bool> {
         return Err(Error::WrongUsage(why));
     }
     let remote = reach::chosen(&cli, &|name| std::env::var_os(name))?;
+    if let Some(why) = guard::refused_remote(remote.is_some()) {
+        return Err(Error::WrongUsage(why));
+    }
     crate::update::remove_old_binaries();
     match (cli.command, remote) {
         (None, None) => client::run()?,

@@ -87,11 +87,13 @@ impl App {
 
     pub(in crate::app::control) fn agents_reopen_request(
         &mut self,
+        client: u64,
         asker: Asker,
         ask: &AgentsReopen,
         area: Option<Rect>,
     ) -> Handled {
         let workspace = self.closed_target(asker, ask.workspace)?;
+        self.bot_reopens(client, workspace)?;
         let done = self.reopen_workspace(workspace, area)?;
         Ok(Some(json(&reopened_answer(done))))
     }

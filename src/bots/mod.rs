@@ -26,6 +26,10 @@ pub(crate) const LAST_CHARS: usize = 200;
 pub(crate) const BOT_ENV: &str = "CORNERCASE_BOT";
 pub(crate) const BOT_RUN_ENV: &str = "CORNERCASE_BOT_RUN";
 pub(crate) const ACCESS_CHANGE: &str = "a bot cannot change a bot's access";
+pub(crate) const ELSEWHERE: &str = "a bot works on this computer only: it cannot act on another machine";
+pub(crate) const NO_PLUGINS: &str = "a bot cannot run or change cornercase's plugins";
+pub(crate) const NO_MACHINES: &str = "a bot cannot change cornercase's machines";
+pub(crate) const NO_TUNNELS: &str = "a bot cannot open or close a tunnel";
 
 pub(crate) struct ServerStop {
     pub(crate) command: &'static str,

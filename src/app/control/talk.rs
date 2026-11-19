@@ -148,7 +148,7 @@ impl App {
         Ok(held.enter.then(|| (Launch::enter(pane, now), Stage::Launch { confirm, compacts, wait: held.wait })))
     }
 
-    fn foreground_agent(&self, term: &term::Term) -> Option<agents::Known> {
+    pub(super) fn foreground_agent(&self, term: &term::Term) -> Option<agents::Known> {
         agents::detect(&self.config, &term.foreground_args()).as_deref().and_then(agents::Known::of)
     }
 

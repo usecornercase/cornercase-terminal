@@ -102,6 +102,20 @@ fn window(path: &[&str], found: &ArgMatches) -> Option<String> {
     Some(String::from(why))
 }
 
+fn elsewhere_or_runs(path: &[&str]) -> Option<String> {
+    let why = match path {
+        ["plugin", sub, ..] if !["list", "status", "actions", "logs"].contains(sub) => crate::bots::NO_PLUGINS,
+        ["machines", "add" | "edit" | "remove" | "update", ..] => crate::bots::NO_MACHINES,
+        ["tunnel", ..] => crate::bots::NO_TUNNELS,
+        _ => return None,
+    };
+    Some(String::from(why))
+}
+
+pub(super) fn refused_remote(remote: bool) -> Option<String> {
+    (remote && own_bot().is_some()).then(|| String::from(crate::bots::ELSEWHERE))
+}
+
 fn in_no_place(leaf: &Command, found: &ArgMatches) -> Option<String> {
     let places = PLACES.iter().chain(["all"].iter());
     if !defaults_here(leaf) || places.into_iter().any(|long| named(leaf, found, long)) {
@@ -122,6 +136,7 @@ pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Opt
         .or_else(|| window(&path, found))
         .or_else(|| itself(&path, found, own))
         .or_else(|| secrets(&path, found, own))
+        .or_else(|| elsewhere_or_runs(&path))
         .or_else(|| writes_a_file(leaf, found))
         .or_else(|| in_no_place(leaf, found))
 }

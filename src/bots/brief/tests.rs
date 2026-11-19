@@ -36,6 +36,16 @@ fn each_access_says_what_it_allows() {
     assert!(!full.contains("write only in your folder"));
 }
 
+#[test]
+fn a_cornercase_bot_is_told_what_cornercase_refuses_it_and_a_full_one_is_not() {
+    let gemini = Bot { agent: String::from("gemini"), ..named(Access::Cornercase) };
+    for bot in [named(Access::Cornercase), gemini] {
+        let told = brief(&bot, Path::new("/b"));
+        assert!(told.contains(BOUNDED), "{told}");
+    }
+    assert!(!brief(&named(Access::Full), Path::new("/b")).contains(BOUNDED));
+}
+
 #[rstest::rstest]
 #[case::cornercase(Access::Cornercase)]
 #[case::full(Access::Full)]
