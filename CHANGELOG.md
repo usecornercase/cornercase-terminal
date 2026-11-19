@@ -11,6 +11,7 @@ Every pull request that changes the app adds a section here for its new version.
 - When an agent a bot started needs you and the bot is set to `always`, its question and buttons reach the phone at the desk too, once.
 - **Discord's forum mode gives each bot its own post**, `🤖 <name>`, where its answers and its routines' go and where what you write goes to it. Removing the bot closes it, and the post is kept across restarts.
 - A bot's failed routine now reaches the phone once, as the bot's own message, instead of twice while away.
+- `cornercase bot edit` and the bot form now say so when a bot's settings cannot be saved, instead of showing a change that a restart would undo.
 
 ## 0.13.105
 

@@ -256,11 +256,11 @@ impl App {
             let written = folder::write_about(&self.panels.bots.live[at].folder, about);
             written.map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
         }
-        let live = &mut self.panels.bots.live[at];
-        let followed = bot.follow;
+        let followed = self.panels.bots.live[at].bot.follow;
         bot.follow = edit.follow.unwrap_or(followed);
-        live.bot = bot;
-        let _ = folder::save(&live.folder, &live.bot);
+        let saved = folder::save(&self.panels.bots.live[at].folder, &bot);
+        saved.map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
+        self.panels.bots.live[at].bot = bot;
         self.follow_changed(at, followed);
         self.publish_bot_change(at, "edited");
         Ok(at)

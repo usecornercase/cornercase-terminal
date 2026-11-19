@@ -496,7 +496,8 @@ fn slash_text(data: &Value) -> Option<String> {
     let name = data["name"].as_str().filter(|name| !name.is_empty())?;
     let options = data["options"].as_array().into_iter().flatten();
     let values = options.filter_map(|option| option["value"].as_str());
-    Some(std::iter::once(format!("/{name}")).chain(values.map(str::to_string)).collect::<Vec<_>>().join(" "))
+    let values: Vec<&str> = values.collect();
+    Some(if values.is_empty() { format!("/{name}") } else { format!("/{name} {}", values.join("\n")) })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

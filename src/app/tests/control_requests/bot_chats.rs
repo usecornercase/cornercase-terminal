@@ -210,3 +210,30 @@ fn a_failed_run_is_sent_once_while_away() {
     assert_eq!(failed.len(), 1, "{failed:?}");
     assert!(failed[0].contains("✗ claude is not installed") && failed[0].contains("🤖 PRs"), "{}", failed[0]);
 }
+
+#[test]
+fn an_answer_is_not_sent_to_a_chat_paired_after_the_message_was_written() {
+    let mut b = Bots::new(Via::Telegram, ChatApps::Off);
+    let asked = b.phone.says(&mut b.app, "/bot prs hello");
+    let other = Chat { id: 77, user: USER, name: "@other".into(), paired: 2 };
+    wiring::set_up(&mut b.app, Via::Telegram, "1:t", "cornercase_bot", Some(other));
+    b.settle();
+    assert!(b.told("hello"));
+    let sent = b.sent();
+    assert!(answer(&sent).is_none(), "{:?}", texts(&sent));
+    assert!(!sent.iter().any(|(_, order)| reply_to(order) == Some(asked)), "{sent:?}");
+}
+
+#[test]
+fn a_discord_command_names_its_bot_apart_from_its_text() {
+    let mut b = Bots::new(Via::Discord, ChatApps::Off);
+    let dir = b.dir.path().to_path_buf();
+    for (id, name) in [("my", "My"), ("my-bot", "My bot")] {
+        crate::bots::folder::create(&dir, &crate::bots::sample(id, name), "").expect("create");
+    }
+    b.app.set_bots_dir(&dir);
+    b.phone.says(&mut b.app, "/bot My\nbot hi");
+    let lines = chat_of(&dir, "my");
+    assert!(lines.iter().any(|line| line.kind == Kind::You && line.text == "bot hi"), "{lines:?}");
+    assert_eq!(chat_of(&dir, "my-bot"), Vec::new());
+}

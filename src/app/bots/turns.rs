@@ -431,6 +431,7 @@ impl App {
         folder::remove(&state.folder).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
         let removed = self.panels.bots.live.remove(at);
         self.forget_tags(&removed.bot.id);
+        self.forget_bot_asks(removed.key);
         let entries = self.panels.queued.remove_bot(&removed.bot.id);
         if self.panels.bots.shown.as_ref().is_some_and(|shown| shown.bot == removed.bot.id) {
             self.leave_bot();

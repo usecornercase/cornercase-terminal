@@ -133,7 +133,8 @@ fn removing_the_bot_closes_its_post() {
             Order::Close { thread: THREAD, lock: true }
         ]
     );
-    assert!(!std::fs::read_to_string(f.config.path().join("discord.json")).unwrap_or_default().contains("bot_posts"));
+    let saved = std::fs::read_to_string(f.config.path().join("discord.json")).expect("read discord.json");
+    assert!(!saved.contains("bot_posts"), "{saved}");
 }
 
 #[test]

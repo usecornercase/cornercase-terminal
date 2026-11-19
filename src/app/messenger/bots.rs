@@ -13,7 +13,6 @@ use crate::control::bots::{BotRequest, BotSay};
 use crate::messenger::{Keyboard, Message, Tap, Via};
 use crate::text::truncate_right;
 
-const ASKS: usize = 64;
 const LABEL: usize = 120;
 const MOST_LISTED: usize = 25;
 pub(super) const BOT_GONE: &str = "That bot is gone. /bots lists the bots now.";
@@ -21,32 +20,48 @@ const NO_BOTS: &str = "No bots yet: make one in cornercase, in the Bots section.
 const NO_SUCH_BOT: &str = "No bot has that name.";
 pub(super) const BOTS: &str = "Bots";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Written {
+    pub(super) message: i64,
+    pub(super) chat: i64,
+}
+
+impl Written {
+    pub(super) fn of(message: &Message) -> Self {
+        Self { message: message.id, chat: message.chat }
+    }
+}
+
 #[derive(Debug, Default)]
-pub(super) struct Asks(VecDeque<(u64, u64, i64)>);
+pub(super) struct Asks(VecDeque<(u64, u64, Written)>);
 
 impl Asks {
-    pub(super) fn push(&mut self, key: u64, line: u64, message: i64) {
-        self.0.push_back((key, line, message));
-        while self.0.len() > ASKS {
-            self.0.pop_front();
-        }
+    pub(super) fn push(&mut self, key: u64, line: u64, written: Written) {
+        self.0.push_back((key, line, written));
     }
 
-    pub(super) fn take(&mut self, key: u64, lines: &[u64]) -> Option<i64> {
+    pub(super) fn take(&mut self, key: u64, lines: &[u64]) -> Option<Written> {
         let mut newest = None;
-        self.0.retain(|&(asked, line, message)| {
+        self.0.retain(|&(asked, line, written)| {
             let answered = asked == key && lines.contains(&line);
             if answered {
-                newest = Some(message);
+                newest = Some(written);
             }
             !answered
         });
         newest
     }
+
+    pub(super) fn forget(&mut self, key: u64) {
+        self.0.retain(|(asked, ..)| *asked != key);
+    }
 }
 
 pub(super) fn named<'a, 'b>(args: &'a str, bots: &'b [&'b Bot]) -> Option<(&'b Bot, &'a str)> {
     let args = args.trim();
+    if let Some((name, text)) = args.split_once('\n') {
+        return crate::bots::find(bots, name).map(|bot| (bot, text.trim()));
+    }
     let spaces = args.char_indices().rev().filter(|(_, c)| c.is_whitespace()).map(|(at, _)| at);
     std::iter::once(args.len())
         .chain(spaces)
@@ -80,11 +95,22 @@ impl App {
     pub(in crate::app) fn bot_line_to_chat_apps(&mut self, at: usize, line: &Line, asked: &[u64]) {
         let key = self.panels.bots.live[at].key;
         for via in Via::ALL {
-            let reply_to = self.messenger_mut(via).bot_asks.take(key, asked);
+            let written = self.messenger_mut(via).bot_asks.take(key, asked);
+            let written = written.filter(|written| self.still_heard(via, written.chat));
             let unasked = matches!(line.kind, Kind::Bot | Kind::Error) && self.bot_delivers(at, via);
-            if reply_to.is_some() || unasked {
-                self.send_bot_line(via, at, line, reply_to);
+            if written.is_some() || unasked {
+                self.send_bot_line(via, at, line, written);
             }
+        }
+    }
+
+    fn still_heard(&self, via: Via, chat: i64) -> bool {
+        self.messenger(via).chat().is_some_and(|paired| paired.id == chat) || self.knows(via, chat)
+    }
+
+    pub(in crate::app) fn forget_bot_asks(&mut self, key: u64) {
+        for via in Via::ALL {
+            self.messenger_mut(via).bot_asks.forget(key);
         }
     }
 
@@ -96,7 +122,7 @@ impl App {
         }
     }
 
-    fn send_bot_line(&mut self, via: Via, at: usize, line: &Line, reply_to: Option<i64>) {
+    fn send_bot_line(&mut self, via: Via, at: usize, line: &Line, written: Option<Written>) {
         let key = self.panels.bots.live[at].key;
         let title = self.bot_title(via, at, line);
         let m = via.markup();
@@ -113,7 +139,9 @@ impl App {
             }
             _ => vec![m.escape(&line.text)],
         };
-        self.say_long(via, &title, parts, Delivery { route: Some(Route::Bot(key)), reply_to, ..Delivery::default() });
+        let (reply_to, to) = (written.map(|w| w.message), written.map(|w| w.chat));
+        let delivery = Delivery { route: Some(Route::Bot(key)), reply_to, to, ..Delivery::default() };
+        self.say_long(via, &title, parts, delivery);
     }
 
     fn bot_title(&self, via: Via, at: usize, line: &Line) -> String {
@@ -129,25 +157,25 @@ impl App {
         }
     }
 
-    pub(super) fn write_to_bot(&mut self, via: Via, key: u64, text: String, message: i64) {
+    pub(super) fn write_to_bot(&mut self, via: Via, key: u64, text: String, written: Written) {
         let Some(at) = self.panels.bots.by_key(key) else {
-            self.reply(via, message, BOT_GONE);
+            self.reply(via, written.message, BOT_GONE);
             return;
         };
         let bot = self.panels.bots.live[at].bot.id.clone();
         let say = BotSay { bot, text, wait: false };
-        self.chat_request(via, Command::Bot(BotRequest::Say(say)), Asked::Bot { message, key }, None);
+        self.chat_request(via, Command::Bot(BotRequest::Say(say)), Asked::Bot { written, key }, None);
     }
 
-    pub(super) fn bot_said(&mut self, via: Via, (message, key): (i64, u64), reply: Result<Value, String>) {
+    pub(super) fn bot_said(&mut self, via: Via, (written, key): (Written, u64), reply: Result<Value, String>) {
         match reply {
             Ok(value) => {
-                self.post_reaction(via, message);
+                self.post_reaction(via, written.message);
                 if let Some(line) = value["line"]["id"].as_u64() {
-                    self.messenger_mut(via).bot_asks.push(key, line, message);
+                    self.messenger_mut(via).bot_asks.push(key, line, written);
                 }
             }
-            Err(why) => self.reply(via, message, &why),
+            Err(why) => self.reply(via, written.message, &why),
         }
     }
 
@@ -201,7 +229,7 @@ impl App {
         if text.is_empty() {
             self.tap_bot(via, key, message.chat);
         } else {
-            self.write_to_bot(via, key, text, message.id);
+            self.write_to_bot(via, key, text, Written::of(message));
         }
     }
 

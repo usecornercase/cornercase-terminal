@@ -499,20 +499,16 @@ fn a_followed_agent_that_needs_you_is_sent_once_with_its_buttons(#[case] away: b
     let pane = f.start_with(Some("prs"), "ask", false);
     f.works(pane);
     f.agent.finish();
-    let mut seen = Vec::new();
+    let (mut seen, mut at) = (Vec::new(), Instant::now());
     let mut read = |f: &mut Following| {
         drain(&mut f.agent.app, &f.agent.rx);
-        f.agent.app.refresh(Instant::now());
+        at = (at + Duration::from_secs(2)).max(Instant::now());
+        f.agent.app.refresh(at);
         seen.extend(phone.read(&mut f.agent.app).into_iter().map(|(_, order)| order));
         seen.iter().filter(|order| html(order).contains("claude needs you")).cloned().collect::<Vec<_>>()
     };
-    wait_until("the chat app is told", || !read(&mut f).is_empty());
-    let from = Instant::now();
-    let mut needs = Vec::new();
-    while from.elapsed() < Duration::from_secs(3) {
-        needs = read(&mut f);
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("the chat app is told", || !read(&mut f).is_empty() && !f.kinds(Kind::Waiting).is_empty());
+    let needs = (0..3).map(|_| read(&mut f)).last().unwrap_or_default();
     assert_eq!(needs.len(), 1, "{needs:?}");
     assert!(keyboard(&needs[0]).iter().flatten().any(|key| key.text == "esc"), "{needs:?}");
     assert_eq!(f.kinds(Kind::Waiting).len(), 1);

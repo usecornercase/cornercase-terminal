@@ -99,7 +99,7 @@ impl App {
             Route::Pane(pane) => self.deliver(via, pane, message.text.clone(), message.id),
             Route::Branch(draft) => self.draft_branch(via, draft, message.text.trim(), message.id),
             Route::Prompt(draft) => self.draft_prompt(via, draft, message, area),
-            Route::Bot(key) => self.write_to_bot(via, key, message.text.clone(), message.id),
+            Route::Bot(key) => self.write_to_bot(via, key, message.text.clone(), super::bots::Written::of(message)),
         }
     }
 

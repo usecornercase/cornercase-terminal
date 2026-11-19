@@ -131,14 +131,14 @@ mod updates {
     }
 
     #[test]
-    fn a_slash_command_with_options_reads_them_in_order_after_its_name() {
+    fn a_slash_command_with_options_reads_them_in_order_after_its_name_each_on_its_own_line() {
         let options =
             json!([{"name": "name", "type": 3, "value": "prs"}, {"name": "text", "type": 3, "value": "hello there"}]);
         let d = json!({"id": "1300000000000000001", "token": "tok", "type": 2, "channel_id": "1200",
             "user": {"id": "9", "username": "ada"}, "data": {"name": "bot", "type": 1, "options": options}});
 
         let Some(Update::Message(message)) = update("INTERACTION_CREATE", &d, None) else { panic!("a message") };
-        assert_eq!(message.text, "/bot prs hello there");
+        assert_eq!(message.text, "/bot prs\nhello there");
     }
 }
 

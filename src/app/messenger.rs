@@ -108,7 +108,7 @@ enum Asked {
     Keys { press: String, chat: i64, chat_message: i64, key: String, agent: String },
     Finished { pane: u64, header: String },
     Start { message: i64, place: String, agent: String },
-    Bot { message: i64, key: u64 },
+    Bot { written: bots::Written, key: u64 },
 }
 
 pub(super) struct Messenger {
@@ -451,7 +451,7 @@ impl App {
                 Ok(value) => self.started(via, &value, message, (&place, &agent)),
                 Err(why) => self.reply(via, message, &why),
             },
-            Asked::Bot { message, key } => self.bot_said(via, (message, key), reply),
+            Asked::Bot { written, key } => self.bot_said(via, (written, key), reply),
         }
     }
 
