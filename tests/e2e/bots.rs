@@ -8,16 +8,23 @@ const STREAM: &str = r#"{"type":"system","subtype":"init","model":"claude-opus-5
 {"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"text","text":"hello from the bot"}]}}
 {"type":"result","subtype":"success","is_error":false,"result":"hello from the bot","session_id":"s1","usage":{"input_tokens":3,"output_tokens":4}}"#;
 
+const SAID: &str = "hello from the bot";
+
 pub(super) fn with_agent() -> Arc<Session> {
     with_agent_running("")
 }
 
 fn with_agent_running(before: &str) -> Arc<Session> {
+    with_agent_saying(before, SAID)
+}
+
+pub(super) fn with_agent_saying(before: &str, said: &str) -> Arc<Session> {
     let session = Session::new();
     let claude = session.dir.join("claude-bot");
+    let stream = STREAM.replace(SAID, said);
     write_executable(
         &claude,
-        &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$0.args\"\n{before}\ncat <<'EOF'\n{STREAM}\nEOF\n"),
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$0.args\"\n{before}\ncat <<'EOF'\n{stream}\nEOF\n"),
     );
     let config = serde_json::json!({"agent_commands": agent_commands(&[("claude", &claude)]), "agent": "claude"});
     std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");

@@ -1,6 +1,6 @@
 # Bots › The window
 
-Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`, `routines_dialog.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
+Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`, `routines_dialog.rs`, `links.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
 
 #844 made bots with no face but `cornercase bot …`. The window draws a bot **as a chat** (bubbles, Markdown, what it is doing), never as the agent's interface, since #844 runs the agent without it and keeps the chat in `chat.jsonl`.
 
@@ -52,7 +52,15 @@ While a chat shows, every key goes to its input field and **never to a pane**: `
 
 ## Links
 
-A click on an `http://` or `https://` address in a bot's line **copies** it; why is in [Opening in other apps](../opening-in-other-apps.md). Opening it is a follow-up issue.
+A click on an `http://` or `https://` address in a bot's answer (alone, or as a routine run's answer) does what the window can do (#863):
+
+- **A local window with a desktop** (it sent the default app in its `Hello`) opens **Open link**: who wrote it, the address on up to three rows, `goes to <host>`, and ` copy `, ` open `, ` cancel `. ` open ` (or `Enter`) opens the address in that window's browser; ` copy ` copies it; `Esc`, ` cancel ` or a click outside close it. Removing the bot closes it.
+- **A remote window, the browser, an ssh session or a Linux console** copies the address at once, as before.
+- **An address the window would refuse** (not ASCII, a user name before the host, over 2,048 bytes, a character a URL cannot hold) is copied, with a toast that says why it is not opened.
+- An address longer than the chat is cut across rows; a click on its first row opens it whole (it is found again in the answer), a click on a later row does nothing.
+- Links in a followed agent's `finished` message, in your own messages, steps, notices and errors are not clickable.
+
+The limits and why are in [Opening in other apps › A link in a bot's answer](../opening-in-other-apps.md).
 
 ## Compact mode and the phone
 

@@ -207,7 +207,7 @@ Secrets (#877): see [Secrets › Tests](bots/secrets.md#tests). Asks (#878): see
 
 ## The window (#845)
 
-The Bots section, the chat and the form are in [bots/window.md](bots/window.md): where the chat shows and what leaves it, the shown bot shared by windows and reported as `shown_bot`, the keys, the drawing of each line, unread and ` go `, the form and `bot edit --about`, why a link is copied and not opened, and what was checked.
+The Bots section, the chat and the form are in [bots/window.md](bots/window.md): where the chat shows and what leaves it, the shown bot shared by windows and reported as `shown_bot`, the keys, the drawing of each line, unread and ` go `, the form and `bot edit --about`, what a click on a link does in each window (#863), and what was checked.
 
 ## Topics
 

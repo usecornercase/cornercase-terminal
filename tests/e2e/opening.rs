@@ -59,3 +59,36 @@ fn a_window_over_ssh_is_offered_copy_path() {
 
     ui.wait_for("the menu offers copy path", |s| s.contains("copy path") && !s.contains("open in…"));
 }
+
+const DOCS: &str = "https://example.com/docs";
+
+fn bot_answered(session: &Arc<Session>, ui: &mut Harness) {
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    session.says(&["bot", "say", "prs", "go", "--wait"]);
+    ui.click(ui.position_of("prs"));
+    ui.wait_for("the answer shows", |s| s.contains(DOCS));
+    ui.click(ui.position_of(DOCS));
+}
+
+#[test]
+fn a_link_in_a_bots_answer_opens_in_the_browser_after_asking() {
+    let session = super::bots::with_agent_saying("", &format!("read {DOCS} first"));
+    let mut ui = local_window(&session, 0);
+    bot_answered(&session, &mut ui);
+
+    ui.wait_for("the dialog asks", |s| s.contains("Open link") && s.contains("goes to example.com"));
+    ui.click(ui.position_of(" open "));
+
+    let launcher = if cfg!(target_os = "macos") { "open.args" } else { "xdg-open.args" };
+    session.wait_for_file(launcher, "the browser opened the address", |args| args.trim() == DOCS);
+}
+
+#[test]
+fn a_window_over_ssh_copies_a_bots_link() {
+    let session = super::bots::with_agent_saying("", &format!("read {DOCS} first"));
+    let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+    bot_answered(&session, &mut ui);
+
+    ui.wait_for("the address is copied", |s| s.contains("copied to clipboard") && !s.contains("Open link"));
+}
