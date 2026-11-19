@@ -478,6 +478,7 @@ impl App {
         let kind = self.agent_kind(asker, start.agent.clone())?;
         let (mode, model, effort) = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
         agents::start_line(&self.config, &kind, mode, model, effort)?;
+        self.bot_starts(client, &kind, mode)?;
         if start.prompt.as_deref().is_some_and(|prompt| !prompt.trim().is_empty()) {
             return Err(malformed("give the prompt or the issue, not both"));
         }

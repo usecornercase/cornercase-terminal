@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use super::*;
 use crate::agents::activity::Activity;
 use crate::agents::headless::Access;
-use crate::app::control::boundary::HEAD;
 use crate::app::control::boundary::fronts_agent;
+use crate::app::control::boundary::{HEAD, NO_KEYS, OWN_ONLY};
 use crate::app::tests::bots::{install_bot, root_pid};
 use crate::test_util::fake_program;
 
@@ -61,6 +61,21 @@ impl Bounded {
         message
     }
 
+    fn closed(&mut self, command: Command) {
+        assert_eq!(error(now(&mut self.app, None, command)), NO_KEYS);
+    }
+
+    fn refused_for(&mut self, command: Command, why: &str) {
+        let message = error(now(&mut self.app, None, command));
+        assert!(message.starts_with(why), "{message}");
+    }
+
+    fn waits(&mut self) {
+        let term = self.app.projects.pane_by_mut(self.agent).expect("the pane");
+        term.agent.update(Some(Activity::Waiting), false, Instant::now());
+        assert_eq!(term.agent.status(), Some(activity::Status::Waiting));
+    }
+
     fn screen(&self, pane: u64) -> String {
         pane_screen(&self.app, pane)
     }
@@ -87,6 +102,16 @@ fn text(pane: u64, text: &str, enter: bool) -> Command {
     send_text(pane, text, enter, false)
 }
 
+fn send_text_forced(pane: u64, text: &str) -> Command {
+    Command::Send(wire::SendText {
+        pane: Some(pane),
+        text: Some(text.into()),
+        enter: true,
+        force: true,
+        ..wire::SendText::default()
+    })
+}
+
 fn input(pane: u64) -> Command {
     let events = vec![crate::control::terminal::InputEvent::Text("typed-by-bot".into())];
     Command::Input(wire::Input { pane: Some(pane), events, ..wire::Input::default() })
@@ -99,8 +124,8 @@ fn a_bot_cannot_type_into_a_shell_pane() {
 
     let sent = b.refused(text(shell, "echo typed-by-bot", true));
     assert!(sent.contains(&format!("pane {shell} runs none")), "{sent}");
-    b.refused(press_keys(shell, &["enter"]));
-    b.refused(input(shell));
+    b.closed(press_keys(shell, &["enter"]));
+    b.closed(input(shell));
     b.refused(Command::PasteFile(wire::PasteFile { pane: Some(shell), name: "a.txt".into(), data: String::new() }));
     let todo = wire::TodoSend { id: 1, pane: Some(shell), tab: None, force: false };
     b.refused(Command::TodoSend(todo));
@@ -114,13 +139,95 @@ fn a_bot_cannot_type_into_a_shell_pane() {
 }
 
 #[test]
-fn a_bot_can_type_into_an_agent_pane_and_start_a_plain_shell() {
+fn a_bot_can_write_a_prompt_to_an_agent_pane_and_start_a_plain_shell() {
     let mut b = bounded();
     let agent = b.agent;
 
     value(&mut b.app, None, text(agent, "hello", false));
-    value(&mut b.app, None, press_keys(agent, &["esc"]));
     value(&mut b.app, None, new_tab(None));
+}
+
+#[test]
+fn a_bot_cannot_press_keys_or_type_into_an_agent_pane() {
+    let mut b = bounded();
+    let agent = b.agent;
+
+    b.closed(press_keys(agent, &["esc"]));
+    b.closed(input(agent));
+    assert!(!b.screen(agent).contains("typed-by-bot"), "{}", b.screen(agent));
+
+    b.as_you();
+    value(&mut b.app, None, press_keys(agent, &["esc"]));
+}
+
+#[test]
+fn a_bot_cannot_send_an_agents_command_or_its_shell() {
+    let mut b = bounded();
+    let agent = b.agent;
+    let command = "a bot writes prompts to an agent, not its commands";
+
+    b.refused_for(text(agent, "/exit", true), command);
+    b.refused_for(text(agent, "  !echo typed-by-bot", true), command);
+    b.refused_for(
+        Command::Send(wire::SendText { pane: Some(agent), enter: true, ..wire::SendText::default() }),
+        "a bot's send needs a text",
+    );
+
+    assert!(!b.screen(agent).contains("typed-by-bot"), "{}", b.screen(agent));
+    assert!(!b.screen(agent).contains("/exit"), "{}", b.screen(agent));
+}
+
+#[test]
+fn a_bot_cannot_answer_a_waiting_agent_even_with_force() {
+    let mut b = bounded();
+    let agent = b.agent;
+    b.waits();
+    let asks = format!("{HEAD}, and the agent in pane {agent} asks something");
+
+    b.refused_for(text(agent, "yes", true), &asks);
+    b.refused_for(send_text_forced(agent, "yes"), &asks);
+    b.refused_for(Command::TodoSend(wire::TodoSend { id: 1, pane: Some(agent), tab: None, force: true }), &asks);
+    b.refused_for(
+        Command::Held(wire::HeldRequest { pane: Some(agent), tab: None, action: wire::HeldAction::SendNow }),
+        &asks,
+    );
+    b.refused_for(
+        Command::PasteFile(wire::PasteFile { pane: Some(agent), name: "a.txt".into(), data: "eA==".into() }),
+        &asks,
+    );
+
+    b.as_you();
+    value(&mut b.app, None, press_keys(agent, &["esc"]));
+}
+
+#[test]
+fn a_bots_enter_is_not_pressed_once_its_agent_asks_something() {
+    let mut b = bounded();
+    let agent = b.agent;
+    ask(&mut b.app, None, text(agent, "go on", true));
+    b.waits();
+
+    let message = error(answered(&mut b.app, &b.rx, "the bot is answered"));
+
+    assert!(message.starts_with(&format!("{HEAD}, and the agent in pane {agent} asks something")), "{message}");
+    assert!(pane(&b.app, agent).submitted.is_none(), "no Enter was pressed");
+}
+
+#[test]
+fn a_bot_closes_only_the_panes_and_tabs_it_started() {
+    let mut b = bounded();
+    let (shell, agent) = (b.shell, b.agent);
+    let shells_tab = b.app.projects.tab(b.app.projects.tab_of_pane(shell).expect("the shell's tab")).id;
+    let close = |item| Command::Close(wire::Close { item, remove_worktree: false, force: false, unlock: false });
+
+    b.refused_for(close(Item::Pane(shell)), &format!("{OWN_ONLY}; pane-{shell} was not started by this bot"));
+    b.refused_for(close(Item::Tab(shells_tab)), OWN_ONLY);
+    let workspace = b.app.report(None).panes()[0].workspace;
+    b.refused_for(close(Item::Workspace(workspace)), OWN_ONLY);
+    assert!(b.app.projects.pane_by(shell).is_some());
+
+    b.app.projects.pane_by_mut(agent).expect("the agent's pane").bot = Some("prs".into());
+    value(&mut b.app, None, close(Item::Pane(agent)));
 }
 
 #[test]

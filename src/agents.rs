@@ -568,14 +568,11 @@ pub(crate) fn start_line(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<String, String> {
-    let mut chosen = args(config, kind);
-    if let Some(name) = mode {
-        let table = modes(config, kind);
-        if let Some(refusal) = mode_refusal(kind, name, &table) {
-            return Err(refusal);
-        }
-        chosen = with_mode(kind, &chosen, &table, (name != DEFAULT_MODE).then_some(name));
+    let table = modes(config, kind);
+    if let Some(refusal) = mode.and_then(|name| mode_refusal(kind, name, &table)) {
+        return Err(refusal);
     }
+    let chosen = chosen(config, kind, mode, &table);
     if model.is_some_and(|m| !m.trim().is_empty()) && Known::of(kind).is_none() {
         let known: Vec<&str> = Known::ALL.into_iter().filter(|k| k.model_flag().is_some()).map(Known::name).collect();
         let known = known.join(", ");
@@ -589,6 +586,25 @@ pub(crate) fn start_line(
         return Err(refusal);
     }
     Ok(line(config, kind, with_effort(kind, with_model(kind, chosen, model), effort)))
+}
+
+fn chosen(config: &Config, kind: &str, mode: Option<&str>, table: &[Mode]) -> Vec<String> {
+    let args = args(config, kind);
+    match mode {
+        Some(name) => with_mode(kind, &args, table, (name != DEFAULT_MODE).then_some(name)),
+        None => args,
+    }
+}
+
+pub(crate) fn never_asks(config: &Config, kind: &str, mode: Option<&str>) -> Option<String> {
+    let table = modes(config, kind);
+    let run = normalized(kind, &chosen(config, kind, mode, &table));
+    let built_in = Known::of(kind).into_iter().flat_map(|known| known.modes().iter());
+    let built_in = built_in.map(|(name, args)| ((*name).to_string(), args.iter().map(|a| (*a).to_string()).collect()));
+    let mut every = table.iter().cloned().chain(built_in);
+    let found =
+        every.find(|(name, args): &Mode| is_dangerous(name) && position_of(&run, &normalized(kind, args)).is_some());
+    found.map(|(name, _)| name)
 }
 
 fn mode_refusal(kind: &str, name: &str, table: &[Mode]) -> Option<String> {

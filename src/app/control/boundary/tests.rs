@@ -1,19 +1,19 @@
 use rstest::rstest;
 
-use super::{Gated, gated, stop_name, window_name};
+use super::table::{CLOSED, OPEN, RULED, closed};
+use super::typing::not_a_prompt;
+use super::{Gated, Text, gated, stop_name, window_name};
+use crate::agents::Known;
 use crate::control::bots::{BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::control::{
-    CloneRepository, Command, ConfigImport, Configure, HeldAction, HeldRequest, Input, Keys, NewTab, OpenView,
-    PasteFile, RestartWhenIdle, SendText, SetView, Split, TodoSend, UpdateCheck, UpdateInstall,
+    AgentsClose, CloneRepository, Close, CloseAgent, Command, ConfigImport, Configure, FlowImport, FlowSave,
+    HeldAction, HeldRequest, Item, MachineSet, Machines, NewTab, Open, OpenView, PasteFile, RestartWhenIdle, SendText,
+    SetView, Split, TodoSend, UpdateCheck, UpdateInstall, WorktreeSize,
 };
 use crate::protocol::ClientMessage;
 
 fn held(action: HeldAction) -> Command {
     Command::Held(HeldRequest { pane: Some(4), tab: None, action })
-}
-
-fn input(pane: Option<u64>, popup: bool) -> Command {
-    Command::Input(Input { pane, popup, ..Input::default() })
 }
 
 fn new_tab(command: Option<&str>) -> Command {
@@ -40,23 +40,73 @@ fn import(apply: bool) -> Command {
     Command::ConfigImport(ConfigImport { apply, ..ConfigImport::default() })
 }
 
-const PANE: Option<Gated> = Some(Gated::Pane { pane: Some(4), tab: None });
+const PANE: Option<Gated> = Some(Gated::Pane { pane: Some(4), tab: None, text: Text::Kept });
+
+fn send(text: Option<&str>) -> Command {
+    Command::Send(SendText { pane: Some(4), text: text.map(str::to_string), ..SendText::default() })
+}
+
+fn close(item: Item) -> Command {
+    Command::Close(Close { item, remove_worktree: false, force: false, unlock: false })
+}
+
+fn close_agent(check: bool) -> Command {
+    Command::CloseAgent(CloseAgent { pane: 4, check, ..CloseAgent::default() })
+}
+
+fn agents_close(check: bool) -> Command {
+    Command::AgentsClose(AgentsClose { workspace: Some(1), check, force: false })
+}
+
+fn flow_import(check: bool) -> Command {
+    Command::FlowImport(FlowImport { check, ..FlowImport::default() })
+}
+
+fn flow_save(check: bool) -> Command {
+    Command::FlowSave(FlowSave { check, ..FlowSave::default() })
+}
+
+fn typed(text: &str) -> Gated {
+    Gated::Pane { pane: Some(4), tab: None, text: Text::Given(text.into()) }
+}
 
 #[rstest]
-#[case::send(Command::Send(SendText { pane: Some(4), ..SendText::default() }), PANE)]
+#[case::send(send(Some("hi")), Some(typed("hi")))]
+#[case::send_without_a_text(send(None), Some(Gated::Pane { pane: Some(4), tab: None, text: Text::Missing }))]
+#[case::send_with_an_empty_text(send(Some("")), Some(Gated::Pane { pane: Some(4), tab: None, text: Text::Missing }))]
 #[case::send_to_a_tab(
     Command::Send(SendText { tab: Some(2), ..SendText::default() }),
-    Some(Gated::Pane { pane: None, tab: Some(2) })
+    Some(Gated::Pane { pane: None, tab: Some(2), text: Text::Missing })
 )]
-#[case::keys(Command::Keys(Keys { pane: Some(4), ..Keys::default() }), PANE)]
-#[case::todo_send(Command::TodoSend(TodoSend { id: 1, pane: Some(4), tab: None, force: false }), PANE)]
+#[case::todo_send(
+    Command::TodoSend(TodoSend { id: 1, pane: Some(4), tab: None, force: false }),
+    Some(Gated::Pane { pane: Some(4), tab: None, text: Text::Todo(1) })
+)]
 #[case::held_send_now(held(HeldAction::SendNow), PANE)]
 #[case::held_wait_turn(held(HeldAction::WaitTurn), None)]
-#[case::input_to_a_popup(input(None, true), Some(Gated::Popup))]
-#[case::input_to_a_pane(input(Some(4), false), PANE)]
-#[case::input_without_a_pane(input(None, false), None)]
 #[case::paste_file(Command::PasteFile(PasteFile { pane: Some(4), ..PasteFile::default() }), PANE)]
 #[case::paste_file_without_a_pane(Command::PasteFile(PasteFile::default()), None)]
+#[case::open(Command::Open(Open { path: "/x".into(), ..Open::default() }), Some(Gated::Opens("/x".into())))]
+#[case::worktree_size_of_a_path(
+    Command::WorktreeSize(WorktreeSize { workspace: None, path: Some("/x".into()) }),
+    Some(Gated::Measures("/x".into()))
+)]
+#[case::worktree_size_of_a_workspace(Command::WorktreeSize(WorktreeSize { workspace: Some(1), path: None }), None)]
+#[case::close_a_pane(close(Item::Pane(4)), Some(Gated::Closes(Item::Pane(4))))]
+#[case::close_a_workspace(close(Item::Workspace(2)), Some(Gated::Closes(Item::Workspace(2))))]
+#[case::close_an_agent(close_agent(false), Some(Gated::Closing))]
+#[case::check_closing_an_agent(close_agent(true), None)]
+#[case::close_agents(agents_close(false), Some(Gated::Closing))]
+#[case::check_closing_agents(agents_close(true), None)]
+#[case::import_a_flow(flow_import(false), Some(Gated::Flows))]
+#[case::preview_a_flow_import(flow_import(true), None)]
+#[case::save_a_flow(flow_save(false), Some(Gated::Flows))]
+#[case::check_a_flow(flow_save(true), None)]
+#[case::list_machines(Command::Machines(Machines::List), None)]
+#[case::retry_machines(Command::Machines(Machines::Retry(None)), None)]
+#[case::set_a_machine(Command::Machines(Machines::Set(MachineSet::default())), Some(Gated::Machines))]
+#[case::remove_a_machine(Command::Machines(Machines::Remove("x".into())), Some(Gated::Machines))]
+#[case::update_a_machine(Command::Machines(Machines::Update("x".into())), Some(Gated::Machines))]
 #[case::new_tab_with_a_command(new_tab(Some("ls")), Some(Gated::NewShell))]
 #[case::new_tab_without_a_command(new_tab(None), None)]
 #[case::new_tab_with_a_blank_command(new_tab(Some("  ")), None)]
@@ -90,6 +140,56 @@ const PANE: Option<Gated> = Some(Gated::Pane { pane: Some(4), tab: None });
 #[case::status(Command::Status(crate::control::Status::default()), None)]
 fn a_request_is_classified(#[case] command: Command, #[case] expected: Option<Gated>) {
     assert_eq!(gated(&command), expected);
+}
+
+#[test]
+fn every_request_is_decided_once() {
+    let closed: Vec<&str> = CLOSED.iter().flat_map(|(names, _)| names.iter().copied()).collect();
+    let lists = [closed.as_slice(), RULED, OPEN];
+    for name in Command::NAMES {
+        let found = lists.iter().filter(|list| list.contains(name)).count();
+        assert_eq!(found, 1, "`{name}` must be in exactly one of CLOSED, RULED and OPEN");
+    }
+    for name in lists.concat() {
+        assert!(Command::NAMES.contains(&name), "`{name}` is not a request");
+    }
+}
+
+#[rstest]
+#[case::keys("keys", "a bot cannot press keys")]
+#[case::flow_run("flow-run", "a bot cannot run a flow")]
+#[case::flows("flow-delete", "a bot cannot change cornercase's flows")]
+#[case::plugins("plugin-run", "a bot cannot run or change cornercase's plugins")]
+#[case::stop("stop-port", "a bot cannot stop a process")]
+#[case::discard("changes-discard", "a bot cannot discard changes")]
+#[case::worktrees("free-builds", "a bot cannot remove a worktree")]
+#[case::own("agents-forget", "a bot closes only the tabs and panes it started")]
+#[case::accounts("profile-use", "a bot cannot change your accounts")]
+#[case::pair("config-pair", "a bot cannot pair a device")]
+#[case::forum("forum-server", "a bot cannot change cornercase's settings")]
+#[case::tunnels("tunnel-hold", "a bot cannot open or close a tunnel")]
+fn a_closed_request_says_why(#[case] name: &str, #[case] starts: &str) {
+    let why = closed(name).expect("closed");
+    assert!(why.starts_with(starts), "{why}");
+}
+
+#[test]
+fn an_open_request_is_not_closed() {
+    assert_eq!(closed("status"), None);
+    assert_eq!(closed("send"), None);
+}
+
+#[rstest]
+#[case::a_command("/exit", None, true)]
+#[case::shell_mode_after_spaces("  !ls", None, true)]
+#[case::a_command_on_the_next_line("\n/x", None, true)]
+#[case::a_path_inside("fix /usr/bin", None, false)]
+#[case::a_heading("# heading", None, false)]
+#[case::an_exclamation("hello!", None, false)]
+#[case::copilots_help("?", Some(Known::Copilot), true)]
+#[case::a_question_for_claude("?", Some(Known::Claude), false)]
+fn a_prompt_is_told_from_an_agents_command(#[case] text: &str, #[case] agent: Option<Known>, #[case] refused: bool) {
+    assert_eq!(not_a_prompt(text, agent), refused);
 }
 
 #[test]

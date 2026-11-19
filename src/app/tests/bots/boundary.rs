@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::control::boundary::NO_KEYS;
 use crate::protocol::ClientMessage;
 
 const BOT: u64 = 41;
@@ -87,7 +88,7 @@ fn a_bots_turn_cannot_type_into_a_popup_or_start_a_pane_with_a_command() {
     let popup = reply_from(&mut c.app, BOT, "input", &popup_text()).expect_err("refused");
     let shell = reply_from(&mut c.app, BOT, "new-tab", &serde_json::json!({"command": "ls"})).expect_err("refused");
 
-    assert!(popup.starts_with("a bot can only type into a pane that runs an agent"), "{popup}");
+    assert_eq!(popup, NO_KEYS);
     assert!(shell.contains("a new pane's command is typed into its shell"), "{shell}");
     for other in [BOT + 1, BOT + 2] {
         assert_eq!(reply_from(&mut c.app, other, "input", &popup_text()), Err(NO_POPUP.to_string()));
@@ -133,12 +134,8 @@ fn a_full_bots_turn_is_not_refused() {
 
 #[test]
 fn a_bots_connection_cannot_send_into_a_shell_pane_but_another_can() {
-    let shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
     let folder = TempDir::new();
-    let (mut app, rx) = new_app_with_shell(shell, no_config());
-    if cfg!(windows) {
-        app.config.shell.args = vec![String::from("/d")];
-    }
+    let (mut app, rx) = system_shell_app();
     app.open_project(folder.path().to_path_buf(), AREA).expect("open project");
     let pane = app.report(None).panes()[0].pane;
     let (_dir, _bin, claude) = install_bot(&mut app, "", Access::Cornercase);
@@ -374,7 +371,7 @@ mod queue_by_a_bot {
         let root = root_of(&c);
         c.app.client_connected(BOT, Some(root));
         let popup = reply_from(&mut c.app, BOT, "input", &popup_text()).expect_err("refused");
-        assert!(popup.starts_with("a bot can only type into a pane that runs an agent"), "{popup}");
+        assert_eq!(popup, NO_KEYS);
         c.release(ANSWER);
         c.runs_settle();
     }
@@ -388,8 +385,146 @@ mod queue_by_a_bot {
         c.started(1);
         c.app.client_connected(BOT, None);
         let popup = reply_from(&mut c.app, BOT, "input", &popup_text()).expect_err("refused");
-        assert!(popup.starts_with("a bot can only type into a pane that runs an agent"), "{popup}");
+        assert_eq!(popup, NO_KEYS);
         c.release(ANSWER);
         c.runs_settle();
+    }
+}
+
+mod marked {
+    use super::*;
+    use crate::app::control::boundary::OWN_ONLY;
+
+    const NEVER_ASKS: &str = "a bot cannot start an agent in a mode that never asks before it acts";
+
+    fn shell_app() -> (App, Receiver<AppEvent>) {
+        let (mut app, rx) = system_shell_app();
+        app.config.agent_commands.insert("claude".into(), "/nonexistent/claude".into());
+        app.clients.bots.marked(BOT, "prs");
+        (app, rx)
+    }
+
+    fn refusal(app: &mut App, client: u64, command: &str, args: &serde_json::Value) -> Option<String> {
+        let text = serde_json::json!({"contract": 1, "command": command, "args": args}).to_string();
+        app.request(client, &text, Some(AREA), Instant::now());
+        let answers = app.take_answers();
+        let (_, reply) = answers.into_iter().find(|(who, _)| *who == client)?;
+        let reply: serde_json::Value = serde_json::from_str(&reply).expect("a reply");
+        reply["error"]["message"].as_str().map(str::to_string)
+    }
+
+    fn refused_to_the_bot_only(app: &mut App, command: &str, args: &serde_json::Value, why: &str) {
+        let bots = refusal(app, BOT, command, args).unwrap_or_else(|| panic!("{command} was allowed to the bot"));
+        assert!(bots.starts_with(why), "{command}: {bots}");
+        let others = refusal(app, BOT + 1, command, args);
+        assert!(others.is_none_or(|others| !others.starts_with(why)), "{command} was refused to another client");
+    }
+
+    fn refused_to_the_bot(app: &mut App, command: &str, args: &serde_json::Value, why: &str) {
+        let bots = refusal(app, BOT, command, args).unwrap_or_else(|| panic!("{command} was allowed to the bot"));
+        assert!(bots.starts_with(why), "{command}: {bots}");
+    }
+
+    #[test]
+    fn a_bot_is_refused_what_the_table_closes() {
+        let (mut app, _rx) = shell_app();
+        let none = serde_json::json!({});
+        for (command, args, why) in [
+            ("keys", serde_json::json!({"pane": 99, "keys": ["enter"]}), "a bot cannot press keys"),
+            ("input", serde_json::json!({"pane": 99, "events": [{"text": "x"}]}), "a bot cannot press keys"),
+            ("stop-process", serde_json::json!({"pid": 2_000_000_000}), "a bot cannot stop a process"),
+            ("changes-discard", serde_json::json!({"workspace": 99, "path": "x"}), "a bot cannot discard changes"),
+            ("agents-forget", serde_json::json!({"workspace": 99}), OWN_ONLY),
+            ("tunnel-open", serde_json::json!({"port": 5173}), crate::bots::NO_TUNNELS),
+        ] {
+            refused_to_the_bot_only(&mut app, command, &args, why);
+        }
+        for (command, args, why) in [
+            ("flow-run", serde_json::json!({"name": "x", "prompt": "y"}), "a bot cannot run a flow"),
+            ("flow-delete", serde_json::json!({"name": "x"}), "a bot cannot change cornercase's flows"),
+            ("plugin-run", serde_json::json!({"plugin": "x", "action": "y", "revision": 1}), crate::bots::NO_PLUGINS),
+            ("worktrees-remove", none.clone(), "a bot cannot remove a worktree"),
+            ("account-use", serde_json::json!({"provider": "claude", "account": "x"}), "a bot cannot change your"),
+            ("config-pair", none.clone(), "a bot cannot pair a device"),
+            ("forum-server", serde_json::json!({"id": "1"}), "a bot cannot change cornercase's settings"),
+        ] {
+            refused_to_the_bot(&mut app, command, &args, why);
+        }
+    }
+
+    #[test]
+    fn a_bot_is_refused_what_changes_flows_machines_and_what_it_did_not_start() {
+        let (mut app, _rx) = shell_app();
+        let flows = "a bot cannot change cornercase's flows";
+        for (command, args, why) in [
+            ("flow-import", serde_json::json!({"text": "x"}), flows),
+            ("flow-save", serde_json::json!({"flow": {"name": "x"}}), flows),
+            ("close-agent", serde_json::json!({"pane": 99}), OWN_ONLY),
+            ("agents-close", serde_json::json!({"workspace": 99}), OWN_ONLY),
+            ("close", serde_json::json!({"item": {"project": 99}}), OWN_ONLY),
+            ("close", serde_json::json!({"item": {"workspace": 99}}), OWN_ONLY),
+            ("machines", serde_json::json!({"action": "remove", "entry": "vps"}), crate::bots::NO_MACHINES),
+            ("start", serde_json::json!({"machine": "vps", "prompt": "x"}), crate::bots::ELSEWHERE),
+        ] {
+            refused_to_the_bot_only(&mut app, command, &args, why);
+        }
+        for (command, args) in [
+            ("flow-import", serde_json::json!({"text": "x", "check": true})),
+            ("close-agent", serde_json::json!({"pane": 99, "check": true})),
+            ("machines", serde_json::json!({"action": "list"})),
+        ] {
+            let said = refusal(&mut app, BOT, command, &args);
+            assert!(said.as_deref().is_none_or(|said| !said.starts_with("a bot")), "{command}: {said:?}");
+        }
+    }
+
+    #[test]
+    fn a_bot_cannot_open_a_bots_folder_or_a_code_workspace() {
+        let (mut app, _rx) = shell_app();
+        let bots = TempDir::new();
+        std::fs::create_dir_all(bots.path().join("prs")).expect("a bot's folder");
+        app.set_bots_dir(bots.path());
+        app.clients.bots.marked(BOT, "prs");
+        let file = TempDir::new();
+        let workspace = file.path().join("x.code-workspace");
+        std::fs::write(&workspace, "{\"folders\": []}").expect("a workspace file");
+        let other = TempDir::new();
+
+        for (path, why) in [
+            (bots.path().to_path_buf(), "a bot cannot open a bot's folder as a project"),
+            (bots.path().join("prs"), "a bot cannot open a bot's folder as a project"),
+            (workspace, "a bot cannot open a .code-workspace file"),
+        ] {
+            refused_to_the_bot_only(&mut app, "open", &serde_json::json!({"path": path}), why);
+        }
+        let measured = serde_json::json!({"path": bots.path().join("prs")});
+        let said = refusal(&mut app, BOT, "worktree-size", &measured).expect("refused");
+        assert_eq!(said, "a bot cannot measure a folder inside a bot's folder");
+        assert_eq!(refusal(&mut app, BOT, "open", &serde_json::json!({"path": other.path()})), None);
+        app.stop_background();
+    }
+
+    #[test]
+    fn a_bot_cannot_start_an_agent_in_a_mode_that_never_asks() {
+        let (mut app, _rx) = shell_app();
+        let folder = TempDir::new();
+        app.open_project(folder.path().to_path_buf(), AREA).expect("open project");
+        let project = app.projects[0].id;
+        let start = |mode: Option<&str>| serde_json::json!({"project": project, "agent": "claude", "mode": mode, "prompt": "fix it"});
+
+        refused_to_the_bot_only(&mut app, "start", &start(Some("skip permissions (dangerous)")), NEVER_ASKS);
+        assert_eq!(refusal(&mut app, BOT, "start", &start(Some("default"))), None);
+        app.config.agent_args.insert("claude".into(), vec!["--dangerously-skip-permissions".into()]);
+        let refused = refusal(&mut app, BOT, "start", &start(None)).expect("refused");
+        assert!(refused.starts_with(NEVER_ASKS), "{refused}");
+        assert_eq!(refusal(&mut app, BOT, "start", &start(Some("default"))), None);
+        let command = refusal(
+            &mut app,
+            BOT,
+            "start",
+            &serde_json::json!({"project": project, "agent": "claude", "mode": "default", "prompt": "!ls"}),
+        );
+        assert!(command.is_some_and(|said| said.starts_with("a bot writes prompts to an agent")));
+        app.stop_background();
     }
 }

@@ -117,6 +117,18 @@ fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped()
     assert!(refused(&start, 2, "a bot runs in no pane"), "{start:?}");
     let kill = session.command().env("CORNERCASE_BOT", "prs").arg("kill-server").output().expect("run");
     assert!(refused(&kill, 2, "a bot cannot stop its own server"), "{kill:?}");
+    let elsewhere = "a bot works on this computer only: it cannot act on another machine";
+    let flag =
+        session.command().env("CORNERCASE_BOT", "prs").args(["--remote", "vps", "status"]).output().expect("run");
+    assert!(refused(&flag, 2, elsewhere), "{flag:?}");
+    let named = session
+        .command()
+        .env("CORNERCASE_BOT", "prs")
+        .env("CORNERCASE_REMOTE", "vps")
+        .arg("status")
+        .output()
+        .expect("run");
+    assert!(refused(&named, 2, elsewhere), "{named:?}");
     assert!(session.says(&["status", "--json"]).contains("\"projects\""));
 }
 
@@ -188,6 +200,22 @@ fn a_command_whose_environment_names_a_bot_is_refused_by_the_server() {
         session.command().env("CORNERCASE_BOT", "prs").args(["send", "--pane", &pane, "x"]).output().expect("run");
 
     assert!(refused(&sent, 1, HEAD), "{sent:?}");
+}
+
+#[test]
+fn a_bots_keys_and_closing_a_project_are_refused_by_the_server_but_yours_are_not() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let pane = held::new_shell(&session);
+    let as_bot = |args: &[&str]| session.command().env("CORNERCASE_BOT", "prs").args(args).output().expect("run");
+
+    let keys = as_bot(&["keys", "--pane", &pane, "enter"]);
+    let close = as_bot(&["close", "--project", "1"]);
+
+    assert!(refused(&keys, 1, "a bot cannot press keys"), "{keys:?}");
+    assert!(refused(&close, 1, "a bot closes only the tabs and panes it started"), "{close:?}");
+    session.says(&["keys", "--pane", &pane, "enter"]);
+    assert!(session.says(&["read", "--pane", &pane]).contains('$'));
 }
 
 #[test]

@@ -66,16 +66,18 @@ fn environment(bot: &Bot, session: &Session, first: Option<&Path>, path: Option<
     env
 }
 
+pub(crate) fn inside(bots: Option<&Path>, folder: &Path) -> bool {
+    let mut roots = bots.into_iter().flat_map(|bots| [bots.to_path_buf(), crate::os::fs::canonical(bots)]);
+    roots.any(|bots| folder.starts_with(bots))
+}
+
 pub(crate) fn repositories(projects: &[crate::project::Project], bots: Option<&Path>) -> Vec<PathBuf> {
     let open = projects.iter().filter(|project| !project.closing);
     let folders = open.flat_map(|project| {
         let worktrees = project.workspaces.iter().filter(|workspace| workspace.worktree && workspace.open());
         std::iter::once(project.path.clone()).chain(worktrees.map(|workspace| workspace.path.clone()))
     });
-    let inside: Vec<PathBuf> =
-        bots.into_iter().flat_map(|bots| [bots.to_path_buf(), crate::os::fs::canonical(bots)]).collect();
-    let mut folders: Vec<PathBuf> =
-        folders.filter(|folder| !inside.iter().any(|bots| folder.starts_with(bots))).collect();
+    let mut folders: Vec<PathBuf> = folders.filter(|folder| !inside(bots, folder)).collect();
     folders.sort();
     folders.dedup();
     folders

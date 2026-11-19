@@ -4,7 +4,7 @@ use std::time::{Duration, Instant, SystemTime};
 use ratatui::layout::Rect;
 
 use super::App;
-use super::control::boundary::fronts_agent;
+use super::control::boundary::takes_a_bots_enter;
 use super::event::Start;
 use super::toast::Toast;
 use crate::agents::launch::{self, Launch, Refusal, Step, Trust};
@@ -193,7 +193,7 @@ struct Outcomes {
 
 fn bars_enter(launch: &Launch, term: &Term, config: &Config, bots: &HashSet<u64>) -> bool {
     let bots_enter = launch.kind() == "enter" && launch.key.is_some_and(|key| bots.contains(&key));
-    bots_enter && !fronts_agent(config, term)
+    bots_enter && !takes_a_bots_enter(config, term)
 }
 
 fn drive(launch: &mut Launch, term: &mut Term, round: &Round, out: &mut Outcomes) -> Option<Launched> {

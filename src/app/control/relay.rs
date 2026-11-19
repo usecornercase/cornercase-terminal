@@ -16,6 +16,7 @@ pub(super) struct Relaying {
 
 impl App {
     pub(super) fn relay_request(&mut self, client: u64, machine: &str, send: Send) -> Handled {
+        self.bot_stays_here(client)?;
         unwaited(&send)?;
         let focus = send.focus();
         let key = self.clients.requests.key();

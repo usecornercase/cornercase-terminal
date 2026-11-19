@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 use super::Asker;
 use crate::agents;
@@ -9,20 +10,35 @@ use crate::bots::BOT_ENV;
 use crate::config::Config;
 use crate::control::bots::BotRequest;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{self, Command, Configure, HeldAction};
+use crate::control::{self, Command, Configure, HeldAction, Item, Machines};
 use crate::log;
 use crate::process;
-use crate::project::Hierarchy;
 use crate::protocol::ClientMessage;
 use crate::term::Term;
+
+mod owning;
+mod table;
+mod typing;
+
+#[cfg(test)]
+pub(in crate::app) use table::NO_KEYS;
+pub(in crate::app) use table::OWN_ONLY;
+pub(in crate::app) use typing::takes_a_bots_enter;
 
 pub(crate) const NOT_OWN: &str = "a bot can only schedule and change its own queue entries";
 pub(crate) const HEAD: &str = "a bot can only type into a pane that runs an agent";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+enum Text {
+    Kept,
+    Missing,
+    Given(String),
+    Todo(u64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Gated {
-    Pane { pane: Option<u64>, tab: Option<u64> },
-    Popup,
+    Pane { pane: Option<u64>, tab: Option<u64>, text: Text },
     NewShell,
     Access,
     Says(String),
@@ -31,6 +47,12 @@ enum Gated {
     Clone,
     ShowsChat,
     Reveals,
+    Opens(PathBuf),
+    Measures(PathBuf),
+    Closes(Item),
+    Closing,
+    Flows,
+    Machines,
 }
 
 #[derive(Default)]
@@ -114,20 +136,41 @@ fn gated(command: &Command) -> Option<Gated> {
     if crate::bots::stops_server(command.name()) {
         return Some(Gated::ServerStop);
     }
+    typing(command).or_else(|| places(command)).or_else(|| lifts(command))
+}
+
+fn given(text: Option<&String>) -> Text {
+    text.filter(|text| !text.is_empty()).map_or(Text::Missing, |text| Text::Given(text.clone()))
+}
+
+fn typing(command: &Command) -> Option<Gated> {
     match command {
-        Command::Send(send) => Some(Gated::Pane { pane: send.pane, tab: send.tab }),
-        Command::Keys(keys) => Some(Gated::Pane { pane: keys.pane, tab: keys.tab }),
-        Command::TodoSend(send) => Some(Gated::Pane { pane: send.pane, tab: send.tab }),
+        Command::Send(send) => Some(Gated::Pane { pane: send.pane, tab: send.tab, text: given(send.text.as_ref()) }),
+        Command::TodoSend(send) => Some(Gated::Pane { pane: send.pane, tab: send.tab, text: Text::Todo(send.id) }),
         Command::Held(held) if held.action == HeldAction::SendNow => {
-            Some(Gated::Pane { pane: held.pane, tab: held.tab })
+            Some(Gated::Pane { pane: held.pane, tab: held.tab, text: Text::Kept })
         }
-        Command::Input(input) if input.popup => Some(Gated::Popup),
-        Command::Input(input) => input.pane.map(|pane| Gated::Pane { pane: Some(pane), tab: None }),
-        Command::PasteFile(paste) => paste.pane.map(|pane| Gated::Pane { pane: Some(pane), tab: None }),
+        Command::PasteFile(paste) => {
+            paste.pane.map(|pane| Gated::Pane { pane: Some(pane), tab: None, text: Text::Kept })
+        }
         Command::NewTab(new) if !blank(new.command.as_ref()) => Some(Gated::NewShell),
         Command::Split(split) if !blank(split.command.as_ref()) => Some(Gated::NewShell),
+        _ => None,
+    }
+}
+
+fn places(command: &Command) -> Option<Gated> {
+    match command {
+        Command::Open(open) => Some(Gated::Opens(open.path.clone())),
+        Command::WorktreeSize(size) => size.path.clone().map(Gated::Measures),
+        Command::Close(close) => Some(Gated::Closes(close.item)),
+        Command::CloseAgent(close) if !close.check => Some(Gated::Closing),
+        Command::AgentsClose(close) if !close.check => Some(Gated::Closing),
+        Command::FlowImport(import) if !import.check => Some(Gated::Flows),
+        Command::FlowSave(save) if !save.check => Some(Gated::Flows),
+        Command::Machines(Machines::Set(_) | Machines::Remove(_) | Machines::Update(_)) => Some(Gated::Machines),
         Command::Clone(_) => Some(Gated::Clone),
-        _ => lifts(command),
+        _ => None,
     }
 }
 
@@ -171,39 +214,12 @@ fn window_name(message: &ClientMessage) -> Option<&'static str> {
     }
 }
 
-fn runs_none(pane: u64) -> Refusal {
-    Refusal::new(
-        Code::Failed,
-        format!("{HEAD}, and pane {pane} runs none; `cornercase status --panes` lists the agents"),
-    )
-}
-
-fn no_popup() -> Refusal {
-    Refusal::new(Code::Failed, format!("{HEAD}, not into a plugin's popup"))
-}
-
-fn no_access() -> Refusal {
-    Refusal::new(Code::Failed, crate::bots::ACCESS_CHANGE)
-}
-
-fn no_full_bot() -> Refusal {
-    Refusal::new(Code::Failed, "a bot cannot write to a bot with full access")
-}
-
-fn no_settings() -> Refusal {
-    Refusal::new(Code::Failed, "a bot cannot change cornercase's settings")
-}
-
-fn no_stop() -> Refusal {
-    Refusal::new(Code::Failed, crate::bots::STOP_REFUSED)
+fn failed(why: &str) -> Refusal {
+    Refusal::new(Code::Failed, why)
 }
 
 fn no_chat_view() -> Refusal {
-    Refusal::new(Code::Failed, "a bot cannot show a bot's chat in a view")
-}
-
-fn no_clone() -> Refusal {
-    Refusal::new(Code::Failed, "a bot cannot clone a repository; clone it yourself and the bot can work in the project")
+    failed("a bot cannot show a bot's chat in a view")
 }
 
 fn no_new_shell() -> Refusal {
@@ -267,19 +283,49 @@ impl App {
         if let Command::Queue(queue) = command {
             return self.queue_by_bot(client, queue);
         }
-        match gated(command) {
-            None => Ok(()),
-            Some(Gated::Popup) => Err(no_popup()),
-            Some(Gated::NewShell) => Err(no_new_shell()),
-            Some(Gated::Access) => Err(no_access()),
-            Some(Gated::Settings) => Err(no_settings()),
-            Some(Gated::ServerStop) => Err(no_stop()),
-            Some(Gated::Clone) => Err(no_clone()),
-            Some(Gated::ShowsChat) => Err(no_chat_view()),
-            Some(Gated::Reveals) => self.reveals_chat(asker),
-            Some(Gated::Says(bot)) => self.says_to(&bot),
-            Some(Gated::Pane { pane, tab }) => self.types_into(self.target(asker, pane, tab)?),
+        if let Some(why) = table::closed(command.name()) {
+            return Err(failed(why));
         }
+        gated(command).map_or(Ok(()), |gated| self.ruled(client, asker, gated))
+    }
+
+    fn ruled(&self, client: u64, asker: Asker, gated: Gated) -> Result<(), Refusal> {
+        match gated {
+            Gated::NewShell => Err(no_new_shell()),
+            Gated::Access => Err(failed(crate::bots::ACCESS_CHANGE)),
+            Gated::Settings => Err(failed(table::NO_SETTINGS)),
+            Gated::ServerStop => Err(failed(crate::bots::STOP_REFUSED)),
+            Gated::Clone => {
+                Err(failed("a bot cannot clone a repository; clone it yourself and the bot can work in the project"))
+            }
+            Gated::ShowsChat => Err(no_chat_view()),
+            Gated::Closing => Err(failed(OWN_ONLY)),
+            Gated::Flows => Err(failed(table::NO_FLOWS)),
+            Gated::Machines => Err(failed(crate::bots::NO_MACHINES)),
+            Gated::Reveals => self.reveals_chat(asker),
+            Gated::Says(bot) => self.says_to(&bot),
+            Gated::Opens(path) => self.bot_opens(&path),
+            Gated::Measures(path) => self.bot_measures(&path),
+            Gated::Closes(item) => self.closes_own(client, item),
+            Gated::Pane { pane, tab, text } => self.bot_types(asker, (pane, tab), text),
+        }
+    }
+
+    pub(super) fn bot_starts(&self, client: u64, kind: &str, mode: Option<&str>) -> Result<(), Refusal> {
+        if !self.clients.bots.is_bot(client) {
+            return Ok(());
+        }
+        match agents::never_asks(&self.config, kind, mode) {
+            Some(name) => Err(failed(&format!(
+                "a bot cannot start an agent in a mode that never asks before it acts (`{name}`); name another with \
+                 --mode, such as `--mode default`"
+            ))),
+            None => Ok(()),
+        }
+    }
+
+    pub(super) fn bot_stays_here(&self, client: u64) -> Result<(), Refusal> {
+        if self.clients.bots.is_bot(client) { Err(failed(crate::bots::ELSEWHERE)) } else { Ok(()) }
     }
 
     pub(crate) fn refused_stop(&self, client: u64, message: &ClientMessage) -> Option<&'static str> {
@@ -327,7 +373,9 @@ impl App {
 
     fn says_to(&self, bot: &str) -> Result<(), Refusal> {
         match self.bot_at(bot) {
-            Ok(at) if self.panels.bots.live[at].bot.access == Access::Full => Err(no_full_bot()),
+            Ok(at) if self.panels.bots.live[at].bot.access == Access::Full => {
+                Err(failed("a bot cannot write to a bot with full access"))
+            }
             _ => Ok(()),
         }
     }
@@ -337,19 +385,10 @@ impl App {
         if client.is_some_and(|client| bots.is_bot(client)) || bots.owns(key) { self.types_into(pane) } else { Ok(()) }
     }
 
-    fn types_into(&self, pane: u64) -> Result<(), Refusal> {
-        let term = self.projects.pane_by(pane).ok_or_else(|| super::none("pane", pane))?;
-        if fronts_agent(&self.config, term) { Ok(()) } else { Err(runs_none(pane)) }
-    }
-
     pub(in crate::app) fn bot_request_keys(&self) -> HashSet<u64> {
         let pending = self.clients.requests.pending.iter();
         let bots = pending.filter(|p| p.client.is_some_and(|client| self.clients.bots.is_bot(client)));
         bots.map(|p| p.key).chain(self.clients.bots.keys.iter().copied()).collect()
-    }
-
-    pub(in crate::app) fn refuse_bots_enter(&mut self, key: u64, pane: u64) {
-        self.answer_read(key, |_| Err(runs_none(pane)));
     }
 
     pub(super) fn forget_bot(&mut self, client: u64) {

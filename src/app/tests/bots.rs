@@ -55,6 +55,15 @@ fn a_finished_chat_gets_no_notice() {
     assert_eq!(chat_of(dir.path(), "prs").len(), 2);
 }
 
+fn system_shell_app() -> (App, Receiver<AppEvent>) {
+    let shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
+    let (mut app, rx) = new_app_with_shell(shell, no_config());
+    if cfg!(windows) {
+        app.config.shell.args = vec![String::from("/d")];
+    }
+    (app, rx)
+}
+
 const ANSWER: &str = fixture!("claude/2.1.325/bot-new.jsonl");
 const FAILED: &str = fixture!("claude/2.1.318/recap-failed.jsonl");
 

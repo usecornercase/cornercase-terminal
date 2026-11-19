@@ -293,6 +293,8 @@ impl App {
         let prompt = start.prompt.clone().filter(|p| !p.trim().is_empty());
         let (mode, model, effort) = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
         let command = agents::start_line(&self.config, &kind, mode, model, effort)?;
+        self.bot_starts(client, &kind, mode)?;
+        self.bot_prompts(client, &kind, prompt.as_deref())?;
         Ok((launch::Spec { command, prompt, submit: true, trusted: false }, Some(kind)))
     }
 
