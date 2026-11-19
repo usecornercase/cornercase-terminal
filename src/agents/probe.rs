@@ -94,7 +94,7 @@ fn converse<T>(
         stdin = None;
     }
     for line in BufReader::new(stdout).lines() {
-        let Ok(line) = line else { break };
+        let Ok(line) = line else { return (Err(gone(name, reason.as_ref())), Vec::new()) };
         match talk(Heard::Line(&line)) {
             Step::Read => {}
             Step::Write(text) => {

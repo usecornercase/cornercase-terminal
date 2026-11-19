@@ -73,7 +73,7 @@ fn standard_error_is_not_read_unless_asked_for() {
     assert_eq!(failing_with(b"first\n", LIMITS), "fake exited without answering");
 }
 
-fn heard_from(lines: &str, answer_at_end: bool) -> Result<Vec<String>> {
+fn heard_from(lines: impl AsRef<[u8]>, answer_at_end: bool) -> Result<Vec<String>> {
     let dir = TempDir::new();
     let program = fake_program(dir.path(), "fake");
     std::fs::write(program.with_extension("out"), lines).expect("write the canned output");
@@ -91,6 +91,12 @@ fn heard_from(lines: &str, answer_at_end: bool) -> Result<Vec<String>> {
 #[test]
 fn a_run_can_answer_when_its_output_ends() {
     assert_eq!(heard_from("one\ntwo\n", true).expect("an answer"), ["one", "two"]);
+}
+
+#[test]
+fn output_that_cannot_be_read_is_not_its_end() {
+    let error = heard_from(b"one\n\xff\ntwo\n", true).expect_err("no answer");
+    assert_eq!(error.to_string(), "fake exited without answering");
 }
 
 #[test]
