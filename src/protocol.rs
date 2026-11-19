@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Error;
 use crate::graphics::Support;
 use crate::host::notify::Channel;
-use crate::host::open::{Browse, Failed, Open, Opener};
+use crate::host::open::{Browse, Failed, Link, Open, Opener};
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
 use crate::os::fs::{Lock, create_private_dir_all, locked, make_private, owner_and_mode, uid};
@@ -17,7 +17,7 @@ use crate::os::socket::UnixStream;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 13;
+pub(crate) const VERSION: u32 = 14;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const REMOTE_ENV: &str = "CORNERCASE_REMOTE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
@@ -145,12 +145,15 @@ pub(crate) enum ServerMessage {
     Browse(Browse),
     Machine(MachineOrder),
     Tunnel(TunnelOrder),
+    Link(Link),
 }
 
 impl ServerMessage {
     pub(crate) fn window_only(&self) -> bool {
         match self {
-            Self::Sound(_) | Self::Open(_) | Self::Browse(_) | Self::Machine(_) | Self::Tunnel(_) => true,
+            Self::Sound(_) | Self::Open(_) | Self::Browse(_) | Self::Machine(_) | Self::Tunnel(_) | Self::Link(_) => {
+                true
+            }
             Self::Rejected(_)
             | Self::Frame(_)
             | Self::Detached

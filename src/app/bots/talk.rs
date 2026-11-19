@@ -121,7 +121,7 @@ impl App {
             ChatHit::Stop => _ = self.bot_stop(&id),
             ChatHit::News => self.scroll_to_end(),
             ChatHit::Row(row) => self.chat_row(at, &row),
-            ChatHit::Link(url) => self.copy(&url),
+            ChatHit::Link(url) => self.press_link(at, &url),
             ChatHit::Input(line, col) => {
                 let width = usize::from(field.width.max(1));
                 self.panels.bots.live[at].draft.place(width, line, col);

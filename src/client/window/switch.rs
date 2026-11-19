@@ -285,7 +285,7 @@ impl Window<'_> {
         match next {
             Next::End(_) | Next::Reconnect => switch.left = kept(switch.left.take(), next),
             Next::Show(_) | Next::Machine(_) | Next::Nothing => {}
-            Next::Sound(_) | Next::Open(_) | Next::Browse(_) | Next::Tunnel(_) => return Some(next),
+            Next::Sound(_) | Next::Open(_) | Next::Browse(_) | Next::Tunnel(_) | Next::Link(_) => return Some(next),
         }
         None
     }

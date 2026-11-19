@@ -187,6 +187,22 @@ mod compatibility {
     }
 
     #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a client from before Link reads it")]
+    enum BeforeLink {
+        Rejected(String),
+        Frame(Vec<u8>),
+        Detached,
+        Shutdown,
+        Restart(PathBuf),
+        Response(String),
+        Sound(Cue),
+        Open(Open),
+        Browse(Browse),
+        Machine(MachineOrder),
+        Tunnel(TunnelOrder),
+    }
+
+    #[derive(Debug, Deserialize)]
     #[expect(dead_code, reason = "decoded only, the way a server from before Tunnels reads it")]
     enum BeforeTunnels {
         KillServer,
@@ -395,6 +411,26 @@ mod compatibility {
     #[test]
     fn a_client_without_tunnel_orders_reads_one_as_invalid_data() {
         assert_eq!(read_as::<BeforeTunnel>(&ServerMessage::Tunnel(TunnelOrder::Close(1))), io::ErrorKind::InvalidData);
+    }
+
+    fn link() -> Link {
+        Link { url: "https://example.com/docs".into() }
+    }
+
+    #[test]
+    fn a_link_comes_after_every_older_server_variant_and_round_trips() {
+        assert_eq!(postcard::to_stdvec(&ServerMessage::Link(link())).expect("encode")[0], 11);
+        assert!(matches!(round_trip(&ServerMessage::Link(link())), ServerMessage::Link(l) if l == link()));
+    }
+
+    #[test]
+    fn a_client_without_links_reads_one_as_invalid_data() {
+        assert_eq!(read_as::<BeforeLink>(&ServerMessage::Link(link())), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn only_a_window_is_told_to_open_a_link() {
+        assert!(ServerMessage::Link(link()).window_only());
     }
 
     #[test]

@@ -41,6 +41,10 @@ fn rows(form: Rect, run_on: u16) -> [Rect; 8] {
     .areas(form_inner(form))
 }
 
+pub(crate) fn confirm_width(area: Rect) -> usize {
+    usize::from(form_rows(form_area(area))[0].width)
+}
+
 pub(crate) fn form_run_on(form: Rect) -> Rect {
     rows(form, 1)[4]
 }

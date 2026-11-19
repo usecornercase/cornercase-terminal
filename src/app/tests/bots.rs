@@ -430,6 +430,7 @@ mod card_menu;
 mod compact;
 mod form;
 mod git;
+mod links;
 mod menu;
 mod routines;
 mod routines_dialog;

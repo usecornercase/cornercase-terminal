@@ -6,7 +6,7 @@ use super::App;
 use super::menus::MenuAction;
 use super::overlay::Overlay;
 use super::toast::Toast;
-use crate::host::open::{Browse, Failed, Kind, Open, Opener};
+use crate::host::open::{Browse, Failed, Kind, Link, Open, Opener};
 use crate::log;
 use crate::project::Hierarchy;
 use crate::text;
@@ -58,6 +58,10 @@ impl App {
         self.outbox.take_browses()
     }
 
+    pub(crate) fn take_links(&mut self) -> Vec<(u64, Link)> {
+        self.outbox.take_links()
+    }
+
     pub(super) fn can_browse(&self) -> bool {
         self.opening.openers.contains(&Opener::Default)
     }
@@ -73,6 +77,12 @@ impl App {
         let client = self.opening.window;
         log::info!("ui", "open in the browser", client = client, port = browse.port);
         self.outbox.browse(client, browse);
+    }
+
+    pub(crate) fn send_link(&mut self, link: Link) {
+        let client = self.opening.window;
+        log::info!("ui", "open a link", client = client);
+        self.outbox.link(client, link);
     }
 
     pub(crate) fn open_failed(&mut self, client: u64, failed: &Failed) {

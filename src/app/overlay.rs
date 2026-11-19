@@ -37,6 +37,8 @@ pub(super) const CREATE_SUBMIT: &str = "create";
 
 pub(super) const RENAME_SUBMIT: &str = "rename";
 
+pub(super) const OPEN_SUBMIT: &str = "open";
+
 pub(super) const REMOVE_SUBMIT: &str = "remove";
 
 pub(super) const DELETE_SUBMIT: &str = "delete";
@@ -140,6 +142,10 @@ pub(super) enum Overlay {
     RemoveBot {
         bot: u64,
     },
+    OpenLink {
+        bot: u64,
+        url: String,
+    },
     Search(Finder),
     Update(UpdateStep),
     Restart,
@@ -205,7 +211,9 @@ impl Overlay {
             Self::StartFlow { .. } => "start flow",
             Self::ProjectSettings(_) => "project settings",
             Self::Rename { .. } => "rename",
-            Self::BotForm(_) | Self::RenameBot { .. } | Self::RemoveBot { .. } => self.bot_name(),
+            Self::BotForm(_) | Self::RenameBot { .. } | Self::RemoveBot { .. } | Self::OpenLink { .. } => {
+                self.bot_name()
+            }
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
@@ -241,6 +249,7 @@ impl Overlay {
             Self::BotForm(form) if form.editing.is_some() => "edit bot",
             Self::BotForm(_) => "new bot",
             Self::RenameBot { .. } => "rename bot",
+            Self::OpenLink { .. } => "open link",
             _ => "remove bot",
         }
     }
@@ -354,6 +363,7 @@ impl Overlay {
                 | Overlay::MachineWorkspace(_)
                 | Overlay::RenameBot { .. }
                 | Overlay::RemoveBot { .. }
+                | Overlay::OpenLink { .. }
         ) || matches!(self, Overlay::BotSecrets(secrets) if secrets.is_form())
     }
 
@@ -381,6 +391,7 @@ impl Overlay {
             Self::MergeCheck { .. } => CHECK_AGAIN,
             Self::Context { .. } => REFRESH,
             Self::FlowMessage { .. } | Self::QueueResult(_) => COPY,
+            Self::OpenLink { .. } => OPEN_SUBMIT,
             _ => CREATE_SUBMIT,
         }
     }
@@ -565,6 +576,7 @@ impl App {
         match overlay {
             Overlay::BotSecrets(secrets) => self.secrets_view(secrets, area),
             Overlay::BotAsk(form) => self.ask_view(form),
+            Overlay::OpenLink { bot, url } => self.open_link_view(*bot, url, area),
             _ => Self::machine_dialog_view(overlay),
         }
     }

@@ -17,6 +17,7 @@ mod ask_dialog;
 mod asks;
 mod follow;
 mod form;
+mod links;
 mod manage;
 mod menu;
 mod reports;

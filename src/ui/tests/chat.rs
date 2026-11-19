@@ -144,6 +144,29 @@ fn a_link_in_an_answer_is_found_under_a_click() {
     assert_eq!(bots::chat::link_at(row, 0), None);
 }
 
+mod whole_address {
+    use super::*;
+
+    const SHORT: &str = "https://example.com/a";
+    const LONG: &str = "https://example.com/a/b/c";
+
+    #[test]
+    fn an_address_drawn_whole_is_kept_even_when_a_longer_one_starts_with_it() {
+        assert_eq!(whole_address(SHORT, [LONG, &format!("see {SHORT}.")]), SHORT);
+    }
+
+    #[test]
+    fn a_piece_cut_by_the_wrap_gives_the_newest_answer_that_holds_it_whole() {
+        let older = "https://example.com/a/older";
+        assert_eq!(whole_address("https://example.com/a/", [&format!("([docs]({LONG}))") as &str, older]), LONG);
+    }
+
+    #[test]
+    fn a_piece_no_answer_holds_is_given_as_it_is() {
+        assert_eq!(whole_address("https://other.dev/x", [LONG]), "https://other.dev/x");
+    }
+}
+
 #[test]
 fn the_retry_button_is_only_on_the_error_row() {
     let rows = chat_rows(&[ChatEntry::Error { id: 3, text: "boom".into(), retry: true }], CHAT_W - 2, TONE);

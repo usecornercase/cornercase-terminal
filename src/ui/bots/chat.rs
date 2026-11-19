@@ -378,6 +378,19 @@ pub(crate) fn link_at(row: &ChatRow, col: usize) -> Option<String> {
     None
 }
 
+pub(crate) fn whole_address<'a>(drawn: &str, sources: impl IntoIterator<Item = &'a str>) -> String {
+    let mut longer = None;
+    for address in sources.into_iter().flat_map(str::split_whitespace).filter_map(web_address) {
+        if address == drawn {
+            return address;
+        }
+        if longer.is_none() && address.starts_with(drawn) {
+            longer = Some(address);
+        }
+    }
+    longer.unwrap_or_else(|| drawn.to_string())
+}
+
 fn web_address(word: &str) -> Option<String> {
     let at = word.find("http://").or_else(|| word.find("https://"))?;
     let url = word[at..].trim_end_matches([')', '.', ',', ';', ':', '!', '?', '>', ']', '"', '\'']);
