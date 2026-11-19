@@ -14,6 +14,13 @@ fn to_the_end(text: &str) -> (Ran, Option<Result<()>>) {
     (ran, last)
 }
 
+fn permission_of(tools: Tools) -> Option<String> {
+    let ask = Ask { tools, ..Ask::default() };
+    let command = command("opencode", &ask);
+    let mut found = command.get_envs().filter(|(key, _)| *key == PERMISSION_ENV);
+    found.next().and_then(|(_, value)| value).map(|value| value.to_string_lossy().into_owned())
+}
+
 #[test]
 fn a_first_turn_gives_its_session_the_steps_and_only_the_last_answer() {
     let (ran, last) = to_the_end(fixture!("opencode/1.18.35/bot-new.jsonl"));
@@ -86,6 +93,19 @@ fn no_step_ends_the_turn_before_the_output_does() {
 fn a_turn_that_ends_without_text_has_no_answer() {
     let (_, last) = to_the_end(r#"{"type":"step_finish","sessionID":"s","part":{"reason":"stop","tokens":{}}}"#);
     assert!(last.is_none());
+}
+
+#[test]
+fn a_recap_runs_with_read_only_rules_and_no_bypass() {
+    assert_eq!(argv(Tools::Recap, None), ["run", "--format", "json", "--model", "m", "--", "- hi"]);
+    assert_eq!(permission_of(Tools::Recap).as_deref(), Some(READ_ONLY));
+    assert_eq!(permission_of(Tools::Bot(Access::Full)), None);
+    assert_eq!(permission_of(Tools::Bot(Access::Cornercase)), None);
+    let rules: Value = serde_json::from_str(READ_ONLY).expect("the rules are JSON");
+    for tool in ["*", "bash", "edit", "task", "external_directory"] {
+        assert_eq!(rules[tool], "deny", "{tool}");
+    }
+    assert_eq!(rules["read"], "allow");
 }
 
 #[test]

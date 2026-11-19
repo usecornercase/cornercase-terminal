@@ -9,6 +9,12 @@ use crate::agents::headless::{
 use crate::error::{Error, Result};
 
 const TOOL_DETAILS: [&str; 6] = ["filePath", "path", "pattern", "url", "query", "description"];
+const READ_ONLY: &str = concat!(
+    r#"{"*":"deny","read":"allow","glob":"allow","grep":"allow","list":"allow","bash":"deny","edit":"deny","#,
+    r#""task":"deny","skill":"deny","webfetch":"deny","websearch":"deny","todowrite":"deny","#,
+    r#""external_directory":"deny","doom_loop":"allow"}"#
+);
+const PERMISSION_ENV: &str = "OPENCODE_PERMISSION";
 
 pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
     let mut args = owned(&["run", "--format", "json"]);
@@ -20,7 +26,11 @@ pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
     }
     let mut args = agents::with_model("opencode", args, ask.model.as_deref());
     args.extend(["--".to_string(), ask.prompt.clone()]);
-    started(program, args)
+    let mut command = started(program, args);
+    if ask.tools == Tools::Recap {
+        command.env(PERMISSION_ENV, READ_ONLY);
+    }
+    command
 }
 
 fn tool_action(part: &Value) -> Action {

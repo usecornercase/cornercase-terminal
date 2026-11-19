@@ -35,7 +35,7 @@ pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = So
     command: headless::command,
     read: headless::read,
     bot: Some(BOT),
-    recap: false,
+    recap: true,
     stderr: false,
     prepare: None,
     ended: Some(headless::ended),

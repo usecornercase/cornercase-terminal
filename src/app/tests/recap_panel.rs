@@ -99,7 +99,9 @@ fn the_recap_agent_skips_one_that_cannot_write_a_recap() {
     app.config.agent = "gemini".into();
     app.config.recap_agent = String::new();
     assert_eq!(app.recap_agent(None), Known::Claude);
-    assert_eq!(app.recap_agent(Some("copilot")), Known::Claude);
+    assert_eq!(app.recap_agent(Some("cursor")), Known::Claude);
+    assert_eq!(app.recap_agent(Some("copilot")), Known::Copilot);
+    assert_eq!(app.recap_agent(Some("opencode")), Known::Opencode);
     app.config.agent = "codex".into();
     assert_eq!(app.recap_agent(None), Known::Codex);
     app.config.recap_agent = "gemini".into();

@@ -211,6 +211,49 @@ fn codex_argv_is_exactly_what_recap_always_ran() {
     assert_eq!(argv.trim_end(), wanted);
 }
 
+#[test]
+fn copilot_argv_for_a_recap_allows_no_tool() {
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, "copilot", fixture!("copilot/1.0.98/bot-resumed.jsonl"));
+    ran(Known::Copilot, &program, folder.path()).expect("a recap");
+    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
+    assert_eq!(
+        argv.trim_end(),
+        concat!(
+            "[\"--output-format\", \"json\", \"--no-auto-update\", \"--no-ask-user\", ",
+            "\"--disallow-temp-dir\", \"--disable-builtin-mcps\", \"--model\", \"opus\", ",
+            "\"--reasoning-effort\", \"low\", \"--prompt=Sum it up\"]"
+        )
+    );
+}
+
+#[test]
+fn opencode_argv_for_a_recap_has_no_bypass() {
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, "opencode", fixture!("opencode/1.18.35/bot-resumed.jsonl"));
+    std::fs::write(program.with_extension("vars"), "OPENCODE_PERMISSION").expect("names");
+    ran(Known::Opencode, &program, folder.path()).expect("a recap");
+    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
+    assert_eq!(argv.trim_end(), "[\"run\", \"--format\", \"json\", \"--model\", \"opus\", \"--\", \"Sum it up\"]");
+    let env = std::fs::read_to_string(program.with_extension("env")).expect("env");
+    let rules = env.trim_end().strip_prefix("OPENCODE_PERMISSION=").expect("the read-only rules");
+    let rules: Value = serde_json::from_str(rules).expect("json");
+    assert_eq!((&rules["*"], &rules["bash"], &rules["read"]), (&"deny".into(), &"deny".into(), &"allow".into()));
+}
+
+#[rstest::rstest]
+#[case::copilot(Known::Copilot, fixture!("copilot/1.0.98/bot-resumed.jsonl"))]
+#[case::opencode(Known::Opencode, fixture!("opencode/1.18.35/bot-resumed.jsonl"))]
+fn a_recap_is_the_agents_last_answer(#[case] agent: Known, #[case] out: &str) {
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, agent.name(), out);
+    let recap = ran(agent, &program, folder.path()).expect("a recap");
+    assert!(!recap.text.is_empty() && out.contains(&recap.text), "{}", recap.text);
+}
+
 mod bots {
     use std::ffi::OsString;
     use std::sync::Mutex;
