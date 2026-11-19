@@ -48,6 +48,14 @@ fn failed(entry: &Value) -> Error {
     Error::Probe(message.unwrap_or("opencode failed").to_string())
 }
 
+fn said(ran: &mut Ran, part: &Value) {
+    if part["synthetic"] != true {
+        ran.text.push_str(part["text"].as_str().unwrap_or_default());
+    } else if part["metadata"]["compaction_continue"] == true {
+        ran.text.clear();
+    }
+}
+
 pub(in crate::agents) fn read(line: &str, ran: &mut Ran) -> Option<Result<()>> {
     let entry: Value = serde_json::from_str(line).ok()?;
     if ran.session.is_none() {
@@ -55,16 +63,17 @@ pub(in crate::agents) fn read(line: &str, ran: &mut Ran) -> Option<Result<()>> {
     }
     let part = &entry["part"];
     match entry["type"].as_str()? {
-        "text" => ran.text.push_str(part["text"].as_str().unwrap_or_default()),
+        "text" => said(ran, part),
         "tool_use" => heard(ran, tool_action(part)),
-        "step_finish" => {
-            add_tokens(ran, &part["tokens"]);
-            return (part["reason"] != "tool-calls").then(|| answered(ran, super::TITLE));
-        }
+        "step_finish" => add_tokens(ran, &part["tokens"]),
         "error" => return Some(Err(failed(&entry))),
         _ => {}
     }
     None
+}
+
+pub(in crate::agents) fn ended(ran: &mut Ran) -> Option<Result<()>> {
+    (!ran.text.trim().is_empty()).then(|| answered(ran, super::TITLE))
 }
 
 #[cfg(test)]

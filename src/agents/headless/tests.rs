@@ -531,6 +531,28 @@ mod bots {
         assert!(argvs.lines().last().expect("second").contains(&resume.replace("{}", &session)), "{argvs}");
     }
 
+    fn opencode_turn(out: &str) -> Result<Ran> {
+        let dir = TempDir::new();
+        let folder = TempDir::new();
+        let program = faked(&dir, "opencode", out);
+        let command = program.display().to_string();
+        let ask = bot_ask(folder.path(), Access::Full, Some("ses_e2a1b2c3d4ffeAbCdEfGhIjKlM"));
+        run_watched(&called(Known::Opencode, &command, TIMEOUT), &ask, Watch::default())
+    }
+
+    #[test]
+    fn an_opencode_bot_that_compacts_first_answers_with_its_real_answer() {
+        let ran = opencode_turn(fixture!("opencode/1.18.35/bot-compacted.jsonl")).expect("a turn");
+        assert_eq!(ran.text, "The keeper's name was Silas.");
+    }
+
+    #[test]
+    fn an_opencode_run_that_says_nothing_exited_without_answering() {
+        let out = r#"{"type":"step_finish","sessionID":"s","part":{"reason":"stop","tokens":{}}}"#;
+        let error = opencode_turn(out).expect_err("no answer");
+        assert_eq!(error.to_string(), "opencode exited without answering");
+    }
+
     #[cfg(not(windows))]
     #[test]
     fn a_gemini_bot_with_cornercase_access_writes_its_rules_and_runs_with_them() {

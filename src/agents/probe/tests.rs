@@ -73,6 +73,32 @@ fn standard_error_is_not_read_unless_asked_for() {
     assert_eq!(failing_with(b"first\n", LIMITS), "fake exited without answering");
 }
 
+fn heard_from(lines: &str, answer_at_end: bool) -> Result<Vec<String>> {
+    let dir = TempDir::new();
+    let program = fake_program(dir.path(), "fake");
+    std::fs::write(program.with_extension("out"), lines).expect("write the canned output");
+    let mut said = Vec::new();
+    run_heard(LIMITS, Command::new(&program), "", &Running::default(), move |heard| match heard {
+        Heard::Line(line) => {
+            said.push(line.to_string());
+            Step::Read
+        }
+        Heard::End if answer_at_end => Step::Answer(Ok(std::mem::take(&mut said))),
+        Heard::End => Step::Read,
+    })
+}
+
+#[test]
+fn a_run_can_answer_when_its_output_ends() {
+    assert_eq!(heard_from("one\ntwo\n", true).expect("an answer"), ["one", "two"]);
+}
+
+#[test]
+fn a_run_that_hears_the_end_and_does_not_answer_fails() {
+    let error = heard_from("one\ntwo\n", false).expect_err("no answer");
+    assert_eq!(error.to_string(), "fake exited without answering");
+}
+
 #[test]
 fn a_missing_program_fails() {
     let error = run(LIMITS, Command::new("/nonexistent/fake"), "hi\n", echoes).expect_err("no answer");

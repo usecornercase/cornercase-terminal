@@ -10,6 +10,11 @@ use crate::os::process::Lineage;
 use crate::process;
 use crate::processes::stop::{self, Group};
 
+pub(crate) enum Heard<'a> {
+    Line(&'a str),
+    End,
+}
+
 pub(crate) enum Step<T> {
     Read,
     Write(String),
@@ -77,7 +82,7 @@ struct Pipes {
 fn converse<T>(
     pipes: Pipes,
     (first, name, close): (&str, &str, bool),
-    mut talk: impl FnMut(&str) -> Step<T>,
+    mut talk: impl FnMut(Heard<'_>) -> Step<T>,
     left: impl Fn() -> Vec<Group>,
 ) -> Talked<T> {
     let Pipes { stdin, stdout, reason } = pipes;
@@ -90,7 +95,7 @@ fn converse<T>(
     }
     for line in BufReader::new(stdout).lines() {
         let Ok(line) = line else { break };
-        match talk(&line) {
+        match talk(Heard::Line(&line)) {
             Step::Read => {}
             Step::Write(text) => {
                 if !send(stdin.as_mut(), &text) {
@@ -100,7 +105,10 @@ fn converse<T>(
             Step::Answer(result) => return (result, left()),
         }
     }
-    (Err(gone(name, reason.as_ref())), Vec::new())
+    match talk(Heard::End) {
+        Step::Answer(result) => (result, left()),
+        Step::Read | Step::Write(_) => (Err(gone(name, reason.as_ref())), Vec::new()),
+    }
 }
 
 #[derive(Debug, Default)]
@@ -191,7 +199,7 @@ fn converse_apart<T: Send + 'static>(
     child: &mut Child,
     limits: Limits,
     first: &str,
-    talk: impl FnMut(&str) -> Step<T> + Send + 'static,
+    talk: impl FnMut(Heard<'_>) -> Step<T> + Send + 'static,
 ) -> mpsc::Receiver<Talked<T>> {
     let (tx, rx) = mpsc::channel();
     let (root, contain) = (i32::try_from(child.id()).unwrap_or(0), limits.contain);
@@ -209,10 +217,23 @@ fn converse_apart<T: Send + 'static>(
 
 pub(crate) fn run_in<T: Send + 'static>(
     limits: Limits,
+    command: Command,
+    first: &str,
+    running: &Running,
+    mut talk: impl FnMut(&str) -> Step<T> + Send + 'static,
+) -> Result<T> {
+    run_heard(limits, command, first, running, move |heard| match heard {
+        Heard::Line(line) => talk(line),
+        Heard::End => Step::Read,
+    })
+}
+
+pub(crate) fn run_heard<T: Send + 'static>(
+    limits: Limits,
     mut command: Command,
     first: &str,
     running: &Running,
-    talk: impl FnMut(&str) -> Step<T> + Send + 'static,
+    talk: impl FnMut(Heard<'_>) -> Step<T> + Send + 'static,
 ) -> Result<T> {
     let mut child = start(limits, &mut command, running)?;
     let rx = converse_apart(&mut child, limits, first, talk);
