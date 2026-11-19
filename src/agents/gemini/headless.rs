@@ -49,10 +49,20 @@ fn quoted(words: &[String]) -> String {
     format!("[{}]", words.join(", "))
 }
 
+fn folded(c: char) -> Option<char> {
+    match c.to_ascii_lowercase() {
+        's' => Some('\u{17f}'),
+        'k' => Some('\u{212a}'),
+        _ => None,
+    }
+}
+
 fn escaped(name: &str) -> String {
     name.chars().fold(String::new(), |mut text, c| {
         if c.is_ascii_alphabetic() {
-            text.extend(['[', c.to_ascii_lowercase(), c.to_ascii_uppercase(), ']']);
+            text.extend(['[', c.to_ascii_lowercase(), c.to_ascii_uppercase()]);
+            text.extend(folded(c));
+            text.push(']');
         } else {
             if ".^$*+?()[]{}|\\".contains(c) {
                 text.push('\\');
