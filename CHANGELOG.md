@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.103
+
+- **GitHub Copilot CLI and opencode can write the Recap.** Pick them in **Settings → Agents → Recap**, or with `cornercase recap --agent copilot` or `--agent opencode`; `auto` takes one when it is your default agent. Both run read-only and read the dossier only (Claude Code and Codex can also read transcripts and run `cornercase search`), and each recap leaves a session in the agent's own history, since neither can run without keeping one.
+- **An opencode bot no longer answers with opencode's own summary.** When opencode compacted a long conversation before answering, the bot's answer was the compaction summary and the real answer was cut off; the bot now waits for opencode to finish and answers with what it said last.
+- **A Gemini CLI bot on macOS can no longer reach its protected files through a look-alike letter.** macOS' disk treats `ſ` as `s` and `K` (the Kelvin sign) as `k`, so `bot.jſon` was `bot.json`; the bot's write rules now refuse those spellings too.
+
 ## 0.13.102
 
 - **A bot with `cornercase` access now writes only prompts to agents.** It writes to an agent with `cornercase send --pane ID --enter`, but it can no longer press keys (`keys`, `input`), answer an agent that asks you something or shows a dialog, a panel or its shell mode (even with `--force`), or send a text that starts with `/` or `!`, an agent's own command or its shell, or one that holds a control character other than a line break or a tab. If the agent starts asking, or shows a dialog, between the bot's prompt and its Enter, the Enter is not pressed. Your own commands are unchanged.
