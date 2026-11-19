@@ -452,9 +452,12 @@ impl Drop for Term {
 }
 
 pub(crate) fn bracketed(text: &str) -> String {
-    let mut inside = text.to_string();
-    while inside.contains(PASTE_END) {
-        inside = inside.replace(PASTE_END, "");
+    let mut inside = String::with_capacity(text.len());
+    for c in text.chars() {
+        inside.push(c);
+        if inside.ends_with(PASTE_END) {
+            inside.truncate(inside.len() - PASTE_END.len());
+        }
     }
     format!("{PASTE_START}{inside}{PASTE_END}")
 }

@@ -230,6 +230,16 @@ mod writing {
         assert_eq!(bracketed("a\x1b[20\x1b[201\x1b[201~~~b"), "\x1b[200~a\x1b[20~b\x1b[201~");
     }
 
+    #[test]
+    fn a_paste_of_many_nested_ends_is_cleaned_in_one_pass() {
+        let nested = "\x1b[201".repeat(100_000) + &"~".repeat(100_000);
+        let started = Instant::now();
+
+        assert_eq!(bracketed(&nested), "\x1b[200~\x1b[201~");
+        assert_eq!(bracketed("ñ\x1b[201~é"), "\x1b[200~ñé\x1b[201~");
+        assert!(started.elapsed() < Duration::from_secs(2), "{:?}", started.elapsed());
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_program_that_does_not_read_never_blocks_the_writer() {

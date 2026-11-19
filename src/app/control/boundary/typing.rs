@@ -36,7 +36,7 @@ pub(super) fn not_a_prompt(text: &str, agent: Option<agents::Known>) -> Option<&
 }
 
 pub(in crate::app) fn takes_a_bots_enter(config: &Config, term: &Term) -> bool {
-    fronts_agent(config, term) && term.agent.status() != Some(Status::Waiting)
+    fronts_agent(config, term) && term.agent.status() != Some(Status::Waiting) && !term.dialog()
 }
 
 impl App {
@@ -94,7 +94,7 @@ impl App {
     }
 
     pub(in crate::app) fn refuse_bots_enter(&mut self, key: u64, pane: u64) {
-        let fronts = self.projects.pane_by(pane).is_some_and(|term| fronts_agent(&self.config, term));
-        self.answer_read(key, |_| Err(if fronts { asks(pane) } else { runs_none(pane) }));
+        let why = self.types_into(pane).err().unwrap_or_else(|| runs_none(pane));
+        self.answer_read(key, |_| Err(why));
     }
 }

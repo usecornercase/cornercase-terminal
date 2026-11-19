@@ -61,7 +61,7 @@ impl App {
     fn pane_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
         let Asked { client, asker, area, now } = asked;
         ControlFlow::Break(match command {
-            Command::Open(open) => self.open_request(asker, &open, area),
+            Command::Open(open) => self.open_request(client, asker, &open, area),
             Command::Clone(clone) => self.clone_request(asked, clone),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),
             Command::NewTab(new) => self.new_tab_request(asked, new),
@@ -92,7 +92,7 @@ impl App {
             Command::RemovalCheck(check) => self.removal_check_request(client, &check),
             Command::CloseAgent(close) => self.close_agent_request(&close),
             Command::AgentsClose(close) => self.agents_close_request(asker, &close),
-            Command::AgentsReopen(reopen) => self.agents_reopen_request(asker, &reopen, area),
+            Command::AgentsReopen(reopen) => self.agents_reopen_request(client, asker, &reopen, area),
             Command::AgentsForget(forget) => self.agents_forget_request(asker, &forget),
             Command::Move(moving) => self.move_request(&moving),
             Command::MovePane(moving) => self.move_pane_request(&moving, area),

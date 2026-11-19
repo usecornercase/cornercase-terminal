@@ -75,6 +75,7 @@ impl App {
 
     pub(super) fn worktree_size_request(&mut self, client: u64, asker: Asker, request: &WorktreeSize) -> Handled {
         let target = self.worktree_target(asker, request.workspace, request.path.as_deref())?;
+        self.bot_measures(client, &target.path)?;
         let names = self.config.project(&target.repo, self.home.as_deref()).builds();
         let key = self.clients.requests.key();
         let job = Job::new(Level::Debug, "control", "worktree size").with("path", target.path.display());

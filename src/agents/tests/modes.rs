@@ -143,6 +143,9 @@ mod never_asking {
     #[case::the_default(&[], None, false)]
     #[case::from_the_settings(&["--dangerously-skip-permissions"], None, true)]
     #[case::the_default_over_the_settings(&["--dangerously-skip-permissions"], Some("default"), false)]
+    #[case::bypass_permissions(&["--permission-mode", "bypassPermissions"], None, true)]
+    #[case::bypass_permissions_with_equals(&["--permission-mode=bypassPermissions"], None, true)]
+    #[case::bypass_permissions_under_the_default(&["--permission-mode", "bypassPermissions"], Some("default"), true)]
     #[case::a_flag_beside_another_mode(&["--permission-mode", "plan", "--dangerously-skip-permissions"], None, true)]
     fn claude_is_caught(#[case] args: &[&str], #[case] mode: Option<&str>, #[case] caught: bool) {
         assert_eq!(never_asks(&claude_with(args), "claude", mode).is_some(), caught);

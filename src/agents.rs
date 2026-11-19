@@ -599,7 +599,7 @@ fn chosen(config: &Config, kind: &str, mode: Option<&str>, table: &[Mode]) -> Ve
 pub(crate) fn never_asks(config: &Config, kind: &str, mode: Option<&str>) -> Option<String> {
     let table = modes(config, kind);
     let run = normalized(kind, &chosen(config, kind, mode, &table));
-    let built_in = Known::of(kind).into_iter().flat_map(|known| known.modes().iter());
+    let built_in = Known::of(kind).into_iter().flat_map(|known| known.modes().iter().chain(known.never_asking()));
     let built_in = built_in.map(|(name, args)| ((*name).to_string(), args.iter().map(|a| (*a).to_string()).collect()));
     let mut every = table.iter().cloned().chain(built_in);
     let found =

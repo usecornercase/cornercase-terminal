@@ -7,8 +7,8 @@ use crate::agents::Known;
 use crate::control::bots::{BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::control::{
     AgentsClose, CloneRepository, Close, CloseAgent, Command, ConfigImport, Configure, FlowImport, FlowSave,
-    HeldAction, HeldRequest, Item, MachineSet, Machines, NewTab, Open, OpenView, PasteFile, RestartWhenIdle, SendText,
-    SetView, Split, TodoSend, UpdateCheck, UpdateInstall, WorktreeSize,
+    HeldAction, HeldRequest, Item, MachineSet, Machines, NewTab, OpenView, PasteFile, RestartWhenIdle, SendText,
+    SetView, Split, TodoSend, UpdateCheck, UpdateInstall,
 };
 use crate::protocol::ClientMessage;
 
@@ -86,12 +86,6 @@ fn typed(text: &str) -> Gated {
 #[case::held_wait_turn(held(HeldAction::WaitTurn), None)]
 #[case::paste_file(Command::PasteFile(PasteFile { pane: Some(4), ..PasteFile::default() }), PANE)]
 #[case::paste_file_without_a_pane(Command::PasteFile(PasteFile::default()), None)]
-#[case::open(Command::Open(Open { path: "/x".into(), ..Open::default() }), Some(Gated::Opens("/x".into())))]
-#[case::worktree_size_of_a_path(
-    Command::WorktreeSize(WorktreeSize { workspace: None, path: Some("/x".into()) }),
-    Some(Gated::Measures("/x".into()))
-)]
-#[case::worktree_size_of_a_workspace(Command::WorktreeSize(WorktreeSize { workspace: Some(1), path: None }), None)]
 #[case::close_a_pane(close(Item::Pane(4)), Some(Gated::Closes(Item::Pane(4))))]
 #[case::close_a_workspace(close(Item::Workspace(2)), Some(Gated::Closes(Item::Workspace(2))))]
 #[case::close_an_agent(close_agent(false), Some(Gated::Closing))]

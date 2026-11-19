@@ -69,15 +69,23 @@ const NO_AGENT: &str = "say which agent to start, such as `cornercase start clau
     and no agent runs here";
 
 impl App {
-    pub(super) fn open_request(&mut self, asker: Asker, open: &control::Open, area: Option<Rect>) -> Handled {
+    pub(super) fn open_request(
+        &mut self,
+        client: u64,
+        asker: Asker,
+        open: &control::Open,
+        area: Option<Rect>,
+    ) -> Handled {
         if let Some(group) = open.into {
             self.group_index(group).ok_or_else(|| none("group", group))?;
         }
         let wanted = config::expand_home(&open.path.to_string_lossy(), self.home.as_deref());
         if vscode::is_workspace(&wanted) {
+            self.bot_imports(client)?;
             return self.import_request(asker, open, &wanted, area);
         }
         let path = canonicalize(&wanted).map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
+        self.bot_opens(client, &path)?;
         if !path.is_dir() {
             return Err(format!("`{}` is not a folder", path.display()).into());
         }

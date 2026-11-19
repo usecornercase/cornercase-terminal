@@ -497,7 +497,10 @@ mod marked {
         ] {
             refused_to_the_bot_only(&mut app, "open", &serde_json::json!({"path": path}), why);
         }
-        let measured = serde_json::json!({"path": bots.path().join("prs")});
+        let repo = git_repo(&[("a.txt", "a")]);
+        let linked = bots.path().join("prs").join("wt");
+        crate::test_util::git(repo.path(), &["worktree", "add", "--quiet", &linked.to_string_lossy()]);
+        let measured = serde_json::json!({"path": linked});
         let said = refusal(&mut app, BOT, "worktree-size", &measured).expect("refused");
         assert_eq!(said, "a bot cannot measure a folder inside a bot's folder");
         assert_eq!(refusal(&mut app, BOT, "open", &serde_json::json!({"path": other.path()})), None);
@@ -529,6 +532,39 @@ mod marked {
             serde_json::json!({"project": project, "agent": "claude", "mode": "default", "prompt": "go\u{1b}[Z"});
         let keys = refusal(&mut app, BOT, "start", &escape).expect("refused");
         assert!(keys.starts_with("a bot writes prompts to an agent, not keys"), "{keys}");
+        app.stop_background();
+    }
+
+    fn with_a_closed_agent(mode: &str) -> (App, Receiver<AppEvent>, TempDir, u64) {
+        let (mut app, rx) = shell_app();
+        let folder = TempDir::new();
+        app.open_project(folder.path().to_path_buf(), AREA).expect("open project");
+        let workspace = app.report(None).panes()[0].workspace;
+        let pane = serde_json::json!({"cwd": null, "closed": {"kind": "claude", "mode": mode}});
+        let tab = serde_json::from_value(serde_json::json!({"panes": [pane]})).expect("a tab");
+        app.agents.closed.keep(workspace, vec![tab], None);
+        (app, rx, folder, workspace)
+    }
+
+    #[test]
+    fn a_bot_cannot_reopen_an_agent_whose_mode_never_asks() {
+        let (mut app, _rx, _folder, workspace) = with_a_closed_agent("skip permissions (dangerous)");
+        let reopen = serde_json::json!({"workspace": workspace});
+
+        let refused = refusal(&mut app, BOT, "agents-reopen", &reopen).expect("refused");
+        assert!(refused.starts_with(NEVER_ASKS), "{refused}");
+        assert!(app.agents.closed.of(workspace).is_some(), "the closed agent is kept");
+        let theirs = refusal(&mut app, BOT + 1, "agents-reopen", &reopen);
+        assert!(theirs.as_deref().is_none_or(|theirs| !theirs.starts_with(NEVER_ASKS)), "{theirs:?}");
+        app.stop_background();
+    }
+
+    #[test]
+    fn a_bot_may_reopen_an_agent_that_asks() {
+        let (mut app, _rx, _folder, workspace) = with_a_closed_agent("plan");
+
+        let said = refusal(&mut app, BOT, "agents-reopen", &serde_json::json!({"workspace": workspace}));
+        assert!(said.as_deref().is_none_or(|said| !said.starts_with("a bot")), "{said:?}");
         app.stop_background();
     }
 }

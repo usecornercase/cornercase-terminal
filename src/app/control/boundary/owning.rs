@@ -1,15 +1,13 @@
 use std::path::Path;
 
-use super::failed;
-use super::table::OWN_ONLY;
+use super::table::{FLOW_RUN, OWN_ONLY};
+use super::{failed, never_asks};
+use crate::agents;
 use crate::app::App;
 use crate::bots::turn;
-use crate::config;
 use crate::control::Item;
 use crate::control::contract::Refusal;
-use crate::os::fs::canonicalize;
 use crate::project::Hierarchy;
-use crate::project::vscode;
 
 const NO_BOTS_FOLDER: &str = "a bot cannot open a bot's folder as a project";
 const NO_BOTS_WORKTREE: &str = "a bot cannot measure a folder inside a bot's folder";
@@ -32,20 +30,39 @@ impl App {
         if theirs { Ok(()) } else { Err(failed(&format!("{OWN_ONLY}; {item} was not started by this bot"))) }
     }
 
-    pub(super) fn bot_opens(&self, path: &Path) -> Result<(), Refusal> {
-        let wanted = config::expand_home(&path.to_string_lossy(), self.home.as_deref());
-        if vscode::is_workspace(&wanted) {
-            return Err(failed(NO_CODE_WORKSPACE));
+    pub(in crate::app::control) fn bot_reopens(&self, client: u64, workspace: u64) -> Result<(), Refusal> {
+        if !self.clients.bots.is_bot(client) {
+            return Ok(());
         }
-        if self.in_bots_folder(&wanted) { Err(failed(NO_BOTS_FOLDER)) } else { Ok(()) }
+        let kept = self.agents.closed.of(workspace);
+        let flow = match kept {
+            Some(kept) => kept.run.is_some(),
+            None => self.runs.of_workspace(workspace).is_some_and(|run| !run.exited.is_empty()),
+        };
+        if flow {
+            return Err(failed(FLOW_RUN));
+        }
+        let closed = kept.into_iter().flat_map(|kept| &kept.tabs).flat_map(|tab| &tab.panes);
+        let mut modes = closed.filter_map(|pane| pane.closed.as_ref()).filter_map(|closed| {
+            let mode = closed.mode.as_deref().unwrap_or(agents::DEFAULT_MODE);
+            agents::never_asks(&self.config, &closed.kind, Some(mode))
+        });
+        modes.next().map_or(Ok(()), |name| Err(never_asks(&name)))
     }
 
-    pub(super) fn bot_measures(&self, path: &Path) -> Result<(), Refusal> {
-        if self.in_bots_folder(path) { Err(failed(NO_BOTS_WORKTREE)) } else { Ok(()) }
+    pub(in crate::app::control) fn bot_imports(&self, client: u64) -> Result<(), Refusal> {
+        if self.clients.bots.is_bot(client) { Err(failed(NO_CODE_WORKSPACE)) } else { Ok(()) }
     }
 
-    fn in_bots_folder(&self, path: &Path) -> bool {
-        let bots = self.panels.bots.dir.as_deref();
-        canonicalize(path).is_ok_and(|path| turn::inside(bots, &path))
+    pub(in crate::app::control) fn bot_opens(&self, client: u64, canonical: &Path) -> Result<(), Refusal> {
+        if self.in_bots_folder(client, canonical) { Err(failed(NO_BOTS_FOLDER)) } else { Ok(()) }
+    }
+
+    pub(in crate::app::control) fn bot_measures(&self, client: u64, canonical: &Path) -> Result<(), Refusal> {
+        if self.in_bots_folder(client, canonical) { Err(failed(NO_BOTS_WORKTREE)) } else { Ok(()) }
+    }
+
+    fn in_bots_folder(&self, client: u64, canonical: &Path) -> bool {
+        self.clients.bots.is_bot(client) && turn::inside(self.panels.bots.dir.as_deref(), canonical)
     }
 }

@@ -5,12 +5,12 @@ pub(super) const NO_SETTINGS: &str = "a bot cannot change cornercase's settings"
 pub(super) const NO_FLOWS: &str = "a bot cannot change cornercase's flows";
 pub(in crate::app) const NO_KEYS: &str = "a bot cannot press keys or type as a window does: write a prompt to an agent with `cornercase send --pane ID --enter`";
 
+pub(super) const FLOW_RUN: &str =
+    "a bot cannot run a flow: a flow's agents never ask before they act; start one agent with `cornercase start`";
+
 pub(super) const CLOSED: &[(&[&str], &str)] = &[
     (&["keys", "input"], NO_KEYS),
-    (
-        &["flow-run"],
-        "a bot cannot run a flow: a flow's agents never ask before they act; start one agent with `cornercase start`",
-    ),
+    (&["flow-run"], FLOW_RUN),
     (&["flow-delete", "flow-hide", "flow-restore", "flow-default", "flow-order", "flow-close-when-merged"], NO_FLOWS),
     (&["plugin-run", "plugin-popup-close"], NO_PLUGINS),
     (&["stop-process", "stop-port"], "a bot cannot stop a process"),
@@ -65,6 +65,7 @@ pub(super) const RULED: &[&str] = &[
     "restart-when-idle",
     "update-install",
     "worktree-size",
+    "agents-reopen",
 ];
 
 #[cfg(test)]
@@ -125,7 +126,6 @@ pub(super) const OPEN: &[&str] = &[
     "flow-files",
     "account-list",
     "profile-list",
-    "agents-reopen",
     "tour",
     "config-export",
     "ports",

@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 
 use super::Asker;
 use crate::agents;
@@ -47,8 +46,6 @@ enum Gated {
     Clone,
     ShowsChat,
     Reveals,
-    Opens(PathBuf),
-    Measures(PathBuf),
     Closes(Item),
     Closing,
     Flows,
@@ -161,8 +158,6 @@ fn typing(command: &Command) -> Option<Gated> {
 
 fn places(command: &Command) -> Option<Gated> {
     match command {
-        Command::Open(open) => Some(Gated::Opens(open.path.clone())),
-        Command::WorktreeSize(size) => size.path.clone().map(Gated::Measures),
         Command::Close(close) => Some(Gated::Closes(close.item)),
         Command::CloseAgent(close) if !close.check => Some(Gated::Closing),
         Command::AgentsClose(close) if !close.check => Some(Gated::Closing),
@@ -216,6 +211,13 @@ fn window_name(message: &ClientMessage) -> Option<&'static str> {
 
 fn failed(why: &str) -> Refusal {
     Refusal::new(Code::Failed, why)
+}
+
+fn never_asks(name: &str) -> Refusal {
+    failed(&format!(
+        "a bot cannot start an agent in a mode that never asks before it acts (`{name}`); name another with --mode, \
+         such as `--mode default`"
+    ))
 }
 
 fn no_chat_view() -> Refusal {
@@ -304,8 +306,6 @@ impl App {
             Gated::Machines => Err(failed(crate::bots::NO_MACHINES)),
             Gated::Reveals => self.reveals_chat(asker),
             Gated::Says(bot) => self.says_to(&bot),
-            Gated::Opens(path) => self.bot_opens(&path),
-            Gated::Measures(path) => self.bot_measures(&path),
             Gated::Closes(item) => self.closes_own(client, item),
             Gated::Pane { pane, tab, text } => self.bot_types(asker, (pane, tab), text),
         }
@@ -315,13 +315,7 @@ impl App {
         if !self.clients.bots.is_bot(client) {
             return Ok(());
         }
-        match agents::never_asks(&self.config, kind, mode) {
-            Some(name) => Err(failed(&format!(
-                "a bot cannot start an agent in a mode that never asks before it acts (`{name}`); name another with \
-                 --mode, such as `--mode default`"
-            ))),
-            None => Ok(()),
-        }
+        agents::never_asks(&self.config, kind, mode).map_or(Ok(()), |name| Err(never_asks(&name)))
     }
 
     pub(super) fn bot_stays_here(&self, client: u64) -> Result<(), Refusal> {

@@ -346,3 +346,32 @@ fn a_bots_enter_is_not_pressed_when_its_client_left_before_it() {
 
     assert!(!b.screen(agent).lines().any(|line| line.trim() == "pwned"), "{}", b.screen(agent));
 }
+
+#[test]
+fn a_bots_enter_is_not_pressed_once_its_agent_shows_a_dialog() {
+    let mut agent = Agent::new();
+    let id = agent.start(None);
+    agent.until("its input box is seen", |a| pane(a, id).input_seen.is_some());
+    agent.app.clients.bots.marked(CLIENT, "prs");
+    ask(&mut agent.app, None, text(id, "go on", true));
+    let panel = b"\x1b[H\x1b[2J  Shell details\r\n  x to stop\r\n";
+    agent.app.projects.pane_by_mut(id).expect("the pane").feed(panel);
+
+    let message = error(agent.answered("the bot is answered"));
+
+    let dialog = format!("{HEAD}, and the agent in pane {id} shows a dialog, a panel or its shell mode");
+    assert!(message.starts_with(&dialog), "{message}");
+    assert!(!agent.fake.dir().join("pastes").exists(), "no Enter reached the agent");
+}
+
+#[test]
+fn a_bot_cannot_open_a_link_to_a_bots_folder() {
+    let mut b = bounded();
+    let bots = b.app.panels.bots.dir.clone().expect("the bots' folder");
+    let links = TempDir::new();
+    let link = links.path().join("looks-like-a-project");
+    std::os::unix::fs::symlink(bots.join("prs"), &link).expect("link");
+    let open = Command::Open(wire::Open { path: link, focus: false, into: None });
+
+    b.refused_for(open, "a bot cannot open a bot's folder as a project");
+}
