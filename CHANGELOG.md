@@ -2,6 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.106
+
+- **Bots now talk on Telegram and Discord.** With a phone paired, a bot's answers reach it titled `🤖 <name>` (and `↻ <routine>` for a routine's), with their formatting; a failure starts with `✗`. What you wrote, its steps and its notices stay in cornercase.
+- **You choose when, per bot**: `while away` (the default), `always` or `off`, in the bot form's new **Chat apps** row or with `cornercase bot new` and `bot edit --chat-apps`. The row asks you to pair a phone in **Settings › Remote** when none is.
+- **Write to a bot from the phone**: reply to one of its messages, send `/bot NAME TEXT`, or `/bots` and its **✎** button. A 👍 says the bot took it, and its answer comes back as a reply to your message, even when the bot is set to `off`.
+- **`/bots`** lists every bot with what it is doing, its unread answers and its next routine.
+- When an agent a bot started needs you and the bot is set to `always`, its question and buttons reach the phone at the desk too, once.
+- **Discord's forum mode gives each bot its own post**, `🤖 <name>`, where its answers and its routines' go and where what you write goes to it. Removing the bot closes it, and the post is kept across restarts.
+- A bot's failed routine now reaches the phone once, as the bot's own message, instead of twice while away.
+
 ## 0.13.105
 
 - **A link in a bot's answer now opens in your browser, after you confirm it.** A click on an `http://` or `https://` address shows **Open link**: who wrote it, the address (found whole in the answer you clicked even when the chat cut it across rows, and shown on up to three rows, ending in `…` past them) and where it goes, such as `goes to example.com`, with **copy**, **open** and **cancel**. **open** (or `Enter`) opens it in the browser of the window you clicked in. A bot's answer is text an agent wrote, so a click alone never opens it.
