@@ -394,6 +394,7 @@ mod queue_by_a_bot {
 mod marked {
     use super::*;
     use crate::app::control::boundary::OWN_ONLY;
+    use crate::test_util::git_repo as repository;
 
     const NEVER_ASKS: &str = "a bot cannot start an agent in a mode that never asks before it acts";
 
@@ -497,7 +498,7 @@ mod marked {
         ] {
             refused_to_the_bot_only(&mut app, "open", &serde_json::json!({"path": path}), why);
         }
-        let repo = git_repo(&[("a.txt", "a")]);
+        let repo = repository(&[("a.txt", "a")]);
         let linked = bots.path().join("prs").join("wt");
         crate::test_util::git(repo.path(), &["worktree", "add", "--quiet", &linked.to_string_lossy()]);
         let measured = serde_json::json!({"path": linked});
