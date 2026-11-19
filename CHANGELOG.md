@@ -7,6 +7,7 @@ Every pull request that changes the app adds a section here for its new version.
 - **One list of machines.** A machine is added once, in Settings › Machines or with `cornercase remote`, and the machine button offers it to open the window there. **show its work here** decides whether its workspaces and agents show next to yours; a machine that is not shown reads `not shown` in Settings. The button shows as soon as you have a machine, its menu adds one (**add machine…**) or opens Settings › Machines (**manage machines…**), and a machine is removed in Settings, so **forget…** is gone. Its label is `this computer ▴`, or `on vps ▴` once you moved.
 - The machines a window reached are moved into Settings › Machines once, not shown, and the old `machines.json` is removed. The form gains **command**, for a cornercase that is not on the `PATH` there, and `cornercase machines add` gains `--command` and `--hidden`.
 - The local computer is called "this computer" everywhere.
+- A bot cannot add or remove a machine with `cornercase remote --remember` or `--forget` either: they are refused as `cornercase machines add`, `edit` and `remove` are.
 
 ## 0.13.103
 

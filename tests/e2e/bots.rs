@@ -145,6 +145,29 @@ fn inside_a_bot_cornercase_opens_no_window_and_relays_none() {
 }
 
 #[test]
+fn inside_a_bot_the_list_of_machines_is_not_changed_from_the_command_line() {
+    let session = Session::new();
+    let run = |bot: Option<&str>, args: &[&str]| {
+        let mut cmd = session.cold_command();
+        if let Some(bot) = bot {
+            cmd.env("CORNERCASE_BOT", bot);
+        }
+        cmd.args(args).output().expect("run cornercase")
+    };
+    assert!(run(None, &["remote", "--remember", "devbox"]).status.success());
+
+    for args in [&["remote", "--forget", "devbox"], &["remote", "--remember", "newbox"]] {
+        let out = run(Some("prs"), args);
+        assert!(refused(&out, 2, "a bot cannot change cornercase's machines"), "{args:?}: {out:?}");
+    }
+
+    let known = run(Some("prs"), &["remote", "--known", "--json"]);
+    assert!(known.status.success(), "{known:?}");
+    let listed = String::from_utf8_lossy(&known.stdout);
+    assert!(listed.contains("\"devbox\"") && !listed.contains("newbox"), "{listed}");
+}
+
+#[test]
 fn a_bot_made_from_the_form_answers_in_its_chat() {
     let session = started();
     let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);

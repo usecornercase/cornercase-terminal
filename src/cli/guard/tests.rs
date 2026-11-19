@@ -43,6 +43,9 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::machines_add(&["machines", "add", "vps", "me@vps"], crate::bots::NO_MACHINES)]
 #[case::machines_update(&["machines", "update", "vps"], crate::bots::NO_MACHINES)]
 #[case::machines_remove(&["machines", "remove", "vps"], crate::bots::NO_MACHINES)]
+#[case::remember(&["remote", "--remember", "vps"], crate::bots::NO_MACHINES)]
+#[case::remember_with_a_command(&["remote", "--remember", "vps", "--command", "cc"], crate::bots::NO_MACHINES)]
+#[case::forget(&["remote", "--forget", "vps"], crate::bots::NO_MACHINES)]
 #[case::tunnel_open(&["tunnel", "open", "5173"], crate::bots::NO_TUNNELS)]
 #[case::tunnel_hold(&["tunnel", "hold", "5173"], crate::bots::NO_TUNNELS)]
 fn a_bot_is_refused(#[case] args: &[&str], #[case] why: &str) {
