@@ -8,6 +8,8 @@ use crate::cli::help::{
 };
 
 const ACCESS: [&str; 2] = ["cornercase", "full"];
+const CHAT_APPS_HELP: &str =
+    "away (the default): its answers reach Telegram and Discord only while you are away; always; off";
 
 #[derive(Debug, Args)]
 pub(crate) struct BotArgs {
@@ -170,6 +172,8 @@ pub(crate) struct NewArgs {
         help = "on (the default): the bot is told when an agent it starts finishes, and answers in its chat; off: it is not"
     )]
     pub(crate) follow: Option<String>,
+    #[arg(long, value_name = "WHEN", value_parser = crate::bots::ChatApps::NAMES, help = CHAT_APPS_HELP)]
+    pub(crate) chat_apps: Option<String>,
     #[arg(
         long,
         value_name = "TEXT",
@@ -203,6 +207,8 @@ pub(crate) struct EditArgs {
         help = "on: the bot is told when an agent it starts finishes, and answers in its chat; off: it is not; from its next turn"
     )]
     pub(crate) follow: Option<String>,
+    #[arg(long, value_name = "WHEN", value_parser = crate::bots::ChatApps::NAMES, help = CHAT_APPS_HELP)]
+    pub(crate) chat_apps: Option<String>,
     #[arg(long, value_name = "TEXT", help = "What the bot is for, written to bot.md; an empty one empties it")]
     pub(crate) about: Option<String>,
     #[command(flatten)]

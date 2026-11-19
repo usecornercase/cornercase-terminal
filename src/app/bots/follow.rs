@@ -203,6 +203,7 @@ impl App {
         let (Some(agent), Some(place)) = (self.agent_ref(pane, &kind), self.pane_place(pane)) else { return };
         let text = follow::waiting(&kind, &place);
         self.bot_append(at, |id, now| Line::waiting(id, now, &text, (agent, screen), run));
+        self.bot_waiting_to_chat_apps(at, pane);
         if !self.bot_on_screen(at) {
             self.panels.bots.live[at].unread += 1;
         }

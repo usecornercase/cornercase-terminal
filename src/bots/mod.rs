@@ -67,6 +67,38 @@ pub(crate) struct Bot {
     pub(crate) conversation: Option<String>,
     #[serde(default = "yes", skip_serializing_if = "is_on")]
     pub(crate) follow: bool,
+    #[serde(default, skip_serializing_if = "ChatApps::is_away")]
+    pub(crate) chat_apps: ChatApps,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ChatApps {
+    #[default]
+    Away,
+    Always,
+    Off,
+}
+
+impl ChatApps {
+    pub(crate) const NAMES: [&str; 3] = ["away", "always", "off"];
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Away => "away",
+            Self::Always => "always",
+            Self::Off => "off",
+        }
+    }
+
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        [Self::Away, Self::Always, Self::Off].into_iter().find(|choice| choice.name() == text.trim())
+    }
+
+    #[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if takes a reference")]
+    fn is_away(&self) -> bool {
+        *self == Self::Away
+    }
 }
 
 fn yes() -> bool {
@@ -153,6 +185,7 @@ pub(crate) fn sample(id: &str, name: &str) -> Bot {
         created: 100,
         conversation: None,
         follow: true,
+        chat_apps: ChatApps::Away,
     }
 }
 

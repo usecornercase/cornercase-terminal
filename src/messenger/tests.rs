@@ -67,6 +67,7 @@ mod taps {
     #[case::workspace(Tap::Draft(2, Choice::Workspace(8)))]
     #[case::worktree(Tap::Draft(2, Choice::Worktree))]
     #[case::agent(Tap::Draft(2, Choice::Agent("claude".into())))]
+    #[case::bot(Tap::Bot(u64::MAX))]
     fn read_what_they_wrote(#[case] tap: Tap) {
         assert_eq!(Tap::read(&tap.data("ab12"), "ab12"), Ok(tap));
     }
@@ -82,6 +83,11 @@ mod taps {
     fn a_long_agent_name_does_not_fit_a_button() {
         assert!(Tap::Draft(1, Choice::Agent("claude".into())).fits("ab12", Via::Telegram));
         assert!(!Tap::Draft(1, Choice::Agent("x".repeat(60))).fits("ab12", Via::Telegram));
+    }
+
+    #[rstest::rstest]
+    fn a_bot_button_fits_both_platforms(#[values(Via::Telegram, Via::Discord)] via: Via) {
+        assert!(Tap::Bot(u64::MAX).fits("ab12", via));
     }
 }
 

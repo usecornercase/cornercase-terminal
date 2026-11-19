@@ -43,4 +43,4 @@ With fakes only (a `FakeClaude` as the started agent, a Gemini CLI fake as the b
 
 ## Left for later
 
-Telegram and Discord (#848); an agent that answers its started agents' questions (no turn on `waiting`; since #866 the server refuses a `cornercase`-access bot's typing into a waiting agent, and its `keys`); following agents started on another machine; a `bot` column in `status --panes`; remapping old chat links to restored panes after a restart; following the children an agent starts.
+Telegram and Discord came with #848 ([Chat apps](chat-apps.md): a `waiting` line sends the agent's own notice when the bot's answers always go there); an agent that answers its started agents' questions (no turn on `waiting`; since #866 the server refuses a `cornercase`-access bot's typing into a waiting agent, and its `keys`); following agents started on another machine; a `bot` column in `status --panes`; remapping old chat links to restored panes after a restart; following the children an agent starts.

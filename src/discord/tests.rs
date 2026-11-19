@@ -129,6 +129,17 @@ mod updates {
         assert_eq!(invoked("INTERACTION_CREATE", &d), Some(expected));
         assert_eq!(invoked("MESSAGE_CREATE", &d), None);
     }
+
+    #[test]
+    fn a_slash_command_with_options_reads_them_in_order_after_its_name() {
+        let options =
+            json!([{"name": "name", "type": 3, "value": "prs"}, {"name": "text", "type": 3, "value": "hello there"}]);
+        let d = json!({"id": "1300000000000000001", "token": "tok", "type": 2, "channel_id": "1200",
+            "user": {"id": "9", "username": "ada"}, "data": {"name": "bot", "type": 1, "options": options}});
+
+        let Some(Update::Message(message)) = update("INTERACTION_CREATE", &d, None) else { panic!("a message") };
+        assert_eq!(message.text, "/bot prs hello there");
+    }
 }
 
 mod buttons {
@@ -384,11 +395,18 @@ mod api {
         let names: Vec<&str> = registered
             .as_array()
             .map_or(Vec::new(), |all| all.iter().filter_map(|command| command["name"].as_str()).collect());
-        assert_eq!(names, vec!["status", "new", "away", "back"]);
+        assert_eq!(names, vec!["status", "new", "away", "back", "bots", "bot"]);
         assert_eq!(
             registered[1],
             json!({"name": "new", "description": "start an agent", "type": 1,
                 "integration_types": [1], "contexts": [1]})
+        );
+        assert_eq!(
+            registered[5]["options"],
+            json!([
+                {"type": 3, "name": "name", "description": "the bot's name or id", "required": true},
+                {"type": 3, "name": "text", "description": "what to tell it", "required": true}
+            ])
         );
     }
 

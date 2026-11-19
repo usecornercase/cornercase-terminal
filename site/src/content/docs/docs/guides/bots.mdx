@@ -64,6 +64,7 @@ An answer, or an error, that arrives while you are looking at something else mak
 - **Model**: the models the agent suggests, and `default`, the agent's own. Type to filter; `Enter` on a name that matches none uses it as written. **Effort** and **Account** rows show only when the agent takes efforts or you have [accounts](../accounts/) for it.
 - **Access**: `through cornercase` or `full access`, with a two-line note under it. The first line says what `through cornercase` is, and the second, in red, what `full access` lets the bot do, see [Access](#access). Codex, opencode and Cursor CLI offer `full access` only (and Gemini CLI and GitHub Copilot CLI on Windows), so nothing is chosen for you there and **create** asks you to choose.
 - **Follow**: a box, checked, that says whether the bot is told when an agent it starts [finishes](#agents-it-starts). `Space` or a click toggles it.
+- **Chat apps**: when the bot's answers reach [Telegram and Discord](#on-telegram-and-discord): `while away` (the default), `always` or `off`. With no chat app paired it says `pair Telegram or Discord in Settings › Remote` instead, and saving keeps what the bot had.
 - **Secrets** (editing only): the names of the [secrets](#secrets) saved for the bot, such as `2 saved: campus-user, campus-password`, and **manage…**, which opens the Secrets dialog and gets back to the form, with what you changed in it, when you close it.
 - **For**: what the bot is for. It is optional, may be several lines (`Enter` breaks the line here) and becomes `bot.md`; filled in, the bot sets itself up for it as soon as it is made.
 
@@ -84,9 +85,10 @@ cornercase bot new nightly --agent claude --model sonnet --effort low
 - **`--account`**: one of the agent's [accounts](../accounts/); without it, the agent's own login.
 - **`--access`**: what the bot may do, see [Access](#access).
 - **`--follow on|off`**: whether the bot is told when an agent it starts finishes (on by default), see [Agents it starts](#agents-it-starts).
+- **`--chat-apps away|always|off`**: when its answers reach Telegram and Discord (`away` by default), see [On Telegram and Discord](#on-telegram-and-discord).
 - **`--about`**: what the bot is for. It goes into `bot.md` and may be empty. When it is not, the bot sets itself up at once; `bot new` still prints only the id, and `cornercase bot setup prs` runs the setup again, after a failure or after `bot edit --about`.
 
-`cornercase bot edit prs --model opus` changes the name, model, effort, account, access or `--follow` from the bot's next message on; an empty value goes back to the agent's own. `cornercase bot about prs` prints what the bot is for, its `bot.md`. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot, its folder and its [routines](#routines) (it prints how many, and the number `cornercase queue restore` takes to put them back), and is refused while it answers, or while one of its routines does.
+`cornercase bot edit prs --model opus` changes the name, model, effort, account, access or `--follow` from the bot's next message on, and `--chat-apps` at once; an empty value goes back to the agent's own. `cornercase bot about prs` prints what the bot is for, its `bot.md`. The agent cannot change, because another agent cannot continue the conversation: make another bot instead. `cornercase bot remove prs` deletes the bot, its folder and its [routines](#routines) (it prints how many, and the number `cornercase queue restore` takes to put them back), and is refused while it answers, or while one of its routines does.
 
 ## Talk to a bot
 
@@ -139,6 +141,18 @@ A bot can schedule its own work. Tell it **"review my pull requests every weekda
 - how its **last run** ended: `answered` in green, `failed` in red, `stopped`, `missed` in yellow, `answering…` while it runs, or `not run yet`, with when.
 
 The selected row (and the one under the pointer) shows its buttons, each only when it applies: **` run now `** (a routine, or a reminder that has not run, failed or was missed), **` pause `** or **` resume `**, **` edit… `** and **` remove `**, which takes the routine with its runs and offers **` undo `** in the notice. `↑` `↓`, `PageUp`, `PageDown`, `Home` and `End` move, `Esc` closes. `Enter`, or a click on a row, shows the chat at the last run's block and closes the dialog; a run that never started or was missed left no block, so the dialog stays and its hint says why. **` + routine `** opens the schedule form for the bot, as an **every day at 09:00** routine (the kind combo gives a reminder), and **` edit… `** opens it filled in. Saving or cancelling comes back to the dialog.
+
+## On Telegram and Discord
+
+With a phone paired on [Telegram](../telegram/) or [Discord](../discord/), a bot's answers reach it too, titled `🤖 PRs` (and `· ↻ Review PRs` for a routine's), with their Markdown; a failure starts with `✗`. What you wrote, its steps and its notices are not sent. When an agent the bot [follows](#agents-it-starts) needs you, its question comes with its buttons, as an agent's does while you are away.
+
+**When** is the bot's `chat_apps` option, in the form's **Chat apps** row or with `--chat-apps`:
+
+- `away` (the default): only while you are [away](../telegram/#go-away), as agents' messages are.
+- `always`: at the desk too, for a bot you mostly talk to from the phone.
+- `off`: never, for a bot whose routines would be noise there.
+
+**Write to a bot** from the chat: reply to one of its messages, use `/bot PRs what is blocked?`, or `/bots` and its **✎** button. A 👍 says the bot took it, and its answer comes back as a reply to your message, whatever the option says. A reply to a routine's answer goes to the bot's chat, which is told that answer first. With Discord's [forum mode](../discord/#forum-mode) each bot has its own post, `🤖 PRs`, where its answers and its routines' go and where what you write goes to it.
 
 ## Agents it starts
 
@@ -235,4 +249,4 @@ The chat is cornercase's own, not the agent's transcript, so what other features
 
 ## For programs
 
-Everything is a request over the socket, so a window, a script or a plugin can build on it. `cornercase queue add --bot prs --every 'weekday 09:00' --prompt '…'` schedules a bot's routine, `cornercase queue list --bot prs --json` lists its entries, and inside a bot (`CORNERCASE_BOT` set) a `queue add` with no `--project`, `--workspace` or `--worktree` means that bot. `cornercase bot about prs --json` gives a program the text of `bot.md`, so its edit form shows what the person is about to change. See [Scripts and agents](../scripts-and-agents/#bots) for the `bot` request, its events and the `bots` of `status --app`.
+Everything is a request over the socket, so a window, a script or a plugin can build on it. `cornercase queue add --bot prs --every 'weekday 09:00' --prompt '…'` schedules a bot's routine, `cornercase queue list --bot prs --json` lists its entries, and inside a bot (`CORNERCASE_BOT` set) a `queue add` with no `--project`, `--workspace` or `--worktree` means that bot. `chat_apps` in `bot new`, `bot edit` and `bot list --json` is the [Telegram and Discord](#on-telegram-and-discord) option (feature `bot-chat-apps`). `cornercase bot about prs --json` gives a program the text of `bot.md`, so its edit form shows what the person is about to change. See [Scripts and agents](../scripts-and-agents/#bots) for the `bot` request, its events and the `bots` of `status --app`.

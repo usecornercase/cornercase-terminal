@@ -176,3 +176,32 @@ fn tab_reaches_follow_after_access() {
     key(&mut form, KeyCode::Tab);
     assert_eq!(form.focus, Field::About);
 }
+
+#[test]
+fn the_chat_apps_row_is_reached_by_tab_only_when_a_chat_app_is_paired() {
+    let mut form = Form::new(agents(), "claude");
+    assert!(form.fields().contains(&Field::ChatApps));
+    form.focus_on(Field::Follow);
+    key(&mut form, KeyCode::Tab);
+    assert_eq!(form.focus, Field::About);
+    form.chat_ready = true;
+    form.focus_on(Field::Follow);
+    key(&mut form, KeyCode::Tab);
+    assert_eq!(form.focus, Field::ChatApps);
+}
+
+#[test]
+fn both_requests_carry_chat_apps_only_when_a_chat_app_is_paired() {
+    let mut form = Form::new(agents(), "claude");
+    form.name = Editor::new("PRs");
+    assert_eq!(form.new_bot().expect("a bot").chat_apps, None);
+    form.chat_ready = true;
+    assert_eq!(form.new_bot().expect("a bot").chat_apps.as_deref(), Some("away"));
+    let bot = Bot { chat_apps: crate::bots::ChatApps::Always, ..crate::bots::sample("prs", "PRs") };
+    let mut editing = Form::editing(agents(), &bot, "");
+    assert_eq!(editing.edit_bot().expect("an edit").chat_apps, None);
+    editing.chat_ready = true;
+    assert_eq!(editing.edit_bot().expect("an edit").chat_apps.as_deref(), Some("always"));
+    editing.chat_apps.choose(2);
+    assert_eq!(editing.edit_bot().expect("an edit").chat_apps.as_deref(), Some("off"));
+}

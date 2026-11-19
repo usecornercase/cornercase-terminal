@@ -10,6 +10,8 @@ pub(crate) const DEFAULT: &str = "default";
 
 pub(crate) const ACCESSES: [(&str, &str); 2] = [("cornercase", "through cornercase"), ("full", "full access")];
 
+pub(crate) const CHAT_APPS: [(&str, &str); 3] = [("away", "while away"), ("always", "always"), ("off", "off")];
+
 const NOT_AVAILABLE: &str = "not available";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +23,7 @@ pub(crate) enum Field {
     Account,
     Access,
     Follow,
+    ChatApps,
     Secrets,
     About,
 }
@@ -46,6 +49,8 @@ pub(crate) struct Form {
     pub(crate) account: Option<AgentAccounts>,
     pub(crate) access: Combo,
     pub(crate) follow: bool,
+    pub(crate) chat_apps: Combo,
+    pub(crate) chat_ready: bool,
     pub(crate) about: Editor,
     pub(crate) focus: Field,
     pub(crate) error: Option<String>,
@@ -59,6 +64,11 @@ fn agent_combo(agents: &[AgentInfo], chosen: usize) -> Combo {
         .map(|info| (!info.bot).then(|| info.why.clone().unwrap_or_else(|| NOT_AVAILABLE.to_string())))
         .collect();
     Combo::with_notes(titles, Some(chosen), notes)
+}
+
+fn chat_apps_combo(chosen: &str) -> Combo {
+    let labels = CHAT_APPS.iter().map(|(_, label)| (*label).to_string()).collect();
+    Combo::new(labels, Some(CHAT_APPS.iter().position(|(id, _)| *id == chosen).unwrap_or(0)))
 }
 
 fn with_default(levels: &[String], chosen: Option<&str>) -> Vec<String> {
@@ -89,6 +99,8 @@ impl Form {
             account: None,
             access: Combo::default(),
             follow: true,
+            chat_apps: chat_apps_combo(super::ChatApps::Away.name()),
+            chat_ready: false,
             about: Editor::default(),
             focus: Field::Name,
             error: None,
@@ -111,6 +123,8 @@ impl Form {
             account: None,
             access: Combo::default(),
             follow: bot.follow,
+            chat_apps: chat_apps_combo(bot.chat_apps.name()),
+            chat_ready: false,
             about: Editor::new(about),
             focus: Field::Name,
             error: None,
@@ -171,14 +185,19 @@ impl Form {
         if self.account.is_some() {
             fields.push(Field::Account);
         }
-        fields.extend([Field::Access, Field::Follow]);
+        fields.extend([Field::Access, Field::Follow, Field::ChatApps]);
         fields.extend(self.editing.is_some().then_some(Field::Secrets));
         fields.push(Field::About);
         fields
     }
 
     fn focusable(&self) -> Vec<Field> {
-        self.fields().into_iter().filter(|field| self.editing.is_none() || *field != Field::Agent).collect()
+        let skipped = |field: Field| match field {
+            Field::Agent => self.editing.is_some(),
+            Field::ChatApps => !self.chat_ready,
+            _ => false,
+        };
+        self.fields().into_iter().filter(|field| !skipped(*field)).collect()
     }
 
     pub(crate) fn editor_of(&self, field: Field) -> Option<&Editor> {
@@ -204,6 +223,7 @@ impl Form {
             Field::Effort => Some(&self.effort),
             Field::Account => self.account.as_ref().map(|account| &account.combo),
             Field::Access => Some(&self.access),
+            Field::ChatApps => Some(&self.chat_apps),
             Field::Name | Field::About | Field::Follow | Field::Secrets => None,
         }
     }
@@ -215,6 +235,7 @@ impl Form {
             Field::Effort => Some(&mut self.effort),
             Field::Account => self.account.as_mut().map(|account| &mut account.combo),
             Field::Access => Some(&mut self.access),
+            Field::ChatApps => Some(&mut self.chat_apps),
             Field::Name | Field::About | Field::Follow | Field::Secrets => None,
         }
     }
@@ -224,7 +245,7 @@ impl Form {
     }
 
     pub(crate) fn close_lists(&mut self) {
-        for field in [Field::Agent, Field::Model, Field::Effort, Field::Account, Field::Access] {
+        for field in [Field::Agent, Field::Model, Field::Effort, Field::Account, Field::Access, Field::ChatApps] {
             self.combo(field).into_iter().for_each(Combo::close);
         }
     }
@@ -287,6 +308,11 @@ impl Form {
         self.access.chosen().and_then(|at| ACCESSES.get(at)).map(|(id, _)| *id)
     }
 
+    fn chosen_chat_apps(&self) -> Option<String> {
+        let chosen = self.chat_apps.chosen().and_then(|at| CHAT_APPS.get(at));
+        chosen.filter(|_| self.chat_ready).map(|(id, _)| (*id).to_string())
+    }
+
     fn account_choice(&self) -> Option<String> {
         self.account.as_ref().map(|account| account.chosen().to_string())
     }
@@ -306,6 +332,7 @@ impl Form {
             account: self.account_choice().filter(|account| !account.is_empty()),
             access: Some(access.to_string()),
             follow: Some(self.follow),
+            chat_apps: self.chosen_chat_apps(),
             about: self.about.text(),
         })
     }
@@ -322,6 +349,7 @@ impl Form {
             account: self.account_choice(),
             access: Some(access.to_string()),
             follow: Some(self.follow),
+            chat_apps: self.chosen_chat_apps(),
             about: (about != self.loaded_about).then_some(about),
         })
     }

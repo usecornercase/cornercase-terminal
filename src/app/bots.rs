@@ -263,6 +263,7 @@ impl super::App {
         self.panels.bots.next_ask = self.panels.bots.next_ask.max(after);
         self.panels.bots.live = loaded.into_iter().map(|(live, _)| live).collect();
         self.panels.bots.shown = None;
+        self.restore_bot_posts();
     }
 }
 

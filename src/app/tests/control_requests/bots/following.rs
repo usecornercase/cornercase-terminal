@@ -485,3 +485,35 @@ fn a_report_waits_for_its_run_to_answer_and_costs_no_wake_meanwhile() {
     f.agent.app.panels.bots.live[0].runs.clear();
     assert_eq!(f.agent.app.bot_reports_wake(now), Some(Duration::ZERO));
 }
+
+#[rstest::rstest]
+#[case::at_the_desk(false)]
+#[case::away(true)]
+fn a_followed_agent_that_needs_you_is_sent_once_with_its_buttons(#[case] away: bool) {
+    let mut f = following();
+    f.agent.app.panels.bots.live[0].bot.chat_apps = crate::bots::ChatApps::Always;
+    let mut phone = Phone::paired(&mut f.agent.app);
+    if away {
+        f.agent.app.away_request(false).expect("away");
+    }
+    let pane = f.start_with(Some("prs"), "ask", false);
+    f.works(pane);
+    f.agent.finish();
+    let mut seen = Vec::new();
+    let mut read = |f: &mut Following| {
+        drain(&mut f.agent.app, &f.agent.rx);
+        f.agent.app.refresh(Instant::now());
+        seen.extend(phone.read(&mut f.agent.app).into_iter().map(|(_, order)| order));
+        seen.iter().filter(|order| html(order).contains("claude needs you")).cloned().collect::<Vec<_>>()
+    };
+    wait_until("the chat app is told", || !read(&mut f).is_empty());
+    let from = Instant::now();
+    let mut needs = Vec::new();
+    while from.elapsed() < Duration::from_secs(3) {
+        needs = read(&mut f);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(needs.len(), 1, "{needs:?}");
+    assert!(keyboard(&needs[0]).iter().flatten().any(|key| key.text == "esc"), "{needs:?}");
+    assert_eq!(f.kinds(Kind::Waiting).len(), 1);
+}

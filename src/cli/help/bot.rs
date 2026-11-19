@@ -34,8 +34,10 @@ GitHub Copilot CLI bot with cornercase access reads only its own folder and runs
 full access only.
 
 A bot works only while the server runs. With --follow on (the default) it is told when an agent it
-started finishes, and answers in its chat; --follow off tells it nothing. With --json it prints the bot
-as `bot list --json` does; its state is `thinking` while it sets itself up.
+started finishes, and answers in its chat; --follow off tells it nothing. --chat-apps away (the default)
+sends its answers to a paired Telegram or Discord only while you are away, always sends them, off
+never; a message you write to it from there is answered there either way. With --json it prints the
+bot as `bot list --json` does; its state is `thinking` while it sets itself up.
 
 Example:
   cornercase bot new prs --agent claude --about \"Review my open pull requests and tell me which are blocked\"";
@@ -51,7 +53,8 @@ edit` only when the person changed it.";
 pub(in crate::cli) const BOT_EDIT_HELP: &str =
     "Changes what the bot uses from its next message on; a running answer is not changed. An empty
 --model, --effort or --account goes back to the agent's own; --about writes bot.md (`bot about` prints
-it); --follow on|off sets whether the bot is told when an agent it started finishes. The agent cannot
+it); --follow on|off sets whether the bot is told when an agent it started finishes; --chat-apps
+away|always|off sets when its answers reach Telegram and Discord, at once. The agent cannot
 change, because another agent cannot continue the conversation: make another bot instead.";
 
 pub(in crate::cli) const BOT_SAY_HELP: &str =

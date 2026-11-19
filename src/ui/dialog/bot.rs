@@ -18,6 +18,7 @@ const ABOUT_ROWS: u16 = 4;
 const CORNERCASE_NOTE: &str = "through cornercase: reads anything, writes only in its folder";
 const FOLDER_NOTE: &str = "through cornercase: reads and writes only in its folder";
 const FULL_NOTE: &str = "full access: can change any file and run anything, unattended";
+const UNPAIRED: &str = "pair Telegram or Discord in Settings › Remote";
 
 pub(crate) enum Hit {
     Field(Field, usize, usize),
@@ -41,7 +42,7 @@ fn inner(screen: Rect) -> Rect {
 
 fn row_of(form: &Form, field: Field) -> u16 {
     let at = form.fields().iter().position(|shown| *shown == field).unwrap_or_default();
-    let notes = if matches!(field, Field::Follow | Field::Secrets | Field::About) { 2 } else { 0 };
+    let notes = if matches!(field, Field::Follow | Field::ChatApps | Field::Secrets | Field::About) { 2 } else { 0 };
     u16::try_from(at).unwrap_or_default() + notes
 }
 
@@ -120,6 +121,7 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
         (Field::Account, "Account"),
         (Field::Access, "Access"),
         (Field::Follow, "Follow"),
+        (Field::ChatApps, "Chat apps"),
         (Field::Secrets, "Secrets"),
         (Field::About, "For"),
     ];
@@ -133,7 +135,7 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
 
 fn draw_fields(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     let typing = form.opened().is_none();
-    for field in form.fields() {
+    for field in form.fields().into_iter().filter(|field| *field != Field::ChatApps || form.chat_ready) {
         let r = rect(screen, form, field);
         let focused = typing && form.focus == field;
         if field == Field::Follow {
@@ -200,6 +202,17 @@ fn draw_notes(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     }
 }
 
+fn draw_unpaired(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
+    if form.chat_ready {
+        return;
+    }
+    let at = row(screen, row_of(form, Field::ChatApps), 1);
+    let width = at.width.saturating_sub(LABEL + 1);
+    let r = Rect::new(at.x + LABEL + 1, at.y, width, 1);
+    let line = truncate_right(UNPAIRED, usize::from(width));
+    f.render_widget(Paragraph::new(Span::styled(line, Style::default().fg(view.muted))), r);
+}
+
 fn draw_error(f: &mut Frame, screen: Rect, form: &Form) {
     if let Some(error) = &form.error {
         let r = error_row(screen);
@@ -219,6 +232,7 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     draw_labels(f, view, screen, form);
     draw_fields(f, view, screen, form);
     draw_notes(f, view, screen, form);
+    draw_unpaired(f, view, screen, form);
     draw_error(f, screen, form);
     draw_dialog_buttons(f, view, buttons(screen, form), submit_label(form), "cancel");
     let open = form.opened().and_then(|open| form.combo_of(open));

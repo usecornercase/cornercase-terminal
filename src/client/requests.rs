@@ -127,6 +127,10 @@ pub(crate) fn use_bot_follow() -> Result<()> {
     require("bot-follow", "cannot change whether a bot follows the agents it starts")
 }
 
+pub(crate) fn use_bot_chat_apps() -> Result<()> {
+    require("bot-chat-apps", "cannot change whether a bot's answers go to the chat apps")
+}
+
 pub(crate) fn use_bot_setup() -> Result<()> {
     require("bot-setup", "cannot set a bot up")
 }
