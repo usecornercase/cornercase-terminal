@@ -390,15 +390,46 @@ mod migrating {
         assert_eq!(names(&read(&here)), ["devbox"]);
     }
 
-    #[test]
-    fn an_old_file_that_is_not_an_array_stays_byte_for_byte() {
+    #[rstest]
+    #[case::truncated(r#"[{"destination":"devbox"},"#)]
+    #[case::an_object(r#"{"destination":"devbox"}"#)]
+    fn an_old_file_that_is_not_an_array_stays_byte_for_byte(#[case] old: &str) {
         let dir = TempDir::new();
         let here = here_in(&dir);
-        std::fs::write(&here.legacy, r#"[{"destination":"devbox"},"#).expect("written");
+        std::fs::write(&here.legacy, old).expect("written");
 
         assert!(migrate(&here).is_err());
 
-        assert_eq!(text(&here.legacy), r#"[{"destination":"devbox"},"#);
+        assert_eq!(text(&here.legacy), old);
+        assert!(!here.config.exists());
+    }
+
+    #[test]
+    fn an_old_file_over_the_size_limit_is_left_as_it_is() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        let old = format!("{LEGACY}{}", " ".repeat((4 << 20) + 1));
+        std::fs::write(&here.legacy, &old).expect("written");
+
+        let error = migrate(&here).expect_err("refused").to_string();
+
+        assert!(error.contains("machines.json") && error.contains("too large"), "{error}");
+        assert_eq!(std::fs::metadata(&here.legacy).expect("still there").len(), old.len() as u64);
+        assert!(!here.config.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_old_file_that_is_a_fifo_is_refused_without_waiting() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        assert!(std::process::Command::new("mkfifo").arg(&here.legacy).status().expect("mkfifo").success());
+
+        let error = change(&here, |_| ()).expect_err("refused").to_string();
+
+        assert!(error.contains("machines.json") && error.contains("not a regular file"), "{error}");
+        assert_eq!(names(&read(&here)), Vec::<&str>::new());
+        assert!(here.legacy.exists());
         assert!(!here.config.exists());
     }
 

@@ -229,8 +229,8 @@ fn base_name(destination: &str) -> String {
 }
 
 fn legacy_machines(file: &Path) -> io::Result<Vec<Legacy>> {
-    let bytes = std::fs::read(file)?;
-    let entries: Vec<Value> = serde_json::from_slice(&bytes).map_err(io::Error::from)?;
+    let Some(text) = config::read_text(file).map_err(io::Error::other)? else { return Ok(Vec::new()) };
+    let entries: Vec<Value> = serde_json::from_str(&text).map_err(io::Error::from)?;
     Ok(entries
         .into_iter()
         .filter_map(|entry| serde_json::from_value::<Legacy>(entry).ok())
