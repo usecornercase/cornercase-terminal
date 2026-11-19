@@ -102,10 +102,15 @@ fn window(path: &[&str], found: &ArgMatches) -> Option<String> {
     Some(String::from(why))
 }
 
-fn elsewhere_or_runs(path: &[&str]) -> Option<String> {
+fn changes_the_list(found: &ArgMatches) -> bool {
+    ["remember", "forget"].iter().any(|flag| found.get_one::<String>(flag).is_some())
+}
+
+fn elsewhere_or_runs(path: &[&str], found: &ArgMatches) -> Option<String> {
     let why = match path {
         ["plugin", sub, ..] if !["list", "status", "actions", "logs"].contains(sub) => crate::bots::NO_PLUGINS,
         ["machines", "add" | "edit" | "remove" | "update", ..] => crate::bots::NO_MACHINES,
+        ["remote"] if changes_the_list(found) => crate::bots::NO_MACHINES,
         ["tunnel", ..] => crate::bots::NO_TUNNELS,
         _ => return None,
     };
@@ -136,7 +141,7 @@ pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Opt
         .or_else(|| window(&path, found))
         .or_else(|| itself(&path, found, own))
         .or_else(|| secrets(&path, found, own))
-        .or_else(|| elsewhere_or_runs(&path))
+        .or_else(|| elsewhere_or_runs(&path, found))
         .or_else(|| writes_a_file(leaf, found))
         .or_else(|| in_no_place(leaf, found))
 }

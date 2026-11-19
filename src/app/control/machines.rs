@@ -11,6 +11,11 @@ pub(in crate::app) fn unknown(name: &str) -> Refusal {
     Refusal::new(Code::NotFound, format!("no machine is called `{name}`; `cornercase machines` lists them"))
 }
 
+fn not_shown(name: &str) -> Refusal {
+    let why = format!("`{name}` is not shown here, so it has no link: tick show its work here in Settings › Machines");
+    Refusal::new(Code::NotFound, why)
+}
+
 fn remote_item(item: Item) -> Result<RemoteItem, Refusal> {
     match item {
         Item::Workspace(id) => Ok(RemoteItem::Workspace(id)),
@@ -34,14 +39,22 @@ fn icon(text: &str) -> Result<String, Refusal> {
         .ok_or_else(|| malformed(format!("`{text}` is not an icon; use one of {}", known.join(", "))))
 }
 
+fn command_of(set: &MachineSet) -> Option<String> {
+    set.command.as_deref().map(str::trim).filter(|command| !command.is_empty()).map(String::from)
+}
+
 fn edited(old: &Machine, set: &MachineSet) -> Result<Machine, Refusal> {
     let given =
         |value: &Option<String>, old: &str| value.as_deref().map_or_else(|| old.to_string(), |v| v.trim().into());
+    let destination = given(&set.destination, &old.destination);
     Ok(Machine {
         name: given(&set.new_name, &old.name),
         icon: set.icon.as_deref().map(icon).transpose()?.unwrap_or_else(|| old.icon.clone()),
-        destination: given(&set.destination, &old.destination),
         folder: given(&set.folder, &old.folder),
+        command: if set.command.is_some() { command_of(set) } else { old.command.clone() },
+        shown: set.shown.unwrap_or(old.shown),
+        unreached: old.unreached || destination != old.destination,
+        destination,
     })
 }
 
@@ -54,6 +67,9 @@ fn added(set: &MachineSet) -> Result<Machine, Refusal> {
         icon: set.icon.as_deref().map_or_else(|| Ok(ICONS[0].0.to_string()), icon)?,
         destination: set.destination.as_deref().unwrap_or_default().trim().into(),
         folder: set.folder.as_deref().map_or(DEFAULT_FOLDER, str::trim).into(),
+        command: command_of(set),
+        shown: set.shown.unwrap_or(true),
+        unreached: true,
     })
 }
 
@@ -83,6 +99,7 @@ fn checked(machine: &Machine, others: &[Machine]) -> Result<(), Refusal> {
     machines::valid_name(&machine.name).map_err(malformed)?;
     machines::valid_destination(&machine.destination).map_err(malformed)?;
     machines::valid_folder(&machine.folder).map_err(malformed)?;
+    machines::valid_command(machine.command.as_deref().unwrap_or_default()).map_err(malformed)?;
     let taken = machines::name_taken(others, &machine.name);
     match taken.or_else(|| machines::destination_taken(others, &machine.destination)) {
         Some(taken) => Err(conflict(taken)),
@@ -130,12 +147,21 @@ impl App {
 
     fn linkable(&self, name: &str) -> Result<usize, Refusal> {
         let at = self.machine_at(name).ok_or_else(|| unknown(name))?;
+        let machine = &self.config.machines[at];
         match machines::problems(&self.config.machines).swap_remove(at) {
             Some(problem) => {
-                let name = &self.config.machines[at].name;
+                let name = &machine.name;
                 Err(Refusal::new(Code::NotFound, format!("`{name}` has no link until it is fixed: {problem}")))
             }
+            None if !machine.shown => Err(not_shown(&machine.name)),
             None => Ok(at),
+        }
+    }
+
+    pub(in crate::app) fn no_link(&self, name: &str) -> Refusal {
+        match self.machine_at(name) {
+            Some(at) if !self.config.machines[at].shown => not_shown(&self.config.machines[at].name),
+            _ => unknown(name),
         }
     }
 

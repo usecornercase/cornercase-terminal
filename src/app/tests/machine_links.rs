@@ -241,6 +241,28 @@ mod links {
     }
 
     #[test]
+    fn a_machine_that_is_not_shown_gets_no_link() {
+        let hidden = Machine { shown: false, ..machine("vps", "vps.lan") };
+
+        let rig = Rig::new(vec![hidden, machine("pi", "pi.lan")], There::Missing);
+
+        assert_eq!((rig.links().len(), rig.seen("start vps.lan"), rig.seen("start pi.lan")), (1, 0, 1));
+    }
+
+    #[test]
+    fn turning_shown_off_ends_the_link_and_turning_it_on_starts_it_again() {
+        let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
+        assert_eq!(rig.links().len(), 1);
+
+        rig.edit(vec![Machine { shown: false, ..machine("vps", "vps.lan") }], Duration::from_secs(2));
+        assert_eq!(rig.links(), Vec::<u64>::new());
+        wait_until("its link ends", || rig.seen("end vps.lan") == 1);
+        rig.edit(vec![machine("vps", "vps.lan")], Duration::from_secs(4));
+
+        assert_eq!((rig.links().len(), rig.seen("start vps.lan")), (1, 2));
+    }
+
+    #[test]
     fn an_entry_with_a_problem_gets_no_link() {
         let rig = Rig::new(vec![machine("my vps", "vps.lan"), machine("pi", "")], There::Missing);
 

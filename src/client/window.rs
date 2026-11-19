@@ -167,7 +167,7 @@ impl Window<'_> {
     fn link(&mut self, link: Link) -> Result<()> {
         self.generation = self.next_id();
         let Link { reader, writer, guard } = link;
-        self.remember();
+        self.remember(self.lost.is_some());
         let hello = self.hello(&self.target, &self.openers)?;
         let out = spawn_writer(writer);
         let _ = out.send(ClientMessage::Hello(Box::new(hello)));

@@ -27,7 +27,6 @@ impl App {
     pub(super) fn name_view(overlay: &Overlay) -> Option<ui::Overlay> {
         match overlay {
             Overlay::NewGroup { input } => Some(Self::new_group_view(input)),
-            Overlay::NewMachine { input, error } => Some(Self::new_machine_view(input, error.as_deref())),
             _ => None,
         }
     }
@@ -294,7 +293,6 @@ impl App {
             }
             Overlay::Rename { target, input } => self.submit_rename(target, &input.text()),
             Overlay::NewGroup { input } => self.submit_new_group(input),
-            Overlay::NewMachine { input, .. } => self.submit_new_machine(input),
             Overlay::RenameBot { bot, input, .. } => self.submit_rename_bot(bot, input),
             Overlay::RemoveBot { bot } => self.submit_remove_bot(bot),
             Overlay::BotSecrets(secrets) => Some(self.submit_secrets(*secrets)),

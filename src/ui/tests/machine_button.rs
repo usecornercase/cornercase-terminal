@@ -28,7 +28,7 @@ mod on_its_own_row {
 
     #[test]
     fn renders_the_footer_with_the_machine() {
-        insta::assert_snapshot!(render(&on("this machine")).backend());
+        insta::assert_snapshot!(render(&on("this computer")).backend());
     }
 
     #[test]

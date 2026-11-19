@@ -3,6 +3,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::overlay::Overlay;
+use super::toast::Toast;
 use crate::editor::Editor;
 use crate::list::COMBO_ROWS;
 use crate::log;
@@ -114,6 +115,7 @@ impl App {
     fn machine_step(&mut self, step: Step) {
         match step {
             Step::None => {}
+            Step::Back if self.machine_form().is_some_and(|form| !form.back_to_settings) => self.overlay = None,
             Step::Back => {
                 let was = self.machine_form().and_then(|form| form.was.clone());
                 let row = self.machine_row_of(was.as_ref());
@@ -162,7 +164,12 @@ impl App {
         };
         log::info!("machines", "machine set", name = saved.name, new = added);
         let notice = format!("{} {}", saved.name, if added { "added" } else { "saved" });
-        let row = self.machine_row_of(Some(&saved));
-        self.back_to_machines(&row, Some(notice));
+        if form.back_to_settings {
+            let row = self.machine_row_of(Some(&saved));
+            self.back_to_machines(&row, Some(notice));
+        } else {
+            self.overlay = None;
+            self.messages.toast = Some(Toast::new(notice, ui::ToastIcon::Check));
+        }
     }
 }

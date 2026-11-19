@@ -8,7 +8,6 @@ use super::context_dialog::REFRESH;
 use super::flow_panel::{COPY, Shown};
 use super::flows_dialog::flows_view;
 use super::issues_dialog::{room, view};
-use super::machines::CONNECT_SUBMIT;
 use super::menus::MenuAction;
 use super::menus::Target;
 use super::merge_check::CHECK_AGAIN;
@@ -68,10 +67,6 @@ pub(super) enum Overlay {
     },
     NewGroup {
         input: Editor,
-    },
-    NewMachine {
-        input: Editor,
-        error: Option<String>,
     },
     GroupStyle {
         group: u64,
@@ -195,7 +190,6 @@ impl Overlay {
         match self {
             Self::Menu { .. } => "menu",
             Self::NewGroup { .. } => "new group",
-            Self::NewMachine { .. } => "new machine",
             Self::GroupStyle { .. } => "group style",
             Self::DeleteGroup { .. } => "delete group",
             Self::CloseProject { .. } => "close project",
@@ -346,7 +340,6 @@ impl Overlay {
         matches!(
             self,
             Overlay::NewGroup { .. }
-                | Overlay::NewMachine { .. }
                 | Overlay::NewWorkspace { .. }
                 | Overlay::Rename { .. }
                 | Overlay::RemoveWorkspace { .. }
@@ -367,7 +360,6 @@ impl Overlay {
     pub(super) fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } | Self::RenameBot { .. } => RENAME_SUBMIT,
-            Self::NewMachine { .. } => CONNECT_SUBMIT,
             Self::RemoveWorkspace { check, lock, .. } => removal_submit(*check, lock.is_some()),
             Self::MachineWorkspace(dialog) => dialog.submit_label(),
             Self::RemoveAccount { .. } | Self::RemoveBot { .. } => REMOVE_SUBMIT,
@@ -410,8 +402,7 @@ impl Overlay {
             Self::NewWorkspace { input, creating: false, .. }
             | Self::Rename { input, .. }
             | Self::NewGroup { input }
-            | Self::RenameBot { input, .. }
-            | Self::NewMachine { input, .. } => Some(input),
+            | Self::RenameBot { input, .. } => Some(input),
             Self::BotSecrets(secrets) => secrets.input(),
             Self::MachineWorkspace(dialog) => dialog.input(),
             _ => None,
@@ -419,8 +410,7 @@ impl Overlay {
     }
 
     pub(super) fn clear_error(&mut self) {
-        if let Self::NewWorkspace { error, .. } | Self::NewMachine { error, .. } | Self::RenameBot { error, .. } = self
-        {
+        if let Self::NewWorkspace { error, .. } | Self::RenameBot { error, .. } = self {
             *error = None;
         }
         if let Self::BotSecrets(secrets) = self {
@@ -435,7 +425,6 @@ impl Overlay {
                 | Self::Rename { .. }
                 | Self::NewGroup { .. }
                 | Self::RenameBot { .. }
-                | Self::NewMachine { .. }
         ) || matches!(self, Self::MachineWorkspace(dialog) if dialog.takes_input())
             || matches!(self, Self::BotSecrets(secrets) if secrets.takes_input())
     }
@@ -531,7 +520,7 @@ impl App {
         Some(match overlay {
             Overlay::Menu { at, actions } => self.menu_view(*at, actions),
             Overlay::GroupStyle { group } => self.group_style_view(*group)?,
-            Overlay::NewGroup { .. } | Overlay::NewMachine { .. } => Self::name_view(overlay)?,
+            Overlay::NewGroup { .. } => Self::name_view(overlay)?,
             Overlay::NewWorkspace { .. } => self.new_workspace_view(overlay)?,
             Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
             Overlay::ShareSettings(dialog) => ui::Overlay::ShareSettings(Box::new(ui::ShareSettings::of(dialog, area))),

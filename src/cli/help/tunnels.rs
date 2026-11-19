@@ -33,7 +33,7 @@ holder and exits with 1 when none came up, or when neither is attached (tunnels 
 windows opened with `cornercase remote`, or by programs that run `tunnel orders`).
 `tunnel close PORT` closes it but keeps it remembered, as closed. `tunnel forget PORT` removes it.
 A window remembers its tunnels per machine on its own computer, in tunnels.json beside
-machines.json: the next window to that machine brings back the ones that are not closed, on the
+session.json: the next window to that machine brings back the ones that are not closed, on the
 same port when it is free. Windows of one computer share a tunnel: one runs the ssh and the others
 take it over when it ends. With --json they print {\"tunnels\": [...], \"windows\": N, \"takers\": N}, as
 `cornercase tunnels --json` does.

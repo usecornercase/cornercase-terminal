@@ -46,11 +46,11 @@ pub(crate) use requests::{
     use_agent_folds, use_bot_about, use_bot_about_read, use_bot_asks, use_bot_follow, use_bot_routines,
     use_bot_secrets, use_bot_setup, use_bots, use_build_folders, use_close_agent_tabs, use_close_unlock,
     use_flow_close_when_merged, use_flow_free_builds, use_flow_issue_prompt, use_flow_run_view, use_focus_reveal,
-    use_fresh_branches, use_host_events, use_issue_names, use_issues, use_machine_start, use_machine_usage,
-    use_mode_default, use_notices, use_open_into, use_placed_start, use_plugin_run_view, use_popup_terminal,
-    use_queue_results, use_queue_routines, use_queue_undo, use_recap, use_search_settings, use_settings_search,
-    use_surface_patches, use_todo_panel, use_tunnel_hold, use_tunnel_orders, use_tunnel_reverse, use_view,
-    use_view_bot,
+    use_fresh_branches, use_host_events, use_issue_names, use_issues, use_machine_shown, use_machine_start,
+    use_machine_usage, use_mode_default, use_notices, use_open_into, use_placed_start, use_plugin_run_view,
+    use_popup_terminal, use_queue_results, use_queue_routines, use_queue_undo, use_recap, use_search_settings,
+    use_settings_search, use_surface_patches, use_todo_panel, use_tunnel_hold, use_tunnel_orders, use_tunnel_reverse,
+    use_view, use_view_bot,
 };
 pub(crate) use requests::{check_boot, use_boot, use_machine_boot};
 pub(crate) use requests::{hinted, input_ended, reader_gone_within, use_remote, used_remote, watched};

@@ -779,6 +779,7 @@ mod machines {
             icon: "☁".into(),
             destination: "miguel@vps.example.com".into(),
             folder: "~/code".into(),
+            ..Machine::default()
         }
     }
 
@@ -798,7 +799,13 @@ mod machines {
 
     #[test]
     fn round_trip_through_the_file_with_their_four_keys() {
-        let pi = Machine { name: "pi".into(), icon: "◫".into(), destination: "pi.lan".into(), folder: "/srv".into() };
+        let pi = Machine {
+            name: "pi".into(),
+            icon: "◫".into(),
+            destination: "pi.lan".into(),
+            folder: "/srv".into(),
+            ..Machine::default()
+        };
         let config = Config { machines: vec![vps(), pi], ..Config::default() };
         let (_dir, path, text) = saved(&config);
         let entry = "    {\n      \"name\": \"vps\",\n      \"icon\": \"☁\",\n      \"destination\": \

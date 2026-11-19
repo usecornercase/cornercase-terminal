@@ -258,7 +258,7 @@ impl App {
     fn match_machines(&mut self) {
         let listed = self.config.machines.clone();
         let before = std::mem::replace(&mut self.machines.synced, listed.clone());
-        let wanted: Vec<Machine> = machines::accepted(&listed).cloned().collect();
+        let wanted: Vec<Machine> = machines::linked(&listed).cloned().collect();
         self.machines.held.retain(|held| {
             let kept = wanted.iter().any(|machine| machine.destination == held.destination);
             if !kept {
@@ -445,7 +445,7 @@ impl App {
         let problems = machines::problems(&self.config.machines);
         let rows = self.config.machines.iter().zip(problems);
         rows.map(|(machine, problem)| {
-            let unheld = problem.is_some();
+            let unheld = problem.is_some() || !machine.shown;
             let held = self.machines.held.iter().find(|held| !unheld && held.destination == machine.destination);
             let error = held.and_then(|held| self.machines.reason(held));
             let retry_at = held.and_then(Held::retry_at);
@@ -459,8 +459,10 @@ impl App {
             return;
         }
         let infos = self.machine_infos();
+        let on = self.window_on();
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.take_machines(infos);
+            s.on = on;
             s.now = SystemTime::now();
         }
     }

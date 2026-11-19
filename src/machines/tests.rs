@@ -216,6 +216,7 @@ mod info {
             version: Some("0.12.225".into()),
             server_version: Some("0.12.225".into()),
             seen: Some("2026-10-29T10:00:00.000Z".into()),
+            shown: true,
             ..Info::default()
         };
         let expected = json!({
@@ -435,5 +436,110 @@ mod how_long_ago_a_machine_was_seen {
     #[case::not_a_stamp("xyzzy")]
     fn says_nothing_of_a_stamp_it_cannot_read(#[case] seen: &str) {
         assert_eq!(seen_ago(seen, UNIX_EPOCH + Duration::from_secs(SEEN_NOW)), None);
+    }
+}
+
+mod the_keys_of_one_list {
+    use super::*;
+
+    #[test]
+    fn an_entry_from_before_is_shown_has_no_command_and_writes_its_bytes() {
+        let entry = json!({"name": "vps", "icon": "☁", "destination": "vps.lan", "folder": "~/code"});
+
+        let read = serde_json::from_value::<Machine>(entry.clone()).expect("an entry");
+
+        assert_eq!((read.shown, read.command.clone(), read.unreached), (true, None, false));
+        assert_eq!(serde_json::to_value(&read).expect("json"), entry);
+    }
+
+    #[test]
+    fn shown_command_and_unreached_are_read_and_written() {
+        let entry = json!({"name": "vps", "icon": "☁", "destination": "vps.lan", "folder": "~",
+            "command": "~/bin/cc", "shown": false, "unreached": true});
+
+        let read = serde_json::from_value::<Machine>(entry.clone()).expect("an entry");
+
+        assert_eq!((read.shown, read.command.as_deref(), read.unreached), (false, Some("~/bin/cc"), true));
+        assert_eq!(serde_json::to_value(&read).expect("json"), entry);
+    }
+
+    #[test]
+    fn an_empty_command_reads_as_none() {
+        let read = serde_json::from_value::<Machine>(json!({"name": "vps", "command": "  "})).expect("an entry");
+
+        assert_eq!(read.command, None);
+    }
+
+    #[test]
+    fn a_command_with_a_control_character_is_a_problem() {
+        let odd = Machine { command: Some("cc\u{1b}[2J".into()), ..machine("vps", "vps.lan") };
+
+        assert_eq!(odd.problem(&[]).as_deref(), Some("a command cannot hold control or invisible characters"));
+    }
+
+    #[test]
+    fn only_the_shown_and_accepted_ones_are_linked() {
+        let list = [
+            machine("a", "a.lan"),
+            Machine { shown: false, ..machine("b", "b.lan") },
+            Machine { name: "bad name".into(), ..machine("c", "c.lan") },
+            machine("d", "d.lan"),
+        ];
+
+        let names: Vec<&str> = linked(&list).map(|machine| machine.name.as_str()).collect();
+
+        assert_eq!(names, ["a", "d"]);
+    }
+
+    #[test]
+    fn the_remote_of_an_entry_is_its_destination_and_command() {
+        let remote = Machine { command: Some("~/bin/cc".into()), ..machine("a", "me@a.lan") }.remote();
+
+        assert_eq!(
+            (remote.destination.as_str(), remote.command.as_deref(), remote.option),
+            ("me@a.lan", Some("~/bin/cc"), "--command")
+        );
+    }
+}
+
+mod a_row_that_is_not_shown {
+    use super::*;
+
+    fn unshown() -> Machine {
+        Machine { shown: false, ..machine("vps", "vps.lan") }
+    }
+
+    #[test]
+    fn is_unreachable_grey_and_says_so() {
+        let info = Info::of(&unshown(), None, None, None);
+
+        assert_eq!(
+            (info.state, info.mark(), info.note(SystemTime::now()), info.shown),
+            (State::Unreachable, '◌', "not shown".into(), false)
+        );
+    }
+
+    #[test]
+    fn gives_way_to_a_problem() {
+        let info = Info::of(&unshown(), None, Some("use letters".into()), None);
+
+        assert_eq!((info.mark(), info.note(SystemTime::now())), ('○', "use letters".into()));
+    }
+
+    #[test]
+    fn writes_shown_only_when_false_and_command_only_when_set() {
+        let shown = serde_json::to_value(Info::of(&machine("vps", "vps.lan"), None, None, None)).expect("json");
+        let hidden = Machine { command: Some("cc".into()), ..unshown() };
+        let hidden = serde_json::to_value(Info::of(&hidden, None, None, None)).expect("json");
+
+        assert!(shown.get("shown").is_none() && shown.get("command").is_none());
+        assert_eq!((&hidden["shown"], &hidden["command"]), (&json!(false), &json!("cc")));
+    }
+
+    #[test]
+    fn is_read_as_shown_from_a_server_that_does_not_say() {
+        let info: Info = serde_json::from_value(json!({"name": "vps"})).expect("a row");
+
+        assert!(info.shown);
     }
 }

@@ -4,23 +4,17 @@ use super::App;
 use super::menus::MenuAction;
 use super::overlay::Overlay;
 use super::tunnels::Origin;
-use crate::editor::Editor;
 use crate::log;
+use crate::machines::{self, form::Form};
 use crate::protocol::{MachineOrder, Machines, Tunnel, TunnelOrder, TunnelState};
-use crate::remote::machines::{NOT_A_DESTINATION, valid};
-use crate::ui::{self, remote::THIS_MACHINE};
-
-pub(super) const CONNECT_SUBMIT: &str = "connect";
-
-const HINT: &str = "anything ssh takes: a host of ~/.ssh/config or user@host";
+use crate::settings;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MachineItem {
     Here,
     To(u16),
     Add,
-    Forgetting,
-    Forget(u16),
+    Manage,
     Tunnel(u16),
     TunnelDo(u16, TunnelVerb),
 }
@@ -65,25 +59,38 @@ impl App {
         self.outbox.take_machine_orders()
     }
 
+    pub(super) fn window_on(&self) -> Option<String> {
+        self.opening.machines.shown.as_ref()?.here.clone()
+    }
+
+    fn menu_machines(&self) -> Vec<String> {
+        let Some(shown) = &self.opening.machines.shown else { return Vec::new() };
+        if shown.here.is_some() {
+            return shown.known.clone();
+        }
+        machines::accepted(&self.config.machines).map(|machine| machine.name.clone()).collect()
+    }
+
     pub(super) fn machine_label(&self) -> Option<String> {
         let shown = self.opening.machines.shown.as_ref()?;
-        let switches = shown.here.is_some() || !shown.known.is_empty();
-        switches.then(|| shown.here.clone().unwrap_or_else(|| THIS_MACHINE.into()))
+        match &shown.here {
+            Some(here) => Some(format!("on {here}")),
+            None => (!self.config.machines.is_empty()).then(|| machines::HERE.into()),
+        }
     }
 
     pub(super) fn open_machines(&mut self, at: Position) {
-        let Some(shown) = &self.opening.machines.shown else { return };
-        let mut menu = shown.known.clone();
-        if let Some(here) = shown.here.as_ref().filter(|here| !menu.contains(here)) {
+        let Some(here) = self.opening.machines.shown.as_ref().map(|shown| shown.here.clone()) else { return };
+        let mut menu = self.menu_machines();
+        if let Some(here) = here.as_ref().filter(|here| !menu.contains(here)) {
             menu.insert(0, here.clone());
         }
         let count = u16::try_from(menu.len()).unwrap_or(u16::MAX);
-        let forget = (!shown.known.is_empty()).then_some(MachineItem::Forgetting);
         self.opening.machines.menu = menu;
+        let own = here.is_none().then_some([MachineItem::Add, MachineItem::Manage]).into_iter().flatten();
         let actions = std::iter::once(MachineItem::Here)
             .chain((0..count).map(MachineItem::To))
-            .chain([MachineItem::Add])
-            .chain(forget)
+            .chain(own)
             .chain(self.shown_tunnels().iter().map(|tunnel| MachineItem::Tunnel(tunnel.port)))
             .map(MenuAction::Machine)
             .collect();
@@ -95,14 +102,13 @@ impl App {
         let here = self.opening.machines.shown.as_ref().and_then(|shown| shown.here.as_deref());
         let mark = |name: Option<&str>| if name == here { "✓" } else { " " };
         Some(match item {
-            MachineItem::Here => format!("{} {THIS_MACHINE}", mark(None)),
+            MachineItem::Here => format!("{} {}", mark(None), machines::HERE),
             MachineItem::To(index) => {
                 let name = self.menu_machine(index).unwrap_or_default();
                 format!("{} {name}", mark(Some(name)))
             }
             MachineItem::Add => "add machine…".into(),
-            MachineItem::Forgetting => "forget…".into(),
-            MachineItem::Forget(index) => format!("forget {}", self.menu_machine(index).unwrap_or_default()),
+            MachineItem::Manage => "manage machines…".into(),
             MachineItem::Tunnel(port) => self.tunnel_row(port),
             MachineItem::TunnelDo(_, verb) => verb.label().into(),
         })
@@ -161,26 +167,15 @@ impl App {
             }
             MachineItem::Add => {
                 self.screen.nav = None;
-                self.overlay = Some(Overlay::NewMachine { input: Editor::default(), error: None });
+                self.overlay = Some(Overlay::Machine(Box::new(Form::from_button())));
             }
-            MachineItem::Forgetting => self.open_forget_menu(at),
+            MachineItem::Manage => {
+                self.screen.nav = None;
+                self.open_settings_on(&settings::Row::Here);
+            }
             MachineItem::Tunnel(port) => self.open_tunnel_menu(port, at),
             MachineItem::TunnelDo(port, verb) => self.tunnel_action(port, verb),
-            MachineItem::Forget(index) => {
-                if let Some(destination) = self.menu_machine(index).map(str::to_string) {
-                    log::info!("ui", "forget machine", client = self.opening.machines.client);
-                    self.outbox.order_machine(self.opening.machines.client, MachineOrder::Forget(destination));
-                }
-            }
         }
-    }
-
-    fn open_forget_menu(&mut self, at: Position) {
-        let Some(shown) = &self.opening.machines.shown else { return };
-        self.opening.machines.menu.clone_from(&shown.known);
-        let count = u16::try_from(self.opening.machines.menu.len()).unwrap_or(u16::MAX);
-        let actions = (0..count).map(|index| MenuAction::Machine(MachineItem::Forget(index))).collect();
-        self.overlay = Some(Overlay::Menu { at, actions });
     }
 
     fn switch_machine(&mut self, to: Option<String>) {
@@ -190,29 +185,5 @@ impl App {
         }
         log::info!("ui", "switch machine", client = self.opening.machines.client, here = to.is_none());
         self.outbox.order_machine(self.opening.machines.client, MachineOrder::Switch(to));
-    }
-
-    pub(super) fn new_machine_view(input: &Editor, error: Option<&str>) -> ui::Overlay {
-        ui::Overlay::Form(ui::Form {
-            title: "Add machine",
-            label: "ssh destination",
-            value: input.clone(),
-            hint: HINT.into(),
-            toggle: None,
-            note: error.map(|error| ui::Note::Error(error.into())),
-            submit: CONNECT_SUBMIT,
-        })
-    }
-
-    pub(super) fn submit_new_machine(&mut self, input: Editor) -> Option<Overlay> {
-        let destination = input.text().trim().to_string();
-        if destination.is_empty() {
-            return Some(Overlay::NewMachine { input, error: None });
-        }
-        if !valid(&destination) {
-            return Some(Overlay::NewMachine { input, error: Some(NOT_A_DESTINATION.into()) });
-        }
-        self.switch_machine(Some(destination));
-        None
     }
 }

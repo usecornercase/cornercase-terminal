@@ -14,7 +14,7 @@ fn text_at(terminal: &Terminal<TestBackend>, r: Rect) -> String {
 }
 
 fn switch(step: Step<'static>) -> Shown<'static> {
-    Shown::Switch(Switch { from: THIS_MACHINE, to: "devbox", step, hovered: None })
+    Shown::Switch(Switch { from: crate::machines::HERE, to: "devbox", step, hovered: None })
 }
 
 mod notice {
@@ -74,7 +74,7 @@ mod switching {
 
     #[test]
     fn says_why_it_could_not_switch() {
-        let failed = switch(Step::Failed("`devbox` runs cornercase 0.11.9 and this machine 0.12.0"));
+        let failed = switch(Step::Failed("`devbox` runs cornercase 0.11.9 and this computer 0.12.0"));
 
         insta::assert_snapshot!(drawn(70, 12, &failed).backend());
     }
@@ -129,7 +129,7 @@ mod switching {
     fn the_hovered_button_is_lit() {
         let screen = Rect::new(0, 0, 70, 12);
         let shown = Shown::Switch(Switch {
-            from: THIS_MACHINE,
+            from: crate::machines::HERE,
             to: "devbox",
             step: Step::Connecting,
             hovered: Some(Button::Back),

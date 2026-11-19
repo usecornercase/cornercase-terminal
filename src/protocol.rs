@@ -65,7 +65,6 @@ pub(crate) struct Machines {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum MachineOrder {
     Switch(Option<String>),
-    Forget(String),
 }
 
 impl MachineOrder {
@@ -73,7 +72,6 @@ impl MachineOrder {
         match self {
             Self::Switch(None) => "switch here",
             Self::Switch(Some(_)) => "switch",
-            Self::Forget(_) => "forget",
         }
     }
 }

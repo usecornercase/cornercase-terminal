@@ -302,6 +302,26 @@ mod streams {
     }
 
     const FRESH_START: &str = r#"{"args": ["new-workspace", "b", "--worktree", "--fresh", "--json"]}"#;
+    const HIDDEN_ADD: &str = r#"{"args": ["machines", "add", "vps", "x.lan", "--hidden", "--json"]}"#;
+    const PLAIN_ADD: &str = r#"{"args": ["machines", "add", "vps", "x.lan", "--json"]}"#;
+
+    #[test]
+    fn a_hidden_machine_is_refused_up_front_by_a_server_without_machine_shown() {
+        let (answer, seen) = in_a_view_on(HIDDEN_ADD, lacking("machine-shown"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("machine-shown") || error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("\"set\"")), "{seen:?}");
+    }
+
+    #[test]
+    fn a_plain_machine_needs_no_feature() {
+        let (answer, _) = in_a_view_on(PLAIN_ADD, lacking("machine-shown"));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+    }
+
     const HEAD_START: &str = r#"{"args": ["new-workspace", "b", "--worktree", "--no-fresh", "--json"]}"#;
 
     #[test]

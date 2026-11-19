@@ -5,7 +5,6 @@ use serde_json::Value;
 use super::checks::Checking;
 use super::{Held, MachineEvent};
 use crate::app::App;
-use crate::app::control::machines::unknown;
 use crate::app::event::AppEvent;
 use crate::app::machine_links::RemoteItem;
 use crate::control::Command;
@@ -131,7 +130,7 @@ impl App {
     ) -> Result<Sent, Refusal> {
         self.follow_machines();
         let held = self.machines.held().iter().find(|held| held.name.eq_ignore_ascii_case(name));
-        let Some(held) = held else { return Err(unknown(name)) };
+        let Some(held) = held else { return Err(self.no_link(name)) };
         let boot = self.relayed_boot(held, &send)?;
         let picks = self.machines.picks;
         let target = Sent { machine: held.name.clone(), link: held.link.id(), boot: boot.clone(), picks };

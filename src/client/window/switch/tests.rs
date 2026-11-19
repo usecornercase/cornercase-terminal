@@ -5,16 +5,16 @@ use super::*;
 
 const SCREEN: Rect = Rect { x: 0, y: 0, width: 80, height: 24 };
 
-fn machine(destination: &str, command: Option<&str>) -> Machine {
-    Machine { destination: destination.into(), command: command.map(Into::into), unreached: false }
+fn machine(name: &str, destination: &str, command: Option<&str>) -> Machine {
+    Machine { command: command.map(Into::into), ..machines::machine(name, destination) }
 }
 
 fn on(destination: &str) -> Target {
-    Target::Remote(machine(destination, None).remote())
+    Target::Remote(machine("x", destination, None).remote())
 }
 
 fn known() -> Vec<Machine> {
-    vec![machine("devbox", Some("~/tools/cornercase")), machine("gpu-box", None)]
+    vec![machine("devbox", "me@devbox", Some("~/tools/cornercase")), machine("gpu-box", "gpu.lan", None)]
 }
 
 fn key(code: KeyCode, kind: KeyEventKind) -> Event {
@@ -31,44 +31,66 @@ mod choosing {
     use super::*;
 
     #[test]
-    fn this_machine_is_reached_without_asking() {
-        let (to, asks) = chosen(None, &on("devbox"), known()).expect("a switch");
+    fn this_computer_is_reached_without_asking() {
+        let (to, asks) = chosen(None, &on("me@devbox"), &known()).expect("a switch");
 
         assert!(matches!(to, Target::Local) && !asks);
     }
 
     #[test]
-    fn a_known_machine_is_reached_without_asking_and_with_its_command() {
-        let (to, asks) = chosen(Some("devbox".into()), &Target::Local, known()).expect("a switch");
+    fn a_machine_is_found_by_its_name_whatever_its_case_and_reached_with_its_command() {
+        let (to, asks) = chosen(Some("DevBox".into()), &Target::Local, &known()).expect("a switch");
 
         let Target::Remote(remote) = to else { panic!("a remote target") };
-        assert_eq!((remote.command.as_deref(), asks), (Some("~/tools/cornercase"), false));
+        assert_eq!((remote.destination.as_str(), remote.command.as_deref()), ("me@devbox", Some("~/tools/cornercase")));
+        assert!(!asks);
     }
 
     #[test]
-    fn a_machine_it_never_reached_asks_first() {
-        let (to, asks) = chosen(Some("new-box".into()), &Target::Local, known()).expect("a switch");
+    fn a_machine_a_program_added_asks_first() {
+        let list = vec![Machine { unreached: true, ..machine("newbox", "newbox", Some("~/bin/cc")) }];
 
-        assert_eq!((to.machine(), asks), (Some("new-box"), true));
-    }
-
-    #[test]
-    fn a_machine_a_program_remembered_asks_first_with_its_command() {
-        let known = vec![Machine::never_reached("newbox".into(), Some("~/bin/cc".into()))];
-
-        let (to, asks) = chosen(Some("newbox".into()), &Target::Local, known).expect("a switch");
+        let (to, asks) = chosen(Some("newbox".into()), &Target::Local, &list).expect("a switch");
 
         let Target::Remote(remote) = to else { panic!("a remote target") };
         assert_eq!((remote.command.as_deref(), asks), (Some("~/bin/cc"), true));
     }
 
+    #[test]
+    fn a_machine_with_a_problem_is_never_chosen() {
+        let list = vec![machine("my box", "newbox", None)];
+
+        assert!(chosen(Some("my box".into()), &Target::Local, &list).is_none());
+    }
+
     #[rstest]
-    #[case::this_machine_from_this_machine(None, Target::Local)]
-    #[case::the_machine_it_is_on(Some("devbox"), on("devbox"))]
-    #[case::an_option(Some("-oProxyCommand=sh"), Target::Local)]
-    #[case::two_words(Some("devbox ls"), Target::Local)]
+    #[case::this_computer_from_this_computer(None, Target::Local)]
+    #[case::the_machine_it_is_on(Some("devbox"), on("me@devbox"))]
+    #[case::a_name_that_is_not_listed(Some("nobox"), Target::Local)]
+    #[case::a_destination_instead_of_a_name(Some("me@devbox"), Target::Local)]
     fn nothing_happens(#[case] to: Option<&str>, #[case] here: Target) {
-        assert!(chosen(to.map(Into::into), &here, known()).is_none());
+        assert!(chosen(to.map(Into::into), &here, &known()).is_none());
+    }
+}
+
+mod listing {
+    use super::*;
+
+    #[test]
+    fn names_go_in_the_order_of_the_list_and_problems_are_left_out() {
+        let mut list = known();
+        list.push(machine("bad name", "bad.lan", None));
+
+        let sent = machines_of(&list, &Target::Local);
+
+        assert_eq!((sent.here, sent.known), (None, vec!["devbox".to_string(), "gpu-box".to_string()]));
+    }
+
+    #[rstest]
+    #[case::a_listed_one("gpu.lan", "gpu-box")]
+    #[case::an_unlisted_one("far.lan", "far.lan")]
+    fn the_machine_it_is_on_is_named_by_its_entry_else_by_its_destination(#[case] at: &str, #[case] named: &str) {
+        assert_eq!(machines_of(&known(), &on(at)).here.as_deref(), Some(named));
     }
 }
 
@@ -149,8 +171,8 @@ mod naming {
     use super::*;
 
     #[test]
-    fn the_local_machine_is_this_machine() {
-        assert_eq!([place(&Target::Local), place(&on("devbox"))], [THIS_MACHINE, "devbox"]);
+    fn the_local_computer_is_this_computer() {
+        assert_eq!([place(&Target::Local), place(&on("devbox"))], [machines::HERE, "devbox"]);
     }
 }
 

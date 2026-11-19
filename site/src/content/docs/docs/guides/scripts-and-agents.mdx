@@ -1588,7 +1588,7 @@ cornercase machines update mini --json
 
 ```json
 {"command": "machines", "args": {"action": "list"}}
-{"command": "machines", "args": {"action": "set", "entry": {"name": "vps", "new_name": null, "icon": "server", "destination": "ana@vps.example.com", "folder": null, "create": true}}}
+{"command": "machines", "args": {"action": "set", "entry": {"name": "vps", "new_name": null, "icon": "server", "destination": "ana@vps.example.com", "folder": null, "create": true, "command": null, "shown": null}}}
 {"command": "machines", "args": {"action": "remove", "entry": "vps"}}
 {"command": "machines", "args": {"action": "update", "entry": "mini"}}
 {"command": "machines", "args": {"action": "retry", "entry": null}}
@@ -1602,14 +1602,14 @@ cornercase machines update mini --json
 ```
 
 - `state` is `connecting`, `linked`, `unreachable` or `older`. `version` is the cornercase installed there (for `older`, the old one) and `server_version` the one its server runs, which differ until that server restarts.
-- `seen` is when the link was last up, as a UTC time, or `null`; `error` is why it is down (what `ssh` said, cornercase not found there, this computer, the same server as another machine, or what a failed update printed last); `updating` is `true` while an `update` runs; `problem` is what is wrong with the entry in `config.json`, which then gets no link.
+- `seen` is when the link was last up, as a UTC time, or `null`; `error` is why it is down (what `ssh` said, cornercase not found there, this computer, the same server as another machine, or what a failed update printed last); `updating` is `true` while an `update` runs; `problem` is what is wrong with the entry in `config.json`, which then gets no link. A machine that is not shown has `state` `unreachable` and `"shown": false` (written only then, as `command` is only when set), and no link: `retry`, `update` and `--machine` for it are `not-found`, saying so. A server that knows the feature `machine-shown` takes `command` and `shown`; `cornercase machines add --command C --hidden` and `edit --command C` check it first.
 - `retry_at` is when a link that fell tries next, as a UTC time in the form of `seen`, for a card that counts down like the window's `reconnecting in 4 s`. It is one moment per failed try: it stays put until that try fails, and a time that has passed means the try is under way. `retry`, this computer waking up or changing network, and an edit of a machine that is down try at once and move it to that moment. It is left out while the link is `linked` or `connecting`, and while it waits on a person: `state` says why when it is `older`, and `error` when cornercase is not found there, or it is this computer or the same server as another machine. The time is on the clock of the server that answers, as `seen` is. An older server never sends it: check the `machine-retry-at` [feature](#ask-the-server-first) before reading a machine with no `retry_at` as one that waits on a person.
-- `set` takes the machine's `name` and what changes: `new_name`, `icon` (the glyph or its name), `destination` and `folder`; a new machine needs a `destination`, and gets `☁` and `~/code` unless you give them. `create` set to `true` only adds, and a name already listed is a `conflict`; `false` only edits, and an unknown name is `not-found`; `null` does either. A value the rules refuse is `malformed`, and a name or destination another machine has is a `conflict`, with the same texts as the form.
+- `set` takes the machine's `name` and what changes: `new_name`, `icon` (the glyph or its name), `destination`, `folder`, `command` (what runs cornercase there for a window opened there; `""` clears it) and `shown` (`false` keeps it on the list without a link); a new machine needs a `destination`, and gets `☁` and `~/code` unless you give them. `create` set to `true` only adds, and a name already listed is a `conflict`; `false` only edits, and an unknown name is `not-found`; `null` does either. A value the rules refuse is `malformed`, and a name or destination another machine has is a `conflict`, with the same texts as the form.
 - `remove` takes the name; the machine's server keeps running there. `retry` takes a name, or `null` for every machine, and tries those links now. `retry` and `update` of a machine whose entry has a problem are `not-found`, with the problem.
 - `update` takes the name of an `older` machine and answers once `cornercase update` ended there: the list, or `failed` with what it printed last. It is a `conflict` while one runs for that machine, and for a machine that isn't `older`.
 - Unknown names are `not-found`. [`cornercase contract`](#contract-and-compatibility) lists the operation `machines` and the feature `machines`, and the `app` stream carries the same rows as [`machines`](#follow-the-rest-of-the-app).
 
-#### The machines a window reached
+#### The machines a window offers
 
 ```sh
 cornercase remote --known --json
@@ -1617,7 +1617,7 @@ cornercase remote --remember me@10.0.0.5 --command '~/bin/cornercase'
 cornercase remote --forget devbox
 ```
 
-`machines` is your server's list. The machines a window on this computer reached with [`cornercase remote`](../remote/#switch-machines-from-the-window), or a program added, which its machine button offers, are another list: `remote --known` prints them, `{"machines": [{"destination": "devbox", "command": null}]}` with `--json`, in the menu's order, each with its `--command`, and `"unreached": true` until a window has connected to a machine a program added (left out otherwise). `--remember` adds a machine or replaces its `--command` (none clears it) and `--forget` takes it off, so a machine your program reached shows in the window's menu too; the window asks before its first connection there. They read and write this computer's list with no server and no `ssh`, so `CORNERCASE_REMOTE` changes nothing for them and `--remote` is refused. A destination that isn't one word, or starts with `-`, exits with 2, and forgetting a machine that isn't listed writes nothing and exits with 1. A window that is open sees the change at its next connection or forget, or when it is opened again, and a window that is on that machine writes it back, with the `--command` it reached it with, when it reconnects. Pass a machine on as `cornercase remote DESTINATION --command COMMAND`, or `--remote DESTINATION --remote-command COMMAND` for a command, leaving out the command flag when `command` is `null`.
+`remote --known` reads your computer's list, the one the `machines` command shows when it addresses this computer's server (with `--remote vps` it shows vps's own list instead), and the machine button of a window offers the same machines ([`cornercase remote`](../remote/#switch-machines-from-the-window)): `remote --known` prints them, `{"machines": [{"name": "devbox", "destination": "devbox", "command": null}]}` with `--json`, in the order of the file, each with its `--command`, and `"unreached": true` until a window has connected to a machine a program added (left out otherwise). `--remember` adds a machine, not shown, or replaces its `--command` (none clears it) and `--forget` takes it off. They read and write this computer's list with no server and no `ssh`, so `CORNERCASE_REMOTE` changes nothing for them and `--remote` is refused. A destination that isn't one word, or starts with `-`, exits with 2, and forgetting a machine that isn't listed writes nothing and exits with 1. A window that is open sees the change at its next connection, or when it is opened again; a window that reconnects never writes its command over the list. Pass a machine on as `cornercase remote DESTINATION --command COMMAND`, or `--remote DESTINATION --remote-command COMMAND` for a command, leaving out the command flag when `command` is `null`.
 
 #### Machines' workspaces
 
@@ -1824,7 +1824,7 @@ Window processes run on the machine that shows the window, so `--remote` is refu
 With `--json`, status 5 also prints one line of JSON on standard output, and the message goes to standard error as `error: …`:
 
 ```json
-{"error":{"code":"older","message":"`vps` runs cornercase 0.13.19 and this machine 0.13.22. Update it from here with `cornercase --remote vps update`","destination":"vps","there":"0.13.19","here":"0.13.22","update":["cornercase","--remote","vps","update"]}}
+{"error":{"code":"older","message":"`vps` runs cornercase 0.13.19 and this computer 0.13.22. Update it from here with `cornercase --remote vps update`","destination":"vps","there":"0.13.19","here":"0.13.22","update":["cornercase","--remote","vps","update"]}}
 ```
 
 `destination` is what `--remote` was given, `there` the other machine's release (`null` when its cornercase is too old to say), `here` yours, and `update` the command that updates that machine from here, as words to run without a shell (with `--remote-command` when you gave one; replace `cornercase` with your own path if you run another). `view`, `surface` and `requests --follow` take no `--json` and print nothing on standard output; `contract --json` gives the facts.
@@ -1837,7 +1837,7 @@ Some messages you may meet:
 
 | Message | Meaning |
 | --- | --- |
-| ``` `<host>` runs cornercase <version> and this machine <version>. Update it from here with … ``` | `--remote` reached an older cornercase (status 5). Run the command it gives. |
+| ``` `<host>` runs cornercase <version> and this computer <version>. Update it from here with … ``` | `--remote` reached an older cornercase (status 5). Run the command it gives. |
 | `no cornercase server is running` | Start cornercase first, or [`cornercase start-server`](#start-without-a-window) without a window; the other commands never start one. |
 | `this request is for the cornercase server started as …` | A command given [`--boot`](#arrange) named another run of the server, which restarted since (status 4). Nothing was done; read `status` again, since its ids may name other items now. |
 | `… would ignore --boot and act on whatever has that id now …` | The server comes from a release without `boot`, so nothing was done. Restart it so it runs the version you installed; the message says how. |

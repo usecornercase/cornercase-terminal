@@ -2,7 +2,6 @@ use std::time::{Instant, SystemTime};
 
 use serde_json::Value;
 
-use super::machines::unknown;
 use super::{Handled, Pending, Reply, Stage, json};
 use crate::agents::stats::View;
 use crate::agents::usage::Key;
@@ -50,7 +49,7 @@ impl App {
 
     pub(super) fn machine_link(&self, name: &str) -> Result<u64, Refusal> {
         let held = self.machines_in_order().find(|held| held.name.eq_ignore_ascii_case(name));
-        held.map(|held| held.link.id()).ok_or_else(|| unknown(name))
+        held.map(|held| held.link.id()).ok_or_else(|| self.no_link(name))
     }
 
     pub(super) fn ask_one_machine<T: Asked>(&mut self, client: u64, name: &str, of: Of, now: Instant) -> Handled {

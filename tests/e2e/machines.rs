@@ -356,6 +356,19 @@ fn claude_working_there(machine: &Session, workspace: &str) -> PathBuf {
 }
 
 #[test]
+fn a_machine_added_with_the_command_line_shows_the_machine_button() {
+    let here = Session::new();
+    let mut app = Harness::open(Arc::clone(&here), ROWS, COLS);
+    app.wait_for("the window is up", |s| s.contains("Worktrees"));
+    assert!(!app.text().contains("this computer ▴"));
+
+    let added = here.cli(&["machines", "add", "box", "box.lan", "--hidden"]);
+    assert!(added.status.success(), "{added:?}");
+
+    app.wait_for("the machine button shows without reconnecting", |s| s.contains("this computer ▴"));
+}
+
+#[test]
 fn a_machine_s_agent_shows_under_the_local_project_and_tells_when_it_needs_you() {
     let machine = Session::new();
     assert!(machine.cold(&["start-server"]).status.success(), "the server there starts");
