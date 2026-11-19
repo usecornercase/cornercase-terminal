@@ -76,6 +76,8 @@ mod framing {
 
 mod compatibility {
     use super::*;
+    use serde::de::IgnoredAny;
+
     use crate::test_util::fixture;
 
     #[test]
@@ -187,19 +189,18 @@ mod compatibility {
     }
 
     #[derive(Debug, Deserialize)]
-    #[expect(dead_code, reason = "decoded only, the way a client from before Link reads it")]
     enum BeforeLink {
-        Rejected(String),
-        Frame(Vec<u8>),
+        Rejected(IgnoredAny),
+        Frame(IgnoredAny),
         Detached,
         Shutdown,
-        Restart(PathBuf),
-        Response(String),
-        Sound(Cue),
-        Open(Open),
-        Browse(Browse),
-        Machine(MachineOrder),
-        Tunnel(TunnelOrder),
+        Restart(IgnoredAny),
+        Response(IgnoredAny),
+        Sound(IgnoredAny),
+        Open(IgnoredAny),
+        Browse(IgnoredAny),
+        Machine(IgnoredAny),
+        Tunnel(IgnoredAny),
     }
 
     #[derive(Debug, Deserialize)]

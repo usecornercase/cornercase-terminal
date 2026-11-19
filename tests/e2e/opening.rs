@@ -72,7 +72,7 @@ fn bot_answered(session: &Arc<Session>, ui: &mut Harness) {
 
 #[test]
 fn a_link_in_a_bots_answer_opens_in_the_browser_after_asking() {
-    let session = super::bots::with_agent_saying("", &format!("read {DOCS} first"));
+    let session = bots::with_agent_saying("", &format!("read {DOCS} first"));
     let mut ui = local_window(&session, 0);
     bot_answered(&session, &mut ui);
 
@@ -85,7 +85,7 @@ fn a_link_in_a_bots_answer_opens_in_the_browser_after_asking() {
 
 #[test]
 fn a_window_over_ssh_copies_a_bots_link() {
-    let session = super::bots::with_agent_saying("", &format!("read {DOCS} first"));
+    let session = bots::with_agent_saying("", &format!("read {DOCS} first"));
     let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);
     ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
     bot_answered(&session, &mut ui);

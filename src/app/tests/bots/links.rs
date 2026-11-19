@@ -3,6 +3,7 @@ use crate::host::clipboard;
 use crate::host::open::{Link, Opener, link_host};
 
 const DOCS: &str = "https://example.com/docs";
+const NOTHING: [(u64, Link); 0] = [];
 
 fn answered(text: &str) -> Chat {
     let mut c = chat(ANSWER);
@@ -21,18 +22,10 @@ fn answered(text: &str) -> Chat {
 }
 
 fn link_at(app: &mut App) -> (Position, String) {
-    render(app, AREA);
-    let areas = app.chat_geometry(AREA);
-    let shown = app.shown_chat(AREA).expect("a chat");
-    for y in areas.lines.y..areas.lines.bottom() {
-        for x in areas.lines.x..areas.lines.right() {
-            let pos = Position::new(x, y);
-            if let Some(ChatHit::Link(url)) = ui::chat_hit(&areas, &shown.view, pos) {
-                return (pos, url);
-            }
-        }
+    match chat_spot(app, |hit| matches!(hit, ChatHit::Link(_))) {
+        Some((pos, ChatHit::Link(url))) => (pos, url),
+        _ => panic!("no link in the chat"),
     }
-    panic!("no link in the chat");
 }
 
 fn click_link(c: &mut Chat, openers: &[Opener]) {
@@ -79,7 +72,7 @@ fn a_click_on_an_address_asks_first_in_a_window_that_can_browse() {
     let mut c = answered(&format!("read {DOCS} first"));
     click_link(&mut c, &[Opener::Default]);
     assert_eq!(dialog(&mut c).as_deref(), Some(DOCS));
-    assert!(sent(&mut c).is_empty());
+    assert_eq!(sent(&mut c), NOTHING);
     insta::assert_snapshot!(drawn_dialog(&mut c.app));
 }
 
@@ -108,7 +101,7 @@ fn copy_copies_the_address_and_opens_nothing() {
     c.app.take_host_writes();
     press_button(&mut c, "copy");
     assert_eq!(c.app.take_host_writes(), [clipboard::osc52(DOCS)]);
-    assert!(sent(&mut c).is_empty());
+    assert_eq!(sent(&mut c), NOTHING);
     assert!(c.app.overlay.is_none());
 }
 
@@ -125,8 +118,8 @@ fn cancelling_opens_and_copies_nothing(#[case] escape: bool) {
         press_button(&mut c, "cancel");
     }
     assert!(c.app.overlay.is_none());
-    assert!(sent(&mut c).is_empty());
-    assert!(c.app.take_host_writes().is_empty());
+    assert_eq!(sent(&mut c), NOTHING);
+    assert_eq!(c.app.take_host_writes(), Vec::<Vec<u8>>::new());
 }
 
 #[test]
@@ -137,7 +130,7 @@ fn a_window_that_cannot_browse_copies_at_once() {
     assert!(c.app.overlay.is_none());
     assert_eq!(c.app.take_host_writes(), [clipboard::osc52(DOCS)]);
     assert_eq!(toast(&c.app), Some(COPIED));
-    assert!(sent(&mut c).is_empty());
+    assert_eq!(sent(&mut c), NOTHING);
 }
 
 #[test]
@@ -147,7 +140,7 @@ fn a_dialog_submitted_from_a_window_that_cannot_browse_copies() {
     c.app.set_window(8, &[]);
     c.app.take_host_writes();
     send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
-    assert!(sent(&mut c).is_empty());
+    assert_eq!(sent(&mut c), NOTHING);
     assert_eq!(c.app.take_host_writes(), [clipboard::osc52(DOCS)]);
 }
 
@@ -159,7 +152,7 @@ fn an_address_with_a_user_name_is_copied_and_the_toast_says_why() {
     assert!(c.app.overlay.is_none());
     assert_eq!(c.app.take_host_writes(), [clipboard::osc52("https://good.com@evil.example/")]);
     assert_eq!(toast(&c.app), Some("copied the address: it carries a user name, so it is not opened"));
-    assert!(sent(&mut c).is_empty());
+    assert_eq!(sent(&mut c), NOTHING);
 }
 
 #[test]

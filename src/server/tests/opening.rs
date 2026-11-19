@@ -87,9 +87,9 @@ fn only_a_window_that_can_open_is_told_to_open_a_port_in_the_browser() {
 #[test]
 fn a_link_goes_only_to_its_window_when_that_window_can_browse_and_is_no_browser() {
     let mut attached = Attached::new();
-    let browses = || Hello { openers: vec![Opener::Default], ..hello(HostTheme::default()) };
-    let opener = attached.join_hello(browses());
-    let browser = attached.join_hello(Hello { terminal: Some(protocol::BROWSER.into()), ..browses() });
+    let local = || Hello { openers: vec![Opener::Default], ..hello(HostTheme::default()) };
+    let opener = attached.join_hello(local());
+    let browser = attached.join_hello(Hello { terminal: Some(protocol::BROWSER.into()), ..local() });
     let plain = attached.join_hello(hello(HostTheme::default()));
     let link = Link { url: "https://example.com/docs".into() };
     for id in [opener.id, browser.id, plain.id] {
