@@ -202,10 +202,13 @@ pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ra
     let limits = limits_of(call, ask, &spec);
     let Watch { progress, mut steps, running } = watch;
     let (read, ended) = (spec.read, spec.ended);
+    let running = running.unwrap_or_default();
+    let stopped = running.clone();
     let mut ran = Ran::default();
-    probe::run_heard(limits, command, "", &running.unwrap_or_default(), move |heard| {
+    probe::run_heard(limits, command, "", &running, move |heard| {
         let outcome = match heard {
             Heard::Line(line) => read(line, &mut ran),
+            Heard::End if stopped.stopped() => None,
             Heard::End => ended.and_then(|ended| ended(&mut ran)),
         };
         for action in ran.fresh.drain(..) {

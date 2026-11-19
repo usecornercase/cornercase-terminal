@@ -134,6 +134,10 @@ impl Running {
         true
     }
 
+    pub(crate) fn stopped(&self) -> bool {
+        self.0.lock().stopped
+    }
+
     pub(crate) fn holds(&self, pid: i32) -> bool {
         let contained = self.0.lock().lineage.is_some();
         contained && self.owns(pid)

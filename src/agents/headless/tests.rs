@@ -439,6 +439,33 @@ mod bots {
     }
 
     #[test]
+    fn a_stopped_opencode_turn_is_not_an_answer_even_with_text_already_said() {
+        let dir = TempDir::new();
+        let folder = TempDir::new();
+        let out = concat!(
+            r#"{"type":"tool_use","sessionID":"s","part":{"tool":"read","state":{"input":{"filePath":"a"}}}}"#,
+            "\n",
+            r#"{"type":"text","sessionID":"s","part":{"type":"text","text":"Half a thought"}}"#,
+            "\n"
+        );
+        let program = faked(&dir, "opencode", out);
+        std::fs::write(program.with_extension("hold"), "").expect("hold");
+        let (running, seen) = (Running::default(), Arc::new(AtomicUsize::new(0)));
+        let (command, ask) = (program.display().to_string(), bot_ask(folder.path(), Access::Full, None));
+        let handle = {
+            let sink = Arc::clone(&seen);
+            let steps: Box<dyn FnMut(Action) + Send> = Box::new(move |_| _ = sink.fetch_add(1, Ordering::Relaxed));
+            let watch = Watch { running: Some(running.clone()), steps: Some(steps), ..Watch::default() };
+            std::thread::spawn(move || run_watched(&called(Known::Opencode, &command, TIMEOUT), &ask, watch))
+        };
+        crate::test_util::wait_until("opencode spoke", || seen.load(Ordering::Relaxed) > 0);
+        assert!(running.stop());
+        let error = handle.join().expect("the run").expect_err("stopped");
+        assert_eq!(error.to_string(), "opencode exited without answering");
+        std::fs::remove_file(program.with_extension("hold")).expect("release");
+    }
+
+    #[test]
     fn stopping_before_the_process_exists_still_ends_it() {
         let dir = TempDir::new();
         let folder = TempDir::new();
