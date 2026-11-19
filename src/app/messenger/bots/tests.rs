@@ -12,6 +12,8 @@ use crate::bots::sample;
 #[case::nobody("nobody hi", None)]
 #[case::a_name_then_a_line("My\nbot hi", Some(("my", "bot hi")))]
 #[case::a_line_after_an_unknown_name("nobody\nhi", None)]
+#[case::a_second_line_after_the_name_and_text("prs hello\nmore", Some(("prs", "hello\nmore")))]
+#[case::a_name_with_spaces_and_a_second_line("my bot hi\nthere", Some(("my-bot", "hi\nthere")))]
 fn a_bot_is_found_by_the_longest_name_that_leads(#[case] args: &str, #[case] wanted: Option<(&str, &str)>) {
     let bots = [sample("prs", "PRs"), sample("reviews", "My reviews"), sample("my", "My"), sample("my-bot", "My bot")];
     let bots: Vec<&Bot> = bots.iter().collect();

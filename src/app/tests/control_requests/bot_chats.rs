@@ -182,6 +182,14 @@ fn bot_finds_the_bot_by_name_or_lists_them_or_asks_for_the_text() {
 }
 
 #[test]
+fn bot_on_telegram_takes_a_message_of_several_lines() {
+    let mut b = Bots::new(Via::Telegram, ChatApps::Away);
+    b.phone.says(&mut b.app, "/bot prs hello\nand a second line");
+    b.settle();
+    assert!(b.told("hello\nand a second line"));
+}
+
+#[test]
 fn a_reply_to_a_removed_bot_or_a_message_too_long_is_answered_with_why() {
     let mut b = Bots::new(Via::Telegram, ChatApps::Always);
     b.run_routine();

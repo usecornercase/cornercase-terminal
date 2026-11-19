@@ -59,11 +59,9 @@ impl Asks {
 
 pub(super) fn named<'a, 'b>(args: &'a str, bots: &'b [&'b Bot]) -> Option<(&'b Bot, &'a str)> {
     let args = args.trim();
-    if let Some((name, text)) = args.split_once('\n') {
-        return crate::bots::find(bots, name).map(|bot| (bot, text.trim()));
-    }
-    let spaces = args.char_indices().rev().filter(|(_, c)| c.is_whitespace()).map(|(at, _)| at);
-    std::iter::once(args.len())
+    let first = args.find('\n').unwrap_or(args.len());
+    let spaces = args[..first].char_indices().rev().filter(|(_, c)| c.is_whitespace()).map(|(at, _)| at);
+    std::iter::once(first)
         .chain(spaces)
         .find_map(|end| crate::bots::find(bots, &args[..end]).map(|bot| (bot, args[end..].trim())))
 }
