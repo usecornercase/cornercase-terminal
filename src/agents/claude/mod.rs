@@ -81,6 +81,7 @@ pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = So
     recap: true,
     stderr: false,
     prepare: None,
+    ended: None,
 });
 const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
     accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],

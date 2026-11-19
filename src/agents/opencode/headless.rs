@@ -9,18 +9,38 @@ use crate::agents::headless::{
 use crate::error::{Error, Result};
 
 const TOOL_DETAILS: [&str; 6] = ["filePath", "path", "pattern", "url", "query", "description"];
+const READ_ONLY: &str = concat!(
+    r#"{"*":"deny","read":"allow","glob":"allow","grep":"allow","list":"allow","bash":"deny","edit":"deny","#,
+    r#""task":"deny","skill":"deny","webfetch":"deny","websearch":"deny","todowrite":"deny","#,
+    r#""external_directory":"deny","doom_loop":"allow"}"#
+);
+const PERMISSION_ENV: &str = "OPENCODE_PERMISSION";
+const CONFIG_ENV: &str = "OPENCODE_CONFIG_CONTENT";
+const RECAP_AGENT: &str = "cornercase-recap";
+
+fn recap_config() -> String {
+    format!(
+        r#"{{"agent":{{"{RECAP_AGENT}":{{"mode":"primary","description":"Reads cornercase's dossier and changes nothing","permission":{READ_ONLY}}}}}}}"#
+    )
+}
 
 pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
     let mut args = owned(&["run", "--format", "json"]);
-    if ask.tools == Tools::Bot(Access::Full) {
-        args.push(String::from("--auto"));
+    match ask.tools {
+        Tools::Bot(Access::Full) => args.push(String::from("--auto")),
+        Tools::Recap => args.extend(owned(&["--agent", RECAP_AGENT])),
+        Tools::Bot(Access::Cornercase) => {}
     }
     if let Some(session) = &ask.conversation {
         args.extend(["--session".to_string(), session.clone()]);
     }
     let mut args = agents::with_model("opencode", args, ask.model.as_deref());
     args.extend(["--".to_string(), ask.prompt.clone()]);
-    started(program, args)
+    let mut command = started(program, args);
+    if ask.tools == Tools::Recap {
+        command.env(PERMISSION_ENV, READ_ONLY).env(CONFIG_ENV, recap_config());
+    }
+    command
 }
 
 fn tool_action(part: &Value) -> Action {
@@ -48,6 +68,14 @@ fn failed(entry: &Value) -> Error {
     Error::Probe(message.unwrap_or("opencode failed").to_string())
 }
 
+fn said(ran: &mut Ran, part: &Value) {
+    if part["synthetic"] != true {
+        ran.text.push_str(part["text"].as_str().unwrap_or_default());
+    } else if part["metadata"]["compaction_continue"] == true {
+        ran.text.clear();
+    }
+}
+
 pub(in crate::agents) fn read(line: &str, ran: &mut Ran) -> Option<Result<()>> {
     let entry: Value = serde_json::from_str(line).ok()?;
     if ran.session.is_none() {
@@ -55,16 +83,17 @@ pub(in crate::agents) fn read(line: &str, ran: &mut Ran) -> Option<Result<()>> {
     }
     let part = &entry["part"];
     match entry["type"].as_str()? {
-        "text" => ran.text.push_str(part["text"].as_str().unwrap_or_default()),
+        "text" => said(ran, part),
         "tool_use" => heard(ran, tool_action(part)),
-        "step_finish" => {
-            add_tokens(ran, &part["tokens"]);
-            return (part["reason"] != "tool-calls").then(|| answered(ran, super::TITLE));
-        }
+        "step_finish" => add_tokens(ran, &part["tokens"]),
         "error" => return Some(Err(failed(&entry))),
         _ => {}
     }
     None
+}
+
+pub(in crate::agents) fn ended(ran: &mut Ran) -> Option<Result<()>> {
+    (!ran.text.trim().is_empty()).then(|| answered(ran, super::TITLE))
 }
 
 #[cfg(test)]

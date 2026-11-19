@@ -10,7 +10,11 @@ pub(crate) struct RecapArgs {
     pub(crate) fresh: bool,
     #[arg(long, help = "Print the dossier the agent would read, without running an agent")]
     pub(crate) dossier: bool,
-    #[arg(long, value_name = "AGENT", help = "The agent that writes it (claude or codex), for this run only")]
+    #[arg(
+        long,
+        value_name = "AGENT",
+        help = "The agent that writes it (claude, codex, copilot or opencode), for this run only"
+    )]
     pub(crate) agent: Option<String>,
     #[arg(long, value_name = "NAME", help = "The agent's account, for this run only")]
     pub(crate) account: Option<String>,

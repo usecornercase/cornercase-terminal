@@ -175,15 +175,22 @@ fn an_agent_that_does_not_ask_for_it_keeps_its_standard_error_to_itself() {
     assert_eq!(error.to_string(), "claude exited without answering");
 }
 
-#[test]
-fn claude_argv_is_exactly_what_recap_always_ran() {
+fn recap_argv(agent: Known, out: &str, vars: &str) -> (String, String, TempDir) {
     let dir = TempDir::new();
     let folder = TempDir::new();
-    let program = faked(&dir, "claude", fixture!("claude/2.1.318/recap-ok.jsonl"));
-    ran(Known::Claude, &program, folder.path()).expect("a recap");
+    let program = faked(&dir, agent.name(), out);
+    std::fs::write(program.with_extension("vars"), vars).expect("names");
+    ran(agent, &program, folder.path()).expect("a recap");
     let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
+    let env = std::fs::read_to_string(program.with_extension("env")).unwrap_or_default();
+    (argv.trim_end().replace(&format!("{:?}", folder.path().display().to_string()), "<folder>"), env, folder)
+}
+
+#[test]
+fn claude_argv_is_exactly_what_recap_always_ran() {
+    let (argv, _, _folder) = recap_argv(Known::Claude, fixture!("claude/2.1.318/recap-ok.jsonl"), "");
     assert_eq!(
-        argv.trim_end(),
+        argv,
         concat!(
             "[\"-p\", \"--setting-sources\", \"\", \"--no-session-persistence\", \"--strict-mcp-config\", ",
             "\"--output-format\", \"stream-json\", \"--verbose\", \"--max-turns\", \"40\", ",
@@ -196,19 +203,56 @@ fn claude_argv_is_exactly_what_recap_always_ran() {
 
 #[test]
 fn codex_argv_is_exactly_what_recap_always_ran() {
-    let dir = TempDir::new();
-    let folder = TempDir::new();
-    let program = faked(&dir, "codex", fixture!("codex/0.164.0/recap-ok.jsonl"));
-    ran(Known::Codex, &program, folder.path()).expect("a recap");
-    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
-    let wanted = format!(
+    let (argv, _, _folder) = recap_argv(Known::Codex, fixture!("codex/0.164.0/recap-ok.jsonl"), "");
+    assert_eq!(
+        argv,
         concat!(
             "[\"exec\", \"--json\", \"--skip-git-repo-check\", \"--ephemeral\", \"--sandbox\", \"read-only\", ",
-            "\"-C\", {:?}, \"--model\", \"opus\", \"-c\", \"model_reasoning_effort=low\", \"--\", \"Sum it up\"]"
-        ),
-        folder.path().display().to_string()
+            "\"-C\", <folder>, \"--model\", \"opus\", \"-c\", \"model_reasoning_effort=low\", \"--\", \"Sum it up\"]"
+        )
     );
-    assert_eq!(argv.trim_end(), wanted);
+}
+
+#[test]
+fn copilot_argv_for_a_recap_allows_no_tool() {
+    let (argv, _, _folder) = recap_argv(Known::Copilot, fixture!("copilot/1.0.98/bot-resumed.jsonl"), "");
+    assert_eq!(
+        argv,
+        concat!(
+            "[\"--output-format\", \"json\", \"--no-auto-update\", \"--no-ask-user\", ",
+            "\"--disallow-temp-dir\", \"--disable-builtin-mcps\", \"--model\", \"opus\", ",
+            "\"--reasoning-effort\", \"low\", \"--prompt=Sum it up\"]"
+        )
+    );
+}
+
+#[test]
+fn opencode_argv_for_a_recap_has_no_bypass() {
+    let out = fixture!("opencode/1.18.35/bot-resumed.jsonl");
+    let (argv, env, _folder) = recap_argv(Known::Opencode, out, "OPENCODE_PERMISSION OPENCODE_CONFIG_CONTENT");
+    let wanted = r#"["run", "--format", "json", "--agent", "cornercase-recap", "--model", "opus", "--", "Sum it up"]"#;
+    assert_eq!(argv, wanted);
+    let mut lines = env.lines();
+    let rules = lines.next().and_then(|line| line.strip_prefix("OPENCODE_PERMISSION=")).expect("the read-only rules");
+    let rules: Value = serde_json::from_str(rules).expect("json");
+    assert_eq!((&rules["*"], &rules["bash"], &rules["read"]), (&"deny".into(), &"deny".into(), &"allow".into()));
+    let config = lines.next().and_then(|line| line.strip_prefix("OPENCODE_CONFIG_CONTENT=")).expect("the agent");
+    let config: Value = serde_json::from_str(config).expect("json");
+    assert_eq!(config["agent"]["cornercase-recap"]["permission"], rules);
+}
+
+#[rstest::rstest]
+#[case::copilot(
+    Known::Copilot,
+    fixture!("copilot/1.0.98/bot-new.jsonl"),
+    "Version `0.13.80` printed, and the second command did not run because permission was denied."
+)]
+#[case::opencode(Known::Opencode, fixture!("opencode/1.18.35/bot-compacted.jsonl"), "The keeper's name was Silas.")]
+fn a_recap_is_the_agents_last_answer(#[case] agent: Known, #[case] out: &str, #[case] last: &str) {
+    let dir = TempDir::new();
+    let folder = TempDir::new();
+    let program = faked(&dir, agent.name(), out);
+    assert_eq!(ran(agent, &program, folder.path()).expect("a recap").text, last);
 }
 
 mod bots {
@@ -403,6 +447,33 @@ mod bots {
     }
 
     #[test]
+    fn a_stopped_opencode_turn_is_not_an_answer_even_with_text_already_said() {
+        let dir = TempDir::new();
+        let folder = TempDir::new();
+        let out = concat!(
+            r#"{"type":"tool_use","sessionID":"s","part":{"tool":"read","state":{"input":{"filePath":"a"}}}}"#,
+            "\n",
+            r#"{"type":"text","sessionID":"s","part":{"type":"text","text":"Half a thought"}}"#,
+            "\n"
+        );
+        let program = faked(&dir, "opencode", out);
+        std::fs::write(program.with_extension("hold"), "").expect("hold");
+        let (running, seen) = (Running::default(), Arc::new(AtomicUsize::new(0)));
+        let (command, ask) = (program.display().to_string(), bot_ask(folder.path(), Access::Full, None));
+        let handle = {
+            let sink = Arc::clone(&seen);
+            let steps: Box<dyn FnMut(Action) + Send> = Box::new(move |_| _ = sink.fetch_add(1, Ordering::Relaxed));
+            let watch = Watch { running: Some(running.clone()), steps: Some(steps), ..Watch::default() };
+            std::thread::spawn(move || run_watched(&called(Known::Opencode, &command, TIMEOUT), &ask, watch))
+        };
+        crate::test_util::wait_until("opencode spoke", || seen.load(Ordering::Relaxed) > 0);
+        assert!(running.stop());
+        let error = handle.join().expect("the run").expect_err("stopped");
+        assert_eq!(error.to_string(), "opencode exited without answering");
+        std::fs::remove_file(program.with_extension("hold")).expect("release");
+    }
+
+    #[test]
     fn stopping_before_the_process_exists_still_ends_it() {
         let dir = TempDir::new();
         let folder = TempDir::new();
@@ -529,6 +600,28 @@ mod bots {
         let argvs = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
         assert!(!argvs.lines().next().expect("first").contains(&resume.replace("{}", &session)));
         assert!(argvs.lines().last().expect("second").contains(&resume.replace("{}", &session)), "{argvs}");
+    }
+
+    fn opencode_turn(out: &str) -> Result<Ran> {
+        let dir = TempDir::new();
+        let folder = TempDir::new();
+        let program = faked(&dir, "opencode", out);
+        let command = program.display().to_string();
+        let ask = bot_ask(folder.path(), Access::Full, Some("ses_e2a1b2c3d4ffeAbCdEfGhIjKlM"));
+        run_watched(&called(Known::Opencode, &command, TIMEOUT), &ask, Watch::default())
+    }
+
+    #[test]
+    fn an_opencode_bot_that_compacts_first_answers_with_its_real_answer() {
+        let ran = opencode_turn(fixture!("opencode/1.18.35/bot-compacted.jsonl")).expect("a turn");
+        assert_eq!(ran.text, "The keeper's name was Silas.");
+    }
+
+    #[test]
+    fn an_opencode_run_that_says_nothing_exited_without_answering() {
+        let out = r#"{"type":"step_finish","sessionID":"s","part":{"reason":"stop","tokens":{}}}"#;
+        let error = opencode_turn(out).expect_err("no answer");
+        assert_eq!(error.to_string(), "opencode exited without answering");
     }
 
     #[cfg(not(windows))]

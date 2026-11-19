@@ -46,7 +46,7 @@ impl RecapRow {
 
     fn note(self) -> &'static str {
         match self {
-            Self::Agent => "writes the Recap panel's summaries: Claude Code or Codex",
+            Self::Agent => "writes the Recap: Claude Code, Codex, Copilot or opencode",
             Self::Account => "yours alone, not shared",
             Self::Model => "the agent's own models",
             Self::Effort => "low keeps it quick and cheap",
@@ -141,11 +141,14 @@ impl Settings {
         let item = |value: &str, note: &str| PickItem { value: value.into(), note: note.into(), dangerous: false };
         let kind = self.recap_kind();
         match row {
-            RecapRow::Agent => vec![
-                item(AUTO, "the default agent when it can, else Claude Code"),
-                item("claude", "Claude Code"),
-                item("codex", "Codex"),
-            ],
+            RecapRow::Agent => std::iter::once(item(AUTO, "the default agent when it can, else Claude Code"))
+                .chain(
+                    Known::ALL
+                        .into_iter()
+                        .filter(|kind| kind.writes_recap())
+                        .map(|kind| item(kind.name(), kind.title())),
+                )
+                .collect(),
             RecapRow::Account => {
                 let mut items = vec![item(DEFAULT, "the agent's own login")];
                 items.extend(self.accounts.names(kind).into_iter().map(|account| item(&account.name, "")));

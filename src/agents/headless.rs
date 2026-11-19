@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::agents::Known;
-use crate::agents::probe::{self, Limits, Running};
+use crate::agents::probe::{self, Heard, Limits, Running};
 use crate::error::{Error, Result};
 
 const GRACE: Duration = Duration::from_secs(2);
@@ -102,6 +102,8 @@ pub(crate) struct BotSupport {
     pub(crate) effort_needs_model: bool,
 }
 
+pub(in crate::agents) type Ended = fn(&mut Ran) -> Option<Result<()>>;
+
 pub(crate) struct Spec {
     pub(in crate::agents) command: fn(&str, &Ask) -> Command,
     pub(in crate::agents) read: fn(&str, &mut Ran) -> Option<Result<()>>,
@@ -109,6 +111,7 @@ pub(crate) struct Spec {
     pub(in crate::agents) recap: bool,
     pub(in crate::agents) stderr: bool,
     pub(in crate::agents) prepare: Option<fn(&Ask) -> Result<()>>,
+    pub(in crate::agents) ended: Option<Ended>,
 }
 
 #[derive(Clone, Copy)]
@@ -174,6 +177,17 @@ fn limits_of(call: &Call<'_>, ask: &Ask, spec: &Spec) -> Limits {
     }
 }
 
+fn step_of(outcome: Option<Result<()>>, ran: &Ran, progress: &AtomicUsize) -> probe::Step<Ran> {
+    match outcome {
+        None => {
+            progress.store(ran.steps, Ordering::Relaxed);
+            probe::Step::Read
+        }
+        Some(Ok(())) => probe::Step::Answer(Ok(ran.clone())),
+        Some(Err(error)) => probe::Step::Answer(Err(error)),
+    }
+}
+
 pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ran> {
     let agent = call.agent;
     let spec =
@@ -187,23 +201,22 @@ pub(crate) fn run_watched(call: &Call<'_>, ask: &Ask, watch: Watch) -> Result<Ra
     let command = prepared(call, ask, &spec);
     let limits = limits_of(call, ask, &spec);
     let Watch { progress, mut steps, running } = watch;
-    let read = spec.read;
+    let (read, ended) = (spec.read, spec.ended);
+    let running = running.unwrap_or_default();
+    let stopped = running.clone();
     let mut ran = Ran::default();
-    probe::run_in(limits, command, "", &running.unwrap_or_default(), move |line| {
-        let outcome = read(line, &mut ran);
+    probe::run_heard(limits, command, "", &running, move |heard| {
+        let outcome = match heard {
+            Heard::Line(line) => read(line, &mut ran),
+            Heard::End if stopped.stopped() => None,
+            Heard::End => ended.and_then(|ended| ended(&mut ran)),
+        };
         for action in ran.fresh.drain(..) {
             if let Some(steps) = steps.as_mut() {
                 steps(action);
             }
         }
-        match outcome {
-            None => {
-                progress.store(ran.steps, Ordering::Relaxed);
-                probe::Step::Read
-            }
-            Some(Ok(())) => probe::Step::Answer(Ok(ran.clone())),
-            Some(Err(error)) => probe::Step::Answer(Err(error)),
-        }
+        step_of(outcome, &ran, &progress)
     })
 }
 

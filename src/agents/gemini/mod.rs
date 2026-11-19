@@ -51,6 +51,7 @@ pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = So
     recap: false,
     stderr: false,
     prepare: Some(headless::prepare),
+    ended: None,
 });
 #[cfg(not(windows))]
 const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {

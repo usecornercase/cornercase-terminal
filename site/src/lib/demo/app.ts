@@ -3491,7 +3491,7 @@ export class App {
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
       const recap = (id: string, label: string, value: string, note: string): SettingsRow => ({ id: `recap:${id}`, section: 'Recap', label, value, note });
       rows.push(
-        recap('agent', 'recap agent', 'auto (claude)', "writes the Recap panel's summaries: Claude Code or Codex"),
+        recap('agent', 'recap agent', 'auto (claude)', "writes the Recap: Claude Code, Codex, Copilot or opencode"),
         recap('account', 'recap account', 'default', 'yours alone, not shared'),
         recap('model', 'recap model', 'default', "the agent's own models"),
         recap('effort', 'recap effort', 'low', 'low keeps it quick and cheap'),

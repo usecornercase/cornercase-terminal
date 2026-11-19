@@ -76,3 +76,11 @@ fn a_flow_refuses_a_role_exactly_when_its_agent_is_listed_without_flows() {
         assert_eq!(refused, !agent.flows, "{}", agent.name);
     }
 }
+
+#[test]
+fn the_recap_agent_choices_are_the_agents_that_can_write_one() {
+    let s = listed();
+    let setting = s.describe().into_iter().find(|setting| setting.key == "recap_agent").expect("the recap agent");
+    let choices: Vec<String> = setting.choices.into_iter().map(|choice| choice.value).collect();
+    assert_eq!(choices, strings(&["auto", "claude", "codex", "opencode", "copilot"]));
+}
