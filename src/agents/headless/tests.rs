@@ -175,15 +175,22 @@ fn an_agent_that_does_not_ask_for_it_keeps_its_standard_error_to_itself() {
     assert_eq!(error.to_string(), "claude exited without answering");
 }
 
-#[test]
-fn claude_argv_is_exactly_what_recap_always_ran() {
+fn recap_argv(agent: Known, out: &str, vars: &str) -> (String, String, TempDir) {
     let dir = TempDir::new();
     let folder = TempDir::new();
-    let program = faked(&dir, "claude", fixture!("claude/2.1.318/recap-ok.jsonl"));
-    ran(Known::Claude, &program, folder.path()).expect("a recap");
+    let program = faked(&dir, agent.name(), out);
+    std::fs::write(program.with_extension("vars"), vars).expect("names");
+    ran(agent, &program, folder.path()).expect("a recap");
     let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
+    let env = std::fs::read_to_string(program.with_extension("env")).unwrap_or_default();
+    (argv.trim_end().replace(&format!("{:?}", folder.path().display().to_string()), "<folder>"), env, folder)
+}
+
+#[test]
+fn claude_argv_is_exactly_what_recap_always_ran() {
+    let (argv, _, _folder) = recap_argv(Known::Claude, fixture!("claude/2.1.318/recap-ok.jsonl"), "");
     assert_eq!(
-        argv.trim_end(),
+        argv,
         concat!(
             "[\"-p\", \"--setting-sources\", \"\", \"--no-session-persistence\", \"--strict-mcp-config\", ",
             "\"--output-format\", \"stream-json\", \"--verbose\", \"--max-turns\", \"40\", ",
@@ -196,30 +203,21 @@ fn claude_argv_is_exactly_what_recap_always_ran() {
 
 #[test]
 fn codex_argv_is_exactly_what_recap_always_ran() {
-    let dir = TempDir::new();
-    let folder = TempDir::new();
-    let program = faked(&dir, "codex", fixture!("codex/0.164.0/recap-ok.jsonl"));
-    ran(Known::Codex, &program, folder.path()).expect("a recap");
-    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
-    let wanted = format!(
+    let (argv, _, _folder) = recap_argv(Known::Codex, fixture!("codex/0.164.0/recap-ok.jsonl"), "");
+    assert_eq!(
+        argv,
         concat!(
             "[\"exec\", \"--json\", \"--skip-git-repo-check\", \"--ephemeral\", \"--sandbox\", \"read-only\", ",
-            "\"-C\", {:?}, \"--model\", \"opus\", \"-c\", \"model_reasoning_effort=low\", \"--\", \"Sum it up\"]"
-        ),
-        folder.path().display().to_string()
+            "\"-C\", <folder>, \"--model\", \"opus\", \"-c\", \"model_reasoning_effort=low\", \"--\", \"Sum it up\"]"
+        )
     );
-    assert_eq!(argv.trim_end(), wanted);
 }
 
 #[test]
 fn copilot_argv_for_a_recap_allows_no_tool() {
-    let dir = TempDir::new();
-    let folder = TempDir::new();
-    let program = faked(&dir, "copilot", fixture!("copilot/1.0.98/bot-resumed.jsonl"));
-    ran(Known::Copilot, &program, folder.path()).expect("a recap");
-    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
+    let (argv, _, _folder) = recap_argv(Known::Copilot, fixture!("copilot/1.0.98/bot-resumed.jsonl"), "");
     assert_eq!(
-        argv.trim_end(),
+        argv,
         concat!(
             "[\"--output-format\", \"json\", \"--no-auto-update\", \"--no-ask-user\", ",
             "\"--disallow-temp-dir\", \"--disable-builtin-mcps\", \"--model\", \"opus\", ",
@@ -230,14 +228,9 @@ fn copilot_argv_for_a_recap_allows_no_tool() {
 
 #[test]
 fn opencode_argv_for_a_recap_has_no_bypass() {
-    let dir = TempDir::new();
-    let folder = TempDir::new();
-    let program = faked(&dir, "opencode", fixture!("opencode/1.18.35/bot-resumed.jsonl"));
-    std::fs::write(program.with_extension("vars"), "OPENCODE_PERMISSION").expect("names");
-    ran(Known::Opencode, &program, folder.path()).expect("a recap");
-    let argv = std::fs::read_to_string(program.with_extension("argv")).expect("argv");
-    assert_eq!(argv.trim_end(), "[\"run\", \"--format\", \"json\", \"--model\", \"opus\", \"--\", \"Sum it up\"]");
-    let env = std::fs::read_to_string(program.with_extension("env")).expect("env");
+    let out = fixture!("opencode/1.18.35/bot-resumed.jsonl");
+    let (argv, env, _folder) = recap_argv(Known::Opencode, out, "OPENCODE_PERMISSION");
+    assert_eq!(argv, "[\"run\", \"--format\", \"json\", \"--model\", \"opus\", \"--\", \"Sum it up\"]");
     let rules = env.trim_end().strip_prefix("OPENCODE_PERMISSION=").expect("the read-only rules");
     let rules: Value = serde_json::from_str(rules).expect("json");
     assert_eq!((&rules["*"], &rules["bash"], &rules["read"]), (&"deny".into(), &"deny".into(), &"allow".into()));
