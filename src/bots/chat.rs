@@ -5,6 +5,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use super::asks;
 use super::brief::Told;
 use crate::agents::headless::Used;
 use crate::os::fs::OpenOptionsExt;
@@ -24,8 +25,16 @@ pub(crate) fn is_setup(line: &Line) -> bool {
     line.routine.is_none() && line.kind == Kind::Notice && line.text == SETTING_UP
 }
 
+pub(crate) fn tells_saved(line: &Line) -> bool {
+    line.routine.is_none() && line.kind == Kind::Notice && line.ask.is_some() && line.text.starts_with(asks::SAVED)
+}
+
 pub(crate) fn opens_turn(line: &Line) -> bool {
-    (line.routine.is_none() && line.kind == Kind::You) || is_setup(line)
+    (line.routine.is_none() && line.kind == Kind::You) || is_setup(line) || tells_saved(line)
+}
+
+pub(crate) fn retries(line: &Line) -> bool {
+    (line.kind == Kind::You && line.routine.is_none()) || is_setup(line)
 }
 
 fn opens_unseen(line: &Line) -> bool {
@@ -82,6 +91,8 @@ pub(crate) struct Line {
     pub(crate) body: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) run: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ask: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -107,7 +118,16 @@ impl Line {
             agent: None,
             body: None,
             run: None,
+            ask: None,
         }
+    }
+
+    pub(crate) fn asked(self, ask: u64) -> Self {
+        Self { ask: Some(ask), ..self }
+    }
+
+    pub(crate) fn in_routine(self, run: Option<u64>) -> Self {
+        Self { routine: run.or(self.routine), ..self }
     }
 
     pub(crate) fn of_agent(self, agent: AgentRef, body: Option<String>, run: Option<u64>) -> Self {
@@ -235,11 +255,45 @@ fn settle(state: &mut Replayed) {
     }
 }
 
+fn opened(state: &mut Replayed, line: &Line) -> bool {
+    let opens = matches!(line.kind, Kind::You | Kind::Finished) || tells_saved(line);
+    match (opens, line.held) {
+        (true, true) => state.held += 1,
+        (true, false) => state.running = true,
+        (false, _) => {}
+    }
+    opens
+}
+
+fn replay_line(state: &mut Replayed, line: &Line) -> bool {
+    match line.kind {
+        Kind::Bot | Kind::Error => {
+            state.running = state.held > 0;
+            state.held = 0;
+        }
+        Kind::Notice if line.text == SETTING_UP => state.running = true,
+        Kind::Notice if line.text == STOPPED => {
+            state.running = false;
+            return true;
+        }
+        Kind::Notice if line.text == INTERRUPTED => {
+            state.running = false;
+            state.held = 0;
+        }
+        Kind::Notice => state.held = state.held.saturating_sub(dropped_in(&line.text)),
+        Kind::You | Kind::Finished | Kind::Step | Kind::Started | Kind::Waiting => {}
+    }
+    false
+}
+
 pub(crate) fn replay(lines: &[Line]) -> Replayed {
     let mut state = Replayed { next_id: 1, ..Replayed::default() };
     let mut stopping = false;
     for line in lines {
         state.next_id = state.next_id.max(line.id + 1);
+        if line.ask.is_some() && !opens_turn(line) {
+            continue;
+        }
         if let Some(run) = line.routine {
             track_run(&mut state, run, line);
             continue;
@@ -249,24 +303,8 @@ pub(crate) fn replay(lines: &[Line]) -> Replayed {
             settle(&mut state);
             stopping = false;
         }
-        match line.kind {
-            Kind::You | Kind::Finished if line.held => state.held += 1,
-            Kind::You | Kind::Finished => state.running = true,
-            Kind::Bot | Kind::Error => {
-                state.running = state.held > 0;
-                state.held = 0;
-            }
-            Kind::Notice if line.text == SETTING_UP => state.running = true,
-            Kind::Notice if line.text == STOPPED => {
-                state.running = false;
-                stopping = true;
-            }
-            Kind::Notice if line.text == INTERRUPTED => {
-                state.running = false;
-                state.held = 0;
-            }
-            Kind::Notice => state.held = state.held.saturating_sub(dropped_in(&line.text)),
-            Kind::Step | Kind::Started | Kind::Waiting => {}
+        if !opened(&mut state, line) {
+            stopping |= replay_line(&mut state, line);
         }
     }
     if stopping {
@@ -300,9 +338,25 @@ pub(crate) fn prompt_of(lines: &[Line], error: u64) -> Option<&Line> {
     lines[..before].iter().rev().find(|line| opens_turn(line) || line.kind == Kind::Finished)
 }
 
+fn told_from(lines: &[Line]) -> usize {
+    lines.iter().rposition(opens_unseen).map_or(0, |at| at + 1)
+}
+
+pub(crate) fn noted(lines: &[Line]) -> Vec<String> {
+    let notices = lines[told_from(lines)..].iter().filter(|line| line.kind == Kind::Notice && line.ask.is_some());
+    notices
+        .filter_map(|line| {
+            if let Some(names) = line.text.strip_prefix(asks::NOT_GIVEN) {
+                return Some(asks::told_declined(names));
+            }
+            let names = line.text.strip_prefix(asks::SAVED).filter(|_| line.routine.is_some())?;
+            Some(asks::told_saved(names))
+        })
+        .collect()
+}
+
 pub(crate) fn unseen(lines: &[Line]) -> Vec<Told> {
-    let from = lines.iter().rposition(opens_unseen).map_or(0, |at| at + 1);
-    lines[from..]
+    lines[told_from(lines)..]
         .iter()
         .filter(|line| line.kind == Kind::Bot)
         .filter_map(|line| {

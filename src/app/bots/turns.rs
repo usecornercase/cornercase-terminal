@@ -2,10 +2,12 @@ use std::time::{Duration, Instant};
 
 use super::{BotEvent, News, Starting, Thread, Turn};
 use crate::agents::Known;
+use crate::agents::activity::Status;
 use crate::agents::headless::{Ran, Watch};
 use crate::agents::probe::Running;
 use crate::app::App;
 use crate::app::event::AppEvent;
+use crate::app::notifications::BotGoal;
 use crate::bots::brief::Told;
 use crate::bots::chat::{self, Answer, Kind, Line};
 use crate::bots::turn::Session;
@@ -15,7 +17,7 @@ use crate::error::Result;
 use crate::log::{self, Job, Level};
 
 const ANSWERS_KEPT: usize = 32;
-const TOAST_WIDTH: usize = 100;
+pub(super) const TOAST_WIDTH: usize = 100;
 
 type Done<T> = std::result::Result<T, Refusal>;
 
@@ -28,17 +30,34 @@ impl App {
     }
 
     pub(super) fn bot_append(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> Line {
+        let (line, _) = self.bot_written(at, make);
+        self.bot_appended(at, &line);
+        line
+    }
+
+    pub(super) fn bot_try_append(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> std::io::Result<Line> {
+        let (line, written) = self.bot_written(at, make);
+        written?;
+        self.bot_appended(at, &line);
+        Ok(line)
+    }
+
+    fn bot_written(&mut self, at: usize, make: impl FnOnce(u64, i64) -> Line) -> (Line, std::io::Result<()>) {
         let state = &mut self.panels.bots.live[at];
         let line = state.secrets.redacted(&state.retired, make(state.next_line, crate::time::now()));
         state.next_line += 1;
-        let _ = chat::append(&state.folder.join(folder::CHAT_FILE), &line);
+        let written = chat::append(&state.folder.join(folder::CHAT_FILE), &line);
+        (line, written)
+    }
+
+    fn bot_appended(&mut self, at: usize, line: &Line) {
+        let state = &mut self.panels.bots.live[at];
         if matches!(line.kind, Kind::You | Kind::Bot) {
             state.last = Some(line.clone());
         }
         let id = state.bot.id.clone();
-        self.chat_took(at, &line);
+        self.chat_took(at, line);
         self.publish_bot(&id, News::Line(Box::new(line.clone())));
-        line
     }
 
     pub(in crate::app) fn bot_say(&mut self, key: &str, text: &str, wait: bool) -> Done<(usize, Line)> {
@@ -98,8 +117,9 @@ impl App {
 
     fn begin_turn(&mut self, at: usize, mut input: turn::Input, asked: Vec<u64>, thread: Thread) {
         if thread == Thread::Chat {
-            let told = std::mem::take(&mut self.panels.bots.live[at].unseen);
-            input.told = brief::told(&told, &input.bot.id);
+            let live = &mut self.panels.bots.live[at];
+            let (told, notes) = (std::mem::take(&mut live.unseen), std::mem::take(&mut live.notes));
+            input.told = brief::joined_told(brief::told(&told, &input.bot.id), brief::noted(&notes));
         }
         let (id, running) = (self.panels.bots.next_turn, Running::default());
         self.panels.bots.next_turn += 1;
@@ -292,14 +312,14 @@ impl App {
         let state = &mut self.panels.bots.live[at];
         state.unread += 1;
         let bot = state.bot.id.clone();
-        let text = crate::text::truncate_right(&chat::preview(line), TOAST_WIDTH);
-        let message = crate::host::notify::clean(&format!("{who}: {text}"));
-        let status = if line.kind == Kind::Error {
-            crate::agents::activity::Status::Failed
-        } else {
-            crate::agents::activity::Status::Done
-        };
-        let token = self.messages.notices.bot_token(&bot, line.routine);
+        let text = format!("{who}: {}", crate::text::truncate_right(&chat::preview(line), TOAST_WIDTH));
+        let status = if line.kind == Kind::Error { Status::Failed } else { Status::Done };
+        self.bot_toast(&bot, &text, status, BotGoal::Chat(line.routine));
+    }
+
+    pub(super) fn bot_toast(&mut self, bot: &str, text: &str, status: Status, goal: BotGoal) {
+        let message = crate::host::notify::clean(text);
+        let token = self.messages.notices.bot_token(bot, goal);
         let icon = crate::ui::ToastIcon::Agent(status);
         self.messages.toast = Some(super::super::toast::Toast {
             go: Some(token.clone()),

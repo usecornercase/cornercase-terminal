@@ -73,6 +73,7 @@ fn itself(path: &[&str], found: &ArgMatches, own: &str) -> Option<String> {
 fn secrets(path: &[&str], found: &ArgMatches, own: &str) -> Option<String> {
     match path {
         ["bot", "secret", "set" | "remove"] => Some(String::from(crate::bots::secrets::NO_CHANGE)),
+        ["bot", "secret", "give" | "decline"] => Some(String::from(crate::bots::asks::NO_ANSWER)),
         ["bot", "secret", "list"] => {
             let other = found.get_one::<String>("bot").filter(|bot| !bot.eq_ignore_ascii_case(own));
             other.map(|_| String::from(crate::bots::secrets::OWN_ONLY))

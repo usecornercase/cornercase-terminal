@@ -4,18 +4,18 @@ use super::*;
 use crate::bots::secrets::{self, Kept, KeyState};
 use crate::control::contract::{Code, Refusal};
 
-const OWNER: u64 = 7;
-const BOUND: u64 = 8;
-const STRANGER: u64 = 9;
-const VALUE: &str = "hunter2-long-value";
+pub(super) const OWNER: u64 = 7;
+pub(super) const BOUND: u64 = 8;
+pub(super) const STRANGER: u64 = 9;
+pub(super) const VALUE: &str = "hunter2-long-value";
 
-struct Kept2 {
-    app: App,
+pub(super) struct Kept2 {
+    pub(super) app: App,
     _rx: Receiver<AppEvent>,
-    dir: TempDir,
+    pub(super) dir: TempDir,
 }
 
-fn keeper() -> Kept2 {
+pub(super) fn keeper() -> Kept2 {
     let dir = TempDir::new();
     let bots = dir.path().join("bots");
     for (id, name) in [("campus", "Campus"), ("prs", "PRs")] {
@@ -31,7 +31,7 @@ fn keeper() -> Kept2 {
     Kept2 { app, _rx: rx, dir }
 }
 
-fn turn() -> crate::app::bots::Turn {
+pub(in crate::app::tests) fn turn() -> crate::app::bots::Turn {
     crate::app::bots::Turn {
         id: 1,
         thread: crate::app::bots::Thread::Chat,
@@ -44,13 +44,13 @@ fn turn() -> crate::app::bots::Turn {
     }
 }
 
-fn refusal(result: std::result::Result<Value, Refusal>) -> (Code, String) {
+pub(super) fn refusal(result: std::result::Result<Value, Refusal>) -> (Code, String) {
     let refused = result.expect_err("refused");
     (refused.code, refused.message)
 }
 
 impl Kept2 {
-    fn set(&mut self, name: &str, value: &str) -> std::result::Result<Value, Refusal> {
+    pub(super) fn set(&mut self, name: &str, value: &str) -> std::result::Result<Value, Refusal> {
         self.app.bot_secret_set(None, "campus", (name, value))
     }
 
@@ -58,7 +58,7 @@ impl Kept2 {
         self.dir.path().join("bots").join(id).join(folder::SECRETS_FILE)
     }
 
-    fn reload(&mut self) {
+    pub(super) fn reload(&mut self) {
         self.app.set_bots_dir(&self.dir.path().join("bots"));
     }
 }

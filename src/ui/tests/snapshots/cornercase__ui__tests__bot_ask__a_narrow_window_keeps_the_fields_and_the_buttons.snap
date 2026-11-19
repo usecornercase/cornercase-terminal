@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/bot_ask.rs
+expression: "render_sized(&shown(ask(fields)), 60, 18).backend()"
+---
+"                                                            "
+"  ╭─ Campus asks for a secret ───────────────────────────╮  "
+"  │ Claude Code · through cornercase                     │  "
+"  │                                                      │  "
+"  │ It says:                                             │  "
+"  │ │ to read your grades on the campus site, which      │  "
+"  │ campus-user                                          │  "
+"  │                                                      │  "
+"  │ campus-password                                      │  "
+"  │                                                      │  "
+"  │ mail-token                                           │  "
+"  │                                                      │  "
+"  │ pin                                                  │  "
+"  │                                                      │  "
+"  │ tab moves to the next field · enter saves · esc is … │  "
+"  │                              never   not now   save  │  "
+"  ╰──────────────────────────────────────────────────────╯  "
+"                                                            "

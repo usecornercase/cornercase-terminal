@@ -66,6 +66,15 @@ struct Chat {
     bin: TempDir,
 }
 
+fn questions(c: &mut Chat, count: usize) {
+    let path = c.app.panels.bots.live[0].folder.join(folder::CHAT_FILE);
+    for n in 0..count {
+        let id = c.app.panels.bots.live[0].next_line;
+        chat::append(&path, &Line::you(id, 100, &format!("question {n}"), false)).expect("append");
+        c.app.panels.bots.live[0].next_line += 1;
+    }
+}
+
 fn chat(out: &str) -> Chat {
     chat_with(out, Access::Cornercase)
 }
@@ -405,6 +414,8 @@ fn what_a_bot_is_for_is_read_when_asked_and_never_given_empty_in_place_of_a_text
     assert_eq!(c.app.bot_about("nobody").expect_err("no bot").code, Code::NotFound);
 }
 
+mod ask_window;
+mod asks;
 mod boundary;
 mod card_menu;
 mod compact;
@@ -413,7 +424,7 @@ mod git;
 mod menu;
 mod routines;
 mod routines_dialog;
-mod secrets;
+pub(in crate::app::tests) mod secrets;
 mod secrets_window;
 mod setup;
 mod views;

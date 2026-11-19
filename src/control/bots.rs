@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::Fields;
@@ -21,6 +23,43 @@ pub(crate) enum BotRequest {
     SecretList(BotTarget),
     SecretRemove(SecretRemove),
     SecretGet(SecretGet),
+    SecretAsk(SecretAsk),
+    SecretGive(SecretGive),
+    SecretDecline(SecretAnswer),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretAsk {
+    pub(crate) names: Vec<String>,
+    pub(crate) about: String,
+    pub(crate) replace: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretGive {
+    pub(crate) bot: String,
+    pub(crate) ask: u64,
+    pub(crate) values: BTreeMap<String, crate::issues::Secret>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SecretAnswer {
+    pub(crate) bot: String,
+    pub(crate) ask: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AskInfo {
+    pub(crate) id: u64,
+    pub(crate) names: Vec<String>,
+    pub(crate) about: String,
+    pub(crate) replace: bool,
+    pub(crate) routine: Option<u64>,
+    pub(crate) missing: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,6 +164,8 @@ pub(crate) struct BotInfo {
     pub(crate) secrets: usize,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) secrets_unreadable: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) asks: Vec<AskInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,6 +212,17 @@ impl BotRequest {
                 fields.add("all", remove.all)
             }
             Self::SecretGet(get) => name_field(fields.add("action", "secret-get"), &get.name),
+            Self::SecretAsk(ask) => {
+                fields.add("action", "secret-ask").add("names", ask.names.len());
+                fields.add("about_bytes", ask.about.len()).add("replace", ask.replace)
+            }
+            Self::SecretGive(give) => {
+                fields.add("action", "secret-give").add("bot", &give.bot).add("ask", give.ask);
+                fields.add("values", give.values.len())
+            }
+            Self::SecretDecline(answer) => {
+                fields.add("action", "secret-decline").add("bot", &answer.bot).add("ask", answer.ask)
+            }
             _ => fields,
         }
     }
@@ -202,9 +254,13 @@ impl BotRequest {
                 fields.add("action", "history").add("bot", &history.bot).maybe("last", history.last);
                 fields.maybe("after", history.after)
             }
-            Self::SecretSet(_) | Self::SecretList(_) | Self::SecretRemove(_) | Self::SecretGet(_) => {
-                self.secret_fields(fields)
-            }
+            Self::SecretSet(_)
+            | Self::SecretList(_)
+            | Self::SecretRemove(_)
+            | Self::SecretGet(_)
+            | Self::SecretAsk(_)
+            | Self::SecretGive(_)
+            | Self::SecretDecline(_) => self.secret_fields(fields),
         };
     }
 }

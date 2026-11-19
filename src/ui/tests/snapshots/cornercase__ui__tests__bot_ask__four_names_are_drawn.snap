@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/bot_ask.rs
+expression: render(&shown(ask(fields))).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"  ╭─ Campus asks for a secret ───────────────────────────────────────────────────────────────────╮  "
+" P│ Claude Code · through cornercase                                                             │  "
+"  │                                                                                              │  "
+"▌ │ It says:                                                                                     │  "
+"  │ │ to read your grades on the campus site, which needs your university login                  │  "
+"  │ campus-user                                                                                  │  "
+"  │                                                                                              │  "
+"  │ campus-password                                                                              │  "
+"  │                                                                                              │  "
+"  │ mail-token                                                                                   │  "
+"  │                                                                                              │  "
+"  │ pin                                                                                          │  "
+"  │                                                                                              │  "
+"  │ tab moves to the next field · enter saves · esc is not now                                   │  "
+" ─│                                                                      never   not now   save  │  "
+"  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
+"  More ▴                 Help  │                         │                                          "

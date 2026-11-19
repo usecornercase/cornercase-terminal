@@ -513,3 +513,71 @@ fn removing_a_bot_removes_its_secrets_and_remove_all_starts_again() {
     session.says(&["bot", "remove", "a"]);
     assert!(!file.exists());
 }
+
+const ASK: &str = "cornercase bot secret ask campus-user campus-password --about 'to log in' >> \"$0.$CORNERCASE_BOT.ask\" 2>&1\necho \"status $?\" >> \"$0.$CORNERCASE_BOT.ask\"\ncornercase bot secret get campus-password >> \"$0.$CORNERCASE_BOT.got\" 2>&1";
+
+fn asked_ask(session: &Session) -> String {
+    let state: Value = serde_json::from_str(&session.says(&["status", "--app"])).expect("one JSON document");
+    let asks = &state["bots"][0]["asks"];
+    assert_eq!(asks[0]["names"], serde_json::json!(["campus-user", "campus-password"]), "{state}");
+    asks[0]["id"].as_u64().expect("an ask id").to_string()
+}
+
+#[test]
+fn a_bot_asks_for_a_secret_the_user_gives_it_and_its_next_turn_reads_it() {
+    let session = with_agent_running(ASK);
+    let started = session.cold_command().env("CORNERCASE_LOG", "debug").arg("start-server").output().expect("run");
+    assert!(started.status.success(), "{started:?}");
+    let events = session.spawn(&["events"]);
+    session.says(&["bot", "new", "a", "--agent", "claude"]);
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+    assert!(
+        read_by(&session, "a", "ask").starts_with("asked: campus-user, campus-password (ask "),
+        "{}",
+        read_by(&session, "a", "ask")
+    );
+    let history: Value = serde_json::from_str(&session.says(&["bot", "history", "a", "--json"])).expect("json");
+    let lines = history["lines"].as_array().expect("lines");
+    assert!(lines.iter().any(|line| line["kind"] == "notice" && line["ask"].is_u64()), "{history}");
+    let ask = asked_ask(&session);
+
+    let given = session.fed(
+        &["bot", "secret", "give", "a", &ask],
+        &format!("{{\"campus-user\":\"me\",\"campus-password\":\"{VALUE}\"}}"),
+    );
+    assert!(given.status.success(), "{given:?}");
+    assert_eq!(String::from_utf8_lossy(&given.stdout), "campus-password\ncampus-user\n");
+    wait_until("the turn cornercase started read the value", || {
+        std::fs::read_to_string(session.dir.join("claude-bot.a.got")).is_ok_and(|got| got.contains(VALUE))
+    });
+    wait_until("that turn ended", || bot_state(&session)["state"] == "idle");
+    assert!(session.says(&["bot", "history", "a"]).contains("secret saved: campus-user, campus-password"));
+    let again = read_by(&session, "a", "ask");
+    assert!(again.contains("campus-user is already saved") && again.ends_with("status 1\n"), "{again}");
+
+    let mut events = events;
+    let _ = events.kill();
+    let streamed = String::from_utf8_lossy(&events.wait_with_output().expect("the events").stdout).to_string();
+    let chat = std::fs::read_to_string(session.dir.join("server.bots").join("a").join("chat.jsonl")).expect("chat");
+    for text in [chat, session.says(&["logs", "-n", "1000"]), session.says(&["status", "--app"]), streamed] {
+        assert!(!text.contains(VALUE), "{text}");
+    }
+}
+
+#[test]
+fn only_the_bot_asks_and_only_the_user_gives_or_declines() {
+    let session = started_running(ASK);
+    session.says(&["bot", "new", "a", "--agent", "claude"]);
+    let mine = session.cli(&["bot", "secret", "ask", "pw", "--about", "to log in"]);
+    assert!(refused(&mine, 1, "only the bot itself asks for a secret"), "{mine:?}");
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+    let ask = asked_ask(&session);
+    let by_bot = session.command().env("CORNERCASE_BOT", "a").args(["bot", "secret", "decline", "a", &ask]).output();
+    assert!(refused(&by_bot.expect("run"), 2, "a bot cannot give or decline what a bot asks for"));
+
+    session.says(&["bot", "secret", "decline", "a", &ask]);
+
+    assert!(session.says(&["bot", "history", "a"]).contains("secret not given: campus-user, campus-password"));
+    let state: Value = serde_json::from_str(&session.says(&["status", "--app"])).expect("json");
+    assert!(state["bots"][0].get("asks").is_none(), "{state}");
+}

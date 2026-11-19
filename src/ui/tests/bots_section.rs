@@ -10,6 +10,7 @@ fn entry(name: &str, detail: &str) -> BotEntry {
         thinking: false,
         unread: 0,
         active: false,
+        asking: false,
     }
 }
 
@@ -210,4 +211,83 @@ fn a_row_too_narrow_for_the_next_run_draws_agent_and_model_instead() {
     assert!(text.contains("claude"), "{text}");
     assert!(text.contains("next Mon 09:00"), "{text}");
     assert!(!text.contains("next 16 Nov"), "{text}");
+}
+
+#[test]
+fn a_bot_that_asks_for_a_secret_says_so_in_the_waiting_colour() {
+    let asking = BotEntry { asking: true, fallback: "claude".into(), ..entry("campus", "asks for a secret") };
+    let wide = Widths { projects: 44, ..Widths::default() };
+    let view = View { widths: wide, ..shown(Sidebar::SideBySide, vec![asking, entry("prs", "claude")], false) };
+    let t = render_sized(&view, W, TALL.height);
+    let buffer = t.backend().buffer();
+    let found = (0..TALL.height).find_map(|y| {
+        let text = row_text(&t, Rect::new(0, y, W, 1));
+        let x = text.find("asks")?;
+        Some(Position::new(u16::try_from(text[..x].chars().count()).ok()?, y))
+    });
+    let at = found.expect("the detail is drawn");
+    assert_eq!(buffer[at].fg, WAITING_COLOR);
+    let plain = (0..TALL.height).find_map(|y| {
+        let text = row_text(&t, Rect::new(0, y, W, 1));
+        let x = text.rfind("claude")?;
+        Some(Position::new(u16::try_from(text[..x].chars().count()).ok()?, y))
+    });
+    assert_ne!(buffer[plain.expect("the other detail")].fg, WAITING_COLOR);
+}
+
+fn row_with(t: &Terminal<TestBackend>, needle: &str) -> Option<(String, Position)> {
+    (0..TALL.height).find_map(|y| {
+        let text = row_text(t, Rect::new(0, y, W, 1));
+        let x = u16::try_from(text[..text.find(needle)?].chars().count()).ok()?;
+        Some((text, Position::new(x, y)))
+    })
+}
+
+fn sidebar_row(t: &Terminal<TestBackend>, name: &str) -> String {
+    let projects = usize::from(Widths::default().projects);
+    let (text, _) = row_with(t, name).expect("the bot's row");
+    text.chars().take(projects).collect()
+}
+
+#[test]
+fn a_row_too_narrow_for_the_whole_ask_says_asks_in_the_waiting_colour() {
+    let asking =
+        BotEntry { asking: true, unread: 1, fallback: "claude".into(), ..entry("campus", "asks for a secret") };
+    let t = render_sized(&shown(Sidebar::SideBySide, vec![asking], false), W, TALL.height);
+    let row = sidebar_row(&t, "campus");
+    assert!(row.contains("asks"), "{row}");
+    assert!(!row.contains("for a secret"), "{row}");
+    assert!(!row.contains("claude"), "{row}");
+    let (_, at) = row_with(&t, "asks").expect("asks is drawn");
+    assert_eq!(t.backend().buffer()[at].fg, WAITING_COLOR);
+}
+
+#[test]
+fn an_asking_row_cuts_a_long_name_so_asks_still_fits() {
+    let name = "a-bot-with-a-very-long-name-of-forty-chr";
+    let asking = BotEntry { asking: true, unread: 1, fallback: "claude".into(), ..entry(name, "asks for a secret") };
+    let plain = BotEntry { asking: false, ..asking.clone() };
+    let drawn = |entry: BotEntry| {
+        let t = render_sized(&shown(Sidebar::SideBySide, vec![entry], false), W, TALL.height);
+        sidebar_row(&t, "a-bot")
+    };
+    let (asked, quiet) = (drawn(asking), drawn(plain));
+    assert!(asked.contains('…'), "{asked}");
+    assert!(asked.contains("asks"), "{asked}");
+    let shown_of = |row: &str| row.split('…').next().map_or(0, |kept| kept.trim_end().chars().count());
+    assert!(shown_of(&quiet) > shown_of(&asked), "{quiet}\n{asked}");
+}
+
+#[test]
+fn an_asking_row_cuts_a_wide_name_by_its_cells_so_asks_does_not_cover_it() {
+    let name = "日本語の名前のとても長いボット";
+    let asking = BotEntry { asking: true, unread: 1, fallback: "claude".into(), ..entry(name, "asks for a secret") };
+    let t = render_sized(&shown(Sidebar::SideBySide, vec![asking], false), W, TALL.height);
+    let (_, at) = row_with(&t, "asks").expect("asks is drawn");
+    let buffer = t.backend().buffer();
+    assert_eq!(buffer[at].fg, WAITING_COLOR);
+    let before = Position::new(at.x - 1, at.y);
+    assert_eq!(buffer[before].symbol(), " ");
+    let row = sidebar_row(&t, "日");
+    assert!(row.contains('…'), "{row}");
 }

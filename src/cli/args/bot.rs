@@ -3,8 +3,8 @@ use clap::{Args, Subcommand};
 use super::Print;
 use crate::cli::help::{
     BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_ID_HELP, BOT_NEW_HELP, BOT_SAY_HELP,
-    BOT_SECRET_GET_HELP, BOT_SECRET_HELP, BOT_SECRET_LIST_HELP, BOT_SECRET_REMOVE_HELP, BOT_SECRET_SET_HELP,
-    BOT_SETUP_HELP,
+    BOT_SECRET_ASK_HELP, BOT_SECRET_DECLINE_HELP, BOT_SECRET_GET_HELP, BOT_SECRET_GIVE_HELP, BOT_SECRET_HELP,
+    BOT_SECRET_LIST_HELP, BOT_SECRET_REMOVE_HELP, BOT_SECRET_SET_HELP, BOT_SETUP_HELP,
 };
 
 const ACCESS: [&str; 2] = ["cornercase", "full"];
@@ -63,6 +63,34 @@ pub(crate) enum SecretAction {
     Remove(SecretRemoveArgs),
     #[command(about = "Print one of the secrets of the bot that runs this; only that bot may", after_help = BOT_SECRET_GET_HELP)]
     Get(SecretGetArgs),
+    #[command(about = "Ask the user for secrets the bot that runs this lacks; only that bot may", after_help = BOT_SECRET_ASK_HELP)]
+    Ask(SecretAskArgs),
+    #[command(about = "Give the values a bot asked for, reading them from standard input", after_help = BOT_SECRET_GIVE_HELP)]
+    Give(SecretAnswerArgs),
+    #[command(about = "Turn down what a bot asked for", after_help = BOT_SECRET_DECLINE_HELP)]
+    Decline(SecretAnswerArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretAskArgs {
+    #[arg(value_name = "NAME", required = true, num_args = 1..=4, help = "1 to 4 names of a-z, 0-9, - and _, such as campus-password")]
+    pub(crate) names: Vec<String>,
+    #[arg(long, value_name = "TEXT", help = "Why the bot needs them, in one line of at most 200 characters")]
+    pub(crate) about: String,
+    #[arg(long, help = "Ask again for names already saved, to replace them")]
+    pub(crate) replace: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretAnswerArgs {
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
+    pub(crate) bot: String,
+    #[arg(value_name = "ASK", help = "The ask's number, from its `ask` in cornercase status --app or bot history")]
+    pub(crate) ask: u64,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

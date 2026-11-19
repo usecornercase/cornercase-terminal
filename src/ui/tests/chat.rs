@@ -558,3 +558,15 @@ fn a_long_notice_wraps_and_keeps_its_reason() {
         rows.iter().map(|row| row.line.spans.iter().map(|s| s.content.as_ref()).collect::<String>()).collect();
     assert!(rows.len() > 1 && joined.contains("20 agents"), "{joined}");
 }
+
+#[test]
+fn an_ask_waiting_has_a_give_button_after_its_text() {
+    let rows = chat_rows(&[ChatEntry::Asking { text: "asks for a secret: pw".into(), ask: 4 }], CHAT_W - 2, TONE);
+    let (hit, cols) = rows[0].hit.clone().expect("a button");
+    assert_eq!(hit, RowHit::Give(4));
+    let text: String = rows[0].line.spans.iter().map(|span| span.content.as_ref()).collect();
+    let start = text.find(" give… ").expect("the button");
+    assert_eq!(usize::from(cols.start), text[..start].chars().count());
+    assert_eq!(usize::from(cols.end - cols.start), " give… ".chars().count());
+    assert!(text.contains("── asks for a secret: pw ──"), "{text}");
+}

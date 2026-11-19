@@ -71,7 +71,7 @@ impl App {
     fn send_again(&mut self, error: u64) {
         let Some(at) = self.shown_bot() else { return };
         let lines = self.panels.bots.shown.as_ref().map(|shown| shown.lines.as_slice()).unwrap_or_default();
-        let opener = chat::prompt_of(lines, error).filter(|line| line.kind != chat::Kind::Finished).cloned();
+        let opener = chat::prompt_of(lines, error).filter(|line| chat::retries(line)).cloned();
         let Some(opener) = opener else { return };
         let id = self.panels.bots.live[at].bot.id.clone();
         let done = if chat::is_setup(&opener) {
@@ -154,6 +154,7 @@ impl App {
             RowHit::RunAgain(run) => self.run_again(run),
             RowHit::Retry(error) => self.send_again(error),
             RowHit::Example(i) => self.panels.bots.live[at].draft = Editor::new(ui::EXAMPLES[i]),
+            RowHit::Give(ask) => self.open_bot_ask(self.panels.bots.live[at].key, ask),
             RowHit::Link => {}
         }
     }

@@ -135,6 +135,10 @@ pub(crate) fn use_bot_secrets() -> Result<()> {
     require("bot-secrets", "cannot keep a bot's secrets")
 }
 
+pub(crate) fn use_bot_asks() -> Result<()> {
+    require("bot-asks", "cannot ask for a bot's secrets")
+}
+
 pub(crate) fn use_bot_about_read() -> Result<()> {
     require("bot-about-read", "cannot print what a bot is for")
 }

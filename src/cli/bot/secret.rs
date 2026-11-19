@@ -1,16 +1,21 @@
 use std::fmt::Write as _;
+use std::io::{IsTerminal as _, Read as _};
 
 use serde_json::Value;
 
 use super::{send, target};
-use crate::cli::args::bot::{SecretAction, SecretGetArgs, SecretListArgs, SecretRemoveArgs, SecretSetArgs};
+use crate::cli::args::bot::{
+    SecretAction, SecretAnswerArgs, SecretAskArgs, SecretGetArgs, SecretListArgs, SecretRemoveArgs, SecretSetArgs,
+};
 use crate::cli::{config, guard, print_json, print_out};
-use crate::client::{self, use_bot_secrets};
-use crate::control::bots::{BotRequest, SecretGet, SecretRemove, SecretSet};
+use crate::client::{self, use_bot_asks, use_bot_secrets};
+use crate::control::bots::{BotRequest, SecretAnswer, SecretAsk, SecretGet, SecretGive, SecretRemove, SecretSet};
 use crate::error::{Error, Result};
 use crate::queue::clock;
 
 const INPUT_MAX: u64 = (1 << 16) + 1;
+const VALUES_MAX: u64 = 256 * 1024;
+const NOT_AN_OBJECT: &str = "standard input is not a JSON object of name to value";
 
 pub(super) fn run(action: SecretAction) -> Result<bool> {
     use_bot_secrets()?;
@@ -19,6 +24,9 @@ pub(super) fn run(action: SecretAction) -> Result<bool> {
         SecretAction::List(args) => list(&args),
         SecretAction::Remove(args) => remove(&args),
         SecretAction::Get(args) => get(&args),
+        SecretAction::Ask(args) => ask(&args),
+        SecretAction::Give(args) => give(&args),
+        SecretAction::Decline(args) => decline(&args),
     }
 }
 
@@ -121,6 +129,79 @@ fn get(args: &SecretGetArgs) -> Result<bool> {
         print_json(&answer)?;
     } else {
         print_out(&format!("{}\n", answer["value"].as_str().unwrap_or_default()))?;
+    }
+    Ok(true)
+}
+
+fn ask(args: &SecretAskArgs) -> Result<bool> {
+    use_bot_asks()?;
+    let request = SecretAsk { names: args.names.clone(), about: args.about.clone(), replace: args.replace };
+    let answer = send(BotRequest::SecretAsk(request))?;
+    if args.print.json {
+        print_json(&answer)?;
+    } else {
+        print_out(&asked_line(&answer))?;
+    }
+    Ok(true)
+}
+
+fn asked_line(answer: &Value) -> String {
+    let names: Vec<&str> = answer["names"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+    let already = if answer["already"].as_bool() == Some(true) { "already asked" } else { "asked" };
+    format!("{already}: {} (ask {})\n", names.join(", "), answer["ask"].as_u64().unwrap_or_default())
+}
+
+pub(super) fn values_of(text: &str) -> Result<std::collections::BTreeMap<String, crate::issues::Secret>> {
+    let not_an_object = || Error::WrongUsage(String::from(NOT_AN_OBJECT));
+    let Ok(Value::Object(map)) = serde_json::from_str::<Value>(text) else { return Err(not_an_object()) };
+    map.into_iter()
+        .map(|(name, value)| match value {
+            Value::String(value) => Ok((name, crate::issues::Secret(value))),
+            _ => Err(not_an_object()),
+        })
+        .collect()
+}
+
+fn read_values(args: &SecretAnswerArgs) -> Result<String> {
+    if std::io::stdin().is_terminal() {
+        return Err(Error::WrongUsage(format!(
+            "pipe the values in as one JSON object: printf '%s' '{{\"NAME\":\"VALUE\"}}' | cornercase bot secret give {} {}",
+            args.bot, args.ask
+        )));
+    }
+    let mut text = String::new();
+    crate::cli::line::input()
+        .take(VALUES_MAX + 1)
+        .read_to_string(&mut text)
+        .map_err(|_| Error::WrongUsage(String::from(NOT_AN_OBJECT)))?;
+    if text.len() as u64 > VALUES_MAX {
+        return Err(Error::WrongUsage(format!("standard input is over {VALUES_MAX} bytes")));
+    }
+    Ok(text)
+}
+
+fn give(args: &SecretAnswerArgs) -> Result<bool> {
+    use_bot_asks()?;
+    let values = values_of(&read_values(args)?)?;
+    let answer = send(BotRequest::SecretGive(SecretGive { bot: args.bot.clone(), ask: args.ask, values }))?;
+    if args.print.json {
+        print_json(&answer)?;
+    } else {
+        let saved = answer["saved"].as_array().into_iter().flatten().filter_map(Value::as_str);
+        let text = saved.fold(String::new(), |mut text, name| {
+            let _ = writeln!(text, "{name}");
+            text
+        });
+        print_out(&text)?;
+    }
+    Ok(true)
+}
+
+fn decline(args: &SecretAnswerArgs) -> Result<bool> {
+    use_bot_asks()?;
+    let answer = send(BotRequest::SecretDecline(SecretAnswer { bot: args.bot.clone(), ask: args.ask }))?;
+    if args.print.json {
+        print_json(&answer)?;
     }
     Ok(true)
 }

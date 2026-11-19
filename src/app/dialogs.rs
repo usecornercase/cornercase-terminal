@@ -173,6 +173,7 @@ impl App {
             Some(Overlay::Machine(_)) => self.machine_form_key(key, area),
             Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
+            Some(Overlay::BotAsk(_)) => self.bot_ask_key(key, area),
             _ => {}
         }
     }
@@ -186,6 +187,7 @@ impl App {
             Some(Overlay::Machine(_)) => self.machine_form_mouse(ev, pos, area),
             Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_mouse(ev, pos, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
+            Some(Overlay::BotAsk(_)) => self.bot_ask_mouse(ev, pos, area),
             _ => {}
         }
     }

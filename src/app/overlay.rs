@@ -177,6 +177,7 @@ pub(super) enum Overlay {
     Ports(Box<crate::ports::dialog::Dialog>),
     BotRoutines(Box<crate::bots::routines::Dialog>),
     BotSecrets(Box<super::bots::Secrets>),
+    BotAsk(Box<crate::bots::asks::Form>),
     Processes(Box<crate::processes::dialog::Dialog>),
     CloseAgent(Box<CloseAgent>),
     CloseAgents(Box<CloseAgents>),
@@ -227,7 +228,7 @@ impl Overlay {
             }
             Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) | Self::BotRoutines(_) => self.listing_name(),
             Self::CloseAgent(_) | Self::CloseAgents(_) | Self::ForgetAgents { .. } => self.agents_name(),
-            Self::Popup(_) | Self::Star | Self::Keys(_) | Self::BotSecrets(_) => self.misc_name(),
+            Self::Popup(_) | Self::Star | Self::Keys(_) | Self::BotSecrets(_) | Self::BotAsk(_) => self.misc_name(),
         }
     }
 
@@ -236,6 +237,7 @@ impl Overlay {
             Self::Popup(_) => "plugin popup",
             Self::Star => "star",
             Self::Keys(_) => "keys",
+            Self::BotAsk(_) => "bot ask",
             _ => "bot secrets",
         }
     }
@@ -275,6 +277,7 @@ impl Overlay {
                 | Self::Machine(_)
                 | Self::CloneOnMachine(_)
                 | Self::ProjectSettings(_)
+                | Self::BotAsk(_)
         )
     }
 
@@ -563,7 +566,7 @@ impl App {
             | Overlay::QueueResult(_) => self.notes_view(overlay, area)?,
             Overlay::Popup(_) | Overlay::Star | Overlay::Branches(_) => Self::own_view(overlay)?,
             Overlay::BotForm(_) | Overlay::RenameBot { .. } | Overlay::RemoveBot { .. } => self.bot_view(overlay)?,
-            Overlay::Machine(_) | Overlay::CloneOnMachine(_) | Overlay::BotSecrets(_) => self.aside(overlay, area)?,
+            _ => self.aside(overlay, area)?,
         })
     }
 }
@@ -572,6 +575,7 @@ impl App {
     fn aside(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
         match overlay {
             Overlay::BotSecrets(secrets) => self.secrets_view(secrets, area),
+            Overlay::BotAsk(form) => self.ask_view(form),
             _ => Self::machine_dialog_view(overlay),
         }
     }

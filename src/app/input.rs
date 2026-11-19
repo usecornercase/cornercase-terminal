@@ -516,6 +516,7 @@ impl App {
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_paste(text),
             Some(Overlay::Processes(dialog)) => dialog.paste(text),
+            Some(Overlay::BotAsk(_)) => self.bot_ask_paste(text, area),
             Some(_) => self.name_paste(text, area),
             None => {}
         }
