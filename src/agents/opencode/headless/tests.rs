@@ -1,5 +1,5 @@
 use super::*;
-use crate::agents::headless::{feed, plain_args, steps_of};
+use crate::agents::headless::{plain_args, steps_of};
 use crate::test_util::fixture;
 
 fn argv(tools: Tools, conversation: Option<&str>) -> Vec<String> {
@@ -7,17 +7,20 @@ fn argv(tools: Tools, conversation: Option<&str>) -> Vec<String> {
 }
 
 fn to_the_end(text: &str) -> (Ran, Option<Result<()>>) {
-    let (mut ran, mut last) = feed(read, text);
-    if last.is_none() {
-        last = ended(&mut ran);
+    let mut ran = Ran::default();
+    for line in text.lines() {
+        if let Some(result) = read(line, &mut ran) {
+            return (ran, Some(result));
+        }
     }
+    let last = ended(&mut ran);
     (ran, last)
 }
 
-fn permission_of(tools: Tools) -> Option<String> {
+fn env_of(tools: Tools, name: &str) -> Option<String> {
     let ask = Ask { tools, ..Ask::default() };
     let command = command("opencode", &ask);
-    let mut found = command.get_envs().filter(|(key, _)| *key == PERMISSION_ENV);
+    let mut found = command.get_envs().filter(|(key, _)| *key == name);
     found.next().and_then(|(_, value)| value).map(|value| value.to_string_lossy().into_owned())
 }
 
@@ -97,15 +100,25 @@ fn a_turn_that_ends_without_text_has_no_answer() {
 
 #[test]
 fn a_recap_runs_with_read_only_rules_and_no_bypass() {
-    assert_eq!(argv(Tools::Recap, None), ["run", "--format", "json", "--model", "m", "--", "- hi"]);
-    assert_eq!(permission_of(Tools::Recap).as_deref(), Some(READ_ONLY));
-    assert_eq!(permission_of(Tools::Bot(Access::Full)), None);
-    assert_eq!(permission_of(Tools::Bot(Access::Cornercase)), None);
+    let recap = argv(Tools::Recap, None);
+    assert_eq!(recap, ["run", "--format", "json", "--agent", RECAP_AGENT, "--model", "m", "--", "- hi"]);
+    assert_eq!(env_of(Tools::Recap, PERMISSION_ENV).as_deref(), Some(READ_ONLY));
+    for bot in [Tools::Bot(Access::Full), Tools::Bot(Access::Cornercase)] {
+        assert_eq!((env_of(bot, PERMISSION_ENV), env_of(bot, CONFIG_ENV)), (None, None));
+    }
     let rules: Value = serde_json::from_str(READ_ONLY).expect("the rules are JSON");
     for tool in ["*", "bash", "edit", "task", "external_directory"] {
         assert_eq!(rules[tool], "deny", "{tool}");
     }
     assert_eq!(rules["read"], "allow");
+}
+
+#[test]
+fn a_recap_runs_as_an_agent_of_its_own_whose_rules_are_the_read_only_ones() {
+    let config: Value = serde_json::from_str(&env_of(Tools::Recap, CONFIG_ENV).expect("a config")).expect("json");
+    let agent = &config["agent"][RECAP_AGENT];
+    assert_eq!(agent["mode"], "primary");
+    assert_eq!(agent["permission"], serde_json::from_str::<Value>(READ_ONLY).expect("the rules"));
 }
 
 #[test]

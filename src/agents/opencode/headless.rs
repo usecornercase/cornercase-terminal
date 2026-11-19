@@ -15,11 +15,21 @@ const READ_ONLY: &str = concat!(
     r#""external_directory":"deny","doom_loop":"allow"}"#
 );
 const PERMISSION_ENV: &str = "OPENCODE_PERMISSION";
+const CONFIG_ENV: &str = "OPENCODE_CONFIG_CONTENT";
+const RECAP_AGENT: &str = "cornercase-recap";
+
+fn recap_config() -> String {
+    format!(
+        r#"{{"agent":{{"{RECAP_AGENT}":{{"mode":"primary","description":"Reads cornercase's dossier and changes nothing","permission":{READ_ONLY}}}}}}}"#
+    )
+}
 
 pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
     let mut args = owned(&["run", "--format", "json"]);
-    if ask.tools == Tools::Bot(Access::Full) {
-        args.push(String::from("--auto"));
+    match ask.tools {
+        Tools::Bot(Access::Full) => args.push(String::from("--auto")),
+        Tools::Recap => args.extend(owned(&["--agent", RECAP_AGENT])),
+        Tools::Bot(Access::Cornercase) => {}
     }
     if let Some(session) = &ask.conversation {
         args.extend(["--session".to_string(), session.clone()]);
@@ -28,7 +38,7 @@ pub(in crate::agents) fn command(program: &str, ask: &Ask) -> Command {
     args.extend(["--".to_string(), ask.prompt.clone()]);
     let mut command = started(program, args);
     if ask.tools == Tools::Recap {
-        command.env(PERMISSION_ENV, READ_ONLY);
+        command.env(PERMISSION_ENV, READ_ONLY).env(CONFIG_ENV, recap_config());
     }
     command
 }

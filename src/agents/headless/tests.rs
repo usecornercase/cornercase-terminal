@@ -229,22 +229,30 @@ fn copilot_argv_for_a_recap_allows_no_tool() {
 #[test]
 fn opencode_argv_for_a_recap_has_no_bypass() {
     let out = fixture!("opencode/1.18.35/bot-resumed.jsonl");
-    let (argv, env, _folder) = recap_argv(Known::Opencode, out, "OPENCODE_PERMISSION");
-    assert_eq!(argv, "[\"run\", \"--format\", \"json\", \"--model\", \"opus\", \"--\", \"Sum it up\"]");
-    let rules = env.trim_end().strip_prefix("OPENCODE_PERMISSION=").expect("the read-only rules");
+    let (argv, env, _folder) = recap_argv(Known::Opencode, out, "OPENCODE_PERMISSION OPENCODE_CONFIG_CONTENT");
+    let wanted = r#"["run", "--format", "json", "--agent", "cornercase-recap", "--model", "opus", "--", "Sum it up"]"#;
+    assert_eq!(argv, wanted);
+    let mut lines = env.lines();
+    let rules = lines.next().and_then(|line| line.strip_prefix("OPENCODE_PERMISSION=")).expect("the read-only rules");
     let rules: Value = serde_json::from_str(rules).expect("json");
     assert_eq!((&rules["*"], &rules["bash"], &rules["read"]), (&"deny".into(), &"deny".into(), &"allow".into()));
+    let config = lines.next().and_then(|line| line.strip_prefix("OPENCODE_CONFIG_CONTENT=")).expect("the agent");
+    let config: Value = serde_json::from_str(config).expect("json");
+    assert_eq!(config["agent"]["cornercase-recap"]["permission"], rules);
 }
 
 #[rstest::rstest]
-#[case::copilot(Known::Copilot, fixture!("copilot/1.0.98/bot-resumed.jsonl"))]
-#[case::opencode(Known::Opencode, fixture!("opencode/1.18.35/bot-resumed.jsonl"))]
-fn a_recap_is_the_agents_last_answer(#[case] agent: Known, #[case] out: &str) {
+#[case::copilot(
+    Known::Copilot,
+    fixture!("copilot/1.0.98/bot-new.jsonl"),
+    "Version `0.13.80` printed, and the second command did not run because permission was denied."
+)]
+#[case::opencode(Known::Opencode, fixture!("opencode/1.18.35/bot-compacted.jsonl"), "The keeper's name was Silas.")]
+fn a_recap_is_the_agents_last_answer(#[case] agent: Known, #[case] out: &str, #[case] last: &str) {
     let dir = TempDir::new();
     let folder = TempDir::new();
     let program = faked(&dir, agent.name(), out);
-    let recap = ran(agent, &program, folder.path()).expect("a recap");
-    assert!(!recap.text.is_empty() && out.contains(&recap.text), "{}", recap.text);
+    assert_eq!(ran(agent, &program, folder.path()).expect("a recap").text, last);
 }
 
 mod bots {
