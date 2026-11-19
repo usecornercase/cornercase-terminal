@@ -72,8 +72,13 @@ impl App {
 }
 
 fn link_message(name: &str, url: &str, width: usize) -> String {
-    let asks = width.saturating_sub(ASKS.len());
-    let mut rows = vec![format!("{}{ASKS}", truncate_right(name, asks.max(2)))];
+    let room = width.saturating_sub(ASKS.len());
+    let first = if room >= 2 {
+        format!("{}{ASKS}", truncate_right(name, room))
+    } else {
+        truncate_right(&format!("{name}{ASKS}"), width)
+    };
+    let mut rows = vec![first];
     let chunks: Vec<&str> = url.as_bytes().chunks(width).filter_map(|chunk| std::str::from_utf8(chunk).ok()).collect();
     if chunks.len() <= ADDRESS_ROWS {
         rows.extend(chunks.iter().map(|chunk| (*chunk).to_string()));

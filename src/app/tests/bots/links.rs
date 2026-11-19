@@ -54,9 +54,13 @@ fn press_button(c: &mut Chat, label: &str) {
 }
 
 fn drawn_dialog(app: &mut App) -> String {
-    let screen = render(app, AREA);
+    drawn_dialog_in(app, AREA)
+}
+
+fn drawn_dialog_in(app: &mut App, area: Rect) -> String {
+    let screen = render(app, area);
     let buffer = screen.backend().buffer();
-    let form = ui::form_area(AREA);
+    let form = ui::form_area(area);
     let row = |y| (form.x..form.right()).map(|x| buffer[(x, y)].symbol()).collect::<String>();
     (form.y..form.bottom()).map(row).collect::<Vec<_>>().join("\n")
 }
@@ -175,4 +179,14 @@ fn removing_the_bot_closes_the_dialog() {
     click_link(&mut c, &[Opener::Default]);
     assert!(c.app.bot_remove("prs").is_ok());
     assert!(c.app.overlay.is_none());
+}
+
+#[test]
+fn a_narrow_window_still_shows_where_a_long_address_is_cut() {
+    let long = format!("https://example.com/{}", "segment/".repeat(30));
+    let mut c = answered(&format!("see {long}"));
+    c.app.set_window(7, &[Opener::Default]);
+    let (pos, _) = link_at(&mut c.app);
+    click(&mut c.app, pos);
+    insta::assert_snapshot!(drawn_dialog_in(&mut c.app, Rect::new(0, 0, 40, 20)));
 }

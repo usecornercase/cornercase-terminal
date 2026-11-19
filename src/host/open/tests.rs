@@ -280,7 +280,10 @@ mod running {
     fn a_link_runs_the_launcher_with_the_address_alone() {
         let tmp = TempDir::new();
         let launcher = tmp.path().join("xdg-open");
-        write_executable(&launcher, "#!/bin/sh\nprintf '%s\\n' \"$#\" \"$@\" > \"$0.args\"\n");
+        write_executable(
+            &launcher,
+            "#!/bin/sh\nprintf '%s\\n' \"$#\" \"$@\" > \"$0.tmp\"\nmv \"$0.tmp\" \"$0.args\"\n",
+        );
         with_launcher(launcher).link(&link("https://example.com/a?b=c&d#e"), |_| {});
         let args = tmp.path().join("xdg-open.args");
         crate::test_util::wait_until("the launcher ran", || args.exists());
