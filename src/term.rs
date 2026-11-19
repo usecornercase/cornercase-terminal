@@ -452,7 +452,11 @@ impl Drop for Term {
 }
 
 pub(crate) fn bracketed(text: &str) -> String {
-    format!("{PASTE_START}{}{PASTE_END}", text.replace(PASTE_END, ""))
+    let mut inside = text.to_string();
+    while inside.contains(PASTE_END) {
+        inside = inside.replace(PASTE_END, "");
+    }
+    format!("{PASTE_START}{inside}{PASTE_END}")
 }
 
 pub(crate) fn program(config: &Config, name: &str, argv: &[String]) -> String {

@@ -222,6 +222,14 @@ mod writing {
         assert_eq!(bracketed("ls\x1b[201~\rrm -rf x"), "\x1b[200~ls\rrm -rf x\x1b[201~");
     }
 
+    #[test]
+    fn a_paste_cannot_end_itself_with_an_end_that_removing_one_leaves() {
+        let pasted = bracketed("\x1b[201\x1b[201~~\x1b[Z");
+        assert_eq!(pasted.matches("\x1b[201~").count(), 1, "{pasted:?}");
+        assert!(pasted.ends_with("\x1b[201~"), "{pasted:?}");
+        assert_eq!(bracketed("a\x1b[20\x1b[201\x1b[201~~~b"), "\x1b[200~a\x1b[20~b\x1b[201~");
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_program_that_does_not_read_never_blocks_the_writer() {

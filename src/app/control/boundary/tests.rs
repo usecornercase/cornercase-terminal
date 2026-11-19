@@ -188,8 +188,20 @@ fn an_open_request_is_not_closed() {
 #[case::an_exclamation("hello!", None, false)]
 #[case::copilots_help("?", Some(Known::Copilot), true)]
 #[case::a_question_for_claude("?", Some(Known::Claude), false)]
+#[case::lines_and_tabs("fix this\n\tand that\r\n", None, false)]
+#[case::an_escape_that_ends_the_paste("\x1b[201\x1b[201~~\x1b[Z", None, true)]
+#[case::a_lone_escape("go\x1b", None, true)]
+#[case::a_c1_control("go\u{9b}Z", None, true)]
+#[case::a_control_letter("go\x03", None, true)]
 fn a_prompt_is_told_from_an_agents_command(#[case] text: &str, #[case] agent: Option<Known>, #[case] refused: bool) {
-    assert_eq!(not_a_prompt(text, agent), refused);
+    assert_eq!(not_a_prompt(text, agent).is_some(), refused);
+}
+
+#[test]
+fn a_text_with_keys_in_it_says_so() {
+    let why = not_a_prompt("go\x1b[Z", None).expect("refused");
+    assert!(why.starts_with("a bot writes prompts to an agent, not keys"), "{why}");
+    assert!(not_a_prompt("/exit", None).is_some_and(|why| why.contains("`/` or `!`")));
 }
 
 #[test]

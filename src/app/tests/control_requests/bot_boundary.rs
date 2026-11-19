@@ -168,6 +168,8 @@ fn a_bot_cannot_send_an_agents_command_or_its_shell() {
 
     b.refused_for(text(agent, "/exit", true), command);
     b.refused_for(text(agent, "  !echo typed-by-bot", true), command);
+    let keys = "a bot writes prompts to an agent, not keys";
+    b.refused_for(text(agent, "\x1b[201\x1b[201~~typed-by-bot\x1b[Z", true), keys);
     b.refused_for(
         Command::Send(wire::SendText { pane: Some(agent), enter: true, ..wire::SendText::default() }),
         "a bot's send needs a text",

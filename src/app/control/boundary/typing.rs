@@ -12,6 +12,9 @@ const NEEDS_TEXT: &str = "a bot's send needs a text: Enter alone is a key";
 const NOT_A_PROMPT: &str = "a bot writes prompts to an agent, not its commands: a text starting with `/` or `!` is the \
                             agent's own command or its shell; start the text with a word";
 
+const KEYS_IN_TEXT: &str = "a bot writes prompts to an agent, not keys: a text with a control character other than a \
+                            line break or a tab is refused";
+
 fn refused(why: &str) -> Refusal {
     Refusal::new(Code::Failed, format!("{HEAD}, {why}"))
 }
@@ -24,8 +27,12 @@ fn asks(pane: u64) -> Refusal {
     refused(&format!("and the agent in pane {pane} asks something: only you answer an agent's questions, in its tab"))
 }
 
-pub(super) fn not_a_prompt(text: &str, agent: Option<agents::Known>) -> bool {
-    text.trim_start().starts_with(['/', '!']) || agent.is_some_and(|agent| agent.local_command(text))
+pub(super) fn not_a_prompt(text: &str, agent: Option<agents::Known>) -> Option<&'static str> {
+    if text.chars().any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t')) {
+        return Some(KEYS_IN_TEXT);
+    }
+    let command = text.trim_start().starts_with(['/', '!']) || agent.is_some_and(|agent| agent.local_command(text));
+    command.then_some(NOT_A_PROMPT)
 }
 
 pub(in crate::app) fn takes_a_bots_enter(config: &Config, term: &Term) -> bool {
@@ -50,7 +57,10 @@ impl App {
             Text::Kept | Text::Missing => None,
         };
         let agent = self.projects.pane_by(pane).and_then(|term| self.foreground_agent(term));
-        if said.is_some_and(|said| not_a_prompt(&said, agent)) { Err(failed(NOT_A_PROMPT)) } else { Ok(()) }
+        match said.and_then(|said| not_a_prompt(&said, agent)) {
+            Some(why) => Err(failed(why)),
+            None => Ok(()),
+        }
     }
 
     pub(in crate::app::control) fn bot_prompts(
@@ -60,8 +70,8 @@ impl App {
         prompt: Option<&str>,
     ) -> Result<(), Refusal> {
         let agent = agents::Known::of(kind);
-        let refused = self.clients.bots.is_bot(client) && prompt.is_some_and(|prompt| not_a_prompt(prompt, agent));
-        if refused { Err(failed(NOT_A_PROMPT)) } else { Ok(()) }
+        let why = prompt.filter(|_| self.clients.bots.is_bot(client)).and_then(|prompt| not_a_prompt(prompt, agent));
+        why.map_or(Ok(()), |why| Err(failed(why)))
     }
 
     pub(in crate::app::control) fn types_into(&self, pane: u64) -> Result<(), Refusal> {

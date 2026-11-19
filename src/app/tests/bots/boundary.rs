@@ -525,6 +525,10 @@ mod marked {
             &serde_json::json!({"project": project, "agent": "claude", "mode": "default", "prompt": "!ls"}),
         );
         assert!(command.is_some_and(|said| said.starts_with("a bot writes prompts to an agent")));
+        let escape =
+            serde_json::json!({"project": project, "agent": "claude", "mode": "default", "prompt": "go\u{1b}[Z"});
+        let keys = refusal(&mut app, BOT, "start", &escape).expect("refused");
+        assert!(keys.starts_with("a bot writes prompts to an agent, not keys"), "{keys}");
         app.stop_background();
     }
 }
