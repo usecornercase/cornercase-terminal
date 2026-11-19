@@ -101,6 +101,8 @@ fn typed(text: &str) -> Gated {
 #[case::set_a_machine(Command::Machines(Machines::Set(MachineSet::default())), Some(Gated::Machines))]
 #[case::remove_a_machine(Command::Machines(Machines::Remove("x".into())), Some(Gated::Machines))]
 #[case::update_a_machine(Command::Machines(Machines::Update("x".into())), Some(Gated::Machines))]
+#[case::hide_a_machine(Command::Machines(Machines::Hide(Some("x".into()))), Some(Gated::Machines))]
+#[case::show_every_machine(Command::Machines(Machines::Show(None)), Some(Gated::Machines))]
 #[case::new_tab_with_a_command(new_tab(Some("ls")), Some(Gated::NewShell))]
 #[case::new_tab_without_a_command(new_tab(None), None)]
 #[case::new_tab_with_a_blank_command(new_tab(Some("  ")), None)]

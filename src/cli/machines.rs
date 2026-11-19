@@ -8,6 +8,7 @@ use crate::client::{answer, ask};
 use crate::control::usage::MachineRead;
 use crate::control::{Command, MachineList, MachineSet, Machines};
 use crate::error::Result;
+use crate::machines;
 use crate::text;
 use crate::time::{self, Stamp};
 
@@ -18,6 +19,9 @@ pub(super) fn run(args: &MachinesArgs) -> Result<()> {
     if needs_shown(&request) {
         crate::client::use_machine_shown()?;
     }
+    if needs_hide(&request) {
+        crate::client::use_machine_hide()?;
+    }
     let value = ask("machines", Command::Machines(request))?;
     let list: MachineList = answer(value.clone())?;
     if print.json { print_json(&value) } else { print_out(&list_text(&list, SystemTime::now())) }
@@ -25,6 +29,14 @@ pub(super) fn run(args: &MachinesArgs) -> Result<()> {
 
 fn needs_shown(request: &Machines) -> bool {
     matches!(request, Machines::Set(set) if set.command.is_some() || set.shown.is_some())
+}
+
+fn needs_hide(request: &Machines) -> bool {
+    matches!(request, Machines::Hide(_) | Machines::Show(_))
+}
+
+fn target(target: &str) -> Option<String> {
+    (!target.trim().eq_ignore_ascii_case(machines::EVERY)).then(|| target.to_string())
 }
 
 pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
@@ -59,12 +71,14 @@ pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
         Some(MachinesAction::Remove(remove)) => (Machines::Remove(remove.name.clone()), &remove.print),
         Some(MachinesAction::Update(update)) => (Machines::Update(update.name.clone()), &update.print),
         Some(MachinesAction::Retry(retry)) => (Machines::Retry(retry.name.clone()), &retry.print),
+        Some(MachinesAction::Hide(hide)) => (Machines::Hide(target(&hide.target)), &hide.print),
+        Some(MachinesAction::Show(show)) => (Machines::Show(target(&show.target)), &show.print),
     }
 }
 
 pub(crate) fn list_text(list: &MachineList, now: SystemTime) -> String {
     let mut text = format!("{} this computer  {}\n", list.here.icon, list.here.version);
-    let width = |cells: fn(&crate::machines::Info) -> &str| {
+    let width = |cells: fn(&machines::Info) -> &str| {
         list.machines.iter().map(|machine| text::cells(cells(machine))).max().unwrap_or_default()
     };
     let (names, destinations) = (width(|m| &m.name), width(|m| &m.destination));

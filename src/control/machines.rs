@@ -14,6 +14,8 @@ pub(crate) enum Machines {
     Remove(String),
     Update(String),
     Retry(Option<String>),
+    Hide(Option<String>),
+    Show(Option<String>),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,6 +44,8 @@ impl Machines {
             Self::Remove(name) => fields.add("action", "remove").add("name", name),
             Self::Update(name) => fields.add("action", "update").add("name", name),
             Self::Retry(name) => fields.add("action", "retry").maybe("name", name.as_ref()),
+            Self::Hide(name) => fields.add("action", "hide").maybe("name", name.as_ref()),
+            Self::Show(name) => fields.add("action", "show").maybe("name", name.as_ref()),
         };
     }
 }

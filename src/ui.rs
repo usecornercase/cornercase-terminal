@@ -120,7 +120,7 @@ pub(crate) use dialog::settings::{
 #[cfg(test)]
 pub(crate) use dialog::settings::{
     SettingsLine, line_rect, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
-    settings_remove, settings_restart, settings_row, settings_scroll, settings_share, settings_tabs,
+    settings_remove, settings_restart, settings_row, settings_scroll, settings_share, settings_tabs, settings_toggle,
 };
 #[cfg(test)]
 pub(crate) use dialog::share_settings::share_settings_buttons;

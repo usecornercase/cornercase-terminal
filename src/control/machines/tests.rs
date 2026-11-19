@@ -50,6 +50,12 @@ mod the_request {
     #[case::update(json!({"action": "update", "entry": "vps"}), Machines::Update("vps".into()))]
     #[case::retry_every_machine(json!({"action": "retry"}), Machines::Retry(None))]
     #[case::retry_one(json!({"action": "retry", "entry": "vps"}), Machines::Retry(Some("vps".into())))]
+    #[case::hide_one(json!({"action": "hide", "entry": "vps"}), Machines::Hide(Some("vps".into())))]
+    #[case::hide_every_machine(json!({"action": "hide", "entry": null}), Machines::Hide(None))]
+    #[case::hide_without_an_entry(json!({"action": "hide"}), Machines::Hide(None))]
+    #[case::show_one(json!({"action": "show", "entry": "vps"}), Machines::Show(Some("vps".into())))]
+    #[case::show_every_machine(json!({"action": "show", "entry": null}), Machines::Show(None))]
+    #[case::show_without_an_entry(json!({"action": "show"}), Machines::Show(None))]
     fn is_tagged_by_its_action(#[case] sent: Value, #[case] read: Machines) {
         assert_eq!(serde_json::from_value::<Machines>(sent).expect("a request"), read);
     }
@@ -64,6 +70,23 @@ mod the_request {
             ..MachineSet::default()
         };
         assert_eq!(serde_json::from_value::<Machines>(wire).expect("a request"), Machines::Set(expected));
+    }
+
+    #[rstest]
+    #[case::hide_one(Machines::Hide(Some("vps".into())), json!({"action": "hide", "entry": "vps"}))]
+    #[case::show_every_machine(Machines::Show(None), json!({"action": "show", "entry": null}))]
+    fn hide_and_show_are_written_with_their_entry(#[case] request: Machines, #[case] wire: Value) {
+        assert_eq!(serde_json::to_value(request).expect("json"), wire);
+    }
+
+    #[rstest]
+    #[case::hide_one(Machines::Hide(Some("vps".into())), vec![("action", "hide"), ("name", "vps")])]
+    #[case::show_every_machine(Machines::Show(None), vec![("action", "show")])]
+    fn hide_and_show_log_their_action_and_name(#[case] request: Machines, #[case] logged: Vec<(&str, &str)>) {
+        let mut fields = Fields(Vec::new());
+        request.fields(&mut fields);
+        let logged: Vec<_> = logged.into_iter().map(|(key, value)| (key, value.to_string())).collect();
+        assert_eq!(fields.0, logged);
     }
 
     #[test]

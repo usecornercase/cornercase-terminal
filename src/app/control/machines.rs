@@ -1,6 +1,7 @@
 use super::{Handled, conflict, json, malformed};
 use crate::app::App;
 use crate::app::machine_links::{RemoteItem, Update};
+use crate::app::machines::change_shown;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{FocusMachine, Item, MachineList, MachineSet, Machines, machines::ThisComputer};
 use crate::log;
@@ -12,7 +13,7 @@ pub(in crate::app) fn unknown(name: &str) -> Refusal {
 }
 
 fn not_shown(name: &str) -> Refusal {
-    let why = format!("`{name}` is not shown here, so it has no link: tick show its work here in Settings › Machines");
+    let why = format!("`{name}` is hidden here, so it has no link: `cornercase machines show {name}` links it again");
     Refusal::new(Code::NotFound, why)
 }
 
@@ -115,6 +116,8 @@ impl App {
             Machines::Remove(name) => self.remove_machine(&name)?,
             Machines::Update(name) => return self.update_machine_request(client, &name),
             Machines::Retry(name) => self.retry_machines(name.as_deref())?,
+            Machines::Hide(name) => self.show_machines_request(name.as_deref(), false)?,
+            Machines::Show(name) => self.show_machines_request(name.as_deref(), true)?,
         }
         Ok(Some(json(&self.machine_list())))
     }
@@ -190,6 +193,16 @@ impl App {
             }
         })?;
         if found { Ok(()) } else { Err(unknown(name)) }
+    }
+
+    fn show_machines_request(&mut self, name: Option<&str>, shown: bool) -> Result<(), Refusal> {
+        let mut changed = None;
+        self.change_config_for(|config| changed = change_shown(config, name, shown))?;
+        self.follow_machines();
+        match (changed, name) {
+            (None, Some(name)) => Err(unknown(name.trim())),
+            _ => Ok(()),
+        }
     }
 
     fn update_machine_request(&mut self, client: u64, name: &str) -> Handled {

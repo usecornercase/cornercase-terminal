@@ -27,6 +27,12 @@ pub(crate) enum MachinesAction {
     Update(NameArgs),
     #[command(about = "Try the links again now: one machine's, or every machine's")]
     Retry(RetryArgs),
+    #[command(
+        about = "Hide a machine without removing it: its link ends and its server keeps running there; `all` hides every machine"
+    )]
+    Hide(TargetArgs),
+    #[command(about = "Show a hidden machine's work here again; `all` shows every machine")]
+    Show(TargetArgs),
 }
 
 #[derive(Debug, Args)]
@@ -84,6 +90,14 @@ pub(crate) struct NameArgs {
 pub(crate) struct RetryArgs {
     #[arg(value_name = "NAME", help = "Only this machine [default: every machine]")]
     pub(crate) name: Option<String>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct TargetArgs {
+    #[arg(value_name = "NAME|all", help = "The machine's name, as `cornercase machines` lists it, or `all`")]
+    pub(crate) target: String,
     #[command(flatten)]
     pub(crate) print: Print,
 }

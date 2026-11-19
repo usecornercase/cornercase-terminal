@@ -10,7 +10,7 @@ import Screen from '../../../../components/Screen.astro';
 
 <Screen
   name="settings-machines"
-  alt="Settings › Machines: this computer first, then vps linked to cornercase on ana@vps.example.com, homelab unreachable and not seen yet, mini, whose cornercase is older, with an update… row under it, and devbox, grey and not shown; + add machine last"
+  alt="Settings › Machines: this computer first, then vps linked to cornercase on ana@vps.example.com, homelab unreachable and not seen yet, mini, whose cornercase is older, with an update… row under it, and devbox, grey and hidden; each machine ends with its show here toggle; + add machine last"
   crop={[2, 1, 106, 10]}
 />
 
@@ -27,11 +27,19 @@ Click **`+ add machine`** at the end of the list. The form asks for:
 | **destination** | Anything `ssh` takes: a `Host` of your `~/.ssh/config`, or `user@host`. Your config, keys and agent apply, and cornercase never sees a password or a key. |
 | **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, `~`, or one starting with `~/`. Nothing is made there yet. |
 | **command** | Optional. What runs cornercase there, for a window you open there with the machine button, as `cornercase remote --command` does: a path such as `~/bin/cornercase`. Leave it empty when `cornercase` is on the `PATH`. |
-| **show its work here** | On by default. The link starts and the machine's workspaces and agents show next to yours. Off: the machine stays on the list and the machine button still offers it, but nothing is linked and its row reads `◌ not shown`. |
+| **show its work here** | On by default. The link starts and the machine's workspaces and agents show next to yours. Off: the machine stays on the list and the machine button still offers it, but nothing is linked and its row reads `◌ hidden`. |
 
 ` add ` saves it, and the link starts at once, unless **show its work here** is off. A value the form refuses says why under its field, and nothing is saved. Click a machine, or select it and press `Enter`, to change it in the same form; its link carries on unless you change the destination.
 
 The `×` at the end of a row, or `Backspace`, removes a machine at once. The machine's server keeps running there.
+
+### Hide a machine
+
+To stop seeing a machine's work for a while without removing it, hide it. Its link ends, so nothing of it shows in your sidebar or the agents section and its agents don't notify you; its entry stays on the list, and nothing stops on the machine: its server, shells and agents keep running there. Show it again and the link comes back with everything that ran meanwhile.
+
+- **In Settings › Machines**, click the toggle at the end of a machine's row, before its `×`: `show here ✓` hides it, `show here ·` shows it again. On a narrow window the toggle is only ` ✓ ` or ` · `.
+- **From the machine button**, click a machine to open its submenu: **show its work here ✓** hides it, **show its work here ·** shows it, and **open the window there** moves the window to it. **only this computer** hides every machine and **show all** shows them all; each is dim when it would change nothing. These are offered while the window is on this computer.
+- **From a terminal**, `cornercase machines hide vps` and `cornercase machines show vps`, or `all` for every machine ([Command line](../../reference/command-line/#cornercase-machines)).
 
 This is the one list of machines. The machine button at the bottom of the sidebar (`this computer ▴`) offers the same machines, to move the window itself to one ([Switch machines from the window](../remote/#switch-machines-from-the-window)), and a machine you reach with `cornercase remote` joins it, not shown. Its **`add machine…`** opens this form, and **`manage machines…`** opens this page. While the window is on another machine, the first row names whose list this is, `▭ vps`.
 
@@ -40,7 +48,7 @@ This is the one list of machines. The machine button at the bottom of the sideba
 The link is one `ssh` connection from your cornercase server to the cornercase server on the machine. It is the server's, not the window's, so it stays up while no window is open.
 
 - **It uses the server running there**, or starts one when none runs, as [`cornercase start-server`](../../reference/command-line/#cornercase-start-server) does.
-- **It never stops anything there.** Removing the machine, stopping or restarting cornercase on this computer, this computer going to sleep and a dropped connection all end the link only; the server on the machine and everything in it keep running.
+- **It never stops anything there.** Removing or hiding the machine, stopping or restarting cornercase on this computer, this computer going to sleep and a dropped connection all end the link only; the server on the machine and everything in it keep running.
 - **A server you stop there comes back.** After `cornercase kill-server` on the machine, the link starts it again on its next try. To stop it for good, remove the machine here first.
 - **It goes one way.** The machine can't act on this computer through the link: a tab you look at is drawn as text and colours only, nothing it sends is played or opened here, the one thing that reaches your clipboard is text (what you select on it, or what a program in the tab you look at copies), and the link's `ssh` forwards neither your agent, nor X11, nor any port.
 
@@ -52,7 +60,7 @@ The link is one `ssh` connection from your cornercase server to the cornercase s
 | `● linked · 0.12.225` | Linked, with the version of cornercase installed there. When its server still runs an older one, the row adds `· its server runs 0.12.224 until it restarts there`. |
 | `○ unreachable · 8 s` | Down since that long, or `not seen yet` when it has never been up since your server started. Select the row and the line at the bottom shows why: what `ssh` said, `cornercase was not found on vps: install it there`, `that is this computer`, or `the same server as vps` when two destinations reach one machine. |
 | `◐ older · 0.0.1` | Its cornercase is older than yours, so it is not linked. |
-| `◌ not shown` | **show its work here** is off: no link, and nothing of it in your sidebar. Open it and tick the box to link it. |
+| `◌ hidden` | **show its work here** is off: no link, and nothing of it in your sidebar. Click its `show here ·` toggle to link it again ([Hide a machine](#hide-a-machine)). |
 
 A link that drops is tried again after 1, 2, 4 and 8 seconds, then every 15 seconds, and every minute while something on the machine needs you: an older cornercase, a missing one, or a destination that turns out to be this computer or a machine already listed. All of them try again at once when this computer wakes up or changes network, and when you change a machine that is down. `cornercase machines retry` tries them now, and `cornercase machines --json` says when each one tries next ([`retry_at`](../scripts-and-agents/#machines)).
 

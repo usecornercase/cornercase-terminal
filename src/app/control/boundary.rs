@@ -163,7 +163,9 @@ fn places(command: &Command) -> Option<Gated> {
         Command::AgentsClose(close) if !close.check => Some(Gated::Closing),
         Command::FlowImport(import) if !import.check => Some(Gated::Flows),
         Command::FlowSave(save) if !save.check => Some(Gated::Flows),
-        Command::Machines(Machines::Set(_) | Machines::Remove(_) | Machines::Update(_)) => Some(Gated::Machines),
+        Command::Machines(
+            Machines::Set(_) | Machines::Remove(_) | Machines::Update(_) | Machines::Hide(_) | Machines::Show(_),
+        ) => Some(Gated::Machines),
         Command::Clone(_) => Some(Gated::Clone),
         _ => None,
     }

@@ -3,6 +3,7 @@
 use super::*;
 use crate::host::open::Browse;
 use crate::machines::form::{ADD, BACK, Field, Form};
+use crate::machines::link::fake::Once;
 use crate::machines::{Machine, machine};
 use crate::protocol::{Holding, MachineOrder, Machines, Tunnel, TunnelOrder, TunnelState};
 
@@ -13,6 +14,7 @@ fn listed(app: &mut App, names: &[&str]) {
 }
 
 fn reaches(app: &mut App, here: Option<&str>, known: &[&str]) {
+    app.machines.set_connector(Box::new(|_| Box::new(Once(parking_lot::Mutex::new(None)))));
     listed(app, known);
     let known = known.iter().map(|&name| name.to_string()).collect();
     app.set_machines(WINDOW, Some(Machines { here: here.map(Into::into), known }));
@@ -119,7 +121,15 @@ mod menu {
 
         assert_eq!(
             open_menu(&mut app),
-            ["✓ this computer", "  devbox", "  gpu-box", "add machine…", "manage machines…"]
+            [
+                "✓ this computer",
+                "  devbox  ▸",
+                "  gpu-box ▸",
+                "only this computer",
+                "show all",
+                "add machine…",
+                "manage machines…"
+            ]
         );
     }
 
@@ -131,7 +141,15 @@ mod menu {
 
         assert_eq!(
             open_menu(&mut app),
-            ["✓ this computer", "  newbox", "  devbox", "add machine…", "manage machines…"]
+            [
+                "✓ this computer",
+                "  newbox ▸",
+                "  devbox ▸",
+                "only this computer",
+                "show all",
+                "add machine…",
+                "manage machines…"
+            ]
         );
     }
 
@@ -182,6 +200,141 @@ mod menu {
         pick(&mut app, "✓ devbox");
 
         assert_eq!(app.take_machine_orders(), []);
+    }
+}
+
+mod hiding {
+    use super::*;
+
+    fn toast(app: &App) -> Option<String> {
+        app.messages.toast.as_ref().map(|toast| toast.message.clone())
+    }
+
+    fn disabled(app: &App, label: &str) -> bool {
+        let at = menu_labels(app).iter().position(|item| item == label).expect("the item");
+        menu_disabled(app)[at]
+    }
+
+    fn submenu(app: &mut App, row: &str) -> Vec<String> {
+        open_menu(app);
+        pick(app, row);
+        menu_labels(app)
+    }
+
+    #[test]
+    fn a_shown_machine_s_row_offers_to_hide_it_and_to_open_the_window_there() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox"]);
+
+        assert_eq!(submenu(&mut app, "  devbox ▸"), ["show its work here ✓", "open the window there"]);
+    }
+
+    #[test]
+    fn a_hidden_machine_s_row_offers_to_show_it() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox"]);
+        app.config.machines[0].shown = false;
+
+        assert_eq!(submenu(&mut app, "  devbox ▸")[0], "show its work here ·");
+    }
+
+    #[test]
+    fn open_the_window_there_switches_to_it() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox"]);
+        submenu(&mut app, "  devbox ▸");
+
+        pick(&mut app, "open the window there");
+
+        assert_eq!(app.take_machine_orders(), [switch(Some("devbox"))]);
+    }
+
+    #[test]
+    fn show_its_work_here_hides_a_shown_machine_and_says_so() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox", "vps"]);
+        submenu(&mut app, "  devbox ▸");
+
+        pick(&mut app, "show its work here ✓");
+
+        let shown: Vec<bool> = app.config.machines.iter().map(|machine| machine.shown).collect();
+        assert_eq!(shown, [false, true]);
+        assert_eq!(toast(&app).as_deref(), Some("devbox hidden: its server keeps running there"));
+    }
+
+    #[test]
+    fn show_its_work_here_shows_a_hidden_machine() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox"]);
+        app.config.machines[0].shown = false;
+        submenu(&mut app, "  devbox ▸");
+
+        pick(&mut app, "show its work here ·");
+
+        assert!(app.config.machines[0].shown);
+        assert_eq!(toast(&app).as_deref(), Some("devbox shown here"));
+    }
+
+    #[test]
+    fn only_this_computer_hides_every_machine() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox", "vps"]);
+        open_menu(&mut app);
+
+        pick(&mut app, "only this computer");
+
+        assert!(app.config.machines.iter().all(|machine| !machine.shown));
+        assert_eq!(toast(&app).as_deref(), Some("every machine hidden: their servers keep running there"));
+    }
+
+    #[test]
+    fn show_all_shows_every_machine() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox", "vps"]);
+        app.config.machines.iter_mut().for_each(|machine| machine.shown = false);
+        open_menu(&mut app);
+
+        pick(&mut app, "show all");
+
+        assert!(app.config.machines.iter().all(|machine| machine.shown));
+        assert_eq!(toast(&app).as_deref(), Some("every machine shown here"));
+    }
+
+    #[test]
+    fn each_of_the_two_is_dim_when_it_would_change_nothing() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox"]);
+        open_menu(&mut app);
+        let all_shown = (disabled(&app, "only this computer"), disabled(&app, "show all"));
+        app.config.machines[0].shown = false;
+
+        assert_eq!(
+            (all_shown, (disabled(&app, "only this computer"), disabled(&app, "show all"))),
+            ((false, true), (true, false))
+        );
+    }
+
+    #[test]
+    fn a_click_on_a_dim_one_does_nothing() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, None, &["devbox"]);
+        open_menu(&mut app);
+
+        pick(&mut app, "show all");
+
+        assert_eq!((app.config.machines[0].shown, toast(&app)), (true, None));
+    }
+
+    #[test]
+    fn on_another_machine_a_name_still_switches_at_once_and_neither_all_item_is_listed() {
+        let (mut app, _rx) = app();
+        reaches(&mut app, Some("devbox"), &["vps", "devbox"]);
+        let labels = open_menu(&mut app);
+
+        pick(&mut app, "  vps");
+
+        assert!(!labels.iter().any(|label| label == "only this computer" || label == "show all"));
+        assert_eq!(app.take_machine_orders(), [switch(Some("vps"))]);
     }
 }
 

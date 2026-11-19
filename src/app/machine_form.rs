@@ -24,6 +24,7 @@ impl App {
             settings::Action::AddMachine => self.open_machine_form(None),
             settings::Action::EditMachine(at) => self.open_machine_form(Some(at)),
             settings::Action::RemoveMachine(at) => self.remove_machine_row(at),
+            settings::Action::ShowMachine(at, shown) => self.show_machine_row(at, shown),
             settings::Action::UpdateMachine(at) => {
                 self.follow_machines();
                 if let Some(name) = self.config.machines.get(at).map(|machine| machine.name.clone()) {

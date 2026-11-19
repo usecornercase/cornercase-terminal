@@ -109,7 +109,7 @@ fn changes_the_list(found: &ArgMatches) -> bool {
 fn elsewhere_or_runs(path: &[&str], found: &ArgMatches) -> Option<String> {
     let why = match path {
         ["plugin", sub, ..] if !["list", "status", "actions", "logs"].contains(sub) => crate::bots::NO_PLUGINS,
-        ["machines", "add" | "edit" | "remove" | "update", ..] => crate::bots::NO_MACHINES,
+        ["machines", "add" | "edit" | "remove" | "update" | "hide" | "show", ..] => crate::bots::NO_MACHINES,
         ["remote"] if changes_the_list(found) => crate::bots::NO_MACHINES,
         ["tunnel", ..] => crate::bots::NO_TUNNELS,
         _ => return None,

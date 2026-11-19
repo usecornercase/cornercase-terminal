@@ -104,7 +104,8 @@ impl Settings {
             Page::Accounts => self.account_row(row),
             Page::Machines => self.machine_row(row),
         };
-        RowText { label, value, note, dangerous, mark: self.machine_mark(row), tail: self.machine_tail(row) }
+        let (mark, tail, toggle) = (self.machine_mark(row), self.machine_tail(row), self.machine_toggle(row));
+        RowText { label, value, note, dangerous, mark, tail, toggle }
     }
 
     fn agents_row(&self, row: &Row) -> (String, String, String, bool) {

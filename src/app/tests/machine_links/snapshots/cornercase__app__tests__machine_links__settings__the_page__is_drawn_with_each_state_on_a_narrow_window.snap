@@ -1,5 +1,6 @@
 ---
 source: src/app/tests/machine_links/settings.rs
+assertion_line: 112
 expression: every_state().shown(NARROW)
 ---
 "                                                                                "
@@ -7,14 +8,14 @@ expression: every_state().shown(NARROW)
 "  │ Worktrees Agents Accounts Flows Issues UI Remote Plugins Machines        │  "
 "  │  ⌕ search settings                                                       │  "
 "  │ ▌   ▭ this computer         <version>                                    │  "
-"  │   ● ☁ vps                   miguel@vps.e…   ~/code    linked · 0.12.200  │  "
-"  │   ○ ▣ mini                  mac-mini.loc…   …rv/code  unreachable · not  │  "
-"  │   ◐ ◫ pi                    pi.lan          ~/code    older · 0.12.200   │  "
+"  │   ● ☁ vps                   miguel@v…   ~/code  linked · 0.12.200  ✓     │  "
+"  │   ○ ▣ mini                  mac-mini…   …/code  unreachable · not  ✓     │  "
+"  │   ◐ ◫ pi                    pi.lan      ~/code  older · 0.12.200   ✓     │  "
 "  │       update…               installs this version there with cornercase  │  "
-"  │   ◌ ☁ new                   new.lan         ~/code    connecting…        │  "
+"  │   ◌ ☁ new                   new.lan     ~/code  connecting…        ✓     │  "
 "  │   ○ ☁ my vps                box.lan         ~/code    use letters, digit │  "
+"  │   ◌ ☁ devbox                devbox.l…   ~/code  hidden             ·     │  "
 "  │   + add machine             another computer you reach with ssh          │  "
-"  │                                                                          │  "
 "  │                                                                          │  "
 "  │                                                                          │  "
 "  │                                                                          │  "
