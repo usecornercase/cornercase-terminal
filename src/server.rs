@@ -639,6 +639,7 @@ impl Server {
         self.flush_notifications();
         self.flush_sounds();
         self.flush_opens();
+        self.flush_links();
         self.flush_tunnel_orders();
     }
 

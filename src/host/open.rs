@@ -15,6 +15,10 @@ use crate::os::desktop;
 use crate::os::fs::PermissionsExt;
 use crate::process;
 
+mod link;
+
+pub(crate) use link::{Link, host as link_host};
+
 const REVEAL_WITHIN: Duration = Duration::from_secs(5);
 const REPORT_WITHIN: Duration = Duration::from_secs(10);
 
@@ -298,12 +302,17 @@ impl Openers {
     }
 
     pub(crate) fn browse(&self, browse: Browse, failed: impl FnOnce(Failed) + Send + 'static) {
-        let Some(step) = self.default_app(browse.url().into()) else { return };
-        thread::spawn(move || {
-            if let Err(reason) = run(&[step]) {
-                failed(Failed { opener: Opener::Default, reason });
-            }
-        });
+        if let Some(step) = self.default_app(browse.url().into()) {
+            in_the_background(step, failed);
+        }
+    }
+
+    pub(crate) fn link(&self, link: &Link, failed: impl FnOnce(Failed) + Send + 'static) {
+        let Some(step) = self.default_app(link.url.clone().into()) else { return };
+        match link::host(&link.url) {
+            Ok(_) => in_the_background(step, failed),
+            Err(reason) => failed(Failed { opener: Opener::Default, reason: reason.into() }),
+        }
     }
 
     pub(crate) fn open(&self, open: &Open, failed: impl FnOnce(Failed) + Send + 'static) {
@@ -331,6 +340,14 @@ impl Openers {
             None => open,
         }
     }
+}
+
+fn in_the_background(step: Step, failed: impl FnOnce(Failed) + Send + 'static) {
+    thread::spawn(move || {
+        if let Err(reason) = run(&[step]) {
+            failed(Failed { opener: Opener::Default, reason });
+        }
+    });
 }
 
 fn editor(os: Os, opener: Opener, lookup: &impl Fn(&str) -> Option<PathBuf>, apps: &[PathBuf]) -> Option<Reach> {

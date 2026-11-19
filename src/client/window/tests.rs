@@ -102,6 +102,16 @@ mod opening {
     fn opens_without_ending_a_remote_window() {
         assert!(matches!(next(open(), true), Ok(Next::Open(_))));
     }
+
+    fn link() -> Received {
+        Received::Message(ServerMessage::Link(crate::host::open::Link { url: "https://example.com".into() }))
+    }
+
+    #[test]
+    fn a_link_reaches_a_local_or_a_remote_window_without_ending_it() {
+        assert!(matches!(next(link(), false), Ok(Next::Link(link)) if link.url == "https://example.com"));
+        assert!(matches!(next(link(), true), Ok(Next::Link(_))));
+    }
 }
 
 mod reconnecting {

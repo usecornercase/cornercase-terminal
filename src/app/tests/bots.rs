@@ -118,19 +118,17 @@ pub(in crate::app::tests) fn settle(app: &mut App, rx: &Receiver<AppEvent>) {
     });
 }
 
-fn retry_at(app: &mut App) -> Position {
+fn chat_spot(app: &mut App, wanted: impl Fn(&ChatHit) -> bool) -> Option<(Position, ChatHit)> {
     render(app, AREA);
     let areas = app.chat_geometry(AREA);
     let shown = app.shown_chat(AREA).expect("a chat");
-    for y in areas.lines.y..areas.lines.bottom() {
-        for x in areas.lines.x..areas.lines.right() {
-            let pos = Position::new(x, y);
-            if matches!(ui::chat_hit(&areas, &shown.view, pos), Some(ChatHit::Row(RowHit::Retry(_)))) {
-                return pos;
-            }
-        }
-    }
-    panic!("no retry button");
+    let spots = (areas.lines.y..areas.lines.bottom())
+        .flat_map(|y| (areas.lines.x..areas.lines.right()).map(move |x| Position::new(x, y)));
+    spots.into_iter().find_map(|pos| ui::chat_hit(&areas, &shown.view, pos).filter(&wanted).map(|hit| (pos, hit)))
+}
+
+fn retry_at(app: &mut App) -> Position {
+    chat_spot(app, |hit| matches!(hit, ChatHit::Row(RowHit::Retry(_)))).expect("a retry button").0
 }
 
 impl Chat {
@@ -430,6 +428,7 @@ mod card_menu;
 mod compact;
 mod form;
 mod git;
+mod links;
 mod menu;
 mod routines;
 mod routines_dialog;

@@ -1,4 +1,5 @@
-use super::Server;
+use super::{Client, Server};
+use crate::host::open::Opener;
 use crate::host::sound;
 use crate::log;
 use crate::protocol::{Holding, Machines, ServerMessage, TunnelState};
@@ -45,6 +46,18 @@ impl Server {
             if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && c.machines.is_some()) {
                 log::info!("server", "machine order sent", client = id, order = order.id());
                 client.send(ServerMessage::Machine(order));
+            }
+        }
+    }
+
+    pub(super) fn flush_links(&mut self) {
+        let Self { app, clients, .. } = self;
+        for (id, link) in app.take_links() {
+            let browses =
+                |c: &&Client| c.id == id && c.screen.is_some() && !c.browser && c.openers.contains(&Opener::Default);
+            if let Some(client) = clients.iter().find(browses) {
+                log::info!("server", "link sent", client = id);
+                client.send(ServerMessage::Link(link));
             }
         }
     }

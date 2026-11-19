@@ -3,9 +3,10 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::closed_agents::forgotten;
+use super::flow_panel::COPY;
 use super::menus::{PaneAction, Target};
 use super::new_workspace_there::{Asked, run_on_row};
-use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, Overlay, RENAME_SUBMIT};
+use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, OPEN_SUBMIT, Overlay, RENAME_SUBMIT};
 use super::text_fields::FieldArea;
 use crate::editor::Editor;
 use crate::error::Result;
@@ -131,14 +132,19 @@ impl App {
                 (KEEP_PROJECTS_SUBMIT, Some(CLOSE_PROJECTS_SUBMIT))
             }
             Overlay::RemoveBot { bot } => (self.remove_bot_label(*bot), None),
+            Overlay::OpenLink { .. } => (OPEN_SUBMIT, Some(COPY)),
             _ => (overlay.submit_label(), None),
         }
     }
 
     pub(super) fn submit_extra(&mut self) {
-        if let Some(Overlay::DeleteGroup { group }) = self.overlay {
-            self.overlay = None;
-            self.delete_group_and_projects(group);
+        match self.overlay {
+            Some(Overlay::DeleteGroup { group }) => {
+                self.overlay = None;
+                self.delete_group_and_projects(group);
+            }
+            Some(Overlay::OpenLink { .. }) => self.copy_open_link(),
+            _ => {}
         }
     }
 
@@ -294,7 +300,7 @@ impl App {
             Overlay::Rename { target, input } => self.submit_rename(target, &input.text()),
             Overlay::NewGroup { input } => self.submit_new_group(input),
             Overlay::RenameBot { bot, input, .. } => self.submit_rename_bot(bot, input),
-            Overlay::RemoveBot { bot } => self.submit_remove_bot(bot),
+            bot @ (Overlay::RemoveBot { .. } | Overlay::OpenLink { .. }) => self.submit_bot_dialog(bot),
             Overlay::BotSecrets(secrets) => Some(self.submit_secrets(*secrets)),
             Overlay::GroupStyle { .. }
             | Overlay::Usage
@@ -333,6 +339,14 @@ impl App {
                 self.confirm_removal(project, workspace, check, lock.is_some())
             }
             Overlay::MachineWorkspace(dialog) => self.submit_machine_workspace(*dialog),
+            other => Some(other),
+        }
+    }
+
+    fn submit_bot_dialog(&mut self, overlay: Overlay) -> Option<Overlay> {
+        match overlay {
+            Overlay::RemoveBot { bot } => self.submit_remove_bot(bot),
+            Overlay::OpenLink { url, .. } => self.submit_open_link(url),
             other => Some(other),
         }
     }

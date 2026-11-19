@@ -139,7 +139,7 @@ impl Chat {
         let answer = lines
             .iter()
             .find(|line| line.kind == Kind::Bot)
-            .map(|line| (format!("{} · {}", facts.name, clock(line.at, facts)), self.body(line, width)));
+            .map(|line| (line.id, format!("{} · {}", facts.name, clock(line.at, facts)), self.body(line, width)));
         let error = lines.iter().find(|line| line.kind == Kind::Error).map(|line| line.text.clone());
         let ended =
             |line: &&Line| line.kind == Kind::Notice && (line.text == chat::STOPPED || line.text == chat::INTERRUPTED);
@@ -172,7 +172,7 @@ impl Chat {
             }
             Kind::Bot => {
                 let head = format!("{} · {}", facts.name, clock(line.at, facts));
-                ChatEntry::Bot { head, body: self.body(&line, width) }
+                ChatEntry::Bot { id: line.id, head, body: self.body(&line, width) }
             }
             Kind::Step => {
                 let texts = self.lines[group.clone()].iter().map(|step| step.text.clone()).collect();

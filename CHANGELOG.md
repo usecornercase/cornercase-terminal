@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.105
+
+- **A link in a bot's answer now opens in your browser, after you confirm it.** A click on an `http://` or `https://` address shows **Open link**: who wrote it, the address (found whole in the answer you clicked even when the chat cut it across rows, and shown on up to three rows, ending in `…` past them) and where it goes, such as `goes to example.com`, with **copy**, **open** and **cancel**. **open** (or `Enter`) opens it in the browser of the window you clicked in. A bot's answer is text an agent wrote, so a click alone never opens it.
+- **It opens only on the computer that runs cornercase.** In a remote window (`cornercase remote`), the browser or over ssh, the click still copies the address, so a server on another machine can never make your laptop open a page.
+- **Some addresses are always copied, never opened**: one that is not plain ASCII, that carries a user name before the host (`https://good.com@evil.example/` goes to `evil.example`), that spells an IP address in a form a browser reads as another one (`http://0x7f000001/` is `127.0.0.1`), that holds a character a web address cannot have, or that is over 2,048 characters. The toast says why.
+
 ## 0.13.104
 
 - **One list of machines.** A machine is added once, in Settings › Machines or with `cornercase remote`, and the machine button offers it to open the window there. **show its work here** decides whether its workspaces and agents show next to yours; a machine that is not shown reads `not shown` in Settings. The button shows as soon as you have a machine, its menu adds one (**add machine…**) or opens Settings › Machines (**manage machines…**), and a machine is removed in Settings, so **forget…** is gone. Its label is `this computer ▴`, or `on vps ▴` once you moved.

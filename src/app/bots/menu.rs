@@ -184,7 +184,7 @@ impl App {
 impl Overlay {
     pub(in crate::app) fn names_bot(&self, key: u64, id: &str) -> bool {
         match self {
-            Self::RenameBot { bot, .. } | Self::RemoveBot { bot } => *bot == key,
+            Self::RenameBot { bot, .. } | Self::RemoveBot { bot } | Self::OpenLink { bot, .. } => *bot == key,
             Self::BotForm(form) => form.editing.as_deref() == Some(id),
             Self::BotRoutines(dialog) => dialog.bot == key,
             Self::BotSecrets(secrets) => secrets.bot() == key,

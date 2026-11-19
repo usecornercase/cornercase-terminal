@@ -57,7 +57,7 @@ pub(crate) use bots::card::{BotCard, CardRow, card_buttons, card_folder, card_ro
 pub(crate) use bots::chat::body as chat_body;
 pub(crate) use bots::chat::{
     ChatAreas, ChatEntry, ChatHit, ChatRow, ChatView, EXAMPLES, RowHit, Thinking, Tone, chat_areas, chat_hit,
-    chat_rows, empty_rows, entry_rows, input_rows,
+    chat_rows, empty_rows, entry_rows, input_rows, whole_address,
 };
 #[cfg(test)]
 pub(crate) use bots::chat::{row_y, stop_button, thinking_row};
@@ -76,7 +76,7 @@ pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};
 #[cfg(test)]
 #[cfg(unix)]
 pub(crate) use dialog::form::form_run_on;
-pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit, form_run_on_hit, form_text};
+pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, confirm_width, form_hit, form_run_on_hit, form_text};
 pub use dialog::form::{form_area, form_buttons};
 #[cfg(test)]
 pub(crate) use dialog::form::{form_extra_button, form_toggle};
